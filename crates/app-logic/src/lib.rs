@@ -36,6 +36,7 @@ pub mod error;
 pub mod events;
 pub mod field_content_decryption;
 pub mod filter_rules;
+pub mod folder_upload;
 pub mod groups;
 pub mod host_key_store;
 pub mod identity_file;

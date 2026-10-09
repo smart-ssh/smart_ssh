@@ -438,3 +438,329 @@ async fn test_claiming_a_drop_for_an_unknown_session_fails_and_keeps_nothing() {
     assert!(claim_dropped_paths_impl(&s.sessions, &s.grants, unknown).is_err());
     assert!(s.grants.check(unknown, &file, None).is_err());
 }
+
+// ---- Issue #128: folder upload -------------------------------------------
+
+mod folder_upload_tests {
+    use std::collections::HashSet;
+    use std::path::Path;
+
+    use app_logic::folder_upload::{FolderUploadSummary, SkipReason};
+    use ssh_transport::LocalFileSession;
+
+    use super::*;
+    use crate::commands::sftp::folder_upload::{
+        local_paths_are_folders, preview_impl, upload_folder_impl,
+    };
+
+    /// A setup whose remote side is the real local file system (below a
+    /// temp dir), so folder structure and contents can be compared.
+    async fn setup_fs() -> Setup {
+        let s = setup().await;
+        s.session
+            .set_sftp_for_tests(Box::new(LocalFileSession::new()))
+            .await;
+        s
+    }
+
+    impl Setup {
+        fn grant_folder(&self, folder: &Path) {
+            self.grants
+                .grant(self.session_id, vec![folder.to_path_buf()]);
+        }
+
+        async fn folder_preview(
+            &self,
+            folder: &Path,
+            remote_dir: &Path,
+        ) -> CommandResult<app_logic::folder_upload::FolderUploadPreview> {
+            let channel = BrowserChannel::for_tests(&self.registry, self.session_id, None);
+            let root = authorize_local_path(
+                &self.sessions,
+                &self.grants,
+                self.edit_root(),
+                self.session_id,
+                folder.to_str().unwrap(),
+            )?;
+            let snap = self.grants.snapshot(self.session_id, None);
+            preview_impl(
+                &self.session,
+                &channel,
+                &snap,
+                &root,
+                remote_dir.to_str().unwrap(),
+            )
+            .await
+        }
+
+        async fn folder_upload(
+            &self,
+            folder: &Path,
+            remote_dir: &Path,
+            confirmed: &[String],
+        ) -> CommandResult<FolderUploadSummary> {
+            let channel = BrowserChannel::for_tests(&self.registry, self.session_id, None);
+            let root = authorize_local_path(
+                &self.sessions,
+                &self.grants,
+                self.edit_root(),
+                self.session_id,
+                folder.to_str().unwrap(),
+            )?;
+            let snap = self.grants.snapshot(self.session_id, None);
+            let confirmed: HashSet<String> = confirmed.iter().cloned().collect();
+            upload_folder_impl(
+                &self.emitter,
+                &self.session,
+                &channel,
+                self.session_id,
+                &snap,
+                &root,
+                remote_dir.to_str().unwrap(),
+                &confirmed,
+            )
+            .await
+        }
+    }
+
+    fn remote_str(p: &Path) -> String {
+        p.to_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn test_nested_folder_is_recreated_with_identical_contents() {
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        write(&folder.join("a.txt"), b"alpha");
+        write(&folder.join("sub/b.bin"), &[0u8, 1, 2, 255]);
+        write(&folder.join("sub/deep/c.txt"), b"gamma");
+        std::fs::create_dir_all(folder.join("empty")).unwrap();
+        s.grant_folder(&folder);
+        let remote = tempfile::tempdir().unwrap();
+
+        let summary = s.folder_upload(&folder, remote.path(), &[]).await.unwrap();
+
+        let r = remote.path().join("proj");
+        assert_eq!(std::fs::read(r.join("a.txt")).unwrap(), b"alpha");
+        assert_eq!(
+            std::fs::read(r.join("sub/b.bin")).unwrap(),
+            vec![0u8, 1, 2, 255]
+        );
+        assert_eq!(std::fs::read(r.join("sub/deep/c.txt")).unwrap(), b"gamma");
+        assert!(r.join("empty").is_dir(), "an empty folder is created empty");
+        assert_eq!(summary.files_uploaded, 3);
+        assert_eq!(summary.folders_created, 4); // proj, sub, deep, empty = proj + 3
+        assert!(summary.failed.is_empty() && summary.skipped.is_empty());
+        assert_eq!(s.transfer_events(), 6, "one started/finished pair per file");
+    }
+
+    #[tokio::test]
+    async fn test_empty_folder_creates_an_empty_remote_folder() {
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("nothing");
+        std::fs::create_dir_all(&folder).unwrap();
+        s.grant_folder(&folder);
+        let remote = tempfile::tempdir().unwrap();
+
+        let summary = s.folder_upload(&folder, remote.path(), &[]).await.unwrap();
+
+        assert!(remote.path().join("nothing").is_dir());
+        assert_eq!(summary.files_uploaded, 0);
+    }
+
+    #[tokio::test]
+    async fn test_folder_outside_every_grant_is_refused_before_anything_happens() {
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        write(&folder.join("a.txt"), b"a");
+        let remote = tempfile::tempdir().unwrap();
+
+        let err = s
+            .folder_upload(&folder, remote.path(), &[])
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.message, LOCAL_PATH_NOT_GRANTED);
+        assert!(!remote.path().join("proj").exists());
+        assert_eq!(s.transfer_events(), 0);
+    }
+
+    /// A link out of the root is skipped and its target (a canary) never
+    /// reaches the server.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_symlink_out_of_the_root_is_skipped_and_its_target_never_read() {
+        use std::os::unix::fs::symlink;
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        let outside = local.path().join("outside");
+        write(&folder.join("ok.txt"), b"ok");
+        write(&outside.join("canary.txt"), b"CANARY");
+        symlink(outside.join("canary.txt"), folder.join("link.txt")).unwrap();
+        symlink(&outside, folder.join("linkdir")).unwrap();
+        s.grant_folder(&folder);
+        let remote = tempfile::tempdir().unwrap();
+
+        let summary = s.folder_upload(&folder, remote.path(), &[]).await.unwrap();
+
+        let r = remote.path().join("proj");
+        assert_eq!(std::fs::read(r.join("ok.txt")).unwrap(), b"ok");
+        assert!(!r.join("link.txt").exists());
+        assert!(!r.join("linkdir").exists());
+        assert!(summary
+            .skipped
+            .iter()
+            .all(|e| e.reason == SkipReason::Symlink));
+        assert_eq!(summary.skipped.len(), 2);
+    }
+
+    /// The check the upload repeats right before each read refuses a file
+    /// that turned into a link to something outside after the walk.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_grant_snapshot_refuses_a_file_swapped_for_an_outside_link() {
+        use std::os::unix::fs::symlink;
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        let outside = local.path().join("outside.txt");
+        write(&folder.join("a.txt"), b"a");
+        write(&outside, b"CANARY");
+        s.grant_folder(&folder);
+        let snap = s.grants.snapshot(s.session_id, None);
+        let swapped = folder.join("a.txt");
+        std::fs::remove_file(&swapped).unwrap();
+        symlink(&outside, &swapped).unwrap();
+
+        assert!(snap.check(&swapped).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_existing_file_is_listed_and_not_overwritten_without_confirmation() {
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        write(&folder.join("a.txt"), b"new-a");
+        write(&folder.join("b.txt"), b"new-b");
+        s.grant_folder(&folder);
+        let remote = tempfile::tempdir().unwrap();
+        write(&remote.path().join("proj/a.txt"), b"old-a");
+        write(&remote.path().join("proj/other.txt"), b"keep");
+
+        let preview = s.folder_preview(&folder, remote.path()).await.unwrap();
+        let a = remote_str(&remote.path().join("proj/a.txt"));
+        assert_eq!(preview.overwrites, vec![a.clone()]);
+        assert_eq!(preview.file_count, 2);
+
+        // Not confirmed: left untouched and reported.
+        let summary = s.folder_upload(&folder, remote.path(), &[]).await.unwrap();
+        assert_eq!(
+            std::fs::read(remote.path().join("proj/a.txt")).unwrap(),
+            b"old-a"
+        );
+        assert_eq!(
+            std::fs::read(remote.path().join("proj/b.txt")).unwrap(),
+            b"new-b"
+        );
+        assert_eq!(
+            std::fs::read(remote.path().join("proj/other.txt")).unwrap(),
+            b"keep"
+        );
+        assert_eq!(summary.files_uploaded, 1);
+        assert_eq!(summary.skipped.len(), 1);
+        assert_eq!(summary.skipped[0].reason, SkipReason::OverwriteNotConfirmed);
+
+        // Confirmed: overwritten.
+        let summary = s.folder_upload(&folder, remote.path(), &[a]).await.unwrap();
+        assert_eq!(
+            std::fs::read(remote.path().join("proj/a.txt")).unwrap(),
+            b"new-a"
+        );
+        // b.txt exists from the first run and was not confirmed: skipped.
+        assert_eq!(summary.files_uploaded, 1);
+        assert_eq!(summary.skipped.len(), 1);
+    }
+
+    /// One failing file does not stop the others, and the summary names it.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_one_failure_is_reported_and_the_rest_is_uploaded() {
+        use std::os::unix::fs::PermissionsExt;
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        write(&folder.join("a.txt"), b"a");
+        write(&folder.join("locked.txt"), b"x");
+        write(&folder.join("z.txt"), b"z");
+        std::fs::set_permissions(
+            folder.join("locked.txt"),
+            std::fs::Permissions::from_mode(0o000),
+        )
+        .unwrap();
+        if std::fs::read(folder.join("locked.txt")).is_ok() {
+            return; // running as root: the file stays readable
+        }
+        s.grant_folder(&folder);
+        let remote = tempfile::tempdir().unwrap();
+
+        let summary = s.folder_upload(&folder, remote.path(), &[]).await.unwrap();
+
+        std::fs::set_permissions(
+            folder.join("locked.txt"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        assert_eq!(summary.files_uploaded, 2);
+        assert_eq!(summary.failed.len(), 1);
+        assert_eq!(summary.failed[0].path, "locked.txt");
+        assert!(remote.path().join("proj/z.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn test_target_that_is_a_file_aborts_without_writing() {
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        write(&folder.join("a.txt"), b"a");
+        s.grant_folder(&folder);
+        let remote = tempfile::tempdir().unwrap();
+        write(&remote.path().join("proj"), b"i am a file");
+
+        assert!(s.folder_upload(&folder, remote.path(), &[]).await.is_err());
+        assert_eq!(
+            std::fs::read(remote.path().join("proj")).unwrap(),
+            b"i am a file"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dropped_paths_are_classified_as_folder_or_file() {
+        let s = setup_fs().await;
+        let local = tempfile::tempdir().unwrap();
+        let folder = local.path().join("proj");
+        let file = local.path().join("f.txt");
+        write(&folder.join("a.txt"), b"a");
+        write(&file, b"f");
+        s.drop_and_claim(vec![folder.clone(), file.clone()]);
+        let ungranted = local.path().join("other");
+        std::fs::create_dir_all(&ungranted).unwrap();
+
+        let kinds = local_paths_are_folders(
+            &s.sessions,
+            &s.grants,
+            s.edit_root(),
+            s.session_id,
+            &[
+                folder.to_str().unwrap().into(),
+                file.to_str().unwrap().into(),
+                ungranted.to_str().unwrap().into(),
+            ],
+        );
+
+        assert_eq!(kinds, vec![true, false, false]);
+    }
+}

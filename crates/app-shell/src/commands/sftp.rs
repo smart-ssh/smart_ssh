@@ -41,6 +41,9 @@ use super::elevation::{
 /// Spec 0085, A1 (T1–T9): Widerruf des erhöhten Modus innerhalb eines schon
 /// laufenden Browser-Befehls. Eigene Datei, weil der Aufbau (Test-Double mit
 /// Haltepunkt, Audit-Mitschnitt) für sich genommen umfangreich ist.
+mod folder_upload;
+pub(crate) use folder_upload::*;
+
 #[cfg(test)]
 mod revocation_tests;
 
