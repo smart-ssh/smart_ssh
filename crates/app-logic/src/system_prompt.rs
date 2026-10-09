@@ -138,6 +138,40 @@ pub fn note_truncated_notice(language: PromptLanguage) -> &'static str {
     }
 }
 
+/// Issue #129 (Spec 0057, §3.2): der Hinweis, den die Kompaktierung an die
+/// Stelle entfernter alter Gesprächsrunden setzt — auch der Fallback, wenn
+/// die Zusammenfassung fehlschlägt (Spec 0057, §2.2). Dieselbe Sprache wie
+/// der System-Prompt derselben Anfrage. Die deutsche Fassung ist wörtlich
+/// der Text vor Issue #129.
+pub fn round_truncation_notice(language: PromptLanguage, cut_rounds: usize) -> String {
+    match language {
+        PromptLanguage::De => format!(
+            "[Hinweis: ältere Konversation gekürzt — {cut_rounds} frühere Gesprächsrunde(n) \
+             wurden aus Platzgründen aus diesem Kontext entfernt. Der vollständige Verlauf \
+             bleibt im Session-Ledger erhalten.]"
+        ),
+        PromptLanguage::En => format!(
+            "[Note: older conversation truncated — {cut_rounds} earlier conversation round(s) \
+             were removed from this context to save space. The full history is kept in the \
+             session ledger.]"
+        ),
+    }
+}
+
+/// Issue #129 (Spec 0057, §2): die Hülle um eine rollierende
+/// Zusammenfassung, die an die Stelle entfernter Runden tritt. Nur die
+/// Hülle folgt der Sprache — der Zusammenfassungstext selbst stammt aus dem
+/// Kompaktierungs-Aufruf und bleibt unverändert. Die deutsche Fassung ist
+/// wörtlich der Text vor Issue #129.
+pub fn summary_notice(language: PromptLanguage, summary_text: &str) -> String {
+    match language {
+        PromptLanguage::De => {
+            format!("[Zusammenfassung der bisherigen Konversation: {summary_text}]")
+        }
+        PromptLanguage::En => format!("[Summary of the conversation so far: {summary_text}]"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,5 +336,42 @@ mod tests {
         let de = allow_rules_section(PromptLanguage::De, &rules);
         assert!(de.starts_with("\n\n## Freigegebene Befehle (Whitelist / AutoExec)\n"));
         assert!(de.ends_with("- `ls` (exact)\n- `df -h` (exact)"));
+    }
+
+    /// Issue #129: mit Deutsch bleiben beide Kompaktierungs-Hinweise
+    /// byte-identisch zum Text davor.
+    #[test]
+    fn test_german_compaction_notices_are_byte_identical_to_the_previous_text() {
+        assert_eq!(
+            round_truncation_notice(PromptLanguage::De, 3),
+            "[Hinweis: ältere Konversation gekürzt — 3 frühere Gesprächsrunde(n) wurden aus \
+             Platzgründen aus diesem Kontext entfernt. Der vollständige Verlauf bleibt im \
+             Session-Ledger erhalten.]"
+        );
+        assert_eq!(
+            summary_notice(PromptLanguage::De, "Logs geprüft."),
+            "[Zusammenfassung der bisherigen Konversation: Logs geprüft.]"
+        );
+    }
+
+    /// Issue #129: die englischen Hinweise tragen dieselbe Information
+    /// (Anzahl entfernter Runden, vollständiger Verlauf im Ledger) und
+    /// keinen deutschen Text; der Zusammenfassungstext bleibt unverändert.
+    #[test]
+    fn test_english_compaction_notices_carry_the_same_information() {
+        let truncation = round_truncation_notice(PromptLanguage::En, 3);
+        assert_eq!(
+            truncation,
+            "[Note: older conversation truncated — 3 earlier conversation round(s) were \
+             removed from this context to save space. The full history is kept in the \
+             session ledger.]"
+        );
+        assert!(!truncation.contains("ältere Konversation gekürzt"));
+        let summary = summary_notice(PromptLanguage::En, "Logs geprüft.");
+        assert_eq!(
+            summary,
+            "[Summary of the conversation so far: Logs geprüft.]"
+        );
+        assert!(!summary.contains("Zusammenfassung"));
     }
 }
