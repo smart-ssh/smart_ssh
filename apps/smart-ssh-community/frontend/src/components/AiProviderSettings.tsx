@@ -578,7 +578,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 </div>
               </div>
 
-              {supportsWebResearch(provider.providerType) && (
+              {supportsWebResearch(provider.providerType, provider.baseUrl) && (
                 <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
                   <input
                     type="checkbox"
@@ -1028,7 +1028,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             {t("aiProvider.nativeToolCalling")}
           </label>
 
-          {supportsWebResearch(form.providerType) && (
+          {supportsWebResearch(form.providerType, form.baseUrl) && (
             <div>
               <label className="flex items-center gap-2 text-sm text-slate-300">
                 <input

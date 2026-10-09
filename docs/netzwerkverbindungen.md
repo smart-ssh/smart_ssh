@@ -37,7 +37,8 @@ Rechner.
   der Nutzer gestartet hat, und nur an Provider, die er selbst eingerichtet
   hat. Ohne KI-Provider fällt keiner dieser Aufrufe an.
 - **Web-Recherche der KI** (Spec 0105): Bei einem Provider mit
-  serverseitigen Web-Werkzeugen (heute Anthropic) und eingeschalteter
+  serverseitigen Web-Werkzeugen (heute Anthropic und der offizielle
+  OpenAI-Dienst) und eingeschalteter
   Einstellung „Web-Recherche" darf der Provider während eines Chat-Zugs im
   Web suchen und Webseiten abrufen. Das tut der Provider auf seinen eigenen
   Servern im Auftrag dieses Chat-Zugs — es ist **keine Verbindung von

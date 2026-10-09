@@ -1,7 +1,13 @@
 // Spec 0050, Teil 2 ("Testbarkeit"): "Format-Hinweis: falscher Präfix →
 // Warnung, Speichern trotzdem möglich; generischer Provider → keine
 // Warnung."
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -29,7 +35,9 @@ vi.mock("../api", () => ({
   // Hintergrund-Probe in Tests, die sie nicht selbst konfigurieren, aus
   // dem Weg — Ergebnis "otherError", also keine Karte (s. Spec 0069 §3.B3
   // "jeder andere Fehler → keine Karte").
-  discoverModels: vi.fn(() => Promise.reject(new Error("not configured in this test"))),
+  discoverModels: vi.fn(() =>
+    Promise.reject(new Error("not configured in this test")),
+  ),
   fetchAttestationInfo: vi.fn(),
   setActiveAiProvider: vi.fn(),
   testAiProviderCredentials: vi.fn(),
@@ -50,7 +58,9 @@ vi.mock("../api", () => ({
 }));
 
 vi.mock("../riskSettings", () => ({
-  loadRiskClassifierSettings: vi.fn(() => Promise.resolve({ enabled: false, providerId: null })),
+  loadRiskClassifierSettings: vi.fn(() =>
+    Promise.resolve({ enabled: false, providerId: null }),
+  ),
   saveRiskClassifierSettings: vi.fn(),
   loadRedRiskAlwaysConfirm: vi.fn(() => Promise.resolve(true)),
   saveRedRiskAlwaysConfirm: vi.fn(),
@@ -80,19 +90,27 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
     renderForm();
 
     // Default provider type is "openai" (emptyForm()); switch to Anthropic.
-    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "anthropic" },
+    });
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "totally-wrong-format" },
     });
 
-    expect(screen.getByText(/Sieht nicht wie ein Anthropic-Key aus/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Hinzufügen" })).not.toBeDisabled();
+    expect(
+      screen.getByText(/Sieht nicht wie ein Anthropic-Key aus/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Hinzufügen" }),
+    ).not.toBeDisabled();
   });
 
   it("shows no hint once the key matches the expected prefix", () => {
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "anthropic" },
+    });
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-ant-abc123" },
     });
@@ -116,7 +134,9 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
   it("shows no hint while the key field is still empty", () => {
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "anthropic" },
+    });
 
     expect(screen.queryByText(/Sieht nicht wie ein/)).not.toBeInTheDocument();
   });
@@ -131,9 +151,13 @@ describe('AiProviderSettings "Modelle laden"-Button (Spec 0072, B2/B3)', () => {
   it("erscheint auch für den Provider-Typ anthropic", () => {
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "anthropic" },
+    });
 
-    expect(screen.getByRole("button", { name: "Modelle laden" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Modelle laden" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -148,11 +172,17 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
   it("is disabled until an API key is entered", () => {
     renderForm();
 
-    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    ).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
 
-    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    ).not.toBeDisabled();
   });
 
   /** Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts): ohne diese
@@ -166,36 +196,54 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "generic_openai_compatible" },
     });
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
 
-    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    ).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Base-URL"), {
       target: { value: "https://my-gateway.example/v1" },
     });
 
-    expect(screen.getByRole("button", { name: "Zugangsdaten testen" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    ).not.toBeDisabled();
   });
 
   it("shows a valid result", async () => {
     vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
     renderForm();
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    );
 
-    await waitFor(() => expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument(),
+    );
     expect(testAiProviderCredentials).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "sk-abc" }),
     );
   });
 
   it("shows an authentication-failed result", async () => {
-    vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "authenticationFailed" });
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({
+      kind: "authenticationFailed",
+    });
     renderForm();
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-wrong" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-wrong" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    );
 
     await waitFor(() =>
       expect(
@@ -210,9 +258,13 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       message: "connection refused",
     });
     renderForm();
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    );
 
     await waitFor(() =>
       expect(
@@ -232,9 +284,13 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       code: "AI_RATE_LIMITED",
     });
     renderForm();
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    );
 
     await waitFor(() =>
       expect(
@@ -243,7 +299,9 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
         ),
       ).toBeInTheDocument(),
     );
-    expect(screen.queryByText(/Provider nicht erreichbar/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Provider nicht erreichbar/),
+    ).not.toBeInTheDocument();
   });
 
   // Spec 0069, Teil A5, Test 19: mit `AI_MODEL_NOT_FOUND` zeigt die Box
@@ -255,14 +313,20 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       code: "AI_MODEL_NOT_FOUND",
     });
     renderForm();
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    );
 
     await waitFor(() =>
       expect(screen.getByText(/kennt dieses Modell nicht/)).toBeInTheDocument(),
     );
-    expect(screen.queryByText(/HTTP 404: model_not_found/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/HTTP 404: model_not_found/),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the translated text for AI_MODEL_NO_TOOL_SUPPORT instead of the raw message", async () => {
@@ -272,24 +336,40 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       code: "AI_MODEL_NO_TOOL_SUPPORT",
     });
     renderForm();
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    );
 
     await waitFor(() =>
-      expect(screen.getByText(/unterstützt keine Tool-Aufrufe/)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/unterstützt keine Tool-Aufrufe/),
+      ).toBeInTheDocument(),
     );
-    expect(screen.queryByText(/does not support tools/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/does not support tools/),
+    ).not.toBeInTheDocument();
   });
 
   it("clears a stale result once the key is edited again", async () => {
     vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
     renderForm();
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
-    fireEvent.click(screen.getByRole("button", { name: "Zugangsdaten testen" }));
-    await waitFor(() => expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zugangsdaten testen" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument(),
+    );
 
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc-changed" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc-changed" },
+    });
 
     expect(screen.queryByText("✓ Zugangsdaten gültig")).not.toBeInTheDocument();
   });
@@ -305,11 +385,17 @@ describe("AiProviderSettings visual structure (Spec 0056, Teil 3)", () => {
   it("renders all three card sections with their headings", () => {
     renderForm();
 
-    expect(screen.getByRole("heading", { name: "Konfigurierte Provider" })).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Risiko-Indikatoren — KI-Zweitmeinung" }),
+      screen.getByRole("heading", { name: "Konfigurierte Provider" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Provider hinzufügen" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Risiko-Indikatoren — KI-Zweitmeinung",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Provider hinzufügen" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -323,49 +409,77 @@ describe("AiProviderSettings max_tokens override (Spec 0065, Teil 4)", () => {
     renderForm();
     openAdvanced();
 
-    const field = screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false });
+    const field = screen.getByLabelText("Max. Antwortlänge (Tokens)", {
+      exact: false,
+    });
     expect(field).toHaveValue(null);
 
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Prov" } });
-    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "gpt-4o" } });
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Prov" },
+    });
+    fireEvent.change(screen.getByLabelText("Modell"), {
+      target: { value: "gpt-4o" },
+    });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
 
     await waitFor(() => expect(addAiProvider).toHaveBeenCalled());
-    expect(vi.mocked(addAiProvider).mock.calls.at(-1)?.[0].maxTokensOverride).toBeNull();
+    expect(
+      vi.mocked(addAiProvider).mock.calls.at(-1)?.[0].maxTokensOverride,
+    ).toBeNull();
   });
 
   it("sends the entered value as a number", async () => {
     renderForm();
     openAdvanced();
 
-    fireEvent.change(screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false }), {
-      target: { value: "20000" },
+    fireEvent.change(
+      screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false }),
+      {
+        target: { value: "20000" },
+      },
+    );
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Prov" },
     });
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Prov" } });
-    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "gpt-4o" } });
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("Modell"), {
+      target: { value: "gpt-4o" },
+    });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
 
     await waitFor(() => expect(addAiProvider).toHaveBeenCalled());
-    expect(vi.mocked(addAiProvider).mock.calls.at(-1)?.[0].maxTokensOverride).toBe(20000);
+    expect(
+      vi.mocked(addAiProvider).mock.calls.at(-1)?.[0].maxTokensOverride,
+    ).toBe(20000);
   });
 
   it("shows a validation hint and disables submit for 0", () => {
     renderForm();
     openAdvanced();
 
-    fireEvent.change(screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false }), {
-      target: { value: "0" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Max. Antwortlänge (Tokens)", { exact: false }),
+      {
+        target: { value: "0" },
+      },
+    );
 
-    expect(screen.getByText("Max. Antwortlänge muss größer als 0 sein")).toBeInTheDocument();
+    expect(
+      screen.getByText("Max. Antwortlänge muss größer als 0 sein"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Hinzufügen" })).toBeDisabled();
   });
 });
 
 // Spec 0069, Teil B: Ollama-Erkennung.
-function ollamaProvider(overrides: Partial<AiProviderConfigDto> = {}): AiProviderConfigDto {
+function ollamaProvider(
+  overrides: Partial<AiProviderConfigDto> = {},
+): AiProviderConfigDto {
   return {
     id: "existing-ollama",
     providerType: "ollama",
@@ -445,7 +559,9 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
     renderForm();
 
     await screen.findByText("Ollama läuft auf diesem Rechner.");
-    expect(screen.getByRole("button", { name: "Ollama übernehmen" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Ollama übernehmen" }),
+    ).toBeInTheDocument();
   });
 
   it("empty model list -> pull instructions, no suggestion card", async () => {
@@ -454,22 +570,34 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
 
     renderForm();
 
-    await screen.findByText("Ollama läuft, aber es ist noch kein Modell geladen.");
-    expect(screen.queryByRole("button", { name: "Ollama übernehmen" })).not.toBeInTheDocument();
+    await screen.findByText(
+      "Ollama läuft, aber es ist noch kein Modell geladen.",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Ollama übernehmen" }),
+    ).not.toBeInTheDocument();
   });
 
   it("AI_LOCAL_PROVIDER_UNREACHABLE with no providers configured -> install instructions", async () => {
     vi.mocked(listAiProviders).mockResolvedValueOnce([]);
-    vi.mocked(discoverModels).mockRejectedValueOnce({ code: "AI_LOCAL_PROVIDER_UNREACHABLE" });
+    vi.mocked(discoverModels).mockRejectedValueOnce({
+      code: "AI_LOCAL_PROVIDER_UNREACHABLE",
+    });
 
     renderForm();
 
-    await screen.findByText("Kein lokales Ollama gefunden (Standard-Port 11434).");
+    await screen.findByText(
+      "Kein lokales Ollama gefunden (Standard-Port 11434).",
+    );
   });
 
   it("AI_LOCAL_PROVIDER_UNREACHABLE with an already-configured (non-Ollama) provider -> no card", async () => {
-    vi.mocked(listAiProviders).mockResolvedValueOnce([activeAnthropicProvider()]);
-    vi.mocked(discoverModels).mockRejectedValueOnce({ code: "AI_LOCAL_PROVIDER_UNREACHABLE" });
+    vi.mocked(listAiProviders).mockResolvedValueOnce([
+      activeAnthropicProvider(),
+    ]);
+    vi.mocked(discoverModels).mockRejectedValueOnce({
+      code: "AI_LOCAL_PROVIDER_UNREACHABLE",
+    });
 
     renderForm();
 
@@ -481,7 +609,9 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
 
   it("any other error -> no card at all (stays silent)", async () => {
     vi.mocked(listAiProviders).mockResolvedValueOnce([]);
-    vi.mocked(discoverModels).mockRejectedValueOnce({ code: "AI_NETWORK_ERROR" });
+    vi.mocked(discoverModels).mockRejectedValueOnce({
+      code: "AI_NETWORK_ERROR",
+    });
 
     renderForm();
 
@@ -489,7 +619,9 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
     expect(
       screen.queryByText("Kein lokales Ollama gefunden (Standard-Port 11434)."),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("Ollama läuft auf diesem Rechner.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ollama läuft auf diesem Rechner."),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Ollama läuft, aber es ist noch kein Modell geladen."),
     ).not.toBeInTheDocument();
@@ -516,11 +648,15 @@ describe('AiProviderSettings "Ollama übernehmen" (Spec 0069, Teil B4, Test 24/2
         apiKey: "ollama-no-key",
       }),
     );
-    await waitFor(() => expect(setActiveAiProvider).toHaveBeenCalledWith("new-ollama-id"));
+    await waitFor(() =>
+      expect(setActiveAiProvider).toHaveBeenCalledWith("new-ollama-id"),
+    );
   });
 
   it("with an already-active provider -> addAiProvider but no setActiveAiProvider", async () => {
-    vi.mocked(listAiProviders).mockResolvedValueOnce([activeAnthropicProvider()]);
+    vi.mocked(listAiProviders).mockResolvedValueOnce([
+      activeAnthropicProvider(),
+    ]);
     vi.mocked(discoverModels).mockResolvedValueOnce(["llama3"]);
     vi.mocked(addAiProvider).mockResolvedValueOnce("new-ollama-id");
 
@@ -578,12 +714,20 @@ describe("AiProviderSettings — Schlüsselbund nicht verfügbar (Spec 0071, A13
     });
 
     renderForm();
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Claude" } });
-    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "sonnet" } });
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-x" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Claude" },
+    });
+    fireEvent.change(screen.getByLabelText("Modell"), {
+      target: { value: "sonnet" },
+    });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-x" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
 
-    const error = await screen.findByText(/Systemschlüsselbund ist nicht verfügbar/);
+    const error = await screen.findByText(
+      /Systemschlüsselbund ist nicht verfügbar/,
+    );
     // Der übersetzte Text nennt die blockierten Funktionen und den Ort mit
     // dem konkreten nächsten Schritt — der `message`-Fallback tut das nicht.
     expect(error).toHaveTextContent("Passphrase");
@@ -604,17 +748,23 @@ describe("AiProviderSettings red-risk-always-confirm toggle (Spec 0092, A1.4)", 
   it("loads the fail-safe default (on) and is bedienbar without the second opinion enabled", async () => {
     renderForm();
 
-    const toggle = await screen.findByLabelText("Bei rotem Risiko immer nachfragen");
+    const toggle = await screen.findByLabelText(
+      "Bei rotem Risiko immer nachfragen",
+    );
     await waitFor(() => expect(toggle).toBeChecked());
     // Die KI-Zweitmeinung ist per Mock aus (`enabled: false`) — der Provider-
     // Auswahl-Bereich der Zweitmeinung ist deshalb nicht sichtbar, der neue
     // Schalter trotzdem.
-    expect(screen.queryByLabelText("Provider für die Zweitmeinung")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Provider für die Zweitmeinung"),
+    ).not.toBeInTheDocument();
   });
 
   it("saves the new value via saveRedRiskAlwaysConfirm when toggled off", async () => {
     renderForm();
-    const toggle = await screen.findByLabelText("Bei rotem Risiko immer nachfragen");
+    const toggle = await screen.findByLabelText(
+      "Bei rotem Risiko immer nachfragen",
+    );
     await waitFor(() => expect(toggle).toBeChecked());
 
     fireEvent.click(toggle);
@@ -628,7 +778,9 @@ describe("AiProviderSettings red-risk-always-confirm toggle (Spec 0092, A1.4)", 
 // Spec 0069, Teil B6 (#95): Ein über das normale Formular angelegter
 // Provider wird aktiv, wenn beim Speichern noch keiner aktiv ist.
 describe("AiProviderSettings form submit activates the first provider (Spec 0069, Teil B6)", () => {
-  function newOpenAiProvider(overrides: Partial<AiProviderConfigDto> = {}): AiProviderConfigDto {
+  function newOpenAiProvider(
+    overrides: Partial<AiProviderConfigDto> = {},
+  ): AiProviderConfigDto {
     return {
       id: "new-form-id",
       providerType: "openai",
@@ -646,13 +798,20 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
   }
 
   function fillAndSubmit() {
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Prov" } });
-    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "gpt-4o" } });
-    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Prov" },
+    });
+    fireEvent.change(screen.getByLabelText("Modell"), {
+      target: { value: "gpt-4o" },
+    });
+    fireEvent.change(screen.getByLabelText("API-Key"), {
+      target: { value: "sk-abc" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
   }
 
-  const WILL_ACTIVATE_HINT = "Wird als aktiver Provider verwendet, da noch keiner aktiv ist.";
+  const WILL_ACTIVATE_HINT =
+    "Wird als aktiver Provider verwendet, da noch keiner aktiv ist.";
 
   it("without an active provider -> addAiProvider, then setActiveAiProvider with the returned id; the list shows it as active", async () => {
     vi.mocked(listAiProviders)
@@ -665,7 +824,9 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     await screen.findByText(WILL_ACTIVATE_HINT);
     fillAndSubmit();
 
-    await waitFor(() => expect(setActiveAiProvider).toHaveBeenCalledWith("new-form-id"));
+    await waitFor(() =>
+      expect(setActiveAiProvider).toHaveBeenCalledWith("new-form-id"),
+    );
     expect(addAiProvider).toHaveBeenCalledTimes(1);
     expect(vi.mocked(addAiProvider).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(setActiveAiProvider).mock.invocationCallOrder[0],
@@ -673,7 +834,9 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     // Liste neu geladen: der neue Provider trägt die "Aktiv"-Markierung.
     expect(await screen.findByText("Prov")).toBeInTheDocument();
     expect(screen.getByText("aktiv")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Aktiv setzen" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Aktiv setzen" }),
+    ).not.toBeInTheDocument();
     // Ab jetzt ist ein Provider aktiv -> kein Hinweis mehr.
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
   });
@@ -696,12 +859,18 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     // Nach dem Neuladen: Claude weiterhin aktiv, der neue Provider inaktiv.
     expect(await screen.findByText("Prov")).toBeInTheDocument();
     expect(screen.getAllByText("aktiv")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Aktiv setzen" })).toHaveLength(1);
+    expect(
+      screen.getAllByRole("button", { name: "Aktiv setzen" }),
+    ).toHaveLength(1);
   });
 
   it("shows the will-become-active hint only while no provider is active", async () => {
     vi.mocked(listAiProviders).mockResolvedValueOnce([
-      newOpenAiProvider({ id: "inactive-one", displayName: "Inactive", isActive: false }),
+      newOpenAiProvider({
+        id: "inactive-one",
+        displayName: "Inactive",
+        isActive: false,
+      }),
     ]);
 
     renderForm();
@@ -735,12 +904,16 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     fillAndSubmit();
 
     // Fehler über `translateErrorCode` (übersetzter Text statt Rohtext).
-    const error = await screen.findByText(/Systemschlüsselbund ist nicht verfügbar/);
+    const error = await screen.findByText(
+      /Systemschlüsselbund ist nicht verfügbar/,
+    );
     expect(error).not.toHaveTextContent("raw activation failure");
     expect(setActiveAiProvider).toHaveBeenCalledWith("new-form-id");
     // Liste neu geladen, neuer Provider da und inaktiv.
     expect(await screen.findByText("Prov")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Aktiv setzen" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Aktiv setzen" }),
+    ).toBeInTheDocument();
     expect(deleteAiProvider).not.toHaveBeenCalled();
   });
 
@@ -787,18 +960,27 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
 describe("AiProviderSettings web research toggle (Spec 0105)", () => {
   const LABEL = "Web-Recherche (im Web suchen und Seiten lesen)";
 
-  it("is shown checked for a new Anthropic provider", () => {
+  it("is shown checked for a new Anthropic or OpenAI provider", () => {
     renderForm();
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "generic_openai_compatible" },
+    });
     expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
-    expect(screen.getByLabelText(LABEL)).toBeChecked();
+    for (const type of ["anthropic", "openai"]) {
+      fireEvent.change(screen.getByLabelText("Typ"), {
+        target: { value: type },
+      });
+      expect(screen.getByLabelText(LABEL)).toBeChecked();
+    }
   });
 
-  it("is not offered for OpenAI-compatible providers", () => {
+  it("is not offered for generic OpenAI-compatible endpoints and Ollama", () => {
     renderForm();
-    for (const type of ["openai", "generic_openai_compatible", "ollama"]) {
-      fireEvent.change(screen.getByLabelText("Typ"), { target: { value: type } });
+    for (const type of ["generic_openai_compatible", "ollama"]) {
+      fireEvent.change(screen.getByLabelText("Typ"), {
+        target: { value: type },
+      });
       expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
     }
   });
@@ -807,9 +989,19 @@ describe("AiProviderSettings web research toggle (Spec 0105)", () => {
     vi.mocked(listAiProviders).mockResolvedValue([activeAnthropicProvider()]);
     renderForm();
 
-    const toggle = await screen.findByLabelText(LABEL);
+    // The new-provider form (default type OpenAI) has its own switch now;
+    // pick the one inside the configured provider's entry.
+    const entry = (await screen.findByText("Claude")).closest(
+      "div.rounded, li, div",
+    )!;
+    let node: HTMLElement | null = entry as HTMLElement;
+    let toggle: HTMLElement | null = null;
+    while (node && !toggle) {
+      toggle = within(node).queryByLabelText(LABEL);
+      node = node.parentElement;
+    }
     expect(toggle).toBeChecked();
-    fireEvent.click(toggle);
+    fireEvent.click(toggle!);
 
     await waitFor(() => expect(updateAiProvider).toHaveBeenCalledTimes(1));
     const [id, config] = vi.mocked(updateAiProvider).mock.calls[0];
