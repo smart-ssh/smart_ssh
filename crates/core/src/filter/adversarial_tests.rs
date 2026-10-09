@@ -415,6 +415,44 @@ async fn test_adv_here_string_into_shell_hits_hard_blacklist() {
     }
 }
 
+/// Issue #53, acceptance criterion 2: the hard blacklist applies behind a
+/// here-string exactly as it does behind `-c` (Spec 0002 §3.1): with no
+/// user rules the decision is `Confirm` with code `FILTER_HARD_BLACKLIST`,
+/// identical to the `bash -c` form of the same command.
+#[tokio::test]
+async fn test_adv_here_string_hard_blacklist_matches_shell_c_form() {
+    for (here_string, shell_c) in [
+        ("bash <<< 'rm -rf /'", "bash -c 'rm -rf /'"),
+        (
+            "sh <<< 'mkfs.ext4 /dev/sda1'",
+            "sh -c 'mkfs.ext4 /dev/sda1'",
+        ),
+        (
+            "sudo bash <<< 'shutdown -h now'",
+            "sudo bash -c 'shutdown -h now'",
+        ),
+    ] {
+        let here = engine(vec![]).evaluate(here_string, &ctx()).await;
+        let c_form = engine(vec![]).evaluate(shell_c, &ctx()).await;
+        match &here {
+            Decision::Confirm { code, .. } => assert_eq!(
+                code, "FILTER_HARD_BLACKLIST",
+                "{here_string:?}: expected FILTER_HARD_BLACKLIST, got {here:?}"
+            ),
+            other => panic!("{here_string:?}: expected Confirm, got {other:?}"),
+        }
+        let code_of = |d: &Decision| match d {
+            Decision::Confirm { code, .. } | Decision::Deny { code, .. } => Some(code.clone()),
+            Decision::AutoExec => None,
+        };
+        assert_eq!(
+            (std::mem::discriminant(&here), code_of(&here)),
+            (std::mem::discriminant(&c_form), code_of(&c_form)),
+            "{here_string:?} ({here:?}) must match {shell_c:?} ({c_form:?})"
+        );
+    }
+}
+
 /// Issue #53: a benign here-string into a shell is still a script block,
 /// so `Allow "*"` never makes it `AutoExec`.
 #[tokio::test]
