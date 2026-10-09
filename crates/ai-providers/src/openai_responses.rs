@@ -24,7 +24,9 @@ use futures::{Stream, StreamExt};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
+use ssh_manager_core::ai::{
+    AiError, AiEvent, AiProvider, SessionContext, WebActivity, WebActivityKind, WebSource,
+};
 
 use crate::action::parameters_json_schema;
 use crate::error::{map_transport_error, timeout_error};
@@ -39,6 +41,17 @@ use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_T
 
 const MAX_TOKENS_FIELD: &str = "max_output_tokens";
 
+/// Issue #168 (Spec 0105 §3): upper bound of built-in tool calls (web
+/// searches) per request, sent as `max_tool_calls`. Function tools are not
+/// counted by the provider, so this is the search limit.
+const WEB_TOOL_MAX_CALLS: u32 = 5;
+
+/// The provider-side web search tool. Position: always first in the tool
+/// list, so the tool set depends only on the provider and the setting.
+fn web_tool_definition() -> Value {
+    json!({"type": "web_search"})
+}
+
 pub struct OpenAiResponsesProvider {
     client: reqwest::Client,
     base_url: String,
@@ -49,6 +62,8 @@ pub struct OpenAiResponsesProvider {
     #[allow(dead_code)]
     budget: std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard>,
     max_tokens_override: Option<u32>,
+    /// Issue #168: offer the provider's `web_search` tool in the main chat.
+    web_research: bool,
 }
 
 impl OpenAiResponsesProvider {
@@ -71,7 +86,17 @@ impl OpenAiResponsesProvider {
             extra_headers,
             budget,
             max_tokens_override,
+            web_research: false,
         }
+    }
+
+    /// Issue #168: switches the provider's `web_search` tool on or off for
+    /// the main chat (provider setting). The constructor leaves it off so
+    /// every caller enables it deliberately.
+    #[must_use]
+    pub fn with_web_research(mut self, enabled: bool) -> Self {
+        self.web_research = enabled;
+        self
     }
 
     pub(crate) fn build_request_body(&self, context: &SessionContext) -> Value {
@@ -105,23 +130,26 @@ impl OpenAiResponsesProvider {
         }
         body[MAX_TOKENS_FIELD] = json!(max_tokens);
         if self.supports_native_tool_calling && !context.available_actions.is_empty() {
-            body["tools"] = Value::Array(
-                context
-                    .available_actions
-                    .iter()
-                    .map(|action| {
-                        json!({
-                            "type": "function",
-                            "name": action.name,
-                            "description": action.description,
-                            "parameters": parameters_json_schema(action),
-                            // Responses defaults to strict schemas; the
-                            // Chat Completions path never used them.
-                            "strict": false,
-                        })
-                    })
-                    .collect(),
-            );
+            // Web search only for the main chat: every side call sets
+            // `max_tokens_hint`, the main chat never does (as on the
+            // Anthropic path).
+            let mut tools: Vec<Value> = Vec::new();
+            if self.web_research && context.max_tokens_hint.is_none() {
+                tools.push(web_tool_definition());
+                body["max_tool_calls"] = json!(WEB_TOOL_MAX_CALLS);
+            }
+            tools.extend(context.available_actions.iter().map(|action| {
+                json!({
+                    "type": "function",
+                    "name": action.name,
+                    "description": action.description,
+                    "parameters": parameters_json_schema(action),
+                    // Responses defaults to strict schemas; the
+                    // Chat Completions path never used them.
+                    "strict": false,
+                })
+            }));
+            body["tools"] = Value::Array(tools);
         }
         body
     }
@@ -177,6 +205,98 @@ fn event_stream_from_response(
     )
 }
 
+/// Web research of one response, held until its end (ADR 0117 point 10).
+///
+/// The Responses API returns no page text and no result list for a search
+/// (only the query and `url_citation` annotations on the answer), so a
+/// search is shown with its query and the answer's cited sources; there are
+/// no "Webpage read" activities. Citation titles are stored as `results`
+/// too, so the injection check sees them.
+#[derive(Default)]
+struct WebCollector {
+    searches: Vec<WebActivity>,
+    citations: Vec<WebSource>,
+}
+
+impl WebCollector {
+    fn record_call(&mut self, item: &Value) {
+        let action = item.get("action");
+        match action.and_then(|a| a.get("type")).and_then(Value::as_str) {
+            // `open_page` / `find_in_page` carry no page text the app could
+            // store, fence or check; they are not shown (Spec 0105 §4).
+            Some("open_page") | Some("find_in_page") => return,
+            _ => {}
+        }
+        let query = action
+            .and_then(|a| a.get("query"))
+            .and_then(Value::as_str)
+            .or_else(|| {
+                action
+                    .and_then(|a| a.get("queries"))
+                    .and_then(|q| q.get(0))
+                    .and_then(Value::as_str)
+            })
+            .unwrap_or_default()
+            .to_string();
+        let failed = item.get("status").and_then(Value::as_str) == Some("failed");
+        self.searches.push(WebActivity {
+            kind: WebActivityKind::Search,
+            input: query,
+            results: Vec::new(),
+            cited: Vec::new(),
+            content: None,
+            content_truncated: false,
+            error_code: failed.then(|| "search_failed".to_string()),
+        });
+    }
+
+    fn record_annotation(&mut self, annotation: &Value) {
+        if annotation.get("type").and_then(Value::as_str) != Some("url_citation") {
+            return;
+        }
+        let Some(url) = annotation.get("url").and_then(Value::as_str) else {
+            return;
+        };
+        let title = annotation
+            .get("title")
+            .and_then(Value::as_str)
+            .filter(|t| !t.is_empty())
+            .unwrap_or(url);
+        let source = WebSource {
+            title: title.to_string(),
+            url: url.to_string(),
+        };
+        if !self.citations.contains(&source) {
+            self.citations.push(source);
+        }
+    }
+
+    fn record_message_item(&mut self, item: &Value) {
+        let Some(parts) = item.get("content").and_then(Value::as_array) else {
+            return;
+        };
+        for part in parts {
+            if let Some(annotations) = part.get("annotations").and_then(Value::as_array) {
+                for annotation in annotations {
+                    self.record_annotation(annotation);
+                }
+            }
+        }
+    }
+
+    /// Hands out the activities. The answer's citations cannot be tied to
+    /// one search, so they go onto the last search of the response.
+    fn take(&mut self) -> Vec<WebActivity> {
+        let citations = std::mem::take(&mut self.citations);
+        let mut searches = std::mem::take(&mut self.searches);
+        if let Some(last) = searches.last_mut() {
+            last.results = citations.clone();
+            last.cited = citations;
+        }
+        searches
+    }
+}
+
 /// Maps a `response.failed` / `error` event to a visible error.
 fn map_stream_error(code: Option<&str>, message: &str) -> AiError {
     match code {
@@ -191,7 +311,11 @@ fn map_stream_error(code: Option<&str>, message: &str) -> AiError {
 /// Feeds one decoded event into `state`. Returns `Some(terminal)` when the
 /// event ends the response: `Ok(())` after completed/incomplete (finalize
 /// next), `Err(error)` after a failure (no finalize, no tool call released).
-fn handle_event(state: &mut OpenAiStreamState, event: &Value) -> Option<Result<(), AiError>> {
+fn handle_event(
+    state: &mut OpenAiStreamState,
+    web: &mut WebCollector,
+    event: &Value,
+) -> Option<Result<(), AiError>> {
     let kind = event.get("type").and_then(Value::as_str)?;
     match kind {
         "response.output_text.delta" => {
@@ -214,6 +338,21 @@ fn handle_event(state: &mut OpenAiStreamState, event: &Value) -> Option<Result<(
             if let Some(delta) = event.get("delta").and_then(Value::as_str) {
                 state.reasoning_delta_total_len += delta.len();
             }
+        }
+        "response.output_text.annotation.added" => {
+            if let Some(annotation) = event.get("annotation") {
+                web.record_annotation(annotation);
+            }
+        }
+        "response.output_item.done"
+            if event.pointer("/item/type").and_then(Value::as_str) == Some("web_search_call") =>
+        {
+            web.record_call(event.get("item")?);
+        }
+        "response.output_item.done"
+            if event.pointer("/item/type").and_then(Value::as_str) == Some("message") =>
+        {
+            web.record_message_item(event.get("item")?);
         }
         "response.output_item.added" | "response.output_item.done" if state.native_tool_calling => {
             let item = event.get("item")?;
@@ -323,70 +462,87 @@ fn process_frame_stream(
         finish_reason: None,
     };
 
-    Box::pin(futures::stream::unfold(state, |mut state| async move {
-        loop {
-            if let Some(event) = state.pending.pop_front() {
-                return Some((event, state));
-            }
-            if state.finished {
-                return None;
-            }
-            match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, state.frames.next()).await {
-                Ok(Some(Ok(frame))) => {
-                    // Malformed frames are skipped, like on the Chat
-                    // Completions path.
-                    let Ok(event) = serde_json::from_str::<Value>(&frame.data) else {
-                        continue;
-                    };
-                    match handle_event(&mut state, &event) {
-                        None => {}
-                        Some(Ok(())) => {
-                            state.finished = true;
-                            if let Some(reason) = state.finish_reason.clone() {
-                                crate::request_logging::log_stop_reason(
-                                    state.request_id,
-                                    "openai_responses",
-                                    &reason,
-                                );
+    Box::pin(futures::stream::unfold(
+        (state, WebCollector::default()),
+        |(mut state, mut web)| async move {
+            loop {
+                if let Some(event) = state.pending.pop_front() {
+                    return Some((event, (state, web)));
+                }
+                if state.finished {
+                    return None;
+                }
+                match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, state.frames.next()).await {
+                    Ok(Some(Ok(frame))) => {
+                        // Malformed frames are skipped, like on the Chat
+                        // Completions path.
+                        let Ok(event) = serde_json::from_str::<Value>(&frame.data) else {
+                            continue;
+                        };
+                        match handle_event(&mut state, &mut web, &event) {
+                            None => {}
+                            Some(Ok(())) => {
+                                state.finished = true;
+                                if let Some(reason) = state.finish_reason.clone() {
+                                    crate::request_logging::log_stop_reason(
+                                        state.request_id,
+                                        "openai_responses",
+                                        &reason,
+                                    );
+                                }
+                                let events = state.finalize(false);
+                                // Web research is plain information, emitted
+                                // before action proposals; a discarded
+                                // (retried) response drops it with the rest.
+                                let released = !events
+                                    .iter()
+                                    .any(|e| matches!(e, RawEvent::RetryWithHigherMaxTokens));
+                                if released {
+                                    state.pending.extend(
+                                        web.take()
+                                            .into_iter()
+                                            .map(|a| RawEvent::Public(AiEvent::WebActivity(a))),
+                                    );
+                                }
+                                state.pending.extend(events);
                             }
-                            let events = state.finalize(false);
-                            state.pending.extend(events);
-                        }
-                        Some(Err(error)) => {
-                            // A failed response never releases a tool call.
-                            state.finished = true;
-                            state.tool_calls.clear();
-                            state
-                                .pending
-                                .push_back(RawEvent::Public(AiEvent::Error(error)));
+                            Some(Err(error)) => {
+                                // A failed response never releases a tool call.
+                                state.finished = true;
+                                state.tool_calls.clear();
+                                web.take();
+                                state
+                                    .pending
+                                    .push_back(RawEvent::Public(AiEvent::Error(error)));
+                            }
                         }
                     }
-                }
-                Ok(Some(Err(err))) => {
-                    let mapped = map_transport_error(&err);
-                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                    log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
-                }
-                Ok(None) => {
-                    state.finished = true;
-                    // No terminal event seen: abrupt.
-                    let events = state.finalize(true);
-                    state.pending.extend(events);
-                }
-                Err(_elapsed) => {
-                    let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
-                    let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
-                    log_provider_transport_error(state.request_id, &mapped, &secrets);
-                    state
-                        .pending
-                        .push_back(RawEvent::Public(AiEvent::Error(mapped)));
-                    state.finished = true;
+                    Ok(Some(Err(err))) => {
+                        let mapped = map_transport_error(&err);
+                        let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
+                        log_provider_transport_error(state.request_id, &mapped, &secrets);
+                        state
+                            .pending
+                            .push_back(RawEvent::Public(AiEvent::Error(mapped)));
+                        state.finished = true;
+                    }
+                    Ok(None) => {
+                        state.finished = true;
+                        // No terminal event seen: abrupt.
+                        let events = state.finalize(true);
+                        state.pending.extend(events);
+                    }
+                    Err(_elapsed) => {
+                        let mapped = timeout_error(SSE_INACTIVITY_TIMEOUT);
+                        let secrets: Vec<&str> = state.secrets.iter().map(String::as_str).collect();
+                        log_provider_transport_error(state.request_id, &mapped, &secrets);
+                        state
+                            .pending
+                            .push_back(RawEvent::Public(AiEvent::Error(mapped)));
+                        state.finished = true;
+                    }
                 }
             }
-        }
-    }))
+        },
+    ))
 }

@@ -98,7 +98,7 @@ export interface AiProviderConfigInput {
 /** Spec 0105: nur diese Provider-Typen haben serverseitige Web-Werkzeuge —
  * nur für sie zeigt das Formular den Schalter. */
 export function supportsWebResearch(type: ProviderType): boolean {
-  return type === "anthropic";
+  return type === "anthropic" || type === "openai";
 }
 
 // Nur bei diesen beiden Typen ist Base-URL relevant (Spec 0007, Abschnitt

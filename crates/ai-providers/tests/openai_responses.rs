@@ -259,3 +259,148 @@ async fn http_errors_use_the_shared_mapping() {
     let events = collect(&provider(&server, true)).await;
     assert_eq!(events, vec![AiEvent::Error(AiError::AuthenticationFailed)]);
 }
+
+// --- Issue #168: web research via the Responses `web_search` tool ---------
+
+fn web_provider(server: &MockServer, enabled: bool) -> OpenAiResponsesProvider {
+    provider(server, true).with_web_research(enabled)
+}
+
+fn tool_types(body: &serde_json::Value) -> Vec<String> {
+    body["tools"]
+        .as_array()
+        .map(|tools| {
+            tools
+                .iter()
+                .map(|t| t["type"].as_str().unwrap_or_default().to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn web_search_tool_is_first_and_limited_when_enabled() {
+    let server = serve(sse(&[COMPLETED])).await;
+    collect(&web_provider(&server, true)).await;
+    let body = &sent_bodies(&server).await[0];
+    let types = tool_types(body);
+    assert_eq!(types[0], "web_search");
+    assert!(types[1..].iter().all(|t| t == "function"), "{types:?}");
+    assert_eq!(body["max_tool_calls"], 5);
+    assert_eq!(body["store"], false);
+    assert!(body.get("web_search_options").is_none());
+}
+
+#[tokio::test]
+async fn no_web_field_when_switched_off() {
+    let server = serve(sse(&[COMPLETED])).await;
+    collect(&web_provider(&server, false)).await;
+    let body = &sent_bodies(&server).await[0];
+    assert!(!tool_types(body).iter().any(|t| t == "web_search"));
+    assert!(body.get("max_tool_calls").is_none());
+    assert!(!body.to_string().contains("web_search"), "{body}");
+}
+
+#[tokio::test]
+async fn side_calls_never_get_the_web_tool() {
+    let server = serve(sse(&[COMPLETED])).await;
+    let mut ctx = context();
+    ctx.max_tokens_hint = Some(300);
+    let _ = web_provider(&server, true)
+        .send(ctx)
+        .collect::<Vec<_>>()
+        .await;
+    let body = &sent_bodies(&server).await[0];
+    assert!(!body.to_string().contains("web_search"), "{body}");
+    assert!(body.get("max_tool_calls").is_none());
+}
+
+#[tokio::test]
+async fn web_search_call_and_citations_become_one_search_activity() {
+    let server = serve(sse(&[
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"web_search_call","id":"ws_1","status":"completed","action":{"type":"search","query":"nginx 1.29 changes"}}}"#,
+        ),
+        (
+            "response.output_text.delta",
+            r#"{"type":"response.output_text.delta","delta":"See the changelog."}"#,
+        ),
+        (
+            "response.output_text.annotation.added",
+            r#"{"type":"response.output_text.annotation.added","annotation":{"type":"url_citation","url":"https://nginx.org/en/CHANGES","title":"nginx changes","start_index":0,"end_index":4}}"#,
+        ),
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":1,"item":{"type":"message","content":[{"type":"output_text","text":"x","annotations":[{"type":"url_citation","url":"https://nginx.org/en/CHANGES","title":"nginx changes"}]}]}}"#,
+        ),
+        COMPLETED,
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    let activities: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            AiEvent::WebActivity(a) => Some(a),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(activities.len(), 1, "{events:?}");
+    let a = activities[0];
+    assert_eq!(a.kind, ssh_manager_core::ai::WebActivityKind::Search);
+    assert_eq!(a.input, "nginx 1.29 changes");
+    assert_eq!(a.cited.len(), 1, "citations are deduplicated");
+    assert_eq!(a.cited[0].url, "https://nginx.org/en/CHANGES");
+    assert_eq!(a.results, a.cited);
+    assert!(a.content.is_none());
+    assert!(a.error_code.is_none());
+    // Plain information: no action proposal.
+    assert!(!events
+        .iter()
+        .any(|e| matches!(e, AiEvent::ActionProposed(_))));
+}
+
+#[tokio::test]
+async fn open_page_action_is_not_shown_and_failed_search_carries_a_code() {
+    let server = serve(sse(&[
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"web_search_call","status":"completed","action":{"type":"open_page","url":"https://example.com/x"}}}"#,
+        ),
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":1,"item":{"type":"web_search_call","status":"failed","action":{"type":"search","query":"q"}}}"#,
+        ),
+        COMPLETED,
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    let activities: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            AiEvent::WebActivity(a) => Some(a),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(activities.len(), 1, "{events:?}");
+    assert_eq!(activities[0].input, "q");
+    assert_eq!(activities[0].error_code.as_deref(), Some("search_failed"));
+}
+
+#[tokio::test]
+async fn failed_response_releases_no_web_activity() {
+    let server = serve(sse(&[
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"web_search_call","status":"completed","action":{"type":"search","query":"q"}}}"#,
+        ),
+        (
+            "response.failed",
+            r#"{"type":"response.failed","response":{"error":{"code":"server_error","message":"boom"}}}"#,
+        ),
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    assert!(events.iter().any(|e| matches!(e, AiEvent::Error(_))));
+    assert!(!events.iter().any(|e| matches!(e, AiEvent::WebActivity(_))));
+}
