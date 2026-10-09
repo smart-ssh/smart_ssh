@@ -22,4 +22,7 @@ export interface NpmLsNode {
 export function parseAllowList(licensesFilePath: string): string[];
 export function isLicenseAllowed(expr: string, allowList: string[]): boolean;
 export function collectProdPackages(npmLsTree: NpmLsNode): { name: string; version: string }[];
+export function localPackagePredicate(
+  npmLsTree: NpmLsNode,
+): (name: string, info: NpmLsNode) => boolean;
 export function collectNpmProdPackages(frontendDir: string, allowList: string[]): NpmPackageNotice[];

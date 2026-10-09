@@ -344,30 +344,50 @@ function runNpmLs(frontendDir) {
   }
 }
 
-// Issue #118: Ein Paket mit `file:`-Auflösung ist kein Drittpaket, sondern
-// ein lokales — ein Mitglied des npm-Workspace (läuft das Skript mit
-// `--frontend` auf dessen Wurzel, listet `npm ls` die Mitglieder selbst als
-// oberste Abhängigkeiten) oder ein per `file:` verlinktes Paket. Es wird
-// nicht gelistet und nicht gegen die erlaubten Lizenzen geprüft (ein
-// unveröffentlichtes Workspace-Mitglied hat oft gar kein `license`-Feld);
-// seine eigenen Produktionsabhängigkeiten sammelt `walk` trotzdem weiter.
-// Alle anderen Auflösungen (Registry, Git, Tarball-URL) bleiben Drittpakete
-// und laufen unverändert durch die Lizenzprüfung.
-function hasFileResolution(info) {
-  return typeof info.resolved === "string" && info.resolved.startsWith("file:");
+// Issue #118/#122: Ein Paket, dessen `file:`-Auflösung auf ein Verzeichnis
+// zeigt, ist kein Drittpaket, sondern ein lokales — ein Mitglied des
+// npm-Workspace (läuft das Skript mit `--frontend` auf dessen Wurzel, listet
+// `npm ls` die Mitglieder selbst als oberste Abhängigkeiten) oder ein per
+// `file:` verlinktes Verzeichnis. Es wird nicht gelistet und nicht gegen die
+// erlaubten Lizenzen geprüft (ein unveröffentlichtes Workspace-Mitglied hat
+// oft gar kein `license`-Feld); seine eigenen Produktionsabhängigkeiten
+// sammelt `walk` trotzdem weiter.
+//
+// Zeigt die `file:`-Auflösung dagegen auf einen Tarball (z. B.
+// `"foo": "file:vendor/foo-1.0.0.tgz"`), ist das Paket echter Drittcode: npm
+// entpackt ihn als gewöhnliches Verzeichnis nach `node_modules`. Es bleibt
+// ein Drittpaket wie jede andere Auflösung (Registry, Git, Tarball-URL) und
+// läuft durch die Lizenzprüfung.
+//
+// Tarball oder Verzeichnis entscheidet die Endung des aufgelösten Pfads,
+// nicht ein Blick auf die Platte: Dieselbe Regel (`.tgz`, `.tar.gz`, `.tar`,
+// Groß/Klein egal) nutzt npm selbst (`npm-package-arg`), um eine
+// `file:`-Angabe als Tarball oder Verzeichnis einzuordnen. Sie stimmt damit
+// genau mit dem überein, was npm installiert hat, und braucht den Tarball
+// nicht — der muss nach der Installation nicht mehr vorhanden sein, und ein
+// relativer `resolved`-Pfad hätte keine eindeutige Basis.
+const TARBALL_PATH = /\.(?:tgz|tar\.gz|tar)$/i;
+
+function isLocalDirectoryLink(info) {
+  return (
+    typeof info.resolved === "string" &&
+    info.resolved.startsWith("file:") &&
+    !TARBALL_PATH.test(info.resolved)
+  );
 }
 
 // Hängt ein Mitglied von einem anderen ab, nennt `npm ls` es unter dem
 // abhängigen Mitglied noch einmal, dort aber ohne `resolved` (gemessen mit
-// npm 11). Deshalb zuerst alle `file:`-Pakete im ganzen Baum sammeln; ein
-// Eintrag OHNE `resolved` mit demselben Namen und derselben Version gilt
-// dann ebenfalls als lokal. Ein Eintrag mit anderer Auflösung bleibt ein
+// npm 11). Deshalb zuerst alle lokalen Verzeichnis-Pakete im ganzen Baum
+// sammeln; ein Eintrag OHNE `resolved` mit demselben Namen und derselben
+// Version gilt dann ebenfalls als lokal. Ein Tarball-Paket trägt hier nichts
+// bei (Issue #122), und ein Eintrag mit anderer Auflösung bleibt ein
 // Drittpaket, auch bei gleichem Namen.
 function collectLocalPackageKeys(npmLsTree) {
   const keys = new Set();
   function walk(node) {
     for (const [name, info] of Object.entries(node.dependencies ?? {})) {
-      if (info.version && hasFileResolution(info)) keys.add(`${name}@${info.version}`);
+      if (info.version && isLocalDirectoryLink(info)) keys.add(`${name}@${info.version}`);
       walk(info);
     }
   }
@@ -375,11 +395,15 @@ function collectLocalPackageKeys(npmLsTree) {
   return keys;
 }
 
-function collectProdPackages(npmLsTree) {
+function localPackagePredicate(npmLsTree) {
   const localKeys = collectLocalPackageKeys(npmLsTree);
-  const isLocalPackage = (name, info) =>
-    hasFileResolution(info) ||
+  return (name, info) =>
+    isLocalDirectoryLink(info) ||
     (info.resolved === undefined && localKeys.has(`${name}@${info.version}`));
+}
+
+function collectProdPackages(npmLsTree) {
+  const isLocalPackage = localPackagePredicate(npmLsTree);
   const seen = new Set();
   const out = [];
   function walk(node) {
@@ -691,6 +715,7 @@ export {
   parseAllowList,
   isLicenseAllowed,
   collectProdPackages,
+  localPackagePredicate,
   collectNpmProdPackages,
   groupByText,
   generate,

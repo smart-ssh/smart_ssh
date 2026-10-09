@@ -98,9 +98,12 @@ Nicht-Ziele:
   (d) der Schriften (A6). Je Lizenztext stehen die Pakete (Name, Version),
   die ihn verwenden; Pakete des eigenen Workspace dürfen fehlen. Lokale
   npm-Pakete — Mitglieder eines npm-Workspace und per `file:` verlinkte
-  Pakete — sind keine Drittpakete: Sie stehen nicht in der Ausgabe und
-  werden nicht gegen die erlaubten Lizenzen geprüft; ihre
-  Produktionsabhängigkeiten stehen darin, jede genau einmal.
+  Verzeichnisse — sind keine Drittpakete: Sie stehen nicht in der Ausgabe
+  und werden nicht gegen die erlaubten Lizenzen geprüft; ihre
+  Produktionsabhängigkeiten stehen darin, jede genau einmal. Ein aus einem
+  lokalen Tarball installiertes Paket (`file:…/*.tgz`, `.tar.gz`, `.tar`)
+  ist dagegen ein Drittpaket: Es steht in der Ausgabe und wird geprüft wie
+  ein Paket aus der Registry.
 - A1.2 MUSS: Hat ein Paket eine Hinweisdatei (`NOTICE*`, Groß/Klein egal),
   steht ihr Inhalt mit Paketname in der Ausgabe.
 - A1.3 MUSS: Das Skript löscht zu Beginn eine vorhandene Ausgabe. Es bricht
@@ -221,7 +224,12 @@ Datei); `deny.toml` bleibt unverändert.
   einmal, und keines der Mitglieder. Hat ein Drittpaket darin eine nicht
   erlaubte oder gar keine Lizenzangabe, bricht sie ab. Scheitert, wenn
   Mitglieder als Drittpakete gelten oder `file:`-Pakete die Lizenzprüfung
-  für echte Drittpakete aushebeln.
+  für echte Drittpakete aushebeln. Dazu ein Fixture mit einer
+  Produktionsabhängigkeit aus einem lokalen Tarball und einem per `file:`
+  verlinkten Verzeichnis: Das Tarball-Paket steht mit seinem Lizenztext in
+  der Ausgabe, das Verzeichnis nicht; bei nicht erlaubter oder fehlender
+  Lizenzangabe des Tarball-Pakets bricht der Lauf ab. Ein Eintrag ohne
+  Auflösung mit Name und Version des Tarball-Pakets gilt nicht als lokal.
 - **T6 Anzeige mit Datei** (A4.1): Oberflächentest — Klick auf den Eintrag
   öffnet die Ansicht mit dem Text.
 - **T7 Anzeige ohne gültige Datei** (A4.3): (a) Laden scheitert, (b) Laden
