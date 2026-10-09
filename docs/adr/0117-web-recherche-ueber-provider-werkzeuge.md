@@ -73,6 +73,16 @@ genutzt werden und wie Webinhalt im Verlauf gespeichert wird.
 11. **`pause_turn` wird nicht automatisch fortgesetzt.** Eine pausierte
     Antwort endet wie eine normale. Automatisches Fortsetzen bräuchte die
     Original-Blöcke des Providers (Punkt 8).
+12. **Aktionsergebnisse sind für die Abruf-Regel Nutzertext.** Befehls- und
+    andere Aktionsergebnisse gehen als Nutzernachricht an den Anthropic-
+    Provider, weil es keine Werkzeug-Aufruf-ID gibt, an die sie sich als
+    Werkzeug-Ergebnis hängen ließen. Eine Adresse in so einem Ergebnis zählt
+    deshalb für die Regel des Providers (Seitenabruf nur für Adressen, die
+    im Gespräch stehen) als vom Nutzer genannt. Das ist dokumentiert (Spec
+    0105, Abschnitt 3), nicht geändert: Der erzeugende Befehl läuft durch
+    Filter und Bestätigung, und die Sitzung ist nach dem Einlesen schon
+    belastet. Ein Umstieg auf echte Werkzeug-Ergebnisse wäre eine eigene
+    Aufgabe.
 
 ## Konsequenzen
 
