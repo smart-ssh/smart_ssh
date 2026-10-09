@@ -71,11 +71,11 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm ci
 
-      # Spec 0099 (BL-0054), A2.1: jeder Release-Build der Matrix erzeugt
-      # die Drittlizenz-Liste selbst (statt eines vorgelagerten Jobs) — der
-      # Inhalt hängt nicht von der Bauplattform ab (Spec, Abschnitt 5), ein
-      # eigener Job hätte hier nur plattformübergreifenden Artefakt-Transfer
-      # ohne Nutzen hinzugefügt. Dieselbe feste cargo-about-Version wie in
+      # Spec 0099, A2.1: jeder Release-Build der Matrix erzeugt die
+      # Drittlizenz-Liste selbst vor dem Bau der App (statt eines
+      # vorgelagerten Jobs) — ein eigener Job hätte nur
+      # plattformübergreifenden Artefakt-Transfer ohne Nutzen hinzugefügt.
+      # Dieselbe feste cargo-about-Version wie in
       # der Community-CI und im Skript selbst (A1.6).
       - name: Install cargo-about
         uses: taiki-e/install-action@v2
