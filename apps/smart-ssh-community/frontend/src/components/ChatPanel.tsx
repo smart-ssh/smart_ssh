@@ -60,6 +60,7 @@ import type {
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { WebActivityCard } from "./WebActivityCard";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 export type ChatItem =
   | {
@@ -1443,6 +1444,7 @@ function ConfirmActionForm({
             {t("confirmDialog.editableCommand")}
           </span>
           <textarea
+            {...TECHNICAL_INPUT_PROPS}
             value={edited}
             onChange={(e) => setEdited(e.target.value)}
             rows={2}
@@ -1614,6 +1616,7 @@ function QuickRuleButton({
           </div>
           {scopeKind === "tag" && (
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               value={tag}
               onChange={(e) => setTag(e.target.value)}

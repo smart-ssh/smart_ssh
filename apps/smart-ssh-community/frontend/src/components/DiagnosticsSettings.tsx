@@ -9,6 +9,7 @@ import {
 } from "../api";
 import type { KeychainStatusDto } from "../types";
 import { DataPathsSection } from "./DataPathsSection";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöst — eigene
  * Kategorie ("Diagnose") in der zweispaltigen Settings-Struktur. */
@@ -115,6 +116,7 @@ export function DiagnosticsSettings() {
         <div className="space-y-2">
           <p className="text-xs text-slate-400">{t("diagnostics.previewHint")}</p>
           <textarea
+            {...TECHNICAL_INPUT_PROPS}
             readOnly
             value={bundle}
             className="h-64 w-full select-text rounded border border-slate-600 bg-slate-900 p-2 font-mono text-xs text-slate-100"

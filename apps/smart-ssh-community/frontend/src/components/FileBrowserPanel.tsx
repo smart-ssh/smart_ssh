@@ -49,6 +49,7 @@ import { useDragResize } from "../useDragResize";
 import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
  * (alles in px). Die Name-Spalte hat bewusst keinen eigenen Eintrag hier
@@ -904,6 +905,7 @@ export function FileBrowserPanel({
           }}
         >
           <input
+            {...TECHNICAL_INPUT_PROPS}
             value={pathInput}
             onChange={(e) => setPathInput(e.target.value)}
             className="w-full border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-200 focus:outline-none"
@@ -925,6 +927,7 @@ export function FileBrowserPanel({
         </button>
         {!elevated && (
           <input
+            {...TECHNICAL_INPUT_PROPS}
             value={elevationTargetUser}
             onChange={(e) => setElevationTargetUser(e.target.value)}
             aria-label={t("fileElevation.targetUserLabel")}
@@ -1752,6 +1755,7 @@ function ChmodDialog({
         <label className="mb-3 flex items-center gap-2 text-xs text-slate-300">
           {t("fileBrowser.chmod.numeric")}
           <input
+            {...TECHNICAL_INPUT_PROPS}
             value={numericInput}
             onChange={(e) => handleNumericChange(e.target.value)}
             maxLength={4}
@@ -1832,6 +1836,7 @@ function RenamePrompt({
           }}
         >
           <input
+            {...TECHNICAL_INPUT_PROPS}
             ref={inputRef}
             value={initialValue}
             onChange={(e) => onChange(e.target.value)}
