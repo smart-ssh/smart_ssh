@@ -1,6 +1,11 @@
 {
   "status": 404,
   "body": {
-    "error": "model 'llama9-does-not-exist' not found, try pulling it first"
+    "error": {
+      "message": "model 'no-such-model-xyz' not found",
+      "type": "not_found_error",
+      "param": null,
+      "code": null
+    }
   }
 }
