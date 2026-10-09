@@ -117,6 +117,19 @@ darf **nicht** als Ganzes gegen `ls *` gematcht werden. Vorgehen:
    Subcheck behandelt und erzwingt mindestens `Confirm`, da sie dynamisch zur
    Laufzeit anderen Code ausführen kann, der zum Zeitpunkt der Prüfung nicht
    vollständig bekannt ist.
+
+   **Hinterlegter Code** wird genauso behandelt: Ein Kommando, das Code
+   für eine spätere Ausführung speichert — ein `trap`-Handler (läuft bei
+   einem Signal oder beim Beenden der Shell) oder eine Alias-Definition
+   `alias NAME=WERT` (läuft bei jedem späteren Aufruf des Namens) —
+   erzwingt mindestens `Confirm` mit einem Grund, der `trap` bzw. `alias`
+   nennt, auch hinter `command`/`builtin`. Lässt sich der hinterlegte Code
+   als Zeichenkette lesen, wird er zusätzlich wie ein eigenes Kommando
+   geprüft; eine `Deny`-Regel oder die Hard-Blacklist greift also auch
+   darin. Reine Abfrage- und Rücksetzformen speichern keinen Code und
+   bleiben unverändert: `trap`, `trap -p`, `trap -l`, `trap - SIG`,
+   `trap '' SIG`, `alias`, `alias NAME`, `alias -p`.
+
 6. `sudo`/`doas`-Präfixe werden vor dem Matching entfernt und **zusätzlich**
    separat vermerkt (`elevated: true` im Decision-Kontext), sodass später z. B.
    eine Regel "alles mit sudo → immer Confirm" möglich ist.
