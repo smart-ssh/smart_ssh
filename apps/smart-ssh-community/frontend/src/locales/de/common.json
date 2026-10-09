@@ -883,6 +883,7 @@
     "newFolderButton": "+ Ordner",
     "upload": "Hochladen",
     "uploadDialogTitle": "Datei(en) hochladen",
+    "downloadDirDialogTitle": "Zielordner wählen",
     "paste": "Einfügen",
     "pasteTitle": "{{name}} hierher verschieben",
     "cancelCut": "Ausschneiden abbrechen",
