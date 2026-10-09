@@ -489,6 +489,11 @@ pub struct SessionParts {
     /// `SessionManager` entfernt wurde, und ist als App-weite Benachrichtigung
     /// (`note-update-suggested`) ohnehin nie an einen Tab gebunden.
     pub pending_action: StdMutex<Option<ActionId>>,
+    /// Issue #108, Spec 0104 §5: `true`, solange eine MCP-Bestätigung dieser
+    /// Session registriert ist (von der Registrierung bis zum Aufräumen,
+    /// also auch vor dem Setzen des Indikators). Ein weiterer MCP-Vorschlag
+    /// wird dann abgewiesen.
+    pub mcp_confirmation_claim: std::sync::atomic::AtomicBool,
     // Spec 0085, A3: Der normale SFTP-Kanal war bis hierhin ein `pub`-Feld
     // dieser Struktur. Er liegt jetzt als privates Feld an `Session` selbst
     // (s. `NormalSftpChannel`): so kann Code außerhalb von `app-logic` ihn
@@ -1213,6 +1218,7 @@ mod tests {
             sudo_password: None,
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
+            mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),
             chat_turn: std::sync::Mutex::new(crate::session::ChatTurnState::default()),
