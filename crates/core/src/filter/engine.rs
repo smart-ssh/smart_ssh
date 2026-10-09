@@ -344,7 +344,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                 // Ambiguous-Baseline von mindestens `Confirm` wird also nie
                 // unterschritten, nur ggf. auf `Deny` verschärft.
                 //
-                // Issue #53 (ADR 0121): the same for the code a shell reads
+                // Issue #53 (ADR 0122): the same for the code a shell reads
                 // from a here-string (`bash <<< "..."`). The recursion
                 // counts towards the depth cap like the `-c` path.
                 let inner_traces: Vec<EvaluationTrace> =

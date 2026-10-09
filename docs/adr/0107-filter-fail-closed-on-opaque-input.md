@@ -180,7 +180,7 @@ wie weit die Engine sie auflösen soll.
    nicht extrahiert, ein `Deny` dahinter greift also nicht. Das erfüllt
    „nie AutoExec“; eine Auflösung zu `Deny` wäre ein eigener Schritt.
 
-   > **Nachtrag (Issue #53):** Abgelöst durch ADR 0121 — der Inhalt eines
+   > **Nachtrag (Issue #53):** Abgelöst durch ADR 0122 — der Inhalt eines
    > Here-Strings, den eine Shell als Programm liest, wird jetzt wie `-c`-Code
    > ausgewertet; ein `Deny` dahinter greift.
 

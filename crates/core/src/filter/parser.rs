@@ -282,7 +282,7 @@ fn extract_shell_c_style_code(cmd: &str) -> Option<String> {
     tokens.into_iter().nth(2)
 }
 
-/// Issue #53 (ADR 0121): the code a shell reads from a here-string
+/// Issue #53 (ADR 0122): the code a shell reads from a here-string
 /// (`bash <<< "CODE"`, `sudo sh <<< 'CODE'`, `bash<<<'CODE'`), so the engine
 /// can evaluate it like the code behind `bash -c`. Returns at most one code.
 ///
