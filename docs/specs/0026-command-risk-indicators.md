@@ -118,7 +118,6 @@ Schaden lässt sich gut musterbasiert erfassen.
 5. **Zeitpunkt:** Die regelbasierte Einschätzung wird sofort angezeigt. Die
    Zweitmeinung wird danach eingeholt und per Aktualisierung nachgereicht. Ein
    automatisches Ausführen wartet jedoch auf sie (Spec 0092, A3).
-
 6. **Nicht verfügbar ist sichtbar, nie still.** Kann die Zweitmeinung zu
    einer Aktion nicht eingeholt werden – der Provider antwortet mit einem
    Fehler (abgelaufener oder gedrehter Schlüssel, Rate-Limit, Netzwerk,
