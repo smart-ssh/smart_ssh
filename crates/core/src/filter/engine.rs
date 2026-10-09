@@ -343,10 +343,19 @@ impl<S: PolicyStore> FilterEngine<S> {
                 // kombiniert wird nur zum jeweils strengeren Ergebnis, der
                 // Ambiguous-Baseline von mindestens `Confirm` wird also nie
                 // unterschritten, nur ggf. auf `Deny` verschärft.
+                //
+                // Issue #53 (ADR 0121): the same for the code a shell reads
+                // from a here-string (`bash <<< "..."`). The recursion
+                // counts towards the depth cap like the `-c` path.
                 let inner_traces: Vec<EvaluationTrace> =
                     parser::extract_shell_c_style_codes(command)
-                        .iter()
-                        .map(|code_arg| self.evaluate_parsed_explained(code_arg, rules, depth + 1))
+                        .into_iter()
+                        .chain(
+                            parser::extract_here_string_codes(command)
+                                .into_iter()
+                                .filter(|code| !code.trim().is_empty()),
+                        )
+                        .map(|code| self.evaluate_parsed_explained(&code, rules, depth + 1))
                         .collect();
                 let decision = inner_traces
                     .iter()
@@ -939,5 +948,51 @@ mod code_tests {
             ),
             FILTER_RULE_CONFIRM,
         );
+    }
+}
+
+#[cfg(test)]
+mod here_string_depth_tests {
+    use super::*;
+
+    struct NoRules;
+
+    #[async_trait]
+    impl PolicyStore for NoRules {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+            Vec::new()
+        }
+    }
+
+    /// Issue #53: the code behind a here-string is evaluated one level
+    /// deeper, so at the cap it hits the ADR 0036 `Deny` instead of being
+    /// evaluated (or silently skipped).
+    #[test]
+    fn test_here_string_recursion_counts_towards_depth_cap() {
+        let engine = FilterEngine::new(NoRules);
+        let trace =
+            engine.evaluate_parsed_explained("bash <<< 'ls'", &[], parser::MAX_SUBSTITUTION_DEPTH);
+        match &trace.decision {
+            Decision::Deny { code, .. } => assert_eq!(code, FILTER_SUBSTITUTION_TOO_DEEP),
+            other => panic!("expected the depth-cap Deny, got {other:?}"),
+        }
+    }
+
+    /// Counter-check: one level below the cap the here-string code is
+    /// evaluated normally (`Confirm`, no depth-cap `Deny`).
+    #[test]
+    fn test_here_string_recursion_below_depth_cap_evaluates_normally() {
+        let engine = FilterEngine::new(NoRules);
+        let trace = engine.evaluate_parsed_explained(
+            "bash <<< 'ls'",
+            &[],
+            parser::MAX_SUBSTITUTION_DEPTH - 1,
+        );
+        assert!(
+            matches!(trace.decision, Decision::Confirm { .. }),
+            "expected Confirm, got {:?}",
+            trace.decision
+        );
+        assert_eq!(trace.sub_command_traces.len(), 1);
     }
 }

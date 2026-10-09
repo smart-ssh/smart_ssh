@@ -369,6 +369,100 @@ async fn test_adv_here_strings_and_heredocs_never_autoexec() {
     }
 }
 
+/// Issue #53: the code a shell reads from a here-string is evaluated like
+/// `bash -c` code, so the `Deny` rule applies behind it.
+#[tokio::test]
+async fn test_adv_here_string_into_shell_hits_deny_rule() {
+    for cmd in [
+        "bash <<< \"rm -rf /\"",
+        "sh <<< 'rm -rf /'",
+        "bash<<<'rm -rf /'",
+        "sudo bash <<< \"rm -rf /\"",
+        "sudo -u root env bash <<< 'rm -rf /'",
+        "/bin/bash -s <<< 'rm -rf /'",
+        "zsh <<< rm\\ -rf\\ /",
+        "source /dev/stdin <<< 'rm -rf /'",
+        "echo hi; bash <<< 'rm -rf /'",
+        "bash <<< 'rm -rf /' | cat",
+        // Nested: the inner here-string is evaluated in turn.
+        "bash <<< \"bash <<< 'rm -rf /'\"",
+    ] {
+        assert_denied_by_rm_rule(cmd).await;
+    }
+}
+
+/// Issue #53: a hard-blacklisted command behind a here-string is found by
+/// the hard blacklist even with no user rules (before, the here-string was
+/// opaque and no blacklist entry matched).
+#[tokio::test]
+async fn test_adv_here_string_into_shell_hits_hard_blacklist() {
+    for cmd in [
+        "bash <<< 'rm -rf /'",
+        "sh <<< 'mkfs.ext4 /dev/sda1'",
+        "sudo bash <<< 'shutdown -h now'",
+    ] {
+        let trace = engine(vec![]).evaluate_explained(cmd, &ctx()).await;
+        assert!(
+            trace.matched_hard_blacklist_entry.is_some(),
+            "{cmd:?}: expected a hard-blacklist match, got {trace:?}"
+        );
+        assert!(
+            !matches!(trace.decision, Decision::AutoExec),
+            "{cmd:?}: must never be AutoExec, got {:?}",
+            trace.decision
+        );
+        assert_never_autoexec(cmd).await;
+    }
+}
+
+/// Issue #53: a benign here-string into a shell is still a script block,
+/// so `Allow "*"` never makes it `AutoExec`.
+#[tokio::test]
+async fn test_adv_benign_here_string_into_shell_stays_confirm() {
+    for cmd in ["bash <<< \"ls\"", "sh <<< 'ls -la'"] {
+        let decision = engine(vec![allow_all(), deny_rm()])
+            .evaluate(cmd, &ctx())
+            .await;
+        assert!(
+            matches!(decision, Decision::Confirm { .. }),
+            "{cmd:?}: expected Confirm, got {decision:?}"
+        );
+    }
+}
+
+/// Issue #53: what cannot be extracted unambiguously is not resolved to
+/// `Deny` but stays at `Confirm`: a non-shell target, an interpreter, a
+/// shell running a script operand or `-c` code, here-docs, several
+/// here-strings, other input redirections, unbalanced quotes and words the
+/// shell would expand.
+#[tokio::test]
+async fn test_adv_here_string_ambiguous_forms_stay_confirm() {
+    for cmd in [
+        "cat <<< \"rm -rf /\"",
+        "cat <<< 'rm -rf /' | sh",
+        "python3 <<< 'rm -rf /'",
+        "bash script.sh <<< 'rm -rf /'",
+        "bash <<EOF\nrm -rf /\nEOF",
+        "bash <<-EOF\n\trm -rf /\nEOF",
+        "bash <<< 'rm -rf /' <<< 'ls'",
+        "bash < /tmp/x <<< 'rm -rf /'",
+        "bash <<< \"rm -rf /",
+        "bash <<< \"$(echo rm -rf /)\"",
+        "bash <<< \"$CMD rm -rf /\"",
+        "bash <<< `echo rm -rf /`",
+        "bash <<< ~/rm",
+    ] {
+        let decision = engine(vec![allow_all(), deny_rm()])
+            .evaluate(cmd, &ctx())
+            .await;
+        assert!(
+            matches!(decision, Decision::Confirm { .. }),
+            "{cmd:?}: expected Confirm (not extracted), got {decision:?}"
+        );
+        assert_never_autoexec(cmd).await;
+    }
+}
+
 /// Every shell with a `-c`-style code argument, not only bash/sh/zsh/dash,
 /// and `-c` in a later chain segment or behind other options: the code is
 /// evaluated as a command of its own, so the `Deny` rule still applies.
