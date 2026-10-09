@@ -1,7 +1,7 @@
 # ADR 0107 — Filter-Engine: fail-closed bei undurchsichtiger Eingabe
 
 Status: akzeptiert
-Betrifft: Issue #13, Issue #60, Spec 0002 (Abschnitte 3, 4.4, 4.6), ADR 0001, ADR 0036
+Betrifft: Issue #13, Issue #55, Issue #60, Spec 0002 (Abschnitte 3, 4.4, 4.6), ADR 0001, ADR 0036
 
 ## Problem
 
@@ -180,12 +180,46 @@ wie weit die Engine sie auflösen soll.
    nicht extrahiert, ein `Deny` dahinter greift also nicht. Das erfüllt
    „nie AutoExec“; eine Auflösung zu `Deny` wäre ein eigener Schritt.
 
+8. **Hinterlegter Code: `trap` und `alias` (Issue #55).** Beide speichern
+   Shell-Code, der *später* läuft — der `trap`-Handler bei einem Signal
+   oder beim Beenden der Shell, der Alias-Wert bei jedem späteren
+   Kommando, das mit dem Alias-Namen beginnt. Diese spätere Ausführung
+   sieht die Engine nie (sie hat keinen Zustand über Kommandos hinweg),
+   also muss die Definition selbst geprüft werden. Nach demselben
+   Wrapper-Abschälen wie bei `eval` (`command`, `builtin`, `sudo`, ...)
+   und case-insensitiv gilt:
+   - **`trap` mit Handler** → Untergrenze `Confirm`; der Handler wird
+     entquotet und rekursiv wie bei `eval` ausgewertet, ein `Deny` oder
+     die Hard-Blacklist dahinter greift also. Ausgenommen sind nur Formen
+     ohne Code: `trap`, `trap -p [SIG…]`, `trap -l` (Auflisten),
+     `trap - SIG…` und `trap '' SIG…` (Zurücksetzen bzw. Ignorieren) sowie
+     `trap SIG` mit genau einem Operanden, der wie ein Signalname aussieht
+     (ASCII-Buchstaben, Ziffern, `_`, `+`, `-`; Bash setzt dann zurück).
+     Ein einzelner Operand, der kein Signalname sein kann
+     (`trap 'rm x'`), gilt als Handler. Unbekannte Optionen (`trap -z …`)
+     und nicht zerlegbare Argumente → `Confirm` ohne Rekursion.
+   - **`alias` mit mindestens einem Argument, das `=` enthält** →
+     Untergrenze `Confirm`; jeder Wert wird rekursiv ausgewertet.
+     Ausgenommen sind `alias`, `alias NAME…` und `alias -p` (Auflisten).
+     Bewusst zählt *jedes* Argument mit `=`, auch hinter oder als
+     Option (`alias -p x=y`, zsh `alias -g`), weil Shells sich darin
+     unterscheiden, welche Optionen vor einer Definition stehen dürfen.
+   - Der Alias-*Name* wird nicht ausgewertet und es gibt keinen Zustand
+     über Kommandos hinweg: Das spätere `ls` nach `alias ls='rm -rf /'` ist
+     für sich harmlos, geschützt wird an der Definition. Die Bestätigung
+     dort ist der Punkt, an dem der Nutzer den hinterlegten Code sieht.
+   - Funktionsdefinitionen (`f() { …; }`) deckt schon Punkt 3 ab (das `()`
+     im Kommandowort).
+   - Gemeldet wird wie bei `eval` `FILTER_PARSE_AMBIGUOUS` mit einem Grund,
+     der `trap` bzw. `alias` nennt; trifft der Inhalt die Hard-Blacklist
+     oder eine Regel, gewinnt deren strengerer Code.
+
 ## Konsequenzen
 
 - Einige bisher unter einer breiten Allow-Regel automatisch ausgeführte,
   harmlose Formen verlangen jetzt eine Bestätigung: Schleifen und
   `if`-Konstrukte, `[ ... ]`, Kommandos mit Variablen als Kommandoname,
-  `... | sh`, `eval`, `sh -c`/`python3 -c` in späteren Kettengliedern,
+  `... | sh`, `eval`, `trap` mit Handler, `alias NAME=WERT`, `sh -c`/`python3 -c` in späteren Kettengliedern,
   Shell-/Interpreter-Aufrufe mit unbekannten Langoptionen oder ohne
   Operand (auch `python3 --version`), Eingaben mit unsichtbaren Unicode-Zeichen oder
   geschützten Leerzeichen. Das ist die vom Issue verlangte fail-closed

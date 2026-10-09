@@ -520,6 +520,30 @@ impl<S: PolicyStore> FilterEngine<S> {
                 eval_trace = Some(self.evaluate_parsed_explained(&code, rules, depth + 1));
             }
         }
+        // Issue #55: `trap` handlers and `alias` values are code that runs
+        // later, outside this evaluation (on a signal / at shell exit, or
+        // when a later command starts with the alias name). Floor at
+        // `Confirm`; where the code could be extracted, evaluate it like
+        // `eval`, so a `Deny` rule or the hard blacklist behind it applies.
+        if let Some(deferred) = parser::deferred_code(&original_literal) {
+            opaque_reasons.push(match deferred.kind {
+                parser::DeferredCodeKind::Trap => {
+                    "`trap` hinterlegt Shell-Code, der später ausgeführt wird \
+                     (bei einem Signal oder beim Beenden der Shell)"
+                }
+                parser::DeferredCodeKind::Alias => {
+                    "`alias` definiert Shell-Code, der bei einem späteren Aufruf \
+                     des Alias-Namens ausgeführt wird"
+                }
+            });
+            code_traces.extend(
+                deferred
+                    .codes
+                    .iter()
+                    .filter(|code| !code.trim().is_empty())
+                    .map(|code| self.evaluate_parsed_explained(code, rules, depth + 1)),
+            );
+        }
         let opaque_decision = opaque_reasons
             .into_iter()
             .map(|reason| Decision::Confirm {
