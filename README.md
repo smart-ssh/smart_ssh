@@ -126,6 +126,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## 📚 Dokumentation
 
+- [Threat Model](THREAT-MODEL.md) – Was die KI sieht und nie sieht, Grenzen der Redaction, Datenablage und Verschlüsselung, Netzwerkverbindungen, Bestätigungsgrenzen und bekannte Restrisiken
 - [Datenpfade](docs/datenpfade.md) – Wo Smart SSH Datenbank, Logs, Host-Keys und Einstellungen je Plattform ablegt
 - [Entwickler- & Release-Guide](README_DEV.md) – Versionsverwaltung, Release-Workflow und GitHub Secrets
 - [Feature-Spezifikationen](docs/specs/README.md) – Detaillierte Spezifikationen (Specs 0001–0014)
