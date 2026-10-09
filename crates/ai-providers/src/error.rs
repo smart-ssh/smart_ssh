@@ -13,9 +13,10 @@ use ssh_manager_core::ai::{AiError, AiEvent};
 /// (case-insensitive), die auf "das angefragte Modell existiert nicht"
 /// hindeuten, für Provider-Antworten, die kein strukturiertes Feld dafür
 /// liefern. Aus den Fixtures in `tests/fixtures/model_not_found/`
-/// übernommen; die Einträge für OpenAI, OpenRouter und Ollama sind nach wie
-/// vor **unbelegt** (BL-0200 misst sie erst noch gegen echte Accounts, s.
-/// dortige `README.md`). Anthropics echte Antwort (gemessen, Spec 0072 §1)
+/// übernommen; alle vier Fixtures sind gemessen (s. dortige `README.md`).
+/// OpenAI (`error.code`) und Ollama (`error.type`) werden strukturell
+/// erkannt, OpenRouter nur über den Marker `is not a valid model id`.
+/// Anthropics echte Antwort (gemessen, Spec 0072 §1)
 /// trifft keinen dieser Marker — dafür ist [`is_structured_model_not_found`]
 /// zuständig.
 ///
