@@ -89,6 +89,14 @@ Spec 0057 (Kompaktierung, MCP-Ausschluss aus der Summary), ADR 0109.
   Nutzer-Tabs. Dazu kommt wie bisher die OS-Benachrichtigung aus Spec 0028,
   Abschnitt 9a. Der Bestätigungs-Timeout aus Spec 0028, Abschnitt 7 bleibt
   unverändert.
+- **Höchstens eine wartende Bestätigung je MCP-Sitzung:** Solange in einer
+  MCP-Sitzung eine Bestätigung offen ist, wird jede weitere vorgeschlagene
+  Aktion dieser Sitzung sofort abgewiesen und nicht ausgeführt. Der
+  MCP-Client bekommt einen Tool-Fehler, der ihn anweist, die offene Aktion
+  zuerst in der App zu bestätigen oder abzulehnen. Es entsteht keine zweite
+  Karte. Die offene Bestätigung bleibt unverändert bestehen, auch wenn der
+  Tool-Aufruf des Clients schon abgelaufen ist; danach werden neue
+  Vorschläge wieder angenommen.
 
 ## 4. Inhalt des MCP-Tabs
 

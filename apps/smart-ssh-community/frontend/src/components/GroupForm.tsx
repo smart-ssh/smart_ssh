@@ -5,6 +5,7 @@ import { translateErrorCode } from "../errorCodes";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import type { DeleteGroupResult, GroupDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Issue #63: neuer Ort des geöffneten Elements nach einem erfolgreichen
  * Verschieben per Drag-and-drop — `groupId` ist die neue Gruppe (Server)
@@ -147,6 +148,7 @@ export function GroupForm({
         <label className="block text-sm text-slate-300">
           {t("common.name")}
           <input
+            {...TECHNICAL_INPUT_PROPS}
             type="text"
             required
             value={name}

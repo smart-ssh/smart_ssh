@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { deleteChatSession, renameChatSession } from "../api";
 import type { ChatSessionSummaryDto } from "../types";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 interface ChatSessionPickerScreenProps {
   serverName: string;
@@ -105,6 +106,7 @@ export function ChatSessionPickerScreen({
               >
                 {renamingId === session.sessionId ? (
                   <input
+                    {...TECHNICAL_INPUT_PROPS}
                     // eslint-disable-next-line jsx-a11y/no-autofocus -- das Umbenennen-Feld erscheint erst auf die ausdrückliche Aktion „Umbenennen“ und muss den Fokus bekommen, damit man sofort tippen kann (Issue #112).
                     autoFocus
                     type="text"

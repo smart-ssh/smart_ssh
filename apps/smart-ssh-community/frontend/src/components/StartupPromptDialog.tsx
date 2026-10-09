@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { characterCount } from "../passwordLength";
 import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../types";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge des Master-Passworts.
  *
@@ -127,6 +128,7 @@ export function StartupPromptDialog({
             <label className="block text-sm text-slate-200">
               {t("startup.newPasswordLabel")}
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 type="password"
                 // eslint-disable-next-line jsx-a11y/no-autofocus -- gewollter Anfangsfokus des Dialogs (Issue #112): das Passwortfeld ist die einzige Eingabe.
                 autoFocus
@@ -138,6 +140,7 @@ export function StartupPromptDialog({
             <label className="block text-sm text-slate-200">
               {t("startup.repeatPasswordLabel")}
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 type="password"
                 value={repeated}
                 onChange={(e) => setRepeated(e.target.value)}

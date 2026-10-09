@@ -11,6 +11,7 @@ import type {
   SshConfigPreviewTagDto,
 } from "../types";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 interface SshConfigImportDialogProps {
   onClose: () => void;
@@ -305,6 +306,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                             <label className="flex items-center gap-2">
                               {t("sshConfigImport.conflict.renameLabel")}
                               <input
+                                {...TECHNICAL_INPUT_PROPS}
                                 type="text"
                                 className="rounded border border-slate-600 bg-slate-950 px-1.5 py-0.5 text-slate-100"
                                 placeholder={t("sshConfigImport.conflict.renamePlaceholder")}
