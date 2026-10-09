@@ -216,6 +216,8 @@ fn event_stream_from_response(
 struct WebCollector {
     searches: Vec<WebActivity>,
     citations: Vec<WebSource>,
+    /// `WebContentIngested` was already signalled for this response.
+    ingested_signalled: bool,
 }
 
 impl WebCollector {
@@ -258,6 +260,14 @@ impl WebCollector {
             content_truncated: false,
             error_code: failed.then(|| "search_failed".to_string()),
         });
+    }
+
+    /// True exactly once per response, at the first web evidence (a search
+    /// call or a cited source). The caller emits the content-free
+    /// `WebContentIngested` signal right away, so a later error or stop
+    /// cannot hide that untrusted content was read (Spec 0105 §6).
+    fn first_ingest(&mut self) -> bool {
+        !std::mem::replace(&mut self.ingested_signalled, true)
     }
 
     fn record_annotation(&mut self, annotation: &Value) {
@@ -319,6 +329,10 @@ impl WebCollector {
     }
 }
 
+fn is_url_citation(annotation: &Value) -> bool {
+    annotation.get("type").and_then(Value::as_str) == Some("url_citation")
+}
+
 /// Maps a `response.failed` / `error` event to a visible error.
 fn map_stream_error(code: Option<&str>, message: &str) -> AiError {
     match code {
@@ -364,17 +378,41 @@ fn handle_event(
         "response.output_text.annotation.added" => {
             if let Some(annotation) = event.get("annotation") {
                 web.record_annotation(annotation);
+                if is_url_citation(annotation) && web.first_ingest() {
+                    state
+                        .pending
+                        .push_back(RawEvent::Public(AiEvent::WebContentIngested));
+                }
             }
         }
         "response.output_item.done"
             if event.pointer("/item/type").and_then(Value::as_str) == Some("web_search_call") =>
         {
             web.record_call(event.get("item")?);
+            if web.first_ingest() {
+                state
+                    .pending
+                    .push_back(RawEvent::Public(AiEvent::WebContentIngested));
+            }
         }
         "response.output_item.done"
             if event.pointer("/item/type").and_then(Value::as_str) == Some("message") =>
         {
-            web.record_message_item(event.get("item")?);
+            let item = event.get("item")?;
+            web.record_message_item(item);
+            let cites = item
+                .get("content")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|part| part.get("annotations").and_then(Value::as_array))
+                .flatten()
+                .any(is_url_citation);
+            if cites && web.first_ingest() {
+                state
+                    .pending
+                    .push_back(RawEvent::Public(AiEvent::WebContentIngested));
+            }
         }
         "response.output_item.added" | "response.output_item.done" if state.native_tool_calling => {
             let item = event.get("item")?;

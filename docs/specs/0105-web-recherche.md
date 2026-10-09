@@ -134,7 +134,8 @@ ADR 0127 (Web-Recherche über die Responses-API von OpenAI).
 - **Sofort beim Eintreffen:** Die Sitzung gilt schon in dem Moment als
   „nicht vertrauenswürdigen Inhalt gelesen", in dem ein Ergebnis eines
   Web-Werkzeugs (auch ein Werkzeug-Fehler) eintrifft — nicht erst am Ende
-  der Antwort. Das gilt auch, wenn der Nutzer die Antwort danach stoppt oder
+  der Antwort. Bei OpenAI zählt ein abgeschlossener Suchaufruf oder eine
+  zitierte Quelle als Eintreffen. Das gilt auch, wenn der Nutzer die Antwort danach stoppt oder
   sie mit einem Fehler (Verbindungsabbruch, Zeitüberschreitung, Fehler des
   Providers) endet: Bis dahin gestreamter Text bleibt im Verlauf, und die
   folgenden Aktionen werden wie nach einer Recherche eskaliert. Eine
