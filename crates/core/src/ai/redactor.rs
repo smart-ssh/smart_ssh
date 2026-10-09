@@ -225,7 +225,7 @@ const CMD_ARGS: &str = r"(?:(?:[ \t]|\\\r?\n)+[^\s;|&<>]+){0,12}?";
 /// **Mindestens ein echter Abschnitt** ist Pflicht (die Mitte des Ausdrucks):
 /// Ein Wert, der nur aus einer Zeilenfortsetzung besteht, erzeugte sonst einen
 /// Platzhalter, wo nichts redigiert wurde — `mysql -p\` + Umbruch + `   mydb`
-/// wurde zu `mysql [REDACTED]   mydb`, obwohl `mydb` laut §1.4 der
+/// wurde zu `mysql [REDACTED]   mydb`, obwohl `mydb` laut Spec 0095 A1.1 der
 /// Datenbankname ist (Fund des `regression-guard`, gemessen).
 const CMD_VALUE: &str = concat!(
     r"(?:\\\r?\n)*",
@@ -266,7 +266,7 @@ const CMD_GAP: &str = r"(?:[ \t]|\\\r?\n)*";
 
 /// Nur die Zeilenfortsetzung, ohne Leerraum — für `mysql -p`, wo ein
 /// Leerzeichen zwischen Schalter und Wert bedeutet, dass der Wert **kein**
-/// Passwort ist (§1.4: der Client fragt dann interaktiv, der folgende Wert
+/// Passwort ist (Spec 0095 A1.1: der Client fragt dann interaktiv, der folgende Wert
 /// ist der Datenbankname). `mysql -p\` + Zeilenumbruch + `Geheim` ist für die
 /// Shell dagegen `-pGeheim`, also ein angehängter Wert.
 const CMD_CONT: &str = r"(?:\\\r?\n)*";
@@ -278,7 +278,7 @@ const HT_OPT: &str = r"(?:(?:[ \t]|\\\r?\n)+-[A-Za-z]+(?:(?:[ \t]|\\\r?\n)+\d+)?
 
 fn built_in_patterns() -> Vec<PatternRule> {
     let mut patterns: Vec<PatternRule> = vec![
-        // Spec 0078 §9 (Q-BL-0248-02, Fund des regression-guard, gemessen):
+        // Spec 0078 §3 (Q-BL-0248-02, Fund des regression-guard, gemessen):
         // KOPIEN der vier Schlüsselmuster ganz am Anfang der Liste. Die
         // Originale bleiben wörtlich an ihrer Stelle weiter unten; hier
         // steht nur eine zusätzliche, frühere Anwendung.
@@ -589,7 +589,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // das das DB-Muster laufen könnte. Mit Pfad (`…/0?password=…`)
         // stoppt das DB-Muster ohnehin am `/`.
         //
-        // Das DB-Muster bleibt dafür WÖRTLICH unangetastet (Spec 0078 §4):
+        // Das DB-Muster bleibt dafür WÖRTLICH unangetastet (Spec 0078 §3):
         // es ist über vier Review-Runden gegen echte Regressionen verengt
         // worden, und `?`/`#` dort nachzutragen hieße, ein geprüftes Muster
         // zu ändern statt zu ergänzen.
@@ -607,7 +607,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // parameter_containing_an_at_sign`, Fälle mit Quotes). Die freie
         // Form endet an `&` `#`, Leerraum und an den Feldtrennern `,` `;`
         // `"` `'`, aus demselben Grund wie beim DB-Muster unten.
-        // (Spec 0078 §3.1 begründet die Quote-Alternativen mit
+        // (Spec 0078 §1 begründet die Quote-Alternativen mit
         // `?password='top secret 123'`; das trifft nicht zu — dort matcht
         // diese Regel ohnehin nicht, weil die freie Form am `'` scheitert,
         // und das Schlüsselwort-Muster redigiert wie bisher. Der Nutzen
@@ -631,7 +631,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // `?secret=a@-----BEGIN PRIVATE KEY-----` liefert das `a@` die
         // Bedingung, und der Anker liegt mitten im Treffer (Fund des
         // regression-guard über `ee017af..387a91e`, gemessen, Spec 0078
-        // §9 / Q-BL-0248-02). Geschützt wird der Anker deshalb an einer
+        // §3 / Q-BL-0248-02). Geschützt wird der Anker deshalb an einer
         // anderen Stelle: durch die KOPIEN der vier Schlüsselmuster ganz
         // am Anfang der Liste (s. dort). Die `@`-Forderung bleibt, weil
         // sie die Regel auf ihren Zweck begrenzt.
@@ -651,7 +651,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         //
         // Der Trenner: ein `?`, danach beliebig viele weitere Parameter
         // mit `&`. Ein `&` OHNE vorangehendes `?` im selben Token zählt
-        // NICHT (Spec 0078 §9 / Q-BL-0248-02, gemessene Lockerung): sonst
+        // NICHT (Spec 0078 §3 / Q-BL-0248-02, gemessene Lockerung): sonst
         // griff diese Regel mitten in ein Passwort, das ein
         // `&<schlüsselwort>=` enthält, und nahm dem strengen URL-Muster
         // den Anker — `https://u:Geheim&token=b@h/x` wurde zu
@@ -667,7 +667,7 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // realer Effekt ist, dass der Trenner nicht über einen schon
         // `@`-haltigen Parameter hinwegkommt — genau deshalb braucht es
         // die zweite Anwendung unten. Der Ausschluss bleibt, weil er Teil
-        // der gemessenen Fassung aus Spec 0078 §9 (Q-BL-0248-02) ist; ihn
+        // der gemessenen Fassung aus Spec 0078 §3 (Q-BL-0248-02) ist; ihn
         // zu entfernen bräuchte eine eigene Messrunde.
         //
         // BEKANNTER RESTFALL, bewusst entschieden (2026-09-24,
@@ -737,13 +737,13 @@ fn built_in_patterns() -> Vec<PatternRule> {
         // stützt sich also auf die Kopien und auf die Messung, nicht auf
         // die Konstruktion. (Eine frühere Fassung dieses Kommentars
         // behauptete das Gegenteil — Korrektur des Architekten zu
-        // Q-BL-0248-03, s. Spec 0078 §9.)
+        // Q-BL-0248-03, s. Spec 0078 §3.)
         //
         // RESTFALL: Drei und mehr `@`-haltige Schlüsselwort-Parameter im
         // selben Token brauchten je eine weitere Anwendung; ab dem dritten
         // bleibt es beim Verhalten von vor Spec 0078. Eine Schleife wäre
         // die saubere Form, sie hieße aber `redact_bytes` umzubauen — von
-        // Spec 0078 §2 ausdrücklich ausgeschlossen. Test
+        // Spec 0078 §3 nicht vorgesehen. Test
         // `…_redacts_two_at_bearing_query_parameters_in_one_token`.
         PatternRule {
             regex: Regex::new(
@@ -1178,7 +1178,7 @@ fn command_line_password_patterns(value: &str) -> Vec<PatternRule> {
         // `mysql -p <wert>` mit Leerzeichen ist kein Passwort, sondern der
         // Datenbankname — ohne angehängten Wert fragt der Client interaktiv
         // (MySQL-Client-Dokumentation zu `--password[=password], -p[password]`,
-        // Spec 0095 §1.4). `--password=<wert>` deckt das
+        // Spec 0095 A1.1). `--password=<wert>` deckt das
         // Schlüsselwort-Muster oben schon ab.
         //
         // **Kein `(?i)` für das ganze Muster**, nur für den Programmnamen:
@@ -1212,7 +1212,7 @@ fn command_line_password_patterns(value: &str) -> Vec<PatternRule> {
         // `-[A-Za-z]*u` deckt den Kurzschalterblock ab, in dem `u` der
         // letzte Buchstabe ist (`-sSu`, `-sSuadmin:pw`) — gemessen senden
         // `curl -uadmin:pw`, `curl -sSuadmin:pw` und `curl -u admin:pw`
-        // alle denselben `Authorization: Basic`-Header (Spec 0095 §1.4).
+        // alle denselben `Authorization: Basic`-Header (Spec 0095 A1.3).
         //
         // Drei Varianten, weil die Quote-Form nicht in einer Alternative
         // mitgehen kann: ohne Backreferenz kann kein Muster verlangen, dass
@@ -1319,7 +1319,7 @@ fn htpasswd_patterns(value: &str) -> Vec<PatternRule> {
         // A1.4 `htpasswd` mit einem Schalterblock, der `b` enthält (nur dann
         // steht das Passwort überhaupt auf der Kommandozeile; ohne `-b` fragt
         // `htpasswd` interaktiv). Gemessen an der Usage-Ausgabe (Spec 0095
-        // §1.4): `-b[…] [-C cost] [-r rounds] file user password` und
+        // A1.4): `-b[…] [-C cost] [-r rounds] file user password` und
         // `-nb[…] [-C cost] [-r rounds] user password` — mit `n` im Block
         // entfällt die Datei, das Passwort ist dann das ZWEITE statt dritte
         // Positionsargument. Deshalb zwei Regeln.
