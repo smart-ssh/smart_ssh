@@ -4,6 +4,11 @@
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{AiEvent, WebActivity, WebActivityKind, WebSource};
+use ssh_manager_core::filter::FilterEngine;
+use ssh_manager_core::profiles::{AiAction, PostIngestPolicy};
+
+use crate::dto::ActionUserDecision;
+use crate::state::ActionId;
 
 use crate::events::TestEmitter;
 
@@ -335,4 +340,131 @@ async fn test_flag_unset_on_stop_or_error_without_web_result() {
     .await
     .expect("Stopp muss den Turn beenden");
     assert!(!flag_set(&session));
+}
+
+/// Runs one turn whose first (and only) round is `round`, with a `Strict`
+/// post-ingest policy and a policy store that allows everything. Waits for a
+/// `Confirm` decision, asserts that nothing was executed at that point and
+/// denies it. Returns the `chat-action-proposed` payloads and the commands
+/// executed over the transport.
+async fn run_round_with_strict_policy(
+    round: Vec<AiEvent>,
+) -> (Vec<serde_json::Value>, Vec<String>) {
+    let transport = MockSshTransport::default().with_response("uptime", output("up 3 days"));
+    let executed = transport.executed_handle();
+    let mut session = session_with_ai_provider(MockAiProvider::with_rounds(vec![round]), transport);
+    session.parts_mut_for_tests().filter_engine =
+        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let turn = run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    );
+    let responder = async {
+        loop {
+            let confirm = {
+                let events = emitter.events.lock().unwrap();
+                events.iter().find_map(|(name, payload)| {
+                    (name == "chat-action-proposed"
+                        && payload
+                            .get("decision")
+                            .and_then(|d| d.get("Confirm"))
+                            .is_some())
+                    .then(|| payload["actionId"].as_str().unwrap().to_string())
+                })
+            };
+            if let Some(id) = confirm {
+                assert!(
+                    executed.lock().unwrap().is_empty(),
+                    "action must not run before confirmation"
+                );
+                let action_id: ActionId = id.parse().unwrap();
+                let _ = confirmations.resolve(&action_id, ActionUserDecision::Deny);
+                return;
+            }
+            // An auto-executed action never produces a `Confirm`; stop waiting
+            // once the turn is over so the counter-proof fails instead of hanging.
+            if emitter
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(name, _)| name == "chat-action-result" || name == "chat-done")
+            {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    };
+    tokio::join!(turn, responder);
+
+    let proposed = emitter
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(name, _)| name == "chat-action-proposed")
+        .map(|(_, payload)| payload.clone())
+        .collect();
+    let executed = executed.lock().unwrap().clone();
+    (proposed, executed)
+}
+
+fn uptime_action() -> AiEvent {
+    AiEvent::ActionProposed(AiAction::SuggestCommand {
+        command: "uptime".to_string(),
+    })
+}
+
+/// Issue #170: an action proposed in the same response as a web search is
+/// evaluated after the session counts as having ingested untrusted content
+/// (spec 0039 section 5), so a `Strict` policy escalates it to confirmation.
+/// `uptime` alone would be auto-executed (see
+/// `test_server_output_ingestion_escalates_followup_action_under_strict_policy`).
+#[tokio::test]
+async fn test_action_in_same_round_as_web_activity_is_escalated_post_ingest() {
+    let (proposed, executed) = run_round_with_strict_policy(vec![
+        AiEvent::WebActivity(search_activity("nginx 1.29 release notes")),
+        uptime_action(),
+        AiEvent::Done,
+    ])
+    .await;
+
+    assert_eq!(proposed.len(), 1, "{proposed:?}");
+    assert_eq!(
+        proposed[0]["decision"]["Confirm"]["code"],
+        serde_json::json!("FILTER_POST_INGEST_REQUIRES_CONFIRM"),
+        "{:?}",
+        proposed[0]
+    );
+    assert!(executed.is_empty(), "denied action ran: {executed:?}");
+}
+
+/// A web tool result with an `error_code` still counts as ingested.
+#[tokio::test]
+async fn test_action_after_failed_web_activity_is_escalated_post_ingest() {
+    let mut activity = search_activity("rust 1.90");
+    activity.results.clear();
+    activity.cited.clear();
+    activity.error_code = Some("max_uses_exceeded".to_string());
+    let (proposed, executed) = run_round_with_strict_policy(vec![
+        AiEvent::WebActivity(activity),
+        uptime_action(),
+        AiEvent::Done,
+    ])
+    .await;
+
+    assert_eq!(proposed.len(), 1, "{proposed:?}");
+    assert_eq!(
+        proposed[0]["decision"]["Confirm"]["code"],
+        serde_json::json!("FILTER_POST_INGEST_REQUIRES_CONFIRM")
+    );
+    assert!(executed.is_empty(), "{executed:?}");
 }
