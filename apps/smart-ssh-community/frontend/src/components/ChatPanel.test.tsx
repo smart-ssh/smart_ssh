@@ -29,6 +29,7 @@ function buildActionItem(overrides: Partial<ActionItem> = {}): ChatItem {
     targetName: null,
     riskAssessment: null,
     riskSecondOpinionPending: false,
+    secondOpinionUnavailable: false,
     startedAt: null,
     origin: { kind: "internal" },
     ...overrides,
@@ -116,6 +117,20 @@ describe("risk badge positioning (Spec 0029)", () => {
 
 // Spec 0045, Abschnitt 4/7: registrierte Dokument-Aktionen erscheinen neben
 // dem bestehenden Markdown-Export-Button in der Dokument-Karte.
+describe("second opinion unavailable notice (Issue #102)", () => {
+  it("shows the notice on the card when the second opinion could not be obtained", () => {
+    renderItem(
+      buildActionItem({ riskAssessment: riskyAssessment, secondOpinionUnavailable: true }),
+    );
+    expect(screen.getByText("KI-Zweitmeinung nicht verfügbar")).toBeTruthy();
+  });
+
+  it("shows no notice when the second opinion answered", () => {
+    renderItem(buildActionItem({ riskAssessment: riskyAssessment }));
+    expect(screen.queryByText("KI-Zweitmeinung nicht verfügbar")).toBeNull();
+  });
+});
+
 describe("registered document actions (Spec 0045)", () => {
   afterEach(() => {
     resetRegistryForTests();

@@ -124,6 +124,13 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // langes, nicht einschätzbares Kommando), Einstellung „Bei rotem Risiko
   // immer nachfragen" an.
   "FILTER_RED_RISK_REQUIRES_CONFIRM",
+  // Issue #102: KI-Zweitmeinung bzw. Injection-Check nicht verfügbar
+  // (Provider-Fehler) → Bestätigung (fail closed, pro Aktion), plus die
+  // Sitzungs-Hinweise.
+  "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM",
+  "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM",
+  "AI_INJECTION_CHECK_UNAVAILABLE",
+  "AI_SECOND_OPINION_SETUP_FAILED",
   "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM",
   "FILTER_FILE_WRITE_REQUIRES_CONFIRM",
   // CommandError (crates/app-shell/src/error.rs) — Server-/Gruppen-Formulare

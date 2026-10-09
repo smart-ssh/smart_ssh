@@ -61,6 +61,37 @@ fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionCo
     }
 }
 
+/// Issue #102: Ergebnis eines Nebenaufrufs (Zweitmeinung, Injection-Check).
+/// Trennt "Urteil", "kein erkennbares Urteil" und "Provider-Fehler" — vorher
+/// fielen alle drei in `None` zusammen, und ein ausgefallener Provider war
+/// vom Ergebnis "geprüft, unauffällig" nicht zu unterscheiden.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SideCallOutcome<V> {
+    /// Die Antwort enthielt ein erkennbares Urteil samt Begründung.
+    Verdict(V, String),
+    /// Der Provider antwortete, aber ohne erkennbares Urteil (Spec 0074:
+    /// "keine Prüfung verfügbar", nicht "alles in Ordnung").
+    NoVerdict,
+    /// Der Provider-Aufruf ist fehlgeschlagen. `code` ist der stabile
+    /// `AiError::code()` — nie der Fehlertext des Providers.
+    ProviderError { code: &'static str },
+}
+
+impl<V> SideCallOutcome<V> {
+    /// `true`, wenn die Prüfung NICHT stattgefunden hat (Fehler oder kein
+    /// Urteil) — beide Fälle gelten als "konnte nicht geprüft werden".
+    pub fn is_unavailable(&self) -> bool {
+        !matches!(self, SideCallOutcome::Verdict(..))
+    }
+}
+
+fn outcome_from_parsed<V>(parsed: Option<(V, String)>) -> SideCallOutcome<V> {
+    match parsed {
+        Some((verdict, reason)) => SideCallOutcome::Verdict(verdict, reason),
+        None => SideCallOutcome::NoVerdict,
+    }
+}
+
 /// Fragt `provider` nach einer Zweitmeinung zur Daten-Risiko-Achse für
 /// `command_or_path` (Spec 0026, Abschnitt 3). **Minimaler Kontext**: nur
 /// der Kommando-/Pfadtext selbst als einzige `history`-Nachricht, kein
@@ -70,8 +101,10 @@ fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionCo
 /// gewählter `AiProviderConfig` (Spec 0026, Abschnitt 3: "eigener, separat
 /// wählbarer Provider"), nicht der Session-Provider.
 ///
-/// `None`, wenn die Anfrage fehlschlägt ODER die Antwort sich nicht als
-/// none/yellow/red erkennen lässt — "keine Zweitmeinung verfügbar" statt
+/// [`SideCallOutcome::ProviderError`], wenn die Anfrage fehlschlägt (Issue
+/// #102: wird mit `warn` und Fehler-Code protokolliert, nie mit Kommando oder
+/// Fehlertext), [`SideCallOutcome::NoVerdict`], wenn die Antwort sich nicht
+/// als none/yellow/red erkennen lässt — "keine Zweitmeinung verfügbar" statt
 /// eines Absturzes, im selben Geist wie das Fallback-Tool-Calling-Parsing
 /// aus Spec 0006 (`ai_providers::fallback::parse_fallback_response`), das
 /// bei nicht parsebarem Text ebenfalls graceful auf reinen Text zurückfällt
@@ -79,7 +112,7 @@ fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionCo
 pub async fn fetch_second_opinion(
     provider: &dyn AiProvider,
     command_or_path: &str,
-) -> Option<(RiskLevel, String)> {
+) -> SideCallOutcome<RiskLevel> {
     let context = build_second_opinion_context(SECOND_OPINION_PROMPT, command_or_path);
 
     let mut stream = provider.send(context);
@@ -94,7 +127,10 @@ pub async fn fetch_second_opinion(
             // Netzwerk-/Auth-/sonstiger Providerfehler: keine Zweitmeinung
             // verfügbar, kein Absturz, kein Blockieren der (bereits
             // angezeigten) regelbasierten Einschätzung.
-            AiEvent::Error(_) => return None,
+            AiEvent::Error(err) => {
+                tracing::warn!(code = err.code(), "second opinion provider call failed");
+                return SideCallOutcome::ProviderError { code: err.code() };
+            }
             // Nicht erwartet (leere `available_actions`), aber auch kein
             // Fehlerfall — ein Provider ohne natives Tool-Calling könnte
             // theoretisch trotzdem einen Fallback-Aktionsblock parsen,
@@ -107,7 +143,7 @@ pub async fn fetch_second_opinion(
         }
     }
 
-    parse_second_opinion(&text)
+    outcome_from_parsed(parse_second_opinion(&text))
 }
 
 /// Gemeinsamer Kern beider Urteils-Parser (Spec 0074): zerlegt `text` in
@@ -274,14 +310,16 @@ const INJECTION_CHECK_PROMPT: &str =
 /// einzige `history`-Nachricht, dasselbe Sparsamkeitsprinzip wie
 /// [`fetch_second_opinion`].
 ///
-/// `None` bei einem Provider-Fehler oder nicht erkennbarer Antwort —
-/// "keine Prüfung verfügbar" statt Absturz oder stillem Durchwinken (s.
-/// Aufrufer in `orchestration`, der bei `None` explizit NICHTS ändert,
-/// weder eskaliert noch abschwächt).
+/// [`SideCallOutcome::ProviderError`] bei einem Provider-Fehler (Issue #102:
+/// `warn`-Log mit Fehler-Code, ohne Inhalt), [`SideCallOutcome::NoVerdict`]
+/// bei nicht erkennbarer Antwort — "keine Prüfung verfügbar" statt Absturz
+/// oder stillem Durchwinken (s. Aufrufer in `orchestration`: nie
+/// abschwächen, den Nutzer informieren, die nächste Aktion bestätigen
+/// lassen).
 pub async fn fetch_injection_check(
     provider: &dyn AiProvider,
     content: &str,
-) -> Option<(bool, String)> {
+) -> SideCallOutcome<bool> {
     let context = build_second_opinion_context(INJECTION_CHECK_PROMPT, content);
 
     let mut stream = provider.send(context);
@@ -291,7 +329,10 @@ pub async fn fetch_injection_check(
             AiEvent::TextDelta(delta) => text.push_str(&delta),
             // Spec 0065, Teil 2: s. identischer Kommentar bei `fetch_second_opinion`.
             AiEvent::Done | AiEvent::TextTruncated => break,
-            AiEvent::Error(_) => return None,
+            AiEvent::Error(err) => {
+                tracing::warn!(code = err.code(), "injection check provider call failed");
+                return SideCallOutcome::ProviderError { code: err.code() };
+            }
             AiEvent::ActionProposed(_) => {}
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
             // ignoriert.
@@ -299,7 +340,7 @@ pub async fn fetch_injection_check(
         }
     }
 
-    parse_injection_check(&text)
+    outcome_from_parsed(parse_injection_check(&text))
 }
 
 /// Wie [`parse_second_opinion`], aber für `ja`/`nein` statt `none`/
@@ -364,7 +405,10 @@ mod tests {
 
         let result = fetch_second_opinion(&provider, &oversized).await;
 
-        assert_eq!(result, Some((RiskLevel::None, "fine".to_string())));
+        assert_eq!(
+            result,
+            SideCallOutcome::Verdict(RiskLevel::None, "fine".to_string())
+        );
         let context = received.lock().unwrap().clone().expect("send() aufgerufen");
         let MessageContent::Text(sent_text) = &context.history[0].content else {
             panic!("erwartete MessageContent::Text");
@@ -422,7 +466,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Some((RiskLevel::Red, "looks like a credential dump".to_string()))
+            SideCallOutcome::Verdict(RiskLevel::Red, "looks like a credential dump".to_string())
         );
     }
 
@@ -993,8 +1037,18 @@ mod tests {
                 )]))
             }
         }
-        assert_eq!(fetch_second_opinion(&ErrProvider, "x").await, None);
-        assert_eq!(fetch_injection_check(&ErrProvider, "x").await, None);
+        // Issue #102: der Fehler ist als solcher erkennbar (mit stabilem
+        // Code, ohne den Fehlertext "boom"), nicht mit "kein Urteil" vermischt.
+        let expected = SideCallOutcome::ProviderError {
+            code: "AI_NETWORK_ERROR",
+        };
+        assert_eq!(fetch_second_opinion(&ErrProvider, "x").await, expected);
+        assert_eq!(
+            fetch_injection_check(&ErrProvider, "x").await,
+            SideCallOutcome::ProviderError {
+                code: "AI_NETWORK_ERROR"
+            }
+        );
         assert_eq!(parse_second_opinion("   "), None);
         assert_eq!(parse_injection_check(""), None);
         assert_eq!(parse_injection_check("VERDICT:"), None);
@@ -1050,5 +1104,31 @@ mod tests {
                 prop_assert_eq!(parse_injection_check(&text), fallback_injection_check(&text));
             }
         }
+    }
+
+    /// Issue #102: eine Antwort ohne erkennbares Urteil ist "kein Urteil",
+    /// weder "unauffällig" noch ein Provider-Fehler.
+    #[tokio::test]
+    async fn answer_without_verdict_is_reported_as_no_verdict() {
+        let provider = RecordingMockAiProvider {
+            response_text: "I cannot say anything useful here.",
+            received: Arc::new(Mutex::new(None)),
+        };
+        let so = fetch_second_opinion(&provider, "ls").await;
+        assert_eq!(so, SideCallOutcome::NoVerdict);
+        assert!(so.is_unavailable());
+        let ic = fetch_injection_check(&provider, "some text").await;
+        assert_eq!(ic, SideCallOutcome::NoVerdict);
+        assert!(ic.is_unavailable());
+    }
+
+    #[tokio::test]
+    async fn verdict_is_not_unavailable() {
+        let provider = RecordingMockAiProvider {
+            response_text: "VERDICT: no\nfine",
+            received: Arc::new(Mutex::new(None)),
+        };
+        let ic = fetch_injection_check(&provider, "text").await;
+        assert!(!ic.is_unavailable());
     }
 }

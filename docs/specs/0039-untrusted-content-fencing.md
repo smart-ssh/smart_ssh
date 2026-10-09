@@ -91,6 +91,16 @@ eingeschleuste Anweisungen" in den erweiterten Server-Einstellungen.
 - Die Prüfung blockiert den Ablauf nicht. Ein Fehler des Providers oder eine
   nicht lesbare Antwort ergibt „keine Prüfung verfügbar": kein Absturz, kein
   stilles Durchwinken.
+- **Nicht verfügbar ist sichtbar und schließt fail closed (pro Aktion)**:
+  Konnte die Prüfung nicht laufen (Provider-Fehler) oder lieferte sie kein
+  erkennbares Urteil, zeigt die Sitzung einen Hinweis, und die **nächste**
+  vorgeschlagene Aktion wird bestätigungspflichtig (Grund: Prüfung nicht
+  ausgeführt) — wie bei einem erkannten Verdacht, aber mit eigenem Hinweis.
+  Das gilt nur für diese eine Aktion; ein `Deny` verbraucht die Vorgabe
+  nicht. Ein bestehender Verdacht wird dadurch weder gesetzt noch gelöscht.
+  Der Fehler wird mit `warn` und Fehlercode protokolliert, ohne Inhalt und
+  ohne Fehlertext des Providers. Kann die Zweitmeinung beim Verbinden gar
+  nicht eingerichtet werden, gilt der Sitzungs-Hinweis aus Spec 0026 §3.
 - Der Hinweistext benennt die Prüfung ehrlich als zusätzliche Hürde, die
   selbst täuschbar ist, nicht als zuverlässige Erkennung.
 
