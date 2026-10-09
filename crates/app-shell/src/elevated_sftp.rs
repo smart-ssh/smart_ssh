@@ -595,6 +595,10 @@ mod tests {
     use crate::test_support::elevation::{
         access, fixture, output, transport, working_probes, PATH,
     };
+    // Issue #149: Die Verschränkungstests T8/T8b warten auf Ereignisse, nicht
+    // auf ein festes Zeitbudget. `HANG_GUARD` greift nur, wenn das Ereignis
+    // nie kommt, und die Meldung nennt dann, worauf der Test wartete.
+    use crate::test_support::waiting::{expect_within, HANG_GUARD};
 
     #[tokio::test]
     async fn test_enable_probes_path_checks_sudo_and_opens_exec_channel() {
@@ -775,17 +779,23 @@ mod tests {
 
         // Warten, bis das Aktivieren wirklich vor dem Eintrag steht — sonst
         // prüfte der Test eine andere Verschränkung als gemeint.
-        tokio::time::timeout(std::time::Duration::from_secs(5), reached.notified())
-            .await
-            .expect("das Aktivieren muss den Öffnen-Schritt erreichen");
+        expect_within(
+            "das Aktivieren erreicht den Öffnen-Schritt",
+            || format!("Aktivierungs-Task beendet: {}", activation.is_finished()),
+            reached.notified(),
+        )
+        .await;
 
         f.registry.remove_session(&f.sessions, f.session_id);
         gate.notify_one();
 
-        let result = tokio::time::timeout(std::time::Duration::from_secs(5), activation)
-            .await
-            .expect("das Aktivieren muss enden")
-            .expect("der Aktivierungs-Task darf nicht panisch enden");
+        let result = expect_within(
+            "das Aktivieren endet nach dem Entfernen der Sitzung",
+            || "Aktivierung hängt nach der Freigabe am Öffnen-Schritt".to_string(),
+            activation,
+        )
+        .await
+        .expect("der Aktivierungs-Task darf nicht panisch enden");
 
         let err = result.expect_err("A2.2: ohne Sitzung darf nicht aktiviert werden");
         assert_eq!(err.message, "Session nicht gefunden");
@@ -816,9 +826,12 @@ mod tests {
         let activation = tokio::spawn(async move {
             enable(&f_for_enable.ctx(), "deploy", None, None, &access()).await
         });
-        tokio::time::timeout(std::time::Duration::from_secs(5), reached.notified())
-            .await
-            .expect("das Aktivieren muss den Öffnen-Schritt erreichen");
+        expect_within(
+            "das Aktivieren erreicht den Öffnen-Schritt",
+            || format!("Aktivierungs-Task beendet: {}", activation.is_finished()),
+            reached.notified(),
+        )
+        .await;
 
         // Der Haltepunkt läuft mitten in A2.1: er gibt das Aktivieren frei
         // und wartet, bis es ganz durch ist, bevor A2.1 seinen zweiten
@@ -827,9 +840,16 @@ mod tests {
         let gate_for_hook = gate.clone();
         f.registry.set_interleave_hook(Box::new(move || {
             gate_for_hook.notify_one();
-            done_rx
-                .recv_timeout(std::time::Duration::from_secs(5))
-                .expect("das Aktivieren muss innerhalb des Haltepunkts enden");
+            // Synchroner Haltepunkt: `expect_within` ist hier nicht nutzbar,
+            // daher dieselbe Obergrenze direkt.
+            if let Err(err) = done_rx.recv_timeout(HANG_GUARD) {
+                panic!(
+                    "Haltepunkt in A2.1: Warten auf erwartetes Ereignis \
+                     „das Aktivieren endet innerhalb des Haltepunkts“ \
+                     erfolglos nach {} s ({err})",
+                    HANG_GUARD.as_secs()
+                );
+            }
         }));
 
         // `spawn_blocking`: Der Haltepunkt blockiert seinen Thread, bis das
@@ -842,15 +862,21 @@ mod tests {
                 .remove_session(&f_for_removal.sessions, f_for_removal.session_id)
         });
 
-        let result = tokio::time::timeout(std::time::Duration::from_secs(5), activation)
-            .await
-            .expect("das Aktivieren muss enden")
-            .expect("der Aktivierungs-Task darf nicht panisch enden");
+        let result = expect_within(
+            "das Aktivieren endet, während A2.1 im Haltepunkt steht",
+            || format!("Entfernen-Task beendet: {}", removal.is_finished()),
+            activation,
+        )
+        .await
+        .expect("der Aktivierungs-Task darf nicht panisch enden");
         let _ = done_tx.send(());
-        tokio::time::timeout(std::time::Duration::from_secs(5), removal)
-            .await
-            .expect("A2.1 muss enden")
-            .expect("der Entfernen-Task darf nicht panisch enden");
+        expect_within(
+            "das Entfernen der Sitzung (A2.1) endet",
+            || "A2.1 hat den Haltepunkt nicht verlassen".to_string(),
+            removal,
+        )
+        .await
+        .expect("der Entfernen-Task darf nicht panisch enden");
 
         assert!(
             result.is_err(),
