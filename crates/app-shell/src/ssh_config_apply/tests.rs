@@ -62,6 +62,7 @@ fn plan_from_inv(
             servers,
             groups: &[],
             rules,
+            unusable: &[],
             local_server_id: ssh_manager_core::shared::ServerId(Uuid::nil()),
         },
     )
@@ -315,6 +316,7 @@ async fn t_6_4_1b_die_vorschau_oeffnet_nichts() {
             servers: &[],
             groups: &[],
             rules: &[],
+            unusable: &[],
             local_server_id: ssh_manager_core::shared::ServerId(Uuid::nil()),
         },
     );

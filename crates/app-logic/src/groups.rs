@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use ssh_manager_core::profiles::{CredentialStore, GroupId, ProfileStore};
 
-use crate::dto::{DeleteGroupResult, GroupDto, ServerDto};
+use crate::dto::{DeleteGroupResult, GroupDto, ServerDto, UnusableServerDto};
 use crate::error::{CommandError, CommandResult};
 
 /// Aufgabenstellung Teil 1, Punkt 5: eine Gruppe darf nicht sich selbst
@@ -87,7 +87,8 @@ pub async fn compute_delete_group_result(
     executed: bool,
 ) -> CommandResult<DeleteGroupResult> {
     let all_groups = store.list_groups().await?;
-    let all_servers = store.list_servers().await?;
+    let listing = store.list_server_entries().await?;
+    let all_servers = listing.servers;
 
     let mut affected: HashSet<GroupId> = HashSet::new();
     affected.insert(id);
@@ -108,9 +109,17 @@ pub async fn compute_delete_group_result(
         .map(|s| ServerDto::from_server(s, credential_store))
         .collect();
 
+    let unusable_servers_to_unassign: Vec<UnusableServerDto> = listing
+        .unusable
+        .iter()
+        .filter(|s| s.group_id.is_some_and(|gid| affected.contains(&gid)))
+        .map(UnusableServerDto::from)
+        .collect();
+
     Ok(DeleteGroupResult {
         child_groups_to_delete: child_groups.into_iter().map(GroupDto::from).collect(),
         servers_to_unassign,
+        unusable_servers_to_unassign,
         executed,
     })
 }
@@ -262,6 +271,60 @@ mod tests {
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&child.id.0.to_string()));
         assert!(ids.contains(&grandchild.id.0.to_string()));
+    }
+
+    fn unusable_in(
+        name: &str,
+        group_id: Option<GroupId>,
+    ) -> ssh_manager_core::profiles::UnusableServer {
+        ssh_manager_core::profiles::UnusableServer {
+            id: ServerId::new(),
+            name: name.to_string(),
+            host: "newer.example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id,
+            reason: ssh_manager_core::profiles::UnusableReason::UnknownAuthMethod,
+        }
+    }
+
+    /// Issue #177: nicht nutzbare Server direkt in der Gruppe und in einer
+    /// Nachfahre-Gruppe stehen in der Vorschau; einer außerhalb nicht.
+    #[tokio::test]
+    async fn test_delete_group_preview_names_unusable_servers_in_subtree_only() {
+        let root = group("root", None);
+        let child = group("child", Some(root.id));
+        let other = group("other", None);
+        let direct = unusable_in("direct", Some(root.id));
+        let nested = unusable_in("nested", Some(child.id));
+        let outside = unusable_in("outside", Some(other.id));
+        let ungrouped = unusable_in("ungrouped", None);
+        let store = InMemoryProfileStore::new()
+            .with_group(root.clone())
+            .with_group(child)
+            .with_group(other)
+            .with_unusable_server(direct.clone())
+            .with_unusable_server(nested.clone())
+            .with_unusable_server(outside)
+            .with_unusable_server(ungrouped);
+
+        let result =
+            compute_delete_group_result(&store, &InMemoryCredentialStore::new(), root.id, false)
+                .await
+                .unwrap();
+
+        let mut ids: Vec<ServerId> = result
+            .unusable_servers_to_unassign
+            .iter()
+            .map(|s| s.id)
+            .collect();
+        ids.sort_by_key(|id| id.0);
+        let mut expected = vec![direct.id, nested.id];
+        expected.sort_by_key(|id| id.0);
+        assert_eq!(ids, expected);
+        assert!(result.servers_to_unassign.is_empty());
+        // Vorschau ändert nichts.
+        assert_eq!(store.unusable.lock().unwrap().len(), 4);
     }
 
     /// Simuliert den vollen Zweischritt aus `commands::delete_group`:

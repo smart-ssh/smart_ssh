@@ -26,6 +26,7 @@ fn plan_of(read: &ImportRead) -> ssh_manager_core::profiles::ssh_config::ImportP
             servers: &[],
             groups: &[],
             rules: &[],
+            unusable: &[],
             local_server_id: ServerId(Uuid::nil()),
         },
     )

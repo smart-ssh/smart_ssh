@@ -10,7 +10,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use super::parser::{ParsedFile, SkippedKind};
 use super::pattern::block_matches;
 use crate::filter::{Rule, RuleAction, RuleId, Scope};
-use crate::profiles::types::{Group, Server};
+use crate::profiles::types::{Group, Server, UnusableServer};
 use crate::shared::ServerId;
 
 /// Woher ein Wert stammt (§3.1.3: „Die Vorschau zeigt bei jedem betroffenen
@@ -254,6 +254,9 @@ pub struct ImportSource {
 #[derive(Debug, Clone, Copy)]
 pub struct Inventory<'a> {
     pub servers: &'a [Server],
+    /// Nicht nutzbare Server (Spec 0008 §6a): zählen **nur** für die
+    /// Konflikterkennung (§3.1.8), nie als `ProxyJump`-Ziel.
+    pub unusable: &'a [UnusableServer],
     pub groups: &'a [Group],
     pub rules: &'a [Rule],
     /// `ServerId(Uuid::nil())` — hereingegeben statt hier bestimmt, damit
@@ -623,7 +626,7 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
 
     // ---- §3.1.8: Konflikte ------------------------------------------
     for e in entries.iter_mut() {
-        e.conflict = find_conflict(e, inv.servers);
+        e.conflict = find_conflict(e, inv.servers, inv.unusable);
     }
 
     // ---- §3.1.11: Jump-Ziele vor ihren Nutzern ------------------------
@@ -631,24 +634,33 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
     plan
 }
 
-fn find_conflict(e: &PlannedEntry, servers: &[Server]) -> Option<Conflict> {
+fn find_conflict(
+    e: &PlannedEntry,
+    servers: &[Server],
+    unusable: &[UnusableServer],
+) -> Option<Conflict> {
+    let conflict = |kind, id, name: &str| Conflict {
+        kind,
+        existing: id,
+        existing_name: name.to_string(),
+    };
+    // Name vor Adresse, nutzbare vor nicht nutzbaren — wie bisher.
     if let Some(s) = servers.iter().find(|s| s.name == e.name) {
-        return Some(Conflict {
-            kind: ConflictKind::Name,
-            existing: s.id,
-            existing_name: s.name.clone(),
-        });
+        return Some(conflict(ConflictKind::Name, s.id, &s.name));
     }
-    servers
+    if let Some(s) = unusable.iter().find(|s| s.name == e.name) {
+        return Some(conflict(ConflictKind::Name, s.id, &s.name));
+    }
+    let same = |host: &str, port: u16, user: &str| {
+        host == e.host.value && port == e.port.value && user == e.username.value
+    };
+    if let Some(s) = servers.iter().find(|s| same(&s.host, s.port, &s.username)) {
+        return Some(conflict(ConflictKind::Address, s.id, &s.name));
+    }
+    unusable
         .iter()
-        .find(|s| {
-            s.host == e.host.value && s.port == e.port.value && s.username == e.username.value
-        })
-        .map(|s| Conflict {
-            kind: ConflictKind::Address,
-            existing: s.id,
-            existing_name: s.name.clone(),
-        })
+        .find(|s| same(&s.host, s.port, &s.username))
+        .map(|s| conflict(ConflictKind::Address, s.id, &s.name))
 }
 
 /// §3.1.6 in voller Länge: Hops auflösen, Kanten in der **richtigen

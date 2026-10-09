@@ -636,6 +636,8 @@ mod tests {
             id: ServerId::new(),
             name: name.to_string(),
             host: "newer.example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
             group_id: None,
             reason: ssh_manager_core::profiles::UnusableReason::UnknownAuthMethod,
         }
