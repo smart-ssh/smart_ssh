@@ -6,7 +6,7 @@ members = ["crates/*", "apps/*"]
 version = "0.5.2"
 edition = "2021"
 license = "Apache-2.0"
-# Spec 0035 (CI-Dependency-Audit): keine dieser Crates wird auf crates.io
+# Spec 0090, A12 (Dependency-Prüfung): keine dieser Crates wird auf crates.io
 # veröffentlicht. Macht `[licenses.private] ignore = true` in `deny.toml`
 # wirksam, damit cargo-deny die eigene Projektlizenz nicht gegen die
 # Drittanbieter-Allow-Liste prüft.

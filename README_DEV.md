@@ -6,15 +6,19 @@ This document describes how versioning, builds, releases, and CI/CD workflows ar
 
 ## 1. Version Management
 
-The application version is maintained in **three synchronized locations**:
+The product has one version (Spec 0048). It is pinned in these places, which
+must always agree:
 
-| Component | File | JSON / TOML Path |
+| Component | File | Field |
 | :--- | :--- | :--- |
-| **Rust Workspace & Crates** | [`Cargo.toml`](./Cargo.toml) | `[workspace.package] -> version = "0.1.0"` |
-| **Tauri Desktop App** | [`apps/smart-ssh-community/tauri.conf.json`](./apps/smart-ssh-community/tauri.conf.json) | `"version": "0.1.0"` |
-| **Frontend Web App** | [`apps/smart-ssh-community/frontend/package.json`](./apps/smart-ssh-community/frontend/package.json) | `"version": "0.1.0"` |
+| **Rust Workspace & Crates** | [`Cargo.toml`](./Cargo.toml) | `[workspace.package] version` |
+| **Internal crate dependencies** | each `crates/*/Cargo.toml` and `apps/smart-ssh-community/Cargo.toml` | `version = "…"` of every path dependency on another workspace crate |
+| **Tauri Desktop App** | [`apps/smart-ssh-community/tauri.conf.json`](./apps/smart-ssh-community/tauri.conf.json) | `"version"` |
+| **Frontend Web App** | [`apps/smart-ssh-community/frontend/package.json`](./apps/smart-ssh-community/frontend/package.json) and `package-lock.json` | `"version"` |
 
-All individual Rust crates in `crates/*` automatically inherit their version from `[workspace.package]` via `version.workspace = true`.
+All Rust crates inherit their own version from `[workspace.package]` via
+`version.workspace = true`. The path-dependency pins must match the
+workspace version, otherwise the workspace does not build.
 
 ---
 
@@ -23,14 +27,19 @@ All individual Rust crates in `crates/*` automatically inherit their version fro
 Follow these steps to bump the version and trigger automated multi-platform release builds:
 
 ### Step 1: Update Version Numbers
-Update the version string (e.g. from `0.1.0` to `0.2.0`) in all three files:
-1. `Cargo.toml`
-2. `apps/smart-ssh-community/tauri.conf.json`
-3. `apps/smart-ssh-community/frontend/package.json`
+Update the version string (e.g. from `0.1.0` to `0.2.0`) everywhere listed
+above. For the frontend, run `npm version 0.2.0 --no-git-tag-version` in
+`apps/smart-ssh-community/frontend/` so `package.json` and
+`package-lock.json` change together. Then move the collected entries for the
+release into a new `[0.2.0] — <date>` section of `CHANGELOG.md` (see
+`changelog.d/README.md`).
 
 ### Step 2: Commit Changes
 ```bash
-git add Cargo.toml apps/smart-ssh-community/tauri.conf.json apps/smart-ssh-community/frontend/package.json
+git add Cargo.toml Cargo.lock crates/*/Cargo.toml apps/smart-ssh-community/Cargo.toml \
+  apps/smart-ssh-community/tauri.conf.json \
+  apps/smart-ssh-community/frontend/package.json apps/smart-ssh-community/frontend/package-lock.json \
+  CHANGELOG.md changelog.d
 git commit -m "chore: bump version to 0.2.0"
 ```
 
@@ -54,16 +63,22 @@ When a `v*` tag is pushed (or triggered manually via **Workflow Dispatch** in Gi
 - Automatically creates a GitHub Draft Release under the **Releases** section with all installers and binaries attached for download.
 
 ### CI Workflow ([`.github/workflows/community.yml`](./.github/workflows/community.yml))
-Runs on every pull request and branch push, proving the public repo builds
-standalone from a fresh clone with no secrets (Spec 0038):
-- Code formatting (`cargo fmt --all --check`)
-- Lints (`cargo clippy --workspace --all-targets -- -D warnings`)
-- Workspace unit & integration tests (`cargo test --workspace`)
-- Workspace build (`cargo build --workspace`)
-- Frontend build (`npm ci && npm run build`, i.e. `tsc -b && vite build`)
-- Dependency audit (`cargo-deny`/`cargo-audit`, separate job, currently
-  report-mode/`continue-on-error` per Spec 0035 — see that workflow's own
-  comments for when this becomes blocking)
+Runs on every pull request and on every push to `main`, from a fresh clone
+with no secrets (Spec 0090). Every step blocks:
+- On Ubuntu, Windows and macOS:
+  - Code formatting (`cargo fmt --all --check`)
+  - Lints (`cargo clippy --workspace --all-targets -- -D warnings`)
+  - Workspace unit & integration tests (`cargo test --workspace --no-fail-fast`)
+  - Workspace build without test features (`cargo build --workspace`)
+  - Check that `app-logic` does not depend on Tauri
+  - Third-party license notices (`npm run generate-notices`, Spec 0099)
+  - Frontend lint, tests and build (`npm run lint`, `npm test`, `npm run build`)
+- On Ubuntu only, a separate job: `cargo deny check licenses sources bans`,
+  `cargo audit`, and a check that every exemption in `.cargo/audit.toml`
+  still matches a current finding.
+
+The release workflow runs this same workflow as its gate before it builds
+anything.
 
 ---
 
