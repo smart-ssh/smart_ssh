@@ -32,7 +32,7 @@ use super::chat_turn::{
     wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
 };
 use super::notes::{execute_note_update, note_target_preview_for_action};
-use super::pending_confirmation::PendingConfirmation;
+use super::pending_confirmation::{PendingConfirmation, ANOTHER_CONFIRMATION_PENDING_MESSAGE};
 use super::remote_files::{
     execute_read_remote_file, execute_write_remote_file, previous_file_content_for_action,
 };
@@ -373,11 +373,32 @@ pub(crate) async fn handle_action_proposed(
     let prepared = match decision.clone() {
         Decision::AutoExec => PreparedDecision::AutoExec,
         Decision::Deny { reason, code } => PreparedDecision::Deny { reason, code },
-        Decision::Confirm { reason, code } => PreparedDecision::Confirm {
-            reason,
-            code,
-            pending: PendingConfirmation::register(session, action_confirmations, action_id),
-        },
+        Decision::Confirm { reason, code } => {
+            let Ok(pending) = PendingConfirmation::register(
+                session,
+                action_confirmations,
+                action_id,
+                matches!(origin, ActionOrigin::Mcp { .. }),
+            ) else {
+                // Issue #108 / Spec 0104 §5: höchstens eine wartende
+                // Bestätigung je MCP-Sitzung; der Vorschlag wird nicht
+                // ausgeführt und dem Client als Fehler gemeldet.
+                return emit_action_error(
+                    session,
+                    emitter,
+                    session_id,
+                    ANOTHER_CONFIRMATION_PENDING_MESSAGE.to_string(),
+                    None,
+                    persist,
+                )
+                .await;
+            };
+            PreparedDecision::Confirm {
+                reason,
+                code,
+                pending,
+            }
+        }
     };
 
     let (previous_note_content, target_name) =
@@ -509,7 +530,22 @@ pub(crate) async fn handle_action_proposed(
         // 0092, §5) und ist damit sichtbar, ohne persistiert zu werden.
         let reason = "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string();
         let code = "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string();
-        let pending = PendingConfirmation::register(session, action_confirmations, action_id);
+        let Ok(pending) = PendingConfirmation::register(
+            session,
+            action_confirmations,
+            action_id,
+            matches!(origin, ActionOrigin::Mcp { .. }),
+        ) else {
+            return emit_action_error(
+                session,
+                emitter,
+                session_id,
+                ANOTHER_CONFIRMATION_PENDING_MESSAGE.to_string(),
+                None,
+                persist,
+            )
+            .await;
+        };
         emit_action_decision_escalated(
             emitter,
             session_id,

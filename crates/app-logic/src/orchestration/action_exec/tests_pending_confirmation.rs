@@ -693,3 +693,110 @@ fn test_closing_a_session_missing_from_the_manager_behaves_as_before() {
     assert!(!mcp_sessions.is_mcp_session(mcp_session_id));
     assert!(confirmations.contains(&pending));
 }
+
+// ---------------------------------------------------------------------------
+// Issue #108 / Spec 0104 §5 — höchstens eine wartende Bestätigung je
+// MCP-Sitzung.
+// ---------------------------------------------------------------------------
+
+impl Fixture {
+    fn spawn_mcp_proposal(&self) -> tokio::task::JoinHandle<bool> {
+        let session = self.session.clone();
+        let profile_store = self.profile_store.clone();
+        let confirmations = self.confirmations.clone();
+        let emitter = self.emitter.clone();
+        let session_id = self.session_id;
+        tokio::spawn(async move {
+            super::handle_mcp_action_proposed(
+                &session,
+                session_id,
+                AiAction::SuggestCommand {
+                    command: TEST_COMMAND.to_string(),
+                },
+                emitter.as_ref(),
+                profile_store.as_ref(),
+                confirmations.as_ref(),
+                Some("client".to_string()),
+            )
+            .await
+        })
+    }
+}
+
+#[tokio::test]
+async fn test_issue_108_second_mcp_proposal_is_rejected_while_one_waits() {
+    let fixture = Fixture::new();
+    let first = fixture.spawn_mcp_proposal();
+    let first_id = fixture.await_pending_indicator().await;
+
+    let second = fixture.spawn_mcp_proposal();
+    let second_done = with_timeout("der zweite Vorschlag wurde nicht sofort abgewiesen", second)
+        .await
+        .expect("Task ohne Panic");
+    assert!(second_done);
+    assert_eq!(fixture.event_count("chat-error"), 1);
+    assert_eq!(
+        fixture.event_count("chat-action-proposed"),
+        1,
+        "der abgewiesene Vorschlag darf keine zweite Karte erzeugen"
+    );
+    // Die erste Bestätigung wartet unverändert weiter.
+    assert_eq!(fixture.pending_action(), Some(first_id));
+    assert!(fixture.confirmations.contains(&first_id));
+
+    fixture
+        .confirmations
+        .resolve(&first_id, ActionUserDecision::Deny)
+        .expect("erste Bestätigung ist noch offen");
+    with_timeout("die erste Task endete nicht", first)
+        .await
+        .expect("Task ohne Panic");
+    assert_eq!(fixture.pending_action(), None);
+}
+
+#[tokio::test]
+async fn test_issue_108_a_new_mcp_proposal_is_accepted_after_the_wait_ended() {
+    let fixture = Fixture::new();
+    let first = fixture.spawn_mcp_proposal();
+    let first_id = fixture.await_pending_indicator().await;
+    first.abort();
+    let _ = with_timeout("die abgebrochene Task endete nicht", first).await;
+    assert_eq!(fixture.pending_action(), None);
+
+    let second = fixture.spawn_mcp_proposal();
+    let second_id = with_timeout("der neue Vorschlag wartet nicht", async {
+        loop {
+            if let Some(id) = fixture.pending_action() {
+                return id;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await;
+    assert_ne!(first_id, second_id);
+    assert_eq!(fixture.event_count("chat-error"), 0);
+    fixture
+        .confirmations
+        .resolve(&second_id, ActionUserDecision::Deny)
+        .expect("offen");
+    with_timeout("zweite Task endete nicht", second)
+        .await
+        .expect("Task ohne Panic");
+}
+
+#[tokio::test]
+async fn test_issue_108_closing_the_session_rejects_the_waiting_mcp_confirmation() {
+    let fixture = Fixture::new();
+    let task = fixture.spawn_mcp_proposal();
+    fixture.await_pending_indicator().await;
+    let manager = fixture.manager();
+    assert!(fixture.snapshot_has_pending_action(&manager));
+
+    assert!(fixture
+        .session
+        .reject_pending_confirmation(fixture.confirmations.as_ref()));
+    with_timeout("die wartende Task endete nicht", task)
+        .await
+        .expect("Task ohne Panic");
+    assert!(!fixture.snapshot_has_pending_action(&manager));
+}
