@@ -11,14 +11,18 @@ name: Community
 # Check-Namen, und ein roter Lauf von beiden blockierte den Merge (#26).
 # `workflow_call`: `release.yml` ruft denselben Workflow als Gate vor dem
 # Release-Build auf, damit die Prüfschritte nur an dieser Stelle stehen.
+# Push-Läufe auf den langlebigen Branches des Versionszyklus: `main`
+# (Live-Version), `develop` (nächste Version) sowie `release/*` und
+# `hotfix/*`. Der Merge-Schritt wertet den letzten Push-Lauf des
+# Basis-Branches aus, um einen roten Basis-Branch zu erkennen.
 on:
   push:
-    branches: [main]
+    branches: [main, develop, "release/**", "hotfix/**"]
   pull_request:
   workflow_call:
 
 # Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab.
-# Jeder Lauf auf `main` bekommt eine eigene Gruppe (`run_id`): Eine
+# Jeder Push-Lauf (`main`, `develop`, `release/*`, `hotfix/*`) bekommt eine eigene Gruppe (`run_id`): Eine
 # gemeinsame Gruppe würde einen wartenden `main`-Lauf verwerfen, sobald
 # ein weiterer ansteht, auch ohne `cancel-in-progress`.
 concurrency:
