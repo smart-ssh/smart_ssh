@@ -103,6 +103,7 @@ pub(crate) async fn handle_action_proposed(
     earlier_rejection: &std::sync::atomic::AtomicBool,
 ) -> bool {
     let action_id: ActionId = Uuid::new_v4();
+    announce_second_opinion_setup_failure(session, session_id, emitter);
 
     // Spec 0057, §1.1, erster Punkt: "Kommando vorgeschlagen". Bewusst auf
     // `SuggestCommand` beschränkt (diese Etappe deckt nur diesen
@@ -317,6 +318,22 @@ pub(crate) async fn handle_action_proposed(
             code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
         };
     }
+    // Issue #102: der Injection-Check lief nicht (oder lieferte kein
+    // Urteil) → die nächste `AutoExec`-Aktion wird bestätigungspflichtig,
+    // "klebrig bis verbraucht" wie der Verdacht. Nur Eskalation; ein
+    // vorhandenes `Confirm`/`Deny` bleibt unberührt, das Flag dann auch.
+    if matches!(decision, Decision::AutoExec)
+        && session
+            .injection_check_unavailable
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+    {
+        decision = Decision::Confirm {
+            reason: "Die Prüfung auf eingeschleuste Anweisungen konnte nicht ausgeführt werden – \
+                     erfordert Bestätigung"
+                .to_string(),
+            code: "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM".to_string(),
+        };
+    }
 
     // Spec 0028, Abschnitt 5: ein über MCP (externes Tool) ausgelöster
     // Vorschlag landet **immer** bei einer Bestätigung, unabhängig von
@@ -438,6 +455,7 @@ pub(crate) async fn handle_action_proposed(
     // Zweitmeinung das Daten-Risiko auf Rot, darf die Aktion nicht mehr
     // automatisch laufen (s. direkt darunter).
     let mut second_opinion_data_risk: Option<RiskLevel> = None;
+    let mut second_opinion_unavailable = false;
     if let (Some(provider), Some(assessment)) = (
         session.risk_second_opinion_provider.as_deref(),
         risk_assessment,
@@ -455,12 +473,31 @@ pub(crate) async fn handle_action_proposed(
             }
             let second_opinion =
                 crate::second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
+            // Issue #102: "konnte nicht geprüft werden" (Provider-Fehler
+            // ODER kein erkennbares Urteil) ist vom Ergebnis "geprüft,
+            // unauffällig" unterscheidbar. Die Stufe bleibt die
+            // regelbasierte (`escalate_data_risk` kennt nur Eskalation),
+            // aber die Karte bekommt den Hinweis, und die Aktion wird
+            // unten bestätigungspflichtig.
+            second_opinion_unavailable = second_opinion.is_unavailable();
             let (data_risk, reason) = escalate_data_risk(
                 assessment.data_risk,
                 assessment.data_risk_reason,
-                second_opinion,
+                match second_opinion {
+                    crate::second_opinion::SideCallOutcome::Verdict(level, text) => {
+                        Some((level, text))
+                    }
+                    _ => None,
+                },
             );
-            emit_risk_assessment_updated(emitter, session_id, action_id, data_risk, reason);
+            emit_risk_assessment_updated(
+                emitter,
+                session_id,
+                action_id,
+                data_risk,
+                reason,
+                second_opinion_unavailable,
+            );
             // Spec 0092, A3: nur die STUFE festhalten, nicht den Text der
             // Zweitmeinung — s. Kommentar unten am Grundtext.
             second_opinion_data_risk = Some(data_risk);
@@ -502,9 +539,14 @@ pub(crate) async fn handle_action_proposed(
     // kann. Ausgeführt wird in diesem Rennen nichts ohne Klick.
     let mut prepared = prepared;
     let raised_to_red = second_opinion_data_risk == Some(RiskLevel::Red);
-    if session.red_risk_always_confirm
+    // Issue #102 (Maintainer-Entscheidung: fail closed, pro Aktion): Eine
+    // aktivierte, aber ausgefallene Zweitmeinung lässt eine `AutoExec`-Aktion
+    // nicht stillschweigend durch — sie wird wie ein `Confirm` behandelt.
+    // Unabhängig von `red_risk_always_confirm`, denn das ist keine rote
+    // Einstufung, sondern eine fehlende Schutzschicht. Nur Eskalation.
+    let escalate_for_red = session.red_risk_always_confirm && raised_to_red;
+    if (escalate_for_red || second_opinion_unavailable)
         && matches!(prepared, PreparedDecision::AutoExec)
-        && raised_to_red
         && !(matches!(origin, ActionOrigin::Internal)
             && session
                 .auto_continue_stop
@@ -528,8 +570,18 @@ pub(crate) async fn handle_action_proposed(
         // Die Begründung der Zweitmeinung geht dem Nutzer nicht verloren —
         // sie steht im `risk-assessment-updated`-Ereignis am Badge (Spec
         // 0092, §4) und ist damit sichtbar, ohne persistiert zu werden.
-        let reason = "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string();
-        let code = "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string();
+        let (reason, code) = if escalate_for_red {
+            (
+                "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string(),
+                "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string(),
+            )
+        } else {
+            // Issue #102: fester Text, kein Provider-Fehlertext.
+            (
+                "KI-Zweitmeinung nicht verfügbar – erfordert Bestätigung".to_string(),
+                "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM".to_string(),
+            )
+        };
         let Ok(pending) = PendingConfirmation::register(
             session,
             action_confirmations,
@@ -1910,11 +1962,61 @@ pub(crate) async fn check_for_injected_instructions(
         )
         .await;
     }
-    if let Some((true, _reason)) =
-        crate::second_opinion::fetch_injection_check(provider, content).await
+    match crate::second_opinion::fetch_injection_check(provider, content).await {
+        crate::second_opinion::SideCallOutcome::Verdict(true, _reason) => {
+            session
+                .injection_suspected
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        // Geprüft, unauffällig: ändert nichts (löscht insbesondere einen
+        // früheren Verdacht nicht).
+        crate::second_opinion::SideCallOutcome::Verdict(false, _) => {}
+        // Issue #102 (Maintainer-Entscheidung: fail closed, pro Aktion): Der
+        // Check konnte nicht laufen (Provider-Fehler) oder lieferte kein
+        // erkennbares Urteil. `injection_suspected` bleibt unberührt, aber
+        // die nächste vorgeschlagene Aktion braucht eine Bestätigung, und
+        // der Nutzer sieht den Hinweis. Fester Text: weder Inhalt noch
+        // Provider-Fehlertext.
+        crate::second_opinion::SideCallOutcome::NoVerdict
+        | crate::second_opinion::SideCallOutcome::ProviderError { .. } => {
+            session
+                .injection_check_unavailable
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            emit_chat_error(
+                emitter,
+                session_id,
+                "The check for injected instructions could not be run; the next proposed \
+                 action requires confirmation."
+                    .to_string(),
+                Some("AI_INJECTION_CHECK_UNAVAILABLE"),
+            );
+        }
+    }
+}
+
+/// Issue #102: einmaliger Sitzungs-Hinweis, wenn die Zweitmeinung in den
+/// Einstellungen aktiviert war, beim Verbinden aber nicht eingerichtet
+/// werden konnte (Provider gelöscht, ungültige ID, Zugangsdaten nicht
+/// auflösbar). Die Sitzung läuft wie bisher ohne Zweitmeinung und
+/// Injection-Check, aber nicht mehr stillschweigend. Wird beim Start eines
+/// Chat-Turns und bei jedem Aktionsvorschlag aufgerufen (auch MCP) und
+/// sendet nur beim ersten Mal.
+pub(crate) fn announce_second_opinion_setup_failure(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+) {
+    if session
+        .second_opinion_setup_notice_pending
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
     {
-        session
-            .injection_suspected
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+        emit_chat_error(
+            emitter,
+            session_id,
+            "The AI second opinion is enabled but could not be set up for this session; \
+             commands are not being checked by it."
+                .to_string(),
+            Some("AI_SECOND_OPINION_SETUP_FAILED"),
+        );
     }
 }
