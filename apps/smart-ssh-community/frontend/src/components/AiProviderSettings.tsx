@@ -30,6 +30,7 @@ import {
   supportsModelDiscovery,
   supportsWebResearch,
 } from "../types";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 const PROVIDER_TYPES: ProviderType[] = [
   "openai",
@@ -823,6 +824,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           <label className={LABEL_CLASS}>
             <span className={LABEL_TEXT_CLASS}>{t("aiProvider.providerName")}</span>
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               required
               value={form.displayName}
@@ -835,6 +837,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             <span className={LABEL_TEXT_CLASS}>{t("aiProvider.model")}</span>
             <div className="mt-1 flex gap-2">
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 type="text"
                 required
                 list={supportsModelDiscovery(form.providerType) ? MODEL_DATALIST_ID : undefined}
@@ -899,6 +902,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             <label className={LABEL_CLASS}>
               <span className={LABEL_TEXT_CLASS}>{t("aiProvider.baseUrl")}</span>
               <input
+                {...TECHNICAL_INPUT_PROPS}
                 type="text"
                 required
                 placeholder={t("aiProvider.baseUrlPlaceholder")}
@@ -920,6 +924,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               )}
             </span>
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="password"
               required={form.providerType !== "ollama"}
               value={form.apiKey}
@@ -1064,6 +1069,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     {form.extraHeaders.map(([key, value], index) => (
                       <div key={index} className="flex gap-2">
                         <input
+                          {...TECHNICAL_INPUT_PROPS}
                           type="text"
                           placeholder={t("aiProvider.extraHeaderKeyPlaceholder")}
                           value={key}
@@ -1071,6 +1077,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                           className={`w-1/2 text-sm ${FIELD_CLASS}`}
                         />
                         <input
+                          {...TECHNICAL_INPUT_PROPS}
                           type="text"
                           placeholder={t("aiProvider.extraHeaderValuePlaceholder")}
                           value={value}
@@ -1096,6 +1103,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 <label className={LABEL_CLASS}>
                   <span className={LABEL_TEXT_CLASS}>{t("aiProvider.attestationUrlLabel")}</span>
                   <input
+                    {...TECHNICAL_INPUT_PROPS}
                     type="text"
                     placeholder={t("aiProvider.attestationUrlPlaceholder")}
                     value={form.attestationUrl ?? ""}

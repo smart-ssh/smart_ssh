@@ -23,6 +23,7 @@ import type {
   Scope,
   ServerDto,
 } from "../types";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 type ScopeKind = "global" | "server" | "tag";
 
@@ -387,6 +388,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         <label className="block text-sm text-slate-300">
           {t("filterRules.pattern")}
           <input
+            {...TECHNICAL_INPUT_PROPS}
             type="text"
             required
             value={patternValue}
@@ -458,6 +460,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         {kind === "tag" && (
           <>
             <input
+              {...TECHNICAL_INPUT_PROPS}
               list="known-tags"
               type="text"
               value={tag}
@@ -661,6 +664,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
       <label className="block text-sm text-slate-300">
         {t("filterRules.exampleCommand")}
         <textarea
+          {...TECHNICAL_INPUT_PROPS}
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           rows={2}
@@ -716,6 +720,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
               </span>
             ))}
             <input
+              {...TECHNICAL_INPUT_PROPS}
               type="text"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
