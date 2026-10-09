@@ -47,6 +47,16 @@ ADR 0124 (Websuche im Provider-Konto abgeschaltet).
 - Eine Seite kann nur abgerufen werden, wenn ihre Adresse schon im Gespräch
   vorkommt (Regel des Providers). Die App lockert diese Regel nicht und
   schränkt keine Domains frei.
+- Als im Gespräch genannt zählt auch eine Adresse, die in der Ausgabe eines
+  ausgeführten Befehls oder in einem anderen Aktionsergebnis (z. B. gelesener
+  Dateiinhalt) steht: Solche Ergebnisse gehen als Nutzertext an den Provider,
+  die Adresse ist deshalb ab der nächsten Anfrage abrufbar. Nicht nur der
+  Nutzer kann also abrufbare Adressen einbringen — auch eine eingeschleuste
+  Anweisung kann einen Befehl vorschlagen, der eine Adresse ausgibt. Das
+  begrenzen die bestehenden Schichten: Der erzeugende Befehl läuft durch
+  Filter, Risiko-Einschätzung und Bestätigung (Abschnitt 5), und nach dem
+  Einlesen seiner Ausgabe gilt die Sitzung bereits als „nicht
+  vertrauenswürdigen Inhalt gelesen" (Spec 0039, Abschnitt 5).
 - Der angebotene Werkzeugsatz hängt nur vom Provider und der Einstellung ab,
   nicht von Sitzung, Server oder Verlauf (Spec 0064 bleibt wirksam).
   Einzige Ausnahme: Hat das Provider-Konto die Web-Werkzeuge abgelehnt
@@ -97,7 +107,9 @@ ADR 0124 (Websuche im Provider-Konto abgeschaltet).
 - **Rolle:** Eine Recherche geht als Teil der KI-Antwort zurück, nicht als
   Nutzereingabe. Eine URL aus einem früheren Suchtreffer oder Seitentext
   zählt damit für die Abruf-Regel des Providers nicht als vom Nutzer
-  genannt.
+  genannt. Das gilt nur für Recherche-Inhalt; eine Adresse in der Ausgabe
+  eines Befehls oder einem anderen Aktionsergebnis ist dagegen abrufbar
+  (Abschnitt 3).
 - **Eskalation nach dem Einlesen:** Nach der ersten Web-Recherche gilt die
   Sitzung als „nicht vertrauenswürdigen Inhalt gelesen" (Spec 0039,
   Abschnitt 5): Die Eskalationsstufe des Servers greift für die folgenden
