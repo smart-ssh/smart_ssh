@@ -111,6 +111,30 @@ Kehrt der Nutzer zurück, gilt wieder das Verhalten bei geöffnetem Dialog.
 Ohne geöffneten Dialog verhalten sich Header, Drag-Region und
 Fenster-Controls unverändert wie oben beschrieben.
 
+**Auf den Startmasken vor der Entsperrung.** Solange die App noch gesperrt
+ist (Entsperrmaske, unbrauchbare oder nicht erreichbare
+Verpackungsdatei, unbekannter Startzustand, Fortsetzung des Starts im
+Fenster; Spec 0101), gibt es keinen Header. Trotzdem lässt sich das
+Fenster an seiner Oberkante bewegen:
+
+- Ein Streifen in Titelleistenhöhe an der Fensteroberkante ist ziehbar;
+  ein Doppelklick darauf zoomt bzw. maximiert das Fenster wie auf der
+  Titelleiste.
+- Der Streifen lässt die Fenster-Controls frei, mit denselben Abständen
+  wie der Header (Abschnitt 4): links die Ampel auf macOS, rechts
+  Minimieren/Maximieren/Schließen auf Windows und Linux. Die Controls
+  bleiben bedienbar.
+- Der Streifen ist unsichtbar und trägt keine Inhalte. Die Maske und ein
+  geöffneter Startdialog halten oben die Titelleistenhöhe frei, sodass
+  keine Eingabe und kein Knopf unter dem Streifen liegt.
+- Das gilt auch, während ein Startdialog offen ist: Das Fenster bleibt
+  ziehbar, die Fenster-Controls bleiben bedienbar.
+- Um den Streifen anzuzeigen, ruft die gesperrte App kein Kommando auf,
+  das vor der Entsperrung gesperrt ist (Spec 0101).
+
+Nach der Entsperrung übernimmt der Header; es gibt dann keinen zweiten
+Streifen.
+
 ## 6. Offene Punkte
 
 - Der `set_traffic_lights_inset(12.0, 16.0)`-Wert ist ein Startwert und
