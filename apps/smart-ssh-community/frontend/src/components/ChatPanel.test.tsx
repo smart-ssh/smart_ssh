@@ -434,6 +434,16 @@ describe("Sudo fallback announcement for file writes (Spec 0068, Teil 3)", () =>
   });
 });
 
+// Issue #166: Das editierbare Kommando im Bestätigungsdialog braucht einen
+// zugänglichen Namen (die axe-Prüfung im Browser meldete ein unbeschriftetes
+// Feld).
+describe("editable command in the confirmation (issue #166)", () => {
+  it("names the command field by its caption", () => {
+    renderItem(buildActionItem());
+    expect(screen.getByRole("textbox", { name: "Kommando — editierbar" })).toHaveValue("uname -a");
+  });
+});
+
 // Issue #116: Die bisher fest deutschen Chat-Hinweise kommen aus der
 // i18n-Schicht und erscheinen mit englischer UI auf Englisch.
 describe("chat notices follow the UI language (issue #116)", () => {

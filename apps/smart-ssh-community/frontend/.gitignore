@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright (issue #166): run output, never source
+/e2e/test-results/
+/e2e/playwright-report/
+/playwright/.cache/

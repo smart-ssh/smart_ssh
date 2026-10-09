@@ -11,6 +11,8 @@
     "check-commands": "node ../../../scripts/check-tauri-commands.mjs",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "test:e2e:ui": "playwright test -c e2e/playwright.config.ts --ui",
     "generate-notices": "node ../../../scripts/generate-third-party-notices.mjs"
   },
   "dependencies": {
@@ -30,6 +32,8 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^6.9.1",

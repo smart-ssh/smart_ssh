@@ -42,6 +42,21 @@ npm run lint      # Tauri command check (scripts/check-tauri-commands.mjs), then
 npx vitest run
 ```
 
+Browser tests (issue #166, ADR 0120) run the real frontend in Chromium and
+WebKit, at 1280×800 and 800×560, against a fake backend that replaces the
+Tauri IPC layer (`e2e/harness/`). Unknown commands fail the test, so a new
+screen or command needs a handler in `e2e/harness/fakeBackend.ts` or a
+per-test override. Layout checks (inside the viewport, not covered, reachable
+by Tab, only the content scrolls) live in `e2e/support/layout.ts`; known axe
+findings are listed with a reason in `e2e/support/axe.ts`.
+
+```bash
+cd apps/smart-ssh-community/frontend
+npx playwright install chromium webkit   # once, downloads the browsers
+npm run test:e2e      # whole suite, headless
+npm run test:e2e:ui   # Playwright UI mode, for local debugging
+```
+
 `npm run lint` first runs `npm run check-commands`: it fails when a
 `#[tauri::command]` is not in `generate_handler!`, a `generate_handler!`
 entry has no definition, a non-test frontend file `invoke`s an

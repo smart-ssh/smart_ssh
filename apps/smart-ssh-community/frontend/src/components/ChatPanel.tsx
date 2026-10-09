@@ -1417,7 +1417,10 @@ function ConfirmActionForm({
   return (
     <div className="mt-3 space-y-3">
       {initialCommand !== undefined && (
-        <div className="flex flex-col gap-1">
+        // Issue #166: a `label`, not a `div` — the caption is the field's
+        // accessible name (without it screen readers announce an unnamed
+        // text field in the confirmation dialog).
+        <label className="flex flex-col gap-1">
           <span className="font-heading text-xs font-semibold tracking-wide text-slate-400 uppercase">
             {t("confirmDialog.editableCommand")}
           </span>
@@ -1427,7 +1430,7 @@ function ConfirmActionForm({
             rows={2}
             className="w-full border border-amber-700/50 bg-slate-950 px-3 py-2 font-mono text-sm text-slate-100"
           />
-        </div>
+        </label>
       )}
       {/* Reihenfolge/Gruppierung aus dem Design-Import (Abschnitt 1b,
        * Bestätigungsdialog): primäre Aktion (Ausführen) links, Ablehnen
