@@ -1006,7 +1006,7 @@ pub(super) fn opaque_command_word_reason(literal: &str) -> Option<&'static str> 
 /// Where a shell, interpreter or `source` call takes the program it runs
 /// from — see [`program_source`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum ProgramSource {
+pub(crate) enum ProgramSource {
     /// Code passed as an argument (`sh -c CODE`, `fish --command CODE`,
     /// `python3 -c CODE`, `perl -e CODE`, ...), in the order given.
     Code(Vec<String>),
@@ -1422,7 +1422,7 @@ fn is_stdin_path(word: &str) -> bool {
 /// (`bash -o errexit`, `python3 -W ignore`), `+` options (`sh +x`) and an
 /// option before `-c` (`bash -e -c CODE`) are not mistaken for the script
 /// operand or missed.
-pub(super) fn program_source(literal: &str) -> Option<ProgramSource> {
+pub(crate) fn program_source(literal: &str) -> Option<ProgramSource> {
     let resolved = resolve_effective_command(literal);
     let program = resolved.split_whitespace().next()?;
     let Some(kind) = program_kind(program) else {

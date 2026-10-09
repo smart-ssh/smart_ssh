@@ -1114,3 +1114,123 @@ fn test_real_secret_read_and_sftp_server_call_are_matches() {
         );
     }
 }
+
+// --- Issue #126: `-c` code of every shell the filter engine recognises ---
+
+#[test]
+fn test_other_shells_c_code_is_rated_like_the_wrapped_command() {
+    let direct = classify("reboot").server_risk;
+    assert_eq!(direct, RiskLevel::Red, "precondition: plain reboot is Red");
+    let direct_shutdown = classify("shutdown now").server_risk;
+    let direct_poweroff = classify("poweroff").server_risk;
+    for (command, expected) in [
+        ("ksh -c 'reboot'", direct),
+        ("mksh -c 'shutdown now'", direct_shutdown),
+        ("fish -c 'poweroff'", direct_poweroff),
+        ("fish --command 'reboot'", direct),
+        ("tcsh -c 'reboot'", direct),
+        ("yash -c 'reboot'", direct),
+        ("bash5 -c 'reboot'", direct),
+        ("/usr/local/bin/bash-5.2 -c 'reboot'", direct),
+        ("zsh-5.9 -c 'reboot'", direct),
+        ("OKSH -c 'reboot'", direct),
+        ("mysh -c 'reboot'", direct),
+    ] {
+        assert_eq!(
+            classify(command).server_risk,
+            expected,
+            "{command} must have the server risk of the wrapped command"
+        );
+    }
+}
+
+#[test]
+fn test_other_shells_c_code_behind_wrappers_is_data_rated() {
+    let direct = classify("cat /etc/shadow").data_risk;
+    assert_eq!(direct, RiskLevel::Red, "precondition");
+    for command in [
+        "sudo ksh -c 'cat /etc/shadow'",
+        "env fish -c 'cat /etc/shadow'",
+    ] {
+        assert_eq!(classify(command).data_risk, direct, "{command}");
+    }
+}
+
+#[test]
+fn test_options_before_c_are_unwrapped() {
+    let direct = classify("reboot").server_risk;
+    for command in ["ksh -oerrexit -c 'reboot'", "bash -e -c 'reboot'"] {
+        assert_eq!(classify(command).server_risk, direct, "{command}");
+    }
+}
+
+#[test]
+fn test_other_shells_c_code_in_chains_and_nesting() {
+    let direct = classify("reboot").server_risk;
+    for command in ["ls && ksh -c 'reboot'", "ksh -c \"fish -c 'reboot'\""] {
+        assert_eq!(classify(command).server_risk, direct, "{command}");
+    }
+}
+
+/// `reboot` wrapped in `levels` nested `ksh -c` calls.
+fn nested_ksh_c(levels: usize) -> String {
+    let mut command = "reboot".to_string();
+    for _ in 0..levels {
+        command = format!("ksh -c {}", shell_words::quote(&command));
+    }
+    command
+}
+
+#[test]
+fn test_other_shells_nesting_beyond_depth_limit_does_not_crash() {
+    use super::classifier::{classify_into, RiskAccumulator};
+    use crate::filter::MAX_SUBSTITUTION_DEPTH;
+
+    // Within the limit, two `ksh -c` levels reach `reboot` …
+    let mut acc = RiskAccumulator::new();
+    classify_into(&nested_ksh_c(2), MAX_SUBSTITUTION_DEPTH - 2, &mut acc);
+    assert_eq!(acc.server_risk, RiskLevel::Red);
+    // … at the limit nothing more is unwrapped, and the call returns.
+    let mut acc = RiskAccumulator::new();
+    classify_into(&nested_ksh_c(2), MAX_SUBSTITUTION_DEPTH, &mut acc);
+    assert_eq!(acc.server_risk, RiskLevel::None);
+    // The deepest nesting that fits under the length cap is rated without
+    // crash or hang.
+    let mut levels = 1;
+    while nested_ksh_c(levels + 1).len() <= crate::filter::DEFAULT_MAX_COMMAND_LENGTH {
+        levels += 1;
+    }
+    let _ = classify(&nested_ksh_c(levels));
+    let _ = classify(&nested_ksh_c(levels + 1));
+}
+
+#[test]
+fn test_no_false_unwrapping_for_non_shell_c_and_script_operands() {
+    // Ratings as before issue #126 (verified against the pre-change code).
+    for command in [
+        "ssh -c aes128-ctr host",
+        "chsh -s /bin/zsh",
+        "ksh script.sh",
+    ] {
+        let a = classify(command);
+        assert_eq!(a.server_risk, RiskLevel::None, "{command}");
+        assert_eq!(a.data_risk, RiskLevel::None, "{command}");
+    }
+    // A cipher name or script argument that looks like a red command is
+    // still not unwrapped.
+    for command in ["ssh -c reboot host", "ksh reboot"] {
+        assert_eq!(classify(command).server_risk, RiskLevel::None, "{command}");
+    }
+}
+
+#[test]
+fn test_commands_without_c_code_keep_their_rating() {
+    let harmless = classify("ls -la /tmp");
+    assert_eq!(harmless.server_risk, RiskLevel::None);
+    assert_eq!(harmless.data_risk, RiskLevel::None);
+    let red = classify("shutdown -h now");
+    assert_eq!(red.server_risk, RiskLevel::Red);
+    assert_eq!(red.data_risk, RiskLevel::None);
+    let data_red = classify("cat ~/.ssh/id_rsa");
+    assert_eq!(data_red.data_risk, RiskLevel::Red);
+}
