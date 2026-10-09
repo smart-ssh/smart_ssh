@@ -180,3 +180,159 @@ async fn test_injection_check_runs_on_fetched_page_text() {
     assert_eq!(checked.len(), 1);
     assert!(format!("{:?}", checked[0].history).contains("Ignore all previous instructions"));
 }
+
+// ---- Issue #173: Flag sofort beim Eintreffen des Web-Ergebnisses ----
+
+fn flag_set(session: &Session) -> bool {
+    session
+        .untrusted_content_ingested
+        .load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// Provider, dessen Stream nach den Events nie endet (simuliert eine
+/// laufende Antwort, die der Nutzer stoppt).
+struct HangingProvider(Vec<AiEvent>);
+
+impl ssh_manager_core::ai::AiProvider for HangingProvider {
+    fn send(
+        &self,
+        _context: ssh_manager_core::ai::SessionContext,
+    ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+        use futures::StreamExt;
+        Box::pin(futures::stream::iter(self.0.clone()).chain(futures::stream::pending()))
+    }
+}
+
+async fn escalated_code(session: &Session) -> serde_json::Value {
+    let (_, payload) = proposed_decision_code(
+        session,
+        ssh_manager_core::profiles::AiAction::SuggestCommand {
+            command: "echo hi".to_string(),
+        },
+    )
+    .await;
+    payload["decision"].clone()
+}
+
+#[tokio::test]
+async fn test_flag_set_when_response_is_stopped_after_web_result() {
+    let provider = HangingProvider(vec![
+        AiEvent::TextDelta("Laut Webseite: ".to_string()),
+        AiEvent::WebContentIngested,
+    ]);
+    let session = session_with_ai_provider(provider, MockSshTransport::default());
+    let emitter = TestEmitter::default();
+
+    let stopper = async {
+        while !flag_set(&session) {
+            tokio::task::yield_now().await;
+        }
+        session.request_auto_continue_stop();
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        tokio::join!(run_turn(&session, &emitter), stopper)
+    })
+    .await
+    .expect("Stopp muss den Turn beenden");
+
+    assert!(flag_set(&session));
+    let events = emitter.events.lock().unwrap().clone();
+    assert!(events.iter().any(|(n, _)| n == "chat-response-cancelled"));
+    // Gestreamter Text bleibt wie bisher in der Historie.
+    let history = session.context.lock().await.history.clone();
+    assert_eq!(
+        history[0].content,
+        MessageContent::Text("Laut Webseite: ".to_string())
+    );
+}
+
+#[tokio::test]
+async fn test_flag_set_when_response_fails_after_web_result() {
+    let provider = MockAiProvider::new(vec![
+        AiEvent::WebContentIngested,
+        AiEvent::TextDelta("Teil".to_string()),
+        AiEvent::Error(ssh_manager_core::ai::AiError::ProviderUnavailable(
+            "boom".to_string(),
+        )),
+    ]);
+    let session = session_with_ai_provider(provider, MockSshTransport::default());
+    let emitter = TestEmitter::default();
+
+    run_turn(&session, &emitter).await;
+
+    assert!(flag_set(&session));
+    let events = emitter.events.lock().unwrap().clone();
+    assert!(events.iter().any(|(n, _)| n == "chat-error"));
+    // Das Signal selbst erzeugt weder Karte noch Historieneintrag.
+    assert!(!events.iter().any(|(n, _)| n == "chat-web-activity"));
+    let history = session.context.lock().await.history.clone();
+    assert_eq!(history.len(), 1, "{history:?}");
+}
+
+#[tokio::test]
+async fn test_action_is_escalated_after_failed_response_with_web_result() {
+    use ssh_manager_core::profiles::PostIngestPolicy;
+    let provider = MockAiProvider::new(vec![
+        AiEvent::WebContentIngested,
+        AiEvent::Error(ssh_manager_core::ai::AiError::ProviderUnavailable(
+            "boom".to_string(),
+        )),
+    ]);
+    let mut session = session_with_ai_provider(
+        provider,
+        MockSshTransport::default().with_response("echo hi", output("hi")),
+    );
+    session.parts_mut_for_tests().filter_engine = Box::new(
+        ssh_manager_core::filter::FilterEngine::new(AllowEverythingPolicyStore),
+    );
+    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+
+    run_turn(&session, &TestEmitter::default()).await;
+
+    let decision = escalated_code(&session).await;
+    assert_eq!(
+        decision["Confirm"]["code"],
+        serde_json::json!("FILTER_POST_INGEST_REQUIRES_CONFIRM"),
+        "{decision}"
+    );
+}
+
+#[tokio::test]
+async fn test_flag_unset_on_stop_or_error_without_web_result() {
+    let provider = MockAiProvider::new(vec![
+        AiEvent::TextDelta("Hallo".to_string()),
+        AiEvent::Error(ssh_manager_core::ai::AiError::ProviderUnavailable(
+            "boom".to_string(),
+        )),
+    ]);
+    let session = session_with_ai_provider(provider, MockSshTransport::default());
+    run_turn(&session, &TestEmitter::default()).await;
+    assert!(!flag_set(&session));
+
+    let session = session_with_ai_provider(
+        HangingProvider(vec![AiEvent::TextDelta("Hallo".to_string())]),
+        MockSshTransport::default(),
+    );
+    let emitter = TestEmitter::default();
+    let stopper = async {
+        loop {
+            let seen = emitter
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(n, _)| n == "chat-text-delta");
+            if seen {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        session.request_auto_continue_stop();
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        tokio::join!(run_turn(&session, &emitter), stopper)
+    })
+    .await
+    .expect("Stopp muss den Turn beenden");
+    assert!(!flag_set(&session));
+}
