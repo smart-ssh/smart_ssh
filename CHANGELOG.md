@@ -9,6 +9,202 @@ sind mit **(Pro)** markiert.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-09
+
+### Highlights
+- The local database is now fully encrypted, and all credentials move from the OS keychain into it.
+- Optional master password with an unlock screen, as an alternative to the OS keychain.
+- MCP requests run in their own session and tab per server and tool, with at most one pending confirmation.
+- The AI can search the web and read pages, showing every search and the cited sources in the chat.
+- Step-by-step connection log for connection tests and failed connections, per hop for jump hosts.
+- Servers get an optional start directory and can be moved between groups by drag and drop.
+
+### Added
+- Die lokale Datenbank ist jetzt **vollständig verschlüsselt** (SQLCipher) —
+  auch Server-, Host- und Benutzernamen, Filterregeln und Provider-Header.
+- Eine bestehende Datenbank wird beim ersten Start automatisch und geprüft
+  umgewandelt; scheitert ein Schritt, bleibt die bisherige Datei unverändert.
+- **Alle Zugangsdaten** (Passwörter, Schlüssel, Passphrasen, Zertifikate,
+  Sudo-Passwörter, API-Keys, Provider-Header) ziehen beim ersten Start aus dem
+  Schlüsselbund in die verschlüsselte Datenbank um. Ein alter
+  Schlüsselbund-Eintrag wird erst gelöscht, wenn das Secret in der Datenbank
+  nachweislich gleich ist.
+- **Master-Passwort** als Alternative zum Schlüsselbund, z. B. für Linux ohne
+  Secret Service: In den Einstellungen lässt es sich einrichten, ändern und
+  wieder abschaffen; die Sektion zeigt, wo der Datenbank-Schlüssel liegt.
+- **Entsperrmaske beim Start:** Mit Master-Passwort ist bis zur Entsperrung
+  nichts erreichbar — kein Server, keine Einstellung, kein MCP-Server.
+- Nach drei vergeblichen Versuchen bietet die Entsperrmaske „Neu anfangen“
+  an. Die bisherigen Daten gehen dabei verloren (die Dateien werden nur
+  umbenannt), vorher wird noch einmal gefragt.
+- Server können ein optionales Startverzeichnis haben; Terminal und
+  Dateibrowser starten dort. Fehlt es, starten beide im Home-Verzeichnis mit
+  einem Hinweis. KI-Befehle laufen weiterhin im Home-Verzeichnis.
+- Server und Gruppen lassen sich in der Server-Liste und in „Verwalten“ per
+  Drag-and-drop in eine andere Gruppe oder auf die oberste Ebene verschieben.
+- „+ Server“ und „+ Gruppe“ legen das neue Element in der ausgewählten Gruppe
+  an; in der Server-Liste hat jede Gruppenzeile ein „+“ für einen neuen Server.
+- Die Gruppenauswahl in den Formularen zeigt die Hierarchie als eingerückten
+  Pfad (z. B. „Prod / Web“).
+- Die KI kann beim Antworten im Web suchen und Webseiten lesen (nur Text, über
+  die Web-Werkzeuge des Providers, heute Anthropic). Der Chat zeigt jede Suche
+  und Seite samt Quellen; die Einstellung „Web-Recherche“ ist je Provider
+  standardmäßig an. Dein Rechner öffnet dafür keine zusätzliche Verbindung.
+- „Verbindung testen“ und Verbindungsfehler in der Serverliste bieten ein
+  aufklappbares Schritt-für-Schritt-Protokoll (DNS, TCP, Handshake,
+  Host-Key, Anmeldung, je Jump-Host-Hop) mit markiertem Fehlschritt und
+  „Kopieren“. Es wird nirgends gespeichert.
+- Einstellungen → Diagnose zeigt, wo Smart SSH seine Daten ablegt (Datenbank,
+  Logs, Host-Keys, Schlüsseldatei, MCP-Einstellungen), kopierbar und mit
+  „Ordner öffnen“.
+- Die MCP-Beispiel-Konfiguration in den Einstellungen hat eine Schaltfläche
+  „Konfiguration kopieren“ und wird vollständig angezeigt.
+
+### Changed
+- **Wichtig:** Ältere Versionen können die Datenbank nach dem Umstieg nicht
+  mehr öffnen und melden sie als „möglicherweise beschädigt“ — das stimmt
+  nicht. Kein Backup einspielen, sondern die neue Version nutzen.
+- **Wichtig:** Ohne den Datenbank-Schlüssel (bzw. ein vergessenes
+  Master-Passwort) sind die Daten nicht wiederherstellbar, auch nicht aus
+  einem Backup. Beim Einrichten eines Master-Passworts wird das bestätigt.
+- **Wichtig:** Die alte, unverschlüsselte Datei wird entfernt; ältere
+  Fassungen können aber in Backups, Schnappschüssen oder einem früheren
+  Schlüsselbund-Backup weiter liegen.
+- Der Datenbank-Schlüssel wird aus dem vorhandenen Schlüssel im Schlüsselbund
+  abgeleitet; es kommt kein zweiter Eintrag dazu.
+- Ohne diesen Schlüssel startet Smart SSH nicht mehr eingeschränkt, sondern
+  fragt „Erneut versuchen“ oder „Beenden“; an den Daten ändert sich nichts.
+- Fehlt der Schlüssel oder passt er nicht, entsteht **nie** stillschweigend ein
+  neuer. Wer bewusst neu anfängt, behält die alte Datei unter neuem Namen.
+- Chat-Verlauf, Ausführungsprotokoll, Eingabe-Historie und Zusammenfassungen
+  sind nun allein durch die verschlüsselte Datei geschützt. Nicht mehr lesbare
+  alte Einträge werden beim Umstellen entfernt; ein Hinweis nennt ihre Anzahl.
+- Das MCP-Token liegt jetzt in der verschlüsselten Datenbank statt im
+  Klartext in `settings.json`; bestehende MCP-Clients funktionieren weiter.
+- Aktionen eines externen Tools über MCP laufen in einer eigenen Sitzung mit
+  eigener Verbindung und eigenem Tab je Server und Tool („Claude Code @
+  web-01“). Eigener Tab, Terminal und Chat bleiben unberührt; der MCP-Tab
+  übernimmt nicht den Fokus und zeigt eine wartende Bestätigung als Abzeichen.
+- Hat das Provider-Konto die Websuche abgeschaltet, zeigt der Chat einen
+  Hinweis und fragt für den Rest der Sitzung ohne Web-Recherche an, statt an
+  jeder Nachricht zu scheitern.
+- Den System-Prompt der KI gibt es auf Deutsch und Englisch; er folgt der
+  UI-Sprache, ebenso die Hinweise beim Kürzen langer Sitzungen.
+- Die KI-Zweitmeinung und die Prüfung auf eingeschleuste Anweisungen lösen
+  durch zitierte Konfigurationszeilen (z. B. `PermitRootLogin yes`) keine
+  unnötige Rückfrage mehr aus.
+- Ist noch kein KI-Provider aktiv, wird ein neu angelegter Provider gleich
+  aktiv gesetzt. Ein bereits aktiver Provider wird nie ersetzt, auch wenn die
+  Provider-Liste beim Speichern nicht geladen war.
+- Der SSH-Verbindungsaufbau hat je Server in der Kette eigene Zeitgrenzen:
+  10 s für Verbindung und Handshake, 60 s für die Anmeldung — genug für
+  Hardware-Schlüssel mit Berührung oder Agent-Bestätigung.
+- Läuft eine Host-Key-Abfrage im Hintergrund ab (etwa bei einer über MCP
+  gestarteten Verbindung), schließt sie sich, und ein Hinweis meldet, dass
+  die Verbindung nicht aufgebaut und dem Schlüssel nicht vertraut wurde.
+- Kann das Sudo-Passwort eines Servers nicht aus dem Credential-Speicher
+  gelesen werden, steht eine Warnung im Log (ohne Secret).
+- Gruppen und Server in der Verwalten-Seitenleiste lassen sich per Tastatur
+  auswählen; leere Spaltenköpfe und das Kommandofeld im Bestätigungsdialog
+  haben jetzt Namen für Screenreader.
+
+### Fixed
+- Die Host-Key-Abfrage erscheint jetzt auch, wenn gerade „Verwalten“ oder
+  „Filter-Regeln“ offen ist; bisher lief die Verbindung dort ungefragt in die
+  Ablehnung.
+- Eine beschädigte oder fremde Schlüsseldatei sperrt nicht mehr dauerhaft aus:
+  „Neu anfangen“ gibt es dann vor der Entsperrung, aber nur, wenn wirklich
+  kein Passwort mehr passen kann.
+- Lässt sich die Schlüsseldatei gerade nicht lesen (Rechte, Lesefehler,
+  geöffnet), wird nichts verändert und kein „Neu anfangen“ angeboten.
+- Beim Ändern des Master-Passworts gilt bei einem Fehler weiter das alte
+  Passwort; der Wechsel zurück auf den Schlüsselbund überschreibt keinen
+  fremden Schlüssel ohne Bestätigung.
+- Solange die App gesperrt ist, sind auch Einstellungsdateien und
+  Systemdienste nicht erreichbar.
+- Fehlermeldungen beim Start benennen den Zustand und die betroffene Datei
+  richtig; eine unsichtbare Rückfrage endet mit einer Meldung statt zu hängen.
+- Smart SSH lässt sich nicht mehr zweimal mit demselben Datenverzeichnis
+  starten; ein zweiter Start holt das offene Fenster nach vorn. Instanzen mit
+  verschiedenen Datenverzeichnissen laufen nebeneinander.
+- Scheitert der Start an einer Datenbank aus einer neueren Version, bleiben
+  keine `-wal`/`-shm`-Dateien zurück, und unter Windows lässt sich die Datei
+  sofort umbenennen.
+- Ein Server, dessen Anmeldeart diese Version nicht lesen kann (z. B. nach
+  einem Downgrade), leert nicht mehr die Serverliste: Er erscheint als „nicht
+  nutzbar“ mit Grund und lässt sich löschen.
+- Bricht eine laufende SSH-Sitzung ab (Kommando, Shell oder Dateibrowser),
+  meldet die App „Die Verbindung zum Server wurde unterbrochen“ statt eines
+  irreführenden Aufbau- oder SFTP-Kanalfehlers.
+- Der Dateibrowser des lokalen Pseudo-Servers und lokale Befehle starten im
+  Home-Verzeichnis statt im Arbeitsverzeichnis der App.
+- Ein Upload per Drag-and-drop nutzt immer den Kanal und das Verzeichnis, die
+  beim Ablegen angezeigt werden, auch direkt nach dem erhöhten Modus.
+- Beim Verschieben per Drag-and-drop gehen ungespeicherte Eingaben im
+  geöffneten Server- oder Gruppenformular nicht mehr verloren.
+- Wird der aktive Tab geschlossen, wird als Nächstes ein eigener Tab (sonst
+  die Übersicht) aktiv — nie mehr automatisch ein MCP-Tab.
+- Mit englischer Oberfläche zeigen Dateibrowser, Chat-Hinweise, Notizfeld und
+  -Vorschläge, Sitzungs-Kopfzeile und weitere Dialoge keine deutschen Texte mehr.
+- Das Fenster lässt sich auch bei geöffnetem Dialog und auf der Entsperrmaske
+  an der Titelleiste verschieben und per Doppelklick zoomen bzw. maximieren.
+- Technische Eingabefelder (Host, Benutzername, Pfade, Muster …) schalten
+  Autokorrektur und automatische Großschreibung ab; `root` bleibt `root`.
+- Ein fortgesetzter Chat zeigt bei Kommandoergebnissen wieder den echten
+  Exit-Code statt „—“.
+- Wird die KI-Zusammenfassung einer großen Notiz abgeschnitten, warnt der
+  Notiz-Vorschlag deutlich, dass sie unvollständig ist.
+- Ein Fehler in einer Erweiterung des Hinweises vor der ersten Verbindung
+  blendet nur deren Bereich aus statt die ganze Oberfläche.
+- Ist ein Kommando zu lang oder zu tief verschachtelt für die Prüfung, sagt
+  der Bestätigungsdialog genau das, statt einen Secret-Pfad zu behaupten.
+
+### Security
+- Die Filter-Engine erkennt weitere Umgehungsversuche und verlangt dafür eine
+  Bestätigung trotz Allow-Regel: unsichtbare und Sonder-Unicode-Zeichen,
+  Homoglyphen, `$'\x..'`-Quoting, Variablen oder Globs als Kommandoname,
+  Subshells und Shell-Konstrukte, Shells, die von der Standardeingabe lesen,
+  und `eval`.
+- Deny-Regeln greifen jetzt auch hinter `eval`, Here-Strings (`bash <<<`),
+  `-c` weiterer Shells und Shell-Varianten (`ksh`, `fish`, `bash5`, `zsh-5.9`
+  …), `-c` nach anderen Optionen, in späteren Kettengliedern, hinter Wrappern
+  mit Pfad oder anderer Schreibweise sowie hinter `exec`/`builtin`.
+- Unbekannte Programme auf `sh`, die mit `-c`/`-s` aufgerufen werden (z. B.
+  `pwsh -c …`), verlangen mindestens eine Bestätigung.
+- Die Risiko-Anzeige bewertet den Code hinter `-c` jeder erkannten Shell (auch
+  hinter `sudo`/`env`): `bash -c 'shutdown -h now'` zeigt jetzt Rot.
+- `trap`-Handler und Alias-Definitionen verlangen immer eine Bestätigung,
+  auch mit Allow-Regel; trifft der hinterlegte Code eine Deny-Regel, wird
+  blockiert.
+- Das Längenlimit für Kommandos wird überall in Bytes gemessen; lange
+  Kommandos mit Mehrbyte-Zeichen laufen nicht mehr über eine Allow-Regel durch.
+- MCP-Ausgaben gelangen nicht in den KI-Verlauf der eigenen Sitzung und der
+  eigene Chat nicht in die MCP-Sitzung.
+- In einer MCP-Sitzung wartet höchstens eine Aktion auf Bestätigung; weitere
+  werden sofort mit Verweis auf die offene Bestätigung abgewiesen.
+- Externe Tools (MCP) können je Server höchstens 4 eigene Sitzungen öffnen;
+  Tool-Namen werden in Tab und Benachrichtigung auf 64 Zeichen gekürzt.
+- Wird ein Tab mit wartender Bestätigung geschlossen — auch ein MCP-Tab oder
+  nach einem Neuladen —, wird die Aktion sofort abgelehnt.
+- Kommandoausgaben, gelesene Dateien und Server-Notizen, die ein MCP-Client
+  bekommt, sind redigiert bzw. als nicht vertrauenswürdig eingezäunt wie bei
+  der eingebauten KI. Clients, die den Text wörtlich auswerten, sehen ein
+  geändertes Format.
+- Ein leeres MCP-Token wird nicht mehr akzeptiert und beim Start ersetzt;
+  damit eingerichtete Tools brauchen das neue Token aus den Einstellungen.
+- Linux: Die MCP-Einstellungsdatei `settings.json` bekommt jetzt tatsächlich
+  die Rechte `0600` (bestehende beim nächsten Speichern einer MCP-Einstellung).
+- Webinhalt aus der Web-Recherche gilt als nicht vertrauenswürdig: Er wird
+  redigiert, eingezäunt und schaltet die Eskalation nach dem Einlesen ein.
+- `ssh_config`-Import: Importierte Schlagworte, die eine Tag-Allow-Regel
+  treffen (auch per Muster), sind in der Vorschau standardmäßig abgewählt —
+  außer sie treffen zugleich eine Deny-Regel.
+- Der Dateibrowser liest lokal nur Dateien, die für die Sitzung gewählt oder
+  ins Fenster gezogen wurden; andere Pfade (auch über `..` oder Symlinks)
+  werden abgelehnt.
+- Von „Lokal öffnen“ liegengebliebene Kopien von Server-Dateien werden beim
+  nächsten Start entfernt, statt im Klartext im Cache zu bleiben.
+
 ## [0.5.2] — 2026-10-01
 
 ### Added
