@@ -141,7 +141,7 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
     let events = emitter.events.lock().unwrap().clone();
     let escalated = escalated_event(&events).expect("action-decision-escalated muss kommen");
     assert_eq!(escalated["code"], "FILTER_RED_RISK_REQUIRES_CONFIRM");
-    // spec-reviewer-Fund (Runde 1), Spec 0092 §6: Der Grund nennt die rote
+    // spec-reviewer-Fund (Runde 1), Spec 0092 §4: Der Grund nennt die rote
     // Achse und ihre Herkunft, übernimmt aber NICHT den freien Text der
     // Zweitmeinung — der landete sonst unredigiert im persistierten Ledger.
     let escalated_reason = escalated["reason"].as_str().unwrap_or_default();

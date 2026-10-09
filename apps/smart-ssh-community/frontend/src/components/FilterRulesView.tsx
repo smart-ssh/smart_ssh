@@ -133,7 +133,7 @@ export function FilterRulesView() {
     if (otherIndex < 0 || otherIndex >= groupRules.length) return;
     const a = groupRules[index];
     const b = groupRules[otherIndex];
-    // Spec 0077, Klarstellung Q-BL-0249-02: Bricht vor dem ersten
+    // Spec 0077, 3.2.3: Bricht vor dem ersten
     // `updateRule` ab, wenn eine der beiden beteiligten Regeln ein
     // ungültiges Muster trägt — auch wenn nur die Nachbarregel betroffen
     // ist und der eigene Pfeil deshalb noch anklickbar wäre. 3.1.2 bleibt

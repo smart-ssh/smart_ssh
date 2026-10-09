@@ -150,7 +150,7 @@ impl From<&EvalContext> for EffectiveScope {
 }
 
 /// Nachvollziehbare Spur einer Auswertung (Spec 0009, Abschnitt 4) — löst
-/// den in Spec 0002 Abschnitt 7 offen gelassenen "Simulationsansicht"-Punkt.
+/// den in Spec 0002 ursprünglich offen gelassenen "Simulationsansicht"-Punkt.
 /// Ursprünglich ausschließlich für die Testen-Funktion im UI gedacht (dort
 /// reichte `Decision` aus `evaluate()` für die eigentliche
 /// KI-Kommandoschleife) — seit Spec 0057, §1.1 nutzt auch

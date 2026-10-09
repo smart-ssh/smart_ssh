@@ -28,6 +28,17 @@ Bezüge: Spec 0052 (Anzeige von Version und Build in der App), Spec 0090
   Interne Umbauten, Tests und CI stehen nicht darin.
 - Er deckt den vollen Produktumfang ab. Was nur in einer kostenpflichtigen
   Edition verfügbar ist, ist mit **(Pro)** markiert.
+- Jeder Versionsabschnitt ab Version 0.5.3 beginnt mit der Überschrift
+  `### Highlights`, vor den Kategorien. Sie enthält 3 bis 6 Listenpunkte,
+  jeder genau eine Zeile, aus Nutzersicht und ohne Interna. Die Highlights
+  sind englisch, der einzige englische Teil des sonst deutschen Changelogs,
+  weil sie als Kurzfassung der Release-Notes veröffentlicht werden.
+  `[Unreleased]` hat keine Highlights; sie entstehen beim Anlegen des
+  Versionsabschnitts. Ältere Abschnitte sind ausgenommen. Eine
+  automatische Prüfung schlägt fehl, wenn ein Abschnitt ab 0.5.3 die
+  Highlights nicht oder nicht in dieser Form hat.
+- Ein Eintrag (Fragment) hat höchstens zwei Zeilen, beschreibt die sichtbare
+  Wirkung statt des Mechanismus und enthält nichts Internes.
 - Einträge entstehen während der Entwicklung als einzelne Fragmente im
   Verzeichnis `changelog.d/` (Regeln dort im README) und werden beim
   Release in den neuen Versionsabschnitt übernommen; danach werden die

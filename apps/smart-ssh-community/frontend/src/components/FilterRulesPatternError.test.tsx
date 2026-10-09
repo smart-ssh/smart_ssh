@@ -159,12 +159,12 @@ describe("Regelliste markiert ein ungültiges Muster (Spec 0077, T-6e)", () => {
   });
 });
 
-// Spec 0077, Klarstellung Q-BL-0249-02: Die Pfeiltasten an einer Regel mit
+// Spec 0077, 3.2.3: Die Pfeiltasten an einer Regel mit
 // ungültigem Muster dürfen die Priorität nicht verschieben — weder die
 // eigenen Pfeile noch die einer Nachbarregel, deren Verschieben die
 // markierte Regel mitbeträfe. `updateRule` darf in keinem der beiden Fälle
 // aufgerufen werden.
-describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, Q-BL-0249-02)", () => {
+describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3.2.3)", () => {
   function ruleAt(id: string, priority: number, patternError: string | null): RuleDto {
     return {
       id,
