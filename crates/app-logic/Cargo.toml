@@ -23,11 +23,11 @@ test-support = []
 [dependencies]
 # Issue #104: NFKC-Normalisierung der Urteilswerte (Spec 0074).
 unicode-normalization = "0.1.25"
-ai-providers = { version = "0.5.2", path = "../ai-providers" }
+ai-providers = { version = "0.6.0", path = "../ai-providers" }
 async-trait = "0.1.92"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
-credentials-keyring = { version = "0.5.2", path = "../credentials-keyring" }
+credentials-keyring = { version = "0.6.0", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
 # Spec 0075, §9 Q-1 Punkt 1 (übernommen aus app-shell/Cargo.toml, s. dort
@@ -37,15 +37,15 @@ globset = "0.4.20"
 # Spec 0076, §9 K-3 (übernommen aus app-shell/Cargo.toml): `O_NONBLOCK` für
 # `key_files.rs`.
 libc = "0.2.189"
-mcp-server = { version = "0.5.2", path = "../mcp-server" }
-persistence-sqlite = { version = "0.5.2", path = "../persistence-sqlite" }
+mcp-server = { version = "0.6.0", path = "../mcp-server" }
+persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite" }
 regex = "1.13.1"
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
-ssh-manager-core = { version = "0.5.2", path = "../core" }
-ssh-transport = { version = "0.5.2", path = "../ssh-transport" }
+ssh-manager-core = { version = "0.6.0", path = "../core" }
+ssh-transport = { version = "0.6.0", path = "../ssh-transport" }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
@@ -62,7 +62,7 @@ proptest = "1"
 # Klartext-Datenbanken an (Ausgangszustand einer bestehenden
 # Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie
 # unter `[dependencies]`.
-persistence-sqlite = { version = "0.5.2", path = "../persistence-sqlite", features = ["test-support"] }
+persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite", features = ["test-support"] }
 tempfile = "3.27.0"
 # Spec 0020, Abschnitt 6 (Muster wie app-shell/Cargo.toml).
 ssh-manager-core = { path = "../core", features = ["test-support"] }
