@@ -395,6 +395,37 @@ mod tests {
         );
     }
 
+    /// ADR 0113, "Restrisiko: Abholen ist nicht an Sitzung oder Ziel
+    /// gebunden": the pending drop is global, so any live session may claim
+    /// it — not only the one whose file browser received it — and the first
+    /// claim consumes it. Pins the documented behaviour; if a later change
+    /// binds the claim to a session or drop target, update the ADR with it.
+    #[test]
+    fn test_a_drop_is_claimable_by_any_session_but_only_once() {
+        let grants = LocalPathGrants::new();
+        let intended = SessionId::new_v4();
+        let other = SessionId::new_v4();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("dropped.txt");
+        write(&file, b"x");
+
+        grants.record_drop(vec![file.clone()]);
+        let claimed_by_other = grants.claim_drop(other);
+        let claimed_by_intended = grants.claim_drop(intended);
+
+        assert_eq!(
+            claimed_by_other,
+            vec![file.clone()],
+            "the claim is not bound to the session the drop was meant for"
+        );
+        assert!(grants.check(other, &file, None).is_ok());
+        assert!(
+            claimed_by_intended.is_empty(),
+            "the first claim consumes the drop"
+        );
+        assert!(grants.check(intended, &file, None).is_err());
+    }
+
     #[test]
     fn test_claim_without_a_drop_grants_nothing() {
         let grants = LocalPathGrants::new();
