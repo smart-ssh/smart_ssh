@@ -161,6 +161,15 @@ Tabelle in §4.1. Für jeden Code MUSS gelten:
   Imperativ bzw. „prüfe/starte/lege an …"). Diese Bedingung prüft der
   Reviewer am Text; der Test prüft Vorhandensein.
 
+**A2a — Modell ohne Tool-Unterstützung (Issue #99):** Antwortet der Provider
+auf einen Aufruf mit Tools mit HTTP 400, Fehlertyp `invalid_request_error`
+und einer Meldung, die auf „does not support tools“ endet (gemessen bei
+Ollama 0.40.2), zeigt die App `AI_MODEL_NO_TOOL_SUPPORT` (Text in 4.1)
+statt der generischen Provider-Meldung. Andere 400er, „Modell nicht
+gefunden“ (404) und jeder andere Status behalten ihre Einstufung. Der Fehler
+beendet den Zug: kein Kommando wird ausgeführt oder vorgeschlagen. Die
+Voreinstellung der Ollama-Karte bleibt unverändert (natives Tool-Calling an).
+
 **A2 — KI-Fehler unterscheiden** (`crates/core/src/ai/types.rs`,
 `crates/ai-providers/src/error.rs`):
 - `AiError` bekommt drei neue Varianten mit Codes:
@@ -421,6 +430,7 @@ Schritt müssen erhalten bleiben. Kein `{{…}}`-Platzhalter in `errors.*`
 |---|---|---|
 | `AI_AUTH_FAILED` (bleibt) | Authentifizierung beim KI-Provider fehlgeschlagen – API-Key in den Einstellungen prüfen. | AI provider rejected the credentials – check the API key in Settings. |
 | `AI_MODEL_NOT_FOUND` (neu) | Der KI-Provider kennt dieses Modell nicht. Modellnamen in den Einstellungen prüfen („Modelle laden" zeigt die verfügbaren); bei Ollama das Modell zuerst mit `ollama pull <name>` laden. | The AI provider doesn't know this model. Check the model name in Settings ("Load models" lists the available ones); for Ollama, pull it first with `ollama pull <name>`. |
+| `AI_MODEL_NO_TOOL_SUPPORT` (neu, Issue #99) | Dieses Modell unterstützt keine Tool-Aufrufe. Beim Provider in den Einstellungen „Natives Tool-Calling unterstützt“ abwählen (dann läuft der Textmodus) oder ein Modell mit Tool-Unterstützung wählen. | This model does not support tool calling. In the provider settings, untick "Supports native tool calling" (the prompt-based fallback is used then) or pick a model with tool support. |
 | `AI_LOCAL_PROVIDER_UNREACHABLE` (neu) | Der lokale KI-Dienst antwortet nicht. Ollama (bzw. deinen lokalen Server) starten und erneut versuchen. | The local AI service isn't responding. Start Ollama (or your local server) and try again. |
 | `AI_NETWORK_ERROR` (Text neu) | Keine Verbindung zum KI-Provider. Internetverbindung und – bei eigenem Endpunkt – die Base-URL prüfen, dann erneut senden. | Can't reach the AI provider. Check your internet connection and, for a custom endpoint, the base URL, then send again. |
 | `AI_TIMEOUT` (neu) | Der KI-Provider hat zu lange nicht geantwortet. Kurz warten und erneut senden; bei einem lokalen Modell: ist der Rechner ausgelastet oder das Modell zu groß? | The AI provider took too long to respond. Wait a moment and send again; with a local model, check whether the machine is busy or the model too large. |

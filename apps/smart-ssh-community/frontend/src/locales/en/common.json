@@ -491,6 +491,7 @@
     "AI_PROVIDER_UNAVAILABLE": "The AI provider reported an error (e.g. maintenance or overload). Try again later; if it persists, check the provider settings.",
     "AI_RESPONSE_TRUNCATED": "The AI response was too long for a complete command",
     "AI_MODEL_NOT_FOUND": "The AI provider doesn't know this model. Check the model name in Settings (\"Load models\" lists the available ones); for Ollama, pull it first with `ollama pull <name>`.",
+    "AI_MODEL_NO_TOOL_SUPPORT": "This model does not support tool calling. In the provider settings, untick \"Supports native tool calling\" (the prompt-based fallback is used then) or pick a model with tool support.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "The local AI service isn't responding. Start Ollama (or your local server) and try again.",
     "AI_TIMEOUT": "The AI provider took too long to respond. Wait a moment and send again; with a local model, check whether the machine is busy or the model too large.",
     "AI_WEB_RESEARCH_REJECTED": "The AI provider rejects web research for this account. Turn off “Web research” for this provider under “AI Provider” in the settings.",

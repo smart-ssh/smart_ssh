@@ -59,6 +59,9 @@ pub(crate) fn map_http_status(status: reqwest::StatusCode, body: &str) -> AiErro
     match status.as_u16() {
         401 | 403 => AiError::AuthenticationFailed,
         429 => AiError::RateLimited,
+        400 if is_model_no_tool_support(body) => {
+            AiError::ModelNoToolSupport(format!("HTTP {status}: {body}"))
+        }
         404 | 400
             if is_structured_model_not_found(body) || contains_model_not_found_marker(body) =>
         {
@@ -110,6 +113,32 @@ fn is_structured_model_not_found(body: &str) -> bool {
     let error_type = error.get("type").and_then(serde_json::Value::as_str);
     let error_code = error.get("code").and_then(serde_json::Value::as_str);
     error_type == Some("not_found_error") || error_code == Some("model_not_found")
+}
+
+/// Issue #99: Ollama antwortet auf einen Aufruf mit `tools` für ein Modell
+/// ohne Tool-Unterstützung mit HTTP 400 und
+/// `{"error":{"message":"<modell> does not support tools",
+/// "type":"invalid_request_error",...}}` (gemessen, Fixture
+/// `tests/fixtures/no_tool_support/ollama.json`). Es gibt kein
+/// strukturiertes Code-Feld, deshalb: `error.type ==
+/// "invalid_request_error"` **und** `error.message` endet auf
+/// `does not support tools` (case-insensitive, Modellname davor variiert).
+/// Der Aufrufer prüft den Status (nur 400). Kein JSON, andere Typen oder
+/// anderer Text → `false`.
+fn is_model_no_tool_support(body: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
+        return false;
+    };
+    let Some(error) = value.get("error") else {
+        return false;
+    };
+    let is_invalid_request =
+        error.get("type").and_then(serde_json::Value::as_str) == Some("invalid_request_error");
+    let ends_with_marker = error
+        .get("message")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|m| m.trim().to_lowercase().ends_with("does not support tools"));
+    is_invalid_request && ends_with_marker
 }
 
 fn contains_model_not_found_marker(body: &str) -> bool {
@@ -210,6 +239,43 @@ mod map_http_status_tests {
         let value: serde_json::Value =
             serde_json::from_str(raw).expect("Fixture ist gültiges JSON");
         value["body"].to_string()
+    }
+
+    #[test]
+    fn test_ollama_no_tool_support_fixture_maps_to_model_no_tool_support() {
+        let raw = include_str!("../tests/fixtures/no_tool_support/ollama.json");
+        let body = fixture_body(raw);
+        let err = map_http_status(StatusCode::BAD_REQUEST, &body);
+        assert!(matches!(err, AiError::ModelNoToolSupport(_)), "{err:?}");
+        assert_eq!(err.code(), "AI_MODEL_NO_TOOL_SUPPORT");
+    }
+
+    #[test]
+    fn test_no_tool_support_requires_400_and_exact_shape() {
+        let body = r#"{"error":{"message":"m does not support tools","type":"invalid_request_error","param":null,"code":null}}"#;
+        // Anderer Status: nie ModelNoToolSupport.
+        for s in [StatusCode::NOT_FOUND, StatusCode::INTERNAL_SERVER_ERROR] {
+            assert!(!matches!(
+                map_http_status(s, body),
+                AiError::ModelNoToolSupport(_)
+            ));
+        }
+        // Anderer Typ / anderer Text / kein JSON / Text nicht am Ende.
+        for b in [
+            r#"{"error":{"message":"m does not support tools","type":"other"}}"#,
+            r#"{"error":{"message":"bad request","type":"invalid_request_error"}}"#,
+            r#"{"error":{"message":"does not support tools, sorry","type":"invalid_request_error"}}"#,
+            "m does not support tools",
+            "{}",
+        ] {
+            assert!(
+                !matches!(
+                    map_http_status(StatusCode::BAD_REQUEST, b),
+                    AiError::ModelNoToolSupport(_)
+                ),
+                "{b}"
+            );
+        }
     }
 
     #[test]

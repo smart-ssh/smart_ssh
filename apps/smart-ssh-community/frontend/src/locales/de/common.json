@@ -491,6 +491,7 @@
     "AI_PROVIDER_UNAVAILABLE": "Der KI-Provider meldet einen Fehler (z. B. Wartung oder Überlastung). Später erneut versuchen; hält es an, Provider-Einstellungen prüfen.",
     "AI_RESPONSE_TRUNCATED": "Die KI-Antwort war zu lang für einen vollständigen Befehl",
     "AI_MODEL_NOT_FOUND": "Der KI-Provider kennt dieses Modell nicht. Modellnamen in den Einstellungen prüfen („Modelle laden“ zeigt die verfügbaren); bei Ollama das Modell zuerst mit `ollama pull <name>` laden.",
+    "AI_MODEL_NO_TOOL_SUPPORT": "Dieses Modell unterstützt keine Tool-Aufrufe. Beim Provider in den Einstellungen „Natives Tool-Calling unterstützt“ abwählen (dann läuft der Textmodus) oder ein Modell mit Tool-Unterstützung wählen.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Der lokale KI-Dienst antwortet nicht. Ollama (bzw. deinen lokalen Server) starten und erneut versuchen.",
     "AI_TIMEOUT": "Der KI-Provider hat zu lange nicht geantwortet. Kurz warten und erneut senden; bei einem lokalen Modell: ist der Rechner ausgelastet oder das Modell zu groß?",
     "AI_WEB_RESEARCH_REJECTED": "Der KI-Provider lehnt die Web-Recherche für dieses Konto ab. In den Einstellungen unter „KI-Provider“ die „Web-Recherche“ für diesen Provider ausschalten.",
