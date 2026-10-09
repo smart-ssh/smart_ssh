@@ -212,7 +212,7 @@ fn parse_structured_verdict<V: Eq + Copy>(
             let after = normalized[start..]
                 .trim_start_matches('"')
                 .strip_prefix("verdict")?;
-            let after = after.trim_start_matches(|c: char| c == '"' || c == '*' || c == '`');
+            let after = after.trim_start_matches(['"', '*', '`']);
             let after = after.trim_start().strip_prefix([':', '='])?;
             let value: String = after
                 .trim_start_matches(|c: char| {
