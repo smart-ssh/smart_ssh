@@ -577,6 +577,16 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         register_unlocked_plugins_on(builder)
     };
 
+    // Schlüsselbund-Modus: Der beim Start aufgebaute Zustand muss hier an
+    // Tauri übergeben werden — sonst wird er verworfen, das Tor steht trotzdem
+    // offen, und jedes Kommando scheitert mit „state not managed". Im
+    // Passwort-Modus (`None`) übergibt `unlock_with_master_password` ihn nach
+    // der Entsperrung (`AppHandle::manage`).
+    let builder = match app_state {
+        Some(state) => builder.manage(state),
+        None => builder,
+    };
+
     builder
         // Entscheidung für tauri-plugin-decoration statt tauri-plugin-decorum:
         // tauri-plugin-decorum (v0.1.6) wird nicht mehr aktiv gepflegt und wirft Build-Fehler
