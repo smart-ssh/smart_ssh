@@ -54,6 +54,16 @@ die Sperre, endet der Start mit dem Fehler „läuft bereits", ohne die
 Datenbank anzufassen. `convert_plaintext_database` (A6) verlangt die
 Sperre als Argument.
 
+**Nachtrag (Issue #44, ADR 0121):** Ein zweiter Start desselben
+Release-Builds mit dem **Standard**-Datenverzeichnis holt das offene
+Fenster der laufenden Instanz nach vorn und endet, ohne die Datenbank
+anzufassen. Ist `SMART_SSH_DATA_DIR` gesetzt (nicht leer), holt ein Start
+keine andere Instanz nach vorn: Mit einem anderen Datenverzeichnis als jede
+laufende Instanz startet er normal und läuft daneben; mit demselben endet er
+an der Sperre mit dem Fehler „läuft bereits". Kein Prozess öffnet, migriert
+oder wandelt eine Datenbank um und beendet sich danach, weil eine andere
+Instanz nach vorn geholt wurde.
+
 **Startreihenfolge** (`build_app_state`): Log → Datenbank öffnen und migrieren
 → `probe_keychain_availability` → `resolve_or_generate_key` → Cipher und
 verschlüsselnde Stores → Host-Key-Store. Der Zustand entsteht **vor**
