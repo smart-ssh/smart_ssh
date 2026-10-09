@@ -18,6 +18,20 @@ keine echte Barriere sind.
    heute aktiviert, ausdrücklich mit `error`. Eine Regel, die eine spätere
    oxlint-Version neu ins Plugin aufnimmt, meldet zunächst nur eine Warnung,
    bis sie in die Liste kommt.
+
+   *Nachtrag (Issue #146):* Diese Lücke ist geschlossen. `npm run lint`
+   führt vor oxlint `scripts/check-a11y-lint-rules.mjs` aus. Das Skript
+   fragt das installierte oxlint nach seiner wirksamen Konfiguration
+   (`oxlint --print-config`) und verlangt, dass jede dort aktive
+   `jsx_a11y`-Regel und jede in `.oxlintrc.json` genannte `jsx-a11y`-Regel
+   in `.oxlintrc.json` mit `error` steht. Eine neue Regel aus einer
+   Standardkategorie lässt den Lint-Schritt damit sofort scheitern, mit
+   Regelname und Abhilfe in der Meldung. Ist oxlint nicht aufrufbar oder
+   seine Ausgabe nicht lesbar, scheitert der Schritt ebenfalls. Bewusst
+   `--print-config` statt der Regelliste (`--rules`): Die Liste enthält
+   auch Regeln aus Kategorien, die nicht eingeschaltet sind (z. B.
+   `anchor-ambiguous-text`); sie zu verlangen hieße, neue Regeln
+   einzuschalten, statt nur den Schweregrad der aktiven festzuhalten.
 2. **Zwei Regeloptionen statt Unterdrückungen.**
    - `no-autofocus` mit `ignoreNonDOM: true`: Die Regel meldete auch die
      gleichnamige Eigenschaft der Komponente `NotesPanel`, die den Fokus
