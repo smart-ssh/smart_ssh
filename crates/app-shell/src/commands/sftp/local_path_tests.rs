@@ -43,6 +43,9 @@ struct Setup {
     session: Arc<Session>,
     remote: MockSftpSession,
     emitter: TestEmitter,
+    /// Issue #134: this test's edit-copy root, never the real user cache.
+    /// The guard removes it even when the test panics.
+    edit_root: tempfile::TempDir,
 }
 
 async fn setup() -> Setup {
@@ -62,10 +65,20 @@ async fn setup() -> Setup {
         session,
         remote,
         emitter: TestEmitter::default(),
+        edit_root: tempfile::tempdir().unwrap(),
     }
 }
 
 impl Setup {
+    fn edit_root(&self) -> Option<&std::path::Path> {
+        Some(self.edit_root.path())
+    }
+
+    /// The edit-session directory of `session_id` below this test's root.
+    fn edit_dir(&self, session_id: SessionId) -> std::path::PathBuf {
+        edit_session_dir_in(self.edit_root(), session_id).unwrap()
+    }
+
     async fn upload(&self, local_path: &std::path::Path, remote_path: &str) -> CommandResult<()> {
         let channel = BrowserChannel::for_tests(&self.registry, self.session_id, None);
         // The same two steps as `sftp_upload`: grant check first, then the
@@ -73,6 +86,7 @@ impl Setup {
         let local_path = authorize_local_path(
             &self.sessions,
             &self.grants,
+            self.edit_root(),
             self.session_id,
             local_path.to_str().unwrap(),
         )?;
@@ -250,18 +264,16 @@ async fn test_a_symlink_out_of_a_dropped_folder_is_rejected() {
 #[tokio::test]
 async fn test_edit_copy_of_the_own_session_uploads_and_of_another_session_is_rejected() {
     let s = setup().await;
-    let own_dir = edit_session_dir(s.session_id).unwrap();
+    let own_dir = s.edit_dir(s.session_id);
     let own_copy = own_dir.join("nginx.conf");
     write(&own_copy, b"edited");
     let other_id = SessionId::new_v4();
-    let other_dir = edit_session_dir(other_id).unwrap();
+    let other_dir = s.edit_dir(other_id);
     let other_copy = other_dir.join("nginx.conf");
     write(&other_copy, b"other");
 
     let own = s.upload(&own_copy, "/etc/nginx.conf").await;
     let other = s.upload(&other_copy, "/etc/other.conf").await;
-    let _ = std::fs::remove_dir_all(&own_dir);
-    let _ = std::fs::remove_dir_all(&other_dir);
 
     own.unwrap();
     assert_eq!(
@@ -286,6 +298,7 @@ async fn test_read_local_text_preview_enforces_the_grants() {
     let ok = read_local_text_preview_impl(
         &s.sessions,
         &s.grants,
+        s.edit_root(),
         s.session_id,
         dropped.to_str().unwrap(),
     )
@@ -294,6 +307,7 @@ async fn test_read_local_text_preview_enforces_the_grants() {
     let err = read_local_text_preview_impl(
         &s.sessions,
         &s.grants,
+        s.edit_root(),
         s.session_id,
         secret.to_str().unwrap(),
     )
@@ -309,7 +323,7 @@ async fn test_read_local_text_preview_enforces_the_grants() {
 #[tokio::test]
 async fn test_local_file_mtime_enforces_the_grants() {
     let s = setup().await;
-    let own_dir = edit_session_dir(s.session_id).unwrap();
+    let own_dir = s.edit_dir(s.session_id);
     let own_copy = own_dir.join("a.conf");
     write(&own_copy, b"x");
     let dir = tempfile::tempdir().unwrap();
@@ -319,6 +333,7 @@ async fn test_local_file_mtime_enforces_the_grants() {
     let granted = local_file_mtime_impl(
         &s.sessions,
         &s.grants,
+        s.edit_root(),
         s.session_id,
         own_copy.to_str().unwrap(),
     )
@@ -326,6 +341,7 @@ async fn test_local_file_mtime_enforces_the_grants() {
     let refused = local_file_mtime_impl(
         &s.sessions,
         &s.grants,
+        s.edit_root(),
         s.session_id,
         secret.to_str().unwrap(),
     )
@@ -333,11 +349,11 @@ async fn test_local_file_mtime_enforces_the_grants() {
     let missing = local_file_mtime_impl(
         &s.sessions,
         &s.grants,
+        s.edit_root(),
         s.session_id,
         own_dir.join("gone.conf").to_str().unwrap(),
     )
     .await;
-    let _ = std::fs::remove_dir_all(&own_dir);
 
     assert!(granted.is_some());
     assert!(refused.is_none());
@@ -353,9 +369,14 @@ async fn test_after_disconnect_granted_paths_are_rejected() {
     let file = dir.path().join("a.txt");
     write(&file, b"x");
     s.drop_and_claim(vec![file.clone()]);
-    assert!(
-        authorize_local_path(&s.sessions, &s.grants, s.session_id, file.to_str().unwrap()).is_ok()
-    );
+    assert!(authorize_local_path(
+        &s.sessions,
+        &s.grants,
+        s.edit_root(),
+        s.session_id,
+        file.to_str().unwrap()
+    )
+    .is_ok());
 
     s.registry.remove_session(&s.sessions, s.session_id);
     s.grants.remove_session(s.session_id);
@@ -365,16 +386,21 @@ async fn test_after_disconnect_granted_paths_are_rejected() {
     assert!(read_local_text_preview_impl(
         &s.sessions,
         &s.grants,
+        s.edit_root(),
         s.session_id,
         file.to_str().unwrap()
     )
     .await
     .is_err());
-    assert!(
-        local_file_mtime_impl(&s.sessions, &s.grants, s.session_id, file.to_str().unwrap())
-            .await
-            .is_none()
-    );
+    assert!(local_file_mtime_impl(
+        &s.sessions,
+        &s.grants,
+        s.edit_root(),
+        s.session_id,
+        file.to_str().unwrap()
+    )
+    .await
+    .is_none());
 }
 
 /// A grant that outlives its session (e.g. granted in the moment of a
@@ -389,8 +415,14 @@ async fn test_a_grant_without_its_session_does_not_count() {
 
     s.sessions.remove(s.session_id);
 
-    let err = authorize_local_path(&s.sessions, &s.grants, s.session_id, file.to_str().unwrap())
-        .unwrap_err();
+    let err = authorize_local_path(
+        &s.sessions,
+        &s.grants,
+        s.edit_root(),
+        s.session_id,
+        file.to_str().unwrap(),
+    )
+    .unwrap_err();
     assert_eq!(err.message, LOCAL_PATH_NOT_GRANTED);
 }
 

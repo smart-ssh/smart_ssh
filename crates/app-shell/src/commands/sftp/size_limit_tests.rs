@@ -165,6 +165,9 @@ struct Setup {
     registry: Arc<ElevatedSftpRegistry>,
     session_id: SessionId,
     session: Arc<Session>,
+    /// Issue #134: this test's edit-copy root, never the real user cache.
+    /// The guard removes it even when the test panics.
+    edit_root: tempfile::TempDir,
 }
 
 async fn setup(normal: MismatchSftp, elevated: MismatchSftp) -> Setup {
@@ -190,10 +193,16 @@ async fn setup(normal: MismatchSftp, elevated: MismatchSftp) -> Setup {
         registry,
         session_id,
         session,
+        edit_root: tempfile::tempdir().unwrap(),
     }
 }
 
 impl Setup {
+    /// The edit-session directory of this session below the test's root.
+    fn edit_dir(&self) -> std::path::PathBuf {
+        edit_session_dir_in(Some(self.edit_root.path()), self.session_id).unwrap()
+    }
+
     fn normal_channel(&self) -> BrowserChannel {
         BrowserChannel::for_tests(&self.registry, self.session_id, None)
     }
@@ -323,9 +332,10 @@ async fn test_t3_exactly_the_limit_is_still_returned() {
 
 // --- T4–T6: „Lokal öffnen" (A1.2/A1.3) --------------------------------------
 
-/// Öffnet lokal und räumt das Editier-Verzeichnis danach wieder auf. Gibt
-/// zusätzlich das Verzeichnis zurück, damit der Test prüfen kann, ob dort
-/// etwas entstanden ist.
+/// Öffnet lokal im Editier-Kopien-Ordner des Tests (Issue #134: ein
+/// temporäres Verzeichnis, das mit `Setup` verschwindet). Gibt zusätzlich
+/// das Verzeichnis zurück, damit der Test prüfen kann, ob dort etwas
+/// entstanden ist.
 async fn open_for_editing(
     s: &Setup,
     channel: BrowserChannel,
@@ -333,15 +343,24 @@ async fn open_for_editing(
     max_bytes: u64,
 ) -> (CommandResult<EditSessionDto>, std::path::PathBuf) {
     let session_id = s.session_id;
+    let edit_root = s.edit_root.path().to_path_buf();
     let result = with_browser_channel(
         s.session.clone(),
         channel,
         move |session, channel| async move {
-            open_for_editing_impl(&session, &channel, session_id, remote_path, max_bytes).await
+            open_for_editing_impl(
+                &session,
+                &channel,
+                Some(&edit_root),
+                session_id,
+                remote_path,
+                max_bytes,
+            )
+            .await
         },
     )
     .await;
-    (result, edit_session_dir(session_id).unwrap())
+    (result, s.edit_dir())
 }
 
 /// Spec 0086, T4: `stat` meldet 50 MB + 1 — abgelehnt **vor** dem Lesen, und
@@ -380,7 +399,7 @@ async fn test_t5_a_file_that_grew_between_stat_and_read_leaves_no_local_copy() {
     let s = setup(normal.clone(), untouched()).await;
 
     // Eine Kopie aus einem früheren „Lokal öffnen" derselben Datei.
-    let dir = edit_session_dir(s.session_id).unwrap();
+    let dir = s.edit_dir();
     tokio::fs::create_dir_all(&dir).await.unwrap();
     let existing = dir.join("grown.conf");
     tokio::fs::write(&existing, b"FRUEHERE-KOPIE")
@@ -400,7 +419,6 @@ async fn test_t5_a_file_that_grew_between_stat_and_read_leaves_no_local_copy() {
         b"FRUEHERE-KOPIE".to_vec(),
         "die frühere Kopie darf nicht überschrieben werden (A1.3)"
     );
-    let _ = tokio::fs::remove_dir_all(&dir).await;
 }
 
 /// Spec 0086, T6: Absicherung gegen ein `>=` statt `>` — genau die Grenze
@@ -412,7 +430,7 @@ async fn test_t6_exactly_the_limit_is_still_opened_at_both_checks() {
     // (a) `stat` meldet genau 50 MB — die Vorabprüfung darf nicht greifen.
     let at_limit_by_stat = MismatchSftp::claiming(MAX_EDIT_OPEN_BYTES, 11);
     let s = setup(at_limit_by_stat, untouched()).await;
-    let (result, dir) = open_for_editing(
+    let (result, _) = open_for_editing(
         &s,
         s.normal_channel(),
         "/t/at-limit.conf",
@@ -420,21 +438,19 @@ async fn test_t6_exactly_the_limit_is_still_opened_at_both_checks() {
     )
     .await;
     result.expect("genau 50 MB laut `stat` liegen noch innerhalb der Grenze");
-    let _ = tokio::fs::remove_dir_all(&dir).await;
 
     // (b) gelesen werden genau `LIMIT` Bytes — die Prüfung danach darf nicht
     // greifen.
     const LIMIT: u64 = 64;
     let at_limit_by_content = MismatchSftp::claiming(10, LIMIT as usize);
     let s = setup(at_limit_by_content, untouched()).await;
-    let (result, dir) =
+    let (result, _) =
         open_for_editing(&s, s.normal_channel(), "/t/at-limit-read.conf", LIMIT).await;
     let dto = result.expect("genau die Grenze an gelesenen Bytes liegt noch darin");
     assert_eq!(
         tokio::fs::read(&dto.local_path).await.unwrap().len(),
         LIMIT as usize
     );
-    let _ = tokio::fs::remove_dir_all(&dir).await;
 }
 
 // --- T7: A1.4, beide Grenzen gelten auch erhöht -----------------------------
