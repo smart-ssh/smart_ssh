@@ -1,6 +1,7 @@
 use crate::filter::{
-    exceeds_command_length_limit, extract_shell_c_style_codes, resolve_effective_command,
-    segment_command, Pattern, DEFAULT_MAX_COMMAND_LENGTH, MAX_SUBSTITUTION_DEPTH,
+    exceeds_command_length_limit, extract_shell_c_style_codes, program_source,
+    resolve_effective_command, segment_command, Pattern, ProgramSource, DEFAULT_MAX_COMMAND_LENGTH,
+    MAX_SUBSTITUTION_DEPTH,
 };
 
 use super::patterns::{
@@ -86,8 +87,12 @@ impl RiskAccumulator {
 /// normalisation and patterns. Without this the start-anchored patterns
 /// never see the wrapped command, and a red command was shown as "no risk".
 ///
-/// The extraction is the filter engine's own (`extract_shell_c_style_codes`),
-/// so both consumers agree on what counts as `-c` code. Nested calls
+/// The extraction is the filter engine's own, so both consumers agree on
+/// what counts as `-c` code: the union of `extract_shell_c_style_codes`
+/// (whole-command path) and, issue #126, the code `program_source` finds
+/// (the engine's per-segment path), which knows every shell family the
+/// engine does — `ksh -c`, `fish --command`, `tcsh -c`, versioned names
+/// such as `bash5`/`zsh-5.9` and unknown `*sh` names. Nested calls
 /// (`bash -c "sh -c 'reboot'"`) are unwrapped level by level up to
 /// [`MAX_SUBSTITUTION_DEPTH`], the same cap the filter engine and
 /// `segment_command` use; beyond it the remaining code is not unwrapped
@@ -155,8 +160,16 @@ pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulat
     // nesting level.
     let mut codes: Vec<String> = Vec::new();
     for segment in &segments {
-        for code in extract_shell_c_style_codes(&segment.to_lowercase()) {
-            if !codes.contains(&code) {
+        let lower = segment.to_lowercase();
+        let from_segment_path = match program_source(&lower) {
+            Some(ProgramSource::Code(found)) => found,
+            _ => Vec::new(),
+        };
+        for code in extract_shell_c_style_codes(&lower)
+            .into_iter()
+            .chain(from_segment_path)
+        {
+            if !code.trim().is_empty() && !codes.contains(&code) {
                 codes.push(code);
             }
         }
