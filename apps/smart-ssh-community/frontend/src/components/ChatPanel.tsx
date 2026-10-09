@@ -465,7 +465,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           ),
         );
       }),
-      // Spec 0092, §5/A3.2: die Entscheidung zu `actionId` wurde NACH
+      // Spec 0092, A3.2: die Entscheidung zu `actionId` wurde NACH
       // `chat-action-proposed` von `AutoExec` auf `Confirm` verschärft (die
       // KI-Zweitmeinung hat das Daten-Risiko auf Rot gehoben) — die Karte
       // baut sich daraus selbst ein `Confirm{reason, code}`, weil dieses

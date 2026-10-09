@@ -206,14 +206,14 @@ pub(crate) async fn handle_action_proposed(
     // Allow-Regel. Reine Eskalation (`AutoExec` → `Confirm`), für Chat UND
     // MCP, weil beide durch diese Funktion laufen.
     //
-    // Stelle in der Kette (Spec 0092, §5): NACH Secret-Pfad und
+    // Stelle in der Kette (Spec 0092, §4): NACH Secret-Pfad und
     // `sftp-server`, damit deren genauerer Code erhalten bleibt (A2.4 — die
     // beiden Glieder oben haben `decision` dann schon auf `Confirm` gesetzt,
     // die Bedingung hier greift nicht mehr), und VOR der Injection-Prüfung,
     // damit das Verdachts-Flag hier nur GELESEN und nicht verbraucht wird
     // (A2.3, dasselbe Muster und derselbe Grund wie bei den beiden oben).
     // Ein bereits vorliegendes `Confirm` (z. B. `FILTER_HARD_BLACKLIST`,
-    // Spec 0092 §5) bleibt dadurch ebenfalls unberührt, ein `Deny` erst
+    // Spec 0092 §4) bleibt dadurch ebenfalls unberührt, ein `Deny` erst
     // recht.
     if session.red_risk_always_confirm && matches!(decision, Decision::AutoExec) {
         if let Some(reason) = red_risk_confirm_reason(&action, risk_assessment.as_ref()) {
@@ -527,7 +527,7 @@ pub(crate) async fn handle_action_proposed(
         //
         // Die Begründung der Zweitmeinung geht dem Nutzer nicht verloren —
         // sie steht im `risk-assessment-updated`-Ereignis am Badge (Spec
-        // 0092, §5) und ist damit sichtbar, ohne persistiert zu werden.
+        // 0092, §4) und ist damit sichtbar, ohne persistiert zu werden.
         let reason = "Daten-Risiko rot (KI-Zweitmeinung) – erfordert immer Bestätigung".to_string();
         let code = "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string();
         let Ok(pending) = PendingConfirmation::register(

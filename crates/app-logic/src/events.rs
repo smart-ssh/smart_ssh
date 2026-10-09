@@ -408,7 +408,7 @@ struct ActionDecisionEscalatedPayload {
     code: String,
 }
 
-/// Spec 0092, §5/A3.2: Die Entscheidung zu einer bereits vorgeschlagenen
+/// Spec 0092, A3.2: Die Entscheidung zu einer bereits vorgeschlagenen
 /// Aktion hat sich **nach** `chat-action-proposed` verschärft — aus
 /// `AutoExec` wurde `Confirm`, weil die KI-Zweitmeinung das Daten-Risiko auf
 /// Rot gehoben hat. Die Karte behandelt das wie eine `Confirm`-Entscheidung
