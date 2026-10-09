@@ -61,9 +61,10 @@ pub fn build_ai_provider(
     // `SessionContext::max_tokens_hint`.
     max_tokens_override: Option<u32>,
     // Issue #162: serverseitige Web-Recherche — wirkt nur bei Providern
-    // mit serverseitigen Web-Werkzeugen (Anthropic). Die OpenAI-kompatible
-    // Familie bekommt nie ein Web-Werkzeug: ob ein beliebiger kompatibler
-    // Endpunkt eines kennt, lässt sich nicht sicher feststellen (ADR 0117).
+    // mit serverseitigen Web-Werkzeugen (Anthropic, offizielles OpenAI über
+    // die Responses API, ADR 0127). Die OpenAI-kompatible Familie bekommt
+    // nie ein Web-Werkzeug: ob ein beliebiger kompatibler Endpunkt eines
+    // kennt, lässt sich nicht sicher feststellen (ADR 0117).
     web_research_enabled: bool,
 ) -> (Box<dyn AiProvider>, Arc<ProviderBudgetGuard>) {
     let api_key = api_key.expose_secret().to_string();
@@ -73,15 +74,20 @@ pub fn build_ai_provider(
             let budget =
                 registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
             let provider: Box<dyn AiProvider> = if is_official_openai(provider_type, base_url) {
-                Box::new(OpenAiResponsesProvider::new(
-                    resolved_base_url,
-                    model,
-                    api_key,
-                    supports_native_tool_calling,
-                    extra_headers,
-                    budget.clone(),
-                    max_tokens_override,
-                ))
+                // Issue #168: only the official provider has the Responses
+                // `web_search` tool; compatible endpoints never get one.
+                Box::new(
+                    OpenAiResponsesProvider::new(
+                        resolved_base_url,
+                        model,
+                        api_key,
+                        supports_native_tool_calling,
+                        extra_headers,
+                        budget.clone(),
+                        max_tokens_override,
+                    )
+                    .with_web_research(web_research_enabled),
+                )
             } else {
                 Box::new(OpenAiCompatibleProvider::new(
                     resolved_base_url,
