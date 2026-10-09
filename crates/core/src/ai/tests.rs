@@ -2696,3 +2696,93 @@ fn test_t12_0095_a_value_made_only_of_a_line_continuation_is_not_a_value() {
         );
     }
 }
+
+// ---- Issue #261: Schlüsselwörter aller UI-Sprachen ------------------------
+
+/// Beispiel-Schlüsselwörter je Sprache, die sicher auf der Liste stehen.
+const KEYWORD_SAMPLES: &[&str] = &[
+    "password",
+    "passwd",
+    "token",
+    "secret",
+    "passphrase",
+    "credentials",
+    "private key",
+    "access key",
+    "Passwort",
+    "PASSWORT",
+    "Kennwort",
+    "Zugangsdaten",
+    "Geheimnis",
+    "Schlüssel",
+    "Schluessel",
+    "Zugangsschlüssel",
+    "Zugangsschluessel",
+    "Token",
+];
+
+#[test]
+fn test_redactor_redacts_keywords_of_every_language() {
+    let redactor = DefaultOutputRedactor::new();
+    for kw in KEYWORD_SAMPLES {
+        for sep in [": ", "=", ":"] {
+            let text = format!("Titel {kw}{sep}Secret-4711 Ende");
+            let out = redactor.redact_text(&text);
+            assert!(!out.contains("Secret-4711"), "{kw:?}{sep:?} leaked: {out}");
+            assert!(out.contains(REDACTED_PLACEHOLDER), "{out}");
+        }
+    }
+}
+
+#[test]
+fn test_redactor_redacts_german_keyword_in_query_parameter() {
+    let redactor = DefaultOutputRedactor::new();
+    let out = redactor.redact_text("https://h/x?Passwort=a@b.c&y=1");
+    assert!(!out.contains("a@b.c"), "{out}");
+}
+
+#[test]
+fn test_redactor_keeps_keyword_text_without_value_unchanged() {
+    let redactor = DefaultOutputRedactor::new();
+    for text in [
+        "Passwort vergessen?",
+        "Enter your password",
+        "Der Schlüssel liegt im Tresor",
+        "Bitte Zugangsdaten bereithalten.",
+        "PWD=/home/user",
+    ] {
+        assert_eq!(redactor.redact_text(text), text);
+    }
+}
+
+#[test]
+fn test_every_supported_ui_language_has_a_keyword_list() {
+    let ts = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../apps/smart-ssh-community/frontend/src/i18n.ts"),
+    )
+    .expect("i18n.ts is readable");
+    let line = ts
+        .lines()
+        .find(|l| l.contains("export const SUPPORTED_LANGUAGES"))
+        .expect("SUPPORTED_LANGUAGES is declared");
+    let inner = line.split('[').nth(1).unwrap().split(']').next().unwrap();
+    let langs: Vec<&str> = inner
+        .split(',')
+        .map(|s| s.trim().trim_matches('"'))
+        .collect();
+    assert!(
+        !langs.is_empty() && langs.iter().all(|l| !l.is_empty()),
+        "{line}"
+    );
+    let have = keywords::keyword_languages();
+    for lang in langs {
+        assert!(
+            have.contains(&lang),
+            "no keyword list for UI language {lang:?}"
+        );
+    }
+    for (lang, kws) in keywords::CREDENTIAL_KEYWORDS {
+        assert!(!kws.is_empty(), "empty keyword list for {lang}");
+    }
+}
