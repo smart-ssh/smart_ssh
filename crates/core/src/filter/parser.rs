@@ -1827,3 +1827,122 @@ pub(super) fn eval_code(literal: &str) -> Option<String> {
     };
     Some(code)
 }
+
+/// Which shell construct stores code for later execution (issue #55).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DeferredCodeKind {
+    /// `trap ACTION SIGNAL...`: the action runs when a signal arrives or the
+    /// shell exits.
+    Trap,
+    /// `alias NAME=VALUE`: the value runs whenever a later command starts
+    /// with `NAME`.
+    Alias,
+}
+
+/// A segment that stores shell code to run later (issue #55).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct DeferredCode {
+    pub(super) kind: DeferredCodeKind,
+    /// The stored code, one entry per handler/alias value, quotes removed.
+    /// Empty when the code could not be extracted reliably — the segment is
+    /// then only floored at `Confirm` (fail closed).
+    pub(super) codes: Vec<String>,
+}
+
+/// Whether `word` can be a signal specification (`EXIT`, `INT`, `SIGTERM`,
+/// `15`, `RTMIN+1`). A lone `trap WORD` with such a word resets that signal;
+/// any other lone operand is treated as code, fail closed.
+fn is_signal_spec(word: &str) -> bool {
+    !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '+' | '-'))
+}
+
+/// If the segment is a `trap` call that sets a handler, or an `alias` call
+/// that defines at least one alias, returns the code it stores. `literal` as
+/// for [`opaque_command_word_reason`]; wrappers such as `command`/`builtin`
+/// are resolved first, like for [`eval_code`].
+///
+/// Exempt (returns `None`), because they store no code:
+/// - `trap`, `trap -p [SIG...]`, `trap -l` (listing);
+/// - `trap - SIG...`, `trap '' SIG...` (reset to default / ignore the
+///   signal);
+/// - `trap SIG` with a single operand that looks like a signal (reset);
+/// - `alias`, `alias NAME...`, `alias -p` (listing — no argument with `=`).
+///
+/// Everything else that is not clearly one of those forms counts as a
+/// definition (fail closed): an unknown `trap` option, a lone `trap`
+/// operand that is not a signal name, or input that cannot be tokenised
+/// but contains a `=` (alias) or an operand (trap).
+pub(super) fn deferred_code(literal: &str) -> Option<DeferredCode> {
+    let resolved = resolve_effective_command(literal);
+    let trimmed = resolved.trim_start();
+    let rest_start = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let (program, rest) = trimmed.split_at(rest_start);
+    let kind = if program.eq_ignore_ascii_case("trap") {
+        DeferredCodeKind::Trap
+    } else if program.eq_ignore_ascii_case("alias") {
+        DeferredCodeKind::Alias
+    } else {
+        return None;
+    };
+    let Ok(args) = shell_words::split(rest) else {
+        // Not tokenisable: no reliable extraction. Read-only forms never
+        // need quoting, so anything that might define code is floored.
+        let might_define = match kind {
+            DeferredCodeKind::Trap => !rest.trim().is_empty(),
+            DeferredCodeKind::Alias => rest.contains('='),
+        };
+        return might_define.then_some(DeferredCode {
+            kind,
+            codes: Vec::new(),
+        });
+    };
+    let codes = match kind {
+        DeferredCodeKind::Trap => trap_handler(&args)?,
+        DeferredCodeKind::Alias => alias_values(&args)?,
+    };
+    Some(DeferredCode { kind, codes })
+}
+
+/// `trap` arguments → the handler it sets (as a one-element list), or
+/// `None` for the read-only and reset forms listed at [`deferred_code`].
+/// An unknown option yields an empty list (`Confirm`, nothing to evaluate).
+fn trap_handler(args: &[String]) -> Option<Vec<String>> {
+    let mut i = 0usize;
+    while let Some(arg) = args.get(i) {
+        match arg.as_str() {
+            "--" => {
+                i += 1;
+                break;
+            }
+            // `-p`/`-l` only list handlers/signals; with them, the
+            // remaining operands are signal names, not an action.
+            "-p" | "-l" | "-lp" | "-pl" => return None,
+            // `-` alone is the reset action, handled below as an operand.
+            "-" => break,
+            _ if arg.starts_with('-') && arg.len() > 1 => return Some(Vec::new()),
+            _ => break,
+        }
+    }
+    let operands = &args[i.min(args.len())..];
+    match operands {
+        [] => None,
+        [single] if is_signal_spec(single) => None,
+        [action, ..] if action == "-" || action.is_empty() => None,
+        [action, ..] => Some(vec![action.clone()]),
+    }
+}
+
+/// `alias` arguments → the value of every `NAME=VALUE` definition, or
+/// `None` when there is none (listing forms). Any argument with a `=`
+/// counts, even one that starts with `-` (fail closed: shells differ in
+/// which options they accept before a definition).
+fn alias_values(args: &[String]) -> Option<Vec<String>> {
+    let values: Vec<String> = args
+        .iter()
+        .filter_map(|arg| arg.split_once('=').map(|(_, value)| value.to_string()))
+        .collect();
+    (!values.is_empty()).then_some(values)
+}
