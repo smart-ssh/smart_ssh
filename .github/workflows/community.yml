@@ -277,3 +277,66 @@ jobs:
             fi
           done < <(sed -n '/^ignore = \[/,/^\]/p' .cargo/audit.toml | grep -oE '"RUSTSEC-[0-9]{4}-[0-9]+"' | tr -d '"' | sort -u)
           exit "$stale"
+
+  # Browser tests (issue #166, ADR 0120): Playwright runs the real frontend
+  # in Chromium and WebKit, in two window sizes, against a fake backend that
+  # replaces the Tauri IPC layer. A separate job, so the names of the
+  # existing checks stay unchanged. Linux only: the layout checks use
+  # geometry, not screenshots, and `--with-deps` installs the system
+  # packages through apt.
+  browser-tests:
+    name: Browser Tests (Playwright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/smart-ssh-community/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: apps/smart-ssh-community/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # The browser builds depend only on the installed Playwright version,
+      # so that version is the cache key.
+      - name: Read Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+
+      - name: Install Playwright browsers (with system dependencies)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium webkit
+
+      # The cache holds the browsers only, not the system packages.
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit
+
+      # With `CI` set, the config forbids `test.only`, starts its own dev
+      # server and writes the HTML report. Traces are kept for failed tests.
+      - name: Browser tests (Playwright)
+        run: npm run test:e2e
+
+      - name: Upload Playwright traces and report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            apps/smart-ssh-community/frontend/e2e/test-results/
+            apps/smart-ssh-community/frontend/e2e/playwright-report/
+          retention-days: 14
