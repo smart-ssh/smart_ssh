@@ -61,7 +61,12 @@ npm run test:e2e:ui   # Playwright UI mode, for local debugging
 `#[tauri::command]` is not in `generate_handler!`, a `generate_handler!`
 entry has no definition, a non-test frontend file `invoke`s an
 unregistered name, or a name in the startup gate's allow list is not
-registered (issue #101). CI runs it through the same `npm run lint` step.
+registered (issue #101). Then it runs `npm run check-a11y-rules`
+(`scripts/check-a11y-lint-rules.mjs`, issue #146): it fails when a
+`jsx-a11y` rule that the installed oxlint enables is not listed with
+`error` in `.oxlintrc.json` (Spec 0100 A6.1, ADR 0116) — after an oxlint
+upgrade that adds a rule, add it there. CI runs both through the same
+`npm run lint` step.
 
 Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
 if formatting is off, clippy and test never even execute, so a red CI run
