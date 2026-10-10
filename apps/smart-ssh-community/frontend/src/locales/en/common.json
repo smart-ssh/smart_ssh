@@ -369,6 +369,7 @@
     "mismatchBodyAfterHost": " is presenting a different key than the one stored last time. This can indicate a man-in-the-middle attack. Only continue if you are sure the server key changed legitimately (e.g. server reinstallation).",
     "known": "Known",
     "offeredNow": "Offered Now",
+    "keyType": "Key type",
     "cancelConnection": "Cancel Connection",
     "trustAnyway": "Trust Anyway",
     "unknownHeading": "Unknown Host",

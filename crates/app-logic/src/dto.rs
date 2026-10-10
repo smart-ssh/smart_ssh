@@ -853,6 +853,8 @@ pub enum TestConnectionResult {
         port: u16,
         raw_key: Vec<u8>,
         fingerprint: String,
+        /// Algorithm of the offered key; `None` if undeterminable.
+        key_type: Option<String>,
     },
     HostKeyMismatch {
         host: String,
@@ -860,6 +862,8 @@ pub enum TestConnectionResult {
         raw_key: Vec<u8>,
         expected_fingerprint: String,
         actual_fingerprint: String,
+        /// Algorithm of the offered key; `None` if undeterminable.
+        key_type: Option<String>,
     },
     NetworkError {
         message: String,
@@ -1534,11 +1538,14 @@ mod tests {
             port: 22,
             raw_key: vec![1, 2, 3],
             fingerprint: "SHA256:abc".to_string(),
+            key_type: Some("ssh-ed25519".to_string()),
         };
         let json = serde_json::to_value(&value).unwrap();
 
         assert_eq!(json["kind"], "hostKeyUnknown");
         assert_eq!(json["rawKey"], serde_json::json!([1, 2, 3]));
+        assert_eq!(json["keyType"], "ssh-ed25519");
+        assert!(json.get("key_type").is_none());
         assert!(
             json.get("raw_key").is_none(),
             "raw_key darf nicht mehr im snake_case vorkommen"
@@ -1720,6 +1727,7 @@ mod tests {
             raw_key: vec![9],
             expected_fingerprint: "SHA256:old".to_string(),
             actual_fingerprint: "SHA256:new".to_string(),
+            key_type: None,
         };
         let json = serde_json::to_value(&value).unwrap();
 

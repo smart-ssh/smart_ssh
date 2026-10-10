@@ -226,27 +226,32 @@ async fn run_test_connection(
             port,
             raw_key,
             decision,
-        }) => match decision {
-            HostKeyDecision::Unknown { fingerprint } => TestConnectionResult::HostKeyUnknown {
-                host,
-                port,
-                raw_key,
-                fingerprint,
-            },
-            HostKeyDecision::Mismatch {
-                expected_fingerprint,
-                actual_fingerprint,
-            } => TestConnectionResult::HostKeyMismatch {
-                host,
-                port,
-                raw_key,
-                expected_fingerprint,
-                actual_fingerprint,
-            },
-            HostKeyDecision::Trusted => {
-                unreachable!("PendingHostKeyConfirmation wird nur für Unknown/Mismatch gebaut")
+        }) => {
+            let key_type = crate::host_key_store::offered_key_type(&raw_key);
+            match decision {
+                HostKeyDecision::Unknown { fingerprint } => TestConnectionResult::HostKeyUnknown {
+                    host,
+                    port,
+                    raw_key,
+                    fingerprint,
+                    key_type,
+                },
+                HostKeyDecision::Mismatch {
+                    expected_fingerprint,
+                    actual_fingerprint,
+                } => TestConnectionResult::HostKeyMismatch {
+                    host,
+                    port,
+                    raw_key,
+                    expected_fingerprint,
+                    actual_fingerprint,
+                    key_type,
+                },
+                HostKeyDecision::Trusted => {
+                    unreachable!("PendingHostKeyConfirmation wird nur für Unknown/Mismatch gebaut")
+                }
             }
-        },
+        }
         Err(SshError::AuthenticationFailed) => TestConnectionResult::AuthenticationFailed,
         Err(SshError::Timeout) => TestConnectionResult::Timeout,
         // Spec 0098, A4: Die Variante des Ergebnisses bleibt `NetworkError`
@@ -614,7 +619,8 @@ mod tests {
                 MockOutcome::UnknownHostKey => Ok(ConnectOutcome::PendingHostKeyConfirmation {
                     host: "example.invalid".to_string(),
                     port: 22,
-                    raw_key: b"raw-key".to_vec(),
+                    // Wire format: length-prefixed algorithm name, then key data.
+                    raw_key: [&[0, 0, 0, 11][..], b"ssh-ed25519", b"data"].concat(),
                     decision: HostKeyDecision::Unknown {
                         fingerprint: "SHA256:unknown".to_string(),
                     },
@@ -1149,10 +1155,12 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(matches!(
-            result,
-            TestConnectionResult::HostKeyUnknown { .. }
-        ));
+        match result {
+            TestConnectionResult::HostKeyUnknown { key_type, .. } => {
+                assert_eq!(key_type.as_deref(), Some("ssh-ed25519"));
+            }
+            other => panic!("expected HostKeyUnknown, got {other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -1173,10 +1181,13 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(matches!(
-            result,
-            TestConnectionResult::HostKeyMismatch { .. }
-        ));
+        // The mock key blob has no parseable algorithm name: `None`, not a guess.
+        match result {
+            TestConnectionResult::HostKeyMismatch { key_type, .. } => {
+                assert_eq!(key_type, None);
+            }
+            other => panic!("expected HostKeyMismatch, got {other:?}"),
+        }
     }
 
     #[tokio::test]

@@ -691,6 +691,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
       port: 22,
       rawKey: [1, 2, 3],
       fingerprint: "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      keyType: "ssh-ed25519",
     },
     {
       kind: "hostKeyMismatch",
@@ -699,6 +700,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
       rawKey: [1, 2, 3],
       expectedFingerprint: "SHA256:oldoldoldoldoldoldoldoldoldoldoldoldold",
       actualFingerprint: "SHA256:newnewnewnewnewnewnewnewnewnewnewnewnewn",
+      keyType: "ssh-ed25519",
     },
   ];
 
@@ -738,6 +740,9 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
+
+    // Issue #182: the test-connection prompt shows the key type too.
+    expect(await screen.findByTestId("host-key-type")).toHaveTextContent("ssh-ed25519");
 
     // Issue #71: Auf den fokussierten Zustand warten, nicht nur auf den
     // Dialog im DOM. Die Antwort von `testConnection` kommt außerhalb von
