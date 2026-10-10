@@ -859,6 +859,7 @@ export type ElevationFailureKind =
   | "invalidUser"
   | "invalidPath"
   | "sftpServerNotFound"
+  | "sftpServerUnsafe"
   | "passwordRequired"
   | "notAllowed"
   | "requireTty"
@@ -875,8 +876,11 @@ export interface ElevationResultDto {
     kind: ElevationFailureKind;
     /** Zugeschnittene sudoers-Zeile zum Kopieren, falls eine Regel fehlt. */
     sudoersLine: string | null;
+    /** Bei `sftpServerUnsafe`: der auffällige Pfad. */
     detail: string | null;
   } | null;
+  /** Hinweis bei aktivem Kanal: sftp-server ist nicht sicher geschützt. */
+  warning?: { kind: "sftpServerUnsafe"; path: string } | null;
 }
 
 /** Spec 0067, Teil B: `crate::dto::DownloadResultDto`. */
