@@ -164,7 +164,8 @@ kein gültiges Ergebnis (B-T4); eine per Zusatz-Header gesetzte `x-api-key`
 erscheint genau einmal (B-T5).
 
 Nicht Teil dieser Spec: *wann* die Entdeckung ausgelöst wird. Sie läuft nur
-auf Nutzeraktion (Knopf), nie automatisch im Hintergrund.
+auf Nutzeraktion, nie im Hintergrund; welche Aktionen das sind, regelt
+Spec 0025, Abschnitt 2.
 
 ---
 

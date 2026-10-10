@@ -23,6 +23,42 @@ Ollama. Schlägt die Abfrage fehl (nicht jeder Anbieter unterstützt den
 Endpunkt), fällt das Feld auf Freitext zurück; das Anlegen eines Anbieters
 wird dadurch nie blockiert.
 
+### Auslöser
+
+Die Modellsuche läuft nur auf eine Nutzeraktion hin:
+
+- **Verlassen des API-Key-Felds** (oder des Base-URL-Felds), wenn ein Key
+  eingegeben ist, der Anbietertyp die Suche unterstützt und eine nötige
+  Base-URL gesetzt ist. Bloßes Tippen löst nie eine Anfrage aus. Ein
+  erneutes Verlassen des Felds ohne Änderung an Typ, Base-URL oder Key löst
+  keine weitere Anfrage aus; das gilt auch, wenn die letzte Suche per Knopf
+  lief. Ein leeres Key-Feld löst nichts aus.
+- **Klick auf „Modelle laden"**, jederzeit als manueller neuer Versuch.
+
+Für Ollama gibt es keinen automatischen Auslöser über das Key-Feld; dort
+deckt die eigene Ollama-Suche das ab (Spec 0069).
+
+Je Formular läuft höchstens eine Suche gleichzeitig. Ändern sich Typ,
+Base-URL oder Key, während sie läuft, wird ihr Ergebnis verworfen; die
+nächste Suche startet beim nächsten Verlassen des Felds bzw. per Knopf.
+
+### Ergebnisse
+
+- **Modelle gefunden:** Sie erscheinen als Vorschläge im Modellfeld.
+- **Leere Liste:** neutraler Hinweis „Der Anbieter hat keine Modelle
+  geliefert. Modellname manuell eingeben." Das Feld bleibt nutzbar.
+- **Zugangsdaten abgelehnt** (der Anbieter weist den Key zurück): ein
+  eigener, roter Hinweis direkt am Key-Feld, im selben Stil wie das Ergebnis
+  von „Zugangsdaten testen" — nicht der allgemeine Hinweis. Er verschwindet,
+  sobald Key, Base-URL oder Typ geändert werden.
+- **Jeder andere Fehler** (Netzwerk, Zeitüberschreitung, nicht erreichbar,
+  Endpunkt nicht unterstützt): Das Modellfeld bleibt Freitext, mit dem
+  bisherigen, nicht blockierenden Hinweis.
+
+In keinem Fall blockiert die Suche das Speichern des Anbieters. Der Key geht
+dabei nur an den Anbieter (wie bei „Modelle laden"), er wird weder
+protokolliert noch gespeichert, bevor der Nutzer den Anbieter anlegt.
+
 ## 3. Zusatz-Header
 
 Eine Anbieter-Konfiguration kann beliebige zusätzliche HTTP-Header tragen

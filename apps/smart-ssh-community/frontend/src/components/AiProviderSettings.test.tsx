@@ -1012,3 +1012,277 @@ describe("AiProviderSettings web research toggle (Spec 0105)", () => {
     vi.mocked(listAiProviders).mockResolvedValue([]);
   });
 });
+
+describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Abschnitt 2, issue #326)", () => {
+  const OLLAMA_PROBE_URL = "http://127.0.0.1:11434/v1";
+
+  /** Die Ollama-Probe beim Mounten ruft ebenfalls `discoverModels` auf —
+   * Antworten deshalb nach Base-URL verteilen statt per `...Once`, und nur
+   * die Aufrufe des Formulars zählen. */
+  function mockFormDiscovery(impl: () => Promise<string[]>) {
+    vi.mocked(discoverModels).mockImplementation((config) =>
+      config.baseUrl === OLLAMA_PROBE_URL
+        ? Promise.reject(new Error("no ollama in this test"))
+        : impl(),
+    );
+  }
+
+  function formDiscoveryCalls() {
+    return vi
+      .mocked(discoverModels)
+      .mock.calls.filter(([config]) => config.baseUrl !== OLLAMA_PROBE_URL);
+  }
+
+  // Labels tragen Zusatztexte (Ollama-Hinweis, Discovery-Hinweise), daher
+  // Teiltreffer statt exaktem Label-Text.
+  function keyField() {
+    return screen.getByLabelText(/^API-Key/);
+  }
+
+  function modelField() {
+    return screen.getByLabelText(/^Modell/, { selector: "input" });
+  }
+
+  function typeKey(value: string) {
+    fireEvent.change(keyField(), { target: { value } });
+  }
+
+  function datalistValues(container: HTMLElement) {
+    return Array.from(
+      container.querySelectorAll("#ai-provider-model-options option"),
+    ).map((o) => o.getAttribute("value"));
+  }
+
+  it("loads the model list after the key field is left, without another click", async () => {
+    mockFormDiscovery(() => Promise.resolve(["gpt-4o", "gpt-4o-mini"]));
+    const { container } = renderForm();
+
+    typeKey("sk-valid-key");
+    fireEvent.blur(keyField());
+
+    await waitFor(() =>
+      expect(datalistValues(container)).toEqual(["gpt-4o", "gpt-4o-mini"]),
+    );
+    expect(formDiscoveryCalls()).toHaveLength(1);
+    expect(formDiscoveryCalls()[0][0]).toMatchObject({
+      providerType: "openai",
+      apiKey: "sk-valid-key",
+    });
+  });
+
+  it("typing without leaving the field triggers no request; ten characters then blur trigger exactly one", async () => {
+    mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
+    renderForm();
+
+    let typed = "";
+    for (const ch of "sk-abcdefg") {
+      typed += ch;
+      typeKey(typed);
+    }
+    expect(typed).toHaveLength(10);
+    expect(formDiscoveryCalls()).toHaveLength(0);
+
+    fireEvent.blur(keyField());
+    await waitFor(() => expect(formDiscoveryCalls()).toHaveLength(1));
+  });
+
+  it("leaving the field again with unchanged type, URL and key triggers no new request", async () => {
+    mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
+    renderForm();
+
+    typeKey("sk-valid-key");
+    fireEvent.blur(keyField());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Modelle laden" }),
+      ).not.toBeDisabled(),
+    );
+    expect(formDiscoveryCalls()).toHaveLength(1);
+
+    fireEvent.focus(keyField());
+    fireEvent.blur(keyField());
+    await Promise.resolve();
+    expect(formDiscoveryCalls()).toHaveLength(1);
+
+    // Gegenprobe: ein geänderter Key löst wieder aus.
+    typeKey("sk-other-key");
+    fireEvent.blur(keyField());
+    await waitFor(() => expect(formDiscoveryCalls()).toHaveLength(2));
+  });
+
+  it("an empty key field on blur triggers no request", async () => {
+    mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
+    renderForm();
+
+    fireEvent.blur(keyField());
+    typeKey("   ");
+    fireEvent.blur(keyField());
+    await Promise.resolve();
+    expect(formDiscoveryCalls()).toHaveLength(0);
+  });
+
+  it("does not trigger for a generic provider until the base URL is set; leaving the URL field then triggers", async () => {
+    mockFormDiscovery(() => Promise.resolve(["llama"]));
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "generic_openai_compatible" },
+    });
+    typeKey("key-123");
+    fireEvent.blur(keyField());
+    await Promise.resolve();
+    expect(formDiscoveryCalls()).toHaveLength(0);
+
+    const urlField = screen.getByLabelText("Base-URL");
+    fireEvent.change(urlField, { target: { value: "https://llm.example/v1" } });
+    fireEvent.blur(urlField);
+    await waitFor(() => expect(formDiscoveryCalls()).toHaveLength(1));
+    expect(formDiscoveryCalls()[0][0]).toMatchObject({
+      baseUrl: "https://llm.example/v1",
+      apiKey: "key-123",
+    });
+  });
+
+  it("never triggers automatically for Ollama", async () => {
+    mockFormDiscovery(() => Promise.resolve(["llama3"]));
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText("Typ"), {
+      target: { value: "ollama" },
+    });
+    typeKey("anything");
+    fireEvent.blur(keyField());
+    fireEvent.blur(screen.getByLabelText("Base-URL"));
+    await Promise.resolve();
+    // Die Probe beim Mounten läuft gegen dieselbe URL — die Formular-
+    // Discovery wäre die mit dem eingegebenen Key.
+    expect(
+      vi
+        .mocked(discoverModels)
+        .mock.calls.filter(([config]) => config.apiKey === "anything"),
+    ).toHaveLength(0);
+  });
+
+  it("AI_AUTH_FAILED shows the distinct 'credentials rejected' state, not the empty or generic hint", async () => {
+    mockFormDiscovery(() =>
+      Promise.reject({ code: "AI_AUTH_FAILED", message: "401" }),
+    );
+    renderForm();
+
+    typeKey("sk-wrong-key");
+    fireEvent.blur(keyField());
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Zugangsdaten abgelehnt/);
+    expect(alert.className).toMatch(/text-red-400/);
+    expect(
+      screen.queryByText(/Modelle konnten nicht automatisch geladen werden/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/keine Modelle geliefert/),
+    ).not.toBeInTheDocument();
+
+    // Ein neuer Key nimmt den Zustand zurück.
+    typeKey("sk-new-key");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("an empty model list shows the 'no models returned' hint", async () => {
+    mockFormDiscovery(() => Promise.resolve([]));
+    renderForm();
+
+    typeKey("sk-valid-key");
+    fireEvent.blur(keyField());
+
+    expect(
+      await screen.findByText(
+        "Der Anbieter hat keine Modelle geliefert. Modellname manuell eingeben.",
+      ),
+    ).toBeInTheDocument();
+    expect(modelField()).not.toBeDisabled();
+  });
+
+  it("a network error leaves the model field as free text with the non-blocking hint, and the provider can be saved", async () => {
+    mockFormDiscovery(() =>
+      Promise.reject({ code: "AI_TIMEOUT", message: "timed out" }),
+    );
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Prov" },
+    });
+    typeKey("sk-valid-key");
+    fireEvent.blur(keyField());
+
+    expect(
+      await screen.findByText(/Modelle konnten nicht automatisch geladen werden/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.change(modelField(), {
+      target: { value: "my-own-model" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(addAiProvider).mock.calls[0][0].model).toBe("my-own-model");
+  });
+
+  it("ignores the result of an outdated request and allows only one request at a time", async () => {
+    let resolveFirst: (models: string[]) => void = () => {};
+    let call = 0;
+    mockFormDiscovery(() => {
+      call += 1;
+      return call === 1
+        ? new Promise<string[]>((resolve) => {
+            resolveFirst = resolve;
+          })
+        : Promise.resolve(["fresh-model"]);
+    });
+    const { container } = renderForm();
+
+    typeKey("sk-first");
+    fireEvent.blur(keyField());
+    await waitFor(() => expect(formDiscoveryCalls()).toHaveLength(1));
+
+    // Eingaben ändern sich, während die erste Anfrage läuft — ein Blur
+    // startet keine zweite parallel.
+    typeKey("sk-second");
+    fireEvent.blur(keyField());
+    await Promise.resolve();
+    expect(formDiscoveryCalls()).toHaveLength(1);
+
+    resolveFirst(["stale-model"]);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Modelle laden" }),
+      ).not.toBeDisabled(),
+    );
+    expect(datalistValues(container)).toEqual([]);
+    expect(screen.queryByText(/keine Modelle geliefert/)).not.toBeInTheDocument();
+
+    // Der nächste Blur startet eine neue Anfrage für die aktuellen Eingaben.
+    fireEvent.blur(keyField());
+    await waitFor(() =>
+      expect(datalistValues(container)).toEqual(["fresh-model"]),
+    );
+    expect(formDiscoveryCalls()).toHaveLength(2);
+    expect(formDiscoveryCalls()[1][0].apiKey).toBe("sk-second");
+  });
+
+  it('the "Modelle laden" button still works as a manual retry', async () => {
+    mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
+    renderForm();
+
+    typeKey("sk-valid-key");
+    fireEvent.blur(keyField());
+    await waitFor(() => expect(formDiscoveryCalls()).toHaveLength(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Modelle laden" }),
+      ).not.toBeDisabled(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Modelle laden" }));
+    await waitFor(() => expect(formDiscoveryCalls()).toHaveLength(2));
+  });
+});
