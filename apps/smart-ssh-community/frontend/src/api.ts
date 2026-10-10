@@ -379,6 +379,10 @@ export const createRule = (input: RuleInput) => invoke<string>("create_rule", { 
 export const updateRule = (id: string, input: RuleInput) =>
   invoke<void>("update_rule", { id, input });
 
+/** Spec 0077, 3.2.3: tauscht die Prioritäten zweier Regeln atomar. */
+export const swapRulePriorities = (first: string, second: string) =>
+  invoke<void>("swap_rule_priorities", { first, second });
+
 export const deleteRule = (id: string) => invoke<void>("delete_rule", { id });
 
 export const listHardBlacklist = () => invoke<PatternDto[]>("list_hard_blacklist");

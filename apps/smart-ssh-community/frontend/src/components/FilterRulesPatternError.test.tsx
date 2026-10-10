@@ -6,7 +6,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
-import type { RuleDto } from "../types";
+import type { EvaluationTraceDto, RuleDto } from "../types";
 import { FilterRulesView } from "./FilterRulesView";
 
 /** Gekürzte Fassung dessen, was `regex` für `^systemctl stop (.*` liefert —
@@ -21,6 +21,10 @@ const createRuleMock = vi.fn();
 // spreaden lässt — mit `vi.fn(() => Promise.resolve())` (feste 0-Arity)
 // scheiterte das an TS2556 (spec-reviewer-Fund).
 const updateRuleMock = vi.fn((..._args: unknown[]) => Promise.resolve());
+const swapRulePrioritiesMock = vi.fn((..._args: unknown[]) => Promise.resolve());
+const evaluateExplainedMock = vi.fn<(...args: unknown[]) => Promise<EvaluationTraceDto | null>>(
+  () => Promise.resolve(null),
+);
 
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) =>
@@ -33,7 +37,8 @@ vi.mock("../api", () => ({
       : null,
   createRule: (...args: unknown[]) => createRuleMock(...args),
   deleteRule: vi.fn(() => Promise.resolve()),
-  evaluateExplained: vi.fn(() => Promise.resolve(null)),
+  evaluateExplained: (...args: unknown[]) => evaluateExplainedMock(...args),
+  swapRulePriorities: (...args: unknown[]) => swapRulePrioritiesMock(...args),
   listHardBlacklist: vi.fn(() => Promise.resolve([])),
   listKnownTags: vi.fn(() => Promise.resolve([])),
   listRules: () => listRulesMock(),
@@ -80,6 +85,9 @@ beforeEach(() => {
   listRulesMock.mockReset();
   createRuleMock.mockReset();
   updateRuleMock.mockReset();
+  swapRulePrioritiesMock.mockReset();
+  swapRulePrioritiesMock.mockResolvedValue(undefined);
+  evaluateExplainedMock.mockReset();
 });
 
 describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
@@ -204,7 +212,7 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
-  it("bricht vor dem ersten updateRule ab, wenn nur die Nachbarregel patternError trägt", async () => {
+  it("deaktiviert den Pfeil einer gültigen Regel, wenn die Nachbarregel patternError trägt, mit Begründung", async () => {
     listRulesMock.mockResolvedValue([
       ruleAt("rule-top", 200, null),
       ruleAt("rule-broken", 100, LIBRARY_ERROR),
@@ -213,31 +221,24 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     renderView();
 
     await screen.findByText(/rule-top-pattern/);
-    // `rule-top` selbst hat kein patternError, sein Abwärts-Pfeil ist also
-    // anklickbar — die Nachbarregel (`rule-broken`), auf die er zielt, hat
-    // aber ein ungültiges Muster. movePriority muss trotzdem abbrechen,
-    // bevor auch nur die erste `updateRule` läuft.
+    const neighbourReason = testI18n.getFixedT("de")("filterRules.priorityDisabledNeighbourPatternError");
     const topRow = screen.getByText(/rule-top-pattern/).closest("li")!;
     const topDown = within(topRow).getByRole("button", {
       name: /Priorität senken|Decrease priority/,
     });
-    expect(topDown).toBeEnabled();
+    expect(topDown).toBeDisabled();
+    expect(topDown).toHaveAttribute("title", neighbourReason);
 
-    // `movePriority` ist zwar `async`, der Abbruch (`return`) steht aber
-    // vor dem ersten `await` — er läuft also synchron innerhalb des Klicks,
-    // ohne dass es auf ein Mikrotask-Ticken ankäme.
-    fireEvent.click(topDown);
-    expect(updateRuleMock).not.toHaveBeenCalled();
-
-    // Symmetrischer Fall: die Regel unterhalb der markierten greift ebenso
-    // auf sie zu (Aufwärts-Pfeil von `rule-bottom`).
     const bottomRow = screen.getByText(/rule-bottom-pattern/).closest("li")!;
     const bottomUp = within(bottomRow).getByRole("button", {
       name: /Priorität erhöhen|Increase priority/,
     });
-    expect(bottomUp).toBeEnabled();
+    expect(bottomUp).toBeDisabled();
+    expect(bottomUp).toHaveAttribute("title", neighbourReason);
 
+    fireEvent.click(topDown);
     fireEvent.click(bottomUp);
+    expect(swapRulePrioritiesMock).not.toHaveBeenCalled();
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
@@ -260,19 +261,35 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
 
     fireEvent.click(topDown);
 
-    // Anders als beim Abbruch-Guard (der vor dem ersten `await` zurückkehrt)
-    // liegt der zweite `updateRule`-Aufruf hier hinter dem ersten `await` —
-    // erst nach dessen Mikrotask ist er ausgelöst.
-    await waitFor(() => expect(updateRuleMock).toHaveBeenCalledTimes(2));
-    expect(updateRuleMock).toHaveBeenNthCalledWith(
-      1,
-      "rule-top",
-      expect.objectContaining({ priority: 100 }),
-    );
-    expect(updateRuleMock).toHaveBeenNthCalledWith(
-      2,
-      "rule-bottom",
-      expect.objectContaining({ priority: 200 }),
-    );
+    await waitFor(() => expect(swapRulePrioritiesMock).toHaveBeenCalledTimes(1));
+    expect(swapRulePrioritiesMock).toHaveBeenCalledWith("rule-top", "rule-bottom");
+    expect(updateRuleMock).not.toHaveBeenCalled();
+    // Danach wird neu geladen: einmal beim Start, einmal nach dem Tausch.
+    await waitFor(() => expect(listRulesMock).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("Testansicht markiert ein ungültiges Muster (Spec 0077, 3.2.3)", () => {
+  it("zeigt Hinweis und Fehlertext für eine Regel mit patternError neben dem Ergebnis", async () => {
+    listRulesMock.mockResolvedValue([validRule(), brokenRule()]);
+    evaluateExplainedMock.mockResolvedValue({
+      decision: "AutoExec",
+      matchedRule: "rule-valid",
+      matchedHardBlacklistEntry: null,
+      subCommandTraces: [],
+    });
+    renderView();
+
+    await screen.findByText(/systemctl stop/);
+    fireEvent.change(screen.getByPlaceholderText("ls -la && rm -rf /tmp/x"), {
+      target: { value: "systemctl stop nginx" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^(Testen|Test)$/ }));
+
+    const marker = await screen.findByTestId("test-invalid-pattern-rules");
+    expect(marker).toHaveTextContent("^systemctl stop (.*");
+    expect(marker).toHaveTextContent(invalidPatternText());
+    expect(marker).toHaveTextContent(LIBRARY_ERROR);
+    expect(marker).not.toHaveTextContent("ls *");
   });
 });

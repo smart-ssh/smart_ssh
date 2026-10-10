@@ -47,6 +47,20 @@ pub async fn update_rule(
         .map_err(app_logic::error::rule_write_error)
 }
 
+/// Spec 0077, 3.2.3: tauscht die Prioritäten zweier Regeln in einer
+/// Transaktion; prüft vorher beide Muster.
+#[tauri::command]
+pub async fn swap_rule_priorities(
+    state: State<'_, AppState>,
+    first: RuleId,
+    second: RuleId,
+) -> CommandResult<()> {
+    // Ausdrücklich umwandeln, damit der Code erhalten bleibt (s. `create_rule`).
+    app_logic::filter_rules::swap_rule_priorities(&state.policy_store, first, second)
+        .await
+        .map_err(app_logic::error::rule_write_error)
+}
+
 #[tauri::command]
 pub async fn delete_rule(state: State<'_, AppState>, id: RuleId) -> CommandResult<()> {
     state.policy_store.delete(&id).await.map_err(Into::into)

@@ -10,6 +10,7 @@ import {
   listKnownTags,
   listRules,
   listServers,
+  swapRulePriorities,
   updateRule,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
@@ -46,16 +47,6 @@ function scopeKey(scope: Scope): string {
   if (kind === "server") return `server:${scopeServerId(scope)}`;
   if (kind === "tag") return `tag:${scopeTag(scope)}`;
   return "global";
-}
-
-function ruleToInput(rule: RuleDto): RuleInput {
-  return {
-    patternType: rule.patternType,
-    patternValue: rule.patternValue,
-    action: rule.action,
-    scope: rule.scope,
-    priority: rule.priority,
-  };
 }
 
 const ACTION_COLORS: Record<RuleAction, string> = {
@@ -128,26 +119,29 @@ export function FilterRulesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rules, servers, t]);
 
+  // Spec 0077, 3.2.3: Grund, warum ein Pfeil gesperrt ist — die Regel selbst
+  // oder die Nachbarregel, mit der sie tauschen würde, trägt ein ungültiges
+  // Muster.
+  const moveBlockedTitle = (rule: RuleDto, neighbour: RuleDto | undefined) => {
+    if (rule.patternError) return t("filterRules.priorityDisabledPatternError");
+    if (neighbour?.patternError) return t("filterRules.priorityDisabledNeighbourPatternError");
+    return undefined;
+  };
+
   const movePriority = async (groupRules: RuleDto[], index: number, direction: -1 | 1) => {
     const otherIndex = index + direction;
     if (otherIndex < 0 || otherIndex >= groupRules.length) return;
     const a = groupRules[index];
     const b = groupRules[otherIndex];
-    // Spec 0077, 3.2.3: Bricht vor dem ersten
-    // `updateRule` ab, wenn eine der beiden beteiligten Regeln ein
-    // ungültiges Muster trägt — auch wenn nur die Nachbarregel betroffen
-    // ist und der eigene Pfeil deshalb noch anklickbar wäre. 3.1.2 bleibt
-    // wörtlich: Jeder Schreibweg (auch dieser) prüft das Muster; diese
-    // Prüfung ist eine zusätzliche Absicherung davor, sie überhaupt erst
-    // anzustoßen.
+    // Spec 0077, 3.2.3: Trägt eine der beiden beteiligten Regeln ein
+    // ungültiges Muster, wird nichts geschrieben (die Pfeile sind dann
+    // ohnehin deaktiviert). Das Backend prüft beide Muster zusätzlich.
     if (a.patternError || b.patternError) return;
     try {
-      // Tauscht die Prioritätswerte zweier benachbarter Regeln, statt sie
-      // nur um 1 zu verschieben — vermeidet, dass wiederholtes Klicken
-      // Prioritätswerte "aufbraucht"/kollidieren lässt, und ergibt eine
-      // stabile Neusortierung innerhalb der Gruppe.
-      await updateRule(a.id, { ...ruleToInput(a), priority: b.priority });
-      await updateRule(b.id, { ...ruleToInput(b), priority: a.priority });
+      // Ein Befehl tauscht beide Prioritäten in einer Transaktion: Entweder
+      // sind beide getauscht oder keine, nie zwei Regeln mit derselben
+      // Priorität.
+      await swapRulePriorities(a.id, b.id);
       reload();
     } catch (err) {
       setError(commandErrorMessage(err));
@@ -215,8 +209,8 @@ export function FilterRulesView() {
                     <button
                       type="button"
                       onClick={() => movePriority(group.rules, index, -1)}
-                      disabled={index === 0 || !!rule.patternError}
-                      title={rule.patternError ? t("filterRules.priorityDisabledPatternError") : undefined}
+                      disabled={index === 0 || !!rule.patternError || !!group.rules[index - 1]?.patternError}
+                      title={moveBlockedTitle(rule, group.rules[index - 1])}
                       className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label={t("filterRules.increasePriority")}
                     >
@@ -225,8 +219,12 @@ export function FilterRulesView() {
                     <button
                       type="button"
                       onClick={() => movePriority(group.rules, index, 1)}
-                      disabled={index === group.rules.length - 1 || !!rule.patternError}
-                      title={rule.patternError ? t("filterRules.priorityDisabledPatternError") : undefined}
+                      disabled={
+                        index === group.rules.length - 1 ||
+                        !!rule.patternError ||
+                        !!group.rules[index + 1]?.patternError
+                      }
+                      title={moveBlockedTitle(rule, group.rules[index + 1])}
                       className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label={t("filterRules.decreasePriority")}
                     >
@@ -633,6 +631,12 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
     [servers, serverId],
   );
 
+  // Spec 0077, 3.2.3: Eine Regel mit ungültigem Muster passt in der
+  // Simulation nie vollständig; sie wird hier genauso markiert wie in der
+  // Regelliste, damit „passt nicht" nicht als Ergebnis eines gültigen
+  // Musters gelesen wird.
+  const invalidRules = useMemo(() => rules.filter((r) => !!r.patternError), [rules]);
+
   const handleAddTag = () => {
     const value = tagDraft.trim();
     if (value && !tags.includes(value)) setTags([...tags, value]);
@@ -748,6 +752,25 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
       </button>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
+
+      {result && invalidRules.length > 0 && (
+        <div className="space-y-1" data-testid="test-invalid-pattern-rules">
+          <p className="text-xs uppercase tracking-wide text-slate-400">
+            {t("filterRules.testInvalidPatternRules")}
+          </p>
+          <ul className="space-y-1">
+            {invalidRules.map((rule) => (
+              <li key={rule.id} className="text-xs text-amber-300" role="alert">
+                <code className="text-slate-200">
+                  {rule.patternType}: {rule.patternValue}
+                </code>{" "}
+                ⚠ {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
+                <span className="font-mono text-amber-200/70">{rule.patternError}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {result && (
         <div className="space-y-3 rounded border border-slate-700 bg-slate-800/60 p-3">

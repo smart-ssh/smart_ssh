@@ -287,6 +287,8 @@
     "increasePriority": "Priorität erhöhen",
     "decreasePriority": "Priorität senken",
     "priorityDisabledPatternError": "Nicht verschiebbar: Das Muster dieser Regel ist ungültig.",
+    "priorityDisabledNeighbourPatternError": "Nicht verschiebbar: Die Nachbarregel hat ein ungültiges Muster und kann nicht getauscht werden.",
+    "testInvalidPatternRules": "Regeln mit ungültigem Muster (greifen nicht oder nur teilweise):",
     "newRule": "Neue Regel",
     "editRule": "Regel bearbeiten",
     "patternType": "Pattern-Typ",
