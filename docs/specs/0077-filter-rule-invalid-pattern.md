@@ -129,6 +129,11 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
     `rm /x/[a/../b` → Deny). Ihn ganz zu streichen, würde eine greifende
     Deny-Regel abschwächen. „Wie nicht vorhanden" gilt also für das, was nicht
     übersetzt, nicht für den Teil, der wirkt.
+- **3.2.1a** Der Freigabe-Abschnitt des KI-Kontexts („Freigegebene Befehle")
+  führt Allow-Regeln, deren Muster die Prüfung nicht besteht, nicht auf. Eine
+  solche Regel greift nicht, der Befehl braucht weiter eine Bestätigung — die
+  KI soll keine Auto-Ausführung erwarten, die nicht stattfindet. Das ändert
+  nur den Kontext-Text, nicht die Auswertung.
 - **3.2.2** Jede Regel mit ungültigem Muster wird bei der Auswertung auf
   ERROR-Ebene gemeldet, **einmal je Auswertung**, nicht je Teilkommando und
   nicht erst beim ersten Treffer (sonst würden Regeln hinter dem Treffer nie
