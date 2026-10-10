@@ -102,6 +102,14 @@ pub enum AiEvent {
     /// (Spec 0039): Provider geben ihn an die KI nur gefencet zurück, s.
     /// [`WebActivity::to_model_text`].
     WebActivity(WebActivity),
+    /// Issue #173: ein Web-Werkzeug-Ergebnis ist im Stream eingetroffen —
+    /// sofort gesendet, nicht erst mit der gesammelten [`Self::WebActivity`]
+    /// beim regulären Antwortende. So gilt die Sitzung auch dann als „nicht
+    /// vertrauenswürdigen Inhalt gelesen" (Spec 0039 §5), wenn die Antwort
+    /// danach gestoppt wird oder mit einem Fehler endet. Trägt bewusst
+    /// keinen Inhalt (nichts zu schwärzen/zu fencen), wird nie angezeigt
+    /// oder gespeichert und kann das Flag nur setzen, nie löschen.
+    WebContentIngested,
     Error(AiError),
 }
 
