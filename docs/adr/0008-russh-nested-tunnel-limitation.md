@@ -324,3 +324,19 @@ Bastion ist im Produkt immer ein fremder `sshd`.
 
 Dazu kommt ein eigener Folgepunkt für den Nebenbefund aus 4. (Fixture-SFTP
 hängt bei großen Schreibvorgängen).
+
+## Update — Option e) umgesetzt (Issue #180): opt-in End-to-End-Tests gegen OpenSSH
+
+Die Tests in `crates/ssh-transport/tests/openssh_jump.rs` prüfen Exec, PTY
+(`open_shell`, `resize`) und SFTP (`write_file`, `list_dir`, `read_file`,
+byte-genau bis 4 MiB) über Bastion → Ziel gegen zwei echte OpenSSH-Container
+(`tests/openssh/Dockerfile`, dasselbe Image wie oben). Sie sind `#[ignore]`
+und brauchen Docker; lokal startet
+`crates/ssh-transport/tests/openssh/run-jump-tests.sh` Container und Tests.
+Die Host-Keys werden je Hop über `PendingHostKeyConfirmation` bestätigt.
+
+Entschieden (Annahmen, vom Issue empfohlen): Der CI-Job läuft nur auf
+`ubuntu-latest`, bei Pull Requests, die `crates/ssh-transport/**` berühren,
+sowie täglich und manuell; er ist zunächst nicht blockierend. Die
+Test-Fixture ist weiterhin keine geeignete Bastion (siehe oben); die Tests
+verwenden sie deshalb nicht.
