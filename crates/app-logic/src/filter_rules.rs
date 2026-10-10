@@ -102,6 +102,27 @@ pub async fn update_rule(
     Ok(())
 }
 
+/// Vertauscht die Prioritäten zweier Regeln atomar (Spec 0077, 3.2.3).
+///
+/// Prüft **beide** Muster wie jeder andere Schreibweg (3.1.2), bevor der
+/// Speicher etwas schreibt: Trägt eine der Regeln ein ungültiges Muster,
+/// kommt `FILTER_RULE_PATTERN_INVALID` zurück und nichts ändert sich. Das
+/// Vertauschen selbst läuft in einer Transaktion des Speichers.
+pub async fn swap_rule_priorities(
+    policy_store: &SqlitePolicyStore,
+    first: RuleId,
+    second: RuleId,
+) -> Result<(), RuleWriteError> {
+    let a = policy_store.get(&first).await?;
+    let b = policy_store.get(&second).await?;
+    a.pattern.validate()?;
+    b.pattern.validate()?;
+    policy_store
+        .swap_priorities(&first, &second, Utc::now())
+        .await?;
+    Ok(())
+}
+
 /// Alle Regeln, optional auf einen exakten Scope gefiltert (Spec 0009,
 /// Abschnitt 3: `list_rules(scope_filter: Option<ScopeFilter>)` — hier
 /// `Option<Scope>`, s. `RuleInput`-Doc-Kommentar zur `ScopeFilter`-
@@ -363,6 +384,55 @@ mod tests {
             message.contains("unclosed group"),
             "der Fehlertext gehört als Detail in die Liste: {message}"
         );
+    }
+
+    /// Spec 0077, 3.2.3: Das Vertauschen tauscht beide Prioritäten.
+    #[tokio::test]
+    async fn test_swap_rule_priorities_exchanges_both_priorities() {
+        let (_dir, store) = in_memory_store().await;
+        let mut first = allow_ls_input(Scope::Global);
+        first.priority = 7;
+        let mut second = allow_ls_input(Scope::Global);
+        second.priority = 2;
+        let a = create_rule(&store, first).await.unwrap();
+        let b = create_rule(&store, second).await.unwrap();
+
+        swap_rule_priorities(&store, a.clone(), b.clone())
+            .await
+            .unwrap();
+
+        assert_eq!(store.get(&a).await.unwrap().priority, 2);
+        assert_eq!(store.get(&b).await.unwrap().priority, 7);
+    }
+
+    /// Spec 0077, 3.2.3: Trägt die Nachbarregel ein ungültiges Muster,
+    /// wird abgewiesen und **nichts** geschrieben.
+    #[tokio::test]
+    async fn test_swap_rule_priorities_rejects_an_invalid_pattern_and_changes_nothing() {
+        let (_dir, store) = in_memory_store().await;
+        let mut input = allow_ls_input(Scope::Global);
+        input.priority = 7;
+        let valid = create_rule(&store, input).await.unwrap();
+        let invalid = insert_rule_bypassing_layer_one(
+            &store,
+            "legacy-broken",
+            Pattern::Regex("^ls (.*".to_string()),
+            RuleAction::Deny,
+        )
+        .await;
+
+        for (x, y) in [
+            (valid.clone(), invalid.clone()),
+            (invalid.clone(), valid.clone()),
+        ] {
+            let err = swap_rule_priorities(&store, x, y)
+                .await
+                .expect_err("ein ungültiges Muster muss das Vertauschen abweisen");
+            assert_invalid_pattern(err);
+        }
+
+        assert_eq!(store.get(&valid).await.unwrap().priority, 7);
+        assert_eq!(store.get(&invalid).await.unwrap().priority, 100);
     }
 
     /// Legt eine Regel **unter Umgehung von Schicht 1** an, über den

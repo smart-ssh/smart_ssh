@@ -287,6 +287,8 @@
     "increasePriority": "Increase priority",
     "decreasePriority": "Decrease priority",
     "priorityDisabledPatternError": "Cannot move: this rule's pattern is invalid.",
+    "priorityDisabledNeighbourPatternError": "Cannot move: the neighbouring rule has an invalid pattern and cannot be swapped.",
+    "testInvalidPatternRules": "Rules with an invalid pattern (do not match, or only partly):",
     "newRule": "New Rule",
     "editRule": "Edit Rule",
     "patternType": "Pattern Type",

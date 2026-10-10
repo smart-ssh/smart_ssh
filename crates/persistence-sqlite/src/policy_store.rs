@@ -290,6 +290,51 @@ impl SqlitePolicyStore {
         Ok(())
     }
 
+    /// Vertauscht die Prioritäten der Regeln `a` und `b` in **einer**
+    /// Transaktion (Spec 0077, 3.2.3): Entweder tragen danach beide die
+    /// Priorität der jeweils anderen, oder keine hat sich geändert. Die
+    /// Prioritäten werden innerhalb der Transaktion gelesen, nicht vom
+    /// Aufrufer übergeben, damit ein dazwischen liegender Schreibzugriff
+    /// nicht überschrieben wird.
+    pub async fn swap_priorities(
+        &self,
+        a: &RuleId,
+        b: &RuleId,
+        updated_at: DateTime<Utc>,
+    ) -> Result<(), PolicyStoreError> {
+        let mut tx = self.pool.begin().await.map_err(backend_err)?;
+
+        let priority_of = |row: Option<sqlx::sqlite::SqliteRow>, id: &RuleId| match row {
+            Some(row) => row.try_get::<i32, _>("priority").map_err(backend_err),
+            None => Err(PolicyStoreError::NotFound(id.clone())),
+        };
+        let row_a = sqlx::query("SELECT priority FROM filter_rules WHERE id = ?")
+            .bind(&a.0)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(backend_err)?;
+        let priority_a = priority_of(row_a, a)?;
+        let row_b = sqlx::query("SELECT priority FROM filter_rules WHERE id = ?")
+            .bind(&b.0)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(backend_err)?;
+        let priority_b = priority_of(row_b, b)?;
+
+        for (id, priority) in [(a, priority_b), (b, priority_a)] {
+            sqlx::query("UPDATE filter_rules SET priority = ?, updated_at = ? WHERE id = ?")
+                .bind(priority)
+                .bind(updated_at.to_rfc3339())
+                .bind(&id.0)
+                .execute(&mut *tx)
+                .await
+                .map_err(backend_err)?;
+        }
+
+        // Wird `tx` vorher durch `?` verworfen, rollt sqlx zurück.
+        tx.commit().await.map_err(backend_err)
+    }
+
     pub async fn delete(&self, id: &RuleId) -> Result<(), PolicyStoreError> {
         let result = sqlx::query("DELETE FROM filter_rules WHERE id = ?")
             .bind(&id.0)
@@ -449,6 +494,77 @@ mod tests {
         let result = store.update(&rule).await;
 
         assert_eq!(result, Err(PolicyStoreError::NotFound(rule.id)));
+    }
+
+    #[tokio::test]
+    async fn test_swap_priorities_exchanges_both_values() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("a", Scope::Global, 10))
+            .await
+            .unwrap();
+        store
+            .create(&make_rule("b", Scope::Global, 3))
+            .await
+            .unwrap();
+
+        store
+            .swap_priorities(&RuleId("a".into()), &RuleId("b".into()), Utc::now())
+            .await
+            .unwrap();
+
+        assert_eq!(store.get(&RuleId("a".into())).await.unwrap().priority, 3);
+        assert_eq!(store.get(&RuleId("b".into())).await.unwrap().priority, 10);
+    }
+
+    /// Ein Trigger lässt genau den zweiten Schreibzugriff scheitern. Ohne
+    /// Transaktion bliebe die erste Änderung stehen und beide Regeln trügen
+    /// dieselbe Priorität.
+    #[tokio::test]
+    async fn test_swap_priorities_changes_nothing_when_the_second_write_fails() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("a", Scope::Global, 10))
+            .await
+            .unwrap();
+        store
+            .create(&make_rule("b", Scope::Global, 3))
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TRIGGER fail_b BEFORE UPDATE ON filter_rules WHEN OLD.id = 'b' \
+             BEGIN SELECT RAISE(ABORT, 'simulated failure'); END",
+        )
+        .execute(&store.pool)
+        .await
+        .unwrap();
+
+        let result = store
+            .swap_priorities(&RuleId("a".into()), &RuleId("b".into()), Utc::now())
+            .await;
+
+        assert!(matches!(result, Err(PolicyStoreError::Backend(_))));
+        assert_eq!(store.get(&RuleId("a".into())).await.unwrap().priority, 10);
+        assert_eq!(store.get(&RuleId("b".into())).await.unwrap().priority, 3);
+    }
+
+    #[tokio::test]
+    async fn test_swap_priorities_with_unknown_rule_yields_not_found_and_changes_nothing() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("a", Scope::Global, 10))
+            .await
+            .unwrap();
+
+        let result = store
+            .swap_priorities(&RuleId("a".into()), &RuleId("nope".into()), Utc::now())
+            .await;
+
+        assert_eq!(
+            result,
+            Err(PolicyStoreError::NotFound(RuleId("nope".into())))
+        );
+        assert_eq!(store.get(&RuleId("a".into())).await.unwrap().priority, 10);
     }
 
     #[tokio::test]
