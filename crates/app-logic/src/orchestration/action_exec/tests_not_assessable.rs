@@ -49,10 +49,7 @@ fn too_nested_sftp_server_mention() -> String {
 }
 
 fn allow_everything_session(transport: MockSshTransport) -> Session {
-    let mut session = test_session(vec![AiEvent::Done], transport);
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session
+    test_session_allowing_everything(vec![AiEvent::Done], transport)
 }
 
 async fn decide(session: &Session, command: &str) -> (Decision, serde_json::Value) {
@@ -221,7 +218,7 @@ async fn test_deny_stays_deny_for_not_assessable_command() {
         vec![AiEvent::Done],
         MockSshTransport::default().with_response(&command, output("")),
     );
-    session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(DenyEverything));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyEverything)));
     let (decision, payload) = decide(&session, &command).await;
     assert!(matches!(decision, Decision::Deny { .. }), "{payload}");
 }

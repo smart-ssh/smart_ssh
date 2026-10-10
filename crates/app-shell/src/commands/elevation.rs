@@ -929,8 +929,8 @@ mod browser_channel_tests {
         let server_id = ssh_manager_core::shared::ServerId::new();
         let mut session_a = app_logic::test_support::session_with_transport(Box::new(NoTransport));
         let mut session_b = app_logic::test_support::session_with_transport(Box::new(NoTransport));
-        session_a.parts_mut_for_tests().server_id = server_id;
-        session_b.parts_mut_for_tests().server_id = server_id;
+        session_a.set_server_id_for_tests(server_id);
+        session_b.set_server_id_for_tests(server_id);
         session_b
             .set_sftp_for_tests(Box::new(
                 ssh_manager_core::ssh::mock::MockSftpSession::new().with_file("/x", "USER-B"),
@@ -1389,9 +1389,9 @@ mod browser_channel_tests {
                 ProposeOnceAiProvider::new(ai_events),
                 Box::new(NoTransport),
             );
-            session.parts_mut_for_tests().filter_engine = Box::new(
+            session.set_filter_engine_for_tests(Box::new(
                 ssh_manager_core::filter::FilterEngine::new(AllowEverythingPolicyStore),
-            );
+            ));
             let normal =
                 MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
             let elevated =
@@ -1495,9 +1495,9 @@ mod browser_channel_tests {
             crate::test_support::MockAiProvider::new(vec![AiEvent::Done]),
             Box::new(NoTransport),
         );
-        session.parts_mut_for_tests().filter_engine = Box::new(
-            ssh_manager_core::filter::FilterEngine::new(AllowEverythingPolicyStore),
-        );
+        session.set_filter_engine_for_tests(Box::new(ssh_manager_core::filter::FilterEngine::new(
+            AllowEverythingPolicyStore,
+        )));
         let normal = MockSftpSession::new().with_file("/etc/secret.conf", b"USER-VIEW".to_vec());
         let elevated = MockSftpSession::new().with_file("/etc/secret.conf", b"ROOT-VIEW".to_vec());
         session.set_sftp_for_tests(Box::new(normal.clone())).await;
