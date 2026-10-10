@@ -522,6 +522,7 @@
     "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM": "The AI second opinion could not be obtained – requires confirmation",
     "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM": "The check for injected instructions could not be run – requires confirmation",
     "AI_INJECTION_CHECK_UNAVAILABLE": "The check for injected instructions could not be run (AI provider problem). The next proposed action requires confirmation.",
+    "AI_INJECTION_CHECK_INACTIVE": "The check for injected instructions is enabled for this server but is not active in this session (the AI second opinion is off or could not be set up). Enable the second opinion in the settings and reconnect.",
     "AI_SECOND_OPINION_SETUP_FAILED": "The AI second opinion is switched on but could not be set up for this session (provider removed or credential not found). Commands are not checked by it – fix the setting and reconnect.",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risk assessed as red, or could not be assessed reliably (e.g. too long) – always requires confirmation",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Note updates always require confirmation",
