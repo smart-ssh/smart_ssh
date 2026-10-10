@@ -908,6 +908,14 @@ impl AnthropicStreamState {
                     Some("web_search_tool_result") | Some("web_fetch_tool_result") => {
                         if let Some(block) = block {
                             self.record_web_tool_result(block);
+                            // Issue #173: sofort melden, nicht erst in
+                            // `finalize()` — Stopp/Fehler/Abbruch der
+                            // Antwort dürfen das Flag nicht umgehen. Auch
+                            // eine später per Truncation-Retry verworfene
+                            // Antwort meldet: ihr Text kann bereits
+                            // gestreamt sein (konservativ, nur eskalierend).
+                            self.pending
+                                .push_back(RawEvent::Public(AiEvent::WebContentIngested));
                         }
                         return;
                     }
@@ -2287,6 +2295,11 @@ mod tests {
         ])
         .await;
 
+        // Issue #173: das sofortige Signal ist hier nicht Gegenstand.
+        let events: Vec<RawEvent> = events
+            .into_iter()
+            .filter(|e| !matches!(e, RawEvent::Public(AiEvent::WebContentIngested)))
+            .collect();
         assert_eq!(
             events[0],
             RawEvent::Public(AiEvent::TextDelta("Version 1.29 ist aktuell.".to_string()))
@@ -2343,6 +2356,11 @@ mod tests {
         ])
         .await;
 
+        // Issue #173: das sofortige Signal ist hier nicht Gegenstand.
+        let events: Vec<RawEvent> = events
+            .into_iter()
+            .filter(|e| !matches!(e, RawEvent::Public(AiEvent::WebContentIngested)))
+            .collect();
         let RawEvent::Public(AiEvent::WebActivity(activity)) = &events[0] else {
             panic!("erwartet WebActivity, bekam {events:?}");
         };
@@ -2417,6 +2435,45 @@ mod tests {
             .iter()
             .any(|e| matches!(e, RawEvent::Public(AiEvent::Error(_)))));
         assert_eq!(events.last(), Some(&RawEvent::Public(AiEvent::Done)));
+    }
+
+    /// Issue #173: das Web-Ergebnis wird sofort gemeldet — auch wenn die
+    /// Antwort danach mit einem `error`-Event (kein `message_stop`) endet,
+    /// und nur dann, wenn tatsächlich ein Web-Ergebnis eingetroffen ist.
+    #[tokio::test]
+    async fn test_web_result_is_signalled_immediately_even_if_stream_errors() {
+        let events = collect_frames(vec![
+            frame(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_1","content":[{"type":"web_search_result","url":"https://a.example","title":"A"}]}}"#,
+            ),
+            frame("error", r#"{"error":{"message":"overloaded"}}"#),
+        ])
+        .await;
+        let ingested = events
+            .iter()
+            .position(|e| matches!(e, RawEvent::Public(AiEvent::WebContentIngested)))
+            .expect("Signal fehlt");
+        let error = events
+            .iter()
+            .position(|e| matches!(e, RawEvent::Public(AiEvent::Error(_))))
+            .expect("Fehler fehlt");
+        assert!(ingested < error);
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, RawEvent::Public(AiEvent::WebActivity(_)))));
+
+        let events = collect_frames(vec![
+            frame(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"text","text":""}}"#,
+            ),
+            frame("error", r#"{"error":{"message":"overloaded"}}"#),
+        ])
+        .await;
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, RawEvent::Public(AiEvent::WebContentIngested))));
     }
 
     /// Spec 0039: eine gespeicherte Recherche geht in einer späteren Anfrage

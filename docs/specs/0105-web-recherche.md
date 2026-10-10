@@ -131,6 +131,16 @@ ADR 0127 (Web-Recherche über die Responses-API von OpenAI).
   Abschnitt 5): Die Eskalationsstufe des Servers greift für die folgenden
   Aktionen. Eine fortgesetzte Sitzung mit Recherche im Verlauf startet
   ebenso.
+- **Sofort beim Eintreffen:** Die Sitzung gilt schon in dem Moment als
+  „nicht vertrauenswürdigen Inhalt gelesen", in dem ein Ergebnis eines
+  Web-Werkzeugs (auch ein Werkzeug-Fehler) eintrifft — nicht erst am Ende
+  der Antwort. Bei OpenAI zählt ein abgeschlossener Suchaufruf oder eine
+  zitierte Quelle als Eintreffen. Das gilt auch, wenn der Nutzer die Antwort danach stoppt oder
+  sie mit einem Fehler (Verbindungsabbruch, Zeitüberschreitung, Fehler des
+  Providers) endet: Bis dahin gestreamter Text bleibt im Verlauf, und die
+  folgenden Aktionen werden wie nach einer Recherche eskaliert. Eine
+  Recherchekarte erscheint in diesen Fällen nicht. Eine Antwort ohne
+  Web-Ergebnis eskaliert nie.
 - **Injection-Prüfung:** Ist die Prüfung auf eingeschleuste Anweisungen
   eingerichtet, läuft sie beim Speichern einer Recherche über Treffertitel
   und Seitentext. Ein Verdacht eskaliert die nächste Aktion wie bei
@@ -173,7 +183,9 @@ ADR 0127 (Web-Recherche über die Responses-API von OpenAI).
 - **Abgeschnittene Antwort:** Wird eine Antwort mit Aktionsvorschlag wegen
   des Längenlimits verworfen und wiederholt (Spec 0065), verfallen auch die
   Recherchen der verworfenen Antwort; angezeigt und gespeichert werden nur
-  die der wiederholten.
+  die der wiederholten. Die Sitzung gilt trotzdem als „nicht
+  vertrauenswürdigen Inhalt gelesen", sobald die verworfene Antwort ein
+  Web-Ergebnis erhalten hat, weil ihr Text schon gestreamt worden sein kann.
 
 ## 8. Netzwerk
 
