@@ -524,18 +524,22 @@ pub(crate) async fn connect_session(
     // erfüllt sind — die serverspezifische Einstellung UND die app-weite
     // Zweitmeinungs-Konfiguration (Spec 0026, Abschnitt 3), sonst wäre die
     // Checkbox im Frontend wirkungslos, obwohl sie aktiviert wurde.
-    let (injection_check_provider, injection_check_budget) = if server.ai_injection_check_enabled {
-        match crate::risk_second_opinion::resolve_second_opinion_provider(app, state)
-            .await
-            .into_parts()
-            .0
-        {
-            Some((provider, budget)) => (Some(provider), Some(budget)),
-            None => (None, None),
-        }
-    } else {
-        (None, None)
-    };
+    // Issue #231: eingeschaltet, aber ohne Anbieter → Sitzungs-Hinweis
+    // (`injection_check_inactive_notice_pending`), kein Zwang zur
+    // Bestätigung. Ist die Prüfung am Server aus, bleibt es still.
+    let (injection_check_provider, injection_check_budget, injection_check_inactive) =
+        if server.ai_injection_check_enabled {
+            match crate::risk_second_opinion::resolve_second_opinion_provider(app, state)
+                .await
+                .into_parts()
+                .0
+            {
+                Some((provider, budget)) => (Some(provider), Some(budget), false),
+                None => (None, None, true),
+            }
+        } else {
+            (None, None, false)
+        };
 
     // Spec 0034, Abschnitt 2: `chat_sessions.server_id` referenziert
     // `servers(id)` — der lokale Pseudo-Server hat (Spec 0032) bewusst
@@ -715,6 +719,9 @@ pub(crate) async fn connect_session(
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(
                 second_opinion_setup_failed,
+            ),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(
+                injection_check_inactive,
             ),
             chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
             // Spec 0057, §1: dieselbe Gating-Logik wie `chat_session_store`

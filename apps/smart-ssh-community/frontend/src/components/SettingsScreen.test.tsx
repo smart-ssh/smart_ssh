@@ -8,7 +8,7 @@
 // `registerSettingsSection` statt einer der eingebauten Kategorien, damit
 // der Test beweist, dass generisch JEDE registrierte Sektion ankommt, nicht
 // nur die beiden bereits bekannten (`chat-retention`/`mcp-server`).
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerSettingsSection, resetRegistryForTests } from "../extensions/registry";
@@ -121,6 +121,49 @@ describe("SettingsScreen registered sections (Spec 0050, Fund 1.2)", () => {
     await waitFor(() => expect(screen.getAllByText("KI-Provider").length).toBeGreaterThan(0));
     expect(screen.getByText("Anzeige & Sprache")).toBeInTheDocument();
     expect(screen.getByText("Diagnose")).toBeInTheDocument();
+  });
+});
+
+describe("SettingsScreen late-registered sections (issue #243)", () => {
+  beforeEach(() => {
+    resetRegistryForTests();
+  });
+
+  afterEach(() => {
+    resetRegistryForTests();
+  });
+
+  it("adds a nav entry for a section registered while the window is open", async () => {
+    renderSettingsScreen();
+    await waitFor(() => expect(screen.getAllByText("KI-Provider").length).toBeGreaterThan(0));
+    expect(screen.queryByText("Spaet-Sektion")).not.toBeInTheDocument();
+
+    act(() => {
+      registerSettingsSection({ id: "late-section", label: "Spaet-Sektion", component: TestSection });
+    });
+
+    expect(screen.getByText("Spaet-Sektion")).toBeInTheDocument();
+  });
+
+  it("keeps the selected category when a section is registered later", async () => {
+    registerSettingsSection({ id: "early-section", label: "Frueh-Sektion", component: TestSection });
+    renderSettingsScreen();
+    await waitFor(() => expect(screen.getByText("Frueh-Sektion")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Frueh-Sektion" }));
+    expect(screen.getByRole("button", { name: "Frueh-Sektion" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    act(() => {
+      registerSettingsSection({ id: "late-section", label: "Spaet-Sektion", component: TestSection });
+    });
+
+    expect(screen.getByRole("button", { name: "Spaet-Sektion" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Frueh-Sektion" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 });
 

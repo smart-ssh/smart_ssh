@@ -340,6 +340,23 @@ async fn test_setup_failure_notice_is_sent_once_per_session() {
     assert_eq!(notices[0].1["code"], "AI_SECOND_OPINION_SETUP_FAILED");
 }
 
+/// Issue #231: Prüfung am Server an, aber kein Anbieter → genau ein Hinweis.
+#[tokio::test]
+async fn test_inactive_injection_check_notice_is_sent_once() {
+    let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
+    session
+        .injection_check_inactive_notice_pending
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let emitter = TestEmitter::default();
+    let sid = Uuid::new_v4();
+    announce_second_opinion_setup_failure(&session, sid, &emitter);
+    announce_second_opinion_setup_failure(&session, sid, &emitter);
+    let events = emitter.events.lock().unwrap().clone();
+    let notices: Vec<_> = events.iter().filter(|(n, _)| n == "chat-error").collect();
+    assert_eq!(notices.len(), 1);
+    assert_eq!(notices[0].1["code"], "AI_INJECTION_CHECK_INACTIVE");
+}
+
 #[tokio::test]
 async fn test_no_setup_failure_means_no_notice() {
     let session = test_session(vec![AiEvent::Done], MockSshTransport::default());
