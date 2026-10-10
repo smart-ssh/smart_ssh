@@ -179,8 +179,7 @@ fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
             std::fs::create_dir_all(parent)?;
             #[cfg(unix)]
             {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+                ssh_manager_core::fs_hardening::harden_permissions(parent, 0o700, "host_keys_dir");
             }
         }
     }
@@ -188,14 +187,12 @@ fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
     std::fs::write(&tmp_path, contents)?;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o600));
+        ssh_manager_core::fs_hardening::harden_permissions(&tmp_path, 0o600, "host_keys");
     }
     std::fs::rename(&tmp_path, path)?;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        ssh_manager_core::fs_hardening::harden_permissions(path, 0o600, "host_keys");
     }
     Ok(())
 }

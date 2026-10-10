@@ -631,8 +631,7 @@ fn write_and_verify_wrapping(
     {
         // Nach dem `rename` erneut, falls die Datei schon vorher existierte
         // und laxere Rechte trug (Passwortwechsel auf einer alten Datei).
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        ssh_manager_core::fs_hardening::harden_permissions(&path, 0o600, "wrapping_file");
     }
 
     // Fund 4, zweite Hälfte: Der Inhalt der neuen Datei ist durch
