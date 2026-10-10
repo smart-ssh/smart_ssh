@@ -136,6 +136,21 @@ preview_effective_notes(server_id: ServerId) -> String
   Datei-Auswahlen), Tag-Eingabe als Chip-Input (komma-/Enter-getrennt),
   Notiz-Editor, "Kontext-Vorschau"-Button, der `preview_effective_notes`
   aufruft und das Ergebnis in einem Read-only-Textblock anzeigt.
+- **Gespeicherte Host-Keys (Issue #248)**: Das Formular eines bestehenden,
+  gespeicherten Servers zeigt einen schreibgeschützten Bereich "Host-Keys"
+  mit einer Zeile je gespeichertem Schlüssel: Algorithmus (z. B.
+  `ssh-ed25519`) und Fingerprint (`SHA256:…`, markier- und kopierbar), damit
+  der Nutzer ihn mit einer zweiten Quelle abgleichen kann. Nachgeschlagen
+  wird mit Host und Port des **gespeicherten** Servers, nicht mit
+  ungespeicherten Formularwerten. Ist noch kein Schlüssel gespeichert, sagt
+  der Bereich das ("Noch kein Host-Key gespeichert. Er wird bei der ersten
+  Verbindung gespeichert."). Bei einem neuen, ungespeicherten Server und beim
+  lokalen Pseudo-Server wird der Bereich nicht angezeigt. Ein Schlüssel, dessen
+  Algorithmus sich nicht bestimmen lässt, erscheint mit der neutralen
+  Bezeichnung `unknown`. Das Anzeigen verändert den Vertrauensstand nicht;
+  Löschen oder Ersetzen eines Schlüssels gibt es hier nicht. Der rohe
+  Schlüssel verlässt das Backend nie. Server mit gleichem Host und Port
+  teilen sich die gespeicherten Schlüssel und zeigen dieselben Einträge.
 - **Notiz-Historie**: chronologische Liste (`list_note_revisions`), jeder
   Eintrag zeigt Zeitpunkt, Editor (Nutzer, oder KI mit Provider/Modell-Name),
   und einen "Wiederherstellen"-Button pro vergangenem Eintrag (→

@@ -51,6 +51,7 @@ import type {
   StartDirectoryDto,
   TerminalStartDto,
   UnusableServerDto,
+  StoredHostKeyDto,
 } from "./types";
 
 /** Von `crate::error::CommandError` (`crates/app-shell/src/error.rs`). */
@@ -315,6 +316,11 @@ export const testConnection = (input: ServerInput, existingServerId?: string) =>
 
 export const trustHostKey = (host: string, port: number, rawKey: number[]) =>
   invoke<void>("trust_host_key", { host, port, rawKey });
+
+/** Spec 0008: stored host keys (algorithm + fingerprint) for the saved
+ * host and port of a server; read-only, never returns key bytes. */
+export const listStoredHostKeys = (id: string) =>
+  invoke<StoredHostKeyDto[]>("list_stored_host_keys", { id });
 
 /** Spec 0076, B-3/C-7: Vorab-Befund über eine Schlüsseldatei — liest sie,
  * gibt aber nie den Schlüssel selbst heraus (§4.2). */
