@@ -1332,7 +1332,14 @@ fn test_a_symlink_at_the_temporary_path_fails_the_write_and_keeps_its_target() {
     let tmp = temporary_path(&wrapping_file_path(&db));
     std::os::unix::fs::symlink(&victim, &tmp).unwrap();
 
-    let result = set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None);
+    let result = set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    );
     assert!(
         matches!(result, Err(MasterPasswordError::FileFailed { .. })),
         "{result:?}"
@@ -1359,7 +1366,15 @@ fn test_a_stale_temporary_file_does_not_block_a_later_write() {
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o400)).unwrap();
     }
 
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     assert_eq!(unlock(&db, &good()).unwrap().expose(), &ROOT_KEY);
     assert!(!tmp.exists());
 }
@@ -1375,7 +1390,15 @@ fn test_a_metadata_error_other_than_not_found_is_not_read_as_absent() {
     let sub = dir.path.join("sub");
     std::fs::create_dir(&sub).unwrap();
     let db = sub.join("smart-ssh.db");
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
 
     std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o000)).unwrap();
     let restore = || std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o700));
