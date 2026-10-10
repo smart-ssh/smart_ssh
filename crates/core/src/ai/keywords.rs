@@ -63,10 +63,36 @@ pub fn keyword_alternation() -> &'static str {
             .collect();
         all.sort_unstable();
         all.dedup();
-        all.iter()
+        // Zusätzlich die NFD-Form jedes Eintrags mit Umlaut (`u` + U+0308),
+        // damit zerlegte Eingaben (macOS, Zwischenablage) ebenfalls greifen.
+        // Der Eingabetext wird nicht normalisiert, Offsets bleiben gleich.
+        let mut variants: Vec<String> = all.iter().map(|k| k.to_string()).collect();
+        for k in &all {
+            let d = decompose_umlauts(k);
+            if d != *k {
+                variants.push(d);
+            }
+        }
+        variants
+            .iter()
             .map(|k| regex::escape(k).replace(' ', "[ _-]"))
             .collect::<Vec<_>>()
             .join("|")
     });
     &ALT
+}
+
+/// Ersetzt vorkomponierte Umlaute (`ä`, `ö`, `ü`) durch Grundbuchstabe +
+/// kombinierendes Trema (U+0308), also die NFD-Form.
+fn decompose_umlauts(k: &str) -> String {
+    let mut out = String::with_capacity(k.len() + 2);
+    for c in k.chars() {
+        match c {
+            'ä' => out.push_str("a\u{308}"),
+            'ö' => out.push_str("o\u{308}"),
+            'ü' => out.push_str("u\u{308}"),
+            _ => out.push(c),
+        }
+    }
+    out
 }

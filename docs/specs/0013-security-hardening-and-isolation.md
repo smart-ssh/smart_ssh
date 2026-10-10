@@ -139,6 +139,8 @@ In `crates/core/src/ai/redactor.rs`:
    - Deutsch: `Passwort`, `Kennwort`, `Zugangsdaten`, `Geheimnis`,
      `Schlüssel`, `Zugangsschlüssel`, `Token`, jeweils auch mit
      Umlaut-Umschrift (`Schluessel`); Groß-/Kleinschreibung egal.
+     Umlaute gelten in vorkomponierter und in zerlegter Unicode-Form
+     (`u` + kombinierendes Trema) gleich.
    - Bewusst nicht aufgenommen: `pwd` (`PWD=/pfad` steht in jeder
      Umgebungsausgabe), `pass` und `pw` (zu kurz, zu viele Fehltreffer).
    - Text ohne Wert dahinter bleibt unverändert (`Passwort vergessen?`).
