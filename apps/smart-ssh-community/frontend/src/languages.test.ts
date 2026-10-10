@@ -20,6 +20,8 @@ describe("languageForLocale", () => {
     ["zh-CN", "zh-Hans"],
     ["zh-SG", "zh-Hans"],
     ["zh-Hans-CN", "zh-Hans"],
+    ["zh-Hans-HK", "zh-Hans"],
+    ["zh-Hans-TW", "zh-Hans"],
     ["zh", "zh-Hans"],
     ["zh-TW", "en"],
     ["zh-HK", "en"],

@@ -69,6 +69,7 @@ export function languageForLocale(
     case "pt":
       return pick("pt-BR");
     case "zh": {
+      if (rest.includes("hans") && !rest.includes("hant")) return pick("zh-Hans");
       const traditional =
         rest.includes("hant") || rest.some((p) => p === "tw" || p === "hk" || p === "mo");
       return traditional ? DEFAULT_LANGUAGE : pick("zh-Hans");
