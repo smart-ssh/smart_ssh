@@ -282,12 +282,7 @@ pub async fn generate_diagnostics_bundle<R: tauri::Runtime>(
             })
             .collect()
     });
-    let server_count = state
-        .profile_store
-        .list_servers()
-        .await
-        .ok()
-        .map(|servers| servers.len());
+    let server_count = count_usable_servers(state.profile_store.as_ref()).await;
 
     let input = app_logic::diagnostics::DiagnosticsInput {
         version_display: app_logic::version::version_with_hash(
@@ -404,6 +399,80 @@ pub async fn read_credential_file(app: AppHandle, title: String) -> CommandResul
     let path = path.into_path()?;
     let content = std::fs::read_to_string(path)?;
     Ok(Some(content))
+}
+
+/// Anzahl der nutzbaren Server für den Diagnosebericht; `None` nur, wenn
+/// das Lesen selbst scheitert. Nicht nutzbare Zeilen zählen nicht mit und
+/// führen nicht zu `None` (Spec 0008 §6a).
+async fn count_usable_servers(
+    store: &dyn ssh_manager_core::profiles::ProfileStore,
+) -> Option<usize> {
+    store.list_servers().await.ok().map(|servers| servers.len())
+}
+
+#[cfg(test)]
+mod unusable_server_tests {
+    use super::*;
+    use app_logic::test_support::InMemoryProfileStore;
+    use ssh_manager_core::profiles::{UnusableReason, UnusableServer};
+
+    fn usable() -> ssh_manager_core::profiles::Server {
+        use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, Server};
+        Server {
+            id: ServerId::new(),
+            name: "ok".to_string(),
+            host: "ok.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            tags: vec![],
+            auth: AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            start_directory: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    fn unusable(reason: UnusableReason) -> UnusableServer {
+        UnusableServer {
+            id: ServerId::new(),
+            name: "broken-name".to_string(),
+            host: "broken.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            reason,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_server_count_ignores_unknown_auth_method_row() {
+        let store = InMemoryProfileStore::new()
+            .with_server(usable())
+            .with_unusable_server(unusable(UnusableReason::UnknownAuthMethod));
+        assert_eq!(count_usable_servers(&store).await, Some(1));
+    }
+
+    #[tokio::test]
+    async fn test_server_count_ignores_malformed_auth_method_row() {
+        let store = InMemoryProfileStore::new()
+            .with_server(usable())
+            .with_unusable_server(unusable(UnusableReason::UnreadableAuthMethod));
+        assert_eq!(count_usable_servers(&store).await, Some(1));
+    }
+
+    #[tokio::test]
+    async fn test_server_count_with_only_unusable_rows_is_some_zero() {
+        let store = InMemoryProfileStore::new()
+            .with_unusable_server(unusable(UnusableReason::UnknownAuthMethod))
+            .with_unusable_server(unusable(UnusableReason::UnreadableAuthMethod));
+        assert_eq!(count_usable_servers(&store).await, Some(0));
+    }
 }
 
 #[cfg(test)]
