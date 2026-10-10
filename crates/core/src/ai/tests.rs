@@ -2786,3 +2786,96 @@ fn test_every_supported_ui_language_has_a_keyword_list() {
         assert!(!kws.is_empty(), "empty keyword list for {lang}");
     }
 }
+
+// --- Issue #270: weitere Kommandozeilen-Formen und Hashes ---------------
+
+/// Spec 0095 A1.1: weitere Programmnamen mit angehängtem `-p<wert>`;
+/// Gegenprobe: `-p <wert>` (Datenbankname) und fremde Programme bleiben.
+#[test]
+fn test_redactor_redacts_password_argument_of_further_mysql_family_names() {
+    let redactor = DefaultOutputRedactor::new();
+
+    for cmd in [
+        "mysqlsh -u r -pHunter2xyz",
+        "mysqlpump -pHunter2xyz db",
+        "mysql5 -pHunter2xyz",
+        "mariadb-dump -pHunter2xyz db",
+        "mariadb-admin -u r -pHunter2xyz status",
+    ] {
+        let out = redactor.redact_text(cmd);
+        assert!(!out.contains("Hunter2xyz"), "{cmd} -> {out}");
+        assert!(out.contains("[REDACTED]"), "{cmd} -> {out}");
+    }
+    // Gegenproben: Datenbankname mit Leerzeichen, Port (-P), fremdes Programm.
+    for cmd in [
+        "mysqlsh -p mydb",
+        "mysqlpump -P3306 -h db",
+        "mariadb-dump -p mydb",
+        "mysqlshx -pHunter2xyz",
+    ] {
+        assert_eq!(redactor.redact_text(cmd), cmd);
+    }
+}
+
+/// Issue #270: Drupal-7-Hash `$S$…`; ein `$S` ohne Hash-Körper bleibt.
+#[test]
+fn test_redactor_redacts_drupal7_hash() {
+    let redactor = DefaultOutputRedactor::new();
+    let hash = "$S$DabcdefghXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEF";
+
+    let out = redactor.redact_text(&format!("pass = '{hash}' ok"));
+    assert!(!out.contains("abcdefgh"), "{out}");
+    assert!(out.contains("[REDACTED]"), "{out}");
+
+    for harmless in ["echo $S and $SHELL", "price is $S$5 today", "$S$short"] {
+        assert_eq!(redactor.redact_text(harmless), harmless);
+    }
+}
+
+/// Issue #270: `openssl enc -K <hex>` wird redigiert, `-iv` bleibt lesbar.
+#[test]
+fn test_redactor_redacts_openssl_raw_key_but_not_iv() {
+    let redactor = DefaultOutputRedactor::new();
+    let key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    let iv = "ffeeddccbbaa99887766554433221100";
+
+    let out = redactor.redact_text(&format!("openssl enc -aes-256-cbc -K {key} -iv {iv}"));
+    assert!(!out.contains(key), "{out}");
+    assert!(out.contains(iv), "{out}");
+
+    // Gegenprobe: ohne -K und mit fremdem Programm bleibt alles stehen.
+    let plain = format!("openssl enc -aes-256-cbc -iv {iv}");
+    assert_eq!(redactor.redact_text(&plain), plain);
+    let other = format!("mytool -K {key}");
+    assert_eq!(redactor.redact_text(&other), other);
+}
+
+/// Issue #270: ein Quote-Wert, dessen schließender Quote nach einem
+/// Zeilenumbruch steht, wird redigiert; ein fehlender schließender Quote
+/// verschluckt den Folgetext nicht.
+#[test]
+fn test_redactor_redacts_quoted_password_across_one_line_break() {
+    let redactor = DefaultOutputRedactor::new();
+
+    let out = redactor.redact_text("mysql -p'Hunter2\nxyz' mydb");
+    assert!(!out.contains("Hunter2") && !out.contains("xyz"), "{out}");
+    assert!(out.ends_with(" mydb"), "{out}");
+
+    // Gegenprobe: kein schließender Quote → Folgezeilen bleiben unberührt.
+    let unclosed = "mysql -p'Hunter2\nSELECT 1 FROM t;\necho done";
+    let out = redactor.redact_text(unclosed);
+    assert!(out.contains("SELECT 1 FROM t;\necho done"), "{out}");
+}
+
+/// Issue #270, Spec 0078 §5: BEKANNTE EINSCHRÄNKUNG — nur der letzte
+/// Parameter wird geschwärzt, `Secret1`/`Secret2` bleiben stehen. Pinnt den
+/// aktuellen Ausgang, damit er nicht unbemerkt schlechter wird.
+#[test]
+fn test_redactor_known_remaining_case_url_password_with_query_and_at_sign() {
+    let redactor = DefaultOutputRedactor::new();
+
+    assert_eq!(
+        redactor.redact_text("postgres://u:Secret1?x=Secret2&token=b@h/db"),
+        "postgres://u:Secret1?x=Secret2&[REDACTED]"
+    );
+}
