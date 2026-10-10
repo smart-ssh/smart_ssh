@@ -352,17 +352,44 @@ pub enum ActionParameterKind {
 }
 
 impl ActionSchema {
-    /// Entspricht `AiAction::SuggestCommand` (Spec 0003, Abschnitt 5.2).
+    /// Entspricht `AiAction::SuggestCommand` (Spec 0003, Abschnitt 5.2) —
+    /// deutsche Fassung. Issue #323: ein Kommando je Aufruf, aber mehrere
+    /// Aufrufe in einer Antwort erlaubt. Die englische Fassung mit demselben
+    /// Inhalt ist [`Self::suggest_command_en`]; welche Fassung eine Sitzung
+    /// bekommt, entscheidet die Prompt-Sprache (`app-logic`).
     pub fn suggest_command() -> Self {
         Self {
             name: "suggest_command".to_string(),
-            description: "Schlägt ein einzelnes Shell-Kommando zur Ausführung vor. \
-                Läuft vor jeder Ausführung durch die Filter-Engine; nichts wird \
-                automatisch ausgeführt."
+            description: "Schlägt ein Shell-Kommando zur Ausführung vor — ein Kommando je \
+                Aufruf. Voneinander unabhängige Kommandos dürfen als mehrere Aufrufe in \
+                derselben Antwort vorgeschlagen werden; der Nutzer bestätigt oder lehnt \
+                jedes einzeln ab. Läuft vor jeder Ausführung durch die Filter-Engine; \
+                nichts wird automatisch ausgeführt."
                 .to_string(),
             parameters: vec![ActionParameter {
                 name: "command".to_string(),
                 description: "Das vorzuschlagende Shell-Kommando.".to_string(),
+                kind: ActionParameterKind::String,
+                required: true,
+            }],
+        }
+    }
+
+    /// Englische Fassung von [`Self::suggest_command`] (Issue #323):
+    /// derselbe Name, dasselbe Parameter-Schema, nur Beschreibungstexte auf
+    /// Englisch.
+    pub fn suggest_command_en() -> Self {
+        Self {
+            name: "suggest_command".to_string(),
+            description: "Proposes a shell command for execution — one command per call. \
+                Independent commands may be proposed as several calls in the same \
+                response; the user confirms or rejects each one individually. Runs \
+                through the filter engine before any execution; nothing is executed \
+                automatically."
+                .to_string(),
+            parameters: vec![ActionParameter {
+                name: "command".to_string(),
+                description: "The shell command to propose.".to_string(),
                 kind: ActionParameterKind::String,
                 required: true,
             }],
@@ -553,6 +580,37 @@ mod tests {
     /// Löschen/Umbenennen/Verzeichnis-Anlegen angeboten werden — diese
     /// Operationen bleiben ausschließlich über `suggest_command()` (also
     /// mit voller Filter-Engine- und Hard-Blacklist-Prüfung) erreichbar.
+    /// Issue #323: beide Fassungen beschreiben ein Kommando je Aufruf und
+    /// erlauben mehrere Aufrufe je Antwort; „einzelnes"/„single" begrenzt die
+    /// Antwort nicht mehr. Name und Parameter-Schema sind identisch.
+    #[test]
+    fn test_suggest_command_descriptions_allow_several_calls_per_response() {
+        let de = ActionSchema::suggest_command();
+        let en = ActionSchema::suggest_command_en();
+        assert!(de.description.contains("ein Kommando je Aufruf"));
+        assert!(de
+            .description
+            .contains("mehrere Aufrufe in derselben Antwort"));
+        assert!(!de.description.contains("einzelnes"));
+        assert!(en.description.contains("one command per call"));
+        assert!(en
+            .description
+            .contains("several calls in the same response"));
+        assert!(!en.description.to_lowercase().contains("single"));
+        assert_eq!(de.name, en.name);
+        assert_eq!(de.parameters.len(), en.parameters.len());
+        for (d, e) in de.parameters.iter().zip(&en.parameters) {
+            assert_eq!(
+                (&d.name, &d.kind, d.required),
+                (&e.name, &e.kind, e.required)
+            );
+        }
+        for german in ["ä", "ö", "ü", "ß", "Kommando", "Aufruf"] {
+            assert!(!en.description.contains(german), "{german:?}");
+            assert!(!en.parameters[0].description.contains(german), "{german:?}");
+        }
+    }
+
     #[test]
     fn test_default_action_schemas_excludes_delete_rename_mkdir() {
         let schemas = default_action_schemas();

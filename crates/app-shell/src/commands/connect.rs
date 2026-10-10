@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, State};
 
-use ssh_manager_core::ai::{default_action_schemas, ChatMessage, OutputRedactor, SessionContext};
+use ssh_manager_core::ai::{ChatMessage, OutputRedactor, SessionContext};
 use ssh_manager_core::filter::{EffectiveScope, EvalContext, FilterEngine, PolicyStore};
 use ssh_manager_core::profiles::effective_notes_sections;
 use ssh_manager_core::profiles::ProfileStore;
@@ -429,6 +429,10 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
     )
     .await;
     let system_context = system_context_parts.assemble();
+    // Issue #323: die `suggest_command`-Beschreibung folgt derselben Sprache
+    // wie der System-Prompt.
+    let available_actions =
+        app_logic::system_prompt::session_action_schemas(system_context_parts.language);
 
     // Spec 0064 (Prompt-Caching): der `uname`-Banner geht als eigene,
     // gefencte Verlaufs-Nachricht rein, nicht mehr in den System-Prompt
@@ -672,7 +676,7 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             context: tokio::sync::Mutex::new(SessionContext {
                 system_context,
                 history: initial_history,
-                available_actions: default_action_schemas(),
+                available_actions,
                 max_tokens_hint: None,
             }),
             filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
