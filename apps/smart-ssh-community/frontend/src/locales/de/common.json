@@ -1017,6 +1017,8 @@
     }
   },
   "chat": {
+    "newChat": "Neuer Chat",
+    "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",
     "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",
     "stopAutoContinuation": "Automatik stoppen",
     "generating": "KI generiert Antwort / Dokument…",

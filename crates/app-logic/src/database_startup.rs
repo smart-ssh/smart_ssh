@@ -252,7 +252,7 @@ pub struct NewMasterPassword {
 /// **zählen** kann, was gefragt wurde.
 /// `Send + Sync` seit Etappe 3: Der Startablauf läuft im Passwort-Modus aus
 /// einem `#[tauri::command]` heraus, und dessen Future muss `Send` sein
-/// (Teil 0 Frage 3). Beide Implementierungen erfüllen es ohnehin.
+/// (§2 Frage 3). Beide Implementierungen erfüllen es ohnehin.
 pub trait StartupPrompt: Send + Sync {
     /// Zeigt D1–D4 und liefert die Wahl.
     fn ask(&self, dialog: StartupDialog) -> StartupChoice;
@@ -304,7 +304,7 @@ pub enum StartupAbort {
     /// Der Nutzer hat „Beenden“ gewählt — kein Fehlerdialog mehr, es ist
     /// bereits alles gesagt.
     UserQuit,
-    /// Teil 0 Frage 3: Der Nutzer hat etwas gewählt, das eine Texteingabe
+    /// §2 Frage 3: Der Nutzer hat etwas gewählt, das eine Texteingabe
     /// braucht (A13, „Master-Passwort einrichten“ aus D1) — und der
     /// Startablauf läuft gerade mit den nativen Dialogen, die keine haben
     /// (§1: „rfd … keine Texteingabe“).
@@ -512,7 +512,7 @@ pub async fn open_or_prepare_database(
                 // erzeugen und den vorhandenen Verlauf unlesbar machen
                 // (Angriffsrichtung „Einrichten bei verschlüsselter Datei“).
                 StartupChoice::SetUpMasterPassword if offers_password_setup => {
-                    // Teil 0 Frage 3: Die nativen Dialoge haben keine
+                    // §2 Frage 3: Die nativen Dialoge haben keine
                     // Texteingabe. Hier endet der Ablauf **ohne etwas
                     // anzufassen**; der Aufrufer wiederholt ihn mit dem
                     // Fenster.

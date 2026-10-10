@@ -226,7 +226,7 @@ pub enum StartupScreen {
     /// „Beenden", **kein** „Neu anfangen" — über den Inhalt ist nichts
     /// gesagt, und morgen ist die Datei vielleicht wieder lesbar.
     UnreachableWrapping,
-    /// Teil 0 Frage 3 / A13: Schlüsselbund-Modus, aber der Zustand steht
+    /// §2 Frage 3 / A13: Schlüsselbund-Modus, aber der Zustand steht
     /// nicht — der Start ist in D1 gelandet und soll mit dem Einrichten
     /// eines Master-Passworts im Fenster weitergehen.
     SetUpMasterPassword,
@@ -290,7 +290,7 @@ fn decide_startup_screen(
     match health {
         // Keine Verpackungsdatei: Schlüsselbund-Modus. Dass der Zustand
         // trotzdem nicht steht, heißt, dass der Start in D1 gelandet ist
-        // (Teil 0 Frage 3).
+        // (§2 Frage 3).
         H::Absent => StartupScreenDecision {
             screen: StartupScreen::SetUpMasterPassword,
             offers_start_over: false,
@@ -640,7 +640,7 @@ async fn assemble_and_open_the_gate(
     Ok(startup_state(gate, pending))
 }
 
-/// Die Antwort auf einen Startdialog im Fenster (Teil 0 Frage 3).
+/// Die Antwort auf einen Startdialog im Fenster (§2 Frage 3).
 ///
 /// Das neue Master-Passwort kommt getrennt mit — es gehört nicht in das
 /// Ereignis, mit dem gefragt wurde (§6: kein Passwort in einem DTO).
@@ -988,7 +988,7 @@ mod tests {
             decide_startup_screen(Some(H::Absent), 0).screen,
             StartupScreen::SetUpMasterPassword,
             "keine Verpackungsdatei und trotzdem kein Zustand: der Start ist in D1 gelandet \
-             (Teil 0 Frage 3)"
+             (§2 Frage 3)"
         );
         assert_eq!(
             decide_startup_screen(Some(H::Usable), 0).screen,

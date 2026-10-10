@@ -243,6 +243,12 @@ export const disconnect = (sessionId: string) => invoke<void>("disconnect", { se
 export const stopAutoContinuation = (sessionId: string) =>
   invoke<void>("stop_auto_continuation", { sessionId });
 
+/** Issue #271, Spec 0034 §11: beginnt in der bestehenden Verbindung einen
+ * neuen Chat (SSH, Terminal und Dateibrowser bleiben). Liefert die ID der
+ * neuen Chat-Sitzung, `null` für einen lokalen Tab ohne gespeicherten Chat. */
+export const startNewChat = (sessionId: string) =>
+  invoke<string | null>("start_new_chat", { sessionId });
+
 /** Spec 0027, Abschnitt 3: schließt nur den Exec-Kanal dieses einen
  * Kommandos (nicht die SSH-Verbindung/Session) und liefert die bis dahin
  * gesammelte Ausgabe als reguläres `chat-action-result` zurück. Kein
@@ -694,7 +700,7 @@ export const exportSshConfig = (title: string) =>
 export const getStartupState = () => invoke<StartupStateDto>("get_startup_state");
 
 /** A16: entsperren und den Zustand nachbauen. Im Schlüsselbund-Modus
- * (Startmaske `setUpMasterPassword`, Teil 0 Frage 3) wird das Passwort
+ * (Startmaske `setUpMasterPassword`, §2 Frage 3) wird das Passwort
  * nicht gebraucht — dort setzt der Aufruf den Startablauf im Fenster fort,
  * und die Entscheidung fällt im Dialog D1. */
 export const unlockWithMasterPassword = (password: string) =>
@@ -706,7 +712,7 @@ export const unlockWithMasterPassword = (password: string) =>
 export const startOverFromUnlockScreen = () =>
   invoke<StartupStateDto>("start_over_from_unlock_screen");
 
-/** Teil 0 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
+/** §2 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
  * Master-Passwort kommt getrennt mit — es gehört nicht in das Ereignis, mit
  * dem gefragt wurde (§6: kein Passwort in einem DTO).
  *

@@ -1,4 +1,4 @@
-//! Spec 0101, Commit 4: A4, A6–A8 und die Tests T1, T4–T6, T19, T20.
+//! Spec 0101: A4, A6–A8 und die Tests T1, T4–T6, T19, T20.
 //! T1 ist seit Commit 8 vollständig (Secret- und Token-Marker).
 //!
 //! **Eigene Datei, wie `tests_raw_file`:** Diese Tests arbeiten auf echten
@@ -42,7 +42,7 @@ fn lock_for(db_path: &std::path::Path) -> DataDirLock {
     DataDirLock::acquire_for_database(db_path).expect("Temp-Verzeichnis sperren")
 }
 
-/// Die Marker aus Spec 0101 §7. Mit Commit 8 ist T1 **vollständig**:
+/// Die Marker aus Spec 0101 §7. T1 ist **vollständig**:
 /// `Secret-0101` (A9, Secrets in der Datenbank) und `Token-0101` (A12,
 /// MCP-Token in der Datenbank) sind seit den Commits 6–8 wirklich
 /// Datenbankinhalt und damit prüfbar.

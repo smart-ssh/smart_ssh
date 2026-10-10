@@ -15,6 +15,7 @@ import {
   respondToAction,
   sendChatMessage,
   stopAutoContinuation,
+  startNewChat,
   suggestRulePatterns,
   takeChatContentIntoNote,
 } from "../api";
@@ -301,6 +302,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * zuverlässige "die ganze Kette ist zu Ende"-Signal, unabhängig davon, ob
    * sie regulär endete, am Sicherheits-Cap oder durch "Automatik stoppen". */
   const [autoContinuing, setAutoContinuing] = useState(false);
+  /** Issue #271: „Neuer Chat" läuft (Doppelklick-Schutz) bzw. ist gescheitert. */
+  const [startingNewChat, setStartingNewChat] = useState(false);
+  const [newChatError, setNewChatError] = useState<string | null>(null);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
   /** Spec 0026, Abschnitt 4: nur bei aktivierter Zweitmeinung überhaupt
    * einen Lade-Indikator zeigen — sonst käme (bis ein `risk-assessment-
@@ -894,6 +898,32 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [draft]);
 
+  // Issue #271 (Entscheidung 3): gesperrt, solange ein Turn läuft oder eine
+  // Bestätigung offen ist — das Backend prüft zusätzlich.
+  const confirmationOpen = items.some(
+    (it) =>
+      it.type === "action" &&
+      !it.responded &&
+      typeof it.decision === "object" &&
+      "Confirm" in it.decision,
+  );
+  const newChatDisabled = sending || autoContinuing || confirmationOpen || startingNewChat;
+
+  const handleNewChat = async () => {
+    if (newChatDisabled) return;
+    setStartingNewChat(true);
+    setNewChatError(null);
+    try {
+      await startNewChat(sessionId);
+      setItems([]);
+      setHistoryNav(initialHistoryNavState);
+    } catch (err) {
+      setNewChatError(commandErrorMessage(err));
+    } finally {
+      setStartingNewChat(false);
+    }
+  };
+
   const handleDraftChange = (value: string) => {
     setDraft(value);
     // Spec 0015, Abschnitt 5, bewusste MVP-Vereinfachung: jede normale
@@ -909,6 +939,24 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 
   return (
     <div className="flex h-full flex-col">
+      {readOnlyHint === undefined && (
+        <div className="flex items-center justify-end gap-2 border-b border-slate-700 px-3 py-1.5">
+          {newChatError !== null && (
+            <span role="alert" className="flex-1 text-xs text-red-300">
+              {newChatError}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleNewChat}
+            disabled={newChatDisabled}
+            title={newChatDisabled ? t("chat.newChatDisabledHint") : undefined}
+            className="font-heading border border-slate-600 px-2 py-1 text-xs font-semibold tracking-wide text-slate-200 hover:bg-slate-700/50 disabled:opacity-50"
+          >
+            {t("chat.newChat")}
+          </button>
+        </div>
+      )}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {items.map((item) => (
           <ChatItemView
