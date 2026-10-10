@@ -2369,3 +2369,70 @@ async fn test_spec_0077_ta6_decision_matrix_is_unchanged_for_every_pattern_state
         }
     }
 }
+
+/// Issue #258, Sibling zu T-A6 (Spec 0077): Die Allow-Spalte von T-A6 ist
+/// entartet — die Basis-Regel `rm *` liefert für jede Zeile AutoExec, eine
+/// ungültige Allow-Regel, die fälschlich AutoExec liefert, bliebe
+/// unentdeckt. Hier steht die Allow-Regel allein (ohne Basis-Regel): Der
+/// Rückfall ist Confirm, und nur eine **greifende** Allow-Regel liefert
+/// AutoExec. Rot wird der Test, sobald eine Allow-Regel mit ungültigem
+/// Muster (vollständig ungültig oder strenger Zweig ungültig) AutoExec
+/// liefert.
+#[tokio::test]
+async fn test_spec_0077_ta6_allow_rule_alone_only_auto_execs_when_it_matches() {
+    let rows: Vec<(&str, Pattern, &str, &str)> = vec![
+        (
+            "glob, gültig passend",
+            Pattern::Glob("rm /x/c".to_string()),
+            "rm /x/c",
+            "auto_exec",
+        ),
+        (
+            "glob, gültig nicht passend",
+            Pattern::Glob("rm /y/*".to_string()),
+            "rm /x/c",
+            "confirm",
+        ),
+        (
+            "glob, ungültig (beide Zweige)",
+            Pattern::Glob("rm /x/[a/b/..".to_string()),
+            "rm /x/c",
+            "confirm",
+        ),
+        (
+            "glob, nur strenger Zweig ungültig",
+            Pattern::Glob("rm /x/[a/b]/../c".to_string()),
+            "rm /x/a/../c",
+            "confirm",
+        ),
+        (
+            "regex, gültig passend",
+            Pattern::Regex("^rm /x/c$".to_string()),
+            "rm /x/c",
+            "auto_exec",
+        ),
+        (
+            "regex, ungültig",
+            Pattern::Regex("^rm /x/(.*".to_string()),
+            "rm /x/c",
+            "confirm",
+        ),
+    ];
+    for (label, pattern, command, expected) in rows {
+        let eng = engine(vec![Rule {
+            id: RuleId("under-test".to_string()),
+            pattern,
+            action: RuleAction::Allow,
+            scope: Scope::Global,
+            priority: 100,
+            origin: RuleOrigin::User,
+        }]);
+        let decision = eng.evaluate(command, &ctx("srv1", &[])).await;
+        let actual = match &decision {
+            Decision::AutoExec => "auto_exec",
+            Decision::Confirm { .. } => "confirm",
+            Decision::Deny { .. } => "deny",
+        };
+        assert_eq!(actual, expected, "{label}: {decision:?}");
+    }
+}

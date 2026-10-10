@@ -581,3 +581,50 @@ mod path_glob_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod compile_failure_parity_tests {
+    use super::*;
+
+    /// Issue #258: `compile_failure_reason` (Log, Spec 0077 3.2.2) wiederholt
+    /// die Zweige von `validate` (Spec 0077 3.1.1). Driften die beiden
+    /// auseinander, würde eine kaputte Regel nicht mehr gemeldet (oder eine
+    /// gültige fälschlich). Dieser Test hält fest, dass beide für jedes
+    /// Muster dasselbe sagen — und prüft den festen Kurztext je Zweig.
+    #[test]
+    fn test_validate_and_compile_failure_reason_agree_for_every_pattern_kind() {
+        // (Muster, erwarteter Kurztext; None = gültig)
+        let samples: Vec<(Pattern, Option<&'static str>)> = vec![
+            (Pattern::Exact("rm [".into()), None),
+            (Pattern::Exact("ls".into()), None),
+            (Pattern::Regex("^ls .*$".into()), None),
+            (
+                Pattern::Regex("^rm (".into()),
+                Some("regex does not compile"),
+            ),
+            (Pattern::Glob("ls *".into()), None),
+            (Pattern::Glob("ls [a".into()), Some("glob does not compile")),
+            // pfadförmig, beide Zweige gültig
+            (Pattern::Glob("rm /x/*".into()), None),
+            // pfadförmig, beide Zweige ungültig
+            (
+                Pattern::Glob("rm /x/[a/b/..".into()),
+                Some("glob does not compile"),
+            ),
+            // pfadförmig, nur der strenge Zweig ungültig
+            (
+                Pattern::Glob("rm /x/[a/b]/../c".into()),
+                Some("glob does not compile (strict branch)"),
+            ),
+        ];
+        for (pattern, expected) in samples {
+            let reason = pattern.compile_failure_reason();
+            assert_eq!(
+                pattern.validate().is_err(),
+                reason.is_some(),
+                "validate/compile_failure_reason driften auseinander für {pattern:?}"
+            );
+            assert_eq!(reason, expected, "{pattern:?}");
+        }
+    }
+}
