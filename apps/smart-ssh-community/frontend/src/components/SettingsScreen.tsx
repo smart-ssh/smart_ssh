@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
-import { listSettingsSections } from "../extensions/registry";
+import { listSettingsSections, subscribeSettingsSections } from "../extensions/registry";
 import { resolveSectionLabel } from "../resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
@@ -85,7 +85,10 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
   // "chat-retention"/"mcp-server" nutzen das seit diesem Schritt, damit in
   // der englischen UI nicht die festen deutschen Strings aus
   // `registerBuiltinExtensions.ts` erscheinen.
-  const registeredSections = listSettingsSections();
+  const registeredSections = useSyncExternalStore(
+    subscribeSettingsSections,
+    listSettingsSections,
+  );
   const registeredCategories: NavCategory[] = registeredSections.map(({ id, label }) => ({
     id,
     label: resolveSectionLabel(label, id, i18n, t),
