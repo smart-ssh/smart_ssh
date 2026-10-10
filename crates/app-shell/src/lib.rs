@@ -28,6 +28,7 @@ mod risk_second_opinion;
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
+mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
 mod single_instance;
