@@ -30,7 +30,7 @@ pub use connect_log::{
     StepStatus,
 };
 pub use error::{HopLabel, SecretKind, SshError};
-pub use host_key::HostKeyStore;
+pub use host_key::{HostKeyStore, StoredHostKeyInfo};
 pub use jump_host::resolve_connection_target;
 pub use transport::{InteractiveShell, SftpSession, SshTransport};
 pub use types::{
