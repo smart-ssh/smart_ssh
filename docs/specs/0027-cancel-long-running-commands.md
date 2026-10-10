@@ -85,6 +85,16 @@ sich zeitnah, sobald ihr nächster Schreibversuch auf die geschlossene Leitung
 scheitert; ein Versprechen ist das nicht. Die Oberfläche formuliert deshalb
 zurückhaltend.
 
+Für den lokalen Pseudo-Server (Spec 0032) beendet der Abbruch das Kommando
+tatsächlich, samt allem, was es gestartet hat (Pipelines, Subshells,
+Hintergrundprozesse): zuerst wie mit `Ctrl+C`, nach einer kurzen Schonfrist
+hart. Das Kommando endet spätestens etwa zwei Sekunden nach dem Abbruch.
+Ausgabe, die es in der Schonfrist noch schreibt, gehört zum Ergebnis und
+unterliegt derselben Ausgabegrenze (Spec 0043). Unter Windows wird der
+Prozessbaum des Kommandos beendet. Nicht erreicht wird ein Prozess, der sich
+ausdrücklich von seinem Kommando löst (eigene Sitzung bzw. Prozessgruppe).
+Ergebnis und KI-Kontext sind dieselben wie bei einem SSH-Server.
+
 **3.5 Zeitliche Überschneidung.** Kommt der Klick, nachdem das Kommando schon
 von selbst geendet hat, wird er ohne Fehlermeldung ignoriert; das reguläre
 Ergebnis gilt.
@@ -106,8 +116,8 @@ statt dauerhaft „läuft".
 
 - Gilt nur für vorgeschlagene Kommandos. Datei-Aktionen (Spec 0020) haben
   kein bekanntes „hängt für immer"-Muster und sind ausgenommen.
-- Kein automatischer Timeout und kein erzwungenes Beenden des Prozesses auf
-  Prozessebene.
+- Kein automatischer Timeout. Bei SSH-Servern kein erzwungenes Beenden des
+  Prozesses auf Prozessebene (Abschnitt 3.4).
 - Die 5-Sekunden-Schwelle ist fest.
 
 ## 6. Sicherheitszusagen
@@ -121,9 +131,6 @@ statt dauerhaft „läuft".
 
 ## 7. Grenzen
 
-- **Localhost ist nicht abbrechbar.** Für den lokalen Pseudo-Server
-  (Spec 0032) erscheint der Indikator zwar, der Abbruch greift aber nicht: das
-  Kommando läuft bis zu seinem Ende oder der Ausgabegrenze weiter. Ein nie
-  endendes Kommando auf Localhost lässt sich damit nicht beenden.
-- **Kein Beenden des Prozesses garantiert.** Siehe Abschnitt 3.4.
+- **Kein Beenden des Prozesses garantiert** bei SSH-Servern. Siehe
+  Abschnitt 3.4; für Localhost gilt die dortige Ausnahme.
 - **Die Schwelle ist nicht einstellbar.**

@@ -18,10 +18,11 @@ use std::sync::{Arc, Mutex as StdMutex};
 use async_trait::async_trait;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize as PortablePtySize};
 use tokio::io::AsyncReadExt;
-use tokio::process::Command;
+use tokio::process::{Child, ChildStderr, ChildStdout, Command};
+use tokio::sync::oneshot;
 
 use ssh_manager_core::ssh::{
-    CommandOutput, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
+    CommandOutput, ExecOutcome, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
 };
 
 use crate::exec::{CappedOutput, MAX_STREAM_OUTPUT_BYTES};
@@ -58,6 +59,127 @@ async fn is_existing_dir(path: &Path) -> bool {
         .await
         .map(|meta| meta.is_dir())
         .unwrap_or(false)
+}
+
+/// Issue #324: wie lange ein abgebrochenes Kommando nach dem sanften
+/// Abbruch (`SIGINT` an die Prozessgruppe) noch Zeit bekommt, sich selbst zu
+/// beenden und letzte Ausgabe zu schreiben, bevor die Gruppe hart beendet
+/// wird. Deutlich unter der 2-Sekunden-Zusage aus issue #324.
+const CANCEL_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Die beiden Ausgabe-Pipes eines lokalen Kindprozesses samt Lesezustand.
+struct ChildPipes {
+    stdout: ChildStdout,
+    stderr: ChildStderr,
+    stdout_open: bool,
+    stderr_open: bool,
+    buf_out: [u8; 8192],
+    buf_err: [u8; 8192],
+}
+
+impl ChildPipes {
+    fn new(stdout: ChildStdout, stderr: ChildStderr) -> Self {
+        Self {
+            stdout,
+            stderr,
+            stdout_open: true,
+            stderr_open: true,
+            buf_out: [0u8; 8192],
+            buf_err: [0u8; 8192],
+        }
+    }
+
+    fn any_open(&self) -> bool {
+        self.stdout_open || self.stderr_open
+    }
+
+    /// Liest den nächsten Block von der Pipe, die zuerst Daten (oder EOF)
+    /// liefert, in `capped`. Nur aufrufen, solange [`any_open`](Self::any_open)
+    /// gilt. Abbruchsicher: wird das Future verworfen, geht nichts verloren.
+    /// Ein Lesefehler schließt die betroffene Pipe und wird zurückgegeben.
+    async fn read_next(&mut self, capped: &mut CappedOutput) -> std::io::Result<()> {
+        tokio::select! {
+            res = self.stdout.read(&mut self.buf_out), if self.stdout_open => {
+                match res {
+                    Ok(0) => self.stdout_open = false,
+                    Ok(n) => capped.push_stdout(&self.buf_out[..n]),
+                    Err(e) => { self.stdout_open = false; return Err(e); }
+                }
+            }
+            res = self.stderr.read(&mut self.buf_err), if self.stderr_open => {
+                match res {
+                    Ok(0) => self.stderr_open = false,
+                    Ok(n) => capped.push_stderr(&self.buf_err[..n]),
+                    Err(e) => { self.stderr_open = false; return Err(e); }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Issue #324 (Spec 0027): beendet ein abgebrochenes lokales Kommando samt
+/// allen Prozessen, die es gestartet hat, und sammelt bis dahin noch
+/// geschriebene Ausgabe ein (unter demselben Cap, Spec 0044).
+///
+/// Unix: das Kommando läuft in einer eigenen Prozessgruppe (pgid = `pid`).
+/// Erst `SIGINT` an die Gruppe (wie `Ctrl+C`), dann höchstens
+/// [`CANCEL_GRACE`] lang weiterlesen, bis alle Pipes geschlossen sind, dann
+/// in jedem Fall `SIGKILL` an die Gruppe — auch für Glieder, die `SIGINT`
+/// ignorieren (z. B. Hintergrundprozesse einer nicht-interaktiven Shell).
+/// Der Kindprozess wird erst danach eingesammelt (`wait`): bis dahin hält er
+/// als Zombie die Gruppen-ID belegt, `killpg` kann also keine fremde Gruppe
+/// treffen. Ein Prozess, der die Gruppe selbst verlässt (`setsid`), wird
+/// nicht erreicht.
+///
+/// Windows: `taskkill /T /F` beendet den Prozessbaum ab `cmd.exe`.
+async fn terminate_tree(
+    child: &mut Child,
+    pid: Option<u32>,
+    pipes: &mut ChildPipes,
+    capped: &mut CappedOutput,
+) {
+    #[cfg(unix)]
+    let group = pid
+        .and_then(|p| libc::pid_t::try_from(p).ok())
+        .filter(|p| *p > 0);
+    #[cfg(unix)]
+    if let Some(pgid) = group {
+        // SAFETY: `killpg` hat keine Speicher-Vorbedingungen; `pgid` ist die
+        // Gruppe unseres noch nicht eingesammelten Kindprozesses.
+        unsafe {
+            libc::killpg(pgid, libc::SIGINT);
+        }
+    }
+    #[cfg(windows)]
+    if let Some(pid) = pid {
+        let _ = Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &pid.to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await;
+    }
+
+    let _ = tokio::time::timeout(CANCEL_GRACE, async {
+        while pipes.any_open() && !capped.cap_reached() {
+            let _ = pipes.read_next(capped).await;
+        }
+    })
+    .await;
+
+    #[cfg(unix)]
+    if let Some(pgid) = group {
+        // SAFETY: wie oben; der Kindprozess ist weiterhin nicht eingesammelt.
+        unsafe {
+            libc::killpg(pgid, libc::SIGKILL);
+        }
+    }
+    // Rückfallebene (keine Gruppe/kein `taskkill`): zumindest den direkten
+    // Kindprozess beenden. Für einen schon beendeten Prozess wirkungslos.
+    let _ = child.start_kill();
+    let _ = child.wait().await;
 }
 
 /// Standard-Shell des Nutzers für den interaktiven Modus (Spec 0032,
@@ -110,26 +232,14 @@ impl LocalTransport {
             home,
         }
     }
-}
 
-impl Default for LocalTransport {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl SshTransport for LocalTransport {
-    /// Streamt `stdout`/`stderr` des lokalen Kindprozesses inkrementell
-    /// (Spec 0044) statt sie über `Command::output()` erst vollständig zu
-    /// puffern — dasselbe Muster wie `RusshTransport::execute` seit Spec
-    /// 0043, Fund A, nur über rohe Pipes statt `ChannelMsg`s, deshalb
-    /// über den geteilten [`CappedOutput`]-Kern statt [`crate::exec::
-    /// ExecAccumulator`] (der an `ChannelMsg` gebunden ist). Sobald der Cap
-    /// greift, wird nicht weiter gelesen und der Kindprozess beendet — der
-    /// Rest seiner Ausgabe wird verworfen, das Ergebnis als `truncated`
-    /// markiert.
-    async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
+    /// Gemeinsamer Kern von `execute`/`execute_cancellable` (s. deren
+    /// Doc-Kommentare). `cancel = None`: nicht abbrechbar.
+    async fn run(
+        &self,
+        command: &str,
+        cancel: Option<oneshot::Receiver<()>>,
+    ) -> Result<ExecOutcome, SshError> {
         let mut cmd = shell_command(command);
         // Issue #10: run in the home directory like an SSH exec channel
         // does (ADR 0059 assumes a home cwd). Only the working directory
@@ -144,7 +254,7 @@ impl SshTransport for LocalTransport {
                 cmd.current_dir(home);
             }
         }
-        let mut child = cmd
+        cmd
             // spec-reviewer-Fund (Review dieses Schritts): `Command::
             // output()` (der bisherige Aufruf hier) erbt `stdin` vom
             // Elternprozess wie `spawn()` auch — ein Kommando, das auf
@@ -158,23 +268,28 @@ impl SshTransport for LocalTransport {
             // stattdessen sofort/schnell mit einem Fehler enden.
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        // Issue #324: eigene Prozessgruppe (pgid = pid des `sh`), damit ein
+        // Abbruch die ganze Pipeline samt Subshells erreicht, nicht nur den
+        // direkten Kindprozess (s. `terminate_tree`).
+        #[cfg(unix)]
+        cmd.process_group(0);
+        let mut child = cmd
             .spawn()
             .map_err(|e| io_err("lokale Ausführung fehlgeschlagen", e))?;
-        let mut stdout = child
+        // Vor dem ersten `wait()` gelesen: danach liefert `id()` `None`.
+        let pid = child.id();
+        let stdout = child
             .stdout
             .take()
             .expect("stdout wurde als Stdio::piped() angefordert");
-        let mut stderr = child
+        let stderr = child
             .stderr
             .take()
             .expect("stderr wurde als Stdio::piped() angefordert");
 
         let mut capped = CappedOutput::with_limit(self.max_output_bytes);
-        let mut stdout_open = true;
-        let mut stderr_open = true;
-        let mut buf_out = [0u8; 8192];
-        let mut buf_err = [0u8; 8192];
+        let mut pipes = ChildPipes::new(stdout, stderr);
         // spec-reviewer-Fund: ein echter Lese-Fehler auf der Pipe ist NICHT
         // dasselbe wie ein reguläres EOF (`Ok(0)`) — beide vorher gleich zu
         // behandeln hätte eine unvollständige Ausgabe unmarkiert (weder
@@ -185,23 +300,53 @@ impl SshTransport for LocalTransport {
         // behandeln.
         let mut io_error: Option<std::io::Error> = None;
 
-        while (stdout_open || stderr_open) && !capped.cap_reached() {
-            tokio::select! {
-                res = stdout.read(&mut buf_out), if stdout_open => {
-                    match res {
-                        Ok(0) => stdout_open = false,
-                        Ok(n) => capped.push_stdout(&buf_out[..n]),
-                        Err(e) => { io_error.get_or_insert(e); stdout_open = false; }
-                    }
-                }
-                res = stderr.read(&mut buf_err), if stderr_open => {
-                    match res {
-                        Ok(0) => stderr_open = false,
-                        Ok(n) => capped.push_stderr(&buf_err[..n]),
-                        Err(e) => { io_error.get_or_insert(e); stderr_open = false; }
-                    }
+        // Issue #324: löst nur bei einem tatsächlich gesendeten Abbruch aus.
+        // Ein ohne Senden gedroppter Sender (kein Abbruch angefordert) oder
+        // `cancel = None` bleiben für immer offen — das Kommando läuft dann
+        // regulär zu Ende.
+        let cancel_requested = async move {
+            if let Some(rx) = cancel {
+                if rx.await.is_ok() {
+                    return;
                 }
             }
+            std::future::pending::<()>().await
+        };
+        tokio::pin!(cancel_requested);
+        let mut cancelled = false;
+
+        while pipes.any_open() && !capped.cap_reached() {
+            tokio::select! {
+                res = pipes.read_next(&mut capped) => {
+                    if let Err(e) = res {
+                        io_error.get_or_insert(e);
+                    }
+                }
+                _ = &mut cancel_requested => {
+                    cancelled = true;
+                    break;
+                }
+            }
+        }
+
+        // Spec 0027 / issue #324: Abbruch, solange noch Ausgabe-Pipes offen
+        // waren. Ein Abbruch, der erst danach eintrifft (Kommando bereits
+        // fertig), wird oben nicht mehr abgefragt und hat keine Wirkung —
+        // das reguläre Ergebnis gilt (Spec 0027, §3.5).
+        if cancelled {
+            terminate_tree(&mut child, pid, &mut pipes, &mut capped).await;
+            let truncated = capped.truncated();
+            let (stdout, stderr) = capped.into_parts();
+            return Ok(ExecOutcome {
+                output: CommandOutput {
+                    stdout,
+                    stderr,
+                    // Wie im SSH-Pfad: kein regulärer Exit-Code nach Abbruch.
+                    exit_code: None,
+                    truncated,
+                },
+                cancelled: true,
+            });
         }
 
         // Cap gegriffen, bevor der Prozess von selbst beendet war (oder ein
@@ -229,7 +374,7 @@ impl SshTransport for LocalTransport {
 
         let truncated = capped.truncated();
         let (stdout, stderr) = capped.into_parts();
-        Ok(CommandOutput {
+        let output = CommandOutput {
             stdout,
             stderr,
             // Unix: `kill()` beendet den Prozess per Signal statt eines
@@ -241,7 +386,33 @@ impl SshTransport for LocalTransport {
             // Ergebnis" ohnehin trägt.
             exit_code: status.code(),
             truncated,
+        };
+        Ok(ExecOutcome {
+            output,
+            cancelled: false,
         })
+    }
+}
+
+impl Default for LocalTransport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl SshTransport for LocalTransport {
+    /// Streamt `stdout`/`stderr` des lokalen Kindprozesses inkrementell
+    /// (Spec 0044) statt sie über `Command::output()` erst vollständig zu
+    /// puffern — dasselbe Muster wie `RusshTransport::execute` seit Spec
+    /// 0043, Fund A, nur über rohe Pipes statt `ChannelMsg`s, deshalb
+    /// über den geteilten [`CappedOutput`]-Kern statt [`crate::exec::
+    /// ExecAccumulator`] (der an `ChannelMsg` gebunden ist). Sobald der Cap
+    /// greift, wird nicht weiter gelesen und der Kindprozess beendet — der
+    /// Rest seiner Ausgabe wird verworfen, das Ergebnis als `truncated`
+    /// markiert.
+    async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
+        Ok(self.run(command, None).await?.output)
     }
 
     fn set_max_output_bytes(&mut self, limit: usize) {
@@ -252,15 +423,34 @@ impl SshTransport for LocalTransport {
         self.max_output_bytes = limit.min(MAX_STREAM_OUTPUT_BYTES);
     }
 
-    // `execute_with_stdin`/`execute_cancellable`/`execute_with_stdin_cancellable`:
-    // bewusst auf den Trait-Default belassen (delegiert an `execute`, ohne
-    // `stdin`/`cancel` zu berücksichtigen). Ein "echter" Abbruch wäre hier
-    // durch `Child::kill()` sogar zuverlässiger möglich als bei SSH (Spec
-    // 0027, dort nur Best-effort über ein optionales Signal) — für den
-    // ersten Schritt aber bewusst nicht umgesetzt, um den Umfang klein zu
-    // halten; `sudo -S`-Stdin-Zufuhr ist für den lokalen Pseudo-Server
-    // ohnehin nicht relevant (kein hinterlegtes Sudo-Passwort möglich, s.
-    // `crate::local`-Verwendung in `app-shell`).
+    // `execute_with_stdin`: bewusst auf dem Trait-Default (delegiert an
+    // `execute`, ignoriert `stdin`) — `sudo -S`-Stdin-Zufuhr ist für den
+    // lokalen Pseudo-Server nicht relevant (kein hinterlegtes
+    // Sudo-Passwort möglich, s. `crate::local`-Verwendung in `app-shell`),
+    // `stdin` bleibt immer `Stdio::null()`.
+
+    /// Spec 0027 / issue #324: abbrechbar wie der SSH-Pfad. Bei Abbruch wird
+    /// die ganze Prozessgruppe des Kommandos beendet (s. [`terminate_tree`])
+    /// und die bis dahin gesammelte Ausgabe mit `cancelled: true`
+    /// zurückgegeben.
+    async fn execute_cancellable(
+        &mut self,
+        command: &str,
+        cancel: oneshot::Receiver<()>,
+    ) -> Result<ExecOutcome, SshError> {
+        self.run(command, Some(cancel)).await
+    }
+
+    /// Wie [`execute_cancellable`](Self::execute_cancellable); `stdin` wird
+    /// wie bei `execute_with_stdin` ignoriert (`Stdio::null()` bleibt).
+    async fn execute_with_stdin_cancellable(
+        &mut self,
+        command: &str,
+        _stdin: &[u8],
+        cancel: oneshot::Receiver<()>,
+    ) -> Result<ExecOutcome, SshError> {
+        self.run(command, Some(cancel)).await
+    }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
         let pty_system = native_pty_system();
@@ -618,5 +808,271 @@ mod tests {
 
         assert!(output.stdout.is_empty());
         assert_eq!(output.exit_code, Some(0));
+    }
+
+    // --- Issue #324: Abbruch auf dem lokalen Pseudo-Server (Spec 0027) ---
+
+    /// Waits until `marker` exists (the command has reached the point where
+    /// it creates it), so the cancel is sent while the command is really
+    /// running, independent of machine load.
+    async fn wait_for_marker(marker: &Path) {
+        tokio::time::timeout(NO_HANG_TIMEOUT, async {
+            while !marker.exists() {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the command never created its marker file");
+    }
+
+    /// Runs `command` via `execute_cancellable` in `home`, sends the cancel
+    /// as soon as `home/marker` exists, and returns the outcome plus the time
+    /// from cancel to return.
+    async fn run_and_cancel_at_marker(
+        transport: &mut LocalTransport,
+        home: &Path,
+        command: &str,
+    ) -> (ExecOutcome, std::time::Duration) {
+        let (tx, rx) = oneshot::channel();
+        let marker = home.join("marker");
+        let exec = async {
+            let outcome = transport.execute_cancellable(command, rx).await;
+            (outcome, std::time::Instant::now())
+        };
+        let canceller = async {
+            wait_for_marker(&marker).await;
+            let at = std::time::Instant::now();
+            tx.send(())
+                .expect("command already finished before the cancel");
+            at
+        };
+        let ((outcome, finished_at), cancelled_at) =
+            tokio::time::timeout(NO_HANG_TIMEOUT, async { tokio::join!(exec, canceller) })
+                .await
+                .expect("execute_cancellable ignored the cancel and kept running");
+        (
+            outcome.expect("a cancelled command is Ok, not an error"),
+            finished_at.saturating_duration_since(cancelled_at),
+        )
+    }
+
+    /// Whether process `pid` is still alive (a zombie only waits for its
+    /// reaper and counts as gone).
+    #[cfg(unix)]
+    fn process_alive(pid: &str) -> bool {
+        let out = std::process::Command::new("ps")
+            .args(["-A", "-o", "pid=", "-o", "stat="])
+            .output()
+            .expect("ps not available");
+        String::from_utf8_lossy(&out.stdout).lines().any(|line| {
+            let mut cols = line.split_whitespace();
+            cols.next() == Some(pid) && !cols.next().unwrap_or("Z").starts_with('Z')
+        })
+    }
+
+    /// Every pid the command printed (one per line on stdout/stderr) must be
+    /// gone within 2 s of the cancel returning.
+    #[cfg(unix)]
+    async fn assert_printed_pids_gone(output: &CommandOutput, expected: usize) {
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let pids: Vec<&str> = text.split_whitespace().collect();
+        assert_eq!(pids.len(), expected, "unexpected pid output {text:?}");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        for pid in pids {
+            assert!(pid.parse::<u32>().is_ok(), "not a pid: {pid:?}");
+            while process_alive(pid) {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "process {pid} is still running after the cancel"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+    }
+
+    /// Issue #324 regression test: on the old code (trait default, cancel
+    /// ignored) this ran into the timeout, because `sleep 600` is waited for.
+    /// Now the command ends within 2 s of the cancel, the partial output is
+    /// kept and the outcome is marked cancelled without an exit code, as on
+    /// the SSH path.
+    #[tokio::test]
+    async fn test_issue324_cancel_ends_long_running_local_command() {
+        let home = tempfile::tempdir().unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+        #[cfg(unix)]
+        let command = "echo ready; touch marker; sleep 600";
+        #[cfg(windows)]
+        let command = "echo ready& type nul > marker& ping -n 600 127.0.0.1 > NUL";
+
+        let (outcome, after_cancel) =
+            run_and_cancel_at_marker(&mut transport, home.path(), command).await;
+
+        assert!(outcome.cancelled, "the cancel must be reported");
+        assert_eq!(outcome.output.exit_code, None);
+        assert_eq!(
+            String::from_utf8_lossy(&outcome.output.stdout).trim(),
+            "ready"
+        );
+        assert!(!outcome.output.truncated);
+        assert!(
+            after_cancel < std::time::Duration::from_secs(2),
+            "command ended {after_cancel:?} after the cancel"
+        );
+    }
+
+    /// Issue #324: a pipeline is terminated completely — no member of the
+    /// command's process group survives the cancel. The marker is created
+    /// inside the pipeline, so both `sleep` and `cat` are running.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue324_cancel_terminates_whole_pipeline() {
+        let home = tempfile::tempdir().unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+
+        // `sleep 600 | cat`, with each side printing its pid before `exec`
+        // (same process); the marker appears once both sides run.
+        let (outcome, after_cancel) = run_and_cancel_at_marker(
+            &mut transport,
+            home.path(),
+            "echo $$; \
+             sh -c 'echo $$ >&2; touch left; exec sleep 600' | \
+             sh -c 'echo $$ >&2; while [ ! -f left ]; do sleep 0.05; done; \
+                    touch marker; exec cat'",
+        )
+        .await;
+
+        assert!(outcome.cancelled);
+        assert!(after_cancel < std::time::Duration::from_secs(2));
+        // The outer shell, `sleep` and `cat`.
+        assert_printed_pids_gone(&outcome.output, 3).await;
+    }
+
+    /// Issue #324: processes that ignore `SIGINT` (here the shell and its
+    /// `sleep`, via `trap '' INT`; background jobs of a non-interactive
+    /// shell behave the same) are killed after the grace period.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue324_cancel_kills_commands_that_ignore_sigint() {
+        let home = tempfile::tempdir().unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+
+        let (outcome, after_cancel) = run_and_cancel_at_marker(
+            &mut transport,
+            home.path(),
+            "trap '' INT; echo $$; sleep 600 & echo $!; touch marker; wait",
+        )
+        .await;
+
+        assert!(outcome.cancelled);
+        assert!(after_cancel < std::time::Duration::from_secs(2));
+        // The shell and the background `sleep`.
+        assert_printed_pids_gone(&outcome.output, 2).await;
+    }
+
+    /// Issue #324 / Spec 0044: output written after the cancel (here by an
+    /// `INT` trap) still goes through the output cap.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue324_output_cap_applies_to_partial_output_after_cancel() {
+        let home = tempfile::tempdir().unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+        transport.set_max_output_bytes(4);
+
+        let (outcome, _) = run_and_cancel_at_marker(
+            &mut transport,
+            home.path(),
+            "trap 'printf 0123456789; exit 1' INT; printf ab; touch marker; \
+             while :; do sleep 1; done",
+        )
+        .await;
+
+        assert!(outcome.cancelled);
+        assert!(outcome.output.truncated, "the cap must have been hit");
+        assert!(
+            outcome.output.stdout.starts_with(b"ab01"),
+            "unexpected partial output {:?}",
+            String::from_utf8_lossy(&outcome.output.stdout)
+        );
+        assert!(outcome.output.stdout.len() <= 4 + crate::exec::TRUNCATION_NOTICE.len());
+    }
+
+    /// Issue #324: the stdin variant (sudo path) is cancellable too; `stdin`
+    /// itself stays ignored for the local transport.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue324_execute_with_stdin_cancellable_honours_cancel() {
+        let home = tempfile::tempdir().unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+        let (tx, rx) = oneshot::channel();
+        let marker = home.path().join("marker");
+
+        let (outcome, ()) = tokio::time::timeout(NO_HANG_TIMEOUT, async {
+            tokio::join!(
+                transport.execute_with_stdin_cancellable(
+                    "touch marker; sleep 600",
+                    b"secret\n",
+                    rx
+                ),
+                async {
+                    wait_for_marker(&marker).await;
+                    tx.send(()).unwrap();
+                }
+            )
+        })
+        .await
+        .expect("execute_with_stdin_cancellable ignored the cancel");
+
+        assert!(outcome.unwrap().cancelled);
+    }
+
+    /// Issue #324 / Spec 0027 §3.5: a command that finishes before any
+    /// cancel returns its regular result; a cancel sent afterwards has no
+    /// effect.
+    #[tokio::test]
+    async fn test_issue324_late_cancel_has_no_effect() {
+        let mut transport = LocalTransport::new();
+        let (tx, rx) = oneshot::channel();
+
+        let outcome = tokio::time::timeout(
+            NO_HANG_TIMEOUT,
+            transport.execute_cancellable("echo done", rx),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(!outcome.cancelled);
+        assert_eq!(outcome.output.exit_code, Some(0));
+        assert_eq!(
+            String::from_utf8_lossy(&outcome.output.stdout).trim(),
+            "done"
+        );
+        assert!(tx.send(()).is_err(), "nobody listens for the late cancel");
+    }
+
+    /// Issue #324: a cancel sender that is dropped without sending is not a
+    /// cancel — the command runs to its regular end.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue324_dropped_cancel_sender_does_not_cancel() {
+        let mut transport = LocalTransport::new();
+        let (tx, rx) = oneshot::channel::<()>();
+        drop(tx);
+
+        let outcome = tokio::time::timeout(
+            NO_HANG_TIMEOUT,
+            transport.execute_cancellable("echo a; sleep 0.2; echo b", rx),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(!outcome.cancelled);
+        assert_eq!(outcome.output.exit_code, Some(0));
+        assert_eq!(String::from_utf8_lossy(&outcome.output.stdout), "a\nb\n");
     }
 }
