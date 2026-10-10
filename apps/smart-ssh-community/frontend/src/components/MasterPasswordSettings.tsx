@@ -190,7 +190,7 @@ export function MasterPasswordSettings() {
           <button
             type="submit"
             disabled={busy || !newPasswordIsUsable}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("masterPassword.setUpButton")}
           </button>
@@ -241,7 +241,7 @@ export function MasterPasswordSettings() {
                 characterCount(password) < MINIMUM_PASSWORD_LENGTH ||
                 password !== repeated
               }
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("masterPassword.changeButton")}
             </button>

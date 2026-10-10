@@ -164,7 +164,7 @@ export function NoteShrinkSuggestionToast() {
             <button
               type="button"
               onClick={() => summarize(suggestion)}
-              className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500"
+              className="rounded bg-indigo-600 px-3 py-1 text-xs text-slate-950 hover:bg-indigo-500"
             >
               {t("noteShrink.summarize")}
             </button>

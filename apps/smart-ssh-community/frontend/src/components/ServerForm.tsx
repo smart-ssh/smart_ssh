@@ -817,7 +817,7 @@ export function ServerForm({
             type="button"
             onClick={handleSaveLocalTags}
             disabled={savingLocalTags}
-            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             {savingLocalTags ? t("common.saving") : t("common.save")}
           </button>
@@ -850,7 +850,7 @@ export function ServerForm({
             type="button"
             onClick={handleSaveLocalNotes}
             disabled={savingLocalNotes}
-            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             {savingLocalNotes ? t("common.saving") : t("common.save")}
           </button>
@@ -1231,7 +1231,7 @@ export function ServerForm({
                     type="button"
                     onClick={handleConvertToKeychain}
                     disabled={converting}
-                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
                   >
                     {converting
                       ? t("serverForm.convertToKeychain.converting")
@@ -1370,7 +1370,7 @@ export function ServerForm({
           <button
             type="submit"
             disabled={saving}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
           </button>

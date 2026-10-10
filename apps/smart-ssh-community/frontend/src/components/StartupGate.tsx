@@ -266,7 +266,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               <button
                 type="submit"
                 disabled={busy || password.length === 0}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("startup.unlockButton")}
               </button>
@@ -304,7 +304,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               <button
                 type="button"
                 onClick={retry}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500"
               >
                 {t("startup.answers.retry")}
               </button>
@@ -333,7 +333,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
                   setContinueAttempt((attempt) => attempt + 1);
                   setError(null);
                 }}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("startup.answers.retry")}
               </button>
