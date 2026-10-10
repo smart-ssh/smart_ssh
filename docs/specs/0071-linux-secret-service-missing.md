@@ -487,8 +487,9 @@ Nach dem Muster der bestehenden Tests (`:286–309`):
 - T10 Jeder Text enthält die Aufzählung der blockierten Funktionen
   (Prüfung auf „API", „Passwort", „Passphrase") und **nicht** mehr den Satz
   „funktionieren normal".
-- T11 Jeder Text enthält „trotzdem gestartet" (Spec 0059,
-  Nicht-Fatalität bleibt).
+- T11 Kein Text enthält „trotzdem gestartet" und behauptet nicht, die App
+  starte weiter oder SSH-Verbindungen liefen weiter (A9, Spec 0101 E3);
+  die Ursache nennt den Datenbankschlüssel im Schlüsselbund.
 - T11a Sprachwahl (A11c): `de_DE.UTF-8`, `de`, `de_AT@euro` → Deutsch;
   `en_US.UTF-8`, `fr_FR`, `ja_JP.UTF-8` → Englisch; `C`, `POSIX`, `""`,
   `None` → Deutsch (Vorgabe).
