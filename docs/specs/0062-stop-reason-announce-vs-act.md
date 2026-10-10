@@ -31,9 +31,36 @@ Tool-Aufruf folgt.
 
 Der System-Prompt der Sitzung weist die KI an, ein Kommando **auszuführen**
 (das Tool aufzurufen), statt es nur anzukündigen. Kurze Erklärungen vor
-einem Kommando bleiben ausdrücklich erlaubt. Es gibt einen einzigen,
-deutschen System-Prompt; die zweisprachigen Oberflächentexte sind davon
-getrennt.
+einem Kommando bleiben ausdrücklich erlaubt. Der System-Prompt folgt der
+UI-Sprache (Deutsch oder Englisch, Spec 0024); beide Fassungen tragen
+denselben Inhalt.
+
+## Teil 3: Unabhängige Kommandos bündeln, nicht-interaktiv ausführen
+
+Damit eine Aufgabe weniger KI-Anfragen braucht, weist der System-Prompt in
+beiden Sprachen die KI an:
+
+- Braucht sie mehrere Informationen oder Schritte, die **nicht** vom
+  Ergebnis des jeweils anderen abhängen, schlägt sie diese als getrennte
+  Kommando-Vorschläge in **derselben** Antwort vor.
+- Schritte, die von einem früheren Ergebnis abhängen, bleiben in
+  getrennten Runden.
+- Der Nutzer bestätigt oder lehnt jeden Vorschlag einzeln ab; die KI
+  bekommt danach alle Ergebnisse, auch die Ablehnungen, gesammelt in einer
+  Folgeanfrage.
+- Sie fasst unabhängige Kommandos nicht mit `&&` oder `;` zu einer
+  Kommandozeile zusammen, nur um eine Runde zu sparen. Getrennte Vorschläge
+  halten jedes Kommando einzeln prüfbar.
+- Würde ein Kommando eine Rückfrage stellen, nutzt sie die
+  nicht-interaktive Variante (z. B. `-y`/`--yes`,
+  `DEBIAN_FRONTEND=noninteractive` für apt, `--non-interactive` oder
+  `--noconfirm`, wo vorhanden). Eine Rückfrage während der Ausführung kann
+  die KI nicht beantworten; das Kommando würde bis zum Abbruch durch den
+  Nutzer warten.
+
+Die Werkzeug-Beschreibung für Kommando-Vorschläge beschreibt ein Kommando
+je Aufruf und erlaubt mehrere Aufrufe je Antwort. Sie steht in derselben
+Sprache wie der System-Prompt. Eine Einstellung dafür gibt es nicht.
 
 ## Sicherheitszusagen
 
@@ -43,6 +70,10 @@ getrennt.
   Kommando läuft unverändert durch die Filter-Engine und die Bestätigung.
   Der Prompt beeinflusst nur, *ob* die KI das Tool nutzt, nicht, was danach
   geschieht.
+- Gebündelte Vorschläge laufen einzeln und in der vorgeschlagenen
+  Reihenfolge durch Filter, Risiko-Einstufung und Bestätigung. Nach einer
+  Ablehnung braucht jeder weitere Vorschlag derselben Antwort eine
+  Bestätigung (ADR 0059); daran ändert das Bündeln nichts.
 
 ## Grenzen
 
@@ -57,3 +88,10 @@ getrennt.
   über den echten Stream-Pfad erkannt und geloggt.
 - Der Prompt enthält die „handeln statt ankündigen"-Anweisung und behält
   die Erlaubnis zu kurzen Erklärungen.
+- Der System-Prompt enthält in beiden Sprachen die Bündel-Anweisung
+  (unabhängige Schritte in einer Antwort, abhängige in getrennten Runden,
+  kein Verketten mit `&&`/`;` nur um eine Runde zu sparen) und die
+  Anweisung zu nicht-interaktiven Varianten mit mindestens `-y`/`--yes`
+  und `DEBIAN_FRONTEND=noninteractive`.
+- Die Werkzeug-Beschreibung für Kommando-Vorschläge erlaubt mehrere
+  Aufrufe je Antwort und steht in der Sprache des System-Prompts.

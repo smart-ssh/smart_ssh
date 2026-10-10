@@ -196,6 +196,12 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         {
             let mut ctx = session.context.lock().await;
             ctx.system_context = updated_system_context;
+            // Issue #323: ein Wechsel der UI-Sprache gilt ab der nächsten
+            // Nachricht auch für die `suggest_command`-Beschreibung — sonst
+            // stünde der englische Prompt neben der deutschen Beschreibung.
+            ctx.available_actions = app_logic::system_prompt::session_action_schemas(
+                updated_system_context_parts.language,
+            );
         }
         *session.system_context_parts.lock().await = updated_system_context_parts;
         // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
