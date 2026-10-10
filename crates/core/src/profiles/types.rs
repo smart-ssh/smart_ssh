@@ -109,6 +109,11 @@ pub struct UnusableServer {
     pub id: ServerId,
     pub name: String,
     pub host: String,
+    /// Eigene Spalte, nicht Teil der Anmeldeart: nur für den Abgleich auf
+    /// Namens-/Adress-Dopplungen (SSH-config-Import), nie zum Verbinden.
+    pub port: u16,
+    /// Wie `port`: eigene Spalte, nur für den Konfliktabgleich.
+    pub username: String,
     pub group_id: Option<GroupId>,
     pub reason: UnusableReason,
 }

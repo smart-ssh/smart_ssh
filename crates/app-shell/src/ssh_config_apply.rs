@@ -841,7 +841,10 @@ pub async fn preview_ssh_config_import(
 
     // §4.1: Ohne den Bestand sind weder Konflikte noch `ProxyJump`-Ziele im
     // Bestand noch Schlagwort-Treffer bestimmbar.
-    let servers = state.profile_store.list_servers().await?;
+    // Nicht nutzbare Server zählen nur für die Konflikterkennung (Spec
+    // 0008 §6a), nie als Jump-Ziel — sie stehen getrennt im Inventory.
+    let listing = state.profile_store.list_server_entries().await?;
+    let servers = listing.servers;
     let groups = state.profile_store.list_groups().await?;
     // §5.2a: die bestehenden Regeln, damit die Vorschau kennzeichnen kann,
     // welches importierte Schlagwort eine davon trifft.
@@ -857,6 +860,7 @@ pub async fn preview_ssh_config_import(
         &read.sources,
         ssh_manager_core::profiles::ssh_config::Inventory {
             servers: &servers,
+            unusable: &listing.unusable,
             groups: &groups,
             rules: &rules,
             local_server_id: app_logic::dto::LOCAL_SERVER_ID,

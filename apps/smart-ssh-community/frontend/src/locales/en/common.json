@@ -147,6 +147,7 @@
     "deleteNoImpact": "No other objects affected.",
     "childGroupWillBeDeleted": "Subgroup will also be deleted: {{name}}",
     "serverWillBeUnassigned": "Server will only be unassigned (kept): {{name}}",
+    "unusableServerWillBeUnassigned": "Not usable server will only be unassigned (kept): {{name}}",
     "confirmDelete": "Delete permanently"
   },
   "serverForm": {

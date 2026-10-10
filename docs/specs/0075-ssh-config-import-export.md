@@ -325,6 +325,8 @@ abwählen. Bricht er ab, entsteht nichts.
 wird nicht überschrieben. Die Vorschau zeigt den Konflikt; der Nutzer
 wählt je Eintrag: überspringen (Vorgabe) oder als neues Profil mit
 abweichendem Namen anlegen.
+Das gilt auch für Server, die als „nicht nutzbar" markiert sind
+(Spec 0008, 6a); als `ProxyJump`-Ziel werden sie nie aufgelöst.
 
 **3.1.9 `IdentityFile` — der Nutzer entscheidet, was damit geschieht.**
 Die Vorschau bietet drei Wege an, umstellbar für den ganzen Import und

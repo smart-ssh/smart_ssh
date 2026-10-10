@@ -871,6 +871,8 @@ async fn test_unknown_auth_method_does_not_break_the_server_list() {
             id: unusable_id,
             name: "b-newer".to_string(),
             host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
             group_id: Some(group.id),
             reason: ssh_manager_core::profiles::UnusableReason::UnknownAuthMethod,
         }]
@@ -931,4 +933,23 @@ async fn test_an_unusable_server_row_can_be_deleted() {
         .unwrap()
         .unusable
         .is_empty());
+}
+
+/// Issue #177: Löschen der Gruppe eines nicht nutzbaren Servers löst nur
+/// die Gruppenzuordnung — die gespeicherte Anmeldeart bleibt unverändert,
+/// und der Eintrag bleibt als nicht nutzbar gelistet.
+#[tokio::test]
+async fn test_deleting_the_group_of_an_unusable_server_keeps_its_stored_auth_method() {
+    let store = in_memory_store().await;
+    let group = make_group("Produktion", None);
+    store.create_group(&group).await.unwrap();
+    let id = insert_server_with_raw_auth(&store, "newer", Some(group.id), UNKNOWN_AUTH_JSON).await;
+
+    store.delete_group(&group.id).await.unwrap();
+
+    assert_eq!(raw_auth_json(&store, id).await, UNKNOWN_AUTH_JSON);
+    let listing = store.list_server_entries().await.unwrap();
+    assert_eq!(listing.unusable.len(), 1);
+    assert_eq!(listing.unusable[0].id, id);
+    assert_eq!(listing.unusable[0].group_id, None);
 }

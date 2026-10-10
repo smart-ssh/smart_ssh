@@ -8,7 +8,9 @@ use super::parser::{parse_source, FileParse, SkippedKind};
 use super::pattern::matches_pattern;
 use super::plan::*;
 use crate::filter::{Pattern, Rule, RuleAction, RuleId, RuleOrigin, Scope};
-use crate::profiles::types::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+use crate::profiles::types::{
+    AuthMethod, Group, GroupId, PostIngestPolicy, Server, UnusableReason, UnusableServer,
+};
 use crate::shared::ServerId;
 
 // ---------------------------------------------------------------- Hilfen
@@ -41,6 +43,7 @@ const LOCAL: ServerId = ServerId(Uuid::nil());
 fn inv<'a>(servers: &'a [Server], groups: &'a [Group], rules: &'a [Rule]) -> Inventory<'a> {
     Inventory {
         servers,
+        unusable: &[],
         groups,
         rules,
         local_server_id: LOCAL,
@@ -1051,4 +1054,80 @@ fn t_review1_wertgrenze_gilt_auch_fuer_unbekannte_direktive() {
     let err = parse_source(text.as_bytes()).expect_err("Grenze greift");
     assert_eq!(err.line, 2);
     assert!(!format!("{err:?}").contains(&long));
+}
+
+// ---- Issue #177: nicht nutzbare Server zählen für Konflikte (§3.1.8) -----
+
+fn unusable_server(name: &str, host: &str, port: u16, username: &str) -> UnusableServer {
+    UnusableServer {
+        id: ServerId::new(),
+        name: name.to_string(),
+        host: host.to_string(),
+        port,
+        username: username.to_string(),
+        group_id: None,
+        reason: UnusableReason::UnknownAuthMethod,
+    }
+}
+
+fn plan_with_unusable(text: &str, unusable: &[UnusableServer]) -> ImportPlan {
+    build_plan(
+        &[source("/c", text)],
+        Inventory {
+            servers: &[],
+            unusable,
+            groups: &[],
+            rules: &[],
+            local_server_id: LOCAL,
+        },
+    )
+}
+
+#[test]
+fn test_unusable_server_with_same_name_is_a_name_conflict() {
+    let u = unusable_server("web", "other.example", 2200, "root");
+    let plan = plan_with_unusable(
+        "Host web\n  HostName web.example\n",
+        std::slice::from_ref(&u),
+    );
+    let c = plan.entries[0].conflict.as_ref().expect("Konflikt");
+    assert_eq!(c.kind, ConflictKind::Name);
+    assert_eq!(c.existing, u.id);
+}
+
+#[test]
+fn test_unusable_server_with_same_host_port_user_is_an_address_conflict() {
+    let u = unusable_server("old", "web.example", 22, "deploy");
+    let plan = plan_with_unusable(
+        "Host web\n  HostName web.example\n  User deploy\n",
+        std::slice::from_ref(&u),
+    );
+    let c = plan.entries[0].conflict.as_ref().expect("Konflikt");
+    assert_eq!(c.kind, ConflictKind::Address);
+    assert_eq!(c.existing, u.id);
+}
+
+#[test]
+fn test_unusable_server_with_other_port_or_user_is_no_conflict() {
+    let other_port = unusable_server("old", "web.example", 2222, "deploy");
+    let other_user = unusable_server("old2", "web.example", 22, "root");
+    let plan = plan_with_unusable(
+        "Host web\n  HostName web.example\n  User deploy\n",
+        &[other_port, other_user],
+    );
+    assert!(plan.entries[0].conflict.is_none());
+}
+
+#[test]
+fn test_proxyjump_naming_an_unusable_server_is_not_resolved_to_it() {
+    let u = unusable_server("jump", "jump.example", 22, "deploy");
+    let plan = plan_with_unusable(
+        "Host target\n  HostName t.example\n  ProxyJump jump\n",
+        std::slice::from_ref(&u),
+    );
+    let jumps_to_unusable = plan.entries.iter().any(|e| match &e.jump {
+        Some(JumpTarget::Existing(id)) => *id == u.id,
+        _ => false,
+    });
+    assert!(!jumps_to_unusable);
 }
