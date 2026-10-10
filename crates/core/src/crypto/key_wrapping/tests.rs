@@ -316,6 +316,24 @@ fn test_a_wrapping_demanding_absurd_memory_is_rejected_before_deriving() {
     );
 }
 
+/// #266: Die Obergrenze liegt bei 256 MiB. Knapp darüber wird abgelehnt,
+/// **ohne** abzuleiten; genau auf der Grenze und bei den Schreibparametern
+/// gilt die Datei weiter als in Ordnung.
+#[test]
+fn test_memory_cost_cap_is_256_mib() {
+    let just_above = forge_header_only(256 * 1024 + 1, 3, 1);
+    assert_eq!(
+        unwrap_root_key(&just_above, &password()).err(),
+        Some(KeyWrapError::UnacceptableParameters)
+    );
+    // Gegenprobe: auf der Grenze wird nicht wegen der Parameter abgelehnt.
+    let at_cap = forge_header_only(256 * 1024, 3, 1);
+    assert_ne!(
+        inspect_wrapped_key(&at_cap).err(),
+        Some(KeyWrapError::UnacceptableParameters)
+    );
+}
+
 /// A3: Eine fremde Datei am Ort der Verpackung und eine unbekannte Version
 /// sind **nicht** „Passwort falsch" — sie führen in der Tabelle A3 zum
 /// Zustand *ungültig* (D3) und dürfen nicht als beschädigtes Chiffrat
