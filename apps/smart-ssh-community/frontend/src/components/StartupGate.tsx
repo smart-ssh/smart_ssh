@@ -76,6 +76,11 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
   /** Steht der Zuhörer für `startup:prompt`? Erst dann darf ein Kommando
    * laufen, dessen Antwort eine Frage im Fenster ist. */
   const [listening, setListening] = useState(false);
+  /** Zählt die Versuche, die Zuhörer anzumelden. „Erneut versuchen“ erhöht
+   * ihn, wenn die Anmeldung gescheitert ist (`listening` falsch) — als
+   * Abhängigkeit des Zuhörer-Effekts meldet dieser sich dann neu an, nachdem
+   * die Aufräumfunktion die halb angemeldeten Zuhörer abgemeldet hat. */
+  const [listenAttempt, setListenAttempt] = useState(0);
 
   /** Den Zustand neu holen. **Löscht die Meldung nicht** — sonst wischte
    * das Nachfragen nach einem Fehlversuch (s. [`run`]) genau die Meldung
@@ -91,8 +96,15 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
 
   const retry = useCallback(() => {
     setError(null);
+    if (!listening) {
+      // Die Zuhörer stehen nicht: Erst sie neu anmelden. Der Effekt holt
+      // danach bei Bedarf auch den Zustand (Reihenfolge „Zuhörer zuerst,
+      // dann Kommandos“ bleibt).
+      setListenAttempt((attempt) => attempt + 1);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, listening]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,7 +158,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       void prompt.then((unlisten) => unlisten()).catch(() => {});
       void unlocked.then((unlisten) => unlisten()).catch(() => {});
     };
-  }, [initialState, refresh]);
+  }, [initialState, refresh, listenAttempt]);
 
   // Teil 0 Frage 3: Im Schlüsselbund-Modus **ohne** Zustand ist der Start in
   // D1 gelandet und soll im Fenster weitergehen — dort gibt es das
@@ -327,6 +339,14 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
                 type="button"
                 disabled={busy}
                 onClick={() => {
+                  // Standen die Zuhörer nie (Anmeldung gescheitert), kommt
+                  // zuerst die erneute Anmeldung; danach setzt der Effekt
+                  // über `listening` den Startablauf fort.
+                  if (!listening) {
+                    setListenAttempt((attempt) => attempt + 1);
+                    setError(null);
+                    return;
+                  }
                   // Noch einmal in den Startablauf: Der Merker wird
                   // zurückgesetzt, damit der Dialog erneut erscheint.
                   continuedInTheWindow.current = false;
