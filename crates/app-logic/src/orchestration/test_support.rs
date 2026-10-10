@@ -118,6 +118,9 @@ pub(crate) struct MockSshTransport {
     /// ein Test prüfen kann, dass der KI-Ausführungspfad das Kommando nicht
     /// verändert (z. B. kein vorangestelltes `cd`).
     executed: Arc<StdMutex<Vec<String>>>,
+    /// Issue #325: live chunks `execute_streaming` sends (one every 200 ms
+    /// of virtual time) before it returns the regular response.
+    streamed: HashMap<String, Vec<ssh_manager_core::ssh::ExecOutputChunk>>,
 }
 
 pub(crate) type StdinCalls = Arc<StdMutex<Vec<(String, Vec<u8>)>>>;
@@ -147,6 +150,15 @@ impl MockSshTransport {
 
     pub(crate) fn stdin_calls_handle(&self) -> StdinCalls {
         self.stdin_calls.clone()
+    }
+
+    pub(crate) fn with_streamed_output(
+        mut self,
+        command: impl Into<String>,
+        chunks: Vec<ssh_manager_core::ssh::ExecOutputChunk>,
+    ) -> Self {
+        self.streamed.insert(command.into(), chunks);
+        self
     }
 
     pub(crate) fn with_never_completing(mut self, command: impl Into<String>) -> Self {
@@ -210,6 +222,29 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
             output: self.execute(command).await?,
             cancelled: false,
         })
+    }
+
+    async fn execute_streaming(
+        &mut self,
+        command: &str,
+        stdin: Option<&[u8]>,
+        cancel: tokio::sync::oneshot::Receiver<()>,
+        sink: ssh_manager_core::ssh::ExecOutputSink,
+    ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
+        if let Some(chunks) = self.streamed.get(command).cloned() {
+            for chunk in chunks {
+                let _ = sink.send(chunk);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+        }
+        drop(sink);
+        match stdin {
+            Some(stdin) => {
+                self.execute_with_stdin_cancellable(command, stdin, cancel)
+                    .await
+            }
+            None => self.execute_cancellable(command, cancel).await,
+        }
     }
 
     async fn open_shell(&mut self, _size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
