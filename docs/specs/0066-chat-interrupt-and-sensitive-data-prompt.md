@@ -95,6 +95,16 @@ Remote-Datei lesen (0020)
   Frontend-Command, nie aus Tool-Output).
 - Mehrere eingereihte Nachrichten → in Reihenfolge, alle in denselben
   nächsten Request.
+- Der Anbieter bekommt nie zwei aufeinanderfolgende Nachrichten mit
+  derselben Rolle: Grenzen mehrere Nachrichten, die beim Anbieter als
+  `user` gelten (Kommando-Ergebnis, eingereihte Nachrichten), aneinander,
+  gehen sie als **eine** Nachricht dieser Rolle raus. Jede ursprüngliche
+  Nachricht bleibt darin ein eigener, erkennbarer Teil (Anthropic: eigener
+  Text-Block; OpenAI-kompatibel: durch eine Leerzeile getrennt), in
+  unveränderter Reihenfolge. Nutzertext bleibt außerhalb jeder
+  Umzäunung, ein Kommando-Ergebnis innerhalb; das Zusammenfassen betrifft
+  nur die Anfrage — gespeicherter Verlauf und Chat-Anzeige zeigen weiterhin
+  jede Nachricht einzeln.
 - Endet der Turn ohne weitere Runde (KI fertig, Stopp, Fehler, Limit
   erreicht), wird die Warteschlange als **normale** neue Nachricht gesendet.
 - Eingereihte Nachrichten durchlaufen denselben Pfad wie normale

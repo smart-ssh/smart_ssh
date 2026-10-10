@@ -292,10 +292,14 @@ impl OpenAiCompatibleProvider {
         if !system_text.trim().is_empty() {
             messages.push(json!({"role": "system", "content": system_text}));
         }
-        for message in &context.history {
+        // Issue #245 (Spec 0066): adjacent messages with the same provider
+        // role (action result + queued user text, several queued texts) go
+        // out as one message, texts joined by a blank line. Runs on the
+        // already fenced/formatted text; the stored history is untouched.
+        for (role, parts) in group_adjacent_by_role(&context.history) {
             messages.push(json!({
-                "role": role_str(message.role),
-                "content": message_content_text(&message.content),
+                "role": role,
+                "content": parts.join("\n\n"),
             }));
         }
 
@@ -327,6 +331,37 @@ impl OpenAiCompatibleProvider {
 
         body
     }
+}
+
+/// Issue #245: groups adjacent history messages that map to the same
+/// provider role, keeping every original text as its own part (in order).
+/// Operates on the final per-message text, i.e. after fencing and formatting,
+/// so no text moves into or out of an untrusted-content fence and nothing is
+/// redacted twice or skipped. Strict OpenAI-compatible servers and
+/// Anthropic require alternating roles.
+pub(crate) fn group_adjacent_by_role(
+    history: &[ssh_manager_core::ai::ChatMessage],
+) -> Vec<(&'static str, Vec<String>)> {
+    group_adjacent_with(history, role_str, message_content_text)
+}
+
+/// [`group_adjacent_by_role`] with the provider's own role and text mapping
+/// (the Anthropic provider formats its messages itself).
+pub(crate) fn group_adjacent_with(
+    history: &[ssh_manager_core::ai::ChatMessage],
+    role_of: fn(Role) -> &'static str,
+    text_of: fn(&MessageContent) -> String,
+) -> Vec<(&'static str, Vec<String>)> {
+    let mut groups: Vec<(&'static str, Vec<String>)> = Vec::new();
+    for message in history {
+        let role = role_of(message.role);
+        let text = text_of(&message.content);
+        match groups.last_mut() {
+            Some((last_role, parts)) if *last_role == role => parts.push(text),
+            _ => groups.push((role, vec![text])),
+        }
+    }
+    groups
 }
 
 pub(crate) fn role_str(role: Role) -> &'static str {
@@ -2024,5 +2059,144 @@ mod tests {
             log_text.contains("2048"),
             "neues Budget fehlt in der Debug-Zeile: {log_text}"
         );
+    }
+
+    /// Issue #245 (Spec 0066): history `assistant (tool call)`, action result,
+    /// queued user text, queued user text.
+    fn history_with_queued(queued: &[&str]) -> Vec<ssh_manager_core::ai::ChatMessage> {
+        use ssh_manager_core::ai::ChatMessage;
+        let mut history = vec![
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("list files".to_string()),
+            },
+            ChatMessage {
+                role: Role::Assistant,
+                content: MessageContent::Text("running ls".to_string()),
+            },
+            ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::CommandResult {
+                    command: "ls".to_string(),
+                    output: ssh_manager_core::ssh::CommandOutput {
+                        stdout: b"file-a".to_vec(),
+                        stderr: Vec::new(),
+                        exit_code: Some(0),
+                        truncated: false,
+                    },
+                    cancelled: false,
+                },
+            },
+        ];
+        for text in queued {
+            history.push(ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text((*text).to_string()),
+            });
+        }
+        history
+    }
+
+    fn history_context(history: Vec<ssh_manager_core::ai::ChatMessage>) -> SessionContext {
+        SessionContext {
+            system_context: "Hi.".to_string(),
+            history,
+            available_actions: Vec::new(),
+            max_tokens_hint: None,
+        }
+    }
+
+    /// Deterministic pseudo-random role sequences (no extra dev-dependency).
+    fn random_histories() -> Vec<Vec<ssh_manager_core::ai::ChatMessage>> {
+        use ssh_manager_core::ai::ChatMessage;
+        let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+        let mut all = Vec::new();
+        for _ in 0..200 {
+            let mut history = Vec::new();
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let len = 1 + (state >> 60) as usize;
+            for i in 0..len {
+                state = state
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let role = match (state >> 33) % 3 {
+                    0 => Role::User,
+                    1 => Role::Assistant,
+                    _ => Role::ActionResult,
+                };
+                let content = if role == Role::ActionResult {
+                    MessageContent::ActionRejected {
+                        command: format!("cmd{i}"),
+                        reason: ssh_manager_core::ai::RejectionReason::User,
+                    }
+                } else {
+                    MessageContent::Text(format!("m{i}"))
+                };
+                history.push(ChatMessage { role, content });
+            }
+            all.push(history);
+        }
+        all
+    }
+
+    fn combine_provider() -> OpenAiCompatibleProvider {
+        OpenAiCompatibleProvider::new(
+            "https://example.test/v1",
+            "model",
+            "key",
+            true,
+            Vec::new(),
+            test_budget(),
+            None,
+        )
+    }
+
+    #[test]
+    fn test_action_result_and_queued_text_become_one_user_message() {
+        let body = combine_provider()
+            .build_request_body(&history_context(history_with_queued(&["also check /tmp"])));
+        let messages = body["messages"].as_array().unwrap();
+        // system, user, assistant, one combined user
+        assert_eq!(messages.len(), 4, "{body}");
+        let last = &messages[3];
+        assert_eq!(last["role"], "user");
+        let text = last["content"].as_str().unwrap();
+        let result_at = text.find("<command_execution_result>").unwrap();
+        let queued_at = text.find("also check /tmp").unwrap();
+        assert!(result_at < queued_at);
+        assert!(text.ends_with("</command_execution_result>\n\nalso check /tmp"));
+        // The queued text stays outside the fence / result element.
+        assert!(!text[result_at..queued_at].contains("also check"));
+    }
+
+    #[test]
+    fn test_two_queued_messages_in_a_row_produce_one_user_message() {
+        let body = combine_provider()
+            .build_request_body(&history_context(history_with_queued(&["one", "two"])));
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 4, "{body}");
+        assert!(messages[3]["content"]
+            .as_str()
+            .unwrap()
+            .ends_with("\n\none\n\ntwo"));
+    }
+
+    #[test]
+    fn test_no_request_body_has_two_adjacent_messages_with_the_same_role() {
+        let provider = combine_provider();
+        for history in random_histories() {
+            let body = provider.build_request_body(&history_context(history));
+            let roles: Vec<&str> = body["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| m["role"].as_str().unwrap())
+                .collect();
+            for pair in roles.windows(2) {
+                assert_ne!(pair[0], pair[1], "{roles:?}");
+            }
+        }
     }
 }
