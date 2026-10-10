@@ -18,6 +18,9 @@ mod tests;
 #[cfg(test)]
 mod adversarial_tests;
 
+#[cfg(test)]
+mod property_tests;
+
 pub use engine::{
     exceeds_command_length_limit, scope_applies, CombinedPolicySource, FilterEngine, PolicySource,
     PolicySourceError, PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,

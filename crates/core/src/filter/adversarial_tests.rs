@@ -30,8 +30,8 @@ use async_trait::async_trait;
 
 use super::*;
 
-struct StaticPolicyStore {
-    rules: Vec<Rule>,
+pub(super) struct StaticPolicyStore {
+    pub(super) rules: Vec<Rule>,
 }
 
 #[async_trait]
@@ -45,7 +45,7 @@ impl PolicyStore for StaticPolicyStore {
     }
 }
 
-fn rule(id: &str, glob: &str, action: RuleAction, priority: i32) -> Rule {
+pub(super) fn rule(id: &str, glob: &str, action: RuleAction, priority: i32) -> Rule {
     Rule {
         id: RuleId(id.to_string()),
         pattern: Pattern::Glob(glob.to_string()),
@@ -56,19 +56,19 @@ fn rule(id: &str, glob: &str, action: RuleAction, priority: i32) -> Rule {
     }
 }
 
-fn allow_all() -> Rule {
+pub(super) fn allow_all() -> Rule {
     rule("allow-all", "*", RuleAction::Allow, 100)
 }
 
-fn deny_rm() -> Rule {
+pub(super) fn deny_rm() -> Rule {
     rule("deny-rm", "rm *", RuleAction::Deny, 0)
 }
 
-fn engine(rules: Vec<Rule>) -> FilterEngine<StaticPolicyStore> {
+pub(super) fn engine(rules: Vec<Rule>) -> FilterEngine<StaticPolicyStore> {
     FilterEngine::new(StaticPolicyStore { rules })
 }
 
-fn ctx() -> EvalContext {
+pub(super) fn ctx() -> EvalContext {
     EvalContext {
         server_id: ServerId::new(),
         tags: Vec::new(),
