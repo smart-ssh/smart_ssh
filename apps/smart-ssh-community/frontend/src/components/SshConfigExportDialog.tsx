@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, exportSshConfig } from "../api";
 import type { SshConfigExportResultDto } from "../types";
@@ -60,8 +59,8 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
   }
   if (!result && !error) return null;
 
-  return createPortal(
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+  return (
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-lg rounded border border-slate-600 bg-slate-900 p-6 shadow-xl">
         <h2 className="font-heading mb-3 text-lg font-semibold text-slate-100">
           {t("sshConfigExport.dialogTitle")}
@@ -119,7 +118,6 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
           </button>
         </div>
       </div>
-    </ModalBackdrop>,
-    document.body,
+    </ModalBackdrop>
   );
 }
