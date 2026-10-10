@@ -153,7 +153,10 @@ async fn terminate_tree(
     }
     #[cfg(windows)]
     if let Some(pid) = pid {
-        let _ = Command::new("taskkill")
+        let taskkill = std::env::var_os("SystemRoot")
+            .map(|root| PathBuf::from(root).join("System32").join("taskkill.exe"))
+            .unwrap_or_else(|| PathBuf::from("taskkill"));
+        let _ = Command::new(taskkill)
             .args(["/T", "/F", "/PID", &pid.to_string()])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -329,6 +332,17 @@ impl LocalTransport {
             }
         }
 
+        // Issue #324 (review): a command may close or redirect its own
+        // stdout/stderr and keep running; the cancel must then still be
+        // honoured while waiting for the exit.
+        let mut early_status = None;
+        if !cancelled && !capped.cap_reached() && io_error.is_none() {
+            tokio::select! {
+                res = child.wait() => early_status = Some(res),
+                _ = &mut cancel_requested => cancelled = true,
+            }
+        }
+
         // Spec 0027 / issue #324: Abbruch, solange noch Ausgabe-Pipes offen
         // waren. Ein Abbruch, der erst danach eintrifft (Kommando bereits
         // fertig), wird oben nicht mehr abgefragt und hat keine Wirkung —
@@ -367,10 +381,11 @@ impl LocalTransport {
             let _ = child.wait().await;
             return Err(io_err("Lesefehler bei lokaler Kommando-Ausgabe", e));
         }
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| io_err("Warten auf lokalen Prozess fehlgeschlagen", e))?;
+        let status = match early_status {
+            Some(res) => res,
+            None => child.wait().await,
+        }
+        .map_err(|e| io_err("Warten auf lokalen Prozess fehlgeschlagen", e))?;
 
         let truncated = capped.truncated();
         let (stdout, stderr) = capped.into_parts();
@@ -985,7 +1000,7 @@ mod tests {
         let (outcome, _) = run_and_cancel_at_marker(
             &mut transport,
             home.path(),
-            "trap 'printf 0123456789; exit 1' INT; printf ab; touch marker; \
+            "trap 'printf 0123456789; exit 1' INT; printf ab; : > marker; \
              while :; do sleep 1; done",
         )
         .await;
@@ -1052,6 +1067,20 @@ mod tests {
             "done"
         );
         assert!(tx.send(()).is_err(), "nobody listens for the late cancel");
+    }
+
+    /// Issue #324 (review): a command that closes its own stdout/stderr
+    /// and keeps running must still be cancellable.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue324_cancel_ends_command_that_closed_its_output() {
+        let home = tempfile::tempdir().unwrap();
+        let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
+        let command = "exec >/dev/null 2>&1; touch marker; sleep 600";
+        let (outcome, after_cancel) =
+            run_and_cancel_at_marker(&mut transport, home.path(), command).await;
+        assert!(outcome.cancelled);
+        assert!(after_cancel < std::time::Duration::from_secs(2));
     }
 
     /// Issue #324: a cancel sender that is dropped without sending is not a

@@ -90,8 +90,8 @@ tatsächlich, samt allem, was es gestartet hat (Pipelines, Subshells,
 Hintergrundprozesse): zuerst wie mit `Ctrl+C`, nach einer kurzen Schonfrist
 hart. Das Kommando endet spätestens etwa zwei Sekunden nach dem Abbruch.
 Ausgabe, die es in der Schonfrist noch schreibt, gehört zum Ergebnis und
-unterliegt derselben Ausgabegrenze (Spec 0043). Unter Windows wird der
-Prozessbaum des Kommandos beendet. Nicht erreicht wird ein Prozess, der sich
+unterliegt derselben Ausgabegrenze (Spec 0043). Unter Windows gibt es keinen sanften
+Schritt: Der Prozessbaum des Kommandos wird sofort hart beendet. Nicht erreicht wird ein Prozess, der sich
 ausdrücklich von seinem Kommando löst (eigene Sitzung bzw. Prozessgruppe).
 Ergebnis und KI-Kontext sind dieselben wie bei einem SSH-Server.
 
