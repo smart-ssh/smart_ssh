@@ -99,6 +99,28 @@ pub fn base_prompt(language: PromptLanguage, server_name: &str) -> String {
     }
 }
 
+/// Listenzeilen für den Freigabe-Abschnitt aus den Regeln im Scope (Spec
+/// 0077, 3.2.1): nur Allow-Regeln, und nur solche, deren Muster die Prüfung
+/// besteht. Eine Regel mit ungültigem Muster greift bei der Auswertung nicht
+/// (der Befehl braucht weiter eine Bestätigung); sie hier aufzuführen würde
+/// der KI eine Auto-Ausführung versprechen, die nicht stattfindet. Ändert die
+/// Auswertung nicht.
+pub fn allow_rule_lines(rules: &[ssh_manager_core::filter::Rule]) -> Vec<String> {
+    use ssh_manager_core::filter::RuleAction;
+    rules
+        .iter()
+        .filter(|r| r.action == RuleAction::Allow)
+        .filter(|r| r.pattern.validate().is_ok())
+        .map(|r| {
+            format!(
+                "- `{}` ({})",
+                r.pattern.display_text(),
+                r.pattern.kind_str()
+            )
+        })
+        .collect()
+}
+
 /// Abschnitt mit den für diesen Server freigegebenen Kommandos. `rules` sind
 /// die fertig formatierten Listenzeilen; leer → kein Abschnitt.
 pub fn allow_rules_section(language: PromptLanguage, rules: &[String]) -> String {
@@ -189,6 +211,30 @@ mod tests {
         "`<server_note>`",
         "`<remote_system>`",
     ];
+
+    #[test]
+    fn test_allow_rule_lines_leave_out_invalid_patterns_and_other_actions() {
+        use ssh_manager_core::filter::{Pattern, Rule, RuleAction, RuleId, RuleOrigin, Scope};
+        let rule = |id: &str, pattern: Pattern, action: RuleAction| Rule {
+            id: RuleId(id.to_string()),
+            pattern,
+            action,
+            scope: Scope::Global,
+            priority: 0,
+            origin: RuleOrigin::User,
+        };
+        let rules = vec![
+            rule("ok", Pattern::Glob("ls *".into()), RuleAction::Allow),
+            rule("bad", Pattern::Regex("^rm (".into()), RuleAction::Allow),
+            rule("deny", Pattern::Glob("rm *".into()), RuleAction::Deny),
+        ];
+        let lines = allow_rule_lines(&rules);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].contains("ls *"));
+        let section = allow_rules_section(PromptLanguage::En, &lines);
+        assert!(section.contains("ls *"));
+        assert!(!section.contains("rm ("));
+    }
 
     #[test]
     fn test_stored_language_wins_over_the_system_locale() {

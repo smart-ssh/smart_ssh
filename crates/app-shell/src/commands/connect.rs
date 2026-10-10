@@ -7,9 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use ssh_manager_core::ai::{default_action_schemas, ChatMessage, OutputRedactor, SessionContext};
-use ssh_manager_core::filter::{
-    EffectiveScope, EvalContext, FilterEngine, PolicyStore, RuleAction,
-};
+use ssh_manager_core::filter::{EffectiveScope, EvalContext, FilterEngine, PolicyStore};
 use ssh_manager_core::profiles::effective_notes_sections;
 use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
@@ -1163,17 +1161,7 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
     };
     let scope = EffectiveScope::from(&eval_ctx);
     let rules = policy_store.rules_for(&scope).await;
-    let allow_rules: Vec<String> = rules
-        .iter()
-        .filter(|r| r.action == RuleAction::Allow)
-        .map(|r| {
-            format!(
-                "- `{}` ({})",
-                r.pattern.display_text(),
-                r.pattern.kind_str()
-            )
-        })
-        .collect();
+    let allow_rules = app_logic::system_prompt::allow_rule_lines(&rules);
 
     context.push_str(&app_logic::system_prompt::allow_rules_section(
         language,
