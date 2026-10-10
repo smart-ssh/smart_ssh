@@ -671,6 +671,7 @@
       "notAllowed": "This SSH login may not start sftp-server via sudo without a password.",
       "requireTty": "sudo refuses to run without a terminal (“requiretty” in sudoers). Disable requiretty for this login, e.g. with “Defaults:<login> !requiretty”.",
       "sftpServerNotFound": "sftp-server was not found on the server. Please enter its path in the server profile under “Advanced”.",
+      "sftpServerUnsafe": "Not safe: “{{path}}” must be owned by root and must not be writable by group or others. On this server another user could replace sftp-server, so a passwordless sudo rule for it would give them root. Fix the ownership and permissions first.",
       "sudoMissing": "sudo is not installed on the server.",
       "invalidPath": "The sftp-server path set in the server profile is invalid.",
       "invalidUser": "Invalid target user.",

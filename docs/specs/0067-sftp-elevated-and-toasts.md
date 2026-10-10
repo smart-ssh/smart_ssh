@@ -69,6 +69,23 @@ passwortloses sudo für genau diesen Befehl erlaubt ist. Scheitert es,
   verweigert ohne Terminal), `sftp-server` nicht gefunden, sudo nicht
   installiert.
 
+**Eigentümer und Rechte von `sftp-server`.** Bevor die App eine
+sudoers-Zeile vorschlägt (und vor dem sudo-Check), prüft sie lesend auf dem Server, dass `sftp-server` — nach Auflösen von
+Symlinks — und **jedes übergeordnete Verzeichnis bis `/`** root gehören und
+weder für die Gruppe noch für andere beschreibbar sind. Die Prüfung läuft nie
+mit sudo und nutzt nur POSIX-Werkzeuge. Ist ein Eintrag unsicher, oder die
+Prüfung scheitert oder liefert nichts Verwertbares (im Zweifel unsicher):
+- **sudo verlangt ein Passwort oder erlaubt den Befehl nicht:** Der erhöhte
+  Modus bleibt aus, es wird **keine sudoers-Zeile** gezeigt. Die Meldung nennt
+  den auffälligen Pfad und sagt, dass er root gehören und für Gruppe und
+  andere nicht beschreibbar sein muss — auf so einem Server könnte jeder, der
+  das Binary ersetzen kann, mit der Regel root werden.
+- **sudo erlaubt den Befehl bereits:** Der erhöhte Modus startet wie bisher,
+  im Dateibrowser steht aber eine Warnung mit demselben Text.
+Die Prüfung verschärft nur: sie kann die Zeile unterdrücken oder eine Warnung
+hinzufügen, nie den erhöhten Modus dort freigeben, wo er vorher abgelehnt
+wurde. Ist alles sicher, ändert sich nichts.
+
 ### A4. Anderer Nutzer (optional, gleicher Mechanismus)
 
 `sudo -n -u <nutzer> <sftp-server>` — Ziel-Nutzer als optionales Feld im
@@ -152,6 +169,9 @@ Meldungen.
 - Pfad-Erkennung + Override.
 - Fehlerfälle (sudo verlangt Passwort, requiretty, sftp-server fehlt) →
   jeweils verständliche Meldung, sudoers-Zeile korrekt zugeschnitten.
+- Unsicheres `sftp-server` (nicht root-eigen, gruppen-/welt-beschreibbar,
+  beschreibbares Elternverzeichnis, Symlink, Prüfung scheitert): ohne sudo-Recht
+  keine sudoers-Zeile; mit sudo-Recht Start mit Warnung.
 - **KI-/MCP-Pfad kann den erhöhten Kanal nicht nutzen** (Regressionstest).
 - Umschalter nach Trennung/Neustart wieder aus.
 - Edit-Flow: erhöht geöffnet → Upload nur erhöht; Kanal weg → Meldung.
