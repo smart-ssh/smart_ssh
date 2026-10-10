@@ -1,96 +1,64 @@
-# Spec: KI-generierte Dokumente
+# Spec 0012 — KI-generierte Dokumente
 
-Status: Entwurf — **teilweise überholt**, siehe Hinweis unten
-Modul: Erweiterung `core::ai` (Spec 0006), `crates/app-tauri` + `frontend/`
-Abhängigkeiten: `AiAction` (Spec 0003), Chat-Kernschleife (Spec 0007,
-Abschnitt 6)
+Status: umgesetzt
+Zweck: Die KI kann im Chat ein formatiertes Dokument liefern (z. B. eine
+Analyse), das der Nutzer als Markdown-Datei speichern kann.
+Bezüge: Spec 0003 (KI-Aktionen), Spec 0006 (Aktionen der KI), Spec 0037
+(Editionen), Spec 0045 (weitere Dokument-Aktionen), Spec 0057
+(Sitzungsverlauf), ADR 0031, ADR 0037.
 
-> **Änderung durch Spec 0037 (Entitlements & Editionen)**: Der in dieser
-> Spec beschriebene **Word-Export-Pfad wurde aus dem öffentlichen Repository
-> entfernt** und wird später im privaten Repo als Pro-Modul neu gebaut
-> (`Feature::DocumentExport`). Grund: Bezahlmodul-Code gehört nicht ins
-> Apache-2.0-lizenzierte öffentliche Repo — auch nicht hinter einem
-> Feature-Flag, da ein Flag nichts an der Lizenz des Codes darunter ändert.
-> Betroffen sind: der `DocumentFormat::Word`-Zweig, die `docx-rs`-
-> Abhängigkeit und der "Als Word speichern"-Button. **Alles andere in
-> dieser Spec — die `GenerateDocument`-Aktion, die Chat-Karte, der
-> Markdown-Export — bleibt unverändert gültig und vollständig Free.**
+## 1. Überblick
 
-## 1. Ziel
+Bittet der Nutzer die KI um ein Dokument („gib mir ein Dokument mit der
+Analyse"), liefert die KI einen Titel und strukturierten Markdown-Inhalt.
+Der Inhalt erscheint als eigene Karte im Chat.
 
-Der Nutzer kann die KI im Chat bitten, eine Analyse/Zusammenfassung als
-formatiertes Dokument bereitzustellen (z. B. "gib mir ein Dokument mit der
-Analyse"). Die KI liefert strukturierten Markdown-Inhalt, der Nutzer kann ihn
-direkt als Markdown- oder Word-Datei speichern.
+## 2. Die Aktion „Dokument erzeugen"
 
-## 2. Neue Aktion
+- Ein Dokument betrifft weder SSH noch den Server. Es durchläuft **nicht**
+  die Filter-Engine (Spec 0002) und braucht keine Bestätigung, weil dabei
+  nichts Dauerhaftes passiert.
+- Ein Dokument wird **nie automatisch** auf die Festplatte geschrieben.
+  Eine Datei entsteht erst durch eine ausdrückliche Aktion des Nutzers
+  (Abschnitt 3).
+- Die Aktion steht der KI im Chat immer zur Verfügung; die KI entscheidet
+  selbst, wann ein Dokument passt. In Neben-Anfragen (z. B. Spec 0010) ist
+  sie nicht verfügbar.
+- Ein Dokument zählt nicht als ausgeführte Aktion: Es löst keine
+  automatische Folgerunde der KI aus.
 
-Ergänzung zu `AiAction` (Spec 0003, Abschnitt 5.2):
+## 3. Ablauf und Darstellung
 
-```rust
-pub enum AiAction {
-    SuggestCommand { command: String },
-    ProposeNoteUpdate { target: NoteTarget, new_content: String },
-    GenerateDocument { title: String, content_markdown: String },
-}
-```
+1. Die KI liefert ein Dokument. Es erscheint sofort als eigene Karte im
+   Chatverlauf: Titel, Kennzeichnung „Dokument generiert" und der Inhalt als
+   gerendertes Markdown (nicht als Rohtext).
+2. Die Karte hat den Knopf **„Als Markdown speichern"**. Daneben stehen
+   Aktionen, die eine Erweiterung registriert hat (Spec 0045).
+3. „Als Markdown speichern" öffnet den nativen Speichern-Dialog,
+   vorbelegt mit einem aus dem Titel abgeleiteten Dateinamen mit der Endung
+   `.md`. Zeichen, die nicht auf allen unterstützten Betriebssystemen in
+   Dateinamen funktionieren, werden dabei durch Leerzeichen ersetzt und
+   mehrfache Leerzeichen zusammengefasst. Bleibt nichts übrig, heißt die
+   Datei `Dokument.md`.
+4. Geschrieben wird erst, wenn der Nutzer den Dialog bestätigt. Bricht er
+   ab, passiert nichts. Nach dem Speichern zeigt die Karte „Als Markdown
+   exportiert".
 
-`GenerateDocument` durchläuft **nicht** die Filter-Engine (Spec 0002) — es
-betrifft weder SSH noch den Server, sondern erzeugt reinen lokalen Inhalt.
-Es wird auch **nicht automatisch auf die Festplatte geschrieben** — Inhalte
-landen erst bei explizitem Nutzer-Klick auf der Festplatte, konsistent mit
-dem generellen Prinzip, dass Dateizugriffe eine bewusste Nutzeraktion
-brauchen.
+## 4. Weitere Exportformate
 
-## 3. Ablauf
+Die Community-Edition speichert Dokumente nur als Markdown. Weitere Formate
+sind nicht Teil dieser Edition (Spec 0037); sie können über den Andockpunkt
+für Dokument-Aktionen hinzukommen (Spec 0045).
 
-1. KI liefert `AiEvent::ActionProposed(AiAction::GenerateDocument { title, content_markdown })`.
-2. Backend leitet das **direkt** (ohne Zwischenschritt, kein Bestätigungsdialog
-   nötig — es passiert ja noch nichts Persistentes) als
-   `chat-document-generated` Event ans Frontend weiter:
-   ```
-   chat-document-generated { session_id, action_id, title, content_markdown }
-   ```
-3. Frontend zeigt den Inhalt als eigene, hübsch gerenderte Karte im
-   Chatverlauf (gerendertes Markdown, nicht Rohtext), mit zwei Buttons:
-   **"Als Markdown speichern"** und **"Als Word speichern"**.
-4. Klick auf einen der Buttons ruft
-   `export_document(content_markdown: String, title: String, format: DocumentFormat) -> ()`
-   auf. Das öffnet einen nativen Speichern-unter-Dialog (Tauri
-   Dialog-Plugin), vorbelegt mit einem aus `title` abgeleiteten Dateinamen
-   und der passenden Endung. Erst nach Bestätigung im nativen Dialog wird
-   tatsächlich geschrieben.
+## 5. Dokumente im Gesprächsverlauf
 
-```rust
-pub enum DocumentFormat { Markdown, Word }
-```
+Der Dokumentinhalt wird wie eine normale Textantwort der KI in den
+Gesprächsverlauf und in das Sitzungsprotokoll übernommen. Die KI kann sich
+in der weiteren Unterhaltung darauf beziehen („ergänze im Dokument noch
+Abschnitt X").
 
-## 4. Word-Konvertierung
+## 6. Grenzen
 
-Für `DocumentFormat::Word` wird der Markdown-Inhalt in ein einfaches DOCX
-umgewandelt (z. B. über die `docx-rs`-Crate). MVP-Scope der Konvertierung:
-Überschriften (`#`–`###`), Absätze, Fett/Kursiv, Aufzählungen/nummerierte
-Listen. Komplexere Markdown-Konstrukte (Tabellen, Code-Blöcke,
-verschachtelte Listen) werden vereinfacht dargestellt (z. B. Code-Blöcke als
-Absatz in Monospace-Schrift ohne Syntax-Highlighting) statt einen vollen
-Markdown-zu-DOCX-Renderer nachzubauen — das ist für den Anwendungsfall
-"Analyse-Dokument" ausreichend.
-
-## 5. Kontext-Konsistenz
-
-Der generierte Dokumentinhalt wird als Teil der Assistant-Nachricht in
-`context.history` übernommen (wie ein normaler Chat-Text), damit die KI sich
-in der Folgekonversation darauf beziehen kann ("ergänze im Dokument noch
-Abschnitt X") — kein Sonderfall gegenüber normalem Chat-Text nötig.
-
-## 6. Offene Punkte
-
-- Soll `available_actions` (Spec 0006) für `GenerateDocument` immer verfügbar
-  sein, oder nur, wenn der Nutzer explizit danach fragt (Erkennung z. B.
-  über einen Slash-Command `/dokument` statt reiner Freitext-Erkennung durch
-  die KI)? Aktuell: immer als verfügbares Tool angeboten, die KI entscheidet
-  modellseitig, wann es passt — konsistent mit dem bestehenden
-  Tool-Calling-Ansatz für `SuggestCommand`.
-- PDF als drittes Exportformat wäre naheliegend, aber nicht Teil dieser
-  Spec — ließe sich später als dritter Button ergänzen, sobald eine
-  DOCX→PDF- oder Markdown→PDF-Route feststeht.
+- Kein PDF- oder Word-Export in dieser Edition.
+- Ein Dokument wird nicht im Chat bearbeitet; Änderungen entstehen durch
+  ein neues Dokument der KI.
