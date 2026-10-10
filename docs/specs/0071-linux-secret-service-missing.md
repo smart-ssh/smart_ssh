@@ -311,7 +311,15 @@ mit dem klassifizierten Grund auf statt des bisherigen pauschalen
 Store erreicht das Frontend mit dem stabilen Code
 `KEYCHAIN_UNAVAILABLE` über `CommandError::with_code`
 (`error.rs:38–44`, Konvention aus Spec 0024, Abschnitt 5). Das Frontend
-zeigt daraufhin den übersetzten Text aus A5, nicht `message`. Der Code
+zeigt daraufhin den übersetzten Text aus A5, nicht `message`.
+
+> **Stand seit Spec 0101:** Der Zustand wird einmal beim Start ermittelt und
+> danach nie verändert; es gibt **keine** nachträgliche Eskalation von
+> „verfügbar" auf „nicht verfügbar" und keine zusätzliche Startwarnung, wenn
+> ein späterer Zugriff scheitert. Ein Schlüsselbund, der beim Start fehlte,
+> wird über den Startdialog (A5–A9) gemeldet, nicht erst beim ersten Zugriff.
+> Scheitert ein Zugriff, obwohl der Schlüsselbund beim Start da war, meldet
+> der Weg `KEYCHAIN_ACCESS_FAILED` (Spec 0098). Der Code
 wird in `code_tests::test_command_error_with_code_values_are_unique`
 (`error.rs:86–104`) mit aufgenommen.
 
@@ -326,6 +334,9 @@ Sudo-Passwort hinterlegt" einen neutralen Zustand.
 zeigt eine Zeile „Systemschlüsselbund: verfügbar / nicht verfügbar
 (Grund)". Damit ist der Zustand auch dann nachschlagbar, wenn der
 Startdialog weggeklickt wurde.
+
+> **Stand seit Spec 0101:** Die Zeile zeigt den beim Start ermittelten
+> Zustand. Er wird während des Programmlaufs nicht nachträglich verschärft.
 
 **A16 (MUSS)** Der Zustand wird **einmal pro Programmlauf** ermittelt und
 im `AppState` gehalten. Kein Kommando probiert den Schlüsselbund
@@ -411,7 +422,7 @@ fällt die Umsetzung auf diese Variante zurück — dann mit Vermerk in §9.
 
 | Wo es scheitert | Was der Nutzer sieht |
 |---|---|
-| Start, Chat-Schlüssel nicht auflösbar | nicht-fataler `rfd`-Warndialog mit dem Text nach A5/A6/A7; App startet |
+| Start, Schlüssel nicht auflösbar (Schlüsselbund fehlt oder ist gesperrt) | Startdialog mit dem Text nach A5/A6/A7 (seit Spec 0101 nicht mehr nicht-fatal: Die App öffnet ihre Datenbank ohne Schlüsselbund nicht, vgl. Spec 0101, A3) |
 | Provider anlegen/ändern/löschen | Fehler im Provider-Dialog, übersetzter Text über `KEYCHAIN_UNAVAILABLE` |
 | Server-Passwort/Passphrase speichern | Fehler im Server-Formular, gleicher Text |
 | Sudo-Passwort setzen | Fehler im Sudo-Dialog, gleicher Text |

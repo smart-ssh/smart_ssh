@@ -2436,3 +2436,61 @@ async fn test_spec_0077_ta6_allow_rule_alone_only_auto_execs_when_it_matches() {
         assert_eq!(actual, expected, "{label}: {decision:?}");
     }
 }
+
+// --- Issue #260: ungültiges Muster wird je Regel und Muster einmal gemeldet --
+
+/// Speicher, dessen Regelmenge sich zwischen zwei Auswertungen ändern lässt.
+struct SwappableStore(std::sync::Mutex<Vec<Rule>>);
+
+#[async_trait]
+impl PolicyStore for SwappableStore {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+fn count_pattern_error_events(rule_id: &str) -> usize {
+    log_capture::recorded_error_events()
+        .iter()
+        .filter(|line| {
+            line.contains("filter rule pattern does not compile")
+                && line.contains(&format!("\"rule_id\":\"{rule_id}\""))
+        })
+        .count()
+}
+
+/// Issue #260: Zweimal dieselbe Regelmenge auswerten ergibt **ein**
+/// Ereignis; ein geändertes (wieder ungültiges) Muster derselben Regel wird
+/// erneut gemeldet. Die Entscheidung bleibt in allen Fällen gleich.
+///
+/// *Scheitert gegen den Stand vor #260* (dort ein Ereignis je Auswertung).
+#[tokio::test]
+async fn test_issue_260_invalid_pattern_is_logged_once_per_rule_and_pattern() {
+    log_capture::start_recording();
+    let store = Arc::new(SwappableStore(std::sync::Mutex::new(vec![regex_rule(
+        "deny-broken-260",
+        "^a(",
+        RuleAction::Deny,
+        100,
+    )])));
+    struct Shared(Arc<SwappableStore>);
+    #[async_trait]
+    impl PolicyStore for Shared {
+        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+            self.0.rules_for(scope).await
+        }
+    }
+    let eng = FilterEngine::new(Shared(store.clone()));
+
+    let first = eng.evaluate("ls", &ctx("srv", &[])).await;
+    let second = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(first, second, "die Auswertung darf sich nicht ändern");
+    assert_eq!(count_pattern_error_events("deny-broken-260"), 1);
+
+    *store.0.lock().unwrap() = vec![regex_rule("deny-broken-260", "^b(", RuleAction::Deny, 100)];
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("deny-broken-260"), 2);
+
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("deny-broken-260"), 2);
+}

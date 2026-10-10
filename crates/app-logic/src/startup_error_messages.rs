@@ -538,19 +538,6 @@ pub fn host_key_store_failure_text(path: &Path, language: Language) -> DialogTex
     }
 }
 
-/// spec-reviewer-Fund: die Entscheidung "welcher `CipherError` löst die
-/// sichtbare Fall-3-Warnung aus" stand bisher nur als `matches!(...)` direkt
-/// in `app_shell::run` — ohne echte Keychain/DB ist dieser Aufrufort selbst
-/// nicht unit-testbar. Als eigene, reine Funktion hier lässt sich die
-/// Abgrenzung (nur `KeyStoreAccessFailed`, NICHT `InvalidKey` — s. Spec
-/// 0059, Fall 3 vs. Spec 0040 Abschnitt 7) unabhängig davon festnageln.
-pub fn should_warn_about_keychain(err: &ssh_manager_core::crypto::CipherError) -> bool {
-    matches!(
-        err,
-        ssh_manager_core::crypto::CipherError::KeyStoreAccessFailed(_)
-    )
-}
-
 /// Spec 0071, A5 (b): die Aufzählung der **blockierten** Funktionen —
 /// derselbe Absatz für jeden Grund, weil die Folgen identisch sind.
 ///
@@ -1192,20 +1179,6 @@ mod tests {
         let s = "/home/jörg/é/日本語/ß";
         assert_eq!(sanitize_text_for_display(s), s);
         assert_eq!(sanitize_path_for_display(Path::new(s)), s);
-    }
-
-    /// spec-reviewer-Fund: die Fall-3-vs-Spec-0040-Abgrenzung (nur ein
-    /// echter Zugriffsfehler ist sichtbar, ein korrupter Schlüsselwert
-    /// bleibt beim stillen `tracing::warn!`) war zuvor nur an der
-    /// Aufrufstelle in `app_shell::run` geprüft, dort ohne echte
-    /// Keychain/DB nicht testbar.
-    #[test]
-    fn test_should_warn_about_keychain_only_for_the_access_error_not_a_corrupt_key() {
-        use ssh_manager_core::crypto::CipherError;
-        assert!(should_warn_about_keychain(
-            &CipherError::KeyStoreAccessFailed("locked".to_string())
-        ));
-        assert!(!should_warn_about_keychain(&CipherError::InvalidKey));
     }
 
     /// Spec 0071, T6: Fehlt der Anbieter, nennt der Text alle drei

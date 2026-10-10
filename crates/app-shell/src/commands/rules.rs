@@ -28,11 +28,10 @@ pub async fn list_rules(
 
 #[tauri::command]
 pub async fn create_rule(state: State<'_, AppState>, input: RuleInput) -> CommandResult<RuleId> {
-    // Spec 0077, 3.1.3: ausdrücklich umwandeln, nie `.map_err(Into::into)` —
-    // der blanket `From<E: Display>` würde den Code still verschlucken.
+    // Spec 0077, 3.1.3: `From<RuleWriteError> for CommandError` setzt den Code.
     app_logic::filter_rules::create_rule(&state.policy_store, input)
         .await
-        .map_err(app_logic::error::rule_write_error)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -41,10 +40,9 @@ pub async fn update_rule(
     id: RuleId,
     input: RuleInput,
 ) -> CommandResult<()> {
-    // Spec 0077, 3.1.3: s. `create_rule`.
     app_logic::filter_rules::update_rule(&state.policy_store, id, input)
         .await
-        .map_err(app_logic::error::rule_write_error)
+        .map_err(Into::into)
 }
 
 /// Spec 0077, 3.2.3: tauscht die Prioritäten zweier Regeln in einer
@@ -55,10 +53,9 @@ pub async fn swap_rule_priorities(
     first: RuleId,
     second: RuleId,
 ) -> CommandResult<()> {
-    // Ausdrücklich umwandeln, damit der Code erhalten bleibt (s. `create_rule`).
     app_logic::filter_rules::swap_rule_priorities(&state.policy_store, first, second)
         .await
-        .map_err(app_logic::error::rule_write_error)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -182,5 +179,5 @@ pub async fn accept_and_create_rule(
     // Schnellregel denselben Code liefert wie das Formular. Der Fehlerweg
     // bleibt wie bisher: Die Bestätigung ist oben schon aufgelöst, der
     // Fehler der Regel-Erstellung kommt getrennt zurück (3.1.2).
-    rule_result.map_err(app_logic::error::rule_write_error)
+    rule_result.map_err(Into::into)
 }

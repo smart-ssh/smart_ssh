@@ -19,34 +19,16 @@ use crate::dto::{EvalContextInput, EvaluationTraceDto, RuleDto, RuleInput};
 /// Speichers (trägt wie bisher keinen Code). `PolicyStoreError` selbst
 /// kann keinen Code tragen.
 ///
-/// Die Umwandlung nach `CommandError` macht
-/// [`crate::error::rule_write_error`] — ausdrücklich, nie per `?`, sonst
-/// ginge der Code still verloren (Begründung dort).
-/// `Display`/`Error` und die beiden `From`-Impls sind von Hand
-/// geschrieben statt über `thiserror`: `app-shell` hängt nicht von
-/// `thiserror` ab, und diese Spec erlaubt keine neue Abhängigkeit dafür.
+/// **Bewusst weder `Display` noch `Error`:** Der blanket
+/// `impl<E: Display> From<E> for CommandError` würde den Typ sonst ohne
+/// Code umwandeln (`?` verlöre ihn still). Ohne `Display` gilt allein
+/// `From<RuleWriteError> for CommandError` in `crate::error`, das den Code
+/// setzt (Issue #260, ADR 0068 §7). Ein Aufrufer, der den Text braucht,
+/// geht über die Varianten.
 #[derive(Debug)]
 pub enum RuleWriteError {
     InvalidPattern(PatternError),
     Store(PolicyStoreError),
-}
-
-impl std::fmt::Display for RuleWriteError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RuleWriteError::InvalidPattern(err) => write!(f, "{err}"),
-            RuleWriteError::Store(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for RuleWriteError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            RuleWriteError::InvalidPattern(err) => Some(err),
-            RuleWriteError::Store(err) => Some(err),
-        }
-    }
 }
 
 impl From<PatternError> for RuleWriteError {
@@ -344,7 +326,7 @@ mod tests {
                 rule_input(pattern_type, pattern_value, RuleAction::Allow),
             )
             .await
-            .unwrap_or_else(|e| panic!("{pattern_value:?} sollte gültig sein: {e}"));
+            .unwrap_or_else(|e| panic!("{pattern_value:?} sollte gültig sein: {e:?}"));
         }
 
         assert_eq!(store.list_all().await.unwrap().len(), 8);
@@ -441,7 +423,8 @@ mod tests {
     /// Bildet den Fall „Zeile stammt aus einer älteren Programmfassung"
     /// ab: `SqlitePolicyStore::create` prüft das Muster nicht, und
     /// `rules_for`/`pattern_from_db` laden es später unverändert zurück.
-    /// Bewusst über die echte Speicher-API statt über rohes SQL — dann
+    /// Seit #260 prüft auch `create` (Schicht 2); deshalb der
+    /// ungeprüfte Testzugang. Bewusst über die Speicher-API statt über rohes SQL — dann
     /// entsteht die Zeile in genau dem Format, das eine echte
     /// Installation geschrieben hätte, und `app-shell` braucht keine
     /// zusätzliche Abhängigkeit auf `sqlx`.
@@ -462,7 +445,7 @@ mod tests {
             created_at: now,
             updated_at: now,
         };
-        store.create(&stored).await.unwrap();
+        store.create_unchecked_for_tests(&stored).await.unwrap();
         id
     }
 

@@ -19,9 +19,9 @@ des Schlüsselbunds (BL-0205).
 
 **Der Zustand ändert sich nach dem Start nicht.** `AppState.keychain` wird
 beim Start ermittelt (`credentials_keyring::probe_keychain_availability`,
-aufgerufen in `app-shell/src/lib.rs`) und
-höchstens dort eskaliert (`escalate_to_unavailable`, einziger Aufrufer beim
-Start). Danach ändert ihn nichts mehr (Recherche: kein weiterer Aufrufer).
+aufgerufen in `app-shell/src/lib.rs`) und wird danach nicht mehr verändert:
+Es gibt keine Eskalation und keine nachträgliche Anpassung, auch nicht beim
+Start (Recherche: kein weiterer Schreiber).
 
 **Ausnahme `clear_sudo_password`** (`server_credentials.rs`): Dieser
 Lösch-Weg läuft nicht über `keychain_aware_credential_error`, sondern gibt

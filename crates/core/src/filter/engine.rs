@@ -127,13 +127,90 @@ impl PolicyStore for CombinedPolicySource {
 pub struct FilterEngine<S: PolicyStore> {
     store: S,
     max_command_length: usize,
+    /// Bereits gemeldete ungültige Muster (Regel-Kennung + Hash des
+    /// Musters). Hält nie den Mustertext selbst; begrenzt auf
+    /// [`REPORTED_INVALID_PATTERNS_CAP`] Einträge.
+    reported_invalid: std::sync::Mutex<std::collections::HashSet<(String, u64)>>,
 }
 
+/// Obergrenze für die Meldungs-Deduplizierung. Ist sie erreicht, wird die
+/// Menge geleert: im Zweifel wird eine Regel erneut gemeldet, nie
+/// unbegrenzt Speicher gehalten.
+const REPORTED_INVALID_PATTERNS_CAP: usize = 1024;
+
 impl<S: PolicyStore> FilterEngine<S> {
+    /// Spec 0077, 3.2.2: Meldet jede Regel, deren Muster sich nicht übersetzen
+    /// lässt, auf ERROR-Ebene — mit Regel-ID, Aktion und einem festen Kurztext,
+    /// der den scheiternden Zweig benennt.
+    ///
+    /// **Warum hier und nicht in der Bucket-Schleife:**
+    /// [`evaluate_rules_explained`] kehrt beim ersten Treffer zurück und würde
+    /// jede Regel hinter dem Treffer nie melden; außerdem läuft sie je
+    /// Teilkommando mehrfach. Diese Schleife läuft genau einmal über die
+    /// Regelmenge eines Aufrufs, direkt nach `rules_for`.
+    ///
+    /// **Das Kommando wird bewusst NICHT geloggt** (Spec 0077, 3.2.2 und §5):
+    /// Dieses Log ist eine neue Datensenke, und ein Kommando kann ein Geheimnis
+    /// enthalten (Passwort in einem Argument). Gemeldet wird nur die Regel.
+    ///
+    /// **Auch das Muster selbst steht nicht im Klartext im Log** (Spec 0077,
+    /// 3.2.2): Anders als `Pattern::validate()` liefert
+    /// [`Pattern::compile_failure_reason`] nie den Fehlertext von
+    /// `regex`/`globset` — der zitiert das Muster wörtlich, und ein Muster ist
+    /// selbst geschriebener Text, der ebenso ein Geheimnis enthalten kann (eine
+    /// Deny-Regel, die durch einen Tippfehler ungültig ist und auf ein Passwort
+    /// im Argument zielt). Das DTO (3.2.3) und das Formular (3.1.4) bleiben bei
+    /// `validate()` und damit beim vollen Bibliothekstext — nur dieses Log
+    /// bekommt den festen Kurztext.
+    ///
+    /// Ändert die Auswertung nicht: `rules` wird unverändert weitergereicht,
+    /// eine ungültige Regel bleibt drin und verhält sich wie bisher (Spec 0077,
+    /// 3.2.1) — insbesondere greift ein pfadförmiger Glob, bei dem nur einer der
+    /// beiden Zweige nicht übersetzt, weiterhin über den Zweig, der übersetzt.
+    ///
+    /// **Deshalb der Wortlaut der Meldung:** Sie sagt „cannot match through the
+    /// branch(es) that fail", nicht „cannot match". Ein kürzerer Text wäre für
+    /// genau den Einzelzweig-Fall falsch und würde jemanden, der das Protokoll
+    /// liest, glauben lassen, eine Regel sei wirkungslos, die tatsächlich
+    /// greift. Der Plural ist ebenso Absicht: Bei einem Regex und bei einem
+    /// nicht pfadförmigen Glob gibt es nur einen Zweig, und dann ist die Regel
+    /// wirklich ganz wirkungslos — die Einzahl würde diesen häufigsten Fall
+    /// schwächer beschreiben, als er ist.
+    ///
+    /// Seit Issue #260 je Regel-Kennung und Muster nur einmal je Engine (s.
+    /// unten); die Meldung selbst bleibt unverändert.
+    fn report_invalid_patterns(&self, rules: &[Rule]) {
+        for rule in rules {
+            let Some(reason) = rule.pattern.compile_failure_reason() else {
+                continue;
+            };
+            let key = (rule.id.0.clone(), pattern_fingerprint(&rule.pattern));
+            let first_time = {
+                let mut seen = self
+                    .reported_invalid
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if seen.len() >= REPORTED_INVALID_PATTERNS_CAP && !seen.contains(&key) {
+                    seen.clear();
+                }
+                seen.insert(key)
+            };
+            if first_time {
+                tracing::error!(
+                    rule_id = %rule.id,
+                    action = ?rule.action,
+                    pattern_error = reason,
+                    "filter rule pattern does not compile; the rule cannot match through the branch(es) that fail",
+                );
+            }
+        }
+    }
+
     pub fn new(store: S) -> Self {
         Self {
             store,
             max_command_length: DEFAULT_MAX_COMMAND_LENGTH,
+            reported_invalid: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
     }
 
@@ -141,6 +218,7 @@ impl<S: PolicyStore> FilterEngine<S> {
         Self {
             store,
             max_command_length,
+            reported_invalid: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
     }
 
@@ -246,7 +324,7 @@ impl<S: PolicyStore> FilterEngine<S> {
 
         let scope = EffectiveScope::from(ctx);
         let rules = self.store.rules_for(&scope).await;
-        report_invalid_patterns(&rules);
+        self.report_invalid_patterns(&rules);
         let mut trace = self.evaluate_parsed_explained(command, &rules, 0);
         // Issue #13: input whose encoding the engine cannot see through
         // (Unicode tricks, ANSI-C escapes) is escalated to at least
@@ -601,54 +679,17 @@ impl<S: PolicyStore> FilterEngine<S> {
     }
 }
 
-/// Spec 0077, 3.2.2: Meldet jede Regel, deren Muster sich nicht übersetzen
-/// lässt, auf ERROR-Ebene — mit Regel-ID, Aktion und einem festen Kurztext,
-/// der den scheiternden Zweig benennt.
-///
-/// **Warum hier und nicht in der Bucket-Schleife:**
-/// [`evaluate_rules_explained`] kehrt beim ersten Treffer zurück und würde
-/// jede Regel hinter dem Treffer nie melden; außerdem läuft sie je
-/// Teilkommando mehrfach. Diese Schleife läuft genau einmal über die
-/// Regelmenge eines Aufrufs, direkt nach `rules_for`.
-///
-/// **Das Kommando wird bewusst NICHT geloggt** (Spec 0077, 3.2.2 und §5):
-/// Dieses Log ist eine neue Datensenke, und ein Kommando kann ein Geheimnis
-/// enthalten (Passwort in einem Argument). Gemeldet wird nur die Regel.
-///
-/// **Auch das Muster selbst steht nicht im Klartext im Log** (Spec 0077,
-/// 3.2.2): Anders als `Pattern::validate()` liefert
-/// [`Pattern::compile_failure_reason`] nie den Fehlertext von
-/// `regex`/`globset` — der zitiert das Muster wörtlich, und ein Muster ist
-/// selbst geschriebener Text, der ebenso ein Geheimnis enthalten kann (eine
-/// Deny-Regel, die durch einen Tippfehler ungültig ist und auf ein Passwort
-/// im Argument zielt). Das DTO (3.2.3) und das Formular (3.1.4) bleiben bei
-/// `validate()` und damit beim vollen Bibliothekstext — nur dieses Log
-/// bekommt den festen Kurztext.
-///
-/// Ändert die Auswertung nicht: `rules` wird unverändert weitergereicht,
-/// eine ungültige Regel bleibt drin und verhält sich wie bisher (Spec 0077,
-/// 3.2.1) — insbesondere greift ein pfadförmiger Glob, bei dem nur einer der
-/// beiden Zweige nicht übersetzt, weiterhin über den Zweig, der übersetzt.
-///
-/// **Deshalb der Wortlaut der Meldung:** Sie sagt „cannot match through the
-/// branch(es) that fail", nicht „cannot match". Ein kürzerer Text wäre für
-/// genau den Einzelzweig-Fall falsch und würde jemanden, der das Protokoll
-/// liest, glauben lassen, eine Regel sei wirkungslos, die tatsächlich
-/// greift. Der Plural ist ebenso Absicht: Bei einem Regex und bei einem
-/// nicht pfadförmigen Glob gibt es nur einen Zweig, und dann ist die Regel
-/// wirklich ganz wirkungslos — die Einzahl würde diesen häufigsten Fall
-/// schwächer beschreiben, als er ist.
-fn report_invalid_patterns(rules: &[Rule]) {
-    for rule in rules {
-        if let Some(reason) = rule.pattern.compile_failure_reason() {
-            tracing::error!(
-                rule_id = %rule.id,
-                action = ?rule.action,
-                pattern_error = reason,
-                "filter rule pattern does not compile; the rule cannot match through the branch(es) that fail",
-            );
-        }
+/// Hash von Art und Text des Musters — nur zum Wiedererkennen einer
+/// bereits gemeldeten Regel, der Text selbst wird nicht gehalten.
+fn pattern_fingerprint(pattern: &super::types::Pattern) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    match pattern {
+        super::types::Pattern::Glob(p) => (0u8, p).hash(&mut hasher),
+        super::types::Pattern::Regex(p) => (1u8, p).hash(&mut hasher),
+        super::types::Pattern::Exact(p) => (2u8, p).hash(&mut hasher),
     }
+    hasher.finish()
 }
 
 /// Prüft `rules` gemäß der Bucket-Reihenfolge aus Spec Abschnitt 3
