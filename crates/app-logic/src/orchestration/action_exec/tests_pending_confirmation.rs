@@ -695,7 +695,7 @@ fn test_closing_a_session_missing_from_the_manager_behaves_as_before() {
 }
 
 // ---------------------------------------------------------------------------
-// Issue #108 / Spec 0104 §5 — höchstens eine wartende Bestätigung je
+// Issue #108 / Spec 0104 §3 — höchstens eine wartende Bestätigung je
 // MCP-Sitzung.
 // ---------------------------------------------------------------------------
 
