@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { formatDateTime } from "../formatDateTime";
 import { deleteChatSession, renameChatSession } from "../api";
 import type { ChatSessionSummaryDto } from "../types";
 import { ModalBackdrop } from "./ModalBackdrop";
@@ -32,7 +33,7 @@ export function ChatSessionPickerScreen({
   onSessionsChanged,
   onCancel,
 }: ChatSessionPickerScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -125,7 +126,7 @@ export function ChatSessionPickerScreen({
                   </p>
                 )}
                 <p className="text-xs text-slate-500">
-                  {new Date(session.startedAt).toLocaleString()} ·{" "}
+                  {formatDateTime(session.startedAt, i18n.language)} ·{" "}
                   {t("chatSessionPicker.messageCount", { count: session.messageCount })}
                 </p>
               </button>

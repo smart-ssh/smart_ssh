@@ -2755,36 +2755,55 @@ fn test_redactor_keeps_keyword_text_without_value_unchanged() {
     }
 }
 
+/// Reads the registered UI language codes from the language registry
+/// (`languages.ts`): one `code: "xx",` line per entry.
+fn registered_ui_languages(registry_source: &str) -> Vec<String> {
+    registry_source
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("code: \""))
+        .filter_map(|rest| rest.split('"').next())
+        .map(str::to_string)
+        .collect()
+}
+
+fn missing_keyword_lists(langs: &[String]) -> Vec<String> {
+    let have = keywords::keyword_languages();
+    langs
+        .iter()
+        .filter(|l| !have.contains(&l.as_str()))
+        .cloned()
+        .collect()
+}
+
 #[test]
 fn test_every_supported_ui_language_has_a_keyword_list() {
     let ts = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../apps/smart-ssh-community/frontend/src/i18n.ts"),
+            .join("../../apps/smart-ssh-community/frontend/src/languages.ts"),
     )
-    .expect("i18n.ts is readable");
-    let line = ts
-        .lines()
-        .find(|l| l.contains("export const SUPPORTED_LANGUAGES"))
-        .expect("SUPPORTED_LANGUAGES is declared");
-    let inner = line.split('[').nth(1).unwrap().split(']').next().unwrap();
-    let langs: Vec<&str> = inner
-        .split(',')
-        .map(|s| s.trim().trim_matches('"'))
-        .collect();
+    .expect("languages.ts is readable");
+    let langs = registered_ui_languages(&ts);
     assert!(
-        !langs.is_empty() && langs.iter().all(|l| !l.is_empty()),
-        "{line}"
+        langs.len() >= 2 && langs.iter().all(|l| !l.is_empty()),
+        "{langs:?}"
     );
-    let have = keywords::keyword_languages();
-    for lang in langs {
-        assert!(
-            have.contains(&lang),
-            "no keyword list for UI language {lang:?}"
-        );
-    }
+    let missing = missing_keyword_lists(&langs);
+    assert!(
+        missing.is_empty(),
+        "no keyword list for UI language(s) {missing:?}"
+    );
     for (lang, kws) in keywords::CREDENTIAL_KEYWORDS {
         assert!(!kws.is_empty(), "empty keyword list for {lang}");
     }
+}
+
+/// Counter-test: a registered language without a keyword list is reported.
+#[test]
+fn test_registry_guard_detects_language_without_keyword_list() {
+    let source = "  {\n    code: \"de\",\n  },\n  {\n    code: \"zz\",\n  },\n";
+    let langs = registered_ui_languages(source);
+    assert_eq!(langs, vec!["de".to_string(), "zz".to_string()]);
+    assert_eq!(missing_keyword_lists(&langs), vec!["zz".to_string()]);
 }
 
 // --- Issue #270: weitere Kommandozeilen-Formen und Hashes ---------------

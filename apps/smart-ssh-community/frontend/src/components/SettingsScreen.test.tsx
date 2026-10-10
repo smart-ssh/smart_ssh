@@ -12,6 +12,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerSettingsSection, resetRegistryForTests } from "../extensions/registry";
+import { SUPPORTED_LANGUAGES } from "../languages";
 import { testI18n } from "../testI18n";
 import { ChatRetentionSettings } from "./ChatRetentionSettings";
 import { McpServerSettings } from "./McpServerSettings";
@@ -271,7 +272,7 @@ describe("SettingsScreen registered section labels follow the UI language (Spec 
   // sichtbarer Text) und von keinem Test aufgefallen.
   it("has both real registered-section translation keys defined in every locale", () => {
     for (const key of ["settings.categories.chatRetention", "settings.categories.mcpServer"]) {
-      for (const lng of ["de", "en"]) {
+      for (const lng of SUPPORTED_LANGUAGES) {
         expect(testI18n.exists(key, { lng })).toBe(true);
       }
     }
