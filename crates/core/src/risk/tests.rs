@@ -1234,3 +1234,23 @@ fn test_commands_without_c_code_keep_their_rating() {
     let data_red = classify("cat ~/.ssh/id_rsa");
     assert_eq!(data_red.data_risk, RiskLevel::Red);
 }
+
+// --- Issue #255: fork bomb inside a longer command ---------------------
+
+#[test]
+fn test_server_risk_red_fork_bomb_chained_and_wrapped() {
+    for command in [
+        ":(){ :|:& };:;rm",
+        "ls && :(){ :|:& };:",
+        "sudo :(){ :|:& };:",
+        "$(:(){ :|:& };:)",
+        "bash -c ':(){ :|:& };:'",
+        ":(){ :|:& };: ",
+    ] {
+        assert_eq!(
+            classify(command).server_risk,
+            RiskLevel::Red,
+            "fork bomb not red: {command:?}"
+        );
+    }
+}
