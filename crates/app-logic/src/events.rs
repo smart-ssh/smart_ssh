@@ -104,11 +104,10 @@ struct HostKeyVerificationNeededPayload {
     port: u16,
     kind: HostKeyKind,
     fingerprint: String,
-    /// Nur bei `kind: Mismatch` gesetzt. Die Spec-Skizze (Abschnitt 5)
-    /// nennt nur ein einzelnes `fingerprint`-Feld — für den Mismatch-Fall
-    /// (Spec 0005 Abschnitt 6, "besonders strenge Warnung") reicht das
-    /// nicht, um dem Frontend alten und neuen Fingerprint nebeneinander
-    /// zeigen zu lassen, deshalb hier bewusst ergänzt.
+    /// Nur bei `kind: Mismatch` gesetzt. Für den Mismatch-Fall (Spec 0005
+    /// Abschnitt 6.3, Warnung „Bekannt"/„Jetzt angeboten") reicht ein
+    /// einzelnes `fingerprint`-Feld nicht, um dem Frontend alten und neuen
+    /// Fingerprint nebeneinander zeigen zu lassen.
     expected_fingerprint: Option<String>,
     /// Algorithm name of the key the server offers now (e.g.
     /// `ssh-ed25519`); `null` when it cannot be determined. Display-only.

@@ -260,7 +260,7 @@ fn write_or_reuse_secret(
 /// [`delete_auth_method_secrets`]. Die Paarliste hatte einen impliziten
 /// `false`-Zweig — fehlte dort das Paar für eine `AuthMethod`-Variante,
 /// galt schon das bloße **Bearbeiten** eines solchen Servers als Wechsel,
-/// und seine Secrets wurden gelöscht (Spec 0076, §7.1: genau das war
+/// und seine Secrets wurden gelöscht (ADR 0065, Review-Fund: genau das war
 /// einmal passiert). Dieses `match` hat keinen solchen Zweig: Eine neue
 /// Variante erzwingt hier einen Compilerfehler.
 ///
@@ -961,7 +961,7 @@ mod tests {
         }
     }
 
-    /// **Spec 0076, §7.1 — die Stelle, die still brach.**
+    /// **Spec 0076, A-5 (ADR 0065) — die Stelle, die still brach.**
     ///
     /// Damals zählte ein `cleanup_abandoned_slots` Paare von Anmeldearten
     /// auf, um „ist das dieselbe Art?" zu beantworten, mit einem impliziten

@@ -286,7 +286,7 @@ async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
     session.parts_mut_for_tests().model_context_window_tokens = 32_000;
 
     // Große, über drei Scopes verteilte Notiz (~200.000 Byte) — analog
-    // zum Immich-Fall aus Spec 0057 §8.
+    // zum Immich-Fall (Kontext-Hänger bei großer Notiz, Spec 0057, Zweck).
     let parts = crate::compaction::SystemContextParts {
         base: "Du bist ein Assistent.".to_string(),
         note_sections: vec![
@@ -427,7 +427,7 @@ async fn test_compact_for_send_is_noop_below_trigger_ratio() {
 
 /// spec-reviewer-Fund (Review dieses Schritts): der Etappe-2-Test, der
 /// die eigentliche Zusage der Leiter prüfte — "nach der Kompaktierung
-/// passt der Request unters Budget" (Spec 0057, §7) — ging beim
+/// passt der Request unters Budget" (Spec 0057, §3.2) — ging beim
 /// Verschieben nach `orchestration::tests` (Etappe 3, `&Session`-
 /// Parameter) verloren. Hier für BEIDE Pfade wiederhergestellt: mit
 /// erfolgreicher Zusammenfassung (Schritt 1 allein reicht) und mit

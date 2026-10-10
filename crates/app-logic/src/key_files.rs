@@ -5,7 +5,7 @@
 //! Warum hier und nicht in `core`: Eine Schlüsseldatei zu lesen ist eine
 //! äußere Grenze wie `SshTransport`, `CredentialStore` oder `ProfileStore`,
 //! und „`core` never depends on Tauri or a UI framework" verbietet den
-//! `std::fs::read` mitten in der Domänenlogik (§1.3). `core` kennt nur den
+//! `std::fs::read` mitten in der Domänenlogik (Spec 0076, 4.2). `core` kennt nur den
 //! Trait und entscheidet, was aus dem Befund folgt (A-5).
 //!
 //! **Prüfung und Lesen laufen auf demselben offenen Handle** (A-3, E-2,
@@ -186,7 +186,7 @@ struct Probe {
 /// Rohrs, bis ein Schreiber erscheint. Auf Windows entfällt der Zusatz;
 /// dort genügt die Prüfung auf dem Handle.
 ///
-/// Die Konstante kommt seit Spec 0076 §9 K-3 aus `libc` — vorher stand hier
+/// Die Konstante kommt seit ADR 0065 §3 (Nachtrag) aus `libc` — vorher stand hier
 /// eine von Hand gepflegte `#[cfg(target_os/target_arch)]`-Tabelle mit den
 /// rohen Zahlenwerten je Plattform (s. ADR 0065 §3). `libc` lag im
 /// Arbeitsbereich immer schon transitiv im `Cargo.lock`; die Aufnahme als
@@ -888,9 +888,9 @@ mod tests {
     /// beim Öffnen (A-3); ohne das Flag hinge dieser Test, bis ihn jemand
     /// abbricht, statt sauber rot zu werden.
     ///
-    /// Der Test belegt damit zugleich, dass `libc::O_NONBLOCK` (Spec 0076
-    /// §9 K-3) beim `open()` tatsächlich ankommt und wirkt — unabhängig
-    /// davon, ob die Konstante aus `libc` oder, wie vor K-3, aus einer
+    /// Der Test belegt damit zugleich, dass `libc::O_NONBLOCK` (ADR 0065
+    /// §3, Nachtrag) beim `open()` tatsächlich ankommt und wirkt — unabhängig
+    /// davon, ob die Konstante aus `libc` oder, wie früher, aus einer
     /// selbst gepflegten Tabelle stammt.
     #[test]
     #[cfg(unix)]
@@ -936,7 +936,7 @@ mod tests {
     }
 
     /// Legt ein benanntes Rohr an, über `mkfifo(1)` statt über
-    /// `libc::mkfifo` — die Kiste ist seit K-3 zwar im Arbeitsbereich, ein
+    /// `libc::mkfifo` — die Kiste ist seit ADR 0065 §3 zwar im Arbeitsbereich, ein
     /// `unsafe`-FFI-Aufruf für eine einmalige Testvorbereitung bringt aber
     /// keinen Gewinn gegenüber dem vorhandenen Kommandozeilenwerkzeug.
     #[cfg(unix)]
