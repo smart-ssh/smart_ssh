@@ -34,5 +34,6 @@ pub use host_key::{HostKeyStore, StoredHostKeyInfo};
 pub use jump_host::resolve_connection_target;
 pub use transport::{InteractiveShell, SftpSession, SshTransport};
 pub use types::{
-    CommandOutput, ConnectionTarget, ExecOutcome, Hop, HostKeyDecision, PtySize, RemoteEntry,
+    CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk, ExecOutputSink, Hop,
+    HostKeyDecision, OutputStream, PtySize, RemoteEntry,
 };
