@@ -742,6 +742,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_rules,
             commands::create_rule,
             commands::update_rule,
+            commands::swap_rule_priorities,
             commands::delete_rule,
             commands::list_hard_blacklist,
             commands::list_known_tags,
