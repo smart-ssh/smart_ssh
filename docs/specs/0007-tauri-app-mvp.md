@@ -92,13 +92,18 @@ set_active_ai_provider(id: ProviderId)
 
 ```
 connection-status-changed   { session_id, status }
-host-key-verification-needed { session_id, prompt_id, host, port, kind: Unknown | Mismatch, fingerprint, expected_fingerprint }
+host-key-verification-needed { session_id, prompt_id, host, port, kind: Unknown | Mismatch, fingerprint, expected_fingerprint, key_type }
 host-key-verification-ended  { session_id, prompt_id, reason: Decided | TimedOut | Abandoned }
 terminal-output              { session_id, data: Vec<u8> }
 chat-text-delta               { session_id, delta: String }
 chat-action-proposed          { session_id, action_id, action: AiAction, decision: AutoExec | Confirm | Deny }
 chat-action-result            { session_id, action_id, output: CommandOutput }
 ```
+
+`key_type` in `host-key-verification-needed` ist der Algorithmus-Name des
+Schlüssels, den der Server gerade anbietet (z. B. `ssh-ed25519`,
+`ecdsa-sha2-nistp256`), oder `null`, wenn er sich nicht bestimmen lässt. Das
+Feld ist rein anzeigend und beeinflusst die Vertrauensentscheidung nicht.
 
 `host-key-verification-ended` (Issue #37, ADR 0108): das Backend wartet nicht
 mehr auf die Abfrage `prompt_id` — gesendet bei jedem Ausgang des Wartens.

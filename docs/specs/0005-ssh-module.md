@@ -140,6 +140,11 @@ Verhalten:
   als Warnung darstellen (deutlich strenger gestaltet als ein normaler
   Bestätigungsdialog), bevor ein Nutzer den neuen Key explizit als korrekt
   markieren kann (z. B. weil der Server tatsächlich neu aufgesetzt wurde).
+- Beide Abfragen zeigen neben Host:Port und Fingerprint den Schlüsseltyp
+  (Algorithmus-Name, z. B. `ssh-ed25519`) des angebotenen Schlüssels, damit
+  der Nutzer alle drei Angaben mit einer Referenz außerhalb der Verbindung
+  vergleichen kann. Lässt sich der Typ nicht bestimmen, entfällt die Zeile.
+  Der Typ ist rein anzeigend und fließt nicht in die Entscheidung ein.
 
 Die konkrete Speicherung bekannter Host-Keys (eigene Tabelle in
 `persistence-sqlite`, oder klassische `known_hosts`-Datei) ist nicht Teil

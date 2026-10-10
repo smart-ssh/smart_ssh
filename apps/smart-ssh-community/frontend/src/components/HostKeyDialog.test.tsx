@@ -415,3 +415,20 @@ describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issu
     expect(mismatch.text).toContain(mismatchEvent.fingerprint);
   });
 });
+
+// Issue #182: the offered key's algorithm is shown next to host:port and the
+// fingerprint; `null` renders the prompt without it.
+describe.each(branches)("HostKeyDialog key type ($name)", ({ event }) => {
+  it("shows the key type of the offered key", () => {
+    renderDialog({ ...event, keyType: "ssh-ed25519" });
+    expect(screen.getByTestId("host-key-type")).toHaveTextContent("Schlüsseltyp: ssh-ed25519");
+    expect(screen.getByText("example.com:22")).toBeInTheDocument();
+    expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
+  });
+
+  it.each([null, undefined])("renders without a key type line for %s", (keyType) => {
+    renderDialog({ ...event, keyType });
+    expect(screen.queryByTestId("host-key-type")).toBeNull();
+    expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
+  });
+});

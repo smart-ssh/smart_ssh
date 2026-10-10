@@ -98,6 +98,14 @@ fn key_algorithm(raw_key: &[u8]) -> Option<String> {
     String::from_utf8(name_bytes.to_vec()).ok()
 }
 
+/// Display-only: algorithm name of an offered key for the host key prompt.
+/// `None` when the blob does not start with a well-formed, printable
+/// algorithm name. Never used for a trust decision.
+pub fn offered_key_type(raw_key: &[u8]) -> Option<String> {
+    key_algorithm(raw_key)
+        .filter(|name| !name.is_empty() && name.chars().all(|c| c.is_ascii_graphic()))
+}
+
 fn algorithm_key(raw_key: &[u8]) -> String {
     key_algorithm(raw_key).unwrap_or_else(|| UNPARSEABLE_ALGORITHM_SENTINEL.to_string())
 }
@@ -258,6 +266,22 @@ mod tests {
         key.extend_from_slice(algo_bytes);
         key.extend_from_slice(distinguishing_suffix.as_bytes());
         key
+    }
+
+    #[test]
+    fn test_offered_key_type_reports_algorithm_or_none() {
+        assert_eq!(
+            offered_key_type(&fake_key("ssh-ed25519", "x")).as_deref(),
+            Some("ssh-ed25519")
+        );
+        assert_eq!(
+            offered_key_type(&fake_key("ecdsa-sha2-nistp256", "x")).as_deref(),
+            Some("ecdsa-sha2-nistp256")
+        );
+        assert_eq!(offered_key_type(b"raw-key-bytes"), None);
+        assert_eq!(offered_key_type(&[]), None);
+        assert_eq!(offered_key_type(&fake_key("", "x")), None);
+        assert_eq!(offered_key_type(&fake_key("bad\nname", "x")), None);
     }
 
     #[test]

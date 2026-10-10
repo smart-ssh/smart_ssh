@@ -693,6 +693,7 @@ export function ServerForm({
           kind: result.kind === "hostKeyUnknown" ? "unknown" : "mismatch",
           fingerprint: result.kind === "hostKeyUnknown" ? result.fingerprint : result.actualFingerprint,
           expectedFingerprint: result.kind === "hostKeyMismatch" ? result.expectedFingerprint : null,
+          keyType: result.keyType,
         });
       }
     } catch (err) {
