@@ -116,8 +116,8 @@ pub(crate) fn parse_second_opinion_settings(
 /// Provider ist gelöscht, die ID ungültig oder das Credential nicht
 /// auflösbar, ist das [`SecondOpinionSetup::Unavailable`] — der Aufrufer
 /// meldet es der Sitzung.
-pub async fn resolve_second_opinion_provider(
-    app: &tauri::AppHandle,
+pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     state: &AppState,
 ) -> SecondOpinionSetup {
     // Ein nicht öffenbarer Store verhält sich wie bisher: "aus".

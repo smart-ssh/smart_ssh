@@ -89,6 +89,12 @@ pub struct AppState {
     pub keychain: KeychainAvailability,
     pub ai_provider_store: Arc<SqliteAiProviderStore>,
     pub host_key_store: Arc<dyn HostKeyStore>,
+    /// Issue #259: der Verbindungsaufbau von `connect_session`. Produktion
+    /// verdrahtet [`crate::test_connection::RealConnector`]; Tests setzen
+    /// einen Mock ein, damit Verbinden und Fortsetzen ohne echtes Netzwerk
+    /// laufen. Der äußere Timeout und `SSH_CONNECT_LIMITS` bleiben beim
+    /// Aufrufer — der Connector tauscht nur den Aufbau selbst aus.
+    pub connector: Arc<dyn crate::test_connection::Connector>,
     /// Spec 0009: echte, persistente Filter-Regeln statt des bisherigen
     /// `NoRulesPolicyStore`-Platzhalters (s. `crate::policy`-Moduldoc). Kein
     /// `Arc<dyn PolicyStore>` wie bei `profile_store`: `SqlitePolicyStore`
