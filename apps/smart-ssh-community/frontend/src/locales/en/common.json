@@ -1017,6 +1017,8 @@
     }
   },
   "chat": {
+    "newChat": "New chat",
+    "newChatDisabledHint": "Not available while the AI is responding or a confirmation is open.",
     "autoContinuing": "Automatic mode running — the AI responds to the last result on its own…",
     "stopAutoContinuation": "Stop automatic mode",
     "generating": "AI is generating a response / document…",
