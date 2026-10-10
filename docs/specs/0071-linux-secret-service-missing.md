@@ -513,6 +513,12 @@ Nach dem Muster der bestehenden Tests (`:286–309`):
   `test_sanitize_path_for_display_replaces_control_characters` (`:260`).
   Bevorzugt wird der Wert gar nicht ausgegeben; wird er ausgegeben, gilt
   A10.
+  Die Bereinigung ersetzt außer Steuerzeichen auch Zeilen- und
+  Absatztrenner (U+2028, U+2029) und Textrichtungs-Steuerzeichen (U+200E,
+  U+200F, U+202A–U+202E, U+2066–U+2069) durch `?`; gewöhnliche
+  Nicht-ASCII-Zeichen bleiben unverändert. Dasselbe gilt für Dateinamen in
+  den Wahldialogen und für Nutzereingaben, die ein Serverformular als
+  ungültig zitiert (sftp-server-Pfad, Startverzeichnis).
 - **X2 — Kein Secret über die Fehlerkette.** Ein konstruierter
   Backend-Fehler, dessen `Display` einen Platzhalter wie
   `sk-live-hunter2` enthält, darf in **keinem** erzeugten Text und in
