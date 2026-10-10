@@ -196,7 +196,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
           type="button"
           onClick={handleSave}
           disabled={saving || draft === currentNotes}
-          className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+          className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
         >
           {saving ? t("common.saving") : t("notes.saveNote")}
         </button>
