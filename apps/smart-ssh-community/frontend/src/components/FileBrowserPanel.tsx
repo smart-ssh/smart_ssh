@@ -1371,7 +1371,7 @@ export function FileBrowserPanel({
       )}
 
       {editUploadOffer && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {localEdit.session?.elevatedUser
@@ -1437,7 +1437,7 @@ export function FileBrowserPanel({
       )}
 
       {deleteTarget && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm border border-red-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-red-300">
               {elevated
@@ -1501,7 +1501,7 @@ export function FileBrowserPanel({
       )}
 
       {moveCollision && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {elevated
@@ -1533,7 +1533,7 @@ export function FileBrowserPanel({
       )}
 
       {uploadConflict && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
@@ -1576,7 +1576,7 @@ export function FileBrowserPanel({
       )}
 
       {folderConfirm && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {t("fileBrowser.folderUpload.conflictTitle")}
@@ -1613,7 +1613,7 @@ export function FileBrowserPanel({
       )}
 
       {folderSummary && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-slate-700 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
               {t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
@@ -1786,7 +1786,7 @@ function FilePropertiesDialog({
   );
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
         <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
           {t("fileBrowser.properties.title")}
@@ -1882,7 +1882,7 @@ function ChmodDialog({
   };
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
         <h2 className="font-heading mb-1 text-sm font-semibold text-slate-100">
           {t("fileBrowser.chmod.title")}
@@ -1996,7 +1996,7 @@ function RenamePrompt({
   }, []);
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
         <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
           {title ?? t("fileBrowser.renamePrompt.renameTitle")}
@@ -2097,7 +2097,7 @@ function ElevationFailureDialog({
   };
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div
         // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- ein natives <dialog> bleibt ohne showModal()/`open` unsichtbar und bringt eigene Browser-Stile und Top-Layer-Stapelung mit; das Overlay darüber liefert das modale Layout bereits (Issue #112).
         role="dialog"

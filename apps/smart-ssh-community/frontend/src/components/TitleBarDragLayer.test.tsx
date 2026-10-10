@@ -180,7 +180,7 @@ describe("title bar drag layer above modals (issue #160)", () => {
           <button type="button">session tab</button>
         </AppHeader>
         {Array.from({ length: dialogs }, (_, i) => (
-          <ModalBackdrop key={i} className="fixed inset-0 z-50 bg-black/70" />
+          <ModalBackdrop key={i} layer="sessionTab" className="fixed inset-0 z-50 bg-black/70" />
         ))}
       </I18nextProvider>
     );
@@ -235,7 +235,7 @@ describe("title bar drag layer with a dialog in a hidden container (issue #160)"
     );
   }
 
-  const inlineDialog = <ModalBackdrop className="fixed inset-0 z-50 bg-black/70" />;
+  const inlineDialog = <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 bg-black/70" />;
 
   it("disappears when the container of an open dialog is hidden, and returns when it is shown", async () => {
     mockCommands("windows", "custom");
@@ -311,6 +311,28 @@ describe("every full-window modal backdrop uses ModalBackdrop (issue #160)", () 
         return `${path.relative(SRC_DIR, file)}:${line}: ${m[0].replace(/\s+/g, " ").trim()}`;
       });
     });
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});
+
+// Issue #244: Backdrops werden nur über `ModalBackdrop layer="app"` an
+// `document.body` gehängt, nie per eigenem `createPortal` im Dialog.
+describe("no component portals a modal backdrop itself (issue #244)", () => {
+  const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+  function sourceFiles(dir: string): string[] {
+    return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return sourceFiles(full);
+      return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [full] : [];
+    });
+  }
+
+  it("only ModalBackdrop.tsx calls createPortal", () => {
+    const offenders = sourceFiles(SRC_DIR)
+      .filter((file) => path.basename(file) !== "ModalBackdrop.tsx")
+      .filter((file) => /\bcreatePortal\s*\(/.test(fs.readFileSync(file, "utf8")))
+      .map((file) => path.relative(SRC_DIR, file));
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });

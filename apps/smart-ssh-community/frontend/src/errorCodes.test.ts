@@ -385,6 +385,7 @@ describe("Prüfung nicht verfügbar (Issue #102)", () => {
     "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM",
     "AI_INJECTION_CHECK_UNAVAILABLE",
     "AI_SECOND_OPINION_SETUP_FAILED",
+    "AI_INJECTION_CHECK_INACTIVE",
   ];
   for (const code of codes) {
     for (const lng of ["de", "en"]) {
