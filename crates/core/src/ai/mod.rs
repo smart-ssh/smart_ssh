@@ -14,6 +14,7 @@
 
 mod fencing;
 pub mod keywords;
+mod live_redaction;
 mod provider;
 mod redactor;
 #[cfg(test)]
@@ -29,6 +30,7 @@ mod types;
 mod tests;
 
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
+pub use live_redaction::LiveOutputRedactor;
 pub use provider::AiProvider;
 pub use redactor::{
     default_log_redactor, DefaultOutputRedactor, OutputRedactor, REDACTED_PLACEHOLDER,
