@@ -2,7 +2,7 @@
 
 Status: umgesetzt
 Zweck: Teil A: Der Dateibrowser kann auf Wunsch als root (oder anderer Nutzer) arbeiten, ohne dass die App je ein Sudo-Passwort anfasst. Teil B: Jede Dateibrowser-Aktion meldet ihr Ergebnis sichtbar.
-Bezüge: Spec 0020 (Dateibrowser), Spec 0054 (Aktionen, „Lokal öffnen“), Spec 0058 (Meldungen), Spec 0084 §9 und Spec 0085 (Widerruf), Spec 0102 (Startverzeichnis gilt nicht im erhöhten Modus), Spec 0003 (Server-Profil).
+Bezüge: Spec 0020 (Dateibrowser), Spec 0054 (Aktionen, „Lokal öffnen“), Spec 0010 (Notiz-Karten unten rechts), Spec 0084 §9 und Spec 0085 (Widerruf), Spec 0102 (Startverzeichnis gilt nicht im erhöhten Modus), Spec 0003 (Server-Profil).
 
 Ein Root-Dateibrowser ist das mächtigste Werkzeug der App; die Regeln in
 Teil A sind deshalb Leitplanken, keine Vorschläge.
@@ -134,7 +134,8 @@ Jede Aktion aus Spec 0054 meldet ihr Ergebnis:
 
 ### B2. Form
 
-- Die Meldung erscheint als Toast des app-weiten Mechanismus (Spec 0058).
+- Die Meldung erscheint als Toast unten links im App-Fenster, getrennt von
+  den Notiz-Karten unten rechts (Spec 0010) und in derselben Optik.
 - **Erfolg:** kurz, verschwindet nach einigen Sekunden.
 - **Fehler:** bleibt stehen, bis der Nutzer ihn schließt, mit verständlichem
   Grund (Rechte, Ziel existiert, Verbindung weg).
