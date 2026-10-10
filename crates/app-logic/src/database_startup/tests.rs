@@ -2139,3 +2139,111 @@ async fn test_t17_the_startup_decisions_keep_the_key_out_of_the_log_and_the_bund
         );
     }
 }
+
+/// Spec 0101 T17, Angriffsrichtung „SQL-Fehlertext mit dem `PRAGMA key`-Wert“
+/// (ADR 0097 §4 Punkt 5), am Weg **Datenbank mit abgeleitetem Schlüssel
+/// öffnen scheitert**: dieselbe Funktion, die die App nach der Entsperrung
+/// aufruft, im Passwort-Modus (`Unlocked`) und im Schlüsselbund-Modus, je
+/// mit einer Datei, die zu einem anderen Schlüssel gehört, und mit einer
+/// Datei, die gar keine Datenbank ist.
+///
+/// Gesammelt werden der Fehlertext (`Display` und `Debug`), die Dialoge und
+/// das Log; in keinem darf K oder der abgeleitete Schlüssel stehen — weder
+/// in Hex noch in Base64 noch als Byte-Liste. Die Fehlertexte der
+/// Persistenzschicht kommen **direkt** aus dem Verbindungsaufbau dazu.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_t17_a_failing_database_open_with_the_derived_key_keeps_the_key_out_of_errors_and_logs(
+) {
+    use crate::test_support::{key_leak_needles, log_capture};
+
+    const OTHER_KEY: [u8; 32] = [0xA5; 32];
+    log_capture::start_recording();
+
+    let mut collected = String::new();
+
+    // 1. Datei gehört zu einem anderen Schlüssel; Passwort-Modus entsperrt.
+    let foreign_dir = tempfile::tempdir().unwrap();
+    let foreign_db = foreign_dir.path().join("smart-ssh.db");
+    SqliteProfileStore::connect_encrypted(&foreign_db, &DatabaseKey::from_root_key(&OTHER_KEY))
+        .await
+        .expect("fremde Datenbank anlegen")
+        .close()
+        .await;
+    let mut unlocked_key = TEST_ROOT_KEY;
+    let quit = ScriptedPrompt::new(vec![StartupChoice::Quit]);
+    let result = open_or_prepare_database(
+        &foreign_db,
+        RootKeyAccess::Unlocked(RootKey::take_from(&mut unlocked_key)),
+        available(),
+        &quit,
+        &lock_for(&foreign_db),
+    )
+    .await;
+    assert!(
+        matches!(result, Err(StartupAbort::UserQuit)),
+        "ein nicht passender Schlüssel ist D2, und „Beenden“ bricht ab"
+    );
+    assert_eq!(
+        quit.asked(),
+        vec![StartupDialog::D2],
+        "der Pfad „Öffnen mit abgeleitetem Schlüssel scheitert“ wurde nicht durchlaufen"
+    );
+    collected.push_str(&format!("{:?}\n{:?}\n", result.err(), quit.asked()));
+
+    // 2. Dasselbe im Schlüsselbund-Modus.
+    let keychain_dir = tempfile::tempdir().unwrap();
+    let keychain_db = keychain_dir.path().join("smart-ssh.db");
+    SqliteProfileStore::connect_encrypted(&keychain_db, &DatabaseKey::from_root_key(&OTHER_KEY))
+        .await
+        .expect("fremde Datenbank anlegen")
+        .close()
+        .await;
+    let store = CountingCredentialStore::new(GetBehaviour::Present);
+    let quit = ScriptedPrompt::new(vec![StartupChoice::Quit]);
+    let result = open_or_prepare_database(
+        &keychain_db,
+        RootKeyAccess::Keychain(&store),
+        available(),
+        &quit,
+        &lock_for(&keychain_db),
+    )
+    .await;
+    assert!(matches!(result, Err(StartupAbort::UserQuit)));
+    assert_eq!(quit.asked(), vec![StartupDialog::D2]);
+    collected.push_str(&format!("{:?}\n{:?}\n", result.err(), quit.asked()));
+
+    // 3. Die Persistenzschicht selbst, mit falschem Schlüssel und mit einer
+    // Datei, die keine Datenbank ist: der Fehlertext, der sonst bis in
+    // Log und Dialog liefe.
+    let garbage_dir = tempfile::tempdir().unwrap();
+    let garbage_db = garbage_dir.path().join("smart-ssh.db");
+    std::fs::write(&garbage_db, vec![0x5Au8; 4096]).unwrap();
+    for (what, path, key) in [
+        ("falscher Schlüssel", &foreign_db, TEST_ROOT_KEY),
+        ("keine Datenbank", &garbage_db, TEST_ROOT_KEY),
+    ] {
+        let err = SqliteProfileStore::connect_encrypted(path, &DatabaseKey::from_root_key(&key))
+            .await
+            .err()
+            .unwrap_or_else(|| panic!("{what}: das Öffnen hätte scheitern müssen"));
+        collected.push_str(&format!("{err}\n{err:?}\n"));
+    }
+    assert!(
+        collected.len() > 20,
+        "es wurde kein Fehlertext gesammelt — der Test prüfte nichts"
+    );
+
+    let log = log_capture::recorded_text();
+    assert!(
+        log.contains("decided how to open the database"),
+        "die Aufzeichnung hat den Startpfad nicht gesehen — der Test prüfte nichts"
+    );
+
+    let haystacks = [
+        ("die Fehlertexte und Dialoge", collected.as_str()),
+        ("das Log", log.as_str()),
+    ];
+    for key in [&TEST_ROOT_KEY, &OTHER_KEY] {
+        key_leak_needles::assert_absent(&key_leak_needles::for_root_key(key, &[], &[]), &haystacks);
+    }
+}
