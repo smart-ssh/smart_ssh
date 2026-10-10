@@ -246,6 +246,9 @@ In short:
   connect or test a connection.
 - **AI calls** go only to the base URL of providers you configured. With a
   local provider they stay on your machine.
+- **Model discovery** in the provider form goes to the base URL entered
+  there, triggered by leaving the API key or base URL field with a key
+  entered, or by the click on "Modelle laden" (Load models).
 - **The Ollama probe** goes to `127.0.0.1:11434` only, once when the AI
   settings open and no Ollama provider exists.
 - **The MCP server** is off by default; when enabled, it listens on

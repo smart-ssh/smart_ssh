@@ -425,6 +425,8 @@
     "discoverModels": "Load models",
     "discoveringModels": "Loading models…",
     "modelDiscoveryFailedHint": "Could not load models automatically — enter the model name manually.",
+    "modelDiscoveryEmptyHint": "The provider returned no models. Enter the model name by hand.",
+    "modelDiscoveryAuthFailed": "✗ The provider rejected these credentials – check the API key",
     "advanced": "Advanced",
     "extraHeadersLabel": "Extra headers",
     "extraHeadersHint": "Attached to every request to this provider (e.g. OpenRouter's HTTP-Referer/X-Title).",

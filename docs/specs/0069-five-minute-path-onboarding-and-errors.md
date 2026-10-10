@@ -158,7 +158,8 @@ gilt (Tabelle 4.2):
   `AI_RATE_LIMITED`: eigener Text (4.1), weil die Chat-Meldung „Nachricht
   erneut senden" hier nicht passt. Ohne Code: der bisherige Text mit Rohtext.
 - „Modelle laden" fehlgeschlagen: unter dem Hinweis steht bei bekanntem Code der
-  übersetzte Grund.
+  übersetzte Grund. Ausnahme: abgelehnte Zugangsdaten haben einen eigenen
+  Hinweis am Key-Feld (Spec 0025, Abschnitt 2).
 - Verbindungstest im Server-Formular: „Netzwerkfehler" mit bekanntem Code zeigt
   die übersetzte Meldung, ohne Code den bisherigen Text. „Timeout" und
   „Anmeldung abgelehnt" nennen den nächsten Schritt (4.1).

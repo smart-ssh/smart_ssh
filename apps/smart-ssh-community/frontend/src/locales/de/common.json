@@ -425,6 +425,8 @@
     "discoverModels": "Modelle laden",
     "discoveringModels": "Lädt Modelle…",
     "modelDiscoveryFailedHint": "Modelle konnten nicht automatisch geladen werden — Modellname manuell eingeben.",
+    "modelDiscoveryEmptyHint": "Der Anbieter hat keine Modelle geliefert. Modellname manuell eingeben.",
+    "modelDiscoveryAuthFailed": "✗ Der Anbieter hat diese Zugangsdaten abgelehnt – API-Key prüfen",
     "advanced": "Erweitert",
     "extraHeadersLabel": "Zusatz-Header",
     "extraHeadersHint": "Werden an jede Anfrage an diesen Provider angehängt (z. B. OpenRouters HTTP-Referer/X-Title).",
