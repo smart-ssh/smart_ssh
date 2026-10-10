@@ -727,6 +727,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::convert_identity_file_to_keychain,
             commands::test_connection,
             commands::trust_host_key,
+            commands::list_stored_host_keys,
             commands::update_group_notes,
             commands::update_server_notes,
             commands::large_note_dialog_threshold_chars,

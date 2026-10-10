@@ -173,6 +173,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     list_servers: ({ groupId }) =>
       groupId == null ? model.servers : model.servers.filter((s) => s.groupId === groupId),
     get_server: ({ id }) => findServer(id),
+    list_stored_host_keys: () => [],
     list_groups: () => model.groups,
     // The in-memory model only holds readable servers; tests that need an
     // unusable one override this command.
