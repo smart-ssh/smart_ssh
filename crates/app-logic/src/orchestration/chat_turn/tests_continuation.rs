@@ -1346,6 +1346,14 @@ async fn test_queued_message_is_sent_with_the_next_round() {
         queued_at > result_at,
         "nach dem Kommando-Ergebnis einsortiert"
     );
+    // Issue #245: combining adjacent same-role messages happens only in the
+    // provider request; the history keeps the queued text as its own entry.
+    assert_eq!(round_two.iter().filter(|m| is_queued_text(m)).count(), 1);
+    assert!(matches!(
+        round_two[result_at].content,
+        MessageContent::CommandResult { .. }
+    ));
+    assert_eq!(round_two[result_at].role, Role::ActionResult);
     assert!(has_event(&emitter, "chat-queued-messages-sent"));
     assert!(session.chat_turn.lock().unwrap().queued.is_empty());
 }
