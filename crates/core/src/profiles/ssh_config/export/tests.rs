@@ -57,6 +57,7 @@ fn reparse(text: &str) -> crate::profiles::ssh_config::ImportPlan {
             servers: &[],
             groups: &[],
             rules: &[],
+            unusable: &[],
             local_server_id: LOCAL,
         },
     )

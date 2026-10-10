@@ -179,6 +179,17 @@ Anmeldeart beschädigt ist.
   Löschen trotzdem durch und nennt jeden zurückgebliebenen Eintrag, wie
   beim normalen Löschen. Andere Server, die ihn als Jump-Host nutzen,
   werden in der Vorschau genannt und verlieren diesen Verweis.
+- **Zählt für Bestandsabgleiche, nie als Verbindungsziel.** Ein nicht
+  nutzbarer Server zählt beim Import einer SSH-Konfiguration (Spec 0075,
+  3.1.8) wie jeder vorhandene Server für die Konflikterkennung: gleicher
+  Name oder gleiche Kombination aus Host, Port und Benutzer ergibt einen
+  Konflikt in der Vorschau, standardmäßig wird übersprungen. Er wird dabei
+  nie als `ProxyJump`-Ziel aufgelöst. Die Löschvorschau einer Gruppe nennt
+  ihn — auch aus einer Untergruppe — als Server, der seine
+  Gruppenzuordnung verliert (als „nicht nutzbar" gekennzeichnet); Server
+  außerhalb der gelöschten Gruppe und ihrer Untergruppen stehen nicht dort.
+  Weder Vorschau noch Import noch das Löschen der Gruppe ändern seine
+  gespeicherte Anmeldeart.
 - **Gespeicherte Daten bleiben unverändert.** Anzeigen, Auflisten und der
   einmalige Umzug der Secrets in die verschlüsselte Datenbank (Spec 0101)
   ändern die gespeicherte Anmeldeart nicht. Mit der neueren Version ist der
