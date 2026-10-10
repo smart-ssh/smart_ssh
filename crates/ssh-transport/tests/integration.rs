@@ -1111,6 +1111,47 @@ async fn test_sftp_upload_download_roundtrip() {
     assert_eq!(read_back, b"hallo sftp");
 }
 
+/// Issue #179: große Payloads (1 MiB, 4 MiB) per SFTP schreiben und
+/// zurücklesen, byte-genau. Jeder Await hat ein Timeout, damit eine
+/// Regression (Fixture-Hänger) fehlschlägt statt CI zu blockieren.
+#[tokio::test]
+async fn test_sftp_large_file_roundtrip() {
+    use std::time::Duration;
+    use tokio::time::timeout;
+    const LIMIT: Duration = Duration::from_secs(60);
+
+    let server = RunningTestServer::start().await;
+    let mut transport = timeout(LIMIT, connect_trusted(&server))
+        .await
+        .expect("connect sollte nicht hängen");
+    let mut sftp = timeout(LIMIT, transport.open_sftp())
+        .await
+        .expect("open_sftp() sollte nicht hängen")
+        .expect("open_sftp() sollte gelingen");
+
+    for size in [1024 * 1024usize, 4 * 1024 * 1024] {
+        // Nicht-periodisches Muster, damit vertauschte/duplizierte Blöcke auffallen.
+        let payload: Vec<u8> = (0..size)
+            .map(|i| (i.wrapping_mul(31).wrapping_add(i >> 8)) as u8)
+            .collect();
+        let path = format!("/large-{size}.bin");
+
+        timeout(LIMIT, sftp.write_file(&path, &payload))
+            .await
+            .unwrap_or_else(|_| panic!("write_file({size}) hängt"))
+            .expect("write_file() sollte gelingen");
+
+        let on_disk = std::fs::read(sftp_local_path(&server, &path)).unwrap();
+        assert!(on_disk == payload, "{size} B: Datei auf Platte weicht ab");
+
+        let read_back = timeout(LIMIT, sftp.read_file(&path))
+            .await
+            .unwrap_or_else(|_| panic!("read_file({size}) hängt"))
+            .expect("read_file() sollte gelingen");
+        assert!(read_back == payload, "{size} B: gelesene Daten weichen ab");
+    }
+}
+
 /// Verzeichnisauflistung: mehrere Dateien lokal vorab anlegen, per SFTP
 /// auflisten, Namen und Größen prüfen.
 #[tokio::test]
