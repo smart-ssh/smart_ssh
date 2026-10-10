@@ -105,9 +105,6 @@ Maschine verdient nicht weniger Kontrolle als ein entfernter Server, eher mehr
   „Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden"
   abgelehnt, bevor irgendein Zugangsdatum berührt wird.
 - **Anzeigename fest.** „Localhost" lässt sich nicht umbenennen.
-- **Kein Abbruch langer Kommandos.** Der Abbruch eines nie endenden Kommandos
-  (Spec 0027) greift für Localhost nicht; das Kommando endet erst von selbst
-  oder an der Ausgabegrenze.
 - **Kein Sudo-Passwort.** Für Localhost lässt sich kein Sudo-Passwort
   hinterlegen; das Verfahren aus Spec 0018 greift nicht.
 - **Windows-Terminal.** Das lokale Pseudo-Terminal unter Windows hängt von der
