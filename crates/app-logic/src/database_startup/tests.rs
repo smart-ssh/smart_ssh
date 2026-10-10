@@ -2169,11 +2169,14 @@ async fn test_t17_a_failing_database_open_with_the_derived_key_keeps_the_key_out
     // 1. Datei gehört zu einem anderen Schlüssel; Passwort-Modus entsperrt.
     let foreign_dir = tempfile::tempdir().unwrap();
     let foreign_db = foreign_dir.path().join("smart-ssh.db");
-    SqliteProfileStore::connect_encrypted(&foreign_db, &DatabaseKey::from_root_key(&OTHER_KEY))
-        .await
-        .expect("fremde Datenbank anlegen")
-        .close()
-        .await;
+    SqliteProfileStore::connect_encrypted(
+        &foreign_db,
+        &DatabaseKey::from_root_key(&RootKey::for_tests(OTHER_KEY)),
+    )
+    .await
+    .expect("fremde Datenbank anlegen")
+    .close()
+    .await;
     let mut unlocked_key = TEST_ROOT_KEY;
     let quit = ScriptedPrompt::new(vec![StartupChoice::Quit]);
     let result = open_or_prepare_database(
@@ -2198,11 +2201,14 @@ async fn test_t17_a_failing_database_open_with_the_derived_key_keeps_the_key_out
     // 2. Dasselbe im Schlüsselbund-Modus.
     let keychain_dir = tempfile::tempdir().unwrap();
     let keychain_db = keychain_dir.path().join("smart-ssh.db");
-    SqliteProfileStore::connect_encrypted(&keychain_db, &DatabaseKey::from_root_key(&OTHER_KEY))
-        .await
-        .expect("fremde Datenbank anlegen")
-        .close()
-        .await;
+    SqliteProfileStore::connect_encrypted(
+        &keychain_db,
+        &DatabaseKey::from_root_key(&RootKey::for_tests(OTHER_KEY)),
+    )
+    .await
+    .expect("fremde Datenbank anlegen")
+    .close()
+    .await;
     let store = CountingCredentialStore::new(GetBehaviour::Present);
     let quit = ScriptedPrompt::new(vec![StartupChoice::Quit]);
     let result = open_or_prepare_database(
@@ -2227,10 +2233,13 @@ async fn test_t17_a_failing_database_open_with_the_derived_key_keeps_the_key_out
         ("falscher Schlüssel", &foreign_db, TEST_ROOT_KEY),
         ("keine Datenbank", &garbage_db, TEST_ROOT_KEY),
     ] {
-        let err = SqliteProfileStore::connect_encrypted(path, &DatabaseKey::from_root_key(&key))
-            .await
-            .err()
-            .unwrap_or_else(|| panic!("{what}: das Öffnen hätte scheitern müssen"));
+        let err = SqliteProfileStore::connect_encrypted(
+            path,
+            &DatabaseKey::from_root_key(&RootKey::for_tests(key)),
+        )
+        .await
+        .err()
+        .unwrap_or_else(|| panic!("{what}: das Öffnen hätte scheitern müssen"));
         collected.push_str(&format!("{err}\n{err:?}\n"));
     }
     assert!(
