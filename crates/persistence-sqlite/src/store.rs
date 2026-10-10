@@ -480,10 +480,14 @@ fn row_to_unusable_server(
 ) -> ProfileResult<UnusableServer> {
     let id: String = row.get("id");
     let group_id: Option<String> = row.get("group_id");
+    let port_raw: i64 = row.get("port");
     Ok(UnusableServer {
         id: ServerId(parse_uuid(&id, "servers.id")?),
         name: row.get("name"),
         host: row.get("host"),
+        port: u16::try_from(port_raw)
+            .map_err(|_| ProfileError::Backend(format!("port {port_raw} passt nicht in u16")))?,
+        username: row.get("username"),
         group_id: group_id
             .map(|raw| parse_uuid(&raw, "servers.group_id"))
             .transpose()?

@@ -509,6 +509,8 @@ export interface GroupDto {
 export interface DeleteGroupResult {
   childGroupsToDelete: GroupDto[];
   serversToUnassign: ServerDto[];
+  /** Issue #177: nicht nutzbare Server, die ebenfalls ihre Gruppe verlieren. */
+  unusableServersToUnassign: UnusableServerDto[];
   executed: boolean;
 }
 

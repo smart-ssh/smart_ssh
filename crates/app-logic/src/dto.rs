@@ -550,6 +550,9 @@ impl From<&Group> for GroupDto {
 pub struct DeleteGroupResult {
     pub child_groups_to_delete: Vec<GroupDto>,
     pub servers_to_unassign: Vec<ServerDto>,
+    /// Issue #177 (Spec 0008 §6a): nicht nutzbare Server in der Gruppe oder
+    /// einer Nachfahre-Gruppe — sie verlieren die Gruppenzuordnung ebenso.
+    pub unusable_servers_to_unassign: Vec<UnusableServerDto>,
     pub executed: bool,
 }
 
@@ -1552,6 +1555,34 @@ mod tests {
             cancelled: false,
             truncated: false,
         }
+    }
+
+    /// Issue #177: das Frontend liest `unusableServersToUnassign`.
+    #[test]
+    fn test_delete_group_result_serializes_unusable_servers_in_camel_case() {
+        let result = DeleteGroupResult {
+            child_groups_to_delete: vec![],
+            servers_to_unassign: vec![],
+            unusable_servers_to_unassign: vec![UnusableServerDto {
+                id: ServerId::new(),
+                name: "broken".into(),
+                host: "h".into(),
+                group_id: None,
+                reason: UnusableReasonDto::UnknownAuthMethod,
+            }],
+            executed: false,
+        };
+        let json = serde_json::to_value(result).unwrap();
+        let object = json.as_object().unwrap();
+        assert!(object.contains_key("unusableServersToUnassign"), "{json}");
+        assert!(
+            !object.contains_key("unusable_servers_to_unassign"),
+            "{json}"
+        );
+        assert_eq!(
+            json["unusableServersToUnassign"][0]["groupId"],
+            serde_json::Value::Null
+        );
     }
 
     /// Issue #167: ohne `rename_all_fields` kam `exit_code` beim Frontend

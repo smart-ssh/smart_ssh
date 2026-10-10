@@ -147,6 +147,7 @@
     "deleteNoImpact": "Keine weiteren Objekte betroffen.",
     "childGroupWillBeDeleted": "Untergruppe wird mitgelöscht: {{name}}",
     "serverWillBeUnassigned": "Server wird nur entkoppelt (bleibt erhalten): {{name}}",
+    "unusableServerWillBeUnassigned": "Nicht nutzbarer Server wird nur entkoppelt (bleibt erhalten): {{name}}",
     "confirmDelete": "Endgültig löschen"
   },
   "serverForm": {

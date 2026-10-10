@@ -201,7 +201,8 @@ export function GroupForm({
               <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
                 <p className="mb-2 font-medium text-red-200">{t("groupForm.deleteImpactTitle")}</p>
                 {deletePreview.childGroupsToDelete.length === 0 &&
-                deletePreview.serversToUnassign.length === 0 ? (
+                deletePreview.serversToUnassign.length === 0 &&
+                deletePreview.unusableServersToUnassign.length === 0 ? (
                   <p className="text-red-200">{t("groupForm.deleteNoImpact")}</p>
                 ) : (
                   <ul className="mb-2 space-y-1 text-red-200">
@@ -210,6 +211,11 @@ export function GroupForm({
                     ))}
                     {deletePreview.serversToUnassign.map((s) => (
                       <li key={s.id}>{t("groupForm.serverWillBeUnassigned", { name: s.name })}</li>
+                    ))}
+                    {deletePreview.unusableServersToUnassign.map((s) => (
+                      <li key={s.id}>
+                        {t("groupForm.unusableServerWillBeUnassigned", { name: s.name })}
+                      </li>
                     ))}
                   </ul>
                 )}

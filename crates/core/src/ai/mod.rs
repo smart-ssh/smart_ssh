@@ -13,6 +13,7 @@
 //! Mock-Implementierungen testbar.
 
 mod fencing;
+pub mod keywords;
 mod provider;
 mod redactor;
 mod second_opinion;
