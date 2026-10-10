@@ -1,76 +1,45 @@
-# Spec: Notiz- & Server-UI-Politur (Session-Modell Etappe 5 + Reste)
+# Spec 0058 — Notiz-Editor: Hinweis bei großen Notizen, Fokus, Localhost ohne Port
 
-Status: Entwurf
-Repo: **öffentlich** `smart_ssh`, Frontend + etwas Core
-Abhängigkeiten: Session-Modell Etappe 4 (Notiz-Kürzungs-Dialog), Notizen
-(0003), Localhost-Pseudo-Server (0031 o. Ä.)
+Status: umgesetzt
+Zweck: Kleine Verhaltensregeln rund um den Notiz-Editor und die
+Serveranzeige: ein Hinweis bei großen Notizen, der Sprung ins Notizfeld
+aus dem Kürzungs-Vorschlag und die Anzeige des lokalen Pseudo-Servers.
+Bezüge: Spec 0003 (Notizen), Spec 0032 (Localhost als Sitzung), Spec 0057
+(Kürzungs-Vorschlag beim Verbindungsende), Spec 0079 (Schwelle, Karte
+„Notiz ist sehr groß"), ADR 0050.
 
-> Kohärentes, **risikoarmes** Politur-Paket rund um **Notizen und die
-> Server-Form** — thematisch zusammengehörig, gleicher Code-Bereich.
-> **Priorität NORMAL** (UI-Politur, keine Sicherheitslogik). Mehrere kleine
-> Verbesserungen, je eigener Commit.
+## Teil 1: Hinweis beim Bearbeiten großer Notizen
 
-## Teil 1: Hinweis beim Bearbeiten großer Notizen (Session-Modell Etappe 5)
+- Erreicht der Text im Notiz-Editor die Schwelle für große Notizen
+  (10 000 Zeichen, Spec 0079, A4), erscheint über dem Editor ein dezenter,
+  nicht blockierender Hinweis: „Diese Notiz ist sehr groß und kann bei
+  langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte
+  Notiz bleibt vollständig erhalten."
+- Der Hinweis gilt für Server- und Gruppen-Notizen und für die Notiz des
+  lokalen Pseudo-Servers. Er reagiert auf den aktuell eingegebenen Text,
+  nicht erst auf den gespeicherten.
+- Er ist **rein informativ**: Er verhindert das Speichern nicht und
+  verändert die Notiz nicht.
+- Bei Server-Notizen (auch beim lokalen Pseudo-Server) enthält er den Link
+  „Jetzt zusammenfassen". Er startet dieselbe KI-Kürzung wie „Ja,
+  zusammenfassen" auf der Karte beim Verbindungsende (Spec 0057); das
+  Ergebnis erscheint als Notiz-Vorschlag mit Vorschau und muss bestätigt
+  werden. Schlägt die Anfrage fehl, steht die Fehlermeldung im Hinweis.
+  Gruppen-Notizen haben diesen Link nicht.
+- Karte und Hinweis nutzen dieselbe Schwelle aus einer Quelle.
 
-Das Gegenstück zum Sitzungsende-Kürzungs-Dialog (Etappe 4): ein **proaktiver,
-sanfter Hinweis** schon **beim Bearbeiten** einer ungewöhnlich großen Notiz —
-damit der Nutzer es merkt, bevor es in einer langen Sitzung zum Problem wird.
+## Teil 2: „Mache ich selbst" und der lokale Pseudo-Server
 
-- Im **Notiz-Editor**: Ist die Notiz über dem Schwellwert (dieselbe Konstante
-  wie Etappe 4, `LARGE_NOTE_DIALOG_THRESHOLD_BYTES` = 8000 — **wiederverwenden**,
-  keine zweite Konstante), einen **dezenten Hinweis** anzeigen (Banner/
-  Inline-Hinweis, kein blockierender Dialog): „Diese Notiz ist sehr groß und
-  kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die
-  gespeicherte Notiz bleibt vollständig erhalten."
-- **Rein informativ** — kein Zwang, keine Aktion erzwungen. Der Nutzer *darf*
-  eine große Notiz haben; der Hinweis erklärt nur die Konsequenz.
-- Optional (wenn einfach): ein Link/Button „jetzt zusammenfassen", der
-  denselben KI-Kürzungs-Fluss wie Etappe 4 auslöst (mit Diff-Bestätigung) —
-  aber nur wenn das ohne viel Zusatzaufwand geht, sonst nur der Hinweis.
+- „Mache ich selbst" auf der Karte „Notiz ist sehr groß" öffnet die
+  Notiz des Servers, scrollt zum Notizfeld und setzt den Fokus hinein,
+  damit der Nutzer direkt bearbeiten kann. Das geschieht einmal beim
+  Öffnen, nicht bei jeder späteren Aktualisierung der Ansicht.
+- Der lokale Pseudo-Server hat eine eigene Notiz. Die Karte „Notiz ist
+  sehr groß" und „Mache ich selbst" funktionieren für ihn genauso wie für
+  jeden anderen Server.
 
-## Teil 2: Etappe-4-Reste (aus dem Etappe-4-Review, bewusst offen gelassen)
+## Teil 3: Lokaler Pseudo-Server ohne Port
 
-Zwei kleine Nacharbeiten am Sitzungsende-Notiz-Dialog:
-- **„Mache ich selbst" fokussiert das Notizfeld.** Aktuell öffnet die Option
-  das Server-Formular, aber ohne Scroll/Fokus aufs Notizfeld — der Nutzer
-  muss es erst suchen. Beim Öffnen zum Notizfeld scrollen und es fokussieren,
-  damit man direkt loslegen kann.
-- **Lokaler Pseudo-Server bekommt den Dialog nie** (keine `servers`-Zeile,
-  aus der eine Notizgröße gelesen werden könnte). Prüfen: Kann der
-  Pseudo-Server überhaupt eine (große) Notiz haben? Falls ja, den Dialog auch
-  für ihn ermöglichen; falls nein (strukturell keine Notiz), ist das korrekt
-  und wird nur **dokumentiert** (kein Fix nötig). Beschreibe mir, was zutrifft.
-
-## Teil 3: Lokaler Pseudo-Server zeigt Port 0 an
-
-Der Localhost-Pseudo-Server zeigt in der UI **Port 0** an (ein Platzhalter/
-Nicht-Wert, der für den Pseudo-Server keinen Sinn ergibt). Statt „0" entweder
-**gar keinen Port** anzeigen oder einen sinnvollen Hinweis („lokal", kein
-Port). Rein kosmetisch, aber „Port 0" wirkt wie ein Bug. Beschreibe mir, wo
-das herkommt und wie du es sauber löst (kein Port-Feld für den Pseudo-Server
-vs. spezielle Anzeige).
-
-## Nicht Teil dieser Spec
-- Settings-Registry Notify-Mechanismus (eigenes Architektur-Thema, bleibt im
-  Backlog).
-- UI-Feedback bei nicht antwortendem Provider (~20min-Stille — braucht ein
-  neues Chat-Event, eigenes Thema).
-
-## Design/Konventionen
-- **frontend-design-Skill** beachten (Tokens, keine Ad-hoc-Styles).
-- Teil 1: der Hinweis fügt sich dezent in den Notiz-Editor ein (nicht
-  aufdringlich, kein blockierender Dialog).
-- Schwellwert-Konstante aus Etappe 4 **wiederverwenden** (eine Quelle).
-
-## Testbarkeit
-- Teil 1: Hinweis erscheint bei großer Notiz im Editor, nicht bei normaler;
-  gespeicherte Notiz unberührt (rein informativ).
-- Teil 2: „Mache ich selbst" → Notizfeld fokussiert/gescrollt; Pseudo-Server-
-  Notiz-Verhalten geklärt.
-- Teil 3: Pseudo-Server zeigt nicht mehr „Port 0"; echte Server zeigen ihren
-  Port normal.
-
-## Reihenfolge
-1. Teil 3 (Port 0) — kleinster, isoliert.
-2. Teil 2 (Etappe-4-Reste) — im gerade gebauten Etappe-4-Code.
-3. Teil 1 (Etappe-5-Hinweis) — der Kern, nutzt die Etappe-4-Konstante.
+Der lokale Pseudo-Server verbindet sich nicht über das Netz und hat keinen
+Port. Die Serverliste zeigt für ihn nur Nutzer und Host, ohne Port; echte
+Server zeigen `Nutzer@Host:Port`.
