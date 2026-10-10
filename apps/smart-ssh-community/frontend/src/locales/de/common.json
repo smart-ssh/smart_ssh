@@ -522,6 +522,7 @@
     "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM": "Die KI-Zweitmeinung konnte nicht eingeholt werden – erfordert Bestätigung",
     "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM": "Die Prüfung auf eingeschleuste Anweisungen konnte nicht ausgeführt werden – erfordert Bestätigung",
     "AI_INJECTION_CHECK_UNAVAILABLE": "Die Prüfung auf eingeschleuste Anweisungen konnte nicht ausgeführt werden (Problem beim KI-Anbieter). Die nächste vorgeschlagene Aktion erfordert eine Bestätigung.",
+    "AI_INJECTION_CHECK_INACTIVE": "Die Prüfung auf eingeschleuste Anweisungen ist für diesen Server eingeschaltet, in dieser Sitzung aber nicht aktiv (die KI-Zweitmeinung ist aus oder konnte nicht eingerichtet werden). Zweitmeinung in den Einstellungen einschalten und neu verbinden.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Die KI-Zweitmeinung ist eingeschaltet, konnte für diese Sitzung aber nicht eingerichtet werden (Anbieter entfernt oder Zugangsdaten nicht gefunden). Befehle werden nicht damit geprüft – Einstellung korrigieren und neu verbinden.",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risiko rot eingestuft oder nicht sicher einschätzbar (z. B. zu lang) – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",

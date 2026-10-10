@@ -340,6 +340,7 @@ pub(crate) fn session_with_ai_provider(
         injection_suspected: std::sync::atomic::AtomicBool::new(false),
         injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
         second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+        injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
         // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
         // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
         // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`

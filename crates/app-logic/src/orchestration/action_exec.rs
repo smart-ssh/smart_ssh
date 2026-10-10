@@ -2023,4 +2023,18 @@ pub(crate) fn announce_second_opinion_setup_failure(
             Some("AI_SECOND_OPINION_SETUP_FAILED"),
         );
     }
+    // Issue #231: Injection-Prüfung am Server an, aber kein Anbieter.
+    if session
+        .injection_check_inactive_notice_pending
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+    {
+        emit_chat_error(
+            emitter,
+            session_id,
+            "The check for injected instructions is enabled for this server but is not \
+             active in this session (AI second opinion is off or could not be set up)."
+                .to_string(),
+            Some("AI_INJECTION_CHECK_INACTIVE"),
+        );
+    }
 }
