@@ -166,10 +166,13 @@ pub fn wrapping_file_path(db_path: &Path) -> PathBuf {
 /// hieße, in den Schlüsselbund-Modus zu fallen und dort einen neuen K zu
 /// erzeugen — genau das, was A3 verbietet.
 pub fn key_mode(db_path: &Path) -> KeyMode {
-    if std::fs::symlink_metadata(wrapping_file_path(db_path)).is_ok() {
-        KeyMode::Password
-    } else {
-        KeyMode::Keychain
+    match std::fs::symlink_metadata(wrapping_file_path(db_path)) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => KeyMode::Keychain,
+        // Vorhanden **oder** nicht feststellbar (Rechte, E/A): Nur
+        // `NotFound` heißt „kein Passwort-Modus". Alles andere nimmt den
+        // Passwort-Pfad, der die Datei dort als nicht erreichbar meldet,
+        // statt still in den Schlüsselbund zu fallen (ADR 0097 §4).
+        Ok(_) | Err(_) => KeyMode::Password,
     }
 }
 
@@ -228,8 +231,21 @@ impl WrappingHealth {
 /// nicht nach D3. Nur ein *gelesener* Inhalt kann *ungültig* sein.
 pub fn wrapping_health(db_path: &Path) -> WrappingHealth {
     let path = wrapping_file_path(db_path);
-    if std::fs::symlink_metadata(&path).is_err() {
-        return WrappingHealth::Absent;
+    match std::fs::symlink_metadata(&path) {
+        Ok(_) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return WrappingHealth::Absent;
+        }
+        // Nicht feststellbar, ob die Datei da ist: *nicht erreichbar*,
+        // nicht „keine Datei" (ADR 0097 §4).
+        Err(err) => {
+            tracing::warn!(
+                detail = %err,
+                "the wrapping file location cannot be inspected; nothing is changed and the \
+                 user may retry (ADR 0097 §4)"
+            );
+            return WrappingHealth::Unreachable;
+        }
     }
     match std::fs::read(&path) {
         Ok(bytes) => match crypto::inspect_wrapped_key(&bytes) {
@@ -805,8 +821,19 @@ fn write_file_with_owner_only_permissions(
         detail: format!("{step}: {err}"),
     };
 
+    // Eine liegengebliebene reguläre `.new`-Datei eines abgebrochenen
+    // Schreibens wird zuerst entfernt. Eine Verknüpfung (oder alles andere)
+    // an diesem Ort wird **nicht** angefasst: `create_new` scheitert dann,
+    // statt ihr Ziel zu verfolgen und zu kürzen.
+    if let Ok(meta) = std::fs::symlink_metadata(path) {
+        if meta.file_type().is_file() {
+            std::fs::remove_file(path)
+                .map_err(|err| file_failed("alte Zwischendatei entfernen", err))?;
+        }
+    }
+
     let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;

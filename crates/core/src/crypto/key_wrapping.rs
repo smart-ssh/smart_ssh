@@ -66,9 +66,9 @@ const MIN_P_COST: u32 = WRITE_P_COST;
 /// irgendetwas das Chiffrat authentifizieren kann (die Authentifizierung
 /// **braucht** den abgeleiteten Schlüssel, die Reihenfolge ist nicht
 /// umkehrbar). Eine Grenze nach oben ist deshalb die einzige Stelle, an der
-/// dieser Fall abzufangen ist. Sie liegt weit über dem, was A14 schreibt,
-/// also behindert sie keine spätere Erhöhung.
-const MAX_M_COST_KIB: u32 = 1024 * 1024; // 1 GiB
+/// dieser Fall abzufangen ist. Sie liegt mit 256 MiB das Vierfache über dem,
+/// was A14 schreibt, also behindert sie eine moderate spätere Erhöhung nicht.
+const MAX_M_COST_KIB: u32 = 256 * 1024; // 256 MiB (ADR 0095 §2)
 const MAX_T_COST: u32 = 16;
 const MAX_P_COST: u32 = 16;
 

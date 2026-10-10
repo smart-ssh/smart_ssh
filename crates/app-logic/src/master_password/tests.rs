@@ -1203,3 +1203,75 @@ fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
         "RootKey darf K nicht über Debug zeigen"
     );
 }
+
+/// #266 (1): Ein Link am `.new`-Pfad wird nicht verfolgt — das Schreiben
+/// scheitert, und das Ziel bleibt unverändert.
+#[cfg(unix)]
+#[test]
+fn test_a_symlink_at_the_temporary_path_fails_the_write_and_keeps_its_target() {
+    let dir = Dir::new("tmp-symlink");
+    let db = dir.db();
+    let victim = dir.path.join("victim");
+    std::fs::write(&victim, b"unberuehrt").unwrap();
+    let tmp = temporary_path(&wrapping_file_path(&db));
+    std::os::unix::fs::symlink(&victim, &tmp).unwrap();
+
+    let result = set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None);
+    assert!(
+        matches!(result, Err(MasterPasswordError::FileFailed { .. })),
+        "{result:?}"
+    );
+    assert_eq!(std::fs::read(&victim).unwrap(), b"unberuehrt");
+    assert!(
+        !wrapping_file_path(&db).exists(),
+        "es darf keine Verpackungsdatei entstanden sein"
+    );
+}
+
+/// #266 (1): Eine liegengebliebene reguläre `.new`-Datei blockiert nicht.
+#[test]
+fn test_a_stale_temporary_file_does_not_block_a_later_write() {
+    let dir = Dir::new("tmp-stale");
+    let db = dir.db();
+    let tmp = temporary_path(&wrapping_file_path(&db));
+    std::fs::write(&tmp, b"Rest eines abgebrochenen Schreibens").unwrap();
+    // Schreibgeschützt: Das alte `truncate` scheiterte daran, das explizite
+    // Entfernen nicht (Gegenbeweis gegen den Stand vor #266).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o400)).unwrap();
+    }
+
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    assert_eq!(unlock(&db, &good()).unwrap().expose(), &ROOT_KEY);
+    assert!(!tmp.exists());
+}
+
+/// #266 (4): Ein Fehler von `symlink_metadata`, der kein `NotFound` ist,
+/// heißt nicht „keine Datei“.
+#[cfg(unix)]
+#[test]
+fn test_a_metadata_error_other_than_not_found_is_not_read_as_absent() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = Dir::new("meta-err");
+    let sub = dir.path.join("sub");
+    std::fs::create_dir(&sub).unwrap();
+    let db = sub.join("smart-ssh.db");
+    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let restore = || std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o700));
+    if std::fs::symlink_metadata(wrapping_file_path(&db)).is_ok() {
+        restore().unwrap();
+        eprintln!("übersprungen: dieser Benutzer darf trotz 0000 hinein (root?)");
+        return;
+    }
+
+    let health = wrapping_health(&db);
+    let mode = key_mode(&db);
+    restore().unwrap();
+    assert_eq!(health, WrappingHealth::Unreachable);
+    assert_eq!(mode, KeyMode::Password);
+}
