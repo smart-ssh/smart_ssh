@@ -22,6 +22,7 @@ import {
   deleteServer,
   getServer,
   inspectKeyFile,
+  listStoredHostKeys,
   testConnection,
   trustHostKey,
 } from "../api";
@@ -49,6 +50,7 @@ vi.mock("../api", () => ({
   deleteServer: vi.fn(),
   getServer: vi.fn(),
   inspectKeyFile: vi.fn(),
+  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
   largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
   previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
   requestNoteShrink: vi.fn(),
@@ -837,5 +839,38 @@ describe("ServerForm — step log of a test connection (issue #51)", () => {
     expect(details.querySelectorAll("[data-failed='true']")).toHaveLength(0);
     expect(details.textContent).toContain("8 ms");
     expect(details.textContent).toContain("Sitzung aufgebaut");
+  });
+});
+
+describe("ServerForm — gespeicherte Host-Keys (Spec 0008)", () => {
+  it("shows algorithm and fingerprint of every stored key", async () => {
+    vi.mocked(listStoredHostKeys).mockResolvedValue([
+      { algorithm: "ssh-ed25519", fingerprint: "SHA256:aaaaaaaaaaaaaaaa" },
+      { algorithm: "ssh-rsa", fingerprint: "SHA256:bbbbbbbbbbbbbbbb" },
+    ]);
+
+    renderForm();
+
+    expect(await screen.findByText("ssh-ed25519")).toBeInTheDocument();
+    expect(screen.getByText("SHA256:aaaaaaaaaaaaaaaa")).toBeInTheDocument();
+    expect(screen.getByText("ssh-rsa")).toBeInTheDocument();
+    expect(screen.getByText("SHA256:bbbbbbbbbbbbbbbb")).toBeInTheDocument();
+    expect(listStoredHostKeys).toHaveBeenCalledWith(SERVER_ID);
+  });
+
+  it("says so when no host key is stored yet", async () => {
+    vi.mocked(listStoredHostKeys).mockResolvedValue([]);
+
+    renderForm();
+
+    expect(await screen.findByText(/Noch kein Host-Key gespeichert/)).toBeInTheDocument();
+  });
+
+  it("shows no host key area in the create form", async () => {
+    renderNewServerForm();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Anlegen|Create/ })).toBeInTheDocument());
+    expect(screen.queryByText("Host-Keys")).not.toBeInTheDocument();
+    expect(listStoredHostKeys).not.toHaveBeenCalled();
   });
 });

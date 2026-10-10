@@ -151,6 +151,10 @@
     "confirmDelete": "Delete permanently"
   },
   "serverForm": {
+    "hostKeys": {
+      "title": "Host keys",
+      "none": "No host key stored yet. It is stored on the first connection."
+    },
     "titleNew": "New Server",
     "titleExisting": "Server: {{name}}",
     "localHint": "Local pseudo-server — commands run directly on this machine, no SSH connection. Only notes and tags are editable.",

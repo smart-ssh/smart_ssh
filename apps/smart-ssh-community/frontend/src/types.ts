@@ -17,6 +17,11 @@ export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate
  * nachdem in der Sitzung Serverinhalt eingelesen wurde. */
 export type PostIngestPolicy = "strict" | "balanced" | "standard";
 
+export interface StoredHostKeyDto {
+  algorithm: string;
+  fingerprint: string;
+}
+
 export interface ServerDto {
   id: string;
   name: string;

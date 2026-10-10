@@ -31,7 +31,7 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use ssh_manager_core::ssh::{HostKeyDecision, HostKeyStore, SshError};
+use ssh_manager_core::ssh::{HostKeyDecision, HostKeyStore, SshError, StoredHostKeyInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredEntry {
@@ -244,6 +244,27 @@ impl HostKeyStore for FileHostKeyStore {
         known.insert((host.to_string(), port, algo), key.to_vec());
         self.persist(&known)
     }
+
+    /// Read-only: lists `(algorithm, fingerprint)` for `(host, port)`,
+    /// sorted by algorithm. Takes no write path and does not influence
+    /// [`HostKeyStore::check`].
+    fn stored_keys(&self, host: &str, port: u16) -> Vec<StoredHostKeyInfo> {
+        let known = self.known.lock().unwrap();
+        let mut out: Vec<StoredHostKeyInfo> = known
+            .iter()
+            .filter(|((h, p, _), _)| h == host && *p == port)
+            .map(|((_, _, algo), raw_key)| StoredHostKeyInfo {
+                algorithm: if algo == UNPARSEABLE_ALGORITHM_SENTINEL {
+                    "unknown".to_string()
+                } else {
+                    algo.clone()
+                },
+                fingerprint: fingerprint(raw_key),
+            })
+            .collect();
+        out.sort_by(|a, b| a.algorithm.cmp(&b.algorithm));
+        out
+    }
 }
 
 #[cfg(test)]
@@ -427,5 +448,86 @@ mod tests {
 
         let parent_meta = std::fs::metadata(path.parent().unwrap()).unwrap();
         assert_eq!(parent_meta.permissions().mode() & 0o777, 0o700);
+    }
+
+    #[test]
+    fn test_stored_keys_lists_one_entry_per_algorithm_matching_check_fingerprint() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
+        let ed = fake_key("ssh-ed25519", "aaa");
+        let rsa = fake_key("ssh-rsa", "bbb");
+        store.trust("example.invalid", 22, &ed).unwrap();
+        store.trust("example.invalid", 22, &rsa).unwrap();
+        store
+            .trust("other.invalid", 22, &fake_key("ssh-rsa", "ccc"))
+            .unwrap();
+
+        let listed = store.stored_keys("example.invalid", 22);
+
+        assert_eq!(listed.len(), 2);
+        for (algo, key) in [("ssh-ed25519", &ed), ("ssh-rsa", &rsa)] {
+            let entry = listed.iter().find(|e| e.algorithm == algo).unwrap();
+            // `check` of a differing key of the same algorithm reports the
+            // stored key's fingerprint as expected.
+            let other = fake_key(algo, "zzz");
+            match store.check("example.invalid", 22, &other) {
+                HostKeyDecision::Mismatch {
+                    expected_fingerprint,
+                    ..
+                } => assert_eq!(entry.fingerprint, expected_fingerprint),
+                d => panic!("unexpected {d:?}"),
+            }
+            assert_eq!(entry.fingerprint, fingerprint(key));
+        }
+    }
+
+    #[test]
+    fn test_stored_keys_unknown_host_or_port_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
+        store
+            .trust("example.invalid", 22, &fake_key("ssh-ed25519", "a"))
+            .unwrap();
+
+        assert!(store.stored_keys("nope.invalid", 22).is_empty());
+        assert!(store.stored_keys("example.invalid", 2222).is_empty());
+    }
+
+    #[test]
+    fn test_stored_keys_unparseable_algorithm_gets_neutral_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
+        store
+            .trust("example.invalid", 22, b"raw-key-bytes")
+            .unwrap();
+
+        let listed = store.stored_keys("example.invalid", 22);
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].algorithm, "unknown");
+        assert!(!listed[0].algorithm.contains("__"));
+    }
+
+    #[test]
+    fn test_stored_keys_does_not_change_trust_state_or_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("host_keys.json");
+        let store = FileHostKeyStore::load(path.clone()).unwrap();
+        let key = fake_key("ssh-ed25519", "a");
+        store.trust("example.invalid", 22, &key).unwrap();
+        let before = std::fs::read_to_string(&path).unwrap();
+
+        let _ = store.stored_keys("example.invalid", 22);
+        let _ = store.stored_keys("unseen.invalid", 22);
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+        assert_eq!(
+            store.check("example.invalid", 22, &key),
+            HostKeyDecision::Trusted
+        );
+        assert!(matches!(
+            store.check("unseen.invalid", 22, &key),
+            HostKeyDecision::Unknown { .. }
+        ));
     }
 }
