@@ -94,26 +94,28 @@ pub const FILTER_RULE_PATTERN_INVALID: &str = "FILTER_RULE_PATTERN_INVALID";
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
 ///
-/// **Warum eine ausdrückliche Funktion und kein `From`-Impl:** Der blanket
-/// `impl<E: Display> From<E> for CommandError` weiter unten deckt
-/// [`RuleWriteError`] bereits ab (er implementiert `Display` über
-/// `thiserror`); ein zweiter, spezifischerer `From`-Impl wäre eine von
-/// Rusts Kohärenzregeln verbotene überlappende Impl (E0119). Ein blosses
-/// `?` oder `.map_err(Into::into)` liefe deshalb **still** über den
-/// blanket-Impl und setzte `code: None` — der Code ginge verloren, ohne
-/// dass irgendwo etwas scheitert. Dasselbe Muster wie
-/// [`secret_store_error`] und [`CommandError::feature_locked`].
+/// **Ein `From`-Impl ist hier möglich, weil `RuleWriteError` kein `Display`
+/// implementiert** (Issue #260, ADR 0068 §7): Der blanket
+/// `impl<E: Display> From<E>` unten greift deshalb für diesen Typ nicht,
+/// und ein bloßes `?` behält den Code. Ein späteres `Display` auf
+/// `RuleWriteError` wäre ein Kohärenzfehler (E0119), kein stiller
+/// Codeverlust.
 ///
 /// Als `message` steht der Fehlertext der Bibliothek (mit der Stelle im
 /// Muster). Das Frontend ersetzt bei bekanntem Code zwar den Text, zeigt
 /// die `message` für diesen Code aber zusätzlich darunter an (3.1.4) —
 /// genau dafür wird sie hier mitgegeben.
-pub fn rule_write_error(err: crate::filter_rules::RuleWriteError) -> CommandError {
-    match err {
-        crate::filter_rules::RuleWriteError::InvalidPattern(pattern_err) => {
-            CommandError::with_code(pattern_err.to_string(), FILTER_RULE_PATTERN_INVALID)
+impl From<crate::filter_rules::RuleWriteError> for CommandError {
+    fn from(err: crate::filter_rules::RuleWriteError) -> Self {
+        match err {
+            crate::filter_rules::RuleWriteError::InvalidPattern(pattern_err) => {
+                CommandError::with_code(pattern_err.to_string(), FILTER_RULE_PATTERN_INVALID)
+            }
+            crate::filter_rules::RuleWriteError::Store(
+                persistence_sqlite::PolicyStoreError::InvalidPattern(pattern_err),
+            ) => CommandError::with_code(pattern_err.to_string(), FILTER_RULE_PATTERN_INVALID),
+            crate::filter_rules::RuleWriteError::Store(store_err) => CommandError::from(store_err),
         }
-        crate::filter_rules::RuleWriteError::Store(store_err) => CommandError::from(store_err),
     }
 }
 
@@ -331,9 +333,8 @@ mod code_tests {
     /// Muster den stabilen Code an und reicht den Fehlertext der
     /// Bibliothek als `message` durch.
     ///
-    /// Scheitert, wenn jemand die ausdrückliche Umwandlung durch `?` oder
-    /// `.map_err(Into::into)` ersetzt: Dann liefe der Fehler über den
-    /// pauschalen `From<E: Display>`, und `code` wäre still `None`.
+    /// Scheitert, wenn `RuleWriteError` wieder `Display` bekäme (E0119) oder
+    /// die Umwandlung den Code nicht setzt.
     #[test]
     fn test_spec_0077_t6d_invalid_pattern_keeps_its_code_and_library_message() {
         let pattern_err =
@@ -342,9 +343,9 @@ mod code_tests {
                 .unwrap_err();
         let expected_message = pattern_err.to_string();
 
-        let err = super::rule_write_error(crate::filter_rules::RuleWriteError::InvalidPattern(
-            pattern_err,
-        ));
+        let err = crate::error::CommandError::from(
+            crate::filter_rules::RuleWriteError::InvalidPattern(pattern_err),
+        );
 
         assert_eq!(err.code, Some(super::FILTER_RULE_PATTERN_INVALID));
         assert_eq!(err.message, expected_message);
@@ -355,12 +356,36 @@ mod code_tests {
         );
     }
 
+    /// Issue #260: Ein bloßes `?` über einen `RuleWriteError` liefert einen
+    /// `CommandError` mit Code — auch wenn das Muster erst im Speicher
+    /// (Schicht 2) abgewiesen wurde.
+    ///
+    /// *Gegenbeweis:* Vor #260 lief `?` über den blanket `From<E: Display>`
+    /// und ergab `code: None`.
+    #[test]
+    fn test_issue_260_question_mark_keeps_the_code() {
+        fn store_layer_rejects() -> Result<(), crate::filter_rules::RuleWriteError> {
+            let pattern_err = ssh_manager_core::filter::Pattern::Regex("^a(".to_string())
+                .validate()
+                .unwrap_err();
+            Err(persistence_sqlite::PolicyStoreError::InvalidPattern(
+                pattern_err,
+            ))?
+        }
+        fn command() -> crate::error::CommandResult<()> {
+            store_layer_rejects()?;
+            Ok(())
+        }
+        let err = command().unwrap_err();
+        assert_eq!(err.code, Some(super::FILTER_RULE_PATTERN_INVALID));
+    }
+
     /// Spec 0077, 3.1.3: Ein Speicher-Fehler wird umgewandelt wie bisher —
     /// ohne Code. Belegt, dass die neue Umwandlung nicht pauschal den
     /// Muster-Code an jeden Schreibfehler hängt.
     #[test]
     fn test_spec_0077_store_error_keeps_converting_without_a_code() {
-        let err = super::rule_write_error(crate::filter_rules::RuleWriteError::Store(
+        let err = crate::error::CommandError::from(crate::filter_rules::RuleWriteError::Store(
             persistence_sqlite::PolicyStoreError::NotFound(ssh_manager_core::filter::RuleId(
                 "irgendeine-regel".to_string(),
             )),

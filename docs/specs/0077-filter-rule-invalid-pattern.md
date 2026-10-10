@@ -98,7 +98,10 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
   geschrieben wird. Bei einem Fehler wird nichts gespeichert (Anlegen), und die
   gespeicherte Regel bleibt unverändert (Ändern). Die Schnellregel läuft über
   dieselbe Prüfung. Bei ihr gilt: Die Bestätigung wird trotzdem aufgelöst, und
-  der Fehler kommt getrennt zurück.
+  der Fehler kommt getrennt zurück. Dieselbe Prüfung gilt zusätzlich im
+  Regelspeicher selbst: Anlegen und Ändern lehnen ein nicht übersetzbares
+  Muster auch dann ab, wenn der Aufrufer nicht geprüft hat. Die Prüfung
+  davor bleibt bestehen.
 - **3.1.3** Ein ungültiges Muster erzeugt den Fehlercode
   `FILTER_RULE_PATTERN_INVALID` mit dem Fehlertext der Bibliothek als
   Meldung. Der Code geht auf allen drei Wegen (Anlegen, Ändern, Schnellregel)
@@ -142,7 +145,10 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
   branch)"). **Weder das Muster noch das Kommando noch ein Fehlertext der
   Bibliothek stehen im Log:** Deren Fehlertexte zitieren das Muster wörtlich,
   und Muster wie Kommando können Geheimnisse enthalten. Das gilt für alle drei
-  Aktionen.
+  Aktionen. Eine Regel wird je Regel-Kennung und Muster nur **einmal**
+  gemeldet (je Filter-Engine, also je Verbindung), nicht bei jeder weiteren
+  Auswertung; ein geändertes Muster derselben Regel wird erneut gemeldet. Die
+  Auswertung selbst ist davon unberührt.
 - **3.2.3** Die Regelliste markiert eine Regel mit ungültigem Muster sichtbar:
   Jede aufgelistete Regel trägt gegebenenfalls den Fehlertext des Musters; die
   Liste zeigt einen Hinweis mit dem Text aus 3.1.6 und dem Fehlertext als
