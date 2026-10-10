@@ -618,6 +618,12 @@ pub struct SessionParts {
     /// ist, beim `connect()` aber nicht eingerichtet werden konnte. Der
     /// Sitzungs-Hinweis wird einmalig gesendet (`swap(false)`).
     pub second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool,
+    /// Issue #231: `true`, wenn die serverspezifische Injection-Prüfung
+    /// eingeschaltet ist, beim `connect()` aber kein Anbieter zur Verfügung
+    /// stand (Zweitmeinung app-weit aus oder nicht einrichtbar). Nur
+    /// Hinweis, keine erzwungene Bestätigung; einmalig gesendet
+    /// (`swap(false)`).
+    pub injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool,
     /// Spec 0034: Persistenz-Anbindung für diese Sitzung. `None` für
     /// Sitzungen, die bewusst keine `chat_sessions`-Zeile bekommen sollen
     /// (Tests; s. Abschnitt 10 zu MCP — MCP-ausgelöste Aktionen laufen
@@ -1245,6 +1251,7 @@ mod tests {
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
