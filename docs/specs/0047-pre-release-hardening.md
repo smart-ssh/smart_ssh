@@ -1,148 +1,94 @@
-# Spec: Pre-Release-Härtung für die 0.x-Testphase
+# Spec 0047 — Härtung für die 0.x-Testphase
 
-Status: Entwurf
-Modul: `crates/app-shell`, `crates/persistence-sqlite`,
-`crates/credentials-keyring` — alles **öffentliches** Repo `smart_ssh`
-Abhängigkeiten: Server-Verwaltung (0008), SQLite-Persistenz (0004),
-strukturiertes Logging (0016), i18n/Fehler-Codes (0024)
+Status: umgesetzt
+Zweck: Fünf Zusagen, die verhindern, dass ein Tester Daten verliert oder mit einem unerklärlichen Fehler allein bleibt: kein verwaister Zugangsdaten-Eintrag nach einem fehlgeschlagenen Anlegen, Daten überleben ein Update, der Start hinterlässt immer eine Logspur, ein nicht erreichbarer Schlüsselbund bricht den Start nicht spurlos ab, die häufigsten Fehler sind verständlich.
+Bezüge: Spec 0004 (SQLite-Persistenz), Spec 0008 (Server-Verwaltung), Spec 0016 (strukturiertes Logging), Spec 0024 (Fehlercodes, i18n), Spec 0059 (Startfehler-Dialog), Spec 0069 (Fehlermeldungen des Fünf-Minuten-Pfads), Spec 0101 (Schlüsselbund und Secrets in der Datenbank).
+Review-Priorität: ERHÖHT für Fund A2 (Credential-Handling), sonst NORMAL.
 
-> Bündelt die technischen Blocker aus der Pre-Release-Checkliste für die
-> **macOS-Runde-1** der Testphase. Kein Windows/Linux-Anteil (→ Runde 2).
-> **Priorität ERHÖHT für A2** (Credential-Handling), sonst NORMAL.
->
-> **Wichtig — gemischte Art der Aufgaben**: Manche Punkte sind echtes
-> Bauen (A2), manche sind **Verifikation + ggf. Nachschärfung** (A3, B1,
-> B2, D2). Bei den Verifikations-Punkten gilt: erst prüfen, mir den
-> Ist-Zustand berichten, dann nur reparieren, was tatsächlich fehlt — nicht
-> blind neu bauen, was schon funktioniert.
+Die Abschnitte tragen die Kennungen der Funde (A2, A3, B1, B2, D2), auf die
+Code und Tests verweisen.
 
-## Fund A2 — `create_server`-Keychain-Rollback bei Fehler (ERHÖHT)
+## Fund A2 — Kein verwaister Zugangsdaten-Eintrag nach fehlgeschlagenem Anlegen
 
-**Echtes Bauen.** Aktuell (Backlog-Fund): Schlägt `create_server` fehl,
-*nachdem* bereits ein Secret (z. B. Sudo-Passwort) im Keychain gespeichert
-wurde, bleibt ein **verwaister Keychain-Eintrag** für eine Server-ID zurück,
-die es nicht (mehr) gibt.
+Beim Anlegen eines Servers werden Zugangsdaten (Passwort, Private Key,
+Passphrase, Zertifikat, Sudo-Passwort) gespeichert, bevor der Server selbst
+gespeichert wird. Schlägt irgendein Schritt danach fehl — das Auflösen der
+Anmeldeart, das Sudo-Passwort oder das Speichern des Servers —, entfernt die
+Anwendung **alle** Zugangsdaten-Einträge, die dieser Aufruf angelegt haben
+könnte, bevor sie den Fehler meldet. Für eine Server-Kennung, die es nicht
+gibt, bleibt nichts zurück.
 
-**Fix**: `create_server` rollt bei einem Fehler **alle** in diesem Aufruf
-bereits geschriebenen Keychain-Einträge zurück (Passwort, Sudo-Passwort,
-Key-Passphrase — was auch immer angelegt wurde), bevor der Fehler
-zurückgegeben wird. Kein verwaister Eintrag.
+- Ein Eintrag, der ohnehin nie angelegt wurde, ist beim Aufräumen kein
+  Fehler.
+- Schlägt das Aufräumen selbst fehl (Speicher nicht erreichbar), wird das
+  geloggt („Keychain-Rollback fehlgeschlagen: möglicherweise verwaister
+  Eintrag"); der ursprüngliche Fehler bleibt der, den der Nutzer sieht.
+- Eine ungültige Eingabe (z. B. ein ungültiger SFTP- oder Startverzeichnis-
+  Pfad, ein lokaler Pseudo-Server als Jump-Host) wird abgelehnt, **bevor**
+  irgendein Zugangsdaten-Eintrag geschrieben wird.
 
-- Umsetzung sauber testbar: den echten Produktionspfad extrahieren (analog
-  zum `delete_server`-Fix aus Spec 0046, der die Logik aus dem
-  `#[tauri::command]`-Handler in eine testbare Funktion gezogen hat), nicht
-  nur im Command-Handler.
-- Test: Fehler nach dem Speichern des Sudo-Passworts provozieren (mit einem
-  Mock-Store, der beim zweiten Write oder beim DB-Insert fehlschlägt) →
-  danach ist **kein** Keychain-Eintrag für diese Server-ID vorhanden.
-- Der Test muss gegen den **ungefixten** Stand fehlschlagen (verwaister
-  Eintrag bleibt) — empirisch verifizieren.
+## Fund A3 — Daten überleben den Versionssprung
 
-## Fund A3 — Migration N→N+1 verifizieren (Datenverlust über Builds)
+Die Tester behalten ihre Daten über mehrere Builds: Server, Regeln,
+Sitzungen, Notizen und die Verweise auf Zugangsdaten bleiben nach einem
+Update vollständig erhalten und lesbar. Die Datenbank wird beim Start
+vorwärts migriert; eine Datenbank mit älterem Schema und vorhandenen Daten
+verliert dabei keine Zeile. Ist die Datenbank neuer als das Programm, wird
+sie nicht angefasst (Spec 0059, Fall 1).
 
-**Verifikation, ggf. Nachschärfung.** Die Tester behalten über mehrere
-Wochenbuilds hinweg Daten — DB, Keychain-Referenzen, Sitzungen, Regeln
-müssen den Versionssprung überleben. Es gibt versionierte SQLite-
-Migrationen, aber ein echter N→N+1-Durchlauf *mit vorhandenen Daten* wurde
-nie gezielt getestet.
+## Fund B1 — Der Start hinterlässt immer eine Logspur
 
-**Aufgabe**:
-1. Prüfe den Migrations-Mechanismus (persistence-sqlite): Laufen alle
-   Migrationen sauber vorwärts auf einer DB, die mit einer früheren
-   Migrations-Version **und echten Daten** (Server, Regeln, Sessions,
-   Notizen) angelegt wurde?
-2. **Schreibe einen Migrations-Integrationstest**, der genau das absichert:
-   eine DB auf einem früheren Schema-Stand mit Testdaten anlegen, die
-   aktuellen Migrationen anwenden, verifizieren dass alle Daten erhalten und
-   lesbar sind. Das ist der eigentliche Wert — ein dauerhafter Regressions-
-   schutz gegen "die nächste Migration frisst Testerdaten".
-3. Falls dabei ein echtes Migrations-Problem auffällt: melden und beheben.
-   Falls alles sauber ist: den Test als Absicherung dalassen und mir das
-   berichten.
+Die Logdatei wird als eine der allerersten Anweisungen des Starts angelegt,
+vor dem Öffnen der Datenbank, der Migration und jedem Schlüsselbund-Zugriff.
+Auch ein Panic wird mit seiner Meldung ins Log geschrieben, bevor das
+Programm endet.
 
-Berichte mir den Ist-Zustand des Migrations-Mechanismus, bevor/während du
-den Test baust.
+- Die erste Logzeile („Smart SSH startet") enthält App-Version mit Commit-
+  Hash (Spec 0052), Build-Typ, Betriebssystem, Architektur und den
+  aufgelösten Datenpfad.
+- Die wesentlichen Startschritte schreiben je eine Zeile: Prüfung der
+  Schlüsselbund-Verfügbarkeit, Beginn und Ende der Datenbank-Migration, und
+  als letzter Schritt „app setup complete, creating main window". Aus dem
+  Log lässt sich ablesen, wie weit der Start kam.
+- Ein fataler Startfehler wird *zusätzlich* zum Log in einem Dialog gezeigt
+  (Spec 0059), nie stattdessen.
 
-## Fund B1 — Logging als Allererstes beim Start
+## Fund B2 — Nicht erreichbarer Schlüsselbund führt nicht zum Absturz
 
-**Verifikation + Nachschärfung.** Strukturiertes Logging existiert (Spec
-0016). Die Checkliste verlangt aber, dass die Logdatei **vor allem anderen**
-geschrieben wird (Version, OS, Datenpfad, jeder Startschritt) — damit ein
-"geht nicht" beim Tester diagnostizierbar ist, statt spurlos.
+Ist der Schlüsselbund beim Start gesperrt, verweigert oder nicht vorhanden,
+stürzt die Anwendung nicht ab und verschwindet nicht spurlos. Der Zustand
+wird geloggt; der Nutzer bekommt je nach Lage die Wahl „Erneut versuchen" /
+„Beenden" oder das Angebot eines Master-Passworts (Spec 0101, Spec 0059).
+Es wird nie still ein neuer Schlüssel erzeugt und nichts an den Daten
+verändert.
 
-**Aufgabe**:
-1. Prüfe: Wann genau im Startablauf wird das Log initialisiert? Steht es
-   **vor** den Schritten, die scheitern könnten (DB öffnen, Migration,
-   Keychain-Zugriff)? Oder könnte ein früher Fehler passieren, *bevor* das
-   Log steht — sodass gar nichts geschrieben wird?
-2. Falls Logging zu spät initialisiert wird: **so früh wie möglich**
-   ziehen — als eine der allerersten Anweisungen im Start, bevor DB/Keychain/
-   Migration. Die erste Logzeile enthält: App-Version, OS/Plattform,
-   aufgelöster Datenpfad.
-3. Jeder wesentliche Startschritt (Datenverzeichnis auflösen, DB öffnen,
-   Migration starten/fertig, Keychain-Init, Fenster erzeugen) bekommt eine
-   Logzeile, sodass man aus dem Log ablesen kann, **wie weit** der Start kam,
-   bevor etwas schiefging.
+## Fund D2 — Die fünf häufigsten Fehler sind verständlich
 
-Berichte mir, wie der Startablauf aktuell aussieht (Reihenfolge), bevor du
-umbaust.
+Für die fünf Stolpersteine des Fünf-Minuten-Pfads sieht der Nutzer im UI
+(nicht nur im Log) eine Meldung in der eingestellten Sprache, die die
+Ursache nennt und den nächsten Schritt:
 
-## Fund B2 — Keychain gesperrt/nicht verfügbar → Log-Meldung statt Panic (macOS)
+1. falscher API-Key,
+2. Modell nicht gefunden,
+3. lokaler Anbieter (Ollama) nicht gestartet,
+4. Host nicht erreichbar,
+5. Host-Key unbekannt oder geändert (die beiden Host-Key-Dialoge).
 
-**Verifikation, ggf. Fix.** Teilweise in Spec 0040 gehärtet (Chat-
-Verschlüsselungsschlüssel). Für die Testphase relevant: Was passiert auf
-**macOS mit gesperrter Keychain** beim Start und bei der ersten
-Credential-Nutzung?
+Ein Verbindungsfehler trägt dazu seinen stabilen Fehlercode bis ins UI (Spec
+0024), auch in der Serverliste; nur ohne bekannten Code erscheint der rohe
+Text. Die feinere Unterscheidung der Ursachen und die Texte stehen in Spec
+0069.
 
-**Aufgabe**:
-1. Gehe die Stellen durch, die beim Start/früh auf den Keychain zugreifen.
-   Führt ein gesperrter/verweigerter Keychain irgendwo zu einem **Panic**
-   (statt einer Log-Meldung + kontrolliertem Weiterlaufen bzw. sauberer
-   Fehleranzeige)?
-2. Wo ein Panic droht: in eine geloggte, behandelte Fehlermeldung umwandeln
-   (der native Startfehler-**Dialog** bleibt geparkt/SPÄTER — hier reicht
-   laut Checkliste die **Logdatei**). Die App soll nicht spurlos
-   verschwinden.
-3. Der Linux-ohne-Keyring-Fall ist **Runde 2**, hier nicht nötig — aber
-   falls dir auffällt, dass der Fix beide Fälle billig mitnimmt, gern
-   erwähnen.
+## Sicherheitszusagen
 
-Berichte den Ist-Zustand (welche Start-Keychain-Zugriffe, welche panicen).
+- Nach einem fehlgeschlagenen Anlegen bleibt kein Zugangsdaten-Eintrag
+  zurück (Fund A2).
+- Kein Punkt dieser Spec lockert eine Entscheidung der Filter-Engine oder
+  der Bestätigung.
+- Ein Startfehler führt nie zu einem spurlosen Verschwinden: mindestens eine
+  lesbare Logzeile (Fund B1, B2).
 
-## Fund D2 — Die fünf Fehlermeldungen auf dem Fünf-Minuten-Pfad verständlich
+## Grenzen
 
-**Verifikation + Nachschärfung.** Die Fehlertypen existieren
-(`SshError`/`AiError` mit Codes, Spec 0024). Aber ob jede der fünf für einen
-Tester *verständlich* ist, wurde nie geprüft.
-
-**Aufgabe**: Geh die fünf Fehlerfälle durch und prüfe je, welche Meldung der
-Nutzer tatsächlich sieht (im Chat/UI, nicht nur im Log):
-1. **Falscher API-Key** (Provider lehnt ab).
-2. **Modell nicht gefunden** (falscher Modellname).
-3. **Ollama nicht gestartet** (lokaler Provider nicht erreichbar).
-4. **Host nicht erreichbar** (SSH-Verbindung scheitert).
-5. **Host-Key unbekannt/geändert** (die zwei Host-Key-Dialoge).
-
-Für jede: Ist die Meldung für einen Tester verständlich und **nennt sie den
-nächsten Schritt** ("prüfe den API-Key", "starte Ollama", "Host erreichbar?")
-— oder ist es rohe Technik (`AuthenticationFailed`, ein Stacktrace, eine
-englische Lib-Meldung)? Wo unverständlich: die Meldung verständlich machen
-(über die bestehende Fehler-Code→Übersetzung aus Spec 0024, DE/EN). Wo schon
-gut: so lassen und berichten.
-
-Berichte mir eine kurze Tabelle: die fünf Fälle, was der Nutzer aktuell
-sieht, was du geändert hast.
-
-## Sicherheits-Invarianten
-
-- A2: Kein verwaister Keychain-Eintrag nach fehlgeschlagenem `create_server`.
-- Keiner der Punkte lockert eine Filter-Engine-/Gating-Entscheidung.
-- B1/B2: Ein Startfehler führt nie zu einem spurlosen Verschwinden — mindestens
-  eine lesbare Logzeile.
-
-## Reihenfolge / Hinweis
-
-Jeder Fund ein eigener Commit. A2 zuerst (ERHÖHT, echtes Bauen). A3, B1, B2,
-D2 sind Verifikations-lastig — bei jedem **erst berichten, dann fixen**.
-Am Ende `spec-reviewer` (A2 mit ERHÖHT, Rest NORMAL). Regressionstests, wo
-gebaut wird, gegen den ungefixten Stand verifizieren (CLAUDE.md).
+- Der Fall „Linux ohne Schlüsselbund-Dienst" und der native Startfehler-
+  Dialog sind in Spec 0059 und Spec 0101 beschrieben, nicht hier.

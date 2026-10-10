@@ -589,7 +589,7 @@ mod local_server_tests {
         crate::local_server::save_notes(&handle, "").unwrap();
     }
 
-    /// Spec 0063, Teil 2: das im echten Einsatz beobachtete "KI kündigt ein
+    /// das im echten Einsatz beobachtete "KI kündigt ein
     /// Kommando im Fließtext an, ruft `suggest_command` aber nicht auf"
     /// (kein `ActionProposed` → Auto-Fortsetzung aus Spec 0021 hat nichts,
     /// worauf sie reagieren kann, sieht aus wie "KI bleibt mitten im Satz

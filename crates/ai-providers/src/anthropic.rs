@@ -9,7 +9,7 @@
 //! `content_block_delta` liefert `delta.type == "text_delta"` (Feld
 //! `text`) bzw. `"input_json_delta"` (Feld `partial_json`, akkumulierend),
 //! `content_block_stop` schließt den Block ab, `message_delta` liefert
-//! `delta.stop_reason` (Spec 0063, Teil 1: geloggt; seit Spec 0065, Teil 3
+//! `delta.stop_reason` (geloggt; seit Spec 0065, Teil 3
 //! zusätzlich sicherheitskritisch ausgewertet — ein Tool-Call aus einer
 //! Antwort mit `stop_reason: max_tokens` wird nie freigegeben, s.
 //! `AnthropicStreamState::finalize`), `message_stop` beendet den Stream.
@@ -1017,7 +1017,7 @@ impl AnthropicStreamState {
                     ));
                 }
             }
-            // Spec 0063, Teil 1: Anthropic liefert `stop_reason` im
+            // Anthropic liefert `stop_reason` im
             // Spec 0064, Teil 5: `usage` (inkl. der Cache-Felder) steht im
             // `message_start`-Event unter `message.usage`, NICHT unter
             // `message_delta`s eigenem (dort nur `output_tokens`,
@@ -1700,7 +1700,7 @@ mod tests {
         assert!(log_text.contains("\"cache_read_input_tokens\":5120"));
     }
 
-    /// Spec 0063, Teil 1: der eigentliche Testfall aus der Spec — ein
+    /// der eigentliche Testfall aus der Spec — ein
     /// `message_delta` mit `stop_reason: "end_turn"` muss geloggt werden
     /// (nicht nur der isolierte `log_stop_reason`-Aufruf, sondern über den
     /// tatsächlichen SSE-Parsing-Pfad, der ihn im echten Stream findet).
@@ -1732,7 +1732,7 @@ mod tests {
     }
 
     /// Gegenprobe: `max_tokens` (Antwort technisch abgeschnitten) muss
-    /// ebenso sichtbar werden — das ist der Fall, der laut Spec 0063 auf
+    /// ebenso sichtbar werden — das ist der Fall, der laut der damaligen Diagnose auf
     /// einen echten Bug (Token-Limit zu niedrig) hindeuten würde.
     #[tokio::test]
     async fn test_message_delta_with_max_tokens_stop_reason_is_logged() {

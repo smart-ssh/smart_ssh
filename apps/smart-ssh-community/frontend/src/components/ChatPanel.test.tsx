@@ -233,9 +233,8 @@ describe("registered document actions (Spec 0045)", () => {
   });
 });
 
-// Spec 0055, Teil 2 ("Testbarkeit"): "Aktionen erscheinen nach der
-// gewählten Regel (substanziell/Hover), bestehende Funktion (Export/Notiz)
-// weiter erreichbar."
+// Spec 0055, Teil 2: Die Aktionen erscheinen erst bei Hover oder
+// Tastaturfokus, Export und Notiz bleiben an jeder Antwort mit Text erreichbar.
 describe("assistant message actions (Spec 0055, Teil 2)", () => {
   function assistantItem(text: string): ChatItem {
     return { type: "assistant", id: "assistant-1", text };

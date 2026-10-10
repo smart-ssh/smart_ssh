@@ -1,162 +1,122 @@
-# Spec: Server-/Gruppen-Verwaltung (UI)
+# Spec 0008 — Server- und Gruppenverwaltung
 
-Status: Entwurf
-Modul: `crates/app-tauri` (neue Commands) + `frontend/`
-Abhängigkeiten: `ssh-manager-core`/`persistence-sqlite` (Spec 0003/0004),
-baut auf dem MVP-Screen aus Spec 0007 auf (das dort bewusst fehlende
-Server-Anlegen wird hier nachgezogen)
+Status: umgesetzt
+Zweck: Server und Gruppen lassen sich vollständig in der Oberfläche anlegen, bearbeiten und löschen. Notizen haben einen Editor mit Änderungshistorie, und der Nutzer kann sehen, was die KI als Kontext zu sehen bekommt. Ein Verbindungstest prüft Zugangsdaten, bevor ein Server gespeichert wird.
+Bezüge: Spec 0003 (Profile, Notizen), Spec 0004 (Persistenz, Löschverhalten), Spec 0005 (Verbindung, Host-Key-Prüfung, Zeitgrenzen, Schritt-Protokoll), Spec 0007 (Hauptansicht, Umgang mit Zugangsdaten), Spec 0033 (gruppierte Serverübersicht), Spec 0046 (zweistufiges Löschen eines Servers), Spec 0069 (Fehlerarten), Spec 0073 (Trimmen von Zugangsdaten), Spec 0075 (SSH-Konfiguration), Spec 0082 (Wechsel der Anmeldeart), Spec 0100 (Host-Key-Dialog), Spec 0101 (Secret-Umzug), Spec 0103 (Drag-and-drop), ADR 0110 (Schritt-Protokoll des Verbindungstests).
 
 ## 1. Ziel
 
-Server und Gruppen lassen sich vollständig im UI anlegen, bearbeiten und
-löschen, statt wie bisher über `profiles_demo`/CLI. Zusätzlich: Notizen
-(Spec 0003, Abschnitt 5) bekommen einen echten Editor samt Änderungshistorie,
-und der Nutzer kann sich anzeigen lassen, was die KI als Kontext tatsächlich
-zu sehen bekommt.
+Server und Gruppen werden in der Oberfläche verwaltet statt über Demo-Programme
+oder die Kommandozeile. Notizen (Spec 0003, Abschnitt 5) haben einen echten
+Editor samt Änderungshistorie, und der Nutzer kann sich anzeigen lassen, was
+die KI als Kontext tatsächlich sieht.
 
-## 2. Scope-Abgrenzung
+## 2. Abgrenzung
 
-Bewusst **nicht** Teil dieser Spec, um sie überschaubar zu halten:
-- ~~Drag-and-Drop-Reorganisation der Gruppenhierarchie~~ — nicht mehr
-  ausgeschlossen: Spec 0103 (Issue #48) ergänzt Drag-and-drop für Server
-  und Gruppen in beiden Bäumen. Die Gruppen-Auswahl per Dropdown im
-  Bearbeiten-Formular bleibt als tastaturbedienbarer Weg bestehen.
-- Mehrere parallele Server-Tabs/Sessions (eigene spätere Spec)
-- Tag-basierte Filter-Engine-UI (Regeln verwalten) — eigene spätere Spec,
-  auch wenn Tags hier schon am Server gesetzt werden können (nur als
-  Freitext-Chips, keine Regel-Zuordnung)
+Nicht Teil dieser Spec:
 
-## 3. Tauri-Commands: Gruppen
+- Drag-and-drop-Umordnen von Servern und Gruppen: Spec 0103. Die Auswahl der
+  übergeordneten Gruppe per Auswahlliste im Bearbeiten-Formular bleibt als
+  tastaturbedienbarer Weg bestehen.
+- Mehrere parallele Sitzungen: Spec 0017.
+- Das Verwalten der Filter-Regeln: Spec 0009. Tags lassen sich am Server als
+  Freitext-Chips setzen; die Zuordnung zu Regeln ist dort beschrieben.
 
-```
-list_groups() -> Vec<GroupDto>              // flach, parent_id im DTO, Baum wird im Frontend gebaut
-create_group(name: String, parent_id: Option<GroupId>) -> GroupId
-update_group(id: GroupId, name: String, parent_id: Option<GroupId>)
-delete_group(id: GroupId, confirm_cascade: bool) -> DeleteGroupResult
-```
+## 3. Gruppen
 
-`delete_group` gibt vorab (bei `confirm_cascade: false`) eine Vorschau
-zurück, was die Löschung tatsächlich bedeutet — passend zum
-`CASCADE`/`SET NULL`-Verhalten aus Spec 0004, Abschnitt 4:
+Die Oberfläche kann Gruppen auflisten (flach, mit Verweis auf die übergeordnete
+Gruppe; den Baum baut die Oberfläche), anlegen, umbenennen oder verschieben und
+löschen.
 
-```rust
-pub struct DeleteGroupResult {
-    pub child_groups_to_delete: Vec<GroupDto>,   // werden mitgelöscht (CASCADE)
-    pub servers_to_unassign: Vec<ServerDto>,     // verlieren nur die Gruppenzuordnung (SET NULL)
-    pub executed: bool, // false = nur Vorschau, true = tatsächlich gelöscht
-}
-```
+Das Löschen einer Gruppe ist zweistufig, passend zum Löschverhalten aus Spec
+0004: Der erste Schritt löscht nichts und liefert eine Vorschau,
 
-Erst ein zweiter Aufruf mit `confirm_cascade: true` löscht tatsächlich. Das
-verhindert, dass ein Nutzer versehentlich mehrere Untergruppen mitlöscht,
-ohne das vorher explizit gesehen zu haben.
+- welche Untergruppen mitgelöscht werden (kaskadierend) und
+- welche Server nur ihre Gruppenzuordnung verlieren.
 
-## 4. Tauri-Commands: Server
+Erst ein zweiter, ausdrücklich bestätigter Schritt löscht. So werden nicht
+versehentlich mehrere Untergruppen gelöscht, ohne sie vorher gesehen zu haben.
 
-```
-list_servers(group_id: Option<GroupId>) -> Vec<ServerDto>
-get_server(id: ServerId) -> ServerDto
-create_server(input: ServerInput) -> ServerId
-update_server(id: ServerId, input: ServerInput)
-delete_server(id: ServerId)
-test_connection(input: ServerInput) -> TestConnectionResult
-```
+## 4. Server
 
-```rust
-pub struct ServerInput {
-    pub name: String,
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub group_id: Option<GroupId>,
-    pub tags: Vec<String>,
-    pub auth: AuthMethodInput,
-    pub jump_host: Option<ServerId>,
-}
+Die Oberfläche kann Server auflisten (optional nach Gruppe), einzeln abrufen,
+anlegen, ändern, löschen und eine Verbindung testen (Abschnitt 7).
 
-pub enum AuthMethodInput {
-    Password { value: Option<String> },               // None bei update = unverändert lassen
-    PrivateKey { key_content: Option<String>, passphrase: Option<String> },
-    Agent,
-    Certificate { cert_content: Option<String>, key_content: Option<String> },
-}
-```
+Ein Server hat: Name, Host, Port, Benutzername, optionale Gruppe, Tags, eine
+Anmeldeart und optional einen Jump-Host (einen anderen gespeicherten Server).
+Anmeldearten sind Passwort, privater Schlüssel (Inhalt mit optionaler
+Passphrase), Agent und Zertifikat (Zertifikat plus Schlüssel); weitere Arten
+beschreibt Spec 0076.
 
-Gleiche Konvention wie bei der AI-Provider-Verwaltung (Spec 0007, Abschnitt
-8.2): Secret-Felder werden nur bei `create_server` zwingend benötigt; bei
-`update_server` bedeutet `None`/leer "unverändert lassen", nicht "löschen".
-Backend schreibt Secret-Inhalte über `CredentialStore::set()` **vor** dem
-Schreiben der restlichen Felder in die DB — dieselbe Reihenfolge wie beim
-Provider, aus demselben Grund (kein Zustand, in dem ein `CredentialRef` in
-der DB steht, aber kein zugehöriges Secret existiert).
+**Umgang mit Zugangsdaten.** Wie bei der KI-Anbieter-Verwaltung (Spec 0007,
+Abschnitt 8.2):
 
-`ServerDto` (Rückgabe) enthält **keine** Secret-Felder, nur `AuthMethodKind`
-(welche Methode aktiv ist) ohne Inhalt — analog zum Muster, dass der
-API-Key nie ans Frontend zurückgeht.
+- Geheime Felder sind nur beim Anlegen zwingend. Beim Ändern heißt ein leeres
+  Feld „unverändert lassen", nicht „löschen" (Spec 0073, Spec 0082).
+- Das Backend legt Secret-Inhalte in der Credential-Ablage ab, **bevor** die
+  übrigen Felder in der Datenbank stehen. So gibt es nie einen Verweis auf ein
+  Secret, das nicht existiert.
+- Was die Oberfläche zurückbekommt, enthält **keine** Secret-Felder, nur welche
+  Anmeldeart aktiv ist.
+
+**Löschen eines Servers** ist zweistufig (Spec 0046): erst eine Vorschau der
+Auswirkungen, dann das bestätigte Löschen.
 
 ## 5. Notiz-Verwaltung
 
-```
-update_group_notes(id: GroupId, content: String)
-update_server_notes(id: ServerId, content: String)
-list_note_revisions(target: NoteTarget) -> Vec<NoteRevisionDto>
-rollback_note(target: NoteTarget, revision_id: Uuid)
-preview_effective_notes(server_id: ServerId) -> String
-```
+- Jede manuelle Änderung der Notiz einer Gruppe oder eines Servers landet als
+  Revision mit dem Nutzer als Bearbeiter in der Historie (Spec 0003,
+  Abschnitt 5.3), genau wie Änderungen der KI.
+- Die **Historie** ist eine chronologische Liste. Jeder Eintrag zeigt den
+  Zeitpunkt und den Bearbeiter (der Nutzer, oder die KI mit Anbieter und
+  Modellname) und hat eine Schaltfläche „Wiederherstellen".
+- **Wiederherstellen** überschreibt nichts still: Es entsteht eine neue
+  Revision mit dem alten Inhalt. Die Historie bleibt nur anfügend, vergangene
+  Einträge werden weder gelöscht noch umgeschrieben, und ein Rollback bleibt
+  nachvollziehbar.
+- Die **Kontext-Vorschau** zeigt den wirksamen Notiztext eines Servers
+  (Spec 0003, Abschnitt 5.1) unverändert: genau den Text, den die KI beim
+  nächsten Verbindungsaufbau zu diesem Server als Kontext bekommt, nicht
+  gekürzt und nicht umformatiert.
 
-- `update_*_notes` ruft intern `record_revision(target, content, NoteEditor::User)`
-  auf (Spec 0003, Abschnitt 5.3) — jede manuelle Änderung landet in der
-  Historie, genau wie KI-Änderungen.
-- `rollback_note` überschreibt den aktuellen Stand **nicht still**, sondern
-  erzeugt selbst eine neue Revision mit dem alten Inhalt (append-only
-  Historie, kein Löschen/Umschreiben vergangener Einträge) — so bleibt
-  nachvollziehbar, dass ein Rollback stattgefunden hat, statt dass es aussieht
-  als wäre die Änderung nie passiert.
-- `preview_effective_notes` ruft direkt `effective_notes()` (Spec 0003,
-  Abschnitt 5.1) auf und gibt das Ergebnis unverändert zurück — der Nutzer
-  sieht exakt den Text, den die KI beim nächsten Verbindungsaufbau zu diesem
-  Server als Kontext bekommt, keine gekürzte oder umformatierte Version.
+## 6. Oberfläche
 
-## 6. UI-Screens
+- **Seitenleiste:** Baum der Gruppen mit den Servern als Blättern. Ein Klick auf
+  eine Gruppe oder einen Server öffnet das Bearbeiten-Formular im Hauptbereich,
+  nicht in einem eigenen Dialog, damit sich beim Einrichten mehrerer Server
+  bequem hin- und herwechseln lässt.
+- **Gruppen-Formular:** Name, übergeordnete Gruppe (Auswahlliste, die die
+  Gruppe selbst und ihre Nachfahren ausschließt, sodass ein Zyklus schon vor
+  dem Absenden unmöglich ist), Notiz-Editor und eine Löschen-Schaltfläche mit
+  der Vorschau aus Abschnitt 3.
+- **Server-Formular:** alle Felder aus Abschnitt 4. Die Anmeldeart wählt der
+  Nutzer aus, die Eingabefelder wechseln mit: Passwortfeld; Schlüsseldatei über
+  den Datei-Dialog mit optionaler Passphrase; „Agent verwenden" ohne weitere
+  Eingabe; Zertifikat und Schlüssel als zwei Dateiauswahlen. Tags werden als
+  Chips eingegeben (durch Komma oder Enter getrennt). Dazu kommen der
+  Notiz-Editor und die Schaltfläche „Kontext-Vorschau", die den wirksamen
+  Notiztext in einem schreibgeschützten Textblock zeigt.
+- **Gespeicherte Host-Keys:** Das Formular eines bestehenden, gespeicherten
+  Servers zeigt einen schreibgeschützten Bereich „Host-Keys" mit einer Zeile je
+  gespeichertem Schlüssel: Algorithmus (z. B. `ssh-ed25519`) und Fingerprint
+  (`SHA256:…`, markier- und kopierbar), damit der Nutzer ihn mit einer zweiten
+  Quelle abgleichen kann.
+  - Nachgeschlagen wird mit Host und Port des **gespeicherten** Servers, nicht
+    mit ungespeicherten Formularwerten.
+  - Ist noch kein Schlüssel gespeichert, steht dort „Noch kein Host-Key
+    gespeichert. Er wird bei der ersten Verbindung gespeichert."
+  - Bei einem neuen, ungespeicherten Server und beim lokalen Pseudo-Server
+    erscheint der Bereich nicht.
+  - Ein Schlüssel, dessen Algorithmus sich nicht bestimmen lässt, erscheint mit
+    der neutralen Bezeichnung `unknown`.
+  - Das Anzeigen verändert den Vertrauensstand nicht; Löschen oder Ersetzen
+    eines Schlüssels gibt es hier nicht. Der rohe Schlüssel verlässt das
+    Backend nie.
+  - Server mit gleichem Host und Port teilen sich die gespeicherten Schlüssel
+    und zeigen dieselben Einträge.
+- **Notiz-Historie:** wie in Abschnitt 5.
 
-- **Sidebar**: Baumdarstellung der Gruppen (rekursiv aus `list_groups()`
-  clientseitig aufgebaut) mit Servern als Blätter. Klick auf Gruppe/Server
-  öffnet das jeweilige Bearbeiten-Formular im Hauptbereich, nicht als
-  separates Modal — passt besser zu häufigem Hin- und Herwechseln beim
-  Einrichten mehrerer Server.
-- **Gruppen-Formular**: Name, übergeordnete Gruppe (Dropdown, verhindert
-  clientseitig die Auswahl der Gruppe selbst oder eigener Nachfahren als
-  Parent — Zyklenvermeidung schon vor dem Absenden, nicht erst serverseitig
-  entdeckt), Notiz-Editor (Abschnitt 5), Löschen-Button mit der
-  Cascade-Vorschau aus Abschnitt 3.
-- **Server-Formular**: alle Felder aus `ServerInput`, Auth-Methode als
-  Auswahl mit dynamisch wechselnden Eingabefeldern (Passwort-Feld,
-  Key-Datei-Auswahl via Tauri-Datei-Dialog + optionale Passphrase,
-  "Agent verwenden" ohne weitere Eingabe, Zertifikat + Key als zwei
-  Datei-Auswahlen), Tag-Eingabe als Chip-Input (komma-/Enter-getrennt),
-  Notiz-Editor, "Kontext-Vorschau"-Button, der `preview_effective_notes`
-  aufruft und das Ergebnis in einem Read-only-Textblock anzeigt.
-- **Gespeicherte Host-Keys (Issue #248)**: Das Formular eines bestehenden,
-  gespeicherten Servers zeigt einen schreibgeschützten Bereich "Host-Keys"
-  mit einer Zeile je gespeichertem Schlüssel: Algorithmus (z. B.
-  `ssh-ed25519`) und Fingerprint (`SHA256:…`, markier- und kopierbar), damit
-  der Nutzer ihn mit einer zweiten Quelle abgleichen kann. Nachgeschlagen
-  wird mit Host und Port des **gespeicherten** Servers, nicht mit
-  ungespeicherten Formularwerten. Ist noch kein Schlüssel gespeichert, sagt
-  der Bereich das ("Noch kein Host-Key gespeichert. Er wird bei der ersten
-  Verbindung gespeichert."). Bei einem neuen, ungespeicherten Server und beim
-  lokalen Pseudo-Server wird der Bereich nicht angezeigt. Ein Schlüssel, dessen
-  Algorithmus sich nicht bestimmen lässt, erscheint mit der neutralen
-  Bezeichnung `unknown`. Das Anzeigen verändert den Vertrauensstand nicht;
-  Löschen oder Ersetzen eines Schlüssels gibt es hier nicht. Der rohe
-  Schlüssel verlässt das Backend nie. Server mit gleichem Host und Port
-  teilen sich die gespeicherten Schlüssel und zeigen dieselben Einträge.
-- **Notiz-Historie**: chronologische Liste (`list_note_revisions`), jeder
-  Eintrag zeigt Zeitpunkt, Editor (Nutzer, oder KI mit Provider/Modell-Name),
-  und einen "Wiederherstellen"-Button pro vergangenem Eintrag (→
-  `rollback_note`).
-
-## 6a. Nicht nutzbare Server (Issue #100)
+## 6a. Nicht nutzbare Server
 
 Ein gespeicherter Server, dessen Anmeldeart diese Version der App nicht
 lesen kann, ist **nicht nutzbar**. Das passiert, wenn eine neuere Version
@@ -216,64 +176,49 @@ Anmeldeart beschädigt ist.
 - Andere beschädigte Felder eines Servers (ID, Zeitstempel, Port) sind
   davon nicht erfasst und lassen das Laden weiterhin scheitern.
 
-## 7. Verbindungstest ("Verbindung testen"-Button)
+## 7. Verbindungstest („Verbindung testen")
 
-`test_connection(input: ServerInput) -> TestConnectionResult` erlaubt, eine
-Verbindung zu prüfen, **bevor** ein Server gespeichert wird — z. B. direkt
-aus dem noch offenen Anlege-/Bearbeiten-Formular heraus.
+Der Verbindungstest prüft eine Verbindung, **bevor** ein Server gespeichert
+wird, direkt aus dem offenen Anlege- oder Bearbeiten-Formular.
 
-```rust
-pub enum TestConnectionResult {
-    Success,
-    AuthenticationFailed,
-    HostKeyUnknown { fingerprint: String, key_type: Option<String> },
-    HostKeyMismatch { expected_fingerprint: String, actual_fingerprint: String, key_type: Option<String> },
-    NetworkError(String),
-    Timeout,
-}
-```
+Mögliche Ergebnisse: Erfolg, Anmeldung fehlgeschlagen, unbekannter Host-Key,
+geänderter Host-Key, Netzwerkfehler (mit Fehlercode, wenn bekannt, Spec 0069)
+und Zeitüberschreitung.
 
-Verhalten:
-- Nimmt die Rohdaten aus dem Formular direkt entgegen (inkl. noch nicht
-  gespeicherter Secrets) — **nichts wird dabei persistiert**, weder in der
-  DB noch im `CredentialStore`. Bei `update_server`-artigen Aufrufen mit
-  leerem Secret-Feld ("unverändert lassen") wird für den Test das bereits
-  gespeicherte Credential des existierenden Servers herangezogen, sonst
-  ließe sich ein bestehender Server gar nicht testen, ohne das Passwort
-  erneut einzutippen.
-- Führt **nur den SSH-Auth-Handshake** durch (`ssh-transport` verbindet und
-  authentifiziert sich), aber **kein Kommando wird ausgeführt** — kein
-  `execute()`-Aufruf, keine Filter-Engine-Beteiligung, da hier nichts auf
-  dem Server passieren soll, nur die Erreichbarkeit/Zugangsdaten geprüft
-  werden.
-- Verbindung wird direkt danach wieder geschlossen, es entsteht kein Eintrag
-  in `AppState.sessions`.
-- Timeout von 10 Sekunden, danach `TestConnectionResult::Timeout` statt
-  unbegrenztem Warten.
-- Jump-Host-Kette: bereits gespeicherte Zwischen-Hops werden regulär über
-  `ProfileStore` aufgelöst (Spec 0005, Abschnitt 5); nur der letzte Hop (der
-  gerade bearbeitete Server) nutzt die frischen Formulardaten statt
-  gespeicherter Credentials.
-- **Host-Key-Prüfung wird bewusst wiederverwendet**: `HostKeyStore` ist nach
-  Host/Port indiziert (Spec 0005, Abschnitt 6), nicht nach Server-ID. Ergibt
-  der Test `HostKeyUnknown`, kann die UI direkt hier den
-  Bestätigungsdialog aus Spec 0007 zeigen und bei Zustimmung `trust()`
-  aufrufen — die spätere "echte" Verbindung über `connect()` muss dann
-  nicht erneut bestätigt werden, da derselbe `HostKeyStore`-Eintrag greift.
+- **Nichts wird gespeichert.** Der Test nimmt die Formularwerte einschließlich
+  noch nicht gespeicherter Secrets entgegen und legt weder in der Datenbank noch
+  in der Credential-Ablage etwas ab. Bei einem bestehenden Server mit leerem
+  Secret-Feld („unverändert lassen") nutzt der Test das bereits gespeicherte
+  Secret dieses Servers, sonst ließe sich ein bestehender Server nur nach
+  erneutem Eintippen des Passworts testen.
+- **Nur Anmeldung, kein Kommando.** Der Test baut die Verbindung auf und meldet
+  sich an. Es wird kein Kommando ausgeführt, die Filter-Engine ist nicht
+  beteiligt, und auf dem Server passiert nichts. Danach wird die Verbindung
+  sofort geschlossen; es entsteht keine Sitzung.
+- **Zeitgrenzen** wie beim echten Verbindungsaufbau (Spec 0005, Abschnitt 7;
+  Spec 0069): Statt unbegrenzt zu warten, meldet der Test „Timeout". Das
+  Warten auf eine Host-Key-Entscheidung zählt nicht dazu.
+- **Jump-Host-Kette:** Bereits gespeicherte Zwischen-Hops werden wie bei einer
+  echten Verbindung aufgelöst; nur der letzte Hop, der gerade bearbeitete
+  Server, nutzt die frischen Formulardaten.
+- **Host-Key-Prüfung ist dieselbe wie bei einer echten Verbindung.** Die
+  gespeicherten Schlüssel sind nach Host und Port abgelegt, nicht nach Server.
+  Bei einem unbekannten Schlüssel erscheint derselbe Bestätigungsdialog (Spec
+  0005, Abschnitt 6; Spec 0100) mit dem Schlüsseltyp des angebotenen Schlüssels
+  (ohne diese Zeile, wenn er sich nicht bestimmen lässt). Stimmt der Nutzer zu,
+  wird der Schlüssel gespeichert, und die spätere echte Verbindung fragt nicht
+  erneut. Bei einem geänderten Schlüssel erscheint der Warndialog.
+- **Schritt-Protokoll:** Der Test zeigt die Schritte des Aufbaus mit Dauer und
+  Ergebnis zugeklappt unter der Meldung (Spec 0005, Abschnitt 7). Es enthält
+  keine Zugangsdaten und geht nie ins Log oder in den Diagnose-Export.
 
-UI-seitig: Ergebnis erscheint als kompakte Inline-Anzeige direkt im
-Formular (grüner Haken bei `Success`, sonst kurze Fehlermeldung), kein
-eigenes großes Modal — bei `HostKeyUnknown`/`HostKeyMismatch` erscheint der
-bereits aus Spec 0005/0007 bekannte Bestätigungs- bzw. Warnungs-Dialog. Der Dialog zeigt
-dabei wie bei `connect()` den Schlüsseltyp des angebotenen Schlüssels
-(`key_type`; `null`, wenn er sich nicht bestimmen lässt, dann ohne diese
-Zeile).
+Das Ergebnis erscheint kompakt im Formular (grüner Haken bei Erfolg, sonst eine
+kurze Fehlermeldung), ohne eigenes großes Fenster.
 
-## 8. Offene Punkte
+## 8. Grenzen
 
-- Key-Datei-Auswahl liest den Dateiinhalt und speichert ihn im
-  `CredentialStore` — der ursprüngliche Dateipfad wird **nicht**
-  gespeichert. Falls der Nutzer den Key später extern rotiert, muss er ihn
-  im UI erneut hochladen; es gibt keine "beobachtet Datei auf Änderungen"-
-  Funktion. Das ist eine bewusste MVP-Vereinfachung, aber wert, es explizit
-  festzuhalten, falls es später überrascht.
+- Die Auswahl einer Schlüsseldatei liest den Dateiinhalt und legt ihn in der
+  Credential-Ablage ab; der ursprüngliche Dateipfad wird **nicht** gespeichert.
+  Rotiert der Nutzer den Schlüssel später außerhalb der App, muss er ihn im
+  Formular erneut auswählen. Die App beobachtet die Datei nicht auf Änderungen.
+  (Identitätsdateien, die die App dauerhaft per Pfad liest: Spec 0076.)

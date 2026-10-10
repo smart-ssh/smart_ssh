@@ -1,110 +1,77 @@
-# Spec: Versions- & Build-Anzeige
+# Spec 0052 — Versions- und Build-Anzeige
 
-Status: Entwurf
-Repo: **öffentlich** `smart_ssh` (Einbettung, Log, Über-Dialog, Titelzeile) —
-Zwei-Repo-Aspekt bei der Official-Titelzeile prüfen (siehe §5)
-Abhängigkeiten: Startup-Logging (0047/0016), Settings-Neustruktur (0050,
-"Über"-Kategorie), Titelleiste (0014), Versionierung (0048)
+Status: umgesetzt
+Zweck: Auf einen Blick sichtbar machen, welcher Build läuft — Version plus Commit-Hash. Jeder Bug-Report und jedes Log trägt damit die exakte Kennung, ohne dass sie erfragt werden muss.
+Bezüge: Spec 0014 (Titelleiste), Spec 0016 und 0047 (Startlog), Spec 0048 (Versionierung), Spec 0049 (Titelleiste unter Windows), Spec 0050 (Einstellungen, Kategorie „Über"), Spec 0038 (Edition), ADR 0043.
 
-> Macht auf einen Blick sichtbar, **welcher Build genau** läuft — Version +
-> eindeutiger Commit-Hash. Zweck: In der Testphase trägt jeder Bug-Report/jedes
-> Log automatisch die exakte Kennung, statt sie mühsam zu erfragen. Version
-> allein reicht nicht (mehrere Builds können dieselbe Version tragen); erst
-> Version + Commit-Hash identifiziert den Stand eindeutig.
+Version allein reicht nicht, weil mehrere Builds dieselbe Version tragen können;
+erst Version und Commit-Hash identifizieren den Stand eindeutig.
 
-## 1. Was angezeigt/geloggt wird
+## 1. Was angezeigt wird
 
-Zwei Angaben, überall im selben Format:
-- **Version** aus der maßgeblichen Quelle (`tauri.conf.json`, Spec 0048) —
-  z. B. `0.4.1`.
-- **Kurzer Commit-Hash** des gebauten Stands — z. B. `a5b3e01`.
-- **Format**: `0.4.1 (a5b3e01)`. Optional Edition-Kennung, falls billig:
-  `0.4.1 (a5b3e01) · Official` bzw. `· Community`.
+Überall dasselbe Format: `0.4.1 (a5b3e01)` — die Version aus der maßgeblichen
+Quelle (Spec 0048) und der kurze Commit-Hash des gebauten Stands. Wo es passt,
+folgen mit ` · ` die Edition (`Official` bzw. `Community`) und, bei einem
+Entwicklungs-Build, die Kennung `Dev`. Dev- und Release-Builds nutzen getrennte
+Datenverzeichnisse, deshalb wird nur der Dev-Build gekennzeichnet; ein Release-
+Build gilt als Normalfall. Der Versions-/Hash-Teil wird an einer Stelle
+gebildet und nirgends neu zusammengesetzt.
 
-## 2. Commit-Hash zur Build-Zeit einbetten (die Kern-Entscheidung)
+## 2. Der Commit-Hash steckt im Programm
 
-Der Hash muss beim Bauen ins Binary — die App kann ihn zur Laufzeit nicht
-selbst ermitteln (kein Git im Nutzer-System). Ansatz (Coder wählt den
-saubersten, begründet):
-- **Cargo build-script** (`build.rs`): liest `git rev-parse --short HEAD`
-  beim Kompilieren, exponiert es als `env!("…")`-Konstante. Vorteil:
-  funktioniert lokal **und** in CI gleich, kein Extra-Schritt.
-  **Fallstrick**: In einem Build ohne Git (z. B. aus einem Tarball) muss ein
-  Fallback greifen (`"unknown"` statt Build-Abbruch). Und: `build.rs` sollte
-  bei Hash-Änderung neu laufen (`cargo:rerun-if-changed` auf `.git/HEAD` bzw.
-  die passende Ref) — sonst zeigt ein inkrementeller Build einen veralteten
-  Hash.
-- **Alternative**: Hash als Umgebungsvariable aus CI/Release-Skript
-  (`SMART_SSH_BUILD_HASH`) injizieren. Vorteil: explizit. Nachteil: lokale
-  Builds ohne die Variable haben keinen Hash → Fallback nötig, und zwei Wege
-  (lokal vs. CI) statt einem.
-- Empfehlung: **build.rs mit Git-Abfrage + `"unknown"`-Fallback + korrektem
-  rerun-Trigger** — ein Weg, lokal wie CI. Der Coder bestätigt, dass es mit
-  dem macOS-Release-Skript und der `official.yml` zusammenspielt (beide
-  bauen aus einem Git-Checkout, also ist der Hash verfügbar).
+Der Hash wird beim Bauen eingebettet; die App ermittelt ihn nie zur Laufzeit
+(auf dem System des Nutzers gibt es kein Git).
 
-Die Version wird weiterhin aus der bestehenden Quelle gelesen (nicht neu
-eingebettet) — nur der Hash kommt hinzu.
+- Lokal und in CI kommt der Hash gleich aus dem Git-Checkout. Ein neuer Commit
+  auf demselben Branch führt zu einem neuen Hash, nicht zu einem veralteten.
+- Ohne Git (z. B. Build aus einem Tarball) bricht der Build nicht ab; der Hash
+  lautet dann `unknown`.
+- Ein Build, der dieses Repository als Abhängigkeit einbindet, kann den Hash
+  über die Umgebungsvariable `SMART_SSH_BUILD_HASH_OVERRIDE` vorgeben. Ein
+  leerer Wert, ein Wert mit Steuerzeichen (z. B. Zeilenumbruch) oder einer über
+  128 Zeichen wird mit einer Warnung ignoriert; dann gilt der Git-Hash. Die
+  Community Edition setzt die Variable nie.
+- Die Version selbst wird weiter aus der bestehenden Quelle gelesen.
 
 ## 3. Wo es erscheint
 
-### 3.1 Log (wichtigste Ebene)
-Die erste Startzeile (Spec 0047 B1) enthält bereits OS/Datenpfad —
-**Version + Hash ergänzen/prüfen**: Steht die Version schon drin? Falls ja,
-Hash dazu; falls nein, beides. So trägt jedes an einen Bug-Report angehängte
-Log automatisch die exakte Build-Kennung.
+### 3.1 Log
 
-### 3.2 Über-Dialog / Settings-"Über"-Kategorie (für den Tester)
-Version + Hash **sichtbar und kopierbar** (der Tester soll es in den
-Bug-Report kopieren können — ein Klick-zum-Kopieren wäre ideal, mind. aber
-markierbarer Text). Natürlicher Ort: die "Über"-Kategorie der neuen
-zweispaltigen Settings (Spec 0050), wo auch NOTICE/Drittlizenzen hingehören
-(Release-Gate F).
+Die erste Startzeile des Logs enthält die Version, den Hash, die Anzeigeform
+`Version (Hash)`, den Build-Typ, Betriebssystem, Architektur und Datenpfad
+(Spec 0047, Fund B1). Jedes an einen Bug-Report angehängte Log trägt so die
+Build-Kennung. Ebenso das Diagnosepaket.
 
-### 3.3 Titelzeile (nur 0.x-Phase, für den Multi-Build-Komfort)
-Die Fenstertitelzeile zeigt zusätzlich Version (+ ggf. Hash), z. B.
-`Smart SSH 0.4.1 (a5b3e01) — Early Access`. Nutzen: Wer mehrere Builds
-parallel testet (Cross-Plattform), sieht sofort welcher läuft.
-- **Bewusst als 0.x-Merkmal**: Für die spätere 1.0 will man das evtl.
-  reduzieren (nur "Smart SSH", ohne Version/Hash in der Leiste). Deshalb so
-  bauen, dass es leicht abschaltbar/anpassbar ist (z. B. an die
-  Early-Access-Kennzeichnung gekoppelt), nicht fest verdrahtet.
-- Berührt die custom Titelleiste (Spec 0014) — die Version ist Text *in* der
-  Leiste, nicht die Fenster-Buttons; sollte mit dem Windows/Linux-
-  Titelleisten-Stand (0049) verträglich sein (prüfen, dass der Text die
-  Drag-Region/die Buttons nicht stört).
+### 3.2 Einstellungen, Kategorie „Über"
 
-## 4. Nicht-Ziele
+Die Kategorie zeigt Version, Hash, Edition und Build-Typ in einer Zeile. Der
+Text ist markierbar; ein Button „Kopieren" legt dieselbe Zeile in die
+Zwischenablage. Scheitert das Kopieren, erscheint eine sichtbare Meldung und
+der Text bleibt markierbar. Lässt sich die Information nicht laden, steht dort
+eine Fehlermeldung. Zusätzlich öffnet die Kategorie die Liste der
+Drittlizenzen.
 
-- Keine echte fortlaufende "Build-Nummer" (CI-Zähler o. Ä.) — der Commit-Hash
-  ist die eindeutige Build-Kennung und braucht keine zusätzliche Nummer.
-- Kein Auto-Update-Bezug, kიne Telemetrie — reine lokale Anzeige.
+### 3.3 Titelzeile (0.x-Phase)
 
-## 5. Zwei-Repo-Aspekt
+Die Titelzeile zeigt neben „Smart SSH" die Version mit Hash, die Edition und
+bei Dev-Builds `Dev`, gefolgt von „— Early Access", z. B.
+`Smart SSH 0.4.1 (a5b3e01) · Official — Early Access`. Wer mehrere Builds
+parallel testet, sieht so sofort, welcher läuft.
 
-- Die **Einbettung (build.rs), das Log und der Über-Dialog** sind
-  öffentlicher Kern — die Community Edition profitiert genauso.
-- Die **Titelzeile**: Falls die Official-Edition einen eigenen Titel-/Shell-
-  Aufbau hat, muss die Version-in-Titelzeile ggf. auch dort gesetzt werden.
-  Prüfen und melden — wenn die Titelzeile rein öffentlich gerendert wird,
-  reicht der öffentliche Teil; sonst privater Folgeschritt (die Edition-
-  Kennung "Official" käme ohnehin von der privaten Seite).
-- Die **Edition-Kennung** (`· Official`/`· Community`) kommt aus dem
-  `Edition`-Feld des `Wiring` (Spec 0038) — die kennt der öffentliche Code
-  bereits als Enum; nur der konkrete Wert wird pro Binary gesetzt.
+- Der gesamte Zusatz hängt an einem einzigen Schalter, der an die Early-
+  Access-Kennzeichnung gekoppelt ist und für 1.0 in einem Schritt abgeschaltet
+  werden kann; dann steht dort nur „Smart SSH".
+- Lässt sich die Information nicht laden, steht nur „Smart SSH".
+- Der Text ist Teil der Ziehfläche der Leiste und stört weder die Fenster-
+  Buttons noch das Ziehen (Spec 0049).
 
-## 6. Testbarkeit
+## 4. Grenzen
 
-- build.rs: Ein Build mit Git liefert einen Hash; ein simuliertes Build ohne
-  Git-Zugriff liefert `"unknown"` statt Fehler.
-- Log: erste Zeile enthält Version + Hash (Format-Assertion).
-- Über-Dialog: zeigt Version + Hash, Text ist selektierbar/kopierbar.
-- Titelzeile: enthält die Version; abschaltbar-Mechanismus greift.
+- Keine fortlaufende Build-Nummer; der Commit-Hash ist die Kennung.
+- Kein Bezug zu Auto-Update, keine Telemetrie — rein lokale Anzeige.
 
-## 7. Reihenfolge
+## 5. Editionen
 
-1. build.rs-Einbettung + `"unknown"`-Fallback (die Grundlage).
-2. Log ergänzen (0047-Startzeile).
-3. Über-Dialog (Settings-"Über").
-4. Titelzeile (mit Abschalt-Kopplung an Early-Access).
-5. Zwei-Repo-Prüfung Titelzeile/Edition-Kennung — melden, ob privat nötig.
+Einbettung, Log, Über-Kategorie und Titelzeile gehören zum öffentlichen Kern
+und gelten für jede Edition. Die Edition kommt aus der Verdrahtung der
+jeweiligen Binary (Spec 0038); nur ihr Wert unterscheidet die Editionen.

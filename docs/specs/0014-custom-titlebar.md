@@ -1,88 +1,63 @@
-# Spec: Individuelle Titelleiste
+# Spec 0014 — Individuelle Titelleiste
 
-Status: Entwurf
-Modul: Erweiterung `crates/app-tauri` (Tauri-Konfiguration/Setup) +
-`frontend/` (Header-Komponente)
-Abhängigkeiten: keine fachliche Abhängigkeit zu anderen Modulen, rein
-UI-Chrome-Ebene
+Status: umgesetzt
+Zweck: Die native Titelleiste ist durch eine eigene, ins App-Design integrierte Kopfzeile ersetzt, auf allen drei Plattformen. Die nativen Fenster-Controls bleiben erhalten, und das Fenster lässt sich weiterhin an der Titelleiste bewegen, auch bei offenem Dialog und vor der Entsperrung.
+Bezüge: Spec 0017 (Session-Tabs in der Titelleiste), Spec 0049 (Fenster-Steuerung auf Windows und Linux), Spec 0052 (Versionsanzeige), Spec 0101 (Startzustand und Entsperrung), ADR 0019 (Titelleisten-Plugin), ADR 0040 (Rückfall auf die native Titelleiste), ADR 0118 (Drag-Schicht über modalen Dialogen).
 
 ## 1. Ziel
 
-Die native Titelleiste wird durch eine eigene, ins App-Design integrierte
-Kopfzeile ersetzt — auf allen drei Plattformen, nicht nur macOS, damit das
-Erscheinungsbild konsistent bleibt. Wichtig dabei: **die nativen
-Fenster-Controls bleiben erhalten** (macOS-Ampel, Windows-Minimieren/
-Maximieren/Schließen inkl. Snap-Layout-Unterstützung, Linux-System-Icons) —
-wir bauen keine eigenen Nachbauten dieser Buttons, nur den Rest der
-Titelleiste wird zu eigenem Inhalt (App-Name/Logo, perspektivisch eine
-Tab-Leiste für offene Server-Sessions).
+Die Kopfzeile des Fensters gehört der App: App-Name und Logo sowie die Tab-Leiste
+offener Sitzungen (Spec 0017). Die **nativen Fenster-Controls bleiben
+erhalten** (macOS-Ampel, Windows-Minimieren/Maximieren/Schließen samt
+Snap-Layout-Unterstützung, Linux-Fenster-Controls im System-Icon-Theme). Es
+gibt keine eigenen Nachbauten dieser Buttons, nur der Rest der Titelleiste ist
+eigener Inhalt.
 
-## 2. Technologie: `tauri-plugin-decoration`
+## 2. Plattformverhalten
 
-Community-Plugin, das die Overlay-Titelleiste plattformspezifisch verwaltet:
-- **macOS**: `create_overlay_titlebar()` + `set_traffic_lights_inset(x, y)`
-  positioniert die nativen Ampel-Buttons exakt im eigenen Header-Layout,
-  ohne sie selbst nachbauen zu müssen.
-- **Windows**: rendert eigene Minimieren/Maximieren/Schließen-Buttons als
-  HTML über einer transparenten, draggable Titelleistenfläche, koppelt sich
-  aber an die native Snap-Layout-Funktion (Windows 11 Flyout beim Hover über
-  Maximieren) — kein manuelles Nachbauen dieses Verhaltens nötig.
-- **Linux**: Fenster-Controls nutzen das aktuelle System-Icon-Theme, damit
-  sie sich nicht fremd anfühlen.
+- **macOS:** Die native Ampel sitzt oben links, an die Kopfzeile angepasst
+  positioniert.
+- **Windows:** Minimieren, Maximieren (Wiederherstellen) und Schließen sitzen
+  oben rechts über der ziehbaren Titelleistenfläche; das Windows-11-Snap-Layout
+  beim Überfahren von Maximieren funktioniert.
+- **Linux:** Die Fenster-Controls sitzen oben rechts und nutzen das aktuelle
+  System-Icon-Theme.
 
-Begründung für ein Plugin statt Eigenbau: Die in Abschnitt 1 genannten
-Verhaltensdetails (Snap Layout, Ampel-Verhalten bei nicht reagierender App,
-Dark/Light-Mode-Anpassung der Hover-Farben) sind in der Summe genug
-Detailarbeit, dass ein gepflegtes, plattformübergreifendes Plugin dem
-Eigenbau vorzuziehen ist — konsistent mit dem Projektprinzip, wo möglich auf
-ausgereifte Bibliotheken zu setzen statt plattformspezifische Details selbst
-nachzubauen (vgl. Begründung für `russh`/`docx-rs` in Spec 0005/0012).
+Fenster-Controls liegen immer über jedem Dialog und bleiben bedienbar.
 
-## 3. Konfiguration
+## 3. Aktivierung und Rückfall
 
-`tauri.conf.json`: `decorations: true` bleibt gesetzt (das Plugin verwaltet
-die Decorations selbst pro Plattform — **nicht** `decorations: false`
-setzen, sonst greifen die plattformspezifischen Mechanismen des Plugins
-nicht). Für macOS zusätzlich `titleBarStyle: "Overlay"` und
-`hiddenTitle: true`.
+Die eigene Titelleiste wird beim Start des Fensters aktiviert. Die Aktivierung
+läuft auch vor der Entsperrung (Spec 0101), weil die Entsperrmaske denselben
+Fensterrahmen braucht wie die App.
 
-```rust
-// app-tauri setup
-main_window.create_overlay_titlebar()?;
-
-#[cfg(target_os = "macos")]
-main_window.set_traffic_lights_inset(12.0, 16.0)?; // Startwert, siehe Abschnitt 6
-```
+Scheitert die Aktivierung, stellt die App die native Titelleiste samt deren
+Controls wieder her und protokolliert den Fehler; das Fenster bleibt nicht in
+einem halb dekorierten Zustand. In diesem Fall braucht die Kopfzeile keinen
+Freiraum für Controls mehr. Scheitert dagegen nur die Feinpositionierung der
+macOS-Ampel, bleibt die eigene Titelleiste aktiv (ADR 0040).
 
 ## 4. Eigener Header-Inhalt und Layout
 
-Der übrige Titelleistenbereich wird zu einer React-Komponente
-(`<AppHeader />`), die App-Icon + "Smart SSH"-Schriftzug links zeigt (Platz
-für spätere Erweiterung um eine Tab-Leiste offener Sessions). Wichtig für
-die Platzierung relativ zu den nativen Controls:
+Die Kopfzeile zeigt links das App-Icon und den Schriftzug „Smart SSH"
+(Versions- und Editionszusatz: Spec 0052), in der Mitte Platz für die Tab-Leiste
+(Spec 0017).
 
-- **macOS**: native Ampel sitzt oben links → eigener Header-Inhalt beginnt
-  mit entsprechendem linken Abstand (abgeleitet aus dem
-  `set_traffic_lights_inset`-Wert), damit nichts überlappt.
-- **Windows/Linux**: native Controls sitzen oben rechts (Konvention dieser
-  Plattformen) → eigener Header-Inhalt bekommt stattdessen rechts
-  entsprechenden Abstand.
-
-Die Komponente erkennt die Plattform (Tauri liefert das zur Laufzeit) und
-wählt das passende Padding, statt ein hartcodiertes Layout für nur eine
-Plattform zu bauen.
+- **macOS:** Die Ampel sitzt oben links, der Header-Inhalt beginnt mit
+  entsprechendem Abstand links.
+- **Windows/Linux:** Die Controls sitzen oben rechts, der Header-Inhalt lässt
+  rechts entsprechend Platz.
+- Die Plattform wird zur Laufzeit erkannt; fällt die Erkennung aus, schätzt die
+  App sie aus der Browser-Kennung. Solange die Aktivierung der Titelleiste noch
+  aussteht, gilt derselbe Freiraum wie im Normalfall, damit das Layout nicht
+  springt.
 
 ## 5. Drag-Region und Interaktivität
 
-Der gesamte Header-Bereich (außer den nativen Controls selbst) muss als
-ziehbare Fensterfläche markiert werden (`data-tauri-drag-region`-Attribut),
-damit der Nutzer das Fenster weiterhin per Ziehen der Titelleiste bewegen
-kann — das geht sonst verloren, sobald die native Titelleiste durch eigenen
-Inhalt ersetzt wird. Falls künftig interaktive Elemente in den Header
-kommen (z. B. Tab-Klicks): diese Elemente müssen gezielt **von** der
-Drag-Region ausgenommen werden (`pointer-events`-Handling gemäß
-Plugin-Dokumentation), sonst werden Klicks fälschlich als Fenster-Ziehen
-interpretiert statt als Interaktion.
+Der gesamte Header-Bereich außer den nativen Controls ist ziehbar, damit sich
+das Fenster wie gewohnt an der Titelleiste bewegen lässt. Interaktive Elemente
+im Header, etwa die Session-Tabs, sind von der Drag-Region ausgenommen, sodass
+ein Klick darauf ein Klick bleibt und kein Fenster-Ziehen auslöst.
 
 **Bei geöffnetem modalem Dialog.** Ein modaler Dialog dunkelt das ganze
 Fenster ab, die Titelleiste eingeschlossen. Die Fensterfunktionen der
@@ -135,16 +110,8 @@ Fenster an seiner Oberkante bewegen:
 Nach der Entsperrung übernimmt der Header; es gibt dann keinen zweiten
 Streifen.
 
-## 6. Offene Punkte
+## 6. Grenzen
 
-- Der `set_traffic_lights_inset(12.0, 16.0)`-Wert ist ein Startwert und
-  visuell noch nicht final abgestimmt — das lässt sich nur durch
-  tatsächliches Hinschauen auf dem gebauten Fenster feintunen, nicht rein
-  aus der Spec heraus festlegen.
-- Eine native macOS-Menüleiste (oben am Bildschirmrand, nicht am Fenster) ist
-  ein separates Thema und nicht Teil dieser Spec — hier geht es nur um die
-  Fenster-Titelleiste selbst.
-- Sobald die in Spec 0007 angedachte Mehrfach-Tab-Funktionalität (mehrere
-  offene Server-Sessions parallel) ansteht, wird der Header-Bereich um eine
-  Tab-Leiste erweitert — diese Spec legt nur das Grundgerüst (Icon, Name,
-  Drag-Region, Platzierung relativ zu den nativen Controls), keine Tabs.
+- Der Abstand der macOS-Ampel zum Fensterrand ist ein fest eingestellter
+  Startwert und visuell nicht final abgestimmt.
+- Eine native macOS-Menüleiste am Bildschirmrand ist nicht Teil dieser Spec.

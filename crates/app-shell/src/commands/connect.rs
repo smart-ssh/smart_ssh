@@ -860,7 +860,7 @@ mod connect_session_gate_tests {
     use crate::first_run_notice::test_support::{lock, reset, test_app};
     use tauri_plugin_store::StoreExt;
 
-    /// Spec 0031, Abschnitt 6: "`connect()` schlägt fehl/wird blockiert,
+    /// Spec 0031, Abschnitt 4: "`connect()` schlägt fehl/wird blockiert,
     /// solange `first_run_notice_acknowledged` `false` ist" — geprüft am
     /// exakten Türsteher-Schritt, den `connect_session` als Allererstes
     /// aufruft, bevor irgendein anderer Teil der Verbindungslogik läuft.
@@ -895,7 +895,7 @@ mod connect_session_gate_tests {
         reset(&handle);
     }
 
-    /// Spec 0031, Abschnitt 6: "Bestätigung setzt die Einstellung korrekt
+    /// Spec 0031, Abschnitt 4: "Bestätigung setzt die Einstellung korrekt
     /// und dauerhaft (übersteht einen simulierten Neustart)" — eine zweite,
     /// unabhängig aufgebaute `App`-Instanz (= simulierter Neustart) muss
     /// den zuvor per `.save()` auf die Festplatte geschriebenen Wert
