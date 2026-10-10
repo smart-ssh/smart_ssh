@@ -47,6 +47,7 @@ vi.mock("../api", () => ({
   listUnusableServers: vi.fn(() => Promise.resolve([])),
   listGroups: vi.fn(() => Promise.resolve(GROUPS)),
   listServers: vi.fn(() => Promise.resolve(SERVERS)),
+  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
   getServer: vi.fn(),
   createServer: vi.fn(),
   updateServer: vi.fn(),

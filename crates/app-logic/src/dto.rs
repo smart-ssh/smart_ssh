@@ -159,6 +159,15 @@ impl ServerDto {
 /// geschickt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct StoredHostKeyDto {
+    /// SSH algorithm name, or `unknown`.
+    pub algorithm: String,
+    /// `SHA256:<base64>`; the raw key never leaves the backend.
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KeyFileFactsDto {
     pub exists: bool,
     /// Nur Unix; auf Windows immer `false`, wie bei OpenSSH selbst (A-4).

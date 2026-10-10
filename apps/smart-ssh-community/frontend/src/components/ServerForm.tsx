@@ -11,6 +11,7 @@ import {
   getServer,
   inspectKeyFile,
   largeNoteDialogThresholdChars,
+  listStoredHostKeys,
   previewEffectiveNotes,
   requestNoteShrink,
   testConnection,
@@ -35,6 +36,7 @@ import type {
   PostIngestPolicy,
   ServerDto,
   ServerInput,
+  StoredHostKeyDto,
   TestConnectionReport,
   TestConnectionResult,
 } from "../types";
@@ -254,6 +256,9 @@ export function ServerForm({
   // Spec 0032, Abschnitt 3: nur bekannt, sobald `loaded` geladen ist (der
   // lokale Pseudo-Server ist nie `serverId === null`, also nie `isCreate`).
   const isLocal = loaded?.isLocal ?? false;
+  // Spec 0008: stored host keys of the saved host/port; null = not loaded
+  // (or load failed), shown only for an existing, non-local server.
+  const [storedHostKeys, setStoredHostKeys] = useState<StoredHostKeyDto[] | null>(null);
   const [localNotes, setLocalNotes] = useState("");
   const [savingLocalNotes, setSavingLocalNotes] = useState(false);
   const [savingLocalTags, setSavingLocalTags] = useState(false);
@@ -399,6 +404,7 @@ export function ServerForm({
     setConvertConfirmOpen(false);
     setConverting(false);
     setConvertError(null);
+    setStoredHostKeys(null);
     if (serverId === null) {
       setLoaded(null);
       setName("");
@@ -415,6 +421,9 @@ export function ServerForm({
       setAiInjectionCheckEnabled(false);
       return;
     }
+    listStoredHostKeys(serverId)
+      .then((keys) => setStoredHostKeys(keys))
+      .catch(() => setStoredHostKeys(null));
     getServer(serverId)
       .then((server) => {
         setLoaded(server);
@@ -1363,6 +1372,26 @@ export function ServerForm({
             </label>
             <p className="mt-2 text-xs text-slate-500">{t("serverForm.sftpServerPathHint")}</p>
           </details>
+        )}
+
+        {!isCreate && !isLocal && storedHostKeys !== null && (
+          <section aria-labelledby="stored-host-keys-heading" className="space-y-1">
+            <h3 id="stored-host-keys-heading" className="text-sm font-medium text-slate-300">
+              {t("serverForm.hostKeys.title")}
+            </h3>
+            {storedHostKeys.length === 0 ? (
+              <p className="text-xs text-slate-500">{t("serverForm.hostKeys.none")}</p>
+            ) : (
+              <ul className="space-y-1">
+                {storedHostKeys.map((k) => (
+                  <li key={`${k.algorithm}:${k.fingerprint}`} className="text-xs text-slate-300">
+                    <span className="font-mono">{k.algorithm}</span>{" "}
+                    <span className="select-text break-all font-mono">{k.fingerprint}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
 
         {error && <p className="text-sm text-red-400">{error}</p>}

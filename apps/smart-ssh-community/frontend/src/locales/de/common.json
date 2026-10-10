@@ -151,6 +151,10 @@
     "confirmDelete": "Endgültig löschen"
   },
   "serverForm": {
+    "hostKeys": {
+      "title": "Host-Keys",
+      "none": "Noch kein Host-Key gespeichert. Er wird bei der ersten Verbindung gespeichert."
+    },
     "titleNew": "Neuer Server",
     "titleExisting": "Server: {{name}}",
     "localHint": "Lokaler Pseudo-Server — Kommandos laufen direkt auf diesem Rechner, keine SSH-Verbindung. Nur Notizen und Tags sind editierbar.",
