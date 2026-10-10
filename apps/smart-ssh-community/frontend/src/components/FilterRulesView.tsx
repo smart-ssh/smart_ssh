@@ -499,7 +499,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         <button
           type="submit"
           disabled={saving}
-          className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
         >
           {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
         </button>
@@ -742,7 +742,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
         type="button"
         onClick={handleTest}
         disabled={testing || !command.trim()}
-        className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+        className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
       >
         {testing ? t("common.testing") : t("filterRules.test")}
       </button>
