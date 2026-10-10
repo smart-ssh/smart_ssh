@@ -112,7 +112,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
                   aria-current={category.id === active?.id ? "page" : undefined}
                   className={`w-full px-4 py-2 text-left text-sm ${
                     category.id === active?.id
-                      ? "bg-indigo-600 text-white"
+                      ? "bg-indigo-600 text-slate-950"
                       : "text-slate-300 hover:bg-slate-800"
                   }`}
                 >

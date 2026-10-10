@@ -140,7 +140,7 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
             type="button"
             onClick={() => void onAcknowledge(afterStored)}
             disabled={!checked}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("firstRunNotice.continueButton")}
           </button>

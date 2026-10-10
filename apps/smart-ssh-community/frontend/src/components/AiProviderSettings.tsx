@@ -1158,7 +1158,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <button
           type="submit"
           disabled={submitting || (form.maxTokensOverride !== null && form.maxTokensOverride <= 0)}
-          className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
         </button>

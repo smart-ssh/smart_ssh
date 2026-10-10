@@ -225,7 +225,7 @@ impl RunningTestServer {
                         tokio::spawn(async move {
                             let handler = TestHandler {
                                 channels: HashMap::new(),
-                                tunnel_channels: HashSet::new(),
+                                no_echo: HashSet::new(),
                                 sftp_root,
                                 exec_channel,
                                 setstat_mode,
@@ -267,11 +267,12 @@ struct TestHandler {
     /// entgegengenommen hat; ohne diese Zwischenablage wäre er zu diesem
     /// späteren Zeitpunkt nicht mehr erreichbar (nur noch die `ChannelId`).
     channels: HashMap<ChannelId, Channel<Msg>>,
-    /// Per `direct-tcpip` geöffnete und an ein TCP-Ziel gebrückte Channels.
-    /// `russh` liefert eingehende Daten sowohl an den Channel-Stream als auch
-    /// an `Handler::data`; für diese Channels darf `data` nicht echoen, sonst
-    /// bekommt der Client über den Tunnel seine eigenen Bytes zurück.
-    tunnel_channels: HashSet<ChannelId>,
+    /// Kanäle, deren Bytes ein eigener Stream-Konsument bedient (SFTP-
+    /// Subsystem, Exec-SFTP, `direct-tcpip`-Tunnel). `russh` liefert
+    /// `CHANNEL_DATA` auch an `Handler::data` — dort darf das Echo für diese
+    /// Kanäle nicht laufen, sonst landet jeder Client-Schreibvorgang als
+    /// Fremddaten wieder im Stream und erschöpft das Kanalfenster (#179).
+    no_echo: HashSet<ChannelId>,
     sftp_root: PathBuf,
     /// Spec 0085, A2.1/T14: bekommt nur das SFTP-Subsystem des über `exec`
     /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
@@ -356,6 +357,7 @@ impl Handler for TestHandler {
                 return Ok(());
             };
             session.channel_success(channel)?;
+            self.no_echo.insert(channel);
             let handler = SftpTestHandler {
                 root: self.sftp_root.join("elevated"),
                 open_files: HashMap::new(),
@@ -461,10 +463,7 @@ impl Handler for TestHandler {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        // Über `direct-tcpip` gebrückte Tunnel-Channels bekommen kein Echo:
-        // dort fließt der SSH-Verkehr zum nächsten Hop, der Stream-Konsument
-        // (`copy_bidirectional`) bekommt die Daten ohnehin separat.
-        if self.tunnel_channels.contains(&channel) {
+        if self.no_echo.contains(&channel) {
             return Ok(());
         }
         // Einfache Echo-Shell: alles, was der Client in die PTY tippt, geht
@@ -500,8 +499,8 @@ impl Handler for TestHandler {
         match TcpStream::connect(&target).await {
             Ok(mut tcp) => {
                 let _ = tcp.set_nodelay(true);
-                self.tunnel_channels.insert(channel.id());
                 reply.accept().await;
+                self.no_echo.insert(channel.id());
                 let mut channel_stream = channel.into_stream();
                 tokio::spawn(async move {
                     let _ = tokio::io::copy_bidirectional(&mut channel_stream, &mut tcp).await;
@@ -537,6 +536,7 @@ impl Handler for TestHandler {
             return Ok(());
         };
         session.channel_success(channel_id)?;
+        self.no_echo.insert(channel_id);
         let handler = SftpTestHandler {
             root: self.sftp_root.clone(),
             open_files: HashMap::new(),
