@@ -197,6 +197,10 @@ fn keep_head_quoted(pattern: &str, replacement: &'static str, expect_msg: &str) 
 /// (spec-reviewer-Fund, Runde 2).
 const CMD_ARGS: &str = r"(?:(?:[ \t]|\\\r?\n)+[^\s;|&<>]+){0,12}?";
 
+/// Ein Quote-Abschnitt darf **einen** Zeilenumbruch enthalten (`-p'ab` +
+/// Umbruch + `cd'`); fehlt der schließende Quote bis dahin, passt der Zweig
+/// nicht, und der Text dahinter wird nicht verschluckt (Issue #270).
+///
 /// Ein Passwortwert als Argument: ein Shell-Escape (`\;`, `\'`, `\ `), ein
 /// Abschnitt in einfachen oder doppelten Anführungszeichen (dann darf er
 /// Leerraum enthalten) oder freier Text bis zum nächsten Leerraum bzw.
@@ -229,8 +233,8 @@ const CMD_ARGS: &str = r"(?:(?:[ \t]|\\\r?\n)+[^\s;|&<>]+){0,12}?";
 /// Datenbankname ist (Fund des `regression-guard`, gemessen).
 const CMD_VALUE: &str = concat!(
     r"(?:\\\r?\n)*",
-    r#"(?:\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)"#,
-    r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)*"#,
+    r#"(?:\\[^\r\n]|'[^'\r\n]*(?:\r?\n[^'\r\n]*)?'|"[^"\r\n]*(?:\r?\n[^"\r\n]*)?"|[^ \t\r\n;|&<>'"\\]+)"#,
+    r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*(?:\r?\n[^'\r\n]*)?'|"[^"\r\n]*(?:\r?\n[^"\r\n]*)?"|[^ \t\r\n;|&<>'"\\]+)*"#,
 );
 
 /// Trenner zwischen Programmname, Schalter und Wert: Leerraum **oder** die
@@ -257,8 +261,8 @@ const CMD_VALUE: &str = concat!(
 /// Einschränkung, es geht also keine Abdeckung verloren.
 const CMD_VALUE_AFTER_PLACEHOLDER: &str = concat!(
     r"(?:\\\r?\n)*",
-    r#"(?:\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\\[]+)"#,
-    r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*'|"[^"\r\n]*"|[^ \t\r\n;|&<>'"\\]+)*"#,
+    r#"(?:\\[^\r\n]|'[^'\r\n]*(?:\r?\n[^'\r\n]*)?'|"[^"\r\n]*(?:\r?\n[^"\r\n]*)?"|[^ \t\r\n;|&<>'"\\\[]+)"#,
+    r#"(?:\\\r?\n|\\[^\r\n]|'[^'\r\n]*(?:\r?\n[^'\r\n]*)?'|"[^"\r\n]*(?:\r?\n[^"\r\n]*)?"|[^ \t\r\n;|&<>'"\\]+)*"#,
 );
 
 const CMD_SEP: &str = r"(?:[ \t]|\\\r?\n)+";
@@ -440,6 +444,13 @@ fn built_in_patterns() -> Vec<PatternRule> {
         simple(
             r"\$[PH]\$[A-Za-z0-9./]{31,}",
             "eingebautes phpass-Hash-Muster ist gültig",
+        ),
+        // Drupal 7: `$S$` + Zähler + Salz + SHA-512-Anteil (52 Zeichen im
+        // crypt-Base64-Alphabet). Wie phpass: `{31,}`, damit kein Schwanz
+        // übrig bleibt; ein `$S` ohne Hash-Körper trifft nicht.
+        simple(
+            r"\$S\$[A-Za-z0-9./]{31,}",
+            "eingebautes Drupal-7-Hash-Muster ist gültig",
         ),
         // --- Spec 0068, Teil 1: nackte Provider-Keys und Auth-Header ---
         //
@@ -1197,7 +1208,7 @@ fn command_line_password_patterns(value: &str) -> Vec<PatternRule> {
         // `mysql -P3306 -h db` den Port geschwärzt (Spec 0095, T12).
         keep_head(
             &format!(
-                r"(?P<head>\b(?i:mysqldump|mysqladmin|mysql|mariadb)\b{CMD_ARGS}{CMD_SEP}-p{CMD_CONT})(?:{value})"
+                r"(?P<head>\b(?i:mysqldump|mysqladmin|mysqlsh|mysqlpump|mysql5|mysql|mariadb(?:-[a-z]+)*)\b{CMD_ARGS}{CMD_SEP}-p{CMD_CONT})(?:{value})"
             ),
             "eingebautes mysql-Passwortargument-Muster ist gültig",
         ),
@@ -1311,6 +1322,13 @@ fn command_line_password_patterns(value: &str) -> Vec<PatternRule> {
         keep_head(
             &format!(r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-k{CMD_SEP})(?:{value})"),
             "eingebautes openssl-k-Muster ist gültig",
+        ),
+        // `openssl enc … -K <hex>`: der rohe Schlüssel (Issue #270). `-k` und
+        // `-K` sind verschiedene Schalter, daher groß/klein hier **nicht**
+        // vermischt; `-iv` ist kein Geheimnis und bleibt lesbar.
+        keep_head(
+            &format!(r"(?P<head>\b(?i:openssl)\b{CMD_ARGS}{CMD_SEP}-K{CMD_SEP})(?:{value})"),
+            "eingebautes openssl-K-Muster ist gültig",
         ),
     ]
 }
