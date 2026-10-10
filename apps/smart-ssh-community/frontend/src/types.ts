@@ -219,6 +219,9 @@ export interface HostKeyInfo {
   fingerprint: string;
   /** Nur bei `kind === "mismatch"` gesetzt. */
   expectedFingerprint: string | null;
+  /** Algorithm of the key the server offers now (e.g. `ssh-ed25519`);
+   * `null` when it could not be determined. Display-only. */
+  keyType?: string | null;
 }
 
 export interface HostKeyVerificationNeededEvent extends HostKeyInfo {
@@ -607,7 +610,7 @@ export interface NoteRevisionDto {
 export type TestConnectionResult =
   | { kind: "success" }
   | { kind: "authenticationFailed" }
-  | { kind: "hostKeyUnknown"; host: string; port: number; rawKey: number[]; fingerprint: string }
+  | { kind: "hostKeyUnknown"; host: string; port: number; rawKey: number[]; fingerprint: string; keyType: string | null }
   | {
       kind: "hostKeyMismatch";
       host: string;
@@ -615,6 +618,7 @@ export type TestConnectionResult =
       rawKey: number[];
       expectedFingerprint: string;
       actualFingerprint: string;
+      keyType: string | null;
     }
   | {
       kind: "networkError";

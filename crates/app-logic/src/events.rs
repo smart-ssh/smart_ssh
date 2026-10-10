@@ -110,6 +110,9 @@ struct HostKeyVerificationNeededPayload {
     /// nicht, um dem Frontend alten und neuen Fingerprint nebeneinander
     /// zeigen zu lassen, deshalb hier bewusst ergänzt.
     expected_fingerprint: Option<String>,
+    /// Algorithm name of the key the server offers now (e.g.
+    /// `ssh-ed25519`); `null` when it cannot be determined. Display-only.
+    key_type: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -122,6 +125,7 @@ pub fn emit_host_key_verification_needed(
     kind: HostKeyKind,
     fingerprint: String,
     expected_fingerprint: Option<String>,
+    key_type: Option<String>,
 ) {
     emit(
         emitter,
@@ -134,6 +138,7 @@ pub fn emit_host_key_verification_needed(
             kind,
             fingerprint,
             expected_fingerprint,
+            key_type,
         },
     );
 }
@@ -1076,6 +1081,7 @@ mod tests {
             HostKeyKind::Unknown,
             "SHA256:abc".to_string(),
             None,
+            Some("ssh-ed25519".to_string()),
         );
         let events = emitter.events.lock().unwrap();
         assert_eq!(events.len(), 1);
@@ -1083,6 +1089,25 @@ mod tests {
         assert_eq!(events[0].1["sessionId"], session_id.to_string());
         assert_eq!(events[0].1["promptId"], 7);
         assert_eq!(events[0].1["fingerprint"], "SHA256:abc");
+        assert_eq!(events[0].1["keyType"], "ssh-ed25519");
+    }
+
+    #[test]
+    fn test_host_key_verification_needed_key_type_is_null_when_unknown() {
+        let emitter = TestEmitter::default();
+        emit_host_key_verification_needed(
+            &emitter,
+            Uuid::new_v4(),
+            1,
+            "h".to_string(),
+            22,
+            HostKeyKind::Unknown,
+            "SHA256:abc".to_string(),
+            None,
+            None,
+        );
+        let events = emitter.events.lock().unwrap();
+        assert!(events[0].1["keyType"].is_null());
     }
 
     #[test]
