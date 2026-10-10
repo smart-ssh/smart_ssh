@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ActionDecisionEscalatedEvent,
   AiBudgetWaitingEvent,
+  ChatActionOutputEvent,
   ChatActionProposedEvent,
   ChatActionResultEvent,
   ChatAutoContinuationLimitReachedEvent,
@@ -87,6 +88,12 @@ export const onChatActionResult = (
   handler: (event: ChatActionResultEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatActionResultEvent>("chat-action-result", (e) => handler(e.payload));
+
+/** Issue #325 (Spec 0106) — live output of a running command. */
+export const onChatActionOutput = (
+  handler: (event: ChatActionOutputEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatActionOutputEvent>("chat-action-output", (e) => handler(e.payload));
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));

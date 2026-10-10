@@ -422,6 +422,19 @@ export interface ChatActionResultEvent {
   result: ActionResultPayload;
 }
 
+/** Issue #325 (Spec 0106): live output of a running `SuggestCommand`.
+ * `stdout`/`stderr` are newly released, already redacted text to append;
+ * at most about ten events per second and action. Display only — the
+ * final `chat-action-result` replaces it. */
+export interface ChatActionOutputEvent {
+  sessionId: string;
+  actionId: string;
+  stdout: string;
+  stderr: string;
+  /** `true` once the output size limit was reached. */
+  truncated: boolean;
+}
+
 export interface ChatErrorEvent {
   sessionId: string;
   message: string;
