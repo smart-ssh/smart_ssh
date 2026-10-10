@@ -1,4 +1,4 @@
-//! Spec 0101, Commit 5: T3 (Entscheidungstabelle A3/A4), T7 (A5, D4),
+//! Spec 0101: T3 (Entscheidungstabelle A3/A4), T7 (A5, D4),
 //! T8 (D1).
 //!
 //! **Multi-Thread-Runtime** wie in `persistence_sqlite::tests_encryption` —

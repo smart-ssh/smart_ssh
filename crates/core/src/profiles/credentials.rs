@@ -13,7 +13,7 @@ use super::types::CredentialRef;
 /// [`trim_credential_value`]: Die Liste ist eine fachliche Festlegung und
 /// wächst erfahrungsgemäß. Sie ist ebenso bewusst **endlich** — „alles
 /// Unsichtbare" wäre geraten und träfe auch Zeichen, die ein Anbieter
-/// legitim verwenden könnte (Spec 0073, §4.3 und X3).
+/// legitim verwenden könnte (Spec 0073, §4 und X3).
 pub const INVISIBLE_CREDENTIAL_EDGE_CHARS: &[char] = &[
     '\u{FEFF}', // Byte Order Mark — Key aus einer UTF-8-Datei mit BOM kopiert
     '\u{200B}', // Zero Width Space — Kopie aus einer Webseite
