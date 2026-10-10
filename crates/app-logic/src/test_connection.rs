@@ -385,6 +385,9 @@ fn resolve_final_hop_auth(
         // `KeyFileReader` wie beim echten Verbinden. Nur die Passphrase
         // folgt der gewohnten „leer = das Gespeicherte nehmen"-Regel.
         AuthMethodInput::IdentityFile { path, passphrase } => {
+            // Dieselbe Leer-Prüfung wie beim Speichern — vor jedem
+            // Verbindungsversuch und jedem Lesen der Datei.
+            crate::server_credentials::require_identity_file_path(&path)?;
             // Spec 0073, §9 (K1, BL-0243): wie im `PrivateKey`-Zweig über
             // den geteilten `trim_credential_value` statt über
             // `str::trim` — und der getrimmte Wert ist auch der, der in
@@ -1114,6 +1117,39 @@ mod tests {
             matches!(result, TestConnectionResult::Success),
             "mit gefülltem Feld berührt der Ziel-Hop den Schlüsselbund nicht: {result:?}"
         );
+    }
+
+    /// Issue #254: Ein leerer Schlüsseldatei-Pfad scheitert vor jedem
+    /// Verbindungsversuch und jedem Dateizugriff mit dem Pflichtfeld-Code.
+    #[tokio::test]
+    async fn test_blank_identity_file_path_is_rejected_before_any_file_read() {
+        for blank in ["", "   ", "\u{200B}"] {
+            let key_files = MockKeyFileReader::new();
+            let err = test_connection_result(
+                &InMemoryProfileStore::new(),
+                &InMemoryCredentialStore::new(),
+                &key_files,
+                Arc::new(NoOpHostKeyStore),
+                &MockConnector(MockOutcome::Success),
+                ServerInput {
+                    auth: AuthMethodInput::IdentityFile {
+                        path: blank.to_string(),
+                        passphrase: None,
+                    },
+                    ..password_input()
+                },
+                None,
+                Duration::from_millis(200),
+            )
+            .await
+            .expect_err("blank path must be rejected");
+            assert_eq!(
+                err.code,
+                Some("SERVER_IDENTITY_FILE_REQUIRED"),
+                "path {blank:?}"
+            );
+            assert!(key_files.calls().is_empty(), "no file read for {blank:?}");
+        }
     }
 
     #[tokio::test]
