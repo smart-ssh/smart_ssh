@@ -529,39 +529,28 @@ pub fn should_warn_about_keychain(err: &ssh_manager_core::crypto::CipherError) -
 }
 
 /// Spec 0071, A5 (b): die Aufzählung der **blockierten** Funktionen —
-/// derselbe Absatz für jeden Grund, weil die Folgen identisch sind: Ohne
-/// Schlüsselbund scheitert jeder Schreib- und Lesezugriff auf den
-/// `CredentialStore`.
+/// derselbe Absatz für jeden Grund, weil die Folgen identisch sind.
 ///
-/// Ersetzt den Satz "Alle anderen Funktionen (SSH-Verbindungen, KI-Chat,
-/// Filter-Regeln) funktionieren normal" aus Spec 0059 (A9). Der war im
-/// BL-0031-Fall schlicht falsch: `add_ai_provider` schreibt den API-Key
-/// unbedingt vor der DB-Zeile, der Provider lässt sich also gar nicht
-/// anlegen — und ohne Provider gibt es keinen KI-Chat.
+/// Seit Spec 0101 liegen Secrets (API-Keys, Server-Passwörter,
+/// Passphrasen, Sudo-Passwörter) verschlüsselt in der Datenbank; im
+/// Schlüsselbund liegt nur der Schlüssel, der sie schützt. Ohne
+/// Schlüsselbund lässt sich die Datenbank nicht öffnen (E3) — also ist
+/// alles darin nicht verfügbar. Der frühere Satz, SSH-Agent-Verbindungen
+/// funktionierten weiter, entfällt: Ohne geöffnete Datenbank gibt es keine
+/// Serverliste, und die App startet in diesem Dialog nicht.
 fn keychain_blocked_functions(language: Language) -> &'static str {
     match language {
         Language::De => {
-            "Solange das so ist, lassen sich kein API-Key für einen KI-Provider, kein \
-             Server-Passwort, keine Passphrase und kein Sudo-Passwort speichern oder lesen. \
-             Chat-Verlauf, Notiz-Zusammenfassungen und die Eingabe-Historie sind für diesen \
-             Programmlauf deaktiviert. SSH-Verbindungen über den SSH-Agent oder mit einem \
-             Schlüssel ohne Passphrase funktionieren weiterhin."
+            "Solange das so ist, kann Smart SSH seine verschlüsselte Datenbank nicht öffnen: \
+             Server, Passwörter, Passphrasen, Sudo-Passwörter, API-Keys für KI-Provider, \
+             Chat-Verlauf und Einstellungen sind nicht verfügbar, und es lässt sich nichts \
+             davon speichern."
         }
         Language::En => {
-            "While this is the case, no API key for an AI provider, no server password, no \
-             passphrase and no sudo password can be saved or read. Chat history, note \
-             summaries and the input history are disabled for this app run. SSH connections \
-             through the SSH agent, or with a key that has no passphrase, keep working."
+            "While this is the case, Smart SSH cannot open its encrypted database: servers, \
+             passwords, passphrases, sudo passwords, API keys for AI providers, chat history \
+             and settings are not available, and none of them can be saved."
         }
-    }
-}
-
-/// Spec 0071, A9: Die Nicht-Fatalität aus Spec 0059 bleibt unverändert —
-/// diese Spec ändert nur, *was* gemeldet wird, nicht *ob* gestartet wird.
-fn keychain_still_starts(language: Language) -> &'static str {
-    match language {
-        Language::De => "Smart SSH wird jetzt trotzdem gestartet.",
-        Language::En => "Smart SSH will still start.",
     }
 }
 
@@ -588,7 +577,6 @@ pub fn keychain_unavailable_text(
 ) -> DialogText {
     let linux = target_os == "linux";
     let blocked = keychain_blocked_functions(language);
-    let still_starts = keychain_still_starts(language);
 
     let (title, state, next_step) = match (linux, reason, language) {
         // ── Kein Anbieter (Linux) ──────────────────────────────────────
@@ -624,8 +612,8 @@ pub fn keychain_unavailable_text(
         // Messung schlicht falsch.
         (true, KeychainUnavailableReason::NoSecretServiceProvider, Language::De) => (
             "Kein Systemschlüsselbund gefunden",
-            "Smart SSH speichert Passwörter, Passphrasen und API-Keys ausschließlich im \
-             Schlüsselbund des Betriebssystems. Auf diesem System läuft kein \
+            "Der Schlüssel, der die Datenbank von Smart SSH schützt, wird im Schlüsselbund \
+             des Betriebssystems aufbewahrt. Auf diesem System läuft kein \
              Secret-Service-Anbieter.",
             "Nächster Schritt — `sudo apt install gnome-keyring` ausführen und danach neu \
              anmelden. Das genügt auch unter KDE.\n\n\
@@ -635,9 +623,8 @@ pub fn keychain_unavailable_text(
         ),
         (true, KeychainUnavailableReason::NoSecretServiceProvider, Language::En) => (
             "No system keyring found",
-            "Smart SSH stores passwords, passphrases and API keys exclusively in the \
-             operating system's keyring. No Secret Service provider is running on this \
-             system.",
+            "The key that protects Smart SSH's database is kept in the operating \
+             system's keyring. No Secret Service provider is running on this system.",
             "Next step — run `sudo apt install gnome-keyring` and sign in again. This works \
              on KDE as well.\n\n\
              If you already use KWallet (`kwallet6`) or KeePassXC: their Secret Service \
@@ -655,8 +642,8 @@ pub fn keychain_unavailable_text(
         // `PlatformFailure(Zbus(Connection(NotFound, "/run/user/0/bus")))`.
         (true, KeychainUnavailableReason::NoSessionBus, Language::De) => (
             "Kein D-Bus-Session-Bus gefunden",
-            "Smart SSH speichert Passwörter, Passphrasen und API-Keys ausschließlich im \
-             Schlüsselbund des Betriebssystems. Auf diesem System ist kein \
+            "Der Schlüssel, der die Datenbank von Smart SSH schützt, wird im Schlüsselbund \
+             des Betriebssystems aufbewahrt. Auf diesem System ist kein \
              D-Bus-Session-Bus erreichbar — ohne ihn kann Smart SSH keinen \
              Schlüsselbund-Anbieter ansprechen, auch keinen bereits eingerichteten.",
             "Nächster Schritt — den Session-Bus bereitstellen und danach neu anmelden: \
@@ -665,8 +652,8 @@ pub fn keychain_unavailable_text(
         ),
         (true, KeychainUnavailableReason::NoSessionBus, Language::En) => (
             "No D-Bus session bus found",
-            "Smart SSH stores passwords, passphrases and API keys exclusively in the \
-             operating system's keyring. No D-Bus session bus is reachable on this system — \
+            "The key that protects Smart SSH's database is kept in the operating \
+             system's keyring. No D-Bus session bus is reachable on this system — \
              without it Smart SSH cannot talk to any keyring provider, not even one that is \
              already set up.",
             "Next step — provide the session bus and sign in again: \
@@ -744,7 +731,7 @@ pub fn keychain_unavailable_text(
 
     DialogText {
         title: title.to_string(),
-        message: format!("{state}\n\n{blocked}\n\n{next_step}\n\n{still_starts}"),
+        message: format!("{state}\n\n{blocked}\n\n{next_step}"),
     }
 }
 
@@ -1340,7 +1327,7 @@ mod tests {
                 let de = keychain_unavailable_text(reason, os, Language::De);
                 assert!(
                     de.message.contains("API")
-                        && de.message.contains("Passwort")
+                        && de.message.contains("Passwörter")
                         && de.message.contains("Passphrase"),
                     "{os}/{reason:?} muss die blockierten Funktionen aufzählen: {}",
                     de.message
@@ -1364,26 +1351,48 @@ mod tests {
         }
     }
 
-    /// Spec 0071, T11: Die Nicht-Fatalität aus Spec 0059 bleibt — die App
-    /// bricht wegen eines Schlüsselbund-Problems weiterhin nicht ab.
+    /// Spec 0071, A9 / Spec 0101, E3: Der Dialog gehört zu einer nicht
+    /// öffnbaren Datenbank; die App startet daraus nicht. Kein Text darf
+    /// behaupten, Smart SSH starte trotzdem oder SSH-Verbindungen liefen
+    /// weiter.
     #[test]
-    fn test_every_keychain_text_says_the_app_still_starts() {
+    fn test_no_keychain_text_claims_the_app_still_starts_or_secrets_live_in_the_keychain() {
         for os in ["linux", "macos", "windows"] {
             for reason in REASONS {
-                assert!(
-                    keychain_unavailable_text(reason, os, Language::De)
-                        .message
-                        .contains("trotzdem gestartet"),
-                    "{os}/{reason:?}"
-                );
-                assert!(
-                    keychain_unavailable_text(reason, os, Language::En)
-                        .message
-                        .contains("will still start"),
-                    "{os}/{reason:?}"
-                );
+                for language in [Language::De, Language::En] {
+                    let message = keychain_unavailable_text(reason, os, language).message;
+                    let lower = message.to_lowercase();
+                    for forbidden in [
+                        "trotzdem gestartet",
+                        "still start",
+                        "ausschließlich",
+                        "exclusively",
+                        "weiterhin",
+                        "keep working",
+                        "ssh-agent",
+                        "ssh agent",
+                    ] {
+                        assert!(
+                            !lower.contains(forbidden),
+                            "{os}/{reason:?}/{language:?} enthält '{forbidden}': {message}"
+                        );
+                    }
+                }
             }
         }
+        // Die Ursache nennt den Datenbankschlüssel, nicht die Secrets.
+        let de = keychain_unavailable_text(
+            KeychainUnavailableReason::NoSecretServiceProvider,
+            "linux",
+            Language::De,
+        );
+        assert!(de.message.contains("Schlüssel, der die Datenbank"));
+        let en = keychain_unavailable_text(
+            KeychainUnavailableReason::NoSessionBus,
+            "linux",
+            Language::En,
+        );
+        assert!(en.message.contains("protects Smart SSH's database"));
     }
 
     /// Spec 0071, T11b: Für **jeden** Startdialog-Text gibt es beide
@@ -1416,7 +1425,7 @@ mod tests {
 
     /// Spec 0071, X5: Kein Text darf zu einem Klartext-Ablageort oder einem
     /// passwortlosen Schlüsselbund raten. Smart SSH legt Secrets
-    /// ausschließlich im OS-Schlüsselbund ab (I2, §2 Nicht-Ziel 1) — ein
+    /// verschlüsselt in der Datenbank ab (Spec 0101, E2) — ein
     /// Meldungstext ist nicht der Ort, an dem diese Zusage aufgeweicht wird.
     #[test]
     fn test_no_startup_text_recommends_a_less_secure_place_for_secrets() {
