@@ -42,6 +42,10 @@ A13/A15 beschreibt damit eine Eskalation, die so nicht mehr stattfindet.
 **Nicht in diesem Lauf angefasst** — das ist eine Änderung an Spec 0071,
 nicht an 0101.
 
+**Erledigt (#263):** Beide Funktionen samt Re-Export und Tests sind
+entfernt; Spec 0071 (A13/A15, §4.4) und Spec 0098 beschreiben den
+tatsächlichen Stand.
+
 ## 3. Der Symlink-Abbruch gilt für *fehlt* und *Klartext*, nicht für *sonst*
 
 A6 verbietet wörtlich nur die **Umwandlung** eines Symlinks.
