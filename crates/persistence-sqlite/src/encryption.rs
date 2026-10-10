@@ -482,11 +482,10 @@ async fn convert_steps(
     // bereits die vollständige Kopie (spec-reviewer Runde 1).
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
         for suffix in ["", "-wal", "-shm", "-journal"] {
             let path = sibling(tmp, suffix);
             if path.exists() {
-                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+                ssh_manager_core::fs_hardening::harden_permissions(&path, 0o600, "database");
             }
         }
     }
@@ -587,8 +586,7 @@ async fn convert_steps(
     std::fs::rename(tmp, db_path)?;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(db_path, std::fs::Permissions::from_mode(0o600));
+        ssh_manager_core::fs_hardening::harden_permissions(db_path, 0o600, "database");
     }
     Ok(())
 }

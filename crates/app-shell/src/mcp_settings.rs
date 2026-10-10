@@ -87,11 +87,10 @@ fn generate_token() -> String {
 fn harden_settings_store_permissions<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
         let Ok(path) = settings_store_path(app) else {
             return;
         };
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        ssh_manager_core::fs_hardening::harden_permissions(&path, 0o600, "settings");
     }
     #[cfg(not(unix))]
     {

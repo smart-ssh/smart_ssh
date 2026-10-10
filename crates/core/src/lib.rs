@@ -10,6 +10,7 @@ pub mod credentials;
 pub mod crypto;
 pub mod entitlements;
 pub mod filter;
+pub mod fs_hardening;
 pub mod profiles;
 pub mod risk;
 pub mod session;
