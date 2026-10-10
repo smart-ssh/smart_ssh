@@ -669,6 +669,7 @@ pub async fn sftp_elevation_enable(
                 sudoers_line: None,
                 detail: None,
             }),
+            warning: None,
         });
     }
     let server = state.profile_store.get_server(&session.server_id).await?;

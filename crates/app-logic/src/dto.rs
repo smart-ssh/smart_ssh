@@ -1367,6 +1367,23 @@ pub struct ElevationResultDto {
     /// Ermittelter bzw. konfigurierter Pfad, sofern bekannt.
     pub sftp_server_path: Option<String>,
     pub failure: Option<ElevationFailureDto>,
+    /// Hinweis bei aktivem Kanal (Spec 0067, A3): `sftp-server` bzw. ein
+    /// übergeordnetes Verzeichnis ist nicht sicher geschützt.
+    pub warning: Option<ElevationWarningDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevationWarningDto {
+    pub kind: ElevationWarningKind,
+    /// Der auffällige Eintrag (Datei oder Verzeichnis).
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ElevationWarningKind {
+    SftpServerUnsafe,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1388,6 +1405,9 @@ pub enum ElevationFailureKind {
     InvalidUser,
     InvalidPath,
     SftpServerNotFound,
+    /// `sftp-server` oder ein übergeordnetes Verzeichnis gehört nicht root
+    /// bzw. ist für Gruppe/andere beschreibbar; `detail` ist der Pfad.
+    SftpServerUnsafe,
     PasswordRequired,
     NotAllowed,
     RequireTty,

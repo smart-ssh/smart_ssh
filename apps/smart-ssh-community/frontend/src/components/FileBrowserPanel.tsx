@@ -203,6 +203,7 @@ export function FileBrowserPanel({
   // Spec 0067, A4: Ziel-Nutzer der Rechteerhöhung, Default root.
   const [elevationTargetUser, setElevationTargetUser] = useState("root");
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
+  const [elevationWarning, setElevationWarning] = useState<string | null>(null);
   const elevated = elevation !== null;
   const elevatedUser = elevation?.targetUser ?? "";
   // Spec 0067, A5: an jeden Aufruf übergeben — `null` = normaler Kanal,
@@ -219,6 +220,7 @@ export function FileBrowserPanel({
   const updateElevation = (next: { targetUser: string } | null) => {
     elevationGenerationRef.current += 1;
     setElevation(next);
+    if (next === null) setElevationWarning(null);
     onElevationChangeRef.current?.(next?.targetUser ?? null);
     if (next === null) {
       sftpElevationDisable(sessionId).catch((err) =>
@@ -296,6 +298,7 @@ export function FileBrowserPanel({
       }
       if (result.active) {
         updateElevation({ targetUser: result.targetUser });
+        setElevationWarning(result.warning?.path ?? null);
         load(path, result.targetUser);
       } else {
         setElevationFailure(result);
@@ -959,6 +962,11 @@ export function FileBrowserPanel({
           >
             {t("fileElevation.toggleOff")}
           </button>
+        </div>
+      )}
+      {elevated && elevationWarning && (
+        <div role="alert" className="bg-red-950 px-2 py-1.5 text-xs text-red-200">
+          {t("fileElevation.failure.sftpServerUnsafe", { path: elevationWarning })}
         </div>
       )}
       <div className="flex items-center gap-1.5 border-b border-slate-800 px-2 py-1.5">
@@ -2106,7 +2114,7 @@ function ElevationFailureDialog({
         <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
           {t("fileElevation.failureTitle")}
         </h2>
-        <p className="mb-3 text-sm text-slate-300">{t(`fileElevation.failure.${failure.kind}`)}</p>
+        <p className="mb-3 text-sm text-slate-300">{t(`fileElevation.failure.${failure.kind}`, { path: failure.detail ?? "" })}</p>
         {failure.sudoersLine && (
           <>
             <p className="mb-2 text-sm text-slate-300">{t("fileElevation.sudoersIntro")}</p>
@@ -2128,7 +2136,7 @@ function ElevationFailureDialog({
             </p>
           </>
         )}
-        {failure.detail && (
+        {failure.detail && failure.kind !== "sftpServerUnsafe" && (
           <p className="mb-3 font-mono text-xs break-all text-slate-500">
             {t("fileElevation.detail", { detail: failure.detail })}
           </p>
