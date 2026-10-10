@@ -110,8 +110,8 @@ pub(crate) async fn handle_action_proposed(
     announce_second_opinion_setup_failure(session, session_id, emitter);
 
     // Spec 0057, §1.1, erster Punkt: "Kommando vorgeschlagen". Bewusst auf
-    // `SuggestCommand` beschränkt (diese Etappe deckt nur diesen
-    // Aktionstyp ab, s. Spec 0057 §8 "Etappe 1") — `ReadRemoteFile`/
+    // `SuggestCommand` beschränkt (das Ledger deckt nur diesen
+    // Aktionstyp ab, s. Spec 0057 §9, Grenzen) — `ReadRemoteFile`/
     // `WriteRemoteFile`/`ProposeNoteUpdate` folgen in einer späteren
     // Erweiterung.
     if let AiAction::SuggestCommand { command } = &action {

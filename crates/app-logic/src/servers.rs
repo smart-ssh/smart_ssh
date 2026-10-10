@@ -1444,8 +1444,8 @@ mod tests {
         );
     }
 
-    /// T9b: derselbe Fall für die Schlüsseldatei — der Fund aus Spec 0076,
-    /// §7.1, jetzt am **ganzen** Ablauf statt nur an `resolve_auth_method`.
+    /// T9b: derselbe Fall für die Schlüsseldatei — der Fund aus Spec 0076 (ADR 0065),
+    /// Passphrase-Verlust beim Bearbeiten, jetzt am **ganzen** Ablauf statt nur an `resolve_auth_method`.
     /// Dort prüfte ihn eine Paarliste; hier kann er per Konstruktion nicht
     /// mehr auftreten (gleiche Art ⇒ leere Differenzmenge). Der Test hält
     /// das fest, statt sich darauf zu verlassen.

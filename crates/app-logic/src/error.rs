@@ -81,9 +81,8 @@ fn backend_failure_to_command_error(payload: &str) -> CommandError {
 /// Eintrag liegen geblieben ist. Das ist die Auskunft, für die dieser Weg
 /// überhaupt existiert.
 ///
-/// Solange Schritt 5 der Spec keine Übersetzung dafür ergänzt, ist der Code
-/// dem Frontend unbekannt — und genau dann zeigt es die `message`, die den
-/// Slot nennt. Die Übersetzung sollte ihn als Parameter führen.
+/// Kennt das Frontend den Code nicht, zeigt es die `message`, die den Slot
+/// nennt. Eine Übersetzung sollte ihn als Parameter führen.
 pub const IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND: &str = "IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND";
 
 /// Spec 0077, 3.1.3: Das Muster einer Filterregel lässt sich nicht

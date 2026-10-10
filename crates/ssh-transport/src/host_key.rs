@@ -6,8 +6,8 @@ use crate::error::TransportError;
 /// Extrahiert die rohen Public-Key-Bytes aus einem `PublicKeyOrCertificate`
 /// (russh übergibt diesen Typ an `check_server_key`, unabhängig davon, ob
 /// der Server einen einfachen Host-Key oder ein Zertifikat präsentiert) —
-/// für [`HostKeyStore::check`], das laut Spec 0005 Abschnitt 6 einen
-/// `&[u8]`-Schlüssel erwartet.
+/// für [`HostKeyStore::check`], das einen `&[u8]`-Schlüssel erwartet (Spec
+/// 0005, Abschnitt 6).
 pub(crate) fn public_key_bytes(key: &PublicKeyOrCertificate) -> Result<Vec<u8>, TransportError> {
     // `PublicKeyOrCertificate::public_key()` ist eine von `russh` selbst
     // bereitgestellte Convenience-Methode, die beide Varianten einheitlich

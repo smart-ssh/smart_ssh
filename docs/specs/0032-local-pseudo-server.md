@@ -1,107 +1,116 @@
-# Spec: Lokaler Pseudo-Server ("Localhost")
+# Spec 0032 — Lokaler Pseudo-Server „Localhost"
 
-Status: Entwurf
-Modul: neue Implementierung in `crates/ssh-transport` (oder eigene Crate
-`crates/local-transport`, siehe Abschnitt 2), Erweiterung `crates/app-tauri`,
-`frontend/`
-Abhängigkeiten: `SshTransport`-Trait (Spec 0005), SFTP-Trait (Spec 0020),
-Filter-Engine (Spec 0002), Kernschleife (Spec 0007)
+Status: umgesetzt
+Zweck: Ein immer vorhandener, nicht löschbarer Eintrag „Localhost" in der Serverliste, über den der KI-Copilot (Vorschlag, Filter-Engine, Bestätigung, Ausführung) auf dem eigenen Rechner genutzt werden kann — ohne dass dafür ein SSH-Server laufen muss.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0003 (Server-Profile, Notizen), Spec 0005 (Transport), Spec 0007 (Kernschleife), Spec 0008 (Server-Formular), Spec 0017 (Tabs), Spec 0020 (Dateizugriff), Spec 0026 (Risiko-Anzeige), Spec 0033 (Serverliste), Spec 0043 und Spec 0044 (Ausgabegrenze), ADR 0026, ADR 0030.
 
 ## 1. Ziel
 
-Ein immer vorhandener, nicht löschbarer Eintrag "Localhost" in der
-Server-Liste, über den die KI-Chat-Funktionalität (Vorschlag → Filter-Engine
-→ Bestätigung → Ausführung, exakt wie bei einem echten Server) auf der
-**eigenen Maschine** genutzt werden kann — ohne dass dafür ein lokaler
-SSH-Server (`sshd`) laufen oder eingerichtet werden muss. Viele Nutzer haben
-gerade auf macOS/Windows standardmäßig gar keinen aktiven SSH-Server —
-das würde diese Funktion sonst für die meisten unbenutzbar machen.
+Der Nutzer kann den KI-Chat samt Filter-Engine, Risiko-Anzeige und Bestätigung
+auf der **eigenen Maschine** ausprobieren und benutzen, ohne einen lokalen
+`sshd` einzurichten. Gerade unter macOS und Windows läuft standardmäßig
+keiner; die Funktion wäre sonst für die meisten unbenutzbar. Auch der
+Einstieg ohne eigenen Server nutzt das: „Localhost" steht oben in der
+Serverliste und öffnet eine Sitzung auf diesem Rechner mit denselben
+Bestätigungen wie auf einem Server.
 
-## 2. Architektur-Entscheidung: lokale Prozessausführung statt SSH-zu-sich-selbst
+## 2. Ausführung statt SSH-zu-sich-selbst
 
-`LocalTransport` implementiert `SshTransport`/`InteractiveShell` (Spec
-0005, Abschnitt 4) **nicht** über das SSH-Protokoll, sondern über direkte
-lokale Prozessausführung:
+Localhost spricht **kein** SSH-Protokoll. Kommandos, Terminal und Dateizugriff
+laufen direkt auf dem lokalen Rechner:
 
-```rust
-pub struct LocalTransport { /* kein Verbindungszustand nötig */ }
+- **Einzelkommando.** Das Kommando läuft über die Shell des Systems
+  (`sh -c` unter macOS und Linux, `cmd /C` unter Windows) im
+  Home-Verzeichnis des Nutzers; ist dieses nicht verfügbar, im
+  Arbeitsverzeichnis der App. Die Standardeingabe ist geschlossen: ein
+  Kommando, das auf Eingabe wartet (`cat`, `read`), endet sofort oder
+  scheitert, statt zu hängen. Standard- und Fehlerausgabe sowie der Exit-Code
+  werden wie bei einem Server eingesammelt. Die Ausgabe ist auf 2 MiB
+  begrenzt (Spec 0043, Spec 0044); wird die Grenze erreicht, wird der Prozess
+  beendet und das Ergebnis als abgeschnitten markiert — der Exit-Code kann
+  dann fehlen.
+- **Terminal.** Ein lokales Pseudo-Terminal mit der Standard-Shell des Nutzers
+  (`$SHELL`, sonst `/bin/sh`; unter Windows `powershell.exe`). Größenänderung
+  wird wie bei SSH unterstützt.
+- **Dateibrowser.** Der Dateizugriff (Spec 0020) arbeitet direkt auf dem lokalen
+  Dateisystem; relative Pfade gelten ab dem Home-Verzeichnis.
+- **Verbindungsaufbau.** „Verbinden" ist sofort erfolgreich. Es gibt keinen
+  Handshake, keine Zugangsdaten, keinen Host-Key und keine Host-Key-Abfrage.
 
-#[async_trait]
-impl SshTransport for LocalTransport {
-    async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        // Plattform-Shell aufrufen: `sh -c <command>` (Unix), `cmd /C <command>` (Windows)
-    }
-    async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
-        // lokales PTY über die `portable-pty`-Crate, Start der Standard-Shell
-        // des Nutzers ($SHELL auf Unix, powershell/cmd auf Windows)
-    }
-    async fn disconnect(&mut self) -> Result<(), SshError> { Ok(()) }
-}
-```
-
-Analog `LocalFileSession` als lokale Implementierung des SFTP-Traits (Spec
-0020, Abschnitt 3), die direkt auf das lokale Dateisystem zugreift
-(`std::fs`/`tokio::fs`) statt über ein SFTP-Subsystem.
-
-**Der entscheidende architektonische Vorteil**: Weil beide Traits bereits
-seit Spec 0005/0020 sauber von ihrer konkreten Implementierung getrennt
-sind, braucht **keine** der umgebenden Komponenten (Filter-Engine,
-KI-Anbindung, Kernschleife, Bestätigungsdialoge, Risiko-Indikatoren,
-MCP-Server) irgendeine Änderung — sie funktionieren automatisch, weil sie
-nur gegen den Trait programmiert sind, nicht gegen `russh` konkret.
-
-Keine Credential-Store-Nutzung, kein Host-Key-Handling — beides ist für
-lokale Ausführung bedeutungslos, `connect()` für den lokalen Pseudo-Server
-ist praktisch sofort erfolgreich, kein Handshake nötig.
+Alles oberhalb davon — Filter-Engine, Risiko-Einstufung, Bestätigungsdialoge,
+KI-Anbindung, MCP-Server — ist unverändert, weil es nur gegen die
+gemeinsame Transport-Schnittstelle arbeitet (Spec 0005, Abschnitt 2).
 
 ## 3. Identität und Persistenz
 
-Kein neuer Eintrag in der `servers`-Tabelle (Spec 0004) — der lokale
-Pseudo-Server wird zur Laufzeit **synthetisiert**, nicht aus der DB
-geladen, mit einer fest reservierten, konstanten `ServerId` (z. B. die
-Nil-UUID `00000000-0000-0000-0000-000000000000`). `list_servers()` fügt
-diesen Eintrag immer als erstes Element hinzu, unabhängig von
-Gruppen-/Filterparametern. Vorteile dieses Ansatzes: nicht löschbar (er
-existiert schlicht nicht als DB-Zeile, die man löschen könnte), taucht
-nicht versehentlich in einer Gruppe auf, keine Migration nötig.
-
-`ServerDto` bekommt ein Feld `is_local: bool`. Für `is_local: true`
-sind Host/Port/Username/Auth-Methode/Jump-Host im Bearbeiten-Formular
-ausgeblendet oder deaktiviert (bedeutungslos) — nur Notizen und Tags bleiben
-editierbar, da `effective_notes()` (Spec 0003) auch für den lokalen
-Pseudo-Server sinnvoll ist (z. B. "Homebrew-Pakete unter `/opt/homebrew`").
+- **Kein Datensatz.** Localhost steht nicht in der Server-Tabelle. Der Eintrag
+  wird zur Laufzeit gebildet und trägt eine fest reservierte, nie vergebene
+  Kennung (die Nil-UUID). Er ist dadurch nicht löschbar, nicht verschiebbar und
+  braucht keine Migration.
+- **Immer da und zuerst.** Die Serverliste enthält ihn immer als erstes Element,
+  unabhängig von jedem Gruppenfilter. Er gehört nie zu einer Gruppe.
+- **Name und Anzeige.** Der Name ist fest „Localhost". Die Zeile zeigt
+  `Benutzer@Host` ohne Port, weil es keinen gibt.
+- **Nur Notizen und Tags sind editierbar.** Name, Host, Port, Benutzer,
+  Anmeldeart, Jump-Host und Startverzeichnis gibt es für Localhost nicht; das
+  Formular zeigt sie nicht an, sondern nur einen Hinweis, Notizen und Tags.
+  Die Notizen gehen wie bei jedem Server in den KI-Kontext (Spec 0003), nur
+  ohne Gruppen- und Vererbungsanteile; die
+  KI-Vorschläge zum Aktualisieren oder Kürzen der Notiz beim Beenden (Spec 0010)
+  gelten auch hier.
+- **Keine Notiz-Historie.** Anders als bei einem Server gibt es für Localhost
+  nur den aktuellen Stand der Notiz, keine Versionen und kein Zurücksetzen.
+  Notizen und Tags liegen in den App-Einstellungen (ADR 0026).
+- **Kein gespeicherter Chat-Verlauf.** Eine Localhost-Sitzung legt keine
+  gespeicherte Chat-Sitzung an und ist nicht wiederaufnehmbar (ADR 0030).
+- **Feste Eskalationsstufe.** Die Stufe für Folgeaktionen nach gelesenem
+  Serverinhalt (Spec 0039) ist für Localhost fest „Balanced" und nicht
+  einstellbar (ADR 0026).
+- **Kein Verbindungstest.** Das Formular hat keine Schaltfläche „Verbindung
+  testen"; ein Aufruf dafür wird abgelehnt.
+- **Direkte Änderungen werden abgelehnt.** Bearbeiten, Löschen und Verschieben
+  über den normalen Weg schlagen für Localhost mit einer Fehlermeldung fehl.
 
 ## 4. Verhalten in der Kernschleife
 
-Keine Sonderbehandlung — der lokale Pseudo-Server durchläuft dieselbe
-`Session`-Struktur (Spec 0007, Abschnitt 3), dieselbe Filter-Engine-Prüfung
-(Spec 0002), dieselben Bestätigungsdialoge, dieselben Risiko-Indikatoren
-(Spec 0026). Bewusst **keine** automatische Lockerung der Filter-Engine für
-lokale Kommandos — die eigene Maschine verdient nicht weniger Kontrolle als
-ein entfernter Server, eher im Gegenteil (Zugriff auf eigene Dateien,
-eigene Zugangsdaten in `~/.ssh`, `~/.aws` usw.).
+Localhost durchläuft **dieselbe** Sitzungsstruktur, dieselbe Filter-Engine, dieselben
+Bestätigungsdialoge und dieselben Risiko-Anzeigen wie jeder Server — ohne
+Verzweigung nach der Kennung in der Sicherheitslogik. Eine Regel mit Geltungsbereich
+„dieser Server" wirkt für Localhost wie für jeden anderen Server.
 
-## 5. UI
+Es gibt **keine** automatische Lockerung für lokale Kommandos: die eigene
+Maschine verdient nicht weniger Kontrolle als ein entfernter Server, eher mehr
+(eigene Dateien, Zugangsdaten unter `~/.ssh`, `~/.aws`).
 
-- Fest angepinnt **oberhalb** der Gruppenhierarchie (Spec 0033), niemals
-  innerhalb eines Ordners einsortierbar — visuell klar getrennt (eigenes
-  Icon, z. B. ein Computer- statt Server-Symbol, Label "Localhost").
-- Öffnet wie jeder andere Server einen Tab (Spec 0017) — keine
-  Sonderbehandlung im Multi-Tab-System nötig, da es sich für die restliche
-  App wie eine ganz normale Session verhält.
-- Kein Verbindungstest-Button (Spec 0008, Abschnitt 7) nötig/sinnvoll —
-  "Verbindung" ist hier immer sofort erfolgreich.
+## 5. Oberfläche
 
-## 6. Offene Punkte
+- Localhost steht fest **oberhalb** der Gruppenhierarchie (Spec 0033) in
+  eigenem Rahmen, nie in einem Ordner. Er lässt sich weder ziehen noch ist er
+  Ablageziel (Spec 0103).
+- Ein Klick öffnet einen Tab wie bei jedem Server (Spec 0017); auch hier gibt
+  es höchstens einen Nutzer-Tab.
+- Im Server-Formular zeigt Localhost einen Hinweis („Lokaler Pseudo-Server —
+  Kommandos laufen direkt auf diesem Rechner, keine SSH-Verbindung. Nur
+  Notizen und Tags sind editierbar.") sowie Notizen und Tags, aber weder
+  Löschen noch Verbindungstest noch Gruppen- oder Jump-Host-Auswahl.
+- Ist sonst kein Server angelegt, verweist der Einstiegs-Block auf Localhost
+  als Möglichkeit, ohne Server auszuprobieren (Spec 0069).
+- Ein Localhost-Eintrag zählt nie als „angelegter Server".
 
-- Der lokale Pseudo-Server kann **nicht** als Jump-Host für andere Server
-  fungieren (ergibt konzeptionell keinen Sinn — er ist der Ausgangspunkt,
-  keine Zwischenstation im SSH-Verbindungsgraphen). Explizit ausgeschlossen,
-  nicht nur "vergessen".
-- Plattform-Verhalten des lokalen PTY unter Windows (ConPTY) hängt vom
-  aktuellen Support-Stand der `portable-pty`-Crate ab — zum
-  Implementierungszeitpunkt prüfen, da sich das zwischen Crate-Versionen
-  unterscheiden kann.
-- Soll der Anzeigename ("Localhost") anpassbar sein? Aktuell fest, da es
-  ohnehin nur einen solchen Eintrag gibt — falls gewünscht, leicht später
-  nachrüstbar über das ohnehin editierbare Notiz-/Tag-Feld hinaus.
+## 6. Ausschlüsse und Grenzen
+
+- **Kein Jump-Host.** Localhost kann nicht als Jump-Host für andere Server
+  dienen: es ist der Ausgangspunkt, keine Zwischenstation. Die Auswahl im
+  Formular bietet ihn nicht an; wird er trotzdem gesendet, wird das mit
+  „Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden"
+  abgelehnt, bevor irgendein Zugangsdatum berührt wird.
+- **Anzeigename fest.** „Localhost" lässt sich nicht umbenennen.
+- **Kein Abbruch langer Kommandos.** Der Abbruch eines nie endenden Kommandos
+  (Spec 0027) greift für Localhost nicht; das Kommando endet erst von selbst
+  oder an der Ausgabegrenze.
+- **Kein Sudo-Passwort.** Für Localhost lässt sich kein Sudo-Passwort
+  hinterlegen; das Verfahren aus Spec 0018 greift nicht.
+- **Windows-Terminal.** Das lokale Pseudo-Terminal unter Windows hängt von der
+  Unterstützung der verwendeten Terminal-Bibliothek für ConPTY ab; einzelne
+  moderne ConPTY-Flags setzt sie nicht (ADR 0026). Das Verhalten kann deshalb
+  von dem unter macOS und Linux abweichen.

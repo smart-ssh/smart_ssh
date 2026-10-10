@@ -323,8 +323,8 @@ pub fn round_count(history: &[ChatMessage]) -> usize {
 /// Spec 0057, §3.2, Schritt 1: alte Runden werden auf einen einzelnen
 /// Platzhalter-Hinweis gekürzt, die letzten `min_preserved_rounds` bleiben
 /// vollständig erhalten. Reines Abschneiden — noch OHNE Zusammenfassung
-/// (Spec 0057, §8: "Etappe 2 ... einfache Kürzung", die KI-Summary ersetzt
-/// diesen Platzhalter erst in Etappe 3). No-op, wenn ohnehin nicht mehr
+/// (die KI-Summary, Spec 0057 §2, ersetzt diesen Platzhalter und bleibt
+/// sein Fallback, §2.2). No-op, wenn ohnehin nicht mehr
 /// als `min_preserved_rounds` Runden vorhanden sind. Kürzt UNBEDINGT auf
 /// genau `min_preserved_rounds` — anders als [`compact_rounds_for_budget`]
 /// (die tatsächlich in [`compact_for_send`] verwendete, budgetbewusste
@@ -1216,7 +1216,7 @@ mod tests {
         }
     }
 
-    // --- Token-Schätzung, inkl. Fencing-Expansion (Spec 0057, §7) ---------
+    // --- Token-Schätzung, inkl. Fencing-Expansion (Spec 0057, §3.1) ---------
 
     #[test]
     fn test_estimate_tokens_uses_four_bytes_per_token_heuristic() {
@@ -1259,7 +1259,7 @@ mod tests {
         assert_eq!(estimated, 100 + 100); // 400/4 + 400/4, keine Actions
     }
 
-    // --- Auslöser bei ~70-80 % (Spec 0057, §7) -----------------------------
+    // --- Auslöser bei ~75 % (Spec 0057, §3.1) -----------------------------
     //
     // `compact_for_send` selbst braucht seit Etappe 3 eine `&Session`
     // (Zusammenfassungs-KI-Aufruf in Schritt 1) — die zugehörigen Tests
