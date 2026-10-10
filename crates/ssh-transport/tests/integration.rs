@@ -1374,6 +1374,102 @@ async fn test_execute_cancellable_behaves_like_execute_without_cancel() {
     assert_eq!(outcome.output.exit_code, Some(0));
 }
 
+/// Issue #325: `execute_streaming` delivers stdout and stderr chunks while
+/// the command is still running — both lines arrive through the sink
+/// before anything cancels the never-ending command. Cancel afterwards
+/// still returns the partial output with `cancelled: true`, identical to
+/// `execute_cancellable`.
+#[tokio::test]
+async fn test_execute_streaming_delivers_both_streams_live_and_stays_cancellable() {
+    use ssh_manager_core::ssh::{ExecOutputChunk, OutputStream};
+
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+    let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+
+    // Cancels only after both live chunks have arrived — so the chunks
+    // provably came in while the command was running.
+    let watcher = tokio::spawn(async move {
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        while stdout != b"out line\n" || stderr != b"err line\n" {
+            match chunks.recv().await {
+                Some(ExecOutputChunk::Data {
+                    stream: OutputStream::Stdout,
+                    bytes,
+                }) => stdout.extend(bytes),
+                Some(ExecOutputChunk::Data {
+                    stream: OutputStream::Stderr,
+                    bytes,
+                }) => stderr.extend(bytes),
+                Some(ExecOutputChunk::Truncated) => panic!("unexpected truncation"),
+                None => panic!("sink closed before both lines arrived"),
+            }
+        }
+        let _ = cancel_tx.send(());
+        (stdout, stderr)
+    });
+
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        transport.execute_streaming("never-ending-mixed", None, cancel_rx, sink),
+    )
+    .await
+    .expect("execute_streaming() must return once cancel resolves")
+    .expect("execute_streaming() should succeed despite the cancel");
+
+    let (live_stdout, live_stderr) = watcher.await.unwrap();
+    assert_eq!(live_stdout, b"out line\n");
+    assert_eq!(live_stderr, b"err line\n");
+    assert!(outcome.cancelled);
+    assert_eq!(outcome.output.stdout, b"out line\n");
+    assert_eq!(outcome.output.stderr, b"err line\n");
+    assert_eq!(outcome.output.exit_code, None);
+}
+
+/// Issue #325: with the cap reached, the live stream carries exactly the
+/// kept bytes (never more than the limit, never the notice text) followed
+/// by one `Truncated`, and the final result is identical to `execute()`'s
+/// capped result.
+#[tokio::test]
+async fn test_execute_streaming_stops_forwarding_at_the_cap() {
+    use ssh_manager_core::ssh::ExecOutputChunk;
+
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    const SMALL_LIMIT: usize = 4096;
+    transport.set_max_output_bytes(SMALL_LIMIT);
+    let expected = transport.execute("flood").await.unwrap();
+
+    let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+    let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        transport.execute_streaming("flood", None, cancel_rx, sink),
+    )
+    .await
+    .expect("execute_streaming() must not hang on a flooding server")
+    .expect("execute_streaming() should succeed despite truncation");
+
+    let mut live = Vec::new();
+    let mut truncated_events = 0;
+    while let Some(chunk) = chunks.recv().await {
+        match chunk {
+            ExecOutputChunk::Data { bytes, .. } => {
+                assert_eq!(truncated_events, 0, "no data after the cap");
+                live.extend(bytes);
+            }
+            ExecOutputChunk::Truncated => truncated_events += 1,
+        }
+    }
+    assert_eq!(live.len(), SMALL_LIMIT);
+    assert_eq!(truncated_events, 1);
+    assert!(!outcome.cancelled);
+    assert_eq!(outcome.output, expected);
+    assert!(outcome.output.truncated);
+}
+
 /// Spec 0043, Fund A: der in-process-Testserver liefert über das
 /// `"flood"`-Kommando (s. `fixtures::test_server`) deutlich mehr Bytes, als
 /// der (über `SshTransport::set_max_output_bytes` künstlich klein gesetzte)

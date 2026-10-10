@@ -383,6 +383,15 @@ impl Handler for TestHandler {
         // absichtlich weder `exit_status_request` noch `eof`/`close`. Der
         // Kanal bleibt offen, bis der *Client* ihn schließt (genau das
         // Verhalten, das `drain_channel_cancellable` testet).
+        // Issue #325: like `never-ending`, but with one line on stdout AND
+        // one on stderr — a live-output test sees both streams arrive while
+        // the command is still running.
+        if command == "never-ending-mixed" {
+            session.data(channel, b"out line\n".to_vec())?;
+            session.extended_data(channel, 1, b"err line\n".to_vec())?;
+            self.first_line_sent.mark_sent();
+            return Ok(());
+        }
         if command == "never-ending" {
             session.data(channel, b"first line\n".to_vec())?;
             self.first_line_sent.mark_sent();
