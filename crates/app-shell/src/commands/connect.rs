@@ -298,6 +298,7 @@ pub(crate) async fn connect_session(
                     raw_key,
                     decision,
                 } => {
+                    let key_type = app_logic::host_key_store::offered_key_type(&raw_key);
                     let (kind, fingerprint, expected_fingerprint) = match decision {
                         HostKeyDecision::Unknown { fingerprint } => {
                             (HostKeyKind::Unknown, fingerprint, None)
@@ -347,6 +348,7 @@ pub(crate) async fn connect_session(
                         kind,
                         fingerprint,
                         expected_fingerprint,
+                        key_type,
                     );
 
                     let wait = wait_for_host_key_decision(

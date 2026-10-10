@@ -369,6 +369,7 @@
     "mismatchBodyAfterHost": " präsentiert einen anderen Schlüssel als beim letzten Mal gespeichert. Das kann auf einen Man-in-the-Middle-Angriff hindeuten. Nur fortfahren, wenn du sicher bist, dass sich der Server-Schlüssel legitim geändert hat (z. B. Neuinstallation des Servers).",
     "known": "Bekannt",
     "offeredNow": "Jetzt angeboten",
+    "keyType": "Schlüsseltyp",
     "cancelConnection": "Verbindung abbrechen",
     "trustAnyway": "Trotzdem vertrauen",
     "unknownHeading": "Unbekannter Host",
