@@ -347,6 +347,8 @@
     "cancellingCommand": "Wird getrennt…",
     "commandCancelledNotice": "⚠ Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code.",
     "commandTruncatedNotice": "⚠ Ausgabe wurde am Größenlimit abgeschnitten — möglicherweise unvollständig.",
+    "liveOutputLabel": "Live-Ausgabe",
+    "liveOutputTruncatedNotice": "⚠ Größenlimit erreicht — weitere Ausgabe wird nicht mehr angezeigt.",
     "mcpOrigin": "Externes Tool (MCP): „{{name}}“",
     "mcpOriginGeneric": "externes Tool (MCP)",
     "mcpOriginHint": "Diese Aktion wurde nicht vom internen Chat, sondern über den lokalen MCP-Server von einem externen Tool angefragt."
