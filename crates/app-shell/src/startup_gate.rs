@@ -2,7 +2,7 @@
 //! Entsperren, Beenden und „Neu anfangen“ erreichbar.
 //!
 //! **Warum ein eigenes Tor und nicht der fehlende `AppState`:** Gemessen
-//! (Teil 0 Frage 3, M1/M6) beantwortet Tauri 2 ein Kommando mit nicht
+//! (§2 Frage 3, M1/M6) beantwortet Tauri 2 ein Kommando mit nicht
 //! verwaltetem `State<AppState>` mit einem Fehler, nicht mit einem Panic —
 //! darauf allein ließe sich A16 also bauen. Es wäre aber ein Schutz, der an
 //! der Argumentliste jedes einzelnen Kommandos hängt: `get_platform`,

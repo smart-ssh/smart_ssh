@@ -314,7 +314,7 @@ fn resolve_final_hop_auth(
             let key_ref = CredentialRef::new("test:private_key");
             ephemeral.insert(&key_ref, key_secret);
 
-            // Spec 0073, §9 (K1, BL-0243): dieselbe Trim-Semantik und
+            // Spec 0073, A6–A8 (K1, BL-0243): dieselbe Trim-Semantik und
             // dieselbe „leer = das Gespeicherte nehmen"-Regel wie beim
             // Speichern (`server_credentials::resolve_auth_method`).
             // Vorher trat der Verbindungstest mit der Passphrase an, wie
@@ -388,7 +388,7 @@ fn resolve_final_hop_auth(
             // Dieselbe Leer-Prüfung wie beim Speichern — vor jedem
             // Verbindungsversuch und jedem Lesen der Datei.
             crate::server_credentials::require_identity_file_path(&path)?;
-            // Spec 0073, §9 (K1, BL-0243): wie im `PrivateKey`-Zweig über
+            // Spec 0073, A6–A8 (K1, BL-0243): wie im `PrivateKey`-Zweig über
             // den geteilten `trim_credential_value` statt über
             // `str::trim` — und der getrimmte Wert ist auch der, der in
             // den Ephemeral-Store geht, nicht der rohe.
@@ -468,7 +468,7 @@ impl<'a> CredentialStore for TieredCredentialStore<'a> {
 /// oder, wenn das leer ist, aus dem gespeicherten Credential des bestehenden
 /// Servers.
 ///
-/// Spec 0073, §9 (Q-BL-0149-02): dieselbe Form wie
+/// Spec 0073, A6–A8 (Q-BL-0149-02): dieselbe Form wie
 /// `server_credentials::write_or_reuse_secret` beim Speichern. Der
 /// eingegebene Wert läuft über den geteilten [`trim_credential_value`], und
 /// **danach** entscheidet dieselbe Leer-Regel: nicht leer → dieser Wert;
@@ -501,7 +501,7 @@ fn resolve_secret(
     match provided.map(|value| trim_credential_value(&value)) {
         Some(value) if !value.is_empty() => Ok(SecretString::from(value)),
         _ => {
-            // Spec 0073, §9 (Q-BL-0149-03): derselbe Code wie beim Speichern
+            // Spec 0073, A6–A8 (Q-BL-0149-03): derselbe Code wie beim Speichern
             // (`write_or_reuse_secret`), damit beide Knöpfe bei derselben
             // Eingabe denselben übersetzten Satz zeigen. Der Text (nur
             // Rückfall ohne Übersetzung) behauptet nicht „kein Server
@@ -1673,7 +1673,7 @@ mod tests {
         assert!(matches!(result, TestConnectionResult::Success));
     }
 
-    // --- Spec 0073, §9 (K1, BL-0243): Passphrase im Verbindungstest ------
+    // --- Spec 0073, A6–A8 (K1, BL-0243): Passphrase im Verbindungstest ------
     //
     // „Verbindung testen" und „Speichern" bekommen dieselbe Eingabe aus
     // demselben Formularfeld. Behandeln sie sie verschieden, sagt ein
@@ -1845,7 +1845,7 @@ mod tests {
         }
     }
 
-    // --- Spec 0073, §9 (Q-BL-0149-02): die übrigen Secret-Slots -----------
+    // --- Spec 0073, A6–A8 (Q-BL-0149-02): die übrigen Secret-Slots -----------
     //
     // Dieselbe Begründung wie beim Passphrase-Block oben, jetzt für die
     // Pflicht-Secrets selbst: Passwort, Key-Inhalt, Zertifikat und

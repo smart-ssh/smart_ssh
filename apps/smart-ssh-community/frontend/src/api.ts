@@ -700,7 +700,7 @@ export const exportSshConfig = (title: string) =>
 export const getStartupState = () => invoke<StartupStateDto>("get_startup_state");
 
 /** A16: entsperren und den Zustand nachbauen. Im Schlüsselbund-Modus
- * (Startmaske `setUpMasterPassword`, Teil 0 Frage 3) wird das Passwort
+ * (Startmaske `setUpMasterPassword`, §2 Frage 3) wird das Passwort
  * nicht gebraucht — dort setzt der Aufruf den Startablauf im Fenster fort,
  * und die Entscheidung fällt im Dialog D1. */
 export const unlockWithMasterPassword = (password: string) =>
@@ -712,7 +712,7 @@ export const unlockWithMasterPassword = (password: string) =>
 export const startOverFromUnlockScreen = () =>
   invoke<StartupStateDto>("start_over_from_unlock_screen");
 
-/** Teil 0 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
+/** §2 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
  * Master-Passwort kommt getrennt mit — es gehört nicht in das Ereignis, mit
  * dem gefragt wurde (§6: kein Passwort in einem DTO).
  *

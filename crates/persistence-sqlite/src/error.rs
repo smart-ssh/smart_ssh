@@ -206,7 +206,7 @@ pub enum ConnectFailureKind {
     /// Host-Key-Speicher neben der Datenbank ließ sich nicht laden.
     ///
     /// Eigener Fall, weil der Startablauf seit Etappe 3 auch aus einem
-    /// Kommando heraus laufen kann (Teil 0 Frage 3): Dort gibt es kein
+    /// Kommando heraus laufen kann (§2 Frage 3): Dort gibt es kein
     /// `process::exit` mit nativem Dialog mehr, der Fall muss also als
     /// Fehlerart durch die Rückgabe wandern. Der Text kommt weiter aus
     /// `app_logic::startup_error_messages::host_key_store_failure_text`.

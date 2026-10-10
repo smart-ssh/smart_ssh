@@ -1,4 +1,4 @@
-//! Schlüsselverwaltung für den Wurzelschlüssel K (Spec 0036, Abschnitt 4;
+//! Schlüsselverwaltung für den Wurzelschlüssel K (Spec 0101, E1;
 //! seit Spec 0101 die Wurzel des Datenbankschlüssels). Der Slot-Name stammt
 //! aus der Zeit der feldweisen Chat-Verschlüsselung und bleibt, damit
 //! vorhandene Installationen ihren K wiederfinden.
@@ -11,7 +11,7 @@ use crate::profiles::{CredentialError, CredentialRef, CredentialStore};
 
 use super::CipherError;
 
-/// Fester Slot im `CredentialStore` (Spec 0036, Abschnitt 4) — "kein neuer
+/// Fester Slot im `CredentialStore` (Spec 0101, E1) — "kein neuer
 /// Speichermechanismus", derselbe `CredentialStore` wie für Server-
 /// Credentials/API-Keys, nur mit einem App-weiten statt einem
 /// Server-/Provider-spezifischen Schlüssel (daher das `app:`-Präfix statt
