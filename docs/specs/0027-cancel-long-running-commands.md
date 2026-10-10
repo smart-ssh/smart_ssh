@@ -1,183 +1,129 @@
-# Spec: Abbruch lang laufender KI-Kommandos
+# Spec 0027 — Abbruch lang laufender KI-Kommandos
 
-Status: Entwurf
-Modul: Erweiterung `crates/core/src/ssh/`, `crates/ssh-transport/`,
-`crates/app-tauri`, `frontend/`
-Abhängigkeiten: SSH-Transport (Spec 0005), Kernschleife (Spec 0007),
-Bestätigungs-Registry (Spec 0007, `ConfirmationRegistry`), i18n (Spec 0024)
+Status: umgesetzt
+Zweck: Ein von der KI vorgeschlagenes Kommando, das nicht von selbst endet (`tail -f`, `journalctl -f`, `watch`), blockiert nicht für immer die Sitzung: der Nutzer kann die Verbindung zu genau diesem Kommando trennen und bekommt die bis dahin gesammelte Ausgabe als Ergebnis.
+Bezüge: Spec 0005 (Einzelkommando), Spec 0006 (Redaction), Spec 0007 (Kernschleife, Bestätigung), Spec 0018 (Sudo-Passwort), Spec 0020 (Dateikanal), Spec 0021 (automatische Folgerunden), Spec 0024 (Texte), Spec 0032 (Localhost), Spec 0039 (Fencing), Spec 0043 (Ausgabegrenze), Spec 0066 (Stopp), ADR 0057.
 
 ## 1. Ziel
 
-`SshTransport::execute()` wartet aktuell bedingungslos, bis der Remote-Kanal
-schließt — bei einem nicht selbst terminierenden Kommando (`journalctl -f`,
-`tail -f`, `watch`, `kubectl logs -f`, …) heißt das: für immer. Da
-`execute_suggested_command` währenddessen `session.transport` sperrt, hängt
-nicht nur die aktuelle Chat-Runde, sondern jede weitere Interaktion mit der
-Session (neues Terminal-Tab, Trennen, jedes weitere KI-Kommando).
+Ein Kommando wartet bis zum Ende seines Kanals. Bei einem Kommando, das nie
+endet, wäre das für immer; solange es läuft, halten weitere Kommandos und das
+Öffnen eines Terminals derselben Sitzung an.
 
 Diese Spec ergänzt eine **manuelle** Abbruchmöglichkeit: Läuft ein
-KI-vorgeschlagenes Kommando länger als 5 Sekunden, erscheint ein Indikator
-an der Aktionskarte. Ein Klick schließt **ausschließlich den Exec-Kanal
-dieses einen Kommandos** (nicht die SSH-Verbindung, nicht die Session,
-nicht andere offene Kanäle wie Terminal/SFTP) und liefert die bis dahin
-gesammelte Ausgabe als Ergebnis zurück in den Chat-Kontext — derselbe Pfad,
-über den auch ein regulär beendetes Kommando sein Ergebnis meldet.
+KI-vorgeschlagenes Kommando länger als 5 Sekunden, erscheint an der
+Aktionskarte ein Indikator mit einer Schaltfläche. Ein Klick schließt
+**ausschließlich den Kanal dieses einen Kommandos** — nicht die SSH-Verbindung,
+nicht die Sitzung, nicht Terminal oder Dateizugriff — und liefert die bis dahin
+gesammelte Ausgabe auf demselben Weg zurück in den Chat wie ein regulär
+beendetes Kommando.
 
 **Nicht Teil dieser Spec:**
-- Kein automatischer Timeout. Der Abbruch ist eine bewusste Nutzeraktion,
-  keine geratene feste Zeitgrenze, die ein legitim lang laufendes Kommando
-  (z. B. `apt upgrade`) fälschlich beenden würde.
-- Kein "echtes" Live-Mitlesen für die KI. Die KI sieht ohnehin immer nur das
-  Ergebnis eines bereits abgeschlossenen Tool-Aufrufs, nie einen
-  fortlaufenden Strom zwischen zwei Chat-Runden — "der KI beim Log-Folgen
-  zusehen lassen" hat im aktuellen Anfrage/Antwort-Modell kein sinnvolles
-  Gegenstück. Was tatsächlich gebraucht wird, ist ein *begrenzter*
-  Ausschnitt, kein unbegrenzter Strom — genau das liefert der Abbruch.
-- Kein garantiertes Töten des Remote-Prozesses (s. Abschnitt 3, letzter
-  Absatz).
 
-## 2. Frontend: Lauf-Indikator nach 5 Sekunden
+- **Kein automatischer Timeout.** Ein legitim lang laufendes Kommando
+  (z. B. `apt upgrade`) würde von einer geratenen Zeitgrenze fälschlich
+  beendet. Der Abbruch ist immer eine bewusste Nutzeraktion.
+- **Kein Live-Mitlesen der KI.** Die KI sieht immer nur das Ergebnis eines
+  abgeschlossenen Aufrufs. Was gebraucht wird, ist ein *begrenzter*
+  Ausschnitt; den liefert der Abbruch.
+- **Kein garantiertes Beenden des Prozesses** auf dem Server (Abschnitt 3.4).
 
-Rein clientseitig, **kein neues Backend-Event** für den Start nötig: Sobald
-eine Aktionskarte in den Ausführungszustand übergeht — sofort bei
-`AutoExec`, oder nach Klick auf "Ausführen" im Bestätigungsdialog — startet
-ein lokaler Timer. Liegt nach 5 Sekunden noch kein `chat-action-result` für
-diese `actionId` vor, erscheint ein dezenter Indikator ("läuft seit {{s}}s…")
-mit einem Button. Nur für `SuggestCommand`-Aktionen relevant —
-`ReadRemoteFile`/`WriteRemoteFile` laufen über die SFTP-Session (Spec 0020),
-nicht über `execute()`, und sind von diesem Hänge-Muster nicht betroffen
-(s. Abschnitt 5).
+## 2. Lauf-Indikator
 
-Button-Text bewusst nicht "Kommando stoppen" (suggeriert einen garantierten
-Kill) — stattdessen ehrlich formuliert im Sinne von "Verbindung zu diesem
-Kommando trennen". Klick ruft `cancel_running_command(sessionId, actionId)`
-auf, der Button wechselt in einen deaktivierten Zwischenzustand ("wird
-getrennt…"), bis das reguläre `chat-action-result`-Event eintrifft — exakt
-derselbe Pfad wie bei reguläre Beendigung, kein Sonderfall im Frontend
-nötig außer dem Indikator selbst und einem Hinweis in der Ergebnisanzeige
-(s. Abschnitt 4).
+**2.1 Wann.** Sobald ein vorgeschlagenes Kommando tatsächlich ausgeführt wird —
+sofort bei automatischer Ausführung, sonst nach „Ausführen" bzw. dem
+Ausführen eines bearbeiteten Vorschlags oder dem Akzeptieren mit Regel —
+läuft in der Oberfläche ein Zähler. Liegt nach 5 Sekunden noch kein Ergebnis
+vor, erscheint an der Aktionskarte:
 
-## 3. Backend: Abbrechbare Ausführung
+- ein pulsierender Punkt und der Text „läuft seit {n}s…" (Sekunden, sekündlich
+  aktualisiert),
+- die Schaltfläche **„Verbindung zu diesem Kommando trennen"**.
 
-Neue Methode auf `SshTransport` (Spec 0005), mit Default-Implementierung,
-die Cancel ignoriert und unverändert `execute()` ruft — bestehende
-Implementierungen/Mocks bleiben ohne Änderung funktionsfähig:
+Die Beschriftung sagt bewusst nicht „Kommando stoppen", weil sie keinen
+garantierten Kill verspricht (Abschnitt 3.4).
 
-```rust
-pub struct ExecOutcome {
-    pub output: CommandOutput,
-    /// `true`, wenn der Abbruch tatsächlich gegriffen hat, bevor das
-    /// Kommando von selbst beendet war.
-    pub cancelled: bool,
-}
+**2.2 Nur Kommandos.** Der Indikator erscheint nur für vorgeschlagene
+Shell-Kommandos. Lesen und Schreiben von Dateien läuft über den
+Dateikanal (Spec 0020) und ist nicht Gegenstand dieser Spec; Notizvorschläge
+und Dokumente haben kein Remote-Kommando dahinter.
 
-#[async_trait]
-pub trait SshTransport: Send + Sync {
-    // ... bestehende Methoden unverändert ...
+**2.3 Nach dem Klick.** Die Schaltfläche wird deaktiviert und zeigt „Wird
+getrennt…", bis das reguläre Ergebnis eintrifft. Schlägt die Anfrage selbst
+fehl, wird sie wieder bedienbar.
 
-    async fn execute_cancellable(
-        &mut self,
-        command: &str,
-        cancel: oneshot::Receiver<()>,
-    ) -> Result<ExecOutcome, SshError> {
-        Ok(ExecOutcome { output: self.execute(command).await?, cancelled: false })
-    }
-}
-```
+**2.4 Folgerunden.** Der Indikator erscheint unabhängig davon, ob die Aktion
+durch eine Nutzernachricht oder eine automatische Folgerunde (Spec 0021)
+ausgelöst wurde.
 
-**Reale Implementierung** (`ssh-transport`): `drain_channel` liest nicht
-mehr bedingungslos bis der Kanal schließt, sondern in einem `tokio::select!`
-zwischen dem nächsten `channel.wait()` und dem Cancel-`Receiver`. Löst
-Cancel zuerst aus, schließt die Funktion den Kanal aktiv (`channel.eof()`
-bzw. Drop) und liefert `accumulate_exec_output(messages)` mit der bis dahin
-gesammelten Ausgabe zurück, `cancelled: true`. `exit_code` bleibt `None` —
-bereits ein an anderer Stelle behandelter gültiger Zustand für "kein
-regulärer Exit", kein neuer Sonderfall im Typ nötig.
+## 3. Abbruch
 
-**Cancel-Registrierung**: `AppState` bekommt eine neue Registry,
-wiederverwendet exakt den bestehenden generischen Typ
-(`crate::confirmation::ConfirmationRegistry`, bisher für
-Host-Key-Bestätigung/Aktions-Freigabe genutzt):
+**3.1 Wirkung.** Der Abbruch betrifft nur den Kanal dieses Kommandos. Die
+Verbindung, die Sitzung und andere Kanäle bleiben unberührt. Er wirkt auch bei
+Kommandos, die mit dem hinterlegten Sudo-Passwort laufen (Spec 0018).
 
-```rust
-pub running_command_cancellations: ConfirmationRegistry<ActionId, ()>,
-```
+**3.2 Ergebnis.** Das Ergebnis trägt die bis zum Abbruch eingetroffene
+Standard- und Fehlerausgabe. Der Exit-Code bleibt leer, das Ergebnis ist als
+„abgebrochen" markiert. Das Ergebnis läuft durch dieselben Schritte wie jedes
+andere: Redaction vor Anzeige, Verlauf und KI-Anfrage, Eintrag im
+Sitzungsverlauf mit dem Vermerk des Abbruchs, Fortsetzung des Chats.
 
-`execute_suggested_command` registriert vor dem Aufruf einen `Receiver`
-unter der `action_id`, ruft `execute_cancellable` statt `execute()`, und
-entfernt den Eintrag implizit (die Registry räumt bei `resolve()`/Verbrauch
-selbst auf). Neuer Tauri-Command:
+**3.3 Kontext für die KI.** Bei einem abgebrochenen Kommando enthält der
+KI-Kontext einen ausdrücklichen Hinweis, dass der Nutzer das Kommando manuell
+abgebrochen hat, die Ausgabe unvollständig ist und der fehlende Exit-Code kein
+Fehler ist — damit die KI ihn nicht als Kommandofehler liest und denselben
+Befehl erneut vorschlägt. Ist die Ausgabe zusätzlich durch die Ausgabegrenze
+(Spec 0043) abgeschnitten, steht auch das im Kontext.
 
-```rust
-#[tauri::command]
-pub async fn cancel_running_command(
-    state: State<'_, AppState>,
-    action_id: ActionId,
-) -> CommandResult<()>
-```
+**3.4 Reichweite.** Beim Abbruch sendet Smart SSH zunächst ein
+SSH-Unterbrechungssignal an den Kanal — vom Server optional unterstützt — und
+schließt den Kanal danach in jedem Fall. Das beendet zuverlässig **nur das
+lokale Warten**. Dass der Prozess auf dem Server endet, ist nicht garantiert:
+anders als im Terminal gibt es im Einzelkommando kein steuerndes Terminal,
+`Ctrl+C` erreicht den Prozess nicht von selbst. Die meisten Werkzeuge beenden
+sich zeitnah, sobald ihr nächster Schreibversuch auf die geschlossene Leitung
+scheitert; ein Versprechen ist das nicht. Die Oberfläche formuliert deshalb
+zurückhaltend.
 
-löst den passenden Sender aus, falls einer wartet. Kein Fehler, falls
-nicht (Race zwischen Klick und regulärer Beendigung — das Kommando ist dann
-bereits fertig, der Klick kommt schlicht zu spät und wird stillschweigend
-ignoriert, kein Absturz, keine Fehlermeldung an den Nutzer für einen
-harmlosen zeitlichen Zufall).
+**3.5 Zeitliche Überschneidung.** Kommt der Klick, nachdem das Kommando schon
+von selbst geendet hat, wird er ohne Fehlermeldung ignoriert; das reguläre
+Ergebnis gilt.
 
-**Kontext für die KI**: `MessageContent::CommandResult` und
-`ActionResultPayload::Command` bekommen je ein zusätzliches
-`cancelled: bool`-Feld. Die Kontext-Formatierung für den KI-Request (beide
-Provider-Implementierungen, `ai-providers`) ergänzt bei `cancelled: true`
-einen expliziten Hinweis im selben Block wie den bestehenden
-`security_notice` — die KI muss erkennen können, dass die Ausgabe
-unvollständig ist und das Fehlen eines Exit-Codes keine Störung, sondern
-ein manueller Abbruch war, sonst könnte sie den fehlenden Exit-Code
-fälschlich als Kommandofehler interpretieren und z. B. denselben Befehl
-erneut vorschlagen.
+**3.6 Stopp vor dem Start.** Ein Stopp (Spec 0066), der eine noch nicht
+gestartete automatische Ausführung verhindert, meldet sie über denselben
+Weg als abgebrochen mit leerer Ausgabe; die Karte zeigt dann „abgebrochen"
+statt dauerhaft „läuft".
 
-**Realität des Abbruchs**: Ein Schließen des Exec-Kanals beendet
-zuverlässig **nur das lokale Warten** — es ist **kein** garantiertes Töten
-des Remote-Prozesses. Anders als beim Terminal-Tab (echtes PTY, `Ctrl+C`
-erreicht die Prozessgruppe direkt, s. Spec 0005/0017) hat ein reiner
-Exec-Kanal keine kontrollierende TTY. Die meisten CLI-Werkzeuge
-(einschließlich `journalctl`) beenden sich in der Praxis aber zeitnah
-selbst, sobald ihr nächster Schreibversuch auf die bereits geschlossene
-Pipe mit `SIGPIPE`/`EPIPE` fehlschlägt — verlässlich genug für den
-beabsichtigten Zweck, aber kein hartes Versprechen, und im UI entsprechend
-zurückhaltend formuliert (s. Abschnitt 2/4).
+## 4. Darstellung
 
-## 4. Darstellung im UI
-
-- Indikator an der Aktionskarte (dort, wo Decision-/Risiko-Badges sitzen,
-  Spec 0009/0026): dezenter pulsierender Punkt + Text "läuft seit {{s}}s…".
-- Button "Verbindung zu diesem Kommando trennen" — deaktiviert und mit
-  Zwischentext, sobald geklickt, bis das Ergebnis eintrifft.
-- `ActionResultView` (Ergebnisanzeige) zeigt bei `cancelled: true` einen
-  zusätzlichen Hinweis, z. B. "⚠ Manuell abgebrochen nach {{s}}s — Ausgabe
-  möglicherweise unvollständig, kein regulärer Exit-Code.", statt des
-  sonst gezeigten "exit code: …"-Werts.
-- Alle neuen Strings über das i18n-System (Spec 0024), keine hartcodierten
-  Texte.
+- Der Indikator sitzt an der Aktionskarte.
+- Im Ergebnis steht bei Abbruch statt der Exit-Code-Zeile: „⚠ Manuell
+  abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer
+  Exit-Code." Die bis dahin gesammelte Ausgabe steht darunter.
+- Alle Texte laufen über das Übersetzungssystem (Spec 0024).
 
 ## 5. Abgrenzung
 
-- Gilt ausschließlich für `SuggestCommand` über `SshTransport::execute()`/
-  `execute_with_stdin()`. `ReadRemoteFile`/`WriteRemoteFile` laufen über die
-  separate SFTP-Session (Spec 0020) mit anderer Fehler-/Zeit-Charakteristik
-  (SFTP-Operationen sind strukturell selbst-terminierend — kein bekanntes
-  "hängt für immer"-Muster wie bei einem interaktiven Exec-Kanal) — nicht
-  Teil dieser Spec.
-- Kein automatischer Timeout (s. Abschnitt 1).
-- Kein `kill -9`-Äquivalent auf Prozessebene (s. Abschnitt 3, letzter
-  Absatz) — der Abbruch trennt die Verbindung zum Kommando, tötet nicht
-  garantiert den Prozess.
+- Gilt nur für vorgeschlagene Kommandos. Datei-Aktionen (Spec 0020) haben
+  kein bekanntes „hängt für immer"-Muster und sind ausgenommen.
+- Kein automatischer Timeout und kein erzwungenes Beenden des Prozesses auf
+  Prozessebene.
+- Die 5-Sekunden-Schwelle ist fest.
 
-## 6. Offene Punkte
+## 6. Sicherheitszusagen
 
-- Soll der 5-Sekunden-Schwellwert später konfigurierbar werden? Aktuell
-  fest codiert, analog zu anderen Sparsamkeits-Konstanten in der App (z. B.
-  `DEFAULT_MAX_COMMAND_LENGTH`, `SSE_INACTIVITY_TIMEOUT`).
-- Automatische Folgerunden (Spec 0021): keine Sonderbehandlung — der
-  Indikator erscheint unabhängig davon, ob die Aktion durch eine
-  Nutzer-Nachricht oder eine automatische Folgerunde ausgelöst wurde.
-- Denkbare spätere Ausbaustufe: derselbe Abbruch-Mechanismus für
-  `ProposeNoteUpdate`/`GenerateDocument` wäre sinnlos (kein
-  Remote-Kommando dahinter) — bewusst nicht vorgesehen.
+- Der Abbruch kann nichts ausführen und nichts freigeben; er beendet nur das
+  Warten auf ein bereits bestätigtes Kommando.
+- Die Ausgabe eines abgebrochenen Kommandos wird genauso redigiert und
+  gefenct wie die eines regulär beendeten (Spec 0006, Spec 0039).
+- Ein Abbruch ist im Verlauf sichtbar; die KI kann ihn nicht mit einem
+  Kommandofehler verwechseln.
+
+## 7. Grenzen
+
+- **Localhost ist nicht abbrechbar.** Für den lokalen Pseudo-Server
+  (Spec 0032) erscheint der Indikator zwar, der Abbruch greift aber nicht: das
+  Kommando läuft bis zu seinem Ende oder der Ausgabegrenze weiter. Ein nie
+  endendes Kommando auf Localhost lässt sich damit nicht beenden.
+- **Kein Beenden des Prozesses garantiert.** Siehe Abschnitt 3.4.
+- **Die Schwelle ist nicht einstellbar.**

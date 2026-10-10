@@ -767,7 +767,7 @@ async fn test_start_directory_column_is_nullable() {
 /// Datenbank.**
 ///
 /// `auth_method` ist eine JSON-Textspalte (Migration 0001) — eine Variante
-/// mehr ändert am Schema nichts (§1.4), und genau das prüft dieser Test:
+/// mehr ändert am Schema nichts (Spec 0076, A-1), und genau das prüft dieser Test:
 /// anlegen, neu laden, bearbeiten, wieder laden. Der Pfad kommt dabei
 /// **unverändert** zurück, ohne `realpath` und ohne aufgelöstes `~` (A-1,
 /// §4.4).

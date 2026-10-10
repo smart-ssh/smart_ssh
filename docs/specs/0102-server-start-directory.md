@@ -1,149 +1,120 @@
 # Spec 0102 — Startverzeichnis je Server für Terminal und Dateibrowser
 
-Status: umgesetzt · Issue: #9
-Zweck: Ein Server-Profil kann ein optionales Startverzeichnis tragen. Ist es
-gesetzt, starten das interaktive Terminal und der SFTP-Dateibrowser einer
-Sitzung dort statt im Home des Login-Nutzers. Ist es leer, bleibt alles wie
-bisher. KI-Kommandos laufen weiterhin immer im Home.
-Review-Priorität: NORMAL (Filter-Engine, Risiko-Klassifizierer,
-Redaction, Credentials und KI-Ausführungspfad bleiben unberührt)
+Status: umgesetzt
+Zweck: Ein Server-Profil kann ein optionales Startverzeichnis tragen. Ist es gesetzt, starten das interaktive Terminal und der SFTP-Dateibrowser einer Sitzung dort statt im Home des Login-Nutzers. Ist es leer, bleibt alles wie ohne dieses Feld. KI-Kommandos laufen weiterhin immer im Home.
+Bezüge: Spec 0003 (Server-Profil), Spec 0005 (Terminal), Spec 0032 (lokaler Pseudo-Server), Spec 0067 (erhöhter Dateibrowser), Spec 0075 (SSH-Config-Import/-Export), ADR 0059 (KI-Kommandos in frischer Shell im Home), ADR 0101 (`cd`-Zeile im Terminal), ADR 0102 (eine Prüfung pro Sitzung).
+Review-Priorität: NORMAL (Filter-Engine, Risiko-Klassifizierer, Redaction, Credentials und KI-Ausführungspfad bleiben unberührt)
 
-## 1. Ist-Stand (vor dieser Spec)
+## 1. Überblick
 
-- **Terminal:** `RusshTransport::open_shell`
-  (`crates/ssh-transport/src/transport.rs`) fordert PTY und Login-Shell an,
-  danach läuft nichts. Der lokale Pseudo-Server startet `$SHELL` ohne cwd
-  (`crates/ssh-transport/src/local.rs`).
-- **Dateibrowser:** startet bei `"."` (`FileBrowserPanel.tsx`); der
-  SFTP-Server löst `"."` gegen das Home auf. `remotePath.ts` zeigt `"."` als
-  `~` und hält Kindpfade relativ (`./unterordner`). `SftpSession` hat kein
-  `realpath`.
-- **KI-Kommandos:** jede Aktion läuft in einer frischen Shell im Home
-  (ADR 0059; die Secret-Lese-Prüfung im Risiko-Klassifizierer baut darauf).
-- **Datenmodell:** `Server` (`crates/core/src/profiles/types.rs`); das
-  jüngste vergleichbare optionale Feld ist `sftp_server_path` (Spec 0067,
-  Migration `0014`).
+Das Startverzeichnis ist ein optionales Feld am Server-Profil (im Server-
+Formular, nicht beim lokalen Pseudo-Server). Es gilt für das interaktive
+Terminal und den Dateibrowser der Sitzung; beide nutzen dieselbe, einmalige
+Prüfung (§4.1). Bestehende Server ohne Wert verhalten sich unverändert.
 
 ## 2. Datenmodell
 
-- `Server.start_directory: Option<String>`, `None` = nicht gesetzt.
-- Migration `0017_server_start_directory.sql`:
-  `ALTER TABLE servers ADD COLUMN start_directory TEXT;` — nullable,
-  Bestandszeilen erhalten `NULL` und verhalten sich wie bisher.
-- `ServerDto.start_directory` und `ServerInput.start_directory`
-  (`#[serde(default)]`, fehlend = nicht gesetzt).
+- Der Wert ist optional; „nicht gesetzt" ist der Normalfall. Bestehende
+  Server behalten nach einem Update „nicht gesetzt".
+- Ein fehlendes Feld in einer Eingabe bedeutet „nicht gesetzt".
 
 ## 3. Validierung
 
-Gemeinsame Regel in `ssh_manager_core::profiles::normalize_start_directory`
-(Backend, beim Anlegen und Bearbeiten über
-`app_logic::dto::normalize_start_directory_input`) und
-`checkStartDirectory` (`frontend/src/startDirectory.ts`, im Formular vor
-dem Speichern):
+Dieselbe Regel gilt im Server-Formular vor dem Speichern und im Backend
+beim Anlegen und Bearbeiten (das Backend lehnt ab, bevor etwas gespeichert
+wird):
 
 1. Leerraum am Rand wird entfernt; leer = nicht gesetzt.
-2. Erlaubt: absoluter Pfad (`/…`) oder ein Pfad, der mit `~/` beginnt.
+2. Erlaubt: ein absoluter Pfad (`/…`) oder ein Pfad, der mit `~/` beginnt.
    Abgelehnt: jeder andere relative Pfad, auch `~` allein und `~nutzer/…`.
    Das Formular zeigt eine klare Meldung und speichert nicht.
-3. Steuerzeichen werden abgelehnt (s. ADR 0101: sie würden die
-   `cd`-Zeile im Terminal zerreißen oder vorzeitig abschicken).
+3. Steuerzeichen werden abgelehnt (sie würden die `cd`-Zeile im Terminal
+   zerreißen oder vorzeitig abschicken, s. ADR 0101).
 
 ## 4. Verhalten in der Sitzung
 
 ### 4.1 Eine Prüfung pro Sitzung
 
-`app_logic::start_directory` prüft das konfigurierte Verzeichnis **einmal**
-pro Sitzung per SFTP `stat` über den normalen SFTP-Kanal der Sitzung
-(Ergebnis in einem `OnceCell` an `Session`). Terminal und Dateibrowser
-teilen dieses Ergebnis:
+Das konfigurierte Verzeichnis wird **einmal** pro Sitzung über den normalen
+SFTP-Kanal der Sitzung geprüft. Terminal und Dateibrowser teilen dieses
+Ergebnis (parallele Anfragen warten auf dieselbe Prüfung):
 
-- **gefunden** — `stat` erfolgreich und Verzeichnis;
-- **fehlt** — `stat` scheitert, das Ziel ist kein Verzeichnis, oder der
-  SFTP-Kanal lässt sich nicht öffnen;
+- **gefunden** — das Ziel existiert und ist ein Verzeichnis;
+- **fehlt** — das Ziel existiert nicht, ist kein Verzeichnis, ist nicht
+  zugänglich, oder der SFTP-Kanal lässt sich nicht öffnen;
 - **nicht gesetzt** — keine Prüfung, kein SFTP-Zugriff.
 
-Für `~/x` wird `./x` geprüft (SFTP kennt kein `~`, löst relative Pfade aber
-gegen das Home auf), `~/` allein ist `"."`.
+Da SFTP kein `~` kennt, aber relative Pfade gegen das Home auflöst, wird
+`~/x` als `./x` geprüft und geöffnet; `~/` allein ist das Home (`.`).
 
 ### 4.2 Terminal
 
-Nach dem Start der Login-Shell schreibt `open_terminal` sichtbar
-`cd -- '<dir>'` plus Eingabetaste ins PTY (Issue-Entscheidung 1). Die
-Shell-Anfrage selbst ist unverändert, es gibt kein
-`cd … && exec $SHELL`. Quoting und Sonderfälle: ADR 0101.
+Nach dem Start der Login-Shell schreibt die Anwendung sichtbar eine
+`cd`-Zeile samt Eingabetaste ins Terminal, wenn das Verzeichnis gefunden
+wurde: `cd -- '<Verzeichnis>'`. Bei `~/…` steht nur `~/` ungequotet (damit
+die Shell die Tilde expandiert), der Rest ist gequotet; `~/` allein ergibt
+`cd -- ~`. Ein `'` im Pfad wird maskiert. Die Shell-Anfrage selbst ist
+unverändert, es gibt kein `cd … && exec $SHELL`. Scheitert das Schreiben der
+Zeile, bleibt die Shell im Home und der Fehler wird nur protokolliert.
+Quoting und Sonderfälle: ADR 0101.
 
 ### 4.3 Dateibrowser
 
-Neues Command `sftp_start_directory(session_id)` →
-`{ path, missingDirectory }`. Der Browser öffnet bei `path`; „Zum
-Startverzeichnis" (⌂) kehrt dorthin zurück, „Aufwärts" funktioniert von
-dort über das bestehende `parentPath` (`/srv/app` → `/srv`, `./projects` →
-`.`). Scheitert schon die Abfrage, startet der Browser wie bisher bei `"."`.
+Der Dateibrowser fragt beim Öffnen den Startpfad der Sitzung ab und öffnet
+dort. „Zum Startverzeichnis" kehrt dorthin zurück, „Aufwärts" funktioniert
+von dort ganz normal (`/srv/app` → `/srv`, `./projects` → `.`). Scheitert
+schon die Abfrage, startet der Browser wie ohne Startverzeichnis bei `.`
+(Home).
 
 ### 4.4 Fehlendes Verzeichnis
 
-Terminal (kein `cd`) und Dateibrowser (`"."`) nutzen das Home. Die Sitzung
+Terminal (kein `cd`) und Dateibrowser (`.`) nutzen das Home. Die Sitzung
 scheitert nicht. Genau **ein** sichtbarer, nicht blockierender Hinweis pro
 Sitzung nennt das konfigurierte Verzeichnis: Das Backend gibt den Wert nur
-beim ersten Abruf heraus — an `open_terminal` oder `sftp_start_directory`,
-je nachdem, wer zuerst fragt — und das Frontend zeigt ihn als Toast.
+beim ersten Abruf heraus — an das Terminal oder den Dateibrowser, je
+nachdem, wer zuerst fragt — und das Frontend zeigt ihn als Meldung
+(Toast).
 
 ### 4.5 Nicht gesetzt
 
-Kein SFTP-Zugriff, kein `cd`, Browser bei `"."` — identisch zum bisherigen
-Verhalten.
+Kein SFTP-Zugriff, kein `cd`, Browser bei `.` — wie ohne dieses Feature.
 
-## 5. Abgrenzungen
+## 5. Abgrenzungen und Grenzen
 
-- **KI-Kommandos** (Chat und MCP) laufen weiter im Home; ADR 0059 gilt
-  unverändert. Der Ausführungspfad (`orchestration`), Filter-Engine und
-  Risiko-Klassifizierer lesen den Wert nicht. Test:
-  `orchestration::action_exec::tests_core::test_ai_command_is_unchanged_by_start_directory`
-  (das ausgeführte Kommando ist wörtlich der Vorschlag, mit und ohne
-  Startverzeichnis).
+- **KI-Kommandos** (Chat und MCP) laufen weiter im Home (ADR 0059).
+  Ausführungspfad, Filter-Engine und Risiko-Klassifizierer lesen den Wert
+  nicht; das ausgeführte Kommando ist wörtlich der Vorschlag, mit und ohne
+  Startverzeichnis.
 - **Keine Sicherheitsgrenze:** Terminal und SFTP laufen ohnehin nicht durch
   die Filter-Engine; das Startverzeichnis ist Komfort.
 - **Lokaler Pseudo-Server:** Das Formular bietet das Feld nicht an (wie die
   übrigen in Spec 0032 ausgeblendeten Felder), das synthetische Profil trägt
-  immer `None`, das Verhalten bleibt unverändert. Dass sein Dateibrowser
-  früher das Arbeitsverzeichnis der App statt des Homes öffnete, ist ein
-  eigener Defekt (inzwischen separat behoben) und nicht Teil dieser Spec.
-- **Erhöhter Dateibrowser-Modus (Spec 0067):** Das Startverzeichnis gilt
-  für den Login-Nutzer; „Zum Startverzeichnis" lädt denselben Pfad auch im
-  erhöhten Modus, eine eigene Prüfung für den Zielnutzer gibt es nicht.
+  immer „nicht gesetzt", das Verhalten bleibt unverändert.
+- **Erhöhter Dateibrowser-Modus (Spec 0067):** Das Startverzeichnis wird für
+  den Login-Nutzer geprüft; „Zum Startverzeichnis" lädt denselben Pfad auch
+  im erhöhten Modus, eine eigene Prüfung für den Zielnutzer gibt es nicht.
   Ein Startverzeichnis der Form `~/…` wird dabei als relativer Pfad `./…`
-  geladen (§4.1). Diesen löst der erhöhte `sftp-server` relativ zu seinem
-  eigenen Startverzeichnis auf, also aus Sicht des Zielnutzers, nicht
-  gegen das Home des Login-Nutzers. „Zum Startverzeichnis" kann im
-  erhöhten Modus deshalb in einem anderen Verzeichnis landen oder
-  scheitern. Das ist eine bekannte Grenze, kein Defekt. Wer im erhöhten
-  Modus verlässlich am selben Ort starten will, trägt einen absoluten Pfad
-  ein.
-- **Vorab-Eingabe im Terminal (Typeahead):** Die `cd`-Zeile (§4.2) wird
-  nach dem Login ins PTY geschrieben und wartet dort als Vorab-Eingabe,
-  bis die Shell sie liest. Login-Skripte, die anstehende Eingaben
-  verwerfen (z. B. per `tcflush` oder `read` in einer Schleife) oder per
-  `exec` einen Multiplexer starten (z. B. `exec tmux`), können die Zeile
-  verschlucken oder an den Multiplexer weiterreichen. Das Terminal bleibt
-  dann im Home bzw. das `cd` läuft in der falschen Umgebung. Hingenommen:
-  Die Zeile ist sichtbar, und die Shell-Anfrage bleibt bewusst
-  unverändert (§4.2, ADR 0101).
+  geladen (§4.1), den der erhöhte `sftp-server` aus Sicht des Zielnutzers
+  auflöst, nicht gegen das Home des Login-Nutzers. „Zum Startverzeichnis"
+  kann im erhöhten Modus deshalb in einem anderen Verzeichnis landen oder
+  scheitern. Bekannte Grenze, kein Defekt; wer im erhöhten Modus verlässlich
+  am selben Ort starten will, trägt einen absoluten Pfad ein.
+- **Vorab-Eingabe im Terminal (Typeahead):** Die `cd`-Zeile (§4.2) wird nach
+  dem Login ins Terminal geschrieben und wartet dort als Vorab-Eingabe, bis
+  die Shell sie liest. Login-Skripte, die anstehende Eingaben verwerfen
+  (z. B. per `tcflush` oder `read` in einer Schleife) oder per `exec` einen
+  Multiplexer starten (z. B. `exec tmux`), können die Zeile verschlucken
+  oder an den Multiplexer weiterreichen; das Terminal bleibt dann im Home
+  bzw. das `cd` läuft in der falschen Umgebung. Hingenommen: Die Zeile ist
+  sichtbar, und die Shell-Anfrage bleibt bewusst unverändert (ADR 0101).
 
 ## 6. SSH-Config-Import/-Export (Spec 0075)
 
 Das Feld hat in `ssh_config` kein Gegenstück und wird nicht abgebildet.
 Der Export benennt es nach Spec 0075, §3.2.3, als Kommentar über dem Block
-(`# smart-ssh: Startverzeichnis (…) ist hier nicht abgebildet.`); der Import
-liest es nie und legt Server immer ohne Startverzeichnis an.
+(`# smart-ssh: Startverzeichnis (…) ist hier nicht abgebildet.`), auch bei
+Zeilenumbrüchen im Wert ohne aus dem Kommentar auszubrechen; der Import
+legt Server immer ohne Startverzeichnis an.
 
-## 7. Tests
-
-- Core: Validierung, SFTP-Pfad, `cd`-Zeile inkl. Leerzeichen, `'`,
-  `~/`, Shell-Metazeichen (`profiles::start_directory::tests`); Export-
-  Kommentar inkl. Zeilenumbruch-Ausbruch (`ssh_config::export::tests`).
-- Persistenz: Rundlauf, nullable Spalte, Bestandszeile nach Upgrade.
-- app-logic: Normalisierung beim Anlegen/Bearbeiten, eine Prüfung pro
-  Sitzung, ein Hinweis, `cd` im PTY, Fallback bei fehlendem SFTP, KI-
-  Kommando unverändert.
-- Frontend: Formularvalidierung, Feld nicht beim lokalen Server,
-  Dateibrowser-Start/„Zum Startverzeichnis"/„Aufwärts", Hinweis.
+(Der frühere Abschnitt 7 „Tests" ist entfallen; die Nummer wird nicht neu
+vergeben.)

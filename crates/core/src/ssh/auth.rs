@@ -189,7 +189,7 @@ impl fmt::Display for KeyFileError {
 
 impl std::error::Error for KeyFileError {}
 
-/// Die äußere Grenze zum Dateisystem (Spec 0076, §1.3/§4.2) — `core` liest
+/// Die äußere Grenze zum Dateisystem (Spec 0076, §4.2) — `core` liest
 /// keine Datei selbst, so wie es auch keine SSH-Verbindung selbst aufbaut.
 /// Die konkrete Umsetzung liegt in `app-shell`, in Tests steht eine
 /// Attrappe ([`super::mock::MockKeyFileReader`]).
@@ -219,8 +219,7 @@ pub trait KeyFileReader {
 ///
 /// Kein `russh`-spezifischer Typ — die Übersetzung in konkrete `russh`-
 /// Auth-Aufrufe ist Sache von `crates/ssh-transport` (Spec 0005 Abschnitt
-/// 2). Nicht Teil der in Abschnitt 4-7 der Spec explizit vorgegebenen
-/// Typen, aber eine direkte, naheliegende Konsequenz aus Abschnitt 8
+/// 2). Eine direkte, naheliegende Konsequenz aus Abschnitt 7
 /// ("Fehler-Mapping ... fehlende Credentials führen zu
 /// `CredentialResolutionFailed`") und Teil 2 Punkt 3 der Aufgabenstellung:
 /// Die *Auflösung* von `AuthMethod` + `CredentialStore` zu tatsächlichem

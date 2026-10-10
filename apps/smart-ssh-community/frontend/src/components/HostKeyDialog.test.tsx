@@ -1,9 +1,7 @@
-// Spec 0100 (BL-0232): Der Host-Key-Dialog muss allein mit der Tastatur
+// Spec 0100: Der Host-Key-Dialog muss allein mit der Tastatur
 // sicher bedienbar sein — Anfangsfokus auf der ablehnenden Schaltfläche,
 // Fokus-Fang, Escape lehnt ab, keine Entscheidung ohne Absicht — und von
-// Screenreadern als modal angesagt werden. Jeder Test außer T8 scheitert am
-// Stand vor dieser Spec (Beleg im Bericht, nicht hier: Fix lokal entfernt,
-// Lauf beobachtet, Fix wiederhergestellt).
+// Screenreadern als modal angesagt werden.
 import { StrictMode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
