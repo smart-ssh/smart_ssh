@@ -1,305 +1,244 @@
-# Spec: Dateitransfer (SFTP) — Dateibrowser und KI-Zugriff
+# Spec 0020 — Dateitransfer (SFTP): Dateibrowser und KI-Dateizugriff
 
-Status: Entwurf
-Modul: Trait-Definitionen in `crates/core/src/ssh/`, Implementierung in
-`crates/ssh-transport`, Commands in `crates/app-tauri`, Dateibrowser in
-`frontend/`
-Abhängigkeiten: SSH-Modul (Spec 0005, offener Punkt "SFTP" wird hiermit
-geschlossen), Filter-Engine (Spec 0002), KI-Aktionen (Spec 0003/0006),
-Kernschleife (Spec 0007)
+Status: umgesetzt
+Zweck: Wie Smart SSH Dateien auf einem Server zeigt, überträgt und ändert. Es gibt zwei Wege mit unterschiedlicher Kontrolle: den Dateibrowser, den der Nutzer selbst bedient, und Dateiaktionen, die die KI vorschlägt.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0005 (Verbindung, Kanäle), Spec 0006 (Redaktion), Spec 0017 (Sitzungs-Tabs), Spec 0018 (Sudo-Passwort), Spec 0019 (Notiz-Diff), Spec 0028 (MCP), Spec 0054 (Aktionen im Dateibrowser), Spec 0067 (erhöhter Modus), Spec 0068 Teil 3 (Sudo-Ankündigung), Spec 0086 (Größengrenzen im Browser).
 
 ## 1. Ziel und Abgrenzung
 
-Zwei Anwendungsfälle, die sich denselben Transport teilen, aber
-unterschiedlich reguliert sind:
+Zwei Anwendungsfälle teilen sich dieselbe Verbindung, sind aber unterschiedlich
+reguliert:
 
-1. **Manueller Dateibrowser** — der Nutzer navigiert selbst durch das
-   Remote-Dateisystem, lädt Dateien hoch/herunter. Das ist eine direkte
-   Nutzeraktion, vergleichbar mit dem interaktiven PTY-Terminal (Spec 0005):
-   **keine Filter-Engine-Prüfung**, der Nutzer tut es ja selbst und sieht,
-   was er tut.
-2. **KI-initiierter Dateizugriff** — die KI schlägt vor, eine Datei zu lesen
-   oder zu schreiben. Das ist ein Vorschlag wie jeder andere und **muss**
-   derselben Kontrolle unterliegen wie ein Shell-Kommando (Abschnitt 4).
+1. **Manueller Dateibrowser.** Der Nutzer navigiert selbst durch das
+   Dateisystem des Servers, lädt Dateien hoch und herunter. Das ist eine
+   direkte Nutzeraktion, vergleichbar mit dem interaktiven Terminal
+   (Spec 0005): **keine Prüfung durch die Filter-Engine**, der Nutzer tut es
+   selbst und sieht, was er tut.
+2. **KI-Dateizugriff.** Die KI schlägt vor, eine Datei zu lesen oder zu
+   schreiben. Das ist ein Vorschlag wie jeder andere und unterliegt derselben
+   Kontrolle wie ein Shell-Kommando (Abschnitt 4).
 
-## 2. Warum SFTP für die KI überhaupt sinnvoll ist
+## 2. Warum die KI Dateien über SFTP bekommt
 
-Die KI kann heute bereits Dateien über Shell-Kommandos schreiben
-(`echo`/`cat <<EOF`), die durch die Filter-Engine laufen. SFTP ersetzt das
-nicht aus Notwendigkeit, sondern weil es **besser kontrollierbar** ist:
+Die KI kann Dateien auch über Shell-Kommandos schreiben (`echo`,
+`cat <<EOF`), die durch die Filter-Engine laufen. Der Dateizugriff ist
+nicht notwendig, aber besser kontrollierbar:
 
-- **Echter Diff statt Kommando-Text**: Bei einer Änderung an einer
-  bestehenden Datei kann die App den alten Inhalt lesen und dem Nutzer
-  einen Zeilen-Diff zeigen, statt nur ein `cat <<EOF`-Kommando mit dem neuen
-  Volltext. Der Nutzer sieht damit *was sich ändert*, nicht *was geschrieben
-  wird* — deutlich besser prüfbar, gerade bei Config-Dateien.
-- **Keine Shell-Quoting-Fallstricke**: Sonderzeichen, Anführungszeichen,
-  Backslashes und Variablen-artige Inhalte (`$foo`) in Konfigurationsdateien
-  brauchen bei Heredocs sorgfältiges Escaping. Fehler dabei erzeugen still
-  falsche Dateiinhalte — ein Risiko, das bei SFTP-Transfer strukturell
-  entfällt.
-- **Keine Längenlimits** durch Kommandozeilen-Beschränkungen.
+- **Echter Diff statt Kommandotext.** Bei einer Änderung an einer
+  bestehenden Datei liest die App den alten Inhalt und zeigt einen
+  Zeilen-Diff. Der Nutzer sieht, *was sich ändert*, nicht *was geschrieben
+  wird*.
+- **Keine Quoting-Fallstricke.** Sonderzeichen, Anführungszeichen,
+  Backslashes und `$foo`-artige Inhalte brauchen bei Heredocs sorgfältiges
+  Escaping; Fehler erzeugen still falsche Dateien. Bei der Dateiübertragung
+  entfällt das Risiko.
+- **Keine Längengrenzen** der Kommandozeile.
 
-**Wichtig**: SFTP darf die bestehende Kontrolle nicht schwächen. Ohne die
-Regelung aus Abschnitt 4 wäre ein SFTP-Write eine stille Umgehung der
-Filter-Engine — genau das, was die App verhindern soll.
+Der Dateizugriff schwächt die bestehende Kontrolle nicht: Ohne die Regeln aus
+Abschnitt 4 wäre ein Dateischreibvorgang eine stille Umgehung der
+Filter-Engine.
 
 ## 3. Transport
 
-**`russh-sftp`** als SFTP-Client-Implementierung über einen
-Subsystem-Channel der bestehenden SSH-Verbindung (Spec 0005). Kein zweiter
-Verbindungsaufbau, kein separater Auth-Vorgang, keine erneute
-Host-Key-Prüfung — die SFTP-Session läuft als weiterer Channel über
-dieselbe `SshTransport`-Verbindung wie Exec- und PTY-Modus, inklusive
-bestehender Jump-Host-Kette.
+Dateizugriffe laufen als weiterer Kanal über **dieselbe** Verbindung wie
+Kommandos und Terminal (Spec 0005): kein zweiter Verbindungsaufbau, keine
+erneute Anmeldung, keine erneute Host-Key-Prüfung, auch nicht über eine
+Jump-Host-Kette. Es wird ausschließlich das SFTP-Protokoll verwendet, kein
+SCP; die Oberfläche verhält sich wie ein klassischer Transfer-Client.
 
-Kein SCP-Protokoll: OpenSSH selbst nutzt seit Version 9 intern SFTP für
-`scp`, und SCP kann keine Verzeichnisse auflisten — für einen Dateibrowser
-also ungeeignet. Die *Benutzeroberfläche* verhält sich wie ein klassischer
-Datei-Transfer-Client, der *Transport* ist durchgehend SFTP.
+Angeboten werden: Verzeichnis auflisten, Datei lesen, Datei schreiben,
+Eintrag abfragen, löschen, umbenennen/verschieben, Ordner anlegen und
+Rechte setzen. Je Eintrag sind Name, Pfad, Typ, Größe, Rechte und
+Änderungszeit bekannt.
 
-```rust
-#[async_trait]
-pub trait SftpSession: Send {
-    async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError>;
-    async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError>;
-    async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError>;
-    async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
-    async fn remove(&mut self, path: &str) -> Result<(), SshError>;
-    async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError>;
-    async fn create_dir(&mut self, path: &str) -> Result<(), SshError>;
-}
+Der Dateikanal einer Sitzung wird beim ersten Dateizugriff geöffnet und
+bleibt für die Dauer der Sitzung offen. Er gehört der Sitzung; kein Code
+außerhalb der Anwendungslogik kann ihn ersetzen (Spec 0085 A3).
 
-pub struct RemoteEntry {
-    pub name: String,
-    pub path: String,
-    pub is_dir: bool,
-    pub size: u64,
-    pub permissions: u32,
-    pub modified: Option<DateTime<Utc>>,
-}
-```
+## 4. KI-Zugriff: Aktionen und ihre Kontrolle
 
-Erweiterung von `SshTransport` (Spec 0005, Abschnitt 4) um:
+Zusätzlich zu `SuggestCommand` kennt die KI zwei Dateiaktionen:
+`ReadRemoteFile` (Datei lesen) und `WriteRemoteFile` (Datei schreiben).
 
-```rust
-async fn open_sftp(&mut self) -> Result<Box<dyn SftpSession>, SshError>;
-```
+### 4.1 Lesen
 
-Die SFTP-Session wird pro Server-Session **lazy** geöffnet (erst beim ersten
-Dateizugriff) und dann für die Dauer der Session offengehalten, statt für
-jede Operation neu aufgebaut zu werden.
+Lesen wird wie ein lesendes Kommando behandelt und läuft durch die
+**Filter-Engine**. Dafür wird die Aktion auf ein gleichwertiges Kommando
+abgebildet: `sftp-read <pfad>`. Nutzer schreiben damit gewöhnliche Regeln
+(z. B. Allow für `sftp-read /etc/nginx/*`, Deny für `sftp-read /etc/shadow`)
+mit derselben Syntax und Präzedenz wie für Shell-Kommandos. Pfade werden vor
+der Auswertung normalisiert (`.`, `..`, doppelte `/`), damit sich ein Muster
+nicht über Pfadumwege umgehen lässt (Spec 0060).
 
-## 4. KI-Zugriff: neue Aktionen und deren Kontrolle
+Der gelesene Inhalt läuft vor der Rückgabe an die KI durch die Redaktion
+(Spec 0006), wie jede Kommandoausgabe, und wird im KI-Kontext als nicht
+vertrauenswürdig gekennzeichnet (Spec 0039).
 
-Ergänzung zu `AiAction` (Spec 0003, Abschnitt 5.2 / Spec 0012):
+Dateien über **256 KB** werden mit klarer Meldung an Nutzer und KI abgelehnt,
+statt vollständig in den KI-Kontext geladen zu werden. Die Grenze ist fest,
+nicht einstellbar. Sie wird anhand der vorab abgefragten Größe geprüft;
+liefert diese Abfrage keinen Wert, wird trotzdem gelesen.
 
-```rust
-pub enum AiAction {
-    SuggestCommand { command: String },
-    ProposeNoteUpdate { target: NoteTargetSelector, new_content: String },
-    GenerateDocument { title: String, content_markdown: String },
-    ReadRemoteFile { path: String },
-    WriteRemoteFile { path: String, content: String },
-}
-```
+### 4.2 Schreiben
 
-### 4.1 `ReadRemoteFile`
+Die sicherheitskritischste Aktion dieser Spec. Ablauf:
 
-Wird wie ein lesendes Kommando behandelt und läuft durch die
-**Filter-Engine**. Damit vorhandene Regelsysteme greifen, ohne ein zweites
-paralleles Regelkonzept einzuführen, wird die Aktion für die Auswertung auf
-ein äquivalentes Kommando abgebildet: `sftp-read <pfad>`. Nutzer können
-damit ganz normale Regeln schreiben (z. B. Allow für
-`sftp-read /etc/nginx/*`, Deny für `sftp-read /etc/shadow`), mit derselben
-Syntax und derselben Präzedenz-Kette wie für Shell-Kommandos.
+1. **Filter-Engine.** Die Aktion wird auf `sftp-write <pfad>` abgebildet und
+   wie in 4.1 ausgewertet. Eine Deny-Regel blockiert wie gewohnt.
+2. **Nie ohne Anzeige.** Auch bei einer Allow-Regel wird nie ohne
+   Bestätigung geschrieben; es gibt hier kein automatisches Ausführen. Ein
+   Dateischreibvorgang ist schwerer rückgängig zu machen und zu überblicken
+   als ein Kommando, und typische Allow-Regeln mit Platzhaltern
+   (`sftp-write /etc/nginx/*`) würden sonst weitreichende, unsichtbare
+   Änderungen erlauben. Aktionen, die über MCP kommen, brauchen ebenfalls
+   immer eine Bestätigung (Spec 0028).
+3. **Änderungs-Vorschau.** Vor der Bestätigung liest die App die Zieldatei
+   (sofern vorhanden) und zeigt im Dialog den Diff zwischen altem und neuem
+   Inhalt, mit derselben zeilenbasierten Darstellung wie bei
+   Notiz-Vorschlägen (Spec 0019). Existiert die Datei nicht, zeigt der
+   Dialog den vollen Inhalt als neue Datei ohne Hervorhebung. Ist die
+   bestehende Datei nicht als Text lesbar (Binärdatei), zeigt der Dialog
+   stattdessen einen Hinweis mit alter und neuer Größe.
+4. **Automatisches Backup.** Vor dem Überschreiben einer bestehenden Datei
+   legt die App auf dem Server eine Sicherungskopie
+   `<pfad>.smartssh-backup-<zeitstempel>` an. Der Backup-Pfad steht im
+   Chat-Ergebnis.
+5. **Ergebnis.** Nach der Bestätigung wird geschrieben; Erfolg oder Fehler
+   samt Backup-Pfad gehen als Ergebnis in den KI-Kontext zurück.
 
-Der gelesene Inhalt läuft vor der Rückgabe an die KI durch den
-`OutputRedactor` (Spec 0006, Abschnitt 5) — identisch zu
-Kommando-Ausgaben. Dateien über einer konfigurierbaren Größe (Default:
-256 KB) werden abgelehnt statt vollständig in den KI-Kontext geladen, mit
-klarer Meldung an Nutzer und KI.
+### 4.3 Privilegierte Schreibzugriffe
 
-### 4.2 `WriteRemoteFile`
+Die Dateisitzung läuft mit den Rechten des SSH-Login-Nutzers. Ein Schreiben
+auf eine root-eigene Datei (`/etc/nginx/nginx.conf`) scheitert deshalb mit
+„Zugriff verweigert“, sofern man nicht als root verbunden ist. Ist für den
+Server ein Sudo-Passwort hinterlegt (Spec 0018), gilt:
 
-Sicherheitskritischster Teil dieser Spec. Ablauf:
+1. Der reguläre Schreibversuch kommt zuerst. Gelingt er, ist nichts weiter
+   zu tun.
+2. **Keine stille Eskalation.** Dass das hinterlegte Sudo-Passwort für das
+   Schreiben verwendet werden kann, steht **schon im Bestätigungsdialog**,
+   bevor der Nutzer bestätigt (Spec 0068 Teil 3, Spec 0018 Abschnitt 7).
+   Nur dann, wenn der Dialog es angekündigt hat, darf nach einem Rechte-Fehler
+   mit Sudo geschrieben werden; eine zweite Rückfrage gibt es nicht.
+3. Der Inhalt wird in eine temporäre Datei im Home-Verzeichnis des
+   Login-Nutzers geschrieben und dann mit `sudo -S install -m <modus> <temp>
+   <ziel>` an den Zielort gebracht; die temporäre Datei wird danach entfernt.
+   `install` setzt Rechte und Eigentümer des Ziels in einem Schritt, statt sie
+   von der temporären Datei zu erben. Eine bestehende Datei behält ihren
+   Modus, eine neue bekommt 0644.
+4. Das Backup aus 4.2, Punkt 4 entsteht in diesem Fall ebenfalls mit Sudo
+   (`sudo -S cp -p`), weil die Zieldatei sonst nicht kopierbar wäre.
+5. Ist **kein** Sudo-Passwort hinterlegt (oder wurde es nicht angekündigt),
+   wird der Fehler unverändert gemeldet, mit dem Hinweis, dass für den Pfad
+   erhöhte Rechte nötig sind. Es gibt keinen stillen Ersatzweg.
 
-1. Abbildung auf `sftp-write <pfad>` für die Filter-Engine-Auswertung
-   (gleiche Logik wie oben). Eine `Deny`-Regel blockiert wie gewohnt.
-2. **Auch bei einer `Allow`-Regel wird nie ohne Anzeige geschrieben.**
-   Anders als bei Shell-Kommandos gibt es hier kein `AutoExec`: Ein
-   Dateischreibvorgang wird immer angezeigt, mindestens als kompakte
-   Zusammenfassung. Begründung: Ein Config-Overwrite ist schwerer
-   rückgängig zu machen und schwerer zu überblicken als ein einzelnes
-   Kommando; die Wildcard-Natur typischer Allow-Regeln (`sftp-write
-   /etc/nginx/*`) würde sonst sehr weitreichende, unsichtbare Änderungen
-   erlauben.
-3. **Änderungs-Vorschau**: Vor der Bestätigung liest die App die Zieldatei
-   (sofern vorhanden) selbst per SFTP und liefert deren aktuellen Inhalt als
-   `previousFileContent`-Feld mit dem `chat-action-proposed`-Event ans
-   Frontend — analog zu `previousNoteContent` aus Spec 0019, Abschnitt 3.
-   Der Diff wird **nicht** im Backend berechnet, sondern von derselben
-   zeilenbasierten Diff-Komponente im Frontend dargestellt, die schon für
-   Notiz-Vorschläge existiert (Spec 0019, Abschnitt 4) — eine zweite
-   Diff-Implementierung für denselben UI-Zweck wäre unnötige Doppelung.
-   `previousFileContent` ist `null`, falls die Datei noch nicht existiert;
-   das Frontend zeigt dann den vollen Inhalt als neue Datei ohne
-   Diff-Hervorhebung.
-   Ausnahme: Ist die Zieldatei nicht als Text dekodierbar (Binärdatei),
-   wird `previousFileContent` ebenfalls `null` gesetzt und im Dialog
-   stattdessen ein Hinweis samt alter/neuer Dateigröße angezeigt — ein
-   Zeilen-Diff wäre dort sinnlos.
-4. **Automatisches Backup**: Vor jedem Überschreiben einer existierenden
-   Datei legt die App serverseitig eine Sicherungskopie an
-   (`<pfad>.smartssh-backup-<zeitstempel>`), sodass eine versehentliche
-   Änderung rückgängig gemacht werden kann. Der Backup-Pfad wird dem Nutzer
-   im Bestätigungsdialog und im Chat-Ergebnis genannt.
-5. Nach Bestätigung: Schreiben per SFTP, Ergebnis (Erfolg/Fehler,
-   Backup-Pfad) geht als `chat-action-result` zurück in den KI-Kontext.
-
-### 4.3 Privilegierte Schreibzugriffe (Zusammenspiel mit Spec 0018)
-
-SFTP kennt kein `sudo` — die Session läuft mit den Rechten des
-SSH-Login-Users. Ein `WriteRemoteFile` auf eine root-eigene Datei
-(`/etc/nginx/nginx.conf`, `/etc/systemd/system/*.service`) scheitert daher
-mit "permission denied", sofern man sich nicht ohnehin als root verbindet.
-Das betrifft ausgerechnet den Hauptanwendungsfall, für den die
-Diff-Anzeige aus Abschnitt 4.2 den größten Nutzen hätte.
-
-Lösung, sofern für den Server ein Sudo-Passwort hinterlegt ist (Spec 0018,
-Abschnitt 4) **oder** die Verbindung ohnehin als root läuft:
-
-1. Der reguläre SFTP-Schreibversuch wird zuerst unternommen. Gelingt er,
-   ist nichts weiter zu tun (Normalfall bei Dateien im Home-Verzeichnis
-   oder bei root-Verbindungen).
-2. Scheitert er an fehlenden Rechten, wird **nicht** stillschweigend
-   eskaliert. Stattdessen erscheint im Bestätigungsdialog explizit, dass
-   der Schreibvorgang erhöhte Rechte benötigt und mit dem hinterlegten
-   Sudo-Passwort ausgeführt würde — dieselbe Transparenzregel wie in Spec
-   0018, Abschnitt 7 für Shell-Kommandos.
-3. Nach Bestätigung: Der Inhalt wird per SFTP in eine temporäre Datei im
-   Home-Verzeichnis des Login-Users geschrieben, anschließend per
-   `execute_with_stdin` (Spec 0018, Abschnitt 5) mit
-   `sudo -S install -m <mode> <temp> <ziel>` an den Zielort verschoben und
-   die temporäre Datei entfernt. `install` statt `mv`, weil es Rechte und
-   Eigentümer des Ziels in einem Schritt korrekt setzt, statt sie vom
-   Temp-File zu erben.
-4. Das Backup aus Abschnitt 4.2, Punkt 4 wird in diesem Fall ebenfalls über
-   den privilegierten Pfad angelegt (`sudo -S cp -p`), da die Zieldatei
-   sonst nicht lesbar/kopierbar wäre.
-5. Ist **kein** Sudo-Passwort hinterlegt, wird der Fehler unverändert als
-   Fehlschlag an Nutzer und KI zurückgemeldet, mit dem Hinweis, dass für
-   diesen Pfad erhöhte Rechte nötig sind — kein stiller Fallback auf einen
-   anderen Mechanismus.
-
-Auch der Lesevorgang (`ReadRemoteFile`, Abschnitt 4.1) kann an Rechten
-scheitern; dort wird der Fehler schlicht zurückgemeldet, ohne
-Sudo-Eskalation — ein Lesevorgang, der erhöhte Rechte braucht, kann von der
-KI weiterhin als regulär geprüftes `sudo cat <pfad>`-Kommando vorgeschlagen
-werden, das durch die normale Filter-Engine läuft.
+Auch Lesen kann an Rechten scheitern. Dort wird der Fehler gemeldet, ohne
+Sudo-Eskalation; die KI kann stattdessen ein regulär geprüftes
+`sudo cat <pfad>` vorschlagen.
 
 ### 4.4 Was die KI nicht darf
 
-`remove`, `rename` und `create_dir` werden der KI **nicht** als Aktionen
-angeboten. Wenn die KI etwas löschen oder verschieben will, muss sie es als
-normales Shell-Kommando vorschlagen, das durch die reguläre Filter-Engine
-inklusive Hard-Blacklist läuft (Spec 0002, Abschnitt 3.1). Begründung: Für
-diese Operationen bietet SFTP keinen der Vorteile aus Abschnitt 2 (kein
-Diff, kein Quoting-Problem), aber ein zusätzliches Umgehungsrisiko — es gibt
-also keinen Grund, dafür einen zweiten Weg zu schaffen.
+Löschen, Umbenennen und Ordner anlegen werden der KI **nicht** als
+Dateiaktionen angeboten. Will sie etwas löschen oder verschieben, schlägt
+sie ein gewöhnliches Shell-Kommando vor, das durch die Filter-Engine
+inklusive der harten Sperrliste läuft (Spec 0002, Abschnitt 3.1). Für diese
+Operationen bietet SFTP keinen der Vorteile aus Abschnitt 2 (kein Diff, kein
+Quoting-Problem), aber ein zusätzliches Umgehungsrisiko; einen zweiten Weg
+gibt es deshalb nicht.
 
 ## 5. Manueller Dateibrowser
 
-Tauri-Commands:
+Der Nutzer kann Verzeichnisse auflisten und wechseln, Dateien herunterladen
+und hochladen, Einträge löschen, umbenennen, verschieben, Ordner anlegen und
+Rechte ändern; die einzelnen Aktionen und ihre Bestätigungen beschreibt
+Spec 0054.
 
-```
-sftp_list(session_id, path) -> Vec<RemoteEntryDto>
-sftp_download(session_id, remote_path) -> ()   // nativer Speichern-Dialog
-sftp_upload(session_id, local_path, remote_path) -> ()
-sftp_delete(session_id, path)
-sftp_rename(session_id, from, to)
-sftp_mkdir(session_id, path)
-```
+- **Keine Filter-Engine.** Direkte Nutzeraktionen, wie im interaktiven
+  Terminal (Spec 0005, Abschnitt 1).
+- **Nativer Dateidialog.** Herunterladen in einen gewählten Pfad und
+  Hochladen laufen über den Dialog des Betriebssystems. Es wird nie ohne
+  explizite Auswahl auf die lokale Festplatte geschrieben oder von ihr
+  gelesen; welche lokalen Dateien gelesen werden dürfen, regelt 5.2.
+- **Bestätigung.** Löschen verlangt immer eine Rückfrage, auch als
+  Nutzeraktion, damit ein Fehlklick nichts zerstört.
+- **Übertragungen** laufen asynchron, blockieren die Sitzung nicht und zeigen
+  ihren Fortschritt.
 
-Verhalten:
-- **Keine Filter-Engine-Prüfung** — direkte Nutzeraktionen, analog zum
-  interaktiven Terminal (Spec 0005, Abschnitt 1).
-- Down- und Uploads laufen über den **nativen Datei-Dialog** (Tauri
-  Dialog-Plugin), konsistent mit Spec 0012: Es wird nie ohne expliziten
-  Dialog auf die lokale Festplatte geschrieben oder von ihr gelesen. Welche
-  lokalen Dateien gelesen werden dürfen, regelt Abschnitt 5.2.
-- Löschen erfordert eine Bestätigungsrückfrage im UI (auch wenn es eine
-  Nutzeraktion ist — versehentliches Löschen per Fehlklick soll nicht
-  passieren).
-- Fortschrittsanzeige bei Transfers größerer Dateien; Transfers laufen
-  asynchron und blockieren die Session nicht.
+### 5.1 Oberfläche
 
-### 5.1 UI
-
-Der Dateibrowser wird als **umschaltbare Ansicht im rechten Panel**
-platziert (dort, wo im Layout aus Spec 0007 das Terminal sitzt), mit einem
-Umschalter "Terminal | Dateien". Begründung: Der rechte Bereich ist bereits
-der "direkte Zugriff auf den Server"-Bereich, während links der KI-Chat
-liegt — thematisch passend, und es entsteht kein zusätzliches drittes Panel,
-das den ohnehin knappen Platz weiter aufteilt.
-
-Inhalt: Pfadleiste mit Navigation, Dateiliste (Name, Größe, Rechte,
-Änderungsdatum), Kontextmenü (Herunterladen, Umbenennen, Löschen), Upload
-per Button oder Drag-and-Drop aus dem Betriebssystem.
+Der Dateibrowser ist eine umschaltbare Ansicht im rechten Bereich neben dem
+Terminal, mit dem Umschalter „Terminal | Dateien“. Der rechte Bereich ist der
+„direkte Zugriff auf den Server“, links liegt der KI-Chat. Der Browser zeigt
+eine Pfadleiste mit Navigation und eine Dateiliste (Name, Größe, Rechte,
+Änderungsdatum). Aktionen stehen im Kontextmenü und im Drei-Punkte-Menü
+(Spec 0054), Upload geht per Button oder Drag-and-Drop aus dem
+Betriebssystem. Spaltenbreiten und Bereichsaufteilung sind verstellbar
+(Spec 0053).
 
 ### 5.2 Welche lokalen Dateien gelesen werden dürfen
 
-Die Oberfläche ist keine Vertrauensgrenze — sie zeigt auch KI-erzeugte
+Die Oberfläche ist keine Vertrauensgrenze: Sie zeigt auch KI-erzeugte
 Inhalte. Ein lokaler Pfad gilt deshalb nicht schon, weil die Oberfläche ihn
 nennt. Für Upload, die Überschreib-Vorschau beim Upload und die
-Änderungserkennung von „Lokal öffnen“ liest die App lokal nur Dateien, die
-der Nutzer dieser Sitzung freigegeben hat:
+Änderungserkennung von „Lokal öffnen“ liest die App nur Dateien, die der
+Nutzer in dieser Sitzung freigegeben hat:
 
 - **Ausgewählt:** im nativen Öffnen-Dialog des Upload-Buttons oder im
-  Ordner-Dialog von „Ordner hochladen“. Der Dialog wird von der App selbst
-  geöffnet; die Oberfläche kann keinen Pfad vorgeben.
+  Ordner-Dialog von „Ordner hochladen“. Die App öffnet den Dialog selbst; die
+  Oberfläche kann keinen Pfad vorgeben.
 - **Abgelegt:** per Drag-and-Drop aus dem Betriebssystem auf das Fenster.
-  Maßgeblich sind die Pfade, die das Betriebssystem beim Ablegen meldet,
-  nicht ein von der Oberfläche genannter Pfad. Ein Ablegen gilt für die
-  Sitzung, deren Dateibrowser es entgegennimmt, und verfällt nach kurzer
-  Zeit, wenn es niemand entgegennimmt.
+  Maßgeblich sind die Pfade, die das Betriebssystem beim Ablegen meldet, nicht
+  ein von der Oberfläche genannter Pfad. Ein Ablegen gilt für die Sitzung, deren
+  Dateibrowser es entgegennimmt, und verfällt nach kurzer Zeit, wenn es
+  niemand entgegennimmt.
 - **Eigene Bearbeitungskopie:** Dateien in der Bearbeitungskopie dieser
-  Sitzung („Lokal öffnen“). Die Bearbeitungskopie einer anderen Sitzung
-  zählt nicht.
+  Sitzung („Lokal öffnen“). Die Bearbeitungskopie einer anderen Sitzung zählt
+  nicht.
 
-Ist ein Ordner freigegeben, gelten auch die Dateien darunter als
-freigegeben; darauf beruht der Ordner-Upload (Spec 0054, Teil 3), der jede
-Datei darunter einzeln gegen die Freigabe prüft, kurz bevor er sie liest. Ob ein Pfad unter einer Freigabe liegt, wird
-am tatsächlichen Ziel entschieden: Ein Pfad mit `..` oder ein symbolischer
-Link, der aus der Freigabe hinausführt, ist nicht freigegeben.
+Ist ein Ordner freigegeben, gelten auch die Dateien darunter als freigegeben;
+darauf beruht der Ordner-Upload (Spec 0054, Teil 3), der jede Datei einzeln
+gegen die Freigabe prüft, kurz bevor er sie liest. Ob ein Pfad unter einer
+Freigabe liegt, wird am tatsächlichen Ziel entschieden: Ein Pfad mit `..`
+oder ein symbolischer Link, der aus der Freigabe hinausführt, ist nicht
+freigegeben.
 
-Jeder andere lokale Pfad wird abgelehnt, bevor etwas gelesen wird: Upload
-und Überschreib-Vorschau scheitern mit einer Meldung, die Änderungserkennung
-meldet keinen Zeitstempel. Freigaben bestehen nur im Speicher und enden,
-wenn die Sitzung getrennt wird.
+Jeder andere lokale Pfad wird abgelehnt, bevor etwas gelesen wird: Upload und
+Überschreib-Vorschau scheitern mit einer Meldung, die Änderungserkennung
+meldet keinen Zeitstempel. Freigaben bestehen nur im Speicher und enden, wenn
+die Sitzung getrennt wird.
 
-## 6. Testbarkeit
+### 5.3 Ergebnisse und Fehler
 
-- Unit-Tests gegen einen `MockSftpSession` für die Kontroll-Logik: Mapping
-  von `ReadRemoteFile`/`WriteRemoteFile` auf `sftp-read`/`sftp-write` für die
-  Filter-Engine, Redaction gelesener Inhalte, Größenlimit-Ablehnung,
-  Backup-Pfad-Erzeugung, Diff-Berechnung.
-- Integrationstests gegen den bereits vorhandenen in-process
-  `russh`-Testserver (Spec 0005, Abschnitt 8), erweitert um ein
-  SFTP-Subsystem: echter Upload/Download-Roundtrip, Verzeichnisauflistung,
-  Rename/Delete.
+Jede Aktion meldet ihr Ergebnis (Spec 0067, Teil B). Ein Fehler beim
+Dateizugriff erscheint mit verständlichem Grund, etwa fehlende Rechte,
+bestehendes Ziel oder getrennte Verbindung; die Verbindung selbst bleibt
+dabei bestehen.
 
-## 7. Offene Punkte
+### 5.4 Nur der aktive Tab nimmt Drops an
 
-- Symlinks: aktuell nicht gesondert behandelt (werden wie normale Einträge
-  gelistet). Ob ein Schreibvorgang auf einen Symlink das Ziel oder den Link
-  ersetzen soll, ist bewusst noch nicht entschieden — relevant, falls die KI
-  Config-Dateien schreibt, die auf verlinkte Pfade zeigen
-  (`/etc/nginx/sites-enabled/*` ist ein typischer Fall).
-- Aufräumen alter `.smartssh-backup-*`-Dateien: Diese sammeln sich
-  serverseitig an. Denkbar wäre eine Übersicht im UI ("von Smart SSH
-  angelegte Backups auf diesem Server") mit Lösch-Funktion — nicht Teil
-  dieser Spec, aber sollte nicht dauerhaft vergessen werden.
-- Große Verzeichnisse (mehrere tausend Einträge): aktuell keine
-  Paginierung/Virtualisierung vorgesehen; falls das in der Praxis stört,
-  nachrüsten.
+Jede geöffnete Sitzung bleibt beim Tab-Wechsel bestehen (Spec 0017). Ein
+Ablegen aus dem Betriebssystem wird nur vom Dateibrowser des **aktiven Tabs**
+entgegengenommen, und nur, solange dessen Ansicht „Dateien“ gewählt ist;
+sonst würden mehrere Hintergrund-Tabs gleichzeitig zum Ziel.
+
+## 6. Zugesichertes Verhalten (durch automatische Tests belegt)
+
+- Die Abbildung auf `sftp-read`/`sftp-write`, die Pfad-Normalisierung, die
+  Größengrenze, die Redaktion gelesener Inhalte, der Backup-Pfad, die
+  Diff-Vorschau und die Sudo-Ankündigung sind mit Test-Doubles geprüft.
+- Upload, Download, Verzeichnisliste, Umbenennen und Löschen sind gegen einen
+  echten SFTP-Server im Test geprüft, auch über den erhöhten Kanal
+  (Spec 0067).
+
+## 7. Grenzen
+
+- **Symbolische Links** werden wie normale Einträge aufgelistet. Ob ein
+  Schreibvorgang das Ziel oder den Link ersetzt, ist nicht festgelegt und
+  hängt vom Server ab; das betrifft etwa Pfade unter `sites-enabled`.
+- **Backups** (`.smartssh-backup-*`) sammeln sich auf dem Server an; die App
+  räumt sie nicht auf und listet sie nicht gesondert.
+- **Große Verzeichnisse** (mehrere tausend Einträge) werden vollständig
+  geladen, ohne Seitenaufteilung.
+- Die 256-KB-Grenze für die KI gilt nur anhand der vorab abgefragten Größe
+  (4.1); eine zwischen Abfrage und Lesen gewachsene Datei wird dort nicht
+  erneut geprüft. Für den Dateibrowser gilt die engere Regel aus Spec 0086.
