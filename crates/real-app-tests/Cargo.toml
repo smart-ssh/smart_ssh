@@ -1,0 +1,30 @@
+[package]
+name = "real-app-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Starts the real desktop app through tauri-driver (WebDriver) and checks its startup paths (issue #235, Spec 0090)."
+
+# Test-only package: nothing in the shipped application depends on it. The
+# tests in `tests/` are `#[ignore]`d because they need a built app,
+# `tauri-driver`, a display and a Secret Service session; the CI job runs
+# them with `--ignored` (ADR 0130).
+# Everything is a dev-dependency on purpose: the production dependency graph
+# (`cargo tree --edges normal,build`, which `network_boundary.rs` inspects for
+# HTTP clients) must not see WebDriver's HTTP client. This package has no
+# library or binary target.
+[dev-dependencies]
+app-logic = { version = "0.6.0", path = "../app-logic" }
+credentials-keyring = { version = "0.6.0", path = "../credentials-keyring" }
+persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite" }
+secrecy = "0.10.3"
+serde_json = "1.0.151"
+ssh-manager-core = { version = "0.6.0", path = "../core" }
+tempfile = "3.27.0"
+# No `manager` feature: it downloads browser drivers at runtime. The driver
+# is `tauri-driver`, installed by the CI job.
+thirtyfour = { version = "0.37.7", default-features = false, features = ["reqwest", "rustls"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "net", "time"] }
+uuid = { version = "1.26.0", features = ["v4"] }
+chrono = "0.4.45"
