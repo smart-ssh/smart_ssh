@@ -315,3 +315,58 @@ fn t_review2_hardlink_auf_die_datei_selbst_wird_erkannt() {
 
     assert!(super::resolves_to_ssh_config_under(&hardlink, home.path()));
 }
+
+// Issue #181 (Spec 0008 §6a): nicht nutzbare Zeilen (unbekannte oder
+// beschädigte Anmeldeart) lassen den Export nicht scheitern und kommen
+// weder mit Name noch mit Host im Text vor.
+mod unusable_rows {
+    use super::*;
+    use crate::ssh_config_export::load_export_plan;
+    use app_logic::test_support::InMemoryProfileStore;
+    use ssh_manager_core::profiles::{UnusableReason, UnusableServer};
+
+    fn unusable(reason: UnusableReason) -> UnusableServer {
+        UnusableServer {
+            id: ServerId::new(),
+            name: "secret-broken-name".to_string(),
+            host: "secret-broken.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id: None,
+            reason,
+        }
+    }
+
+    async fn check(reason: UnusableReason) {
+        let store = InMemoryProfileStore::new()
+            .with_server(server("usable-one", "usable.example.com", 22, "me"))
+            .with_unusable_server(unusable(reason));
+        let plan = load_export_plan(&store)
+            .await
+            .expect("export must not fail on a not-usable row");
+        assert!(plan.text.contains("usable.example.com"), "{}", plan.text);
+        assert!(!plan.text.contains("secret-broken-name"));
+        assert!(!plan.text.contains("secret-broken.invalid"));
+        assert_eq!(plan.exported.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_export_succeeds_with_unknown_auth_method_row() {
+        check(UnusableReason::UnknownAuthMethod).await;
+    }
+
+    #[tokio::test]
+    async fn test_export_succeeds_with_malformed_auth_method_row() {
+        check(UnusableReason::UnreadableAuthMethod).await;
+    }
+
+    #[tokio::test]
+    async fn test_export_with_only_unusable_rows_has_no_hosts() {
+        let store = InMemoryProfileStore::new()
+            .with_unusable_server(unusable(UnusableReason::UnknownAuthMethod))
+            .with_unusable_server(unusable(UnusableReason::UnreadableAuthMethod));
+        let plan = load_export_plan(&store).await.expect("no error");
+        assert!(plan.exported.is_empty());
+        assert!(!plan.text.contains("secret-broken"));
+    }
+}
