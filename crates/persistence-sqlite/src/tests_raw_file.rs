@@ -89,8 +89,13 @@ async fn write_secret_through_all_stores(
 ) -> SqliteProfileStore {
     let profile_store = match encryption {
         FileEncryption::Sqlcipher => {
-            SqliteProfileStore::connect_encrypted(db_path, &DatabaseKey::from_root_key(&[42u8; 32]))
-                .await
+            SqliteProfileStore::connect_encrypted(
+                db_path,
+                &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(
+                    [42u8; 32],
+                )),
+            )
+            .await
         }
         FileEncryption::Plaintext => SqliteProfileStore::connect_plaintext(db_path).await,
     }

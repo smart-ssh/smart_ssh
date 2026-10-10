@@ -51,7 +51,7 @@ eine Kopie liegen zu lassen. Die Variante besitzt den Schlüssel (nicht
 geliehen), weil der Moduswechsel aus D1 mitten in der Startschleife einen
 neuen K einsetzt.
 
-**Was von A19 (SOLL) offen bleibt:** Die Entscheidungstabelle kopiert K
+**Was von A19 (SOLL) zunächst offen blieb (seit Issue #267 erledigt, s. Punkt 10):** Die Entscheidungstabelle kopiert K
 weiter in ein `Option<[u8; 32]>`, weil der Bestand (`read_key_state`,
 `DatabaseKey::from_root_key`, `AppState`s Chat-Cipher) mit `[u8; 32]`
 arbeitet. Das umzustellen ist ein eigener Schritt und kein Teil dieser
@@ -187,8 +187,14 @@ nichts gesehen hat.
   (Punkt 2). **Erledigt mit #266:** m ≤ 256 MiB.
 - **`create_new` für die `.new`-Datei** und **der Hinweis an
   `Wiring::plugins`** (Punkt 8): **erledigt mit #266.**
-- **A19 bleibt im Bestand unerfüllt**, soweit `read_key_state` und
-  `DatabaseKey::from_root_key` mit `[u8; 32]` arbeiten (Punkt 3).
+- **Obergrenzen der Argon2-Parameter** bleiben bei 1 GiB / t 16 / p 16
+  (Punkt 2). Härtung, kein Fehler; Klarstellung 9 nimmt den Punkt nicht auf.
+- **A19 im Bestand: nachgezogen mit Issue #267.** `RootKeyState`,
+  `read_key_state`, `DatabaseKey::from_root_key`, `wrap_root_key` und die
+  Umstellung der Altspalten arbeiten mit `RootKey`. Für die eine Stelle, an
+  der K aus dem Entsperr-Zustand in den Startablauf wandert, gibt es
+  `RootKey::duplicate` (kein `Clone`); beide Kopien werden überschrieben.
+  Reine Test-Helfer behalten Arrays.
 - **T17 und die zweite Hälfte von T18 waren nicht als eigene Tests belegt.**
   T17 war durch die vorhandenen Prüfungen auf Fehlertexte und die
   Log-Positivliste abgedeckt, T18s zweite Hälfte (MCP-Anfrage im gesperrten
