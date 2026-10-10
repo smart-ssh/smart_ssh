@@ -1,84 +1,59 @@
-# Spec: stop_reason-Sichtbarkeit + „ankündigen statt handeln"-Fix
+# Spec 0062 — Abbruchgrund sichtbar, „handeln statt ankündigen"
 
-Status: Umgesetzt
-Repo: **öffentlich** `smart_ssh`, `crates/ai-providers` (stop_reason) +
-`crates/app-shell`/commands.rs (System-Prompt)
-Abhängigkeiten: KI-Provider (0006), Auto-Fortsetzung (0021), Body-Timeout/
-Streaming-Parsing (anthropic.rs)
+Status: umgesetzt
+Zweck: Endet ein KI-Turn, ohne dass die KI ein angekündigtes Kommando
+tatsächlich vorschlägt, lässt sich der Grund erkennen, und die KI wird
+angehalten, Kommandos auszuführen statt nur anzukündigen.
+Bezüge: Spec 0006 (Anbieter), Spec 0021 (Fortsetzung), Spec 0007.
 
-> **Das Problem (im echten Einsatz beobachtet):** Die KI schreibt eine
-> **Ankündigung** eines nächsten Schritts („Lassen wir uns Status und Journal
-> anzeigen:") und **endet dann den Turn, ohne `suggest_command` aufzurufen**.
-> Kein Tool-Call → kein `ActionProposed` → `executed_action = false` → die
-> Auto-Fortsetzung (0021) hat nichts, worauf sie reagieren kann, und stoppt.
-> Für den Nutzer sieht es aus wie „die KI bleibt mitten im Satz stehen".
-> **Zwei Teile: Sichtbarkeit (warum endete der Turn?) + Gegensteuern (Prompt).**
-> Priorität NORMAL (Prompt berührt Modellverhalten — vorsichtig).
+## Problem
 
-## Teil 1: `stop_reason` parsen + loggen (Diagnose-Grundlage)
+Die KI schreibt gelegentlich eine **Ankündigung** („Lassen wir uns Status
+und Journal anzeigen:") und beendet den Turn, ohne ein Kommando
+vorzuschlagen. Ohne Vorschlag gibt es nichts, worauf die automatische
+Fortsetzung (Spec 0021) reagieren könnte; sie stoppt. Für den Nutzer wirkt
+es, als bliebe die KI mitten im Satz stehen.
 
-Der Anthropic-Provider wertete bislang nur `content_block_*`/`message_stop`
-aus — das Feld **`stop_reason`** (warum der Turn endete) wurde nirgends
-geparst oder geloggt. Damit ließ sich nicht unterscheiden:
-- `end_turn` → Modell hat **bewusst** aufgehört (das wahrscheinliche hier)
-- `max_tokens` → Antwort wurde **technisch abgeschnitten** (Token-Limit) — das
-  wäre ein **echter Bug** (Limit zu niedrig), keine Modell-Eigenheit
-- `tool_use` → Modell will ein Tool aufrufen
-- `stop_sequence`/andere
+## Teil 1: Abbruchgrund erfassen
 
-**Umsetzung:**
-- `stop_reason` aus dem `message_delta`-SSE-Event geparst (nicht
-  `message_stop` — dessen eigenes `delta` ist leer).
-- Geloggt mit `request_id` (`tracing::info!`, kein sensibler Inhalt — nur
-  das Enum-/String-Feld).
-- Analog für den OpenAI-kompatiblen Provider: `choices[0].finish_reason`
-  (`stop`/`length`/`tool_calls`), unabhängig vom bestehenden `delta`-Zugriff
-  geprüft (liegt typischerweise im letzten Chunk mit leerem/fehlendem
-  `delta`).
+Der Grund, warum eine Antwort endete, wird gelesen und im Log festgehalten
+(zusammen mit der Request-Kennung, ohne sensiblen Inhalt):
 
-## Teil 2: System-Prompt — „handeln statt ankündigen"
+- Anthropic: `stop_reason` aus dem Ende-Ereignis des Streams.
+- OpenAI-kompatibel: `finish_reason` der letzten Antwortstückes.
 
-Eine vorsichtige Ergänzung im System-Prompt (`commands.rs`), die genau das
-beobachtete Muster adressiert: die KI soll ein Kommando **ausführen** (Tool
-aufrufen), statt es nur **anzukündigen** — ohne dabei kurze Erklärungen vor
-einem Kommando zu verbieten.
+So lässt sich unterscheiden, ob das Modell **bewusst** aufhörte (`end_turn`/
+`stop`), ob die Antwort **technisch abgeschnitten** wurde (`max_tokens`/
+`length`; dann ist das Limit zu niedrig, siehe Spec 0065) oder ob ein
+Tool-Aufruf folgt.
 
-**Korrektur zur ursprünglichen Annahme dieser Spec:** Es gibt in diesem
-Repo **nur einen einzigen, deutschen** System-Prompt
-(`crates/app-shell/src/commands.rs::build_session_system_context`) — keine
-englische Variante. Die "DE+EN, beide existieren"-Prämisse traf nicht zu
-(die zweisprachigen `locales/de,en/common.json`-Dateien sind reine
-Frontend-UI-Strings, kein KI-Prompt). Nur die eine Stelle angepasst.
+## Teil 2: System-Prompt „handeln statt ankündigen"
 
-## Nicht Teil dieser Spec (Backlog-Gedanke)
-- **Automatisches Nachhaken**: Wenn die App `end_turn` **ohne** vorangehenden
-  Tool-Call erkennt und der Text mit einer Ankündigung endet (`:` o. Ä.),
-  könnte sie automatisch „und weiter?" nachschieben statt zu stoppen. Eigene,
-  heiklere Spec (wann genau nachhaken, ohne zu nerven?) — hier nur als
-  Gedanke, nicht gebaut.
+Der System-Prompt der Sitzung weist die KI an, ein Kommando **auszuführen**
+(das Tool aufzurufen), statt es nur anzukündigen. Kurze Erklärungen vor
+einem Kommando bleiben ausdrücklich erlaubt. Es gibt einen einzigen,
+deutschen System-Prompt; die zweisprachigen Oberflächentexte sind davon
+getrennt.
 
-## Invarianten / Sicherheit
-- Das `stop_reason`-Logging enthält **keinen** sensiblen Inhalt (nur das
-  Enum-Feld + request_id).
-- Die Prompt-Änderung ändert **nichts** an der Filter-/Confirm-Bahn — ein
-  per Tool vorgeschlagenes Kommando läuft weiter durch die Filter-Engine +
-  Confirm wie bisher. Der Prompt beeinflusst nur, *ob* die KI das Tool nutzt,
-  nicht *was danach* passiert.
+## Sicherheitszusagen
 
-## Testbarkeit
-- `stop_reason`/`finish_reason` wird geparst + geloggt (Regressionstests in
-  `crates/ai-providers/src/anthropic.rs`/`openai_compatible.rs`, über den
-  echten SSE-Parsing-Pfad — `end_turn`/`stop` und `max_tokens`/`length`
-  jeweils abgedeckt, für beide Provider).
-- Der Prompt-Text enthält die Ergänzung (Regressionstest in `commands.rs`,
-  prüft sowohl die neue Anweisung als auch, dass der "kurz erklären bleibt
-  erlaubt"-Satz erhalten bleibt).
-- **Nicht automatisiert testbar**: ob die Prompt-Ergänzung das reale
-  Verhalten ändert (das zeigt nur echte Nutzung) — beobachtet wird, ob das
-  „ankündigen ohne handeln"-Muster seltener wird.
+- Das Logging des Abbruchgrunds enthält keinen sensiblen Inhalt, nur das
+  Grund-Feld und die Request-Kennung.
+- Der Prompt ändert nichts an Filter und Bestätigung: Ein vorgeschlagenes
+  Kommando läuft unverändert durch die Filter-Engine und die Bestätigung.
+  Der Prompt beeinflusst nur, *ob* die KI das Tool nutzt, nicht, was danach
+  geschieht.
 
-## Abschluss
-- Zwei Commits: `fea08c9` (Teil 1), `a735c66` (Teil 2).
-- `spec-reviewer` NORMAL.
-- CHANGELOG (unter „Changed", da Verhaltens-Feinschliff, kein neues
-  Feature).
+## Grenzen
+
+- Ein automatisches Nachhaken der App bei einer Ankündigung ohne
+  Vorschlag gibt es nicht.
+- Ob die Prompt-Ergänzung das reale Modellverhalten ändert, ist nicht
+  automatisiert prüfbar.
+
+## Akzeptanzfälle
+
+- `end_turn`/`stop` und `max_tokens`/`length` werden für beide Anbieter
+  über den echten Stream-Pfad erkannt und geloggt.
+- Der Prompt enthält die „handeln statt ankündigen"-Anweisung und behält
+  die Erlaubnis zu kurzen Erklärungen.
