@@ -1,5 +1,5 @@
 use russh::ChannelMsg;
-use ssh_manager_core::ssh::CommandOutput;
+use ssh_manager_core::ssh::{CommandOutput, ExecOutputChunk, ExecOutputSink, OutputStream};
 
 /// Baut aus einer Sequenz von `ChannelMsg`s (wie sie `Channel::wait()` im
 /// Exec-Modus liefert) das fertige [`CommandOutput`] zusammen.
@@ -42,48 +42,82 @@ pub(crate) struct CappedOutput {
     stderr: Vec<u8>,
     stdout_truncated: bool,
     stderr_truncated: bool,
+    /// Issue #325: live copy of every byte that is kept (never the
+    /// truncation notice), plus one `Truncated` when the cap is reached.
+    /// Display only — `None` for the non-streaming paths.
+    sink: Option<ExecOutputSink>,
 }
 
 impl CappedOutput {
-    pub(crate) fn with_limit(limit: usize) -> Self {
+    pub(crate) fn with_limit_and_sink(limit: usize, sink: Option<ExecOutputSink>) -> Self {
         Self {
             limit,
             stdout: Vec::new(),
             stderr: Vec::new(),
             stdout_truncated: false,
             stderr_truncated: false,
+            sink,
         }
     }
 
     pub(crate) fn push_stdout(&mut self, data: &[u8]) {
-        Self::push(
+        let (kept, newly_truncated) = Self::push(
             &mut self.stdout,
             &mut self.stdout_truncated,
             self.limit,
             data,
         );
+        self.forward(OutputStream::Stdout, kept, newly_truncated);
     }
 
     pub(crate) fn push_stderr(&mut self, data: &[u8]) {
-        Self::push(
+        let (kept, newly_truncated) = Self::push(
             &mut self.stderr,
             &mut self.stderr_truncated,
             self.limit,
             data,
         );
+        self.forward(OutputStream::Stderr, kept, newly_truncated);
     }
 
-    fn push(buf: &mut Vec<u8>, truncated: &mut bool, limit: usize, data: &[u8]) {
-        if *truncated {
+    /// Sends the kept part of a chunk to the live sink. A closed receiver
+    /// only ends the live display, never the command — send errors are
+    /// deliberately ignored (the final result does not depend on them).
+    fn forward(&self, stream: OutputStream, kept: &[u8], newly_truncated: bool) {
+        let Some(sink) = &self.sink else {
             return;
+        };
+        if !kept.is_empty() {
+            let _ = sink.send(ExecOutputChunk::Data {
+                stream,
+                bytes: kept.to_vec(),
+            });
+        }
+        if newly_truncated {
+            let _ = sink.send(ExecOutputChunk::Truncated);
+        }
+    }
+
+    /// Returns the part of `data` that was kept and whether this call hit
+    /// the cap.
+    fn push<'a>(
+        buf: &mut Vec<u8>,
+        truncated: &mut bool,
+        limit: usize,
+        data: &'a [u8],
+    ) -> (&'a [u8], bool) {
+        if *truncated {
+            return (&[], false);
         }
         if buf.len() + data.len() <= limit {
             buf.extend_from_slice(data);
+            (data, false)
         } else {
             let remaining = limit.saturating_sub(buf.len());
             buf.extend_from_slice(&data[..remaining]);
             buf.extend_from_slice(TRUNCATION_NOTICE);
             *truncated = true;
+            (&data[..remaining], true)
         }
     }
 
@@ -141,8 +175,14 @@ impl ExecAccumulator {
     }
 
     pub(crate) fn with_limit(limit: usize) -> Self {
+        Self::with_limit_and_sink(limit, None)
+    }
+
+    /// Issue #325: like [`Self::with_limit`], with a live copy of the kept
+    /// output (see [`CappedOutput::with_limit_and_sink`]).
+    pub(crate) fn with_limit_and_sink(limit: usize, sink: Option<ExecOutputSink>) -> Self {
         Self {
-            capped: CappedOutput::with_limit(limit),
+            capped: CappedOutput::with_limit_and_sink(limit, sink),
             exit_code: None,
         }
     }

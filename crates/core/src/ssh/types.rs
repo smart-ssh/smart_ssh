@@ -38,6 +38,36 @@ pub struct ExecOutcome {
     pub cancelled: bool,
 }
 
+/// Which output stream of a running command a live chunk belongs to
+/// (issue #325).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputStream {
+    Stdout,
+    Stderr,
+}
+
+/// One live event of a running command (issue #325), sent by
+/// [`SshTransport::execute_streaming`](super::SshTransport::execute_streaming)
+/// while the command runs. Display only: the final [`ExecOutcome`] stays the
+/// single source for the chat history and the AI context.
+///
+/// `Data` carries exactly the bytes the transport also kept for the final
+/// result (after the output cap, never the truncation notice itself).
+/// `Truncated` is sent once, when the output cap is reached; no further
+/// `Data` follows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecOutputChunk {
+    Data {
+        stream: OutputStream,
+        bytes: Vec<u8>,
+    },
+    Truncated,
+}
+
+/// Receiving end is owned by the caller; a dropped receiver only ends the
+/// live display, never the command (sending errors are ignored).
+pub type ExecOutputSink = tokio::sync::mpsc::UnboundedSender<ExecOutputChunk>;
+
 /// Terminalgröße für eine PTY-Shell (Spec 0005, Abschnitt 4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PtySize {

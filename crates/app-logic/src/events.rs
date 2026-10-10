@@ -699,6 +699,43 @@ pub fn emit_chat_action_result(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatActionOutputPayload<'a> {
+    session_id: SessionId,
+    action_id: ActionId,
+    stdout: &'a str,
+    stderr: &'a str,
+    truncated: bool,
+}
+
+/// Issue #325 (Spec 0106): live output of a running `SuggestCommand`,
+/// throttled (at most one event per `LIVE_OUTPUT_INTERVAL` and action).
+/// `stdout`/`stderr` are the newly released, already redacted text to
+/// append; `truncated` is `true` once the output cap was reached. Display
+/// only: never persisted, never sent to the AI; `chat-action-result`
+/// replaces the live view with the final result.
+pub fn emit_chat_action_output(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    stdout: &str,
+    stderr: &str,
+    truncated: bool,
+) {
+    emit(
+        emitter,
+        "chat-action-output",
+        &ChatActionOutputPayload {
+            session_id,
+            action_id,
+            stdout,
+            stderr,
+            truncated,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatErrorPayload {
     session_id: SessionId,
     message: String,

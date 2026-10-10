@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use tokio::sync::oneshot;
 
 use super::error::SshError;
-use super::types::{CommandOutput, ExecOutcome, PtySize, RemoteEntry};
+use super::types::{CommandOutput, ExecOutcome, ExecOutputSink, PtySize, RemoteEntry};
 
 /// Offene Verbindung zu einem SSH-Server (Spec 0005, Abschnitt 1/4). Exec-
 /// und interaktiver Modus laufen über **denselben** Transport (SSH-
@@ -61,6 +61,32 @@ pub trait SshTransport: Send + Sync {
             output: self.execute_with_stdin(command, stdin).await?,
             cancelled: false,
         })
+    }
+    /// Like [`execute_cancellable`](Self::execute_cancellable) /
+    /// [`execute_with_stdin_cancellable`](Self::execute_with_stdin_cancellable)
+    /// (chosen by `stdin`), but additionally sends every output chunk to
+    /// `sink` while the command runs (issue #325, live output in the chat).
+    /// The returned [`ExecOutcome`] is identical to the one of the
+    /// non-streaming method: the stream is display-only.
+    ///
+    /// Default: no live chunks, delegates unchanged — existing
+    /// implementations and test mocks keep working; `RusshTransport` and
+    /// `LocalTransport` override it.
+    async fn execute_streaming(
+        &mut self,
+        command: &str,
+        stdin: Option<&[u8]>,
+        cancel: oneshot::Receiver<()>,
+        sink: ExecOutputSink,
+    ) -> Result<ExecOutcome, SshError> {
+        drop(sink);
+        match stdin {
+            Some(stdin) => {
+                self.execute_with_stdin_cancellable(command, stdin, cancel)
+                    .await
+            }
+            None => self.execute_cancellable(command, cancel).await,
+        }
     }
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError>;
     /// Öffnet eine SFTP-Session als weiteren Subsystem-Channel derselben

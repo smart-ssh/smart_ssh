@@ -23,6 +23,7 @@ import {
   onActionDecisionEscalated,
   onAiBudgetWaiting,
   onChatActionProposed,
+  onChatActionOutput,
   onChatActionResult,
   onChatAutoContinuationLimitReached,
   onChatAutoContinuationStarted,
@@ -38,6 +39,8 @@ import {
   onRiskAssessmentUpdated,
 } from "../events";
 import { translateErrorCode } from "../errorCodes";
+import { appendLiveOutput, type LiveOutput } from "../liveOutput";
+import { LiveCommandOutput } from "./LiveCommandOutput";
 import { listDocumentActions } from "../extensions/registry";
 import { formatBytes } from "../format";
 import {
@@ -316,6 +319,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * akzeptierter kleiner Randfall, kein Korrektheitsproblem. */
   const [riskSecondOpinionEnabled, setRiskSecondOpinionEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Issue #325: live output per running action, kept outside `items` so
+   * that its updates (up to ten per second) do not trigger the chat's
+   * jump-to-the-end effect below. Removed when the result arrives. */
+  const [liveOutputs, setLiveOutputs] = useState<Record<string, LiveOutput>>({});
   // Spec 0055, Teil 1: `<textarea>` statt `<input type="text">` für die
   // mehrzeilige Eingabe (Shift+Enter/Auto-Grow) — dieselbe DOM-API
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
@@ -505,8 +512,21 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           ),
         );
       }),
+      onChatActionOutput((event) => {
+        if (event.sessionId !== sessionId) return;
+        setLiveOutputs((prev) => ({
+          ...prev,
+          [event.actionId]: appendLiveOutput(prev[event.actionId], event),
+        }));
+      }),
       onChatActionResult((event) => {
         if (event.sessionId !== sessionId) return;
+        // Issue #325: the final result replaces the live view.
+        setLiveOutputs((prev) => {
+          if (!(event.actionId in prev)) return prev;
+          const { [event.actionId]: _finished, ...rest } = prev;
+          return rest;
+        });
         setItems((prev) =>
           prev.map((item) =>
             item.type === "action" && item.actionId === event.actionId
@@ -962,6 +982,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           <ChatItemView
             key={item.id}
             item={item}
+            liveOutput={item.type === "action" ? liveOutputs[item.actionId] : undefined}
             onRespond={respond}
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
@@ -1135,6 +1156,7 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
 // genutzt.
 export function ChatItemView({
   item,
+  liveOutput,
   onRespond,
   onAcceptWithRule,
   onExport,
@@ -1143,6 +1165,9 @@ export function ChatItemView({
   sessionId,
 }: {
   item: ChatItem;
+  /** Issue #325: live output while the command runs (`undefined` before
+   * the first output and after the result). */
+  liveOutput?: LiveOutput;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
@@ -1422,6 +1447,9 @@ export function ChatItemView({
        * abbrechbaren Exec-Kanal (s. Spec, Abschnitt 5). */}
       {!item.result && "SuggestCommand" in item.action && item.startedAt !== null && (
         <RunningCommandIndicator actionId={item.actionId} startedAt={item.startedAt} />
+      )}
+      {!item.result && "SuggestCommand" in item.action && liveOutput && (
+        <LiveCommandOutput output={liveOutput} />
       )}
 
       {item.result && <ActionResultView result={item.result} sessionId={sessionId} />}
