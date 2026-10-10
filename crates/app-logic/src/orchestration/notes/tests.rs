@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use tokio::sync::Mutex as AsyncMutex;
 
 use ssh_manager_core::ai::{AiError, AiEvent, DefaultOutputRedactor};
-use ssh_manager_core::filter::FilterEngine;
 use ssh_manager_core::profiles::{Group, GroupId, NoteRevision, ProfileResult, Server};
 use ssh_manager_core::shared::ServerId;
 
@@ -126,7 +125,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
         .history
         .push(command_result_message());
     // Winziges Fenster + große Notiz erzwingt Schritt 3 (Notiz-Kürzung).
-    session.parts_mut_for_tests().model_context_window_tokens = 2_000;
+    session.set_model_context_window_tokens_for_tests(2_000);
     let parts = crate::compaction::SystemContextParts {
         base: "Basis".to_string(),
         note_sections: vec![("Server \"web-01\"".to_string(), "n".repeat(50_000))],
@@ -136,7 +135,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
         let mut ctx = session.context.lock().await;
         ctx.system_context = parts.assemble();
     }
-    session.parts_mut_for_tests().system_context_parts = AsyncMutex::new(parts);
+    session.set_system_context_parts_for_tests(AsyncMutex::new(parts));
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -1835,7 +1834,7 @@ async fn test_malformed_tool_call_yields_chat_error_without_ending_session() {
 /// `session.server_id` auf — die KI nennt nie eine ID.
 #[tokio::test]
 async fn test_propose_note_update_current_server_resolves_to_session_server_id() {
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
                 target: NoteTargetSelector::CurrentServer,
@@ -1845,8 +1844,6 @@ async fn test_propose_note_update_current_server_resolves_to_session_server_id()
         ],
         MockSshTransport::default(),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let expected_server_id = session.server_id;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();

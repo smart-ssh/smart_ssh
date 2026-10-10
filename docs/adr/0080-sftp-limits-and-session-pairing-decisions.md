@@ -103,6 +103,14 @@ Guard-Referenz) weiter nicht.
 
 ## Entscheidung 4 (A3.3): ein breiter Test-Zugang, kein Satz feldweiser Setter
 
+> **Nachtrag (Issue #264): der offene Punkt ist erledigt.** Der breite
+> Zugang `parts_mut_for_tests` ist entfernt. An seine Stelle treten feldweise
+> `Session::set_<feld>_for_tests`-Setter, einer je Feld, das Tests tatsächlich
+> überschreiben, hinter demselben `cfg(any(test, feature = "test-support"))`.
+> Tests, die nur eine großzügige Filter-Engine brauchen, bauen die Sitzung
+> gleich damit (`test_support`-Konstruktoren). Der Text darunter beschreibt die
+> damalige Entscheidung.
+
 `Session::parts_mut_for_tests` gibt `&mut SessionParts` heraus, also
 Schreibrechte auf **alle** mitgegebenen Bestandteile — auch auf
 `filter_engine`, `ai_provider` und `sudo_password`. Ein Aufruf aus
@@ -241,6 +249,6 @@ ohnehin benutzt.
 - „Lokal öffnen" lehnt Dateien über 50 MiB ab. Für Nutzer, die bisher eine
   sehr große Datei lokal geöffnet haben, ist das eine Verhaltensänderung
   (Changelog-Fragment `changelog.d/0086-sftp-size-limits.md`).
-- Offen und im Backlog: feldweise Test-Setter statt
-  `parts_mut_for_tests` (Entscheidung 4), und `cargo build --workspace` im
+- Offen und im Backlog: (feldweise Test-Setter: erledigt, s. Nachtrag zu
+  Entscheidung 4), und `cargo build --workspace` im
   lokalen Gate.

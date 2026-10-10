@@ -44,9 +44,10 @@ fn action_result_count(events: &[(String, serde_json::Value)]) -> usize {
 }
 
 fn attach_second_opinion(session: &mut Session, provider: impl AiProvider + 'static) {
-    session.parts_mut_for_tests().risk_second_opinion_provider = Some(Box::new(provider));
-    session.parts_mut_for_tests().risk_second_opinion_budget =
-        Some(Arc::new(ai_providers::ProviderBudgetGuard::new()));
+    session.set_risk_second_opinion_provider_for_tests(Some(Box::new(provider)));
+    session.set_risk_second_opinion_budget_for_tests(Some(Arc::new(
+        ai_providers::ProviderBudgetGuard::new(),
+    )));
 }
 
 /// Wartet, bis die Eskalation gemeldet ist, und beantwortet dann den Dialog
@@ -101,8 +102,7 @@ async fn test_t10_second_opinion_raising_to_red_turns_autoexec_into_confirmation
             MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
         )
         .await;
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     attach_second_opinion(
         &mut session,
         VerdictProvider("red: gibt Zugangsdaten des Dienstes aus"),
@@ -220,8 +220,7 @@ async fn test_second_opinion_wording_never_reaches_the_persisted_ledger() {
             MockSshTransport::default().with_response(&command, output("ok")),
         )
         .await;
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     attach_second_opinion(
         &mut session,
         VerdictProvider("red: das Kommando enthält das Passwort S3cretPassw0rd"),
@@ -279,8 +278,7 @@ async fn test_t11_rejecting_the_escalated_action_blocks_it_and_marks_the_rejecti
             MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
         )
         .await;
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     attach_second_opinion(&mut session, VerdictProvider("red: heikel"));
 
     let emitter = TestEmitter::default();
@@ -336,13 +334,11 @@ async fn test_t11_rejecting_the_escalated_action_blocks_it_and_marks_the_rejecti
 /// kein neues Ereignis.
 #[tokio::test]
 async fn test_t12_setting_off_lets_the_action_run_as_before() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().red_risk_always_confirm = false;
+    session.set_red_risk_always_confirm_for_tests(false);
     attach_second_opinion(&mut session, VerdictProvider("red: heikel"));
 
     let emitter = TestEmitter::default();
@@ -378,12 +374,10 @@ async fn test_t12_setting_off_lets_the_action_run_as_before() {
 /// ist Rot, nicht „irgendeine Anhebung".
 #[tokio::test]
 async fn test_t13_second_opinion_raising_only_to_yellow_does_not_escalate() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response(PLAIN, output("total 0")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     attach_second_opinion(
         &mut session,
         VerdictProvider("yellow: könnte interne Pfade zeigen"),
@@ -456,12 +450,10 @@ impl AiProvider for GatedVerdictProvider {
 async fn test_t14_a_stop_during_the_second_opinion_wins_over_the_escalation() {
     let entered = Arc::new(tokio::sync::Notify::new());
     let release = Arc::new(tokio::sync::Notify::new());
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     attach_second_opinion(
         &mut session,
         GatedVerdictProvider {
@@ -527,12 +519,10 @@ async fn test_t14_a_stop_during_the_second_opinion_wins_over_the_escalation() {
     // überhaupt nichts täte — sie prüfte dann nichts.
     let entered = Arc::new(tokio::sync::Notify::new());
     let release = Arc::new(tokio::sync::Notify::new());
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     attach_second_opinion(
         &mut session,
         GatedVerdictProvider {
@@ -578,12 +568,10 @@ async fn test_t14_a_stop_during_the_second_opinion_wins_over_the_escalation() {
 /// hängen.
 #[tokio::test(start_paused = true)]
 async fn test_t15_an_escalated_confirmation_still_times_out_without_executing() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response(YELLOW_ONLY, output("ok")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     attach_second_opinion(&mut session, VerdictProvider("red: heikel"));
 
     let emitter = TestEmitter::default();

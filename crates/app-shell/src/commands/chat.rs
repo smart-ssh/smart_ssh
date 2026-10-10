@@ -754,8 +754,8 @@ mod send_chat_message_persistence_tests {
         let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
 
         let mut session = test_session(server_id);
-        session.parts_mut_for_tests().chat_session_store = Some(chat_store.clone());
-        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        session.set_chat_session_store_for_tests(Some(chat_store.clone()));
+        session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
 
         (session, profile_store, chat_store, tmp_dir)
     }
@@ -846,10 +846,10 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
             persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
@@ -1020,14 +1020,15 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().transport =
-            app_logic::session::SessionTransport::new(Box::new(EchoTransport));
-        session.parts_mut_for_tests().filter_engine =
-            Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedActionProvider {
+        session.set_transport_for_tests(app_logic::session::SessionTransport::new(Box::new(
+            EchoTransport,
+        )));
+        session
+            .set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
+        session.set_ai_provider_for_tests(Box::new(GatedActionProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
             persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
@@ -1108,10 +1109,10 @@ mod send_chat_message_persistence_tests {
     async fn test_run_chat_turn_does_not_swallow_an_early_stop() {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: Arc::new(tokio::sync::Notify::new()),
             contexts: contexts.clone(),
-        });
+        }));
         session.request_auto_continue_stop();
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
@@ -1143,10 +1144,10 @@ mod send_chat_message_persistence_tests {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
         let gate = Arc::new(tokio::sync::Notify::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         session.request_auto_continue_stop();
         let dir = tempfile::tempdir().unwrap();
         let policy_store =

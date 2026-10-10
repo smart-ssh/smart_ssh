@@ -258,7 +258,7 @@ async fn test_retry_goes_through_the_same_rate_limit_budget_gate() {
     });
     let budget = Arc::new(ai_providers::ProviderBudgetGuard::new());
     budget.record_headers(exhausted_budget_snapshot());
-    session.parts_mut_for_tests().ai_provider_budget = budget;
+    session.set_ai_provider_budget_for_tests(budget);
     let emitter = TestEmitter::default();
 
     run_chat_turn(

@@ -4,7 +4,6 @@
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{AiEvent, WebActivity, WebActivityKind, WebSource};
-use ssh_manager_core::filter::FilterEngine;
 use ssh_manager_core::profiles::{AiAction, PostIngestPolicy};
 
 use crate::dto::ActionUserDecision;
@@ -173,7 +172,7 @@ async fn test_injection_check_runs_on_fetched_page_text() {
         AiEvent::Done,
     ]);
     let checked = checker.received_contexts_handle();
-    session.parts_mut_for_tests().injection_check_provider = Some(Box::new(checker));
+    session.set_injection_check_provider_for_tests(Some(Box::new(checker)));
     let emitter = TestEmitter::default();
 
     run_turn(&session, &emitter).await;
@@ -287,10 +286,10 @@ async fn test_action_is_escalated_after_failed_response_with_web_result() {
         provider,
         MockSshTransport::default().with_response("echo hi", output("hi")),
     );
-    session.parts_mut_for_tests().filter_engine = Box::new(
-        ssh_manager_core::filter::FilterEngine::new(AllowEverythingPolicyStore),
-    );
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+    session.set_filter_engine_for_tests(Box::new(ssh_manager_core::filter::FilterEngine::new(
+        AllowEverythingPolicyStore,
+    )));
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Strict);
 
     run_turn(&session, &TestEmitter::default()).await;
 
@@ -352,10 +351,11 @@ async fn run_round_with_strict_policy(
 ) -> (Vec<serde_json::Value>, Vec<String>) {
     let transport = MockSshTransport::default().with_response("uptime", output("up 3 days"));
     let executed = transport.executed_handle();
-    let mut session = session_with_ai_provider(MockAiProvider::with_rounds(vec![round]), transport);
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+    let mut session = session_with_ai_provider_allowing_everything(
+        MockAiProvider::with_rounds(vec![round]),
+        transport,
+    );
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Strict);
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
