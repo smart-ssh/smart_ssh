@@ -401,7 +401,7 @@ pub(crate) async fn handle_action_proposed(
                 action_id,
                 matches!(origin, ActionOrigin::Mcp { .. }),
             ) else {
-                // Issue #108 / Spec 0104 §5: höchstens eine wartende
+                // Issue #108 / Spec 0104 §3: höchstens eine wartende
                 // Bestätigung je MCP-Sitzung; der Vorschlag wird nicht
                 // ausgeführt und dem Client als Fehler gemeldet.
                 return emit_action_error(

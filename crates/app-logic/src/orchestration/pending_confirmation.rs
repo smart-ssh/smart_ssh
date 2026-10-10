@@ -58,7 +58,7 @@ impl<'a> PendingConfirmation<'a> {
     /// Registriert `action_id` als wartend. Ab hier räumt [`Drop`] auf.
     /// Der Tab-Indikator wird erst in [`Self::wait_for_decision`] gesetzt.
     ///
-    /// `exclusive` (MCP-Sitzungen, Spec 0104 §5): Wartet in der Sitzung
+    /// `exclusive` (MCP-Sitzungen, Spec 0104 §3): Wartet in der Sitzung
     /// bereits eine Bestätigung, wird nichts registriert und
     /// [`AnotherConfirmationPending`] zurückgegeben. Prüfung und Belegung
     /// geschehen in einem atomaren Schritt (von der Registrierung bis zum Fallen), damit parallele Vorschläge nicht
