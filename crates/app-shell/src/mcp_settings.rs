@@ -19,10 +19,10 @@ use tauri_plugin_store::StoreExt;
 use ssh_manager_core::shared::ServerId;
 
 use crate::mcp_backend::AppMcpBackend;
+use crate::settings_store::{self, SETTINGS_STORE_FILE};
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
-pub(crate) const SETTINGS_STORE_FILE: &str = "settings.json";
 const ENABLED_KEY: &str = "mcpServerEnabled";
 const TOKEN_KEY: &str = "mcpServerToken";
 const ALLOWED_SERVERS_KEY: &str = "mcpServerAllowedServerIds";
@@ -58,59 +58,6 @@ fn generate_token() -> String {
     uuid::Uuid::new_v4().simple().to_string()
 }
 
-/// Unabhängiger Review-Pass (Spec 0028): das MCP-Bearer-Token — das einzige
-/// Geheimnis, das die gesamte MCP-Angriffsfläche freischaltet — landet über
-/// `tauri-plugin-store` mit OS-Standardrechten (typ. 0644, weltlesbar) in
-/// `settings.json`, während dasselbe Projekt Logs (`logging.rs`), die
-/// SQLite-DB und `host_keys.json` bereits konsequent auf 0600/0700 härtet
-/// und API-Keys in den OS-Keychain statt in den Store legt. Jeder
-/// mitlaufende Prozess desselben Nutzerkontos, der die Datei lesen darf,
-/// wird damit zu einem vollwertigen MCP-Client. Härtet die Datei
-/// best-effort auf 0600.
-///
-/// **Die damals genannte vollständige Lösung ist mit Spec 0101 A12
-/// umgesetzt:** Das Token liegt in der verschlüsselten Datenbank, nicht
-/// mehr in dieser Datei. Die Härtung bleibt trotzdem — die Datei hält
-/// weiter Einstellungen (erlaubte Server, Zeitschranke, Ein/Aus), und sie
-/// hatte diese Rechte bisher; ein Umzug ist kein Grund, sie
-/// zurückzunehmen. Nach jedem Schreibzugriff dieses Moduls aufgerufen,
-/// weil es den bisherigen Auslöser (das Token-Schreiben) nicht mehr gibt.
-///
-/// **Issue #40:** The path comes from [`settings_store_path`], i.e. exactly
-/// the resolution the store uses itself. It used to be built from
-/// `app_config_dir`; on Linux that is a different directory than the
-/// store's `BaseDirectory::AppData`, so the hardening hit a file that does
-/// not exist and the real `settings.json` kept its umask mode.
-///
-/// Best-effort: a failed path resolution or `set_permissions` is ignored
-/// and never fails the calling command.
-fn harden_settings_store_permissions<R: Runtime>(app: &AppHandle<R>) {
-    #[cfg(unix)]
-    {
-        let Ok(path) = settings_store_path(app) else {
-            return;
-        };
-        ssh_manager_core::fs_hardening::harden_permissions(&path, 0o600, "settings");
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = app;
-    }
-}
-
-/// Where `settings.json` lives: via `tauri_plugin_store::resolve_store_path`,
-/// the same resolution the store uses when reading and writing
-/// (`BaseDirectory::AppData`). Deliberately not `app_config_dir`: on Linux
-/// that is a different directory (`~/.config` instead of `~/.local/share`),
-/// see ADR 0105. Single source of truth for this path — used by the
-/// permission hardening above and by the data paths display
-/// (`commands::diagnostics_export`).
-pub(crate) fn settings_store_path<R: Runtime>(
-    app: &AppHandle<R>,
-) -> tauri_plugin_store::Result<std::path::PathBuf> {
-    tauri_plugin_store::resolve_store_path(app, SETTINGS_STORE_FILE)
-}
-
 /// Spec 0101, A12: `settings.json` als **alter** Ablageort des Tokens.
 ///
 /// Nur noch Lesen und Entfernen — geschrieben wird dorthin nicht mehr. Die
@@ -131,26 +78,11 @@ impl app_logic::mcp_token::LegacyMcpTokenFile for SettingsJsonToken<'_> {
     }
 
     fn remove_token(&self) -> CommandResult<()> {
-        let store = self.app.store(SETTINGS_STORE_FILE)?;
-        let previous = store.get(TOKEN_KEY);
-        store.delete(TOKEN_KEY);
-        if let Err(err) = store.save() {
-            // **Bei gescheitertem Schreiben den Schlüssel zurücksetzen**
-            // (spec-reviewer Runde 3): Der Store ist im Prozess
-            // zwischengespeichert — `delete` wirkt sofort im Speicher, nur
-            // `save` kann scheitern. Ohne das Zurücksetzen stünde das
-            // Token weiter im Klartext in der Datei, während jeder
-            // folgende `read_token` `None` liefert; die App hielte die
-            // Kopie für den Rest der Prozesslaufzeit für entfernt, und
-            // genau das Klartext-Vorkommen, das A12 beseitigen soll,
-            // überlebte still.
-            if let Some(previous) = previous {
-                store.set(TOKEN_KEY, previous);
-            }
-            return Err(err.into());
-        }
-        harden_settings_store_permissions(self.app);
-        Ok(())
+        // `settings_store::update` puts the key back in memory when the save
+        // fails (spec-reviewer round 3): without that the token would stay in
+        // plaintext in the file while every later `read_token` returned
+        // `None`, and the plaintext copy A12 removes would survive silently.
+        settings_store::update(self.app, |changes| changes.delete(TOKEN_KEY))
     }
 }
 
@@ -169,7 +101,7 @@ fn load_or_init_token(app: &AppHandle, state: &AppState) -> CommandResult<String
     // stehen, mit denen ein anderes Modul sie angelegt hat. Das wäre
     // gegenüber vorher ein Rückschritt, auch wenn das Geheimnis jetzt
     // nicht mehr darin steht.
-    harden_settings_store_permissions(app);
+    settings_store::harden_settings_store_permissions(app);
     app_logic::mcp_token::load_or_init_token(
         state.credential_store.as_ref(),
         &SettingsJsonToken { app },
@@ -194,12 +126,10 @@ fn load_allowed_servers(app: &AppHandle) -> CommandResult<HashSet<ServerId>> {
 }
 
 fn store_allowed_servers(app: &AppHandle, ids: &HashSet<ServerId>) -> CommandResult<()> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
     let ids_json: Vec<String> = ids.iter().map(|id| id.0.to_string()).collect();
-    store.set(ALLOWED_SERVERS_KEY, serde_json::json!(ids_json));
-    store.save()?;
-    harden_settings_store_permissions(app);
-    Ok(())
+    settings_store::update(app, |changes| {
+        changes.set(ALLOWED_SERVERS_KEY, serde_json::json!(ids_json))
+    })
 }
 
 fn load_confirm_timeout_secs<R: Runtime>(app: &AppHandle<R>) -> CommandResult<u64> {
@@ -301,10 +231,9 @@ pub async fn set_mcp_server_enabled(
     enabled: bool,
 ) -> CommandResult<McpServerSettingsDto> {
     sync_live_state_from_store(&app, &state)?;
-    let store = app.store(SETTINGS_STORE_FILE)?;
-    store.set(ENABLED_KEY, serde_json::json!(enabled));
-    store.save()?;
-    harden_settings_store_permissions(&app);
+    settings_store::update(&app, |changes| {
+        changes.set(ENABLED_KEY, serde_json::json!(enabled))
+    })?;
 
     if enabled {
         start_server_if_not_running(&app, &state).await?;
@@ -351,10 +280,9 @@ pub async fn set_mcp_server_confirm_timeout_secs(
     state: State<'_, AppState>,
     secs: u64,
 ) -> CommandResult<McpServerSettingsDto> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
-    store.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(secs));
-    store.save()?;
-    harden_settings_store_permissions(&app);
+    settings_store::update(&app, |changes| {
+        changes.set(CONFIRM_TIMEOUT_SECS_KEY, serde_json::json!(secs))
+    })?;
 
     let was_running = state.mcp.runtime.lock().await.is_some();
     if was_running {
@@ -475,7 +403,7 @@ mod tests {
         std::fs::set_permissions(&store_path, std::fs::Permissions::from_mode(0o644))
             .expect("store file must exist after save");
 
-        harden_settings_store_permissions(handle);
+        crate::settings_store::harden_settings_store_permissions(handle);
 
         let mode = std::fs::metadata(&store_path)
             .expect("store file must still exist")
