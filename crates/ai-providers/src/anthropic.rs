@@ -2491,6 +2491,134 @@ mod tests {
             .any(|e| matches!(e, RawEvent::Public(AiEvent::WebContentIngested))));
     }
 
+    /// Frames of a web search block (`web_search` or `web_fetch`, result or
+    /// provider error) at block indices 0 and 1.
+    fn web_block_frames(error: bool, fetch: bool) -> Vec<Result<SseFrame, reqwest::Error>> {
+        let (tool, field, input, result_type) = if fetch {
+            (
+                "web_fetch",
+                "url",
+                "https://example.com/doc",
+                "web_fetch_tool_result",
+            )
+        } else {
+            (
+                "web_search",
+                "query",
+                "nginx 1.29",
+                "web_search_tool_result",
+            )
+        };
+        let content = match (error, fetch) {
+            (true, _) => format!(
+                r#"{{"type":"{result_type}_error","error_code":"unavailable"}}"#
+            ),
+            (false, true) => r#"{"type":"web_fetch_result","url":"https://example.com/doc","content":{"type":"document","source":{"type":"text","media_type":"text/plain","data":"Text"},"title":"Doc"}}"#.to_string(),
+            (false, false) => r#"[{"type":"web_search_result","url":"https://nginx.org/en/CHANGES","title":"nginx changes","encrypted_content":"x"}]"#.to_string(),
+        };
+        vec![
+            frame(
+                "content_block_start",
+                &format!(
+                    r#"{{"index":0,"content_block":{{"type":"server_tool_use","id":"srvtoolu_1","name":"{tool}","input":{{}}}}}}"#
+                ),
+            ),
+            frame(
+                "content_block_delta",
+                &format!(
+                    r#"{{"index":0,"delta":{{"type":"input_json_delta","partial_json":"{{\"{field}\":\"{input}\"}}"}}}}"#
+                ),
+            ),
+            frame("content_block_stop", r#"{"index":0}"#),
+            frame(
+                "content_block_start",
+                &format!(
+                    r#"{{"index":1,"content_block":{{"type":"{result_type}","tool_use_id":"srvtoolu_1","content":{content}}}}}"#
+                ),
+            ),
+            frame("content_block_stop", r#"{"index":1}"#),
+        ]
+    }
+
+    fn position_of(events: &[RawEvent], pred: impl Fn(&AiEvent) -> bool) -> usize {
+        events
+            .iter()
+            .position(|e| matches!(e, RawEvent::Public(ev) if pred(ev)))
+            .unwrap_or_else(|| panic!("event missing in {events:?}"))
+    }
+
+    /// Issue #170: the chat turn sets the "untrusted content ingested" flag
+    /// when it handles `WebActivity`, and evaluates the action (spec 0039
+    /// section 5) only afterwards. That holds only because the provider emits
+    /// `WebActivity` strictly before `ActionProposed` — pinned here for a
+    /// mixed response, native tool calling, for search and fetch, with a
+    /// result and with a provider error.
+    #[tokio::test]
+    async fn test_web_activity_precedes_action_proposed_in_mixed_response() {
+        for (error, fetch) in [(false, false), (false, true), (true, false), (true, true)] {
+            let mut frames = vec![frame("message_start", r#"{"message":{"usage":{}}}"#)];
+            frames.extend(web_block_frames(error, fetch));
+            frames.extend([
+                frame(
+                    "content_block_start",
+                    r#"{"index":2,"content_block":{"type":"tool_use","name":"suggest_command"}}"#,
+                ),
+                frame(
+                    "content_block_delta",
+                    r#"{"index":2,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"uptime\"}"}}"#,
+                ),
+                frame("content_block_stop", r#"{"index":2}"#),
+                frame("message_delta", r#"{"delta":{"stop_reason":"tool_use"}}"#),
+                frame("message_stop", "{}"),
+            ]);
+            let events = collect_frames(frames).await;
+
+            let web = position_of(&events, |e| matches!(e, AiEvent::WebActivity(_)));
+            let action = position_of(&events, |e| matches!(e, AiEvent::ActionProposed(_)));
+            assert!(
+                web < action,
+                "error={error} fetch={fetch}: WebActivity must precede ActionProposed: {events:?}"
+            );
+            let RawEvent::Public(AiEvent::WebActivity(activity)) = &events[web] else {
+                unreachable!()
+            };
+            assert_eq!(activity.error_code.is_some(), error);
+            assert_eq!(events.last(), Some(&RawEvent::Public(AiEvent::Done)));
+        }
+    }
+
+    /// Same guarantee for the text-pattern fallback (no native tool calling),
+    /// where the action is parsed from the text and emitted after the web
+    /// activities.
+    #[tokio::test]
+    async fn test_web_activity_precedes_fallback_action_in_mixed_response() {
+        let mut frames = vec![frame("message_start", r#"{"message":{"usage":{}}}"#)];
+        frames.extend(web_block_frames(false, false));
+        frames.extend([
+            frame(
+                "content_block_start",
+                r#"{"index":2,"content_block":{"type":"text","text":""}}"#,
+            ),
+            frame(
+                "content_block_delta",
+                r#"{"index":2,"delta":{"type":"text_delta","text":"Ok.\n<!--ACTION-->{\"action\": \"suggest_command\", \"parameters\": {\"command\": \"uptime\"}}<!--/ACTION-->"}}"#,
+            ),
+            frame("content_block_stop", r#"{"index":2}"#),
+            frame("message_delta", r#"{"delta":{"stop_reason":"end_turn"}}"#),
+            frame("message_stop", "{}"),
+        ]);
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(frames));
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, false, Uuid::new_v4(), String::new())
+                .collect()
+                .await;
+
+        let web = position_of(&events, |e| matches!(e, AiEvent::WebActivity(_)));
+        let action = position_of(&events, |e| matches!(e, AiEvent::ActionProposed(_)));
+        assert!(web < action, "{events:?}");
+    }
+
     /// Spec 0039: eine gespeicherte Recherche geht in einer späteren Anfrage
     /// nur gefencet an die KI — Fence-Marker im Seitentext brechen nicht aus.
     #[test]
