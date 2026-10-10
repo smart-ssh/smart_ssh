@@ -11,7 +11,7 @@ use ssh_manager_core::profiles::{
 use ssh_manager_core::shared::ServerId;
 
 use crate::event_emitter::TauriEventEmitter;
-use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::ai_provider_factory::build_ai_provider_from_config;
 use app_logic::dto::NoteRevisionDto;
 use app_logic::error::{secret_store_error, CommandResult};
 use app_logic::orchestration::execute_note_shrink_request;
@@ -85,22 +85,14 @@ pub async fn request_note_shrink(
     server_id: ServerId,
 ) -> CommandResult<()> {
     let active_config = active_ai_provider_config(&state).await?;
-    let api_key = state
-        .credential_store
-        .get(&active_config.credential_ref)
-        .map_err(secret_store_error)?;
-    let (ai_provider, ai_provider_budget) = build_ai_provider(
+    // Issue #162: Notiz-Nebenaufruf — nie Web-Werkzeuge.
+    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
         &state.rate_limit_registry,
-        active_config.provider_type,
-        active_config.base_url.as_deref(),
-        &active_config.model,
-        api_key,
-        active_config.supports_native_tool_calling,
-        active_config.extra_headers.clone(),
-        active_config.max_tokens_override,
-        // Issue #162: Notiz-Nebenaufruf — nie Web-Werkzeuge.
+        state.credential_store.as_ref(),
+        &active_config,
         false,
-    );
+    )
+    .map_err(secret_store_error)?;
     let provider_label = active_config.display_name.clone();
     let model = active_config.model.clone();
     // spec-reviewer-Fund (Review dieses Schritts): derselbe zusätzliche

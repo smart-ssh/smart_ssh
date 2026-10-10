@@ -13,9 +13,8 @@
  * Ein `FeatureLocked`-Fehler tritt aber gerade bei den meisten Commands
  * (`send_chat_message`, `sftp_*`, `export_document`, …) typischerweise bei
  * aktivem Session-Tab auf — ohne Portal wäre dieser Dialog also fast immer
- * unsichtbar. `createPortal` nach `document.body` behebt das. */
+ * unsichtbar. `ModalBackdrop layer="app"` rendert nach `document.body` und behebt das. */
 
-import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -31,8 +30,8 @@ export function FeatureLockedDialog() {
 
   if (!locked) return null;
 
-  return createPortal(
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  return (
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm space-y-3 rounded border border-slate-700 bg-slate-900 p-5 text-slate-100">
         <h2 className="font-heading text-sm font-semibold tracking-wide">
           {t("featureLocked.title")}
@@ -48,7 +47,6 @@ export function FeatureLockedDialog() {
           {t("featureLocked.close")}
         </button>
       </div>
-    </ModalBackdrop>,
-    document.body,
+    </ModalBackdrop>
   );
 }

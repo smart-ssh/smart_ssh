@@ -25,14 +25,17 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use ssh_manager_core::filter::{
-    scope_applies, EffectiveScope, Pattern, PolicySource, PolicySourceError, PolicySourceResult,
-    PolicyStore, Rule, RuleAction, RuleId, RuleOrigin, Scope,
+    scope_applies, EffectiveScope, Pattern, PatternError, PolicySource, PolicySourceError,
+    PolicySourceResult, PolicyStore, Rule, RuleAction, RuleId, RuleOrigin, Scope,
 };
 use ssh_manager_core::shared::ServerId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyStoreError {
     NotFound(RuleId),
+    /// Das Muster der Regel lässt sich nicht übersetzen; `create`/`update`
+    /// haben nichts geschrieben (Spec 0077, 3.1.2, Schicht 2).
+    InvalidPattern(PatternError),
     Backend(String),
 }
 
@@ -40,6 +43,7 @@ impl std::fmt::Display for PolicyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PolicyStoreError::NotFound(id) => write!(f, "Filter-Regel '{id}' nicht gefunden"),
+            PolicyStoreError::InvalidPattern(err) => write!(f, "{err}"),
             PolicyStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
         }
     }
@@ -237,7 +241,27 @@ impl SqlitePolicyStore {
         row_to_stored_rule(&row)
     }
 
+    /// Lehnt eine Regel mit nicht übersetzbarem Muster ab, **bevor** etwas
+    /// geschrieben wird (Spec 0077, 3.1.2, Schicht 2) — unabhängig davon, ob
+    /// der Aufrufer selbst schon geprüft hat.
     pub async fn create(&self, rule: &StoredRule) -> Result<(), PolicyStoreError> {
+        rule.pattern
+            .validate()
+            .map_err(PolicyStoreError::InvalidPattern)?;
+        self.insert_unchecked(rule).await
+    }
+
+    /// Schreibt ohne Musterprüfung — **nur für Tests**, die eine Regel aus
+    /// einer älteren Datenbank nachstellen (Spec 0077, T-6c).
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn create_unchecked_for_tests(
+        &self,
+        rule: &StoredRule,
+    ) -> Result<(), PolicyStoreError> {
+        self.insert_unchecked(rule).await
+    }
+
+    async fn insert_unchecked(&self, rule: &StoredRule) -> Result<(), PolicyStoreError> {
         let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
         let (scope_type, scope_value) = scope_to_db(&rule.scope);
 
@@ -264,7 +288,13 @@ impl SqlitePolicyStore {
 
     /// Aktualisiert alle Felder außer `created_at` (bleibt beim ursprünglichen
     /// Anlage-Zeitpunkt, analog zu `AiProviderConfigUpdate`).
+    ///
+    /// Prüft das Muster wie [`Self::create`]; bei einem Fehler behält die
+    /// gespeicherte Regel ihr altes Muster.
     pub async fn update(&self, rule: &StoredRule) -> Result<(), PolicyStoreError> {
+        rule.pattern
+            .validate()
+            .map_err(PolicyStoreError::InvalidPattern)?;
         let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
         let (scope_type, scope_value) = scope_to_db(&rule.scope);
 
@@ -288,6 +318,51 @@ impl SqlitePolicyStore {
             return Err(PolicyStoreError::NotFound(rule.id.clone()));
         }
         Ok(())
+    }
+
+    /// Vertauscht die Prioritäten der Regeln `a` und `b` in **einer**
+    /// Transaktion (Spec 0077, 3.2.3): Entweder tragen danach beide die
+    /// Priorität der jeweils anderen, oder keine hat sich geändert. Die
+    /// Prioritäten werden innerhalb der Transaktion gelesen, nicht vom
+    /// Aufrufer übergeben, damit ein dazwischen liegender Schreibzugriff
+    /// nicht überschrieben wird.
+    pub async fn swap_priorities(
+        &self,
+        a: &RuleId,
+        b: &RuleId,
+        updated_at: DateTime<Utc>,
+    ) -> Result<(), PolicyStoreError> {
+        let mut tx = self.pool.begin().await.map_err(backend_err)?;
+
+        let priority_of = |row: Option<sqlx::sqlite::SqliteRow>, id: &RuleId| match row {
+            Some(row) => row.try_get::<i32, _>("priority").map_err(backend_err),
+            None => Err(PolicyStoreError::NotFound(id.clone())),
+        };
+        let row_a = sqlx::query("SELECT priority FROM filter_rules WHERE id = ?")
+            .bind(&a.0)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(backend_err)?;
+        let priority_a = priority_of(row_a, a)?;
+        let row_b = sqlx::query("SELECT priority FROM filter_rules WHERE id = ?")
+            .bind(&b.0)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(backend_err)?;
+        let priority_b = priority_of(row_b, b)?;
+
+        for (id, priority) in [(a, priority_b), (b, priority_a)] {
+            sqlx::query("UPDATE filter_rules SET priority = ?, updated_at = ? WHERE id = ?")
+                .bind(priority)
+                .bind(updated_at.to_rfc3339())
+                .bind(&id.0)
+                .execute(&mut *tx)
+                .await
+                .map_err(backend_err)?;
+        }
+
+        // Wird `tx` vorher durch `?` verworfen, rollt sqlx zurück.
+        tx.commit().await.map_err(backend_err)
     }
 
     pub async fn delete(&self, id: &RuleId) -> Result<(), PolicyStoreError> {
@@ -441,6 +516,37 @@ mod tests {
         );
     }
 
+    /// Issue #260: `create` und `update` weisen ein nicht übersetzbares
+    /// Muster am Speicher ab und lassen den Bestand unverändert.
+    ///
+    /// *Scheitert gegen den Stand vor #260* (dort wurde die Regel
+    /// gespeichert).
+    #[tokio::test]
+    async fn test_issue_260_create_and_update_reject_an_invalid_pattern() {
+        let store = in_memory_policy_store().await;
+
+        let mut bad = make_rule("bad", Scope::Global, 0);
+        bad.pattern = Pattern::Regex("^a(".to_string());
+        let err = store.create(&bad).await.unwrap_err();
+        assert!(
+            matches!(err, PolicyStoreError::InvalidPattern(_)),
+            "{err:?}"
+        );
+        assert!(store.list_all().await.unwrap().is_empty());
+
+        let good = make_rule("good", Scope::Global, 0);
+        store.create(&good).await.unwrap();
+        let mut changed = good.clone();
+        changed.pattern = Pattern::Glob("ls [abc *".to_string());
+        let err = store.update(&changed).await.unwrap_err();
+        assert!(
+            matches!(err, PolicyStoreError::InvalidPattern(_)),
+            "{err:?}"
+        );
+        let stored = store.get(&good.id).await.unwrap();
+        assert_eq!(stored.pattern, Pattern::Glob("ls *".to_string()));
+    }
+
     #[tokio::test]
     async fn test_update_on_unknown_id_yields_not_found() {
         let store = in_memory_policy_store().await;
@@ -449,6 +555,77 @@ mod tests {
         let result = store.update(&rule).await;
 
         assert_eq!(result, Err(PolicyStoreError::NotFound(rule.id)));
+    }
+
+    #[tokio::test]
+    async fn test_swap_priorities_exchanges_both_values() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("a", Scope::Global, 10))
+            .await
+            .unwrap();
+        store
+            .create(&make_rule("b", Scope::Global, 3))
+            .await
+            .unwrap();
+
+        store
+            .swap_priorities(&RuleId("a".into()), &RuleId("b".into()), Utc::now())
+            .await
+            .unwrap();
+
+        assert_eq!(store.get(&RuleId("a".into())).await.unwrap().priority, 3);
+        assert_eq!(store.get(&RuleId("b".into())).await.unwrap().priority, 10);
+    }
+
+    /// Ein Trigger lässt genau den zweiten Schreibzugriff scheitern. Ohne
+    /// Transaktion bliebe die erste Änderung stehen und beide Regeln trügen
+    /// dieselbe Priorität.
+    #[tokio::test]
+    async fn test_swap_priorities_changes_nothing_when_the_second_write_fails() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("a", Scope::Global, 10))
+            .await
+            .unwrap();
+        store
+            .create(&make_rule("b", Scope::Global, 3))
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TRIGGER fail_b BEFORE UPDATE ON filter_rules WHEN OLD.id = 'b' \
+             BEGIN SELECT RAISE(ABORT, 'simulated failure'); END",
+        )
+        .execute(&store.pool)
+        .await
+        .unwrap();
+
+        let result = store
+            .swap_priorities(&RuleId("a".into()), &RuleId("b".into()), Utc::now())
+            .await;
+
+        assert!(matches!(result, Err(PolicyStoreError::Backend(_))));
+        assert_eq!(store.get(&RuleId("a".into())).await.unwrap().priority, 10);
+        assert_eq!(store.get(&RuleId("b".into())).await.unwrap().priority, 3);
+    }
+
+    #[tokio::test]
+    async fn test_swap_priorities_with_unknown_rule_yields_not_found_and_changes_nothing() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("a", Scope::Global, 10))
+            .await
+            .unwrap();
+
+        let result = store
+            .swap_priorities(&RuleId("a".into()), &RuleId("nope".into()), Utc::now())
+            .await;
+
+        assert_eq!(
+            result,
+            Err(PolicyStoreError::NotFound(RuleId("nope".into())))
+        );
+        assert_eq!(store.get(&RuleId("a".into())).await.unwrap().priority, 10);
     }
 
     #[tokio::test]

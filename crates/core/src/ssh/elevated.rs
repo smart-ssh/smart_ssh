@@ -54,9 +54,35 @@ pub fn is_valid_target_user(user: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
 }
 
-/// Probe-Kommando zur Pfad-Erkennung: gibt den ersten ausführbaren Pfad aus
-/// (erst `sshd_config`, dann [`KNOWN_SFTP_SERVER_PATHS`]), Exit 3 wenn keiner.
+/// Quotet `s` für eine POSIX-Shell (und csh/tcsh/fish) in einfache
+/// Anführungszeichen; ein `'` im Text wird zu `'\''`.
+pub fn shell_single_quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('\'');
+    for c in s.chars() {
+        if c == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(c);
+        }
+    }
+    out.push('\'');
+    out
+}
+
+/// Probe-Kommando zur Pfad-Erkennung: [`posix_sftp_server_probe`] unter
+/// `/bin/sh -c`, damit es unabhängig von der Login-Shell (csh/tcsh/fish)
+/// läuft. Ausgabe und Exit-Codes wie dort.
 pub fn sftp_server_probe_command() -> String {
+    format!(
+        "/bin/sh -c {}",
+        shell_single_quote(&posix_sftp_server_probe())
+    )
+}
+
+/// Der Probe-Text in POSIX-sh-Syntax: gibt den ersten ausführbaren Pfad aus
+/// (erst `sshd_config`, dann [`KNOWN_SFTP_SERVER_PATHS`]), Exit 3 wenn keiner.
+pub fn posix_sftp_server_probe() -> String {
     let mut cmd = String::from(
         "p=$(awk '$1==\"Subsystem\" && $2==\"sftp\" {print $3; exit}' /etc/ssh/sshd_config 2>/dev/null); \
          case \"$p\" in /*) if [ -x \"$p\" ]; then echo \"$p\"; exit 0; fi;; esac; for p in",
@@ -82,6 +108,71 @@ pub fn parse_sftp_server_probe(output: &CommandOutput) -> Option<String> {
         .trim()
         .to_string();
     is_plausible_sftp_server_path(&first_line).then_some(first_line)
+}
+
+/// Ergebnis der Eigentümer-/Rechte-Prüfung von `sftp-server` (Spec 0067, A3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SftpServerSafety {
+    /// Datei und jedes übergeordnete Verzeichnis gehören root und sind weder
+    /// für die Gruppe noch für andere beschreibbar.
+    Safe,
+    /// Mindestens ein Eintrag ist unsicher — oder die Prüfung selbst ist
+    /// gescheitert (fail closed). `path` ist der erste auffällige Eintrag
+    /// bzw. der geprüfte Pfad, wenn die Prüfung kein verwertbares Ergebnis
+    /// lieferte.
+    Unsafe { path: String },
+}
+
+/// Probe-Kommando: [`posix_sftp_server_safety_probe`] unter `/bin/sh -c`.
+/// `None`, wenn `path` kein plausibler `sftp-server`-Pfad ist (er landet im
+/// Kommando).
+pub fn sftp_server_safety_probe_command(path: &str) -> Option<String> {
+    is_plausible_sftp_server_path(path).then(|| {
+        format!(
+            "/bin/sh -c {}",
+            shell_single_quote(&posix_sftp_server_safety_probe(path))
+        )
+    })
+}
+
+/// Der Prüf-Text in POSIX-sh-Syntax (kein GNU-`stat`): löst Symlinks der
+/// Datei (`readlink`, begrenzt) und des Verzeichnisses (`cd -P`/`pwd -P`)
+/// auf und prüft dann Datei und alle Elternverzeichnisse bis `/` mit
+/// `find -prune`. Ausgabe `SAFE` oder `UNSAFE <aufgelöster Pfad>`; jeder
+/// Fehler endet mit Exit 4 (und damit als unsicher).
+pub fn posix_sftp_server_safety_probe(path: &str) -> String {
+    let mut cmd = format!("r={}; n=0; ", shell_single_quote(path));
+    cmd.push_str(
+        r#"while [ -L "$r" ]; do n=$((n+1)); [ "$n" -gt 20 ] && exit 4; t=$(readlink "$r") || exit 4; case "$t" in /*) r=$t;; *) r=$(dirname "$r")/$t;; esac; done; d=$(cd -P "$(dirname "$r")" 2>/dev/null && pwd -P) || exit 4; e=$d/$(basename "$r"); while :; do o=$(find "$e" -prune \( ! -user 0 -o -perm -g+w -o -perm -o+w \) -print) || exit 4; if [ -n "$o" ]; then echo "UNSAFE $e"; exit 0; fi; [ "$e" = / ] && break; e=$(dirname "$e"); done; echo SAFE"#,
+    );
+    cmd
+}
+
+/// Liest das Ergebnis von [`sftp_server_safety_probe_command`]. Alles außer
+/// Exit 0 mit genau `SAFE` ist unsicher; ein gemeldeter Pfad aus der
+/// Server-Ausgabe wird validiert, sonst gilt `checked_path`.
+pub fn parse_sftp_server_safety_probe(
+    output: &CommandOutput,
+    checked_path: &str,
+) -> SftpServerSafety {
+    let unsafe_at = |path: &str| SftpServerSafety::Unsafe {
+        path: path.to_string(),
+    };
+    if output.exit_code != Some(0) {
+        return unsafe_at(checked_path);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines().map(str::trim).filter(|l| !l.is_empty());
+    let (Some(first), None) = (lines.next(), lines.next()) else {
+        return unsafe_at(checked_path);
+    };
+    if first == "SAFE" {
+        return SftpServerSafety::Safe;
+    }
+    match first.strip_prefix("UNSAFE ") {
+        Some(p) if is_safe_absolute_path(p) || p == "/" => unsafe_at(p),
+        _ => unsafe_at(checked_path),
+    }
 }
 
 /// `-u <nutzer>` nur, wenn nicht root — die Standard-sudoers-Regel für root
@@ -292,12 +383,76 @@ mod tests {
 
     #[test]
     fn test_probe_command_checks_sshd_config_and_known_paths() {
-        let cmd = sftp_server_probe_command();
+        let cmd = posix_sftp_server_probe();
         assert!(cmd.contains("/etc/ssh/sshd_config"));
         for path in KNOWN_SFTP_SERVER_PATHS {
             assert!(cmd.contains(path));
         }
         assert!(cmd.contains("-x"));
+    }
+
+    #[test]
+    fn test_probe_command_runs_under_bin_sh_with_probe_quoted() {
+        let cmd = sftp_server_probe_command();
+        let rest = cmd.strip_prefix("/bin/sh -c '").expect("prefix");
+        assert!(rest.ends_with('\''));
+        // Zurück-Entquoten: `'\''` -> `'`.
+        let inner = &rest[..rest.len() - 1];
+        assert_eq!(inner.replace("'\\''", "'"), posix_sftp_server_probe());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_shell_single_quote_round_trips_through_sh() {
+        for s in [
+            "plain",
+            "it's",
+            "'",
+            "a$b",
+            "x;y",
+            "$(id)",
+            "`id`",
+            "a b\"c\\d",
+            "''",
+            "",
+        ] {
+            let out = std::process::Command::new("/bin/sh")
+                .args(["-c", &format!("printf %s {}", shell_single_quote(s))])
+                .output()
+                .unwrap();
+            assert_eq!(String::from_utf8_lossy(&out.stdout), s);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_probe_command_under_real_sh_prints_sshd_config_path() {
+        use std::os::unix::fs::PermissionsExt;
+        // Der Probe liest /etc/ssh/sshd_config; ist dort kein absoluter,
+        // ausführbarer Subsystem-Pfad, würde das Ergebnis vom Host abhängen.
+        // Deshalb: Probe-Text mit ersetztem Config-Pfad durch dieselbe
+        // Quoting-Funktion und echte `/bin/sh`.
+        let dir = std::env::temp_dir().join(format!("probe-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = dir.join("sftp-server");
+        std::fs::write(&fake, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let conf = dir.join("sshd_config");
+        std::fs::write(&conf, format!("Subsystem sftp {}\n", fake.display())).unwrap();
+
+        let probe =
+            posix_sftp_server_probe().replace("/etc/ssh/sshd_config", &conf.display().to_string());
+        let cmd = format!("/bin/sh -c {}", shell_single_quote(&probe));
+        let out = std::process::Command::new("/bin/sh")
+            .args(["-c", &cmd])
+            .output()
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(out.status.code(), Some(0));
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).trim(),
+            fake.display().to_string()
+        );
     }
 
     #[test]
@@ -356,5 +511,137 @@ mod tests {
             classify_sudo_check(&out(1, "", "sudo: unable to resolve host\n")),
             SudoCheck::Failed("sudo: unable to resolve host".to_string())
         );
+    }
+
+    const SAFETY_PATH: &str = "/usr/lib/openssh/sftp-server";
+
+    #[test]
+    fn test_safety_parser_reports_safe_tree() {
+        assert_eq!(
+            parse_sftp_server_safety_probe(&out(0, "SAFE\n", ""), SAFETY_PATH),
+            SftpServerSafety::Safe
+        );
+    }
+
+    #[test]
+    fn test_safety_parser_reports_each_unsafe_entry_with_its_path() {
+        // Datei nicht root-eigen / gruppen- / welt-beschreibbar und
+        // welt-beschreibbares Elternverzeichnis: die Probe nennt den Eintrag.
+        for entry in [
+            "/usr/lib/openssh/sftp-server",
+            "/usr/lib/openssh",
+            "/usr",
+            "/",
+        ] {
+            assert_eq!(
+                parse_sftp_server_safety_probe(
+                    &out(0, &format!("UNSAFE {entry}\n"), ""),
+                    SAFETY_PATH
+                ),
+                SftpServerSafety::Unsafe {
+                    path: entry.to_string()
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn test_safety_parser_reports_symlink_target_path() {
+        assert_eq!(
+            parse_sftp_server_safety_probe(
+                &out(0, "UNSAFE /opt/real/sftp-server\n", ""),
+                "/usr/lib/openssh/sftp-server"
+            ),
+            SftpServerSafety::Unsafe {
+                path: "/opt/real/sftp-server".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_safety_parser_fails_closed_on_garbage_and_failure() {
+        let fallback = SftpServerSafety::Unsafe {
+            path: SAFETY_PATH.to_string(),
+        };
+        for o in [
+            out(0, "", ""),
+            out(0, "garbage\n", ""),
+            out(0, "SAFE\nSAFE\n", ""),
+            out(0, "SAFE extra\n", ""),
+            out(0, "UNSAFE /tmp/x; reboot\n", ""),
+            out(0, "UNSAFE relative\n", ""),
+            out(4, "", "find: no such file"),
+            out(1, "SAFE\n", ""),
+            CommandOutput {
+                stdout: b"SAFE\n".to_vec(),
+                stderr: Vec::new(),
+                exit_code: None,
+                truncated: false,
+            },
+        ] {
+            assert_eq!(
+                parse_sftp_server_safety_probe(&o, SAFETY_PATH),
+                fallback,
+                "{o:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_safety_probe_command_validates_path_and_wraps_in_sh() {
+        assert_eq!(sftp_server_safety_probe_command("/bin/sh"), None);
+        assert_eq!(sftp_server_safety_probe_command("/x; id/sftp-server"), None);
+        let cmd = sftp_server_safety_probe_command(SAFETY_PATH).unwrap();
+        assert!(cmd.starts_with("/bin/sh -c '"));
+        assert!(cmd.contains("-prune"));
+        assert!(!cmd.contains("sudo"));
+        assert!(!cmd.contains("stat -c"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_safety_probe_under_real_sh_resolves_symlinks_and_flags_unsafe() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let dir = std::env::temp_dir().join(format!("safety-test-{}", std::process::id()));
+        let real = dir.join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        let bin = real.join("sftp-server");
+        std::fs::write(&bin, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let link_dir = dir.join("link");
+        std::os::unix::fs::symlink(&real, &link_dir).unwrap();
+        let link_file = dir.join("sftp-server");
+        std::os::unix::fs::symlink(&bin, &link_file).unwrap();
+
+        let run = |p: &std::path::Path| {
+            let cmd = sftp_server_safety_probe_command(&p.display().to_string()).unwrap();
+            let o = std::process::Command::new("/bin/sh")
+                .args(["-c", &cmd])
+                .output()
+                .unwrap();
+            (
+                o.status.code(),
+                String::from_utf8_lossy(&o.stdout).trim().to_string(),
+            )
+        };
+        let owned_by_root = std::fs::metadata(&bin).unwrap().uid() == 0;
+        let resolved = std::fs::canonicalize(&bin).unwrap();
+        let via_dir_link = run(&link_dir.join("sftp-server"));
+        let via_file_link = run(&link_file);
+        // Gegenprobe: ein Test-Nutzer ist nicht root → die Datei selbst ist
+        // der erste unsichere Eintrag, und zwar unter ihrem aufgelösten Pfad.
+        if !owned_by_root {
+            let expect = format!("UNSAFE {}", resolved.display());
+            assert_eq!(via_dir_link, (Some(0), expect.clone()));
+            assert_eq!(via_file_link, (Some(0), expect));
+        }
+        // Welt-beschreibbare Datei wird auch bei root-Eigentum gemeldet.
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o757)).unwrap();
+        let (code, out_text) = run(&bin);
+        assert_eq!(code, Some(0));
+        assert!(out_text.starts_with("UNSAFE "), "{out_text}");
+        // Fehlende Datei: Exit != 0 (fail closed durch den Parser).
+        assert_ne!(run(&real.join("missing/sftp-server")).0, Some(0));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

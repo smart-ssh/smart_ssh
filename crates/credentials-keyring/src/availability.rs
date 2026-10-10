@@ -1,6 +1,6 @@
-//! Warum der Systemschlüsselbund nicht verfügbar ist (Spec 0071, Teil 1).
+//! Warum der Systemschlüsselbund nicht verfügbar ist (Spec 0071, A1–A4).
 //!
-//! **Warum hier und nicht in `app-shell`** (Spec 0071, §4.1): In dieser
+//! **Warum hier und nicht in `app-shell`** (Spec 0071, §1): In dieser
 //! Crate liegt bereits das gesamte Wissen über die `keyring`-Crate;
 //! `app-shell` "enthält keine fachliche Logik" (Spec 0007, Abschnitt 3) und
 //! bekommt deshalb nur den fertigen [`KeychainUnavailableReason`] und wählt
@@ -8,7 +8,7 @@
 //! gegenüber `startup_dialog` zieht.
 //!
 //! **Warum [`keyring::Entry::store_status`] und nicht der Fehler aus
-//! `Entry::new`** (Spec 0071, §4.2): `keyring` initialisiert den
+//! `Entry::new`** (Spec 0071, §1): `keyring` initialisiert den
 //! Plattform-Store einmalig und faul in einem `LazyLock`. Schlägt das fehl,
 //! liefert jedes spätere `Entry::new` nur noch
 //! [`keyring::Error::NoDefaultStore`] — die eigentliche Ursache ist dort
@@ -38,7 +38,7 @@ pub enum StoreFailure {
     /// Session-Bus" (`secret_service::Error::Unavailable`) als auch "Bus da,
     /// aber niemand besitzt `org.freedesktop.secrets`"
     /// (`zbus::Error::MethodError(ServiceUnknown)`) — die beiden sind am
-    /// `keyring`-API nicht mehr unterscheidbar (Spec 0071, §4.3), deshalb
+    /// `keyring`-API nicht mehr unterscheidbar (Spec 0071, §1), deshalb
     /// entscheidet darüber das Session-Bus-Indiz.
     PlatformUnreachable,
     /// [`keyring::Error::NoStorageAccess`] — der Store ist vorhanden und
@@ -193,36 +193,6 @@ pub fn store_status_cause_chain_for_log() -> Option<String> {
     Some(chain)
 }
 
-/// Verschärft einen bereits ermittelten Zustand — **nur** in Richtung
-/// "nicht verfügbar", nie zurück (spec-reviewer-Fund, Review zu Spec 0071).
-///
-/// Hintergrund: [`probe_keychain_availability`] ist ein Schnappschuss vom
-/// Programmstart. `store_status()` kann `Ok(())` melden (der Anbieter
-/// antwortet auf den Verbindungsaufbau), und der erste echte Zugriff
-/// scheitert trotzdem — der typische Fall ist ein vorhandener, aber
-/// gesperrter Schlüsselbund, bei dem die Sperre erst beim Item-Zugriff
-/// sichtbar wird. Ohne diese Eskalation bliebe der Zustand `Available`,
-/// und damit bekäme weder der Fehlercode `KEYCHAIN_UNAVAILABLE` (A13) noch
-/// die Diagnose-Zeile (A15) etwas davon mit: Die Oberfläche meldete
-/// "verfügbar", während jeder Credential-Zugriff scheitert, und der rohe
-/// englische Bibliothekstext stünde wieder im UI — genau der Zustand, den
-/// BL-0031 beanstandet.
-///
-/// **Nur Eskalation** (Muster aus ADR 0024, "only escalation, never
-/// softening"): Ein bereits klassifizierter Grund bleibt erhalten, weil er
-/// spezifischer ist als der später nachgereichte. Es gibt keinen Weg,
-/// über diese Funktion wieder auf [`KeychainAvailability::Available`] zu
-/// kommen.
-pub fn escalate_to_unavailable(
-    current: KeychainAvailability,
-    reason: KeychainUnavailableReason,
-) -> KeychainAvailability {
-    match current {
-        KeychainAvailability::Available => KeychainAvailability::Unavailable(reason),
-        already_unavailable => already_unavailable,
-    }
-}
-
 /// Der eine Aufruf pro Programmlauf (Spec 0071, A16). `store_status()`
 /// selbst ist beliebig oft billig — es liest denselben `LazyLock` und
 /// startet höchstens einmal einen Verbindungsversuch —, aber A16 verlangt
@@ -367,49 +337,6 @@ mod tests {
             !format!("{failure:?}").contains("hunter2"),
             "der Debug-Text der Klassifizierung darf den Rohfehler nicht mitschleppen"
         );
-    }
-
-    /// spec-reviewer-Fund: Ein `Available`-Schnappschuss muss sich
-    /// nachträglich verschärfen lassen, sonst meldet die Oberfläche
-    /// "verfügbar", während jeder Zugriff scheitert.
-    #[test]
-    fn test_escalation_turns_available_into_unavailable() {
-        assert_eq!(
-            escalate_to_unavailable(
-                KeychainAvailability::Available,
-                KeychainUnavailableReason::Unknown
-            ),
-            KeychainAvailability::Unavailable(KeychainUnavailableReason::Unknown)
-        );
-    }
-
-    /// Die andere Richtung — der eigentliche Punkt: Eskalation darf **nie**
-    /// abschwächen. Weder zurück auf `Available` noch auf einen weniger
-    /// spezifischen Grund. Ohne diese Zusicherung könnte ein später
-    /// nachgereichtes `Unknown` eine bereits erkannte, konkrete Ursache
-    /// (und damit den Paketnamen im Text) überschreiben.
-    #[test]
-    fn test_escalation_never_softens_an_existing_verdict() {
-        for existing in [
-            KeychainUnavailableReason::NoSessionBus,
-            KeychainUnavailableReason::NoSecretServiceProvider,
-            KeychainUnavailableReason::Locked,
-            KeychainUnavailableReason::Unknown,
-        ] {
-            for nachgereicht in [
-                KeychainUnavailableReason::Unknown,
-                KeychainUnavailableReason::Locked,
-            ] {
-                assert_eq!(
-                    escalate_to_unavailable(
-                        KeychainAvailability::Unavailable(existing),
-                        nachgereicht
-                    ),
-                    KeychainAvailability::Unavailable(existing),
-                    "{existing:?} darf von {nachgereicht:?} nicht überschrieben werden"
-                );
-            }
-        }
     }
 
     /// Spec 0071, A3.

@@ -159,6 +159,15 @@ impl ServerDto {
 /// geschickt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct StoredHostKeyDto {
+    /// SSH algorithm name, or `unknown`.
+    pub algorithm: String,
+    /// `SHA256:<base64>`; the raw key never leaves the backend.
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KeyFileFactsDto {
     pub exists: bool,
     /// Nur Unix; auf Windows immer `false`, wie bei OpenSSH selbst (A-4).
@@ -697,7 +706,7 @@ pub struct ServerInput {
 /// sicherer absoluter Pfad sein — er landet in einem `sudo`-Kommando und in
 /// der angezeigten sudoers-Zeile.
 ///
-/// Spec 0073, §9 (Q-BL-0149-01): Getrimmt wird über den geteilten
+/// Spec 0073, A6–A8 (Q-BL-0149-01): Getrimmt wird über den geteilten
 /// [`trim_credential_value`], obwohl der Pfad kein Zugangsdaten-Wert ist —
 /// §1 der Spec listet diese Stelle, A3 verlangt für sie den Helfer. Der
 /// Unterschied zu `str::trim` ist **nicht** kosmetisch:
@@ -723,8 +732,9 @@ pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String
         return Ok(None);
     }
     if !ssh_manager_core::ssh::elevated::is_plausible_sftp_server_path(&trimmed) {
+        let shown = crate::startup_error_messages::sanitize_text_for_display(&trimmed);
         return Err(format!(
-            "Ungültiger sftp-server-Pfad „{trimmed}“ — erlaubt ist ein absoluter Pfad aus \
+            "Ungültiger sftp-server-Pfad „{shown}“ — erlaubt ist ein absoluter Pfad aus \
              Buchstaben, Ziffern und / . _ - +, der auf „sftp-server“ endet"
         ));
     }
@@ -738,8 +748,10 @@ pub fn normalize_start_directory_input(input: Option<String>) -> Result<Option<S
     let Some(raw) = input else {
         return Ok(None);
     };
-    ssh_manager_core::profiles::normalize_start_directory(&raw)
-        .map_err(|err| format!("Ungültiges Startverzeichnis „{}“ — {err}", raw.trim()))
+    ssh_manager_core::profiles::normalize_start_directory(&raw).map_err(|err| {
+        let shown = crate::startup_error_messages::sanitize_text_for_display(raw.trim());
+        format!("Ungültiges Startverzeichnis „{shown}“ — {err}")
+    })
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =
@@ -853,6 +865,8 @@ pub enum TestConnectionResult {
         port: u16,
         raw_key: Vec<u8>,
         fingerprint: String,
+        /// Algorithm of the offered key; `None` if undeterminable.
+        key_type: Option<String>,
     },
     HostKeyMismatch {
         host: String,
@@ -860,6 +874,8 @@ pub enum TestConnectionResult {
         raw_key: Vec<u8>,
         expected_fingerprint: String,
         actual_fingerprint: String,
+        /// Algorithm of the offered key; `None` if undeterminable.
+        key_type: Option<String>,
     },
     NetworkError {
         message: String,
@@ -1351,6 +1367,23 @@ pub struct ElevationResultDto {
     /// Ermittelter bzw. konfigurierter Pfad, sofern bekannt.
     pub sftp_server_path: Option<String>,
     pub failure: Option<ElevationFailureDto>,
+    /// Hinweis bei aktivem Kanal (Spec 0067, A3): `sftp-server` bzw. ein
+    /// übergeordnetes Verzeichnis ist nicht sicher geschützt.
+    pub warning: Option<ElevationWarningDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevationWarningDto {
+    pub kind: ElevationWarningKind,
+    /// Der auffällige Eintrag (Datei oder Verzeichnis).
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ElevationWarningKind {
+    SftpServerUnsafe,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1372,6 +1405,9 @@ pub enum ElevationFailureKind {
     InvalidUser,
     InvalidPath,
     SftpServerNotFound,
+    /// `sftp-server` oder ein übergeordnetes Verzeichnis gehört nicht root
+    /// bzw. ist für Gruppe/andere beschreibbar; `detail` ist der Pfad.
+    SftpServerUnsafe,
     PasswordRequired,
     NotAllowed,
     RequireTty,
@@ -1534,11 +1570,14 @@ mod tests {
             port: 22,
             raw_key: vec![1, 2, 3],
             fingerprint: "SHA256:abc".to_string(),
+            key_type: Some("ssh-ed25519".to_string()),
         };
         let json = serde_json::to_value(&value).unwrap();
 
         assert_eq!(json["kind"], "hostKeyUnknown");
         assert_eq!(json["rawKey"], serde_json::json!([1, 2, 3]));
+        assert_eq!(json["keyType"], "ssh-ed25519");
+        assert!(json.get("key_type").is_none());
         assert!(
             json.get("raw_key").is_none(),
             "raw_key darf nicht mehr im snake_case vorkommen"
@@ -1720,6 +1759,7 @@ mod tests {
             raw_key: vec![9],
             expected_fingerprint: "SHA256:old".to_string(),
             actual_fingerprint: "SHA256:new".to_string(),
+            key_type: None,
         };
         let json = serde_json::to_value(&value).unwrap();
 
@@ -2106,7 +2146,7 @@ mod sftp_server_path_tests {
         }
     }
 
-    // --- Spec 0073, §9 (Q-BL-0149-01) -----------------------------------
+    // --- Spec 0073, A6–A8 (Q-BL-0149-01) -----------------------------------
     //
     // Der Pfad-Override läuft über denselben geteilten
     // `trim_credential_value` wie die Zugangsdaten-Werte. Die
@@ -2271,6 +2311,20 @@ mod identity_file_dto_tests {
 #[cfg(test)]
 mod start_directory_tests {
     use super::{normalize_start_directory_input, ServerDto, ServerInput};
+
+    #[test]
+    fn rejected_paths_are_sanitised_in_error_messages() {
+        let err =
+            super::normalize_sftp_server_path(Some("/usr/\u{202E}evil".to_string())).unwrap_err();
+        assert!(!err.contains('\u{202E}'), "{err}");
+        assert!(err.contains("/usr/?evil"), "{err}");
+        let err =
+            normalize_start_directory_input(Some("rel\u{202E}\u{2028}x".to_string())).unwrap_err();
+        assert!(
+            !err.contains('\u{202E}') && !err.contains('\u{2028}'),
+            "{err}"
+        );
+    }
     use crate::test_support::InMemoryCredentialStore;
     use chrono::Utc;
     use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, Server};

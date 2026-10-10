@@ -17,6 +17,11 @@ export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate
  * nachdem in der Sitzung Serverinhalt eingelesen wurde. */
 export type PostIngestPolicy = "strict" | "balanced" | "standard";
 
+export interface StoredHostKeyDto {
+  algorithm: string;
+  fingerprint: string;
+}
+
 export interface ServerDto {
   id: string;
   name: string;
@@ -219,6 +224,9 @@ export interface HostKeyInfo {
   fingerprint: string;
   /** Nur bei `kind === "mismatch"` gesetzt. */
   expectedFingerprint: string | null;
+  /** Algorithm of the key the server offers now (e.g. `ssh-ed25519`);
+   * `null` when it could not be determined. Display-only. */
+  keyType?: string | null;
 }
 
 export interface HostKeyVerificationNeededEvent extends HostKeyInfo {
@@ -607,7 +615,7 @@ export interface NoteRevisionDto {
 export type TestConnectionResult =
   | { kind: "success" }
   | { kind: "authenticationFailed" }
-  | { kind: "hostKeyUnknown"; host: string; port: number; rawKey: number[]; fingerprint: string }
+  | { kind: "hostKeyUnknown"; host: string; port: number; rawKey: number[]; fingerprint: string; keyType: string | null }
   | {
       kind: "hostKeyMismatch";
       host: string;
@@ -615,6 +623,7 @@ export type TestConnectionResult =
       rawKey: number[];
       expectedFingerprint: string;
       actualFingerprint: string;
+      keyType: string | null;
     }
   | {
       kind: "networkError";
@@ -850,6 +859,7 @@ export type ElevationFailureKind =
   | "invalidUser"
   | "invalidPath"
   | "sftpServerNotFound"
+  | "sftpServerUnsafe"
   | "passwordRequired"
   | "notAllowed"
   | "requireTty"
@@ -866,8 +876,11 @@ export interface ElevationResultDto {
     kind: ElevationFailureKind;
     /** Zugeschnittene sudoers-Zeile zum Kopieren, falls eine Regel fehlt. */
     sudoersLine: string | null;
+    /** Bei `sftpServerUnsafe`: der auffällige Pfad. */
     detail: string | null;
   } | null;
+  /** Hinweis bei aktivem Kanal: sftp-server ist nicht sicher geschützt. */
+  warning?: { kind: "sftpServerUnsafe"; path: string } | null;
 }
 
 /** Spec 0067, Teil B: `crate::dto::DownloadResultDto`. */

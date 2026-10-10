@@ -16,7 +16,8 @@ use std::path::Path;
 use credentials_keyring::KeychainUnavailableReason;
 
 use crate::startup_error_messages::{
-    cannot_start_title, keychain_unavailable_text, sanitize_path_for_display, DialogText, Language,
+    cannot_start_title, keychain_unavailable_text, sanitize_path_for_display,
+    sanitize_text_for_display, DialogText, Language,
 };
 
 /// Ein Startdialog mit Wahl. Anders als [`DialogText`] (nur melden, dann
@@ -424,15 +425,6 @@ pub fn unreadable_history_removed_notice_text(removed: u64, language: Language) 
         title: title.to_string(),
         message,
     }
-}
-
-/// Wie `sanitize_path_for_display`, für einen Dateinamen — derselbe Grund
-/// (Spec 0071, X1): Ein Steuerzeichen darin könnte den Dialogtext optisch
-/// fortsetzen.
-fn sanitize_text_for_display(text: &str) -> String {
-    text.chars()
-        .map(|c| if c.is_control() { '?' } else { c })
-        .collect()
 }
 
 #[cfg(test)]

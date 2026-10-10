@@ -33,6 +33,11 @@ pub struct Wiring {
     pub ai_providers: Vec<Arc<dyn AiProvider>>,
     pub policy_sources: Vec<Arc<dyn PolicySource>>,
     pub sync_backends: Vec<Arc<dyn SyncBackend>>,
+    /// Zusätzliche Tauri-Plugins.
+    ///
+    /// **Im Passwort-Modus** (Master-Passwort, Spec 0101) dürfen Hooks, die
+    /// Befehle registrieren, diese erst **nach dem Entsperren** registrieren,
+    /// sonst wären sie vor dem Entsperren aufrufbar (ADR 0095 §8).
     pub plugins: Vec<PluginHook>,
     pub edition: Edition,
     /// Issue #16: zusätzliche Datenpfade einer Edition (z. B. eine

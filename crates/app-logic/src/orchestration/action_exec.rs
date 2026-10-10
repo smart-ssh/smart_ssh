@@ -110,8 +110,8 @@ pub(crate) async fn handle_action_proposed(
     announce_second_opinion_setup_failure(session, session_id, emitter);
 
     // Spec 0057, §1.1, erster Punkt: "Kommando vorgeschlagen". Bewusst auf
-    // `SuggestCommand` beschränkt (diese Etappe deckt nur diesen
-    // Aktionstyp ab, s. Spec 0057 §8 "Etappe 1") — `ReadRemoteFile`/
+    // `SuggestCommand` beschränkt (das Ledger deckt nur diesen
+    // Aktionstyp ab, s. Spec 0057 §9, Grenzen) — `ReadRemoteFile`/
     // `WriteRemoteFile`/`ProposeNoteUpdate` folgen in einer späteren
     // Erweiterung.
     if let AiAction::SuggestCommand { command } = &action {
@@ -2021,6 +2021,20 @@ pub(crate) fn announce_second_opinion_setup_failure(
              commands are not being checked by it."
                 .to_string(),
             Some("AI_SECOND_OPINION_SETUP_FAILED"),
+        );
+    }
+    // Issue #231: Injection-Prüfung am Server an, aber kein Anbieter.
+    if session
+        .injection_check_inactive_notice_pending
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+    {
+        emit_chat_error(
+            emitter,
+            session_id,
+            "The check for injected instructions is enabled for this server but is not \
+             active in this session (AI second opinion is off or could not be set up)."
+                .to_string(),
+            Some("AI_INJECTION_CHECK_INACTIVE"),
         );
     }
 }

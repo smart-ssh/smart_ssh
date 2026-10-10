@@ -1,218 +1,100 @@
-# Spec: SQLite-Persistenz für Server-Profile
+# Spec 0004 — Lokale Persistenz der Server-Profile
 
-Status: Entwurf
-Modul: neue Crate `crates/persistence-sqlite`
-Abhängigkeiten: `ssh-manager-core` (implementiert dessen `ProfileStore`-Trait
-aus Spec 0003)
+Status: umgesetzt
+Zweck: Beschreibt, wie Server, Gruppen, Tags und Notizrevisionen dauerhaft in einer lokalen SQLite-Datenbank liegen und welche Zusagen die Speicherung macht.
+Bezüge: Spec 0003 (Datenmodell), Spec 0101 (Verschlüsselung der Datenbank, Ablage der Secrets), Spec 0096 (Secrets in der Datenbank), ADR 0010.
 
-## 1. Architektur-Entscheidung: eigene Crate statt Teil von `core`
+## 1. Trennung von der Logik
 
-Die SQLite-Anbindung wird **nicht** in `ssh-manager-core` implementiert,
-sondern in einer neuen Crate `crates/persistence-sqlite`, die den
-`ProfileStore`-Trait aus Spec 0003 implementiert.
+- Die Kernlogik (Spec 0003, Filter, Risiko, KI) kennt keine Datenbank. Sie
+  spricht nur mit einer Speicher-Schnittstelle; die SQLite-Anbindung ist ein
+  austauschbarer Baustein dahinter.
+- Für Tests gibt es eine Implementierung im Arbeitsspeicher; die Kernlogik ist
+  damit ohne Datenbankdatei testbar.
 
-Begründung: `core` soll frei von I/O-Abhängigkeiten und schnell testbar
-bleiben (reine Logik, In-Memory-Implementierungen für Tests). Eine konkrete
-DB-Anbindung ist ein austauschbares Detail, kein Kernbestandteil der Logik.
-Das folgt demselben Prinzip wie die Trennung `core`/`app-tauri` aus Spec 0001
-— nur eine Ebene tiefer. Sollte später eine andere Storage-Lösung nötig
-werden (z. B. für Sync zwischen Geräten), tauscht man diese Crate aus, ohne
-`core` anzufassen.
+## 2. Migrationen
 
-## 2. Technologie
+- Das Schema wird beim Start der Anwendung automatisch angelegt oder auf den
+  aktuellen Stand gebracht; der Nutzer führt keinen Migrationsschritt aus.
+- Mehrfaches Öffnen derselben Datenbank ist unschädlich; bereits angewendete
+  Migrationen werden nicht erneut ausgeführt.
+- Fremdschlüssel sind immer aktiv.
+- Eine Datenbank, die von einer neueren Programmversion migriert wurde, wird
+  von einer älteren Version nicht stillschweigend weiterbenutzt, sondern mit
+  einem Fehler abgelehnt.
 
-**`sqlx`** mit SQLite-Backend, `runtime-tokio` + `rustls`-Feature.
-Begründung: compile-time-geprüfte Queries (`sqlx::query!`), nativer
-async/await-Support passend zu Tauris async Command-Handlern, eingebettete
-Migrationen über `sqlx::migrate!()` — kein manueller Migrationsschritt für
-Endnutzer nötig, die Migrationen laufen automatisch beim App-Start.
+## 3. Speicherort
 
-Alternative `rusqlite` wurde verworfen, da synchron und ohne
-compile-time-Query-Checks.
+Die Datenbank `smart-ssh.db` liegt im plattformüblichen Datenordner des Nutzers:
 
-## 3. Speicherort der Datenbank
+- macOS: `~/Library/Application Support/Smart SSH/`
+- Windows: `%APPDATA%\Smart SSH\`
+- Linux: `~/.local/share/smart-ssh/`
 
-Plattformspezifischer App-Datenordner über die `directories`-Crate:
+Zusätzlich:
 
-- macOS: `~/Library/Application Support/Smart SSH/smart-ssh.db`
-- Windows: `%APPDATA%\Smart SSH\smart-ssh.db`
-- Linux: `~/.local/share/smart-ssh/smart-ssh.db`
+- Die Umgebungsvariable `SMART_SSH_DATA_DIR` ersetzt den Ordner (in jedem Build);
+  ein leerer Wert gilt als nicht gesetzt.
+- Entwicklungs-Builds (`cargo tauri dev`) nutzen einen eigenen Ordner mit
+  Suffix „dev", damit sie keine Datenbank eines Release-Builds mit anderem
+  Migrationsstand überschreiben oder blockieren.
+- Community- und Official-Edition teilen sich denselben Ordner.
 
-Der Pfad wird nicht hartcodiert, sondern über
-`directories::ProjectDirs::from(...)` ermittelt.
+## 4. Was gespeichert wird
 
-## 4. Schema
+- **Gruppen** (Name, übergeordnete Gruppe, Notiz, Zeitpunkte).
+- **Server** (Felder aus Spec 0003, Abschnitt 3), mit der Anmeldeart als
+  Struktur, die ausschließlich Verweise und Pfade enthält, keine Secrets
+  (Spec 0003, Abschnitt 4).
+- **Tags** je Server als eigene, nach Tag durchsuchbare Zuordnung.
+- **Notizrevisionen** (Spec 0003, Abschnitt 5.3) mit Ziel (Server oder Gruppe),
+  Inhalt, Urheber, optional Anbieter und Modell, Zeitpunkt.
+- Zeitstempel werden als ISO-8601-Text abgelegt und verlustfrei gelesen.
 
-```sql
--- migrations/0001_initial.sql
+Löschverhalten:
 
-PRAGMA journal_mode = WAL;
+- Wird eine Gruppe gelöscht, werden ihre Untergruppen mitgelöscht; die in ihr
+  liegenden Server bleiben erhalten und verlieren nur die Gruppenzuordnung.
+- Wird ein Server gelöscht, verschwinden seine Tags; die Gruppe bleibt.
+- Wird ein als Jump-Host genutzter Server gelöscht, verliert nur die Zuordnung
+  beim abhängigen Server; dieser wird nicht mitgelöscht.
+- Vor einem Löschen zeigt die Oberfläche, was mitgelöscht wird und was nur seine
+  Zuordnung verliert (Spec 0008).
 
-CREATE TABLE groups (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    parent_id   TEXT REFERENCES groups(id) ON DELETE CASCADE,
-    notes       TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
-);
+## 5. Zusagen des Speichers
 
-CREATE INDEX idx_groups_parent ON groups(parent_id);
+- Gruppe und Server lassen sich anlegen und unverändert wieder lesen.
+- Die Gruppenkette eines Servers wird von der Wurzel bis zur unmittelbaren
+  Gruppe geliefert; eine zyklische Kette ergibt einen Fehler.
 
-CREATE TABLE servers (
-    id              TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    host            TEXT NOT NULL,
-    port            INTEGER NOT NULL,
-    username        TEXT NOT NULL,
-    group_id        TEXT REFERENCES groups(id) ON DELETE SET NULL,
-    auth_method     TEXT NOT NULL,   -- JSON-serialisiertes AuthMethod-Enum
-    notes           TEXT NOT NULL DEFAULT '',
-    jump_host_id    TEXT REFERENCES servers(id) ON DELETE SET NULL,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
-);
+## 6. Notizen und Revisionen
 
-CREATE INDEX idx_servers_group ON servers(group_id);
+- Eine neue Notizversion wird zusätzlich zum aktuellen Notizfeld als Revision
+  abgelegt, nicht an dessen Stelle.
+- Revision und aktuelles Notizfeld ändern sich in **einer** Transaktion: beide
+  gelingen oder keine; es gibt nie eine Revision ohne passenden aktuellen Stand
+  oder umgekehrt.
+- Die Revisionen eines Ziels werden chronologisch gelesen.
 
-CREATE TABLE server_tags (
-    server_id   TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-    tag         TEXT NOT NULL,
-    PRIMARY KEY (server_id, tag)
-);
-
-CREATE INDEX idx_server_tags_tag ON server_tags(tag);
-
-CREATE TABLE note_revisions (
-    id              TEXT PRIMARY KEY,
-    target_type     TEXT NOT NULL CHECK (target_type IN ('server', 'group')),
-    target_id       TEXT NOT NULL,
-    content         TEXT NOT NULL,
-    editor_type     TEXT NOT NULL CHECK (editor_type IN ('user', 'ai')),
-    ai_provider     TEXT,
-    ai_model        TEXT,
-    created_at      TEXT NOT NULL
-);
-
-CREATE INDEX idx_note_revisions_target ON note_revisions(target_type, target_id);
-```
-
-Designentscheidungen dazu:
-- **`auth_method` als JSON-Spalte statt normalisierter Tabellen.** Das
-  `AuthMethod`-Enum aus Spec 0003 hat unterschiedliche Felder pro Variante;
-  eine JSON-Serialisierung (`serde_json`) ist hier pragmatischer als drei
-  nullable Spalten-Sets. Enthält ausschließlich `CredentialRef`-Strings, nie
-  Secrets (siehe Spec 0003, Abschnitt 4).
-- **`server_tags` als eigene Tabelle statt JSON-Array-Spalte**, damit die
-  Filter-Engine (Spec 0002) später effizient nach Tag filtern/joinen kann,
-  ohne JSON parsen zu müssen.
-- **Timestamps als TEXT (ISO 8601)** statt SQLite-nativer Integer-Zeitstempel,
-  für bessere Lesbarkeit beim manuellen Debuggen der DB und verlustfreies
-  Round-tripping mit `chrono::DateTime<Utc>`.
-- **`ON DELETE CASCADE` für Gruppen-Kinder und Tags**, aber
-  **`ON DELETE SET NULL` für `group_id`/`jump_host_id` auf Servern** — das
-  Löschen einer Gruppe soll nicht versehentlich Server mitlöschen, nur die
-  Zuordnung auflösen.
-
-## 5. Implementierung des `ProfileStore`-Traits
-
-```rust
-pub struct SqliteProfileStore {
-    pool: sqlx::SqlitePool,
-}
-
-impl SqliteProfileStore {
-    pub async fn connect(db_path: &Path) -> Result<Self> {
-        // Pool aufbauen, sqlx::migrate!() ausführen, PRAGMA foreign_keys=ON setzen
-    }
-}
-
-#[async_trait]
-impl ProfileStore for SqliteProfileStore {
-    // Implementiert alle Methoden aus dem Trait in Spec 0003 Abschnitt 5.1
-    // (Server/Gruppe abrufen, Gruppenkette von Wurzel bis Zielgruppe)
-}
-```
-
-Der `ProfileStore`-Trait aus Spec 0003 muss dafür auf `async fn` umgestellt
-werden (über die `async-trait`-Crate, damit er weiterhin als Trait-Objekt
-nutzbar bleibt für Tests mit `InMemoryProfileStore`). Das ist ein kleiner
-nachträglicher Eingriff in `core::profiles` — wird als eigener erster Schritt
-im Implementierungs-Prompt behandelt, bevor die SQLite-Crate entsteht.
-
-## 6. Testbarkeit
-
-Tests laufen gegen eine **In-Memory-SQLite-DB** (`sqlite::memory:`), mit den
-echten Migrationen angewendet — keine separate Test-Datenbank-Logik nötig,
-dieselben Migrationsdateien wie in Produktion. Jeder Test bekommt eine frische
-Pool-Instanz, kein geteilter State zwischen Tests.
-
-Testfälle (Auszug):
-- Gruppe anlegen, Server anlegen, wieder abrufen → Felder identisch
-- Gruppenkette über 3 Ebenen korrekt von Wurzel bis Blatt zurückgegeben
-- Server-Löschung entfernt zugehörige `server_tags`, aber nicht die Gruppe
-- Gruppen-Löschung setzt `group_id` betroffener Server auf `NULL`, löscht sie
-  nicht
-- `note_revisions` werden beim Schreiben einer neuen Notiz-Version zusätzlich
-  zum aktuellen `notes`-Feld persistiert (nicht ersetzt)
-- Migrationen sind idempotent: zweimaliges Ausführen von `connect()` auf
-  derselben DB-Datei bricht nicht
-
-## 7. Entscheidung: keine Datei-Verschlüsselung im MVP (überholt)
-
-**Überholt durch Spec 0101 und Issue #113:** Dieser Abschnitt beschreibt
-die ursprüngliche MVP-Entscheidung und bleibt als Historie stehen; er gibt
-nicht mehr den aktuellen Stand wieder. Heute gilt:
+## 7. Verschlüsselung
 
 - Die Datenbankdatei ist vollständig verschlüsselt (Spec 0101). Ohne den
-  Schlüssel lässt sich keine ihrer Tabellen lesen, auch nicht Hostnames,
-  Usernames, Gruppen-/Server-Namen oder Notizen.
-- Secrets (Server-Passwörter, Private Keys, Passphrasen, API-Keys usw.)
-  liegen in der verschlüsselten Datenbank, nicht mehr im OS-Schlüsselbund.
-  Dort liegt höchstens noch der Schlüssel der Datenbank; im
-  Master-Passwort-Modus liegt er stattdessen, mit dem Passwort verpackt, in
-  einer Datei neben der Datenbank (Spec 0101).
+  Schlüssel lässt sich keine Tabelle lesen, auch nicht Hostnames, Benutzernamen,
+  Gruppen- und Servernamen oder Notizen.
+- Secrets (Passwörter, private Schlüssel, Passphrasen, API-Schlüssel) liegen
+  in der verschlüsselten Datenbank (Spec 0096, Spec 0101). Im
+  Schlüsselbund-Modus liegt dort höchstens noch der Datenbankschlüssel; im
+  Master-Passwort-Modus liegt er, mit dem Passwort verpackt, in einer Datei
+  neben der Datenbank.
 - Konversationsinhalte (Chat, Ledger, Eingabe-Historie, Zusammenfassungen)
-  werden nicht mehr feldweise verschlüsselt; sie liegen als Klartext in der
-  verschlüsselten Datenbankdatei und sind durch deren Verschlüsselung
-  geschützt (Issue #113, Spec 0036).
-- Der unten verlangte Hinweis, die lokale Datenbank liege unverschlüsselt
-  auf der Festplatte, und das zurückgestellte optionale SQLCipher-Feature
-  sind damit gegenstandslos.
+  liegen als Klartext innerhalb der verschlüsselten Datei und haben keine
+  eigene Feldverschlüsselung (Spec 0036).
 
-Ursprünglicher Text:
+## 8. Grenzen
 
-Die SQLite-Datei wird **nicht** zusätzlich verschlüsselt (kein SQLCipher).
-Begründung: Sie enthält keine Secrets (die liegen im Keychain, siehe Spec
-0003 Abschnitt 4), sondern Hostnames, Usernames, Ports, Gruppen-/Server-Namen
-und Freitext-Notizen, die operative Details verraten können, aber keine
-Zugangsdaten sind. Für dieses Risiko wird die OS-Festplattenverschlüsselung
-(FileVault/BitLocker/LUKS) als ausreichend vorausgesetzt.
-
-Diese Annahme muss dem Nutzer sichtbar gemacht werden — z. B. ein Hinweis
-beim ersten App-Start oder in den Einstellungen, dass die lokale Datenbank
-unverschlüsselt auf der Festplatte liegt und volle Festplattenverschlüsselung
-empfohlen wird, falls diese nicht bereits aktiv ist.
-
-Ein optionales SQLCipher-Feature mit Key aus dem OS-Keychain (transparent,
-ohne Passwort-Eingabe) bleibt als spätere Ausbaustufe denkbar, etwa für
-Nutzer, die zusätzlichen Schutz gegen gezieltes Kopieren der `.db`-Datei bei
-entsperrtem Nutzerkonto wollen (z. B. durch Malware oder versehentliches
-Cloud-Backup). Kein Bestandteil dieser Spec, keine offene Frage mehr, sondern
-bewusst zurückgestellt.
-
-**Ergänzung** (ebenfalls überholt, siehe Hinweis am Anfang dieses
-Abschnitts: Full-Database-Verschlüsselung ist mit Spec 0101 umgesetzt, und
-seit Issue #113 gibt es keine gesonderte Verschlüsselung des
-Konversationsinhalts mehr): Mit der Einführung persistenter Chat-Sitzungen (Spec 0034)
-wurde diese Bewertung für Chat-Inhalte verfeinert, nicht revidiert — statt
-Full-Database-Verschlüsselung (technisch mit `sqlx` nicht ohne Weiteres
-umsetzbar, siehe Spec 0036) wird gezielt nur der Konversationsinhalt
-verschlüsselt. Die hier getroffene Einschätzung zu Metadaten bleibt
-unverändert gültig.
-
-## 8. Weitere offene Punkte
-
-- Soll es einen Export/Import-Mechanismus geben (z. B. verschlüsseltes JSON),
-  um Profile zwischen Rechnern zu übertragen, ohne Cloud-Sync zu bauen?
-  Nicht Teil dieser Spec, aber relevant für die Roadmap.
+- Es gibt keinen Export und Import von Profilen zwischen Rechnern außer dem
+  Import und Export der SSH-Konfiguration (Spec 0075).
+- Es gibt keine Synchronisation zwischen Geräten.
+- Eine Datenbank, die bei laufender Anwendung kopiert wird, ist nur mit ihrem
+  Schlüssel lesbar; ein Schutz vor einer Prozess-Kompromittierung bei
+  entsperrter Anwendung ist nicht Ziel der Verschlüsselung.

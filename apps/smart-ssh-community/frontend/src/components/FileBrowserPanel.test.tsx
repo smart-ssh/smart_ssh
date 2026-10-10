@@ -1185,6 +1185,38 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("shows the unsafe sftp-server message and no sudoers line", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: false,
+      targetUser: "root",
+      sftpServerPath: "/usr/lib/openssh/sftp-server",
+      failure: { kind: "sftpServerUnsafe", sudoersLine: null, detail: "/usr/lib/openssh" },
+    });
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+
+    expect(await screen.findByText(/Nicht sicher: „\/usr\/lib\/openssh“ muss root gehören/)).toBeVisible();
+    expect(screen.queryByText(/NOPASSWD/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/passwortlosen Dateizugriff/)).not.toBeInTheDocument();
+  });
+
+  it("warns in the file browser when elevated mode started with an unsafe sftp-server", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "root",
+      sftpServerPath: "/usr/lib/openssh/sftp-server",
+      failure: null,
+      warning: { kind: "sftpServerUnsafe", path: "/usr/lib/openssh/sftp-server" },
+    });
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+
+    expect(await screen.findByText(/Nicht sicher: „\/usr\/lib\/openssh\/sftp-server“/)).toBeVisible();
+    expect(screen.getAllByRole("alert").length).toBe(2);
+  });
+
   it("can elevate to another user (A4) and names that user everywhere", async () => {
     vi.mocked(sftpElevationEnable).mockResolvedValue({
       active: true,

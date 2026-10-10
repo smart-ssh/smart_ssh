@@ -1,9 +1,7 @@
-// Spec 0100 (BL-0232): Der Host-Key-Dialog muss allein mit der Tastatur
+// Spec 0100: Der Host-Key-Dialog muss allein mit der Tastatur
 // sicher bedienbar sein — Anfangsfokus auf der ablehnenden Schaltfläche,
 // Fokus-Fang, Escape lehnt ab, keine Entscheidung ohne Absicht — und von
-// Screenreadern als modal angesagt werden. Jeder Test außer T8 scheitert am
-// Stand vor dieser Spec (Beleg im Bericht, nicht hier: Fix lokal entfernt,
-// Lauf beobachtet, Fix wiederhergestellt).
+// Screenreadern als modal angesagt werden.
 import { StrictMode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
@@ -413,5 +411,22 @@ describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issu
     expect(unknown.text).not.toContain("Man-in-the-Middle");
     expect(mismatch.text).toContain(mismatchEvent.expectedFingerprint as string);
     expect(mismatch.text).toContain(mismatchEvent.fingerprint);
+  });
+});
+
+// Issue #182: the offered key's algorithm is shown next to host:port and the
+// fingerprint; `null` renders the prompt without it.
+describe.each(branches)("HostKeyDialog key type ($name)", ({ event }) => {
+  it("shows the key type of the offered key", () => {
+    renderDialog({ ...event, keyType: "ssh-ed25519" });
+    expect(screen.getByTestId("host-key-type")).toHaveTextContent("Schlüsseltyp: ssh-ed25519");
+    expect(screen.getByText("example.com:22")).toBeInTheDocument();
+    expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
+  });
+
+  it.each([null, undefined])("renders without a key type line for %s", (keyType) => {
+    renderDialog({ ...event, keyType });
+    expect(screen.queryByTestId("host-key-type")).toBeNull();
+    expect(screen.getByText(event.fingerprint)).toBeInTheDocument();
   });
 });

@@ -19,34 +19,16 @@ use crate::dto::{EvalContextInput, EvaluationTraceDto, RuleDto, RuleInput};
 /// Speichers (trägt wie bisher keinen Code). `PolicyStoreError` selbst
 /// kann keinen Code tragen.
 ///
-/// Die Umwandlung nach `CommandError` macht
-/// [`crate::error::rule_write_error`] — ausdrücklich, nie per `?`, sonst
-/// ginge der Code still verloren (Begründung dort).
-/// `Display`/`Error` und die beiden `From`-Impls sind von Hand
-/// geschrieben statt über `thiserror`: `app-shell` hängt nicht von
-/// `thiserror` ab, und diese Spec erlaubt keine neue Abhängigkeit dafür.
+/// **Bewusst weder `Display` noch `Error`:** Der blanket
+/// `impl<E: Display> From<E> for CommandError` würde den Typ sonst ohne
+/// Code umwandeln (`?` verlöre ihn still). Ohne `Display` gilt allein
+/// `From<RuleWriteError> for CommandError` in `crate::error`, das den Code
+/// setzt (Issue #260, ADR 0068 §7). Ein Aufrufer, der den Text braucht,
+/// geht über die Varianten.
 #[derive(Debug)]
 pub enum RuleWriteError {
     InvalidPattern(PatternError),
     Store(PolicyStoreError),
-}
-
-impl std::fmt::Display for RuleWriteError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RuleWriteError::InvalidPattern(err) => write!(f, "{err}"),
-            RuleWriteError::Store(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for RuleWriteError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            RuleWriteError::InvalidPattern(err) => Some(err),
-            RuleWriteError::Store(err) => Some(err),
-        }
-    }
 }
 
 impl From<PatternError> for RuleWriteError {
@@ -99,6 +81,27 @@ pub async fn update_rule(
     let stored = input.into_stored_rule(id, existing.created_at, Utc::now());
     stored.pattern.validate()?;
     policy_store.update(&stored).await?;
+    Ok(())
+}
+
+/// Vertauscht die Prioritäten zweier Regeln atomar (Spec 0077, 3.2.3).
+///
+/// Prüft **beide** Muster wie jeder andere Schreibweg (3.1.2), bevor der
+/// Speicher etwas schreibt: Trägt eine der Regeln ein ungültiges Muster,
+/// kommt `FILTER_RULE_PATTERN_INVALID` zurück und nichts ändert sich. Das
+/// Vertauschen selbst läuft in einer Transaktion des Speichers.
+pub async fn swap_rule_priorities(
+    policy_store: &SqlitePolicyStore,
+    first: RuleId,
+    second: RuleId,
+) -> Result<(), RuleWriteError> {
+    let a = policy_store.get(&first).await?;
+    let b = policy_store.get(&second).await?;
+    a.pattern.validate()?;
+    b.pattern.validate()?;
+    policy_store
+        .swap_priorities(&first, &second, Utc::now())
+        .await?;
     Ok(())
 }
 
@@ -323,7 +326,7 @@ mod tests {
                 rule_input(pattern_type, pattern_value, RuleAction::Allow),
             )
             .await
-            .unwrap_or_else(|e| panic!("{pattern_value:?} sollte gültig sein: {e}"));
+            .unwrap_or_else(|e| panic!("{pattern_value:?} sollte gültig sein: {e:?}"));
         }
 
         assert_eq!(store.list_all().await.unwrap().len(), 8);
@@ -365,13 +368,63 @@ mod tests {
         );
     }
 
+    /// Spec 0077, 3.2.3: Das Vertauschen tauscht beide Prioritäten.
+    #[tokio::test]
+    async fn test_swap_rule_priorities_exchanges_both_priorities() {
+        let (_dir, store) = in_memory_store().await;
+        let mut first = allow_ls_input(Scope::Global);
+        first.priority = 7;
+        let mut second = allow_ls_input(Scope::Global);
+        second.priority = 2;
+        let a = create_rule(&store, first).await.unwrap();
+        let b = create_rule(&store, second).await.unwrap();
+
+        swap_rule_priorities(&store, a.clone(), b.clone())
+            .await
+            .unwrap();
+
+        assert_eq!(store.get(&a).await.unwrap().priority, 2);
+        assert_eq!(store.get(&b).await.unwrap().priority, 7);
+    }
+
+    /// Spec 0077, 3.2.3: Trägt die Nachbarregel ein ungültiges Muster,
+    /// wird abgewiesen und **nichts** geschrieben.
+    #[tokio::test]
+    async fn test_swap_rule_priorities_rejects_an_invalid_pattern_and_changes_nothing() {
+        let (_dir, store) = in_memory_store().await;
+        let mut input = allow_ls_input(Scope::Global);
+        input.priority = 7;
+        let valid = create_rule(&store, input).await.unwrap();
+        let invalid = insert_rule_bypassing_layer_one(
+            &store,
+            "legacy-broken",
+            Pattern::Regex("^ls (.*".to_string()),
+            RuleAction::Deny,
+        )
+        .await;
+
+        for (x, y) in [
+            (valid.clone(), invalid.clone()),
+            (invalid.clone(), valid.clone()),
+        ] {
+            let err = swap_rule_priorities(&store, x, y)
+                .await
+                .expect_err("ein ungültiges Muster muss das Vertauschen abweisen");
+            assert_invalid_pattern(err);
+        }
+
+        assert_eq!(store.get(&valid).await.unwrap().priority, 7);
+        assert_eq!(store.get(&invalid).await.unwrap().priority, 100);
+    }
+
     /// Legt eine Regel **unter Umgehung von Schicht 1** an, über den
     /// Speicher selbst (Spec 0077, T-6c/T-6e).
     ///
     /// Bildet den Fall „Zeile stammt aus einer älteren Programmfassung"
     /// ab: `SqlitePolicyStore::create` prüft das Muster nicht, und
     /// `rules_for`/`pattern_from_db` laden es später unverändert zurück.
-    /// Bewusst über die echte Speicher-API statt über rohes SQL — dann
+    /// Seit #260 prüft auch `create` (Schicht 2); deshalb der
+    /// ungeprüfte Testzugang. Bewusst über die Speicher-API statt über rohes SQL — dann
     /// entsteht die Zeile in genau dem Format, das eine echte
     /// Installation geschrieben hätte, und `app-shell` braucht keine
     /// zusätzliche Abhängigkeit auf `sqlx`.
@@ -392,7 +445,7 @@ mod tests {
             created_at: now,
             updated_at: now,
         };
-        store.create(&stored).await.unwrap();
+        store.create_unchecked_for_tests(&stored).await.unwrap();
         id
     }
 

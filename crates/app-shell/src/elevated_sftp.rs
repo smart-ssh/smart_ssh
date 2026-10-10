@@ -322,11 +322,15 @@ impl ElevatedSftpRegistry {
 
 use ssh_manager_core::ssh::elevated::{
     classify_sudo_check, elevated_sftp_command, is_plausible_sftp_server_path,
-    is_valid_target_user, parse_sftp_server_probe, sftp_server_probe_command, sudo_check_command,
-    sudoers_line, SudoCheck, DEFAULT_ELEVATION_USER,
+    is_valid_target_user, parse_sftp_server_probe, parse_sftp_server_safety_probe,
+    sftp_server_probe_command, sftp_server_safety_probe_command, sudo_check_command, sudoers_line,
+    SftpServerSafety, SudoCheck, DEFAULT_ELEVATION_USER,
 };
 
-use app_logic::dto::{ElevationFailureDto, ElevationFailureKind, ElevationResultDto};
+use app_logic::dto::{
+    ElevationFailureDto, ElevationFailureKind, ElevationResultDto, ElevationWarningDto,
+    ElevationWarningKind,
+};
 use app_logic::error::{CommandError, CommandResult};
 
 /// Spec 0084, A1/A2: alles, was das Einschalten des erhöhten Kanals über die
@@ -363,6 +367,7 @@ fn failure(
             sudoers_line: sudoers,
             detail,
         }),
+        warning: None,
     })
 }
 
@@ -452,6 +457,20 @@ pub(crate) async fn enable(
     };
     let path_for_dto = Some(path.clone());
 
+    // Spec 0067, A3: Eigentümer und Rechte von `sftp-server` und seinen
+    // Elternverzeichnissen — vor dem sudo-Check, damit keine NOPASSWD-Regel
+    // für ein austauschbares Binary vorgeschlagen wird. Fail closed: auch ein
+    // gescheiterter oder unlesbarer Probe gilt als unsicher.
+    let safety_cmd = sftp_server_safety_probe_command(&path).expect("Pfad wurde oben validiert");
+    let safety = match run_probe(session, &safety_cmd).await {
+        Ok(output) => parse_sftp_server_safety_probe(&output, &path),
+        Err(_) => SftpServerSafety::Unsafe { path: path.clone() },
+    };
+    let unsafe_path = match safety {
+        SftpServerSafety::Safe => None,
+        SftpServerSafety::Unsafe { path } => Some(path),
+    };
+
     let check_cmd =
         sudo_check_command(&path, &target_user).expect("Pfad und Nutzer wurden oben validiert");
     let check = match run_probe(session, &check_cmd).await {
@@ -461,6 +480,17 @@ pub(crate) async fn enable(
     let sudoers = || sudoers_line(login, &path, &target_user);
     match check {
         SudoCheck::Allowed => {}
+        SudoCheck::PasswordRequired | SudoCheck::NotAllowed if unsafe_path.is_some() => {
+            // Keine sudoers-Zeile für ein Binary, das ein anderer Nutzer
+            // austauschen könnte.
+            return failure(
+                &target_user,
+                path_for_dto,
+                ElevationFailureKind::SftpServerUnsafe,
+                None,
+                unsafe_path,
+            );
+        }
         SudoCheck::PasswordRequired => {
             return failure(
                 &target_user,
@@ -548,6 +578,10 @@ pub(crate) async fn enable(
                 target_user,
                 sftp_server_path: path_for_dto,
                 failure: None,
+                warning: unsafe_path.map(|path| ElevationWarningDto {
+                    kind: ElevationWarningKind::SftpServerUnsafe,
+                    path,
+                }),
             })
         }
         Err(err) => failure(
@@ -646,6 +680,100 @@ mod tests {
             .iter()
             .any(|c| c.starts_with("sftp-exec:")));
         assert!(!f.is_active().await);
+    }
+
+    fn unsafe_outputs() -> Vec<ssh_manager_core::ssh::CommandOutput> {
+        vec![
+            output(0, &format!("UNSAFE {PATH}\n"), ""),
+            output(0, "garbage", ""),
+            output(4, "", "find: no such file"),
+        ]
+    }
+
+    #[tokio::test]
+    async fn test_unsafe_binary_with_password_required_withholds_sudoers_line() {
+        for safety in unsafe_outputs() {
+            let (mut t, log) = transport(
+                output(0, "/usr/lib/openssh/sftp-server\n", ""),
+                output(1, "", "sudo: a password is required\n"),
+            );
+            t.safety = safety;
+            let f = fixture(Box::new(t));
+
+            let result = enable(&f.ctx(), "deploy", None, None, &access())
+                .await
+                .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
+
+            assert!(!result.active);
+            let failure = result.failure.unwrap();
+            assert_eq!(failure.kind, ElevationFailureKind::SftpServerUnsafe);
+            assert_eq!(failure.sudoers_line, None);
+            assert_eq!(failure.detail.as_deref(), Some(PATH));
+            assert!(!log
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| c.starts_with("sftp-exec:")));
+            assert!(!f.is_active().await);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_unsafe_binary_with_sudo_not_allowed_withholds_sudoers_line() {
+        let (mut t, _log) = transport(
+            output(0, "/usr/lib/openssh/sftp-server\n", ""),
+            output(1, "", "Sorry, user deploy is not allowed to execute it.\n"),
+        );
+        t.safety = output(0, "UNSAFE /usr/lib/openssh\n", "");
+        let f = fixture(Box::new(t));
+        let result = enable(&f.ctx(), "deploy", None, None, &access())
+            .await
+            .unwrap();
+        let failure = result.failure.unwrap();
+        assert_eq!(failure.kind, ElevationFailureKind::SftpServerUnsafe);
+        assert_eq!(failure.sudoers_line, None);
+        assert_eq!(failure.detail.as_deref(), Some("/usr/lib/openssh"));
+    }
+
+    #[tokio::test]
+    async fn test_unsafe_binary_with_sudo_allowed_starts_channel_with_warning() {
+        for safety in unsafe_outputs() {
+            let (probe, check) = working_probes();
+            let (mut t, log) = transport(probe, check);
+            t.safety = safety;
+            let f = fixture(Box::new(t));
+
+            let result = enable(&f.ctx(), "deploy", None, None, &access())
+                .await
+                .unwrap();
+
+            assert!(result.active, "{result:?}");
+            let warning = result.warning.expect("Warnung bei unsicherem Binary");
+            assert_eq!(warning.kind, ElevationWarningKind::SftpServerUnsafe);
+            assert_eq!(warning.path, PATH);
+            assert!(log
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| c.starts_with("sftp-exec:")));
+            assert!(f.is_active().await);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_safe_binary_has_no_warning_and_probe_runs_before_sudo_check() {
+        let (probe, check) = working_probes();
+        let (t, log) = transport(probe, check);
+        let f = fixture(Box::new(t));
+        let result = enable(&f.ctx(), "deploy", None, None, &access())
+            .await
+            .unwrap();
+        assert!(result.active && result.warning.is_none(), "{result:?}");
+        let log = log.lock().unwrap().clone();
+        let pos = |needle: &str| log.iter().position(|c| c.contains(needle)).unwrap();
+        assert!(pos("-prune") < pos("sudo -n -l"));
+        // Der Safety-Probe läuft nie mit sudo.
+        assert!(!log[pos("-prune")].contains("sudo"));
     }
 
     #[tokio::test]

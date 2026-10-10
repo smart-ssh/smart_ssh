@@ -226,7 +226,7 @@ pub enum StartupScreen {
     /// „Beenden", **kein** „Neu anfangen" — über den Inhalt ist nichts
     /// gesagt, und morgen ist die Datei vielleicht wieder lesbar.
     UnreachableWrapping,
-    /// Teil 0 Frage 3 / A13: Schlüsselbund-Modus, aber der Zustand steht
+    /// §2 Frage 3 / A13: Schlüsselbund-Modus, aber der Zustand steht
     /// nicht — der Start ist in D1 gelandet und soll mit dem Einrichten
     /// eines Master-Passworts im Fenster weitergehen.
     SetUpMasterPassword,
@@ -290,7 +290,7 @@ fn decide_startup_screen(
     match health {
         // Keine Verpackungsdatei: Schlüsselbund-Modus. Dass der Zustand
         // trotzdem nicht steht, heißt, dass der Start in D1 gelandet ist
-        // (Teil 0 Frage 3).
+        // (§2 Frage 3).
         H::Absent => StartupScreenDecision {
             screen: StartupScreen::SetUpMasterPassword,
             offers_start_over: false,
@@ -640,7 +640,7 @@ async fn assemble_and_open_the_gate(
     Ok(startup_state(gate, pending))
 }
 
-/// Die Antwort auf einen Startdialog im Fenster (Teil 0 Frage 3).
+/// Die Antwort auf einen Startdialog im Fenster (§2 Frage 3).
 ///
 /// Das neue Master-Passwort kommt getrennt mit — es gehört nicht in das
 /// Ereignis, mit dem gefragt wurde (§6: kein Passwort in einem DTO).
@@ -721,6 +721,79 @@ fn loss_warning(confirmed: bool) -> master_password::LossWarning {
     }
 }
 
+/// Die Vorprüfungen von [`set_up_master_password`], getrennt vom
+/// `State<AppState>` und vom Schlüsselbund, damit die Entscheidung ohne
+/// Tauri-Laufzeit testbar ist (ADR 0099 §7, Punkt 1). Sie schreibt nichts.
+///
+/// Reihenfolge, und sie ist Teil der Zusage:
+///
+/// 1. **Bestätigung vor dem Schlüsselbund** (Klarstellung 12): Ohne sie
+///    wird abgelehnt, bevor `read_key` überhaupt aufgerufen wird — „verändert
+///    nichts" fängt beim Nichtstun an, und die Fehlermeldung bliebe sonst
+///    von der Erreichbarkeit des Schlüsselbunds abhängig.
+/// 2. **K wird gelesen, nicht erzeugt** (A3/A13): Ist er nicht lesbar,
+///    entsteht hier auf keinen Fall ein neuer — die Datenbank wäre verloren.
+/// 3. **Es muss der K sein, mit dem die Datenbank gerade offen ist**
+///    (spec-reviewer Lauf 4, Fund 10). Weicht der Eintrag seit dem Start
+///    ab — zweite Installation, manuelle Änderung, ein Rest aus A17 —,
+///    verpackte die App sonst einen Schlüssel, mit dem die offene Datenbank
+///    **nicht** zu öffnen ist: beim nächsten Start D2 und Totalverlust.
+///    Verglichen wird über die Kennung, nicht über K selbst — K für die
+///    ganze Sitzung aufzubewahren wäre das Gegenteil von A19 (s.
+///    `crypto::root_key_fingerprint`).
+fn check_set_up_preconditions(
+    warning_confirmed: bool,
+    open_root_key_fingerprint: &[u8; 32],
+    read_key: impl FnOnce() -> ssh_manager_core::crypto::RootKeyState,
+) -> Result<
+    (
+        master_password::LossWarning,
+        ssh_manager_core::crypto::RootKey,
+    ),
+    CommandError,
+> {
+    let warning = loss_warning(warning_confirmed);
+    if warning != master_password::LossWarning::ConfirmedByTheUser {
+        return Err(to_command_error(
+            master_password::MasterPasswordError::LossWarningNotConfirmed,
+        ));
+    }
+    match read_key() {
+        ssh_manager_core::crypto::RootKeyState::Present(key)
+            if &ssh_manager_core::crypto::root_key_fingerprint(&key)
+                == open_root_key_fingerprint =>
+        {
+            Ok((warning, key))
+        }
+        ssh_manager_core::crypto::RootKeyState::Present(_) => {
+            tracing::error!(
+                "refusing to set up a master password: the root key in the OS keychain is not \
+                 the one this database is open with; wrapping it would make the database \
+                 unopenable (Spec 0101, A3/A13)"
+            );
+            Err(CommandError::with_code(
+                "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Smart SSH \
+                 richtet das Master-Passwort deshalb nicht ein — es würde den falschen \
+                 Schlüssel sichern und die Datenbank beim nächsten Start unlesbar machen. \
+                 Es ist nichts verändert.",
+                KEYCHAIN_KEY_MISMATCH_CODE,
+            ))
+        }
+        other => {
+            tracing::warn!(
+                ?other,
+                "refusing to set up a master password without a readable root key \
+                 (Spec 0101, A3)"
+            );
+            Err(CommandError::with_code(
+                "Der Schlüssel zu deiner Datenbank ist gerade nicht lesbar. Richte das \
+                 Master-Passwort später erneut ein — es wird kein neuer Schlüssel erzeugt.",
+                MASTER_PASSWORD_FILE_FAILED_CODE,
+            ))
+        }
+    }
+}
+
 /// A13: Master-Passwort aus den Einstellungen einrichten.
 ///
 /// K kommt dabei aus dem Schlüsselbund — es ist dasselbe K, mit dem die
@@ -738,68 +811,12 @@ pub fn set_up_master_password(
     warning_confirmed: bool,
     state: tauri::State<'_, AppState>,
 ) -> CommandResult<&'static str> {
-    // **Vor dem Schlüsselbund** (Klarstellung 12): Der Riegel in
-    // `app_logic` greift ohnehin, aber ein Aufruf ohne Bestätigung soll
-    // nicht einmal einen Schlüssel lesen — „verändert nichts" fängt beim
-    // Nichtstun an, und die Fehlermeldung bliebe sonst von der
-    // Erreichbarkeit des Schlüsselbunds abhängig.
-    let warning = loss_warning(warning_confirmed);
-    if warning != master_password::LossWarning::ConfirmedByTheUser {
-        return Err(to_command_error(
-            master_password::MasterPasswordError::LossWarningNotConfirmed,
-        ));
-    }
     let db_path = persistence_sqlite::default_db_path();
     let keyring = credentials_keyring::KeyringCredentialStore::new();
-
-    // **K wird gelesen, nicht erzeugt** (A3/A13): Aus den Einstellungen
-    // heraus ist die Datenbank offen, es gibt also einen gültigen K. Wäre
-    // er nicht lesbar, dürfte hier auf keinen Fall ein neuer entstehen —
-    // die Datenbank wäre damit verloren.
-    let root_key = match ssh_manager_core::crypto::read_root_key(&keyring) {
-        // **Und es muss der K sein, mit dem die Datenbank gerade offen ist**
-        // (spec-reviewer Lauf 4, Fund 10). Weicht der Eintrag seit dem Start
-        // ab — zweite Installation, manuelle Änderung, ein Rest aus A17 —,
-        // verpackte die App sonst einen Schlüssel, mit dem die offene
-        // Datenbank **nicht** zu öffnen ist: beim nächsten Start D2 und
-        // Totalverlust, ohne dass dazwischen irgendetwas auffiele.
-        //
-        // Verglichen wird über die Kennung aus dem `AppState`, nicht über K
-        // selbst — K für die ganze Sitzung aufzubewahren wäre das Gegenteil
-        // von A19 (s. `crypto::root_key_fingerprint`).
-        ssh_manager_core::crypto::RootKeyState::Present(key)
-            if ssh_manager_core::crypto::root_key_fingerprint(&key)
-                == state.root_key_fingerprint =>
-        {
-            key
-        }
-        ssh_manager_core::crypto::RootKeyState::Present(_) => {
-            tracing::error!(
-                "refusing to set up a master password: the root key in the OS keychain is not \
-                 the one this database is open with; wrapping it would make the database \
-                 unopenable (Spec 0101, A3/A13)"
-            );
-            return Err(CommandError::with_code(
-                "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Smart SSH \
-                 richtet das Master-Passwort deshalb nicht ein — es würde den falschen \
-                 Schlüssel sichern und die Datenbank beim nächsten Start unlesbar machen. \
-                 Es ist nichts verändert.",
-                KEYCHAIN_KEY_MISMATCH_CODE,
-            ));
-        }
-        other => {
-            tracing::warn!(
-                ?other,
-                "refusing to set up a master password without a readable root key \
-                 (Spec 0101, A3)"
-            );
-            return Err(CommandError::with_code(
-                "Der Schlüssel zu deiner Datenbank ist gerade nicht lesbar. Richte das \
-                 Master-Passwort später erneut ein — es wird kein neuer Schlüssel erzeugt.",
-                MASTER_PASSWORD_FILE_FAILED_CODE,
-            ));
-        }
-    };
+    let (warning, root_key) =
+        check_set_up_preconditions(warning_confirmed, &state.root_key_fingerprint, || {
+            ssh_manager_core::crypto::read_root_key(&keyring)
+        })?;
 
     master_password::set_up_master_password(
         &db_path,
@@ -971,7 +988,7 @@ mod tests {
             decide_startup_screen(Some(H::Absent), 0).screen,
             StartupScreen::SetUpMasterPassword,
             "keine Verpackungsdatei und trotzdem kein Zustand: der Start ist in D1 gelandet \
-             (Teil 0 Frage 3)"
+             (§2 Frage 3)"
         );
         assert_eq!(
             decide_startup_screen(Some(H::Usable), 0).screen,
@@ -1133,7 +1150,7 @@ mod tests {
         std::fs::remove_file(&wrapping).expect("entfernen");
         master_password::set_up_master_password(
             &db_path,
-            &[7u8; 32],
+            &ssh_manager_core::crypto::RootKey::for_tests([7u8; 32]),
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
             master_password::LossWarning::ConfirmedByTheUser,
@@ -1185,7 +1202,7 @@ mod tests {
         let db_path = dir.path().join("smart-ssh.db");
         master_password::set_up_master_password(
             &db_path,
-            &[9u8; 32],
+            &ssh_manager_core::crypto::RootKey::for_tests([9u8; 32]),
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
             master_password::LossWarning::ConfirmedByTheUser,
@@ -1264,5 +1281,72 @@ mod tests {
             guard < counts,
             "die Prüfung auf die Fehlerart muss **vor** dem Zählen stehen"
         );
+    }
+
+    fn key_state(key: ssh_manager_core::crypto::RootKey) -> ssh_manager_core::crypto::RootKeyState {
+        ssh_manager_core::crypto::RootKeyState::Present(key)
+    }
+
+    /// Spec 0101 E10/Klarstellung 12: ohne Bestätigung wird abgelehnt, und
+    /// der Schlüsselbund wird nicht einmal gelesen.
+    #[test]
+    fn test_set_up_without_confirmation_is_rejected_before_the_keychain_is_read() {
+        let key = ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]);
+        let fp = ssh_manager_core::crypto::root_key_fingerprint(&key);
+        let read = std::cell::Cell::new(false);
+        let err = check_set_up_preconditions(false, &fp, || {
+            read.set(true);
+            key_state(key)
+        })
+        .expect_err("ohne Bestätigung abgelehnt");
+        assert!(!read.get(), "der Schlüsselbund darf nicht gelesen werden");
+        assert_ne!(err.code, Some(KEYCHAIN_KEY_MISMATCH_CODE));
+        assert_eq!(
+            err.code,
+            to_command_error(master_password::MasterPasswordError::LossWarningNotConfirmed).code
+        );
+    }
+
+    /// Klarstellung 9: ein anderer K im Schlüsselbund als der der offenen
+    /// Datenbank wird mit `KEYCHAIN_KEY_MISMATCH` abgelehnt.
+    #[test]
+    fn test_set_up_with_a_foreign_keychain_key_is_rejected_with_mismatch() {
+        let fp = ssh_manager_core::crypto::root_key_fingerprint(
+            &ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]),
+        );
+        let err = check_set_up_preconditions(true, &fp, || {
+            key_state(ssh_manager_core::crypto::RootKey::for_tests([4u8; 32]))
+        })
+        .expect_err("fremder Schlüssel abgelehnt");
+        assert_eq!(err.code, Some(KEYCHAIN_KEY_MISMATCH_CODE));
+    }
+
+    /// A3: ein nicht lesbarer K wird nie durch einen neuen ersetzt.
+    #[test]
+    fn test_set_up_without_a_readable_keychain_key_is_rejected() {
+        use ssh_manager_core::crypto::RootKeyState;
+        let fp = ssh_manager_core::crypto::root_key_fingerprint(
+            &ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]),
+        );
+        for state in [
+            RootKeyState::NotFound,
+            RootKeyState::Invalid,
+            RootKeyState::Unreachable("x".into()),
+        ] {
+            let err = check_set_up_preconditions(true, &fp, || state)
+                .expect_err("kein lesbarer Schlüssel");
+            assert_eq!(err.code, Some(MASTER_PASSWORD_FILE_FAILED_CODE));
+        }
+    }
+
+    /// Der Erfolgsfall: Bestätigung da, Kennung passt — K wird zurückgegeben.
+    #[test]
+    fn test_set_up_preconditions_pass_for_the_key_the_database_is_open_with() {
+        let key = ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]);
+        let fp = ssh_manager_core::crypto::root_key_fingerprint(&key);
+        let (warning, got) = check_set_up_preconditions(true, &fp, || key_state(key.duplicate()))
+            .expect("zugelassen");
+        assert_eq!(warning, master_password::LossWarning::ConfirmedByTheUser);
+        assert_eq!(got.expose(), key.expose());
     }
 }

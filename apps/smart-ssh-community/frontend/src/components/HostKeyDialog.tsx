@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../types";
 import { useDialogFocusTrap } from "../useDialogFocusTrap";
@@ -71,8 +70,8 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // `ServerList`; das Portal bleibt trotzdem nötig — `ServerForm` zeigt
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
-  return createPortal(
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+  return (
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
        * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
        * damit kein String-Literal; die statische Analyse von
@@ -120,6 +119,11 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                 <strong>{event.host}:{event.port}</strong>
                 {t("hostKeyDialog.mismatchBodyAfterHost")}
               </p>
+              {event.keyType ? (
+                <p className="mb-4 text-sm text-red-200/90" data-testid="host-key-type">
+                  {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
+                </p>
+              ) : null}
               <div className="mb-4 grid grid-cols-2 gap-px border border-red-700/40 bg-red-700/25">
                 <div className="flex flex-col gap-1 bg-red-950 p-3">
                   <span className="font-heading text-[11px] font-semibold tracking-wide text-red-400/80 uppercase">
@@ -168,6 +172,11 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
               <strong>{event.host}:{event.port}</strong>
               {t("hostKeyDialog.unknownBodyAfterHost")}
             </p>
+            {event.keyType ? (
+              <p className="mb-2 text-sm text-slate-300" data-testid="host-key-type">
+                {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
+              </p>
+            ) : null}
             <div className="mb-4 border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-300">
               {event.fingerprint}
             </div>
@@ -192,7 +201,6 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
           </div>
         )}
       </div>
-    </ModalBackdrop>,
-    document.body,
+    </ModalBackdrop>
   );
 }

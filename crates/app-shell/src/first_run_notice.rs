@@ -7,7 +7,7 @@ use tauri_plugin_store::StoreExt;
 /// Spec 0024-Muster (s. `crate::risk_second_opinion`-Moduldoc): derselbe
 /// `tauri-plugin-store`-Ablageort wie die übrigen reinen UI-/App-
 /// Einstellungen, kein SQLite nötig für ein einzelnes Bool.
-const SETTINGS_STORE_FILE: &str = "settings.json";
+use crate::settings_store::SETTINGS_STORE_FILE;
 const ACKNOWLEDGED_KEY: &str = "first_run_notice_acknowledged";
 
 /// Spec 0031, Abschnitt 4, letzter Punkt: `connect_session` prüft dies

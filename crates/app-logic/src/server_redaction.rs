@@ -311,6 +311,23 @@ mod tests {
         assert!(recorded_warn_lines().is_empty());
     }
 
+    /// Issue #249: der Lesepfad greift pro Aufruf genau einmal auf den
+    /// Store zu. Gegenprobe: ein zweiter `get` im Lesepfad (z. B. Retry
+    /// oder Doppelauflösung) lässt die Zählung auf 2 springen.
+    #[test]
+    fn test_read_sudo_password_for_redaction_reads_store_exactly_once() {
+        let server_id = ServerId::new();
+        let credentials = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(server_id), "s3cret-sudo");
+
+        let _ = read_sudo_password_for_redaction(&credentials, server_id);
+        assert_eq!(credentials.get_calls(), 1);
+
+        let missing = InMemoryCredentialStore::new();
+        let _ = read_sudo_password_for_redaction(&missing, server_id);
+        assert_eq!(missing.get_calls(), 1);
+    }
+
     /// Issue #18, AC 2: ein schließender Marker plus eingeschleuste
     /// Anweisung bricht den Fence nicht auf.
     #[tokio::test]

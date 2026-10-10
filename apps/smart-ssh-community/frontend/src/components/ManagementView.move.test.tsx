@@ -59,6 +59,7 @@ vi.mock("../api", () => ({
   listUnusableServers: vi.fn(() => Promise.resolve([])),
   listGroups: vi.fn(() => Promise.resolve(backend.groups.map((g) => ({ ...g })))),
   listServers: vi.fn(() => Promise.resolve(backend.servers.map((s) => ({ ...s })))),
+  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
   getServer: vi.fn((id: string) => {
     const found = backend.servers.find((s) => s.id === id);
     return found ? Promise.resolve({ ...found }) : Promise.reject(new Error("not found"));

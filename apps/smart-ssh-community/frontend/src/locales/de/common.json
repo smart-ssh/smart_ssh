@@ -151,6 +151,10 @@
     "confirmDelete": "Endgültig löschen"
   },
   "serverForm": {
+    "hostKeys": {
+      "title": "Host-Keys",
+      "none": "Noch kein Host-Key gespeichert. Er wird bei der ersten Verbindung gespeichert."
+    },
     "titleNew": "Neuer Server",
     "titleExisting": "Server: {{name}}",
     "localHint": "Lokaler Pseudo-Server — Kommandos laufen direkt auf diesem Rechner, keine SSH-Verbindung. Nur Notizen und Tags sind editierbar.",
@@ -283,6 +287,8 @@
     "increasePriority": "Priorität erhöhen",
     "decreasePriority": "Priorität senken",
     "priorityDisabledPatternError": "Nicht verschiebbar: Das Muster dieser Regel ist ungültig.",
+    "priorityDisabledNeighbourPatternError": "Nicht verschiebbar: Die Nachbarregel hat ein ungültiges Muster und kann nicht getauscht werden.",
+    "testInvalidPatternRules": "Regeln mit ungültigem Muster (greifen nicht oder nur teilweise):",
     "newRule": "Neue Regel",
     "editRule": "Regel bearbeiten",
     "patternType": "Pattern-Typ",
@@ -369,6 +375,7 @@
     "mismatchBodyAfterHost": " präsentiert einen anderen Schlüssel als beim letzten Mal gespeichert. Das kann auf einen Man-in-the-Middle-Angriff hindeuten. Nur fortfahren, wenn du sicher bist, dass sich der Server-Schlüssel legitim geändert hat (z. B. Neuinstallation des Servers).",
     "known": "Bekannt",
     "offeredNow": "Jetzt angeboten",
+    "keyType": "Schlüsseltyp",
     "cancelConnection": "Verbindung abbrechen",
     "trustAnyway": "Trotzdem vertrauen",
     "unknownHeading": "Unbekannter Host",
@@ -418,6 +425,8 @@
     "discoverModels": "Modelle laden",
     "discoveringModels": "Lädt Modelle…",
     "modelDiscoveryFailedHint": "Modelle konnten nicht automatisch geladen werden — Modellname manuell eingeben.",
+    "modelDiscoveryEmptyHint": "Der Anbieter hat keine Modelle geliefert. Modellname manuell eingeben.",
+    "modelDiscoveryAuthFailed": "✗ Der Anbieter hat diese Zugangsdaten abgelehnt – API-Key prüfen",
     "advanced": "Erweitert",
     "extraHeadersLabel": "Zusatz-Header",
     "extraHeadersHint": "Werden an jede Anfrage an diesen Provider angehängt (z. B. OpenRouters HTTP-Referer/X-Title).",
@@ -521,6 +530,7 @@
     "FILTER_SECOND_OPINION_UNAVAILABLE_REQUIRES_CONFIRM": "Die KI-Zweitmeinung konnte nicht eingeholt werden – erfordert Bestätigung",
     "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM": "Die Prüfung auf eingeschleuste Anweisungen konnte nicht ausgeführt werden – erfordert Bestätigung",
     "AI_INJECTION_CHECK_UNAVAILABLE": "Die Prüfung auf eingeschleuste Anweisungen konnte nicht ausgeführt werden (Problem beim KI-Anbieter). Die nächste vorgeschlagene Aktion erfordert eine Bestätigung.",
+    "AI_INJECTION_CHECK_INACTIVE": "Die Prüfung auf eingeschleuste Anweisungen ist für diesen Server eingeschaltet, in dieser Sitzung aber nicht aktiv (die KI-Zweitmeinung ist aus oder konnte nicht eingerichtet werden). Zweitmeinung in den Einstellungen einschalten und neu verbinden.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Die KI-Zweitmeinung ist eingeschaltet, konnte für diese Sitzung aber nicht eingerichtet werden (Anbieter entfernt oder Zugangsdaten nicht gefunden). Befehle werden nicht damit geprüft – Einstellung korrigieren und neu verbinden.",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risiko rot eingestuft oder nicht sicher einschätzbar (z. B. zu lang) – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",
@@ -665,6 +675,7 @@
       "notAllowed": "Dieser SSH-Login darf sftp-server nicht ohne Passwort per sudo starten.",
       "requireTty": "sudo verweigert den Aufruf ohne Terminal („requiretty“ in sudoers). Für diesen Login muss requiretty abgeschaltet werden, z. B. mit „Defaults:<login> !requiretty“.",
       "sftpServerNotFound": "sftp-server wurde auf dem Server nicht gefunden. Den Pfad bitte im Server-Profil unter „Erweitert“ eintragen.",
+      "sftpServerUnsafe": "Nicht sicher: „{{path}}“ muss root gehören und darf für Gruppe und andere nicht beschreibbar sein. Auf diesem Server könnte ein anderer Nutzer sftp-server austauschen; eine passwortlose sudo-Regel dafür würde ihm root verschaffen. Bitte zuerst Eigentümer und Rechte korrigieren.",
       "sudoMissing": "sudo ist auf dem Server nicht installiert.",
       "invalidPath": "Der im Server-Profil eingetragene sftp-server-Pfad ist ungültig.",
       "invalidUser": "Ungültiger Ziel-Nutzer.",
@@ -1008,6 +1019,8 @@
     }
   },
   "chat": {
+    "newChat": "Neuer Chat",
+    "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",
     "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",
     "stopAutoContinuation": "Automatik stoppen",
     "generating": "KI generiert Antwort / Dokument…",

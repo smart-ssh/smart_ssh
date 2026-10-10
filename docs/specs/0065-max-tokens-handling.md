@@ -1,159 +1,110 @@
-# Spec: max_tokens-Handling (Default, Fortsetzung, Tool-Call-Schutz)
+# Spec 0065 — Umgang mit der maximalen Antwortlänge (max_tokens)
 
-Status: Entwurf
-Repo: **öffentlich** `smart_ssh`, `crates/ai-providers` (max_tokens, stop_reason-
-Auswertung) + `crates/app-shell` (Orchestrierung, Fortsetzung, Retry) +
-Frontend (Hinweis + „Weiter"-Knopf, Provider-Override-Feld)
-Abhängigkeiten: stop_reason-Logging (0063), Rate-Limit-Gate (0061),
-Prompt-Caching (0064), Filter-Engine/Confirm (0002), Auto-Fortsetzung (0021),
-Provider-Formular (0056)
+Status: umgesetzt
+Zweck: Antworten werden nicht durch ein zu knappes Längenlimit abgeschnitten;
+wenn es doch passiert, bleibt die Teilantwort nutzbar, und ein
+abgeschnittener Kommandovorschlag wird nie ausgeführt.
+Bezüge: Spec 0062 (Abbruchgrund), Spec 0061/0064 (Rate-Limit, Cache),
+Spec 0002 (Filter-Engine), Spec 0021 (Fortsetzung), Spec 0056
+(Anbieter-Formular), Spec 0087 (Kontextgrenzen-Fehler).
 
-> **Das Problem (im echten Einsatz beobachtet, dank 0063 sichtbar):** Ein
-> Request brach mit `stop_reason: max_tokens` ab — `max_tokens` stand bei
-> ~4000, zu knapp für längere Skripte/Analysen. Der Nutzer sieht bestenfalls
-> einen Hinweis, kann aber nichts tun.
->
-> **Recherche (aktuelle Anthropic-Doku, verifiziert):** OTPM wird in Echtzeit
-> auf den **tatsächlich erzeugten** Tokens gezählt — `max_tokens` fließt NICHT
-> in die Rate-Limit-Berechnung ein, ein höherer Wert hat **keinen
-> Rate-Limit-Nachteil**. Bezahlt werden ebenfalls nur echte Tokens. (Ältere
-> Doku-Versionen sagten anderes — die aktuelle gilt.) **Andere Provider
-> können abweichen** (manche Gateways reservieren anhand von `max_tokens` oder
-> lehnen Werte über dem Modell-Maximum mit 400 ab).
->
-> **Priorität ERHÖHT** — wegen §3: ein abgeschnittener Tool-Call darf NIE
-> ausgeführt werden (Sicherheitsinvariante).
+## Ausgangslage
 
-## Getroffene Entscheidungen
+Ein zu niedriges Längenlimit ließ Antworten bei längeren Skripten oder
+Analysen mit Abbruchgrund `max_tokens` enden. Bei Anthropic zählt das
+Output-Limit auf tatsächlich erzeugten Tokens; ein höherer Wert hat keinen
+Rate-Limit-Nachteil und keine höheren Kosten. Andere Anbieter können
+abweichen (Gateways reservieren anhand des Werts oder lehnen Werte über dem
+Modell-Maximum mit 400 ab).
 
-Keine reine Einstellung, kein pauschales adaptives Hochdrehen, sondern:
-1. **Hoher, modellabhängiger Default** — Abschneiden wird zur Ausnahme.
-2. **Abgeschnittener Text → Hinweis + „Weiter"-Knopf** (setzt fort statt neu
-   zu erzeugen).
-3. **Abgeschnittener Tool-Call → verwerfen + einmaliger automatischer Retry
-   mit höherem Wert**, dann sichtbarer Fehler.
-4. **Optionaler Override pro Provider** (für Modelle mit unbekanntem
-   Output-Maximum).
+## 1. Hoher, modellabhängiger Standard
 
-## 1. Default: hoch und modellabhängig (der eigentliche Fix)
-
-- `max_tokens` für den **Haupt-Chat** nicht mehr fest ~4000, sondern
-  **modellabhängig**: orientiert am Output-Maximum des Modells, mit einem
-  vernünftigen Deckel (Vorschlag **16.384** als allgemeiner Default; für
-  Anthropic-Modelle darf es höher sein, z. B. 32k — kein Rate-Limit-Nachteil).
-- **Modell-Maximum**: Eine kleine Lookup-Tabelle bekannter Modelle mit ihrem
-  Output-Maximum (analog zur Kontextfenster-Tabelle aus 0057). **Gegen die
-  tatsächlich genutzten Modelle prüfen, nicht aus dem Gedächtnis** — die
-  Werte ändern sich mit Modellgenerationen. Unbekanntes Modell → konservativer
-  Fallback (z. B. 8192), damit kein 400 wegen „über dem Maximum" entsteht.
-- **Nebenaufrufe bleiben bewusst klein** (Zweitmeinung, Injection-Check,
-  Auto-Titel, Notiz-Vorschlag, Summary): dort ist Kürze gewollt und ein
+- Das Limit für den **Haupt-Chat** orientiert sich am bekannten
+  Output-Maximum des Modells: bei Anthropic die Hälfte davon, bei sehr
+  großen Maxima (128k) 32 000, bei 64k-Modellen 16 384. Eine kleine Tabelle
+  bekannter Modelle liefert die Maxima; sie wird gegen die tatsächlich
+  genutzten Modelle gepflegt.
+- Ein unbekanntes Modell bekommt ein konservatives Fallback-Maximum (Standard: die Hälfte davon), damit kein
+  400 wegen „über dem Maximum" entsteht (Anthropic 8192; offizielle OpenAI-API
+  4096; andere OpenAI-kompatible Endpunkte 16 384, Standard dort 8192).
+- **Nebenaufrufe bleiben klein** (Zweitmeinung, Einschleusungs-Prüfung,
+  Auto-Titel, Notiz-Vorschlag, Zusammenfassung): Kürze ist gewollt, und ein
   kleiner Deckel schützt vor einem Modell, das statt „red" einen Aufsatz
-  schreibt. Die aktuellen Werte dort prüfen und bewusst setzen (nicht
-  versehentlich mit auf 16k ziehen).
-- **Nicht-Anthropic-Provider**: Default ebenfalls modellabhängig, aber
-  vorsichtiger (Gateways können reservieren/ablehnen) — §4-Override greift.
+  schreibt. Der Deckel liegt bei 4096.
 
-## 2. Abgeschnittener TEXT → Hinweis + „Weiter"
+## 2. Abgeschnittener Text → Hinweis und „Weiter"
 
-Wenn `stop_reason: max_tokens` (bzw. `finish_reason: length`) und die Antwort
-**keinen** unvollständigen Tool-Call enthält:
-- Die bis dahin erzeugte Antwort **bleibt sichtbar** (nicht verwerfen — sie
-  ist gültig, nur unvollständig).
-- **UI-Hinweis** an der Nachricht: „Antwort wurde abgeschnitten (Längenlimit
-  erreicht)." + **„Weiter"-Knopf**.
-- **„Weiter"** schickt eine Fortsetzungs-Nachricht (sinngemäß: „Deine letzte
-  Antwort wurde wegen des Längenlimits abgeschnitten. Fahre exakt an der
-  Stelle fort, an der sie endete, ohne zu wiederholen.") — eine **normale
-  Nachricht**, funktioniert daher bei **jedem** Provider, erzeugt nur den
-  fehlenden Teil neu.
-- Die Fortsetzung läuft durch den **normalen Pfad** (Kompaktierung 0057,
-  Gate 0061, Caching 0064, Redaction, Filter-Engine) — keine Sonderbahn.
-- **Kein automatisches „Weiter"** — der Nutzer entscheidet (konsistent mit dem
-  Kontroll-Prinzip; oft reicht die Teilantwort).
-- **Hinweis-Text wird außerhalb jeder Untrusted-Fence gerendert** (Lehre aus
-  0057: ein Hinweis *im* Fence wäre von echter Ausgabe fälschbar) — über den
-  bestehenden Mechanismus (Flag/Event), nicht als Text in den Inhalt.
+Endet eine Antwort wegen des Längenlimits und enthält **keinen**
+unvollständigen Kommandovorschlag:
 
-## 3. Abgeschnittener TOOL-CALL → nie ausführen (SICHERHEITSKRITISCH)
+- Die bis dahin erzeugte Antwort bleibt sichtbar (sie ist gültig, nur
+  unvollständig).
+- An der Nachricht erscheint der Hinweis „Antwort wurde abgeschnitten
+  (Längenlimit erreicht)." mit einem **„Weiter"-Knopf**.
+- „Weiter" schickt eine normale Fortsetzungs-Nachricht (sinngemäß: die
+  letzte Antwort wurde abgeschnitten, fahre exakt dort fort, ohne zu
+  wiederholen). Das funktioniert bei jedem Anbieter und erzeugt nur den
+  fehlenden Teil.
+- Die Fortsetzung läuft durch den normalen Pfad (Kompaktierung, Drosselung,
+  Caching, Redaction, Filter-Engine), keine Sonderbahn.
+- Es gibt **kein automatisches „Weiter"**; der Nutzer entscheidet.
+- Der Hinweis wird außerhalb jeder Untrusted-Fence gerendert, damit echte
+  Ausgabe ihn nicht fälschen kann.
 
-Schlägt `max_tokens` **mitten in einem `tool_use`-Block** zu, ist das
-Kommando-JSON unvollständig — im schlimmsten Fall ein **gekürztes, aber
-syntaktisch gültiges** Kommando (`rm -rf /var/log/app` statt
-`rm -rf /var/log/app/old`).
+## 3. Abgeschnittener Kommandovorschlag → nie ausführen
 
-- **Invariante: Ein Tool-Call aus einer Antwort mit `stop_reason:
-  max_tokens` wird NIEMALS ausgeführt und NIEMALS zur Bestätigung
-  vorgelegt** — auch nicht, wenn das JSON zufällig parsebar ist. Es geht nicht
-  um „parsebar", sondern um „vollständig".
-- **Kläre zuerst (Teil 0)**: Wie verhält sich der aktuelle Code? Wird ein
-  `tool_use`-Block aus einem abgebrochenen Stream derzeit verarbeitet, wenn
-  sein JSON parsebar ist? Das ist der entscheidende Ist-Befund.
-- **Einmaliger automatischer Retry**: den abgeschnittenen Tool-Call verwerfen,
-  die Anfrage **einmal** mit höherem `max_tokens` (verdoppelt, bis zum
-  Modell-Maximum) wiederholen — unsichtbar für den Nutzer (ggf. über die
-  bestehende Status-Anzeige).
-- **Scheitert auch der Retry** (wieder `max_tokens`) → **sichtbarer Fehler**
-  („Die KI-Antwort war zu lang für einen vollständigen Befehl"), **keine
-  Schleife**, keine Ausführung. „Fehler containen".
-- **Mehrere Tool-Calls in einer Antwort** (der ungetestete Multi-`tool_use`-
-  Pfad aus dem Backlog): Wenn der *letzte* abgeschnitten ist, die *vorherigen*
-  aber vollständig — **konservativ: die ganze Antwort als abgeschnitten
-  behandeln** (keinen ihrer Tool-Calls ausführen) und retryen. Begründung:
-  Die vorherigen Kommandos wurden im Kontext eines nicht zu Ende gedachten
-  Plans vorgeschlagen. Beschreibe mir, falls du einen guten Grund siehst,
-  davon abzuweichen.
+Schlägt das Limit mitten in einem Kommandovorschlag zu, ist dieser im
+schlimmsten Fall ein gekürztes, aber syntaktisch gültiges Kommando
+(`rm -rf /var/log/app` statt `rm -rf /var/log/app/old`).
 
-## 4. Optionaler Override pro Provider (Experten-Feld)
+- **Ein Vorschlag aus einer wegen des Längenlimits beendeten Antwort wird
+  niemals ausgeführt und niemals zur Bestätigung vorgelegt**, auch wenn
+  sein JSON zufällig parsebar ist. Maßgeblich ist „vollständig", nicht
+  „parsebar".
+- Die App verwirft den Vorschlag und wiederholt die Anfrage **einmal**
+  automatisch mit einem höheren Limit (verdoppelt, bis zum Modell-Maximum),
+  unsichtbar für den Nutzer.
+- Scheitert auch der Retry mit demselben Grund, erscheint ein sichtbarer
+  Fehler („Die KI-Antwort war zu lang für einen vollständigen Befehl"), ohne
+  Schleife und ohne Ausführung.
+- Enthält eine Antwort mehrere Vorschläge und ist der letzte abgeschnitten,
+  gilt die **ganze Antwort** als abgeschnitten: keiner der Vorschläge wird
+  ausgeführt, die Anfrage wird wiederholt. Die vorherigen Vorschläge
+  entstanden im Rahmen eines nicht zu Ende gedachten Plans.
+- Zusammenspiel mit einem Kontextgrenzen-Fehler (Spec 0087): je Aufruf läuft
+  höchstens einer der beiden Retrys.
 
-- Im Provider-Formular (0056) ein **optionales** Feld „Max. Antwortlänge
-  (Tokens)" mit Default **„Automatisch"**.
-- Nur relevant für OpenAI-kompatible/selbstgehostete Provider, deren
-  Output-Maximum die App nicht kennt (lokales Modell mit 4k-Output, Gateway
-  mit eigenem Limit).
-- Validierung: positive Zahl, sinnvolle Obergrenze; leer = automatisch.
-- Wird der Override gesetzt, gilt er für den **Haupt-Chat** dieses Providers
-  (Nebenaufrufe behalten ihre kleinen Werte).
-- Visuell unauffällig (eingeklappter „Erweitert"-Bereich), damit Normalnutzer
-  nicht mit einer Zahl konfrontiert werden, die sie nicht verstehen.
+## 4. Optionaler Override je Anbieter
 
-## Invarianten / Sicherheit
-- **Abgeschnittener Tool-Call wird nie ausgeführt oder vorgelegt** (§3) —
-  unabhängig von JSON-Parsebarkeit.
-- Retry ist **einmalig** — keine Retry-Schleife, kein unbegrenztes Hängen.
-- Fortsetzung („Weiter") läuft durch den normalen Pfad (Redaction, Fencing,
-  Filter-Engine, Confirm) — keine Umgehung.
-- Hinweis wird außerhalb von Untrusted-Fences gerendert (nicht fälschbar).
-- Nebenaufrufe behalten kleine `max_tokens`.
-- Unbekanntes Modell → konservativer Fallback (kein 400 durch zu hohen Wert).
+Das Anbieter-Formular (Spec 0056) bietet im eingeklappten
+„Erweitert"-Bereich ein optionales Feld „Max. Antwortlänge (Tokens)" mit
+Standard „Automatisch". Es ist für OpenAI-kompatible und selbstgehostete
+Anbieter gedacht, deren Output-Maximum die App nicht kennt.
 
-## Testbarkeit
-- **Pflicht-Regressionstest §3**: Mock-Stream, der mitten in einem
-  `tool_use`-Block mit `stop_reason: max_tokens` endet — **mit parsebarem,
-  aber gekürztem JSON** → Kommando wird NICHT ausgeführt/vorgelegt,
-  Retry wird ausgelöst. Gegen den ungefixten Stand verifizieren (schlägt
-  vorher fehl, falls der Ist-Code solche Blöcke verarbeitet).
-- Retry scheitert erneut → sichtbarer Fehler, keine Schleife, keine
+- Gültig ist eine positive Zahl mit sinnvoller Obergrenze; leer heißt
+  automatisch.
+- Ein gesetzter Wert gilt für den Haupt-Chat dieses Anbieters; Nebenaufrufe
+  behalten ihre kleinen Werte.
+- Ein Retry nach einem Kontextgrenzen-Fehler überschreibt einen vom Nutzer
+  gesetzten Wert nicht (Spec 0087).
+
+## Sicherheitszusagen
+
+- Ein abgeschnittener Vorschlag wird nie ausgeführt oder vorgelegt (3).
+- Der Retry ist einmalig: keine Schleife, kein unbegrenztes Hängen.
+- „Weiter" läuft durch Redaction, Fencing, Filter-Engine und Bestätigung.
+- Der Hinweis lässt sich nicht durch Ausgabeinhalt fälschen.
+- Ein unbekanntes Modell führt nicht zu einem 400 durch einen zu hohen Wert.
+
+## Akzeptanzfälle
+
+- Ein Stream, der mitten im Kommandovorschlag mit `max_tokens` endet, auch
+  mit parsebarem gekürztem JSON, wird weder ausgeführt noch vorgelegt; ein
+  Retry läuft.
+- Scheitert der Retry erneut: sichtbarer Fehler, keine Schleife, keine
   Ausführung.
-- Multi-`tool_use` mit abgeschnittenem letztem Block → keiner ausgeführt.
-- Text-Abschnitt → Teilantwort bleibt, Hinweis + „Weiter"-Event; „Weiter"
-  schickt die Fortsetzungs-Nachricht durch den normalen Pfad.
-- Default-Werte: Haupt-Chat modellabhängig, unbekanntes Modell → Fallback,
-  Nebenaufrufe klein.
-- Override: gesetzt → gilt für Haupt-Chat; leer → automatisch.
-
-## Reihenfolge
-1. **Teil 0 + §3** (Ist-Verhalten bei abgeschnittenem Tool-Call klären, dann
-   den Schutz + Retry) — sicherheitskritisch, zuerst.
-2. §1 (modellabhängiger Default, Nebenaufrufe prüfen).
-3. §2 (Hinweis + „Weiter").
-4. §4 (Override-Feld).
-
-## Abschluss
-- `spec-reviewer` ERHÖHT (§3 adversarial: Kann ein gekürztes, parsebares
-  Kommando auf irgendeinem Weg doch in Confirm/Ausführung landen?).
-- CHANGELOG: „Längere KI-Antworten möglich; abgeschnittene Antworten lassen
-  sich fortsetzen; abgeschnittene Befehle werden nie ausgeführt."
-- Melde mir: den Ist-Befund zu §3 (wurden abgeschnittene Tool-Calls bisher
-  verarbeitet?), die Modell-Maximum-Tabelle, die Nebenaufruf-Werte, und je
-  Teil einen manuellen Testablauf.
+- Mehrere Vorschläge mit abgeschnittenem letztem: keiner wird ausgeführt.
+- Abgeschnittener Text: Teilantwort bleibt, Hinweis und „Weiter" erscheinen,
+  „Weiter" geht durch den normalen Pfad.
+- Standardwerte: Haupt-Chat modellabhängig, unbekanntes Modell Fallback,
+  Nebenaufrufe klein; Override gilt für den Haupt-Chat.

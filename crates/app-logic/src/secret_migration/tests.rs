@@ -163,7 +163,7 @@ async fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let store = SqliteProfileStore::connect_encrypted(
         &dir.path().join("smart-ssh.db"),
-        &DatabaseKey::from_root_key(&TEST_ROOT_KEY),
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(TEST_ROOT_KEY)),
     )
     .await
     .unwrap();
@@ -248,7 +248,7 @@ async fn test_t11_the_provider_branch_and_the_other_auth_kinds_move_too() {
     let dir = tempfile::tempdir().unwrap();
     let store = SqliteProfileStore::connect_encrypted(
         &dir.path().join("smart-ssh.db"),
-        &DatabaseKey::from_root_key(&TEST_ROOT_KEY),
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(TEST_ROOT_KEY)),
     )
     .await
     .unwrap();
@@ -814,7 +814,7 @@ async fn test_a10_a_fresh_installation_touches_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let store = SqliteProfileStore::connect_encrypted(
         &dir.path().join("smart-ssh.db"),
-        &DatabaseKey::from_root_key(&TEST_ROOT_KEY),
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(TEST_ROOT_KEY)),
     )
     .await
     .unwrap();
@@ -937,7 +937,7 @@ async fn test_t17_the_secret_migration_keeps_the_key_and_the_secrets_out_of_the_
     let dir = tempfile::tempdir().unwrap();
     let store = SqliteProfileStore::connect_encrypted(
         &dir.path().join("smart-ssh.db"),
-        &DatabaseKey::from_root_key(&T17_KEY),
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(T17_KEY)),
     )
     .await
     .unwrap();

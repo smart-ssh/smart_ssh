@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 // Spec 0099, A1.8/A4.3: die Kennzeile der erzeugten Datei — eine Kopie für
 // das ganze Frontend, gegen das Generierungs-Skript geprüft (Issue #7).
@@ -48,8 +47,8 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
     };
   }, []);
 
-  return createPortal(
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+  return (
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded border border-slate-600 bg-slate-900 p-6 shadow-xl">
         <h2 className="font-heading mb-3 text-lg font-semibold text-slate-100">
           {t("about.thirdPartyLicenses.title")}
@@ -84,7 +83,6 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
           </button>
         </div>
       </div>
-    </ModalBackdrop>,
-    document.body,
+    </ModalBackdrop>
   );
 }

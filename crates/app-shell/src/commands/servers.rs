@@ -306,6 +306,28 @@ pub async fn trust_host_key(
     Ok(())
 }
 
+/// Read-only listing of the stored host keys (algorithm + fingerprint) for
+/// the saved host and port of a server. Never changes the trust state.
+#[tauri::command]
+pub async fn list_stored_host_keys(
+    state: State<'_, AppState>,
+    id: ServerId,
+) -> CommandResult<Vec<app_logic::dto::StoredHostKeyDto>> {
+    if app_logic::dto::is_local(id) {
+        return Ok(Vec::new());
+    }
+    let server = state.profile_store.get_server(&id).await?;
+    Ok(state
+        .host_key_store
+        .stored_keys(&server.host, server.port)
+        .into_iter()
+        .map(|k| app_logic::dto::StoredHostKeyDto {
+            algorithm: k.algorithm,
+            fingerprint: k.fingerprint,
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod local_server_tests {
     //! Spec 0032, Abschnitt 3: `list_servers()` enthält den lokalen

@@ -7,6 +7,7 @@ import {
   registerDocumentAction,
   registerSettingsSection,
   resetRegistryForTests,
+  subscribeSettingsSections,
 } from "./registry";
 
 function Noop() {
@@ -99,5 +100,48 @@ describe("registry", () => {
 
     resetRegistryForTests();
     expect(listFirstRunNoticeExtensions()).toEqual([]);
+  });
+
+  describe("settings section subscriptions (issue #243)", () => {
+    it("notifies listeners after a registration and returns a new list", () => {
+      const listener = vi.fn();
+      subscribeSettingsSections(listener);
+      const before = listSettingsSections();
+
+      registerSettingsSection({ id: "a", component: Noop });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listSettingsSections()).not.toBe(before);
+      expect(listSettingsSections().map((s) => s.id)).toEqual(["a"]);
+    });
+
+    it("returns a stable array reference between changes", () => {
+      registerSettingsSection({ id: "a", component: Noop });
+      expect(listSettingsSections()).toBe(listSettingsSections());
+    });
+
+    it("notifies when an existing id is replaced", () => {
+      function Other() {
+        return null;
+      }
+      registerSettingsSection({ id: "a", component: Noop });
+      const listener = vi.fn();
+      subscribeSettingsSections(listener);
+
+      registerSettingsSection({ id: "a", component: Other });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listSettingsSections()[0].component).toBe(Other);
+    });
+
+    it("does not call an unsubscribed listener", () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeSettingsSections(listener);
+      unsubscribe();
+
+      registerSettingsSection({ id: "a", component: Noop });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
   });
 });

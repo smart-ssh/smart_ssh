@@ -52,6 +52,22 @@ use ssh_manager_core::shared::ServerId;
 use crate::dto::AuthMethodInput;
 use crate::error::{secret_store_error, CommandError};
 
+/// Spec 0076 / 0073: Ein Schlüsseldatei-Pfad, der nach dem geteilten
+/// [`trim_credential_value`] leer ist (nur Leerraum oder unsichtbare
+/// Randzeichen), gilt als nicht angegeben. Speichern und Verbindungstest
+/// prüfen über diese eine Funktion. Geprüft wird nur, **ob** etwas
+/// dasteht — der Pfad selbst wird nie getrimmt oder sonst verändert
+/// (Spec 0076, A-1/A-5).
+pub(crate) fn require_identity_file_path(path: &str) -> Result<(), CommandError> {
+    if trim_credential_value(path).is_empty() {
+        return Err(CommandError::with_code(
+            "Pfad zur Schlüsseldatei ist erforderlich",
+            "SERVER_IDENTITY_FILE_REQUIRED",
+        ));
+    }
+    Ok(())
+}
+
 /// Deterministischer `CredentialRef` pro `(server_id, slot)` — kein
 /// zusätzlicher Zustand nötig, um sich "den Ref von vorhin" zu merken; bei
 /// `update_server` wird derselbe String einfach erneut berechnet.
@@ -237,14 +253,14 @@ fn write_or_reuse_secret(
 }
 
 /// Welche Schlüsselbund-Einträge zu einer [`AuthMethod`] gehören — die
-/// **eine** Stelle, an der diese Zuordnung steht (Spec 0082, §5).
+/// **eine** Stelle, an der diese Zuordnung steht (Spec 0082, §4).
 ///
 /// Vorher gab es sie zweimal: als Paarliste in einem `cleanup_abandoned_
 /// slots` („ist die neue Art dieselbe wie die alte?") und in
 /// [`delete_auth_method_secrets`]. Die Paarliste hatte einen impliziten
 /// `false`-Zweig — fehlte dort das Paar für eine `AuthMethod`-Variante,
 /// galt schon das bloße **Bearbeiten** eines solchen Servers als Wechsel,
-/// und seine Secrets wurden gelöscht (Spec 0076, §7.1: genau das war
+/// und seine Secrets wurden gelöscht (ADR 0065, Review-Fund: genau das war
 /// einmal passiert). Dieses `match` hat keinen solchen Zweig: Eine neue
 /// Variante erzwingt hier einen Compilerfehler.
 ///
@@ -333,7 +349,7 @@ fn remove_obsolete_secret(
 /// alte Wert unter dem Sudo-Slot stehen, statt geleert zu werden — ein
 /// verwaister Eintrag, der ab da als Sudo-Passwort gälte. Das ist der
 /// gewollte Tausch: ein Eintrag zu viel statt ein Credential zu wenig. S.
-/// Spec 0082 §9 (K1) und `docs/adr/0081`.
+/// Spec 0082 §8 (K1) und `docs/adr/0081`.
 pub(crate) fn cleanup_replaced_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
@@ -567,12 +583,7 @@ pub fn resolve_auth_method(
         // an, und zwar mit derselben „leer = unverändert"-Semantik wie bei
         // `PrivateKey`.
         AuthMethodInput::IdentityFile { path, passphrase } => {
-            if path.trim().is_empty() {
-                return Err(CommandError::with_code(
-                    "Pfad zur Schlüsseldatei ist erforderlich",
-                    "SERVER_IDENTITY_FILE_REQUIRED",
-                ));
-            }
+            require_identity_file_path(&path)?;
 
             let existing_passphrase_ref = match existing {
                 Some(AuthMethod::IdentityFile {
@@ -622,7 +633,7 @@ pub fn delete_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     auth: &AuthMethod,
 ) -> Vec<CredentialRef> {
-    // Spec 0082, §5: dieselbe Zuordnung, die auch das Aufräumen nach einem
+    // Spec 0082, §4: dieselbe Zuordnung, die auch das Aufräumen nach einem
     // Methodenwechsel benutzt — sie steht nur noch an einer Stelle.
     auth_method_credential_refs(auth)
         .into_iter()
@@ -950,7 +961,7 @@ mod tests {
         }
     }
 
-    /// **Spec 0076, §7.1 — die Stelle, die still brach.**
+    /// **Spec 0076, A-5 (ADR 0065) — die Stelle, die still brach.**
     ///
     /// Damals zählte ein `cleanup_abandoned_slots` Paare von Anmeldearten
     /// auf, um „ist das dieselbe Art?" zu beantworten, mit einem impliziten
@@ -1009,6 +1020,49 @@ mod tests {
             "die hinterlegte Passphrase darf beim Bearbeiten nicht aus dem Schlüsselbund \
              verschwinden — das wäre ein Credential-Verlust ohne Fehlermeldung"
         );
+    }
+
+    /// Issue #254: Ein leerer, nur aus Leerraum oder nur aus unsichtbaren
+    /// Randzeichen bestehender Pfad wird beim Speichern abgelehnt.
+    #[test]
+    fn test_blank_identity_file_path_is_rejected_on_save() {
+        for blank in ["", "   ", "\u{200B}", " \u{200B}\t"] {
+            let err = resolve_auth_method(
+                &InMemoryCredentialStore::new(),
+                ServerId::new(),
+                AuthMethodInput::IdentityFile {
+                    path: blank.to_string(),
+                    passphrase: None,
+                },
+                None,
+            )
+            .expect_err("blank path must be rejected");
+            assert_eq!(
+                err.code,
+                Some("SERVER_IDENTITY_FILE_REQUIRED"),
+                "path {blank:?}"
+            );
+        }
+    }
+
+    /// Spec 0076, A-1/A-5: Leerraum um einen echten Pfad bleibt erhalten.
+    #[test]
+    fn test_identity_file_path_with_surrounding_spaces_is_stored_unchanged() {
+        let padded = format!("  {IDENTITY_PATH} ");
+        let auth = resolve_auth_method(
+            &InMemoryCredentialStore::new(),
+            ServerId::new(),
+            AuthMethodInput::IdentityFile {
+                path: padded.clone(),
+                passphrase: None,
+            },
+            None,
+        )
+        .unwrap();
+        let AuthMethod::IdentityFile { path, .. } = auth else {
+            panic!("expected AuthMethod::IdentityFile");
+        };
+        assert_eq!(path, padded);
     }
 
     /// A-1: Der Pfad geht **nicht** in den Schlüsselbund — er ist kein

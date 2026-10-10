@@ -74,7 +74,7 @@ uuid = { version = "1.26.0", features = ["v4", "serde"] }
 # unter `[dependencies]`.
 persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite", features = ["test-support"] }
 tempfile = "3.27.0"
-# Spec 0076, §9 K-3: `libc::mkfifo` im Testaufbau von
+# ADR 0065 §3 (Nachtrag): `libc::mkfifo` im Testaufbau von
 # `ssh_config_apply/tests.rs` — nach Spec 0084 der einzige verbliebene
 # Gebrauch in dieser Crate, deshalb nur noch `[dev-dependencies]`.
 libc = "0.2.189"

@@ -23,7 +23,10 @@ Authentifizierung ein.
 
 ## 2. Obergrenzen für die Argon2-Parameter (nicht in A14 gefordert)
 
-m ≤ 1 GiB, t ≤ 16, p ≤ 16, geprüft **vor** der Ableitung.
+m ≤ 256 MiB, t ≤ 16, p ≤ 16, geprüft **vor** der Ableitung.
+
+**Nachtrag (#266):** Die Grenze für m wurde von 1 GiB auf 256 MiB gesenkt;
+Dateien darüber gehen den Weg „unbrauchbare Verpackungsdatei“.
 
 **Grund:** Die Parameter stehen in einer Datei, die jemand mit Schreibzugriff
 auf das Datenverzeichnis ändern kann. Ohne Obergrenze wäre `m = 4 GiB` eine
@@ -31,9 +34,8 @@ Speicherbombe, die vor dem ersten Fenster zuschlägt — und die Reihenfolge ist
 nicht umkehrbar: Die Authentifizierung braucht den abgeleiteten Schlüssel.
 Eine Grenze nach oben ist die einzige Stelle, an der dieser Fall abzufangen
 ist. Sie liegt weit über den Schreibparametern, behindert also keine
-Erhöhung. Der Reviewer hält fest, dass 1 GiB noch reichlich ist; das Senken
-auf z. B. 256 MiB ist Härtung, kein Fehler, und **bleibt bewusst offen**
-(Klarstellung 9 nimmt diesen Punkt ausdrücklich nicht auf).
+Erhöhung. Der Reviewer hielt fest, dass 1 GiB noch reichlich ist; das Senken
+auf 256 MiB war Härtung, kein Fehler, und ist mit #266 **erledigt**.
 
 ## 3. Neuer Typ `RootKey` statt `Zeroizing<[u8; 32]>`
 
@@ -49,7 +51,7 @@ eine Kopie liegen zu lassen. Die Variante besitzt den Schlüssel (nicht
 geliehen), weil der Moduswechsel aus D1 mitten in der Startschleife einen
 neuen K einsetzt.
 
-**Was von A19 (SOLL) offen bleibt:** Die Entscheidungstabelle kopiert K
+**Was von A19 (SOLL) zunächst offen blieb (seit Issue #267 erledigt, s. Punkt 10):** Die Entscheidungstabelle kopiert K
 weiter in ein `Option<[u8; 32]>`, weil der Bestand (`read_key_state`,
 `DatabaseKey::from_root_key`, `AppState`s Chat-Cipher) mit `[u8; 32]`
 arbeitet. Das umzustellen ist ein eigener Schritt und kein Teil dieser
@@ -181,10 +183,18 @@ nichts gesehen hat.
   D1-Knopf („Master-Passwort einrichten“) wird deshalb nativ noch nicht
   gezeigt: Der Weg dahinter ist fertig, nur die Maske fehlt, und ohne sie
   stünde der Nutzer vor einem Fenster ohne Eingabefeld.
+- **Obergrenzen der Argon2-Parameter** blieben bei 1 GiB / t 16 / p 16
+  (Punkt 2). **Erledigt mit #266:** m ≤ 256 MiB.
+- **`create_new` für die `.new`-Datei** und **der Hinweis an
+  `Wiring::plugins`** (Punkt 8): **erledigt mit #266.**
 - **Obergrenzen der Argon2-Parameter** bleiben bei 1 GiB / t 16 / p 16
   (Punkt 2). Härtung, kein Fehler; Klarstellung 9 nimmt den Punkt nicht auf.
-- **A19 bleibt im Bestand unerfüllt**, soweit `read_key_state` und
-  `DatabaseKey::from_root_key` mit `[u8; 32]` arbeiten (Punkt 3).
+- **A19 im Bestand: nachgezogen mit Issue #267.** `RootKeyState`,
+  `read_key_state`, `DatabaseKey::from_root_key`, `wrap_root_key` und die
+  Umstellung der Altspalten arbeiten mit `RootKey`. Für die eine Stelle, an
+  der K aus dem Entsperr-Zustand in den Startablauf wandert, gibt es
+  `RootKey::duplicate` (kein `Clone`); beide Kopien werden überschrieben.
+  Reine Test-Helfer behalten Arrays.
 - **T17 und die zweite Hälfte von T18 waren nicht als eigene Tests belegt.**
   T17 war durch die vorhandenen Prüfungen auf Fehlertexte und die
   Log-Positivliste abgedeckt, T18s zweite Hälfte (MCP-Anfrage im gesperrten

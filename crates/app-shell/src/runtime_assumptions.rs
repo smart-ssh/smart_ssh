@@ -1,4 +1,4 @@
-//! Spec 0101, Teil 0 Frage 2: die eine Annahme über Tauris Async-Runtime,
+//! Spec 0101, §2 Frage 2: die eine Annahme über Tauris Async-Runtime,
 //! auf der der synchrone Secret-Speicher steht — als Test, nicht als Satz
 //! in einem Kommentar.
 //!

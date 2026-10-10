@@ -62,7 +62,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
    * Klarstellung 10e, „ein geöffnetes Passwortfeld ist leer" — mit einem
    * neuen `key` entsteht der Zustand des Dialogs je Frage neu. */
   const [questionSerial, setQuestionSerial] = useState(0);
-  /** Teil 0 Frage 3: Der Startablauf wird genau **einmal** je Programmlauf
+  /** §2 Frage 3: Der Startablauf wird genau **einmal** je Programmlauf
    * aus dem Fenster fortgesetzt. Ohne den Merker schickte ein zweiter
    * Durchlauf des Effekts (React im Entwicklungsmodus) einen zweiten
    * Aufruf, der im Backend auf der Entsperr-Sperre wartet, bis die erste
@@ -76,6 +76,11 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
   /** Steht der Zuhörer für `startup:prompt`? Erst dann darf ein Kommando
    * laufen, dessen Antwort eine Frage im Fenster ist. */
   const [listening, setListening] = useState(false);
+  /** Zählt die Versuche, die Zuhörer anzumelden. „Erneut versuchen“ erhöht
+   * ihn, wenn die Anmeldung gescheitert ist (`listening` falsch) — als
+   * Abhängigkeit des Zuhörer-Effekts meldet dieser sich dann neu an, nachdem
+   * die Aufräumfunktion die halb angemeldeten Zuhörer abgemeldet hat. */
+  const [listenAttempt, setListenAttempt] = useState(0);
 
   /** Den Zustand neu holen. **Löscht die Meldung nicht** — sonst wischte
    * das Nachfragen nach einem Fehlversuch (s. [`run`]) genau die Meldung
@@ -91,8 +96,15 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
 
   const retry = useCallback(() => {
     setError(null);
+    if (!listening) {
+      // Die Zuhörer stehen nicht: Erst sie neu anmelden. Der Effekt holt
+      // danach bei Bedarf auch den Zustand (Reihenfolge „Zuhörer zuerst,
+      // dann Kommandos“ bleibt).
+      setListenAttempt((attempt) => attempt + 1);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, listening]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,9 +158,9 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       void prompt.then((unlisten) => unlisten()).catch(() => {});
       void unlocked.then((unlisten) => unlisten()).catch(() => {});
     };
-  }, [initialState, refresh]);
+  }, [initialState, refresh, listenAttempt]);
 
-  // Teil 0 Frage 3: Im Schlüsselbund-Modus **ohne** Zustand ist der Start in
+  // §2 Frage 3: Im Schlüsselbund-Modus **ohne** Zustand ist der Start in
   // D1 gelandet und soll im Fenster weitergehen — dort gibt es das
   // Eingabefeld, das die nativen Dialoge nicht haben. Der Aufruf setzt den
   // Ablauf fort; die Wahl selbst fällt im Dialog D1, der daraufhin kommt.
@@ -266,7 +278,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               <button
                 type="submit"
                 disabled={busy || password.length === 0}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("startup.unlockButton")}
               </button>
@@ -304,7 +316,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               <button
                 type="button"
                 onClick={retry}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500"
               >
                 {t("startup.answers.retry")}
               </button>
@@ -327,13 +339,21 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
                 type="button"
                 disabled={busy}
                 onClick={() => {
+                  // Standen die Zuhörer nie (Anmeldung gescheitert), kommt
+                  // zuerst die erneute Anmeldung; danach setzt der Effekt
+                  // über `listening` den Startablauf fort.
+                  if (!listening) {
+                    setListenAttempt((attempt) => attempt + 1);
+                    setError(null);
+                    return;
+                  }
                   // Noch einmal in den Startablauf: Der Merker wird
                   // zurückgesetzt, damit der Dialog erneut erscheint.
                   continuedInTheWindow.current = false;
                   setContinueAttempt((attempt) => attempt + 1);
                   setError(null);
                 }}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("startup.answers.retry")}
               </button>

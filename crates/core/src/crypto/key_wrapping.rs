@@ -66,9 +66,9 @@ const MIN_P_COST: u32 = WRITE_P_COST;
 /// irgendetwas das Chiffrat authentifizieren kann (die Authentifizierung
 /// **braucht** den abgeleiteten Schlüssel, die Reihenfolge ist nicht
 /// umkehrbar). Eine Grenze nach oben ist deshalb die einzige Stelle, an der
-/// dieser Fall abzufangen ist. Sie liegt weit über dem, was A14 schreibt,
-/// also behindert sie keine spätere Erhöhung.
-const MAX_M_COST_KIB: u32 = 1024 * 1024; // 1 GiB
+/// dieser Fall abzufangen ist. Sie liegt mit 256 MiB das Vierfache über dem,
+/// was A14 schreibt, also behindert sie eine moderate spätere Erhöhung nicht.
+const MAX_M_COST_KIB: u32 = 256 * 1024; // 256 MiB (ADR 0095 §2)
 const MAX_T_COST: u32 = 16;
 const MAX_P_COST: u32 = 16;
 
@@ -166,6 +166,29 @@ pub struct RootKey {
 impl RootKey {
     fn new(bytes: Zeroizing<[u8; DATABASE_KEY_LEN]>) -> Self {
         Self { bytes }
+    }
+
+    /// Nimmt einen bereits in `Zeroizing` liegenden K auf (Keychain-Pfade,
+    /// Issue #267): Der Wert wird verschoben, nicht kopiert.
+    pub(crate) fn from_zeroizing(bytes: Zeroizing<[u8; DATABASE_KEY_LEN]>) -> Self {
+        Self::new(bytes)
+    }
+
+    /// Eine ausdrückliche, selbst wieder überschriebene Zweitkopie von K.
+    ///
+    /// **Bewusst kein `Clone`:** Ein `.clone()` fiele in keinem Review auf.
+    /// Diese Methode gibt es für die eine Stelle, an der K aus dem
+    /// Entsperr-Zustand in den Startablauf wandert, während der
+    /// Entsperr-Zustand weiterlebt (`app_logic::database_startup`). Beide
+    /// Kopien werden beim Freigeben überschrieben.
+    pub fn duplicate(&self) -> Self {
+        Self::new(Zeroizing::new(*self.bytes))
+    }
+
+    /// Nur für Tests: baut einen `RootKey` aus einem festen Array.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn for_tests(bytes: [u8; DATABASE_KEY_LEN]) -> Self {
+        Self::new(Zeroizing::new(bytes))
     }
 
     /// Nimmt einen frisch erzeugten K in den schützenden Typ (A19,
@@ -341,10 +364,7 @@ fn derive_wrapping_key(
 /// Der Rückgabewert ist der vollständige Inhalt der Verpackungsdatei. Er
 /// enthält K nur als Chiffrat — ein Blick in die Datei zeigt Parameter,
 /// Salt und Nonce, nichts weiter.
-pub fn wrap_root_key(
-    root_key: &[u8; DATABASE_KEY_LEN],
-    password: &SecretString,
-) -> Result<Vec<u8>, KeyWrapError> {
+pub fn wrap_root_key(root_key: &RootKey, password: &SecretString) -> Result<Vec<u8>, KeyWrapError> {
     check_password_length(password)?;
 
     let header = Header {
@@ -370,7 +390,7 @@ pub fn wrap_root_key(
         .encrypt(
             &nonce_of(&header.nonce),
             Payload {
-                msg: root_key,
+                msg: root_key.expose(),
                 aad: &aad,
             },
         )

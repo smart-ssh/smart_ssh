@@ -196,6 +196,12 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         {
             let mut ctx = session.context.lock().await;
             ctx.system_context = updated_system_context;
+            // Issue #323: ein Wechsel der UI-Sprache gilt ab der nächsten
+            // Nachricht auch für die `suggest_command`-Beschreibung — sonst
+            // stünde der englische Prompt neben der deutschen Beschreibung.
+            ctx.available_actions = app_logic::system_prompt::session_action_schemas(
+                updated_system_context_parts.language,
+            );
         }
         *session.system_context_parts.lock().await = updated_system_context_parts;
         // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
@@ -379,6 +385,35 @@ pub async fn stop_auto_continuation(
         .ok_or("Session nicht gefunden")?;
     session.request_auto_continue_stop();
     Ok(())
+}
+
+/// Issue #271, Spec 0034 §11: "Neuer Chat" innerhalb der bestehenden
+/// Verbindung — s. `app_logic::orchestration::start_new_chat`. Liefert die
+/// ID der neuen `chat_sessions`-Zeile (`None` für einen lokalen Tab).
+#[tauri::command]
+pub async fn start_new_chat(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<Option<String>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    // Der aktuell aktive Anbieter, wie beim Verbinden; ohne aktiven Anbieter
+    // bleibt die Spalte leer, statt den Chat zu verhindern.
+    let provider_id = super::ai_providers::active_ai_provider_config(&state)
+        .await
+        .ok()
+        .map(|config| config.id.0);
+    let new_id = app_logic::orchestration::start_new_chat(
+        &session,
+        session_id,
+        &TauriEventEmitter(app),
+        provider_id,
+    )
+    .await?;
+    Ok(new_id.map(|id| id.to_string()))
 }
 
 #[tauri::command]
@@ -672,6 +707,7 @@ mod send_chat_message_persistence_tests {
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
@@ -724,8 +760,8 @@ mod send_chat_message_persistence_tests {
         let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
 
         let mut session = test_session(server_id);
-        session.parts_mut_for_tests().chat_session_store = Some(chat_store.clone());
-        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        session.set_chat_session_store_for_tests(Some(chat_store.clone()));
+        session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
 
         (session, profile_store, chat_store, tmp_dir)
     }
@@ -816,10 +852,10 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
             persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
@@ -990,14 +1026,15 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().transport =
-            app_logic::session::SessionTransport::new(Box::new(EchoTransport));
-        session.parts_mut_for_tests().filter_engine =
-            Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedActionProvider {
+        session.set_transport_for_tests(app_logic::session::SessionTransport::new(Box::new(
+            EchoTransport,
+        )));
+        session
+            .set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
+        session.set_ai_provider_for_tests(Box::new(GatedActionProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
             persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
@@ -1078,10 +1115,10 @@ mod send_chat_message_persistence_tests {
     async fn test_run_chat_turn_does_not_swallow_an_early_stop() {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: Arc::new(tokio::sync::Notify::new()),
             contexts: contexts.clone(),
-        });
+        }));
         session.request_auto_continue_stop();
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
@@ -1113,10 +1150,10 @@ mod send_chat_message_persistence_tests {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
         let gate = Arc::new(tokio::sync::Notify::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         session.request_auto_continue_stop();
         let dir = tempfile::tempdir().unwrap();
         let policy_store =

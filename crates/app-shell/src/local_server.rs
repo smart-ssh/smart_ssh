@@ -25,7 +25,8 @@ use ssh_manager_core::profiles::Server;
 // dieses Modul bleibt wegen `AppHandle`/`tauri-plugin-store` in `app-shell`.
 use app_logic::dto::LOCAL_SERVER_ID;
 
-const SETTINGS_STORE_FILE: &str = "settings.json";
+use crate::settings_store::{self, SETTINGS_STORE_FILE};
+
 const NOTES_KEY: &str = "localServerNotes";
 const TAGS_KEY: &str = "localServerTags";
 
@@ -51,15 +52,17 @@ fn load_tags<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
 }
 
 pub fn save_notes<R: Runtime>(app: &AppHandle<R>, notes: &str) -> Result<(), String> {
-    let store = app.store(SETTINGS_STORE_FILE).map_err(|e| e.to_string())?;
-    store.set(NOTES_KEY, serde_json::json!(notes));
-    store.save().map_err(|e| e.to_string())
+    settings_store::update(app, |changes| {
+        changes.set(NOTES_KEY, serde_json::json!(notes))
+    })
+    .map_err(|e| e.message)
 }
 
 pub fn save_tags<R: Runtime>(app: &AppHandle<R>, tags: &[String]) -> Result<(), String> {
-    let store = app.store(SETTINGS_STORE_FILE).map_err(|e| e.to_string())?;
-    store.set(TAGS_KEY, serde_json::json!(tags));
-    store.save().map_err(|e| e.to_string())
+    settings_store::update(app, |changes| {
+        changes.set(TAGS_KEY, serde_json::json!(tags))
+    })
+    .map_err(|e| e.message)
 }
 
 /// Baut den synthetischen `Server` für die Kernschleife (Filter-Engine-

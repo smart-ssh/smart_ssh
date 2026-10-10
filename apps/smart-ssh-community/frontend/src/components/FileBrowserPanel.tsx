@@ -203,6 +203,7 @@ export function FileBrowserPanel({
   // Spec 0067, A4: Ziel-Nutzer der Rechteerhöhung, Default root.
   const [elevationTargetUser, setElevationTargetUser] = useState("root");
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
+  const [elevationWarning, setElevationWarning] = useState<string | null>(null);
   const elevated = elevation !== null;
   const elevatedUser = elevation?.targetUser ?? "";
   // Spec 0067, A5: an jeden Aufruf übergeben — `null` = normaler Kanal,
@@ -219,6 +220,7 @@ export function FileBrowserPanel({
   const updateElevation = (next: { targetUser: string } | null) => {
     elevationGenerationRef.current += 1;
     setElevation(next);
+    if (next === null) setElevationWarning(null);
     onElevationChangeRef.current?.(next?.targetUser ?? null);
     if (next === null) {
       sftpElevationDisable(sessionId).catch((err) =>
@@ -296,6 +298,7 @@ export function FileBrowserPanel({
       }
       if (result.active) {
         updateElevation({ targetUser: result.targetUser });
+        setElevationWarning(result.warning?.path ?? null);
         load(path, result.targetUser);
       } else {
         setElevationFailure(result);
@@ -961,6 +964,11 @@ export function FileBrowserPanel({
           </button>
         </div>
       )}
+      {elevated && elevationWarning && (
+        <div role="alert" className="bg-red-950 px-2 py-1.5 text-xs text-red-200">
+          {t("fileElevation.failure.sftpServerUnsafe", { path: elevationWarning })}
+        </div>
+      )}
       <div className="flex items-center gap-1.5 border-b border-slate-800 px-2 py-1.5">
         <button
           type="button"
@@ -1371,7 +1379,7 @@ export function FileBrowserPanel({
       )}
 
       {editUploadOffer && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {localEdit.session?.elevatedUser
@@ -1437,7 +1445,7 @@ export function FileBrowserPanel({
       )}
 
       {deleteTarget && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm border border-red-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-red-300">
               {elevated
@@ -1501,7 +1509,7 @@ export function FileBrowserPanel({
       )}
 
       {moveCollision && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {elevated
@@ -1533,7 +1541,7 @@ export function FileBrowserPanel({
       )}
 
       {uploadConflict && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
@@ -1576,7 +1584,7 @@ export function FileBrowserPanel({
       )}
 
       {folderConfirm && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
               {t("fileBrowser.folderUpload.conflictTitle")}
@@ -1613,7 +1621,7 @@ export function FileBrowserPanel({
       )}
 
       {folderSummary && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg border border-slate-700 bg-slate-900 p-5 shadow-xl">
             <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
               {t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
@@ -1786,7 +1794,7 @@ function FilePropertiesDialog({
   );
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
         <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
           {t("fileBrowser.properties.title")}
@@ -1882,7 +1890,7 @@ function ChmodDialog({
   };
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
         <h2 className="font-heading mb-1 text-sm font-semibold text-slate-100">
           {t("fileBrowser.chmod.title")}
@@ -1996,7 +2004,7 @@ function RenamePrompt({
   }, []);
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
         <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
           {title ?? t("fileBrowser.renamePrompt.renameTitle")}
@@ -2097,7 +2105,7 @@ function ElevationFailureDialog({
   };
 
   return (
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div
         // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- ein natives <dialog> bleibt ohne showModal()/`open` unsichtbar und bringt eigene Browser-Stile und Top-Layer-Stapelung mit; das Overlay darüber liefert das modale Layout bereits (Issue #112).
         role="dialog"
@@ -2106,7 +2114,7 @@ function ElevationFailureDialog({
         <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
           {t("fileElevation.failureTitle")}
         </h2>
-        <p className="mb-3 text-sm text-slate-300">{t(`fileElevation.failure.${failure.kind}`)}</p>
+        <p className="mb-3 text-sm text-slate-300">{t(`fileElevation.failure.${failure.kind}`, { path: failure.detail ?? "" })}</p>
         {failure.sudoersLine && (
           <>
             <p className="mb-2 text-sm text-slate-300">{t("fileElevation.sudoersIntro")}</p>
@@ -2128,7 +2136,7 @@ function ElevationFailureDialog({
             </p>
           </>
         )}
-        {failure.detail && (
+        {failure.detail && failure.kind !== "sftpServerUnsafe" && (
           <p className="mb-3 font-mono text-xs break-all text-slate-500">
             {t("fileElevation.detail", { detail: failure.detail })}
           </p>

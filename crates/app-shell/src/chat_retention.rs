@@ -11,10 +11,11 @@ use tauri_plugin_store::StoreExt;
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
-const SETTINGS_STORE_FILE: &str = "settings.json";
+use crate::settings_store::{self, SETTINGS_STORE_FILE};
+
 const RETENTION_DAYS_KEY: &str = "chatSessionRetentionDays";
 
-fn read_retention_days<R: Runtime>(app: &AppHandle<R>) -> Option<u32> {
+pub(crate) fn read_retention_days<R: Runtime>(app: &AppHandle<R>) -> Option<u32> {
     app.store(SETTINGS_STORE_FILE)
         .ok()?
         .get(RETENTION_DAYS_KEY)?
@@ -33,16 +34,14 @@ pub fn get_chat_session_retention_days(app: AppHandle) -> CommandResult<Option<u
 /// `tauri::test::MockRuntime` statt der echten `Wry`-Runtime aufrufen
 /// können — derselbe Grund wie bei `commands::ensure_first_run_notice_
 /// acknowledged`.
-fn write_retention_days<R: Runtime>(app: &AppHandle<R>, days: Option<u32>) -> CommandResult<()> {
-    let store = app.store(SETTINGS_STORE_FILE)?;
-    match days {
-        Some(days) => store.set(RETENTION_DAYS_KEY, serde_json::json!(days)),
-        None => {
-            store.delete(RETENTION_DAYS_KEY);
-        }
-    }
-    store.save()?;
-    Ok(())
+pub(crate) fn write_retention_days<R: Runtime>(
+    app: &AppHandle<R>,
+    days: Option<u32>,
+) -> CommandResult<()> {
+    settings_store::update(app, |changes| match days {
+        Some(days) => changes.set(RETENTION_DAYS_KEY, serde_json::json!(days)),
+        None => changes.delete(RETENTION_DAYS_KEY),
+    })
 }
 
 #[tauri::command]

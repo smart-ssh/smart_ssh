@@ -11,6 +11,7 @@ import {
   getServer,
   inspectKeyFile,
   largeNoteDialogThresholdChars,
+  listStoredHostKeys,
   previewEffectiveNotes,
   requestNoteShrink,
   testConnection,
@@ -35,6 +36,7 @@ import type {
   PostIngestPolicy,
   ServerDto,
   ServerInput,
+  StoredHostKeyDto,
   TestConnectionReport,
   TestConnectionResult,
 } from "../types";
@@ -110,7 +112,7 @@ function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
  * das Backend verlangt dort zwingend einen Wert und lehnt sonst ab). Die
  * Passphrase ist immer optional, auch bei Neuanlage.
  *
- * Spec 0073, §9 (Q-BL-0149-02): Derselbe `buildInput()` bedient auch
+ * Spec 0073, A6–A8 (Q-BL-0149-02): Derselbe `buildInput()` bedient auch
  * "Verbindung testen" (s. unten) — und dort gilt seither dieselbe Regel.
  * Ein leeres Pflichtfeld bei Neuanlage endet also in beiden Fällen in der
  * Fehlermeldung, nicht in einem Anmeldeversuch mit leerem Secret. Auf
@@ -254,6 +256,9 @@ export function ServerForm({
   // Spec 0032, Abschnitt 3: nur bekannt, sobald `loaded` geladen ist (der
   // lokale Pseudo-Server ist nie `serverId === null`, also nie `isCreate`).
   const isLocal = loaded?.isLocal ?? false;
+  // Spec 0008: stored host keys of the saved host/port; null = not loaded
+  // (or load failed), shown only for an existing, non-local server.
+  const [storedHostKeys, setStoredHostKeys] = useState<StoredHostKeyDto[] | null>(null);
   const [localNotes, setLocalNotes] = useState("");
   const [savingLocalNotes, setSavingLocalNotes] = useState(false);
   const [savingLocalTags, setSavingLocalTags] = useState(false);
@@ -399,6 +404,7 @@ export function ServerForm({
     setConvertConfirmOpen(false);
     setConverting(false);
     setConvertError(null);
+    setStoredHostKeys(null);
     if (serverId === null) {
       setLoaded(null);
       setName("");
@@ -415,6 +421,9 @@ export function ServerForm({
       setAiInjectionCheckEnabled(false);
       return;
     }
+    listStoredHostKeys(serverId)
+      .then((keys) => setStoredHostKeys(keys))
+      .catch(() => setStoredHostKeys(null));
     getServer(serverId)
       .then((server) => {
         setLoaded(server);
@@ -693,6 +702,7 @@ export function ServerForm({
           kind: result.kind === "hostKeyUnknown" ? "unknown" : "mismatch",
           fingerprint: result.kind === "hostKeyUnknown" ? result.fingerprint : result.actualFingerprint,
           expectedFingerprint: result.kind === "hostKeyMismatch" ? result.expectedFingerprint : null,
+          keyType: result.keyType,
         });
       }
     } catch (err) {
@@ -817,7 +827,7 @@ export function ServerForm({
             type="button"
             onClick={handleSaveLocalTags}
             disabled={savingLocalTags}
-            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             {savingLocalTags ? t("common.saving") : t("common.save")}
           </button>
@@ -850,7 +860,7 @@ export function ServerForm({
             type="button"
             onClick={handleSaveLocalNotes}
             disabled={savingLocalNotes}
-            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             {savingLocalNotes ? t("common.saving") : t("common.save")}
           </button>
@@ -1231,7 +1241,7 @@ export function ServerForm({
                     type="button"
                     onClick={handleConvertToKeychain}
                     disabled={converting}
-                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
                   >
                     {converting
                       ? t("serverForm.convertToKeychain.converting")
@@ -1364,13 +1374,33 @@ export function ServerForm({
           </details>
         )}
 
+        {!isCreate && !isLocal && storedHostKeys !== null && (
+          <section aria-labelledby="stored-host-keys-heading" className="space-y-1">
+            <h3 id="stored-host-keys-heading" className="text-sm font-medium text-slate-300">
+              {t("serverForm.hostKeys.title")}
+            </h3>
+            {storedHostKeys.length === 0 ? (
+              <p className="text-xs text-slate-500">{t("serverForm.hostKeys.none")}</p>
+            ) : (
+              <ul className="space-y-1">
+                {storedHostKeys.map((k) => (
+                  <li key={`${k.algorithm}:${k.fingerprint}`} className="text-xs text-slate-300">
+                    <span className="font-mono">{k.algorithm}</span>{" "}
+                    <span className="select-text break-all font-mono">{k.fingerprint}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="submit"
             disabled={saving}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
           </button>

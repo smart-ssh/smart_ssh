@@ -13,14 +13,7 @@ interface AllowedViolation {
   reason: string;
 }
 
-export const AXE_ALLOWLIST: AllowedViolation[] = [
-  {
-    rule: "color-contrast",
-    screens: "*",
-    reason:
-      "The dark theme uses muted text colours (secondary labels, inactive tabs, hints) below the 4.5:1 ratio on many screens. Raising them is an app-wide visual design change, not part of the test setup.",
-  },
-];
+export const AXE_ALLOWLIST: AllowedViolation[] = [];
 
 export async function expectNoSeriousA11yViolations(page: Page, screen: string): Promise<void> {
   const results = await new AxeBuilder({ page }).analyze();

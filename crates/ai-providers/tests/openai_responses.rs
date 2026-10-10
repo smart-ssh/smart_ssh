@@ -449,3 +449,85 @@ async fn failed_response_releases_no_web_activity() {
     assert!(events.iter().any(|e| matches!(e, AiEvent::Error(_))));
     assert!(!events.iter().any(|e| matches!(e, AiEvent::WebActivity(_))));
 }
+
+fn ingested(events: &[AiEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| matches!(e, AiEvent::WebContentIngested))
+        .count()
+}
+
+#[tokio::test]
+async fn web_search_call_signals_ingest_even_when_the_response_fails() {
+    let server = serve(sse(&[
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"web_search_call","status":"completed","action":{"type":"search","query":"q"}}}"#,
+        ),
+        (
+            "response.failed",
+            r#"{"type":"response.failed","response":{"error":{"code":"server_error","message":"boom"}}}"#,
+        ),
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    assert_eq!(ingested(&events), 1, "{events:?}");
+    let signal = events
+        .iter()
+        .position(|e| matches!(e, AiEvent::WebContentIngested))
+        .unwrap();
+    let error = events
+        .iter()
+        .position(|e| matches!(e, AiEvent::Error(_)))
+        .unwrap();
+    assert!(signal < error, "{events:?}");
+}
+
+#[tokio::test]
+async fn web_search_call_signals_ingest_once_when_the_stream_is_cut() {
+    let server = serve(sse(&[
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"web_search_call","status":"completed","action":{"type":"search","query":"q"}}}"#,
+        ),
+        (
+            "response.output_item.done",
+            r#"{"type":"response.output_item.done","output_index":1,"item":{"type":"web_search_call","status":"completed","action":{"type":"search","query":"q2"}}}"#,
+        ),
+        (
+            "error",
+            r#"{"type":"error","code":"server_error","message":"boom"}"#,
+        ),
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    assert_eq!(ingested(&events), 1, "{events:?}");
+}
+
+#[tokio::test]
+async fn citation_alone_signals_ingest_and_plain_answer_does_not() {
+    let server = serve(sse(&[
+        (
+            "response.output_text.annotation.added",
+            r#"{"type":"response.output_text.annotation.added","annotation":{"type":"url_citation","url":"https://example.com/a","title":"A"}}"#,
+        ),
+        (
+            "response.failed",
+            r#"{"type":"response.failed","response":{"error":{"code":"server_error","message":"boom"}}}"#,
+        ),
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    assert_eq!(ingested(&events), 1, "{events:?}");
+
+    let server = serve(sse(&[
+        (
+            "response.output_text.delta",
+            r#"{"type":"response.output_text.delta","delta":"hi"}"#,
+        ),
+        COMPLETED,
+    ]))
+    .await;
+    let events = collect(&web_provider(&server, true)).await;
+    assert_eq!(ingested(&events), 0, "{events:?}");
+}

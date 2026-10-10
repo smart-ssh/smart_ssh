@@ -192,6 +192,40 @@ describe("StartupGate", () => {
     expect(await screen.findByText(/kein Zuhörer/)).toBeTruthy();
   });
 
+  it("meldet die Zuhörer bei „Erneut versuchen“ nach einer gescheiterten Anmeldung neu an (#269)", async () => {
+    // Ohne den Versuchszähler als Abhängigkeit des Zuhörer-Effekts bliebe
+    // `listening` falsch, der Knopf wäre wirkungslos, und es gäbe keine
+    // zweite Anmeldung.
+    const unlistenPrompt = vi.fn();
+    vi.mocked(onStartupPrompt).mockRejectedValueOnce(new Error("kein Zuhörer"));
+    vi.mocked(onStartupPrompt).mockResolvedValue(unlistenPrompt);
+    vi.mocked(unlockWithMasterPassword).mockResolvedValue(
+      state({ screen: "setUpMasterPassword", mode: "keychain" }),
+    );
+
+    renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
+    expect(await screen.findByText(/kein Zuhörer/)).toBeTruthy();
+    // Die Maske läuft nicht weiter, solange kein Zuhörer steht.
+    expect(unlockWithMasterPassword).not.toHaveBeenCalled();
+    expect(onStartupUnlocked).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Erneut versuchen" }));
+
+    await waitFor(() => expect(onStartupPrompt).toHaveBeenCalledTimes(2));
+    // Beide Zuhörer: genau zweimal angemeldet (ein Versuch, ein Neuversuch).
+    expect(onStartupUnlocked).toHaveBeenCalledTimes(2);
+    // Erst nach der erfolgreichen Anmeldung läuft das Kommando.
+    await waitFor(() => expect(unlockWithMasterPassword).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/kein Zuhörer/)).toBeNull();
+
+    // Eine Frage wird genau einmal behandelt (kein doppelter Zuhörer).
+    const handlers = vi.mocked(onStartupPrompt).mock.calls.map((c) => c[0]);
+    handlers.forEach((h) =>
+      h({ kind: "notice", title: "Einmal-0269", message: "Hinweis-0269" } as StartupPromptRequest),
+    );
+    expect(await screen.findAllByText(/Hinweis-0269/)).toHaveLength(1);
+  });
+
   it("zeigt bei einer echten Frage nur die Knöpfe, die ihre Art anbietet (A3)", async () => {
     renderGate(state());
     await waitFor(() => expect(onStartupPrompt).toHaveBeenCalled());

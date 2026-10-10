@@ -1,67 +1,46 @@
-# Spec: Server-/Gruppen-Kennzeichnung bei Notiz-Vorschlägen
+# Spec 0023 — Ziel-Kennzeichnung bei Notiz-Vorschlägen
 
-Status: Entwurf
-Modul: `frontend/` (Bestätigungsdialog, Disconnect-Benachrichtigung)
-Abhängigkeiten: Notiz-Vorschlag beim Beenden (Spec 0010), Änderungs-Vorschau
-(Spec 0019), Multi-Tab-Sessions (Spec 0017), Bugfix Ziel-Auflösung (Spec
-0016, Abschnitt 6)
+Status: umgesetzt
+Zweck: Jeder Notiz-Vorschlag zeigt deutlich, für welchen Server oder welche
+Gruppe er gilt, unabhängig davon, was gerade auf dem Bildschirm ist.
+Bezüge: Spec 0003 (Notiz-Ziele), Spec 0010 (Vorschlag beim Beenden), Spec
+0016 (Zielauflösung), Spec 0017 (Sitzungs-Tabs), Spec 0019
+(Änderungs-Vorschau).
 
-## 1. Problem
+## 1. Hintergrund
 
-Ein Notiz-Vorschlag für Server A wurde angezeigt, während der Nutzer gerade
-Server B geöffnet hatte — ohne erkennbaren Hinweis, dass sich der Vorschlag
-auf einen anderen Server bezieht. Das Backend hat korrekt gehandelt (der
-Vorschlag landete auch tatsächlich bei Server A, nicht bei B, gemäß der
-serverseitigen Zielauflösung aus Spec 0016, Abschnitt 6) — das Problem ist
-rein die fehlende Kennzeichnung in der Anzeige. Das widerspricht dem
-Kernprinzip der App: Der Nutzer muss immer eindeutig erkennen können, worauf
-sich eine Bestätigung bezieht, unabhängig davon, was er gerade auf dem
-Bildschirm hat.
-
-Ursache vermutlich: Die Disconnect-Benachrichtigung (`NoteSuggestionToast`,
-Spec 0010/0019) wurde als bewusst tab-/kontext-unabhängige Benachrichtigung
-gebaut (Spec 0010, Abschnitt 2, Punkt 6: "auch dann noch... wenn der Nutzer
-inzwischen zu einem anderen Screen navigiert hat") — dabei wurde
-offensichtlich vergessen, den Servernamen mit anzuzeigen, weil zum
-Zeitpunkt der Implementierung meist nur ein Server offen war und der Bezug
-"zufällig" klar schien.
+Ein Vorschlag für Server A konnte erscheinen, während der Nutzer Server B
+offen hatte, ohne dass erkennbar war, worauf er sich bezieht. Gespeichert
+wurde er korrekt bei A; es fehlte nur die Kennzeichnung. Grundsatz der App:
+Der Nutzer muss bei jeder Bestätigung eindeutig erkennen, worauf sie sich
+bezieht.
 
 ## 2. Ziel
 
-Jede Darstellung eines Notiz-Vorschlags — egal ob als reguläre
-Chat-Aktionskarte oder als Disconnect-Benachrichtigung, egal ob der
-betroffene Server/die Gruppe gerade sichtbar ist oder nicht — zeigt
-**immer und deutlich sichtbar** den Namen des Ziels (Server- oder
-Gruppenname) an, nicht nur den Notizinhalt selbst.
+Jede Darstellung eines Notiz-Vorschlags, als Aktionskarte im Chat wie als
+Benachrichtigung beim Beenden, zeigt **immer und deutlich** den Namen des
+Ziels, nicht nur den Notizinhalt.
 
-## 3. Umsetzung
+## 3. Kennzeichnung
 
-- `chat-action-proposed` und `note-update-suggested` (Spec 0019, Abschnitt
-  3) enthalten bereits ein aufgelöstes Ziel serverseitig — ergänze das
-  Event-Payload um `targetName: string` (Server- oder Gruppenname, bereits
-  zum Zeitpunkt der Zielauflösung bekannt, kein zusätzlicher Command nötig).
-- **`NoteSuggestionToast`**: zeigt `targetName` prominent im Titel/Header
-  der Benachrichtigung (z. B. "Notiz-Vorschlag für Server 'Proxmox'"), nicht
-  nur als Nebeninfo im Fließtext.
-- **Aktionskarte im Chat** (`ChatPanel`, regulärer In-Chat-Vorschlag): zeigt
-  `targetName` ebenfalls, **auch wenn** es sich um den aktuell offenen
-  Server der jeweiligen Session handelt — Konsistenz ist hier wichtiger als
-  Redundanz zu vermeiden, und verhindert eine Klasse von Bugs wie den
-  gemeldeten, falls sich der Anzeigekontext künftig ändert (z. B. durch
-  Multi-Tab, Spec 0017).
-- Bezieht sich der Vorschlag auf eine **Gruppe** statt einen Server
-  (`NoteTarget::Group`, Spec 0003), wird zusätzlich zum Gruppennamen ein
-  klar erkennbares Label ("Gruppen-Notiz", nicht "Server-Notiz") angezeigt —
-  sonst entsteht dieselbe Verwechslungsgefahr auf einer zweiten Achse
-  (Server vs. Gruppe statt nur Server A vs. Server B).
+- Die App liefert mit jedem Notiz-Vorschlag den Namen des aufgelösten
+  Ziels (Server- oder Gruppenname) mit, aus derselben Zielauflösung, die
+  auch beim Speichern gilt.
+- **Benachrichtigung beim Beenden:** Der Name steht im Titel, nicht nur im
+  Fließtext: „Notiz-Vorschlag für Server „…"" bzw.
+  „Gruppen-Notiz-Vorschlag für „…"".
+- **Aktionskarte im Chat:** Der Name steht in der Beschriftung, **auch
+  wenn** es der Server der eigenen Sitzung ist: „Notiz aktualisieren:
+  Server „…"" bzw. „Gruppen-Notiz aktualisieren: „…"". Konsistenz geht hier
+  vor dem Vermeiden von Wiederholung.
+- Ein Vorschlag für eine **Gruppe** ist immer ausdrücklich als
+  Gruppen-Notiz beschriftet, damit Server und Gruppe nicht verwechselt
+  werden.
+- Lässt sich der Name nicht ermitteln (z. B. Ziel inzwischen gelöscht),
+  steht an seiner Stelle „unbekanntes Ziel", nie ein leerer Platz.
 
-## 4. Test
+## 4. Akzeptanzfall
 
-Regressionstest für genau den gemeldeten Fall: Ein `ProposeNoteUpdate` für
-Server A wird ausgelöst, während im Frontend-State Server B als "aktuell
-betrachtet" markiert ist — das gerenderte Event zeigt nachweislich den
-Namen von Server A, nicht B und nicht gar keinen Namen.
-
-## 5. Offene Punkte
-
-- Keine — dies ist ein reiner Anzeige-Bugfix ohne neue Design-Entscheidungen.
+Ein Notiz-Vorschlag für Server A kommt an, während im Frontend Server B als
+aktuell gilt: Die Anzeige nennt nachweislich Server A, nicht B und nicht
+gar keinen Namen.

@@ -226,27 +226,32 @@ async fn run_test_connection(
             port,
             raw_key,
             decision,
-        }) => match decision {
-            HostKeyDecision::Unknown { fingerprint } => TestConnectionResult::HostKeyUnknown {
-                host,
-                port,
-                raw_key,
-                fingerprint,
-            },
-            HostKeyDecision::Mismatch {
-                expected_fingerprint,
-                actual_fingerprint,
-            } => TestConnectionResult::HostKeyMismatch {
-                host,
-                port,
-                raw_key,
-                expected_fingerprint,
-                actual_fingerprint,
-            },
-            HostKeyDecision::Trusted => {
-                unreachable!("PendingHostKeyConfirmation wird nur für Unknown/Mismatch gebaut")
+        }) => {
+            let key_type = crate::host_key_store::offered_key_type(&raw_key);
+            match decision {
+                HostKeyDecision::Unknown { fingerprint } => TestConnectionResult::HostKeyUnknown {
+                    host,
+                    port,
+                    raw_key,
+                    fingerprint,
+                    key_type,
+                },
+                HostKeyDecision::Mismatch {
+                    expected_fingerprint,
+                    actual_fingerprint,
+                } => TestConnectionResult::HostKeyMismatch {
+                    host,
+                    port,
+                    raw_key,
+                    expected_fingerprint,
+                    actual_fingerprint,
+                    key_type,
+                },
+                HostKeyDecision::Trusted => {
+                    unreachable!("PendingHostKeyConfirmation wird nur für Unknown/Mismatch gebaut")
+                }
             }
-        },
+        }
         Err(SshError::AuthenticationFailed) => TestConnectionResult::AuthenticationFailed,
         Err(SshError::Timeout) => TestConnectionResult::Timeout,
         // Spec 0098, A4: Die Variante des Ergebnisses bleibt `NetworkError`
@@ -309,7 +314,7 @@ fn resolve_final_hop_auth(
             let key_ref = CredentialRef::new("test:private_key");
             ephemeral.insert(&key_ref, key_secret);
 
-            // Spec 0073, §9 (K1, BL-0243): dieselbe Trim-Semantik und
+            // Spec 0073, A6–A8 (K1, BL-0243): dieselbe Trim-Semantik und
             // dieselbe „leer = das Gespeicherte nehmen"-Regel wie beim
             // Speichern (`server_credentials::resolve_auth_method`).
             // Vorher trat der Verbindungstest mit der Passphrase an, wie
@@ -380,7 +385,10 @@ fn resolve_final_hop_auth(
         // `KeyFileReader` wie beim echten Verbinden. Nur die Passphrase
         // folgt der gewohnten „leer = das Gespeicherte nehmen"-Regel.
         AuthMethodInput::IdentityFile { path, passphrase } => {
-            // Spec 0073, §9 (K1, BL-0243): wie im `PrivateKey`-Zweig über
+            // Dieselbe Leer-Prüfung wie beim Speichern — vor jedem
+            // Verbindungsversuch und jedem Lesen der Datei.
+            crate::server_credentials::require_identity_file_path(&path)?;
+            // Spec 0073, A6–A8 (K1, BL-0243): wie im `PrivateKey`-Zweig über
             // den geteilten `trim_credential_value` statt über
             // `str::trim` — und der getrimmte Wert ist auch der, der in
             // den Ephemeral-Store geht, nicht der rohe.
@@ -460,7 +468,7 @@ impl<'a> CredentialStore for TieredCredentialStore<'a> {
 /// oder, wenn das leer ist, aus dem gespeicherten Credential des bestehenden
 /// Servers.
 ///
-/// Spec 0073, §9 (Q-BL-0149-02): dieselbe Form wie
+/// Spec 0073, A6–A8 (Q-BL-0149-02): dieselbe Form wie
 /// `server_credentials::write_or_reuse_secret` beim Speichern. Der
 /// eingegebene Wert läuft über den geteilten [`trim_credential_value`], und
 /// **danach** entscheidet dieselbe Leer-Regel: nicht leer → dieser Wert;
@@ -493,7 +501,7 @@ fn resolve_secret(
     match provided.map(|value| trim_credential_value(&value)) {
         Some(value) if !value.is_empty() => Ok(SecretString::from(value)),
         _ => {
-            // Spec 0073, §9 (Q-BL-0149-03): derselbe Code wie beim Speichern
+            // Spec 0073, A6–A8 (Q-BL-0149-03): derselbe Code wie beim Speichern
             // (`write_or_reuse_secret`), damit beide Knöpfe bei derselben
             // Eingabe denselben übersetzten Satz zeigen. Der Text (nur
             // Rückfall ohne Übersetzung) behauptet nicht „kein Server
@@ -614,7 +622,8 @@ mod tests {
                 MockOutcome::UnknownHostKey => Ok(ConnectOutcome::PendingHostKeyConfirmation {
                     host: "example.invalid".to_string(),
                     port: 22,
-                    raw_key: b"raw-key".to_vec(),
+                    // Wire format: length-prefixed algorithm name, then key data.
+                    raw_key: [&[0, 0, 0, 11][..], b"ssh-ed25519", b"data"].concat(),
                     decision: HostKeyDecision::Unknown {
                         fingerprint: "SHA256:unknown".to_string(),
                     },
@@ -1110,6 +1119,39 @@ mod tests {
         );
     }
 
+    /// Issue #254: Ein leerer Schlüsseldatei-Pfad scheitert vor jedem
+    /// Verbindungsversuch und jedem Dateizugriff mit dem Pflichtfeld-Code.
+    #[tokio::test]
+    async fn test_blank_identity_file_path_is_rejected_before_any_file_read() {
+        for blank in ["", "   ", "\u{200B}"] {
+            let key_files = MockKeyFileReader::new();
+            let err = test_connection_result(
+                &InMemoryProfileStore::new(),
+                &InMemoryCredentialStore::new(),
+                &key_files,
+                Arc::new(NoOpHostKeyStore),
+                &MockConnector(MockOutcome::Success),
+                ServerInput {
+                    auth: AuthMethodInput::IdentityFile {
+                        path: blank.to_string(),
+                        passphrase: None,
+                    },
+                    ..password_input()
+                },
+                None,
+                Duration::from_millis(200),
+            )
+            .await
+            .expect_err("blank path must be rejected");
+            assert_eq!(
+                err.code,
+                Some("SERVER_IDENTITY_FILE_REQUIRED"),
+                "path {blank:?}"
+            );
+            assert!(key_files.calls().is_empty(), "no file read for {blank:?}");
+        }
+    }
+
     #[tokio::test]
     async fn test_success() {
         let profile_store = InMemoryProfileStore::new();
@@ -1149,10 +1191,12 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(matches!(
-            result,
-            TestConnectionResult::HostKeyUnknown { .. }
-        ));
+        match result {
+            TestConnectionResult::HostKeyUnknown { key_type, .. } => {
+                assert_eq!(key_type.as_deref(), Some("ssh-ed25519"));
+            }
+            other => panic!("expected HostKeyUnknown, got {other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -1173,10 +1217,13 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(matches!(
-            result,
-            TestConnectionResult::HostKeyMismatch { .. }
-        ));
+        // The mock key blob has no parseable algorithm name: `None`, not a guess.
+        match result {
+            TestConnectionResult::HostKeyMismatch { key_type, .. } => {
+                assert_eq!(key_type, None);
+            }
+            other => panic!("expected HostKeyMismatch, got {other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -1626,7 +1673,7 @@ mod tests {
         assert!(matches!(result, TestConnectionResult::Success));
     }
 
-    // --- Spec 0073, §9 (K1, BL-0243): Passphrase im Verbindungstest ------
+    // --- Spec 0073, A6–A8 (K1, BL-0243): Passphrase im Verbindungstest ------
     //
     // „Verbindung testen" und „Speichern" bekommen dieselbe Eingabe aus
     // demselben Formularfeld. Behandeln sie sie verschieden, sagt ein
@@ -1798,7 +1845,7 @@ mod tests {
         }
     }
 
-    // --- Spec 0073, §9 (Q-BL-0149-02): die übrigen Secret-Slots -----------
+    // --- Spec 0073, A6–A8 (Q-BL-0149-02): die übrigen Secret-Slots -----------
     //
     // Dieselbe Begründung wie beim Passphrase-Block oben, jetzt für die
     // Pflicht-Secrets selbst: Passwort, Key-Inhalt, Zertifikat und

@@ -12,6 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use ssh_manager_core::profiles::ssh_config::{build_export, quote_value, ExportPlan};
+use ssh_manager_core::profiles::ProfileStore;
 
 use app_logic::error::{CommandError, CommandResult};
 
@@ -210,9 +211,7 @@ pub async fn export_ssh_config(
         ));
     }
 
-    let servers = state.profile_store.list_servers().await?;
-    let groups = state.profile_store.list_groups().await?;
-    let plan = build_export(&servers, &groups, app_logic::dto::LOCAL_SERVER_ID);
+    let plan = load_export_plan(state.profile_store.as_ref()).await?;
 
     // `std::fs::write` statt `tokio::fs`: derselbe, durch eine explizite
     // Nutzeraktion ausgelöste Einzelschreibvorgang wie bei
@@ -221,6 +220,21 @@ pub async fn export_ssh_config(
     std::fs::write(&path, &plan.text)?;
 
     Ok(Some(build_result_dto(&plan, &path)))
+}
+
+/// Lädt Server und Gruppen und baut daraus den Exportplan. Aus dem
+/// `#[tauri::command]` herausgelöst, damit der Schritt ohne Dialog und
+/// `AppHandle` testbar ist. `list_servers` liefert nur nutzbare Server;
+/// eine nicht nutzbare Zeile (unbekannte oder beschädigte Anmeldeart)
+/// wird übergangen und lässt den Export nicht scheitern (Spec 0008 §6a).
+async fn load_export_plan(store: &dyn ProfileStore) -> CommandResult<ExportPlan> {
+    let servers = store.list_servers().await?;
+    let groups = store.list_groups().await?;
+    Ok(build_export(
+        &servers,
+        &groups,
+        app_logic::dto::LOCAL_SERVER_ID,
+    ))
 }
 
 #[cfg(test)]

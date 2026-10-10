@@ -74,6 +74,9 @@ pub(crate) mod elevation {
     pub(crate) struct ProbeTransport {
         probe: CommandOutput,
         sudo_check: CommandOutput,
+        /// Antwort auf die Eigentümer-/Rechte-Prüfung von `sftp-server`
+        /// (Spec 0067, A3); Standard: `SAFE`.
+        pub(crate) safety: CommandOutput,
         pub(crate) start_fails: bool,
         log: Arc<StdMutex<Vec<String>>>,
         /// Spec 0084, T8/T8b: meldet, dass das Öffnen des erhöhten Kanals
@@ -105,7 +108,9 @@ pub(crate) mod elevation {
     impl SshTransport for ProbeTransport {
         async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
             self.log.lock().unwrap().push(format!("exec:{command}"));
-            if command.contains("sudo -n") && command.contains(" -l ") {
+            if command.contains("-prune") {
+                Ok(self.safety.clone())
+            } else if command.contains("sudo -n") && command.contains(" -l ") {
                 Ok(self.sudo_check.clone())
             } else {
                 Ok(self.probe.clone())
@@ -156,6 +161,7 @@ pub(crate) mod elevation {
             ProbeTransport {
                 probe,
                 sudo_check,
+                safety: output(0, "SAFE\n", ""),
                 start_fails: false,
                 log: log.clone(),
                 open_reached: None,

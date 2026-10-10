@@ -98,7 +98,10 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
   geschrieben wird. Bei einem Fehler wird nichts gespeichert (Anlegen), und die
   gespeicherte Regel bleibt unverändert (Ändern). Die Schnellregel läuft über
   dieselbe Prüfung. Bei ihr gilt: Die Bestätigung wird trotzdem aufgelöst, und
-  der Fehler kommt getrennt zurück.
+  der Fehler kommt getrennt zurück. Dieselbe Prüfung gilt zusätzlich im
+  Regelspeicher selbst: Anlegen und Ändern lehnen ein nicht übersetzbares
+  Muster auch dann ab, wenn der Aufrufer nicht geprüft hat. Die Prüfung
+  davor bleibt bestehen.
 - **3.1.3** Ein ungültiges Muster erzeugt den Fehlercode
   `FILTER_RULE_PATTERN_INVALID` mit dem Fehlertext der Bibliothek als
   Meldung. Der Code geht auf allen drei Wegen (Anlegen, Ändern, Schnellregel)
@@ -129,6 +132,11 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
     `rm /x/[a/../b` → Deny). Ihn ganz zu streichen, würde eine greifende
     Deny-Regel abschwächen. „Wie nicht vorhanden" gilt also für das, was nicht
     übersetzt, nicht für den Teil, der wirkt.
+- **3.2.1a** Der Freigabe-Abschnitt des KI-Kontexts („Freigegebene Befehle")
+  führt Allow-Regeln, deren Muster die Prüfung nicht besteht, nicht auf. Eine
+  solche Regel greift nicht, der Befehl braucht weiter eine Bestätigung — die
+  KI soll keine Auto-Ausführung erwarten, die nicht stattfindet. Das ändert
+  nur den Kontext-Text, nicht die Auswertung.
 - **3.2.2** Jede Regel mit ungültigem Muster wird bei der Auswertung auf
   ERROR-Ebene gemeldet, **einmal je Auswertung**, nicht je Teilkommando und
   nicht erst beim ersten Treffer (sonst würden Regeln hinter dem Treffer nie
@@ -137,15 +145,26 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
   branch)"). **Weder das Muster noch das Kommando noch ein Fehlertext der
   Bibliothek stehen im Log:** Deren Fehlertexte zitieren das Muster wörtlich,
   und Muster wie Kommando können Geheimnisse enthalten. Das gilt für alle drei
-  Aktionen.
+  Aktionen. Eine Regel wird je Regel-Kennung und Muster nur **einmal**
+  gemeldet (je Filter-Engine, also je Verbindung), nicht bei jeder weiteren
+  Auswertung; ein geändertes Muster derselben Regel wird erneut gemeldet. Die
+  Auswertung selbst ist davon unberührt.
 - **3.2.3** Die Regelliste markiert eine Regel mit ungültigem Muster sichtbar:
   Jede aufgelistete Regel trägt gegebenenfalls den Fehlertext des Musters; die
   Liste zeigt einen Hinweis mit dem Text aus 3.1.6 und dem Fehlertext als
   Detail. Bearbeiten und Löschen bleiben möglich; Speichern verlangt nach
   Schicht 1 ein gültiges Muster. Die Pfeiltasten zum Verschieben der Priorität
-  sind an einer solchen Regel deaktiviert (mit Tooltip, der den Grund nennt),
-  und bevor eine Nachbarregel geändert wird, bricht das Verschieben ab. So
-  bleibt die Regel, dass jeder Schreibweg prüft.
+  sind an einer solchen Regel deaktiviert, und ebenso der Pfeil einer
+  Nachbarregel, dessen Verschieben die markierte Regel mitbeträfe; jeweils mit
+  Tooltip, der den Grund nennt. Das Verschieben tauscht die Prioritäten beider
+  Regeln in **einem** atomaren Schritt: Entweder sind beide getauscht, oder
+  keine hat sich geändert; nie tragen zwei Regeln danach dieselbe Priorität.
+  Der Schritt prüft beide Muster wie jeder andere Schreibweg (3.1.2) und
+  liefert bei einem ungültigen Muster `FILTER_RULE_PATTERN_INVALID`, ohne etwas
+  zu ändern. So bleibt die Regel, dass jeder Schreibweg prüft.
+- **3.2.3a** Die Testansicht markiert eine Regel mit ungültigem Muster wie die
+  Regelliste (Hinweis mit Text aus 3.1.6 und Fehlertext als Detail), zusätzlich
+  dazu, dass sie dort nicht (oder nur teilweise) passt.
 - **3.2.4** Die Auswertung von Mustern für die Risiko-Einstufung bleibt
   unverändert: ein Übersetzungsfehler ist dort weiterhin „passt nicht".
 
@@ -213,8 +232,14 @@ gespeicherte ungültige Regel bleibt wirkungslos, wird aber sichtbar gemacht
   auf allen drei Wegen (Anlegen, Ändern, Schnellregel).
 - **T-6e** Die Auflistung liefert für eine Regel mit ungültigem Muster den
   Fehlertext und für eine gültige keinen; die Liste zeigt bei gesetztem Fehler
-  den Hinweis mit Fehlertext. Die Pfeile sind deaktiviert, und es wird auch für
-  die Nachbarregel nichts geschrieben.
+  den Hinweis mit Fehlertext. Die Pfeile sind deaktiviert, auch der der Nachbarregel,
+  und es wird nichts geschrieben.
+- **T-6f** Das Vertauschen zweier Regeln tauscht beide Prioritäten; scheitert
+  der zweite Schreibzugriff, hat sich keine Priorität geändert. Ein Paar mit
+  einem ungültigen Muster wird mit `FILTER_RULE_PATTERN_INVALID` abgewiesen und
+  nichts ändert sich.
+- **T-6g** Die Testansicht zeigt für eine Regel mit ungültigem Muster den
+  Hinweis mit Fehlertext.
 
 ### 6.2 Fest eingebaute Muster
 

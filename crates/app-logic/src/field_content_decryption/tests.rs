@@ -54,7 +54,7 @@ impl StartupPrompt for NoticeRecorder {
 async fn store_with_server(dir: &std::path::Path) -> (SqliteProfileStore, ServerId) {
     let store = SqliteProfileStore::connect_encrypted(
         &dir.join("smart-ssh.db"),
-        &DatabaseKey::from_root_key(&K),
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(K)),
     )
     .await
     .expect("test database opens");
@@ -94,12 +94,20 @@ async fn test_removed_entries_are_announced_exactly_once() {
     }
     let prompt = NoticeRecorder::default();
 
-    decrypt_field_encrypted_content(&store, &K, &prompt)
-        .await
-        .expect("conversion succeeds");
-    decrypt_field_encrypted_content(&store, &K, &prompt)
-        .await
-        .expect("second start succeeds");
+    decrypt_field_encrypted_content(
+        &store,
+        &ssh_manager_core::crypto::RootKey::for_tests(K),
+        &prompt,
+    )
+    .await
+    .expect("conversion succeeds");
+    decrypt_field_encrypted_content(
+        &store,
+        &ssh_manager_core::crypto::RootKey::for_tests(K),
+        &prompt,
+    )
+    .await
+    .expect("second start succeeds");
 
     assert_eq!(*prompt.removed.lock().unwrap(), vec![2]);
     assert_eq!(field_encrypted_blob_count(&store).await, 0);
@@ -118,9 +126,13 @@ async fn test_no_notice_when_every_entry_was_readable() {
     insert_legacy_prompt_history_row(&store, &server_id, encrypt_for_tests(&K, "lesbar")).await;
     let prompt = NoticeRecorder::default();
 
-    decrypt_field_encrypted_content(&store, &K, &prompt)
-        .await
-        .expect("conversion succeeds");
+    decrypt_field_encrypted_content(
+        &store,
+        &ssh_manager_core::crypto::RootKey::for_tests(K),
+        &prompt,
+    )
+    .await
+    .expect("conversion succeeds");
 
     assert!(prompt.removed.lock().unwrap().is_empty());
     store.close().await;
@@ -137,7 +149,12 @@ async fn test_a_failed_conversion_stops_the_start_visibly() {
     store.close().await;
     let prompt = NoticeRecorder::default();
 
-    let result = decrypt_field_encrypted_content(&store, &K, &prompt).await;
+    let result = decrypt_field_encrypted_content(
+        &store,
+        &ssh_manager_core::crypto::RootKey::for_tests(K),
+        &prompt,
+    )
+    .await;
 
     assert!(
         matches!(

@@ -25,9 +25,8 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// MCP-Zwang kommt, nicht von fehlenden Regeln.
 fn session_on(server_id: ServerId, transport: MockSshTransport) -> Session {
     let mut session = test_session(vec![AiEvent::Done], transport);
-    session.parts_mut_for_tests().server_id = server_id;
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_server_id_for_tests(server_id);
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     session
 }
 

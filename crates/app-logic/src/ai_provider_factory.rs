@@ -7,8 +7,10 @@ use ai_providers::{
     provider_identity_key, AnthropicProvider, OpenAiCompatibleProvider, OpenAiResponsesProvider,
     ProviderBudgetGuard, RateLimitRegistry,
 };
+use persistence_sqlite::AiProviderConfig;
 use secrecy::{ExposeSecret, SecretString};
 use ssh_manager_core::ai::{AiProvider, ProviderType};
+use ssh_manager_core::profiles::{CredentialError, CredentialStore};
 
 pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 /// Spec 0072, B1: `pub(crate)` statt privat — `commands::discover_models`
@@ -121,6 +123,32 @@ pub fn build_ai_provider(
     }
 }
 
+/// Issue #249: der eine Pfad „API-Key aus dem `CredentialStore` lesen und
+/// den Provider bauen“ für `connect()` und die Notiz-Kürzung. Der Key wird
+/// hier genau einmal gelesen (Spec 0022, Abschnitt 3); der gebaute Provider
+/// hat strukturell keinen Zugriff auf den Store, `send()` liest also nie
+/// erneut. Die Anzahl der Store-Lesevorgänge ist damit eine Eigenschaft
+/// dieser Funktion und wird dort getestet.
+pub fn build_ai_provider_from_config(
+    registry: &RateLimitRegistry,
+    credential_store: &dyn CredentialStore,
+    config: &AiProviderConfig,
+    web_research_enabled: bool,
+) -> Result<(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>), CredentialError> {
+    let api_key = credential_store.get(&config.credential_ref)?;
+    Ok(build_ai_provider(
+        registry,
+        config.provider_type,
+        config.base_url.as_deref(),
+        &config.model,
+        api_key,
+        config.supports_native_tool_calling,
+        config.extra_headers.clone(),
+        config.max_tokens_override,
+        web_research_enabled,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -151,7 +179,7 @@ mod tests {
     }
 
     use ssh_manager_core::ai::SessionContext;
-    use ssh_manager_core::profiles::{CredentialRef, CredentialStore};
+    use ssh_manager_core::profiles::CredentialRef;
 
     use super::*;
     use crate::test_support::InMemoryCredentialStore;
@@ -165,43 +193,44 @@ mod tests {
         }
     }
 
-    /// Spec 0022, Abschnitt 3, erster Punkt: der Provider-API-Key wird beim
-    /// Aufbau der `AiProvider`-Instanz **einmalig** aus dem `CredentialStore`
-    /// gelesen (hier über `store.get(...)` simuliert — exakt der Ablauf aus
-    /// `app_shell::commands::connect`, Zeile "let api_key = state.credential_
-    /// store.get(&active_config.credential_ref)?") und danach als reines
-    /// `String`-Feld in die Provider-Instanz eingebettet (s.
-    /// `OpenAiCompatibleProvider`/`AnthropicProvider`). Mehrere `send()`-
-    /// Aufrufe (mehrere Chat-Runden über dieselbe Session) dürfen den Store
-    /// nicht erneut ansprechen — `send()` selbst nimmt strukturell gar
-    /// keinen `CredentialStore`-Parameter entgegen, kann ihn also gar nicht
-    /// erreichen; dieser Test macht diese Garantie trotzdem explizit und
-    /// ausführbar, statt sie nur implizit im Typsystem zu verstecken.
+    fn test_config(credential_ref: CredentialRef) -> AiProviderConfig {
+        let now = chrono::Utc::now();
+        AiProviderConfig {
+            id: ssh_manager_core::ai::ProviderId::new(),
+            provider_type: ProviderType::OpenAi,
+            display_name: "Test".to_string(),
+            base_url: None,
+            model: "gpt-4o".to_string(),
+            supports_native_tool_calling: true,
+            credential_ref,
+            is_active: true,
+            extra_headers: Vec::new(),
+            attestation_url: None,
+            max_tokens_override: None,
+            web_research_enabled: false,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Spec 0022, Abschnitt 3, erster Punkt (Issue #249): der Provider-API-
+    /// Key wird beim Aufbau der `AiProvider`-Instanz **einmalig** aus dem
+    /// `CredentialStore` gelesen. Der Test geht über den Produktionspfad
+    /// (`build_ai_provider_from_config`, den `connect()` und die Notiz-
+    /// Kürzung nutzen) und zählt die Store-Zugriffe über mehrere `send()`-
+    /// Aufrufe hinweg. Gegenprobe: liest der Helper den Store zweimal (oder
+    /// bei jedem Aufruf), schlägt die Zählung fehl.
     #[test]
     fn test_provider_api_key_read_once_regardless_of_send_call_count() {
         let credential_ref = CredentialRef::new("ai-provider:test");
         let store = InMemoryCredentialStore::new().with_secret(&credential_ref, "sk-test-key");
-
-        let api_key = store.get(&credential_ref).expect("Key muss auflösbar sein");
-        assert_eq!(store.get_calls(), 1);
+        let config = test_config(credential_ref);
 
         let registry = RateLimitRegistry::new();
-        let (provider, _budget) = build_ai_provider(
-            &registry,
-            ProviderType::OpenAi,
-            None,
-            "gpt-4o",
-            api_key,
-            true,
-            Vec::new(),
-            None,
-            false,
-        );
+        let (provider, _budget) = build_ai_provider_from_config(&registry, &store, &config, false)
+            .expect("Key muss auflösbar sein");
+        assert_eq!(store.get_calls(), 1);
 
-        // Fünf "Chat-Runden" — `send()` liefert nur einen (nicht gepollten)
-        // Stream zurück, es geschieht keine echte Netzwerk-I/O, aber jeder
-        // Aufruf würde einen erneuten Store-Zugriff sofort sichtbar machen,
-        // falls der Key doch nicht gecacht wäre.
         for _ in 0..5 {
             let _ = provider.send(empty_context());
         }
@@ -211,6 +240,18 @@ mod tests {
             1,
             "der Provider-API-Key darf über mehrere send()-Aufrufe hinweg nicht erneut aus dem CredentialStore gelesen werden"
         );
+    }
+
+    /// Ein fehlender Key ist ein Fehler des Helpers, kein stiller Fallback.
+    #[test]
+    fn test_build_ai_provider_from_config_fails_without_stored_key() {
+        let store = InMemoryCredentialStore::new();
+        let config = test_config(CredentialRef::new("ai-provider:missing"));
+        let registry = RateLimitRegistry::new();
+
+        let result = build_ai_provider_from_config(&registry, &store, &config, false);
+
+        assert!(matches!(result, Err(CredentialError::NotFound(_))));
     }
 
     /// Spec 0061, Abschnitt 2 (die Kern-Entscheidung): zwei Aufrufe mit

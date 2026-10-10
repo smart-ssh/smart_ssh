@@ -135,12 +135,15 @@ immer mit der Log-Zeile verbunden.
 4. **Weiter zurückgestellt**, unverändert begründet in ADR 0096 §5: ein
    reiner Hinweis wartet fünf Minuten und der Passwortplatz wird beim Öffnen
    der Frage nicht geleert (beides Klarstellung 10e, Commit 11) ·
-   `create_new` für die `.new`-Datei der Verpackung · die Argon2-Obergrenze ·
-   ein Hinweis an `Wiring::plugins` · A19 im Bestand.
+   A19 im Bestand. **Erledigt mit #266:** `create_new` für die `.new`-Datei
+   der Verpackung (eine liegengebliebene reguläre Datei wird zuvor entfernt,
+   eine Verknüpfung lässt das Schreiben scheitern) · die Argon2-Obergrenze
+   (256 MiB) · der Hinweis an `Wiring::plugins`.
 5. **Zwei Härtungen aus der Review-Runde, klein und unabhängig:**
    `key_mode`/`wrapping_health` werten die Fehlerart von `symlink_metadata`
    nicht aus (heute nicht ausnutzbar, weil die Dateizustandsprüfung vorher
-   abbricht), und T17 fährt den D2-Pfad nicht, auf dem ein SQL-Fehlertext den
+   abbricht; **erledigt mit #266:** nur `NotFound` heißt „keine Datei“, jeder
+   andere Fehler ergibt `Password` bzw. `Unreachable`), und T17 fährt den D2-Pfad nicht, auf dem ein SQL-Fehlertext den
    `PRAGMA`-Wert tragen könnte (dafür gibt es eigene Tests in
    `persistence-sqlite`).
 6. **`KEYCHAIN_HOLDS_ANOTHER_KEY` steht noch nicht in der Codeliste des

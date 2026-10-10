@@ -11,7 +11,7 @@
 //! SFTP-Protokoll-Roundtrip, nicht nur eine simulierte Kontroll-Logik (die
 //! deckt bereits `ssh_manager_core::ssh::mock::MockSftpSession` ab).
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -225,6 +225,7 @@ impl RunningTestServer {
                         tokio::spawn(async move {
                             let handler = TestHandler {
                                 channels: HashMap::new(),
+                                no_echo: HashSet::new(),
                                 sftp_root,
                                 exec_channel,
                                 setstat_mode,
@@ -266,6 +267,12 @@ struct TestHandler {
     /// entgegengenommen hat; ohne diese Zwischenablage wäre er zu diesem
     /// späteren Zeitpunkt nicht mehr erreichbar (nur noch die `ChannelId`).
     channels: HashMap<ChannelId, Channel<Msg>>,
+    /// Kanäle, deren Bytes ein eigener Stream-Konsument bedient (SFTP-
+    /// Subsystem, Exec-SFTP, `direct-tcpip`-Tunnel). `russh` liefert
+    /// `CHANNEL_DATA` auch an `Handler::data` — dort darf das Echo für diese
+    /// Kanäle nicht laufen, sonst landet jeder Client-Schreibvorgang als
+    /// Fremddaten wieder im Stream und erschöpft das Kanalfenster (#179).
+    no_echo: HashSet<ChannelId>,
     sftp_root: PathBuf,
     /// Spec 0085, A2.1/T14: bekommt nur das SFTP-Subsystem des über `exec`
     /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
@@ -350,6 +357,7 @@ impl Handler for TestHandler {
                 return Ok(());
             };
             session.channel_success(channel)?;
+            self.no_echo.insert(channel);
             let handler = SftpTestHandler {
                 root: self.sftp_root.join("elevated"),
                 open_files: HashMap::new(),
@@ -455,6 +463,9 @@ impl Handler for TestHandler {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if self.no_echo.contains(&channel) {
+            return Ok(());
+        }
         // Einfache Echo-Shell: alles, was der Client in die PTY tippt, geht
         // unverändert zurück — reicht als vorhersagbares Verhalten für den
         // Integrationstest (kein echtes Betriebssystem-Shell-Backend nötig).
@@ -470,9 +481,10 @@ impl Handler for TestHandler {
     /// dann werden Bytes in beide Richtungen transparent durchgereicht
     /// (reine Byte-Bridge, kein SSH-Wissen nötig).
     ///
-    /// Bekannte Einschränkung (nicht diese Bridge, sondern der darüber
-    /// verschachtelte SSH-Handshake): s. `crate::connect`-Doc-Kommentar und
-    /// `docs/adr/0008-russh-nested-tunnel-limitation.md`.
+    /// Die Channel-ID wird in `tunnel_channels` vermerkt, damit
+    /// `data` die Bytes nicht als Echo-Shell zurückspiegelt (das war
+    /// die Ursache des früheren „Bad packet size“-Fehlers, s.
+    /// `docs/adr/0008-russh-nested-tunnel-limitation.md`, Update 2026-10-09).
     async fn channel_open_direct_tcpip(
         &mut self,
         channel: Channel<Msg>,
@@ -488,6 +500,7 @@ impl Handler for TestHandler {
             Ok(mut tcp) => {
                 let _ = tcp.set_nodelay(true);
                 reply.accept().await;
+                self.no_echo.insert(channel.id());
                 let mut channel_stream = channel.into_stream();
                 tokio::spawn(async move {
                     let _ = tokio::io::copy_bidirectional(&mut channel_stream, &mut tcp).await;
@@ -523,6 +536,7 @@ impl Handler for TestHandler {
             return Ok(());
         };
         session.channel_success(channel_id)?;
+        self.no_echo.insert(channel_id);
         let handler = SftpTestHandler {
             root: self.sftp_root.clone(),
             open_files: HashMap::new(),

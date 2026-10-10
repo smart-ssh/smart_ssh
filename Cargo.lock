@@ -6003,6 +6003,7 @@ dependencies = [
  "futures",
  "globset",
  "hkdf 0.13.0",
+ "proptest",
  "regex",
  "secrecy",
  "serde",

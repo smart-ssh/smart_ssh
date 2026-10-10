@@ -2,9 +2,9 @@
 //! den Schlüsselbund.**
 //!
 //! Der Weg geht nur in eine Richtung. Aus einem gespeicherten Schlüssel
-//! wieder eine Datei zu machen ist ausdrücklich kein Ziel (erstes
-//! Nicht-Ziel in §2) — das hieße, Schlüsselmaterial aus dem Schlüsselbund
-//! auf die Platte zu schreiben.
+//! wieder eine Datei zu machen ist ausdrücklich kein Ziel (siehe
+//! „Nicht Teil dieser Spec“) — das hieße, Schlüsselmaterial aus dem
+//! Schlüsselbund auf die Platte zu schreiben.
 //!
 //! Wie `crate::servers` von `tauri::State` losgelöst gehalten, damit sich
 //! der Ablauf gegen einen In-Memory-`ProfileStore`/`CredentialStore`

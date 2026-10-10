@@ -1,80 +1,53 @@
-# Spec: Dateimanager-Layout — verstellbare Spalten & Bereiche
+# Spec 0053 — Dateimanager-Layout: verstellbare Spalten und Bereiche
 
-Status: Entwurf
-Repo: **öffentlich** `smart_ssh`, Frontend
-Modul: SFTP-Dateimanager-UI, das Layout, das KI-Bereich und SSH-/SFTP-Bereich
-teilt
-Abhängigkeiten: SFTP-Browser (0020), Frontend-Design-Konventionen
+Status: umgesetzt
+Zweck: Der Nutzer passt das Layout des Dateimanagers und die Aufteilung zwischen KI-Bereich und SSH-/SFTP-Bereich an seine Arbeitsweise an. Beides ist reine Darstellung; es berührt keinen Zugriff auf den Server.
+Bezüge: Spec 0020 (Dateibrowser, Abschnitt 5.1), Spec 0054 (Aktionsspalte).
 
-> Reine **Layout-/UX-Verbesserungen** am Dateimanager — kein
-> server-verändernder Zugriff, keine Filter-Engine-Berührung, **Priorität
-> NORMAL**. Das UI fühlt sich noch starr an; der Nutzer soll das Layout an
-> seine Arbeitsweise anpassen können. Die chmod-/Rechte-Bearbeitung ist
-> **bewusst NICHT Teil dieser Spec** (eigener, sicherheitsrelevanter Schritt,
-> weil server-verändernd — bleibt im Backlog).
+## Teil 1: Verstellbare Spaltenbreiten
 
-## Teil 1: Verstellbare Spaltenbreiten im Dateimanager
+Die Dateiliste hat die Spalten Name, Größe, Rechte und Änderungsdatum sowie
+eine schmale Aktionsspalte (Drei-Punkte-Menü).
 
-Die Dateiliste hat feste Spaltenbreiten (Name, Größe, Datum, Rechte, …). Der
-Nutzer soll die Spalten in der Breite **ziehen** können.
+- Zwischen den Spaltenköpfen sitzt ein Ziehgriff. Ziehen ändert die Breite
+  der Spalte links davon. Der Mauszeiger zeigt den Griff als
+  Spaltengrenze an.
+- Jede verstellbare Spalte hat eine Mindestbreite und lässt sich nicht auf
+  0 zusammenziehen. Auch eine sehr breit gezogene Nachbarspalte drückt die
+  Name-Spalte nie unter ihre eigene Mindestbreite.
+- Die **Name-Spalte** hat keine feste Breite und nimmt den Rest ein. Größe,
+  Rechte und Änderungsdatum sind verstellbar; die Aktionsspalte ist fest und
+  hat keinen Griff.
+- **Persistenz:** Die gewählten Breiten bleiben über einen Neustart
+  erhalten. Sie gelten global, nicht je Server oder Sitzung. Ein fehlender,
+  kaputter oder unplausibler gespeicherter Wert (nicht endlich, nicht
+  positiv, absurd groß) wird verworfen und durch den Standardwert ersetzt.
 
-- Zwischen den Spaltenköpfen ein **Drag-Handle**; Ziehen ändert die Breite
-  der Spalte links davon.
-- Sinnvolle **Mindestbreiten** pro Spalte (nicht auf 0 zusammenziehbar).
-- Die **Name-Spalte** sollte den flexiblen Rest einnehmen (sie ist am
-  wichtigsten und variabelsten), die anderen (Größe/Datum/Rechte) eher fix,
-  aber ebenfalls verstellbar.
-- **Persistenz**: Die gewählten Breiten überleben einen Neustart (im
-  bestehenden Frontend-Settings-/State-Mechanismus ablegen — dort, wo
-  ähnliche UI-Präferenzen schon liegen; **kein** localStorage in Artefakten,
-  aber die App ist kein Artefakt — der reguläre Persistenz-Weg der App ist
-  gemeint). Falls es noch keinen Ort für UI-Präferenzen gibt, den saubersten
-  wählen und mir beschreiben.
+## Teil 2: Verstellbare Bereichsgröße
 
-## Teil 2: Verstellbare Bereichsgröße (KI-Bereich ↔ SSH-/SFTP-Bereich)
+Zwischen dem KI-Bereich (links) und dem SSH-/SFTP-Bereich (rechts) liegt ein
+senkrechter Ziehgriff.
 
-Die Aufteilung zwischen dem **KI-Bereich** und dem **SSH-/SFTP-Bereich**
-(bzw. Terminal/Dateimanager) ist fix. Der Nutzer soll den **Splitter**
-dazwischen ziehen können, um mehr Platz für das eine oder andere zu geben.
-
-- Ein **Drag-Divider** zwischen den beiden Bereichen (horizontal oder
-  vertikal, je nach aktuellem Layout).
-- Sinnvolle **Mindestgrößen** für beide Bereiche (keiner auf 0 ziehbar).
-- **Persistenz** wie bei Teil 1 (die gewählte Aufteilung überlebt Neustart).
-- Auf **kleinen Fenstern** darf der Splitter das Layout nicht unbrauchbar
-  machen — die Mindestgrößen greifen, notfalls Fallback auf die
-  Standardaufteilung.
+- Ziehen verändert die Breite des rechten Bereichs. Beide Bereiche haben eine
+  Mindestbreite und lassen sich nicht auf 0 ziehen.
+- **Persistenz** wie bei Teil 1: Die gewählte Breite bleibt über einen
+  Neustart erhalten.
+- **Kleine Fenster:** Passen beide Mindestbreiten nicht nebeneinander, gilt
+  die Standardaufteilung. Die gespeicherte Vorliebe bleibt dabei erhalten; sie
+  wird weder durch die Anzeige in einem zu kleinen Fenster noch durch eine
+  Ziehgeste dort überschrieben, und die Geste hat in diesem Zustand keine
+  Wirkung. Wird das Fenster wieder größer, gilt die gespeicherte Breite.
+- Wird das Fenster verkleinert, so dass die gespeicherte Breite dem linken
+  Bereich nicht mehr seine Mindestbreite lässt, wird nur die angezeigte
+  Breite begrenzt.
 
 ## Nicht Teil dieser Spec
 
-- **chmod / Rechte-Bearbeitung** — server-verändernd, eigene
-  sicherheitsrelevante Spec (muss durch die Bestätigungs-/Filter-Logik).
-  Bleibt im Backlog.
-- Keine Änderung an der Datei-Logik selbst (Upload/Download/Anzeige) — nur
-  Layout.
+- Rechte-Bearbeitung (chmod) und andere Aktionen: Spec 0054.
+- Die Datei-Logik selbst (Navigation, Upload, Download, Anzeige) bleibt
+  unverändert.
 
-## Design/Konventionen
+## Grenzen
 
-- Halte dich an den **frontend-design-Skill** (Design-Tokens, keine
-  Ad-hoc-Styles).
-- Die Drag-Handles/Divider sollen sich an bestehende UI-Muster anlehnen
-  (falls es schon irgendwo verstellbare Elemente gibt, dasselbe Muster
-  nutzen).
-- Barrierearm: Divider/Handles per Tastatur bedienbar wäre schön (nicht
-  zwingend), mindestens aber ein klarer Hover-/Cursor-Hinweis
-  (`col-resize`/`row-resize`).
-
-## Testbarkeit
-
-- Spaltenbreite ziehen → Breite ändert sich, Mindestbreite wird nicht
-  unterschritten, Wert überlebt Neustart.
-- Bereichs-Splitter ziehen → Aufteilung ändert sich, Mindestgrößen greifen,
-  Wert überlebt Neustart.
-- Kleines Fenster → Layout bleibt bedienbar (Mindestgrößen).
-- Bestehende Dateimanager-Funktionen (Navigation, Upload/Download) unverändert.
-
-## Reihenfolge
-
-1. Spaltenbreiten (Teil 1) — abgegrenzter, kleiner.
-2. Bereichs-Splitter (Teil 2).
-Beide teilen sich den Persistenz-Mechanismus für UI-Präferenzen.
+- Ziehgriffe für Spalten und Bereich sind **nicht per Tastatur** bedienbar;
+  nur Ziehen mit Maus oder Zeigegerät verändert die Breite.

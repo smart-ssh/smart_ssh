@@ -9,7 +9,7 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
   await app.launch({
     settings: { ...ACKNOWLEDGED },
     servers: [server({ id: "s-new", name: "fresh-host", host: "fresh.example.test", port: 2222 })],
-    hostKeys: { "s-new": { kind: "unknown", fingerprint: FINGERPRINT } },
+    hostKeys: { "s-new": { kind: "unknown", fingerprint: FINGERPRINT, keyType: "ssh-ed25519" } },
   });
   const page = app.page;
 
@@ -18,6 +18,7 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("fresh.example.test:2222");
   await expect(dialog).toContainText(FINGERPRINT);
+  await expect(dialog).toContainText("ssh-ed25519");
 
   // Nothing is decided while the dialog is open.
   expect(await app.calls("confirm_host_key")).toEqual([]);
@@ -48,7 +49,7 @@ test("host key prompt: a changed key shows both fingerprints, accepts nothing wi
   await app.launch({
     settings: { ...ACKNOWLEDGED },
     servers: [server({ id: "s-old", name: "moved-host", host: "moved.example.test", port: 2200 })],
-    hostKeys: { "s-old": { kind: "mismatch", fingerprint: FINGERPRINT, expectedFingerprint: KNOWN } },
+    hostKeys: { "s-old": { kind: "mismatch", fingerprint: FINGERPRINT, expectedFingerprint: KNOWN, keyType: "ssh-ed25519" } },
   });
   const page = app.page;
 
@@ -58,6 +59,7 @@ test("host key prompt: a changed key shows both fingerprints, accepts nothing wi
   await expect(dialog).toContainText("moved.example.test:2200");
   await expect(dialog).toContainText(KNOWN);
   await expect(dialog).toContainText(FINGERPRINT);
+  await expect(dialog).toContainText("ssh-ed25519");
 
   expect(await app.calls("confirm_host_key")).toEqual([]);
 

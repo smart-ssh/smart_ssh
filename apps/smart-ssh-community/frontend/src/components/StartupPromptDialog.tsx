@@ -58,7 +58,7 @@ const DESTRUCTIVE: ReadonlySet<StartupPromptAnswer> = new Set<StartupPromptAnswe
 ]);
 
 /**
- * Spec 0101, Teil 0 Frage 3: die Startdialoge **im Fenster** (D1–D4, die
+ * Spec 0101, §2 Frage 3: die Startdialoge **im Fenster** (D1–D4, die
  * zweiten Bestätigungen aus A5, die Eingabe eines neuen Master-Passworts
  * aus A13 und der Hinweis nach dem Umbenennen).
  *
@@ -114,7 +114,7 @@ export function StartupPromptDialog({
     // (`pt-9` zusätzlich zum `p-4`, also `pt-13`) — dort liegt die
     // Drag-Leiste über dem Backdrop, und kein Knopf und keine Eingabe des
     // Dialogs darf darunter rücken.
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-4 pt-13">
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-4 pt-13">
       <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
         <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
           {request.title}
@@ -175,7 +175,7 @@ export function StartupPromptDialog({
             <button
               type="button"
               onClick={onDismiss}
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500"
             >
               {t("common.ok")}
             </button>
@@ -186,12 +186,12 @@ export function StartupPromptDialog({
                 type="button"
                 onClick={() => answer(choice)}
                 disabled={choice === "confirm" && wantsPassword && !passwordIsUsable}
-                className={`rounded px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`rounded px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                   DESTRUCTIVE.has(choice) || (choice === "confirm" && confirmIsDestructive)
-                    ? "bg-red-700 hover:bg-red-600"
+                    ? "bg-red-700 text-white hover:bg-red-600"
                     : choice === "quit" || choice === "cancel"
-                      ? "bg-slate-700 hover:bg-slate-600"
-                      : "bg-indigo-600 hover:bg-indigo-500"
+                      ? "bg-slate-700 text-white hover:bg-slate-600"
+                      : "bg-indigo-600 text-slate-950 hover:bg-indigo-500"
                 }`}
               >
                 {t(`startup.answers.${choice}`)}

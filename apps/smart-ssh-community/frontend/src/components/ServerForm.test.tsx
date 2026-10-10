@@ -22,6 +22,7 @@ import {
   deleteServer,
   getServer,
   inspectKeyFile,
+  listStoredHostKeys,
   testConnection,
   trustHostKey,
 } from "../api";
@@ -49,6 +50,7 @@ vi.mock("../api", () => ({
   deleteServer: vi.fn(),
   getServer: vi.fn(),
   inspectKeyFile: vi.fn(),
+  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
   largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
   previewEffectiveNotes: vi.fn(() => Promise.resolve("")),
   requestNoteShrink: vi.fn(),
@@ -281,6 +283,24 @@ describe("ServerForm — Sudo-Passwort entfernen schlägt fehl (Spec 0071, A17)"
     // Und die Maske darf nicht auf "kein Sudo-Passwort hinterlegt"
     // umschalten, obwohl nichts entfernt wurde.
     expect(screen.getByText("(leer = unverändert, aktuell hinterlegt)")).toBeInTheDocument();
+  });
+});
+
+describe("ServerForm — Verbindungstest ohne Schlüsseldatei-Pfad (issue #254)", () => {
+  it("shows the translated message, not the raw code or backend text", async () => {
+    vi.mocked(getServer).mockResolvedValue(serverDto());
+    vi.mocked(testConnection).mockRejectedValue({
+      code: "SERVER_IDENTITY_FILE_REQUIRED",
+      message: "RAW-BACKEND-TEXT-254",
+    });
+
+    renderForm();
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
+
+    expect(await screen.findByText("Pfad zur Schlüsseldatei ist erforderlich")).toBeInTheDocument();
+    expect(screen.queryByText(/SERVER_IDENTITY_FILE_REQUIRED/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/RAW-BACKEND-TEXT-254/)).not.toBeInTheDocument();
   });
 });
 
@@ -691,6 +711,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
       port: 22,
       rawKey: [1, 2, 3],
       fingerprint: "SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      keyType: "ssh-ed25519",
     },
     {
       kind: "hostKeyMismatch",
@@ -699,6 +720,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
       rawKey: [1, 2, 3],
       expectedFingerprint: "SHA256:oldoldoldoldoldoldoldoldoldoldoldoldold",
       actualFingerprint: "SHA256:newnewnewnewnewnewnewnewnewnewnewnewnewn",
+      keyType: "ssh-ed25519",
     },
   ];
 
@@ -738,6 +760,9 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
+
+    // Issue #182: the test-connection prompt shows the key type too.
+    expect(await screen.findByTestId("host-key-type")).toHaveTextContent("ssh-ed25519");
 
     // Issue #71: Auf den fokussierten Zustand warten, nicht nur auf den
     // Dialog im DOM. Die Antwort von `testConnection` kommt außerhalb von
@@ -832,5 +857,38 @@ describe("ServerForm — step log of a test connection (issue #51)", () => {
     expect(details.querySelectorAll("[data-failed='true']")).toHaveLength(0);
     expect(details.textContent).toContain("8 ms");
     expect(details.textContent).toContain("Sitzung aufgebaut");
+  });
+});
+
+describe("ServerForm — gespeicherte Host-Keys (Spec 0008)", () => {
+  it("shows algorithm and fingerprint of every stored key", async () => {
+    vi.mocked(listStoredHostKeys).mockResolvedValue([
+      { algorithm: "ssh-ed25519", fingerprint: "SHA256:aaaaaaaaaaaaaaaa" },
+      { algorithm: "ssh-rsa", fingerprint: "SHA256:bbbbbbbbbbbbbbbb" },
+    ]);
+
+    renderForm();
+
+    expect(await screen.findByText("ssh-ed25519")).toBeInTheDocument();
+    expect(screen.getByText("SHA256:aaaaaaaaaaaaaaaa")).toBeInTheDocument();
+    expect(screen.getByText("ssh-rsa")).toBeInTheDocument();
+    expect(screen.getByText("SHA256:bbbbbbbbbbbbbbbb")).toBeInTheDocument();
+    expect(listStoredHostKeys).toHaveBeenCalledWith(SERVER_ID);
+  });
+
+  it("says so when no host key is stored yet", async () => {
+    vi.mocked(listStoredHostKeys).mockResolvedValue([]);
+
+    renderForm();
+
+    expect(await screen.findByText(/Noch kein Host-Key gespeichert/)).toBeInTheDocument();
+  });
+
+  it("shows no host key area in the create form", async () => {
+    renderNewServerForm();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Anlegen|Create/ })).toBeInTheDocument());
+    expect(screen.queryByText("Host-Keys")).not.toBeInTheDocument();
+    expect(listStoredHostKeys).not.toHaveBeenCalled();
   });
 });

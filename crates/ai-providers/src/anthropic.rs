@@ -210,16 +210,31 @@ impl AnthropicProvider {
             system_text.push_str(&fallback_system_prompt_addition(&context.available_actions));
         }
 
-        let messages: Vec<Value> = context
-            .history
-            .iter()
-            .map(|message| {
-                json!({
-                    "role": role_str(message.role),
-                    "content": message_content_text(&message.content),
-                })
-            })
-            .collect();
+        // Issue #245 (Spec 0066): adjacent same-role messages become one
+        // message with one text block per original message (in order); a
+        // single message keeps the plain string form. Runs on the already
+        // fenced text. Cache breakpoints sit on `system`/`tools`, not on
+        // messages, so combining does not move them.
+        let messages: Vec<Value> = crate::openai_compatible::group_adjacent_with(
+            &context.history,
+            role_str,
+            message_content_text,
+        )
+        .into_iter()
+        .map(|(role, mut parts)| {
+            let content = if parts.len() == 1 {
+                json!(parts.remove(0))
+            } else {
+                Value::Array(
+                    parts
+                        .into_iter()
+                        .map(|text| json!({"type": "text", "text": text}))
+                        .collect(),
+                )
+            };
+            json!({"role": role, "content": content})
+        })
+        .collect();
 
         // Spec 0064 (Prompt-Caching): `system` als Ein-Block-Array statt
         // eines reinen Strings — Anthropic erlaubt `cache_control` nur auf
@@ -908,6 +923,14 @@ impl AnthropicStreamState {
                     Some("web_search_tool_result") | Some("web_fetch_tool_result") => {
                         if let Some(block) = block {
                             self.record_web_tool_result(block);
+                            // Issue #173: sofort melden, nicht erst in
+                            // `finalize()` — Stopp/Fehler/Abbruch der
+                            // Antwort dürfen das Flag nicht umgehen. Auch
+                            // eine später per Truncation-Retry verworfene
+                            // Antwort meldet: ihr Text kann bereits
+                            // gestreamt sein (konservativ, nur eskalierend).
+                            self.pending
+                                .push_back(RawEvent::Public(AiEvent::WebContentIngested));
                         }
                         return;
                     }
@@ -2287,6 +2310,11 @@ mod tests {
         ])
         .await;
 
+        // Issue #173: das sofortige Signal ist hier nicht Gegenstand.
+        let events: Vec<RawEvent> = events
+            .into_iter()
+            .filter(|e| !matches!(e, RawEvent::Public(AiEvent::WebContentIngested)))
+            .collect();
         assert_eq!(
             events[0],
             RawEvent::Public(AiEvent::TextDelta("Version 1.29 ist aktuell.".to_string()))
@@ -2343,6 +2371,11 @@ mod tests {
         ])
         .await;
 
+        // Issue #173: das sofortige Signal ist hier nicht Gegenstand.
+        let events: Vec<RawEvent> = events
+            .into_iter()
+            .filter(|e| !matches!(e, RawEvent::Public(AiEvent::WebContentIngested)))
+            .collect();
         let RawEvent::Public(AiEvent::WebActivity(activity)) = &events[0] else {
             panic!("erwartet WebActivity, bekam {events:?}");
         };
@@ -2417,6 +2450,173 @@ mod tests {
             .iter()
             .any(|e| matches!(e, RawEvent::Public(AiEvent::Error(_)))));
         assert_eq!(events.last(), Some(&RawEvent::Public(AiEvent::Done)));
+    }
+
+    /// Issue #173: das Web-Ergebnis wird sofort gemeldet — auch wenn die
+    /// Antwort danach mit einem `error`-Event (kein `message_stop`) endet,
+    /// und nur dann, wenn tatsächlich ein Web-Ergebnis eingetroffen ist.
+    #[tokio::test]
+    async fn test_web_result_is_signalled_immediately_even_if_stream_errors() {
+        let events = collect_frames(vec![
+            frame(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_1","content":[{"type":"web_search_result","url":"https://a.example","title":"A"}]}}"#,
+            ),
+            frame("error", r#"{"error":{"message":"overloaded"}}"#),
+        ])
+        .await;
+        let ingested = events
+            .iter()
+            .position(|e| matches!(e, RawEvent::Public(AiEvent::WebContentIngested)))
+            .expect("Signal fehlt");
+        let error = events
+            .iter()
+            .position(|e| matches!(e, RawEvent::Public(AiEvent::Error(_))))
+            .expect("Fehler fehlt");
+        assert!(ingested < error);
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, RawEvent::Public(AiEvent::WebActivity(_)))));
+
+        let events = collect_frames(vec![
+            frame(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"text","text":""}}"#,
+            ),
+            frame("error", r#"{"error":{"message":"overloaded"}}"#),
+        ])
+        .await;
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, RawEvent::Public(AiEvent::WebContentIngested))));
+    }
+
+    /// Frames of a web search block (`web_search` or `web_fetch`, result or
+    /// provider error) at block indices 0 and 1.
+    fn web_block_frames(error: bool, fetch: bool) -> Vec<Result<SseFrame, reqwest::Error>> {
+        let (tool, field, input, result_type) = if fetch {
+            (
+                "web_fetch",
+                "url",
+                "https://example.com/doc",
+                "web_fetch_tool_result",
+            )
+        } else {
+            (
+                "web_search",
+                "query",
+                "nginx 1.29",
+                "web_search_tool_result",
+            )
+        };
+        let content = match (error, fetch) {
+            (true, _) => format!(
+                r#"{{"type":"{result_type}_error","error_code":"unavailable"}}"#
+            ),
+            (false, true) => r#"{"type":"web_fetch_result","url":"https://example.com/doc","content":{"type":"document","source":{"type":"text","media_type":"text/plain","data":"Text"},"title":"Doc"}}"#.to_string(),
+            (false, false) => r#"[{"type":"web_search_result","url":"https://nginx.org/en/CHANGES","title":"nginx changes","encrypted_content":"x"}]"#.to_string(),
+        };
+        vec![
+            frame(
+                "content_block_start",
+                &format!(
+                    r#"{{"index":0,"content_block":{{"type":"server_tool_use","id":"srvtoolu_1","name":"{tool}","input":{{}}}}}}"#
+                ),
+            ),
+            frame(
+                "content_block_delta",
+                &format!(
+                    r#"{{"index":0,"delta":{{"type":"input_json_delta","partial_json":"{{\"{field}\":\"{input}\"}}"}}}}"#
+                ),
+            ),
+            frame("content_block_stop", r#"{"index":0}"#),
+            frame(
+                "content_block_start",
+                &format!(
+                    r#"{{"index":1,"content_block":{{"type":"{result_type}","tool_use_id":"srvtoolu_1","content":{content}}}}}"#
+                ),
+            ),
+            frame("content_block_stop", r#"{"index":1}"#),
+        ]
+    }
+
+    fn position_of(events: &[RawEvent], pred: impl Fn(&AiEvent) -> bool) -> usize {
+        events
+            .iter()
+            .position(|e| matches!(e, RawEvent::Public(ev) if pred(ev)))
+            .unwrap_or_else(|| panic!("event missing in {events:?}"))
+    }
+
+    /// Issue #170: the chat turn sets the "untrusted content ingested" flag
+    /// when it handles `WebActivity`, and evaluates the action (spec 0039
+    /// section 5) only afterwards. That holds only because the provider emits
+    /// `WebActivity` strictly before `ActionProposed` — pinned here for a
+    /// mixed response, native tool calling, for search and fetch, with a
+    /// result and with a provider error.
+    #[tokio::test]
+    async fn test_web_activity_precedes_action_proposed_in_mixed_response() {
+        for (error, fetch) in [(false, false), (false, true), (true, false), (true, true)] {
+            let mut frames = vec![frame("message_start", r#"{"message":{"usage":{}}}"#)];
+            frames.extend(web_block_frames(error, fetch));
+            frames.extend([
+                frame(
+                    "content_block_start",
+                    r#"{"index":2,"content_block":{"type":"tool_use","name":"suggest_command"}}"#,
+                ),
+                frame(
+                    "content_block_delta",
+                    r#"{"index":2,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"uptime\"}"}}"#,
+                ),
+                frame("content_block_stop", r#"{"index":2}"#),
+                frame("message_delta", r#"{"delta":{"stop_reason":"tool_use"}}"#),
+                frame("message_stop", "{}"),
+            ]);
+            let events = collect_frames(frames).await;
+
+            let web = position_of(&events, |e| matches!(e, AiEvent::WebActivity(_)));
+            let action = position_of(&events, |e| matches!(e, AiEvent::ActionProposed(_)));
+            assert!(
+                web < action,
+                "error={error} fetch={fetch}: WebActivity must precede ActionProposed: {events:?}"
+            );
+            let RawEvent::Public(AiEvent::WebActivity(activity)) = &events[web] else {
+                unreachable!()
+            };
+            assert_eq!(activity.error_code.is_some(), error);
+            assert_eq!(events.last(), Some(&RawEvent::Public(AiEvent::Done)));
+        }
+    }
+
+    /// Same guarantee for the text-pattern fallback (no native tool calling),
+    /// where the action is parsed from the text and emitted after the web
+    /// activities.
+    #[tokio::test]
+    async fn test_web_activity_precedes_fallback_action_in_mixed_response() {
+        let mut frames = vec![frame("message_start", r#"{"message":{"usage":{}}}"#)];
+        frames.extend(web_block_frames(false, false));
+        frames.extend([
+            frame(
+                "content_block_start",
+                r#"{"index":2,"content_block":{"type":"text","text":""}}"#,
+            ),
+            frame(
+                "content_block_delta",
+                r#"{"index":2,"delta":{"type":"text_delta","text":"Ok.\n<!--ACTION-->{\"action\": \"suggest_command\", \"parameters\": {\"command\": \"uptime\"}}<!--/ACTION-->"}}"#,
+            ),
+            frame("content_block_stop", r#"{"index":2}"#),
+            frame("message_delta", r#"{"delta":{"stop_reason":"end_turn"}}"#),
+            frame("message_stop", "{}"),
+        ]);
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(frames));
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, false, Uuid::new_v4(), String::new())
+                .collect()
+                .await;
+
+        let web = position_of(&events, |e| matches!(e, AiEvent::WebActivity(_)));
+        let action = position_of(&events, |e| matches!(e, AiEvent::ActionProposed(_)));
+        assert!(web < action, "{events:?}");
     }
 
     /// Spec 0039: eine gespeicherte Recherche geht in einer späteren Anfrage
@@ -2534,5 +2734,140 @@ mod tests {
             .filter(|n| n != "web_search" && n != "web_fetch")
             .collect();
         assert_eq!(after, expected);
+    }
+
+    /// Issue #245 (Spec 0066): history `assistant (tool call)`, action result,
+    /// queued user text, queued user text.
+    fn history_with_queued(queued: &[&str]) -> Vec<ssh_manager_core::ai::ChatMessage> {
+        use ssh_manager_core::ai::ChatMessage;
+        let mut history = vec![
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("list files".to_string()),
+            },
+            ChatMessage {
+                role: Role::Assistant,
+                content: MessageContent::Text("running ls".to_string()),
+            },
+            ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::CommandResult {
+                    command: "ls".to_string(),
+                    output: ssh_manager_core::ssh::CommandOutput {
+                        stdout: b"file-a".to_vec(),
+                        stderr: Vec::new(),
+                        exit_code: Some(0),
+                        truncated: false,
+                    },
+                    cancelled: false,
+                },
+            },
+        ];
+        for text in queued {
+            history.push(ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text((*text).to_string()),
+            });
+        }
+        history
+    }
+
+    fn history_context(history: Vec<ssh_manager_core::ai::ChatMessage>) -> SessionContext {
+        SessionContext {
+            system_context: "Hi.".to_string(),
+            history,
+            available_actions: Vec::new(),
+            max_tokens_hint: None,
+        }
+    }
+
+    /// Deterministic pseudo-random role sequences (no extra dev-dependency).
+    fn random_histories() -> Vec<Vec<ssh_manager_core::ai::ChatMessage>> {
+        use ssh_manager_core::ai::ChatMessage;
+        let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+        let mut all = Vec::new();
+        for _ in 0..200 {
+            let mut history = Vec::new();
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let len = 1 + (state >> 60) as usize;
+            for i in 0..len {
+                state = state
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let role = match (state >> 33) % 3 {
+                    0 => Role::User,
+                    1 => Role::Assistant,
+                    _ => Role::ActionResult,
+                };
+                let content = if role == Role::ActionResult {
+                    MessageContent::ActionRejected {
+                        command: format!("cmd{i}"),
+                        reason: ssh_manager_core::ai::RejectionReason::User,
+                    }
+                } else {
+                    MessageContent::Text(format!("m{i}"))
+                };
+                history.push(ChatMessage { role, content });
+            }
+            all.push(history);
+        }
+        all
+    }
+
+    fn combine_provider() -> AnthropicProvider {
+        AnthropicProvider::new(
+            "https://example.test",
+            "claude-test",
+            "key",
+            true,
+            test_budget(),
+            None,
+        )
+    }
+
+    #[test]
+    fn test_action_result_and_queued_text_become_one_user_message_with_blocks() {
+        let body = combine_provider()
+            .build_request_body(&history_context(history_with_queued(&["also check /tmp"])));
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 3, "{body}");
+        let last = &messages[2];
+        assert_eq!(last["role"], "user");
+        let blocks = last["content"].as_array().unwrap();
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0]["type"], "text");
+        assert!(blocks[0]["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("<command_execution_result>"));
+        assert_eq!(blocks[1]["text"], "also check /tmp");
+    }
+
+    #[test]
+    fn test_two_queued_messages_in_a_row_produce_one_user_message() {
+        let body = combine_provider()
+            .build_request_body(&history_context(history_with_queued(&["one", "two"])));
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 3, "{body}");
+        assert_eq!(messages[2]["content"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_no_request_body_has_two_adjacent_messages_with_the_same_role() {
+        let provider = combine_provider();
+        for history in random_histories() {
+            let body = provider.build_request_body(&history_context(history));
+            let roles: Vec<&str> = body["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| m["role"].as_str().unwrap())
+                .collect();
+            for pair in roles.windows(2) {
+                assert_ne!(pair[0], pair[1], "{roles:?}");
+            }
+        }
     }
 }

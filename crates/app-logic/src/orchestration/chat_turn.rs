@@ -821,6 +821,14 @@ async fn run_one_round(
                     executed_action = true;
                 }
             }
+            AiEvent::WebContentIngested => {
+                // Issue #173: Flag sofort setzen (monoton), unabhängig
+                // davon, wie diese Antwort endet. Kein Inhalt, keine
+                // Anzeige, kein `round_had_content`.
+                session
+                    .untrusted_content_ingested
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+            }
             AiEvent::WebActivity(activity) => {
                 // Issue #162: reine Information — keine Filter-Engine, keine
                 // Bestätigung, KEINE Folgerunde (`executed_action` bleibt

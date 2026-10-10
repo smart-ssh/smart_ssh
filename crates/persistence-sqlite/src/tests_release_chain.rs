@@ -55,7 +55,9 @@ mod marker {
 }
 
 fn fixture_key() -> DatabaseKey {
-    DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY)
+    DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(
+        RELEASE_FIXTURE_ROOT_KEY,
+    ))
 }
 
 /// Das Verzeichnis selbst: Jede eingetragene Fixture existiert, ist, was
@@ -202,7 +204,9 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
         .await
         .unwrap_or_else(|err| panic!("{release}: the upgraded file does not open: {err}"));
     let decryption = store
-        .decrypt_field_encrypted_content(&RELEASE_FIXTURE_ROOT_KEY)
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(
+            RELEASE_FIXTURE_ROOT_KEY,
+        ))
         .await
         .unwrap_or_else(|err| panic!("{release}: field content decryption failed: {err}"));
     let FieldContentDecryption::Completed(report) = decryption else {
@@ -259,7 +263,9 @@ async fn upgrade_step_by_step(fixture: &ReleaseFixture) {
         .unwrap_or_else(|err| panic!("{release}: the decrypted file does not open: {err}"));
     assert_eq!(
         store
-            .decrypt_field_encrypted_content(&RELEASE_FIXTURE_ROOT_KEY)
+            .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(
+                RELEASE_FIXTURE_ROOT_KEY
+            ))
             .await
             .unwrap_or_else(|err| panic!("{release}: second decryption run failed: {err}")),
         FieldContentDecryption::AlreadyDone

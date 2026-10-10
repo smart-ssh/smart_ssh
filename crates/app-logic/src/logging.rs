@@ -269,7 +269,7 @@ pub fn init_logging() -> WorkerGuard {
     // context`/`log_command_execution`) und verdienen dieselbe
     // Zugriffsbeschränkung wie die SQLite-DB und `host_keys.json` (0700/
     // 0600) statt der OS-Standardrechte (typ. 0755/0644, weltlesbar).
-    harden_log_permissions(&dir);
+    let permission_failures = harden_log_permissions(&dir);
 
     let filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| default_filter());
@@ -281,6 +281,12 @@ pub fn init_logging() -> WorkerGuard {
         .with_env_filter(filter)
         .init();
 
+    // The subscriber was not yet installed while the permissions were
+    // tightened; report any failures now so they reach the log file.
+    for failure in &permission_failures {
+        failure.warn();
+    }
+
     guard
 }
 
@@ -289,22 +295,28 @@ pub fn init_logging() -> WorkerGuard {
 /// `persistence_sqlite::store::SqliteProfileStore::connect` (DB-Datei) und
 /// `host_key_store::write_atomically` (`host_keys.json`). Best-effort (wie
 /// dort): ein fehlgeschlagenes `chmod` verhindert nicht den App-Start.
+/// Failures are returned (not logged) because the subscriber is not yet
+/// installed at this point; the caller logs them after initialisation.
 #[cfg(unix)]
-fn harden_log_permissions(dir: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
+fn harden_log_permissions(dir: &Path) -> Vec<ssh_manager_core::fs_hardening::PermissionFailure> {
+    use ssh_manager_core::fs_hardening::try_harden_permissions;
+    let mut failures = Vec::new();
+    failures.extend(try_harden_permissions(dir, 0o700, "log_dir").err());
     let Ok(entries) = fs::read_dir(dir) else {
-        return;
+        return failures;
     };
     for entry in entries.flatten() {
         if entry.file_type().is_ok_and(|t| t.is_file()) {
-            let _ = fs::set_permissions(entry.path(), fs::Permissions::from_mode(0o600));
+            failures.extend(try_harden_permissions(&entry.path(), 0o600, "log_file").err());
         }
     }
+    failures
 }
 
 #[cfg(not(unix))]
-fn harden_log_permissions(_dir: &Path) {}
+fn harden_log_permissions(_dir: &Path) -> Vec<ssh_manager_core::fs_hardening::PermissionFailure> {
+    Vec::new()
+}
 
 #[cfg(test)]
 mod tests {

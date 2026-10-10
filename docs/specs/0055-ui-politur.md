@@ -83,6 +83,15 @@ das Frontend beim Rendern über den bestehenden i18n-Mechanismus auflöst.
 - **frontend-design-Skill** beachten (Tokens, keine Ad-hoc-Styles).
 - Teil 1 (auto-grow) und Teil 2 (Hover-Aktionen) sollen sich natürlich ins
   bestehende Chat-Layout einfügen.
+- **Textkontrast:** Jeder Text erreicht mindestens das WCAG-2.1-AA-Verhältnis
+  von 4,5:1 (große Schrift 3:1) gegen seinen tatsächlichen Hintergrund. Das
+  gilt auch für abgesetzte Texte (Sekundärbeschriftungen, inaktive Tabs,
+  Hinweise) und für Text auf Akzentflächen (Primärbuttons, aktive Auswahl).
+  Abgesetzte Texte bleiben durch ihre Abstufung (hell → gedämpft) vom
+  Haupttext unterscheidbar. Deaktivierte Bedienelemente sind nach WCAG
+  ausgenommen. Die automatischen Barrierefreiheits-Scans der Browser-Tests
+  prüfen das ohne Ausnahme für das Hauptfenster, jede Einstellungskategorie
+  und die Befehlsbestätigung.
 
 ## Testbarkeit
 

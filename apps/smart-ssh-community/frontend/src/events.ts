@@ -216,7 +216,7 @@ export const onMcpActionTabRequested = (
 
 // --- Spec 0101, Etappe 3: Startfragen im Fenster -------------------------
 
-/** Teil 0 Frage 3: eine Startfrage (D1–D4, zweite Bestätigung, neues
+/** §2 Frage 3: eine Startfrage (D1–D4, zweite Bestätigung, neues
  * Master-Passwort, Hinweis) erscheint im Fenster.
  *
  * **Der Zuhörer muss stehen, bevor das erste Entsperr-Kommando läuft.**

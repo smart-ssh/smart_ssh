@@ -205,7 +205,8 @@ impl SessionTransport {
     /// Codeangabe.)
     ///
     /// **Diese Fälle hängen bewusst an keinem `cfg`/Feature.** Der
-    /// Test-Zugang [`Session::parts_mut_for_tests`] steht hinter
+    /// Test-Zugang (die `set_*_for_tests`-Setter, z. B.
+    /// [`Session::set_filter_engine_for_tests`]) steht hinter
     /// `feature = "test-support"`, und dieses Feature ist im Doctest-Lauf von
     /// `cargo test --workspace` **aktiv** (Feature-Unification über
     /// `app-shell`s dev-dependency). Ein `DerefMut` hinter demselben Feature
@@ -358,8 +359,9 @@ impl std::ops::DerefMut for TransportGuard<'_> {
 /// alle mitgegebenen Bestandteile zweier Sitzungen auf einmal, während der
 /// private SFTP-Kanal zurückbliebe. Ohne `DerefMut` ist von außen kein Feld
 /// einer bestehenden Sitzung schreibbar; Tests bekommen den Zugang über
-/// [`Session::parts_mut_for_tests`] hinter `cfg(test)`/`feature = "test-support"`
-/// (A3.3, Muster wie [`Session::set_sftp_for_tests`]).
+/// feldweise `set_<feld>_for_tests`-Setter hinter
+/// `cfg(test)`/`feature = "test-support"` (A3.3, Muster wie
+/// [`Session::set_sftp_for_tests`]).
 pub struct Session {
     parts: SessionParts,
     sftp: NormalSftpChannel,
@@ -438,8 +440,9 @@ pub struct SessionParts {
     /// compact_for_send`) noch nie greifen musste, oder nach einem
     /// wiederaufgenommenen Resume ohne zuvor gespeicherte Summary.
     /// Aktualisiert ausschließlich von `compaction::
-    /// compact_rounds_with_summary` (nie direkt), zusätzlich verschlüsselt
-    /// persistiert wie die Chat-Historie/das Ledger (Spec 0036/0057 §2.3),
+    /// compact_rounds_with_summary` (nie direkt), persistiert
+    /// wie die Chat-Historie/das Ledger, geschützt durch die Verschlüsselung
+    /// der Datenbankdatei (Spec 0036, Spec 0057 §2.3),
     /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
     pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
     /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
@@ -618,6 +621,12 @@ pub struct SessionParts {
     /// ist, beim `connect()` aber nicht eingerichtet werden konnte. Der
     /// Sitzungs-Hinweis wird einmalig gesendet (`swap(false)`).
     pub second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool,
+    /// Issue #231: `true`, wenn die serverspezifische Injection-Prüfung
+    /// eingeschaltet ist, beim `connect()` aber kein Anbieter zur Verfügung
+    /// stand (Zweitmeinung app-weit aus oder nicht einrichtbar). Nur
+    /// Hinweis, keine erzwungene Bestätigung; einmalig gesendet
+    /// (`swap(false)`).
+    pub injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool,
     /// Spec 0034: Persistenz-Anbindung für diese Sitzung. `None` für
     /// Sitzungen, die bewusst keine `chat_sessions`-Zeile bekommen sollen
     /// (Tests; s. Abschnitt 10 zu MCP — MCP-ausgelöste Aktionen laufen
@@ -792,34 +801,123 @@ impl Session {
         NormalSftpGuard(self.sftp.inner.lock().await)
     }
 
-    /// Spec 0086, A3.3: Schreibzugang auf die mitgegebenen Bestandteile —
-    /// **nur für Tests**, die eine Sitzung mit gezielt gesetzten Feldern
-    /// brauchen (`session.parts_mut_for_tests().server_id = …`). Hinter dem Feature
-    /// `test-support` wie [`Session::set_sftp_for_tests`]: Produktivbauten
-    /// aktivieren es nicht, also gibt es für Produktivcode außerhalb von
-    /// `app-logic` keinen Weg, ein Feld einer bestehenden Sitzung zu
-    /// überschreiben.
-    ///
-    /// Dass dieses Feature im Doctest-Lauf von `cargo test --workspace`
-    /// aktiv ist, macht die `compile_fail`-Fälle an
-    /// [`SessionTransport::lock`] **nicht** wirkungslos: die rühren diesen
-    /// Zugang nicht an, sondern das Fehlen von `DerefMut` — und das gilt
-    /// unabhängig von jedem Feature (s. dortiger Kommentar, ADR 0080).
-    ///
-    /// **Der Zugang ist breit**, und der Name sagt das (spec-reviewer,
-    /// Runde 1): Er reicht `&mut SessionParts` heraus, also Schreibrechte auf
-    /// **alle** mitgegebenen Bestandteile — auch auf `filter_engine`,
-    /// `ai_provider` und `sudo_password`. Ein Aufruf aus Produktivcode wäre
-    /// damit ein vollständiger Filter-Bypass. Er ist dort unmöglich, weil kein
-    /// Produktivbau `test-support` aktiviert; das `_for_tests` im Namen ist
-    /// die zweite Schranke, damit ein solcher Aufruf einem Menschen auffällt,
-    /// bevor `cargo build --workspace` ihn ablehnt (`cargo clippy
-    /// --all-targets`/`cargo test` haben das Feature an und würden ihn
-    /// durchlassen). Ein feldweiser Satz Setter wäre enger — s. ADR 0080,
-    /// warum er hier nicht kommt.
+    // Spec 0086, A3.3 / ADR 0080 (decision 4): Test-Setter, je einer pro
+    // Feld, das Tests tatsächlich überschreiben. Alle hinter dem Feature
+    // `test-support` wie [`Session::set_sftp_for_tests`]: Produktivbauten
+    // aktivieren es nicht, also gibt es für Produktivcode keinen Weg, ein
+    // Feld einer bestehenden Sitzung zu überschreiben (`cargo build
+    // --workspace` lehnt einen Aufruf ab; `clippy --all-targets`/`cargo
+    // test` haben das Feature an). Jeder Setter ändert genau ein Feld —
+    // `set_filter_engine_for_tests`, `set_ai_provider_for_tests` und
+    // `set_sudo_password_for_tests` sind die sicherheitsrelevanten.
+
     #[cfg(any(test, feature = "test-support"))]
-    pub fn parts_mut_for_tests(&mut self) -> &mut SessionParts {
-        &mut self.parts
+    pub fn set_filter_engine_for_tests(&mut self, value: Box<dyn CommandEvaluator>) {
+        self.parts.filter_engine = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_model_context_window_tokens_for_tests(&mut self, value: usize) {
+        self.parts.model_context_window_tokens = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_ai_provider_for_tests(&mut self, value: Box<dyn AiProvider>) {
+        self.parts.ai_provider = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_post_ingest_policy_for_tests(
+        &mut self,
+        value: ssh_manager_core::profiles::PostIngestPolicy,
+    ) {
+        self.parts.post_ingest_policy = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_sudo_password_for_tests(&mut self, value: Option<secrecy::SecretString>) {
+        self.parts.sudo_password = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_injection_check_provider_for_tests(&mut self, value: Option<Box<dyn AiProvider>>) {
+        self.parts.injection_check_provider = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_injection_check_budget_for_tests(
+        &mut self,
+        value: Option<Arc<ai_providers::ProviderBudgetGuard>>,
+    ) {
+        self.parts.injection_check_budget = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_server_id_for_tests(&mut self, value: ServerId) {
+        self.parts.server_id = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_red_risk_always_confirm_for_tests(&mut self, value: bool) {
+        self.parts.red_risk_always_confirm = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_chat_session_id_for_tests(&mut self, value: AsyncMutex<Option<uuid::Uuid>>) {
+        self.parts.chat_session_id = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_system_context_parts_for_tests(
+        &mut self,
+        value: AsyncMutex<crate::compaction::SystemContextParts>,
+    ) {
+        self.parts.system_context_parts = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_risk_second_opinion_provider_for_tests(
+        &mut self,
+        value: Option<Box<dyn AiProvider>>,
+    ) {
+        self.parts.risk_second_opinion_provider = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_risk_second_opinion_budget_for_tests(
+        &mut self,
+        value: Option<Arc<ai_providers::ProviderBudgetGuard>>,
+    ) {
+        self.parts.risk_second_opinion_budget = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_chat_session_store_for_tests(
+        &mut self,
+        value: Option<persistence_sqlite::SqliteChatSessionStore>,
+    ) {
+        self.parts.chat_session_store = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_ledger_store_for_tests(
+        &mut self,
+        value: Option<persistence_sqlite::SqliteLedgerStore>,
+    ) {
+        self.parts.ledger_store = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_transport_for_tests(&mut self, value: SessionTransport) {
+        self.parts.transport = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_ai_provider_budget_for_tests(
+        &mut self,
+        value: Arc<ai_providers::ProviderBudgetGuard>,
+    ) {
+        self.parts.ai_provider_budget = value;
     }
 
     /// Spec 0085, A3.3: Setzt einen Test-Kanal ein. Hinter dem Feature
@@ -1060,6 +1158,107 @@ pub struct SessionManager {
     /// während eines offenen Host-Key-Dialogs den Tab nicht einfach
     /// verschwinden lässt.
     pending_connections: StdMutex<HashMap<SessionId, ServerId>>,
+    /// Issue #242: Chat-Sitzungen, die gerade fortgesetzt (Resume) oder
+    /// gelöscht werden. Schließt die Lücke zwischen "Resume gestartet" und
+    /// `insert` der registrierten `Session`, in der `is_chat_session_active`
+    /// noch `false` liefert. Reine synchrone Sperre, nie über ein `.await`
+    /// hinweg gehalten.
+    claimed_chat_sessions: StdMutex<HashMap<uuid::Uuid, ChatSessionClaimState>>,
+}
+
+#[derive(Default, Clone, Copy)]
+struct ChatSessionClaimState {
+    resumers: usize,
+    deleting: bool,
+}
+
+/// Die Chat-Sitzung ist gerade in Benutzung (Resume läuft, ein Tab nutzt
+/// sie) bzw. wird gerade gelöscht.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatSessionClaimError {
+    /// Ein Tab nutzt die Sitzung oder ein Resume läuft gerade.
+    InUse,
+    /// Ein Löschvorgang für diese Sitzung läuft gerade.
+    BeingDeleted,
+}
+
+/// RAII-Anspruch auf eine Chat-Sitzung; gibt sie beim `Drop` frei — auch auf
+/// jedem Fehlerpfad eines Resume.
+#[must_use = "dropping the claim releases it immediately"]
+pub struct ChatSessionClaim<'a> {
+    manager: &'a SessionManager,
+    chat_session_id: uuid::Uuid,
+    exclusive: bool,
+}
+
+impl Drop for ChatSessionClaim<'_> {
+    fn drop(&mut self) {
+        let mut claims = self.manager.claimed_chat_sessions.lock().unwrap();
+        if let Some(state) = claims.get_mut(&self.chat_session_id) {
+            if self.exclusive {
+                state.deleting = false;
+            } else {
+                state.resumers = state.resumers.saturating_sub(1);
+            }
+            if !state.deleting && state.resumers == 0 {
+                claims.remove(&self.chat_session_id);
+            }
+        }
+    }
+}
+
+impl SessionManager {
+    /// Issue #242: Anspruch eines Resume. Mehrere gleichzeitige Resumes
+    /// derselben Sitzung bleiben möglich (wie bisher); nur ein laufendes
+    /// Löschen schließt sie aus. Vor dem Laden der Historie nehmen, bis nach
+    /// `insert` der `Session` halten.
+    pub fn claim_chat_session_for_resume(
+        &self,
+        chat_session_id: uuid::Uuid,
+    ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
+        let mut claims = self.claimed_chat_sessions.lock().unwrap();
+        let state = claims.entry(chat_session_id).or_default();
+        if state.deleting {
+            return Err(ChatSessionClaimError::BeingDeleted);
+        }
+        state.resumers += 1;
+        Ok(ChatSessionClaim {
+            manager: self,
+            chat_session_id,
+            exclusive: false,
+        })
+    }
+
+    /// Issue #242: exklusiver Anspruch für das Löschen. Scheitert mit
+    /// `InUse`, wenn ein Resume läuft oder ein Tab die Sitzung nutzt;
+    /// Prüfung und Anspruch gehören zusammen, der Aufrufer löscht, solange
+    /// er die Rückgabe hält.
+    pub async fn claim_chat_session_for_delete(
+        &self,
+        chat_session_id: uuid::Uuid,
+    ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
+        {
+            let mut claims = self.claimed_chat_sessions.lock().unwrap();
+            let state = claims.entry(chat_session_id).or_default();
+            if state.deleting {
+                return Err(ChatSessionClaimError::BeingDeleted);
+            }
+            if state.resumers > 0 {
+                return Err(ChatSessionClaimError::InUse);
+            }
+            state.deleting = true;
+        }
+        // Ab hier hält der Anspruch (Drop gibt frei, auch beim Fehler unten).
+        let claim = ChatSessionClaim {
+            manager: self,
+            chat_session_id,
+            exclusive: true,
+        };
+        if self.is_chat_session_active(chat_session_id).await {
+            return Err(ChatSessionClaimError::InUse);
+        }
+        Ok(claim)
+    }
 }
 
 impl SessionManager {
@@ -1245,6 +1444,7 @@ mod tests {
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
@@ -1457,7 +1657,7 @@ mod tests {
         let manager = SessionManager::new();
         let chat_session_id = Uuid::new_v4();
         let mut session = dummy_session(ServerId::new());
-        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
         manager.insert(Uuid::new_v4(), Arc::new(session));
 
         assert!(manager.is_chat_session_active(chat_session_id).await);
@@ -1467,7 +1667,7 @@ mod tests {
     async fn test_is_chat_session_active_false_for_an_unrelated_chat_session_id() {
         let manager = SessionManager::new();
         let mut session = dummy_session(ServerId::new());
-        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(Uuid::new_v4()));
+        session.set_chat_session_id_for_tests(AsyncMutex::new(Some(Uuid::new_v4())));
         manager.insert(Uuid::new_v4(), Arc::new(session));
 
         assert!(!manager.is_chat_session_active(Uuid::new_v4()).await);
@@ -1479,5 +1679,56 @@ mod tests {
         manager.insert(Uuid::new_v4(), Arc::new(dummy_session(ServerId::new())));
 
         assert!(!manager.is_chat_session_active(Uuid::new_v4()).await);
+    }
+
+    // Issue #242: Claim-Logik (Resume vs. Löschen).
+    #[tokio::test]
+    async fn delete_is_refused_while_a_resume_holds_the_claim() {
+        let manager = SessionManager::new();
+        let id = Uuid::new_v4();
+        let _resume = manager.claim_chat_session_for_resume(id).unwrap();
+        assert!(matches!(
+            manager.claim_chat_session_for_delete(id).await,
+            Err(ChatSessionClaimError::InUse)
+        ));
+    }
+
+    #[tokio::test]
+    async fn delete_is_allowed_again_after_a_failed_resume_drops_the_claim() {
+        let manager = SessionManager::new();
+        let id = Uuid::new_v4();
+        let resume = manager.claim_chat_session_for_resume(id).unwrap();
+        drop(resume); // Fehlerpfad: Guard fällt
+        assert!(manager.claim_chat_session_for_delete(id).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn delete_of_unused_chat_session_is_allowed_and_releases_afterwards() {
+        let manager = SessionManager::new();
+        let id = Uuid::new_v4();
+        let delete = manager.claim_chat_session_for_delete(id).await.unwrap();
+        // Läuft das Löschen, scheitert ein Resume und ein zweites Löschen.
+        assert!(matches!(
+            manager.claim_chat_session_for_resume(id),
+            Err(ChatSessionClaimError::BeingDeleted)
+        ));
+        assert!(matches!(
+            manager.claim_chat_session_for_delete(id).await,
+            Err(ChatSessionClaimError::BeingDeleted)
+        ));
+        drop(delete);
+        assert!(manager.claim_chat_session_for_resume(id).is_ok());
+    }
+
+    #[tokio::test]
+    async fn claims_are_per_chat_session() {
+        let manager = SessionManager::new();
+        let _resume = manager
+            .claim_chat_session_for_resume(Uuid::new_v4())
+            .unwrap();
+        assert!(manager
+            .claim_chat_session_for_delete(Uuid::new_v4())
+            .await
+            .is_ok());
     }
 }

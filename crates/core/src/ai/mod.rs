@@ -16,6 +16,12 @@ mod fencing;
 pub mod keywords;
 mod provider;
 mod redactor;
+#[cfg(test)]
+mod redactor_generators;
+#[cfg(test)]
+mod redactor_property;
+#[cfg(test)]
+mod redactor_reference;
 mod second_opinion;
 mod types;
 

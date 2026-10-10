@@ -131,6 +131,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM",
   "AI_INJECTION_CHECK_UNAVAILABLE",
   "AI_SECOND_OPINION_SETUP_FAILED",
+  // Issue #231: Injection-Prüfung am Server an, aber kein KI-Anbieter.
+  "AI_INJECTION_CHECK_INACTIVE",
   "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM",
   "FILTER_FILE_WRITE_REQUIRES_CONFIRM",
   // CommandError (crates/app-shell/src/error.rs) — Server-/Gruppen-Formulare

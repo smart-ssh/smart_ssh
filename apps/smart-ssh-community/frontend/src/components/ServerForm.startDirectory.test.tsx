@@ -17,6 +17,7 @@ vi.mock("../api", () => ({
   createServer: vi.fn(),
   deleteServer: vi.fn(),
   getServer: vi.fn(),
+  listStoredHostKeys: vi.fn(() => Promise.resolve([])),
   inspectKeyFile: vi.fn(),
   largeNoteDialogThresholdChars: vi.fn(() => Promise.resolve(100000)),
   previewEffectiveNotes: vi.fn(() => Promise.resolve("")),

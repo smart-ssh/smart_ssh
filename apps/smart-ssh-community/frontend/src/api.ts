@@ -51,6 +51,7 @@ import type {
   StartDirectoryDto,
   TerminalStartDto,
   UnusableServerDto,
+  StoredHostKeyDto,
 } from "./types";
 
 /** Von `crate::error::CommandError` (`crates/app-shell/src/error.rs`). */
@@ -242,6 +243,12 @@ export const disconnect = (sessionId: string) => invoke<void>("disconnect", { se
 export const stopAutoContinuation = (sessionId: string) =>
   invoke<void>("stop_auto_continuation", { sessionId });
 
+/** Issue #271, Spec 0034 §11: beginnt in der bestehenden Verbindung einen
+ * neuen Chat (SSH, Terminal und Dateibrowser bleiben). Liefert die ID der
+ * neuen Chat-Sitzung, `null` für einen lokalen Tab ohne gespeicherten Chat. */
+export const startNewChat = (sessionId: string) =>
+  invoke<string | null>("start_new_chat", { sessionId });
+
 /** Spec 0027, Abschnitt 3: schließt nur den Exec-Kanal dieses einen
  * Kommandos (nicht die SSH-Verbindung/Session) und liefert die bis dahin
  * gesammelte Ausgabe als reguläres `chat-action-result` zurück. Kein
@@ -316,6 +323,11 @@ export const testConnection = (input: ServerInput, existingServerId?: string) =>
 export const trustHostKey = (host: string, port: number, rawKey: number[]) =>
   invoke<void>("trust_host_key", { host, port, rawKey });
 
+/** Spec 0008: stored host keys (algorithm + fingerprint) for the saved
+ * host and port of a server; read-only, never returns key bytes. */
+export const listStoredHostKeys = (id: string) =>
+  invoke<StoredHostKeyDto[]>("list_stored_host_keys", { id });
+
 /** Spec 0076, B-3/C-7: Vorab-Befund über eine Schlüsseldatei — liest sie,
  * gibt aber nie den Schlüssel selbst heraus (§4.2). */
 export const inspectKeyFile = (path: string) =>
@@ -372,6 +384,10 @@ export const createRule = (input: RuleInput) => invoke<string>("create_rule", { 
 
 export const updateRule = (id: string, input: RuleInput) =>
   invoke<void>("update_rule", { id, input });
+
+/** Spec 0077, 3.2.3: tauscht die Prioritäten zweier Regeln atomar. */
+export const swapRulePriorities = (first: string, second: string) =>
+  invoke<void>("swap_rule_priorities", { first, second });
 
 export const deleteRule = (id: string) => invoke<void>("delete_rule", { id });
 
@@ -684,7 +700,7 @@ export const exportSshConfig = (title: string) =>
 export const getStartupState = () => invoke<StartupStateDto>("get_startup_state");
 
 /** A16: entsperren und den Zustand nachbauen. Im Schlüsselbund-Modus
- * (Startmaske `setUpMasterPassword`, Teil 0 Frage 3) wird das Passwort
+ * (Startmaske `setUpMasterPassword`, §2 Frage 3) wird das Passwort
  * nicht gebraucht — dort setzt der Aufruf den Startablauf im Fenster fort,
  * und die Entscheidung fällt im Dialog D1. */
 export const unlockWithMasterPassword = (password: string) =>
@@ -696,7 +712,7 @@ export const unlockWithMasterPassword = (password: string) =>
 export const startOverFromUnlockScreen = () =>
   invoke<StartupStateDto>("start_over_from_unlock_screen");
 
-/** Teil 0 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
+/** §2 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
  * Master-Passwort kommt getrennt mit — es gehört nicht in das Ereignis, mit
  * dem gefragt wurde (§6: kein Passwort in einem DTO).
  *

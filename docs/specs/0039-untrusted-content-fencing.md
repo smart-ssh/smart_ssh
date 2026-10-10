@@ -101,6 +101,13 @@ eingeschleuste Anweisungen" in den erweiterten Server-Einstellungen.
   Der Fehler wird mit `warn` und Fehlercode protokolliert, ohne Inhalt und
   ohne Fehlertext des Providers. Kann die Zweitmeinung beim Verbinden gar
   nicht eingerichtet werden, gilt der Sitzungs-Hinweis aus Spec 0026 §3.
+- **Eingeschaltet, aber ohne Anbieter ist sichtbar**: Ist die Prüfung am
+  Server eingeschaltet, steht beim Verbinden aber kein Zweitmeinungs-
+  Provider zur Verfügung (Zweitmeinung app-weit aus oder nicht
+  einrichtbar), zeigt die Sitzung einmalig einen Hinweis, dass die Prüfung
+  in dieser Sitzung nicht aktiv ist und warum. Es bleibt bei dem Hinweis:
+  keine erzwungene Bestätigung. Ist die Prüfung am Server aus, erscheint
+  kein Hinweis; ebenso nicht, wenn ein Provider verfügbar ist.
 - Der Hinweistext benennt die Prüfung ehrlich als zusätzliche Hürde, die
   selbst täuschbar ist, nicht als zuverlässige Erkennung.
 

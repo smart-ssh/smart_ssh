@@ -29,7 +29,7 @@ use app_logic::state::AppState;
 /// UI-/App-Einstellungen ohne Bezug zu Server-/Gruppen-Fachdaten, keine
 /// eigene SQLite-Migration nötig (Spec 0026, Abschnitt 1, Punkt 1 verlangt
 /// das explizit: "keine neue SQLite-Tabelle").
-const SETTINGS_STORE_FILE: &str = "settings.json";
+use crate::settings_store::SETTINGS_STORE_FILE;
 const ENABLED_KEY: &str = "riskClassifierEnabled";
 const PROVIDER_ID_KEY: &str = "riskClassifierProviderId";
 /// Spec 0092, A1.1.
@@ -116,8 +116,8 @@ pub(crate) fn parse_second_opinion_settings(
 /// Provider ist gelöscht, die ID ungültig oder das Credential nicht
 /// auflösbar, ist das [`SecondOpinionSetup::Unavailable`] — der Aufrufer
 /// meldet es der Sitzung.
-pub async fn resolve_second_opinion_provider(
-    app: &tauri::AppHandle,
+pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     state: &AppState,
 ) -> SecondOpinionSetup {
     // Ein nicht öffenbarer Store verhält sich wie bisher: "aus".

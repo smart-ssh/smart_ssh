@@ -147,9 +147,11 @@ impl SqliteProfileStore {
                 std::fs::create_dir_all(parent).map_err(sqlx::Error::Io)?;
                 #[cfg(unix)]
                 {
-                    use std::os::unix::fs::PermissionsExt;
-                    let _ =
-                        std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+                    ssh_manager_core::fs_hardening::harden_permissions(
+                        parent,
+                        0o700,
+                        "database_dir",
+                    );
                 }
                 // Spec-0059-Fund (spec-reviewer): `create_dir_all` gibt `Ok`
                 // zurück, wenn `parent` bereits existiert — der in Spec 0059
@@ -186,8 +188,7 @@ impl SqliteProfileStore {
         #[cfg(unix)]
         {
             if db_path.exists() {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(db_path, std::fs::Permissions::from_mode(0o600));
+                ssh_manager_core::fs_hardening::harden_permissions(db_path, 0o600, "database");
             }
         }
         Ok(store)

@@ -32,7 +32,7 @@ export function LanguageSettings() {
             aria-pressed={i18n.language === language}
             className={`rounded px-3 py-1.5 text-sm ${
               i18n.language === language
-                ? "bg-indigo-600 text-white"
+                ? "bg-indigo-600 text-slate-950"
                 : "bg-slate-700 text-slate-200 hover:bg-slate-600"
             }`}
           >

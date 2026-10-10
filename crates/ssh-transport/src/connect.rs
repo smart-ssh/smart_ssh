@@ -17,9 +17,8 @@ use crate::transport::RusshTransport;
 
 /// Ergebnis eines Verbindungsversuchs.
 ///
-/// Weicht von der Signatur in Spec 0005 Abschnitt 4
-/// (`connect() -> Result<Box<dyn SshTransport>, SshError>`) bewusst ab:
-/// Abschnitt 6 verlangt ausdrücklich, dass ein `Unknown`/`Mismatch`-
+/// Ist bewusst kein reines `Result<Box<dyn SshTransport>, SshError>`:
+/// Spec 0005 Abschnitt 6 verlangt ausdrücklich, dass ein `Unknown`/`Mismatch`-
 /// Host-Key **nicht** stillschweigend im Fehlerfall versteckt wird, sondern
 /// die UI-Schicht ihn für einen Bestätigungsdialog nutzen kann. Ein reiner
 /// `Result<Box<dyn SshTransport>, SshError>` kann "verbunden" nicht von
@@ -40,8 +39,7 @@ pub enum ConnectOutcome {
 /// Baut eine (ggf. über Jump-Hosts verkettete) SSH-Verbindung zu `target`
 /// auf (Spec 0005, Abschnitt 4/5).
 ///
-/// `host_keys: Arc<dyn HostKeyStore>` statt `&dyn HostKeyStore` (Spec-
-/// Signatur): `russh::client::Handler` verlangt `Self: 'static` (der
+/// `host_keys: Arc<dyn HostKeyStore>` statt `&dyn HostKeyStore`: `russh::client::Handler` verlangt `Self: 'static` (der
 /// Handler wird in einen Tokio-Task verschoben, dessen Lebensdauer die des
 /// `connect()`-Aufrufs überdauert) — eine geliehene Referenz mit
 /// Aufruf-Lebensdauer kann das nicht erfüllen. `credentials` bleibt dagegen
@@ -61,27 +59,13 @@ pub enum ConnectOutcome {
 /// (die Integrationstests riefen `connect()` bislang nur direkt in
 /// `#[tokio::test]`s auf, wo eine `Send`-Future nicht verlangt wird).
 ///
-/// **Bekannte Einschränkung (Jump-Hosts, `remaining_hops`-Zweig):** die
-/// Verkettung über `channel_open_direct_tcpip` + `Channel::into_stream()` +
-/// `client::connect_stream()` folgt exakt dem in Spec 0005 Abschnitt 5
-/// beschriebenen Standard-Tunneling-Verfahren und ist architektonisch
-/// korrekt — betrifft nur den Jump-Host-Fall (zweiter und weitere Hops),
-/// ein einzelner Hop ist davon nicht betroffen und funktioniert (s.
-/// Integrationstests). Gegen `russh` 0.63.1 sendet der über den Tunnel
-/// erreichte Ziel-Server (verifiziert per Byte-Level-Tracing direkt auf dem
-/// rohen `TcpStream`, nicht nur eine Vermutung) seine eigene
-/// SSH-Identifikationszeile ein zweites Mal, unmittelbar vor seiner
-/// KEXINIT-Antwort — der Client liest die zweite Kopie fälschlich als
-/// 4-Byte-Paketlängen-Präfix und bricht mit "Bad packet size" ab.
-/// Ausgeschlossen wurden dabei: TCP-Nagle-Koaleszenz (`nodelay` half
-/// nicht), doppelter `channel_open_direct_tcpip`-Aufruf (per Zähler
-/// verifiziert: genau 1), doppelter `run_stream`-Aufruf (per Log
-/// verifiziert: genau 1) sowie ein zweiter `send_ssh_id`-Aufrufort (es gibt
-/// nur einen einzigen in der gesamten `russh`-Quelle). Details und
-/// Recherche zu zwei unabhängigen, offenen `russh`-Upstream-Reports mit
-/// demselben grundsätzlichen Muster (SSH-über-SSH via
-/// `channel_open_direct_tcpip`) in
-/// `docs/adr/0008-russh-nested-tunnel-limitation.md`.
+/// **Jump-Hosts (`remaining_hops`-Zweig):** die Verkettung über
+/// `channel_open_direct_tcpip` + `Channel::into_stream()` +
+/// `client::connect_stream()` folgt dem in Spec 0005 Abschnitt 5
+/// beschriebenen Standard-Tunneling-Verfahren; jeder Hop durchläuft eigene
+/// Host-Key-Prüfung und Authentifizierung. Ein früherer „Bad packet
+/// size“-Fehler im Zwei-Hop-Test lag am Echo der Test-Fixture auf
+/// Tunnel-Channels, nicht an diesem Code (ADR 0008, Update 2026-10-09).
 ///
 /// Spec 0076, §4.2: `key_files` ist die äußere Grenze zum Dateisystem für
 /// [`ssh_manager_core::profiles::AuthMethod::IdentityFile`] — durchgereicht
@@ -561,7 +545,7 @@ fn resolve_or_pending<H>(
 /// `crate::error::map_io_error`) sind bereits präziser zugeordnet und
 /// brauchen keine weitere Unterscheidung. Wird ausschließlich für den
 /// **ersten** Hop aufgerufen (s. `connect()` oben) — Jump-Hosts ab dem
-/// zweiten Hop bleiben wie vor dieser Spec (§2, Nicht-Ziele).
+/// zweiten Hop bleiben wie vor dieser Spec (Spec 0076, Abschnitt „Entscheidungen“).
 async fn diagnose_connection_failed_dns(err: SshError, host: &str, port: u16) -> SshError {
     let SshError::ConnectionFailed(detail) = &err else {
         return err;

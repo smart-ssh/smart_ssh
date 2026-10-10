@@ -100,9 +100,9 @@
   --color-slate-800: #131a29;
   --color-slate-700: #232a3d;
   --color-slate-600: #3a4257;
-  --color-slate-500: #4f596e;
-  --color-slate-400: #6b7590;
-  --color-slate-300: #8b93a8;
+  --color-slate-500: #8a93aa; /* Fließtext-Kontrast >= 4.5:1 (WCAG AA) auf slate-950..700 */
+  --color-slate-400: #9aa3b8;
+  --color-slate-300: #aab1c4;
   --color-slate-200: #c4cadb;
   --color-slate-100: #dfe3ee;
   --color-slate-50: #e6e9f2;

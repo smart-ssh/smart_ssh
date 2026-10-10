@@ -190,7 +190,7 @@ export function MasterPasswordSettings() {
           <button
             type="submit"
             disabled={busy || !newPasswordIsUsable}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("masterPassword.setUpButton")}
           </button>
@@ -241,7 +241,7 @@ export function MasterPasswordSettings() {
                 characterCount(password) < MINIMUM_PASSWORD_LENGTH ||
                 password !== repeated
               }
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("masterPassword.changeButton")}
             </button>
@@ -272,7 +272,7 @@ export function MasterPasswordSettings() {
       {/* Klarstellung 10b: die Frage vor dem Überschreiben eines fremden
        * Schlüssels. Ohne Bestätigung bleibt alles, wie es war. */}
       {askAboutAnotherKey && (
-        <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
             <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
               {t("masterPassword.anotherKeyTitle")}

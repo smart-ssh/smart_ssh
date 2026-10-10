@@ -15,7 +15,7 @@ use app_logic::system_prompt::{prompt_language, PromptLanguage};
 use tauri_plugin_store::StoreExt;
 
 /// Derselbe Ablageort wie die UI-Sprache (Spec 0024, Abschnitt 4).
-const SETTINGS_STORE_FILE: &str = "settings.json";
+use crate::settings_store::SETTINGS_STORE_FILE;
 const LANGUAGE_KEY: &str = "language";
 
 /// Ein nicht öffenbarer Store zählt wie „keine gespeicherte Wahl" — genau

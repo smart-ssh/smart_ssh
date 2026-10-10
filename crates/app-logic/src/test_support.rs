@@ -557,6 +557,7 @@ pub fn session_with_ai_and_transport(
         injection_suspected: std::sync::atomic::AtomicBool::new(false),
         injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
         second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
+        injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
         chat_session_store: None,
         ledger_store: None,
         chat_session_id: AsyncMutex::new(None),
@@ -762,7 +763,9 @@ pub mod key_leak_needles {
         use base64::engine::general_purpose::STANDARD as BASE64;
         use base64::Engine;
 
-        let pragma = DatabaseKey::from_root_key(root_key).pragma_value();
+        let pragma =
+            DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(*root_key))
+                .pragma_value();
         let pragma_value = pragma.expose_secret().to_string();
         let pragma_hex = pragma_value
             .trim_start_matches("x'")

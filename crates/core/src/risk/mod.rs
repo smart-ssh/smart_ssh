@@ -26,6 +26,9 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod property_tests;
+
 pub use classifier::{
     secret_path_read_reason, sftp_server_invocation_reason, CommandCheckFinding,
     RuleBasedRiskClassifier,

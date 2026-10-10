@@ -41,7 +41,7 @@ pub enum FixtureEncryption {
     /// Releases vor SQLCipher (bis einschließlich 0.5.2).
     Plaintext,
     /// Releases mit SQLCipher: Der Datenbankschlüssel ist
-    /// `DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY)`.
+    /// `DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(RELEASE_FIXTURE_ROOT_KEY))`.
     Sqlcipher,
 }
 

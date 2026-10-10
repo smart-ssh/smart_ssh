@@ -24,10 +24,11 @@ mod local_server;
 mod mcp_backend;
 mod mcp_settings;
 mod risk_second_opinion;
-/// Spec 0101, Teil 0 Frage 2: die gemessene Annahme über Tauris
+/// Spec 0101, §2 Frage 2: die gemessene Annahme über Tauris
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
+mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
 mod single_instance;
@@ -53,7 +54,7 @@ mod startup_prompt;
 mod test_support;
 /// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
 mod ui_language;
-/// Spec 0101, Teil 0 Frage 3: die Startdialoge im Fenster, fuer den
+/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
 /// Passwort-Modus.
 mod window_prompt;
 mod wiring;
@@ -75,7 +76,7 @@ use app_logic::state::AppState;
 /// K beschafft wird.
 ///
 /// **Eigener Typ seit Spec 0101 Etappe 3:** Im Passwort-Modus wird der
-/// Startablauf in zwei Hälften geteilt (Teil 0 Frage 3). Die erste läuft in
+/// Startablauf in zwei Hälften geteilt (§2 Frage 3). Die erste läuft in
 /// [`run`] vor dem Fenster, die zweite im Entsperr-Kommando. Beide brauchen
 /// dieselben Angaben, und sie dürfen sich nicht unterscheiden — die
 /// Umgebung wird deshalb genau einmal gelesen.
@@ -320,6 +321,8 @@ pub(crate) async fn open_and_assemble(
         keychain,
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
+        // Issue #259: Produktion baut die Verbindung real auf.
+        connector: Arc::new(app_logic::test_connection::RealConnector),
         policy_store,
         prompt_history_store,
         chat_session_store,
@@ -415,7 +418,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `State`.
     let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
 
-    // Spec 0101, Etappe 3 (Teil 0 Frage 3): Der Startablauf hat seit dem
+    // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
     //
     // **Schlüsselbund-Modus** (Standard, E8): unverändert — der `AppState`
@@ -507,7 +510,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                     drop(_log_guard);
                     std::process::exit(0);
                 }
-                // Teil 0 Frage 3: „Master-Passwort einrichten" aus D1
+                // §2 Frage 3: „Master-Passwort einrichten" aus D1
                 // braucht eine Texteingabe, die rfd nicht hat. Es ist
                 // nichts verändert; die App startet ohne Zustand und
                 // wiederholt den Ablauf aus dem Fenster.
@@ -700,6 +703,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::respond_to_action,
             commands::cancel_running_command,
             commands::stop_auto_continuation,
+            commands::start_new_chat,
             commands::disconnect,
             commands::list_chat_sessions,
             commands::resume_chat_session,
@@ -727,6 +731,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::convert_identity_file_to_keychain,
             commands::test_connection,
             commands::trust_host_key,
+            commands::list_stored_host_keys,
             commands::update_group_notes,
             commands::update_server_notes,
             commands::large_note_dialog_threshold_chars,
@@ -739,6 +744,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_rules,
             commands::create_rule,
             commands::update_rule,
+            commands::swap_rule_priorities,
             commands::delete_rule,
             commands::list_hard_blacklist,
             commands::list_known_tags,

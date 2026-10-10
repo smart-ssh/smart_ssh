@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
-import { listSettingsSections } from "../extensions/registry";
+import { listSettingsSections, subscribeSettingsSections } from "../extensions/registry";
 import { resolveSectionLabel } from "../resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
@@ -85,7 +85,10 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
   // "chat-retention"/"mcp-server" nutzen das seit diesem Schritt, damit in
   // der englischen UI nicht die festen deutschen Strings aus
   // `registerBuiltinExtensions.ts` erscheinen.
-  const registeredSections = listSettingsSections();
+  const registeredSections = useSyncExternalStore(
+    subscribeSettingsSections,
+    listSettingsSections,
+  );
   const registeredCategories: NavCategory[] = registeredSections.map(({ id, label }) => ({
     id,
     label: resolveSectionLabel(label, id, i18n, t),
@@ -97,7 +100,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
   const active = categories.find((c) => c.id === activeId) ?? categories[0];
 
   return (
-    <ModalBackdrop className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
+    <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
       <div className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl">
         <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40">
           <h2 className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
@@ -112,7 +115,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
                   aria-current={category.id === active?.id ? "page" : undefined}
                   className={`w-full px-4 py-2 text-left text-sm ${
                     category.id === active?.id
-                      ? "bg-indigo-600 text-white"
+                      ? "bg-indigo-600 text-slate-950"
                       : "text-slate-300 hover:bg-slate-800"
                   }`}
                 >

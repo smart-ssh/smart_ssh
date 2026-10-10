@@ -31,7 +31,7 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use ssh_manager_core::ssh::{HostKeyDecision, HostKeyStore, SshError};
+use ssh_manager_core::ssh::{HostKeyDecision, HostKeyStore, SshError, StoredHostKeyInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredEntry {
@@ -96,6 +96,14 @@ fn key_algorithm(raw_key: &[u8]) -> Option<String> {
     let len = u32::from_be_bytes(len_bytes) as usize;
     let name_bytes = raw_key.get(4..4 + len)?;
     String::from_utf8(name_bytes.to_vec()).ok()
+}
+
+/// Display-only: algorithm name of an offered key for the host key prompt.
+/// `None` when the blob does not start with a well-formed, printable
+/// algorithm name. Never used for a trust decision.
+pub fn offered_key_type(raw_key: &[u8]) -> Option<String> {
+    key_algorithm(raw_key)
+        .filter(|name| !name.is_empty() && name.chars().all(|c| c.is_ascii_graphic()))
 }
 
 fn algorithm_key(raw_key: &[u8]) -> String {
@@ -171,8 +179,7 @@ fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
             std::fs::create_dir_all(parent)?;
             #[cfg(unix)]
             {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+                ssh_manager_core::fs_hardening::harden_permissions(parent, 0o700, "host_keys_dir");
             }
         }
     }
@@ -180,14 +187,12 @@ fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
     std::fs::write(&tmp_path, contents)?;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o600));
+        ssh_manager_core::fs_hardening::harden_permissions(&tmp_path, 0o600, "host_keys");
     }
     std::fs::rename(&tmp_path, path)?;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        ssh_manager_core::fs_hardening::harden_permissions(path, 0o600, "host_keys");
     }
     Ok(())
 }
@@ -239,6 +244,27 @@ impl HostKeyStore for FileHostKeyStore {
         known.insert((host.to_string(), port, algo), key.to_vec());
         self.persist(&known)
     }
+
+    /// Read-only: lists `(algorithm, fingerprint)` for `(host, port)`,
+    /// sorted by algorithm. Takes no write path and does not influence
+    /// [`HostKeyStore::check`].
+    fn stored_keys(&self, host: &str, port: u16) -> Vec<StoredHostKeyInfo> {
+        let known = self.known.lock().unwrap();
+        let mut out: Vec<StoredHostKeyInfo> = known
+            .iter()
+            .filter(|((h, p, _), _)| h == host && *p == port)
+            .map(|((_, _, algo), raw_key)| StoredHostKeyInfo {
+                algorithm: if algo == UNPARSEABLE_ALGORITHM_SENTINEL {
+                    "unknown".to_string()
+                } else {
+                    algo.clone()
+                },
+                fingerprint: fingerprint(raw_key),
+            })
+            .collect();
+        out.sort_by(|a, b| a.algorithm.cmp(&b.algorithm));
+        out
+    }
 }
 
 #[cfg(test)]
@@ -258,6 +284,22 @@ mod tests {
         key.extend_from_slice(algo_bytes);
         key.extend_from_slice(distinguishing_suffix.as_bytes());
         key
+    }
+
+    #[test]
+    fn test_offered_key_type_reports_algorithm_or_none() {
+        assert_eq!(
+            offered_key_type(&fake_key("ssh-ed25519", "x")).as_deref(),
+            Some("ssh-ed25519")
+        );
+        assert_eq!(
+            offered_key_type(&fake_key("ecdsa-sha2-nistp256", "x")).as_deref(),
+            Some("ecdsa-sha2-nistp256")
+        );
+        assert_eq!(offered_key_type(b"raw-key-bytes"), None);
+        assert_eq!(offered_key_type(&[]), None);
+        assert_eq!(offered_key_type(&fake_key("", "x")), None);
+        assert_eq!(offered_key_type(&fake_key("bad\nname", "x")), None);
     }
 
     #[test]
@@ -406,5 +448,86 @@ mod tests {
 
         let parent_meta = std::fs::metadata(path.parent().unwrap()).unwrap();
         assert_eq!(parent_meta.permissions().mode() & 0o777, 0o700);
+    }
+
+    #[test]
+    fn test_stored_keys_lists_one_entry_per_algorithm_matching_check_fingerprint() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
+        let ed = fake_key("ssh-ed25519", "aaa");
+        let rsa = fake_key("ssh-rsa", "bbb");
+        store.trust("example.invalid", 22, &ed).unwrap();
+        store.trust("example.invalid", 22, &rsa).unwrap();
+        store
+            .trust("other.invalid", 22, &fake_key("ssh-rsa", "ccc"))
+            .unwrap();
+
+        let listed = store.stored_keys("example.invalid", 22);
+
+        assert_eq!(listed.len(), 2);
+        for (algo, key) in [("ssh-ed25519", &ed), ("ssh-rsa", &rsa)] {
+            let entry = listed.iter().find(|e| e.algorithm == algo).unwrap();
+            // `check` of a differing key of the same algorithm reports the
+            // stored key's fingerprint as expected.
+            let other = fake_key(algo, "zzz");
+            match store.check("example.invalid", 22, &other) {
+                HostKeyDecision::Mismatch {
+                    expected_fingerprint,
+                    ..
+                } => assert_eq!(entry.fingerprint, expected_fingerprint),
+                d => panic!("unexpected {d:?}"),
+            }
+            assert_eq!(entry.fingerprint, fingerprint(key));
+        }
+    }
+
+    #[test]
+    fn test_stored_keys_unknown_host_or_port_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
+        store
+            .trust("example.invalid", 22, &fake_key("ssh-ed25519", "a"))
+            .unwrap();
+
+        assert!(store.stored_keys("nope.invalid", 22).is_empty());
+        assert!(store.stored_keys("example.invalid", 2222).is_empty());
+    }
+
+    #[test]
+    fn test_stored_keys_unparseable_algorithm_gets_neutral_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json")).unwrap();
+        store
+            .trust("example.invalid", 22, b"raw-key-bytes")
+            .unwrap();
+
+        let listed = store.stored_keys("example.invalid", 22);
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].algorithm, "unknown");
+        assert!(!listed[0].algorithm.contains("__"));
+    }
+
+    #[test]
+    fn test_stored_keys_does_not_change_trust_state_or_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("host_keys.json");
+        let store = FileHostKeyStore::load(path.clone()).unwrap();
+        let key = fake_key("ssh-ed25519", "a");
+        store.trust("example.invalid", 22, &key).unwrap();
+        let before = std::fs::read_to_string(&path).unwrap();
+
+        let _ = store.stored_keys("example.invalid", 22);
+        let _ = store.stored_keys("unseen.invalid", 22);
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+        assert_eq!(
+            store.check("example.invalid", 22, &key),
+            HostKeyDecision::Trusted
+        );
+        assert!(matches!(
+            store.check("unseen.invalid", 22, &key),
+            HostKeyDecision::Unknown { .. }
+        ));
     }
 }
