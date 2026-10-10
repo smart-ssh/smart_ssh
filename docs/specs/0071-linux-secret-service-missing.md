@@ -227,18 +227,23 @@ Paketnamen nach A0.3 zu bestätigen):
 
 > **Kein Systemschlüsselbund gefunden**
 >
-> Smart SSH speichert Passwörter, Passphrasen und API-Keys ausschließlich
-> im Schlüsselbund des Betriebssystems. Auf diesem System läuft kein
-> Secret-Service-Anbieter.
+> Der Schlüssel, der die Datenbank von Smart SSH schützt, wird im
+> Schlüsselbund des Betriebssystems aufbewahrt. Auf diesem System läuft
+> kein Secret-Service-Anbieter.
 >
-> Solange das so ist, lassen sich **keine KI-Provider, keine
-> Server-Passwörter, keine Passphrasen und keine Sudo-Passwörter**
-> speichern oder lesen. SSH-Verbindungen mit einem Schlüssel ohne
-> Passphrase oder über den SSH-Agent funktionieren weiterhin.
+> Solange das so ist, kann Smart SSH seine verschlüsselte Datenbank nicht
+> öffnen: Server, Passwörter, Passphrasen, Sudo-Passwörter, API-Keys,
+> Chat-Verlauf und Einstellungen sind nicht verfügbar.
 >
-> Nächster Schritt — einen Anbieter installieren und neu anmelden, z. B.:
-> `sudo apt install gnome-keyring` (GNOME), `sudo apt install kwalletd6`
-> (KDE) oder KeePassXC mit aktivierter Secret-Service-Integration.
+> Nächster Schritt — `sudo apt install gnome-keyring` ausführen und neu
+> anmelden.
+
+Seit Spec 0101 liegen die Secrets selbst verschlüsselt in der Datenbank
+(E2); der Schlüsselbund hält nur deren Schlüssel. Kein Text darf Secrets
+im Schlüsselbund verorten oder behaupten, SSH-Verbindungen funktionierten
+ohne erreichbaren Schlüsselbund weiter. Der Dialog erscheint dort, wo die
+Datenbank nicht geöffnet werden kann (Spec 0101, E3/E8: „Erneut
+versuchen“, „Beenden“, ggf. Master-Passwort einrichten).
 
 **A6 (MUSS)** `NoSessionBus` nennt stattdessen den Session-Bus als Ursache
 und `dbus-user-session` (bzw. das in A0.3 bestätigte Paket) als ersten
@@ -255,7 +260,9 @@ Linux-Paketnamen, keinen `apt`-Befehl und kein „Secret Service".
 (SSH-Verbindungen, KI-Chat, Filter-Regeln) funktionieren normal"
 (`startup_error_messages.rs:155–156`) entfällt für die Fälle aus A1 und
 wird durch die Aufzählung aus A5 (b) ersetzt. Der Satz „Smart SSH wird
-jetzt trotzdem gestartet" bleibt — die App bricht weiterhin nicht ab.
+jetzt trotzdem gestartet" entfällt seit Spec 0101 (E3): Der Dialog
+erscheint, wenn die Datenbank nicht geöffnet werden kann, und die App
+startet daraus nicht.
 
 **A10 (MUSS)** Kein Text enthält einen rohen Bibliotheksfehler, eine
 D-Bus-Adresse, einen Benutzernamen oder einen Pfad, der nicht vorher durch
