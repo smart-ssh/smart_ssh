@@ -1,0 +1,58 @@
+name: OpenSSH Jump Tests
+
+# Issue #180: End-to-End-Tests des Jump-Host-Pfads (Bastion -> Ziel) gegen
+# zwei echte OpenSSH-`sshd`-Container. Die Tests in
+# `crates/ssh-transport/tests/openssh_jump.rs` sind `#[ignore]` und laufen
+# im normalen `cargo test --workspace` nicht mit; dieser Workflow startet
+# die Container über `run-jump-tests.sh` und führt sie gezielt aus.
+#
+# Eigene Workflow-Datei, weil `paths:` nur pro Workflow filtert: PRs laufen
+# nur, wenn sie `crates/ssh-transport/**` (oder diese Datei) ändern. Dazu
+# ein wöchentlicher Lauf gegen `main` und der manuelle Start.
+#
+# Vorerst nicht blockierend (`continue-on-error`): ein roter Lauf ist
+# sichtbar, hält aber keinen Merge auf. Keine Secrets, nur `ubuntu-latest`
+# (Docker ist dort vorinstalliert).
+on:
+  pull_request:
+    paths:
+      - "crates/ssh-transport/**"
+      - ".github/workflows/openssh-jump-tests.yml"
+  schedule:
+    # Montags 04:00 UTC.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+# Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab;
+# geplante und manuelle Läufe bekommen je eine eigene Gruppe.
+concurrency:
+  group: openssh-jump-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  openssh-jump-tests:
+    name: OpenSSH Jump Tests (Docker)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      # Baut das sshd-Image, startet Bastion und Ziel in einem gemeinsamen
+      # Docker-Netz, wartet auf beide Banner und führt die ignorierten
+      # Tests aus; die Container räumt das Skript selbst wieder ab.
+      - name: Jump-Host-Tests gegen OpenSSH-Container
+        run: crates/ssh-transport/tests/openssh/run-jump-tests.sh
