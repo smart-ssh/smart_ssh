@@ -103,10 +103,33 @@ pub(crate) fn cannot_start_title(language: Language) -> &'static str {
 /// den Pfad stillschweigend zu kürzen (der volle Pfad bleibt für die
 /// Fehlerdiagnose wichtig).
 pub(crate) fn sanitize_path_for_display(path: &Path) -> String {
-    path.display()
-        .to_string()
-        .chars()
-        .map(|c| if c.is_control() { '?' } else { c })
+    sanitize_text_for_display(&path.display().to_string())
+}
+
+/// Gemeinsamer Anzeige-Bereiniger (Spec 0071, X1): ersetzt jedes
+/// Steuerzeichen **sowie** U+2028/U+2029 (Zeilen-/Absatztrenner), U+200E/
+/// U+200F und die Bidi-Steuerzeichen U+202A–U+202E und U+2066–U+2069
+/// durch `?`. Sonst könnten sie einen Text optisch auf einer neuen Zeile
+/// fortsetzen oder umkehren. Gewöhnliche Nicht-ASCII-Zeichen bleiben.
+pub(crate) fn sanitize_text_for_display(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_control()
+                || matches!(
+                    c,
+                    '\u{2028}'
+                        | '\u{2029}'
+                        | '\u{200E}'
+                        | '\u{200F}'
+                        | '\u{202A}'..='\u{202E}'
+                        | '\u{2066}'..='\u{2069}'
+                )
+            {
+                '?'
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -1144,6 +1167,31 @@ mod tests {
                 text.message
             );
         }
+    }
+
+    #[test]
+    fn test_sanitize_for_display_neutralises_separators_and_bidi_controls() {
+        for c in [
+            '\u{2028}', '\u{2029}', '\u{200E}', '\u{200F}', '\u{202A}', '\u{202B}', '\u{202C}',
+            '\u{202D}', '\u{202E}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}', '\n',
+            '\u{0085}',
+        ] {
+            assert_eq!(sanitize_text_for_display(&format!("a{c}b")), "a?b", "{c:?}");
+            let path = format!("/tmp/x{c}y");
+            assert_eq!(sanitize_path_for_display(Path::new(&path)), "/tmp/x?y");
+        }
+        for language in [Language::De, Language::En] {
+            let text = host_key_store_failure_text(Path::new("/tmp/a\u{202E}b\u{2028}c"), language);
+            assert!(!text.message.contains('\u{202E}'));
+            assert!(!text.message.contains('\u{2028}'));
+        }
+    }
+
+    #[test]
+    fn test_sanitize_for_display_keeps_ordinary_non_ascii() {
+        let s = "/home/jörg/é/日本語/ß";
+        assert_eq!(sanitize_text_for_display(s), s);
+        assert_eq!(sanitize_path_for_display(Path::new(s)), s);
     }
 
     /// spec-reviewer-Fund: die Fall-3-vs-Spec-0040-Abgrenzung (nur ein
