@@ -54,9 +54,35 @@ pub fn is_valid_target_user(user: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
 }
 
-/// Probe-Kommando zur Pfad-Erkennung: gibt den ersten ausführbaren Pfad aus
-/// (erst `sshd_config`, dann [`KNOWN_SFTP_SERVER_PATHS`]), Exit 3 wenn keiner.
+/// Quotet `s` für eine POSIX-Shell (und csh/tcsh/fish) in einfache
+/// Anführungszeichen; ein `'` im Text wird zu `'\''`.
+pub fn shell_single_quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('\'');
+    for c in s.chars() {
+        if c == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(c);
+        }
+    }
+    out.push('\'');
+    out
+}
+
+/// Probe-Kommando zur Pfad-Erkennung: [`posix_sftp_server_probe`] unter
+/// `/bin/sh -c`, damit es unabhängig von der Login-Shell (csh/tcsh/fish)
+/// läuft. Ausgabe und Exit-Codes wie dort.
 pub fn sftp_server_probe_command() -> String {
+    format!(
+        "/bin/sh -c {}",
+        shell_single_quote(&posix_sftp_server_probe())
+    )
+}
+
+/// Der Probe-Text in POSIX-sh-Syntax: gibt den ersten ausführbaren Pfad aus
+/// (erst `sshd_config`, dann [`KNOWN_SFTP_SERVER_PATHS`]), Exit 3 wenn keiner.
+pub fn posix_sftp_server_probe() -> String {
     let mut cmd = String::from(
         "p=$(awk '$1==\"Subsystem\" && $2==\"sftp\" {print $3; exit}' /etc/ssh/sshd_config 2>/dev/null); \
          case \"$p\" in /*) if [ -x \"$p\" ]; then echo \"$p\"; exit 0; fi;; esac; for p in",
@@ -292,12 +318,76 @@ mod tests {
 
     #[test]
     fn test_probe_command_checks_sshd_config_and_known_paths() {
-        let cmd = sftp_server_probe_command();
+        let cmd = posix_sftp_server_probe();
         assert!(cmd.contains("/etc/ssh/sshd_config"));
         for path in KNOWN_SFTP_SERVER_PATHS {
             assert!(cmd.contains(path));
         }
         assert!(cmd.contains("-x"));
+    }
+
+    #[test]
+    fn test_probe_command_runs_under_bin_sh_with_probe_quoted() {
+        let cmd = sftp_server_probe_command();
+        let rest = cmd.strip_prefix("/bin/sh -c '").expect("prefix");
+        assert!(rest.ends_with('\''));
+        // Zurück-Entquoten: `'\''` -> `'`.
+        let inner = &rest[..rest.len() - 1];
+        assert_eq!(inner.replace("'\\''", "'"), posix_sftp_server_probe());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_shell_single_quote_round_trips_through_sh() {
+        for s in [
+            "plain",
+            "it's",
+            "'",
+            "a$b",
+            "x;y",
+            "$(id)",
+            "`id`",
+            "a b\"c\\d",
+            "''",
+            "",
+        ] {
+            let out = std::process::Command::new("/bin/sh")
+                .args(["-c", &format!("printf %s {}", shell_single_quote(s))])
+                .output()
+                .unwrap();
+            assert_eq!(String::from_utf8_lossy(&out.stdout), s);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_probe_command_under_real_sh_prints_sshd_config_path() {
+        use std::os::unix::fs::PermissionsExt;
+        // Der Probe liest /etc/ssh/sshd_config; ist dort kein absoluter,
+        // ausführbarer Subsystem-Pfad, würde das Ergebnis vom Host abhängen.
+        // Deshalb: Probe-Text mit ersetztem Config-Pfad durch dieselbe
+        // Quoting-Funktion und echte `/bin/sh`.
+        let dir = std::env::temp_dir().join(format!("probe-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = dir.join("sftp-server");
+        std::fs::write(&fake, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let conf = dir.join("sshd_config");
+        std::fs::write(&conf, format!("Subsystem sftp {}\n", fake.display())).unwrap();
+
+        let probe =
+            posix_sftp_server_probe().replace("/etc/ssh/sshd_config", &conf.display().to_string());
+        let cmd = format!("/bin/sh -c {}", shell_single_quote(&probe));
+        let out = std::process::Command::new("/bin/sh")
+            .args(["-c", &cmd])
+            .output()
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(out.status.code(), Some(0));
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).trim(),
+            fake.display().to_string()
+        );
     }
 
     #[test]
