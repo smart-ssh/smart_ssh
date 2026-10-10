@@ -37,6 +37,12 @@ ssh-manager-core = { version = "0.6.0", path = "../core" }
 # beide Teil der eigentlichen Bibliothek, nicht nur der Test-Fixtures.
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "process", "fs"] }
 
+# Issue #324: `killpg` beendet beim Abbruch (Spec 0027) die ganze
+# Prozessgruppe eines lokalen Kommandos. Bereits direkte Abhängigkeit von
+# `app-logic` (ADR 0065), keine neue Kiste im Lockfile.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.189"
+
 [dev-dependencies]
 rand = "0.10.2"
 tempfile = "3.27.0"
