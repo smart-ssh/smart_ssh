@@ -2742,6 +2742,23 @@ fn test_redactor_redacts_german_keyword_in_query_parameter() {
 }
 
 #[test]
+fn test_redactor_redacts_decomposed_umlaut_keywords() {
+    let redactor = DefaultOutputRedactor::new();
+    for kw in [
+        "Schlu\u{308}ssel",
+        "SCHLU\u{308}SSEL",
+        "Zugangsschlu\u{308}ssel",
+        "Schlüssel",
+        "SCHLÜSSEL",
+    ] {
+        let out = redactor.redact_text(&format!("{kw}: geheim4711"));
+        assert!(!out.contains("geheim4711"), "{kw:?} line leaked: {out}");
+        let out = redactor.redact_text(&format!("https://h/x?{kw}=a@b.c&y=1"));
+        assert!(!out.contains("a@b.c"), "{kw:?} query leaked: {out}");
+    }
+}
+
+#[test]
 fn test_redactor_keeps_keyword_text_without_value_unchanged() {
     let redactor = DefaultOutputRedactor::new();
     for text in [
