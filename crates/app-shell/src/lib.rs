@@ -703,6 +703,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::respond_to_action,
             commands::cancel_running_command,
             commands::stop_auto_continuation,
+            commands::start_new_chat,
             commands::disconnect,
             commands::list_chat_sessions,
             commands::resume_chat_session,

@@ -243,6 +243,12 @@ export const disconnect = (sessionId: string) => invoke<void>("disconnect", { se
 export const stopAutoContinuation = (sessionId: string) =>
   invoke<void>("stop_auto_continuation", { sessionId });
 
+/** Issue #271, Spec 0034 §11: beginnt in der bestehenden Verbindung einen
+ * neuen Chat (SSH, Terminal und Dateibrowser bleiben). Liefert die ID der
+ * neuen Chat-Sitzung, `null` für einen lokalen Tab ohne gespeicherten Chat. */
+export const startNewChat = (sessionId: string) =>
+  invoke<string | null>("start_new_chat", { sessionId });
+
 /** Spec 0027, Abschnitt 3: schließt nur den Exec-Kanal dieses einen
  * Kommandos (nicht die SSH-Verbindung/Session) und liefert die bis dahin
  * gesammelte Ausgabe als reguläres `chat-action-result` zurück. Kein

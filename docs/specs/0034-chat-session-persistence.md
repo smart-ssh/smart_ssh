@@ -162,14 +162,46 @@ laufen bereits laut Spec 0028, Abschnitt 3 außerhalb der
 Turn-Fortsetzungslogik und ohne eigenen Chatverlauf. Diese Abgrenzung bleibt
 unverändert bestehen.
 
-## 11. Offene Punkte
+## 11. Neuer Chat innerhalb einer Verbindung
 
-- Soll es einen "Neuer Chat"-Button **innerhalb** einer bereits verbundenen
-  Session geben (ohne die SSH-Verbindung zu trennen), um mitten in der
-  Nutzung das Thema zu wechseln? Naheliegend, aber nicht Teil dieser Spec —
-  würde eine weitere `chat_sessions`-Zeile erzeugen, während die
-  SSH-Verbindung/der Tab bestehen bleibt, technisch unproblematisch, aber
-  bewusst zurückgestellt, bis der Bedarf sich zeigt.
+Im Chat-Panel eines verbundenen Tabs gibt es eine Schaltfläche „Neuer
+Chat“. Sie beginnt einen frischen Chat, ohne die SSH-Verbindung zu trennen:
+Terminal, Verbindung, Tab, Dateibrowser, gespeichertes Sudo-Passwort und ein
+bereits erhöhter Kanal bleiben unverändert.
+
+1. **Wirkung.** Der bisherige Chat wird beendet (`ended_at` gesetzt) und
+   bekommt seinen automatischen Titel aus dem bisherigen Verlauf — genau wie
+   beim Trennen (Abschnitt 4 und 7). Für denselben Server und den aktiven
+   KI-Anbieter entsteht eine neue `chat_sessions`-Zeile, auf die der Tab
+   umschaltet. Verlauf, rollierende Zusammenfassung und Chat-Zustand sind
+   leer, die Chat-Ansicht zeigt einen leeren Chat. Der alte Chat erscheint
+   mit seinem Titel in der Auswahlliste (Abschnitt 6) und ist wie jeder
+   beendete Chat fortsetzbar. Die Ledger-Einträge des alten Chats bleiben an
+   diesem; neue Einträge gehören zum neuen Chat.
+2. **Entscheidung: Misstrauens-Markierung bleibt.** Die Markierung „nicht
+   vertrauenswürdiger Inhalt gesehen“ (Spec 0039, Abschnitt 5) gilt für die
+   Verbindung, nicht für den Chat. Der neue Chat erbt sie und setzt sie nie
+   zurück; ebenso bleiben ein offener Injection-Verdacht und eine
+   nicht verfügbare Injection-Prüfung bestehen. Ein neuer Chat senkt keine
+   Eskalationsstufe.
+3. **Entscheidung: gesperrt bei Aktivität.** Die Schaltfläche ist gesperrt,
+   solange in diesem Tab eine KI-Antwort läuft oder eine Bestätigung offen
+   ist. Dieselbe Prüfung gilt zusätzlich im Backend; dort lehnt der Befehl
+   mit einem Fehler ab und ändert nichts.
+4. **Entscheidung: Titel wie beim Trennen.** Der beendete Chat bekommt
+   Endzeit und automatischen Titel (nur wenn er eine Nutzer-Nachricht hat
+   und noch keinen Titel) auf demselben Weg wie beim Trennen. Der Vorschlag,
+   Notizen zu aktualisieren, gehört zum Ende der Verbindung und wird durch
+   „Neuer Chat“ nicht ausgelöst.
+5. **Entscheidung: Ausnahmen.** Ein lokaler Tab hat keinen gespeicherten
+   Chat; dort wird nur der Verlauf geleert, es entsteht keine Zeile. MCP-
+   Sitzungen (Abschnitt 10) zeigen die Schaltfläche nicht. Die einleitende
+   Betriebssystem-Information der Verbindung bleibt im Kontext erhalten.
+   Schlägt das Anlegen der neuen Zeile fehl, bleibt der bisherige Chat
+   unverändert aktiv und die Schaltfläche meldet den Fehler.
+
+## 12. Offene Punkte
+
 - Zusammenfassen statt reinem Kürzen alter Nachrichten (Abschnitt 9) wäre
   eine spätere Verbesserung, sobald sich das reine Kürzen in der Praxis als
   zu verlustreich erweist.
