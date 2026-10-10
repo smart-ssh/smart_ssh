@@ -65,6 +65,10 @@ mod tests_red_risk_second_opinion;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_not_assessable;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_live_output;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
@@ -1663,7 +1667,14 @@ async fn execute_suggested_command(
     // nie entfernter Eintrag in der Registry zurück.
     let cancel_rx = session.running_command_cancellations.register(action_id);
 
-    let raw_outcome = {
+    // Issue #325 (Spec 0106): the transport additionally hands every output
+    // chunk to `live_sink` while the command runs; `forward_live_output`
+    // redacts and throttles it into `chat-action-output` events. Display
+    // only — the outcome below (history, ledger, AI) is unchanged. The
+    // forwarder ends when the transport drops the sink, i.e. before the
+    // final result is emitted.
+    let (live_sink, live_chunks) = tokio::sync::mpsc::unbounded_channel();
+    let execution = async {
         let mut transport = session.transport.lock().await;
         match (&effective_command, &session.sudo_password) {
             (Some(rewritten), Some(password)) => {
@@ -1671,12 +1682,26 @@ async fn execute_suggested_command(
                 let mut stdin = password.expose_secret().as_bytes().to_vec();
                 stdin.push(b'\n');
                 transport
-                    .execute_with_stdin_cancellable(rewritten, &stdin, cancel_rx)
+                    .execute_streaming(rewritten, Some(&stdin), cancel_rx, live_sink)
                     .await
             }
-            _ => transport.execute_cancellable(&command, cancel_rx).await,
+            _ => {
+                transport
+                    .execute_streaming(&command, None, cancel_rx, live_sink)
+                    .await
+            }
         }
     };
+    let (raw_outcome, ()) = tokio::join!(
+        execution,
+        super::live_output::forward_live_output(
+            live_chunks,
+            session.redactor.as_ref(),
+            emitter,
+            session_id,
+            action_id,
+        )
+    );
     let _ = session
         .running_command_cancellations
         .resolve(&action_id, ());
