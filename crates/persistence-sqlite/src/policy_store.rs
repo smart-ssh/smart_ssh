@@ -25,14 +25,17 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use ssh_manager_core::filter::{
-    scope_applies, EffectiveScope, Pattern, PolicySource, PolicySourceError, PolicySourceResult,
-    PolicyStore, Rule, RuleAction, RuleId, RuleOrigin, Scope,
+    scope_applies, EffectiveScope, Pattern, PatternError, PolicySource, PolicySourceError,
+    PolicySourceResult, PolicyStore, Rule, RuleAction, RuleId, RuleOrigin, Scope,
 };
 use ssh_manager_core::shared::ServerId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyStoreError {
     NotFound(RuleId),
+    /// Das Muster der Regel lässt sich nicht übersetzen; `create`/`update`
+    /// haben nichts geschrieben (Spec 0077, 3.1.2, Schicht 2).
+    InvalidPattern(PatternError),
     Backend(String),
 }
 
@@ -40,6 +43,7 @@ impl std::fmt::Display for PolicyStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PolicyStoreError::NotFound(id) => write!(f, "Filter-Regel '{id}' nicht gefunden"),
+            PolicyStoreError::InvalidPattern(err) => write!(f, "{err}"),
             PolicyStoreError::Backend(msg) => write!(f, "Datenbankfehler: {msg}"),
         }
     }
@@ -237,7 +241,27 @@ impl SqlitePolicyStore {
         row_to_stored_rule(&row)
     }
 
+    /// Lehnt eine Regel mit nicht übersetzbarem Muster ab, **bevor** etwas
+    /// geschrieben wird (Spec 0077, 3.1.2, Schicht 2) — unabhängig davon, ob
+    /// der Aufrufer selbst schon geprüft hat.
     pub async fn create(&self, rule: &StoredRule) -> Result<(), PolicyStoreError> {
+        rule.pattern
+            .validate()
+            .map_err(PolicyStoreError::InvalidPattern)?;
+        self.insert_unchecked(rule).await
+    }
+
+    /// Schreibt ohne Musterprüfung — **nur für Tests**, die eine Regel aus
+    /// einer älteren Datenbank nachstellen (Spec 0077, T-6c).
+    #[cfg(any(test, feature = "test-support"))]
+    pub async fn create_unchecked_for_tests(
+        &self,
+        rule: &StoredRule,
+    ) -> Result<(), PolicyStoreError> {
+        self.insert_unchecked(rule).await
+    }
+
+    async fn insert_unchecked(&self, rule: &StoredRule) -> Result<(), PolicyStoreError> {
         let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
         let (scope_type, scope_value) = scope_to_db(&rule.scope);
 
@@ -264,7 +288,13 @@ impl SqlitePolicyStore {
 
     /// Aktualisiert alle Felder außer `created_at` (bleibt beim ursprünglichen
     /// Anlage-Zeitpunkt, analog zu `AiProviderConfigUpdate`).
+    ///
+    /// Prüft das Muster wie [`Self::create`]; bei einem Fehler behält die
+    /// gespeicherte Regel ihr altes Muster.
     pub async fn update(&self, rule: &StoredRule) -> Result<(), PolicyStoreError> {
+        rule.pattern
+            .validate()
+            .map_err(PolicyStoreError::InvalidPattern)?;
         let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
         let (scope_type, scope_value) = scope_to_db(&rule.scope);
 
@@ -484,6 +514,37 @@ mod tests {
             rule.created_at.to_rfc3339(),
             "update darf created_at nicht ändern"
         );
+    }
+
+    /// Issue #260: `create` und `update` weisen ein nicht übersetzbares
+    /// Muster am Speicher ab und lassen den Bestand unverändert.
+    ///
+    /// *Scheitert gegen den Stand vor #260* (dort wurde die Regel
+    /// gespeichert).
+    #[tokio::test]
+    async fn test_issue_260_create_and_update_reject_an_invalid_pattern() {
+        let store = in_memory_policy_store().await;
+
+        let mut bad = make_rule("bad", Scope::Global, 0);
+        bad.pattern = Pattern::Regex("^a(".to_string());
+        let err = store.create(&bad).await.unwrap_err();
+        assert!(
+            matches!(err, PolicyStoreError::InvalidPattern(_)),
+            "{err:?}"
+        );
+        assert!(store.list_all().await.unwrap().is_empty());
+
+        let good = make_rule("good", Scope::Global, 0);
+        store.create(&good).await.unwrap();
+        let mut changed = good.clone();
+        changed.pattern = Pattern::Glob("ls [abc *".to_string());
+        let err = store.update(&changed).await.unwrap_err();
+        assert!(
+            matches!(err, PolicyStoreError::InvalidPattern(_)),
+            "{err:?}"
+        );
+        let stored = store.get(&good.id).await.unwrap();
+        assert_eq!(stored.pattern, Pattern::Glob("ls *".to_string()));
     }
 
     #[tokio::test]
