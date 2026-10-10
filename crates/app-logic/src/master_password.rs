@@ -307,7 +307,7 @@ pub fn tidy_up_keychain_after_unlock(
             // Schlüssel im Schlüsselbund gehört zu irgendetwas anderem —
             // vielleicht zu einer zweiten Installation, vielleicht zu einem
             // Verlauf, der sonst verloren wäre. Er wird nicht angefasst.
-            if &entry == root_key.expose() {
+            if entry.expose() == root_key.expose() {
                 match keyring.delete(&CredentialRef::new(CHAT_CONTENT_ENCRYPTION_KEY_REF)) {
                     Ok(()) | Err(CredentialError::NotFound(_)) => {
                         tracing::info!(
@@ -400,7 +400,7 @@ pub enum LossWarning {
 /// Schreiben der Verpackung → K bleibt im Schlüsselbund").
 pub fn set_up_master_password(
     db_path: &Path,
-    root_key: &[u8; 32],
+    root_key: &RootKey,
     password: &SecretString,
     repeated: &SecretString,
     warning: LossWarning,
@@ -459,7 +459,7 @@ pub fn change_master_password(
     // Das alte Passwort **zuerst** prüfen: Ohne es gibt es kein K, das neu
     // verpackt werden könnte.
     let root_key = unlock(db_path, current)?;
-    write_and_verify_wrapping(db_path, root_key.expose(), new_password)?;
+    write_and_verify_wrapping(db_path, &root_key, new_password)?;
     tracing::info!("master password changed (Spec 0101, A15)");
     Ok(())
 }
@@ -510,7 +510,7 @@ pub fn switch_to_keychain(
     // benennt.
     match crypto::read_root_key(keyring) {
         // Gleich K: „Ist der Eintrag gleich K, entfällt die Frage."
-        crypto::RootKeyState::Present(existing) if &existing == root_key.expose() => {}
+        crypto::RootKeyState::Present(existing) if existing.expose() == root_key.expose() => {}
         crypto::RootKeyState::NotFound => {}
         // Ein anderer Schlüssel — und ein unbrauchbarer Eintrag ist auch
         // „nicht gleich K". Beides fragt nach, statt zu raten, wessen
@@ -547,11 +547,11 @@ pub fn switch_to_keychain(
         }
     }
 
-    store_root_key(keyring, root_key.expose())?;
+    store_root_key(keyring, &root_key)?;
     // Zurücklesen und vergleichen, bevor die einzige andere Kopie von K
     // verschwindet.
     match crypto::read_root_key(keyring) {
-        crypto::RootKeyState::Present(read_back) if &read_back == root_key.expose() => {}
+        crypto::RootKeyState::Present(read_back) if read_back.expose() == root_key.expose() => {}
         crypto::RootKeyState::Present(_) => {
             return Err(MasterPasswordError::KeychainFailed {
                 detail: "zurückgelesener Wurzelschlüssel weicht ab".to_string(),
@@ -606,7 +606,7 @@ pub fn rename_wrapping_file(db_path: &Path, suffix: &str) -> std::io::Result<Opt
 /// zeigt, ein Totalverlust.
 fn write_and_verify_wrapping(
     db_path: &Path,
-    root_key: &[u8; 32],
+    root_key: &RootKey,
     password: &SecretString,
 ) -> Result<(), MasterPasswordError> {
     let path = wrapping_file_path(db_path);
@@ -669,7 +669,7 @@ fn write_and_verify_wrapping(
 fn write_and_read_back(
     tmp: &Path,
     wrapped: &[u8],
-    root_key: &[u8; 32],
+    root_key: &RootKey,
     password: &SecretString,
 ) -> Result<(), MasterPasswordError> {
     write_file_with_owner_only_permissions(tmp, wrapped)?;
@@ -696,7 +696,7 @@ fn write_and_read_back(
         });
     }
     let unwrapped = crypto::unwrap_root_key(&read_back, password).map_err(classify_unwrap_error)?;
-    if unwrapped.expose() != root_key {
+    if unwrapped.expose() != root_key.expose() {
         return Err(MasterPasswordError::FileFailed {
             detail: "entpackter Schlüssel weicht von K ab".to_string(),
         });
@@ -855,14 +855,14 @@ fn write_file_with_owner_only_permissions(
 
 fn store_root_key(
     keyring: &dyn CredentialStore,
-    root_key: &[u8; 32],
+    root_key: &RootKey,
 ) -> Result<(), MasterPasswordError> {
     use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine;
     keyring
         .set(
             &CredentialRef::new(CHAT_CONTENT_ENCRYPTION_KEY_REF),
-            SecretString::from(BASE64.encode(root_key)),
+            SecretString::from(BASE64.encode(root_key.expose())),
         )
         .map_err(|err| MasterPasswordError::KeychainFailed {
             detail: format!("Wurzelschlüssel nicht schreibbar: {err}"),

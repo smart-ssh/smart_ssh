@@ -121,7 +121,7 @@ fn test_t13_setting_up_removes_the_key_from_the_keychain_and_unlocks_again() {
 
     set_up_master_password(
         &dir.db(),
-        &ROOT_KEY,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
         &good(),
         &good(),
         CONFIRMED,
@@ -168,7 +168,7 @@ fn test_t13_short_or_mismatched_password_changes_nothing() {
     assert!(matches!(
         set_up_master_password(
             &dir.db(),
-            &ROOT_KEY,
+            &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
             &eleven,
             &eleven,
             CONFIRMED,
@@ -180,7 +180,7 @@ fn test_t13_short_or_mismatched_password_changes_nothing() {
     assert!(matches!(
         set_up_master_password(
             &dir.db(),
-            &ROOT_KEY,
+            &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
             &good(),
             &pw("ein-anderes-passwort"),
             CONFIRMED,
@@ -215,7 +215,7 @@ fn test_k12_setting_up_without_the_confirmed_warning_changes_nothing() {
 
     let result = set_up_master_password(
         &dir.db(),
-        &ROOT_KEY,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
         &good(),
         &good(),
         LossWarning::NotConfirmed,
@@ -246,7 +246,7 @@ fn test_k12_setting_up_without_the_confirmed_warning_changes_nothing() {
     // dauerhaft, er verlangt nur die Zusage.
     set_up_master_password(
         &dir.db(),
-        &ROOT_KEY,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
         &good(),
         &good(),
         CONFIRMED,
@@ -272,7 +272,7 @@ fn test_t13_a_failing_delete_leaves_the_key_in_the_keychain() {
 
     set_up_master_password(
         &dir.db(),
-        &ROOT_KEY,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
         &good(),
         &good(),
         CONFIRMED,
@@ -302,7 +302,15 @@ fn test_t13_a_failing_delete_leaves_the_key_in_the_keychain() {
 fn test_t16_a_differing_keychain_entry_is_never_deleted() {
     let dir = Dir::new("tidy");
     let keyring = CountingKeychain::default();
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let key = unlock(&dir.db(), &good()).unwrap();
 
     // Verschieden → nichts gelöscht.
@@ -338,7 +346,15 @@ fn test_t16_a_differing_keychain_entry_is_never_deleted() {
 fn test_t13_change_password_and_switch_back() {
     let dir = Dir::new("change");
     let keyring = CountingKeychain::default();
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
 
     // Eine „Datenbank" daneben, die byte-gleich bleiben muss.
     std::fs::write(dir.db(), b"nicht wirklich eine Datenbank").unwrap();
@@ -387,7 +403,7 @@ fn test_t13_change_password_and_switch_back() {
         "A15: Verpackungsdatei weg"
     );
     match ssh_manager_core::crypto::read_root_key(&keyring) {
-        ssh_manager_core::crypto::RootKeyState::Present(key) => assert_eq!(key, ROOT_KEY),
+        ssh_manager_core::crypto::RootKeyState::Present(key) => assert_eq!(key.expose(), &ROOT_KEY),
         other => panic!("K muss im Schlüsselbund liegen, war {other:?}"),
     }
 }
@@ -401,7 +417,15 @@ fn test_t13_change_password_and_switch_back() {
 #[test]
 fn test_a15_switch_back_keeps_the_wrapping_when_the_keychain_cannot_be_read() {
     let dir = Dir::new("switch-fails");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
 
     let keyring = CountingKeychain {
         fail_read: true,
@@ -441,7 +465,15 @@ fn test_a15_switch_back_keeps_the_wrapping_when_the_keychain_cannot_be_read() {
 #[test]
 fn test_a5_renaming_the_wrapping_never_overwrites() {
     let dir = Dir::new("rename");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let original = std::fs::read(wrapping_file_path(&dir.db())).unwrap();
 
     let renamed = rename_wrapping_file(&dir.db(), ".unreadable-TEST")
@@ -460,7 +492,15 @@ fn test_a5_renaming_the_wrapping_never_overwrites() {
         .is_none());
 
     // Belegter Zielname → Fehler, und die neue Datei bleibt stehen.
-    set_up_master_password(&dir.db(), &OTHER_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(OTHER_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let err = rename_wrapping_file(&dir.db(), ".unreadable-TEST").unwrap_err();
     assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
     assert_eq!(
@@ -551,7 +591,15 @@ fn test_no_error_text_carries_secret_material() {
 fn test_a_failing_check_of_the_new_wrapping_leaves_the_old_one_able_to_yield_the_key() {
     let dir = Dir::new("verify-before-replace");
     let db = dir.db();
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
 
     let path = wrapping_file_path(&db);
     let before = std::fs::read(&path).unwrap();
@@ -603,7 +651,15 @@ fn test_no_half_written_wrapping_is_left_behind() {
         std::path::PathBuf::from(name)
     };
 
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     assert!(!tmp.exists(), "nach dem Einrichten liegt kein Rest");
 
     let new_password = pw("ein-ganz-neues-master-passwort");
@@ -633,7 +689,15 @@ fn test_no_half_written_wrapping_is_left_behind() {
 #[test]
 fn test_switching_back_does_not_replace_a_foreign_keychain_entry_without_confirmation() {
     let dir = Dir::new("switch-foreign");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let wrapping_before = std::fs::read(wrapping_file_path(&dir.db())).unwrap();
 
     // Im Schlüsselbund liegt der Schlüssel einer **anderen** Installation.
@@ -666,7 +730,8 @@ fn test_switching_back_does_not_replace_a_foreign_keychain_entry_without_confirm
     );
     match ssh_manager_core::crypto::read_root_key(&keyring) {
         ssh_manager_core::crypto::RootKeyState::Present(key) => assert_eq!(
-            key, OTHER_KEY,
+            key.expose(),
+            &OTHER_KEY,
             "der fremde Schlüssel muss unverändert im Schlüsselbund liegen"
         ),
         other => panic!("der fremde Eintrag ist weg, war {other:?}"),
@@ -689,7 +754,7 @@ fn test_switching_back_does_not_replace_a_foreign_keychain_entry_without_confirm
     .expect("mit Bestätigung muss der Wechsel gelingen");
     assert_eq!(key_mode(&dir.db()), KeyMode::Keychain);
     match ssh_manager_core::crypto::read_root_key(&keyring) {
-        ssh_manager_core::crypto::RootKeyState::Present(key) => assert_eq!(key, ROOT_KEY),
+        ssh_manager_core::crypto::RootKeyState::Present(key) => assert_eq!(key.expose(), &ROOT_KEY),
         other => panic!("nach der Bestätigung muss K dort liegen, war {other:?}"),
     }
 }
@@ -712,7 +777,15 @@ fn test_replacing_a_foreign_key_after_a_confirmation_is_visible_in_the_log() {
     log_capture::start_recording();
 
     let dir = Dir::new("switch-confirmed-log");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let keyring = CountingKeychain::with_root_key(&OTHER_KEY);
 
     switch_to_keychain(
@@ -752,7 +825,7 @@ fn test_switching_back_asks_nothing_when_the_keychain_is_empty_or_already_holds_
     let empty_dir = Dir::new("switch-empty");
     set_up_master_password(
         &empty_dir.db(),
-        &ROOT_KEY,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
         &good(),
         &good(),
         CONFIRMED,
@@ -772,7 +845,15 @@ fn test_switching_back_asks_nothing_when_the_keychain_is_empty_or_already_holds_
     // Gleich K: der abgebrochene Wechsel aus A17, der beide Hälften liegen
     // ließ. Ihn zu „überschreiben" ändert nichts, also wird nicht gefragt.
     let same_dir = Dir::new("switch-same");
-    set_up_master_password(&same_dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &same_dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let same = CountingKeychain::with_root_key(&ROOT_KEY);
     switch_to_keychain(
         &same_dir.db(),
@@ -793,7 +874,15 @@ fn test_switching_back_asks_nothing_when_the_keychain_is_empty_or_already_holds_
 #[test]
 fn test_switching_back_asks_before_replacing_an_unusable_keychain_entry() {
     let dir = Dir::new("switch-invalid");
-    set_up_master_password(&dir.db(), &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &dir.db(),
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
 
     let keyring = CountingKeychain::default();
     keyring.entries.lock().unwrap().insert(
@@ -831,7 +920,15 @@ fn test_wrapping_health_only_allows_starting_over_when_no_password_could_work() 
     assert!(!wrapping_health(&db).allows_starting_over());
 
     // Eine echte Verpackung: brauchbar — auch wenn das Passwort nicht passt.
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     assert_eq!(wrapping_health(&db), WrappingHealth::Usable);
     assert!(
         !wrapping_health(&db).allows_starting_over(),
@@ -866,7 +963,15 @@ fn test_wrapping_health_only_allows_starting_over_when_no_password_could_work() 
 fn test_weak_parameters_count_as_unusable_not_as_a_wrong_password() {
     let dir = Dir::new("health-params");
     let db = dir.db();
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
 
     let path = wrapping_file_path(&db);
     let mut bytes = std::fs::read(&path).unwrap();
@@ -932,7 +1037,15 @@ fn test_a_wrapping_file_without_read_permission_is_unreachable_not_invalid() {
 
     let dir = Dir::new("health-perm");
     let db = dir.db();
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     let path = wrapping_file_path(&db);
     let intact = std::fs::read(&path).unwrap();
 
@@ -1075,7 +1188,7 @@ fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
     // T13: einrichten.
     set_up_master_password(
         &db,
-        &T17_KEY,
+        &ssh_manager_core::crypto::RootKey::for_tests(T17_KEY),
         &password,
         &password,
         CONFIRMED,
@@ -1194,7 +1307,10 @@ fn test_t17_no_key_password_or_secret_in_the_log_or_the_diagnostics_bundle() {
     // Und die beiden Typen, über die es am kürzesten gehen würde: ein
     // `{:?}` auf dem Schlüssel selbst.
     assert_eq!(
-        format!("{:?}", DatabaseKey::from_root_key(&T17_KEY)),
+        format!(
+            "{:?}",
+            DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(T17_KEY))
+        ),
         "DatabaseKey(<nicht anzeigbar>)"
     );
     assert_eq!(
@@ -1216,7 +1332,14 @@ fn test_a_symlink_at_the_temporary_path_fails_the_write_and_keeps_its_target() {
     let tmp = temporary_path(&wrapping_file_path(&db));
     std::os::unix::fs::symlink(&victim, &tmp).unwrap();
 
-    let result = set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None);
+    let result = set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    );
     assert!(
         matches!(result, Err(MasterPasswordError::FileFailed { .. })),
         "{result:?}"
@@ -1243,7 +1366,15 @@ fn test_a_stale_temporary_file_does_not_block_a_later_write() {
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o400)).unwrap();
     }
 
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
     assert_eq!(unlock(&db, &good()).unwrap().expose(), &ROOT_KEY);
     assert!(!tmp.exists());
 }
@@ -1259,7 +1390,15 @@ fn test_a_metadata_error_other_than_not_found_is_not_read_as_absent() {
     let sub = dir.path.join("sub");
     std::fs::create_dir(&sub).unwrap();
     let db = sub.join("smart-ssh.db");
-    set_up_master_password(&db, &ROOT_KEY, &good(), &good(), CONFIRMED, None).unwrap();
+    set_up_master_password(
+        &db,
+        &ssh_manager_core::crypto::RootKey::for_tests(ROOT_KEY),
+        &good(),
+        &good(),
+        CONFIRMED,
+        None,
+    )
+    .unwrap();
 
     std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o000)).unwrap();
     let restore = || std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o700));
