@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use ssh_manager_core::ai::{AiProvider, RejectionReason, SessionContext};
 use ssh_manager_core::filter::{Decision, EffectiveScope, FilterEngine, PolicyStore, Rule};
-use ssh_manager_core::profiles::{CredentialStore, PostIngestPolicy};
+use ssh_manager_core::profiles::PostIngestPolicy;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::mock::MockSftpSession;
 
@@ -760,23 +760,25 @@ async fn test_stop_auto_continuation_prevents_further_rounds_but_leaves_open_dia
 
 // --- Spec 0022: Credential-Caching (Sudo-Passwort) ----------------------
 
-/// Spec 0022, Abschnitt 3, zweiter Punkt: das Sudo-Passwort wird laut
-/// Spec 0018 einmalig bei `connect()` gelesen und in `Session.
-/// sudo_password` gecacht — dieser Test verifiziert das über mehrere
-/// tatsächlich ausgeführte `sudo`-Kommandos in derselben Session hinweg
-/// (über die automatische Fortsetzung aus Spec 0021 erreicht, ohne dass
-/// der Nutzer zwischendurch etwas eingeben muss), statt es nur an einer
-/// einzelnen Ausführung zu prüfen.
+/// Spec 0022, Abschnitt 3, zweiter Punkt (Issue #249): das Sudo-Passwort
+/// wird laut Spec 0018 einmalig bei `connect()` über
+/// `read_sudo_password_for_redaction` gelesen und in `Session.sudo_password`
+/// gecacht. Der Chat-Turn hat strukturell keinen Zugriff auf den
+/// `CredentialStore`; diese Garantie wird nicht per Test wiederholt. Dieser
+/// Test fährt den Produktions-Lesepfad und danach mehrere `sudo`-Kommandos
+/// (über die automatische Fortsetzung aus Spec 0021) und zählt die
+/// Store-Zugriffe: genau einer für den Lesepfad, keiner mehr für die
+/// Kommandos, und das Passwort kommt tatsächlich bei der Ausführung an.
 #[tokio::test]
 async fn test_sudo_password_credential_store_not_read_again_across_multiple_commands() {
-    let credential_ref = crate::server_credentials::sudo_password_credential_ref(ServerId::new());
+    let server_id = ServerId::new();
+    let credential_ref = crate::server_credentials::sudo_password_credential_ref(server_id);
     let store =
         crate::test_support::InMemoryCredentialStore::new().with_secret(&credential_ref, "hunter2");
 
-    // Exakt der Ablauf aus `app_shell::commands::connect` (Spec 0018,
-    // Abschnitt 6): einmal lesen, danach in `Session.sudo_password`
-    // cachen — kein Store-Zugriff mehr für den Rest der Session-Laufzeit.
-    let resolved_password = store.get(&credential_ref).ok();
+    let resolved_password =
+        crate::server_redaction::read_sudo_password_for_redaction(&store, server_id);
+    assert!(resolved_password.is_some());
     assert_eq!(store.get_calls(), 1);
 
     let mut session = session_with_ai_provider(
