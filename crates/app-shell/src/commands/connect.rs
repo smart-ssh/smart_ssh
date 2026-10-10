@@ -146,6 +146,26 @@ pub(crate) async fn connect_session(
     // verdient strengere Behandlung"-Logik wie dort.
     ensure_first_run_notice_acknowledged(app)?;
 
+    // Issue #242: ab hier (vor Verbindungsaufbau und Laden der Historie) gilt
+    // die Chat-Sitzung als in Benutzung, bis dieser Aufruf endet — nach dem
+    // `sessions.insert` unten übernimmt die registrierte `Session` (s.
+    // `is_chat_session_active`). Jeder frühe Rückgabepfad gibt den Anspruch
+    // per `Drop` frei.
+    let _resume_claim = match resume {
+        Some(existing_id) => Some(
+            state
+                .sessions
+                .claim_chat_session_for_resume(existing_id)
+                .map_err(|_| {
+                    CommandError::from(
+                        "Diese Chat-Sitzung wird gerade gelöscht und kann nicht fortgesetzt \
+                         werden.",
+                    )
+                })?,
+        ),
+        None => None,
+    };
+
     let is_local = app_logic::dto::is_local(server_id);
     let server = if is_local {
         crate::local_server::synthetic_server(app)
@@ -798,13 +818,25 @@ pub async fn delete_chat_session(
     state: State<'_, AppState>,
     session_id: uuid::Uuid,
 ) -> CommandResult<()> {
-    if state.sessions.is_chat_session_active(session_id).await {
-        return Err(
-            "Diese Chat-Sitzung ist gerade in einem offenen Tab aktiv — erst trennen, dann \
-             löschen."
-                .into(),
-        );
-    }
+    // Issue #242: Prüfung und Löschen unter einem Anspruch — ein Resume, das
+    // gerade läuft (noch nicht registriert), zählt ebenfalls als "in Benutzung".
+    let _claim = match state
+        .sessions
+        .claim_chat_session_for_delete(session_id)
+        .await
+    {
+        Ok(claim) => claim,
+        Err(app_logic::session::ChatSessionClaimError::InUse) => {
+            return Err(
+                "Diese Chat-Sitzung ist gerade in einem offenen Tab aktiv — erst trennen, dann \
+                 löschen."
+                    .into(),
+            );
+        }
+        Err(app_logic::session::ChatSessionClaimError::BeingDeleted) => {
+            return Err("Diese Chat-Sitzung wird gerade gelöscht.".into());
+        }
+    };
     Ok(state.chat_session_store.delete_session(session_id).await?)
 }
 

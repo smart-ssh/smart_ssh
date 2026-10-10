@@ -1066,6 +1066,107 @@ pub struct SessionManager {
     /// während eines offenen Host-Key-Dialogs den Tab nicht einfach
     /// verschwinden lässt.
     pending_connections: StdMutex<HashMap<SessionId, ServerId>>,
+    /// Issue #242: Chat-Sitzungen, die gerade fortgesetzt (Resume) oder
+    /// gelöscht werden. Schließt die Lücke zwischen "Resume gestartet" und
+    /// `insert` der registrierten `Session`, in der `is_chat_session_active`
+    /// noch `false` liefert. Reine synchrone Sperre, nie über ein `.await`
+    /// hinweg gehalten.
+    claimed_chat_sessions: StdMutex<HashMap<uuid::Uuid, ChatSessionClaimState>>,
+}
+
+#[derive(Default, Clone, Copy)]
+struct ChatSessionClaimState {
+    resumers: usize,
+    deleting: bool,
+}
+
+/// Die Chat-Sitzung ist gerade in Benutzung (Resume läuft, ein Tab nutzt
+/// sie) bzw. wird gerade gelöscht.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatSessionClaimError {
+    /// Ein Tab nutzt die Sitzung oder ein Resume läuft gerade.
+    InUse,
+    /// Ein Löschvorgang für diese Sitzung läuft gerade.
+    BeingDeleted,
+}
+
+/// RAII-Anspruch auf eine Chat-Sitzung; gibt sie beim `Drop` frei — auch auf
+/// jedem Fehlerpfad eines Resume.
+#[must_use = "dropping the claim releases it immediately"]
+pub struct ChatSessionClaim<'a> {
+    manager: &'a SessionManager,
+    chat_session_id: uuid::Uuid,
+    exclusive: bool,
+}
+
+impl Drop for ChatSessionClaim<'_> {
+    fn drop(&mut self) {
+        let mut claims = self.manager.claimed_chat_sessions.lock().unwrap();
+        if let Some(state) = claims.get_mut(&self.chat_session_id) {
+            if self.exclusive {
+                state.deleting = false;
+            } else {
+                state.resumers = state.resumers.saturating_sub(1);
+            }
+            if !state.deleting && state.resumers == 0 {
+                claims.remove(&self.chat_session_id);
+            }
+        }
+    }
+}
+
+impl SessionManager {
+    /// Issue #242: Anspruch eines Resume. Mehrere gleichzeitige Resumes
+    /// derselben Sitzung bleiben möglich (wie bisher); nur ein laufendes
+    /// Löschen schließt sie aus. Vor dem Laden der Historie nehmen, bis nach
+    /// `insert` der `Session` halten.
+    pub fn claim_chat_session_for_resume(
+        &self,
+        chat_session_id: uuid::Uuid,
+    ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
+        let mut claims = self.claimed_chat_sessions.lock().unwrap();
+        let state = claims.entry(chat_session_id).or_default();
+        if state.deleting {
+            return Err(ChatSessionClaimError::BeingDeleted);
+        }
+        state.resumers += 1;
+        Ok(ChatSessionClaim {
+            manager: self,
+            chat_session_id,
+            exclusive: false,
+        })
+    }
+
+    /// Issue #242: exklusiver Anspruch für das Löschen. Scheitert mit
+    /// `InUse`, wenn ein Resume läuft oder ein Tab die Sitzung nutzt;
+    /// Prüfung und Anspruch gehören zusammen, der Aufrufer löscht, solange
+    /// er die Rückgabe hält.
+    pub async fn claim_chat_session_for_delete(
+        &self,
+        chat_session_id: uuid::Uuid,
+    ) -> Result<ChatSessionClaim<'_>, ChatSessionClaimError> {
+        {
+            let mut claims = self.claimed_chat_sessions.lock().unwrap();
+            let state = claims.entry(chat_session_id).or_default();
+            if state.deleting {
+                return Err(ChatSessionClaimError::BeingDeleted);
+            }
+            if state.resumers > 0 {
+                return Err(ChatSessionClaimError::InUse);
+            }
+            state.deleting = true;
+        }
+        // Ab hier hält der Anspruch (Drop gibt frei, auch beim Fehler unten).
+        let claim = ChatSessionClaim {
+            manager: self,
+            chat_session_id,
+            exclusive: true,
+        };
+        if self.is_chat_session_active(chat_session_id).await {
+            return Err(ChatSessionClaimError::InUse);
+        }
+        Ok(claim)
+    }
 }
 
 impl SessionManager {
@@ -1486,5 +1587,56 @@ mod tests {
         manager.insert(Uuid::new_v4(), Arc::new(dummy_session(ServerId::new())));
 
         assert!(!manager.is_chat_session_active(Uuid::new_v4()).await);
+    }
+
+    // Issue #242: Claim-Logik (Resume vs. Löschen).
+    #[tokio::test]
+    async fn delete_is_refused_while_a_resume_holds_the_claim() {
+        let manager = SessionManager::new();
+        let id = Uuid::new_v4();
+        let _resume = manager.claim_chat_session_for_resume(id).unwrap();
+        assert!(matches!(
+            manager.claim_chat_session_for_delete(id).await,
+            Err(ChatSessionClaimError::InUse)
+        ));
+    }
+
+    #[tokio::test]
+    async fn delete_is_allowed_again_after_a_failed_resume_drops_the_claim() {
+        let manager = SessionManager::new();
+        let id = Uuid::new_v4();
+        let resume = manager.claim_chat_session_for_resume(id).unwrap();
+        drop(resume); // Fehlerpfad: Guard fällt
+        assert!(manager.claim_chat_session_for_delete(id).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn delete_of_unused_chat_session_is_allowed_and_releases_afterwards() {
+        let manager = SessionManager::new();
+        let id = Uuid::new_v4();
+        let delete = manager.claim_chat_session_for_delete(id).await.unwrap();
+        // Läuft das Löschen, scheitert ein Resume und ein zweites Löschen.
+        assert!(matches!(
+            manager.claim_chat_session_for_resume(id),
+            Err(ChatSessionClaimError::BeingDeleted)
+        ));
+        assert!(matches!(
+            manager.claim_chat_session_for_delete(id).await,
+            Err(ChatSessionClaimError::BeingDeleted)
+        ));
+        drop(delete);
+        assert!(manager.claim_chat_session_for_resume(id).is_ok());
+    }
+
+    #[tokio::test]
+    async fn claims_are_per_chat_session() {
+        let manager = SessionManager::new();
+        let _resume = manager
+            .claim_chat_session_for_resume(Uuid::new_v4())
+            .unwrap();
+        assert!(manager
+            .claim_chat_session_for_delete(Uuid::new_v4())
+            .await
+            .is_ok());
     }
 }
