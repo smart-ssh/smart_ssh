@@ -130,9 +130,8 @@ impl<'a> AuthSteps<'a> {
 /// `authenticate` läuft je Hop der Verbindungskette (`connect::connect`).
 ///
 /// Die Benennung selbst steht in [`SshError::named_for_hop`] (`core`), damit
-/// der Verbindungstest für Hops ab dem zweiten — gegen einen echten Server
-/// nicht erreichbar, ADR 0008 — **dieselbe** Funktion aufruft statt eines
-/// Nachbaus (Spec 0098 §7 Ebene V1; spec-reviewer Runde 1). Hier bleibt nur
+/// der Verbindungstest für Hops ab dem zweiten **dieselbe** Funktion
+/// aufruft statt eines Nachbaus (Spec 0098 §7 Ebene V1; spec-reviewer Runde 1). Hier bleibt nur
 /// die Übersetzung von [`Hop`] auf deren Argumente.
 fn name_hop(error: SshError, hop: &Hop) -> SshError {
     error.named_for_hop(&hop.username, &hop.host, hop.port)
