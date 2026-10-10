@@ -31,6 +31,12 @@ import {
   supportsWebResearch,
 } from "../types";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import {
+  type DiscoveryInputs,
+  discoveryInputsOf,
+  sameDiscoveryInputs,
+  shouldAutoDiscover,
+} from "../modelDiscoveryTrigger";
 
 const PROVIDER_TYPES: ProviderType[] = [
   "openai",
@@ -151,6 +157,25 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   // `null` sowohl "kein Fehlschlag" als auch "Fehlschlag ohne bekannten
   // Code" (dann bleibt nur der bisherige generische Hinweis stehen).
   const [modelsFailedCode, setModelsFailedCode] = useState<string | null>(null);
+  // Issue #326 (Spec 0025, Abschnitt 2): eine leere Liste ist kein gültiges
+  // Ergebnis (Spec 0072 B-T4) — eigener neutraler Hinweis statt stillem
+  // "Erfolg". `AI_AUTH_FAILED` bekommt einen eigenen, roten Zustand am
+  // Key-Feld statt des generischen Discovery-Hinweises.
+  const [modelsEmpty, setModelsEmpty] = useState(false);
+  const [modelsAuthFailed, setModelsAuthFailed] = useState(false);
+  // Issue #326: Eingaben (Typ, Base-URL, Key) der letzten automatischen
+  // oder manuellen Discovery in diesem Formular — ein erneutes Verlassen
+  // des Felds mit denselben Eingaben löst keine zweite Anfrage aus. Nur im
+  // Speicher dieser Komponente, wie `form` selbst; nie geloggt.
+  const lastDiscoveryInputsRef = useRef<DiscoveryInputs | null>(null);
+  // Höchstens eine Discovery je Formular gleichzeitig; `formRef` liefert
+  // beim Eintreffen der Antwort den aktuellen Stand, um das Ergebnis einer
+  // inzwischen veralteten Anfrage zu verwerfen.
+  const discoveryInFlightRef = useRef(false);
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
   const [credentialTestRunning, setCredentialTestRunning] = useState(false);
   const [credentialTestResult, setCredentialTestResult] =
     useState<TestAiProviderCredentialsResult | null>(null);
@@ -372,6 +397,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       setModels([]);
       setModelsFailed(false);
       setModelsFailedCode(null);
+      setModelsEmpty(false);
+      setModelsAuthFailed(false);
+      lastDiscoveryInputsRef.current = null;
       setCredentialTestResult(null);
       reload();
       onProvidersChanged();
@@ -395,21 +423,60 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
    * bevor der Provider gespeichert ist — schlägt der Aufruf fehl (nicht
    * jeder Anbieter unterstützt den Endpunkt zuverlässig), bleibt das
    * Modellfeld einfach ein normales Freitextfeld (kein `setError`, kein
-   * blockierender Zustand). */
-  const handleDiscoverModels = async () => {
+   * blockierender Zustand).
+   *
+   * Issue #326: gemeinsamer Pfad für "Modelle laden" und den automatischen
+   * Auslöser beim Verlassen des Key-/Base-URL-Felds. Höchstens eine
+   * Anfrage je Formular gleichzeitig; ändern sich Typ, Base-URL oder Key,
+   * während sie läuft, wird ihr Ergebnis verworfen. Der Key geht genau wie
+   * bisher nur an `discover_models`, nirgends sonst hin. */
+  const runModelDiscovery = async () => {
+    if (discoveryInFlightRef.current) return;
+    const requestForm = form;
+    const requestInputs = discoveryInputsOf(requestForm);
+    discoveryInFlightRef.current = true;
+    lastDiscoveryInputsRef.current = requestInputs;
     setModelsLoading(true);
     setModelsFailed(false);
     setModelsFailedCode(null);
+    setModelsEmpty(false);
+    setModelsAuthFailed(false);
+    const isCurrent = () =>
+      sameDiscoveryInputs(requestInputs, discoveryInputsOf(formRef.current));
     try {
-      const discovered = await discoverModels({ ...form, apiKey: effectiveApiKey(form) });
+      const discovered = await discoverModels({
+        ...requestForm,
+        apiKey: effectiveApiKey(requestForm),
+      });
+      if (!isCurrent()) return;
       setModels(discovered);
+      setModelsEmpty(discovered.length === 0);
     } catch (err) {
-      setModelsFailed(true);
-      setModelsFailedCode(commandErrorCode(err));
+      if (!isCurrent()) return;
+      const code = commandErrorCode(err);
       setModels([]);
+      if (code === "AI_AUTH_FAILED") {
+        setModelsAuthFailed(true);
+      } else {
+        setModelsFailed(true);
+        setModelsFailedCode(code);
+      }
     } finally {
+      discoveryInFlightRef.current = false;
       setModelsLoading(false);
     }
+  };
+
+  const handleDiscoverModels = () => {
+    void runModelDiscovery();
+  };
+
+  /** Issue #326: das Verlassen des API-Key- oder Base-URL-Felds gilt als
+   * Nutzeraktion, die die Modellsuche auslöst — bloßes Tippen nie. */
+  const handleDiscoveryFieldBlur = () => {
+    if (discoveryInFlightRef.current) return;
+    if (!shouldAutoDiscover(form, lastDiscoveryInputsRef.current)) return;
+    void runModelDiscovery();
   };
 
   /** Spec 0050, Teil 3: testet die gerade eingegebenen, noch nicht
@@ -810,6 +877,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                       : form.baseUrl,
                 });
                 setCredentialTestResult(null);
+                setModelsAuthFailed(false);
               }}
               className={`mt-1 w-full ${FIELD_CLASS}`}
             >
@@ -878,6 +946,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 <option key={model} value={model} aria-label={model} />
               ))}
             </datalist>
+            {modelsEmpty && (
+              <p className="mt-1 text-xs text-slate-500">{t("aiProvider.modelDiscoveryEmptyHint")}</p>
+            )}
             {modelsFailed && (
               <>
                 <p className="mt-1 text-xs text-slate-500">{t("aiProvider.modelDiscoveryFailedHint")}</p>
@@ -907,7 +978,11 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 required
                 placeholder={t("aiProvider.baseUrlPlaceholder")}
                 value={form.baseUrl ?? ""}
-                onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, baseUrl: e.target.value });
+                  setModelsAuthFailed(false);
+                }}
+                onBlur={handleDiscoveryFieldBlur}
                 className={`mt-1 w-full ${FIELD_CLASS}`}
               />
             </label>
@@ -934,10 +1009,25 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 // Stand zum Testzeitpunkt — ändert sich der Key danach,
                 // wäre ein weiterhin angezeigtes "gültig" irreführend.
                 setCredentialTestResult(null);
+                // Issue #326: "Zugangsdaten abgelehnt" gilt nur für den
+                // Key, mit dem die Modellsuche lief.
+                setModelsAuthFailed(false);
               }}
+              onBlur={handleDiscoveryFieldBlur}
               className={`mt-1 w-full ${FIELD_CLASS}`}
             />
           </label>
+          {/* Issue #326: eigener Zustand für `AI_AUTH_FAILED` aus der
+           * Modellsuche, im selben roten Stil wie das Ergebnis von
+           * "Zugangsdaten testen" — nicht der generische Discovery-Hinweis. */}
+          {modelsAuthFailed && (
+            <p
+              role="alert"
+              className="rounded border border-red-800 bg-red-950/40 px-2.5 py-1.5 text-xs text-red-400"
+            >
+              {t("aiProvider.modelDiscoveryAuthFailed")}
+            </p>
+          )}
           {/* Spec 0050, Teil 2 (jetzt auch Spec 0056, Teil 1): reiner
            * Offline-Hinweis, kein Blockieren — `apiKeyFormatWarning`
            * liefert `null`, solange das Feld leer ist, der Provider kein
