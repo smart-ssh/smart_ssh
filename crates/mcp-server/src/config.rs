@@ -1,5 +1,5 @@
 //! Startet den lokalen MCP-HTTP-Server (Spec 0028, Abschnitt 8: Streamable
-//! HTTP, gebunden an `127.0.0.1`, konfigurierbarer Port).
+//! HTTP, gebunden an `127.0.0.1`, fester Port).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -15,8 +15,8 @@ use crate::auth::{require_bearer_token, SharedToken};
 use crate::backend::McpBackend;
 use crate::tool_server::SmartSshMcpServer;
 
-/// Spec 0028, Abschnitt 8: "Port konfigurierbar (Default z. B. `47823`,
-/// außerhalb üblicher Kollisionsbereiche)".
+/// Spec 0028, Abschnitt 8: fester Port `47823`, außerhalb üblicher
+/// Kollisionsbereiche. Tests binden mit Port `0` an einen freien Port.
 pub const DEFAULT_PORT: u16 = 47823;
 
 /// Spec 0028, Abschnitt 7: "konfigurierbares Timeout (Default 5 Minuten)".

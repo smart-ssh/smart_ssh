@@ -16,7 +16,7 @@ use axum::response::Response;
 /// verlangen, den HTTP-Listener für eine Token-Rotation neu zu starten,
 /// was laufende Verbindungen unnötig hart trennen würde. `Arc`-geklont
 /// zwischen dem Axum-`State` dieser Middleware und der Stelle, die das
-/// Token bei "Neu generieren" austauscht (Spec 0028, Teil 2).
+/// Token bei "Neu generieren" austauscht (Spec 0028, Abschnitt 9).
 #[derive(Clone, Default)]
 pub struct SharedToken(Arc<Mutex<String>>);
 

@@ -492,7 +492,7 @@ pub struct SessionParts {
     /// `SessionManager` entfernt wurde, und ist als App-weite Benachrichtigung
     /// (`note-update-suggested`) ohnehin nie an einen Tab gebunden.
     pub pending_action: StdMutex<Option<ActionId>>,
-    /// Issue #108, Spec 0104 §5: `true`, solange eine MCP-Bestätigung dieser
+    /// Issue #108, Spec 0104 §3: `true`, solange eine MCP-Bestätigung dieser
     /// Session registriert ist (von der Registrierung bis zum Aufräumen,
     /// also auch vor dem Setzen des Indikators). Ein weiterer MCP-Vorschlag
     /// wird dann abgewiesen.
