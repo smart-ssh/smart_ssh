@@ -320,6 +320,8 @@ pub(crate) async fn open_and_assemble(
         keychain,
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
+        // Issue #259: Produktion baut die Verbindung real auf.
+        connector: Arc::new(app_logic::test_connection::RealConnector),
         policy_store,
         prompt_history_store,
         chat_session_store,
