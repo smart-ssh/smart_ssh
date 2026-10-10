@@ -480,7 +480,7 @@ export function ServerList({
           <button
             type="button"
             onClick={onCreateFirstServer}
-            className="mt-3 rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+            className="mt-3 rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
           >
             {t("mainScreen.emptyStateCreateFirstServer")}
           </button>

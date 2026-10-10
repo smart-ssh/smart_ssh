@@ -87,7 +87,7 @@ export function ChatSessionPickerScreen({
         <button
           type="button"
           onClick={onNewConversation}
-          className="mb-4 w-full rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+          className="mb-4 w-full rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500"
         >
           {t("chatSessionPicker.newConversation")}
         </button>

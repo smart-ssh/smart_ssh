@@ -130,7 +130,7 @@ export function NoteSuggestionToast() {
                 <button
                   type="button"
                   onClick={() => updateSuggestion(suggestion.actionId, { expanded: true })}
-                  className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500"
+                  className="rounded bg-indigo-600 px-2 py-1 text-xs text-slate-950 hover:bg-indigo-500"
                 >
                   {t("noteSuggestion.show")}
                 </button>
