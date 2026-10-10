@@ -1,5 +1,4 @@
 import { Component as ReactComponent, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   listFirstRunNoticeExtensions,
@@ -109,8 +108,8 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
   // `HostKeyDialog.tsx` — dieser Screen kann ebenfalls von `ServerList`
   // ausgelöst werden, während `MainScreen` per `display:none` ausgeblendet
   // ist (aktiver Session-Tab), und wäre ohne Portal unsichtbar.
-  return createPortal(
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+  return (
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
         <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
           {t("firstRunNotice.title")}
@@ -146,7 +145,6 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
           </button>
         </div>
       </div>
-    </ModalBackdrop>,
-    document.body,
+    </ModalBackdrop>
   );
 }

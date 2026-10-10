@@ -114,7 +114,7 @@ export function StartupPromptDialog({
     // (`pt-9` zusätzlich zum `p-4`, also `pt-13`) — dort liegt die
     // Drag-Leiste über dem Backdrop, und kein Knopf und keine Eingabe des
     // Dialogs darf darunter rücken.
-    <ModalBackdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-4 pt-13">
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-4 pt-13">
       <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
         <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
           {request.title}
