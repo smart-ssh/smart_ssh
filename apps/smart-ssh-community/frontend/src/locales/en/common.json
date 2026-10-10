@@ -44,10 +44,6 @@
       "chatRetention": "Sessions & Data",
       "mcpServer": "MCP Server",
       "masterPassword": "Master password"
-    },
-    "language": {
-      "de": "German",
-      "en": "English"
     }
   },
   "about": {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
+import { formatDateTime } from "../formatDateTime";
 import {
   claimDroppedPaths,
   commandErrorMessage,
@@ -194,7 +195,7 @@ export function FileBrowserPanel({
 
   // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
   const localEdit = useLocalEditSession(sessionId);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Spec 0067, A5: erhöhter Modus pro Browser-Ansicht — nie Default, nicht
   // persistiert. `null` = normaler Modus.
@@ -1219,7 +1220,7 @@ export function FileBrowserPanel({
                     {entry.permissions}
                   </td>
                   <td className="px-2 py-1 whitespace-nowrap text-slate-500">
-                    {entry.modified ? new Date(entry.modified).toLocaleString() : "—"}
+                    {entry.modified ? formatDateTime(entry.modified, i18n.language) : "—"}
                   </td>
                   <td className="relative px-2 py-1 text-right">
                     <button
@@ -1781,7 +1782,7 @@ function FilePropertiesDialog({
   entry: RemoteEntryDto;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const octal = entry.permissionsOctal.toString(8).padStart(3, "0");
   const owner = entry.owner ?? (entry.uid !== null ? String(entry.uid) : "—");
   const group = entry.group ?? (entry.gid !== null ? String(entry.gid) : "—");
@@ -1813,7 +1814,7 @@ function FilePropertiesDialog({
           {row(t("fileBrowser.properties.group"), group)}
           {row(
             t("fileBrowser.properties.modified"),
-            entry.modified ? new Date(entry.modified).toLocaleString() : "—",
+            entry.modified ? formatDateTime(entry.modified, i18n.language) : "—",
           )}
         </div>
         <div className="mt-4 flex justify-end">
