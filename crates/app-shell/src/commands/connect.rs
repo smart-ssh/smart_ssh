@@ -13,7 +13,7 @@ use ssh_manager_core::profiles::ProfileStore;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::{resolve_connection_target, ConnectLog, HostKeyDecision, SshError};
 
-use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::ai_provider_factory::build_ai_provider_from_config;
 use app_logic::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use app_logic::dto::HostKeyUserDecision;
 use app_logic::error::{secret_store_error, ssh_command_error, CommandError, CommandResult};
@@ -171,22 +171,14 @@ pub(crate) async fn connect_session(
         state.profile_store.get_server(&server_id).await?
     };
     let active_config = active_ai_provider_config(state).await?;
-    let api_key = state
-        .credential_store
-        .get(&active_config.credential_ref)
-        .map_err(secret_store_error)?;
-    let (ai_provider, ai_provider_budget) = build_ai_provider(
+    // Issue #162: Einstellung des Providers (Default an).
+    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
         &state.rate_limit_registry,
-        active_config.provider_type,
-        active_config.base_url.as_deref(),
-        &active_config.model,
-        api_key,
-        active_config.supports_native_tool_calling,
-        active_config.extra_headers.clone(),
-        active_config.max_tokens_override,
-        // Issue #162: Einstellung des Providers (Default an).
+        state.credential_store.as_ref(),
+        &active_config,
         active_config.web_research_enabled,
-    );
+    )
+    .map_err(secret_store_error)?;
 
     // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
     // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"

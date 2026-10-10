@@ -286,6 +286,24 @@ describe("ServerForm — Sudo-Passwort entfernen schlägt fehl (Spec 0071, A17)"
   });
 });
 
+describe("ServerForm — Verbindungstest ohne Schlüsseldatei-Pfad (issue #254)", () => {
+  it("shows the translated message, not the raw code or backend text", async () => {
+    vi.mocked(getServer).mockResolvedValue(serverDto());
+    vi.mocked(testConnection).mockRejectedValue({
+      code: "SERVER_IDENTITY_FILE_REQUIRED",
+      message: "RAW-BACKEND-TEXT-254",
+    });
+
+    renderForm();
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
+
+    expect(await screen.findByText("Pfad zur Schlüsseldatei ist erforderlich")).toBeInTheDocument();
+    expect(screen.queryByText(/SERVER_IDENTITY_FILE_REQUIRED/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/RAW-BACKEND-TEXT-254/)).not.toBeInTheDocument();
+  });
+});
+
 function validKeyFacts(overrides: Partial<KeyFileFactsDto> = {}): KeyFileFactsDto {
   return {
     exists: true,
