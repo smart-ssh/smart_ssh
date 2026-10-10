@@ -763,7 +763,9 @@ pub mod key_leak_needles {
         use base64::engine::general_purpose::STANDARD as BASE64;
         use base64::Engine;
 
-        let pragma = DatabaseKey::from_root_key(root_key).pragma_value();
+        let pragma =
+            DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(*root_key))
+                .pragma_value();
         let pragma_value = pragma.expose_secret().to_string();
         let pragma_hex = pragma_value
             .trim_start_matches("x'")

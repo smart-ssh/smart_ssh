@@ -489,7 +489,7 @@ fn test_t3_key_state_never_confuses_backend_with_notfound() {
     let present = CountingCredentialStore::new(GetBehaviour::Present);
     let (state, key) = read_key_state(&present, available());
     assert_eq!(state, KeyState::Present);
-    assert_eq!(key, Some(TEST_ROOT_KEY));
+    assert_eq!(key.as_ref().map(|k| *k.expose()), Some(TEST_ROOT_KEY));
 }
 
 /// A3: Ist der Schlüsselbund beim Start als nicht verfügbar erkannt, wird
@@ -506,7 +506,7 @@ fn test_a3_an_unavailable_keychain_is_not_queried_at_all() {
         state,
         KeyState::Unreachable(Some(KeychainUnavailableReason::NoSessionBus))
     );
-    assert_eq!(key, None);
+    assert!(key.is_none());
     assert_eq!(
         store.gets.load(Ordering::SeqCst),
         0,
@@ -799,7 +799,8 @@ async fn test_t7_start_over_from_d2_renames_byte_identically_and_starts_fresh() 
     // vorhandene K öffnet sie nicht (D2).
     let mut foreign_root = TEST_ROOT_KEY;
     foreign_root[0] ^= 0xff;
-    let foreign_key = DatabaseKey::from_root_key(&foreign_root);
+    let foreign_key =
+        DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(foreign_root));
     let store = SqliteProfileStore::connect_encrypted(&db_path, &foreign_key)
         .await
         .unwrap();
@@ -850,7 +851,7 @@ async fn test_t7_start_over_from_d2_renames_byte_identically_and_starts_fresh() 
 
     // Die neue Datenbank ist leer und mit dem vorhandenen K lesbar.
     assert!(opened.store.list_servers().await.unwrap().is_empty());
-    assert_eq!(opened.root_key, TEST_ROOT_KEY);
+    assert_eq!(opened.root_key.expose(), &TEST_ROOT_KEY);
     assert_eq!(
         credentials.sets(),
         0,
@@ -885,7 +886,8 @@ async fn test_t7_start_over_from_d3_also_replaces_the_unusable_key() {
     assert_eq!(prompt.asked(), vec![StartupDialog::D3]);
     assert_eq!(credentials.sets(), 1, "der unbrauchbare K wird ersetzt");
     assert_ne!(
-        opened.root_key, TEST_ROOT_KEY,
+        opened.root_key.expose(),
+        &TEST_ROOT_KEY,
         "der neue K darf nicht der Testschlüssel sein"
     );
 
@@ -950,8 +952,8 @@ async fn test_t7_without_the_second_confirmation_no_file_is_renamed() {
 fn test_the_root_key_fingerprint_recognises_the_same_key_and_no_other() {
     use ssh_manager_core::crypto::root_key_fingerprint;
 
-    let key = [0x11u8; 32];
-    let other = [0x12u8; 32];
+    let key = ssh_manager_core::crypto::RootKey::for_tests([0x11u8; 32]);
+    let other = ssh_manager_core::crypto::RootKey::for_tests([0x12u8; 32]);
 
     assert_eq!(root_key_fingerprint(&key), root_key_fingerprint(&key));
     assert_ne!(
@@ -964,7 +966,7 @@ fn test_the_root_key_fingerprint_recognises_the_same_key_and_no_other() {
     // Datenbankschlüssel (Domänentrennung, eigene `info`-Zeichenkette).
     assert_ne!(
         root_key_fingerprint(&key).as_slice(),
-        key.as_slice(),
+        key.expose().as_slice(),
         "die Kennung darf K nicht einfach durchreichen"
     );
     let fingerprint_hex: String = root_key_fingerprint(&key)
@@ -1068,7 +1070,7 @@ async fn test_t7_variant_start_over_in_password_mode_renames_the_wrapping_and_wr
     .expect("die neue Verpackung muss mit dem neuen Passwort aufgehen");
     assert_eq!(
         unlocked.expose(),
-        &opened.root_key,
+        opened.root_key.expose(),
         "die Verpackung muss genau den K tragen, mit dem die Datenbank offen ist"
     );
     opened.store.close().await;
@@ -1254,7 +1256,7 @@ async fn test_t13_d4_in_password_mode_converts_the_file_and_rewraps_the_new_key(
         &secrecy::SecretString::from("mein-neues-master-passwort".to_string()),
     )
     .expect("die neue Verpackung muss aufgehen");
-    assert_eq!(unlocked.expose(), &opened.root_key);
+    assert_eq!(unlocked.expose(), opened.root_key.expose());
 
     // Die alte, unbrauchbare Verpackung liegt unverändert daneben.
     let moved = file_names(dir.path())
@@ -1520,7 +1522,7 @@ async fn test_t8_an_unreachable_key_does_not_open_the_database_and_retry_works()
             1,
             "genau ein D1 erwartet"
         );
-        assert_eq!(opened.root_key, TEST_ROOT_KEY);
+        assert_eq!(opened.root_key.expose(), &TEST_ROOT_KEY);
         assert_eq!(credentials.sets(), 0, "kein neuer K bei einem Retry");
         opened.store.close().await;
     }
@@ -1795,7 +1797,8 @@ pub(super) async fn plaintext_database(dir: &std::path::Path) -> std::path::Path
 /// Eine mit [`TEST_ROOT_KEY`] verschlüsselte Datenbank.
 async fn encrypted_database(dir: &std::path::Path) -> std::path::PathBuf {
     let db_path = dir.join("smart-ssh.db");
-    let key = DatabaseKey::from_root_key(&TEST_ROOT_KEY);
+    let key =
+        DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(TEST_ROOT_KEY));
     let store = SqliteProfileStore::connect_encrypted(&db_path, &key)
         .await
         .unwrap();
@@ -1883,10 +1886,12 @@ async fn test_a5_a_rename_collision_gets_its_own_message_without_backup_advice()
     // Verschlüsselt mit einem **anderen** Schlüssel → D2 → „Neu anfangen“.
     let mut foreign_root = TEST_ROOT_KEY;
     foreign_root[0] ^= 0xff;
-    let store =
-        SqliteProfileStore::connect_encrypted(&db_path, &DatabaseKey::from_root_key(&foreign_root))
-            .await
-            .unwrap();
+    let store = SqliteProfileStore::connect_encrypted(
+        &db_path,
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(foreign_root)),
+    )
+    .await
+    .unwrap();
     store.close().await;
     let before = std::fs::read(&db_path).unwrap();
 
@@ -2164,11 +2169,14 @@ async fn test_t17_a_failing_database_open_with_the_derived_key_keeps_the_key_out
     // 1. Datei gehört zu einem anderen Schlüssel; Passwort-Modus entsperrt.
     let foreign_dir = tempfile::tempdir().unwrap();
     let foreign_db = foreign_dir.path().join("smart-ssh.db");
-    SqliteProfileStore::connect_encrypted(&foreign_db, &DatabaseKey::from_root_key(&OTHER_KEY))
-        .await
-        .expect("fremde Datenbank anlegen")
-        .close()
-        .await;
+    SqliteProfileStore::connect_encrypted(
+        &foreign_db,
+        &DatabaseKey::from_root_key(&RootKey::for_tests(OTHER_KEY)),
+    )
+    .await
+    .expect("fremde Datenbank anlegen")
+    .close()
+    .await;
     let mut unlocked_key = TEST_ROOT_KEY;
     let quit = ScriptedPrompt::new(vec![StartupChoice::Quit]);
     let result = open_or_prepare_database(
@@ -2193,11 +2201,14 @@ async fn test_t17_a_failing_database_open_with_the_derived_key_keeps_the_key_out
     // 2. Dasselbe im Schlüsselbund-Modus.
     let keychain_dir = tempfile::tempdir().unwrap();
     let keychain_db = keychain_dir.path().join("smart-ssh.db");
-    SqliteProfileStore::connect_encrypted(&keychain_db, &DatabaseKey::from_root_key(&OTHER_KEY))
-        .await
-        .expect("fremde Datenbank anlegen")
-        .close()
-        .await;
+    SqliteProfileStore::connect_encrypted(
+        &keychain_db,
+        &DatabaseKey::from_root_key(&RootKey::for_tests(OTHER_KEY)),
+    )
+    .await
+    .expect("fremde Datenbank anlegen")
+    .close()
+    .await;
     let store = CountingCredentialStore::new(GetBehaviour::Present);
     let quit = ScriptedPrompt::new(vec![StartupChoice::Quit]);
     let result = open_or_prepare_database(
@@ -2222,10 +2233,13 @@ async fn test_t17_a_failing_database_open_with_the_derived_key_keeps_the_key_out
         ("falscher Schlüssel", &foreign_db, TEST_ROOT_KEY),
         ("keine Datenbank", &garbage_db, TEST_ROOT_KEY),
     ] {
-        let err = SqliteProfileStore::connect_encrypted(path, &DatabaseKey::from_root_key(&key))
-            .await
-            .err()
-            .unwrap_or_else(|| panic!("{what}: das Öffnen hätte scheitern müssen"));
+        let err = SqliteProfileStore::connect_encrypted(
+            path,
+            &DatabaseKey::from_root_key(&RootKey::for_tests(key)),
+        )
+        .await
+        .err()
+        .unwrap_or_else(|| panic!("{what}: das Öffnen hätte scheitern müssen"));
         collected.push_str(&format!("{err}\n{err:?}\n"));
     }
     assert!(

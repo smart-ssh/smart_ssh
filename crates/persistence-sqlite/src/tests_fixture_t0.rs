@@ -316,7 +316,7 @@ async fn test_t0_fixture_has_14_migrations_all_markers_and_decryptable_chat_cont
     // beim Start mit K entschlüsselt und als Klartext zurückgeschrieben;
     // erst danach liest der Store ihn.
     let decryption = store
-        .decrypt_field_encrypted_content(&T0_TEST_KEY)
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(T0_TEST_KEY))
         .await
         .expect("Umstellung der Fixture gelingt");
     assert!(

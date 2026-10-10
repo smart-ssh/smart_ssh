@@ -21,7 +21,7 @@ fn password() -> SecretString {
 /// Die Verpackung einmal bauen und für alle Manipulationsfälle
 /// weiterverwenden — s. Modulkommentar.
 fn wrapped_once() -> Vec<u8> {
-    wrap_root_key(&ROOT_KEY, &password()).expect("Verpacken muss gelingen")
+    wrap_root_key(&RootKey::for_tests(ROOT_KEY), &password()).expect("Verpacken muss gelingen")
 }
 
 /// A14/A16: Was verpackt wurde, kommt mit demselben Passwort unverändert
@@ -380,12 +380,12 @@ fn test_a13_minimum_password_length_is_enforced_when_wrapping_only() {
     let eleven = SecretString::from("abcdefghijk".to_string());
     assert_eq!(eleven.expose_secret().chars().count(), 11);
     assert_eq!(
-        wrap_root_key(&ROOT_KEY, &eleven),
+        wrap_root_key(&RootKey::for_tests(ROOT_KEY), &eleven),
         Err(KeyWrapError::PasswordTooShort)
     );
 
     let twelve = SecretString::from("abcdefghijkl".to_string());
-    assert!(wrap_root_key(&ROOT_KEY, &twelve).is_ok());
+    assert!(wrap_root_key(&RootKey::for_tests(ROOT_KEY), &twelve).is_ok());
 
     // Zeichen, nicht Byte: zwölf Umlaute sind 24 Byte und müssen reichen.
     let umlauts = SecretString::from("ääääääääääää".to_string());
