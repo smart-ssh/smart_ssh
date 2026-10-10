@@ -723,8 +723,9 @@ pub fn normalize_sftp_server_path(input: Option<String>) -> Result<Option<String
         return Ok(None);
     }
     if !ssh_manager_core::ssh::elevated::is_plausible_sftp_server_path(&trimmed) {
+        let shown = crate::startup_error_messages::sanitize_text_for_display(&trimmed);
         return Err(format!(
-            "Ungültiger sftp-server-Pfad „{trimmed}“ — erlaubt ist ein absoluter Pfad aus \
+            "Ungültiger sftp-server-Pfad „{shown}“ — erlaubt ist ein absoluter Pfad aus \
              Buchstaben, Ziffern und / . _ - +, der auf „sftp-server“ endet"
         ));
     }
@@ -738,8 +739,10 @@ pub fn normalize_start_directory_input(input: Option<String>) -> Result<Option<S
     let Some(raw) = input else {
         return Ok(None);
     };
-    ssh_manager_core::profiles::normalize_start_directory(&raw)
-        .map_err(|err| format!("Ungültiges Startverzeichnis „{}“ — {err}", raw.trim()))
+    ssh_manager_core::profiles::normalize_start_directory(&raw).map_err(|err| {
+        let shown = crate::startup_error_messages::sanitize_text_for_display(raw.trim());
+        format!("Ungültiges Startverzeichnis „{shown}“ — {err}")
+    })
 }
 
 /// Spec 0008, Abschnitt 4. `#[serde(tag = "kind", rename_all =
@@ -2279,6 +2282,20 @@ mod identity_file_dto_tests {
 #[cfg(test)]
 mod start_directory_tests {
     use super::{normalize_start_directory_input, ServerDto, ServerInput};
+
+    #[test]
+    fn rejected_paths_are_sanitised_in_error_messages() {
+        let err =
+            super::normalize_sftp_server_path(Some("/usr/\u{202E}evil".to_string())).unwrap_err();
+        assert!(!err.contains('\u{202E}'), "{err}");
+        assert!(err.contains("/usr/?evil"), "{err}");
+        let err =
+            normalize_start_directory_input(Some("rel\u{202E}\u{2028}x".to_string())).unwrap_err();
+        assert!(
+            !err.contains('\u{202E}') && !err.contains('\u{2028}'),
+            "{err}"
+        );
+    }
     use crate::test_support::InMemoryCredentialStore;
     use chrono::Utc;
     use ssh_manager_core::profiles::{AuthMethod, PostIngestPolicy, Server};
