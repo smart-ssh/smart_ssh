@@ -34,10 +34,13 @@
  * identisch, nur ohne eigene Paketgrenze/-versionierung.
  *
  * Bewusst ein einfaches Modul-Singleton (kein React-Context): Beiträge
- * werden als Modul-Nebeneffekt registriert (import-time, s.
- * `registerBuiltinExtensions.ts`), bevor irgendeine Komponente rendert —
- * kein Provider/Consumer-Baum nötig für einen Zustand, der sich nach dem
- * App-Start nicht mehr ändert. */
+ * werden üblicherweise als Modul-Nebeneffekt registriert (import-time, s.
+ * `registerBuiltinExtensions.ts`), bevor irgendeine Komponente rendert.
+ * Eine Registrierung darf aber auch später erfolgen (z. B. nach einer
+ * asynchronen Prüfung): Für Settings-Abschnitte gibt es dafür
+ * `subscribeSettingsSections` (kompatibel mit `useSyncExternalStore`), damit
+ * ein geöffnetes Einstellungsfenster den neuen Abschnitt ohne erneutes
+ * Öffnen zeigt. */
 
 import type { ComponentType } from "react";
 
@@ -137,6 +140,33 @@ const registry: Registry = {
  * Hot-Module-Reload) einen Settings-Abschnitt. */
 export function registerSettingsSection(section: SettingsSectionContribution): void {
   registry.settingsSections.set(section.id, section);
+  notifySettingsSectionsChanged();
+}
+
+type SettingsSectionsListener = () => void;
+
+const settingsSectionListeners = new Set<SettingsSectionsListener>();
+
+/** Stabiler Schnappschuss: ändert sich nur bei einer Änderung der Liste,
+ * damit `listSettingsSections()` als `getSnapshot` taugt. */
+let settingsSectionsSnapshot: SettingsSectionContribution[] = [];
+
+function notifySettingsSectionsChanged(): void {
+  settingsSectionsSnapshot = Array.from(registry.settingsSections.values());
+  // Kopie, damit ein Listener sich während des Aufrufs abmelden darf.
+  for (const listener of Array.from(settingsSectionListeners)) {
+    listener();
+  }
+}
+
+/** Meldet einen Listener an, der nach jeder Änderung der Settings-Abschnitte
+ * (neue oder ersetzte `id`) aufgerufen wird. Gibt die Abmelde-Funktion
+ * zurück. */
+export function subscribeSettingsSections(listener: () => void): () => void {
+  settingsSectionListeners.add(listener);
+  return () => {
+    settingsSectionListeners.delete(listener);
+  };
 }
 
 /** Registriert (bzw. ersetzt bei gleicher `id`) eine Dokument-Aktion (Spec
@@ -146,8 +176,10 @@ export function registerDocumentAction(action: DocumentAction): void {
   registry.documentActions.set(action.id, action);
 }
 
+/** Registrierte Settings-Abschnitte. Zwischen zwei Änderungen dieselbe
+ * Array-Referenz (nicht verändern). */
 export function listSettingsSections(): SettingsSectionContribution[] {
-  return Array.from(registry.settingsSections.values());
+  return settingsSectionsSnapshot;
 }
 
 /** spec-reviewer-Fund (Review dieses Schritts): rein statisch — kein
@@ -188,6 +220,7 @@ export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[] {
  * Registrierungen aus einem Test nicht in den nächsten durchsickern. */
 export function resetRegistryForTests(): void {
   registry.settingsSections.clear();
+  notifySettingsSectionsChanged();
   registry.documentActions.clear();
   registry.firstRunNoticeExtensions.clear();
 }
