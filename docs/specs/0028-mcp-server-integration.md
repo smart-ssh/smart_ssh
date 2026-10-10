@@ -1,250 +1,206 @@
-# Spec: MCP-Server-Integration
+# Spec 0028 — Lokaler MCP-Server
 
-Status: Entwurf
-Modul: neue Crate `crates/mcp-server` (Free-Tier), Erweiterung
-`crates/app-tauri`, `frontend/` (Einstellungen)
-Abhängigkeiten: Kernschleife (Spec 0007/0021), Filter-Engine (Spec 0002),
-KI-Aktionen (Spec 0003/0006/0020), strukturiertes Logging (Spec 0016)
+Status: umgesetzt
+Zweck: Smart SSH bietet seine Fähigkeiten (Server auflisten, Notizen lesen,
+Kommando vorschlagen, Datei lesen und schreiben, Notiz-Änderung vorschlagen)
+als lokalen MCP-Server an. Ein externer Agent (z. B. ein Coding-Agent) kann
+damit auf einem Server nachsehen, ohne rohen SSH-Zugriff zu bekommen: Jede
+Aktion läuft durch dieselben Kontrollen wie ein Vorschlag der eingebauten KI
+und muss immer in der App bestätigt werden.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0005 (Verbindungsaufbau, Host-Key),
+Spec 0016 (strukturiertes Logging), Spec 0017 (Tabs), Spec 0020 (KI-Aktionen
+auf Dateien), Spec 0039 (Fencing nicht vertrauenswürdiger Inhalte), Spec 0067
+(erhöhter Dateibrowser), Spec 0088 (Warten auf Bestätigung), Spec 0092
+(rotes Risiko), Spec 0101 (Ablage des Tokens), Spec 0104 (eigene Sitzung und
+eigener Tab je MCP-Client), ADR 0025, ADR 0103.
 
-## 1. Ziel
+## 1. Überblick
 
-Smart SSH exponiert seine eigenen Fähigkeiten (Kommando vorschlagen, Datei
-lesen/schreiben, Notiz aktualisieren, Server auflisten) als **MCP-Server**,
-den externe MCP-Clients — allen voran Claude Code, aber auch Claude Desktop
-oder andere — ansprechen können. Der Sinn: Ein externer Agent kann so beim
-Debuggen "über SSH nachschauen", ohne rohen, ungeprüften SSH-Zugriff zu
-bekommen — jede vorgeschlagene Aktion läuft durch **exakt dieselbe**
-Kontroll-Infrastruktur wie ein intern von der App-eigenen KI vorgeschlagenes
-Kommando.
+Der externe Client spricht den lokalen MCP-Server der laufenden App an
+(§8), sieht nur freigegebene Server (§6) und kann Aktionen nur vorschlagen;
+ausgeführt wird erst nach Bestätigung in der App (§5), in einer eigenen
+Sitzung je Client (§9a, Spec 0104).
 
-**Nicht verhandelbar**: Kein zweiter, paralleler Ausführungspfad. MCP-
-Tool-Calls werden auf dieselben `AiAction`-Varianten (Spec 0003/0020)
-abgebildet und laufen durch dieselbe Filter-Engine, denselben Redactor,
-denselben Bestätigungsdialog-Mechanismus wie jeder andere KI-Vorschlag.
+## 2. Umfang
 
-## 2. Free vs. Premium — Schnitt für diese Spec
+Ein lokaler MCP-Server mit einem Bearer-Token für alle Clients, gebunden an
+`127.0.0.1`. Mehrere Clients gleichzeitig sind möglich und bekommen getrennte
+Sitzungen (Spec 0104), teilen sich aber Token und Server-Allow-Liste.
 
-- **Free (Teil dieser Spec und des Implementierungs-Prompts)**: ein
-  MCP-Server, ein lokaler Client, ein Bearer-Token, gebunden an `127.0.0.1`.
-- **Premium (nur architektonisch vorgemerkt, nicht Teil des
-  Implementierungs-Prompts)**: mehrere gleichzeitige externe Clients mit
-  eigenen, granular gescopten Tokens (z. B. "dieser Agent darf nur Staging,
-  nur lesend"), teamweite zentrale Audit-Sicht über mehrere Agenten hinweg,
-  zentral verwaltetes Gateway für eine Organisation. Wird als eigene,
-  spätere Crate (`crates/mcp-server-team` o. ä.) angelegt, sobald benötigt —
-  hier nur als Grund für die Architektur-Entscheidung in Abschnitt 3
-  relevant.
+## 3. Kein zweiter Ausführungspfad
 
-## 3. Architektur-Entscheidung: Wiederverwendung statt Parallelstruktur
+Ein Tool-Aufruf über MCP wird zu derselben KI-Aktion wie ein Vorschlag der
+eingebauten KI (Kommando, Datei lesen, Datei schreiben, Notiz-Änderung) und
+durchläuft dieselbe Filter-Engine, dieselbe Redaction, dasselbe Fencing und
+denselben Bestätigungsablauf. Der MCP-Server führt selbst nichts aus.
 
-`crates/mcp-server` implementiert einen MCP-Server (empfohlene Bibliothek:
-das offizielle Rust-SDK `rmcp` — prüfe zum Implementierungszeitpunkt den
-aktuellen Stand, das MCP-Ökosystem entwickelt sich noch), der eingehende
-Tool-Calls **nicht selbst ausführt**, sondern in `AiAction`-Werte übersetzt
-und an dieselbe Orchestrierungs-Funktion übergibt, die auch der interne
-Chat-Flow nutzt (`handle_action_proposed` aus Spec 0007/0021). Dadurch ist
-ein Bypass der Filter-Engine strukturell ausgeschlossen, nicht nur durch
-Disziplin beim Programmieren — derselbe Code-Pfad wird zweimal angesprungen
-(einmal vom Chat, einmal vom MCP-Server), nicht zweimal implementiert.
+Eine MCP-Aktion erscheint als Aktionskarte mit Bestätigen und Ablehnen, wie
+ein Vorschlag im Chat. Was der Nutzer dort entscheidet, gilt für den
+externen Client: Freigabe führt aus und liefert das Ergebnis, Ablehnung
+liefert „Abgelehnt: <Grund>", ein Filter-`Deny` liefert die Begründung der
+Regel ohne Ausführung.
 
-MCP-ausgelöste Aktionen laufen **außerhalb** der Turn-Fortsetzungslogik aus
-Spec 0021 — es gibt keinen Chatverlauf, in den ein Ergebnis automatisch
-zurückfließen müsste; der externe Client (z. B. Claude Code) verwaltet seine
-eigene Fortsetzungslogik. Nach Abschluss (genehmigt/abgelehnt/blockiert)
-geht das Ergebnis als MCP-Tool-Antwort zurück an den externen Client, fertig.
+MCP-Aktionen gehören zu keinem Chat-Verlauf und lösen keine Folgerunde der
+eingebauten KI aus. Das Ergebnis geht als Tool-Antwort an den externen
+Client zurück; dessen Fortsetzung steuert der Client selbst.
 
 ## 4. Angebotene Tools
 
-```
-list_servers()                              → informativ, kein Filter-Engine-Gate
-get_server_notes(server_id)                  → effective_notes(), informativ
-propose_command(server_id, command)          → AiAction::SuggestCommand
-read_remote_file(server_id, path)            → AiAction::ReadRemoteFile
-write_remote_file(server_id, path, content)  → AiAction::WriteRemoteFile
-propose_note_update(server_id, new_content)  → AiAction::ProposeNoteUpdate
-```
+| Tool | Wirkung | Bestätigung |
+|---|---|---|
+| `list_servers` | Name und Kennung jedes Servers auf der Allow-Liste | nein |
+| `get_server_notes(server_id)` | effektive Notizen des Servers (eigene und Gruppen-Notizen) | nein |
+| `propose_command(server_id, command)` | Shell-Kommando auf dem Server | immer |
+| `read_remote_file(server_id, path)` | Datei per SFTP lesen | immer |
+| `write_remote_file(server_id, path, content)` | Datei per SFTP schreiben, mit Sicherung der alten Fassung | immer |
+| `propose_note_update(server_id, new_content)` | Änderung der Server-Notiz vorschlagen | immer |
 
-Bewusst **nicht** angeboten: Datei löschen/umbenennen/Verzeichnis anlegen —
-dieselbe Begründung wie in Spec 0020, Abschnitt 4.3 für die interne KI.
+Bewusst **nicht** angeboten: Datei löschen, umbenennen, Verzeichnis anlegen
+(wie für die eingebaute KI, Spec 0020). Dateiaktionen über MCP nutzen nie
+den erhöhten SFTP-Kanal (Spec 0067).
 
-Inhalte, die vom Server stammen, gehen an den externen Client genauso
-geschützt wie an die eingebaute KI (Spec 0039): Notizen aus
-`get_server_notes`, die Kommandoausgabe aus `propose_command` (stdout und,
-falls vorhanden, stderr) und der Dateiinhalt aus `read_remote_file` sind
-zuerst redigiert und danach als nicht vertrauenswürdiger Inhalt gefenct,
-mit dem Kommando bzw. Pfad als Quelle. Eingeschleuste Tags im Inhalt sind
-escapt und können den Fence nicht schließen. Kurze Statusangaben der App
-(Exit-Code, Hinweis auf einen Abbruch durch den Nutzer) stehen außerhalb
-des Fence; die Rückmeldungen von `write_remote_file` und
-`propose_note_update` enthalten keine Server-Inhalte und sind nicht
-gefenct. Die Tool-Beschreibungen weisen den Client darauf hin, dass
-gefencter Inhalt Daten ist, keine Anweisung.
+Inhalte vom Server gehen an den externen Client genauso geschützt wie an die
+eingebaute KI (Spec 0039): Notizen aus `get_server_notes`, die
+Kommandoausgabe aus `propose_command` (stdout und, falls vorhanden, stderr)
+und der Dateiinhalt aus `read_remote_file` sind zuerst redigiert und danach
+als nicht vertrauenswürdiger Inhalt gefenct, mit dem Kommando bzw. Pfad als
+Quelle. Eingeschleuste Tags im Inhalt sind escapt und können den Fence nicht
+schließen. Kurze Statusangaben der App (Exit-Code, Hinweis auf einen Abbruch
+durch den Nutzer) stehen außerhalb des Fence; die Rückmeldungen von
+`write_remote_file` und `propose_note_update` enthalten keine Server-Inhalte
+und sind nicht gefenct. Die Tool-Beschreibungen weisen den Client darauf
+hin, dass gefencter Inhalt Daten ist, keine Anweisung.
 
-## 5. Strengere Behandlung als interne KI-Vorschläge
+## 5. Immer bestätigen
 
-Jede der oben genannten aktionsauslösenden Tools (`propose_command`,
-`read_remote_file`, `write_remote_file`, `propose_note_update`) landet
-**immer** bei einer Bestätigung im UI — unabhängig davon, ob eine
-bestehende Allow-Regel das Kommando eigentlich automatisch ausführen würde.
-Begründung: Ein externes Tool ist eine neue Vertrauensgrenze, die eine
-bewusst striktere Behandlung verdient, unabhängig von bereits für die
-interne KI eingerichteten Regeln — dieselbe Denkweise wie bei
-SFTP-Schreibzugriffen (Spec 0020, Abschnitt 4.2). Diese Einschränkung ist
-für die Free-Version fest codiert, keine Einstellung.
+Jedes der vier aktionsauslösenden Tools (`propose_command`,
+`read_remote_file`, `write_remote_file`, `propose_note_update`) endet
+**immer** in einer Bestätigung in der App, auch wenn eine Allow-Regel das
+Kommando sonst automatisch ausführen würde. Ein externes Tool ist eine
+eigene Vertrauensgrenze. Die Regel ist fest, keine Einstellung. Sie
+verschärft nur: Ein `Deny` der Filter-Engine bleibt `Deny` und wird nicht
+zur Bestätigung herabgestuft.
 
-`list_servers`/`get_server_notes` sind rein lesende, ungefährliche
-Informationsabfragen ohne Serververbindung und bleiben ohne Bestätigung
-nutzbar.
+`list_servers` und `get_server_notes` lesen nur gespeicherte Daten, bauen
+keine Verbindung auf und brauchen keine Bestätigung.
 
-## 6. Sicherheitsmechanismen
+## 6. Sicherheitszusagen
 
-- **Nur `127.0.0.1`**, niemals im Netzwerk erreichbar.
-- **Bearer-Token**, beim erstmaligen Aktivieren generiert, in den
-  Einstellungen einsehbar/neu generierbar. Jeder Tool-Call ohne oder mit
-  falschem Token wird abgelehnt, kein Teil-Zugriff. Ein leeres oder nur aus
-  Leerzeichen bestehendes Token gewährt nie Zugriff, auch nicht einem
-  Client, der selbst ein leeres Token schickt. Findet die App beim Laden
-  ein solches gespeichertes Token, ersetzt sie es durch ein neu generiertes;
-  die Einstellungen zeigen danach wie gewohnt das neue Token, ohne
-  zusätzlichen Dialog.
-- **Standardmäßig deaktiviert** — eigener Schalter in den Einstellungen,
-  keine automatische Aktivierung.
-- **Server-Allow-Liste**: eine explizite Auswahl, welche verwalteten Server
-  überhaupt über MCP ansprechbar sind — nicht automatisch alle. Ein Server,
-  der nicht auf der Liste steht, ist für `propose_command`/
-  `read_remote_file`/`write_remote_file`/`propose_note_update` unsichtbar
-  (Fehler "unbekannter Server", nicht "Zugriff verweigert" — kein
-  Informationsleck über die Existenz nicht freigegebener Server).
-- **Ursprungs-Kennzeichnung im UI**: Ein Bestätigungsdialog, der durch einen
-  MCP-Tool-Call ausgelöst wurde, zeigt deutlich sichtbar "Angefragt über:
-  externes Tool (MCP)" statt wie gewohnt den Namen des internen
-  KI-Providers — der Nutzer muss immer erkennen können, ob eine Anfrage aus
-  dem eigenen Chat oder von einem externen Agenten kommt.
-- **Logging**: Jeder MCP-Tool-Call wird über die bestehende Infrastruktur
-  aus Spec 0016 protokolliert, mit `origin: "mcp"` markiert — auch in der
-  Free-Version, da das ein reiner Transparenz-Gewinn ohne Zusatzkomplexität
-  ist.
+- **Nur `127.0.0.1`**, nie aus dem Netzwerk erreichbar.
+- **Bearer-Token.** Jeder Aufruf ohne oder mit falschem Token wird
+  abgelehnt, ohne Teil-Zugriff. Ein leeres oder nur aus Leerzeichen
+  bestehendes Token gewährt nie Zugriff, auch nicht einem Client, der selbst
+  ein leeres Token schickt. Findet die App beim Laden ein solches
+  gespeichertes Token, ersetzt sie es durch ein neu erzeugtes; die
+  Einstellungen zeigen danach wie gewohnt das neue Token, ohne zusätzlichen
+  Dialog. Das Token liegt in der verschlüsselten Datenbank (Spec 0101).
+- **Standardmäßig aus.** Der Server läuft nur, wenn der Nutzer ihn in den
+  Einstellungen einschaltet. War er beim Beenden eingeschaltet, startet er
+  beim nächsten App-Start (nach dem Entsperren) wieder.
+- **Server-Allow-Liste.** Nur ausdrücklich ausgewählte Server sind über MCP
+  ansprechbar, anfangs keiner. `list_servers` nennt nur diese. Jedes Tool
+  mit `server_id` antwortet für einen Server außerhalb der Liste mit
+  „unbekannter Server", genau wie für einen nicht existierenden — nie
+  „Zugriff verweigert". So verrät die Antwort nicht, ob es den Server gibt.
+- **Herkunft sichtbar.** Eine Aktionskarte aus MCP trägt ein
+  Herkunfts-Abzeichen „Externes Tool (MCP)" mit dem Namen des Clients
+  (§9a) statt des Namens des KI-Anbieters. Der Nutzer erkennt immer, ob
+  eine Anfrage aus dem eigenen Chat oder von einem externen Agenten kommt.
+- **Protokoll.** Jeder MCP-Tool-Aufruf und sein Ausgang wird über das
+  strukturierte Logging (Spec 0016) mit `origin: "mcp"` protokolliert.
 
-## 7. Umgang mit wartenden Bestätigungen (Timeout)
+## 7. Warten auf Bestätigung (Timeout)
 
-Ein MCP-Tool-Call, der auf eine `Confirm`-Aktion trifft, blockiert, bis der
-Nutzer in der App entscheidet — das ist gewollt (Abschnitt 5). Damit ein
-wartender externer Client nicht unbegrenzt hängt (manche MCP-Clients haben
-eigene Timeouts, ein ewig hängender Tool-Call ist schlechte UX), gilt ein
-konfigurierbares Timeout (Default 5 Minuten): läuft es ab, bevor der Nutzer
-entschieden hat, liefert der Tool-Call eine Antwort wie "Zeitüberschreitung
-beim Warten auf Bestätigung — die Anfrage steht weiterhin in der App zur
-Entscheidung offen" zurück, statt unbegrenzt zu warten. Die eigentliche
-Bestätigungsanfrage im UI bleibt davon unberührt bestehen und kann weiterhin
-normal entschieden werden, nur der ursprüngliche MCP-Tool-Call bekommt eine
-Antwort, damit der aufrufende Agent nicht hängen bleibt.
+Ein aktionsauslösender Tool-Aufruf wartet, bis der Nutzer in der App
+entscheidet, höchstens aber das eingestellte Timeout (Standard 5 Minuten).
+Läuft es vorher ab, antwortet der Tool-Aufruf mit „Zeitüberschreitung beim
+Warten auf Bestätigung — die Anfrage steht weiterhin in der App zur
+Entscheidung offen." Die Aktionskarte in der App bleibt bestehen und kann
+weiterhin bestätigt oder abgelehnt werden; nur der Tool-Aufruf ist beendet.
+Für eine Entscheidung danach gibt es keine Rückmeldung an den Client.
 
 ## 8. Transport
 
-HTTP-basiert (Streamable-HTTP-Transport gemäß aktuellem MCP-Standard,
-prüfen zum Implementierungszeitpunkt), nicht stdio — Begründung: Die App
-läuft bereits als langlebiger Prozess mit offenen SSH-Verbindungen; ein
-stdio-basierter, vom Client gestarteter Subprozess hätte keinen Zugriff auf
-diesen laufenden Zustand. Port konfigurierbar (Default z. B. `47823`,
-außerhalb üblicher Kollisionsbereiche), zusammen mit dem Token in der
-Konfiguration, die der Nutzer in seinen externen Client (z. B. Claude Codes
-MCP-Konfiguration) einträgt.
+Streamable HTTP, nicht stdio: Der externe Client verbindet sich mit der
+bereits laufenden App und ihren Sitzungen, er startet sie nicht selbst. Der
+Port ist fest `47823`. Endpunkt und Token trägt der Nutzer in die
+MCP-Konfiguration seines Clients ein.
 
-## 9. UI (Einstellungen)
+## 9. Einstellungen
 
-- Schalter "MCP-Server aktivieren" (Default aus)
-- Angezeigter Verbindungs-Endpunkt + Token (mit "Neu generieren"-Button —
-  invalidiert das alte Token sofort)
-- Mehrfachauswahl: welche Server auf der Allow-Liste stehen
-- Kurzer Hinweistext mit Beispiel-Konfiguration für Claude Code. Die
-  Konfiguration wird vollständig angezeigt (umbrochen, ohne eigenen
-  Scrollbereich) und lässt sich per Schaltfläche „Konfiguration kopieren"
-  in die Zwischenablage kopieren — per Tastatur erreichbar. Kopiert wird
-  exakt der angezeigte Text; eine kurze Rückmeldung bestätigt das Kopieren
-  oder meldet, dass es fehlgeschlagen ist. Der Text enthält das Token, die
-  Zwischenablage enthält es danach ebenfalls (gleiche Offenlegung wie beim
-  manuellen Markieren); die App protokolliert den Text nicht.
+Eigener Abschnitt „MCP-Server" in den Einstellungen:
 
-## 9a. UI-Ablauf bei einer eingehenden MCP-Anfrage
+- Schalter „MCP-Server aktivieren" (Standard aus).
+- Endpunkt (`http://127.0.0.1:47823`) und Token, immer sichtbar. „Neu
+  generieren" fragt vorher nach und macht das alte Token sofort ungültig,
+  auch für einen laufenden Server und schon verbundene Clients.
+- Timeout für das Warten auf Bestätigung in ganzen Minuten (mindestens 1).
+  Eine Änderung startet einen laufenden Server neu, damit sie sofort gilt;
+  ein gerade wartender Tool-Aufruf bricht dabei mit einem Verbindungsfehler
+  ab, die Aktionskarte in der App bleibt.
+- Mehrfachauswahl der Server auf der Allow-Liste.
+- Beispiel-Konfiguration für einen Client. Sie wird vollständig angezeigt
+  (umbrochen, ohne eigenen Scrollbereich) und lässt sich per Schaltfläche
+  „Konfiguration kopieren" in die Zwischenablage kopieren, auch per
+  Tastatur. Kopiert wird exakt der angezeigte Text; eine kurze Rückmeldung
+  bestätigt das Kopieren oder meldet, dass es fehlgeschlagen ist. Der Text
+  enthält das Token, die Zwischenablage danach ebenfalls (gleiche
+  Offenlegung wie beim manuellen Markieren); die App protokolliert den Text
+  nicht.
 
-Wichtige Ergänzung, die über die reine Kennzeichnung aus Abschnitt 6 hinausgeht:
-Ein MCP-Tool-Call kann eintreffen, während der Nutzer die App gar nicht im
-Vordergrund hat (z. B. gerade im Editor arbeitet, während Claude Code im
-Hintergrund debuggt). Eine rein passive Anzeige (wie der Hintergrund-Tab-
-Indikator aus Spec 0017, Abschnitt 5) würde in diesem Fall leicht übersehen
-werden — die Anfrage liefe dann unbemerkt in den Timeout aus Abschnitt 7,
-ohne dass der Nutzer je die Chance zur Bestätigung hatte. Deshalb:
+## 9a. Ablauf einer eingehenden MCP-Aktion
 
-- **Zielserver ist immer eindeutig sichtbar**: Jede aktionsauslösende
-  MCP-Anfrage (`propose_command`, `read_remote_file`, `write_remote_file`,
-  `propose_note_update`) öffnet — falls noch nicht vorhanden — automatisch
-  einen neuen Tab für den betroffenen Server (Spec 0017-Infrastruktur
-  wiederverwendet), statt eine unsichtbare Hintergrundverbindung
-  aufzubauen. ~~Existiert bereits ein Tab für diesen Server, wird dieser
-  verwendet.~~ **Geändert durch Spec 0104:** Jede MCP-Anfrage läuft in einer
-  eigenen MCP-Sitzung je (Server, MCP-Client) mit eigener SSH-Verbindung
-  und eigenem Tab; ein Nutzer-Tab desselben Servers wird nie verwendet. Der
-  MCP-Tab erscheint, ohne den Fokus zu übernehmen — wartende Bestätigungen
-  signalisieren ein beschriftetes Abzeichen am Tab und die
-  OS-Benachrichtigung unten. Der Bestätigungsdialog selbst zeigt den Servernamen wie jeder
-  andere Bestätigungsdialog auch — kein Sonderfall nötig, das ergibt sich
-  automatisch daraus, dass er an eine konkrete, servergebundene Session
-  hängt.
+Ein externer Agent arbeitet oft, während die App im Hintergrund liegt. Eine
+Anfrage darf deshalb nicht unbemerkt in den Timeout laufen.
 
-  **Keine vorherige manuelle Verbindung erforderlich**: Der Verbindungsaufbau
-  läuft über denselben `connect()`-Pfad wie beim manuellen Klick auf einen
-  Server in der Sidebar (Spec 0005/0007) — eine MCP-Anfrage an einen noch
-  nie verbundenen Server baut die Verbindung selbst auf. Handelt es sich um
-  die allererste Verbindung zu diesem Server (unbekannter Host-Key): Die
-  Verbindung pausiert exakt wie bei einem manuellen Verbindungsaufbau
-  (Spec 0005, Abschnitt 6) und wartet auf die Host-Key-Bestätigung des
-  Nutzers, **bevor** das eigentliche Kommando überhaupt zur Bestätigung
-  angezeigt wird. Dieser Host-Key-Dialog muss über denselben
-  Tab-öffnen-plus-Benachrichtigung-Mechanismus sichtbar gemacht werden wie
-  die eigentliche Aktions-Bestätigung — sonst würde eine MCP-Anfrage an
-  einen neuen Server scheitern, ohne dass der Nutzer je die Chance zur
-  Bestätigung bekommt.
-- **Native Betriebssystem-Benachrichtigung**: Zusätzlich zur reinen
-  In-App-Anzeige löst eine wartende MCP-Bestätigung eine native OS-Toast-
-  Benachrichtigung aus (Tauri-Notification-Plugin), die den Servernamen
-  nennt (z. B. "Claude Code möchte ein Kommando auf 'web-01' ausführen").
-  Klick auf die Benachrichtigung holt das App-Fenster in den Vordergrund
-  und springt direkt zum betroffenen Tab/Dialog. Das ist bewusst
-  aufdringlicher als die stille Hintergrund-Tab-Markierung aus Spec 0017 —
-  eine externe Anfrage, die auf eine Entscheidung wartet, ist ein anderer
-  Dringlichkeitsgrad als ein Ergebnis aus dem eigenen Chat, den der Nutzer
-  sowieso gerade aktiv verfolgt.
-- **Herkunfts-Anzeige mit Client-Name, falls verfügbar**: Das MCP-Protokoll
-  übermittelt beim Verbindungsaufbau optional Client-Metadaten
-  (`clientInfo.name`, z. B. "Claude Code"). Ist dieser Wert vorhanden, zeigt
-  der Bestätigungsdialog ihn statt der generischen Formulierung ("Angefragt
-  über: Claude Code" statt nur "Angefragt über: externes Tool (MCP)") —
-  fällt zurück auf die generische Formulierung, falls der Client keinen
-  Namen übermittelt.
-- **Nur die vier aktionsauslösenden Tools** lösen Tab-Öffnung/
-  Benachrichtigung/Dialog aus. `list_servers`/`get_server_notes` bleiben
-  bewusst still (kein Risiko, keine Bestätigung nötig, siehe Abschnitt 5) —
-  sonst würde jede reine Metadaten-Abfrage unnötig aufdringlich wirken.
+- **Eigener Tab, eigene Verbindung.** Jede aktionsauslösende Anfrage läuft
+  in der MCP-Sitzung ihres Clients für diesen Server, mit eigener
+  SSH-Verbindung und eigenem Tab; fehlt sie, wird sie angelegt. Ein
+  Nutzer-Tab desselben Servers wird nie verwendet. Der Tab erscheint, ohne
+  den Fokus zu übernehmen, und trägt bei einer wartenden Bestätigung ein
+  beschriftetes Abzeichen (Einzelheiten Spec 0104). Die Aktionskarte nennt
+  den Server wie jede andere Bestätigung.
+- **Keine manuelle Verbindung nötig.** Die Verbindung entsteht mit
+  denselben gespeicherten Zugangsdaten und demselben Ablauf wie beim Klick
+  auf den Server in der Seitenleiste. Ist der Host-Key unbekannt oder
+  geändert, wartet der Aufbau auf die Host-Key-Entscheidung des Nutzers
+  (Spec 0005), bevor die Aktion überhaupt zur Bestätigung erscheint. Der
+  Host-Key-Dialog erscheint dabei über der ganzen App, unabhängig vom
+  aktiven Tab. Solange der Hinweis beim ersten Start (Spec 0031) nicht
+  bestätigt ist, scheitert der Verbindungsaufbau wie bei einem manuellen
+  Verbindungsversuch.
+- **OS-Benachrichtigung.** Sobald die Sitzung steht, zeigt die App eine
+  native Benachrichtigung „Smart SSH: Bestätigung erforderlich" mit dem
+  Text „<Client> möchte eine Aktion auf '<Server>' ausführen." (ohne
+  Client-Namen „Ein externes Tool (MCP) …"). Kann die Benachrichtigung
+  nicht gezeigt werden (z. B. keine Berechtigung), läuft die Aktion trotzdem
+  normal weiter; der Client bekommt deswegen keinen Fehler.
+- **Client-Name.** Übermittelt der Client beim Verbindungsaufbau einen
+  Namen (`clientInfo.name`), nennen Abzeichen, Tab und Benachrichtigung ihn
+  (gekürzt nach Spec 0104, §2); sonst steht dort die allgemeine
+  Bezeichnung „externes Tool".
+- **Nur die vier aktionsauslösenden Tools** legen Sitzung und Tab an und
+  benachrichtigen. `list_servers` und `get_server_notes` bleiben still.
 
-## 10. Testbarkeit
+## 10. Prüfbare Fälle
 
-- Unit-Tests: Tool-Call → `AiAction`-Mapping korrekt für alle fünf Aktionen;
-  `propose_command`/`write_remote_file`/etc. landen **immer** bei `Confirm`,
-  auch mit passender Allow-Regel (expliziter Regressionstest gegen genau
-  dieses Verhalten); Server außerhalb der Allow-Liste liefert "unbekannter
-  Server", nicht "Zugriff verweigert"; falsches/fehlendes Token wird
-  abgelehnt.
-- Integrationstest: MCP-Server lokal hochfahren, Tool-Call über einen
-  echten oder minimalen MCP-Test-Client absetzen, Timeout-Verhalten aus
-  Abschnitt 7 verifizieren.
+- Jedes der vier aktionsauslösenden Tools wird zur passenden KI-Aktion und
+  endet in einer Bestätigung, auch wenn eine Allow-Regel passt.
+- Ein Server außerhalb der Allow-Liste ergibt „unbekannter Server", nicht
+  „Zugriff verweigert"; das gilt auch für `get_server_notes`.
+- Fehlendes, falsches oder leeres Token wird abgelehnt.
+- Gegen einen echt gestarteten lokalen Server: Ein Tool-Aufruf über HTTP
+  funktioniert, und nach Ablauf eines (kurzen) Timeouts kommt die
+  Timeout-Antwort, während die Bestätigung offen bleibt.
 
-## 11. Offene Punkte
+## 11. Grenzen
 
-- Eine spätere Lockerung ("dieser MCP-Client darf whitelisted
-  Read-Only-Kommandos automatisch ausführen") ist denkbar, aber bewusst
-  nicht Teil der Free-Version — die Free-Version bleibt maximal
-  konservativ (Abschnitt 5).
-- Genaues Format der Premium-Scoped-Tokens (Abschnitt 2) ist nicht Teil
-  dieser Spec, nur die Tatsache, dass die Architektur (Trennung
-  MCP-Server-Crate von der Orchestrierungs-Logik) das später ohne
-  Kern-Umbau zulässt.
+- Keine Lockerung für einzelne Clients (etwa „diese Lese-Kommandos ohne
+  Bestätigung"): Die Bestätigung aus §5 gilt ausnahmslos.
+- Keine Tokens je Client und keine Allow-Liste je Client.
+- Der Port ist nicht einstellbar.
+- Ein Klick auf die OS-Benachrichtigung öffnet den MCP-Tab nicht gezielt;
+  welches Fenster in den Vordergrund kommt, bestimmt das Betriebssystem.
+- Während die Verbindung auf eine Host-Key-Entscheidung wartet, gibt es
+  noch keine OS-Benachrichtigung; sichtbar ist dann nur der Host-Key-Dialog
+  in der App.
