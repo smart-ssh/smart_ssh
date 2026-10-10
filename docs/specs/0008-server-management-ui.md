@@ -211,8 +211,8 @@ aus dem noch offenen Anlege-/Bearbeiten-Formular heraus.
 pub enum TestConnectionResult {
     Success,
     AuthenticationFailed,
-    HostKeyUnknown { fingerprint: String },
-    HostKeyMismatch { expected_fingerprint: String, actual_fingerprint: String },
+    HostKeyUnknown { fingerprint: String, key_type: Option<String> },
+    HostKeyMismatch { expected_fingerprint: String, actual_fingerprint: String, key_type: Option<String> },
     NetworkError(String),
     Timeout,
 }
@@ -249,7 +249,10 @@ Verhalten:
 UI-seitig: Ergebnis erscheint als kompakte Inline-Anzeige direkt im
 Formular (grüner Haken bei `Success`, sonst kurze Fehlermeldung), kein
 eigenes großes Modal — bei `HostKeyUnknown`/`HostKeyMismatch` erscheint der
-bereits aus Spec 0005/0007 bekannte Bestätigungs- bzw. Warnungs-Dialog.
+bereits aus Spec 0005/0007 bekannte Bestätigungs- bzw. Warnungs-Dialog. Der Dialog zeigt
+dabei wie bei `connect()` den Schlüsseltyp des angebotenen Schlüssels
+(`key_type`; `null`, wenn er sich nicht bestimmen lässt, dann ohne diese
+Zeile).
 
 ## 8. Offene Punkte
 

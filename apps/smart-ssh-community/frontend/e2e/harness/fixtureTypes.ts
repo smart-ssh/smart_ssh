@@ -24,6 +24,8 @@ export interface FakeHostKey {
   kind: HostKeyKind;
   fingerprint: string;
   expectedFingerprint?: string | null;
+  /** Algorithm of the offered key; defaults to `null` (undeterminable). */
+  keyType?: string | null;
 }
 
 export interface FakeBackendFixture {
