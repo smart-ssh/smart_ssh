@@ -19,7 +19,7 @@ listet jede Verbindung, die die App aufbauen kann (Issue #14).
 | Sitzungstitel | Basis-URL des Sitzungs-Providers | beim Trennen einer Sitzung, die mindestens eine Nutzer-Nachricht und noch keinen Titel hat | je nach Provider-URL¹ |
 | Notiz-Vorschlag | Basis-URL des Sitzungs-Providers | beim Trennen einer Sitzung, in der mindestens ein Befehl ausgeführt wurde | je nach Provider-URL¹ |
 | Notiz kürzen | Basis-URL des KI-Providers | Nutzer stimmt dem Kürzen einer zu langen Notiz zu | je nach Provider-URL¹ |
-| Modellsuche | Basis-URL aus dem Provider-Formular (`/models`) | Klick auf „Modelle laden" im Provider-Formular | je nach Provider-URL¹ |
+| Modellsuche | Basis-URL aus dem Provider-Formular (`/models`) | Verlassen des API-Key- oder Base-URL-Felds im Provider-Formular mit eingegebenem Key (nur bei geänderten Eingaben), oder Klick auf „Modelle laden" | je nach Provider-URL¹ |
 | Schlüsselprüfung | Basis-URL aus dem Provider-Formular | Klick auf „Zugangsdaten testen" im Provider-Formular | je nach Provider-URL¹ |
 | Attestierungs-Abruf | die vom Nutzer im Provider hinterlegte Attestierungs-URL | Klick auf „Attestierung abrufen" in den KI-Einstellungen | je nach URL |
 | Ollama-Suche | `http://127.0.0.1:11434/v1/models` | einmal beim Öffnen der KI-Einstellungen, wenn noch kein Ollama-Provider existiert; erneut nur per Klick auf „Erneut suchen" (Spec 0069, E1) | **nein, nur lokal** |
