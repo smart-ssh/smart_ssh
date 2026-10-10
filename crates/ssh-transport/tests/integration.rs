@@ -279,43 +279,20 @@ async fn test_pty_shell_with_resize() {
     assert_eq!(echoed_again, b"pong\n");
 }
 
-/// Zwei-Hop-Jump-Verbindung gegen zwei in-process Test-Server: Server A
-/// agiert als Bastion (leitet den `direct-tcpip`-Kanal an Server B weiter),
-/// die eigentliche Session (Exec) läuft gegen Server B.
-///
-/// `#[ignore]`: schlägt reproduzierbar mit "Bad packet size" fehl. Per
-/// Byte-Level-Tracing direkt auf dem rohen `TcpStream` verifiziert (nicht
-/// nur vermutet): der über den Tunnel erreichte Ziel-Server sendet seine
-/// eigene SSH-Identifikationszeile ein zweites Mal, direkt vor seiner
-/// KEXINIT-Antwort; der Client liest diese zweite Kopie fälschlich als
-/// 4-Byte-Paketlängen-Präfix. Nicht diese Implementierung ist die Ursache
-/// (Bastion-TCP-Proxy und `connect()`-Ablauf entsprechen exakt Spec 0005
-/// Abschnitt 5) — es ist ein Verhalten von `russh` 0.63.1 selbst. Siehe
-/// `docs/adr/0008-russh-nested-tunnel-limitation.md` für die vollständige
-/// Fehlersuche (u. a. ausgeschlossen: TCP-Nagle-Koaleszenz, doppelte
-/// `channel_open_direct_tcpip`-/`run_stream`-Aufrufe) und zwei unabhängige,
-/// offene `russh`-Upstream-Reports mit demselben grundsätzlichen Muster.
-/// Der Test bleibt bestehen (nicht gelöscht) als Dokumentation des
-/// erwarteten Verhaltens und als Regressionscheck für einen künftigen Fix.
-#[ignore = "bekannte russh-0.63.1-Einschränkung bei verschachteltem SSH-über-SSH-Handshake, s. Doc-Kommentar/ADR 0008"]
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_two_hop_jump_connection() {
-    let bastion = RunningTestServer::start().await;
-    let target_server = RunningTestServer::start().await;
+/// Zeitbudget je `await` in den Zwei-Hop-Tests: ein Rückfall hängt nicht,
+/// sondern schlägt fehl.
+const JUMP_STEP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
-    let host_keys = TestHostKeyStore::default();
-    host_keys
-        .trust("127.0.0.1", bastion.addr.port(), &bastion.host_public_key)
-        .unwrap();
-    host_keys
-        .trust(
-            "127.0.0.1",
-            target_server.addr.port(),
-            &target_server.host_public_key,
-        )
-        .unwrap();
-    let host_keys: std::sync::Arc<dyn HostKeyStore> = std::sync::Arc::new(host_keys);
-
+/// Verbindet über Bastion → Ziel. Beide Host-Keys laufen über den normalen
+/// Weg (Spec 0005): `connect()` pausiert je unbekanntem Hop mit
+/// `PendingHostKeyConfirmation`, der Test vertraut genau diesen gemeldeten
+/// Key und verbindet erneut. Pro Hop höchstens ein Durchlauf.
+async fn connect_two_hops_with_confirmation(
+    bastion: &RunningTestServer,
+    target_server: &RunningTestServer,
+) -> Box<dyn ssh_manager_core::ssh::SshTransport> {
+    let host_keys: std::sync::Arc<dyn HostKeyStore> =
+        std::sync::Arc::new(TestHostKeyStore::default());
     let target = ConnectionTarget {
         hops: vec![
             password_hop("127.0.0.1", bastion.addr.port()),
@@ -324,23 +301,156 @@ async fn test_two_hop_jump_connection() {
     };
     let credentials = TestCredentialStore::default();
 
-    let outcome = ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys)
+    let mut confirmed = Vec::new();
+    for _ in 0..3 {
+        let outcome = tokio::time::timeout(
+            JUMP_STEP_TIMEOUT,
+            ssh_transport::connect(&target, &credentials, &NoKeyFiles, host_keys.clone()),
+        )
         .await
+        .expect("Zwei-Hop-connect() darf nicht hängen")
         .expect("Zwei-Hop-connect() sollte gelingen");
-
-    let mut transport = match outcome {
-        ConnectOutcome::Connected(transport) => transport,
-        ConnectOutcome::PendingHostKeyConfirmation { .. } => {
-            panic!("beide Host-Keys waren vorab vertraut")
+        match outcome {
+            ConnectOutcome::Connected(transport) => {
+                assert_eq!(
+                    confirmed.len(),
+                    2,
+                    "beide Hops müssen vorher bestätigt worden sein"
+                );
+                return transport;
+            }
+            ConnectOutcome::PendingHostKeyConfirmation {
+                host,
+                port,
+                raw_key,
+                decision,
+            } => {
+                assert!(
+                    matches!(decision, HostKeyDecision::Unknown { .. }),
+                    "erwartet Unknown, bekam {decision:?}"
+                );
+                assert!(
+                    !confirmed.contains(&port),
+                    "derselbe Hop pausiert ein zweites Mal"
+                );
+                host_keys
+                    .trust(&host, port, &raw_key)
+                    .expect("trust() sollte gelingen");
+                confirmed.push(port);
+            }
         }
-    };
+    }
+    panic!("Zwei-Hop-Verbindung stand nach drei Versuchen nicht");
+}
 
-    let output = transport
-        .execute("via-jump")
+/// Zwei-Hop-Jump-Verbindung gegen zwei in-process Test-Server: Server A
+/// agiert als Bastion (leitet den `direct-tcpip`-Kanal an Server B weiter),
+/// die eigentliche Session (Exec) läuft gegen Server B.
+///
+/// *Gegenbeweis:* ohne die Ausnahme für Tunnel-Channels in
+/// `TestHandler::data` (Fixture) echot die Bastion die Bytes des Tunnels an
+/// den Client zurück, der die eigene Identifikationszeile als Paketlänge
+/// liest („Bad packet size“, ADR 0008, Update 2026-10-09).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_two_hop_jump_connection() {
+    let bastion = RunningTestServer::start().await;
+    let target_server = RunningTestServer::start().await;
+
+    let mut transport = connect_two_hops_with_confirmation(&bastion, &target_server).await;
+
+    let output = tokio::time::timeout(JUMP_STEP_TIMEOUT, transport.execute("via-jump"))
         .await
+        .expect("execute() darf nicht hängen")
         .expect("execute() über den Tunnel sollte gelingen");
     assert_eq!(output.stdout, b"echo:via-jump\n");
     assert_eq!(output.exit_code, Some(0));
+}
+
+/// Zwei Hops: PTY (Echo, Resize, Echo danach) und SFTP (`write_file`,
+/// `list_dir`, `read_file` byte-genau) über denselben Tunnel. Größen
+/// ≤ 256 KiB (größere Schreibvorgänge hängen in der Fixture).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_two_hop_jump_pty_and_sftp() {
+    let bastion = RunningTestServer::start().await;
+    let target_server = RunningTestServer::start().await;
+
+    let mut transport = connect_two_hops_with_confirmation(&bastion, &target_server).await;
+
+    // PTY
+    {
+        let mut shell = tokio::time::timeout(
+            JUMP_STEP_TIMEOUT,
+            transport.open_shell(PtySize { cols: 80, rows: 24 }),
+        )
+        .await
+        .expect("open_shell() darf nicht hängen")
+        .expect("open_shell() über den Tunnel sollte gelingen");
+
+        tokio::time::timeout(JUMP_STEP_TIMEOUT, shell.write(b"ping\n"))
+            .await
+            .expect("write() darf nicht hängen")
+            .expect("write() sollte gelingen");
+        let echoed = tokio::time::timeout(JUMP_STEP_TIMEOUT, shell.read())
+            .await
+            .expect("read() darf nicht hängen")
+            .expect("read() sollte Daten liefern");
+        assert_eq!(echoed, b"ping\n");
+
+        tokio::time::timeout(
+            JUMP_STEP_TIMEOUT,
+            shell.resize(PtySize {
+                cols: 120,
+                rows: 40,
+            }),
+        )
+        .await
+        .expect("resize() darf nicht hängen")
+        .expect("resize() sollte gelingen");
+
+        tokio::time::timeout(JUMP_STEP_TIMEOUT, shell.write(b"pong\n"))
+            .await
+            .expect("write() nach resize() darf nicht hängen")
+            .expect("write() nach resize() sollte gelingen");
+        let echoed_again = tokio::time::timeout(JUMP_STEP_TIMEOUT, shell.read())
+            .await
+            .expect("read() nach resize() darf nicht hängen")
+            .expect("read() nach resize() sollte Daten liefern");
+        assert_eq!(echoed_again, b"pong\n");
+    }
+
+    // SFTP
+    let mut sftp = tokio::time::timeout(JUMP_STEP_TIMEOUT, transport.open_sftp())
+        .await
+        .expect("open_sftp() darf nicht hängen")
+        .expect("open_sftp() über den Tunnel sollte gelingen");
+
+    let content: Vec<u8> = (0..200 * 1024u32).map(|i| (i % 251) as u8).collect();
+    tokio::time::timeout(
+        JUMP_STEP_TIMEOUT,
+        sftp.write_file("/jump-roundtrip.bin", &content),
+    )
+    .await
+    .expect("write_file() darf nicht hängen")
+    .expect("write_file() sollte gelingen");
+
+    let entries = tokio::time::timeout(JUMP_STEP_TIMEOUT, sftp.list_dir("/"))
+        .await
+        .expect("list_dir() darf nicht hängen")
+        .expect("list_dir() sollte gelingen");
+    let entry = entries
+        .iter()
+        .find(|e| e.name == "jump-roundtrip.bin")
+        .expect("geschriebene Datei muss in list_dir() auftauchen");
+    assert_eq!(entry.size, content.len() as u64);
+
+    let read_back = tokio::time::timeout(JUMP_STEP_TIMEOUT, sftp.read_file("/jump-roundtrip.bin"))
+        .await
+        .expect("read_file() darf nicht hängen")
+        .expect("read_file() sollte gelingen");
+    assert!(
+        read_back == content,
+        "Inhalt muss byte-genau übereinstimmen"
+    );
 }
 
 /// Verhalten bei `Unknown`-Host-Key: Verbindung pausiert korrekt (kein
@@ -672,10 +782,7 @@ async fn test_t6_3_7_a_wrong_passphrase_says_so_and_leaks_nothing() {
 /// gefunden" — bei einer Kette aus mehreren Rechnern die Hälfte der
 /// Auskunft.
 ///
-/// Geprüft wird am **ersten** Hop, weil der verschachtelte
-/// SSH-über-SSH-Handshake in russh 0.63.1 nicht funktioniert (ADR 0008,
-/// s. `test_two_hop_jump_connection`): Ein Fehler am zweiten Hop wäre
-/// nicht zuverlässig erreichbar. Der Prüfpunkt bleibt derselbe — die
+/// Geprüft wird am **ersten** Hop: Der Prüfpunkt ist je Hop derselbe — die
 /// Meldung muss Benutzer, Host und Port des betroffenen Hops tragen.
 #[tokio::test]
 async fn test_t6_3_6_a_failing_identity_file_names_the_hop() {
@@ -741,11 +848,8 @@ impl CredentialStore for KeychainFailingStore {
 /// Transport-Schicht als Schlüsselbund-Fehler erkennbar, ohne die Nutzlast
 /// der Bibliothek — und mit der Hop-Angabe aus Spec 0076, A-8.
 ///
-/// Geprüft am **ersten** Hop, aus demselben Grund wie bei
-/// `test_t6_3_6_a_failing_identity_file_names_the_hop`: Der verschachtelte
-/// SSH-über-SSH-Handshake trägt in russh 0.63.1 nicht (ADR 0008), ein Fehler
-/// am zweiten Hop wäre nicht zuverlässig erreichbar. `name_hop` läuft für
-/// jeden Hop gleich, deshalb genügt der erste (§7, T12a).
+/// Geprüft am **ersten** Hop: `name_hop` läuft für jeden Hop gleich,
+/// deshalb genügt der erste (§7, T12a).
 ///
 /// Dies ist die einzige Ebene, die den Weg durch `ssh_transport::connect`
 /// **mit echter Verbindung** belegt: TCP, Handshake und Host-Key-Prüfung
@@ -1942,8 +2046,8 @@ async fn test_issue_51_rejected_key_marks_the_auth_step() {
 
 /// Jump-Host: Schritte je Hop. Der zweite Hop öffnet seinen Tunnel über den
 /// ersten und hat keinen eigenen DNS-/TCP-Schritt. Ob der verschachtelte
-/// Handshake gegen russh 0.63.1 gelingt (ADR 0008), spielt hier keine
-/// Rolle — geprüft wird nur, dass beide Hops getrennt auftauchen.
+/// Handshake gelingt, spielt hier keine Rolle — geprüft wird nur, dass
+/// beide Hops getrennt auftauchen.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_issue_51_jump_host_attempt_lists_steps_per_hop() {
     let bastion = RunningTestServer::start().await;

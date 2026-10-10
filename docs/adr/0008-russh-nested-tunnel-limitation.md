@@ -1,11 +1,14 @@
 # 0008-russh-nested-tunnel-limitation
 
 ## Status
-Accepted (als dokumentierte Einschränkung, nicht als gelöstes Problem)
+Superseded / obsolet. Die hier dokumentierte Einschränkung existiert nicht:
+Der Fehler lag in der Test-Fixture, nicht in `russh`.
 
-**Update 2026-10-09:** Die Analyse unten ist widerlegt. Der Fehler liegt
-in der Test-Fixture, nicht in `russh`. Jump-Hosts und SFTP über Jump-Hosts
-funktionieren, siehe Abschnitt „Update 2026-10-09“ am Ende.
+**Update 2026-10-09:** Die Analyse unten ist widerlegt. Jump-Hosts und SFTP
+über Jump-Hosts funktionieren, siehe Abschnitt „Update 2026-10-09“ am Ende.
+Die Fixture ist behoben (Issue #178): Tunnel-Channels werden nicht mehr
+echot, `test_two_hop_jump_connection` läuft und ein neuer Zwei-Hop-Test
+deckt PTY und SFTP ab.
 
 ## Kontext
 

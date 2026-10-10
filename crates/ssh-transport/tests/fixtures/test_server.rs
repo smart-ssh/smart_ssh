@@ -11,7 +11,7 @@
 //! SFTP-Protokoll-Roundtrip, nicht nur eine simulierte Kontroll-Logik (die
 //! deckt bereits `ssh_manager_core::ssh::mock::MockSftpSession` ab).
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -225,6 +225,7 @@ impl RunningTestServer {
                         tokio::spawn(async move {
                             let handler = TestHandler {
                                 channels: HashMap::new(),
+                                tunnel_channels: HashSet::new(),
                                 sftp_root,
                                 exec_channel,
                                 setstat_mode,
@@ -266,6 +267,11 @@ struct TestHandler {
     /// entgegengenommen hat; ohne diese Zwischenablage wäre er zu diesem
     /// späteren Zeitpunkt nicht mehr erreichbar (nur noch die `ChannelId`).
     channels: HashMap<ChannelId, Channel<Msg>>,
+    /// Per `direct-tcpip` geöffnete und an ein TCP-Ziel gebrückte Channels.
+    /// `russh` liefert eingehende Daten sowohl an den Channel-Stream als auch
+    /// an `Handler::data`; für diese Channels darf `data` nicht echoen, sonst
+    /// bekommt der Client über den Tunnel seine eigenen Bytes zurück.
+    tunnel_channels: HashSet<ChannelId>,
     sftp_root: PathBuf,
     /// Spec 0085, A2.1/T14: bekommt nur das SFTP-Subsystem des über `exec`
     /// geöffneten Kanals mit — das normale `sftp`-Subsystem soll den Zähler
@@ -455,6 +461,12 @@ impl Handler for TestHandler {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        // Über `direct-tcpip` gebrückte Tunnel-Channels bekommen kein Echo:
+        // dort fließt der SSH-Verkehr zum nächsten Hop, der Stream-Konsument
+        // (`copy_bidirectional`) bekommt die Daten ohnehin separat.
+        if self.tunnel_channels.contains(&channel) {
+            return Ok(());
+        }
         // Einfache Echo-Shell: alles, was der Client in die PTY tippt, geht
         // unverändert zurück — reicht als vorhersagbares Verhalten für den
         // Integrationstest (kein echtes Betriebssystem-Shell-Backend nötig).
@@ -470,9 +482,10 @@ impl Handler for TestHandler {
     /// dann werden Bytes in beide Richtungen transparent durchgereicht
     /// (reine Byte-Bridge, kein SSH-Wissen nötig).
     ///
-    /// Bekannte Einschränkung (nicht diese Bridge, sondern der darüber
-    /// verschachtelte SSH-Handshake): s. `crate::connect`-Doc-Kommentar und
-    /// `docs/adr/0008-russh-nested-tunnel-limitation.md`.
+    /// Die Channel-ID wird in `tunnel_channels` vermerkt, damit
+    /// `data` die Bytes nicht als Echo-Shell zurückspiegelt (das war
+    /// die Ursache des früheren „Bad packet size“-Fehlers, s.
+    /// `docs/adr/0008-russh-nested-tunnel-limitation.md`, Update 2026-10-09).
     async fn channel_open_direct_tcpip(
         &mut self,
         channel: Channel<Msg>,
@@ -487,6 +500,7 @@ impl Handler for TestHandler {
         match TcpStream::connect(&target).await {
             Ok(mut tcp) => {
                 let _ = tcp.set_nodelay(true);
+                self.tunnel_channels.insert(channel.id());
                 reply.accept().await;
                 let mut channel_stream = channel.into_stream();
                 tokio::spawn(async move {
