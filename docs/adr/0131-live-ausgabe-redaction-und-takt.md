@@ -1,4 +1,4 @@
-# ADR 0130 — Live-Ausgabe: Redaction auf stabilen Zeilen, Takt im Backend
+# ADR 0131 — Live-Ausgabe: Redaction auf stabilen Zeilen, Takt im Backend
 
 Status: akzeptiert
 Betrifft: Issue #325, Spec 0106, Spec 0006, Spec 0027, Spec 0043/0044

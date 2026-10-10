@@ -9,7 +9,7 @@ Review-Priorität: ERHÖHT (Redaction, Ausführungspfad)
 
 Bezüge: Spec 0005 (Einzelkommando), Spec 0006 (Redaction), Spec 0024
 (Texte), Spec 0027 (Abbruch, Lauf-Indikator), Spec 0032 (Localhost),
-Spec 0043/0044 (Ausgabegrenze), ADR 0130 (Entscheidungen zu dieser Spec).
+Spec 0043/0044 (Ausgabegrenze), ADR 0131 (Entscheidungen zu dieser Spec).
 
 ## 1. Was sich nicht ändert
 

@@ -1,4 +1,4 @@
-//! Redaction of live command output (issue #325, Spec 0106, ADR 0130).
+//! Redaction of live command output (issue #325, Spec 0106, ADR 0131).
 //!
 //! The chat shows the output of a running command while it arrives. That
 //! live view must never show a secret that the final, redacted result
