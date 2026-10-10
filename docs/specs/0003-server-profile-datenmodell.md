@@ -1,190 +1,111 @@
-# Spec: Server-Profile & Credentials Datenmodell
+# Spec 0003 — Server-Profile, Gruppen, Credentials und Kontextnotizen
 
-Status: Entwurf
-Modul: `crates/core/profiles` (Name vorläufig, ggf. Umbenennung zu `servers`)
-Abhängigkeiten: keine direkte Code-Abhängigkeit, konzeptionell verzahnt mit
-Spec 0002 (Filter-Engine nutzt `Scope`/Tags aus diesem Modell) und der
-künftigen KI-Provider-Spec (nutzt `effective_notes()`, siehe Abschnitt 5)
+Status: umgesetzt
+Zweck: Beschreibt, was ein Server-Profil und eine Gruppe enthalten, wie Credentials referenziert werden und wie Kontextnotizen für die KI gepflegt und vererbt werden.
+Bezüge: Spec 0002 (Filter-Engine nutzt Tags der Server), Spec 0004 (Speicherung), Spec 0101 (Ablage der Secrets), Spec 0010 und 0023 (Notizvorschläge), ADR 0004 (keine Kürzung des Notizkontexts), ADR 0050 (Hinweis bei langen Notizen).
 
 ## 1. Ziel
 
-Datenmodell für Server-Verbindungsprofile, deren Organisation in Gruppen, die
-zugehörigen Credentials (sicher referenziert, nie Klartext in der DB) sowie
-ein neues Feature: **LLM-Kontextnotizen** pro Server und pro Gruppe, die sowohl
-vom Nutzer als auch von der KI gepflegt werden können.
+Ein Nutzer verwaltet Server-Verbindungsprofile, ordnet sie in Gruppen, hinterlegt
+Zugangsdaten sicher und pflegt Freitext-Kontextnotizen pro Server und pro Gruppe,
+die der KI als Zusatzkontext dienen. Notizen können vom Nutzer und — nach
+Bestätigung — von der KI geändert werden.
 
 ## 2. Gruppen
 
-Gruppen sind hierarchisch (Baum), damit z. B. "Kunde A / Produktion" als
-verschachtelte Struktur möglich ist. Fürs MVP ist die Tiefe nicht technisch
-begrenzt, UI-seitig aber ggf. auf 2–3 Ebenen beschränkt, um die Übersicht
-nicht zu verlieren.
-
-```rust
-pub struct GroupId(Uuid);
-
-pub struct Group {
-    pub id: GroupId,
-    pub name: String,
-    pub parent_id: Option<GroupId>,
-    pub notes: String,           // aktueller LLM-Kontext, s. Abschnitt 5
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-```
-
-Wichtig: **Gruppen sind ein eigenes Konzept, getrennt von den `Tag`-Scopes der
-Filter-Engine** (Spec 0002). Gruppen dienen der Organisation und dem
-Notizen-Kontext; Tags (z. B. `"production"`) dienen der Policy-Steuerung. Ein
-Server kann in Gruppe "Kunde A" liegen und gleichzeitig den Tag `production`
-tragen — beides unabhängig voneinander, aber ein Server erbt sinnvollerweise
-optional die Tags seiner Gruppe als Default (siehe Abschnitt 6, offener Punkt).
+- Gruppen bilden einen Baum: eine Gruppe hat höchstens eine übergeordnete Gruppe,
+  die Tiefe ist nicht begrenzt.
+- Eine Gruppe hat einen Namen, eine Notiz (aktueller KI-Kontext, s. Abschnitt 5)
+  sowie Erstell- und Änderungszeitpunkt.
+- **Gruppen sind von den Tags der Filter-Engine getrennt.** Gruppen dienen der
+  Organisation und dem Notizkontext; Tags (z. B. `production`) steuern die
+  Policy (Spec 0002). Ein Server kann in einer Gruppe liegen und unabhängig davon
+  Tags tragen. Die Gruppenzugehörigkeit verändert nie die Tags oder die Policy
+  eines Servers.
+- Eine Gruppe lässt sich nicht unter sich selbst oder unter einen ihrer
+  Nachfolger hängen (kein Zyklus).
 
 ## 3. Server-Profil
 
-```rust
-pub struct ServerId(Uuid);
+Ein Server hat:
 
-pub struct Server {
-    pub id: ServerId,
-    pub name: String,
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub group_id: Option<GroupId>,
-    pub tags: Vec<String>,
-    pub auth: AuthMethod,
-    pub notes: String,                // aktueller LLM-Kontext, s. Abschnitt 5
-    pub jump_host: Option<ServerId>,   // Bastion/Jump-Host-Verkettung
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
+- Name, Host, Port, Benutzername
+- optional eine Gruppe
+- Tags (Policy-Scopes, Spec 0002)
+- eine Anmeldeart (s. unten)
+- eine Notiz (aktueller KI-Kontext, s. Abschnitt 5)
+- optional einen Jump-Host (anderer gespeicherter Server, Spec 0005)
+- eine Stufe für die Eskalation nach eingelesenem Serverinhalt und einen Schalter
+  für die KI-Prüfung auf eingeschleuste Anweisungen (Spec 0039)
+- optional einen Pfad für den erhöhten Dateibrowser-Modus (Spec 0067)
+- optional ein Startverzeichnis (Spec 0102)
+- Erstell- und Änderungszeitpunkt
 
-pub enum AuthMethod {
-    Password { credential_ref: CredentialRef },
-    PrivateKey { credential_ref: CredentialRef, passphrase_ref: Option<CredentialRef> },
-    Agent,
-    Certificate { cert_ref: CredentialRef, key_ref: CredentialRef },
-}
-```
+Anmeldearten:
 
-## 4. Credential-Referenzen (keine Secrets in der DB)
+- **Passwort**
+- **Privater Schlüssel** mit optionaler Passphrase
+- **Schlüsseldatei** auf der Platte mit optionaler Passphrase (Spec 0076); der
+  Pfad wird so gespeichert, wie der Nutzer ihn eingegeben hat
+- **Zertifikat** (Zertifikat und Schlüssel)
+- **SSH-Agent**
 
-```rust
-pub struct CredentialRef(String); // opaker Schlüssel ins OS-Keychain
+## 4. Credentials
 
-pub trait CredentialStore {
-    fn get(&self, r: &CredentialRef) -> Result<SecretString>;
-    fn set(&self, r: &CredentialRef, value: SecretString) -> Result<()>;
-    fn delete(&self, r: &CredentialRef) -> Result<()>;
-}
-```
+- Ein Profil trägt nur **Verweise** auf Credentials, nie Passwörter, private
+  Schlüssel, Passphrasen oder Zertifikatsinhalte selbst.
+- Die Secrets selbst liegen in der verschlüsselten Datenbank (Spec 0101, Spec
+  0096).
+- Secrets werden in der Anwendung nie geloggt oder in Debug-Ausgaben
+  ausgegeben.
+- Der Pfad einer Schlüsseldatei ist kein Secret und darf in Datenbank, Log und
+  Oberfläche stehen.
 
-Die lokale DB (SQLite) enthält **ausschließlich** `CredentialRef`-Strings,
-niemals Passwörter, private Keys oder Zertifikats-Inhalte. Die eigentlichen
-Secrets liegen im OS-Keychain über die `keyring`-Crate (siehe Spec 0001,
-Abschnitt 2). `SecretString` (z. B. via `secrecy`-Crate) verhindert
-versehentliches Loggen/Debug-Printen von Secrets im Code.
+## 5. Kontextnotizen
 
-## 5. LLM-Kontextnotizen — Konzept
+Eine Notiz ist ein Freitextfeld pro Server und pro Gruppe, das der KI als Kontext
+mitgegeben wird (z. B. „PHP 8.2 und MySQL 8 liegen unter `/opt/lamp`"). Sie ist
+vom Nutzer editierbar und kann von der KI zur Änderung vorgeschlagen werden.
 
-Das ist die Ergänzung, um die es dir ging: Ein Freitextfeld pro Server und pro
-Gruppe, das der KI als zusätzlicher Kontext mitgegeben wird — z. B. "PHP 8.2
-und MySQL 8 sind unter `/opt/lamp` installiert, Config liegt in
-`/opt/lamp/conf`". Zwei Anforderungen:
+### 5.1 Effektiver Kontext
 
-1. **Vom Nutzer editierbar** — trivial, normales Textfeld in den
-   Server-/Gruppen-Einstellungen.
-2. **Von der KI editierbar** — die KI kann nach einer Aktion (z. B. LAMP-
-   Stack-Installation) selbstständig vorschlagen, die Notiz zu aktualisieren.
+- Der KI-Kontext einer Sitzung setzt sich aus den Notizen der Gruppenkette von
+  der Wurzel bis zur unmittelbaren Gruppe und danach der Notiz des Servers
+  zusammen, vom Allgemeinen zum Spezifischen.
+- Jeder Abschnitt trägt eine Überschrift mit seiner Quelle (`## Kontext: <Gruppe>`,
+  `## Kontext: Server "<Name>"`).
+- Leere oder nur aus Leerraum bestehende Notizen erzeugen keinen Abschnitt.
+- Der zusammengesetzte Text wird **nicht gekürzt oder priorisiert** (ADR 0004).
+- Ist die Gruppenkette zyklisch, ergibt das einen Fehler statt einer Endlosschleife.
+- Die Notiztexte gelten als nicht vertrauenswürdiger Inhalt und werden vor der
+  Übergabe an die KI markiert und redigiert (Spec 0039, Spec 0016).
+- Der Nutzer kann den effektiven Kontext eines Servers vorab ansehen.
 
-### 5.1 Vererbung: effektiver Kontext für eine Session
+### 5.2 Änderungen durch die KI
 
-Wenn eine SSH-Session zu einem Server startet, wird der an die KI übergebene
-Kontext aus der Gruppen-Kette **von der Wurzel bis zum Server** zusammengesetzt,
-vom Allgemeinen zum Spezifischen — spätere (spezifischere) Einträge haben mehr
-Gewicht/Aktualität:
+- Eine Notizänderung durch die KI ist **kein Shell-Kommando** und läuft nicht
+  durch die Filter-Engine.
+- Die KI schlägt den vollständigen neuen Text vor; der Nutzer sieht einen Diff
+  (alt/neu) und bestätigt oder verwirft.
+- Ein Vorschlag wird nie automatisch übernommen, unabhängig von Policy-Regeln.
+  Das ist bewusst strenger als bei automatisch ausführbaren Kommandos, weil eine
+  Notiz den Kontext künftiger Sitzungen dauerhaft beeinflusst.
 
-```rust
-pub fn effective_notes(
-    server: &Server,
-    groups: &dyn ProfileStore,
-) -> String {
-    // Kette: Root-Gruppe ... unmittelbare Gruppe -> Server
-    // Formatierung z.B.:
-    // ## Kontext: Kunde A
-    // <notes der Gruppe "Kunde A">
-    // ## Kontext: Produktion
-    // <notes der Gruppe "Produktion">
-    // ## Kontext: Server "web-01"
-    // <notes des Servers>
-}
-```
+### 5.3 Änderungshistorie
 
-Diese Funktion lebt in `core/profiles`, ist reine Logik und ohne DB-Zugriff
-über den `ProfileStore`-Trait testbar (gleiches Muster wie `PolicyStore` in
-Spec 0002).
+- Jede Änderung einer Notiz (durch den Nutzer oder die KI nach Bestätigung)
+  erzeugt eine Revision mit Inhalt, Zeitpunkt und Urheber (Nutzer, oder KI mit
+  Anbieter und Modell). Der lokale Pseudo-Server (Spec 0032) hat keine Historie.
+- Das Notizfeld selbst hält nur den aktuellen Stand; die Historie ist davon
+  getrennt, nur lesbar und chronologisch einsehbar.
+- Der Nutzer kann eine Notiz auf eine frühere Revision zurücksetzen; das ist
+  selbst wieder eine neue Revision.
 
-### 5.2 KI-Schreibzugriff — eigener Aktionstyp, kein Shell-Kommando
+## 6. Grenzen
 
-Eine Notiz-Änderung durch die KI ist **kein** Shell-Kommando und läuft
-deshalb **nicht** durch die Filter-Engine aus Spec 0002. Stattdessen ein
-eigener Aktionstyp, der aber demselben Transparenzprinzip folgt: die KI
-schlägt vor, der Nutzer sieht einen Diff, bestätigt oder verwirft.
-
-```rust
-pub enum AiAction {
-    SuggestCommand { command: String },
-    ProposeNoteUpdate {
-        target: NoteTarget,       // Server(ServerId) oder Group(GroupId)
-        new_content: String,       // vollständiger neuer Text, nicht nur Diff
-    },
-}
-```
-
-UI-Verhalten: `ProposeNoteUpdate` wird immer als Diff-Ansicht (alt/neu)
-angezeigt, nie automatisch übernommen — unabhängig von Filter-Engine-Regeln,
-da diese nur für Shell-Kommandos gelten. Das ist bewusst strenger als
-`AutoExec`-fähige Kommandos, weil eine Notiz dauerhaft den Kontext künftiger
-Sessions beeinflusst und stille Fehlinformationen sich sonst unbemerkt
-festsetzen könnten.
-
-### 5.3 Änderungs-Historie (Audit)
-
-Da Notizen sowohl von Menschen als auch von der KI verändert werden, braucht
-es Nachvollziehbarkeit — separat von den eigentlichen `notes`-Feldern, die
-immer nur den aktuellen Stand halten:
-
-```rust
-pub struct NoteRevision {
-    pub id: Uuid,
-    pub target: NoteTarget,
-    pub content: String,
-    pub edited_by: NoteEditor,
-    pub created_at: DateTime<Utc>,
-}
-
-pub enum NoteEditor {
-    User,
-    Ai { provider: String, model: String },
-}
-```
-
-Jede Änderung (ob Nutzer oder KI, nach Bestätigung) erzeugt einen neuen
-`NoteRevision`-Eintrag. Damit ist im UI jederzeit nachvollziehbar, wann und
-durch wen sich der KI-Kontext für einen Server verändert hat — und ein
-Rollback auf eine vorherige Revision ist möglich.
-
-## 6. Offene Punkte
-
-- Sollen Server automatisch die Tags ihrer Gruppe erben (für die
-  Filter-Engine-Scopes aus Spec 0002), oder bleibt das komplett getrennt?
-  Tendenz: opt-in Vererbung, aber nicht erzwungen, um keine überraschenden
-  Policy-Effekte durch Gruppenzugehörigkeit zu erzeugen.
-- Maximale Länge/Token-Budget für `effective_notes()` — bei tiefen
-  Gruppenhierarchien mit langen Notizen muss ggf. gekürzt oder priorisiert
-  werden, bevor es an die KI-API geht (Kosten- und Kontextlimit-Frage,
-  gehört eng mit der KI-Provider-Spec zusammen).
-- Sollen `ProposeNoteUpdate`-Vorschläge ebenfalls eine Art "Auto-Accept"-Option
-  bekommen (analog zur Filter-Engine), oder bleibt das für immer manuell
-  bestätigungspflichtig? Aktuelle Empfehlung: immer manuell, siehe 5.2.
+- Server erben die Tags ihrer Gruppe nicht; Gruppe und Policy bleiben getrennt
+  (Abschnitt 2).
+- Notizen haben keine Längen- oder Token-Begrenzung (ADR 0004); der Nutzer wird
+  bei sehr langen Notizen gefragt, ob sie verkürzt werden sollen (ADR 0050).
+- Vorschläge der KI zu Notizen werden immer manuell bestätigt; es gibt keine
+  Automatik.

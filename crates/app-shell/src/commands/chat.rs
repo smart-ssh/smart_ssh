@@ -381,6 +381,35 @@ pub async fn stop_auto_continuation(
     Ok(())
 }
 
+/// Issue #271, Spec 0034 §11: "Neuer Chat" innerhalb der bestehenden
+/// Verbindung — s. `app_logic::orchestration::start_new_chat`. Liefert die
+/// ID der neuen `chat_sessions`-Zeile (`None` für einen lokalen Tab).
+#[tauri::command]
+pub async fn start_new_chat(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<Option<String>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    // Der aktuell aktive Anbieter, wie beim Verbinden; ohne aktiven Anbieter
+    // bleibt die Spalte leer, statt den Chat zu verhindern.
+    let provider_id = super::ai_providers::active_ai_provider_config(&state)
+        .await
+        .ok()
+        .map(|config| config.id.0);
+    let new_id = app_logic::orchestration::start_new_chat(
+        &session,
+        session_id,
+        &TauriEventEmitter(app),
+        provider_id,
+    )
+    .await?;
+    Ok(new_id.map(|id| id.to_string()))
+}
+
 #[tauri::command]
 pub async fn disconnect(
     app: AppHandle,

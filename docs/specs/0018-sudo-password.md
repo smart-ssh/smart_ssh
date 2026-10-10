@@ -1,160 +1,103 @@
-# Spec: Sudo-Passwort für privilegierte Kommandos
+# Spec 0018 — Sudo-Passwort für privilegierte Kommandos
 
-Status: Entwurf
-Modul: Erweiterung `crates/ssh-transport`, `crates/core` (`SshTransport`-Trait),
-`crates/app-tauri` (Credential-Handling, Kernschleife), `frontend/`
-(Server-Formular, Bestätigungsdialog)
-Abhängigkeiten: SSH-Transport-Modul (Spec 0005), Server-Datenmodell/
-Credential-Store (Spec 0003), Kernschleife (Spec 0007, Abschnitt 6),
-Sicherheits-Härtung (Spec 0013)
+Status: umgesetzt
+Zweck: Ein optionales, pro Server hinterlegtes Sudo-Passwort ermöglicht es, dass ein von der KI vorgeschlagenes und freigegebenes `sudo`-/`doas`-Kommando ohne Terminal ausgeführt wird — flüchtig, sichtbar und ohne Secret im Kommandotext.
+Bezüge: Spec 0003 (Credentials), Spec 0005 (SSH), Spec 0016 (Redaction/Log), Spec 0020 (Datei schreiben mit Sudo-Fallback), Spec 0068 Teil 3 (Ankündigung des Fallbacks), Spec 0096 und 0101 (Ablage der Secrets).
 
 ## 1. Problem
 
-`SshTransport::execute()` öffnet einen reinen, nicht-interaktiven Exec-
-Channel ohne Pseudo-Terminal und ohne Stdin-Zufuhr (s.
-`crates/ssh-transport/src/transport.rs`). Ein von der KI vorgeschlagenes
-`sudo <kommando>` scheitert dort zuverlässig: `sudo` braucht entweder ein
-TTY für seinen Passwort-Prompt oder einen `askpass`-Helfer — beides fehlt.
-Das interaktive Terminal (rechtes Panel) hat dagegen einen echten PTY-
-Channel, über den der Nutzer selbst `sudo` interaktiv nutzen kann — aber KI
-und Terminal teilen sich zwar dieselbe authentifizierte SSH-Verbindung
-(dasselbe `SshTransport`), nicht aber denselben Channel/dieselbe Shell-
-Zustand (kein gemeinsames "eingeloggtes" Sudo-Timestamp-Caching).
+KI-Kommandos laufen über einen nicht-interaktiven Kanal ohne Terminal. Ein
+`sudo`, das ein Passwort abfragt, scheitert dort. Das interaktive Terminal hat
+dagegen ein echtes Terminal, teilt aber weder Kanal noch Sudo-Zeitstempel mit
+den KI-Kommandos.
 
 ## 2. Ziel
 
-Ein **optionales** Sudo-Passwort pro Server, das ausschließlich lokal im
-`CredentialStore` (Spec 0003, wie das SSH-Login-Passwort) abgelegt wird.
-Erkennt die Kernschleife vor der Ausführung ein führendes `sudo`/`doas` im
-freigegebenen Kommando, wird das Passwort **einmalig, flüchtig** über den
-Exec-Channel eingespeist (`sudo -S`, Passwort über Stdin) — nie auf dem
-Zielserver abgelegt, nie in einer Umgebungsvariable, nie in einer Datei.
+Ein optionales Sudo-Passwort pro Server, getrennt vom Login-Passwort abgelegt.
+Beginnt ein freigegebenes Kommando mit `sudo` oder `doas`, wird das Passwort
+**einmalig und flüchtig** über die Standardeingabe dieses einen Aufrufs
+übergeben (`sudo -S`) — nie als Umgebungsvariable, nie in einer Datei, nie auf
+dem Zielserver abgelegt.
 
-## 3. Nicht-Ziele / Abgrenzung
+## 3. Abgrenzung
 
-- **Kein** Zusammenlegen von KI-Exec-Channel und interaktivem Terminal-PTY
-  (das wäre der größere, in Erwägung gezogene Umbau — verworfen: die
-  Terminal-Ausgabe müsste dafür per Prompt-Erkennung aus einem rohen
-  Bytestrom herausgeschnitten werden, deutlich fragiler als die heutige
-  saubere stdout/stderr/exit-code-Erfassung des Exec-Channels).
-- Erkannt wird nur ein Kommando, das **als Ganzes** mit `sudo `/`doas `
-  beginnt (`^\s*(sudo|doas)(\s|$)`) — kein `sudo` mitten in einer
-  Kommandokette (`foo && sudo bar`). Diese Fälle laufen weiterhin wie bisher
-  (scheitern ohne Passwort-Zufuhr) — eine Erkennung an beliebiger Stelle
-  einer Kette bräuchte dieselbe Segmentierungslogik wie die Filter-Engine
-  (Spec 0002) und ist nicht Teil dieses Schritts.
-- Kein Speichern des Sudo-Passworts für die Terminal-Session — der Nutzer
-  tippt dort weiterhin selbst, falls gewünscht.
+- Erkannt wird nur ein Kommando, das **als Ganzes** mit `sudo` oder `doas`
+  beginnt (führender Leerraum ist erlaubt). Ein `sudo` mitten in einer
+  Kommandokette (`foo && sudo bar`) wird nicht erkannt und läuft wie ohne
+  Passwort, scheitert also, wenn `sudo` ein Passwort verlangt.
+- KI-Kanal und interaktives Terminal werden nicht zusammengelegt. Im Terminal
+  gibt der Nutzer das Passwort weiterhin selbst ein; es wird dort nie
+  automatisch eingespeist.
+- Der lokale Pseudo-Server unterstützt die Übergabe über die Standardeingabe nicht.
 
 ## 4. Speicherung
 
-Wie das SSH-Login-Passwort ein deterministischer `CredentialRef` pro
-Server, eigener Slot (`server:{id}:sudo_password`), analog zu
-`crate::server_credentials::credential_ref` (Spec 0008, Abschnitt 4). Kein
-neues Feld auf `Server`/keine Schema-Migration nötig: "ist ein Sudo-
-Passwort hinterlegt" wird pro Aufruf per `CredentialStore::get(...).is_ok()`
-ermittelt (ein lokaler, synchroner Keychain-Zugriff, kein Netzwerk — keine
-spürbare Mehrkosten beim Laden der Serverliste).
-
-Verhalten beim Speichern (Server-Formular, Spec 0008 Abschnitt 4-Konvention
-"leer = unverändert"):
-- Neues, nicht-leeres Feld → wird gesetzt/überschrieben.
-- Leeres Feld → bestehender Wert (falls vorhanden) bleibt unverändert.
-- Explizites Entfernen: eigener "Entfernen"-Button/Befehl
-  (`clear_server_sudo_password(server_id)`), da "leer lassen" bereits
-  "unverändert" bedeutet — sonst gäbe es keinen Weg, ein einmal gesetztes
-  Sudo-Passwort wieder zu löschen, ohne das ganze Feld semantisch
-  umzudeuten.
-- `delete_server` löscht den Sudo-Passwort-Slot mit (best-effort, analog zu
-  den Login-Auth-Secrets).
+- Das Sudo-Passwort hat einen eigenen Platz je Server, getrennt vom
+  Login-Passwort und von Passphrasen.
+- Server-Formular: Ein neu eingegebener Wert wird gesetzt oder überschreibt den
+  alten; ein **leeres** Feld lässt einen vorhandenen Wert **unverändert**.
+- Zum Entfernen gibt es eine eigene Aktion; „leer lassen" kann das nicht, weil
+  es „unverändert" bedeutet.
+- Beim Löschen des Servers wird das Sudo-Passwort mitgelöscht.
+- Ob ein Sudo-Passwort hinterlegt ist, kann die Oberfläche erfahren; der Wert
+  selbst wird nie an die Oberfläche geliefert.
 
 ## 5. Ausführung
 
-`SshTransport` (Spec 0005) bekommt eine neue Methode mit Default-
-Implementierung (bestehende Implementierungen/Mocks in Tests bleiben
-unverändert lauffähig):
+Nach Filter-Engine und Bestätigung gilt für das freigegebene Kommando:
 
-```rust
-async fn execute_with_stdin(
-    &mut self,
-    command: &str,
-    stdin: &[u8],
-) -> Result<CommandOutput, SshError> {
-    self.execute(command).await  // Default: Stdin ignorieren
-}
-```
+1. Beginnt es mit `sudo`/`doas` (Abschnitt 3) **und** ist für die Sitzung ein
+   Sudo-Passwort hinterlegt, wird `-S` direkt hinter `sudo`/`doas` eingefügt und
+   das Passwort mit abschließendem Zeilenumbruch über die Standardeingabe
+   gesendet. Enthält das Kommando bereits ein `-S` oder `-A`, bleibt es
+   unverändert und ohne Passwortübergabe.
+2. Sonst läuft das Kommando unverändert wie ohne Sudo-Passwort.
 
-`RusshTransport` implementiert sie echt: öffnet den Exec-Channel wie
-`execute()`, schreibt danach `stdin` über den Channel (`channel.data_bytes`)
-und signalisiert EOF, bevor auf die Antwort gewartet wird.
+- Das Passwort wird beim Verbinden einmal gelesen. Fehlt es, ist das der
+  Normalfall und kein Verbindungsfehler. Schlägt das Lesen aus einem anderen
+  Grund fehl (z. B. verweigert der Schlüsselbund den Zugriff), läuft die
+  Sitzung ohne Sudo-Passwort weiter und der Vorfall wird ohne Fehlertext
+  protokolliert.
+- Das angezeigte und protokollierte Kommando enthält `-S`, nie das Passwort,
+  weil dieses nie Teil des Kommandotexts ist.
+- Für das Schreiben von Dateien mit Sudo-Fallback (Spec 0020) gilt dasselbe
+  Passwort und dieselbe Ankündigung (Abschnitt 7, Spec 0068 Teil 3).
 
-In der Kernschleife (`crate::orchestration::execute_suggested_command`,
-Spec 0007 Abschnitt 6) wird das **bereits durch Filter-Engine/Bestätigung
-freigegebene** Kommando vor der Ausführung geprüft:
+## 6. Sitzungszustand
 
-1. Beginnt es mit `sudo`/`doas` (Abschnitt 3) **und** ist für die Session
-   ein Sudo-Passwort hinterlegt (bei `connect()` einmalig aus dem
-   `CredentialStore` geladen, s. Abschnitt 6) → das Kommando wird auf
-   `sudo -S ...`/`doas -S ...` umgeschrieben (nur falls nicht bereits ein
-   `-S`/`-A`-Flag vorhanden — dann unverändert lassen, KI/Nutzer hat es
-   selbst schon vorgesehen) und über `execute_with_stdin` mit dem Passwort
-   (gefolgt von einem Zeilenumbruch) als Stdin ausgeführt.
-2. Sonst: unverändertes Verhalten, `execute()` wie bisher.
-
-Das tatsächlich ausgeführte, umgeschriebene Kommando (mit `-S`, ohne
-Passwort) landet wie gewohnt in `chat-action-result`/im strukturierten Log
-(Spec 0016) — das Passwort selbst erscheint an keiner dieser Stellen, da es
-nie Teil eines Kommando-**Texts** ist, sondern ausschließlich über den
-separaten Stdin-Kanal fließt.
-
-## 6. Session-Zustand
-
-`Session` (Spec 0007, Abschnitt 3) bekommt ein neues Feld
-`sudo_password: Option<SecretString>`, einmalig bei `connect()` aus dem
-`CredentialStore` gelesen (wie `ai_provider_label`/`ai_model`) — ein
-fehlender Eintrag (`CredentialError::NotFound`) wird zu `None`, kein
-harter Verbindungsfehler.
+- Das Passwort gehört zur Sitzung und wird in ihr nur als geschützter Wert
+  gehalten, der nicht in Logs oder Debug-Ausgaben erscheint.
+- Es wird nicht mit anderen Sitzungen geteilt.
 
 ## 7. Transparenz im Bestätigungsdialog
 
-Der bestehende Bestätigungsdialog zeigt weiterhin exakt das von der KI
-vorgeschlagene Kommando (ohne `-S`, ohne Passwort-Andeutung im Kommandotext
-selbst) — aber ergänzt um einen kurzen, deutlich sichtbaren Hinweis, wenn
-Abschnitt 5, Punkt 1 zutreffen würde ("wird mit hinterlegtem Sudo-Passwort
-ausgeführt"). Das gilt konsistent mit dem sonstigen Transparenzprinzip
-dieses Projekts (Spec 0002/0007: auch automatisch ablaufende Details werden
-angezeigt, nie stillschweigend gemacht) — ohne diesen Hinweis würde der
-Nutzer nicht erkennen, dass im Hintergrund ein gespeichertes Secret
-verwendet wird, auch wenn er dem Kommando selbst zustimmt.
+- Der Bestätigungsdialog zeigt weiterhin genau das vorgeschlagene Kommando
+  (ohne `-S`) und ergänzt einen deutlichen Hinweis, wenn Abschnitt 5, Punkt 1
+  zutrifft („wird mit hinterlegtem Sudo-Passwort ausgeführt").
+- Ob das hinterlegte Passwort verwendet wird, entscheidet das Backend und teilt
+  es der Oberfläche mit; die Oberfläche rät nicht.
+- Ein Kommando, das das hinterlegte Passwort verwendet, wird **nie automatisch**
+  ausgeführt: Eine automatische Ausführung (`AutoExec`) wird auf Bestätigung
+  eskaliert, auch wenn eine Erlauben-Regel greift.
 
-Backend berechnet dieses Flag (`usesStoredSudoPassword: bool`) serverseitig
-bei jedem `chat-action-proposed`/`chat-action-result` für
-`SuggestCommand`-Aktionen (dieselbe Erkennung wie Abschnitt 5, Punkt 1) und
-sendet es als Teil des Event-Payloads mit — das Frontend rät nicht selbst,
-ob ein Passwort hinterlegt ist (das weiß nur das Backend).
+## 8. Sicherheitszusagen
 
-## 8. Sicherheitsüberlegungen
+- Das Passwort verlässt den Rechner nur über die Standardeingabe genau eines
+  `sudo -S`-Aufrufs auf dem bereits authentifizierten Kanal.
+- **Redaction:** Das hinterlegte Sudo-Passwort ist als zusätzliches Muster
+  Teil der Ausgabe-Redaction der Sitzung. Hintergrund: `sudo -S` liest die
+  Zeile nur, wenn es tatsächlich nach einem Passwort fragt. Bei `NOPASSWD`
+  oder gültigem Sudo-Zeitstempel erhält das **ausgeführte Programm** die
+  Zeile (etwa `sudo cat` oder `sudo tee`) und könnte sie ausgeben. Das
+  Passwort erreicht deshalb weder KI-Kontext noch Log im Klartext.
+- Das Passwort liegt wie alle Secrets nur in der verschlüsselten Datenbank
+  (Spec 0096, Spec 0101).
+- Das Passwort ist kein Teil von Kommandotext, Ledger, Chatverlauf oder
+  Log-Eintrag.
 
-- Das Passwort verlässt den Exec-Channel **nie** als Umgebungsvariable oder
-  Datei auf dem Zielserver — beides wäre für ein späteres, von der KI
-  vorgeschlagenes Kommando (`env`, `cat ...`) lesbar und würde direkt in den
-  KI-Kontext zurückfließen (Spec 0013, Prompt-Injection-Überlegungen gelten
-  hier analog). Ausschließlich Stdin-Zufuhr für genau einen `sudo -S`-
-  Aufruf, danach ist der Wert aus dem Prozessspeicher des Zielsystems wieder
-  verschwunden.
-- `sudo -S` echot das Passwort nicht auf stdout/stderr — es taucht in
-  `CommandOutput` nicht auf, muss also nicht zusätzlich vom
-  `OutputRedactor` (Spec 0006, Abschnitt 5) behandelt werden.
-- Das Passwort bleibt wie das SSH-Login-Passwort ausschließlich im lokalen
-  `CredentialStore` (OS-Schlüsselbund) — keine neue Speicherklasse, keine
-  Abweichung vom bestehenden Sicherheitsmodell (Spec 0013).
+## 9. Grenzen
 
-## 9. Offene Punkte
-
-- Elevation mitten in einer Kommandokette (`cd /var/log && sudo tail -f
-  app.log`) wird bewusst nicht unterstützt (Abschnitt 3) — falls das später
-  gebraucht wird, bräuchte es dieselbe Segment-Erkennung wie die
-  Filter-Engine, keine eigenständige Zweitimplementierung.
-- Kein Ablaufdatum/keine erneute Bestätigung für ein einmal gespeichertes
-  Sudo-Passwort — folgt damit demselben Modell wie das SSH-Login-Passwort
-  selbst.
+- Ein `sudo` in der Mitte einer Kommandokette wird nicht unterstützt
+  (Abschnitt 3).
+- Das Sudo-Passwort hat kein Ablaufdatum und keine erneute Abfrage; es folgt
+  damit dem Modell des Login-Passworts.

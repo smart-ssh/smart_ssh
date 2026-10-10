@@ -438,8 +438,9 @@ pub struct SessionParts {
     /// compact_for_send`) noch nie greifen musste, oder nach einem
     /// wiederaufgenommenen Resume ohne zuvor gespeicherte Summary.
     /// Aktualisiert ausschließlich von `compaction::
-    /// compact_rounds_with_summary` (nie direkt), zusätzlich verschlüsselt
-    /// persistiert wie die Chat-Historie/das Ledger (Spec 0036/0057 §2.3),
+    /// compact_rounds_with_summary` (nie direkt), persistiert
+    /// wie die Chat-Historie/das Ledger, geschützt durch die Verschlüsselung
+    /// der Datenbankdatei (Spec 0036, Spec 0057 §2.3),
     /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
     pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
     /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
