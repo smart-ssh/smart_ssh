@@ -1144,7 +1144,7 @@ mod tests {
         std::fs::remove_file(&wrapping).expect("entfernen");
         master_password::set_up_master_password(
             &db_path,
-            &[7u8; 32],
+            &ssh_manager_core::crypto::RootKey::for_tests([7u8; 32]),
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
             master_password::LossWarning::ConfirmedByTheUser,
@@ -1196,7 +1196,7 @@ mod tests {
         let db_path = dir.path().join("smart-ssh.db");
         master_password::set_up_master_password(
             &db_path,
-            &[9u8; 32],
+            &ssh_manager_core::crypto::RootKey::for_tests([9u8; 32]),
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
             master_password::LossWarning::ConfirmedByTheUser,

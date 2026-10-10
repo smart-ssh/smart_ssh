@@ -143,7 +143,7 @@ impl SqliteProfileStore {
     /// weiterzulaufen.
     pub async fn decrypt_field_encrypted_content(
         &self,
-        root_key: &[u8; 32],
+        root_key: &ssh_manager_core::crypto::RootKey,
     ) -> PersistenceResult<FieldContentDecryption> {
         self.decrypt_field_encrypted_content_inner(root_key, None)
             .await
@@ -155,7 +155,7 @@ impl SqliteProfileStore {
     #[cfg(any(test, feature = "test-support"))]
     pub async fn decrypt_field_encrypted_content_failing_after(
         &self,
-        root_key: &[u8; 32],
+        root_key: &ssh_manager_core::crypto::RootKey,
         fail_after: u64,
     ) -> PersistenceResult<FieldContentDecryption> {
         self.decrypt_field_encrypted_content_inner(root_key, Some(fail_after))
@@ -164,7 +164,7 @@ impl SqliteProfileStore {
 
     async fn decrypt_field_encrypted_content_inner(
         &self,
-        root_key: &[u8; 32],
+        root_key: &ssh_manager_core::crypto::RootKey,
         fail_after: Option<u64>,
     ) -> PersistenceResult<FieldContentDecryption> {
         let mut tx = self.pool.begin().await?;

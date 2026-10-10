@@ -164,7 +164,7 @@ fn password_setup_is_safe(reason: Option<KeychainUnavailableReason>) -> bool {
 pub fn read_key_state(
     credential_store: &dyn CredentialStore,
     keychain: KeychainAvailability,
-) -> (KeyState, Option<[u8; 32]>) {
+) -> (KeyState, Option<RootKey>) {
     if !keychain.is_available() {
         return (KeyState::Unreachable(keychain.unavailable_reason()), None);
     }
@@ -352,7 +352,7 @@ pub struct OpenedDatabase {
     /// Der Wurzelschlüssel K — für die Kennung des Schlüssels (Klarstellung
     /// 9) und die einmalige Umstellung der früher feldweise verschlüsselten
     /// Spalten (Issue #113, [`crate::field_content_decryption`]).
-    pub root_key: [u8; 32],
+    pub root_key: RootKey,
 }
 
 /// Spec 0101, A3/A5/A6 — der Startablauf, bis die Datenbank offen ist.
@@ -427,11 +427,9 @@ pub async fn open_or_prepare_database(
         let (key_state, root_key) = match &access {
             RootKeyAccess::Keychain(store) => read_key_state(*store, keychain),
             // A3: „Im Passwort-Modus ist K erst nach der Entsperrung *da*.“
-            // Die Kopie in das `Option<[u8; 32]>` bleibt: Der Bestand
-            // (`read_key_state`, `DatabaseKey::from_root_key`) arbeitet mit
-            // `[u8; 32]`, und das umzustellen wäre ein eigener Schritt
-            // (ADR 0095 §3).
-            RootKeyAccess::Unlocked(key) => (KeyState::Present, Some(*key.expose())),
+            // Die Zweitkopie liegt ebenfalls in `RootKey` und wird beim
+            // Freigeben überschrieben (A19, Issue #267).
+            RootKeyAccess::Unlocked(key) => (KeyState::Present, Some(key.duplicate())),
             // A3: „*ungültig* (… Verpackungsdatei, deren Format oder
             // Version nicht lesbar ist)“.
             RootKeyAccess::UnusableWrapping => (KeyState::Invalid, None),
@@ -462,11 +460,11 @@ pub async fn open_or_prepare_database(
                 let Some(key) = root_key else {
                     return Err(missing_key_despite_present());
                 };
-                match open_encrypted(db_path, &key).await {
+                match open_encrypted(db_path, key).await {
                     Ok(opened) => return Ok(opened),
                     // D2: Die Datei ist mit dem vorhandenen Schlüssel nicht
                     // lesbar.
-                    Err(Abort::NotReadable) => {
+                    Err(Abort::NotReadable(key)) => {
                         // `Keep`: Der Schlüssel ist brauchbar, nur die Datei
                         // gehört nicht zu ihm — s. [`StartOverKey`].
                         let key = start_over(
@@ -476,7 +474,7 @@ pub async fn open_or_prepare_database(
                             StartupDialog::D2,
                             StartOverKey::Keep(key),
                         )?;
-                        return open_encrypted(db_path, &key)
+                        return open_encrypted(db_path, key)
                             .await
                             .map_err(fatal_after_start_over);
                     }
@@ -485,7 +483,7 @@ pub async fn open_or_prepare_database(
             }
             StartupPlan::GenerateKeyThenCreateFresh => {
                 let key = generate_key(db_path, &access, prompt)?;
-                return open_encrypted(db_path, &key)
+                return open_encrypted(db_path, key)
                     .await
                     .map_err(fatal_after_start_over);
             }
@@ -493,11 +491,11 @@ pub async fn open_or_prepare_database(
                 let Some(key) = root_key else {
                     return Err(missing_key_despite_present());
                 };
-                return convert_then_open(db_path, &key, lock).await;
+                return convert_then_open(db_path, key, lock).await;
             }
             StartupPlan::GenerateKeyThenConvert => {
                 let key = generate_key(db_path, &access, prompt)?;
-                return convert_then_open(db_path, &key, lock).await;
+                return convert_then_open(db_path, key, lock).await;
             }
             StartupPlan::Dialog(StartupDialog::D1 {
                 offers_password_setup,
@@ -527,7 +525,7 @@ pub async fn open_or_prepare_database(
                     }
                     // „Aus D1 gibt es keinen K im Schlüsselbund; dort wird K
                     // neu erzeugt (A3).“
-                    let mut key = ssh_manager_core::crypto::generate_root_key();
+                    let key = ssh_manager_core::crypto::generate_root_key();
                     let Some(new_password) = prompt.ask_for_new_master_password() else {
                         // A5: Abbruch heißt, dass nichts verändert ist.
                         return Err(StartupAbort::UserQuit);
@@ -536,9 +534,8 @@ pub async fn open_or_prepare_database(
                     // Ab jetzt Passwort-Modus mit entpacktem K; der nächste
                     // Durchlauf fährt die Tabelle neu und landet in
                     // „neu anlegen“ bzw. „umwandeln“.
-                    // A19: K wandert in den schützenden Typ, das Array
-                    // wird dabei überschrieben.
-                    access = RootKeyAccess::Unlocked(RootKey::take_from(&mut key));
+                    // A19: K war von Anfang an im schützenden Typ.
+                    access = RootKeyAccess::Unlocked(key);
                     continue;
                 }
                 StartupChoice::SetUpMasterPassword => {
@@ -563,7 +560,7 @@ pub async fn open_or_prepare_database(
                     StartupDialog::D2,
                     StartOverKey::Issue,
                 )?;
-                return open_encrypted(db_path, &key)
+                return open_encrypted(db_path, key)
                     .await
                     .map_err(fatal_after_start_over);
             }
@@ -580,7 +577,7 @@ pub async fn open_or_prepare_database(
                     StartupDialog::D3,
                     StartOverKey::Issue,
                 )?;
-                return open_encrypted(db_path, &key)
+                return open_encrypted(db_path, key)
                     .await
                     .map_err(fatal_after_start_over);
             }
@@ -599,7 +596,7 @@ pub async fn open_or_prepare_database(
                 // Schlüssel“ auch „neue Verpackung“ — mit derselben
                 // Reihenfolge wie in A5 (s. `generate_key`).
                 let key = generate_key(db_path, &access, prompt)?;
-                return convert_then_open(db_path, &key, lock).await;
+                return convert_then_open(db_path, key, lock).await;
             }
             // [`decide_startup`] liefert diesen Dialog nie — er gehört zum
             // Secret-Umzug (A11), der erst nach dem Öffnen läuft. Der Zweig
@@ -616,7 +613,8 @@ pub async fn open_or_prepare_database(
 }
 
 enum Abort {
-    NotReadable,
+    /// Trägt K zurück, damit „Neu anfangen“ ihn behalten kann.
+    NotReadable(RootKey),
     Fatal(StartupAbort),
 }
 
@@ -635,7 +633,7 @@ fn missing_key_despite_present() -> StartupAbort {
 /// weiteren Runde Dialoge.
 fn fatal_after_start_over(err: Abort) -> StartupAbort {
     match err {
-        Abort::NotReadable => StartupAbort::Fatal {
+        Abort::NotReadable(_) => StartupAbort::Fatal {
             kind: ConnectFailureKind::KeyMismatch,
             detail: "Datei direkt nach dem Neuanfang nicht lesbar".to_string(),
         },
@@ -660,7 +658,7 @@ fn fatal_after_start_over(err: Abort) -> StartupAbort {
 /// sonst käme derselbe Dialog beim nächsten Start wieder.
 enum StartOverKey {
     /// K bleibt, nur die Datei geht aus dem Weg.
-    Keep([u8; 32]),
+    Keep(RootKey),
     /// Es gibt keinen brauchbaren K — ein neuer entsteht (Schlüsselbund
     /// oder neue Verpackung, je nach Modus).
     Issue,
@@ -672,7 +670,7 @@ fn start_over(
     prompt: &dyn StartupPrompt,
     dialog: StartupDialog,
     key: StartOverKey,
-) -> Result<[u8; 32], StartupAbort> {
+) -> Result<RootKey, StartupAbort> {
     if prompt.ask(dialog) != StartupChoice::StartOver {
         return Err(StartupAbort::UserQuit);
     }
@@ -772,7 +770,7 @@ fn generate_key(
     db_path: &Path,
     access: &RootKeyAccess<'_>,
     prompt: &dyn StartupPrompt,
-) -> Result<[u8; 32], StartupAbort> {
+) -> Result<RootKey, StartupAbort> {
     match access {
         RootKeyAccess::Keychain(store) => store_new_key_in_keychain(*store),
         RootKeyAccess::Unlocked(_) | RootKeyAccess::UnusableWrapping => {
@@ -809,7 +807,7 @@ fn generate_key(
     }
 }
 
-fn store_new_key_in_keychain(store: &dyn CredentialStore) -> Result<[u8; 32], StartupAbort> {
+fn store_new_key_in_keychain(store: &dyn CredentialStore) -> Result<RootKey, StartupAbort> {
     ssh_manager_core::crypto::generate_and_store_root_key(store).map_err(|err| {
         // Der Text von `CipherError::KeyStoreAccessFailed` trägt die
         // Bibliotheks-Nutzlast — die geht ins Log, nie in einen Dialog
@@ -864,7 +862,7 @@ fn check_new_password_upfront(password: &NewMasterPassword) -> Result<(), Startu
 
 fn set_up_password(
     db_path: &Path,
-    key: &[u8; 32],
+    key: &RootKey,
     password: &NewMasterPassword,
     keyring: Option<&dyn CredentialStore>,
     moved: FilesAlreadyMoved,
@@ -892,14 +890,11 @@ fn set_up_password(
     })
 }
 
-async fn open_encrypted(db_path: &Path, root_key: &[u8; 32]) -> Result<OpenedDatabase, Abort> {
-    let db_key = DatabaseKey::from_root_key(root_key);
+async fn open_encrypted(db_path: &Path, root_key: RootKey) -> Result<OpenedDatabase, Abort> {
+    let db_key = DatabaseKey::from_root_key(&root_key);
     match SqliteProfileStore::connect_encrypted(db_path, &db_key).await {
-        Ok(store) => Ok(OpenedDatabase {
-            store,
-            root_key: *root_key,
-        }),
-        Err(PersistenceError::NotReadableWithKey) => Err(Abort::NotReadable),
+        Ok(store) => Ok(OpenedDatabase { store, root_key }),
+        Err(PersistenceError::NotReadableWithKey) => Err(Abort::NotReadable(root_key)),
         Err(err) => {
             let kind = err.classify();
             Err(Abort::Fatal(StartupAbort::Fatal {
@@ -912,10 +907,10 @@ async fn open_encrypted(db_path: &Path, root_key: &[u8; 32]) -> Result<OpenedDat
 
 async fn convert_then_open(
     db_path: &Path,
-    root_key: &[u8; 32],
+    root_key: RootKey,
     lock: &DataDirLock,
 ) -> Result<OpenedDatabase, StartupAbort> {
-    let db_key = DatabaseKey::from_root_key(root_key);
+    let db_key = DatabaseKey::from_root_key(&root_key);
     tracing::info!("converting the plaintext database (Spec 0101, A6)");
     if let Err(err) = persistence_sqlite::convert_plaintext_database(db_path, &db_key, lock).await {
         let as_persistence = PersistenceError::Conversion(err);
@@ -929,7 +924,7 @@ async fn convert_then_open(
     tracing::info!("plaintext database converted");
     match open_encrypted(db_path, root_key).await {
         Ok(opened) => Ok(opened),
-        Err(Abort::NotReadable) => Err(StartupAbort::Fatal {
+        Err(Abort::NotReadable(_)) => Err(StartupAbort::Fatal {
             kind: ConnectFailureKind::KeyMismatch,
             detail: "umgewandelte Datei nicht mit ihrem Schlüssel lesbar".to_string(),
         }),

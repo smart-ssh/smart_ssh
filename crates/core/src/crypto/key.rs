@@ -9,6 +9,9 @@ use secrecy::{ExposeSecret, SecretString};
 
 use crate::profiles::{CredentialError, CredentialRef, CredentialStore};
 
+use zeroize::Zeroizing;
+
+use super::key_wrapping::RootKey;
 use super::CipherError;
 
 /// Fester Slot im `CredentialStore` (Spec 0036, Abschnitt 4) — "kein neuer
@@ -30,7 +33,7 @@ const KEY_LEN: usize = 32; // 256 Bit
 /// beschreibt.
 pub enum RootKeyState {
     /// K liegt vor.
-    Present([u8; KEY_LEN]),
+    Present(RootKey),
     /// Es gibt keinen Eintrag. Ein neuer K **darf** entstehen (A3, Felder
     /// „K erzeugen").
     NotFound,
@@ -101,28 +104,36 @@ pub fn read_root_key(store: &dyn CredentialStore) -> RootKeyState {
 /// einrichten"). Die Funktion prüft das nicht — sie kann es nicht, ihr
 /// fehlt der Dateizustand. Sie heißt deshalb so, dass ein Aufruf an der
 /// falschen Stelle im Code auffällt.
-pub fn generate_and_store_root_key(
-    store: &dyn CredentialStore,
-) -> Result<[u8; KEY_LEN], CipherError> {
+pub fn generate_and_store_root_key(store: &dyn CredentialStore) -> Result<RootKey, CipherError> {
     let credential_ref = CredentialRef::new(CHAT_CONTENT_ENCRYPTION_KEY_REF);
     generate_and_store_key(store, &credential_ref)
 }
 
-fn decode_key(encoded: &str) -> Result<[u8; KEY_LEN], CipherError> {
-    let bytes = BASE64
-        .decode(encoded)
-        .map_err(|_| CipherError::InvalidKey)?;
-    bytes.try_into().map_err(|_| CipherError::InvalidKey)
+fn decode_key(encoded: &str) -> Result<RootKey, CipherError> {
+    // Der dekodierte Puffer ist K im Klartext: in `Zeroizing`, damit er
+    // auch auf dem Fehlerpfad überschrieben wird (A19).
+    let bytes = Zeroizing::new(
+        BASE64
+            .decode(encoded)
+            .map_err(|_| CipherError::InvalidKey)?,
+    );
+    if bytes.len() != KEY_LEN {
+        return Err(CipherError::InvalidKey);
+    }
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    key.copy_from_slice(&bytes);
+    Ok(RootKey::from_zeroizing(key))
 }
 
 fn generate_and_store_key(
     store: &dyn CredentialStore,
     credential_ref: &CredentialRef,
-) -> Result<[u8; KEY_LEN], CipherError> {
+) -> Result<RootKey, CipherError> {
     let key = generate_key();
-    let encoded = BASE64.encode(key);
+    // `SecretString` überschreibt den Text beim Freigeben.
+    let encoded = SecretString::from(BASE64.encode(key.expose()));
     store
-        .set(credential_ref, SecretString::from(encoded))
+        .set(credential_ref, encoded)
         .map_err(|err| match err {
             CredentialError::Backend(msg) => CipherError::KeyStoreAccessFailed(msg),
             CredentialError::NotFound(_) => {
@@ -140,15 +151,15 @@ fn generate_and_store_key(
 ///
 /// Derselbe Hinweis wie bei [`generate_and_store_root_key`]: Nur aus einem
 /// Fall aufrufen, den A3 dafür vorsieht.
-pub fn generate_root_key() -> [u8; KEY_LEN] {
+pub fn generate_root_key() -> RootKey {
     generate_key()
 }
 
-fn generate_key() -> [u8; KEY_LEN] {
+fn generate_key() -> RootKey {
     use chacha20poly1305::aead::{rand_core::RngCore, OsRng};
-    let mut key = [0u8; KEY_LEN];
-    OsRng.fill_bytes(&mut key);
-    key
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    OsRng.fill_bytes(key.as_mut());
+    RootKey::from_zeroizing(key)
 }
 
 #[cfg(test)]
@@ -224,9 +235,8 @@ mod tests {
 
         let key = generate_and_store_root_key(&store).unwrap();
 
-        assert_eq!(key.len(), KEY_LEN);
         match read_root_key(&store) {
-            RootKeyState::Present(read_back) => assert_eq!(read_back, key),
+            RootKeyState::Present(read_back) => assert_eq!(read_back.expose(), key.expose()),
             other => panic!("erwartet: Present, erhalten: {other:?}"),
         }
     }
@@ -241,7 +251,7 @@ mod tests {
         else {
             panic!("beide Lesevorgänge müssen Present liefern");
         };
-        assert_eq!(first, second);
+        assert_eq!(first.expose(), second.expose());
     }
 
     #[test]
@@ -289,10 +299,29 @@ mod tests {
         let store = AlwaysFailingCredentialStore;
 
         assert_eq!(
-            generate_and_store_root_key(&store),
-            Err(CipherError::KeyStoreAccessFailed(
+            generate_and_store_root_key(&store).err(),
+            Some(CipherError::KeyStoreAccessFailed(
                 "Keychain gesperrt".to_string()
             ))
         );
+    }
+
+    /// A19 (Issue #267): `Debug` von `RootKeyState` zeigt K nicht — weder
+    /// als Byte-Liste noch als Hex noch als Base64.
+    #[test]
+    fn test_root_key_state_debug_does_not_contain_the_key() {
+        let key = RootKey::for_tests([0xAB; KEY_LEN]);
+        let state = RootKeyState::Present(key);
+        let rendered = format!("{state:?}");
+
+        assert_eq!(rendered, "Present(<nicht anzeigbar>)");
+        assert!(!rendered.contains("171"), "Byte-Liste: {rendered}");
+        assert!(!rendered.to_lowercase().contains("abab"), "Hex: {rendered}");
+        assert!(
+            !rendered.contains(&BASE64.encode([0xAB; KEY_LEN])),
+            "Base64: {rendered}"
+        );
+        // Auch in der Pretty-Form und über ein Option-Gehäuse.
+        assert!(!format!("{:#?}", Some(&state)).contains("171"));
     }
 }

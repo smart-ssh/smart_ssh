@@ -804,7 +804,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = persistence_sqlite::SqliteProfileStore::connect_encrypted(
             &dir.path().join("smart-ssh.db"),
-            &ssh_manager_core::crypto::DatabaseKey::from_root_key(&[7; 32]),
+            &ssh_manager_core::crypto::DatabaseKey::from_root_key(
+                &ssh_manager_core::crypto::RootKey::for_tests([7; 32]),
+            ),
         )
         .await
         .unwrap();
