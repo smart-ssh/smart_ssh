@@ -429,7 +429,7 @@ pub async fn generate_session_title_on_disconnect(
             AiEvent::ActionProposed(_) => {}
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
             // ignoriert.
-            AiEvent::WebActivity(_) => {}
+            AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
             // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
             // Nebenaufruf — ein abgeschnittener Titel wird einfach genau
             // wie ein sonst leerer/fehlerhafter Titel behandelt (s.
@@ -626,7 +626,7 @@ pub async fn suggest_note_update_on_disconnect(
             AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
             // ignoriert.
-            AiEvent::TextDelta(_) | AiEvent::WebActivity(_) => {}
+            AiEvent::TextDelta(_) | AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
         }
     }
 
@@ -926,7 +926,7 @@ async fn summarize_note_for_shrink(
                 AiEvent::ActionProposed(_) => {}
                 // Issue #162: Nebenaufrufe bekommen keine Web-Werkzeuge
                 // (s. `ai_providers::anthropic`); defensiv ignoriert.
-                AiEvent::WebActivity(_) => {}
+                AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
                 AiEvent::Done => return Some((text, false)),
                 // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — die gekürzte Notiz gilt trotzdem als
