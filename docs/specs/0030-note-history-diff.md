@@ -1,53 +1,42 @@
-# Spec: Diff-Anzeige in der Notiz-Historie
+# Spec 0030 — Diff-Anzeige in der Notiz-Historie
 
-Status: Entwurf
-Modul: `frontend/` (Notiz-Historie-Ansicht)
-Abhängigkeiten: Notiz-Historie (Spec 0003, Abschnitt 5.3; Spec 0008,
-Abschnitt 6), bestehende Diff-Komponente (Spec 0019, Abschnitt 4)
+Status: umgesetzt
+Zweck: Die Notiz-Historie zeigt je Revision, was sich gegenüber der
+vorherigen geändert hat.
+Bezüge: Spec 0003 (Notiz-Historie), Spec 0008 (Notiz-Ansicht), Spec 0019
+(Diff-Darstellung).
 
-## 1. Problem
+## 1. Überblick
 
-Die Notiz-Historie (Spec 0008, Abschnitt 6) zeigt pro Revision bisher nur
-Zeitpunkt, Editor (Nutzer/KI) und einen "Wiederherstellen"-Button — nicht,
-**was sich inhaltlich geändert hat**. Um das nachzuvollziehen, müsste man
-aktuell zwei Revisionen manuell nebeneinanderhalten und selbst vergleichen.
+Die Historie einer Notiz listet je Revision Zeitpunkt, Bearbeiter (Nutzer
+oder KI mit Anbieter und Modell) und „Wiederherstellen". Zusätzlich lässt
+sich je Revision die Änderung anzeigen.
 
-## 2. Ziel
+## 2. Vergleichsgrundlage
 
-Jeder Eintrag in der Notiz-Historie zeigt zusätzlich, was sich gegenüber der
-**unmittelbar vorherigen** Revision (chronologisch) geändert hat — über
-dieselbe zeilenbasierte Diff-Komponente, die bereits für Notiz-
-Änderungsvorschläge existiert (Spec 0019, Abschnitt 4), nicht über eine
-zweite Implementierung.
+Jede Revision wird mit ihrer **chronologisch unmittelbar vorherigen**
+Revision verglichen, mit derselben zeilenbasierten Darstellung wie die
+Vorschau von Notiz-Vorschlägen (Spec 0019, Abschnitt 4).
 
 ## 3. Verhalten
 
-- Standardmäßig **eingeklappt** — die Historie-Liste bleibt bei vielen
-  Einträgen übersichtlich (Zeitpunkt, Editor, Wiederherstellen-Button wie
-  bisher). Klick auf einen Eintrag klappt den Diff gegenüber der
-  vorherigen Revision auf.
-- Für die **älteste** Revision (kein Vorgänger vorhanden): kein Diff, da
-  nichts zum Vergleichen existiert — stattdessen der volle Inhalt als
-  "Ursprüngliche Version", klar mit einer eigenen Beschriftung erkennbar.
-- Diff-Berechnung passiert clientseitig aus den bereits über
-  `list_note_revisions` (Spec 0008, Abschnitt 5) geladenen Daten — kein
-  neuer Backend-Command nötig, alle Revisionsinhalte liegen dem Frontend
-  ohnehin schon vor.
-- Farbschema identisch zur bestehenden Diff-Darstellung (Spec 0019,
-  Abschnitt 4): hinzugefügte Zeilen grün, entfernte Zeilen
-  rot/durchgestrichen.
+- Jeder Eintrag ist standardmäßig **eingeklappt**. Ein Klick auf den
+  Eintrag klappt den Vergleich auf und wieder zu. Mehrere Einträge können
+  gleichzeitig aufgeklappt sein.
+- Die **älteste** Revision hat keinen Vorgänger. Aufgeklappt zeigt sie den
+  vollen Inhalt unter der Beschriftung „Ursprüngliche Version", ohne
+  Diff-Hervorhebung.
+- Der Vergleich entsteht aus den Revisionen, die die Historie ohnehin
+  geladen hat; dafür ist kein weiterer Abruf nötig.
+- Farben wie in Spec 0019: hinzugefügte Zeilen grün, entfernte rot und
+  durchgestrichen.
 
-## 4. Nicht-Ziele
+## 4. Grenzen
 
-- Kein Diff über mehr als zwei benachbarte Revisionen hinweg (z. B. "zeige
-  mir alle Änderungen der letzten 5 Versionen auf einmal") — jede Revision
-  wird nur gegen ihren direkten Vorgänger verglichen, das reicht für den
-  Anwendungsfall "nachvollziehen, was bei diesem einen Schritt passiert
-  ist".
+- Kein Vergleich über mehr als zwei benachbarte Revisionen hinweg.
 
-## 5. Test
+## 5. Akzeptanzfall
 
-Historie mit mindestens drei Revisionen: mittlere Revision zeigt beim
-Aufklappen korrekt den Diff gegenüber der direkt vorherigen (nicht gegenüber
-der ältesten oder der aktuellen); älteste Revision zeigt "Ursprüngliche
-Version" ohne Diff-Darstellung.
+Historie mit mindestens drei Revisionen: Die mittlere zeigt aufgeklappt den
+Unterschied zur direkt vorherigen (nicht zur ältesten und nicht zur
+aktuellen); die älteste zeigt „Ursprüngliche Version" ohne Diff.

@@ -1,151 +1,94 @@
-# Spec: Registry aufräumen — Dokument-Aktions-Andockpunkt, tote Typen entfernen
+# Spec 0045 — Andockpunkte für Erweiterungen im Frontend
 
-Status: Entwurf
-Modul: **öffentliches Repo** `smart_ssh` — `src/extensions/registry.ts`,
-`ChatPanel.tsx`, ggf. weitere Konsumenten
-Abhängigkeiten: Extension-Registry (0038), KI-Dokumente/Markdown-Export
-(0012)
+Status: umgesetzt
+Zweck: Welche Stellen der Oberfläche ein Frontend-Modul (z. B. eine andere
+Edition) erweitern kann, und welche Regeln dafür gelten.
+Bezüge: Spec 0012 (KI-Dokumente), Spec 0031 (Erststart-Hinweis), Spec 0037
+(Editionen), Spec 0038 (Aufbau des Repositorys), Spec 0050
+(Einstellungen), ADR 0037, ADR 0123.
 
-> Dies ist eine **öffentliche** Spec (Apache-2.0). Sie schafft einen
-> generischen Andockpunkt, den *jedes* Frontend (Community wie Official)
-> nutzen kann — sie weiß nichts von Pro/Word-Export. Der private Word-Export
-> dockt in einem separaten privaten Schritt daran an.
+## 1. Überblick
 
-## 1. Ausgangslage
+Das Frontend hat eine Registry, über die ein Modul beim Start Beiträge
+anmeldet. Die Registry ist editionsneutral: Sie kennt keine Editionen,
+Freischaltungen, Netzwerk- oder Update-Logik.
 
-Der Aufbau des Official-Frontends (privates Repo) hat einen Fund im
-öffentlichen Repo aufgedeckt: Die Extension-Registry aus 0038 deklariert
-vier Beitragsarten (`registerRoute`, `registerPanel`,
-`registerSettingsSection`, `registerCommandPaletteAction`), aber **nur
-`registerSettingsSection` wird tatsächlich irgendwo gerendert.**
-`listRoutes()`, `listPanels()` und `listCommandPaletteActions()` werden
-nirgends konsumiert — es gibt keine Command-Palette-UI, keine
-Route-/Panel-Rendering-Stelle. Diese drei Typen sind **totes Vokabular**:
-Sie behaupten "hier kannst du andocken", rendern aber nichts. Ein Feature,
-das sie nutzt (wie zunächst der Word-Export über `registerCommandPaletteAction`),
-wird dadurch unsichtbar — genau die Falle, in die der Word-Export gelaufen
-ist.
+## 2. Grundsatz
 
-## 2. Prinzip
+**Kein Andockpunkt ohne Darstellung.** Jede Beitragsart der Registry hat
+eine Stelle in der Oberfläche, die ihre Beiträge tatsächlich anzeigt. Ein
+Andockpunkt, der nichts anzeigt, lässt ein Feature unbemerkt unsichtbar
+werden und wird deshalb nicht angeboten. Braucht ein Feature eine neue
+Beitragsart, kommt sie zusammen mit ihrer Darstellung.
 
-**Kein Registry-Typ ohne echten, gerenderten Konsumenten.** Ein Andockpunkt,
-der nichts rendert, ist schlimmer als keiner — er lockt in die
-Unsichtbarkeits-Falle. Diese Spec macht genau **einen** neuen Typ real (den
-akut gebrauchten), und **entfernt** die drei toten. Ein entfernter Typ kann
-jederzeit wiederkommen, wenn ein Feature ihn braucht — dann aber **mit**
-Rendering, nicht als leere Deklaration.
+Für jede Beitragsart gilt: Ein Beitrag hat eine Kennung; eine erneute
+Anmeldung mit derselben Kennung ersetzt die vorherige.
 
-## 3. Neuer Typ: `registerDocumentAction`
+## 3. Dokument-Aktionen
 
-Ein generischer Andockpunkt für Aktionen an einem KI-generierten Dokument
-(dort, wo im Dokument-/Chat-Bereich der Markdown-Export sitzt, 0012).
+Ein Modul kann eine Aktion für KI-generierte Dokumente (Spec 0012)
+anmelden. Eine Dokument-Aktion hat:
 
-```ts
-export interface DocumentAction {
-  id: string;
-  label: string;                       // z. B. "Als Word speichern"
-  // Aufruf mit dem aktuellen Dokument-Inhalt/Kontext, den der Renderer
-  // bereitstellt (Markdown-Inhalt + Titel, analog zum bestehenden
-  // Markdown-Export)
-  onInvoke: (doc: DocumentContext) => void;
-  // Optional: darstellungssteuernd, damit ein gegatetes Feature sich als
-  // gesperrt zeigen kann, ohne dass die Registry etwas von Entitlements weiß
-  disabled?: boolean;
-  disabledReason?: string;             // Tooltip/Hinweis bei disabled
-}
+- eine Kennung und eine Beschriftung (z. B. „Als Word speichern"),
+- eine Handlung, die beim Klick mit Titel und Markdown-Inhalt des
+  Dokuments aufgerufen wird,
+- optional die Angabe „gesperrt" mit einer Begründung.
 
-export function registerDocumentAction(action: DocumentAction): void;
-export function listDocumentActions(): DocumentAction[];
-```
+Ob eine Aktion gesperrt ist, entscheidet das anmeldende Modul. Die
+Registry und die Dokument-Karte zeigen nur an, was sie bekommen.
 
-**Wichtig — die Registry bleibt entitlement-agnostisch.** Sie kennt keine
-`Feature`/`Entitlements` (das wäre Pro-Wissen im öffentlichen Repo). Ob eine
-Aktion gesperrt ist, entscheidet der *Registrierende* (im Pro-Fall das
-private Modul) und setzt `disabled`/`disabledReason` — die Registry und
-`ChatPanel` rendern nur, was ihnen gegeben wird.
+## 4. Darstellung der Dokument-Aktionen
 
-## 4. Rendering in `ChatPanel`
+- Die Aktionen erscheinen **nur auf der Dokument-Karte** (Spec 0012,
+  Abschnitt 3), **neben** „Als Markdown speichern", in der Reihenfolge der
+  Anmeldung. Der Markdown-Export bleibt unverändert an seinem Platz.
+- Eine aktive Aktion ist klickbar und ruft ihre Handlung auf.
+- Eine gesperrte Aktion bleibt sichtbar, ist ausgegraut und nicht
+  klickbar; ihre Begründung erscheint als Tooltip.
 
-`ChatPanel.tsx` (bzw. die Dokument-Karten-Komponente aus 0012) rendert die
-über `listDocumentActions()` registrierten Aktionen **neben** dem
-bestehenden Markdown-Export-Button. Eine `disabled`-Aktion wird sichtbar,
-aber ausgegraut/gesperrt dargestellt, mit `disabledReason` als Tooltip.
-Klick auf eine aktive Aktion ruft ihr `onInvoke` mit dem Dokument-Kontext
-auf.
+## 5. Beitragsarten
 
-Der bestehende Markdown-Export bleibt unverändert an seinem Platz — die
-registrierten Dokument-Aktionen kommen daneben, nicht statt.
+Die Registry bietet genau drei Beitragsarten an:
 
-## 5. Entfernen der toten Typen
+- Abschnitte der Einstellungen (Spec 0050),
+- Dokument-Aktionen (Abschnitte 3 und 4),
+- Erweiterungen des Erststart-Hinweises (Abschnitt 9).
 
-`registerRoute`/`listRoutes`, `registerPanel`/`listPanels`,
-`registerCommandPaletteAction`/`listCommandPaletteActions` werden aus der
-Registry **entfernt**, samt zugehöriger Typen. Prüfe vor dem Entfernen:
-- Gibt es *irgendeinen* tatsächlichen Aufruf im öffentlichen Repo? (Erwartung
-  laut Fund: nein, außer der Registrierung selbst.) Falls doch ein echter
-  Konsument auftaucht, **melden** statt blind entfernen.
-- Der private Word-Export nutzt aktuell `registerCommandPaletteAction` als
-  Notlösung — der wird im **privaten** Repo auf `registerDocumentAction`
-  umgestellt (separater privater Schritt). Das Entfernen hier macht den
-  privaten Notlösungs-Code kaputt, **das ist beabsichtigt und wird im
-  privaten Schritt behoben**; koordiniere über den Submodule-Pin (der private
-  Schritt bumpt auf den öffentlichen Commit mit dieser Spec).
+Andockpunkte für eigene Routen, Seitenbereiche oder eine Befehlspalette
+gibt es nicht; die App hat dafür keine Darstellung.
 
-## 6. Sicherheits-/Konsistenz-Invarianten
+## 6. Sicherheitszusagen
 
-- Die Registry bleibt entitlement-agnostisch (kein `Feature`-Wissen im
-  öffentlichen Repo).
-- `disabled` an einer Dokument-Aktion ist **nur** die freundliche Vorderseite
-  — die harte Durchsetzung eines gegateten Features bleibt die
-  `require(...)`-Prüfung im jeweiligen Command (privat). Ein Umgehen der
-  UI-Sperre führt weiterhin zu `FeatureLocked`.
-- Nach dem Entfernen der drei Typen gibt es **kein** totes Registry-Vokabular
-  mehr — jeder verbleibende Typ (`registerSettingsSection`,
-  `registerDocumentAction`, sowie der später hinzugekommene
-  `registerFirstRunNoticeExtension`, Abschnitt 9) hat einen echten Renderer.
+- Die Registry bleibt editionsneutral; sie enthält kein Wissen über
+  Freischaltungen.
+- „Gesperrt" an einer Dokument-Aktion ist nur die Anzeige. Die
+  verbindliche Prüfung, ob ein Feature freigeschaltet ist, liegt im
+  Befehl, den die Aktion aufruft. Wer die Sperre in der Oberfläche umgeht,
+  scheitert dort.
 
-## 7. Testbarkeit
+## 7. Akzeptanzfälle
 
-- `registerDocumentAction`/`listDocumentActions`: Registrierung und Auflistung
-  (Unit).
-- `ChatPanel` rendert eine registrierte aktive Aktion (klickbar, `onInvoke`
-  wird aufgerufen) und eine `disabled`-Aktion (sichtbar, gesperrt, Tooltip) —
-  Komponententest.
-- Nach dem Entfernen der toten Typen kompiliert das öffentliche Repo und
-  alle bestehenden Tests bleiben grün (die drei Typen hatten ja keine
-  Konsumenten).
+- Anmelden und Auflisten von Dokument-Aktionen; gleiche Kennung ersetzt.
+- Die Dokument-Karte zeigt eine angemeldete aktive Aktion (Klick ruft die
+  Handlung mit Titel und Inhalt auf) und eine gesperrte (sichtbar, nicht
+  klickbar, Begründung als Tooltip).
 
-## 8. Offene Punkte / Koordination
+## 8. (entfallen)
 
-- Der private Word-Export-Umbau (von `registerCommandPaletteAction` auf
-  `registerDocumentAction`) ist ein **separater privater Schritt**, der auf
-  den öffentlichen Commit dieser Spec aufsetzt (Submodule-Pin bumpen).
-- Falls später ein Pro-Feature doch eine eigene Route/ein Panel braucht,
-  wird der entsprechende Typ **neu und mit Renderer** hinzugefügt — nicht
-  aus einer leeren Deklaration reaktiviert.
+## 9. Erweiterungen des Erststart-Hinweises
 
-## 9. Nachtrag: Erweiterungen des Erststart-Hinweises (Issue #157)
+Ein Modul kann dem Erststart-Hinweis (Spec 0031, Abschnitt 6) eigene
+Elemente hinzufügen.
 
-Ein weiterer Typ nach dem Prinzip aus Abschnitt 2 — eingeführt zusammen mit
-seinem Renderer, dem Erststart-Hinweis (Spec 0031, Abschnitt 6):
-
-```ts
-export interface FirstRunNoticeExtension {
-  id: string;
-  order: number;   // aufsteigend; bei Gleichstand nach id
-  Component: ComponentType<{ onContinue: (handler: () => void | Promise<void>) => void }>;
-}
-
-export function registerFirstRunNoticeExtension(ext: FirstRunNoticeExtension): void;
-export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[];
-```
-
-- Gleiche `id` ersetzt die vorherige Registrierung (wie bei den übrigen
-  Typen).
-- Eine Erweiterung bekommt nur `onContinue`. Je Erweiterung gilt ein
-  Handler; ein erneuter Aufruf ersetzt den vorherigen.
-- Der Typ ist editionsneutral: Die Registry kennt keine Editionen,
-  Entitlements, Netzwerk- oder Update-Logik. Was eine Erweiterung anzeigt
-  und tut, verantwortet der Registrierende.
-- Regel für Autoren: Optionale Elemente sind beim Anzeigen aus bzw. leer
-  (Spec 0031, Abschnitt 6).
+- Eine Erweiterung hat eine Kennung, eine Rangfolge und eine eigene
+  Anzeige. Erweiterungen erscheinen aufsteigend nach Rangfolge, bei
+  Gleichstand nach Kennung.
+- Eine Erweiterung kann genau eine Handlung anmelden, die einmal
+  ausgeführt wird, nachdem der Nutzer den Hinweis bestätigt hat und die
+  Bestätigung gespeichert ist. Eine erneute Anmeldung ersetzt die
+  vorherige Handlung derselben Erweiterung.
+- Was eine Erweiterung anzeigt und tut, verantwortet das anmeldende Modul.
+  Optionale Elemente sind beim Anzeigen aus bzw. leer (Spec 0031,
+  Abschnitt 6).
+- Eine fehlerhafte Erweiterung verhindert den Erststart-Hinweis nicht
+  (ADR 0123).
