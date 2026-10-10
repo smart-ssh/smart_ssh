@@ -1,88 +1,55 @@
-# Spec: Erweiterte OpenAI-kompatible Provider (OpenRouter, TEE-gehostet)
+# Spec 0025 — Erweiterte OpenAI-kompatible Anbieter
 
-Status: Entwurf
-Modul: Erweiterung `crates/ai-providers`, `crates/app-tauri`, `frontend/`
-Abhängigkeiten: KI-Provider-Trait und -Verwaltung (Spec 0006/0007)
+Status: umgesetzt
+Zweck: Anbieter, die der OpenAI-API folgen (z. B. OpenRouter, TEE-gehostete
+Dienste), bequem nutzbar machen: Modellauswahl, Zusatz-Header und eine rein
+informative Attestierungs-Anzeige.
+Bezüge: Spec 0006 (Anbieter-Abstraktion), Spec 0007 (Anbieter-Verwaltung).
 
 ## 1. Ziel
 
-Der bestehende `generic_openai_compatible`-Providertyp (Spec 0006/0007)
-deckt technisch bereits OpenRouter und die meisten anderen
-OpenAI-API-kompatiblen Anbieter ab. Diese Spec verbessert die **Nutzbarkeit**
-für diese Anbieter (Modellauswahl statt Freitext, anbieterspezifische
-Zusatz-Header) und ergänzt eine **informative, nicht-kryptografisch-
-verifizierte** Anzeige für TEE-gehostete Anbieter.
+Der generische OpenAI-kompatible Anbietertyp deckt technisch bereits
+OpenRouter und die meisten anderen kompatiblen Anbieter ab. Diese Spec
+beschreibt die Nutzbarkeit dafür: Modellauswahl statt Freitext,
+anbieterspezifische Zusatz-Header und eine **informative, nicht
+kryptografisch geprüfte** Anzeige für TEE-gehostete Anbieter.
 
-## 2. Modell-Discovery
+## 2. Modell-Entdeckung
 
-```
-discover_models(config: AiProviderConfigInput) -> Result<Vec<String>, AiError>
-```
+Die App fragt die Modellliste des Anbieters ab (`GET {Basis-URL}/models`,
+OpenAI-Konvention) und bietet die IDs im Formular als durchsuchbares
+Dropdown an — für den generischen OpenAI-kompatiblen Typ, OpenAI und
+Ollama. Schlägt die Abfrage fehl (nicht jeder Anbieter unterstützt den
+Endpunkt), fällt das Feld auf Freitext zurück; das Anlegen eines Anbieters
+wird dadurch nie blockiert.
 
-Ruft `GET {base_url}/models` gemäß OpenAI-API-Konvention auf (Standard bei
-praktisch allen kompatiblen Anbietern, inkl. OpenRouter, das darüber
-Hunderte verfügbare Modelle listet) und liefert die Modell-IDs. Im
-Provider-Formular (Spec 0007, Abschnitt 8.3) ersetzt das Modellfeld für
-`generic_openai_compatible`/`openai`/`ollama` ein durchsuchbares
-Dropdown statt eines reinen Freitextfelds — mit Fallback auf Freitext, falls
-`discover_models` fehlschlägt (nicht jeder Anbieter unterstützt den
-Endpunkt zuverlässig, das darf das Anlegen eines Providers nicht
-blockieren).
+## 3. Zusatz-Header
 
-## 3. Anbieterspezifische Zusatz-Header
-
-Ergänzung zu `AiProviderConfigInput` (Spec 0007, Abschnitt 8.2):
-
-```rust
-pub struct AiProviderConfigInput {
-    // ... bestehende Felder
-    pub extra_headers: Vec<(String, String)>,
-}
-```
-
-Generisch statt OpenRouter-spezifisch benannt, da mehrere Anbieter eigene
-Header erwarten (OpenRouter z. B. optional `HTTP-Referer`/`X-Title` für die
-eigene Nutzungsstatistik/Rangliste — kein Pflichtfeld, aber nützlich).
-`OpenAiCompatibleProvider` (Spec 0006) hängt diese Header an jeden Request
-an. Im UI: ein einfaches Key-Value-Listenfeld, ein-/ausblendbar hinter
-"Erweitert", damit das Formular für den Normalfall nicht überladen wirkt.
+Eine Anbieter-Konfiguration kann beliebige zusätzliche HTTP-Header tragen
+(generisch, nicht OpenRouter-spezifisch; OpenRouter nutzt z. B. optional
+`HTTP-Referer`/`X-Title`). Sie werden an jede Anfrage an diesen Anbieter
+angehängt. Im Formular stehen sie als einfache Schlüssel-Wert-Liste hinter
+„Erweitert".
 
 ## 4. TEE-gehostete Anbieter — Informationsanzeige
 
-**Kein automatisierter kryptografischer Verifikationsmechanismus** — das
-wäre hardware-/anbieterspezifisch (SGX, TDX, unterschiedliche
-Attestierungsformate) und würde falsche Sicherheit suggerieren, wenn nicht
-vollständig korrekt implementiert. Stattdessen:
+Es gibt **keine** kryptografische Verifikation: Sie wäre hardware- und
+anbieterspezifisch und würde falsche Sicherheit suggerieren.
 
-```rust
-pub struct AiProviderConfigInput {
-    // ...
-    pub attestation_url: Option<String>,
-}
-```
+Stattdessen kann die Konfiguration (unter „Erweitert") eine optionale
+Attestierungs-URL tragen. Ist sie gesetzt, ruft die App sie beim Speichern
+und auf Wunsch erneut ab und zeigt die **rohe Antwort** in einem
+schreibgeschützten Textblock, mit dem Hinweis:
 
-Optionales Feld im "Erweitert"-Bereich. Ist es gesetzt, ruft die App den
-angegebenen Endpunkt beim Speichern und auf Wunsch erneut ab
-(`fetch_attestation_info(provider_id) -> String`) und zeigt die **rohe
-Antwort** in einem Read-only-Textblock im Provider-Formular an, mit einem
-unmissverständlichen Hinweis:
-
-> "Dieser Wert wird unverändert vom Anbieter abgerufen und **nicht** von
+> „Dieser Wert wird unverändert vom Anbieter abgerufen und **nicht** von
 > Smart SSH kryptografisch geprüft. Zur eigenständigen Verifikation nutze
 > das vom Hardware-/Anbieter bereitgestellte Prüfwerkzeug."
 
-Kein Badge, kein grünes Häkchen, kein Wort wie "verifiziert" im UI — die
-App bestätigt nichts, sie zeigt nur an, was der Anbieter selbst meldet.
+Es gibt kein Badge, kein grünes Häkchen und kein Wort wie „verifiziert":
+Die App zeigt nur an, was der Anbieter selbst meldet.
 
-## 5. Offene Punkte
+## 5. Grenzen
 
-- Eine spätere, echte Attestierungsprüfung (z. B. für konkret benannte,
-  häufig genutzte TEE-Anbieter mit dokumentiertem Format) wäre denkbar,
-  ist aber ein eigenständiges, deutlich größeres Thema — bewusst nicht Teil
-  dieser Spec.
-- Sollen entdeckte Modelle (Abschnitt 2) zusätzliche Metadaten zeigen
-  (Preis pro Token, Kontextfenstergröße), sofern der Anbieter das über
-  denselben oder einen weiteren Endpunkt liefert (OpenRouter tut das)?
-  Naheliegende Erweiterung, aber nicht in dieser Spec — würde eine
-  anbieterspezifische Zusatzschnittstelle brauchen, die über den generischen
-  OpenAI-Standard hinausgeht.
+- Eine echte Attestierungsprüfung ist nicht Teil des Produkts.
+- Die entdeckten Modelle zeigen keine Zusatzdaten wie Preis oder
+  Kontextfenstergröße; der generische OpenAI-Standard liefert sie nicht.

@@ -1,207 +1,153 @@
-# Spec: Persistente, fortsetzbare KI-Chat-Sitzungen
+# Spec 0034 — Persistente, fortsetzbare KI-Chat-Sitzungen
 
-Status: Entwurf
-Modul: Schema-Erweiterung `persistence-sqlite`, Erweiterung `crates/app-tauri`,
-`frontend/`
-Abhängigkeiten: Kernschleife (Spec 0007/0021), KI-Provider (Spec 0006,
-Abschnitt 8 — löst den dortigen offenen Punkt zur Kontext-Kürzung),
-Redactor (Spec 0006, Abschnitt 5), Notiz-Vorschlag-Trigger-Mechanismus
-(Spec 0010, wiederverwendet für Titel-Generierung), MCP-Server (Spec 0028,
-Abschnitt 3 — MCP-Sitzungen bleiben ausdrücklich ausgenommen)
+Status: umgesetzt
+Zweck: Chat-Verläufe werden dauerhaft gespeichert und lassen sich beim
+erneuten Verbinden zu einem Server fortsetzen.
+Bezüge: Spec 0007 und 0021 (Kernschleife), Spec 0006 (Redaction), Spec 0010
+(Notiz-Vorschlag beim Beenden), Spec 0016 und 0036 (redigierte,
+verschlüsselte Inhalte), Spec 0028/0104 (MCP-Sitzungen sind ausgenommen),
+Spec 0039 (Misstrauens-Markierung), Spec 0057 (Kontextaufbau).
 
 ## 1. Ziel
 
-Chat-Verläufe werden dauerhaft gespeichert (nicht nur im Arbeitsspeicher der
-laufenden `Session`, Spec 0007 Abschnitt 3) und lassen sich beim erneuten
-Verbinden zu einem Server fortsetzen — nach demselben Grundprinzip, wie es
-Claude Code selbst löst: **lokale Speicherung des vollständigen Verlaufs,
-kein Provider-seitiger Session-Mechanismus** (recherchiert, siehe
-Diskussion — Anthropic-, OpenAI- und kompatible APIs sind zustandslos, jede
-Anfrage muss den Verlauf selbst mitschicken).
+Chat-Verläufe liegen lokal vollständig in der Datenbank, nicht nur im
+Arbeitsspeicher der laufenden Sitzung. Es gibt keinen anbieterseitigen
+Session-Mechanismus: die APIs sind zustandslos, jede Anfrage trägt den
+Verlauf selbst.
 
-## 2. Schema-Erweiterung (`persistence-sqlite`)
+## 2. Gespeicherte Daten
 
-```sql
--- migrations/000X_chat_sessions.sql
+Je Chat-Sitzung: Server, Titel (leer bis automatisch erzeugt), Start- und
+Endzeit (leer, solange aktiv) und der Anbieter, mit dem sie begann.
+Je Nachricht: Rolle (Nutzer, Assistent, Aktionsergebnis), Inhaltsart (Text,
+Kommando-Ergebnis, abgelehnte Aktion), Inhalt, Reihenfolge, Zeitpunkt.
+Löscht man den Server, verschwinden seine Sitzungen und Nachrichten mit.
 
-CREATE TABLE chat_sessions (
-    id              TEXT PRIMARY KEY,
-    server_id       TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-    title           TEXT,             -- NULL bis automatisch generiert
-    started_at      TEXT NOT NULL,
-    ended_at        TEXT,             -- NULL während aktiv/laufend
-    ai_provider_id  TEXT REFERENCES ai_provider_configs(id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_chat_sessions_server ON chat_sessions(server_id, started_at);
-
-CREATE TABLE chat_messages (
-    id              TEXT PRIMARY KEY,
-    session_id      TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    role            TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'action_result')),
-    content_type    TEXT NOT NULL CHECK (
-        content_type IN ('text', 'command_result', 'action_rejected', 'document')
-    ),
-    content         TEXT NOT NULL,    -- serialisierter MessageContent, siehe Abschnitt 3
-    sequence        INTEGER NOT NULL, -- Reihenfolge innerhalb der Sitzung
-    created_at      TEXT NOT NULL
-);
-
-CREATE INDEX idx_chat_messages_session ON chat_messages(session_id, sequence);
-```
-
-`ai_provider_id` ist rein informativ ("mit welchem Provider begann diese
-Sitzung") — beim Fortsetzen ist **nicht** derselbe Provider erforderlich,
-der Textverlauf ist providerunabhängig (Abschnitt 5).
+Der Anbieter einer Sitzung ist rein informativ: Beim Fortsetzen ist
+**nicht** derselbe Anbieter nötig, der Textverlauf ist anbieterunabhängig
+(Abschnitt 5).
 
 ## 3. Was gespeichert wird — redigiert, nicht roh
 
-Der `content`-Wert entspricht exakt dem, was tatsächlich durch den
-`OutputRedactor` (Spec 0006, Abschnitt 5) gelaufen ist, **nicht** dem
-ungefilterten Rohinhalt — dieselbe Konsistenzregel wie bereits beim
-strukturierten Logging (Spec 0016) festgelegt. Damit sammeln sich nicht
-zusätzlich unredigierte Secrets in der lokalen DB an, über das hinaus, was
-ohnehin schon an die KI ging.
+Gespeichert wird genau das, was durch die Redaction (Spec 0006, Abschnitt
+5) gelaufen ist, nicht der Rohinhalt. So sammeln sich in der lokalen
+Datenbank nicht zusätzlich unredigierte Secrets an. Vor jedem Senden gilt
+zusätzlich Spec 0040, Abschnitt 5.
 
 ## 4. Sitzungs-Lebenszyklus
 
-Eine Sitzung beginnt bei `connect()`, endet bei `disconnect()` — analog zu
-Claude Codes "eine Session pro Arbeitsblock"-Modell, nicht eine einzige
-endlose Historie pro Server.
+Eine Sitzung beginnt beim Verbinden und endet beim Trennen — eine Sitzung
+pro Arbeitsblock, keine endlose Historie pro Server.
 
-- Jede Nachricht (Nutzer-Text, KI-Antwort, Aktionsergebnis, Ablehnung gemäß
-  Spec 0021) wird **fortlaufend** geschrieben, sobald sie entsteht — kein
-  Sammeln bis zum Verbindungsende. Ein Absturz mitten in der Sitzung verliert
-  damit höchstens die letzte, noch nicht abgeschlossene Nachricht.
-- Beim Fortsetzen einer gespeicherten Sitzung (Abschnitt 6) wird **dieselbe**
-  `chat_sessions`-Zeile weiterverwendet (`ended_at` wird auf `NULL`
-  zurückgesetzt, `sequence` läuft weiter hoch) — kein Kopieren in eine neue
-  Zeile. Der Verlauf bleibt ein durchgehender Thread über mehrere
-  Verbinden/Trennen-Zyklen hinweg.
+- Jede Nachricht (Nutzertext, KI-Antwort, Aktionsergebnis, Ablehnung gemäß
+  Spec 0021) wird **sofort** gespeichert, nicht erst am Verbindungsende. Ein
+  Absturz verliert höchstens die letzte, noch nicht abgeschlossene
+  Nachricht.
+- Beim Fortsetzen wird **dieselbe** Sitzung weiterverwendet (Endzeit wird
+  geleert, die Reihenfolge läuft weiter) — kein Kopieren. Der Verlauf bleibt
+  ein durchgehender Thread über mehrere Verbinden/Trennen-Zyklen.
 
-## 5. "Fortsetzbar" — bewusst ohne Ablaufdatum
+## 5. „Fortsetzbar" — ohne Ablaufdatum
 
-Da es kein Provider-Konzept für Session-Ablauf gibt, verfällt eine Sitzung
-**nicht automatisch nach Zeit**. Eine Sitzung gilt als fortsetzbar, wenn:
+Eine Sitzung verfällt nicht automatisch nach Zeit. Sie ist fortsetzbar,
+wenn sich ihre gespeicherte Historie laden lässt (keine korrupten Daten)
+und mindestens ein aktiver KI-Anbieter konfiguriert ist — nicht zwingend
+derselbe wie zuvor.
 
-1. sich die gespeicherte Historie laden lässt (Integritätsprüfung, keine
-   korrupten Daten), und
-2. mindestens ein aktiver KI-Provider konfiguriert ist — nicht zwingend
-   derselbe, der ursprünglich genutzt wurde.
+Optional gibt es eine globale **Aufbewahrungs-Einstellung** in Tagen
+(Standard: niemals automatisch löschen). Ist sie gesetzt, räumt die App
+beim Start Sitzungen auf, deren Endzeit älter als der Zeitraum ist, samt
+Nachrichten.
 
-Kein Alters-Grenzwert, der eine Sitzung blockiert. Stattdessen: eine
-**optionale Aufbewahrungs-Einstellung** (`chat_session_retention_days:
-Option<u32>`, Default `None` = niemals automatisch löschen), global über
-`tauri-plugin-store` (Spec 0024-Muster) gespeichert, nicht pro Server. Ist
-sie gesetzt, räumt ein Hintergrund-Job beim App-Start Sitzungen auf, deren
-`ended_at` älter als der konfigurierte Zeitraum ist (samt zugehöriger
-Nachrichten über `ON DELETE CASCADE`).
+## 6. Ablauf beim Verbinden
 
-## 6. UI-Ablauf beim Verbinden
+Hat ein Server gespeicherte Sitzungen, erscheint beim Klick ein
+Auswahl-Screen statt direkten Verbindens:
 
-Beim Klick auf einen Server mit vorhandener Sitzungshistorie erscheint ein
-leichter Auswahl-Screen statt direkt zu verbinden:
-
-- **"Neue Unterhaltung"** — prominent, Standardaktion (Enter-Taste),
-  erzeugt eine neue `chat_sessions`-Zeile.
-- **Liste vergangener Sitzungen** darunter, neueste zuerst: Titel (Abschnitt
-  7), Zeitpunkt, Nachrichtenanzahl. Klick lädt die gespeicherte Historie in
-  den `SessionContext` und setzt die Sitzung fort (`resume_chat_session`,
-  Abschnitt 8).
-- Hat ein Server noch keine gespeicherte Sitzung: kein Auswahl-Screen,
-  direktes Verbinden wie bisher.
+- **„Neue Unterhaltung"** — prominent, Standardaktion (Enter), beginnt
+  eine neue Sitzung.
+- **Liste vergangener Sitzungen**, neueste zuerst: Titel (Abschnitt 7),
+  Zeitpunkt, Nachrichtenanzahl. Ein Klick lädt die Historie und setzt die
+  Sitzung fort (Abschnitt 8).
+- Ohne gespeicherte Sitzung: kein Auswahl-Screen, direkt verbinden.
 
 ## 7. Automatische Kurztitel
 
-Beim Verbindungsende (`disconnect()`) wird — sofern die Sitzung mindestens
-eine Nutzer-Nachricht enthält und noch keinen Titel hat — ein kurzer Titel
-(2–4 Wörter) generiert. Wiederverwendet denselben Trigger-Mechanismus wie
-der Notiz-Vorschlag beim Beenden (Spec 0010, Abschnitt 2): ein gezielter,
-minimaler KI-Aufruf, hier aber ohne Tool-Schema — reine Textanfrage ("Fasse
-den Zweck dieser Unterhaltung in 2–4 Worten zusammen"), Antworttext wird
-direkt (defensiv auf sinnvolle Länge begrenzt) als Titel übernommen.
+Beim Trennen — sofern die Sitzung mindestens eine Nutzer-Nachricht hat und
+noch keinen Titel — wird ein kurzer Titel (2–4 Wörter) erzeugt: ein
+minimaler KI-Aufruf ohne Tool-Schema, dessen Antworttext (defensiv auf
+sinnvolle Länge begrenzt) der Titel wird. Der Aufruf nutzt denselben
+Auslöser wie der Notiz-Vorschlag beim Beenden (Spec 0010, Abschnitt 2).
 
-- Ein einmal automatisch gesetzter Titel wird **nicht** bei jedem weiteren
-  Trennen erneut überschrieben — nur beim allerersten Mal, danach bleibt er
-  stabil (kann sich sonst bei jedem Fortsetzen ändern, verwirrend für den
-  Wiedererkennungswert).
-- `rename_chat_session(session_id, new_title)` erlaubt manuelles
-  Umbenennen, überschreibt den automatischen Titel dauerhaft.
+- Ein gesetzter Titel wird nicht bei jedem weiteren Trennen überschrieben,
+  er bleibt stabil.
+- Manuelles Umbenennen überschreibt den automatischen Titel dauerhaft.
 
-## 8. Commands
+## 8. Operationen
 
-```
-list_chat_sessions(server_id) -> Vec<ChatSessionSummaryDto>
-resume_chat_session(server_id, session_id) -> SessionId
-rename_chat_session(session_id, new_title)
-delete_chat_session(session_id)
-```
+Auflisten der Sitzungen eines Servers, Fortsetzen, Umbenennen, Löschen.
 
-`resume_chat_session` baut wie ein normaler `connect()` die SSH-Verbindung
-auf (inkl. ggf. Host-Key-Bestätigung), lädt zusätzlich die gespeicherte
-Historie in den `SessionContext` — inklusive der Kontext-Kürzung aus
-Abschnitt 9, falls nötig.
+Fortsetzen baut wie normales Verbinden die SSH-Verbindung auf (inklusive
+Host-Key-Bestätigung) und lädt die Historie in den Kontext, bei Bedarf mit
+Kürzung (Abschnitt 9). Schlägt das Laden fehl, wird die bereits
+aufgebaute Verbindung sauber getrennt. Eine gerade aktive Sitzung lässt
+sich nicht löschen (klare Meldung).
 
-## 9. Kontext-Kürzung beim Laden (löst Spec 0006, Abschnitt 8)
+## 9. Kontextbegrenzung beim Laden
 
-Eine über Tage/Wochen fortgesetzte Sitzung kann eine Historie ansammeln, die
-das Kontextfenster/Budget sprengt. Beim Laden (und vor jedem
-`AiProvider::send()`-Aufruf) gilt eine einfache, zeichenbasierte
-Näherung statt eines exakten, providerspezifischen Tokenizers:
-konfigurierbares Zeichen-Budget (Default z. B. 40.000 Zeichen), beim
-Überschreiten werden die **ältesten** Nachrichten zuerst verworfen, bis der
-verbleibende Verlauf unter das Budget passt. Kein Zusammenfassen/
-Komprimieren älterer Nachrichten in dieser Spec — reines Kürzen, einfach
-und vorhersehbar, auch wenn dadurch älterer Kontext verloren geht (bewusste
-MVP-Vereinfachung, wie ursprünglich in Spec 0006 skizziert).
+Eine über Tage fortgesetzte Sitzung kann das Kontextfenster sprengen. Vor
+jeder Anfrage wird der gesendete Kontext begrenzt; das Budget ist fest und
+kein Bedienknopf. Wie der Kontext aufgebaut und verkleinert wird
+(Zusammenfassung alter Runden, Kürzen einzelner Ausgaben), beschreibt
+Spec 0057. Der volle Verlauf bleibt unabhängig davon gespeichert.
 
-## 10. Abgrenzung zu MCP (Spec 0028)
+## 10. Abgrenzung zu MCP
 
-MCP-ausgelöste Aktionen erzeugen **keine** `chat_sessions`-Einträge — sie
-laufen bereits laut Spec 0028, Abschnitt 3 außerhalb der
-Turn-Fortsetzungslogik und ohne eigenen Chatverlauf. Diese Abgrenzung bleibt
-unverändert bestehen.
+MCP-ausgelöste Aktionen erzeugen **keine** Chat-Sitzungen und schreiben
+nichts in einen gespeicherten Verlauf (siehe Spec 0040, Abschnitt 4 und
+Spec 0104).
 
 ## 11. Neuer Chat innerhalb einer Verbindung
 
 Im Chat-Panel eines verbundenen Tabs gibt es eine Schaltfläche „Neuer
-Chat“. Sie beginnt einen frischen Chat, ohne die SSH-Verbindung zu trennen:
+Chat". Sie beginnt einen frischen Chat, ohne die SSH-Verbindung zu trennen:
 Terminal, Verbindung, Tab, Dateibrowser, gespeichertes Sudo-Passwort und ein
 bereits erhöhter Kanal bleiben unverändert.
 
-1. **Wirkung.** Der bisherige Chat wird beendet (`ended_at` gesetzt) und
+1. **Wirkung.** Der bisherige Chat wird beendet (Endzeit gesetzt) und
    bekommt seinen automatischen Titel aus dem bisherigen Verlauf — genau wie
    beim Trennen (Abschnitt 4 und 7). Für denselben Server und den aktiven
-   KI-Anbieter entsteht eine neue `chat_sessions`-Zeile, auf die der Tab
-   umschaltet. Verlauf, rollierende Zusammenfassung und Chat-Zustand sind
-   leer, die Chat-Ansicht zeigt einen leeren Chat. Der alte Chat erscheint
-   mit seinem Titel in der Auswahlliste (Abschnitt 6) und ist wie jeder
-   beendete Chat fortsetzbar. Die Ledger-Einträge des alten Chats bleiben an
-   diesem; neue Einträge gehören zum neuen Chat.
-2. **Entscheidung: Misstrauens-Markierung bleibt.** Die Markierung „nicht
-   vertrauenswürdiger Inhalt gesehen“ (Spec 0039, Abschnitt 5) gilt für die
+   KI-Anbieter entsteht eine neue Sitzung, auf die der Tab umschaltet.
+   Verlauf, rollierende Zusammenfassung und Chat-Zustand sind leer, die
+   Chat-Ansicht zeigt einen leeren Chat. Der alte Chat erscheint mit
+   seinem Titel in der Auswahlliste (Abschnitt 6) und ist wie jeder
+   beendete Chat fortsetzbar. Die Ledger-Einträge des alten Chats bleiben
+   an diesem; neue Einträge gehören zum neuen Chat.
+2. **Misstrauens-Markierung bleibt.** Die Markierung „nicht
+   vertrauenswürdiger Inhalt gesehen" (Spec 0039, Abschnitt 5) gilt für die
    Verbindung, nicht für den Chat. Der neue Chat erbt sie und setzt sie nie
-   zurück; ebenso bleiben ein offener Injection-Verdacht und eine
-   nicht verfügbare Injection-Prüfung bestehen. Ein neuer Chat senkt keine
+   zurück; ebenso bleiben ein offener Injection-Verdacht und eine nicht
+   verfügbare Injection-Prüfung bestehen. Ein neuer Chat senkt keine
    Eskalationsstufe.
-3. **Entscheidung: gesperrt bei Aktivität.** Die Schaltfläche ist gesperrt,
-   solange in diesem Tab eine KI-Antwort läuft oder eine Bestätigung offen
-   ist. Dieselbe Prüfung gilt zusätzlich im Backend; dort lehnt der Befehl
-   mit einem Fehler ab und ändert nichts.
-4. **Entscheidung: Titel wie beim Trennen.** Der beendete Chat bekommt
-   Endzeit und automatischen Titel (nur wenn er eine Nutzer-Nachricht hat
-   und noch keinen Titel) auf demselben Weg wie beim Trennen. Der Vorschlag,
-   Notizen zu aktualisieren, gehört zum Ende der Verbindung und wird durch
-   „Neuer Chat“ nicht ausgelöst.
-5. **Entscheidung: Ausnahmen.** Ein lokaler Tab hat keinen gespeicherten
-   Chat; dort wird nur der Verlauf geleert, es entsteht keine Zeile. MCP-
-   Sitzungen (Abschnitt 10) zeigen die Schaltfläche nicht. Die einleitende
+3. **Gesperrt bei Aktivität.** Die Schaltfläche ist gesperrt, solange in
+   diesem Tab eine KI-Antwort läuft oder eine Bestätigung offen ist.
+   Dieselbe Prüfung gilt zusätzlich im Backend; dort lehnt der Befehl mit
+   einem Fehler ab und ändert nichts.
+4. **Titel wie beim Trennen.** Der beendete Chat bekommt Endzeit und
+   automatischen Titel (nur wenn er eine Nutzer-Nachricht hat und noch
+   keinen Titel) auf demselben Weg wie beim Trennen. Der Vorschlag, Notizen
+   zu aktualisieren, gehört zum Ende der Verbindung und wird durch „Neuer
+   Chat" nicht ausgelöst.
+5. **Ausnahmen.** Ein lokaler Tab hat keinen gespeicherten Chat; dort wird
+   nur der Verlauf geleert, es entsteht keine Sitzung. MCP-Sitzungen
+   (Abschnitt 10) zeigen die Schaltfläche nicht. Die einleitende
    Betriebssystem-Information der Verbindung bleibt im Kontext erhalten.
-   Schlägt das Anlegen der neuen Zeile fehl, bleibt der bisherige Chat
+   Schlägt das Anlegen der neuen Sitzung fehl, bleibt der bisherige Chat
    unverändert aktiv und die Schaltfläche meldet den Fehler.
 
-## 12. Offene Punkte
+## 12. Grenzen
 
-- Zusammenfassen statt reinem Kürzen alter Nachrichten (Abschnitt 9) wäre
-  eine spätere Verbesserung, sobald sich das reine Kürzen in der Praxis als
-  zu verlustreich erweist.
+- Der Chat des lokalen Pseudo-Servers wird nicht gespeichert (er hat keinen
+  Server-Eintrag, an den die Sitzung gebunden wäre).
+- Ältere Nachrichten werden beim Senden gekürzt bzw. zusammengefasst
+  (Spec 0057), nicht aus dem gespeicherten Verlauf gelöscht.
