@@ -9,6 +9,7 @@ import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   continueTruncatedResponse,
+  listPromptHistory,
   respondToAction,
   sendChatMessage,
   stopAutoContinuation,
@@ -165,6 +166,36 @@ describe("ChatPanel multiline input (Spec 0055, Teil 1)", () => {
     // Pixelwert.
     fireEvent.change(field, { target: { value: "a\nb\nc" } });
     await waitFor(() => expect(field.style.height).not.toBe(""));
+  });
+});
+
+describe("ChatPanel prompt history after send (Spec 0015, §5, issue #352)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("makes a prompt sent in the open panel reachable with ArrowUp immediately", async () => {
+    let stored: string[] = ["alt"];
+    vi.mocked(listPromptHistory).mockImplementation(() => Promise.resolve([...stored]));
+    vi.mocked(sendChatMessage).mockImplementation((_s, text) => {
+      stored = [...stored, text];
+      return Promise.resolve();
+    });
+    renderChatPanel();
+    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    await waitFor(() => expect(listPromptHistory).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(field, { target: { value: "neu" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await waitFor(() => expect(listPromptHistory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(field).toHaveValue(""));
+
+    (field as HTMLTextAreaElement).setSelectionRange(0, 0);
+    fireEvent.keyDown(field, { key: "ArrowUp" });
+    expect(field).toHaveValue("neu");
+    (field as HTMLTextAreaElement).setSelectionRange(0, 0);
+    fireEvent.keyDown(field, { key: "ArrowUp" });
+    expect(field).toHaveValue("alt");
   });
 });
 
