@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AutoReconnectSettings } from "./AutoReconnectSettings";
 import { commandErrorMessage, getChatSessionRetentionDays, setChatSessionRetentionDays } from "../api";
 
 /** Spec 0034, Abschnitt 5: optionale Aufbewahrungsdauer für persistente
@@ -94,6 +95,7 @@ export function ChatRetentionSettings() {
         />
       )}
       <p className="mt-1 text-xs text-slate-500">{t("chatRetention.hint")}</p>
+      <AutoReconnectSettings />
     </div>
   );
 }

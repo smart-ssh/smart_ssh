@@ -18,6 +18,7 @@ vi.mock("./FileBrowserPanel", () => ({ FileBrowserPanel: () => <div>file-browser
 
 vi.mock("../events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
+  onAutoReconnectChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 vi.mock("../layoutSettings", () => ({

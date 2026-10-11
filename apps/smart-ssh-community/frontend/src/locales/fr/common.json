@@ -1108,7 +1108,10 @@
     "splitHandle": "Séparateur de panneau",
     "terminalTab": "Terminal",
     "filesTab": "Fichiers",
-    "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}"
+    "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}",
+    "reconnectingAuto": "Reconnexion… (tentative {{attempt}})",
+    "stopReconnect": "Arrêter",
+    "reconnectGaveUp": "La connexion n’a pas pu être rétablie."
   },
   "unusableServer": {
     "badge": "Inutilisable",
@@ -1119,5 +1122,12 @@
     "host": "Hôte : {{host}}",
     "delete": "Supprimer le serveur",
     "deleteSecrets": "Tous les secrets que cette version sait enregistrer pour ce serveur sont supprimés. Les secrets ajoutés par une version plus récente de l’application peuvent subsister."
+  },
+  "autoReconnect": {
+    "label": "Reconnexion automatique",
+    "off": "Désactivée",
+    "seconds30": "30 secondes",
+    "seconds60": "60 secondes",
+    "minutes5": "5 min"
   }
 }

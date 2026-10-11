@@ -72,3 +72,51 @@ test("a failed reconnect shows the error and keeps the button", async ({ app }) 
   await expect(app.page.getByRole("alert")).toBeVisible();
   await expect(app.page.getByRole("button", { name: "Reconnect", exact: true })).toBeEnabled();
 });
+
+// Issue #356: automatic reconnect — the header shows the attempts and "Stop".
+test("automatic attempts show the progress, Stop ends them and the button returns", async ({
+  app,
+}) => {
+  await app.launch(populated());
+  const sessionId = await openSession(app, "web-1");
+
+  await app.emit("auto-reconnect-changed", { sessionId, phase: "running", attempt: 1 });
+  await app.emit("connection-status-changed", { sessionId, status: "disconnected", reason: null });
+  await expect(app.page.getByText("Reconnecting… (attempt 1)")).toBeVisible();
+  await expect(app.page.getByRole("button", { name: "Reconnect", exact: true })).toBeHidden();
+
+  await app.emit("auto-reconnect-changed", { sessionId, phase: "running", attempt: 2 });
+  await expect(app.page.getByText("Reconnecting… (attempt 2)")).toBeVisible();
+
+  await app.page.getByRole("button", { name: "Stop", exact: true }).click();
+  expect((await app.calls("stop_auto_reconnect")).map((c) => c.args.sessionId)).toEqual([
+    sessionId,
+  ]);
+  await app.emit("auto-reconnect-changed", { sessionId, phase: "stopped", attempt: 0 });
+  await expect(app.page.getByRole("button", { name: "Reconnect", exact: true })).toBeVisible();
+});
+
+test("when the time runs out the header says so and the button appears", async ({ app }) => {
+  await app.launch(populated());
+  const sessionId = await openSession(app, "web-1");
+  await app.emit("auto-reconnect-changed", { sessionId, phase: "running", attempt: 1 });
+  await app.emit("connection-status-changed", { sessionId, status: "disconnected", reason: null });
+
+  await app.emit("auto-reconnect-changed", { sessionId, phase: "gave_up", attempt: 0 });
+
+  await expect(app.page.getByText("Connection could not be restored.")).toBeVisible();
+  await expect(app.page.getByRole("button", { name: "Reconnect", exact: true })).toBeVisible();
+});
+
+test("a successful automatic reconnect needs no click", async ({ app }) => {
+  await app.launch(populated());
+  const sessionId = await openSession(app, "web-1");
+  await app.emit("auto-reconnect-changed", { sessionId, phase: "running", attempt: 1 });
+  await app.emit("connection-status-changed", { sessionId, status: "disconnected", reason: null });
+  await app.emit("connection-status-changed", { sessionId, status: "connected", reason: null });
+  await app.emit("auto-reconnect-changed", { sessionId, phase: "reconnected", attempt: 0 });
+
+  await expect(app.page.getByText("Reconnecting… (attempt 1)")).toBeHidden();
+  await expect(app.page.getByRole("button", { name: "Reconnect", exact: true })).toBeHidden();
+  expect(await app.calls("reconnect_session")).toHaveLength(0);
+});

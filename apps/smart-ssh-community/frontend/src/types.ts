@@ -212,6 +212,14 @@ export interface ConnectionStatusChangedEvent {
   reason: string | null;
 }
 
+/** Issue #356, Spec 0107 §8: Stand der automatischen Neuverbindung. */
+export interface AutoReconnectChangedEvent {
+  sessionId: string;
+  phase: "running" | "reconnected" | "gave_up" | "stopped" | "blocked";
+  /** Nummer des laufenden bzw. nächsten Versuchs (nur bei `running`). */
+  attempt: number;
+}
+
 export type HostKeyKind = "unknown" | "mismatch";
 
 /** Gemeinsame Form für `HostKeyDialog` — sowohl

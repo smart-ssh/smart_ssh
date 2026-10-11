@@ -1100,7 +1100,10 @@
     "splitHandle": "Paneelscheiding",
     "terminalTab": "Terminal",
     "filesTab": "Bestanden",
-    "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}"
+    "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
+    "reconnectingAuto": "Opnieuw verbinden… (poging {{attempt}})",
+    "stopReconnect": "Stoppen",
+    "reconnectGaveUp": "De verbinding kon niet worden hersteld."
   },
   "unusableServer": {
     "badge": "Onbruikbaar",
@@ -1111,5 +1114,12 @@
     "host": "Host: {{host}}",
     "delete": "Server verwijderen",
     "deleteSecrets": "Elk geheim dat deze versie voor deze server weet op te slaan, wordt verwijderd. Geheimen die door een nieuwere versie van de app zijn toegevoegd, kunnen blijven bestaan."
+  },
+  "autoReconnect": {
+    "label": "Automatisch opnieuw verbinden",
+    "off": "Uit",
+    "seconds30": "30 seconden",
+    "seconds60": "60 seconden",
+    "minutes5": "5 minuten"
   }
 }

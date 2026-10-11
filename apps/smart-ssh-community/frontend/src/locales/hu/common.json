@@ -1100,7 +1100,10 @@
     "connectionLostPressR": "A kapcsolat megszakadt. Nyomja meg az R gombot az újracsatlakozáshoz.",
     "reconnect": "Újracsatlakozás",
     "reconnectedSeparator": "— újracsatlakozva —",
-    "reconnecting": "Újracsatlakozás…"
+    "reconnecting": "Újracsatlakozás…",
+    "reconnectingAuto": "Újracsatlakozás… ({{attempt}}. kísérlet)",
+    "stopReconnect": "Leállítás",
+    "reconnectGaveUp": "A kapcsolatot nem sikerült helyreállítani."
   },
   "unusableServer": {
     "badge": "Nem használható",
@@ -1111,5 +1114,12 @@
     "host": "Gazdagép: {{host}}",
     "delete": "Szerver törlése",
     "deleteSecrets": "A szerverhez ez a verzió által tárolható minden titok törlődik. Az alkalmazás újabb verziója által hozzáadott titkok megmaradhatnak."
+  },
+  "autoReconnect": {
+    "label": "Automatikus újracsatlakozás",
+    "off": "Ki",
+    "seconds30": "30 másodperc",
+    "seconds60": "60 másodperc",
+    "minutes5": "5 perc"
   }
 }
