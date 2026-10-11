@@ -1,6 +1,6 @@
 //! Tests zu Spec 0075, Schritt 4: die `~/.ssh/config`-Ablehnung (§3.2.5,
 //! §6.3.14) und der äußere Zeuge `ssh -F … -G` (§6.3.2, §6.3.12, §6.3.13,
-//! §9/Q-1 Punkt 5). Beides läuft hier und nicht in
+//! §4.2 (Zitier- und Trennerregeln)). Beides läuft hier und nicht in
 //! `crates/core/src/profiles/ssh_config/export/tests.rs`, weil es entweder
 //! ein Dateisystem (symlink-Auflösung) oder ein echtes `ssh`-Binary
 //! braucht — beides hat `core` laut Architekturregel nicht.
@@ -8,7 +8,7 @@
 //! **Warum ein externer Zeuge nötig ist, nicht nur der Rundlauf über
 //! unseren eigenen Parser:** Leser und Schreiber teilen dieselbe
 //! Zitier-/Trennerroutine (`ssh_config::quoting`); ein symmetrisch falsches
-//! Verständnis davon bestünde einen reinen Rundlauf-Test trotzdem (§9/Q-1
+//! Verständnis davon bestünde einen reinen Rundlauf-Test trotzdem (§4.2
 //! Punkt 5). `ssh -G` urteilt unabhängig von unserem Parser.
 
 use std::collections::HashMap;
@@ -97,7 +97,7 @@ fn t_6_3_2_ssh_g_akzeptiert_die_exportierte_datei() {
     assert_eq!(
         values.get("user").map(String::as_str),
         Some("max mustermann"),
-        "§9/Q-1 Punkt 5: der Wert mit Leerzeichen ist der äußere Zeuge für die Quoting-Regel"
+        "§4.2 (Zitier- und Trennerregeln): der Wert mit Leerzeichen ist der äußere Zeuge für die Quoting-Regel"
     );
     assert_eq!(
         values.get("identityfile").map(String::as_str),
@@ -144,7 +144,7 @@ fn t_6_3_12_proxyjump_mit_umbenanntem_alias_besteht_ssh_g() {
 /// §6.4.6a verlangt ausdrücklich „`ssh -F … -G` besteht" — der Test in
 /// `crates/core/src/profiles/ssh_config/export/tests.rs` prüft nur den
 /// eigenen Alias-Rundlauf (spec-reviewer-Fund, Runde 1: das ist genau die
-/// Symmetriefalle, die §9/Q-1 Punkt 5 ausschließen will). Hier der externe
+/// Symmetriefalle, die §4.2 (Zitier- und Trennerregeln) ausschließen will). Hier der externe
 /// Zeuge dazu, mit demselben bösartigen Namen wie dort.
 #[test]
 fn t_6_4_6a_ssh_g_besteht_mit_boesartigem_namen() {
@@ -163,7 +163,7 @@ fn t_6_4_6a_ssh_g_besteht_mit_boesartigem_namen() {
 
 // -------------------------------------------- Fall 2/13 aus Review-Runde 1
 
-/// §9/Q-1 Punkt 5: `ssh -G` als äußerer Zeuge entscheidet, welche
+/// §4.2 (Zitier- und Trennerregeln): `ssh -G` als äußerer Zeuge entscheidet, welche
 /// Quoting-Fassung stimmt — nicht der Rundlauf durch unseren eigenen Leser
 /// (der `\"` nicht entschachtelt, s. `quoting.rs`-Moduldoc). Ein Wert mit
 /// eingebettetem `"`.

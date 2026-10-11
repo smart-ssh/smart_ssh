@@ -111,7 +111,7 @@ fn t_6_2_3_platzhalter_im_include_pfad() {
     assert!(!names.contains(&"nichtdabei"), "Nicht-Treffer gelesen");
 }
 
-// ---------------------------- ANNAHME A-2 (ADR 0074 Punkt 5/8, §9 Spec)
+// ---------------------------- ANNAHME A-2 (ADR 0074 Punkt 5/8)
 
 // spec-reviewer-Fund (Runde 1, S-1): `*` ist auf Windows kein gültiges
 // Pfadzeichen — `create_dir_all` auf ein Verzeichnis, das buchstäblich `*`
@@ -126,7 +126,7 @@ fn t_6_2_3_platzhalter_im_include_pfad() {
 #[cfg(unix)]
 #[test]
 fn t_a2_platzhalter_vor_letzter_pfadkomponente_wird_gemeldet_nicht_aufgeloest() {
-    // ANNAHME A-2, bestätigt (Architekt, 2026-09-25, §9 der Spec): Ein
+    // ANNAHME A-2, bestätigt (Architekt, 2026-09-25, §3.3): Ein
     // Platzhalter weiter vorne als die letzte Pfadkomponente
     // (`Include */conf.d/x.conf`) wird gemeldet, nicht aufgelöst — sonst
     // liefe ein Muster aus fremder Hand einen unbegrenzten Verzeichnisbaum
@@ -239,7 +239,7 @@ fn t3_platzhalter_vor_letzter_komponente_bleibt_trotz_fragezeichen_im_verzeichni
 
 #[test]
 fn t_6_2_4_relativer_include_relativ_zur_einbindenden_datei() {
-    // Der Messbefund gegen `ssh2-config` (§9/M-1) als Test: Sie löst
+    // Der Messbefund gegen `ssh2-config` (ADR 0074) als Test: Sie löst
     // relative Pfade gegen `$HOME/.ssh` auf. Hier muss das Verzeichnis der
     // **einbindenden** Datei gewinnen — nicht `~/.ssh`, nicht das
     // Arbeitsverzeichnis.
@@ -374,7 +374,7 @@ fn t_6_4_5a_gesamtgroesse_ueber_viele_dateien() {
     let d = tempfile::tempdir().unwrap();
     // Neun Dateien à 1 MiB: je Datei weit unter der Grenze, zusammen
     // darüber. Genau das ist der Punkt — die Grenze gilt über alle Dateien
-    // zusammen (§9, Anmerkung zur Grenze).
+    // zusammen (§3.3).
     let filler = "# ".to_string() + &"x".repeat(1022);
     let one_mib: String = std::iter::repeat_n(filler.as_str(), 1024)
         .collect::<Vec<_>>()
@@ -440,7 +440,7 @@ fn t_6_4_5c_wert_mit_hunderttausend_zeichen() {
 #[test]
 fn t_6_4_5d_datei_die_sich_selbst_einbindet() {
     // Genau der Fall, an dem `ssh2-config` den Prozess mit einem
-    // Stapelüberlauf beendete (§9/M-1). Hier: eine Meldung, kein Hänger.
+    // Stapelüberlauf beendete (ADR 0074). Hier: eine Meldung, kein Hänger.
     let d = tempfile::tempdir().unwrap();
     let c = write(d.path(), "selbst.conf", "Include selbst.conf\nHost a\n");
     let read = read_ok(&c);
