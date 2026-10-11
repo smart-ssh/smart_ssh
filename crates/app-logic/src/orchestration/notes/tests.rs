@@ -98,6 +98,20 @@ async fn test_disconnect_suggestion_calls_ai_with_restricted_actions_when_comman
     );
     assert_eq!(recorded[0].available_actions[0].name, "propose_note_update");
     assert!(
+        recorded[0].available_actions[0]
+            .parameters
+            .iter()
+            .all(|p| p.name != "target"),
+        "kein Ziel-Parameter: nur die Notiz des Servers selbst (Spec 0010, Abschnitt 3)"
+    );
+    assert!(
+        !recorded[0].available_actions[0]
+            .description
+            .to_lowercase()
+            .contains("gruppe"),
+        "die Beschreibung darf die Gruppe nicht erwähnen"
+    );
+    assert!(
         recorded[0]
             .history
             .iter()
@@ -192,6 +206,48 @@ async fn test_disconnect_suggestion_no_event_when_ai_proposes_nothing() {
     assert!(
         !suggested,
         "Rückgabewert muss false sein, s. Etappe-4-Kommentar oben"
+    );
+}
+
+#[tokio::test]
+async fn test_disconnect_suggestion_ignores_group_target_proposal() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![
+            AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                target: NoteTargetSelector::CurrentServerGroup,
+                new_content: "Gruppen-Notiz per Disconnect".to_string(),
+            }),
+            AiEvent::Done,
+        ]),
+        MockSshTransport::default(),
+    );
+    session
+        .context
+        .lock()
+        .await
+        .history
+        .push(command_result_message());
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let suggested = suggest_note_update_on_disconnect(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    )
+    .await;
+
+    assert!(
+        emitter.events.lock().unwrap().is_empty(),
+        "Gruppen-Ziel beim Verbindungsende: kein Event, kein Dialog"
+    );
+    assert!(!suggested, "Rückgabewert muss false sein");
+    assert!(
+        profile_store.note_revisions.lock().unwrap().is_empty(),
+        "keine Revision"
     );
 }
 
