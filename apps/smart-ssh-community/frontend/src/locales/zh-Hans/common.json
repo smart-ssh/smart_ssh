@@ -1084,6 +1084,10 @@
   "session": {
     "disconnected": "已断开连接",
     "disconnectedWithReason": "已断开连接：{{reason}}",
+    "reconnect": "重新连接",
+    "reconnecting": "正在重新连接…",
+    "connectionLostPressR": "连接已断开。按 R 重新连接。",
+    "reconnectedSeparator": "— 已重新连接 —",
     "disconnect": "断开连接",
     "splitHandle": "面板分隔条",
     "terminalTab": "终端",

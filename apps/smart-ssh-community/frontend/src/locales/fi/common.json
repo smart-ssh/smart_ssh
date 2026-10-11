@@ -1092,6 +1092,10 @@
   "session": {
     "disconnected": "Yhteys katkaistu",
     "disconnectedWithReason": "Yhteys katkaistu: {{reason}}",
+    "reconnect": "Yhdistä uudelleen",
+    "reconnecting": "Yhdistetään uudelleen…",
+    "connectionLostPressR": "Yhteys katkesi. Yhdistä uudelleen painamalla R.",
+    "reconnectedSeparator": "— yhdistetty uudelleen —",
     "disconnect": "Katkaise yhteys",
     "splitHandle": "Paneelien jakaja",
     "terminalTab": "Pääte",

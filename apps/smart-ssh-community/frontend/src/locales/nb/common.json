@@ -1092,6 +1092,10 @@
   "session": {
     "disconnected": "Frakoblet",
     "disconnectedWithReason": "Frakoblet: {{reason}}",
+    "reconnect": "Koble til på nytt",
+    "reconnecting": "Kobler til på nytt…",
+    "connectionLostPressR": "Tilkoblingen gikk tapt. Trykk R for å koble til på nytt.",
+    "reconnectedSeparator": "— koblet til på nytt —",
     "disconnect": "Koble fra",
     "splitHandle": "Panelskille",
     "terminalTab": "Terminal",

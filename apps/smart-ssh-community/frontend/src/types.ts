@@ -198,9 +198,13 @@ export interface RiskAssessment {
 }
 
 /** Spec 0017, Abschnitt 2: `awaiting_host_key` kommt nie über
- * `connection-status-changed` (das Event kennt nur den Übergang
- * connected/disconnected), nur als `SessionSummaryDto.status`. */
-export type ConnectionStatus = "connected" | "disconnected" | "awaiting_host_key";
+ * `connection-status-changed` (das Event kennt nur die Übergänge
+ * connected/disconnected/reconnecting, Issue #355), nur als `SessionSummaryDto.status`. */
+export type ConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "awaiting_host_key";
 
 export interface ConnectionStatusChangedEvent {
   sessionId: string;

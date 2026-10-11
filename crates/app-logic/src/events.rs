@@ -46,6 +46,9 @@ fn emit<T: Serialize>(emitter: &dyn EventEmitter, event: &str, payload: &T) {
 pub enum ConnectionStatus {
     Connected,
     Disconnected,
+    /// Issue #355, Spec 0105: a reconnect of a lost session is running.
+    /// Goes back to `Connected` or, on failure, `Disconnected`.
+    Reconnecting,
     /// Spec 0017, Abschnitt 2: `list_sessions()`-Status für einen laufenden
     /// `connect()`-Aufruf, der gerade auf `confirm_host_key` wartet — diese
     /// Session existiert noch nicht in `SessionManager.sessions` (sie wird

@@ -1092,6 +1092,10 @@
   "session": {
     "disconnected": "डिस्कनेक्ट हो गया",
     "disconnectedWithReason": "डिस्कनेक्ट हो गया: {{reason}}",
+    "reconnect": "फिर से कनेक्ट करें",
+    "reconnecting": "फिर से कनेक्ट हो रहा है…",
+    "connectionLostPressR": "कनेक्शन टूट गया। दोबारा कनेक्ट करने के लिए R दबाएँ।",
+    "reconnectedSeparator": "— दोबारा कनेक्ट हुआ —",
     "disconnect": "डिस्कनेक्ट करें",
     "splitHandle": "पैनल विभाजक",
     "terminalTab": "टर्मिनल",

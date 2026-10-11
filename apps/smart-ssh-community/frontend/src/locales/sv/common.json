@@ -1092,6 +1092,10 @@
   "session": {
     "disconnected": "Frånkopplad",
     "disconnectedWithReason": "Frånkopplad: {{reason}}",
+    "reconnect": "Anslut igen",
+    "reconnecting": "Ansluter igen…",
+    "connectionLostPressR": "Anslutningen bröts. Tryck på R för att ansluta igen.",
+    "reconnectedSeparator": "— ansluten igen —",
     "disconnect": "Koppla från",
     "splitHandle": "Panelavdelare",
     "terminalTab": "Terminal",
