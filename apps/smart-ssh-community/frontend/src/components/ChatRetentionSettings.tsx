@@ -77,7 +77,6 @@ export function ChatRetentionSettings() {
       <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
         <input
           type="checkbox"
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           checked={days !== null}
           disabled={busy}
           onChange={(e) => handleToggleEnabled(e.target.checked)}
