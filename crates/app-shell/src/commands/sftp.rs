@@ -16,6 +16,7 @@
 //! `remove_dir`/das Zusammenspiel mit `list_dir`. "Umbenennen" (SFTP
 //! `RENAME`, für beide Eintragstypen) war davon nie betroffen.
 
+use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
@@ -26,6 +27,7 @@ use crate::event_emitter::TauriEventEmitter;
 use app_logic::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
 use app_logic::error::CommandError;
 use app_logic::error::CommandResult;
+use app_logic::error::{SFTP_CONTENT_TOO_LARGE, SFTP_COPY_CANCELLED};
 use app_logic::events::{
     emit_sftp_transfer_finished, emit_sftp_transfer_started, EventEmitter, SftpTransferKind,
 };
@@ -1074,8 +1076,9 @@ pub async fn sftp_mkdir(
     .await
 }
 
-/// Obergrenze für "Dateiinhalt kopieren" (Spec 0054, Teil 2) UND für die
-/// Upload-Diff-Vorschau (Teil 3, `read_local_text_preview` unten). Bewusst
+/// Obergrenze für die Remote-Seite der Upload-Diff-Vorschau (`sftp_read_text`;
+/// „Dateiinhalt kopieren" hat seit Issue #357 eine eigene, größere Grenze,
+/// [`MAX_COPY_CONTENT_BYTES`]) UND für die lokale Seite (Teil 3, `read_local_text_preview` unten). Bewusst
 /// **kein** gemeinsamer Code-Pfad und keine gemeinsame Konstante mit
 /// `orchestration::ReadRemoteFile`s 256-KB-Cap (Spec 0020, Abschnitt
 /// 4.1) — das liefe für einen manuellen Klick über KI-Infrastruktur
@@ -1086,7 +1089,7 @@ pub async fn sftp_mkdir(
 /// geteilte Definition.
 const MAX_TEXT_PREVIEW_BYTES: u64 = 256 * 1024;
 
-/// Spec 0086, A1.1: die Ablehnungs-Meldung für „Dateiinhalt kopieren" —
+/// Spec 0086, A1.6: die Ablehnungs-Meldung der Vorschau (`sftp_read_text`) —
 /// **wörtlich dieselbe** vor und nach dem Lesen. An einer Stelle gebildet
 /// statt an zwei formatiert: der Nutzer soll nicht daran ablesen können, an
 /// welcher der beiden Prüfungen es lag (und zwei Formatierungen wären
@@ -1155,6 +1158,184 @@ async fn read_text_impl(
     // kann die Grenze halten, die der Nutzer zugesagt bekommt.
     if bytes.len() as u64 > MAX_TEXT_PREVIEW_BYTES {
         return Err(too_large_for_clipboard());
+    }
+    String::from_utf8(bytes)
+        .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))
+}
+
+/// Issue #357, Spec 0086 A1.1: Obergrenze für „Dateiinhalt kopieren"
+/// (50 × 1024 × 1024 Bytes, fest, normaler und erhöhter Kanal). Eine Datei
+/// von genau dieser Größe ist erlaubt. Unabhängig von
+/// [`MAX_TEXT_PREVIEW_BYTES`] (Vorschau) und dem KI-Lesepfad.
+const MAX_COPY_CONTENT_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Fortschritt wird in Schritten dieser Größe gemeldet, nicht je Lesestück.
+const COPY_PROGRESS_STEP_BYTES: u64 = 1024 * 1024;
+
+fn content_too_large_for_clipboard() -> CommandError {
+    CommandError::with_code(
+        "The file is larger than 50 MB and cannot be copied to the clipboard.",
+        SFTP_CONTENT_TOO_LARGE,
+    )
+}
+
+fn copy_cancelled() -> CommandError {
+    CommandError::with_code("Copying was cancelled.", SFTP_COPY_CANCELLED)
+}
+
+/// Fortschritt von „Dateiinhalt kopieren": `done` Bytes gelesen, `total`
+/// die per `stat` gemeldete Größe (`None`, wenn `stat` scheiterte).
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyContentProgress {
+    pub done: u64,
+    pub total: Option<u64>,
+}
+
+/// Laufende „Dateiinhalt kopieren"-Aufträge nach Anfrage-ID, damit
+/// `sftp_cancel_copy_content` den Lesevorgang beenden kann.
+#[derive(Default)]
+pub struct CopyContentJobs(
+    std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Notify>>>,
+);
+
+impl CopyContentJobs {
+    fn register(&self, request_id: &str) -> std::sync::Arc<tokio::sync::Notify> {
+        let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id.to_string(), notify.clone());
+        notify
+    }
+
+    fn remove(&self, request_id: &str) {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(request_id);
+    }
+
+    fn cancel(&self, request_id: &str) {
+        if let Some(notify) = self
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(request_id)
+        {
+            notify.notify_one();
+        }
+    }
+}
+
+/// Issue #357: „Dateiinhalt kopieren" — liest eine Remote-Textdatei bis
+/// 50 MB für die Zwischenablage (der `writeText`-Aufruf passiert im
+/// Frontend). Anders als [`sftp_read_text`] (Vorschau des Upload-Diffs,
+/// 256 KB) liest dieser Befehl **begrenzt**: nach Grenze + 1 Bytes ist
+/// Schluss, auch wenn `stat` scheitert; der Speicher hält nie mehr. Der
+/// Fortschritt geht über `on_progress`, `sftp_cancel_copy_content` bricht
+/// ab. Kein Filter-Engine-/KI-Gate (Spec 0054, Sicherheitsmodell).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn sftp_copy_content(
+    state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
+    jobs: State<'_, CopyContentJobs>,
+    session_id: SessionId,
+    path: String,
+    elevated_user: Option<String>,
+    request_id: String,
+    on_progress: Channel<CopyContentProgress>,
+) -> CommandResult<String> {
+    let cancel = jobs.register(&request_id);
+    let result = run_browser_command(
+        &state,
+        elevated.inner(),
+        session_id,
+        elevated_user,
+        |session, channel| {
+            let cancel = cancel.clone();
+            async move {
+                let mut send = |p: CopyContentProgress| {
+                    let _ = on_progress.send(p);
+                };
+                copy_content_impl(
+                    &session,
+                    &channel,
+                    &path,
+                    MAX_COPY_CONTENT_BYTES,
+                    &cancel,
+                    &mut send,
+                )
+                .await
+            }
+        },
+    )
+    .await;
+    jobs.remove(&request_id);
+    result
+}
+
+/// Bricht einen laufenden `sftp_copy_content` ab (unbekannte ID: nichts).
+#[tauri::command]
+pub async fn sftp_cancel_copy_content(
+    jobs: State<'_, CopyContentJobs>,
+    request_id: String,
+) -> CommandResult<()> {
+    jobs.cancel(&request_id);
+    Ok(())
+}
+
+async fn copy_content_impl(
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    limit: u64,
+    cancel: &tokio::sync::Notify,
+    report: &mut (dyn FnMut(CopyContentProgress) + Send),
+) -> CommandResult<String> {
+    // Der Abbruch gilt auch, solange der Kanal noch von einem anderen Befehl
+    // gehalten wird; das Verwerfen des Futures gibt die Sperre frei.
+    tokio::select! {
+        result = copy_content_read(session, channel, path, limit, report) => result,
+        _ = cancel.notified() => Err(copy_cancelled()),
+    }
+}
+
+async fn copy_content_read(
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    limit: u64,
+    report: &mut (dyn FnMut(CopyContentProgress) + Send),
+) -> CommandResult<String> {
+    let mut guard = lock_browser_sftp(session, channel).await;
+    let mut sftp = guard.sftp().await?;
+
+    // Ein fehlgeschlagenes `stat` blockiert das Lesen nicht; die Grenze hält
+    // dann das begrenzte Lesen unten.
+    let mut total = None;
+    if let Ok(entry) = sftp.stat(path).await {
+        if entry.size > limit {
+            return Err(content_too_large_for_clipboard());
+        }
+        total = Some(entry.size);
+    }
+
+    let mut last_reported = 0u64;
+    let mut on_chunk = |done: u64| {
+        if last_reported == 0 || done >= last_reported + COPY_PROGRESS_STEP_BYTES {
+            last_reported = done;
+            report(CopyContentProgress { done, total });
+        }
+    };
+    // Grenze + 1: ein Byte mehr als erlaubt beweist die Überschreitung, ohne
+    // den Rest der Datei zu lesen.
+    let bytes = sftp
+        .read_file_capped(path, limit.saturating_add(1), &mut on_chunk)
+        .await?;
+    if bytes.len() as u64 > limit {
+        return Err(content_too_large_for_clipboard());
     }
     String::from_utf8(bytes)
         .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))

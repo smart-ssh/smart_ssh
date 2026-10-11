@@ -164,6 +164,30 @@ impl SftpSession for LocalFileSession {
             .map_err(|e| io_err(path, e))
     }
 
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError> {
+        use tokio::io::AsyncReadExt;
+        let file = tokio::fs::File::open(self.resolve(path))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        let mut reader = file.take(max_bytes);
+        let mut out = Vec::new();
+        let mut chunk = vec![0u8; 64 * 1024];
+        loop {
+            let n = reader.read(&mut chunk).await.map_err(|e| io_err(path, e))?;
+            if n == 0 {
+                break;
+            }
+            out.extend_from_slice(&chunk[..n]);
+            progress(out.len() as u64);
+        }
+        Ok(out)
+    }
+
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
         tokio::fs::write(self.resolve(path), content)
             .await
@@ -299,6 +323,34 @@ mod tests {
         let content = session.read_file(path).await.unwrap();
 
         assert_eq!(content, b"hallo welt");
+    }
+
+    /// Issue #357: `read_file_capped` hört nach `max_bytes` auf und meldet
+    /// den Fortschritt.
+    #[tokio::test]
+    async fn test_read_file_capped_stops_at_the_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.txt");
+        let path = path.to_str().unwrap();
+        let mut session = LocalFileSession::new();
+        session
+            .write_file(path, &vec![b'x'; 200_000])
+            .await
+            .unwrap();
+
+        let mut last = 0;
+        let content = session
+            .read_file_capped(path, 100_001, &mut |n| last = n)
+            .await
+            .unwrap();
+
+        assert_eq!(content.len(), 100_001);
+        assert_eq!(last, 100_001);
+        let all = session
+            .read_file_capped(path, 1_000_000, &mut |_| {})
+            .await
+            .unwrap();
+        assert_eq!(all.len(), 200_000);
     }
 
     #[tokio::test]

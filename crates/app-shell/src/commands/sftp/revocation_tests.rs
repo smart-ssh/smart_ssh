@@ -285,6 +285,23 @@ impl SftpSession for GatedSftp {
             .ok_or_else(|| SshError::ChannelError(format!("Datei nicht gefunden: {path}")))
     }
 
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError> {
+        self.record(format!("read_file_capped {path}")).await;
+        let entries = self.0.entries.lock().unwrap();
+        let content = entries
+            .get(path)
+            .map(|e| e.content.clone())
+            .ok_or_else(|| SshError::ChannelError(format!("Datei nicht gefunden: {path}")))?;
+        let len = content.len().min(max_bytes as usize);
+        progress(len as u64);
+        Ok(content[..len].to_vec())
+    }
+
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
         self.record(format!("write_file {path}")).await;
         self.0.entries.lock().unwrap().insert(
@@ -394,6 +411,18 @@ impl SftpSession for CountingSftp {
     }
     async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError> {
         self.0.lock().unwrap().push(format!("read_file {path}"));
+        Ok(Vec::new())
+    }
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        _max_bytes: u64,
+        _progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("read_file_capped {path}"));
         Ok(Vec::new())
     }
     async fn write_file(&mut self, path: &str, _content: &[u8]) -> Result<(), SshError> {
