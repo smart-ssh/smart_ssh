@@ -1091,6 +1091,10 @@
   "session": {
     "disconnected": "Disconnected",
     "disconnectedWithReason": "Disconnected: {{reason}}",
+    "reconnect": "Reconnect",
+    "reconnecting": "Reconnecting…",
+    "connectionLostPressR": "Connection lost. Press R to reconnect.",
+    "reconnectedSeparator": "— reconnected —",
     "disconnect": "Disconnect",
     "splitHandle": "Panel divider",
     "terminalTab": "Terminal",

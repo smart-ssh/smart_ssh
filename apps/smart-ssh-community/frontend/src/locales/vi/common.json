@@ -1083,6 +1083,10 @@
   "session": {
     "disconnected": "Đã ngắt kết nối",
     "disconnectedWithReason": "Đã ngắt kết nối: {{reason}}",
+    "reconnect": "Kết nối lại",
+    "reconnecting": "Đang kết nối lại…",
+    "connectionLostPressR": "Mất kết nối. Nhấn R để kết nối lại.",
+    "reconnectedSeparator": "— đã kết nối lại —",
     "disconnect": "Ngắt kết nối",
     "splitHandle": "Thanh chia khung",
     "terminalTab": "Dòng lệnh",

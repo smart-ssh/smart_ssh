@@ -192,12 +192,15 @@ pub(crate) async fn execute_read_remote_file(
 
     match raw {
         Ok(bytes) => {
-            let redacted = session.redactor.redact(&CommandOutput {
-                stdout: bytes,
-                stderr: Vec::new(),
-                exit_code: Some(0),
-                truncated: false,
-            });
+            let redacted = ssh_manager_core::ai::OutputRedactor::redact(
+                &session.redactor,
+                &CommandOutput {
+                    stdout: bytes,
+                    stderr: Vec::new(),
+                    exit_code: Some(0),
+                    truncated: false,
+                },
+            );
             let content = String::from_utf8_lossy(&redacted.stdout).into_owned();
             emit_chat_action_result(
                 emitter,
@@ -450,7 +453,7 @@ pub(crate) async fn execute_write_remote_file(
             // (Review-Fund: keine Neuberechnung, die auseinanderlaufen kann).
             let Some(password) = session
                 .sudo_password
-                .clone()
+                .get()
                 .filter(|_| sudo_fallback_announced)
             else {
                 return emit_action_error(

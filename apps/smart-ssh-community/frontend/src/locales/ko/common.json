@@ -1083,6 +1083,10 @@
   "session": {
     "disconnected": "연결 끊김",
     "disconnectedWithReason": "연결 끊김: {{reason}}",
+    "reconnect": "다시 연결",
+    "reconnecting": "다시 연결하는 중…",
+    "connectionLostPressR": "연결이 끊어졌습니다. 다시 연결하려면 R을 누르십시오.",
+    "reconnectedSeparator": "— 다시 연결됨 —",
     "disconnect": "연결 끊기",
     "splitHandle": "패널 구분선",
     "terminalTab": "터미널",

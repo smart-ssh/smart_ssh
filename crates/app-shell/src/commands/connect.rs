@@ -123,68 +123,23 @@ fn map_connect_result(
     result.map_err(|err| ssh_command_error(&err))
 }
 
-pub(crate) async fn connect_session<R: tauri::Runtime>(
+/// Opens the SSH connection of a session, including jump hosts, credential
+/// resolution and the host key dialog (ADR 0007). Shared by the first connect
+/// and by `reconnect_session` (Issue #355), so a reconnect is verified exactly
+/// like a first connect: no cached "accepted" decision, a changed key shows
+/// the dialog again.
+async fn establish_transport<R: tauri::Runtime>(
     app: &AppHandle<R>,
     state: &AppState,
     server_id: ServerId,
     session_id: SessionId,
-    resume: Option<uuid::Uuid>,
-    persist_chat_session: bool,
-) -> CommandResult<SessionId> {
-    // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
-    // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
-    // Frontend-Sperre wäre umgehbar (z. B. ein direkter
-    // `invoke("connect", ...)`-Aufruf ohne den UI-Umweg über
-    // `ServerList`). Greift für **jeden** Aufrufer dieser Funktion
-    // gleichermaßen, also auch für `crate::mcp_backend`s automatischen
-    // Verbindungsaufbau (Spec 0028) — dieselbe "neue Vertrauensgrenze
-    // verdient strengere Behandlung"-Logik wie dort.
-    ensure_first_run_notice_acknowledged(app)?;
-
-    // Issue #242: ab hier (vor Verbindungsaufbau und Laden der Historie) gilt
-    // die Chat-Sitzung als in Benutzung, bis dieser Aufruf endet — nach dem
-    // `sessions.insert` unten übernimmt die registrierte `Session` (s.
-    // `is_chat_session_active`). Jeder frühe Rückgabepfad gibt den Anspruch
-    // per `Drop` frei.
-    let _resume_claim = match resume {
-        Some(existing_id) => Some(
-            state
-                .sessions
-                .claim_chat_session_for_resume(existing_id)
-                .map_err(|_| {
-                    CommandError::from(
-                        "Diese Chat-Sitzung wird gerade gelöscht und kann nicht fortgesetzt \
-                         werden.",
-                    )
-                })?,
-        ),
-        None => None,
-    };
-
+    server: &ssh_manager_core::profiles::Server,
+) -> CommandResult<Box<dyn ssh_manager_core::ssh::SshTransport>> {
     let is_local = app_logic::dto::is_local(server_id);
-    let server = if is_local {
-        crate::local_server::synthetic_server(app)
-    } else {
-        state.profile_store.get_server(&server_id).await?
-    };
-    let active_config = active_ai_provider_config(state).await?;
-    // Issue #162: Einstellung des Providers (Default an).
-    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
-        &state.rate_limit_registry,
-        state.credential_store.as_ref(),
-        &active_config,
-        active_config.web_research_enabled,
-    )
-    .map_err(secret_store_error)?;
-
-    // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
-    // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"
-    // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
-    // `russh`/Host-Key-Schleife unten zu durchlaufen.
-    let mut transport: Box<dyn ssh_manager_core::ssh::SshTransport> = if is_local {
+    Ok(if is_local {
         Box::new(ssh_transport::LocalTransport::new())
     } else {
-        let target = match resolve_connection_target(&server, state.profile_store.as_ref()).await {
+        let target = match resolve_connection_target(server, state.profile_store.as_ref()).await {
             Ok(target) => target,
             Err(err) => {
                 // Fund (2026-09): ein fehlgeschlagener Verbindungs-
@@ -410,7 +365,68 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
                 }
             }
         }
+    })
+}
+
+pub(crate) async fn connect_session<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    server_id: ServerId,
+    session_id: SessionId,
+    resume: Option<uuid::Uuid>,
+    persist_chat_session: bool,
+) -> CommandResult<SessionId> {
+    // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
+    // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
+    // Frontend-Sperre wäre umgehbar (z. B. ein direkter
+    // `invoke("connect", ...)`-Aufruf ohne den UI-Umweg über
+    // `ServerList`). Greift für **jeden** Aufrufer dieser Funktion
+    // gleichermaßen, also auch für `crate::mcp_backend`s automatischen
+    // Verbindungsaufbau (Spec 0028) — dieselbe "neue Vertrauensgrenze
+    // verdient strengere Behandlung"-Logik wie dort.
+    ensure_first_run_notice_acknowledged(app)?;
+
+    // Issue #242: ab hier (vor Verbindungsaufbau und Laden der Historie) gilt
+    // die Chat-Sitzung als in Benutzung, bis dieser Aufruf endet — nach dem
+    // `sessions.insert` unten übernimmt die registrierte `Session` (s.
+    // `is_chat_session_active`). Jeder frühe Rückgabepfad gibt den Anspruch
+    // per `Drop` frei.
+    let _resume_claim = match resume {
+        Some(existing_id) => Some(
+            state
+                .sessions
+                .claim_chat_session_for_resume(existing_id)
+                .map_err(|_| {
+                    CommandError::from(
+                        "Diese Chat-Sitzung wird gerade gelöscht und kann nicht fortgesetzt \
+                         werden.",
+                    )
+                })?,
+        ),
+        None => None,
     };
+
+    let is_local = app_logic::dto::is_local(server_id);
+    let server = if is_local {
+        crate::local_server::synthetic_server(app)
+    } else {
+        state.profile_store.get_server(&server_id).await?
+    };
+    let active_config = active_ai_provider_config(state).await?;
+    // Issue #162: Einstellung des Providers (Default an).
+    let (ai_provider, ai_provider_budget) = build_ai_provider_from_config(
+        &state.rate_limit_registry,
+        state.credential_store.as_ref(),
+        &active_config,
+        active_config.web_research_enabled,
+    )
+    .map_err(secret_store_error)?;
+
+    // Spec 0032, Abschnitt 2/3: der lokale Pseudo-Server hat keinen
+    // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"
+    // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
+    // `russh`/Host-Key-Schleife unten zu durchlaufen.
+    let mut transport = establish_transport(app, state, server_id, session_id, &server).await?;
 
     let sanitized_os = if let Ok(uname_output) = transport.execute("uname -a").await {
         let uname_text = String::from_utf8_lossy(&uname_output.stdout);
@@ -684,14 +700,14 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             server_id,
             tags: server.tags,
             terminal: std::sync::Mutex::new(None),
-            redactor,
+            redactor: app_logic::session::SwappableRedactor::new(redactor),
             ai_provider_label: active_config.display_name,
             ai_model: active_config.model,
             system_context_parts: tokio::sync::Mutex::new(system_context_parts),
             model_context_window_tokens,
             summary: tokio::sync::Mutex::new(initial_summary),
             mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
-            sudo_password,
+            sudo_password: app_logic::session::SwappableSudoPassword::new(sudo_password),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
             mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
@@ -750,6 +766,98 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
 
 /// Spec 0034, Abschnitt 6/8: Liste vergangener Sitzungen für den
 /// Auswahl-Screen beim Verbinden, neueste zuerst.
+/// Issue #355, Spec 0105: reconnects a lost session in place. Tab, session
+/// id, chat history and AI context stay; the transport is replaced by a
+/// fresh connection that went through the same path as a first connect
+/// (`establish_transport`: jump hosts, keychain, host key dialog).
+#[tauri::command]
+pub async fn reconnect_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    elevated: State<'_, crate::elevated_sftp::ElevatedSftpRegistry>,
+    grants: State<'_, app_logic::local_path_grants::LocalPathGrants>,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    reconnect_session_inner(&app, &state, &elevated, &grants, session_id).await
+}
+
+pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    elevated: &crate::elevated_sftp::ElevatedSftpRegistry,
+    grants: &app_logic::local_path_grants::LocalPathGrants,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    let emitter = crate::event_emitter::TauriEventEmitter(app.clone());
+    // Only one reconnect at a time, and only for a lost session: a second
+    // trigger finds the state `Reconnecting` and does nothing.
+    let Some(claim) = session.begin_reconnect() else {
+        return Err(CommandError::with_code(
+            "Die Sitzung ist nicht getrennt oder wird bereits neu verbunden.",
+            "SESSION_NOT_RECONNECTABLE",
+        ));
+    };
+    emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Reconnecting, None);
+
+    // From here every exit that is not a success reports `Disconnected`
+    // again (the claim resets the session state when dropped).
+    let result = async {
+        // A confirmation waiting at the time of the drop is rejected, never
+        // executed on the new connection (fail closed, as on close).
+        session.reject_pending_confirmation(&state.pending_action_confirmations);
+        if let Some(action_id) = session.transport.running_action() {
+            let _ = state.running_command_cancellations.resolve(&action_id, ());
+        }
+        session.retire_connection().await;
+        // Elevated channel and local path grants belong to the old
+        // connection and are not carried over.
+        elevated.revoke_session(session_id);
+        grants.remove_session(session_id);
+
+        let server_id = session.server_id;
+        let server = if app_logic::dto::is_local(server_id) {
+            crate::local_server::synthetic_server(app)
+        } else {
+            state.profile_store.get_server(&server_id).await?
+        };
+        let transport = establish_transport(app, state, server_id, session_id, &server).await?;
+        // The sudo password is read again, so the redactor knows the
+        // current value.
+        let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
+            state.credential_store.as_ref(),
+            server_id,
+        );
+        let redactor =
+            app_logic::server_redaction::redactor_with_sudo_password(sudo_password.as_ref());
+        Ok::<_, CommandError>((transport, redactor, sudo_password))
+    }
+    .await;
+
+    match result {
+        Ok((transport, redactor, sudo_password)) => {
+            claim.succeed(transport, redactor, sudo_password).await;
+            tracing::info!(session_id = %session_id, "session reconnected");
+            emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Connected, None);
+            Ok(())
+        }
+        Err(err) => {
+            drop(claim);
+            tracing::warn!(session_id = %session_id, "reconnect failed");
+            emit_connection_status_changed(
+                &emitter,
+                session_id,
+                ConnectionStatus::Disconnected,
+                None,
+            );
+            Err(err)
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn list_chat_sessions(
     state: State<'_, AppState>,
@@ -1567,13 +1675,21 @@ mod connect_flow_tests {
     struct ScriptedConnector {
         result: Mutex<Option<Result<ConnectOutcome, SshError>>>,
         calls: AtomicUsize,
+        /// Hop count of the target of the latest connect.
+        last_hops: AtomicUsize,
     }
 
     impl ScriptedConnector {
+        /// Issue #355: queues the result for the next connect (a reconnect).
+        fn push(&self, result: Result<ConnectOutcome, SshError>) {
+            *self.result.lock().unwrap() = Some(result);
+        }
+
         fn new(result: Result<ConnectOutcome, SshError>) -> Arc<Self> {
             Arc::new(Self {
                 result: Mutex::new(Some(result)),
                 calls: AtomicUsize::new(0),
+                last_hops: AtomicUsize::new(0),
             })
         }
     }
@@ -1582,7 +1698,7 @@ mod connect_flow_tests {
     impl Connector for ScriptedConnector {
         async fn connect(
             &self,
-            _target: &ConnectionTarget,
+            target: &ConnectionTarget,
             _credentials: &(dyn CredentialStore + Send + Sync),
             _key_files: &(dyn KeyFileReader + Send + Sync),
             _host_keys: Arc<dyn HostKeyStore>,
@@ -1590,6 +1706,7 @@ mod connect_flow_tests {
             _limits: ssh_transport::ConnectLimits,
         ) -> Result<ConnectOutcome, SshError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
+            self.last_hops.store(target.hops.len(), Ordering::SeqCst);
             self.result
                 .lock()
                 .unwrap()
@@ -1951,5 +2068,315 @@ mod connect_flow_tests {
 
         assert_eq!(err.code, Some("FIRST_RUN_NOTICE_NOT_ACKNOWLEDGED"));
         assert_eq!(connector.calls.load(Ordering::SeqCst), 0);
+    }
+
+    // --- Issue #355 / Spec 0105: reconnect ---------------------------------
+
+    fn registry_pair() -> (
+        crate::elevated_sftp::ElevatedSftpRegistry,
+        app_logic::local_path_grants::LocalPathGrants,
+    ) {
+        (
+            crate::elevated_sftp::ElevatedSftpRegistry::default(),
+            app_logic::local_path_grants::LocalPathGrants::default(),
+        )
+    }
+
+    /// Connects and simulates the drop the terminal actor reports.
+    async fn connected_then_lost(
+        app: &tauri::App<tauri::test::MockRuntime>,
+        fx: &Fixture,
+        connector: &ScriptedConnector,
+        disconnected: &Arc<AtomicBool>,
+    ) -> (SessionId, Arc<Session>) {
+        connector.push(connected(disconnected));
+        let session_id = uuid::Uuid::new_v4();
+        connect_session(
+            app.handle(),
+            &fx.state,
+            fx.server_id,
+            session_id,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+        let session = fx.state.sessions.get(session_id).unwrap();
+        *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
+        (session_id, session)
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_keeps_session_id_and_ai_context_and_replaces_transport() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let events = status_events(&app);
+        let old_closed = Arc::new(AtomicBool::new(false));
+        let new_closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&old_closed));
+        let fx = fixture(connector.clone()).await;
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &old_closed).await;
+        session
+            .context
+            .lock()
+            .await
+            .history
+            .push(user_text("before the drop"));
+        let history_len = session.context.lock().await.history.len();
+        connector.push(connected(&new_closed));
+        let (elevated, grants) = registry_pair();
+
+        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .expect("reconnect should succeed");
+
+        let after = fx.state.sessions.get(session_id).unwrap();
+        assert!(Arc::ptr_eq(&session, &after), "same session object and id");
+        assert_eq!(*after.status.lock().unwrap(), ConnectionStatus::Connected);
+        assert_eq!(after.context.lock().await.history.len(), history_len);
+        assert!(old_closed.load(Ordering::SeqCst), "old transport is closed");
+        assert!(
+            !new_closed.load(Ordering::SeqCst),
+            "new transport stays open"
+        );
+        assert!(!after.transport.is_closed());
+        let seen = events.lock().unwrap().clone();
+        assert!(seen.iter().any(|p| p.contains("reconnecting")), "{seen:?}");
+        assert!(
+            seen.last()
+                .is_some_and(|p| p.contains("connected") && !p.contains("dis")),
+            "{seen:?}"
+        );
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_rereads_sudo_password_for_sudo_and_redactor() {
+        use app_logic::server_credentials::sudo_password_credential_ref;
+        use secrecy::ExposeSecret;
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let old_closed = Arc::new(AtomicBool::new(false));
+        let new_closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&old_closed));
+        let fx = fixture(connector.clone()).await;
+        let cred_ref = sudo_password_credential_ref(fx.server_id);
+        fx.state
+            .credential_store
+            .set(&cred_ref, "old-sudo-pw".to_string().into())
+            .unwrap();
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &old_closed).await;
+        assert_eq!(
+            session.sudo_password.get().unwrap().expose_secret(),
+            "old-sudo-pw"
+        );
+        fx.state
+            .credential_store
+            .set(&cred_ref, "new-sudo-pw".to_string().into())
+            .unwrap();
+        connector.push(connected(&new_closed));
+        let (elevated, grants) = registry_pair();
+
+        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .expect("reconnect should succeed");
+
+        let after = fx.state.sessions.get(session_id).unwrap();
+        // The password used for `sudo -S` and the redactor come from one read.
+        assert_eq!(
+            after.sudo_password.get().unwrap().expose_secret(),
+            "new-sudo-pw"
+        );
+        let redacted = after.redactor.redact_text("echo new-sudo-pw");
+        assert!(!redacted.contains("new-sudo-pw"), "{redacted}");
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_of_a_live_session_does_nothing() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
+        *session.status.lock().unwrap() = ConnectionStatus::Connected;
+        let calls = connector.calls.load(Ordering::SeqCst);
+        let (elevated, grants) = registry_pair();
+
+        let err = reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, Some("SESSION_NOT_RECONNECTABLE"));
+        assert_eq!(connector.calls.load(Ordering::SeqCst), calls);
+        assert!(!closed.load(Ordering::SeqCst), "live connection untouched");
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_second_reconnect_trigger_while_one_runs_starts_no_connect() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
+        let calls = connector.calls.load(Ordering::SeqCst);
+        let (elevated, grants) = registry_pair();
+
+        // The first trigger holds the claim (its connect is "running").
+        let running = session.begin_reconnect().expect("first trigger claims");
+        let err = reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.code, Some("SESSION_NOT_RECONNECTABLE"));
+        assert_eq!(connector.calls.load(Ordering::SeqCst), calls);
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Reconnecting
+        );
+        drop(running);
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_failed_reconnect_stays_disconnected_and_can_be_retried() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
+        let (elevated, grants) = registry_pair();
+        connector.push(Err(SshError::ConnectionFailed("down".to_string())));
+
+        let err = reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .unwrap_err();
+        assert!(err.code.is_some(), "the translated error code is reported");
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
+
+        let fresh = Arc::new(AtomicBool::new(false));
+        connector.push(connected(&fresh));
+        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .expect("the button stays usable");
+        assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_pending_confirmation_at_drop_is_rejected_not_executed_after_reconnect() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
+        let action_id = uuid::Uuid::new_v4();
+        let waiting = fx.state.pending_action_confirmations.register(action_id);
+        *session.pending_action.lock().unwrap() = Some(action_id);
+        connector.push(connected(&Arc::new(AtomicBool::new(false))));
+        let (elevated, grants) = registry_pair();
+
+        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .unwrap();
+
+        assert!(
+            matches!(waiting.await, Ok(app_logic::dto::ActionUserDecision::Deny)),
+            "the waiting action is denied, never approved"
+        );
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_rejected_host_key_during_reconnect_leaves_the_tab_disconnected() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
+        connector.push(Ok(ConnectOutcome::PendingHostKeyConfirmation {
+            host: "example.invalid".to_string(),
+            port: 22,
+            raw_key: vec![1, 2, 3],
+            decision: HostKeyDecision::Mismatch {
+                expected_fingerprint: "SHA256:old".to_string(),
+                actual_fingerprint: "SHA256:new".to_string(),
+            },
+        }));
+        let (elevated, grants) = registry_pair();
+
+        let reject = async {
+            loop {
+                if fx
+                    .state
+                    .pending_host_key_confirmations
+                    .resolve(&session_id, HostKeyUserDecision::Reject)
+                    .is_ok()
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        let (result, ()) = tokio::join!(
+            reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id),
+            reject
+        );
+
+        assert_eq!(result.unwrap_err().code, Some("SSH_HOST_KEY_NOT_TRUSTED"));
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_goes_through_the_jump_host_chain_again() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        let mut jump = server();
+        jump.name = "bastion".to_string();
+        fx.state.profile_store.create_server(&jump).await.unwrap();
+        let mut target = fx
+            .state
+            .profile_store
+            .get_server(&fx.server_id)
+            .await
+            .unwrap();
+        target.jump_host = Some(jump.id);
+        fx.state.profile_store.update_server(&target).await.unwrap();
+        let (session_id, _session) = connected_then_lost(&app, &fx, &connector, &closed).await;
+        assert_eq!(connector.last_hops.load(Ordering::SeqCst), 2);
+        connector.last_hops.store(0, Ordering::SeqCst);
+        connector.push(connected(&Arc::new(AtomicBool::new(false))));
+        let (elevated, grants) = registry_pair();
+
+        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            connector.last_hops.load(Ordering::SeqCst),
+            2,
+            "bastion + target"
+        );
+        reset(app.handle());
     }
 }

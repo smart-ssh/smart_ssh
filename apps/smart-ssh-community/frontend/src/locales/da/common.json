@@ -1091,6 +1091,10 @@
   "session": {
     "disconnected": "Afbrudt",
     "disconnectedWithReason": "Afbrudt: {{reason}}",
+    "reconnect": "Opret forbindelse igen",
+    "reconnecting": "Opretter forbindelse igen…",
+    "connectionLostPressR": "Forbindelsen er tabt. Tryk på R for at oprette forbindelse igen.",
+    "reconnectedSeparator": "— forbundet igen —",
     "disconnect": "Afbryd",
     "splitHandle": "Panelskillelinje",
     "terminalTab": "Terminal",
