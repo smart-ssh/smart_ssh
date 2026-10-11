@@ -30,7 +30,8 @@ use super::*;
 fn truncation_marker(language: crate::system_prompt::PromptLanguage) -> &'static str {
     match language {
         crate::system_prompt::PromptLanguage::De => "ältere Konversation gekürzt",
-        crate::system_prompt::PromptLanguage::En => "older conversation truncated",
+        crate::system_prompt::PromptLanguage::En
+        | crate::system_prompt::PromptLanguage::Other(_) => "older conversation truncated",
     }
 }
 
@@ -41,7 +42,8 @@ fn summary_marker(language: crate::system_prompt::PromptLanguage) -> &'static st
         crate::system_prompt::PromptLanguage::De => {
             "[Zusammenfassung der bisherigen Konversation: "
         }
-        crate::system_prompt::PromptLanguage::En => "[Summary of the conversation so far: ",
+        crate::system_prompt::PromptLanguage::En
+        | crate::system_prompt::PromptLanguage::Other(_) => "[Summary of the conversation so far: ",
     }
 }
 
@@ -2354,7 +2356,7 @@ async fn test_notice_language_follows_the_system_prompt_rule_without_stored_lang
     for (locale, expected) in [
         (Some("de-DE"), PromptLanguage::De),
         (Some("en-US"), PromptLanguage::En),
-        (Some("fr-FR"), PromptLanguage::En),
+        (Some("xx-XX"), PromptLanguage::En),
         (None, PromptLanguage::En),
     ] {
         let language = prompt_language(None, locale);
@@ -2370,7 +2372,7 @@ async fn test_notice_language_follows_the_system_prompt_rule_without_stored_lang
 
         let other = match expected {
             PromptLanguage::De => PromptLanguage::En,
-            PromptLanguage::En => PromptLanguage::De,
+            PromptLanguage::En | PromptLanguage::Other(_) => PromptLanguage::De,
         };
         let texts = history_texts(&result);
         assert!(
