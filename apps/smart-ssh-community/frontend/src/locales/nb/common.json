@@ -564,7 +564,8 @@
     "APP_LOCKED": "Smart SSH er fortsatt låst. Lås den opp med hovedpassordet først.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Denne operasjonen passer ikke med hvor nøkkelen oppbevares nå. Ingenting ble endret – åpne innstillingene på nytt, de viser den aktive modusen.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Advarselen om hovedpassordet er ikke bekreftet. Uten dette passordet går alle data tapt og det finnes ingen gjenoppretting – kryss av i boksen og sett det opp på nytt. Ingenting ble endret.",
-    "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart."
+    "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart.",
+    "SFTP_CONTENT_TOO_LARGE": "Filen er større enn 50 MB og kan ikke kopieres til utklippstavlen."
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruke dette til å foreslå kommandoer, fillesing/-skriving og notatoppdateringer på tillatte servere – hver forespørsel krever alltid bekreftelse i appen, uavhengig av eksisterende tillat-regler.",
@@ -1015,7 +1016,9 @@
     "renamePrompt": {
       "renameTitle": "Gi nytt navn",
       "newFolderTitle": "Ny mappe"
-    }
+    },
+    "copyProgress": "Kopierer… {{done}} MB av {{total}} MB",
+    "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
   },
   "chat": {
     "newChat": "Ny chat",

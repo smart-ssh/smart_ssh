@@ -564,7 +564,8 @@
     "APP_LOCKED": "Smart SSH jest nadal zablokowany. Najpierw odblokuj go hasłem głównym.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Ta operacja nie pasuje do miejsca, w którym klucz jest obecnie przechowywany. Nic nie zmieniono — otwórz ustawienia ponownie, pokazują aktywny tryb.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Ostrzeżenie o haśle głównym nie zostało potwierdzone. Bez tego hasła wszystkie dane przepadają, a odzyskanie nie jest możliwe — zaznacz pole i skonfiguruj ponownie. Nic nie zmieniono.",
-    "KEYCHAIN_KEY_MISMATCH": "Klucz w magazynie kluczy nie należy do tej bazy danych. Nic nie zmieniono — zapisanie go uniemożliwiłoby odczyt bazy przy następnym uruchomieniu."
+    "KEYCHAIN_KEY_MISMATCH": "Klucz w magazynie kluczy nie należy do tej bazy danych. Nic nie zmieniono — zapisanie go uniemożliwiłoby odczyt bazy przy następnym uruchomieniu.",
+    "SFTP_CONTENT_TOO_LARGE": "Plik jest większy niż 50 MB i nie można go skopiować do schowka."
   },
   "mcpServer": {
     "hint": "Zewnętrzni klienci MCP mogą przez niego proponować polecenia, odczyty/zapisy plików i aktualizacje notatek na serwerach z listy dozwolonych — każde żądanie zawsze wymaga potwierdzenia w aplikacji, niezależnie od istniejących reguł zezwalających.",
@@ -1029,7 +1030,9 @@
     "renamePrompt": {
       "renameTitle": "Zmień nazwę",
       "newFolderTitle": "Nowy folder"
-    }
+    },
+    "copyProgress": "Kopiowanie… {{done}} MB z {{total}} MB",
+    "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB"
   },
   "chat": {
     "newChat": "Nowy czat",

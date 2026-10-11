@@ -213,6 +213,14 @@ pub(crate) mod test_stubs {
         async fn read_file(&mut self, _: &str) -> Result<Vec<u8>, SshError> {
             unreachable!()
         }
+        async fn read_file_capped(
+            &mut self,
+            _: &str,
+            _: u64,
+            _: &mut (dyn FnMut(u64) + Send),
+        ) -> Result<Vec<u8>, SshError> {
+            unreachable!()
+        }
         async fn write_file(&mut self, _: &str, _: &[u8]) -> Result<(), SshError> {
             unreachable!()
         }

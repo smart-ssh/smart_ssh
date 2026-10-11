@@ -35,6 +35,8 @@ import {
   sftpExists,
   sftpList,
   sftpOpenForEditing,
+  sftpCancelCopyContent,
+  sftpCopyContent,
   sftpReadText,
   sftpRename,
   sftpStat,
@@ -51,7 +53,16 @@ import type { RemoteEntryDto, SftpTransferStartedEvent } from "../types";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 
 vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
+  commandErrorMessage: (err: unknown) =>
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as { message: unknown }).message)
+      : String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err
+      ? String((err as { code: unknown }).code)
+      : null,
+  sftpCopyContent: vi.fn(),
+  sftpCancelCopyContent: vi.fn(() => Promise.resolve()),
   sftpList: vi.fn(),
   sftpDelete: vi.fn(),
   sftpDeletePreview: vi.fn(),
@@ -460,7 +471,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
   it("copies the file content to the clipboard via sftp_read_text", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpReadText).mockResolvedValue("hallo welt");
+    vi.mocked(sftpCopyContent).mockResolvedValue("hallo welt");
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -480,10 +491,93 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     );
   });
 
+  it("copies a 10 MB file completely to the clipboard", async () => {
+    const big = "x".repeat(10 * 1024 * 1024);
+    vi.mocked(sftpList).mockResolvedValue([{ ...fileEntry, size: big.length }]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpCopyContent).mockResolvedValue(big);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
+
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(big));
+  });
+
+  it("shows the translated message for a file over 50 MB, not the backend text", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpCopyContent).mockRejectedValue({
+      code: "SFTP_CONTENT_TOO_LARGE",
+      message: "raw backend text",
+    });
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
+
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "error",
+          message: expect.stringContaining("50 MB"),
+        }),
+      ),
+    );
+    expect(vi.mocked(showToast).mock.calls.at(-1)?.[0].message).not.toContain("raw backend text");
+  });
+
+  it("shows progress and a cancel action for a 6 MB file; cancelling copies nothing", async () => {
+    const sixMb = 6 * 1024 * 1024;
+    vi.mocked(sftpList).mockResolvedValue([{ ...fileEntry, size: sixMb }]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    let rejectCopy: (reason: unknown) => void = () => {};
+    vi.mocked(sftpCopyContent).mockImplementation(
+      (_s, _p, _u, _id, onProgress) =>
+        new Promise<string>((_resolve, reject) => {
+          rejectCopy = reject;
+          onProgress({ done: 2 * 1024 * 1024, total: sixMb });
+        }),
+    );
+    vi.mocked(showToast).mockClear();
+    vi.mocked(navigator.clipboard.writeText).mockClear();
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
+
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain("2.0");
+    expect(status.textContent).toContain("6.0");
+    fireEvent.click(within(status).getByRole("button", { name: "Abbrechen" }));
+    expect(sftpCancelCopyContent).toHaveBeenCalledTimes(1);
+
+    rejectCopy({ code: "SFTP_COPY_CANCELLED", message: "cancelled" });
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it("shows no progress for a small file", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpCopyContent).mockImplementation(() => new Promise<string>(() => {}));
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
+    await waitFor(() => expect(sftpCopyContent).toHaveBeenCalled());
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("shows a toast with the backend error when the file is not text", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
-    vi.mocked(sftpReadText).mockRejectedValue("Datei ist keine Textdatei (kein gültiges UTF-8)");
+    vi.mocked(sftpCopyContent).mockRejectedValue("Datei ist keine Textdatei (kein gültiges UTF-8)");
 
     renderPanel();
     await screen.findByText(/a\.txt/);

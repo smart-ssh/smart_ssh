@@ -564,7 +564,8 @@
     "APP_LOCKED": "Smart SSH is nog vergrendeld. Ontgrendel het eerst met uw hoofdwachtwoord.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Deze handeling past niet bij de plek waar de sleutel nu wordt bewaard. Er is niets gewijzigd — open de instellingen opnieuw, daar staat de actieve modus.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "De waarschuwing over het hoofdwachtwoord is niet bevestigd. Zonder dat wachtwoord gaan alle gegevens verloren en is herstel onmogelijk — vink het vakje aan en stel het opnieuw in. Er is niets gewijzigd.",
-    "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken."
+    "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken.",
+    "SFTP_CONTENT_TOO_LARGE": "Het bestand is groter dan 50 MB en kan niet naar het klembord worden gekopieerd."
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",
@@ -1015,7 +1016,9 @@
     "renamePrompt": {
       "renameTitle": "Hernoemen",
       "newFolderTitle": "Nieuwe map"
-    }
+    },
+    "copyProgress": "Kopiëren… {{done}} MB van {{total}} MB",
+    "copyProgressUnknownTotal": "Kopiëren… {{done}} MB"
   },
   "chat": {
     "newChat": "Nieuwe chat",

@@ -7,8 +7,9 @@ Review-Priorität: erhöht für A3 (Sitzungsaufbau, normaler Kanal), sonst norma
 
 ## 1. Verhalten im Überblick
 
-- „Dateiinhalt kopieren“ lehnt eine Datei über 256 KB ab, auch wenn sie erst
-  nach der Größenabfrage so groß wurde. „Lokal öffnen“ lehnt Dateien über
+- „Dateiinhalt kopieren“ funktioniert für Textdateien bis 50 MB und lehnt
+  eine größere Datei ab, auch wenn sie erst nach der Größenabfrage so groß
+  wurde. Ab 5 MB zeigt die Oberfläche Fortschritt und einen Abbrechen-Knopf. „Lokal öffnen“ lehnt Dateien über
   50 MB ab, vor dem Lesen, wenn die Größe schon bekannt ist, sonst nach dem
   Lesen.
 - Scheitert ein Download oder Upload über den erhöhten Kanal, weil der Modus
@@ -20,8 +21,10 @@ Review-Priorität: erhöht für A3 (Sitzungsaufbau, normaler Kanal), sonst norma
 
 ## 2. Nicht-Ziele
 
-- Kein begrenztes Lesen: Eine Datei darf kurz ganz im Speicher liegen, sie
-  wird nur nicht weitergegeben.
+- Kein begrenztes Lesen für „Lokal öffnen“ und die Vorschau des
+  Upload-Vergleichs: Eine Datei darf dort kurz ganz im Speicher liegen, sie
+  wird nur nicht weitergegeben. „Dateiinhalt kopieren“ liest dagegen
+  begrenzt (A1.1).
 - Keine Grenze für Download, Upload oder die KI-Lesepfade (für die KI gilt
   Spec 0020, Abschnitt 4.1).
 - Die Meldung bei einem Wechsel des Zielnutzers im erhöhten Modus bleibt, wie
@@ -31,11 +34,17 @@ Review-Priorität: erhöht für A3 (Sitzungsaufbau, normaler Kanal), sonst norma
 
 ### A1 — Größengrenzen
 
-- **A1.1** „Dateiinhalt kopieren“ lehnt eine Datei ab, deren gelesener Inhalt
-  größer als 256 KB ist, auch wenn die Größenabfrage vorher bestanden hat
-  oder gescheitert ist. Die Meldung ist wörtlich dieselbe wie bei der
-  Ablehnung nach der Größenabfrage. Dateien bis einschließlich 256 KB werden
-  wie bisher gelesen.
+- **A1.1** „Dateiinhalt kopieren“ kopiert Textdateien (gültiges UTF-8) bis
+  einschließlich 50 MB (50 × 1024 × 1024 Bytes); die Grenze ist fest. Eine
+  größere Datei wird abgelehnt, mit der übersetzten Meldung „Die Datei ist
+  größer als 50 MB und kann nicht in die Zwischenablage kopiert werden.“
+  (Fehlercode, kein deutscher Rohtext aus dem Backend). Das gilt auch, wenn
+  die Größenabfrage vorher bestanden hat oder gescheitert ist: Gelesen
+  werden höchstens 50 MB + 1 Byte, danach wird abgebrochen; der Speicher hält
+  für diese Aktion nie mehr. Eine Nicht-Text-Datei zeigt die bestehende
+  Meldung „keine Textdatei“. Lehnt die Zwischenablage des Betriebssystems den
+  Inhalt ab, zeigt die bestehende Meldung „Kopieren fehlgeschlagen“ den
+  Grund.
 - **A1.2** „Lokal öffnen“ lehnt eine Datei über 50 MB (50 × 1024 × 1024
   Bytes) ab. Meldung, wörtlich: `Datei ist größer als 50 MB — zu groß zum
   lokalen Öffnen. Bitte stattdessen herunterladen.` Ein gescheiterter
@@ -48,6 +57,13 @@ Review-Priorität: erhöht für A3 (Sitzungsaufbau, normaler Kanal), sonst norma
   des KI-Lesepfads: Eine manuelle Aktion läuft nie über Code der
   KI-Infrastruktur (Redaktion, Filter-Abbildung); gleiche Zahlenwerte sind
   Zufall, keine geteilte Definition (Spec 0054, Sicherheitsmodell).
+
+- **A1.5** Ab 5 MB (bekannte Dateigröße, sonst gelesene Bytes) zeigt die
+  Oberfläche „Kopiere… n MB von m MB“ und einen Abbrechen-Knopf; sie bleibt
+  bedienbar. Abbrechen beendet das Lesen, kopiert nichts und zeigt keine
+  Fehlermeldung.
+- **A1.6** Die Grenze der Vorschau im Upload-Vergleich (256 KB) und der
+  KI-Lesepfad (Spec 0020, Abschnitt 4.1) bleiben unverändert.
 
 ### A2 — Transfer-Meldung beim Widerruf
 
@@ -97,19 +113,25 @@ heutige Ziel umgeschrieben oder entfernt; die Kennung bleibt vergeben.
 
 ## 5. Abnahmefälle
 
-- **T1 (A1.1)** `stat` meldet 100 Bytes, gelesen werden 256 KB + 1 Byte:
-  Ablehnung mit dem Text der Größenablehnung.
-- **T2 (A1.1)** `stat` scheitert, gelesen werden 256 KB + 1 Byte: Ablehnung,
-  gleicher Text.
-- **T3 (A1.1)** Genau 256 KB gültiges UTF-8 werden zurückgegeben
-  (Grenzwert).
+- **T1 (A1.1)** Eine 10-MB-Datei wird vollständig kopiert.
+- **T2 (A1.1)** `stat` meldet 100 Bytes, gelesen werden 50 MB + 1 Byte:
+  Ablehnung mit dem Code der Größenablehnung; bei `stat` > 50 MB wird gar
+  nicht gelesen.
+- **T3 (A1.1)** Genau 50 MB gültiges UTF-8 werden zurückgegeben (Grenzwert),
+  50 MB + 1 Byte nicht; beides auch über den erhöhten Kanal.
+- **T3a (A1.1)** `stat` scheitert, die Datei hat 60 MB: Ablehnung nach
+  höchstens 50 MB + 1 gelesenen Bytes.
+- **T3b (A1.5)** Eine 6-MB-Datei zeigt Fortschritt; Abbrechen beendet das
+  Lesen und kopiert nichts.
+- **T3c (A1.6)** Die Vorschau des Upload-Vergleichs lehnt weiter über 256 KB
+  ab.
 - **T4 (A1.2)** `stat` meldet 50 MB + 1: Ablehnung mit dem Text aus A1.2,
   ohne dass gelesen wurde; kein Eintrag in der Bearbeitungskopie-Ablage.
 - **T5 (A1.2/A1.3)** `stat` meldet 10 Bytes, gelesen werden 50 MB + 1:
   Ablehnung, keine lokale Datei; eine vorhandene Kopie ist danach
   byte-gleich.
 - **T6 (A1.2)** Genau 50 MB werden geöffnet (Grenzwert).
-- **T7 (A1.4)** T1 und T4 auch über den erhöhten Kanal.
+- **T7 (A1.4)** T3 und T4 auch über den erhöhten Kanal.
 - **T8 (A2.1)** Download und Upload über den erhöhten Kanal, Widerruf nach
   dem Erstzugang: Das Ereignis „Übertragung beendet“ hat denselben Fehlertext
   wie das Befehlsergebnis, `ELEVATED_CHANNEL_INACTIVE`.

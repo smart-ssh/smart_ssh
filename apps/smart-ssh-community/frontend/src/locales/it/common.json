@@ -564,7 +564,8 @@
     "APP_LOCKED": "Smart SSH è ancora bloccato. Lo sblocchi prima con la sua password principale.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Questa operazione non corrisponde a dove è attualmente conservata la chiave. Nulla è stato modificato: riapra le impostazioni, che mostrano la modalità attiva.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L'avviso sulla password principale non è stato confermato. Senza quella password tutti i dati vanno persi e non c'è recupero: selezioni la casella e la imposti di nuovo. Nulla è stato modificato.",
-    "KEYCHAIN_KEY_MISMATCH": "La chiave nel portachiavi non appartiene a questo database. Nulla è stato modificato: memorizzarla renderebbe il database illeggibile al prossimo avvio."
+    "KEYCHAIN_KEY_MISMATCH": "La chiave nel portachiavi non appartiene a questo database. Nulla è stato modificato: memorizzarla renderebbe il database illeggibile al prossimo avvio.",
+    "SFTP_CONTENT_TOO_LARGE": "Il file supera i 50 MB e non può essere copiato negli appunti."
   },
   "mcpServer": {
     "hint": "I client MCP esterni possono usarlo per proporre comandi, letture/scritture di file e aggiornamenti di note sui server in elenco consentito; ogni richiesta richiede sempre conferma nell'app, indipendentemente dalle regole di consenso esistenti.",
@@ -1022,7 +1023,9 @@
     "renamePrompt": {
       "renameTitle": "Rinomina",
       "newFolderTitle": "Nuova cartella"
-    }
+    },
+    "copyProgress": "Copia in corso… {{done}} MB di {{total}} MB",
+    "copyProgressUnknownTotal": "Copia in corso… {{done}} MB"
   },
   "chat": {
     "newChat": "Nuova chat",
