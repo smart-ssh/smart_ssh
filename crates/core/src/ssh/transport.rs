@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 
 use super::error::SshError;
 use super::types::{CommandOutput, ExecOutcome, ExecOutputSink, PtySize, RemoteEntry};
@@ -146,7 +146,24 @@ pub trait SshTransport: Send + Sync {
     /// Default nach oben geklemmt, s. jeweiliger `set_max_output_bytes`-
     /// Kommentar).
     fn set_max_output_bytes(&mut self, _limit: usize) {}
+
+    /// Issue #353: a watch that turns to `Some` once the connection is
+    /// gone (keepalive timeout, server disconnect, stream error, local
+    /// close). Lets the application notice a dead connection without an
+    /// open terminal. Default: `None` (the transport cannot tell).
+    fn connection_loss_watch(&self) -> Option<ConnectionLossWatch> {
+        None
+    }
 }
+
+/// Issue #353: why a connection ended; `reason` is user-facing text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionLoss {
+    pub reason: Option<String>,
+}
+
+/// Receiver side of [`SshTransport::connection_loss_watch`].
+pub type ConnectionLossWatch = watch::Receiver<Option<ConnectionLoss>>;
 
 /// A started exec channel that runs independently of the transport it was
 /// opened from (issue #328, see [`SshTransport::start_exec`]).

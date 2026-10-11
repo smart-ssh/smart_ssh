@@ -33,7 +33,9 @@ pub use connect_log::{
 pub use error::{HopLabel, SecretKind, SshError};
 pub use host_key::{HostKeyStore, StoredHostKeyInfo};
 pub use jump_host::resolve_connection_target;
-pub use transport::{InteractiveShell, RunningExec, SftpSession, SshTransport};
+pub use transport::{
+    ConnectionLoss, ConnectionLossWatch, InteractiveShell, RunningExec, SftpSession, SshTransport,
+};
 pub use types::{
     CommandOutput, ConnectionTarget, ExecOutcome, ExecOutputChunk, ExecOutputSink, Hop,
     HostKeyDecision, OutputStream, PtySize, RemoteEntry,

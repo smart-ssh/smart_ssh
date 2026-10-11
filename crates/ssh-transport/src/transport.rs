@@ -44,6 +44,8 @@ pub struct RusshTransport {
     /// können, ohne echte 2-MB-Nutzlasten durch den in-process-Testserver
     /// schicken zu müssen (analog zu `FilterEngine::with_max_command_length`).
     pub(crate) max_output_bytes: usize,
+    /// Issue #353: set when any hop's session ends.
+    pub(crate) loss: ssh_manager_core::ssh::ConnectionLossWatch,
 }
 
 /// Treibt `channel.wait()`, bis der Channel schließt — akkumuliert dabei
@@ -157,6 +159,10 @@ impl RunningExec for RunningRusshExec {
 
 #[async_trait]
 impl SshTransport for RusshTransport {
+    fn connection_loss_watch(&self) -> Option<ssh_manager_core::ssh::ConnectionLossWatch> {
+        Some(self.loss.clone())
+    }
+
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
         let channel = self
             .handle
