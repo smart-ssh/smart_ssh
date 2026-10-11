@@ -657,7 +657,7 @@ mod send_chat_message_persistence_tests {
     use ssh_manager_core::shared::ServerId;
     use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError, SshTransport};
 
-    use crate::first_run_notice::test_support::test_app;
+    use crate::first_run_notice::test_support::{lock_async, test_app};
     use app_logic::confirmation::ConfirmationRegistry;
     use app_logic::events::TestEmitter;
     use app_logic::session::SessionParts;
@@ -806,6 +806,7 @@ mod send_chat_message_persistence_tests {
     /// `session.context`.
     #[tokio::test]
     async fn test_send_chat_message_persists_user_text_via_push_history() {
+        let _guard = lock_async().await;
         let (session, profile_store, chat_store, _tmp_dir) = session_with_real_persistence().await;
         let chat_session_id = session.chat_session_id.lock().await.unwrap();
         let app = test_app();
@@ -881,6 +882,7 @@ mod send_chat_message_persistence_tests {
     /// unbemerkt an der ersten Anfrage des neuen Chats.
     #[tokio::test]
     async fn test_message_sent_during_new_chat_swap_is_rejected_not_queued() {
+        let _guard = lock_async().await;
         let session = test_session(ServerId::new());
         {
             let mut turn = session.chat_turn.lock().unwrap();
@@ -919,6 +921,7 @@ mod send_chat_message_persistence_tests {
     /// denselben Pfad, also auch mit Redaction vor dem Versand.
     #[tokio::test]
     async fn test_message_sent_during_running_turn_is_queued_then_sent_redacted() {
+        let _guard = lock_async().await;
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
@@ -1093,6 +1096,7 @@ mod send_chat_message_persistence_tests {
     /// Folge-Turn.
     #[tokio::test]
     async fn test_queued_message_injected_then_stopped_before_send_is_still_answered() {
+        let _guard = lock_async().await;
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
@@ -1217,6 +1221,7 @@ mod send_chat_message_persistence_tests {
     /// `send_chat_message_impl` setzt das Flag beim Turn-Start zurück.
     #[tokio::test]
     async fn test_new_message_after_an_old_stop_runs_normally() {
+        let _guard = lock_async().await;
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
         let gate = Arc::new(tokio::sync::Notify::new());
@@ -1295,6 +1300,7 @@ mod send_chat_message_persistence_tests {
 
     #[tokio::test]
     async fn test_ai_gets_the_note_after_reconnect_and_its_next_command_needs_confirmation() {
+        let _guard = lock_async().await;
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
         // `UnusedTransport` panics if a command is executed: the proposal

@@ -85,6 +85,9 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
+        // Explicit starting state: the store is the real, shared file, so
+        // never assume an earlier test (or run) left it clean.
+        write_retention_days(handle, None).unwrap();
 
         assert_eq!(read_retention_days(handle), None);
     }
@@ -94,6 +97,7 @@ mod tests {
         let _guard = lock();
         let app = test_app();
         let handle = app.handle();
+        write_retention_days(handle, None).unwrap();
 
         write_retention_days(handle, Some(30)).unwrap();
         assert_eq!(read_retention_days(handle), Some(30));
