@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Ez a művelet nem egyezik azzal, hogy a kulcs jelenleg hol van tárolva. Semmi nem változott – nyissa meg újra a beállításokat, azok mutatják az aktív módot.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "A mesterjelszó-figyelmeztetést nem erősítették meg. E jelszó nélkül minden adat elvész, és nincs helyreállítás – jelölje be a négyzetet, és állítsa be újra. Semmi nem változott.",
     "KEYCHAIN_KEY_MISMATCH": "A kulcstartóban lévő kulcs nem ehhez az adatbázishoz tartozik. Semmi nem változott – a tárolása olvashatatlanná tenné az adatbázist a következő indításkor.",
-    "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra."
+    "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra.",
+    "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren."
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
@@ -641,6 +642,7 @@
     "chmodFailed": "A(z) „{{name}}” jogosultságai nem állíthatók be: {{reason}}",
     "pathCopied": "Útvonal a vágólapra másolva",
     "contentCopied": "A(z) „{{name}}” tartalma a vágólapra másolva",
+    "fileCopied": "A(z) „{{name}}” fájlként a vágólapra másolva",
     "copyFailed": "A vágólapra másolás sikertelen: {{reason}}",
     "openedLocally": "A(z) „{{name}}” helyben megnyitva – a módosítások feltöltésre lesznek felkínálva",
     "openLocallyFailed": "A(z) „{{name}}” nem nyitható meg helyben: {{reason}}",
@@ -983,6 +985,7 @@
       "download": "Letöltés",
       "downloadTo": "Letöltés ide…",
       "copyContent": "Fájltartalom másolása",
+      "copyFile": "Fájl másolása",
       "openLocally": "Megnyitás helyben…",
       "copyPath": "Útvonal másolása",
       "properties": "Tulajdonságok",
