@@ -13,6 +13,7 @@ import { onStartupPrompt, onStartupUnlocked } from "../events";
 import { applyStoredLanguage } from "../i18n";
 import { translateErrorCode } from "../errorCodes";
 import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../types";
+import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { StartupPromptDialog } from "./StartupPromptDialog";
 import { StartupTitleBarDragStrip } from "./StartupTitleBarDragStrip";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
@@ -234,9 +235,9 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     // Titelleistenhöhe frei (`pt-9` zusätzlich zum `p-6`, also
     // `pt-15`), über dem die Drag-Leiste liegt — die Karte rückt nie
     // darunter.
-    <div className="flex h-screen flex-col items-center justify-center bg-slate-900 px-6 pb-6 pt-15 text-slate-100">
+    <div className="flex h-screen flex-col items-center overflow-y-auto bg-slate-900 px-6 pb-6 pt-15 text-slate-100">
       <StartupTitleBarDragStrip />
-      <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl">
+      <div className="my-auto w-full max-w-md rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl">
         <h1 className="font-heading mb-1 text-xl font-semibold tracking-wide">Smart SSH</h1>
 
         {state === null ? (
@@ -257,31 +258,31 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
             }}
           >
             <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unlockIntro")}</p>
-            <label className="block text-sm text-slate-200">
-              {t("startup.passwordLabel")}
-              <input
-                {...TECHNICAL_INPUT_PROPS}
-                type="password"
-                // eslint-disable-next-line jsx-a11y/no-autofocus -- gewollter Anfangsfokus des Dialogs (Issue #112): das Passwortfeld ist die einzige Eingabe.
-                autoFocus
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-              />
-            </label>
-            {state.failedUnlockAttempts > 0 && (
-              <p className="mt-3 text-sm text-slate-400">
-                {t("startup.failedAttempts", { attempts: state.failedUnlockAttempts })}
-              </p>
-            )}
+            <Field
+              label={t("startup.passwordLabel")}
+              help={
+                state.failedUnlockAttempts > 0
+                  ? t("startup.failedAttempts", { attempts: state.failedUnlockAttempts })
+                  : undefined
+              }
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  {...TECHNICAL_INPUT_PROPS}
+                  type="password"
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- gewollter Anfangsfokus des Dialogs (Issue #112): das Passwortfeld ist die einzige Eingabe.
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={FIELD_CONTROL_CLASS}
+                />
+              )}
+            </Field>
             <Actions>
-              <button
-                type="submit"
-                disabled={busy || password.length === 0}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <Button type="submit" variant="primary" disabled={busy || password.length === 0}>
                 {t("startup.unlockButton")}
-              </button>
+              </Button>
               <Secondary onClick={() => void quitApplication()}>
                 {t("startup.answers.quit")}
               </Secondary>
@@ -313,13 +314,9 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
              * anfangen", auch nach beliebig vielen Versuchen nicht. */}
             <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unreachableWrapping")}</p>
             <Actions>
-              <button
-                type="button"
-                onClick={retry}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500"
-              >
+              <Button variant="primary" onClick={retry}>
                 {t("startup.answers.retry")}
-              </button>
+              </Button>
               <Secondary onClick={() => void quitApplication()}>
                 {t("startup.answers.quit")}
               </Secondary>
@@ -335,8 +332,8 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               * Knöpfe hätte „Beenden" dann nicht beendet, und es gäbe
               * keinen Weg mehr aus der App außer dem Fenstersystem. */}
             <Actions>
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 disabled={busy}
                 onClick={() => {
                   // Standen die Zuhörer nie (Anmeldung gescheitert), kommt
@@ -353,10 +350,9 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
                   setContinueAttempt((attempt) => attempt + 1);
                   setError(null);
                 }}
-                className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("startup.answers.retry")}
-              </button>
+              </Button>
               <Secondary onClick={() => void quitApplication()}>
                 {t("startup.answers.quit")}
               </Secondary>
@@ -394,19 +390,11 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
 }
 
 function Actions({ children }: { children: ReactNode }) {
-  return <div className="mt-5 flex flex-wrap gap-2">{children}</div>;
+  return <div className="mt-5 flex flex-wrap justify-end gap-2">{children}</div>;
 }
 
 function Secondary({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
-    >
-      {children}
-    </button>
-  );
+  return <Button onClick={onClick}>{children}</Button>;
 }
 
 /** A5: „Neu anfangen" ist rot und führt in die zweite Bestätigung — die
@@ -422,14 +410,9 @@ function StartOver({
   t: (key: string) => string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      className="rounded bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-    >
+    <Button variant="danger" onClick={onClick} disabled={busy}>
       {t("startup.answers.startOver")}
-    </button>
+    </Button>
   );
 }
 

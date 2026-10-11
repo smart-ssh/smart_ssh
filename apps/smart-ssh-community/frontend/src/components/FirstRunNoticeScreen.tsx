@@ -5,7 +5,7 @@ import {
   type FirstRunNoticeContinueHandler,
   type FirstRunNoticeExtensionContext,
 } from "../extensions/registry";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { Button, DialogFrame } from "./ui";
 
 interface FirstRunNoticeScreenProps {
   /** Aufgerufen bei "Weiter". Der Aufrufer speichert die Pflicht-
@@ -71,6 +71,7 @@ class ExtensionBoundary extends ReactComponent<ExtensionBoundaryProps, { failed:
 export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProps) {
   const { t } = useTranslation();
   const [checked, setChecked] = useState(false);
+  const checkboxRef = useRef<HTMLInputElement>(null);
 
   // Spec 0031, Abschnitt 6: Erweiterungen werden beim Öffnen einmal
   // gelesen. Jede bekommt nur `onContinue` — keinen Zugriff auf
@@ -104,47 +105,49 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
     runContinueHandlers(Array.from(continueHandlers.current.entries()));
   };
 
-  // Unabhängiger Review-Pass: s. identischer Kommentar in
-  // `HostKeyDialog.tsx` — dieser Screen kann ebenfalls von `ServerList`
-  // ausgelöst werden, während `MainScreen` per `display:none` ausgeblendet
-  // ist (aktiver Session-Tab), und wäre ohne Portal unsichtbar.
+  // `DialogFrame` rendert per Portal nach `document.body` (`layer="app"`):
+  // Dieser Screen kann von `ServerList` ausgelöst werden, während
+  // `MainScreen` per `display:none` ausgeblendet ist (aktiver Session-Tab),
+  // und wäre sonst unsichtbar. Escape bewirkt hier nichts: Der Hinweis ist
+  // eine Pflicht-Bestätigung (Spec 0031, Abschnitt 4), kein Abbrechen.
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
-        <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
-          {t("firstRunNotice.title")}
-        </h2>
-        <p className="mb-4 text-sm text-slate-300">{t("firstRunNotice.responsibilityText")}</p>
-        <p className="mb-4 text-sm text-slate-300">{t("firstRunNotice.encryptionText")}</p>
-        <label className="mb-4 flex items-center gap-2 text-sm text-slate-200">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
-          />
-          {t("firstRunNotice.checkboxLabel")}
-        </label>
-        {extensions.map(({ id, Component, context }) => (
-          <ExtensionBoundary key={id} id={id} onError={onExtensionError}>
-            <section
-              data-testid={`first-run-notice-extension-${id}`}
-              className="mb-4 border-t border-slate-700 pt-4 text-sm text-slate-300"
-            >
-              <Component {...context} />
-            </section>
-          </ExtensionBoundary>
-        ))}
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => void onAcknowledge(afterStored)}
-            disabled={!checked}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+    <DialogFrame
+      layer="app"
+      title={t("firstRunNotice.title")}
+      onClose={() => {}}
+      initialFocusRef={checkboxRef}
+      actions={
+        <Button
+          variant="primary"
+          onClick={() => void onAcknowledge(afterStored)}
+          disabled={!checked}
+        >
+          {t("firstRunNotice.continueButton")}
+        </Button>
+      }
+    >
+      <p className="mb-3">{t("firstRunNotice.responsibilityText")}</p>
+      <p className="mb-3">{t("firstRunNotice.encryptionText")}</p>
+      <label className="flex items-start gap-2 text-slate-200">
+        <input
+          ref={checkboxRef}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => setChecked(e.target.checked)}
+          className="mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        />
+        {t("firstRunNotice.checkboxLabel")}
+      </label>
+      {extensions.map(({ id, Component, context }) => (
+        <ExtensionBoundary key={id} id={id} onError={onExtensionError}>
+          <section
+            data-testid={`first-run-notice-extension-${id}`}
+            className="mt-3 border-t border-slate-700 pt-3 text-slate-300"
           >
-            {t("firstRunNotice.continueButton")}
-          </button>
-        </div>
-      </div>
-    </ModalBackdrop>
+            <Component {...context} />
+          </section>
+        </ExtensionBoundary>
+      ))}
+    </DialogFrame>
   );
 }
