@@ -680,7 +680,8 @@
       "startFailed": "sftp-server tidak dapat dimulai melalui sudo (kemungkinan penyebab: “requiretty” di sudoers)."
     },
     "channelLost": "Hak tinggi berakhir — kanal dengan hak tinggi tidak lagi aktif.",
-    "targetUserLabel": "Pengguna target untuk hak tinggi (default: root)"
+    "targetUserLabel": "Pengguna target untuk hak tinggi (default: root)",
+    "group": "Hak istimewa tinggi"
   },
   "sshConfigImport": {
     "dialogTitle": "Impor ssh_config",
@@ -902,6 +903,7 @@
     "toStartDirectory": "Ke direktori awal",
     "parentDirectory": "Direktori induk",
     "newFolderButton": "+ Folder baru",
+    "fileActionsGroup": "Aksi berkas",
     "upload": "Unggah",
     "uploadDialogTitle": "Unggah berkas",
     "uploadFolder": "Unggah folder",

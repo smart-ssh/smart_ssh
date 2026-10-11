@@ -685,7 +685,8 @@
       "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsag: “requiretty” i sudoers)."
     },
     "channelLost": "Forhøjede rettigheder er afsluttet – den forhøjede kanal er ikke længere aktiv.",
-    "targetUserLabel": "Målbruger for forhøjede rettigheder (standard: root)"
+    "targetUserLabel": "Målbruger for forhøjede rettigheder (standard: root)",
+    "group": "Forhøjede rettigheder"
   },
   "sshConfigImport": {
     "dialogTitle": "Importér ssh_config",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Gå til startmappen",
     "parentDirectory": "Overordnet mappe",
     "newFolderButton": "+ Mappe",
+    "fileActionsGroup": "Filhandlinger",
     "upload": "Upload",
     "uploadDialogTitle": "Upload fil(er)",
     "uploadFolder": "Upload mappe",

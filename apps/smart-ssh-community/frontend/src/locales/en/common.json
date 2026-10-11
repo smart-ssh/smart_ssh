@@ -685,7 +685,8 @@
       "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers)."
     },
     "channelLost": "Elevated rights ended — the elevated channel is no longer active.",
-    "targetUserLabel": "Target user for elevated rights (default: root)"
+    "targetUserLabel": "Target user for elevated rights (default: root)",
+    "group": "Elevated rights"
   },
   "sshConfigImport": {
     "dialogTitle": "Import ssh_config",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Go to start directory",
     "parentDirectory": "Parent directory",
     "newFolderButton": "+ Folder",
+    "fileActionsGroup": "File actions",
     "upload": "Upload",
     "uploadDialogTitle": "Upload file(s)",
     "uploadFolder": "Upload folder",

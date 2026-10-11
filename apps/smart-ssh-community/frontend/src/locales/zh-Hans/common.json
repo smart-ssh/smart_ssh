@@ -680,7 +680,8 @@
       "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。"
     },
     "channelLost": "提权已结束——提权通道已不再有效。",
-    "targetUserLabel": "提权的目标用户（默认：root）"
+    "targetUserLabel": "提权的目标用户（默认：root）",
+    "group": "提升的权限"
   },
   "sshConfigImport": {
     "dialogTitle": "导入 ssh_config",
@@ -902,6 +903,7 @@
     "toStartDirectory": "转到起始目录",
     "parentDirectory": "上级目录",
     "newFolderButton": "+ 文件夹",
+    "fileActionsGroup": "文件操作",
     "upload": "上传",
     "uploadDialogTitle": "上传文件",
     "uploadFolder": "上传文件夹",

@@ -685,7 +685,8 @@
       "startFailed": "sftp-server sudo से शुरू नहीं हो सका (संभावित कारण: sudoers में “requiretty”)।"
     },
     "channelLost": "उन्नत अधिकार समाप्त हुए — उन्नत चैनल अब सक्रिय नहीं है।",
-    "targetUserLabel": "उन्नत अधिकारों के लिए लक्ष्य उपयोगकर्ता (डिफ़ॉल्ट: root)"
+    "targetUserLabel": "उन्नत अधिकारों के लिए लक्ष्य उपयोगकर्ता (डिफ़ॉल्ट: root)",
+    "group": "उन्नत अधिकार"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config आयात करें",
@@ -907,6 +908,7 @@
     "toStartDirectory": "प्रारंभ डायरेक्टरी पर जाएँ",
     "parentDirectory": "मूल डायरेक्टरी",
     "newFolderButton": "+ फ़ोल्डर",
+    "fileActionsGroup": "फ़ाइल क्रियाएँ",
     "upload": "अपलोड करें",
     "uploadDialogTitle": "फ़ाइल(ें) अपलोड करें",
     "uploadFolder": "फ़ोल्डर अपलोड करें",
