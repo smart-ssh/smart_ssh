@@ -216,6 +216,24 @@ pub fn with_response_language(text: &str, language: PromptLanguage) -> String {
     }
 }
 
+/// Spec 0065, Teil 2 / Issue #361: Fortsetzungs-Anweisung nach einer
+/// abgeschnittenen Antwort in der Prompt-Sprache (de / en eigene Texte,
+/// sonst Englisch plus Antwortsprach-Anweisung).
+pub fn continue_truncated_response_instruction(language: PromptLanguage) -> String {
+    match language {
+        PromptLanguage::De => CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION_DE.to_string(),
+        _ => with_response_language(CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION_EN, language),
+    }
+}
+
+const CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION_DE: &str =
+    "Deine letzte Antwort wurde wegen des Längenlimits abgeschnitten. Fahre exakt an der \
+     Stelle fort, an der sie endete, ohne den bisherigen Teil zu wiederholen.";
+
+const CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION_EN: &str =
+    "Your last response was cut off because of the length limit. Continue exactly where it \
+     ended, without repeating the part so far.";
+
 /// Issue #90/#330: dieselbe Regel wie die UI (`frontend/src/i18n.ts`,
 /// `resolveInitialLanguage`, Spec 0024, Abschnitt 4) — die gespeicherte
 /// Wahl (`language` in `settings.json`) gilt, wenn sie ein bekannter
@@ -961,6 +979,23 @@ mod tests {
             base_prompt(lang("fr"), "web-01"),
             base_prompt(lang("fr"), "web-01")
         );
+    }
+
+    /// Issue #361: de/en eigene Texte, fr Englisch + Regel, unbekannt Englisch.
+    #[test]
+    fn test_continue_instruction_follows_the_prompt_language() {
+        let de = continue_truncated_response_instruction(PromptLanguage::De);
+        assert!(de.starts_with("Deine letzte Antwort"));
+        assert!(!de.contains("Always respond in"));
+        let en = continue_truncated_response_instruction(PromptLanguage::En);
+        assert!(en.starts_with("Your last response"));
+        assert!(!en.contains("Always respond in"));
+        assert_eq!(
+            continue_truncated_response_instruction(lang("fr")),
+            format!("{en} Always respond in French.")
+        );
+        let unknown = prompt_language(Some(&json!("xx")), None);
+        assert_eq!(continue_truncated_response_instruction(unknown), en);
     }
 
     #[test]
