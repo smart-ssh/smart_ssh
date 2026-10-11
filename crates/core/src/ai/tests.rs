@@ -2887,6 +2887,48 @@ fn test_redactor_keeps_keyword_text_without_value_unchanged() {
     }
 }
 
+/// Issue #333: je hinzugefügter Sprache maskiert der Redactor einen Wert
+/// hinter dem Wort für „Passwort“ (Gegenprobe: ohne Wert bleibt der Text).
+#[test]
+fn test_redactor_masks_value_after_password_word_of_nordic_languages() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in ["lösenord", "adgangskode", "kodeord", "passord", "salasana"] {
+        for text in [
+            format!("{word}: hunter2"),
+            format!("{}: hunter2", word.to_uppercase()),
+        ] {
+            let out = redactor.redact_text(&text);
+            assert!(!out.contains("hunter2"), "{word}: leaked: {out}");
+            assert!(out.contains(REDACTED_PLACEHOLDER), "{out}");
+        }
+        assert_eq!(redactor.redact_text(word), word);
+    }
+}
+
+/// Issue #333: Die neuen Listen sind klein geschrieben, ohne Duplikate
+/// innerhalb der Liste und ohne Einträge der englischen Liste.
+#[test]
+fn test_nordic_keyword_lists_are_lowercase_and_distinct_from_english() {
+    let english: &[&str] = keywords::CREDENTIAL_KEYWORDS
+        .iter()
+        .find(|(l, _)| *l == "en")
+        .map(|(_, k)| *k)
+        .expect("en list");
+    for code in ["sv", "da", "nb", "fi"] {
+        let list = keywords::CREDENTIAL_KEYWORDS
+            .iter()
+            .find(|(l, _)| *l == code)
+            .unwrap_or_else(|| panic!("no list for {code}"))
+            .1;
+        let mut seen = std::collections::HashSet::new();
+        for kw in list {
+            assert_eq!(*kw, kw.to_lowercase(), "{code}: {kw}");
+            assert!(!english.contains(kw), "{code}: {kw} duplicates en");
+            assert!(seen.insert(*kw), "{code}: duplicate {kw}");
+        }
+    }
+}
+
 /// Reads the registered UI language codes from the language registry
 /// (`languages.ts`): one `code: "xx",` line per entry.
 fn registered_ui_languages(registry_source: &str) -> Vec<String> {
