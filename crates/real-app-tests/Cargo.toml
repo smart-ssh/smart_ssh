@@ -16,8 +16,9 @@ description = "Starts the real desktop app through tauri-driver (WebDriver) and 
 # library or binary target.
 [dev-dependencies]
 app-logic = { version = "0.6.0", path = "../app-logic" }
+base64 = "0.23.1"
 credentials-keyring = { version = "0.6.0", path = "../credentials-keyring" }
-persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite" }
+persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite", features = ["test-support"] }
 secrecy = "0.10.3"
 serde_json = "1.0.151"
 ssh-manager-core = { version = "0.6.0", path = "../core" }

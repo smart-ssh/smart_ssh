@@ -4667,6 +4667,7 @@ name = "real-app-tests"
 version = "0.6.0"
 dependencies = [
  "app-logic",
+ "base64 0.23.1",
  "chrono",
  "credentials-keyring",
  "persistence-sqlite",

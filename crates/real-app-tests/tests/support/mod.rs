@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
+use base64::Engine as _;
 use secrecy::SecretString;
 use serde_json::{json, Value};
 use ssh_manager_core::profiles::{CredentialRef, CredentialStore};
@@ -97,7 +98,17 @@ pub fn seed_plaintext_upgrade(data_dir: &Path) -> TestResult {
     let keychain = credentials_keyring::KeyringCredentialStore::new();
     let a = uuid::Uuid::from_u128(0x0011);
     let b = uuid::Uuid::from_u128(0x0012);
+    // 0.5.2 kept its root key in the keychain and encrypted chat, prompt
+    // history and ledger with it. Without it the app removes that content and
+    // shows a blocking startup notice before any window exists (no WebDriver
+    // session), so seed the key the fixture was written with.
+    let root_key = base64::engine::general_purpose::STANDARD
+        .encode(persistence_sqlite::test_support::RELEASE_FIXTURE_ROOT_KEY);
     for (name, value) in [
+        (
+            ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF.to_string(),
+            root_key.as_str(),
+        ),
         (format!("server:{a}:password"), "fake-password-0235"),
         (format!("server:{b}:private_key"), "fake-private-key-0235"),
         (format!("server:{b}:passphrase"), "fake-passphrase-0235"),
