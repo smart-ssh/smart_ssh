@@ -17,12 +17,12 @@ usted / …).
 
 Filled per language by the translation issues. English is the reference.
 
-| English term | de | (one column per language) |
-|---|---|---|
-| filter rule | | |
-| allow / deny | | |
-| session | | |
-| server | | |
-| file browser | | |
-| redaction | | |
-| second opinion | | |
+| English term | de | fr | es | it |
+|---|---|---|---|---|
+| filter rule | Filterregel (Regel) | règle de filtrage | regla de filtro | regola di filtro |
+| allow / deny | Allow / Deny (Ablehnen) | autoriser / refuser | Permitir / Denegar | Consenti / Nega |
+| session | Sitzung | session | sesión | sessione |
+| server | Server | serveur | servidor | server |
+| file browser | Dateibrowser | explorateur de fichiers | explorador de archivos | file browser |
+| redaction | redigiert | caviardage | ocultación de datos sensibles | oscuramento |
+| second opinion | Zweitmeinung | second avis | segunda opinión | seconda opinione |

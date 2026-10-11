@@ -96,3 +96,49 @@ export function lengthProblems(
   }
   return problems;
 }
+
+/** `{{placeholder}}`-Platzhalter und `<tag>`/`</tag>`/`<0>`-Tags eines Werts,
+ * als sortierte Liste (Vielfachheit bleibt erhalten). */
+export function markers(value: string): string[] {
+  return (value.match(/\{\{[^}]*\}\}|<\/?[A-Za-z0-9]+\s*\/?>/g) ?? []).sort();
+}
+
+/** Schlüssel, deren Übersetzung Platzhalter/Tags des englischen Werts
+ * verändert, weglässt oder dazuerfindet. Pluralformen ohne englisches
+ * Gegenstück werden mit `_other` verglichen. */
+export function markerProblems(resources: unknown, english: unknown): string[] {
+  const en = leafValues(english);
+  const problems: string[] = [];
+  for (const [key, value] of leafValues(resources)) {
+    const ref = englishReference(key, en);
+    if (ref === undefined) continue;
+    const want = markers(ref);
+    const got = markers(value);
+    // `_one`/`_zero` dürfen `{{count}}` weglassen ("ein Eintrag"); alle
+    // anderen Platzhalter müssen vorhanden sein.
+    const lenient = /_(one|zero|two)$/.test(key);
+    const ok = lenient
+      ? got.every((g) => want.includes(g)) && want.filter((w) => w !== "{{count}}").every((w) => got.includes(w))
+      : want.join("\u0000") === got.join("\u0000");
+    if (!ok) problems.push(`${key}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`);
+  }
+  return problems;
+}
+
+/** Werte, die dem englischen Wert gleichen, obwohl sie Wörter enthalten und
+ * nicht in der Ausnahmeliste stehen. Werte ohne Buchstaben außerhalb von
+ * Platzhaltern/Tags zählen nicht. */
+export function identicalProblems(
+  resources: unknown,
+  english: unknown,
+  allowed: Record<string, string> = {},
+): string[] {
+  const en = leafValues(english);
+  const problems: string[] = [];
+  for (const [key, value] of leafValues(resources)) {
+    if (key in allowed || en.get(key) !== value) continue;
+    const words = value.replace(/\{\{[^}]*\}\}|<\/?[A-Za-z0-9]+\s*\/?>/g, "");
+    if (/\p{L}/u.test(words)) problems.push(`${key}: identical to English`);
+  }
+  return problems;
+}

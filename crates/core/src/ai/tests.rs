@@ -2719,7 +2719,48 @@ const KEYWORD_SAMPLES: &[&str] = &[
     "Zugangsschlüssel",
     "Zugangsschluessel",
     "Token",
+    "mot de passe",
+    "Mot de passe",
+    "phrase secrète",
+    "jeton",
+    "clé API",
+    "clé privée",
+    "identifiants",
+    "contraseña",
+    "Contraseña",
+    "clave privada",
+    "credenciales",
+    "parola d'ordine",
+    "chiave API",
+    "chiave privata",
+    "credenziali",
 ];
+
+/// Issue #331: per added UI language, the local word for "password" masks
+/// the value after it; harmless text without a value stays untouched.
+#[test]
+fn test_redactor_masks_value_after_password_word_in_fr_es_it() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in [
+        "mot de passe",
+        "Mot de passe",
+        "contraseña",
+        "contrasena",
+        "parola d'ordine",
+    ] {
+        for sep in [": ", "="] {
+            let out = redactor.redact_text(&format!("{word}{sep}hunter2"));
+            assert!(!out.contains("hunter2"), "{word:?}{sep:?} leaked: {out}");
+        }
+    }
+    for text in [
+        "Mot de passe oublié ?",
+        "Olvidé mi contraseña",
+        "Hai dimenticato la parola d'ordine?",
+    ] {
+        assert_eq!(redactor.redact_text(text), text);
+    }
+}
 
 #[test]
 fn test_redactor_redacts_keywords_of_every_language() {
