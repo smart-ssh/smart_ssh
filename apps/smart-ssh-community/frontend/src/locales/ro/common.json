@@ -1108,7 +1108,10 @@
     "connectionLostPressR": "Conexiunea a fost pierdută. Apăsați R pentru reconectare.",
     "reconnect": "Reconectare",
     "reconnectedSeparator": "— reconectat —",
-    "reconnecting": "Se reconectează…"
+    "reconnecting": "Se reconectează…",
+    "reconnectingAuto": "Se reconectează… (încercarea {{attempt}})",
+    "stopReconnect": "Oprește",
+    "reconnectGaveUp": "Conexiunea nu a putut fi restabilită."
   },
   "unusableServer": {
     "badge": "Inutilizabil",
@@ -1119,5 +1122,12 @@
     "host": "Host: {{host}}",
     "delete": "Șterge serverul",
     "deleteSecrets": "Fiecare secret pe care această versiune știe să-l stocheze pentru acest server este șters. Secretele adăugate de o versiune mai nouă a aplicației pot rămâne."
+  },
+  "autoReconnect": {
+    "label": "Reconectare automată",
+    "off": "Dezactivată",
+    "seconds30": "30 de secunde",
+    "seconds60": "60 de secunde",
+    "minutes5": "5 minute"
   }
 }
