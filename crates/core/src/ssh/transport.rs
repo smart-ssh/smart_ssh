@@ -209,6 +209,19 @@ pub trait RunningExec: Send {
 pub trait SftpSession: Send {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError>;
     async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError>;
+    /// Wie `read_file`, liest aber **höchstens** `max_bytes` Bytes und hört
+    /// dann auf (Issue #357): der Speicher hält nie mehr als `max_bytes`,
+    /// auch wenn die Datei viel größer ist oder ihre Größe unbekannt war.
+    /// Wer „größer als N" erkennen will, übergibt `N + 1` und prüft die
+    /// Länge des Ergebnisses. `progress` bekommt nach jedem gelesenen Stück
+    /// die bisher gelesene Byte-Zahl. Abbrechen heißt, den Aufruf fallen zu
+    /// lassen (Drop des Futures).
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError>;
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError>;
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
     /// Wie `stat`, folgt aber KEINEM Symlink am Zielpfad selbst (SFTP

@@ -506,6 +506,19 @@ impl SftpSession for BrowserSftp<'_> {
         self.operation().await?.sftp().read_file(path).await
     }
 
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .read_file_capped(path, max_bytes, progress)
+            .await
+    }
+
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
         self.operation()
             .await?

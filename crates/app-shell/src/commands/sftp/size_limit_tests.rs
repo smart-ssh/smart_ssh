@@ -54,6 +54,11 @@ struct Mismatch {
     stat: StatResult,
     content: Vec<u8>,
     read_calls: AtomicUsize,
+    /// Issue #357: so viele Bytes hat `read_file_capped` insgesamt geliefert.
+    bytes_served: AtomicUsize,
+    /// Issue #357: `read_file_capped` bleibt nach dem ersten Fortschritt
+    /// hängen (für den Abbruch-Test).
+    hang_after_progress: std::sync::atomic::AtomicBool,
     ops: StdMutex<Vec<String>>,
 }
 
@@ -63,6 +68,8 @@ impl MismatchSftp {
             stat,
             content,
             read_calls: AtomicUsize::new(0),
+            bytes_served: AtomicUsize::new(0),
+            hang_after_progress: std::sync::atomic::AtomicBool::new(false),
             ops: StdMutex::new(Vec::new()),
         }))
     }
@@ -75,6 +82,15 @@ impl MismatchSftp {
 
     fn read_calls(&self) -> usize {
         self.0.read_calls.load(Ordering::SeqCst)
+    }
+
+    fn hanging(self) -> Self {
+        self.0.hang_after_progress.store(true, Ordering::SeqCst);
+        self
+    }
+
+    fn bytes_served(&self) -> usize {
+        self.0.bytes_served.load(Ordering::SeqCst)
     }
 
     fn ops(&self) -> Vec<String> {
@@ -92,6 +108,27 @@ impl SftpSession for MismatchSftp {
         self.0.read_calls.fetch_add(1, Ordering::SeqCst);
         self.0.ops.lock().unwrap().push(format!("read_file {path}"));
         Ok(self.0.content.clone())
+    }
+
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError> {
+        self.0.read_calls.fetch_add(1, Ordering::SeqCst);
+        self.0
+            .ops
+            .lock()
+            .unwrap()
+            .push(format!("read_file_capped {path}"));
+        let len = self.0.content.len().min(max_bytes as usize);
+        self.0.bytes_served.fetch_add(len, Ordering::SeqCst);
+        progress(len as u64);
+        if self.0.hang_after_progress.load(Ordering::SeqCst) {
+            std::future::pending::<()>().await;
+        }
+        Ok(self.0.content[..len].to_vec())
     }
 
     async fn write_file(&mut self, _path: &str, _content: &[u8]) -> Result<(), SshError> {
@@ -510,4 +547,174 @@ async fn test_t7_the_editing_limit_also_holds_on_the_elevated_channel() {
         "der normale Kanal darf dabei nie berührt werden, war: {:?}",
         normal.ops()
     );
+}
+
+// --- Issue #357: „Dateiinhalt kopieren" bis 50 MB (A1.1, A1.5) ---------------
+
+const MB: usize = 1024 * 1024;
+const COPY_LIMIT: usize = 50 * MB;
+
+type Progress = std::sync::Arc<StdMutex<Vec<CopyContentProgress>>>;
+
+async fn copy(
+    s: &Setup,
+    channel: BrowserChannel,
+    path: &'static str,
+    cancel: std::sync::Arc<tokio::sync::Notify>,
+    on_report: impl Fn(&CopyContentProgress) + Send + Sync + 'static,
+) -> (CommandResult<String>, Progress) {
+    let seen: Progress = Default::default();
+    let seen_in = seen.clone();
+    let result = with_browser_channel(s.session.clone(), channel, |session, channel| async move {
+        let mut report = |p: CopyContentProgress| {
+            on_report(&p);
+            seen_in.lock().unwrap().push(p);
+        };
+        copy_content_impl(
+            &session,
+            &channel,
+            path,
+            MAX_COPY_CONTENT_BYTES,
+            &cancel,
+            &mut report,
+        )
+        .await
+    })
+    .await;
+    (result, seen)
+}
+
+async fn copy_plain(s: &Setup, channel: BrowserChannel) -> CommandResult<String> {
+    copy(s, channel, "/t/big.txt", Default::default(), |_| {})
+        .await
+        .0
+}
+
+#[test]
+fn test_copy_limit_is_50_mib() {
+    assert_eq!(MAX_COPY_CONTENT_BYTES, 50 * 1024 * 1024);
+    // Die Vorschau-Grenze bleibt unverändert.
+    assert_eq!(MAX_TEXT_PREVIEW_BYTES, 256 * 1024);
+}
+
+#[tokio::test]
+async fn test_copy_10_mb_file_is_returned_completely() {
+    let normal = MismatchSftp::claiming(10 * MB as u64, 10 * MB);
+    let s = setup(normal, untouched()).await;
+    let text = copy_plain(&s, s.normal_channel()).await.unwrap();
+    assert_eq!(text.len(), 10 * MB);
+}
+
+#[tokio::test]
+async fn test_copy_exactly_50_mb_is_allowed_and_one_more_byte_is_rejected_on_both_channels() {
+    for elevated in [false, true] {
+        let ok = MismatchSftp::claiming(COPY_LIMIT as u64, COPY_LIMIT);
+        let too_big = MismatchSftp::claiming(COPY_LIMIT as u64 + 1, COPY_LIMIT + 1);
+        for (sftp, expect_ok) in [(ok, true), (too_big, false)] {
+            let s = if elevated {
+                setup(untouched(), sftp).await
+            } else {
+                setup(sftp, untouched()).await
+            };
+            let channel = if elevated {
+                s.elevated_channel()
+            } else {
+                s.normal_channel()
+            };
+            let result = copy_plain(&s, channel).await;
+            if expect_ok {
+                assert_eq!(result.unwrap().len(), COPY_LIMIT, "elevated={elevated}");
+            } else {
+                let err = result.expect_err("50 MB + 1 muss abgelehnt werden");
+                assert_eq!(
+                    err.code,
+                    Some("SFTP_CONTENT_TOO_LARGE"),
+                    "elevated={elevated}"
+                );
+            }
+        }
+    }
+}
+
+/// Wächst die Datei nach `stat` (oder meldet `stat` sie kleiner), greift die
+/// Prüfung am gelesenen Inhalt.
+#[tokio::test]
+async fn test_copy_rejects_a_file_that_grew_after_stat() {
+    let normal = MismatchSftp::claiming(100, COPY_LIMIT + 1);
+    let s = setup(normal, untouched()).await;
+    let err = copy_plain(&s, s.normal_channel()).await.unwrap_err();
+    assert_eq!(err.code, Some("SFTP_CONTENT_TOO_LARGE"));
+}
+
+/// `stat` scheitert, die Datei hat 60 MB: abgelehnt, nach höchstens
+/// Grenze + 1 gelesenen Bytes.
+#[tokio::test]
+async fn test_copy_with_failing_stat_reads_at_most_limit_plus_one_byte() {
+    let normal = MismatchSftp::new(StatResult::Fails, vec![b'x'; 60 * MB]);
+    let s = setup(normal.clone(), untouched()).await;
+    let err = copy_plain(&s, s.normal_channel()).await.unwrap_err();
+    assert_eq!(err.code, Some("SFTP_CONTENT_TOO_LARGE"));
+    assert_eq!(normal.bytes_served(), COPY_LIMIT + 1);
+}
+
+/// `stat` meldet schon zu viel: gar nicht erst lesen.
+#[tokio::test]
+async fn test_copy_rejects_by_stat_without_reading() {
+    let normal = MismatchSftp::claiming(COPY_LIMIT as u64 + 1, 10);
+    let s = setup(normal.clone(), untouched()).await;
+    let err = copy_plain(&s, s.normal_channel()).await.unwrap_err();
+    assert_eq!(err.code, Some("SFTP_CONTENT_TOO_LARGE"));
+    assert_eq!(normal.read_calls(), 0);
+}
+
+#[tokio::test]
+async fn test_copy_keeps_the_not_a_text_file_message() {
+    let normal = MismatchSftp::new(StatResult::Size(2), vec![0xff, 0xfe]);
+    let s = setup(normal, untouched()).await;
+    let err = copy_plain(&s, s.normal_channel()).await.unwrap_err();
+    assert_eq!(
+        err.message,
+        "Datei ist keine Textdatei (kein gültiges UTF-8)"
+    );
+}
+
+#[tokio::test]
+async fn test_copy_reports_progress_with_the_stat_size_as_total() {
+    let normal = MismatchSftp::claiming(6 * MB as u64, 6 * MB);
+    let s = setup(normal, untouched()).await;
+    let (result, seen) = copy(
+        &s,
+        s.normal_channel(),
+        "/t/big.txt",
+        Default::default(),
+        |_| {},
+    )
+    .await;
+    assert_eq!(result.unwrap().len(), 6 * MB);
+    let seen = seen.lock().unwrap();
+    assert_eq!(
+        seen.last().map(|p| (p.done, p.total)),
+        Some((6 * MB as u64, Some(6 * MB as u64)))
+    );
+}
+
+/// Abbruch mitten im Lesen: nichts wird geliefert, der Fehler trägt den
+/// Abbruch-Code.
+#[tokio::test]
+async fn test_copy_cancel_stops_the_read_and_returns_no_content() {
+    let normal = MismatchSftp::claiming(6 * MB as u64, 6 * MB).hanging();
+    let s = setup(normal, untouched()).await;
+    let cancel = std::sync::Arc::new(tokio::sync::Notify::new());
+    let trigger = cancel.clone();
+    let (result, seen) = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        copy(&s, s.normal_channel(), "/t/big.txt", cancel, move |_| {
+            trigger.notify_one()
+        }),
+    )
+    .await
+    .expect("der Abbruch muss den hängenden Lesevorgang beenden");
+    let err = result.expect_err("ein abgebrochenes Kopieren liefert keinen Inhalt");
+    assert_eq!(err.code, Some("SFTP_COPY_CANCELLED"));
+    assert!(!seen.lock().unwrap().is_empty());
 }

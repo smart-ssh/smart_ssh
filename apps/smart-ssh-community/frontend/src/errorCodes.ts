@@ -237,6 +237,9 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // niemandem begegnen (die Oberfläche zeigt die App erst danach) —
   // begegnet es doch, soll kein roher Text erscheinen.
   "APP_LOCKED",
+  // Issue #357, Spec 0086 A1.1: „Dateiinhalt kopieren" (der Abbruch-Code
+  // SFTP_COPY_CANCELLED wird nie angezeigt).
+  "SFTP_CONTENT_TOO_LARGE",
 ]);
 
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/

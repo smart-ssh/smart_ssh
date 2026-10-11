@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH je stále zamčen. Nejdříve jej odemkněte hlavním heslem.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Tato operace neodpovídá tomu, kde je klíč aktuálně uložen. Nic se nezměnilo — znovu otevřete nastavení, zobrazuje aktivní režim.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Varování k hlavnímu heslu nebylo potvrzeno. Bez tohoto hesla jsou všechna data ztracena a neexistuje obnova — zaškrtněte políčko a nastavte heslo znovu. Nic se nezměnilo.",
-    "KEYCHAIN_KEY_MISMATCH": "Klíč v klíčence nepatří k této databázi. Nic se nezměnilo — jeho uložení by databázi při dalším spuštění učinilo nečitelnou."
+    "KEYCHAIN_KEY_MISMATCH": "Klíč v klíčence nepatří k této databázi. Nic se nezměnilo — jeho uložení by databázi při dalším spuštění učinilo nečitelnou.",
+    "SFTP_CONTENT_TOO_LARGE": "Soubor je větší než 50 MB a nelze jej zkopírovat do schránky."
   },
   "mcpServer": {
     "hint": "Externí klienti MCP mohou prostřednictvím toho navrhovat příkazy, čtení/zápisy souborů a aktualizace poznámek na povolených serverech — každý požadavek vždy vyžaduje potvrzení v aplikaci, bez ohledu na stávající pravidla povolení.",
@@ -1028,7 +1029,9 @@
     "renamePrompt": {
       "renameTitle": "Přejmenovat",
       "newFolderTitle": "Nová složka"
-    }
+    },
+    "copyProgress": "Kopíruji… {{done}} MB z {{total}} MB",
+    "copyProgressUnknownTotal": "Kopíruji… {{done}} MB"
   },
   "chat": {
     "newChat": "Nový chat",

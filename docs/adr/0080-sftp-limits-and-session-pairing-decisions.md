@@ -199,6 +199,30 @@ jetzt `&dyn EventEmitter`; die Zwischenfunktionen `download_recursive` und
 Testsonderbahn, `EventEmitter` ist die Abstraktion, die der Produktivpfad
 ohnehin benutzt.
 
+## Entscheidung 8 (A1.1, Issue #357): „Dateiinhalt kopieren" liest begrenzt bis 50 MB, die Vorschau bleibt bei 256 KB
+
+Die ursprüngliche Entscheidung (256 KB, Prüfung am gelesenen Inhalt, ganzes
+Lesen im Speicher) ist für „Dateiinhalt kopieren" abgelöst. Der Maintainer hat
+50 MB festgelegt (fest, beide Kanäle, genau 50 MB erlaubt).
+
+- **Eigener Befehl.** `sftp_copy_content` ersetzt `sftp_read_text` für diese
+  Aktion. `sftp_read_text` bleibt für die Vorschau des Upload-Vergleichs
+  (256 KB, deutscher Text) — sie teilt sich weder Konstante noch Pfad mit dem
+  Kopieren (A1.4).
+- **Begrenztes Lesen.** Neue Trait-Methode `SftpSession::read_file_capped`
+  liest höchstens `max_bytes` und meldet den Fortschritt. Aufgerufen mit
+  Grenze + 1: ein Byte mehr beweist die Überschreitung. Damit hält der
+  Speicher auch bei gescheitertem `stat` oder wachsender Datei nie mehr als
+  Grenze + 1. Der Wrapper des erhöhten Kanals prüft den Widerruf wie bei jeder
+  Operation (Spec 0085).
+- **Fortschritt und Abbruch.** Fortschritt über einen Tauri-`Channel`, in
+  Schritten von 1 MB. Abbruch über eine Anfrage-ID und `Notify`: der Befehl
+  verwirft das Lese-Future, das die Kanal-Sperre freigibt. Die Lieferung als
+  ein JSON-String über IPC genügt für 50 MB; Chunking bleibt die Option, falls
+  Messungen Stockungen zeigen.
+- **Fehlercodes.** `SFTP_CONTENT_TOO_LARGE` (übersetzt im Frontend) und
+  `SFTP_COPY_CANCELLED` (nie angezeigt).
+
 ## Bewusst nicht behoben
 
 - **`app_logic::orchestration::SIDE_CALL_MAX_TOKENS` ist `pub(crate)`**
