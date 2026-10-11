@@ -432,6 +432,27 @@ impl ActionSchema {
         }
     }
 
+    /// Variante von [`Self::propose_note_update`] nur für die Notiz-Anregung
+    /// beim Verbindungsende (Spec 0010, Abschnitt 3): bietet ausschließlich
+    /// die Notiz des Servers selbst an, weder ein `target`-Feld noch eine
+    /// Erwähnung der Gruppe. Der Name bleibt `propose_note_update`, damit die
+    /// Anbieter-Abbildung unverändert greift (Default-Ziel: `current_server`).
+    pub fn propose_server_note_update() -> Self {
+        Self {
+            name: "propose_note_update".to_string(),
+            description: "Schlägt eine Aktualisierung der Kontextnotiz des aktuell verbundenen \
+                Servers vor. Wird immer als Diff zur manuellen Bestätigung angezeigt, nie \
+                automatisch übernommen."
+                .to_string(),
+            parameters: vec![ActionParameter {
+                name: "new_content".to_string(),
+                description: "Vollständiger neuer Notiztext, nicht nur ein Diff.".to_string(),
+                kind: ActionParameterKind::String,
+                required: true,
+            }],
+        }
+    }
+
     /// Entspricht `AiAction::GenerateDocument` (Spec 0012, Abschnitt 2).
     pub fn generate_document() -> Self {
         Self {
