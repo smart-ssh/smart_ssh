@@ -278,29 +278,20 @@ pub fn base_prompt(language: PromptLanguage, server_name: &str) -> String {
     }
 }
 
-/// Issue #323: die Werkzeug-Schemas einer Sitzung in der Prompt-Sprache.
-/// `suggest_command` folgt der Sprache (deutsche bzw. englische
-/// Beschreibung, gleiches Schema); alle übrigen Werkzeuge und ihre
-/// Reihenfolge bleiben wie in [`default_action_schemas`]. Statisch je
-/// Sprache, damit der gecachte Präfix (Spec 0064) stabil bleibt.
+/// Issues #323, #339: die Werkzeug-Schemas einer Sitzung in der Prompt-Sprache.
+/// Deutsch liefert [`default_action_schemas`] unverändert, Englisch (und
+/// `Other`) die englischen Fassungen aller Werkzeuge. Name, Parameter,
+/// `required`-Flags und Reihenfolge sind in beiden Sprachen gleich. Statisch
+/// je Sprache, damit der gecachte Präfix (Spec 0064) stabil bleibt.
 ///
 /// [`default_action_schemas`]: ssh_manager_core::ai::default_action_schemas
 pub fn session_action_schemas(language: PromptLanguage) -> Vec<ssh_manager_core::ai::ActionSchema> {
-    use ssh_manager_core::ai::{default_action_schemas, ActionSchema};
-    let suggest_command = match language {
-        PromptLanguage::De => ActionSchema::suggest_command(),
-        PromptLanguage::En | PromptLanguage::Other(_) => ActionSchema::suggest_command_en(),
-    };
-    default_action_schemas()
-        .into_iter()
-        .map(|schema| {
-            if schema.name == suggest_command.name {
-                suggest_command.clone()
-            } else {
-                schema
-            }
-        })
-        .collect()
+    match language {
+        PromptLanguage::De => ssh_manager_core::ai::default_action_schemas(),
+        PromptLanguage::En | PromptLanguage::Other(_) => {
+            ssh_manager_core::ai::english_action_schemas()
+        }
+    }
 }
 
 /// Listenzeilen für den Freigabe-Abschnitt aus den Regeln im Scope (Spec
@@ -472,34 +463,73 @@ mod tests {
         }
     }
 
-    /// Issue #323: die englische Prompt-Sprache bekommt die englische
-    /// `suggest_command`-Beschreibung, die deutsche die deutsche. Die übrigen
-    /// Werkzeuge und die Reihenfolge bleiben wie im Standard-Satz.
+    /// Issues #323, #339: Alle Werkzeug- und Parameter-Beschreibungen folgen
+    /// der Prompt-Sprache; Schema (Namen, Typen, `required`, Reihenfolge) ist
+    /// in beiden Sprachen gleich, Deutsch unverändert, Ausgabe deterministisch.
     #[test]
     fn test_session_action_schemas_follow_the_prompt_language() {
-        use ssh_manager_core::ai::{default_action_schemas, ActionSchema};
-        let suggest = |schemas: &[ActionSchema]| {
-            schemas
-                .iter()
-                .find(|s| s.name == "suggest_command")
-                .cloned()
-                .expect("suggest_command fehlt")
-        };
-        let en = session_action_schemas(PromptLanguage::En);
-        let de = session_action_schemas(PromptLanguage::De);
-        assert_eq!(suggest(&en), ActionSchema::suggest_command_en());
-        assert_eq!(suggest(&de), ActionSchema::suggest_command());
-        assert_ne!(suggest(&en).description, suggest(&de).description);
-
+        use ssh_manager_core::ai::default_action_schemas;
         let defaults = default_action_schemas();
-        for schemas in [&en, &de] {
-            let names: Vec<&str> = schemas.iter().map(|s| s.name.as_str()).collect();
-            let default_names: Vec<&str> = defaults.iter().map(|s| s.name.as_str()).collect();
-            assert_eq!(names, default_names);
-            for (schema, default) in schemas.iter().zip(&defaults) {
-                if schema.name != "suggest_command" {
-                    assert_eq!(schema, default);
+        let de = session_action_schemas(PromptLanguage::De);
+        let en = session_action_schemas(PromptLanguage::En);
+        assert_eq!(de, defaults);
+        assert_eq!(en, session_action_schemas(PromptLanguage::En));
+        assert_eq!(de, session_action_schemas(PromptLanguage::De));
+
+        let markers = [
+            "ä",
+            "ö",
+            "ü",
+            "ß",
+            "Ä",
+            "Ö",
+            "Ü",
+            " der ",
+            " die ",
+            " das ",
+            " und ",
+            " ein ",
+            " eine ",
+            " nicht ",
+            " auf ",
+            " wird ",
+            " über ",
+            "Kommando",
+            "Datei",
+            "Server,",
+            "Nutzer",
+            "Vollständig",
+            "Pfad",
+        ];
+        for schema in &en {
+            let texts = std::iter::once(&schema.description)
+                .chain(schema.parameters.iter().map(|p| &p.description));
+            for text in texts {
+                assert!(
+                    !text.trim().is_empty(),
+                    "{}: empty description",
+                    schema.name
+                );
+                for marker in markers {
+                    assert!(
+                        !text.contains(marker),
+                        "{}: German marker {marker:?} in {text:?}",
+                        schema.name
+                    );
                 }
+            }
+        }
+
+        assert_eq!(en.len(), defaults.len());
+        for (schema, default) in en.iter().zip(&defaults) {
+            assert_eq!(schema.name, default.name);
+            assert_ne!(schema.description, default.description);
+            assert_eq!(schema.parameters.len(), default.parameters.len());
+            for (p, d) in schema.parameters.iter().zip(&default.parameters) {
+                assert_eq!(p.name, d.name);
+                assert_eq!(p.kind, d.kind);
+                assert_eq!(p.required, d.required);
+                assert_ne!(p.description, d.description);
             }
         }
     }
