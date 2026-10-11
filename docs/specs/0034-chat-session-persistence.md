@@ -144,6 +144,14 @@ bereits erhöhter Kanal bleiben unverändert.
    Betriebssystem-Information der Verbindung bleibt im Kontext erhalten.
    Schlägt das Anlegen der neuen Sitzung fehl, bleibt der bisherige Chat
    unverändert aktiv und die Schaltfläche meldet den Fehler.
+6. **Nachricht während des Wechsels.** Sendet der Nutzer genau in dem
+   Moment eine Nachricht, in dem „Neuer Chat" den Chat austauscht, wird sie
+   abgelehnt und nicht eingereiht: Sie gelangt weder in den alten noch in
+   den neuen Chat. Die Chat-Ansicht zeigt einen Hinweis, dass die Nachricht
+   nicht gesendet wurde, und der Text bleibt im Eingabefeld, sodass der
+   Nutzer sie nach dem Wechsel erneut senden kann. Schlägt der Wechsel
+   fehl, gilt dasselbe; der bisherige Chat bleibt unverändert und
+   Nachrichten werden danach wieder normal angenommen.
 
 ## 12. Grenzen
 

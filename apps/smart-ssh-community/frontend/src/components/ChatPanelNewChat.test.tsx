@@ -15,7 +15,10 @@ if (!Element.prototype.scrollTo) {
 }
 
 vi.mock("../api", () => ({
-  commandErrorMessage: (err: unknown) => String(err),
+  commandErrorMessage: (err: unknown) =>
+    typeof err === "object" && err !== null && "message" in err ? String((err as { message: unknown }).message) : String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
   acceptAndCreateRule: vi.fn(),
   cancelRunningCommand: vi.fn(),
   continueTruncatedResponse: vi.fn(() => Promise.resolve()),
@@ -119,6 +122,19 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
 
     await waitFor(() => expect(startNewChat).toHaveBeenCalledWith("session-1"));
     await waitFor(() => expect(screen.queryByText("hallo Welt")).not.toBeInTheDocument());
+  });
+
+  it("keeps the text in the input when the backend rejects a message during the swap", async () => {
+    vi.mocked(sendChatMessage).mockRejectedValueOnce({ message: "Gerade wird ein neuer Chat begonnen", code: "CHAT_SWITCHING" });
+    renderChatPanel();
+    const field = await screen.findByPlaceholderText(PLACEHOLDER);
+    fireEvent.change(field, { target: { value: "verlorene Frage" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    await waitFor(() => expect(field).toHaveValue("verlorene Frage"));
+    // Not shown as sent in the history; only the error notice remains.
+    expect(screen.getAllByText(/verlorene Frage/)).toHaveLength(1);
+    expect(screen.getByText(/Gerade wird ein neuer Chat begonnen/)).toBeInTheDocument();
   });
 
   it("is disabled while an AI turn is running", async () => {
