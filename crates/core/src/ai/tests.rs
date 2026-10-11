@@ -2897,6 +2897,33 @@ fn test_redactor_redacts_decomposed_accents_and_curly_apostrophes() {
     assert!(!out.contains("geheim4711"), "{out}");
 }
 
+/// Issue #366: Vollständigkeit. Jedes Schlüsselwort jeder Sprache wird in der
+/// Referenz-NFD-Form (auch mit typografischem Apostroph) redigiert.
+#[test]
+fn test_redactor_redacts_every_keyword_in_nfd_form() {
+    use unicode_normalization::UnicodeNormalization;
+    let redactor = DefaultOutputRedactor::new();
+    for (lang, kws) in super::keywords::CREDENTIAL_KEYWORDS {
+        for kw in *kws {
+            for base in [kw.to_string(), kw.replace('\'', "\u{2019}")] {
+                let nfd: String = base.nfd().collect();
+                let sep = if nfd.contains(' ') {
+                    nfd.replace(' ', "_")
+                } else {
+                    nfd.clone()
+                };
+                for form in [&nfd, &sep] {
+                    let out = redactor.redact_text(&format!("{form}: geheim4711"));
+                    assert!(
+                        !out.contains("geheim4711"),
+                        "[{lang}] {form:?} leaked: {out}"
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn test_redactor_keeps_keyword_text_without_value_unchanged() {
     let redactor = DefaultOutputRedactor::new();

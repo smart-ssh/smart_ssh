@@ -543,15 +543,84 @@ pub fn keyword_alternation() -> &'static str {
 fn decompose_accents(k: &str) -> String {
     let mut out = String::with_capacity(k.len() + 4);
     for c in k.chars() {
-        match accent_base(c) {
-            Some((base, mark)) => {
-                out.push(base);
-                out.push(mark);
-            }
-            None => out.push(c),
-        }
+        decompose_char(c, &mut out);
     }
     out
+}
+
+/// Volle kanonische Zerlegung eines Zeichens (rekursiv, damit Buchstaben mit
+/// mehreren Zeichen wie `ậ` = `a` + U+0323 + U+0302 stimmen): Akzenttabelle,
+/// Kana mit (Halb-)Dakuten und Hangul-Silben (algorithmisch zu Jamo).
+fn decompose_char(c: char, out: &mut String) {
+    let code = c as u32;
+    if (0xAC00..=0xD7A3).contains(&code) {
+        let s = code - 0xAC00;
+        let (l, v, t) = (s / 588, (s % 588) / 28, s % 28);
+        out.extend(char::from_u32(0x1100 + l));
+        out.extend(char::from_u32(0x1161 + v));
+        if t > 0 {
+            out.extend(char::from_u32(0x11A7 + t));
+        }
+        return;
+    }
+    match kana_base(c).or_else(|| accent_base(c)) {
+        Some((base, mark)) => {
+            decompose_char(base, out);
+            out.push(mark);
+        }
+        None => out.push(c),
+    }
+}
+
+/// Hiragana/Katakana mit Dakuten (U+3099) oder Handakuten (U+309A).
+fn kana_base(c: char) -> Option<(char, char)> {
+    const VOICED: char = '\u{3099}';
+    const SEMI: char = '\u{309A}';
+    let code = c as u32;
+    match code {
+        0x309E => return Some(('\u{309D}', VOICED)),
+        0x30FE => return Some(('\u{30FD}', VOICED)),
+        0x30F7..=0x30FA => return Some((char::from_u32(code - 0x30F7 + 0x30EF)?, VOICED)),
+        _ => {}
+    }
+    // Katakana liegt 0x60 hinter Hiragana.
+    let (hira, shift) = match code {
+        0x30A1..=0x30F6 => (code - 0x60, 0x60),
+        _ => (code, 0),
+    };
+    let back = |x: u32| char::from_u32(x + shift);
+    // Reihen mit Dakuten direkt hinter dem Grundzeichen (か-ち, て, と, は-ほ).
+    let voiced_after = |h: u32| matches!(h, 0x304B..=0x3062 | 0x3064..=0x3069 | 0x306F..=0x307D);
+    match hira {
+        0x3094 => Some((back(0x3046)?, VOICED)), // ゔ
+        h if voiced_after(h) => {
+            // Grundzeichen stehen an ungeraden/geraden Stellen je nach Reihe.
+            let (base, mark) = if (0x304B..=0x3062).contains(&h) {
+                // か(304B)=か, が(304C): Grundzeichen sind ungerade.
+                if h % 2 == 0 {
+                    (h - 1, VOICED)
+                } else {
+                    return None;
+                }
+            } else if (0x3064..=0x3069).contains(&h) {
+                // つ(3064) づ(3065) て(3066) で(3067) と(3068) ど(3069)
+                if h % 2 == 1 {
+                    (h - 1, VOICED)
+                } else {
+                    return None;
+                }
+            } else {
+                // は(306F) ば(3070) ぱ(3071) ひ(3072) …: Dreiergruppen.
+                match (h - 0x306F) % 3 {
+                    1 => (h - 1, VOICED),
+                    2 => (h - 2, SEMI),
+                    _ => return None,
+                }
+            };
+            Some((back(base)?, mark))
+        }
+        _ => None,
+    }
 }
 
 fn accent_base(c: char) -> Option<(char, char)> {
@@ -604,6 +673,7 @@ fn accent_base(c: char) -> Option<(char, char)> {
         'ř' => ('r', CARON),
         'ś' => ('s', ACUTE),
         'ş' => ('s', CEDILLA),
+        'Ş' => ('S', CEDILLA),
         'š' => ('s', CARON),
         'ș' => ('s', COMMA_BELOW),
         'ť' => ('t', CARON),
@@ -619,6 +689,12 @@ fn accent_base(c: char) -> Option<(char, char)> {
         'ż' => ('z', DOT),
         'ž' => ('z', CARON),
         'ụ' => ('u', '\u{323}'),
+        'ạ' => ('a', '\u{323}'),
+        'ậ' => ('ạ', CIRC),
+        'ẩ' => ('â', '\u{309}'),
+        'ư' => ('u', '\u{31B}'),
+        'ơ' => ('o', '\u{31B}'),
+        'ự' => ('ư', '\u{323}'),
         'й' => ('и', BREVE),
         'ё' => ('е', DIAER),
         'ά' => ('α', ACUTE),
@@ -627,4 +703,22 @@ fn accent_base(c: char) -> Option<(char, char)> {
         'ό' => ('ο', ACUTE),
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod nfd_tests {
+    use super::decompose_char;
+    use unicode_normalization::UnicodeNormalization;
+
+    /// Issue #366: Kana und Hangul werden wie die Referenz-NFD zerlegt.
+    #[test]
+    fn kana_and_hangul_decompose_like_reference_nfd() {
+        for code in (0x3041..=0x30FF).chain(0xAC00..=0xD7A3) {
+            let c = char::from_u32(code).unwrap();
+            let mut ours = String::new();
+            decompose_char(c, &mut ours);
+            let reference: String = c.to_string().nfd().collect();
+            assert_eq!(ours, reference, "U+{code:04X}");
+        }
+    }
 }
