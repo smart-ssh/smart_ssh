@@ -7,6 +7,8 @@ import { identicalProblems, keyParityProblems, lengthProblems, markerProblems } 
 
 // Spec 0072, C2 / Spec 0024: jede registrierte Sprache hat dieselben
 // Schlüssel wie Englisch; Pluralformen folgen `Intl.PluralRules` der Sprache.
+const NEW_LANGUAGES = ["fr", "es", "it", "pl", "cs", "uk", "ru"];
+
 // Neue Sprachen kommen allein über die Registry (`languages.ts`) dazu.
 describe.each(LANGUAGE_REGISTRY.filter((l) => l.code !== "en"))(
   "Übersetzung $code gegen Englisch",
@@ -20,12 +22,12 @@ describe.each(LANGUAGE_REGISTRY.filter((l) => l.code !== "en"))(
       expect(lengthProblems(resources, en, allowed)).toEqual([]);
     });
 
-    it.runIf(["fr", "es", "it"].includes(code))("enthält alle Platzhalter und Tags des Englischen unverändert", () => {
+    it.runIf(NEW_LANGUAGES.includes(code))("enthält alle Platzhalter und Tags des Englischen unverändert", () => {
       expect(markerProblems(resources, en)).toEqual([]);
     });
 
-    // Gilt nur für die Sprachen aus Issue #331; de/pt-BR/… sind älter.
-    it.runIf(["fr", "es", "it"].includes(code))("hat keinen Wert, der dem Englischen gleicht (Ausnahmen: identicalAllowlist.json)", () => {
+    // Gilt nur für die Sprachen aus Issue #331/#334; de/pt-BR/… sind älter.
+    it.runIf(NEW_LANGUAGES.includes(code))("hat keinen Wert, der dem Englischen gleicht (Ausnahmen: identicalAllowlist.json)", () => {
       const allowed = (identicalAllowlist as Record<string, Record<string, string>>)[code] ?? {};
       expect(identicalProblems(resources, en, allowed)).toEqual([]);
     });
