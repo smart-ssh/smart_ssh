@@ -3,7 +3,7 @@ import { LANGUAGE_REGISTRY } from "../languages";
 import allowlist from "./lengthAllowlist.json";
 import en from "./en/common.json";
 import identicalAllowlist from "./identicalAllowlist.json";
-import { identicalProblems, keyParityProblems, lengthProblems, markerProblems } from "./parity";
+import { identicalProblems, keyParityProblems, leafValues, lengthProblems, markerProblems } from "./parity";
 
 // Spec 0072, C2 / Spec 0024: jede registrierte Sprache hat dieselben
 // Schlüssel wie Englisch; Pluralformen folgen `Intl.PluralRules` der Sprache.
@@ -98,3 +98,61 @@ describe("lengthProblems", () => {
     expect(lengthProblems({ k: "x".repeat(16) }, english)).toEqual([]);
   });
 });
+
+// Issue #332: Platzhalter und Tags des Englischen bleiben unverändert; Werte
+// sind nicht mit Englisch identisch (außer Platzhalter-only, Produkt-/Fachbegriffe
+// und Wörter, die in der Sprache gleich lauten).
+// Wörter, die in der Sprache wie im Englischen lauten (Lehnwörter oder
+// Fachbegriffe, im Glossar nicht übersetzt). Gilt für Werte, die nach Abzug von
+// Platzhaltern und Satzzeichen nur aus diesen Wörtern bestehen. URLs, Pfade
+// und Platzhalter-only-Werte sind immer erlaubt.
+const SAME_WORDS: Record<string, readonly string[]> = {
+  "pt-BR": ["ok", "mcp", "logs", "host", "tags", "tag", "enter", "global", "terminal", "token", "local", "mac"],
+  nl: [
+    "ok", "mcp", "server", "servers", "database", "host", "type", "model", "token", "details",
+    "later", "terminal", "hop", "cipher", "mac", "extra", "headers", "header", "openai",
+    "anthropic", "ollama", "ai",
+  ],
+};
+// Produktnamen sind in allen Sprachen gleich (Glossar: bleiben unübersetzt).
+const PRODUCT_WORDS = ["openai", "anthropic", "ollama", "mcp", "ok"];
+function isAllowedSame(code: string, value: string): boolean {
+  if (/^(https?:|~\/|\/)/.test(value.trim())) return true;
+  const words = stripped(value)
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  const ok = new Set([...(SAME_WORDS[code] ?? []), ...PRODUCT_WORDS]);
+  return words.every((w) => ok.has(w));
+}
+const tokens = (s: string) => (s.match(/\{\{[^}]*\}\}|<\/?[a-zA-Z0-9]+\s*\/?>/g) ?? []).sort();
+const stripped = (s: string) => s.replace(/\{\{[^}]*\}\}|<\/?[a-zA-Z0-9]+\s*\/?>/g, "").trim();
+
+describe.each(LANGUAGE_REGISTRY.filter((l) => ["pt-BR", "nl"].includes(l.code)))(
+  "Platzhalter und Eigenständigkeit $code",
+  ({ code, resources }) => {
+    const enValues = leafValues(en);
+    const values = leafValues(resources);
+
+    it("übernimmt alle {{…}}-Platzhalter und Tags des Englischen unverändert", () => {
+      const problems: string[] = [];
+      for (const [key, value] of values) {
+        const ref = enValues.get(key) ?? enValues.get(key.replace(/_[a-z]+$/, "_other"));
+        if (ref === undefined) continue;
+        if (JSON.stringify(tokens(ref)) !== JSON.stringify(tokens(value))) problems.push(key);
+      }
+      expect(problems).toEqual([]);
+    });
+
+    it("hat keinen Wert identisch zum Englischen (Ausnahmen: SAME_WORDS)", () => {
+      const problems: string[] = [];
+      for (const [key, value] of values) {
+        const ref = enValues.get(key);
+        if (ref === undefined || ref !== value) continue;
+        if (stripped(value).length === 0 || isAllowedSame(code, value)) continue;
+        problems.push(`${key}: ${value}`);
+      }
+      expect(problems).toEqual([]);
+    });
+  },
+);

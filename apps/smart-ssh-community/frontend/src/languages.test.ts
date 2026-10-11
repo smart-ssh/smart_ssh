@@ -62,7 +62,7 @@ describe("registry", () => {
   it("sorts the picker by English name and carries the endonym", () => {
     const fake: LanguageEntry = { code: "zz", endonym: "Zzz", englishName: "Aardvarkish", resources: {} };
     const sorted = languagesForPicker([...LANGUAGE_REGISTRY, fake]);
-    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Czech", "English", "French", "German", "Italian", "Polish", "Russian", "Spanish", "Ukrainian"]);
-    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["Čeština", "English", "Français", "Deutsch", "Italiano", "Polski", "Русский", "Español", "Українська"]);
+    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Czech", "Dutch", "English", "French", "German", "Italian", "Polish", "Portuguese (Brazil)", "Russian", "Spanish", "Ukrainian"]);
+    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["Čeština", "Nederlands", "English", "Français", "Deutsch", "Italiano", "Polski", "Português (Brasil)", "Русский", "Español", "Українська"]);
   });
 });

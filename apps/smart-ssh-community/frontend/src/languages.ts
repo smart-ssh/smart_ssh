@@ -7,6 +7,8 @@ import it from "./locales/it/common.json";
 import pl from "./locales/pl/common.json";
 import ru from "./locales/ru/common.json";
 import uk from "./locales/uk/common.json";
+import nl from "./locales/nl/common.json";
+import ptBR from "./locales/pt-BR/common.json";
 
 // Spec 0024, Abschnitt 3/4: die einzige Quelle der Wahrheit für die
 // unterstützten UI-Sprachen. Eine neue Sprache = eine Locale-Datei + ein
@@ -80,6 +82,18 @@ export const LANGUAGE_REGISTRY: readonly LanguageEntry[] = [
     endonym: "Українська",
     englishName: "Ukrainian",
     resources: uk,
+  },
+  {
+    code: "nl",
+    endonym: "Nederlands",
+    englishName: "Dutch",
+    resources: nl,
+  },
+  {
+    code: "pt-BR",
+    endonym: "Português (Brasil)",
+    englishName: "Portuguese (Brazil)",
+    resources: ptBR,
   },
 ];
 
