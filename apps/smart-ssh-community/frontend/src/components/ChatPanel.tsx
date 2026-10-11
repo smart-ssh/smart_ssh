@@ -834,6 +834,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     await runSend(async () => {
       try {
         await sendChatMessage(sessionId, text);
+        // Spec 0015, Abschnitt 5: das Backend hat den Prompt gespeichert (samt
+        // Dedup und 200er-Grenze) — Liste neu laden, damit er sofort per
+        // Pfeiltaste erreichbar ist. Beim lokalen Pseudo-Server bleibt sie leer.
+        void listPromptHistory(serverId)
+          .then(setPromptHistory)
+          .catch(() => {});
       } catch (err) {
         // Issue #315: „Neuer Chat" tauscht den Chat gerade aus; das Backend hat
         // die Nachricht abgelehnt. Sie verschwindet aus dem Verlauf und bleibt
