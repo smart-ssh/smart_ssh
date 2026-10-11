@@ -19,6 +19,10 @@ import sv from "./locales/sv/common.json";
 import id from "./locales/id/common.json";
 import vi from "./locales/vi/common.json";
 import hi from "./locales/hi/common.json";
+import tr from "./locales/tr/common.json";
+import el from "./locales/el/common.json";
+import hu from "./locales/hu/common.json";
+import ro from "./locales/ro/common.json";
 
 // Spec 0024, Abschnitt 3/4: die einzige Quelle der Wahrheit für die
 // unterstützten UI-Sprachen. Eine neue Sprache = eine Locale-Datei + ein
@@ -164,6 +168,30 @@ export const LANGUAGE_REGISTRY: readonly LanguageEntry[] = [
     endonym: "हिन्दी",
     englishName: "Hindi",
     resources: hi,
+  },
+  {
+    code: "tr",
+    endonym: "Türkçe",
+    englishName: "Turkish",
+    resources: tr,
+  },
+  {
+    code: "el",
+    endonym: "Ελληνικά",
+    englishName: "Greek",
+    resources: el,
+  },
+  {
+    code: "hu",
+    endonym: "Magyar",
+    englishName: "Hungarian",
+    resources: hu,
+  },
+  {
+    code: "ro",
+    endonym: "Română",
+    englishName: "Romanian",
+    resources: ro,
   },
 ];
 

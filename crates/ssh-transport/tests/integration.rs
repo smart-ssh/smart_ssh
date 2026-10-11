@@ -2388,3 +2388,144 @@ async fn test_sftp_folder_upload_mirrors_nested_tree_with_identical_contents() {
         0
     );
 }
+
+/// TCP forwarder for one connection that can go silent: once frozen it
+/// keeps the sockets open but forwards nothing in either direction, like a
+/// network that drops packets without a reset (issue #353).
+struct FreezableProxy {
+    port: u16,
+    frozen: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl FreezableProxy {
+    async fn start(target: std::net::SocketAddr) -> Self {
+        use std::sync::atomic::Ordering;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let frozen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = frozen.clone();
+        let task = tokio::spawn(async move {
+            let (inbound, _) = listener.accept().await.unwrap();
+            let outbound = tokio::net::TcpStream::connect(target).await.unwrap();
+            let (mut in_r, mut in_w) = inbound.into_split();
+            let (mut out_r, mut out_w) = outbound.into_split();
+            let f1 = flag.clone();
+            let up = tokio::spawn(async move {
+                let mut buf = [0u8; 4096];
+                while let Ok(n) = in_r.read(&mut buf).await {
+                    if n == 0 {
+                        break;
+                    }
+                    if !f1.load(Ordering::SeqCst) && out_w.write_all(&buf[..n]).await.is_err() {
+                        break;
+                    }
+                }
+            });
+            let mut buf = [0u8; 4096];
+            while let Ok(n) = out_r.read(&mut buf).await {
+                if n == 0 {
+                    break;
+                }
+                if !flag.load(Ordering::SeqCst) && in_w.write_all(&buf[..n]).await.is_err() {
+                    break;
+                }
+            }
+            up.abort();
+        });
+        Self { port, frozen, task }
+    }
+
+    fn freeze(&self) {
+        self.frozen.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl Drop for FreezableProxy {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+/// Connects through `port` with a shortened keepalive (interval 200 ms,
+/// max 2) and returns the transport.
+async fn connect_fast_keepalive(
+    server: &RunningTestServer,
+    port: u16,
+) -> Box<dyn ssh_manager_core::ssh::SshTransport> {
+    let host_keys = TestHostKeyStore::default();
+    host_keys
+        .trust("127.0.0.1", port, &server.host_public_key)
+        .unwrap();
+    let host_keys: std::sync::Arc<dyn HostKeyStore> = std::sync::Arc::new(host_keys);
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", port)],
+    };
+    match ssh_transport::connect_with_keepalive(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        host_keys,
+        &ssh_manager_core::ssh::ConnectLog::new(),
+        ssh_transport::ConnectLimits::DEFAULT,
+        std::time::Duration::from_millis(200),
+        2,
+    )
+    .await
+    .expect("connect should succeed")
+    {
+        ConnectOutcome::Connected(transport) => transport,
+        ConnectOutcome::PendingHostKeyConfirmation { .. } => panic!("host key was trusted"),
+    }
+}
+
+/// Issue #353, AC 2: when the network goes silent (no reset), the keepalive
+/// declares the connection lost without any channel being open.
+/// Counter-proof: without keepalives in the client config the watch stays
+/// `None` and the timeout below fires.
+#[tokio::test]
+async fn test_silent_drop_is_detected_by_keepalive_without_open_channel() {
+    let server = RunningTestServer::start().await;
+    let proxy = FreezableProxy::start(server.addr).await;
+    let transport = connect_fast_keepalive(&server, proxy.port).await;
+    let mut watch = transport
+        .connection_loss_watch()
+        .expect("the russh transport offers a loss watch");
+    assert!(watch.borrow().is_none());
+
+    proxy.freeze();
+    let loss = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            if let Some(loss) = watch.borrow_and_update().clone() {
+                return loss;
+            }
+            watch.changed().await.expect("sender alive");
+        }
+    })
+    .await
+    .expect("keepalive should declare the connection lost");
+    let reason = loss.reason.unwrap_or_default().to_lowercase();
+    assert!(reason.contains("respon"), "reason: {reason}");
+}
+
+/// Issue #353, AC 4 (shortened interval): an idle but healthy session
+/// answers many keepalives and stays connected and usable.
+#[tokio::test]
+async fn test_idle_healthy_session_stays_connected_across_many_keepalives() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_fast_keepalive(&server, server.addr.port()).await;
+    let watch = transport.connection_loss_watch().expect("loss watch");
+
+    // ~15 keepalive intervals, far beyond the 2 unanswered ones allowed.
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    assert!(
+        watch.borrow().is_none(),
+        "a healthy idle session is not lost"
+    );
+    let output = transport.execute("still-here").await.expect("exec works");
+    assert_eq!(output.stdout, b"echo:still-here\n");
+}

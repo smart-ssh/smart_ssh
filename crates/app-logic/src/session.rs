@@ -1339,14 +1339,61 @@ pub fn spawn_terminal_actor(
             // noch offen ist — sonst zeigt eine wiederhergestellte Tab-Leiste
             // (Abschnitt 2, "Backend ist maßgebliche Quelle") eine tote
             // Session fälschlich als weiterhin verbunden an.
-            *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
-            emit_connection_status_changed(
-                emitter.as_ref(),
-                session_id,
-                ConnectionStatus::Disconnected,
-                reason,
-            );
+            report_connection_lost(session_id, &session, emitter.as_ref(), reason);
         }
+    });
+}
+
+/// Issue #353: the one status transition for every way a connection can end
+/// unexpectedly (terminal EOF, keepalive timeout, any other loss the
+/// transport reports). Sets `Disconnected` and emits
+/// `connection-status-changed` — exactly once per session: later reports
+/// find the status already `Disconnected` and do nothing. Returns whether
+/// this call made the transition.
+pub fn report_connection_lost(
+    session_id: SessionId,
+    session: &Session,
+    emitter: &dyn EventEmitter,
+    reason: Option<String>,
+) -> bool {
+    {
+        let mut status = session.status.lock().unwrap();
+        if *status == ConnectionStatus::Disconnected {
+            return false;
+        }
+        *status = ConnectionStatus::Disconnected;
+    }
+    emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
+    true
+}
+
+/// Issue #353: watches the transport's loss signal for a session, also when
+/// no terminal is open. An explicit `disconnect()` marks the transport
+/// closed first, so the resulting signal is not reported as a loss. Holds
+/// only a weak reference: it never keeps a removed session alive.
+pub fn spawn_connection_watch(
+    session_id: SessionId,
+    session: &Arc<Session>,
+    mut watch: ssh_manager_core::ssh::ConnectionLossWatch,
+    emitter: Arc<dyn EventEmitter>,
+) {
+    let session = Arc::downgrade(session);
+    tokio::spawn(async move {
+        let loss = loop {
+            if let Some(loss) = watch.borrow_and_update().clone() {
+                break loss;
+            }
+            if watch.changed().await.is_err() {
+                return; // transport dropped without a loss
+            }
+        };
+        let Some(session) = session.upgrade() else {
+            return;
+        };
+        if session.transport.is_closed() {
+            return;
+        }
+        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason);
     });
 }
 
@@ -1759,6 +1806,101 @@ mod tests {
             !history_contains_untrusted_content(&history),
             "Kommando/Grund stammen von der KI/lokalen Filter-Engine, nie vom Remote-Server"
         );
+    }
+
+    fn status_events(emitter: &crate::events::TestEmitter) -> Vec<serde_json::Value> {
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "connection-status-changed")
+            .map(|(_, payload)| payload.clone())
+            .collect()
+    }
+
+    async fn wait_for_status_events(emitter: &crate::events::TestEmitter, count: usize) {
+        for _ in 0..200 {
+            if status_events(emitter).len() >= count {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    }
+
+    /// Issue #353: terminal EOF first, then a later loss report (exec/SFTP
+    /// error, keepalive) must not emit a second `disconnected` event.
+    #[test]
+    fn test_connection_loss_is_reported_once_per_session() {
+        let session = dummy_session(ServerId::new());
+        let emitter = crate::events::TestEmitter::default();
+        let id = Uuid::new_v4();
+
+        assert!(report_connection_lost(id, &session, &emitter, None));
+        assert!(!report_connection_lost(
+            id,
+            &session,
+            &emitter,
+            Some("The server stopped responding".to_string())
+        ));
+        assert_eq!(status_events(&emitter).len(), 1);
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
+    }
+
+    /// Issue #353: a chat-only session (no terminal actor) is marked
+    /// `Disconnected` by the watcher, with the reason, exactly once even if
+    /// the loss is reported again afterwards.
+    #[tokio::test]
+    async fn test_connection_watch_reports_loss_without_terminal() {
+        let session = Arc::new(dummy_session(ServerId::new()));
+        let emitter = Arc::new(crate::events::TestEmitter::default());
+        let (tx, rx) = tokio::sync::watch::channel(None);
+        let id = Uuid::new_v4();
+        spawn_connection_watch(id, &session, rx, emitter.clone());
+
+        tx.send(Some(ssh_manager_core::ssh::ConnectionLoss {
+            reason: Some("The server stopped responding".to_string()),
+        }))
+        .unwrap();
+        wait_for_status_events(&emitter, 1).await;
+
+        let events = status_events(&emitter);
+        assert_eq!(events.len(), 1);
+        assert!(events[0]
+            .to_string()
+            .contains("The server stopped responding"));
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
+        assert!(!report_connection_lost(
+            id,
+            &session,
+            emitter.as_ref(),
+            None
+        ));
+        assert_eq!(status_events(&emitter).len(), 1);
+    }
+
+    /// Issue #353: an explicit `disconnect()` closes the transport on
+    /// purpose; the resulting signal is not a loss.
+    #[tokio::test]
+    async fn test_connection_watch_ignores_intentional_close() {
+        let session = Arc::new(dummy_session(ServerId::new()));
+        let emitter = Arc::new(crate::events::TestEmitter::default());
+        let (tx, rx) = tokio::sync::watch::channel(None);
+        spawn_connection_watch(Uuid::new_v4(), &session, rx, emitter.clone());
+
+        session.transport.mark_closed();
+        tx.send(Some(ssh_manager_core::ssh::ConnectionLoss { reason: None }))
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        assert!(status_events(&emitter).is_empty());
+        assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
     }
 
     #[test]
