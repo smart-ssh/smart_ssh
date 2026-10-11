@@ -1,147 +1,97 @@
-# Spec: Repository-Trennung, App-Shell & CI-Matrix
+# Spec 0038 — Repository-Trennung, Anwendungs-Hülle und Erweiterungspunkte
 
-Status: Entwurf
-Modul: Refactoring `app-tauri` → Library `app-shell`, neues
-`apps/smart-ssh-community`, `deny.toml`, `.github/workflows/community.yml`
-Abhängigkeiten: Entitlements (Spec 0037), bestehende CI-Matrix (Spec 0001),
-CI-Dependency-Audit (Spec 0035 — `deny.toml` wird hier fachlich erweitert,
-nicht doppelt angelegt)
-
-Grundlage: Architektur-Brief, Abschnitte 1 (D2, D6, D7), 3, 5, 8.
+Status: umgesetzt
+Zweck: Die Anwendungs-Hülle ist eine Bibliothek, die ein kleines Binary mit einer Verdrahtung startet; Erweiterungspunkte im Backend und im Frontend erlauben einer anderen Edition, Funktionen hinzuzufügen, ohne dass das öffentliche Repo von ihr abhängt.
+Bezüge: Spec 0037 (Entitlements), Spec 0090 (CI), Spec 0084 (Anwendungslogik und Hülle), ADR 0035, ADR 0046.
 
 ## 1. Ziel
 
-Das bisherige `app-tauri` wird zu einer **Library** `app-shell` mit einem
-`Wiring`-Struct refaktoriert, das definiert, welche Implementierungen
-(Entitlements, KI-Provider, Policy-Quellen, Sync-Backends, Plugins) verdrahtet
-werden. Community- und (künftig) Official-Binary werden zwei dünne
-`main.rs`-Dateien, die sich nur im übergebenen `Wiring` unterscheiden. Das
-öffentliche Repo bekommt damit die Struktur, die D7 (private hängt von
-öffentlich ab, nie umgekehrt) technisch voraussetzt.
+Das öffentliche Repo ist die Grundlage; eine andere Edition hängt von ihm ab,
+nie umgekehrt. Dafür ist die Hülle eine Bibliothek, und die Binaries
+unterscheiden sich nur in der übergebenen Verdrahtung. Das öffentliche Repo
+baut und testet eigenständig, ohne Zugang zu irgendetwas außerhalb davon.
+Verhalten ändert sich durch die Aufteilung nicht.
 
-**Kein privates Repo in dieser Spec** — nur die öffentliche Seite der
-Trennung. Das private Repo folgt separat, sobald du es angelegt hast
-(du hast das gerade parallel begonnen).
+## 2. Hülle und Verdrahtung
 
-## 2. `app-shell` als Library
+Die Hülle bietet einen Startpunkt, der eine **Verdrahtung** (`Wiring`)
+erhält. Sie legt fest:
 
-```rust
-// crates/app-shell/src/lib.rs
+- den Anbieter der Berechtigungen (Spec 0037),
+- Listen für KI-Anbieter, Regelquellen und Synchronisations-Umsetzungen,
+- zusätzliche Tauri-Plugins (ein Hook auf dem Builder, vor dem Start),
+- die Edition (`Community` oder `Official`), die nur für Anzeige und
+  Aktualisierung zählt,
+- zusätzliche Datenpfade, die die Einstellungen neben den eingebauten
+  anzeigen.
 
-pub struct Wiring {
-    pub entitlements: Arc<dyn EntitlementProvider>,
-    pub ai_providers: Vec<Arc<dyn AiProvider>>,
-    pub policy_sources: Vec<Arc<dyn PolicySource>>,
-    pub sync_backends: Vec<Arc<dyn SyncBackend>>,
-    pub plugins: Vec<Box<dyn FnOnce(tauri::Builder<Wry>) -> tauri::Builder<Wry> + Send>>,
-    pub edition: Edition,   // Community | Official — nur für Anzeige/Updater
-}
+Die Verdrahtung der Community Edition hat einen festen Berechtigungs-Satz
+ohne freigeschaltete gesperrte Funktion (Spec 0037) und keine Plugins,
+Synchronisations-Umsetzungen oder Zusatzpfade. Die Listen für KI-Anbieter
+und Regelquellen bleiben dort leer: KI-Anbieter werden je Server-Verbindung
+aus dem hinterlegten Schlüssel gebaut, der lokale Regelspeicher erst nach dem
+Öffnen der Datenbank angebunden (ADR 0035).
 
-impl Wiring {
-    pub fn community() -> Self {
-        Self {
-            entitlements: Arc::new(FixedEntitlements(Entitlements::free())),
-            ai_providers: ai_providers::all_byok(),
-            policy_sources: vec![Arc::new(SqlitePolicySource::new(..))],
-            sync_backends: vec![],   // kein Git-Sync-Backend in dieser Spec, s. Spec 0037 Abschnitt 6
-            plugins: vec![],
-            edition: Edition::Community,
-        }
-    }
-}
+Die Edition darf in Filter, Risiko-Einstufung und Bestätigung nie eine
+eigene Verzweigung auslösen.
 
-pub fn run(wiring: Wiring) -> tauri::Result<()> { /* bisheriger app-tauri-Setup-Code, unverändert in der Substanz */ }
-```
+**Master-Passwort-Modus** (Spec 0101): Plugins dürfen Befehle erst **nach
+dem Entsperren** registrieren, sonst wären sie vorher aufrufbar.
 
-**Vorgehen beim Refactoring**: Der bestehende `app-tauri`-Code (State-Setup,
-Command-Registrierung, Event-Handling — alles, was seit Spec 0007 entstanden
-ist) wird **inhaltlich unverändert** in `app_shell::run()` verschoben, nicht
-neu geschrieben. Diese Spec ist ein Struktur-Refactoring, keine
-Verhaltensänderung — jeder bestehende Test muss danach unverändert grün
-bleiben.
+## 3. Ein Binary je Edition
 
-## 3. Zwei Binaries
+Das Community-Binary ist ein dünnes Programm, das nur die Verdrahtung der
+Community Edition an den Startpunkt der Hülle übergibt. Ein weiteres Binary
+für eine andere Edition gehört nicht zu diesem Repo.
 
-```
-apps/
-  smart-ssh-community/
-    src/main.rs   → app_shell::run(Wiring::community())
-```
+## 4. Frontend-Erweiterungspunkte
 
-Das bisherige `app-tauri`-Binary wird zu diesem dünnen `main.rs`. Ein
-`apps/smart-ssh/` (Official) existiert **nicht** in dieser Spec — das
-entsteht erst mit dem privaten Repo.
+Das Frontend hat ein kleines Verzeichnis für Beiträge, die eine Edition
+registrieren kann. Jeder Typ hat einen tatsächlichen Renderer:
 
-## 4. Frontend-Registry
+- **Einstellungs-Abschnitte** (in den Einstellungen gerendert),
+- **Dokument-Aktionen** (an der Dokument-Karte im Chat, Spec 0045),
+- **Erweiterungen der Erststart-Seite** (Spec 0031 §6).
 
-```
-frontend/packages/app/   Registry: registerRoute, registerPanel,
-                          registerSettingsSection, registerCommandPalette
-```
+Die Beiträge werden registriert, bevor die erste Komponente rendert; eine
+spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig.
 
-> **Nachtrag (Spec 0045):** `registerRoute`/`registerPanel`/
-> `registerCommandPaletteAction` hatten nie einen tatsächlichen Renderer
-> (keine Route-/Panel-Rendering-Stelle, keine Command-Palette-UI) — totes
-> Vokabular, entfernt in Spec 0045. Aktueller Stand: `registerSettingsSection`
-> (gerendert in `AiProviderSettings`) und `registerDocumentAction`
-> (gerendert in `ChatPanel`s Dokument-Karte, Spec 0045) — jeder verbleibende
-> Typ hat einen echten Renderer.
+**Berechtigungen im Frontend:** Ein Hook liest den Stand der
+Berechtigungen per Befehl und abonniert das Ereignis `entitlements:changed`,
+das ausgelöst wird, wenn der Anbieter einen neuen Stand meldet (in der
+Community Edition nie, die Infrastruktur steht trotzdem).
 
-`useEntitlements()`-Hook: liest den Entitlement-Stand per Command, abonniert
-ein Tauri-Event `entitlements:changed` (Event wird ausgelöst, wenn
-`EntitlementProvider::watch()` einen neuen Stand liefert — in der Community
-Edition passiert das aktuell nie, da `FixedEntitlements` sich nie ändert,
-aber die Infrastruktur muss stehen).
+**Gesperrte Funktionen:** Ein `FeatureLocked`-Fehler (Spec 0037) wird
+zentral abgefangen und als Hinweis-Dialog gezeigt. Der Dialog ist über allen
+Ansichten sichtbar, auch bei aktivem Sitzungs-Tab. Ein vollständiger
+Upgrade-Ablauf gehört nicht zu diesem Stand.
 
-Gesperrte Funktionen: Da es aktuell **keine** gesperrten Community-Features
-gibt außer dem einen Fall aus Spec 0037 (Word-Export), reicht in diesem
-Schritt, dass `FeatureLocked`-Fehler zentral abgefangen und in einen
-einfachen Hinweis-Dialog übersetzt werden ("Diese Funktion erfordert
-Pro") — kein vollständiges Upgrade-Flow-Design in dieser Spec, das folgt,
-sobald es mehr als ein Beispiel gibt.
+## 5. Abhängigkeitsprüfung
 
-## 5. `deny.toml`-Erweiterung
+Die Lizenzprüfung der Rust-Abhängigkeiten (Spec 0090) ist ein Pflichtschritt
+der CI.
 
-Baut auf Spec 0035 auf (dort bereits als Berichtsmodus eingeführt) — diese
-Spec macht daraus, sofern Spec 0035 inzwischen bereinigt und auf blockierend
-umgestellt wurde, einen **Pflichtschritt** in `community.yml` (Abschnitt 6):
-`cargo deny check licenses` muss ohne Ausnahme grün sein, damit
-`community.yml` durchläuft. Keine neue `deny.toml`-Konfiguration — dieselbe
-Datei, dieselben Regeln wie in Spec 0035.
+## 6. CI aus einem frischen Klon
 
-## 6. `community.yml`
+Die CI baut das öffentliche Repo aus einem frischen Klon ohne Geheimnisse:
+Bauen, Tests, Clippy ohne Warnungen, Formatprüfung, Lizenzprüfung und
+Frontend-Build auf Linux, macOS und Windows (Spec 0090). Schlägt ein
+Schritt fehl, weil etwas von außerhalb des öffentlichen Repos fehlt, ist das
+ein Fehler in der Trennung.
 
-Neuer/angepasster CI-Workflow, der explizit **aus einem frischen Klon ohne
-Secrets** baut: `cargo build`, `cargo test`, `cargo clippy -D warnings`,
-`cargo fmt --check`, `cargo deny check licenses`, Frontend-Build. Läuft auf
-der bestehenden Matrix aus Spec 0001 (macOS/Windows/Linux).
+## 7. Sicherheitszusagen
 
-**Zweck dieses Jobs**: beweisen, dass das öffentliche Repo eigenständig baut
-— schlägt ein Schritt fehl, weil (später) etwas aus dem privaten Repo fehlt,
-ist das ein Bug in der Trennung, nicht im öffentlichen Code selbst. Da es
-aktuell noch kein privates Repo mit echter Abhängigkeit gibt, ist dieser
-Job vorerst identisch zur bestehenden CI-Matrix aus Spec 0001 — der
-eigentliche Wert entsteht erst, sobald das private Repo existiert und diese
-Pipeline als Regressionsschutz gegen versehentliche private Abhängigkeiten
-dient.
+Die Aufteilung ändert keine Funktion: Jeder Test, der vorher grün war, ist
+es danach unverändert.
 
-## 7. Sicherheits-Invariante
+## 8. Nachweis
 
-- Das Refactoring darf **keine** bestehende Funktionalität verändern —
-  jeder Test, der vor dieser Spec grün war, muss danach unverändert grün
-  sein. Das ist keine "neue Funktion", sondern eine Struktur-Verschiebung.
+Der gesamte Testlauf bleibt unverändert grün; die CI läuft aus einem frischen
+Klon durch.
 
-## 8. Testbarkeit
+## 9. Grenzen
 
-- Vollständiger bestehender Testlauf (`cargo test --workspace`) bleibt nach
-  dem Refactoring unverändert grün — kein neuer Test nötig, der bestehende
-  Testbestand ist die Abnahme.
-- `community.yml` läuft erfolgreich aus einem frischen Klon durch.
-
-## 9. Offene Punkte
-
-- SBOM-Erzeugung (`cargo-cyclonedx`) aus Abschnitt 8 des Architektur-Briefs
-  ist nicht Teil dieser Spec — sinnvolle spätere Ergänzung zu
-  `community.yml`, aber kein Blocker für die Repository-Trennung selbst.
-- Vollständiges Upgrade-Dialog-Design (Abschnitt 4) folgt, sobald mehr als
-  ein gegatetes Feature existiert.
+- Das Frontend-Verzeichnis für Beiträge ist ein gewöhnliches Modul der
+  Community-App, kein eigenes Paket (ADR 0046).
+- Eine SBOM-Erzeugung und ein vollständiger Upgrade-Dialog gehören nicht zu
+  diesem Stand.
