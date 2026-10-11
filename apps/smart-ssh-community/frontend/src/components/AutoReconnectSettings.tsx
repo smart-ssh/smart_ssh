@@ -42,13 +42,19 @@ export function AutoReconnectSettings() {
 
   return (
     <div className="mt-6">
-      {error && <p className="mb-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{error}</p>}
+      {error && (
+        <p role="alert" className="mb-2 rounded bg-red-950 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      )}
       <label className="flex items-center gap-2 text-sm text-slate-300">
         {t("autoReconnect.label")}
         <select
           value={seconds}
           onChange={(e) => handleChange(Number(e.target.value) as AutoReconnectSeconds)}
-          className="rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-sm text-slate-200"
+          // Same look as `FIELD_CONTROL_CLASS`, but the native focus outline stays: WebKit
+          // shows no ring-based focus style on a `<select>`.
+          className="rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100"
         >
           {AUTO_RECONNECT_SECONDS.map((value) => (
             <option key={value} value={value}>
