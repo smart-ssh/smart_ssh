@@ -17,13 +17,49 @@ Dinge: wie oft die KI vorschlagen soll (Abschnitt 2) und wie der Nutzer die
 
 ## 2. Instruktion an die KI
 
-Die KI wird angehalten, während der **gesamten** Sitzung auf Erkenntnisse
-zu achten, die für künftige Sitzungen nützlich sind (installierte
-Software und Versionen, Konfigurationspfade, getroffene Entscheidungen,
-behobene Probleme, Besonderheiten des Systems), und dafür proaktiv eine
-Notiz-Aktualisierung vorzuschlagen, bei Bedarf mehrfach pro Sitzung und
-nicht erst am Ende. Sie soll dabei nichts wiederholen, was schon in den
-Notizen steht.
+Die KI wird angehalten, während der **gesamten** Sitzung auf dauerhafte
+Fakten zu achten, die künftigen Sitzungen Erkundungs-Kommandos ersparen und
+Fehler verhindern, und dafür eine Notiz-Aktualisierung vorzuschlagen, bei
+Bedarf mehrfach pro Sitzung und nicht erst am Ende, sobald sich ein
+dauerhafter Fakt als neu oder geändert zeigt. Für bloße Ereignisse
+(„nginx neu gestartet“) schlägt sie nichts vor. Sie soll nichts
+wiederholen, was schon in den Notizen steht.
+
+### 2.1 Notiz-Format
+
+Dieselbe Beschreibung gilt für den System-Prompt, die Anregung beim
+Verbindungsende, die Beschreibung des Notiz-Werkzeugs und die Anweisung zum
+Zusammenfassen einer großen Notiz, in Deutsch und Englisch je nach
+Sprache der Oberfläche. Server- und Gruppen-Notizen folgen demselben
+Format (Gruppen: Fakten, die für alle Server der Gruppe gelten).
+
+- Feste Abschnitte in dieser Reihenfolge, leere entfallen: Constraints,
+  Platform, Services, Paths (nie Werte von Geheimnissen), Runtime &
+  Network, Quirks & Workarounds, Conventions & Users, Scripts & Aliases,
+  Recent changes.
+- Recent changes: höchstens 5 einzeilige Einträge `YYYY-MM-DD <dauerhafte
+  Änderung>`, neueste zuerst, der älteste fällt weg; nur Änderungen mit
+  dauerhafter Wirkung.
+- Ein Fakt pro Zeile, knapp im Stil `key: value`. Ein geänderter Fakt wird
+  an Ort und Stelle aktualisiert. Widerspricht eine Beobachtung der Notiz,
+  gilt die Beobachtung. Eine vom Nutzer geschriebene Constraint ändert oder
+  entfernt die KI nicht selbst, sie fragt.
+- Nie gespeichert werden: Geheimnis-Werte, flüchtiger Zustand, rohe
+  Kommandoausgaben, Routine-Aktionen, Fakten, die ein naheliegendes Kommando
+  verrät und die die vorgeschlagenen Kommandos nicht ändern (außer
+  Plattform-Fakten), Spekulation.
+- Die ganze Notiz bleibt unter 7.500 Zeichen; darüber entfällt zuerst
+  Recent changes, dann die am wenigsten nützlichen Quirks, nie Constraints.
+- Verlässt sich eine destruktive Aktion auf einen Notiz-Fakt, den die
+  Sitzung noch nicht bestätigt hat, prüft die KI ihn vorher mit einem
+  günstigen, lesenden Kommando.
+- Eine bestehende Notiz in einem anderen Format wird nicht migriert; der
+  nächste Vorschlag der KI schreibt sie in das neue Format um (als Diff,
+  vom Nutzer zu bestätigen).
+
+Das Format ist reine Führung der KI. Die App prüft, verwirft oder kürzt
+Vorschläge deswegen nicht; Schwärzung, Bestätigung und der Hinweis auf
+große Notizen (Spec 0057) bleiben unverändert.
 
 Es gibt keine feste Mindestgröße für einen Vorschlag. Ob eine Änderung
 sinnvoll ist, entscheidet die KI nach dieser Instruktion; jeder Vorschlag

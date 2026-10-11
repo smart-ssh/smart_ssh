@@ -107,6 +107,7 @@ pub async fn request_note_shrink(
     let redactor: Box<dyn OutputRedactor> =
         app_logic::server_redaction::server_redactor(state.credential_store.as_ref(), server_id);
 
+    let language = crate::ui_language::session_prompt_language(&app);
     tokio::spawn(async move {
         let state = app.state::<AppState>();
         let session_id: SessionId = Uuid::new_v4();
@@ -127,6 +128,7 @@ pub async fn request_note_shrink(
                 &TauriEventEmitter(app.clone()),
                 &target,
                 &state.pending_action_confirmations,
+                language,
             )
             .await;
         } else {
@@ -145,6 +147,7 @@ pub async fn request_note_shrink(
                 &TauriEventEmitter(app.clone()),
                 &target,
                 &state.pending_action_confirmations,
+                language,
             )
             .await;
         }

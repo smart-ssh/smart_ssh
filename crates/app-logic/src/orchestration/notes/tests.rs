@@ -665,6 +665,7 @@ async fn test_summarize_note_for_shrink_returns_redacted_text_on_success() {
         &redactor,
         "Test-Server",
         "Die ursprüngliche Notiz.",
+        PromptLanguage::De,
     )
     .await
     .expect("Erfolgsfall muss Some liefern");
@@ -718,6 +719,7 @@ async fn test_summarize_note_for_shrink_redacts_the_outgoing_note_too() {
         &redactor,
         "Test-Server",
         "Notiz: password=hunter2geheim",
+        PromptLanguage::De,
     )
     .await
     .expect("Erfolgsfall muss Some liefern");
@@ -745,6 +747,7 @@ async fn test_summarize_note_for_shrink_returns_none_on_ai_error() {
         &redactor,
         "Test-Server",
         "Eine Notiz.",
+        PromptLanguage::De,
     )
     .await;
 
@@ -772,6 +775,7 @@ async fn test_summarize_note_for_shrink_returns_none_when_stream_ends_without_do
         &redactor,
         "Test-Server",
         "Eine Notiz.",
+        PromptLanguage::De,
     )
     .await;
 
@@ -794,6 +798,7 @@ async fn test_summarize_note_for_shrink_returns_none_for_empty_note() {
         &redactor,
         "Test-Server",
         "   ",
+        PromptLanguage::De,
     )
     .await;
 
@@ -824,6 +829,7 @@ async fn test_summarize_note_for_shrink_caps_the_returned_text() {
         &redactor,
         "Test-Server",
         "Eine Notiz.",
+        PromptLanguage::De,
     )
     .await
     .expect("Erfolgsfall muss Some liefern")
@@ -857,6 +863,7 @@ async fn test_summarize_note_for_shrink_marks_truncated_reply_as_incomplete() {
         &redactor,
         "Test-Server",
         "Eine Notiz.",
+        PromptLanguage::De,
     )
     .await
     .expect("eine abgeschnittene Antwort muss trotzdem Some liefern");
@@ -888,6 +895,7 @@ async fn test_summarize_note_for_shrink_truncated_and_oversized_keeps_cap_notice
         &redactor,
         "Test-Server",
         "Eine Notiz.",
+        PromptLanguage::De,
     )
     .await
     .expect("Some erwartet");
@@ -916,6 +924,7 @@ async fn test_summarize_note_for_shrink_times_out_instead_of_hanging_forever() {
         &redactor,
         "Test-Server",
         "Eine Notiz.",
+        PromptLanguage::De,
     );
     let advancer =
         tokio::time::advance(NOTE_SHRINK_CALL_TIMEOUT + std::time::Duration::from_secs(1));
@@ -961,6 +970,7 @@ async fn test_execute_note_shrink_request_emits_diff_and_persists_only_after_app
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let responder = async {
         loop {
@@ -1066,6 +1076,7 @@ async fn test_execute_note_shrink_request_flags_truncated_summary_and_stores_sho
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let responder = async {
         loop {
@@ -1145,6 +1156,7 @@ async fn test_execute_note_shrink_request_truncated_summary_denied_leaves_note_u
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let responder = async {
         loop {
@@ -1214,6 +1226,7 @@ async fn test_execute_note_shrink_request_denied_leaves_note_unchanged() {
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let responder = async {
         loop {
@@ -1274,6 +1287,7 @@ async fn test_execute_note_shrink_request_ai_failure_emits_failed_event_and_leav
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     )
     .await;
 
@@ -1322,6 +1336,7 @@ async fn test_execute_note_shrink_request_unanswered_confirmation_times_out_as_d
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let advancer = async {
         loop {
@@ -1369,6 +1384,7 @@ async fn test_execute_note_shrink_request_emits_failed_event_when_server_not_fou
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     )
     .await;
 
@@ -1397,6 +1413,7 @@ async fn test_summarize_note_for_shrink_fences_the_note_as_untrusted_content() {
         &redactor,
         "web-01",
         "Eine Notiz mit Inhalt.",
+        PromptLanguage::De,
     )
     .await
     .expect("Erfolgsfall muss Some liefern");
@@ -1449,6 +1466,7 @@ async fn test_execute_note_shrink_request_aborts_when_note_changed_before_approv
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let responder = async {
         loop {
@@ -1529,6 +1547,7 @@ async fn test_execute_note_shrink_request_persist_failure_emits_failed_event() {
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let responder = async {
         loop {
@@ -2535,6 +2554,7 @@ async fn test_issue_107_dropping_the_note_shrink_wait_removes_the_registry_entry
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let action_id = tokio::time::timeout(ISSUE_107_TEST_TIMEOUT, async {
         tokio::select! {
@@ -2616,6 +2636,7 @@ async fn test_issue_107_note_shrink_timeout_leaves_no_entry_and_rejects_late_res
         &emitter,
         &target,
         &confirmations,
+        PromptLanguage::De,
     );
     let advancer = async {
         let action_id = await_registered_suggestion(&emitter, &confirmations).await;
@@ -2707,4 +2728,62 @@ fn test_title_and_disconnect_instructions_follow_the_prompt_language() {
         format!("{en} Always respond in French.")
     );
     assert_eq!(super::disconnect_completion_instruction(lang("xx")), en);
+}
+
+/// Issue #359: Abschluss- und Kürzen-Instruktion beschreiben in beiden
+/// Sprachen dasselbe Notiz-Format und folgen der Prompt-Sprache.
+#[test]
+fn test_disconnect_and_shrink_instructions_carry_the_note_format_in_both_languages() {
+    use crate::system_prompt::{NOTE_FORMAT_DE, NOTE_FORMAT_EN};
+    let d_de = super::disconnect_completion_instruction(PromptLanguage::De);
+    let d_en = super::disconnect_completion_instruction(PromptLanguage::En);
+    let s_de = super::note_shrink_instruction(PromptLanguage::De);
+    let s_en = super::note_shrink_instruction(PromptLanguage::En);
+    for text in [&d_de, &s_de] {
+        assert!(text.contains(NOTE_FORMAT_DE));
+        assert!(text.contains("7.500 Zeichen"));
+        assert!(!text.contains("getroffene Entscheidungen"));
+    }
+    for text in [&d_en, &s_en] {
+        assert!(text.contains(NOTE_FORMAT_EN));
+        assert!(text.contains("7,500 characters"));
+        assert!(text.contains("rewrite it into this format"));
+        assert!(!text.contains("decisions made"));
+    }
+    assert!(s_en.starts_with("Rewrite the following"));
+    assert!(s_de.starts_with("Schreibe die folgende"));
+    assert!(
+        super::note_shrink_instruction(crate::system_prompt::prompt_language(
+            Some(&serde_json::json!("fr")),
+            None
+        ))
+        .ends_with("Always respond in French.")
+    );
+}
+
+/// Issue #359: die Kürzen-Anfrage nutzt die englische Instruktion für
+/// Englisch.
+#[tokio::test]
+async fn test_summarize_note_for_shrink_uses_the_prompt_language_instruction() {
+    let provider = MockAiProvider::new(vec![AiEvent::TextDelta("x".to_string()), AiEvent::Done]);
+    let contexts = provider.received_contexts_handle();
+    let redactor = DefaultOutputRedactor::new();
+    let budget = ai_providers::ProviderBudgetGuard::new();
+    let emitter = TestEmitter::default();
+    summarize_note_for_shrink(
+        &provider,
+        &budget,
+        &emitter,
+        Uuid::new_v4(),
+        &redactor,
+        "srv",
+        "note",
+        PromptLanguage::En,
+    )
+    .await;
+    let sent = contexts.lock().unwrap();
+    let MessageContent::Text(text) = &sent[0].history[0].content else {
+        panic!("expected text");
+    };
+    assert!(text.starts_with("Rewrite the following"), "{text}");
 }

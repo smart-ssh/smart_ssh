@@ -26,7 +26,7 @@ use crate::events::{
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
-use crate::system_prompt::{with_response_language, PromptLanguage};
+use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
@@ -505,22 +505,33 @@ fn sanitize_generated_title(raw: &str, redactor: &dyn OutputRedactor) -> Option<
 }
 
 const DISCONNECT_COMPLETION_INSTRUCTION_DE: &str = "Die Sitzung wird jetzt beendet. Gibt es aus \
-     dieser Sitzung Informationen, die für künftige Sitzungen an diesem Server als Notiz \
-     festgehalten werden sollten (z. B. neue Pfade, installierte Versionen, getroffene \
-     Entscheidungen)? Schlage eine Notiz-Aktualisierung nur bei echtem Mehrwert vor — keine \
-     Wiederholung bereits bestehender Notizinhalte.";
+     dieser Sitzung dauerhafte Fakten, die neu sind oder sich geändert haben und für künftige \
+     Sitzungen an diesem Server als Notiz festgehalten werden sollten? Schlage eine \
+     Notiz-Aktualisierung nur bei echtem Mehrwert vor — nie für bloße Ereignisse und ohne \
+     Wiederholung bereits bestehender Notizinhalte. Format und Regeln der Notiz:";
 
 /// Issue #330: englische Fassung, s. [`TITLE_GENERATION_INSTRUCTION_EN`].
-const DISCONNECT_COMPLETION_INSTRUCTION_EN: &str = "The session is ending now. Is there \
-     information from this session that should be recorded as a note for future sessions \
-     on this server (e.g. new paths, installed versions, decisions made)? Propose a note \
-     update only if it adds real value — do not repeat existing note content.";
+const DISCONNECT_COMPLETION_INSTRUCTION_EN: &str = "The session is ending now. Are there \
+     durable facts from this session, new or changed, that should be recorded as a note for \
+     future sessions on this server? Propose a note update only if it adds real value — never \
+     for events alone and without repeating existing note content. Format and rules of the \
+     note:";
 
-/// Abschluss-Instruktion in der Prompt-Sprache der Sitzung (Issue #330).
+/// Abschluss-Instruktion in der Prompt-Sprache der Sitzung (Issue #330, #359:
+/// samt Notiz-Format).
 fn disconnect_completion_instruction(language: PromptLanguage) -> String {
     match language {
-        PromptLanguage::De => DISCONNECT_COMPLETION_INSTRUCTION_DE.to_string(),
-        _ => with_response_language(DISCONNECT_COMPLETION_INSTRUCTION_EN, language),
+        PromptLanguage::De => format!(
+            "{DISCONNECT_COMPLETION_INSTRUCTION_DE}\n{}",
+            note_format(language)
+        ),
+        _ => with_response_language(
+            &format!(
+                "{DISCONNECT_COMPLETION_INSTRUCTION_EN}\n{}",
+                note_format(language)
+            ),
+            language,
+        ),
     }
 }
 
@@ -618,7 +629,10 @@ pub async fn suggest_note_update_on_disconnect(
     // Spec 0010, Abschnitt 2, Punkt 3: keine `SuggestCommand`-Schemas
     // anbieten — die KI kann in diesem Aufruf gar nicht erst ein Kommando
     // vorschlagen.
-    request_context.available_actions = vec![ActionSchema::propose_server_note_update()];
+    request_context.available_actions = vec![match system_context_parts.language {
+        PromptLanguage::De => ActionSchema::propose_server_note_update(),
+        _ => ActionSchema::propose_server_note_update_en(),
+    }];
     // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar
     // (analog zur Auto-Titel-Stelle oben).
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
@@ -875,11 +889,29 @@ const NOTE_SHRINK_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_
 /// Original-Notiz ausfallen und das Kürzungsziel strukturell verfehlen.
 const NOTE_SHRINK_MAX_BYTES: usize = 4_000;
 
-const NOTE_SHRINK_INSTRUCTION: &str = "Fasse die folgende, gespeicherte Notiz kürzer, aber \
-     inhaltlich vollständig zusammen — keine Informationen verlieren, die für künftige \
-     Sitzungen an diesem Server relevant sein könnten (z. B. Pfade, installierte Versionen, \
-     getroffene Entscheidungen). Antworte NUR mit der gekürzten Notiz selbst, ohne Einleitung, \
-     Anführungszeichen oder Meta-Kommentar.";
+const NOTE_SHRINK_INSTRUCTION_DE: &str = "Schreibe die folgende, gespeicherte Notiz kürzer \
+     und bringe sie in das unten beschriebene Format. Behalte alle dauerhaften Fakten, die \
+     künftigen Sitzungen an diesem Server nützen; lass Ereignisse und flüchtigen Zustand weg. \
+     Antworte NUR mit der neuen Notiz selbst, ohne Einleitung, Anführungszeichen oder \
+     Meta-Kommentar. Format und Regeln der Notiz:";
+
+/// Issue #359: englische Fassung der Kürzen-Instruktion.
+const NOTE_SHRINK_INSTRUCTION_EN: &str = "Rewrite the following stored note shorter and bring \
+     it into the format described below. Keep all durable facts that help future sessions on \
+     this server; leave out events and transient state. Answer ONLY with the new note itself, \
+     without introduction, quotation marks or meta commentary. Format and rules of the note:";
+
+/// Kürzen-Instruktion in der Prompt-Sprache (Issue #359), samt Notiz-Format
+/// und (für `Other`) der Antwortsprach-Anweisung.
+fn note_shrink_instruction(language: PromptLanguage) -> String {
+    match language {
+        PromptLanguage::De => format!("{NOTE_SHRINK_INSTRUCTION_DE}\n{}", note_format(language)),
+        _ => with_response_language(
+            &format!("{NOTE_SHRINK_INSTRUCTION_EN}\n{}", note_format(language)),
+            language,
+        ),
+    }
+}
 
 /// Der eigentliche KI-Aufruf hinter "Ja, zusammenfassen" (Spec 0057, §4.2).
 /// **Bewusst session-unabhängig** — anders als jeder andere
@@ -911,6 +943,7 @@ const NOTE_SHRINK_INSTRUCTION: &str = "Fasse die folgende, gespeicherte Notiz k�
 /// zuvor angenommenen Notiz-Vorschlag eingeschleuste Instruktion (die
 /// ursprünglich aus einer Kommandoausgabe eines Remote-Hosts stammte) hier
 /// als gleichrangiger Prompt-Text statt als Daten gelesen werden.
+#[allow(clippy::too_many_arguments)]
 async fn summarize_note_for_shrink(
     ai_provider: &dyn AiProvider,
     budget: &ai_providers::ProviderBudgetGuard,
@@ -919,6 +952,7 @@ async fn summarize_note_for_shrink(
     redactor: &dyn OutputRedactor,
     note_source_label: &str,
     note_text: &str,
+    language: PromptLanguage,
 ) -> Option<NoteShrinkSummary> {
     if note_text.trim().is_empty() {
         return None;
@@ -930,10 +964,17 @@ async fn summarize_note_for_shrink(
     let redacted_note = redactor.redact_text(note_text);
     let fenced_note = fence_untrusted(UntrustedKind::ServerNote, note_source_label, &redacted_note);
     let request_context = SessionContext {
-        system_context: "Du kürzt eine gespeicherte Notiz zu einem SSH-Server.".to_string(),
+        system_context: match language {
+            PromptLanguage::De => "Du kürzt eine gespeicherte Notiz zu einem SSH-Server.",
+            _ => "You shorten a stored note about an SSH server.",
+        }
+        .to_string(),
         history: vec![ChatMessage {
             role: Role::User,
-            content: MessageContent::Text(format!("{NOTE_SHRINK_INSTRUCTION}\n\n{fenced_note}")),
+            content: MessageContent::Text(format!(
+                "{}\n\n{fenced_note}",
+                note_shrink_instruction(language)
+            )),
         }],
         available_actions: Vec::new(),
         // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar.
@@ -1131,6 +1172,7 @@ pub async fn execute_note_shrink_request(
     emitter: &dyn EventEmitter,
     target: &dyn NoteShrinkTarget,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+    language: PromptLanguage,
 ) {
     let Some((server_name, note_text)) = target.read().await else {
         emit_note_shrink_failed(
@@ -1152,6 +1194,7 @@ pub async fn execute_note_shrink_request(
         redactor,
         &server_name,
         &note_text,
+        language,
     )
     .await
     else {
