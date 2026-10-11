@@ -32,6 +32,7 @@ const ENTRIES = [entry("logs", true), entry("notes.txt"), entry(LONG_NAME)];
 async function openFileBrowser(app: AppDriver, entries: RemoteEntryDto[] = ENTRIES) {
   await app.launch({ ...populated(), commands: { sftp_list: { result: entries } } });
   await openSession(app, "db-primary");
+  await app.page.getByRole("button", { name: /^Files/ }).click();
   await expect(app.page.getByText("notes.txt")).toBeVisible();
 }
 
