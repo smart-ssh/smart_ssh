@@ -164,8 +164,8 @@ mod tests {
         let handle = app.handle().clone();
         reset_local_store(&handle);
 
-        save_notes(&handle, "Notiz zum lokalen Rechner").unwrap();
-        save_tags(&handle, &["dev".to_string(), "local".to_string()]).unwrap();
+        save_notes(&handle, "Notiz zum lokalen Rechner").expect("save_notes");
+        save_tags(&handle, &["dev".to_string(), "local".to_string()]).expect("save_tags");
 
         let server = synthetic_server(&handle);
 

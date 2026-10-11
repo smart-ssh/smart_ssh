@@ -95,6 +95,13 @@ ssh-manager-core = { path = "../core", features = ["test-support"] }
 # Schlüssel im Klartext liegt. Nur `[dev-dependencies]`.
 ssh-transport = { path = "../ssh-transport", features = ["test-support"] }
 tauri = { version = "2", features = ["test"] }
+# Issue #395: the two-hop reconnect test includes the in-process SSH test
+# server of `ssh-transport` (`tests/fixtures/test_server.rs`) via `#[path]`
+# and therefore needs its dependencies. Same crates and versions as
+# `ssh-transport` already uses; dev-only, never part of a release build.
+rand = "0.10.2"
+russh = "0.63.1"
+russh-sftp = "2.4.0"
 # Spec 0046, Fund 4: `start_paused`/`tokio::time::advance` fürs Testen des
 # Backend-Timeouts auf eine wartende `Confirm`-Aktion, ohne 3600 echte
 # Sekunden abzuwarten. Nur unter `[dev-dependencies]`, landet nie in einem
