@@ -495,10 +495,7 @@ export function FileBrowserPanel({
       const closing = openMenu;
       setOpenMenu(null);
       if (closing.anchor === "row") {
-        const triggers = document.querySelectorAll<HTMLElement>("[data-menu-trigger]");
-        for (const el of triggers) {
-          if (el.dataset.menuTrigger === closing.entry.path) el.focus();
-        }
+        focusMenuTrigger(closing.entry.path);
       }
     };
     document.addEventListener("click", handler);
@@ -1719,6 +1716,13 @@ export function FileBrowserPanel({
   );
 }
 
+/** Focuses the ⋮ button of the entry with this path (no-op for the context menu). */
+function focusMenuTrigger(path: string): void {
+  for (const el of document.querySelectorAll<HTMLElement>("[data-menu-trigger]")) {
+    if (el.dataset.menuTrigger === path) el.focus();
+  }
+}
+
 /** Spec 0054, Teil 1: die EINE Aktionsliste, die sowohl vom Drei-Punkte-
  * Menü als auch vom Kontextmenü (Rechtsklick) gerendert wird — "beide Wege
  * zeigen dieselben Aktionen". `className`/`style` bestimmen nur die
@@ -1759,6 +1763,12 @@ function FileEntryMenu({
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
   const { t } = useTranslation();
+  // The menu unmounts when an action runs. Focus the ⋮ button first, so a
+  // dialog opened by the action remembers it and gives focus back on close.
+  const act = (fn: () => void) => () => {
+    focusMenuTrigger(entry.path);
+    fn();
+  };
   const itemClass =
     "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
   return (
@@ -1766,44 +1776,44 @@ function FileEntryMenu({
       className={`${className} w-52 border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg`}
       style={style}
     >
-      <button type="button" onClick={() => onDownloadDefault(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onDownloadDefault(entry))} className={itemClass}>
         {t("fileBrowser.menu.download")}
       </button>
-      <button type="button" onClick={() => onDownloadChoose(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onDownloadChoose(entry))} className={itemClass}>
         {t("fileBrowser.menu.downloadTo")}
       </button>
       {!entry.isDir && (
-        <button type="button" onClick={() => onCopyContent(entry)} className={itemClass}>
+        <button type="button" onClick={act(() => onCopyContent(entry))} className={itemClass}>
           {t("fileBrowser.menu.copyContent")}
         </button>
       )}
       {!entry.isDir && (
-        <button type="button" onClick={() => onOpenLocally(entry)} className={itemClass}>
+        <button type="button" onClick={act(() => onOpenLocally(entry))} className={itemClass}>
           {t("fileBrowser.menu.openLocally")}
         </button>
       )}
-      <button type="button" onClick={() => onCopyPath(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onCopyPath(entry))} className={itemClass}>
         {t("fileBrowser.menu.copyPath")}
       </button>
-      <button type="button" onClick={() => onShowProperties(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onShowProperties(entry))} className={itemClass}>
         {t("fileBrowser.menu.properties")}
       </button>
-      <button type="button" onClick={onRefresh} className={itemClass}>
+      <button type="button" onClick={act(onRefresh)} className={itemClass}>
         {t("fileBrowser.menu.refresh")}
       </button>
       <div className="my-1 border-t border-slate-800" />
-      <button type="button" onClick={() => onChmod(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onChmod(entry))} className={itemClass}>
         {t("fileBrowser.menu.chmod")}
       </button>
-      <button type="button" onClick={() => onRename(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onRename(entry))} className={itemClass}>
         {t("fileBrowser.menu.rename")}
       </button>
-      <button type="button" onClick={() => onCut(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onCut(entry))} className={itemClass}>
         {t("fileBrowser.menu.cut")}
       </button>
       <button
         type="button"
-        onClick={() => onDelete(entry)}
+        onClick={act(() => onDelete(entry))}
         className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
       >
         {t("fileBrowser.menu.delete")}
