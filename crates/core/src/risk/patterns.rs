@@ -288,6 +288,18 @@ pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static 
                 RiskLevel::Red,
                 "Fork-Bombe",
             ),
+            // Issue #318: the same bomb under any function name. The `regex`
+            // crate has no backreferences, so "same name" is not enforced:
+            // the body must be `ident | ident &` (a pipe followed by a
+            // background `&`) and be followed by a call. Benign definitions
+            // (`f(){ g | h; }`, no trailing `&`) don't match.
+            (
+                Regex(
+                    r"[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\|\s*[A-Za-z_][A-Za-z0-9_]*\s*&\s*\}\s*;?\s*[A-Za-z_]".to_string(),
+                ),
+                RiskLevel::Red,
+                "Fork-Bombe",
+            ),
             (
                 Glob("shutdown*".to_string()),
                 RiskLevel::Red,
