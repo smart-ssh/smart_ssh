@@ -293,8 +293,11 @@ impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
             let _ = sink.send(chunk);
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
-        drop(sink);
+        // Like a real transport, keep the live channel open until the
+        // command is cancelled (issue #327: the idle timer of the
+        // waiting-for-input hint needs the forwarder to stay alive).
         let _ = cancel.await;
+        drop(sink);
         Ok(ssh_manager_core::ssh::ExecOutcome {
             output: CommandOutput {
                 stdout: b"partial output before cancel".to_vec(),

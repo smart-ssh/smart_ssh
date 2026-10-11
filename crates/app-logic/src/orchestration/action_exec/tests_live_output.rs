@@ -257,9 +257,14 @@ async fn stop_after(command: &str, chunk: &str, wait_for_hint: bool) -> (bool, b
     );
     let cancel_future = async {
         if wait_for_hint {
-            while !waiting_hint_shown(&emitter) {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            }
+            // Fail instead of hanging if the hint never appears.
+            tokio::time::timeout(std::time::Duration::from_secs(30), async {
+                while !waiting_hint_shown(&emitter) {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+            })
+            .await
+            .expect("the waiting-for-input hint was never emitted");
         } else {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
