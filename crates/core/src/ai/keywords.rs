@@ -512,16 +512,21 @@ pub fn keyword_alternation() -> &'static str {
             .collect();
         all.sort_unstable();
         all.dedup();
-        // Zusätzlich die NFD-Form jedes Eintrags mit Umlaut (`u` + U+0308),
-        // damit zerlegte Eingaben (macOS, Zwischenablage) ebenfalls greifen.
-        // Der Eingabetext wird nicht normalisiert, Offsets bleiben gleich.
-        let mut variants: Vec<String> = all.iter().map(|k| k.to_string()).collect();
+        // Zusätzlich je Eintrag die NFD-Form (Grundbuchstabe + kombinierendes
+        // Zeichen, macOS, Zwischenablage) und, bei ASCII-Apostroph, die Form mit
+        // typografischem Apostroph (U+2019), jeweils auch kombiniert. Der
+        // Eingabetext wird nicht normalisiert, Offsets bleiben gleich.
+        let mut variants: Vec<String> = Vec::new();
         for k in &all {
-            let d = decompose_umlauts(k);
-            if d != *k {
-                variants.push(d);
+            let curly = k.replace('\'', "\u{2019}");
+            let nfd = decompose_accents(k);
+            let curly_nfd = decompose_accents(&curly);
+            for v in [k.to_string(), curly, nfd, curly_nfd] {
+                variants.push(v);
             }
         }
+        variants.sort_unstable();
+        variants.dedup();
         variants
             .iter()
             .map(|k| regex::escape(k).replace(' ', "[ _-]"))
@@ -531,17 +536,95 @@ pub fn keyword_alternation() -> &'static str {
     &ALT
 }
 
-/// Ersetzt vorkomponierte Umlaute (`ä`, `ö`, `ü`) durch Grundbuchstabe +
-/// kombinierendes Trema (U+0308), also die NFD-Form.
-fn decompose_umlauts(k: &str) -> String {
-    let mut out = String::with_capacity(k.len() + 2);
+/// Zerlegt vorkomponierte Buchstaben mit Akzent in Grundbuchstabe +
+/// kombinierendes Zeichen, also die NFD-Form. Tabelle statt Normalisierungs-
+/// Crate: sie deckt die Akzentbuchstaben der Schlüsselwortlisten ab (Buchstaben
+/// ohne Zerlegung wie `ø`, `ł`, `ı` bleiben unverändert).
+fn decompose_accents(k: &str) -> String {
+    let mut out = String::with_capacity(k.len() + 4);
     for c in k.chars() {
-        match c {
-            'ä' => out.push_str("a\u{308}"),
-            'ö' => out.push_str("o\u{308}"),
-            'ü' => out.push_str("u\u{308}"),
-            _ => out.push(c),
+        match accent_base(c) {
+            Some((base, mark)) => {
+                out.push(base);
+                out.push(mark);
+            }
+            None => out.push(c),
         }
     }
     out
+}
+
+fn accent_base(c: char) -> Option<(char, char)> {
+    const GRAVE: char = '\u{300}';
+    const ACUTE: char = '\u{301}';
+    const CIRC: char = '\u{302}';
+    const TILDE: char = '\u{303}';
+    const BREVE: char = '\u{306}';
+    const DOT: char = '\u{307}';
+    const DIAER: char = '\u{308}';
+    const RING: char = '\u{30A}';
+    const DACUTE: char = '\u{30B}';
+    const CARON: char = '\u{30C}';
+    const CEDILLA: char = '\u{327}';
+    const OGONEK: char = '\u{328}';
+    const COMMA_BELOW: char = '\u{326}';
+    Some(match c {
+        'à' => ('a', GRAVE),
+        'á' => ('a', ACUTE),
+        'â' => ('a', CIRC),
+        'ã' => ('a', TILDE),
+        'ä' => ('a', DIAER),
+        'å' => ('a', RING),
+        'ă' => ('a', BREVE),
+        'ą' => ('a', OGONEK),
+        'ç' => ('c', CEDILLA),
+        'ć' => ('c', ACUTE),
+        'č' => ('c', CARON),
+        'ď' => ('d', CARON),
+        'è' => ('e', GRAVE),
+        'é' => ('e', ACUTE),
+        'ê' => ('e', CIRC),
+        'ë' => ('e', DIAER),
+        'ę' => ('e', OGONEK),
+        'ě' => ('e', CARON),
+        'ì' => ('i', GRAVE),
+        'í' => ('i', ACUTE),
+        'î' => ('i', CIRC),
+        'ï' => ('i', DIAER),
+        'İ' => ('I', DOT),
+        'ń' => ('n', ACUTE),
+        'ñ' => ('n', TILDE),
+        'ň' => ('n', CARON),
+        'ò' => ('o', GRAVE),
+        'ó' => ('o', ACUTE),
+        'ô' => ('o', CIRC),
+        'õ' => ('o', TILDE),
+        'ö' => ('o', DIAER),
+        'ő' => ('o', DACUTE),
+        'ř' => ('r', CARON),
+        'ś' => ('s', ACUTE),
+        'ş' => ('s', CEDILLA),
+        'š' => ('s', CARON),
+        'ș' => ('s', COMMA_BELOW),
+        'ť' => ('t', CARON),
+        'ț' => ('t', COMMA_BELOW),
+        'ù' => ('u', GRAVE),
+        'ú' => ('u', ACUTE),
+        'û' => ('u', CIRC),
+        'ü' => ('u', DIAER),
+        'ů' => ('u', RING),
+        'ű' => ('u', DACUTE),
+        'ý' => ('y', ACUTE),
+        'ź' => ('z', ACUTE),
+        'ż' => ('z', DOT),
+        'ž' => ('z', CARON),
+        'ụ' => ('u', '\u{323}'),
+        'й' => ('и', BREVE),
+        'ё' => ('е', DIAER),
+        'ά' => ('α', ACUTE),
+        'ή' => ('η', ACUTE),
+        'ί' => ('ι', ACUTE),
+        'ό' => ('ο', ACUTE),
+        _ => return None,
+    })
 }

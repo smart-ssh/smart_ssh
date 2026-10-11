@@ -2873,6 +2873,30 @@ fn test_redactor_redacts_decomposed_umlaut_keywords() {
     }
 }
 
+/// Issue #366: NFD-Akzente aller Sprachen und typografischer Apostroph.
+#[test]
+fn test_redactor_redacts_decomposed_accents_and_curly_apostrophes() {
+    let redactor = DefaultOutputRedactor::new();
+    for kw in [
+        "contrasen\u{303}a",
+        "contraseña",
+        "cle\u{301} d\u{2019}acce\u{300}s",
+        "clé d\u{2019}accès",
+        "clé d'accès",
+        "parola d\u{2019}ordine",
+        "PAROLA D\u{2019}ORDINE",
+        "hasło",
+        "pr\u{30c}i\u{301}stupova\u{301} fra\u{301}ze",
+    ] {
+        let out = redactor.redact_text(&format!("{kw}: geheim4711"));
+        assert!(!out.contains("geheim4711"), "{kw:?} leaked: {out}");
+    }
+    // Offsets bleiben bei Nicht-ASCII-Eingabe korrekt.
+    let out = redactor.redact_text("é contrasen\u{303}a: geheim4711 ende");
+    assert!(out.starts_with("é "), "{out}");
+    assert!(!out.contains("geheim4711"), "{out}");
+}
+
 #[test]
 fn test_redactor_keeps_keyword_text_without_value_unchanged() {
     let redactor = DefaultOutputRedactor::new();
