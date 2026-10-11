@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Defina una aplicación local por extensión de archivo para “Abrir localmente”. Sin entrada se usa la aplicación predeterminada del sistema operativo.",
+    "extensionLabel": "Extensión de archivo",
     "appPathPlaceholder": "Ruta de la aplicación",
     "browse": "Examinar…",
     "remove": "Quitar fila",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "No se pudo obtener la segunda opinión de la IA. El riesgo mostrado es el basado en reglas.",
     "riskHint": "Evaluación basada en patrones conocidos: sin garantía.",
     "runningSince": "en ejecución desde hace {{seconds}} s…",
+    "waitingForInputHint": "Este comando probablemente está esperando una entrada. Deténlo y la IA propondrá una variante no interactiva.",
     "cancelCommand": "Desconectar este comando",
     "cancellingCommand": "Desconectando…",
     "commandCancelledNotice": "⚠ Cancelado manualmente: la salida puede estar incompleta y no hay código de salida normal.",
@@ -1099,11 +1101,18 @@
   "session": {
     "disconnected": "Desconectado",
     "disconnectedWithReason": "Desconectado: {{reason}}",
+    "reconnect": "Reconectar",
+    "reconnecting": "Reconectando…",
+    "connectionLostPressR": "Conexión perdida. Pulse R para reconectar.",
+    "reconnectedSeparator": "— reconectado —",
     "disconnect": "Desconectar",
     "splitHandle": "Divisor de paneles",
     "terminalTab": "Terminal",
     "filesTab": "Archivos",
-    "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}"
+    "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
+    "reconnectingAuto": "Reconectando… (intento {{attempt}})",
+    "stopReconnect": "Detener",
+    "reconnectGaveUp": "No se pudo restablecer la conexión."
   },
   "unusableServer": {
     "badge": "No utilizable",
@@ -1114,5 +1123,12 @@
     "host": "Host: {{host}}",
     "delete": "Eliminar servidor",
     "deleteSecrets": "Se elimina todo secreto que esta versión sabe guardar para este servidor. Pueden permanecer secretos añadidos por una versión más reciente de la aplicación."
+  },
+  "autoReconnect": {
+    "label": "Reconectar automáticamente",
+    "off": "Desactivado",
+    "seconds30": "30 segundos",
+    "seconds60": "60 segundos",
+    "minutes5": "5 minutos"
   }
 }

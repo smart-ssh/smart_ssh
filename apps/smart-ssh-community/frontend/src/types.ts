@@ -198,14 +198,26 @@ export interface RiskAssessment {
 }
 
 /** Spec 0017, Abschnitt 2: `awaiting_host_key` kommt nie über
- * `connection-status-changed` (das Event kennt nur den Übergang
- * connected/disconnected), nur als `SessionSummaryDto.status`. */
-export type ConnectionStatus = "connected" | "disconnected" | "awaiting_host_key";
+ * `connection-status-changed` (das Event kennt nur die Übergänge
+ * connected/disconnected/reconnecting, Issue #355), nur als `SessionSummaryDto.status`. */
+export type ConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "awaiting_host_key";
 
 export interface ConnectionStatusChangedEvent {
   sessionId: string;
   status: ConnectionStatus;
   reason: string | null;
+}
+
+/** Issue #356, Spec 0107 §8: Stand der automatischen Neuverbindung. */
+export interface AutoReconnectChangedEvent {
+  sessionId: string;
+  phase: "running" | "reconnected" | "gave_up" | "stopped" | "blocked";
+  /** Nummer des laufenden bzw. nächsten Versuchs (nur bei `running`). */
+  attempt: number;
 }
 
 export type HostKeyKind = "unknown" | "mismatch";
@@ -433,6 +445,14 @@ export interface ChatActionOutputEvent {
   stderr: string;
   /** `true` once the output size limit was reached. */
   truncated: boolean;
+}
+
+/** Issue #327 — the backend's guess whether a running command waits for
+ * input; `waiting: false` when output arrived again. Display only. */
+export interface ChatActionWaitingInputEvent {
+  sessionId: string;
+  actionId: string;
+  waiting: boolean;
 }
 
 export interface ChatErrorEvent {

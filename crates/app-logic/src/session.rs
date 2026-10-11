@@ -46,6 +46,70 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
+/// Issue #355: the stored sudo password of a session. Behind a lock so a
+/// reconnect can replace it together with the redactor.
+pub struct SwappableSudoPassword(std::sync::RwLock<Option<Arc<secrecy::SecretString>>>);
+
+impl SwappableSudoPassword {
+    pub fn new(value: Option<secrecy::SecretString>) -> Self {
+        Self(std::sync::RwLock::new(value.map(Arc::new)))
+    }
+
+    pub fn get(&self) -> Option<Arc<secrecy::SecretString>> {
+        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    pub fn is_some(&self) -> bool {
+        self.get().is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.get().is_none()
+    }
+
+    fn replace(&self, value: Option<secrecy::SecretString>) {
+        *self.0.write().unwrap_or_else(|e| e.into_inner()) = value.map(Arc::new);
+    }
+}
+
+/// Issue #355: the redactor of a session. Behind a lock so a reconnect can
+/// rebuild it with the sudo password read again from the keychain; every
+/// reader sees either the old or the new redactor, never none.
+pub struct SwappableRedactor(std::sync::RwLock<Arc<dyn OutputRedactor>>);
+
+impl SwappableRedactor {
+    pub fn new(redactor: Box<dyn OutputRedactor>) -> Self {
+        Self(std::sync::RwLock::new(Arc::from(redactor)))
+    }
+
+    fn current(&self) -> Arc<dyn OutputRedactor> {
+        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    fn replace(&self, redactor: Box<dyn OutputRedactor>) {
+        *self.0.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
+    }
+}
+
+impl OutputRedactor for SwappableRedactor {
+    fn redact(
+        &self,
+        output: &ssh_manager_core::ssh::CommandOutput,
+    ) -> ssh_manager_core::ssh::CommandOutput {
+        self.current().redact(output)
+    }
+
+    fn redact_text(&self, text: &str) -> String {
+        self.current().redact_text(text)
+    }
+}
+
+impl AsRef<dyn OutputRedactor> for SwappableRedactor {
+    fn as_ref(&self) -> &(dyn OutputRedactor + 'static) {
+        self
+    }
+}
+
 /// Objektsicherer Wrapper um `FilterEngine<S>::evaluate` (Aufgabenstellung
 /// Teil 1, Punkt 4). `FilterEngine<S>` selbst ist über den `PolicyStore`-Typ
 /// generisch, `Session` soll dieses Detail aber nicht nach außen tragen
@@ -160,6 +224,39 @@ impl NormalSftpGuard<'_> {
     }
 }
 
+/// Issue #355: proof that this caller owns the running reconnect of a
+/// session. Dropped without [`ReconnectClaim::succeed`], the session goes
+/// back to `Disconnected`, so the button stays usable after a failure.
+pub struct ReconnectClaim<'a> {
+    session: &'a Session,
+    settled: bool,
+}
+
+impl ReconnectClaim<'_> {
+    /// Installs the new connection and marks the session `Connected`.
+    pub async fn succeed(
+        mut self,
+        transport: Box<dyn SshTransport>,
+        redactor: Box<dyn OutputRedactor>,
+        sudo_password: Option<secrecy::SecretString>,
+    ) {
+        self.session
+            .replace_connection(transport, redactor, sudo_password)
+            .await;
+        *crate::poison::lock_tolerating_poison(&self.session.status) = ConnectionStatus::Connected;
+        self.settled = true;
+    }
+}
+
+impl Drop for ReconnectClaim<'_> {
+    fn drop(&mut self) {
+        if !self.settled {
+            *crate::poison::lock_tolerating_poison(&self.session.status) =
+                ConnectionStatus::Disconnected;
+        }
+    }
+}
+
 /// Spec 0086, A3: der Transport einer Sitzung — ihre eine SSH-Verbindung.
 ///
 /// **Eigener Typ mit privatem Inneren** statt eines nackten
@@ -243,6 +340,16 @@ impl SessionTransport {
 
     pub fn is_closed(&self) -> bool {
         self.closed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Issue #355: puts the freshly connected transport of a reconnect in
+    /// place of the dead one and reopens the session for commands. Only
+    /// [`Session::replace_connection`] calls this, so transport and the
+    /// normal SFTP channel are always replaced together.
+    async fn replace(&self, transport: Box<dyn SshTransport>) {
+        *self.inner.lock().await = transport;
+        self.closed
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Issue #328: resolves once no AI command runs in this session.
@@ -465,7 +572,7 @@ pub struct SessionParts {
     /// `chat-action-result` und `context.history` landet (Spec 0006,
     /// Abschnitt 5) — pro Session eine Instanz statt bei jeder Ausführung
     /// neu aufgebaut (baut intern eine feste Regex-Liste auf).
-    pub redactor: Box<dyn OutputRedactor>,
+    pub redactor: SwappableRedactor,
     /// Für `NoteEditor::Ai { provider, model }` bei `ProposeNoteUpdate`
     /// (Spec 0003, Abschnitt 5.3) — aus der aktiven `AiProviderConfig` zum
     /// Verbindungszeitpunkt übernommen, damit spätere Notiz-Historie
@@ -529,7 +636,7 @@ pub struct SessionParts {
     /// Wird ausschließlich über Stdin an genau einen `sudo -S`-Aufruf
     /// weitergereicht (`crate::orchestration::execute_suggested_command`),
     /// nie auf dem Zielserver abgelegt.
-    pub sudo_password: Option<secrecy::SecretString>,
+    pub sudo_password: SwappableSudoPassword,
     /// Spec 0017, Abschnitt 2: `list_sessions()`-Statusfeld. Startet bei
     /// `Connected` (`Session` wird erst nach erfolgreichem Verbindungsaufbau
     /// konstruiert, s. `app_shell::commands::connect`) und wird von
@@ -721,6 +828,8 @@ pub struct SessionParts {
     /// Feld unmittelbar vor jedem `send()`-Aufruf konsultiert. `None` vor
     /// dem ersten Aufruf.
     pub ai_request_paced_at: AsyncMutex<Option<tokio::time::Instant>>,
+    /// Issue #356, Spec 0107 §8: state of the automatic reconnect.
+    pub auto_reconnect: crate::auto_reconnect::AutoReconnectState,
 }
 
 /// Spec 0066, §2 — s. `Session::chat_turn`.
@@ -757,6 +866,57 @@ impl Session {
 
     pub(crate) fn start_directory_state(&self) -> &crate::start_directory::SessionStartDirectory {
         &self.start_directory
+    }
+
+    /// Issue #355, Spec 0105: claims the reconnect of a disconnected
+    /// session. Only a session in `Disconnected` state can be claimed, and
+    /// only once: the state flips to `Reconnecting` under the lock, so a
+    /// second trigger (double click, `R` key held down) gets `None`.
+    pub fn begin_reconnect(&self) -> Option<ReconnectClaim<'_>> {
+        let mut status = crate::poison::lock_tolerating_poison(&self.status);
+        if *status != ConnectionStatus::Disconnected {
+            return None;
+        }
+        *status = ConnectionStatus::Reconnecting;
+        Some(ReconnectClaim {
+            session: self,
+            settled: false,
+        })
+    }
+
+    /// Issue #355: retires the dead connection before a reconnect: no new
+    /// command starts, a running AI command is told to stop (by the
+    /// caller, via `running_action`), the old transport is closed on a
+    /// best-effort basis.
+    pub async fn retire_connection(&self) {
+        self.transport.mark_closed();
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            self.transport.wait_until_idle(),
+        )
+        .await;
+        let _ = self.transport.lock().await.disconnect().await;
+        *crate::poison::lock_tolerating_poison(&self.terminal) = None;
+    }
+
+    /// Issue #355: replaces transport, normal SFTP channel and redactor of
+    /// this session in place. Tab, session id, chat history, AI context,
+    /// summary and system context parts stay untouched. The normal SFTP
+    /// channel is emptied (it belonged to the old transport) and reopens
+    /// lazily from the new one. Elevated state lives outside the session
+    /// and is dropped by the caller.
+    async fn replace_connection(
+        &self,
+        transport: Box<dyn SshTransport>,
+        redactor: Box<dyn OutputRedactor>,
+        sudo_password: Option<secrecy::SecretString>,
+    ) {
+        *self.sftp.inner.lock().await = None;
+        self.transport.replace(transport).await;
+        // One read feeds both: the password sent to `sudo -S` and the
+        // redactor always agree.
+        self.sudo_password.replace(sudo_password);
+        self.redactor.replace(redactor);
     }
 
     /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.
@@ -899,7 +1059,7 @@ impl Session {
 
     #[cfg(any(test, feature = "test-support"))]
     pub fn set_sudo_password_for_tests(&mut self, value: Option<secrecy::SecretString>) {
-        self.parts.sudo_password = value;
+        self.parts.sudo_password = SwappableSudoPassword::new(value);
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -1181,14 +1341,69 @@ pub fn spawn_terminal_actor(
             // noch offen ist — sonst zeigt eine wiederhergestellte Tab-Leiste
             // (Abschnitt 2, "Backend ist maßgebliche Quelle") eine tote
             // Session fälschlich als weiterhin verbunden an.
-            *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
-            emit_connection_status_changed(
-                emitter.as_ref(),
-                session_id,
-                ConnectionStatus::Disconnected,
-                reason,
-            );
+            report_connection_lost(session_id, &session, emitter.as_ref(), reason);
         }
+    });
+}
+
+/// Issue #353: the one status transition for every way a connection can end
+/// unexpectedly (terminal EOF, keepalive timeout, any other loss the
+/// transport reports). Sets `Disconnected` and emits
+/// `connection-status-changed` — exactly once per session: later reports
+/// find the status already `Disconnected` and do nothing. Returns whether
+/// this call made the transition.
+pub fn report_connection_lost(
+    session_id: SessionId,
+    session: &Session,
+    emitter: &dyn EventEmitter,
+    reason: Option<String>,
+) -> bool {
+    {
+        let mut status = session.status.lock().unwrap();
+        if *status == ConnectionStatus::Disconnected {
+            return false;
+        }
+        *status = ConnectionStatus::Disconnected;
+    }
+    // Issue #356: remember that an AI turn was cut off by the loss (running
+    // command, waiting confirmation or a pending follow-up round), so the
+    // AI can continue after an automatic reconnect.
+    let turn_active = crate::poison::lock_tolerating_poison(&session.chat_turn).running;
+    session.auto_reconnect.set_ai_turn_interrupted(turn_active);
+    // The hook runs first: it announces the automatic attempts before the
+    // status event, so the UI never shows "lost" for a moment.
+    session.auto_reconnect.fire_hook(session_id);
+    emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
+    true
+}
+
+/// Issue #353: watches the transport's loss signal for a session, also when
+/// no terminal is open. An explicit `disconnect()` marks the transport
+/// closed first, so the resulting signal is not reported as a loss. Holds
+/// only a weak reference: it never keeps a removed session alive.
+pub fn spawn_connection_watch(
+    session_id: SessionId,
+    session: &Arc<Session>,
+    mut watch: ssh_manager_core::ssh::ConnectionLossWatch,
+    emitter: Arc<dyn EventEmitter>,
+) {
+    let session = Arc::downgrade(session);
+    tokio::spawn(async move {
+        let loss = loop {
+            if let Some(loss) = watch.borrow_and_update().clone() {
+                break loss;
+            }
+            if watch.changed().await.is_err() {
+                return; // transport dropped without a loss
+            }
+        };
+        let Some(session) = session.upgrade() else {
+            return;
+        };
+        if session.transport.is_closed() {
+            return;
+        }
+        report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason);
     });
 }
 
@@ -1476,7 +1691,7 @@ mod tests {
             server_id,
             tags: Vec::new(),
             terminal: StdMutex::new(None),
-            redactor: Box::new(DefaultOutputRedactor::new()),
+            redactor: SwappableRedactor::new(Box::new(DefaultOutputRedactor::new())),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
             system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
@@ -1487,7 +1702,7 @@ mod tests {
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
             mcp_origin_flags: StdMutex::new(Vec::new()),
-            sudo_password: None,
+            sudo_password: SwappableSudoPassword::new(None),
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
             mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
@@ -1512,6 +1727,7 @@ mod tests {
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
+            auto_reconnect: Default::default(),
         })
     }
 
@@ -1544,6 +1760,7 @@ mod tests {
                     truncated: false,
                 },
                 cancelled: false,
+                waiting_for_input: false,
             },
         }];
         assert!(
@@ -1600,6 +1817,101 @@ mod tests {
             !history_contains_untrusted_content(&history),
             "Kommando/Grund stammen von der KI/lokalen Filter-Engine, nie vom Remote-Server"
         );
+    }
+
+    fn status_events(emitter: &crate::events::TestEmitter) -> Vec<serde_json::Value> {
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "connection-status-changed")
+            .map(|(_, payload)| payload.clone())
+            .collect()
+    }
+
+    async fn wait_for_status_events(emitter: &crate::events::TestEmitter, count: usize) {
+        for _ in 0..200 {
+            if status_events(emitter).len() >= count {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    }
+
+    /// Issue #353: terminal EOF first, then a later loss report (exec/SFTP
+    /// error, keepalive) must not emit a second `disconnected` event.
+    #[test]
+    fn test_connection_loss_is_reported_once_per_session() {
+        let session = dummy_session(ServerId::new());
+        let emitter = crate::events::TestEmitter::default();
+        let id = Uuid::new_v4();
+
+        assert!(report_connection_lost(id, &session, &emitter, None));
+        assert!(!report_connection_lost(
+            id,
+            &session,
+            &emitter,
+            Some("The server stopped responding".to_string())
+        ));
+        assert_eq!(status_events(&emitter).len(), 1);
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
+    }
+
+    /// Issue #353: a chat-only session (no terminal actor) is marked
+    /// `Disconnected` by the watcher, with the reason, exactly once even if
+    /// the loss is reported again afterwards.
+    #[tokio::test]
+    async fn test_connection_watch_reports_loss_without_terminal() {
+        let session = Arc::new(dummy_session(ServerId::new()));
+        let emitter = Arc::new(crate::events::TestEmitter::default());
+        let (tx, rx) = tokio::sync::watch::channel(None);
+        let id = Uuid::new_v4();
+        spawn_connection_watch(id, &session, rx, emitter.clone());
+
+        tx.send(Some(ssh_manager_core::ssh::ConnectionLoss {
+            reason: Some("The server stopped responding".to_string()),
+        }))
+        .unwrap();
+        wait_for_status_events(&emitter, 1).await;
+
+        let events = status_events(&emitter);
+        assert_eq!(events.len(), 1);
+        assert!(events[0]
+            .to_string()
+            .contains("The server stopped responding"));
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
+        assert!(!report_connection_lost(
+            id,
+            &session,
+            emitter.as_ref(),
+            None
+        ));
+        assert_eq!(status_events(&emitter).len(), 1);
+    }
+
+    /// Issue #353: an explicit `disconnect()` closes the transport on
+    /// purpose; the resulting signal is not a loss.
+    #[tokio::test]
+    async fn test_connection_watch_ignores_intentional_close() {
+        let session = Arc::new(dummy_session(ServerId::new()));
+        let emitter = Arc::new(crate::events::TestEmitter::default());
+        let (tx, rx) = tokio::sync::watch::channel(None);
+        spawn_connection_watch(Uuid::new_v4(), &session, rx, emitter.clone());
+
+        session.transport.mark_closed();
+        tx.send(Some(ssh_manager_core::ssh::ConnectionLoss { reason: None }))
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        assert!(status_events(&emitter).is_empty());
+        assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
     }
 
     #[test]

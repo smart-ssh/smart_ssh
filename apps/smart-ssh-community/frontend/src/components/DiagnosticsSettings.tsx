@@ -10,6 +10,7 @@ import {
 import type { KeychainStatusDto } from "../types";
 import { DataPathsSection } from "./DataPathsSection";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { Button } from "./ui";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöst — eigene
  * Kategorie ("Diagnose") in der zweispaltigen Settings-Struktur. */
@@ -85,7 +86,7 @@ export function DiagnosticsSettings() {
 
   return (
     <div className="space-y-4">
-      {error && <p className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
       <div
         className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-300"
         data-testid="keychain-status"
@@ -97,37 +98,25 @@ export function DiagnosticsSettings() {
         )}
       </div>
       <DataPathsSection />
-      <button
-        type="button"
-        onClick={handleOpenLogDirectory}
-        className="w-full rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
-      >
+      <Button className="w-full" onClick={handleOpenLogDirectory}>
         {t("aiProvider.openLogs")}
-      </button>
-      <button
-        type="button"
-        onClick={handleGenerateBundle}
-        disabled={generating}
-        className="w-full rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700 disabled:opacity-60"
-      >
+      </Button>
+      <Button className="w-full" onClick={handleGenerateBundle} disabled={generating}>
         {generating ? t("diagnostics.generating") : t("diagnostics.generateBundle")}
-      </button>
+      </Button>
       {bundle && (
         <div className="space-y-2">
           <p className="text-xs text-slate-400">{t("diagnostics.previewHint")}</p>
           <textarea
             {...TECHNICAL_INPUT_PROPS}
+            aria-label={t("diagnostics.generateBundle")}
             readOnly
             value={bundle}
             className="h-64 w-full select-text rounded border border-slate-600 bg-slate-900 p-2 font-mono text-xs text-slate-100"
           />
-          <button
-            type="button"
-            onClick={handleSaveBundle}
-            className="w-full rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
-          >
+          <Button className="w-full" onClick={handleSaveBundle}>
             {t("diagnostics.save")}
-          </button>
+          </Button>
         </div>
       )}
     </div>

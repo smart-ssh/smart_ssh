@@ -5,6 +5,7 @@ import type {
   ChatActionOutputEvent,
   ChatActionProposedEvent,
   ChatActionResultEvent,
+  ChatActionWaitingInputEvent,
   ChatAutoContinuationLimitReachedEvent,
   ChatAutoContinuationStartedEvent,
   ChatDocumentGeneratedEvent,
@@ -16,6 +17,7 @@ import type {
   ChatTextDeltaEvent,
   ChatWebActivityEvent,
   ChatWebResearchUnavailableEvent,
+  AutoReconnectChangedEvent,
   ConnectionStatusChangedEvent,
   HostKeyVerificationEndedEvent,
   HostKeyVerificationNeededEvent,
@@ -40,6 +42,11 @@ export const onConnectionStatusChanged = (
   handler: (event: ConnectionStatusChangedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ConnectionStatusChangedEvent>("connection-status-changed", (e) => handler(e.payload));
+
+export const onAutoReconnectChanged = (
+  handler: (event: AutoReconnectChangedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<AutoReconnectChangedEvent>("auto-reconnect-changed", (e) => handler(e.payload));
 
 export const onHostKeyVerificationNeeded = (
   handler: (event: HostKeyVerificationNeededEvent) => void,
@@ -94,6 +101,12 @@ export const onChatActionOutput = (
   handler: (event: ChatActionOutputEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatActionOutputEvent>("chat-action-output", (e) => handler(e.payload));
+
+/** Issue #327 — a running command is probably waiting for input. */
+export const onChatActionWaitingInput = (
+  handler: (event: ChatActionWaitingInputEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatActionWaitingInputEvent>("chat-action-waiting-input", (e) => handler(e.payload));
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Tetapkan aplikasi lokal untuk setiap ekstensi berkas yang digunakan pada \"Buka secara lokal\". Tanpa entri, aplikasi bawaan sistem operasi akan digunakan.",
+    "extensionLabel": "Ekstensi berkas",
     "appPathPlaceholder": "Jalur ke aplikasi",
     "browse": "Telusuri…",
     "remove": "Hapus baris",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "Opini kedua AI tidak dapat diperoleh. Risiko yang ditampilkan berdasarkan aturan.",
     "riskHint": "Penilaian berdasarkan pola yang dikenal — tanpa jaminan.",
     "runningSince": "berjalan selama {{seconds}} dtk…",
+    "waitingForInputHint": "Perintah ini kemungkinan menunggu input. Hentikan, lalu AI akan mengusulkan varian non-interaktif.",
     "cancelCommand": "Putuskan perintah ini",
     "cancellingCommand": "Memutuskan…",
     "commandCancelledNotice": "⚠ Dibatalkan secara manual — keluaran mungkin tidak lengkap, tanpa kode keluar normal.",
@@ -1083,11 +1085,18 @@
   "session": {
     "disconnected": "Terputus",
     "disconnectedWithReason": "Terputus: {{reason}}",
+    "reconnect": "Hubungkan ulang",
+    "reconnecting": "Menghubungkan ulang…",
+    "connectionLostPressR": "Koneksi terputus. Tekan R untuk menghubungkan ulang.",
+    "reconnectedSeparator": "— terhubung kembali —",
     "disconnect": "Putuskan",
     "splitHandle": "Pembagi panel",
     "terminalTab": "Terminal",
     "filesTab": "Berkas",
-    "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}"
+    "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
+    "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
+    "stopReconnect": "Berhenti",
+    "reconnectGaveUp": "Koneksi tidak dapat dipulihkan."
   },
   "unusableServer": {
     "badge": "Tidak dapat digunakan",
@@ -1098,5 +1107,12 @@
     "host": "Host: {{host}}",
     "delete": "Hapus server",
     "deleteSecrets": "Setiap rahasia yang dapat disimpan versi ini untuk server ini dihapus. Rahasia yang ditambahkan oleh versi aplikasi yang lebih baru mungkin tetap ada."
+  },
+  "autoReconnect": {
+    "label": "Sambungkan ulang otomatis",
+    "off": "Mati",
+    "seconds30": "30 detik",
+    "seconds60": "60 detik",
+    "minutes5": "5 menit"
   }
 }

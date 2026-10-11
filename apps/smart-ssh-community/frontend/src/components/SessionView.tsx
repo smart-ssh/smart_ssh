@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { onConnectionStatusChanged } from "../events";
+import { commandErrorCode, commandErrorMessage, reconnectSession, stopAutoReconnect } from "../api";
+import { translateErrorCode } from "../errorCodes";
+import { onAutoReconnectChanged, onConnectionStatusChanged } from "../events";
 import type { McpSessionInfo } from "../types";
 import { sessionTabLabel } from "../useSessionTabs";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
 import { useDragResize } from "../useDragResize";
 import { ChatPanel } from "./ChatPanel";
 import { FileBrowserPanel } from "./FileBrowserPanel";
-import { TerminalView } from "./TerminalView";
+import { TerminalView, type TerminalLink } from "./TerminalView";
 
 /** Spec 0053, Teil 2: Mindestbreiten beider Bereiche (px) — keiner darf auf
  * 0 gezogen werden. `RIGHT_PANEL_DEFAULT_WIDTH` ist die bisherige feste
@@ -103,6 +105,17 @@ export function SessionView({
    * wird der Grund statt des fertigen Texts, damit ein Sprachwechsel auch
    * diesen Hinweis sofort umstellt (Spec 0024, Abschnitt 4). */
   const [disconnectReason, setDisconnectReason] = useState<{ reason: string | null } | null>(null);
+  // Issue #355: Zustand der Verbindung dieses Tabs — `lost` zeigt den
+  // "Neu verbinden"-Knopf, `reconnecting` sperrt ihn.
+  const [link, setLink] = useState<TerminalLink>("live");
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
+  const reconnectBusy = useRef(false);
+  // Issue #356: automatische Neuverbindungsversuche — `attempt` ist die
+  // Nummer des laufenden bzw. nächsten Versuchs, `null` = keine laufen;
+  // `gaveUp` = die Zeit ist abgelaufen.
+  const [autoAttempt, setAutoAttempt] = useState<number | null>(null);
+  const [gaveUp, setGaveUp] = useState(false);
+  const autoActive = useRef(false);
   // Spec 0020, Abschnitt 5.1: "Terminal | Dateien"-Umschalter im rechten
   // Panel. Beide Ansichten bleiben gemountet (analog zum
   // Immer-gemountet-Muster der Session-Tabs selbst, Spec 0017 Abschnitt 4) —
@@ -187,13 +200,76 @@ export function SessionView({
     const unlisten = onConnectionStatusChanged((event) => {
       if (event.sessionId !== sessionId) return;
       if (event.status === "disconnected") {
-        setDisconnectReason({ reason: event.reason ?? null });
+        // Ein fehlgeschlagener Reconnect meldet `disconnected` ohne Grund;
+        // der ursprüngliche Grund bleibt dann stehen.
+        setDisconnectReason((prev) => ({ reason: event.reason ?? prev?.reason ?? null }));
+        setLink("lost");
+      } else if (event.status === "reconnecting") {
+        setLink("reconnecting");
+      } else if (event.status === "connected") {
+        setDisconnectReason(null);
+        setReconnectError(null);
+        setGaveUp(false);
+        setLink("live");
       }
     });
     return () => {
       unlisten.then((unlistenFn) => unlistenFn());
     };
   }, [sessionId]);
+
+  // Issue #356: Stand der automatischen Neuverbindung. Das Backend meldet
+  // `running` vor dem Verbindungsabbruch-Ereignis, die Anzeige springt also
+  // nie kurz auf "verloren".
+  useEffect(() => {
+    const unlisten = onAutoReconnectChanged((event) => {
+      if (event.sessionId !== sessionId) return;
+      if (event.phase === "running") {
+        autoActive.current = true;
+        setGaveUp(false);
+        setAutoAttempt(event.attempt);
+        return;
+      }
+      autoActive.current = false;
+      setAutoAttempt(null);
+      setGaveUp(event.phase === "gave_up");
+      // Ein selbst gestarteter Versuch (Knopf) hat die Anzeige schon.
+      if (event.phase !== "reconnected" && !reconnectBusy.current) setLink("lost");
+    });
+    return () => {
+      unlisten.then((unlistenFn) => unlistenFn());
+    };
+  }, [sessionId]);
+
+  const handleStopAutoReconnect = useCallback(() => {
+    stopAutoReconnect(sessionId).catch((err) =>
+      setReconnectError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))),
+    );
+  }, [sessionId, t]);
+
+  // Issue #355: Knopf und Taste R lösen denselben Pfad aus; `reconnectBusy`
+  // fängt einen zweiten Auslöser ab, bevor React neu gerendert hat.
+  const handleReconnect = useCallback(() => {
+    if (reconnectBusy.current || autoActive.current) return;
+    reconnectBusy.current = true;
+    setReconnectError(null);
+    setGaveUp(false);
+    setLink("reconnecting");
+    reconnectSession(sessionId)
+      .then(() => {
+        setDisconnectReason(null);
+        setLink("live");
+      })
+      .catch((err) => {
+        setReconnectError(
+          translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
+        );
+        setLink("lost");
+      })
+      .finally(() => {
+        reconnectBusy.current = false;
+      });
+  }, [sessionId, t]);
 
   // Spec 0104, §4: MCP-Sitzung — nur-lesende Sicht auf das, was der
   // externe Client angefragt hat und was davon lief. Kein Terminal (das
@@ -238,6 +314,40 @@ export function SessionView({
         <div className="flex items-center gap-3">
           <span className="font-heading font-semibold tracking-wide">{serverName}</span>
           {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
+          {autoAttempt !== null && (
+            <>
+              <output className="font-mono text-xs text-amber-300">
+                {t("session.reconnectingAuto", { attempt: autoAttempt })}
+              </output>
+              <button
+                type="button"
+                onClick={handleStopAutoReconnect}
+                className="text-xs text-indigo-300 underline hover:text-indigo-200"
+              >
+                {t("session.stopReconnect")}
+              </button>
+            </>
+          )}
+          {gaveUp && autoAttempt === null && (
+            <output className="font-mono text-xs text-amber-300">
+              {t("session.reconnectGaveUp")}
+            </output>
+          )}
+          {link !== "live" && autoAttempt === null && (
+            <button
+              type="button"
+              onClick={handleReconnect}
+              disabled={link === "reconnecting"}
+              className="font-heading border border-indigo-500/60 px-3 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
+            </button>
+          )}
+          {reconnectError && (
+            <span role="alert" className="font-mono text-xs text-red-300">
+              {reconnectError}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -295,7 +405,11 @@ export function SessionView({
             </button>
           </div>
           <div className={rightPanelView === "terminal" ? "min-h-0 flex-1 p-2" : "hidden"}>
-            <TerminalView sessionId={sessionId} />
+            <TerminalView
+              sessionId={sessionId}
+              link={autoAttempt !== null ? "reconnecting" : link}
+              onReconnect={handleReconnect}
+            />
           </div>
           <div className={rightPanelView === "files" ? "min-h-0 flex-1" : "hidden"}>
             <FileBrowserPanel

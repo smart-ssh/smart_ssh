@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Defina um aplicativo local por extensão de arquivo para usar em \"Abrir localmente\". Sem uma entrada, é usado o aplicativo padrão do sistema operacional.",
+    "extensionLabel": "Extensão do arquivo",
     "appPathPlaceholder": "Caminho do aplicativo",
     "browse": "Procurar…",
     "remove": "Remover linha",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "Não foi possível obter a segunda opinião da IA. O risco exibido é o baseado em regras.",
     "riskHint": "Avaliação baseada em padrões conhecidos — sem garantia.",
     "runningSince": "em execução há {{seconds}}s…",
+    "waitingForInputHint": "Este comando provavelmente está aguardando uma entrada. Interrompa-o e a IA proporá uma variante não interativa.",
     "cancelCommand": "Desconectar este comando",
     "cancellingCommand": "Desconectando…",
     "commandCancelledNotice": "⚠ Cancelado manualmente — a saída pode estar incompleta, sem código de saída regular.",
@@ -1099,11 +1101,18 @@
   "session": {
     "disconnected": "Desconectado",
     "disconnectedWithReason": "Desconectado: {{reason}}",
+    "reconnect": "Reconectar",
+    "reconnecting": "Reconectando…",
+    "connectionLostPressR": "Conexão perdida. Pressione R para reconectar.",
+    "reconnectedSeparator": "— reconectado —",
     "disconnect": "Desconectar",
     "splitHandle": "Divisor de painel",
     "terminalTab": "Terminal",
     "filesTab": "Arquivos",
-    "terminalOpenFailed": "Não foi possível abrir o terminal: {{error}}"
+    "terminalOpenFailed": "Não foi possível abrir o terminal: {{error}}",
+    "reconnectingAuto": "Reconectando… (tentativa {{attempt}})",
+    "stopReconnect": "Parar",
+    "reconnectGaveUp": "Não foi possível restabelecer a conexão."
   },
   "unusableServer": {
     "badge": "Inutilizável",
@@ -1114,5 +1123,12 @@
     "host": "Host: {{host}}",
     "delete": "Excluir servidor",
     "deleteSecrets": "Todo segredo que esta versão sabe armazenar para este servidor é excluído. Segredos adicionados por uma versão mais recente do app podem permanecer."
+  },
+  "autoReconnect": {
+    "label": "Reconectar automaticamente",
+    "off": "Desligado",
+    "seconds30": "30 segundos",
+    "seconds60": "60 segundos",
+    "minutes5": "5 minutos"
   }
 }

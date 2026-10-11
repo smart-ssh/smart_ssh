@@ -19,6 +19,14 @@ import type {
   RecordedCall,
 } from "./fixtureTypes";
 
+const MCP_SETTINGS = {
+  enabled: false,
+  endpoint: "http://127.0.0.1:7777",
+  token: "e2e-token-not-a-secret",
+  allowedServerIds: [] as string[],
+  confirmTimeoutSecs: 120,
+};
+
 const PERSIST_KEY = "smart-ssh-e2e-fake-backend";
 
 interface Model {
@@ -209,13 +217,9 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     get_keychain_status: () => ({ available: true, reason: null }),
     get_master_password_mode: () => "keychain",
     get_chat_session_retention_days: () => null,
-    get_mcp_server_settings: () => ({
-      enabled: false,
-      endpoint: "http://127.0.0.1:7777",
-      token: "e2e-token-not-a-secret",
-      allowedServerIds: [],
-      confirmTimeoutSecs: 120,
-    }),
+    get_mcp_server_settings: () => MCP_SETTINGS,
+    // The timeout field commits on blur, so tabbing through it calls this.
+    set_mcp_server_confirm_timeout_secs: () => MCP_SETTINGS,
 
     // --- Sessions --------------------------------------------------------
     list_sessions: () => model.sessions,
@@ -264,6 +268,9 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     sftp_elevation_status: () => null,
     // Approve/deny of a pending action; the result event is up to the test.
     respond_to_action: () => null,
+    // Issue #355: the status events are up to the test.
+    reconnect_session: () => null,
+    stop_auto_reconnect: () => null,
     disconnect: ({ sessionId }) => {
       model.sessions = model.sessions.filter((s) => s.sessionId !== sessionId);
       persist();

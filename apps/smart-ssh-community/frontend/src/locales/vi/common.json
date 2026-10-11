@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Đặt một ứng dụng cục bộ cho từng phần mở rộng tệp để dùng với \"Mở cục bộ\". Nếu không có mục nào, ứng dụng mặc định của hệ điều hành sẽ được dùng.",
+    "extensionLabel": "Phần mở rộng tệp",
     "appPathPlaceholder": "Đường dẫn đến ứng dụng",
     "browse": "Duyệt…",
     "remove": "Xóa dòng",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "Không thể lấy ý kiến thứ hai của AI. Mức rủi ro hiển thị là mức dựa trên quy tắc.",
     "riskHint": "Đánh giá dựa trên các mẫu đã biết — không đảm bảo.",
     "runningSince": "đang chạy {{seconds}} giây…",
+    "waitingForInputHint": "Lệnh này có thể đang chờ nhập liệu. Hãy dừng nó, AI sẽ đề xuất một biến thể không tương tác.",
     "cancelCommand": "Ngắt kết nối lệnh này",
     "cancellingCommand": "Đang ngắt kết nối…",
     "commandCancelledNotice": "⚠ Đã hủy thủ công — đầu ra có thể chưa đầy đủ, không có mã thoát thông thường.",
@@ -1083,11 +1085,18 @@
   "session": {
     "disconnected": "Đã ngắt kết nối",
     "disconnectedWithReason": "Đã ngắt kết nối: {{reason}}",
+    "reconnect": "Kết nối lại",
+    "reconnecting": "Đang kết nối lại…",
+    "connectionLostPressR": "Mất kết nối. Nhấn R để kết nối lại.",
+    "reconnectedSeparator": "— đã kết nối lại —",
     "disconnect": "Ngắt kết nối",
     "splitHandle": "Thanh chia khung",
     "terminalTab": "Dòng lệnh",
     "filesTab": "Tệp",
-    "terminalOpenFailed": "Không thể mở terminal: {{error}}"
+    "terminalOpenFailed": "Không thể mở terminal: {{error}}",
+    "reconnectingAuto": "Đang kết nối lại… (lần thử {{attempt}})",
+    "stopReconnect": "Dừng",
+    "reconnectGaveUp": "Không thể khôi phục kết nối."
   },
   "unusableServer": {
     "badge": "Không dùng được",
@@ -1098,5 +1107,12 @@
     "host": "Máy chủ: {{host}}",
     "delete": "Xóa máy chủ",
     "deleteSecrets": "Mọi bí mật mà phiên bản này biết cách lưu cho máy chủ này đều bị xóa. Các bí mật do phiên bản ứng dụng mới hơn thêm vào có thể vẫn còn."
+  },
+  "autoReconnect": {
+    "label": "Tự động kết nối lại",
+    "off": "Tắt",
+    "seconds30": "30 giây",
+    "seconds60": "60 giây",
+    "minutes5": "5 phút"
   }
 }

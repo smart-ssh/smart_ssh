@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Définissez une application locale par extension de fichier pour « Ouvrir localement ». Sans entrée, l’application par défaut du système d’exploitation est utilisée.",
+    "extensionLabel": "Extension de fichier",
     "appPathPlaceholder": "Chemin de l’application",
     "browse": "Parcourir…",
     "remove": "Supprimer la ligne",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "Le second avis IA n’a pas pu être obtenu. Le risque affiché est celui fondé sur les règles.",
     "riskHint": "Évaluation fondée sur des motifs connus — sans garantie.",
     "runningSince": "en cours depuis {{seconds}} s…",
+    "waitingForInputHint": "Cette commande attend probablement une saisie. Arrêtez-la et l'IA proposera une variante non interactive.",
     "cancelCommand": "Interrompre cette commande",
     "cancellingCommand": "Interruption…",
     "commandCancelledNotice": "⚠ Annulée manuellement — la sortie peut être incomplète, pas de code de sortie normal.",
@@ -1099,11 +1101,18 @@
   "session": {
     "disconnected": "Déconnecté",
     "disconnectedWithReason": "Déconnecté : {{reason}}",
+    "reconnect": "Se reconnecter",
+    "reconnecting": "Reconnexion…",
+    "connectionLostPressR": "Connexion perdue. Appuyez sur R pour vous reconnecter.",
+    "reconnectedSeparator": "— reconnecté —",
     "disconnect": "Se déconnecter",
     "splitHandle": "Séparateur de panneau",
     "terminalTab": "Terminal",
     "filesTab": "Fichiers",
-    "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}"
+    "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}",
+    "reconnectingAuto": "Reconnexion… (tentative {{attempt}})",
+    "stopReconnect": "Arrêter",
+    "reconnectGaveUp": "La connexion n’a pas pu être rétablie."
   },
   "unusableServer": {
     "badge": "Inutilisable",
@@ -1114,5 +1123,12 @@
     "host": "Hôte : {{host}}",
     "delete": "Supprimer le serveur",
     "deleteSecrets": "Tous les secrets que cette version sait enregistrer pour ce serveur sont supprimés. Les secrets ajoutés par une version plus récente de l’application peuvent subsister."
+  },
+  "autoReconnect": {
+    "label": "Reconnexion automatique",
+    "off": "Désactivée",
+    "seconds30": "30 secondes",
+    "seconds60": "60 secondes",
+    "minutes5": "5 min"
   }
 }

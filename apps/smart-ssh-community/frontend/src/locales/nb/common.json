@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Angi et lokalt program per filtype som brukes til “Åpne lokalt”. Uten oppføring brukes operativsystemets standardprogram.",
+    "extensionLabel": "Filendelse",
     "appPathPlaceholder": "Sti til program",
     "browse": "Bla gjennom…",
     "remove": "Fjern rad",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "AI-andremeningen kunne ikke hentes. Risikoen som vises er den regelbaserte.",
     "riskHint": "Vurdering basert på kjente mønstre – ingen garanti.",
     "runningSince": "kjører i {{seconds}} s…",
+    "waitingForInputHint": "Denne kommandoen venter sannsynligvis på inndata. Stopp den, så foreslår AI-en en ikke-interaktiv variant.",
     "cancelCommand": "Koble fra denne kommandoen",
     "cancellingCommand": "Kobler fra…",
     "commandCancelledNotice": "⚠ Avbrutt manuelt – utdata kan være ufullstendige, ingen vanlig avslutningskode.",
@@ -1091,11 +1093,18 @@
   "session": {
     "disconnected": "Frakoblet",
     "disconnectedWithReason": "Frakoblet: {{reason}}",
+    "reconnect": "Koble til på nytt",
+    "reconnecting": "Kobler til på nytt…",
+    "connectionLostPressR": "Tilkoblingen gikk tapt. Trykk R for å koble til på nytt.",
+    "reconnectedSeparator": "— koblet til på nytt —",
     "disconnect": "Koble fra",
     "splitHandle": "Panelskille",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
-    "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}"
+    "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
+    "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
+    "stopReconnect": "Stopp",
+    "reconnectGaveUp": "Tilkoblingen kunne ikke gjenopprettes."
   },
   "unusableServer": {
     "badge": "Ubrukelig",
@@ -1106,5 +1115,12 @@
     "host": "Vert: {{host}}",
     "delete": "Slett server",
     "deleteSecrets": "Alle hemmeligheter denne versjonen kan lagre for denne serveren, slettes. Hemmeligheter lagt til av en nyere versjon av appen kan bli igjen."
+  },
+  "autoReconnect": {
+    "label": "Koble til på nytt automatisk",
+    "off": "Av",
+    "seconds30": "30 sekunder",
+    "seconds60": "60 sekunder",
+    "minutes5": "5 minutter"
   }
 }

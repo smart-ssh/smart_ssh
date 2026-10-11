@@ -24,6 +24,7 @@ import {
   onAiBudgetWaiting,
   onChatActionProposed,
   onChatActionOutput,
+  onChatActionWaitingInput,
   onChatActionResult,
   onChatAutoContinuationLimitReached,
   onChatAutoContinuationStarted,
@@ -323,6 +324,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * that its updates (up to ten per second) do not trigger the chat's
    * jump-to-the-end effect below. Removed when the result arrives. */
   const [liveOutputs, setLiveOutputs] = useState<Record<string, LiveOutput>>({});
+  // Issue #327: actions whose command is probably waiting for input.
+  const [waitingActions, setWaitingActions] = useState<Record<string, true>>({});
   // Spec 0055, Teil 1: `<textarea>` statt `<input type="text">` für die
   // mehrzeilige Eingabe (Shift+Enter/Auto-Grow) — dieselbe DOM-API
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
@@ -519,8 +522,22 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           [event.actionId]: appendLiveOutput(prev[event.actionId], event),
         }));
       }),
+      onChatActionWaitingInput((event) => {
+        if (event.sessionId !== sessionId) return;
+        setWaitingActions((prev) => {
+          if (event.waiting) return { ...prev, [event.actionId]: true };
+          if (!(event.actionId in prev)) return prev;
+          const { [event.actionId]: _cleared, ...rest } = prev;
+          return rest;
+        });
+      }),
       onChatActionResult((event) => {
         if (event.sessionId !== sessionId) return;
+        setWaitingActions((prev) => {
+          if (!(event.actionId in prev)) return prev;
+          const { [event.actionId]: _finished, ...rest } = prev;
+          return rest;
+        });
         // Issue #325: the final result replaces the live view.
         setLiveOutputs((prev) => {
           if (!(event.actionId in prev)) return prev;
@@ -997,6 +1014,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             key={item.id}
             item={item}
             liveOutput={item.type === "action" ? liveOutputs[item.actionId] : undefined}
+            waitingForInput={item.type === "action" && item.actionId in waitingActions}
             onRespond={respond}
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
@@ -1171,6 +1189,7 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
 export function ChatItemView({
   item,
   liveOutput,
+  waitingForInput = false,
   onRespond,
   onAcceptWithRule,
   onExport,
@@ -1182,6 +1201,9 @@ export function ChatItemView({
   /** Issue #325: live output while the command runs (`undefined` before
    * the first output and after the result). */
   liveOutput?: LiveOutput;
+  /** Issue #327: the backend marked the running command as probably
+   * waiting for input. */
+  waitingForInput?: boolean;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
@@ -1460,7 +1482,11 @@ export function ChatItemView({
        * ReadRemoteFile/WriteRemoteFile laufen über SFTP, nicht über den
        * abbrechbaren Exec-Kanal (s. Spec, Abschnitt 5). */}
       {!item.result && "SuggestCommand" in item.action && item.startedAt !== null && (
-        <RunningCommandIndicator actionId={item.actionId} startedAt={item.startedAt} />
+        <RunningCommandIndicator
+          actionId={item.actionId}
+          startedAt={item.startedAt}
+          waitingForInput={waitingForInput}
+        />
       )}
       {!item.result && "SuggestCommand" in item.action && liveOutput && (
         <LiveCommandOutput output={liveOutput} />
@@ -1478,7 +1504,15 @@ export function ChatItemView({
  * SSH-Verbindung/Session — deshalb absichtlich nicht "Kommando stoppen"
  * (suggeriert einen garantierten Kill, den es nicht gibt, s. Spec
  * Abschnitt 3, letzter Absatz). */
-function RunningCommandIndicator({ actionId, startedAt }: { actionId: string; startedAt: number }) {
+function RunningCommandIndicator({
+  actionId,
+  startedAt,
+  waitingForInput,
+}: {
+  actionId: string;
+  startedAt: number;
+  waitingForInput: boolean;
+}) {
   const { t } = useTranslation();
   const [now, setNow] = useState(() => Date.now());
   const [cancelling, setCancelling] = useState(false);
@@ -1489,7 +1523,9 @@ function RunningCommandIndicator({ actionId, startedAt }: { actionId: string; st
   }, []);
 
   const elapsedSeconds = Math.floor((now - startedAt) / 1000);
-  if (elapsedSeconds < 5) return null;
+  // Issue #327: the stop button is available immediately while the command
+  // is probably waiting for input.
+  if (elapsedSeconds < 5 && !waitingForInput) return null;
 
   const handleCancel = () => {
     setCancelling(true);
@@ -1499,7 +1535,11 @@ function RunningCommandIndicator({ actionId, startedAt }: { actionId: string; st
   return (
     <div className="mt-2 flex items-center gap-2 border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
       <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400" />
-      <span className="flex-1">{t("actionCard.runningSince", { seconds: elapsedSeconds })}</span>
+      <span className="flex-1">
+        {waitingForInput
+          ? t("actionCard.waitingForInputHint")
+          : t("actionCard.runningSince", { seconds: elapsedSeconds })}
+      </span>
       <button
         type="button"
         onClick={handleCancel}

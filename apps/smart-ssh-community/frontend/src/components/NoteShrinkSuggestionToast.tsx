@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { commandErrorMessage, requestNoteShrink } from "../api";
 import { onNoteShrinkFailed, onNoteShrinkSuggested } from "../events";
 import { publishRequestServerNoteEdit } from "../navigationBus";
+import { Button } from "./ui";
 
 interface PendingShrinkSuggestion {
   serverId: string;
@@ -129,14 +130,14 @@ export function NoteShrinkSuggestionToast() {
             {/* Spec 0079, A1: gestaltet wie der ✕-Knopf der Fehler-Karten
              * unten (`dismissFailure`) — entfernt nur diese Karte, merkt den
              * Server NICHT vor (anders als „Später“). */}
-            <button
-              type="button"
+            <Button
+              size="sm"
               onClick={() => dismiss(suggestion.serverId)}
-              className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-600"
               aria-label={t("noteShrink.dismissHint")}
+              className="shrink-0"
             >
               ✕
-            </button>
+            </Button>
           </div>
           <p className="mt-1 text-xs text-slate-400">
             {t("noteShrink.body")}
@@ -147,27 +148,15 @@ export function NoteShrinkSuggestionToast() {
            * rechnerisch nicht mehr aus. `flex-wrap` lässt sie sauber
            * umbrechen statt sich zu stauchen. */}
           <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => later(suggestion.serverId)}
-              className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
-            >
+            <Button size="sm" onClick={() => later(suggestion.serverId)}>
               {t("noteShrink.later")}
-            </button>
-            <button
-              type="button"
-              onClick={() => editMyself(suggestion)}
-              className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
-            >
+            </Button>
+            <Button size="sm" onClick={() => editMyself(suggestion)}>
               {t("noteShrink.editMyself")}
-            </button>
-            <button
-              type="button"
-              onClick={() => summarize(suggestion)}
-              className="rounded bg-indigo-600 px-3 py-1 text-xs text-slate-950 hover:bg-indigo-500"
-            >
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => summarize(suggestion)}>
               {t("noteShrink.summarize")}
-            </button>
+            </Button>
           </div>
         </div>
       ))}
@@ -176,15 +165,18 @@ export function NoteShrinkSuggestionToast() {
           key={failure.id}
           className="flex items-start justify-between gap-2 rounded-lg border border-red-900 bg-red-950 p-3 text-sm shadow-lg"
         >
-          <p className="text-red-200">{failure.message}</p>
-          <button
-            type="button"
+          <p role="alert" className="min-w-0 break-words text-red-200">
+            {failure.message}
+          </p>
+          <Button
+            variant="danger"
+            size="sm"
             onClick={() => dismissFailure(failure.id)}
-            className="shrink-0 rounded bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
             aria-label={t("noteShrink.dismissError")}
+            className="shrink-0"
           >
             ✕
-          </button>
+          </Button>
         </div>
       ))}
     </div>

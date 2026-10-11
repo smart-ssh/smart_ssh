@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Set a local application per file extension to use for \"Open locally\". Without an entry, the operating system default application is used.",
+    "extensionLabel": "File extension",
     "appPathPlaceholder": "Path to application",
     "browse": "Browse…",
     "remove": "Remove row",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "The AI second opinion could not be obtained. The risk shown is the rule-based one.",
     "riskHint": "Assessment based on known patterns — no guarantee.",
     "runningSince": "running for {{seconds}}s…",
+    "waitingForInputHint": "This command is probably waiting for input. Stop it, and the AI will propose a non-interactive variant.",
     "cancelCommand": "Disconnect this command",
     "cancellingCommand": "Disconnecting…",
     "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code.",
@@ -1091,11 +1093,18 @@
   "session": {
     "disconnected": "Disconnected",
     "disconnectedWithReason": "Disconnected: {{reason}}",
+    "reconnect": "Reconnect",
+    "reconnecting": "Reconnecting…",
+    "connectionLostPressR": "Connection lost. Press R to reconnect.",
+    "reconnectedSeparator": "— reconnected —",
     "disconnect": "Disconnect",
     "splitHandle": "Panel divider",
     "terminalTab": "Terminal",
     "filesTab": "Files",
-    "terminalOpenFailed": "Could not open terminal: {{error}}"
+    "terminalOpenFailed": "Could not open terminal: {{error}}",
+    "reconnectingAuto": "Reconnecting… (attempt {{attempt}})",
+    "stopReconnect": "Stop",
+    "reconnectGaveUp": "Connection could not be restored."
   },
   "unusableServer": {
     "badge": "Not usable",
@@ -1106,5 +1115,12 @@
     "host": "Host: {{host}}",
     "delete": "Delete server",
     "deleteSecrets": "Every secret this version knows how to store for this server is deleted. Secrets added by a newer version of the app may remain."
+  },
+  "autoReconnect": {
+    "label": "Reconnect automatically",
+    "off": "Off",
+    "seconds30": "30 seconds",
+    "seconds60": "60 seconds",
+    "minutes5": "5 minutes"
   }
 }

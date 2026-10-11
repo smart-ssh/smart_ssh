@@ -41,7 +41,7 @@ export function NoteDiffPreview({
   const lines = shortNoteDiff(previousContent, newContent);
 
   if (lines.length === 0) {
-    return <p className="text-xs text-slate-500">{t("confirmDialog.noContentChange")}</p>;
+    return <p className="text-xs text-slate-400">{t("confirmDialog.noContentChange")}</p>;
   }
 
   return (

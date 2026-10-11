@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Määritä paikallinen sovellus tiedostopäätettä kohti käytettäväksi toiminnolle \"Avaa paikallisesti\". Ilman merkintää käytetään käyttöjärjestelmän oletussovellusta.",
+    "extensionLabel": "Tiedostopääte",
     "appPathPlaceholder": "Sovelluksen polku",
     "browse": "Selaa…",
     "remove": "Poista rivi",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "Tekoälyn toista mielipidettä ei saatu. Näytetty riski perustuu sääntöihin.",
     "riskHint": "Arvio perustuu tunnettuihin kuvioihin – ei takuuta.",
     "runningSince": "käynnissä {{seconds}} s…",
+    "waitingForInputHint": "Tämä komento odottaa todennäköisesti syötettä. Pysäytä se, niin tekoäly ehdottaa ei-interaktiivista vaihtoehtoa.",
     "cancelCommand": "Katkaise tämä komento",
     "cancellingCommand": "Katkaistaan…",
     "commandCancelledNotice": "⚠ Peruttu käsin – tuloste voi olla vajaa, ei normaalia paluuarvoa.",
@@ -1091,11 +1093,18 @@
   "session": {
     "disconnected": "Yhteys katkaistu",
     "disconnectedWithReason": "Yhteys katkaistu: {{reason}}",
+    "reconnect": "Yhdistä uudelleen",
+    "reconnecting": "Yhdistetään uudelleen…",
+    "connectionLostPressR": "Yhteys katkesi. Yhdistä uudelleen painamalla R.",
+    "reconnectedSeparator": "— yhdistetty uudelleen —",
     "disconnect": "Katkaise yhteys",
     "splitHandle": "Paneelien jakaja",
     "terminalTab": "Pääte",
     "filesTab": "Tiedostot",
-    "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}"
+    "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
+    "reconnectingAuto": "Yhdistetään uudelleen… (yritys {{attempt}})",
+    "stopReconnect": "Pysäytä",
+    "reconnectGaveUp": "Yhteyttä ei voitu palauttaa."
   },
   "unusableServer": {
     "badge": "Ei käytettävissä",
@@ -1106,5 +1115,12 @@
     "host": "Isäntä: {{host}}",
     "delete": "Poista palvelin",
     "deleteSecrets": "Kaikki salaisuudet, jotka tämä versio osaa tallentaa tälle palvelimelle, poistetaan. Sovelluksen uudemman version lisäämät salaisuudet voivat jäädä."
+  },
+  "autoReconnect": {
+    "label": "Yhdistä uudelleen automaattisesti",
+    "off": "Pois",
+    "seconds30": "30 sekuntia",
+    "seconds60": "60 sekuntia",
+    "minutes5": "5 minuuttia"
   }
 }

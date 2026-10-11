@@ -10,6 +10,7 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+mod auto_reconnect;
 mod chat_retention;
 mod commands;
 /// Issue #93: Ort der „Lokal öffnen"-Kopien je Datenverzeichnis und das
@@ -704,8 +705,10 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::respond_to_action,
             commands::cancel_running_command,
             commands::stop_auto_continuation,
+            commands::stop_auto_reconnect,
             commands::start_new_chat,
             commands::disconnect,
+            commands::reconnect_session,
             commands::list_chat_sessions,
             commands::resume_chat_session,
             commands::rename_chat_session,

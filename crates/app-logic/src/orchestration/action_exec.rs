@@ -1094,6 +1094,7 @@ async fn skip_auto_exec_after_stop(
                     truncated: false,
                 },
                 cancelled: true,
+                waiting_for_input: false,
             },
         },
         persist,
@@ -1649,8 +1650,8 @@ async fn execute_suggested_command(
     // Spec 0018, Abschnitt 5: nur umschreiben/Stdin füttern, wenn tatsächlich
     // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
     // (`execute()` wie bisher, scheitert wie gewohnt ohne TTY).
-    let effective_command = session
-        .sudo_password
+    let sudo_password = session.sudo_password.get();
+    let effective_command = sudo_password
         .as_ref()
         .and_then(|_| command_with_stdin_password_flag(&command));
 
@@ -1674,6 +1675,10 @@ async fn execute_suggested_command(
     // forwarder ends when the transport drops the sink, i.e. before the
     // final result is emitted.
     let (live_sink, live_chunks) = tokio::sync::mpsc::unbounded_channel();
+    // Issue #327: set by the forwarder while the "probably waiting for
+    // input" hint is shown. Backend-owned, so the cancel note does not
+    // depend on anything the frontend claims.
+    let waiting_for_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let execution = async {
         // Issue #328: AI commands of one session stay serial through the
         // command slot, but the transport lock is only held to open the exec
@@ -1684,7 +1689,7 @@ async fn execute_suggested_command(
                 "session is disconnecting".to_string(),
             ));
         };
-        let stdin = match (&effective_command, &session.sudo_password) {
+        let stdin = match (&effective_command, &sudo_password) {
             (Some(_), Some(password)) => {
                 use secrecy::ExposeSecret;
                 let mut stdin = password.expose_secret().as_bytes().to_vec();
@@ -1720,6 +1725,7 @@ async fn execute_suggested_command(
             emitter,
             session_id,
             action_id,
+            waiting_for_input.clone(),
         )
     );
     let _ = session
@@ -1796,6 +1802,10 @@ async fn execute_suggested_command(
                         command,
                         output: redacted,
                         cancelled,
+                        // The flag is only meaningful for a stop; a command
+                        // that ended on its own never gets the note.
+                        waiting_for_input: cancelled
+                            && waiting_for_input.load(std::sync::atomic::Ordering::SeqCst),
                     },
                 },
                 persist,

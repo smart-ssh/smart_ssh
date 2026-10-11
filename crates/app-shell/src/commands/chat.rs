@@ -48,13 +48,6 @@ pub async fn send_chat_message(
     .await
 }
 
-/// Spec 0065, Teil 2: sinngemäß aus der Spec-Skizze übernommen (dort bereits
-/// als "sinngemäß"-Formulierung vorgegeben) — analog zu
-/// `orchestration::TITLE_GENERATION_INSTRUCTION`, dieselbe Konvention.
-const CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION: &str =
-    "Deine letzte Antwort wurde wegen des Längenlimits abgeschnitten. Fahre exakt an der \
-     Stelle fort, an der sie endete, ohne den bisherigen Teil zu wiederholen.";
-
 /// Spec 0065, Teil 2: „Weiter"-Knopf nach einem `chat-response-truncated`-
 /// Event — schickt die Fortsetzungs-Anweisung als GANZ NORMALE Nachricht
 /// durch exakt denselben Pfad wie [`send_chat_message`] (Kompaktierung,
@@ -79,7 +72,9 @@ pub async fn continue_truncated_response(
         &TauriEventEmitter(app.clone()),
         &session,
         session_id,
-        CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION.to_string(),
+        app_logic::system_prompt::continue_truncated_response_instruction(
+            crate::ui_language::session_prompt_language(&app),
+        ),
         Some(&state.prompt_history_store),
         state.profile_store.as_ref(),
         &state.policy_store,
@@ -101,7 +96,7 @@ pub async fn continue_truncated_response(
 /// `app` doppelt zu verwenden — in Produktion sind `app`/`emitter` einfach
 /// derselbe Wert (s. Aufrufer oben).
 #[allow(clippy::too_many_arguments)]
-async fn send_chat_message_impl<R: tauri::Runtime>(
+pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
     app: &AppHandle<R>,
     emitter: &dyn EventEmitter,
     session: &Session,
@@ -393,6 +388,19 @@ pub async fn stop_auto_continuation(
     Ok(())
 }
 
+/// Issue #356: "Stop" link of the header while automatic reconnect attempts
+/// run.
+#[tauri::command]
+pub async fn stop_auto_reconnect(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    if let Some(session) = state.sessions.get(session_id) {
+        session.auto_reconnect.stop();
+    }
+    Ok(())
+}
+
 /// Issue #271, Spec 0034 §11: "Neuer Chat" innerhalb der bestehenden
 /// Verbindung — s. `app_logic::orchestration::start_new_chat`. Liefert die
 /// ID der neuen `chat_sessions`-Zeile (`None` für einen lokalen Tab).
@@ -435,6 +443,10 @@ pub async fn disconnect(
     // nirgends aufgerufen. Sie sperrt den Transport nicht; das Trennen
     // bleibt unten in diesem Befehl.
     let session = elevated.remove_session(&state.sessions, session_id);
+    // Issue #356: closing the tab ends automatic reconnect attempts.
+    if let Some(session) = &session {
+        session.auto_reconnect.stop();
+    }
     // Issue #89: picked and dropped local paths are granted per session and
     // expire with it. Every reader also checks that the session still
     // exists, so this is the explicit cleanup, not the only guard.
@@ -697,7 +709,9 @@ mod send_chat_message_persistence_tests {
             server_id,
             tags: Vec::new(),
             terminal: std::sync::Mutex::new(None),
-            redactor: Box::new(DefaultOutputRedactor::new()),
+            redactor: app_logic::session::SwappableRedactor::new(Box::new(
+                DefaultOutputRedactor::new(),
+            )),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
             system_context_parts: AsyncMutex::new(
@@ -706,7 +720,7 @@ mod send_chat_message_persistence_tests {
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
             mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
-            sudo_password: None,
+            sudo_password: app_logic::session::SwappableSudoPassword::new(None),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
             mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
@@ -730,6 +744,7 @@ mod send_chat_message_persistence_tests {
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
+            auto_reconnect: Default::default(),
         })
     }
 
@@ -1245,5 +1260,124 @@ mod send_chat_message_persistence_tests {
         .expect("Turn muss enden");
         result.unwrap();
         assert_eq!(contexts.lock().unwrap().len(), 1);
+    }
+
+    // --- Issue #356: AI continuation after an automatic reconnect ----------
+
+    /// Proposes `echo next` as soon as the connection-restored note is the
+    /// last history entry; otherwise just ends the round.
+    struct ProposeAfterNoteProvider {
+        contexts: Arc<std::sync::Mutex<Vec<SessionContext>>>,
+    }
+    impl AiProvider for ProposeAfterNoteProvider {
+        fn send(
+            &self,
+            context: SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+            let mut contexts = self.contexts.lock().unwrap();
+            let after_note = contexts.is_empty()
+                && history_texts(&context)
+                    .last()
+                    .is_some_and(|t| t.contains("wiederhergestellt"));
+            contexts.push(context);
+            if after_note {
+                Box::pin(futures::stream::iter(vec![
+                    AiEvent::ActionProposed(ssh_manager_core::profiles::AiAction::SuggestCommand {
+                        command: "echo next".to_string(),
+                    }),
+                    AiEvent::Done,
+                ]))
+            } else {
+                Box::pin(futures::stream::iter(vec![AiEvent::Done]))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ai_gets_the_note_after_reconnect_and_its_next_command_needs_confirmation() {
+        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut session = test_session(ServerId::new());
+        // `UnusedTransport` panics if a command is executed: the proposal
+        // must wait for the user instead.
+        session.set_ai_provider_for_tests(Box::new(ProposeAfterNoteProvider {
+            contexts: contexts.clone(),
+        }));
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        let emitter = TestEmitter::default();
+        let profile_store = InMemoryProfileStore::default();
+        let confirmations = ConfirmationRegistry::new();
+        let session_id = uuid::Uuid::new_v4();
+
+        // A turn was active at the drop.
+        session.auto_reconnect.set_ai_turn_interrupted(true);
+        let note = crate::auto_reconnect::continuation_note(&session)
+            .await
+            .expect("an interrupted turn leads to a note");
+        assert!(note.contains("wiederhergestellt"), "{note}");
+        // At most once per drop.
+        assert!(crate::auto_reconnect::continuation_note(&session)
+            .await
+            .is_none());
+
+        let send = send_chat_message_impl(
+            app.handle(),
+            &emitter,
+            &session,
+            session_id,
+            note.clone(),
+            None,
+            &profile_store,
+            &policy_store,
+            &confirmations,
+        );
+        let observe = async {
+            // The proposal arrives and waits for the user's confirmation.
+            let id = loop {
+                let pending = emitter.events.lock().unwrap().iter().find_map(|(n, p)| {
+                    (n == "chat-action-proposed" && p["decision"].get("Confirm").is_some())
+                        .then(|| p["actionId"].as_str().unwrap().to_string())
+                });
+                if let Some(id) = pending {
+                    break id;
+                }
+                tokio::task::yield_now().await;
+            };
+            // The user denies; `UnusedTransport` would panic on any execution.
+            let _ = confirmations.resolve(&id.parse().unwrap(), ActionUserDecision::Deny);
+        };
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(send, observe)
+        })
+        .await
+        .expect("the turn must end");
+        result.unwrap();
+
+        let contexts = contexts.lock().unwrap().clone();
+        assert!(
+            history_texts(&contexts[0]).contains(&note),
+            "the AI request carries the note"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_note_without_an_interrupted_turn_or_after_stop() {
+        let session = test_session(ServerId::new());
+        // No AI turn was active at the drop: nothing is sent.
+        session.auto_reconnect.set_ai_turn_interrupted(false);
+        assert!(crate::auto_reconnect::continuation_note(&session)
+            .await
+            .is_none());
+        // A turn was active, but the user pressed Stop during the drop.
+        session.auto_reconnect.set_ai_turn_interrupted(true);
+        session.request_auto_continue_stop();
+        assert!(crate::auto_reconnect::continuation_note(&session)
+            .await
+            .is_none());
     }
 }

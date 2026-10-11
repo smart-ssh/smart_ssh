@@ -1303,6 +1303,7 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                 command,
                 output,
                 cancelled,
+                ..
             } => ChatHistoryEntryDto::CommandResult {
                 role,
                 command,
@@ -1741,6 +1742,7 @@ mod tests {
                         truncated: false,
                     },
                     cancelled: false,
+                    waiting_for_input: false,
                 },
             };
 

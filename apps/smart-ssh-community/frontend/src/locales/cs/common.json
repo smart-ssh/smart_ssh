@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Nastavte místní aplikaci pro každou příponu souboru, která se použije u „Otevřít lokálně“. Bez záznamu se použije výchozí aplikace operačního systému.",
+    "extensionLabel": "Přípona souboru",
     "appPathPlaceholder": "Cesta k aplikaci",
     "browse": "Procházet…",
     "remove": "Odebrat řádek",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "Druhý názor AI se nepodařilo získat. Zobrazené riziko vychází z pravidel.",
     "riskHint": "Posouzení na základě známých vzorů — bez záruky.",
     "runningSince": "běží {{seconds}} s…",
+    "waitingForInputHint": "Tento příkaz pravděpodobně čeká na vstup. Zastavte ho a AI navrhne neinteraktivní variantu.",
     "cancelCommand": "Odpojit tento příkaz",
     "cancellingCommand": "Odpojování…",
     "commandCancelledNotice": "⚠ Zrušeno ručně — výstup může být neúplný, bez běžného návratového kódu.",
@@ -1107,11 +1109,18 @@
   "session": {
     "disconnected": "Odpojeno",
     "disconnectedWithReason": "Odpojeno: {{reason}}",
+    "reconnect": "Znovu připojit",
+    "reconnecting": "Připojuji znovu…",
+    "connectionLostPressR": "Spojení ztraceno. Stiskněte R pro opětovné připojení.",
+    "reconnectedSeparator": "— znovu připojeno —",
     "disconnect": "Odpojit",
     "splitHandle": "Dělicí lišta panelů",
     "terminalTab": "Terminál",
     "filesTab": "Soubory",
-    "terminalOpenFailed": "Terminál se nepodařilo otevřít: {{error}}"
+    "terminalOpenFailed": "Terminál se nepodařilo otevřít: {{error}}",
+    "reconnectingAuto": "Znovu se připojuji… (pokus {{attempt}})",
+    "stopReconnect": "Zastavit",
+    "reconnectGaveUp": "Připojení se nepodařilo obnovit."
   },
   "unusableServer": {
     "badge": "Nepoužitelný",
@@ -1122,5 +1131,12 @@
     "host": "Hostitel: {{host}}",
     "delete": "Smazat server",
     "deleteSecrets": "Smažou se všechny tajné údaje, které tato verze umí pro tento server ukládat. Tajné údaje přidané novější verzí aplikace mohou zůstat."
+  },
+  "autoReconnect": {
+    "label": "Automaticky se znovu připojit",
+    "off": "Vypnuto",
+    "seconds30": "30 sekund",
+    "seconds60": "60 sekund",
+    "minutes5": "5 minut"
   }
 }

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Stel per bestandsextensie een lokale toepassing in voor \"Lokaal openen\". Zonder vermelding wordt de standaardtoepassing van het besturingssysteem gebruikt.",
+    "extensionLabel": "Bestandsextensie",
     "appPathPlaceholder": "Pad naar toepassing",
     "browse": "Bladeren…",
     "remove": "Rij verwijderen",
@@ -339,6 +340,7 @@
     "riskSecondOpinionUnavailableHint": "De AI second opinion kon niet worden verkregen. Het getoonde risico is het regelgebaseerde.",
     "riskHint": "Beoordeling op basis van bekende patronen — geen garantie.",
     "runningSince": "loopt al {{seconds}}s…",
+    "waitingForInputHint": "Dit commando wacht waarschijnlijk op invoer. Stop het, dan stelt de AI een niet-interactieve variant voor.",
     "cancelCommand": "Deze opdracht loskoppelen",
     "cancellingCommand": "Loskoppelen…",
     "commandCancelledNotice": "⚠ Handmatig geannuleerd — uitvoer kan onvolledig zijn, geen reguliere exitcode.",
@@ -1091,11 +1093,18 @@
   "session": {
     "disconnected": "Verbinding verbroken",
     "disconnectedWithReason": "Verbinding verbroken: {{reason}}",
+    "reconnect": "Opnieuw verbinden",
+    "reconnecting": "Opnieuw verbinden…",
+    "connectionLostPressR": "Verbinding verloren. Druk op R om opnieuw te verbinden.",
+    "reconnectedSeparator": "— opnieuw verbonden —",
     "disconnect": "Verbinding verbreken",
     "splitHandle": "Paneelscheiding",
     "terminalTab": "Terminal",
     "filesTab": "Bestanden",
-    "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}"
+    "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
+    "reconnectingAuto": "Opnieuw verbinden… (poging {{attempt}})",
+    "stopReconnect": "Stoppen",
+    "reconnectGaveUp": "De verbinding kon niet worden hersteld."
   },
   "unusableServer": {
     "badge": "Onbruikbaar",
@@ -1106,5 +1115,12 @@
     "host": "Host: {{host}}",
     "delete": "Server verwijderen",
     "deleteSecrets": "Elk geheim dat deze versie voor deze server weet op te slaan, wordt verwijderd. Geheimen die door een nieuwere versie van de app zijn toegevoegd, kunnen blijven bestaan."
+  },
+  "autoReconnect": {
+    "label": "Automatisch opnieuw verbinden",
+    "off": "Uit",
+    "seconds30": "30 seconden",
+    "seconds60": "60 seconden",
+    "minutes5": "5 minuten"
   }
 }

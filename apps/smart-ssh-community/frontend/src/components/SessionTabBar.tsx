@@ -4,6 +4,7 @@ import { sessionTabLabel, type SessionTab } from "../useSessionTabs";
 const STATUS_DOT: Record<SessionTab["status"], string> = {
   connected: "bg-emerald-500",
   disconnected: "bg-slate-500",
+  reconnecting: "bg-amber-500",
   awaiting_host_key: "bg-amber-500",
 };
 

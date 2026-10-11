@@ -46,6 +46,9 @@ fn emit<T: Serialize>(emitter: &dyn EventEmitter, event: &str, payload: &T) {
 pub enum ConnectionStatus {
     Connected,
     Disconnected,
+    /// Issue #355, Spec 0105: a reconnect of a lost session is running.
+    /// Goes back to `Connected` or, on failure, `Disconnected`.
+    Reconnecting,
     /// Spec 0017, Abschnitt 2: `list_sessions()`-Status für einen laufenden
     /// `connect()`-Aufruf, der gerade auf `confirm_host_key` wartet — diese
     /// Session existiert noch nicht in `SessionManager.sessions` (sie wird
@@ -730,6 +733,34 @@ pub fn emit_chat_action_output(
             stdout,
             stderr,
             truncated,
+        },
+    );
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatActionWaitingInputPayload {
+    session_id: SessionId,
+    action_id: ActionId,
+    waiting: bool,
+}
+
+/// Issue #327: a running command is probably waiting for input (`waiting:
+/// true`) or produced output again (`false`). Display only; the cancel
+/// note is decided in the backend, not from this event.
+pub fn emit_chat_action_waiting_input(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    waiting: bool,
+) {
+    emit(
+        emitter,
+        "chat-action-waiting-input",
+        &ChatActionWaitingInputPayload {
+            session_id,
+            action_id,
+            waiting,
         },
     );
 }

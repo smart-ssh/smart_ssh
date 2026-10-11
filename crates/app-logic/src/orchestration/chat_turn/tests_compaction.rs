@@ -313,6 +313,7 @@ async fn test_immich_case_large_note_and_long_history_stays_under_budget() {
                     truncated: false,
                 },
                 cancelled: false,
+                waiting_for_input: false,
             },
         });
     }
@@ -373,6 +374,7 @@ fn command_result_msg(command: &str, stdout: &str) -> ChatMessage {
             command: command.to_string(),
             output: output(stdout),
             cancelled: false,
+            waiting_for_input: false,
         },
     }
 }
@@ -1741,6 +1743,7 @@ fn test_reapply_redaction_for_send_redacts_with_retroactively_added_pattern() {
                 command: "cat notes.txt".to_string(),
                 output: output("Notiz: sudo_geheim_abc123 verwenden"),
                 cancelled: false,
+                waiting_for_input: false,
             },
         },
     ];

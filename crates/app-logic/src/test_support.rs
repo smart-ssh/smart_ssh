@@ -531,14 +531,16 @@ pub fn session_with_ai_and_transport(
         server_id: ServerId::new(),
         tags: Vec::new(),
         terminal: std::sync::Mutex::new(None),
-        redactor: Box::new(ssh_manager_core::ai::DefaultOutputRedactor::new()),
+        redactor: crate::session::SwappableRedactor::new(Box::new(
+            ssh_manager_core::ai::DefaultOutputRedactor::new(),
+        )),
         ai_provider_label: "test-provider".to_string(),
         ai_model: "test-model".to_string(),
         system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
         model_context_window_tokens: usize::MAX / 1_000,
         summary: AsyncMutex::new(None),
         mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
-        sudo_password: None,
+        sudo_password: crate::session::SwappableSudoPassword::new(None),
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
         mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
@@ -562,6 +564,7 @@ pub fn session_with_ai_and_transport(
         ledger_store: None,
         chat_session_id: AsyncMutex::new(None),
         ai_request_paced_at: AsyncMutex::new(None),
+        auto_reconnect: Default::default(),
     })
 }
 

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { commandErrorMessage } from "../api";
 import { setLanguage, type SupportedLanguage } from "../i18n";
 import { languagesForPicker } from "../languages";
+import { Button } from "./ui";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöster
  * Sprachumschalter — eigene Kategorie ("Anzeige & Sprache") in der
@@ -23,23 +24,18 @@ export function LanguageSettings() {
   // `ChatRetentionSettings.tsx`/`McpServerSettings.tsx`.
   return (
     <div>
-      {error && <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
-      <div className="flex gap-2">
+      {error && <p role="alert" className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+      <div className="flex flex-wrap gap-2">
         {languagesForPicker().map(({ code: language, endonym }) => (
-          <button
+          <Button
             lang={language}
             key={language}
-            type="button"
+            variant={i18n.language === language ? "primary" : "secondary"}
             onClick={() => handleLanguageChange(language)}
             aria-pressed={i18n.language === language}
-            className={`rounded px-3 py-1.5 text-sm ${
-              i18n.language === language
-                ? "bg-indigo-600 text-slate-950"
-                : "bg-slate-700 text-slate-200 hover:bg-slate-600"
-            }`}
           >
             {endonym}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
