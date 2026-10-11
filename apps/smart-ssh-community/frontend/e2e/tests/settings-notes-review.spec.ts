@@ -88,7 +88,7 @@ async function page404(app: { page: Page }) {
   );
 }
 
-test("settings: the overwrite question closes with Escape and returns focus to its button", async ({ app }) => {
+test("settings: the overwrite question closes with Escape and focus stays in the form", async ({ app }) => {
   await app.launch({
     ...populated(),
     commands: {
@@ -108,7 +108,9 @@ test("settings: the overwrite question closes with Escape and returns focus to i
   await page.keyboard.press("Escape");
   await expect(cancel).toBeHidden();
   await expect(settings).toBeVisible();
-  await expect(switchButton).toBeFocused();
+  // The typed password is cleared, so the button the question came from is
+  // disabled; focus lands on the (empty) password field instead of getting lost.
+  await expect(settings.getByLabel("Master password, to confirm")).toBeFocused();
 });
 
 test("settings: every category has a Tab order that follows the visual order, with visible focus", async ({ app }) => {

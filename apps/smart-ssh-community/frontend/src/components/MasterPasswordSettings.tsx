@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { characterCount } from "../passwordLength";
 import {
@@ -63,6 +64,15 @@ export function MasterPasswordSettings() {
   /** Klarstellung 10b: Die Frage ist offen, der Wechsel wartet auf sie. */
   const [askAboutAnotherKey, setAskAboutAnotherKey] = useState(false);
   const cancelOverwriteRef = useRef<HTMLButtonElement>(null);
+  const switchPasswordRef = useRef<HTMLInputElement>(null);
+  // Closing the question clears the typed password, which disables the
+  // "switch" button the dialog was opened from; focus would be lost. Put it
+  // on the (now empty) password field instead.
+  const questionWasOpen = useRef(false);
+  useEffect(() => {
+    if (questionWasOpen.current && !askAboutAnotherKey) switchPasswordRef.current?.focus();
+    questionWasOpen.current = askAboutAnotherKey;
+  }, [askAboutAnotherKey]);
 
   useEffect(() => {
     getMasterPasswordMode()
@@ -249,6 +259,7 @@ export function MasterPasswordSettings() {
               label={t("masterPassword.confirmPasswordLabel")}
               value={switchCurrent}
               onChange={setSwitchCurrent}
+              inputRef={switchPasswordRef}
             />
             <Button disabled={busy || switchCurrent.length === 0} onClick={() => switchToKeychain(false)}>
               {t("masterPassword.switchButton")}
@@ -311,10 +322,12 @@ function PasswordField({
   label,
   value,
   onChange,
+  inputRef,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   return (
     <Field label={label}>
@@ -322,6 +335,7 @@ function PasswordField({
         <input
           {...control}
           {...TECHNICAL_INPUT_PROPS}
+          ref={inputRef}
           type="password"
           value={value}
           onChange={(e) => onChange(e.target.value)}

@@ -176,6 +176,12 @@ export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locato
   }
 
   await scope.locator(`[data-e2e-stop="0"]`).focus();
+  // Programmatic focus after a mouse click does not match :focus-visible;
+  // one Tab forward and back puts the focus on stop 0 as the keyboard does.
+  if (stops.length > 1) {
+    await page.keyboard.press(tabKey(page));
+    await page.keyboard.press(`Shift+${tabKey(page)}`);
+  }
   for (let i = 0; i < stops.length; i++) {
     if (i > 0) await page.keyboard.press(tabKey(page));
     const focus = await page.evaluate(() => {
