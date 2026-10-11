@@ -12,7 +12,10 @@ erschöpfen. Es gilt dieselbe Grenze wie im entfernten Fall (2 MB je
 Ausführung, Spec 0043 Fund A):
 
 - Die Ausgabe wird beim Lesen gezählt. Bei Erreichen der Grenze wird nicht
-  weiter gelesen, der Rest verworfen und der lokale Prozess beendet.
+  weiter gelesen, der Rest verworfen und das lokale Kommando beendet — samt aller
+  Pipeline-Glieder und Hintergrundprozesse, die es gestartet hat, nicht nur
+  die Shell (ein Prozess, der sich selbst aus der Prozessgruppe löst, wird
+  nicht erreicht).
 - Das Ergebnis ist als abgeschnitten markiert; Oberfläche und KI-Kontext
   zeigen es genauso an wie im entfernten Fall.
 - Zählung und Grenze sind für lokale und entfernte Ausführung dieselben;
