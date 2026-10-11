@@ -347,7 +347,8 @@
     "liveOutputTruncatedNotice": "⚠ Boyut sınırına ulaşıldı — sonraki çıktı artık gösterilmiyor.",
     "mcpOrigin": "Harici araç (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "harici araç (MCP)",
-    "mcpOriginHint": "Bu eylemi dahili sohbet değil, yerel MCP sunucusu üzerinden harici bir araç istedi."
+    "mcpOriginHint": "Bu eylemi dahili sohbet değil, yerel MCP sunucusu üzerinden harici bir araç istedi.",
+    "waitingForInputHint": "Bu komut büyük olasılıkla girdi bekliyor. Durdurun; yapay zekâ etkileşimsiz bir varyant önerecektir."
   },
   "confirmDialog": {
     "editableCommand": "Komut — düzenlenebilir",

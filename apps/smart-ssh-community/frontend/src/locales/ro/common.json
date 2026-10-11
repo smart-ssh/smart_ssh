@@ -347,7 +347,8 @@
     "liveOutputTruncatedNotice": "⚠ Limita de dimensiune atinsă — rezultatul următor nu mai este afișat.",
     "mcpOrigin": "Instrument extern (MCP): „{{name}}”",
     "mcpOriginGeneric": "instrument extern (MCP)",
-    "mcpOriginHint": "Această acțiune nu a fost solicitată de chatul intern, ci de un instrument extern prin serverul MCP local."
+    "mcpOriginHint": "Această acțiune nu a fost solicitată de chatul intern, ci de un instrument extern prin serverul MCP local.",
+    "waitingForInputHint": "Această comandă probabil așteaptă o introducere. Opriți-o, iar IA va propune o variantă neinteractivă."
   },
   "confirmDialog": {
     "editableCommand": "Comandă — editabilă",

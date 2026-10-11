@@ -347,7 +347,8 @@
     "liveOutputTruncatedNotice": "⚠ Méretkorlát elérve – a további kimenet már nem látható.",
     "mcpOrigin": "Külső eszköz (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "külső eszköz (MCP)",
-    "mcpOriginHint": "Ezt a műveletet nem a belső csevegés, hanem egy külső eszköz kérte a helyi MCP-szerveren keresztül."
+    "mcpOriginHint": "Ezt a műveletet nem a belső csevegés, hanem egy külső eszköz kérte a helyi MCP-szerveren keresztül.",
+    "waitingForInputHint": "Ez a parancs valószínűleg bemenetre vár. Állítsa le, és az MI nem interaktív változatot javasol."
   },
   "confirmDialog": {
     "editableCommand": "Parancs – szerkeszthető",
