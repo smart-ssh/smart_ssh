@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Stel per bestandsextensie een lokale toepassing in voor \"Lokaal openen\". Zonder vermelding wordt de standaardtoepassing van het besturingssysteem gebruikt.",
+    "extensionLabel": "Bestandsextensie",
     "appPathPlaceholder": "Pad naar toepassing",
     "browse": "Bladeren…",
     "remove": "Rij verwijderen",

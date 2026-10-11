@@ -14,6 +14,7 @@ import {
 import { translateErrorCode } from "../errorCodes";
 import type { NoteRevisionDto, NoteTarget } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
+import { Button, FIELD_CONTROL_CLASS } from "./ui";
 
 interface NotesPanelProps {
   target: NoteTarget;
@@ -165,15 +166,20 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
           </p>
           {"Server" in target && (
             <>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleSummarizeNow}
                 disabled={shrinkRequesting}
-                className="mt-1.5 underline hover:no-underline disabled:opacity-50"
+                className="mt-1.5 underline"
               >
                 {shrinkRequesting ? t("notes.summarizeRequesting") : t("notes.summarizeNow")}
-              </button>
-              {shrinkError && <p className="mt-1 text-red-400">{shrinkError}</p>}
+              </Button>
+              {shrinkError && (
+                <p role="alert" className="mt-1 text-red-300">
+                  {shrinkError}
+                </p>
+              )}
             </>
           )}
         </div>
@@ -186,28 +192,23 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={6}
-          className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+          className={`${FIELD_CONTROL_CLASS} mt-1 w-full`}
         />
       </label>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-300">
+          {error}
+        </p>
+      )}
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || draft === currentNotes}
-          className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
-        >
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={handleSave} disabled={saving || draft === currentNotes}>
           {saving ? t("common.saving") : t("notes.saveNote")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowHistory((s) => !s)}
-          className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
-        >
+        </Button>
+        <Button onClick={() => setShowHistory((s) => !s)} aria-expanded={showHistory}>
           {showHistory ? t("notes.hideHistory") : t("notes.showHistory")}
-        </button>
+        </Button>
       </div>
 
       {showHistory && (
@@ -230,7 +231,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     type="button"
                     onClick={() => toggleExpanded(r.id)}
                     aria-expanded={expanded}
-                    className="flex flex-1 items-center gap-1.5 text-left text-xs text-slate-400 hover:text-slate-200"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-xs text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   >
                     <span className="select-none">{expanded ? "▾" : "▸"}</span>
                     {formatDateTime(r.createdAt, i18n.language)} ·{" "}
@@ -241,19 +242,15 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                           model: r.editedBy.model,
                         })}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRollback(r.id)}
-                    className="shrink-0 rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
-                  >
+                  <Button size="sm" onClick={() => handleRollback(r.id)} className="ml-2 shrink-0">
                     {t("notes.restore")}
-                  </button>
+                  </Button>
                 </div>
                 {expanded && (
                   <div className="px-3 pb-2">
                     {previous === null ? (
                       <div>
-                        <p className="mb-1 text-xs font-semibold text-slate-500">
+                        <p className="mb-1 text-xs font-semibold text-slate-400">
                           {t("notes.originalVersion")}
                         </p>
                         <p className="whitespace-pre-wrap text-slate-300">{r.content}</p>

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Imposti un'applicazione locale per ciascuna estensione di file da usare con \"Apri localmente\". Senza una voce viene usata l'applicazione predefinita del sistema operativo.",
+    "extensionLabel": "Estensione del file",
     "appPathPlaceholder": "Percorso dell'applicazione",
     "browse": "Sfoglia…",
     "remove": "Rimuovi riga",

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Définissez une application locale par extension de fichier pour « Ouvrir localement ». Sans entrée, l’application par défaut du système d’exploitation est utilisée.",
+    "extensionLabel": "Extension de fichier",
     "appPathPlaceholder": "Chemin de l’application",
     "browse": "Parcourir…",
     "remove": "Supprimer la ligne",
