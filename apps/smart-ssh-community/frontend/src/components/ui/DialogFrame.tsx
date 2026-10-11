@@ -49,7 +49,7 @@ export function DialogFrame({
 
   const content = (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto text-sm text-slate-300">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto text-sm text-slate-300">
         {children}
       </div>
       {actions ? (

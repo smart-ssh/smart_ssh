@@ -61,7 +61,7 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
         </Button>
       }
     >
-      <div className="h-full overflow-y-auto rounded border border-slate-700 bg-slate-950 p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded border border-slate-700 bg-slate-950 p-3">
         {state.status === "loading" && (
           <p className="text-sm text-slate-400">{t("about.thirdPartyLicenses.loading")}</p>
         )}
