@@ -12,7 +12,7 @@ use tauri_plugin_store::StoreExt;
 
 use app_logic::auto_reconnect::{
     budget_from_stored, emit_auto_reconnect_changed, is_retryable_code, run_auto_reconnect,
-    AttemptResult, AutoReconnectEnd, AutoReconnectPhase, SETTING_KEY,
+    AttemptResult, AutoReconnectEnd, AutoReconnectPhase, StopHandle, SETTING_KEY,
 };
 use app_logic::session::Session;
 use app_logic::state::{AppState, SessionId};
@@ -23,10 +23,9 @@ use crate::settings_store::SETTINGS_STORE_FILE;
 /// Registers the loss hook of a freshly connected session.
 pub(crate) fn install_hook<R: Runtime>(app: &AppHandle<R>, session: &Session) {
     let app = app.clone();
-    session.auto_reconnect.set_hook(Arc::new(move |session_id| {
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move { run(app, session_id).await });
-    }));
+    session
+        .auto_reconnect
+        .set_hook(Arc::new(move |session_id| start(&app, session_id)));
 }
 
 /// Read at every drop, so a changed setting applies from the next drop on.
@@ -38,7 +37,9 @@ fn read_budget<R: Runtime>(app: &AppHandle<R>) -> Option<Duration> {
     }
 }
 
-async fn run<R: Runtime>(app: AppHandle<R>, session_id: SessionId) {
+/// Called synchronously at the loss, before the status event: announces the
+/// attempts and spawns the loop. Does nothing when the setting is Off.
+fn start<R: Runtime>(app: &AppHandle<R>, session_id: SessionId) {
     let state = app.state::<AppState>();
     let Some(session) = state.sessions.get(session_id) else {
         return;
@@ -47,13 +48,28 @@ async fn run<R: Runtime>(app: AppHandle<R>, session_id: SessionId) {
     if state.mcp.sessions.ensure_user_session(session_id).is_err() {
         return;
     }
-    let Some(budget) = read_budget(&app) else {
+    let Some(budget) = read_budget(app) else {
         return;
     };
-    let emitter = TauriEventEmitter(app.clone());
     let stop = session.auto_reconnect.begin_run();
-    emit_auto_reconnect_changed(&emitter, session_id, AutoReconnectPhase::Running, 1);
+    emit_auto_reconnect_changed(
+        &TauriEventEmitter(app.clone()),
+        session_id,
+        AutoReconnectPhase::Running,
+        1,
+    );
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move { run(app, session, session_id, budget, stop).await });
+}
 
+async fn run<R: Runtime>(
+    app: AppHandle<R>,
+    session: Arc<Session>,
+    session_id: SessionId,
+    budget: Duration,
+    stop: Arc<StopHandle>,
+) {
+    let emitter = TauriEventEmitter(app.clone());
     let end = run_auto_reconnect(
         budget,
         &stop,
@@ -69,6 +85,7 @@ async fn run<R: Runtime>(app: AppHandle<R>, session_id: SessionId) {
     tracing::info!(session_id = %session_id, end = ?end, "automatic reconnect ended");
 
     if end == AutoReconnectEnd::Reconnected {
+        let state = app.state::<AppState>();
         continue_ai(&app, &state, &session, session_id).await;
     }
 }

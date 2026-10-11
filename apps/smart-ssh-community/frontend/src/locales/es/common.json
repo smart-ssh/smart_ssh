@@ -1108,7 +1108,10 @@
     "splitHandle": "Divisor de paneles",
     "terminalTab": "Terminal",
     "filesTab": "Archivos",
-    "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}"
+    "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
+    "reconnectingAuto": "Reconectando… (intento {{attempt}})",
+    "stopReconnect": "Detener",
+    "reconnectGaveUp": "No se pudo restablecer la conexión."
   },
   "unusableServer": {
     "badge": "No utilizable",
@@ -1119,5 +1122,12 @@
     "host": "Host: {{host}}",
     "delete": "Eliminar servidor",
     "deleteSecrets": "Se elimina todo secreto que esta versión sabe guardar para este servidor. Pueden permanecer secretos añadidos por una versión más reciente de la aplicación."
+  },
+  "autoReconnect": {
+    "label": "Reconectar automáticamente",
+    "off": "Desactivado",
+    "seconds30": "30 segundos",
+    "seconds60": "60 segundos",
+    "minutes5": "5 minutos"
   }
 }

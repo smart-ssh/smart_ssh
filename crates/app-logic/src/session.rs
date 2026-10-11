@@ -1370,8 +1370,10 @@ pub fn report_connection_lost(
     // AI can continue after an automatic reconnect.
     let turn_active = crate::poison::lock_tolerating_poison(&session.chat_turn).running;
     session.auto_reconnect.set_ai_turn_interrupted(turn_active);
-    emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
+    // The hook runs first: it announces the automatic attempts before the
+    // status event, so the UI never shows "lost" for a moment.
     session.auto_reconnect.fire_hook(session_id);
+    emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
     true
 }
 

@@ -266,6 +266,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     respond_to_action: () => null,
     // Issue #355: the status events are up to the test.
     reconnect_session: () => null,
+    stop_auto_reconnect: () => null,
     disconnect: ({ sessionId }) => {
       model.sessions = model.sessions.filter((s) => s.sessionId !== sessionId);
       persist();

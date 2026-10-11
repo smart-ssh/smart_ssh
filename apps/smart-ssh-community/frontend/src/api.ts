@@ -241,6 +241,11 @@ export const disconnect = (sessionId: string) => invoke<void>("disconnect", { se
 export const reconnectSession = (sessionId: string) =>
   invoke<void>("reconnect_session", { sessionId });
 
+/** Issue #356, Spec 0107 §8: beendet die automatischen Neuverbindungsversuche
+ * ("Stopp" im Kopf des Tabs). */
+export const stopAutoReconnect = (sessionId: string) =>
+  invoke<void>("stop_auto_reconnect", { sessionId });
+
 /** Spec 0021, Abschnitt 5: bricht die automatische Fortsetzungskette für die
  * aktuelle Nutzer-Nachricht sofort ab — lässt einen bereits offenen
  * Bestätigungsdialog unangetastet (s. `crate::commands::
