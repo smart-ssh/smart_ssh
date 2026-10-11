@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { characterCount } from "../passwordLength";
 import {
@@ -10,7 +11,7 @@ import {
   switchToOsKeychain,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge. Das Backend prüft dieselbe Grenze und
@@ -62,6 +63,16 @@ export function MasterPasswordSettings() {
   const [done, setDone] = useState<string | null>(null);
   /** Klarstellung 10b: Die Frage ist offen, der Wechsel wartet auf sie. */
   const [askAboutAnotherKey, setAskAboutAnotherKey] = useState(false);
+  const cancelOverwriteRef = useRef<HTMLButtonElement>(null);
+  const switchPasswordRef = useRef<HTMLInputElement>(null);
+  // Closing the question clears the typed password, which disables the
+  // "switch" button the dialog was opened from; focus would be lost. Put it
+  // on the (now empty) password field instead.
+  const questionWasOpen = useRef(false);
+  useEffect(() => {
+    if (questionWasOpen.current && !askAboutAnotherKey) switchPasswordRef.current?.focus();
+    questionWasOpen.current = askAboutAnotherKey;
+  }, [askAboutAnotherKey]);
 
   useEffect(() => {
     getMasterPasswordMode()
@@ -171,12 +182,12 @@ export function MasterPasswordSettings() {
             onChange={setRepeated}
           />
           {password.length > 0 && characterCount(password) < MINIMUM_PASSWORD_LENGTH && (
-            <p className="text-sm text-amber-300">
+            <p role="alert" className="text-sm text-amber-300">
               {t("masterPassword.passwordTooShort", { minimum: MINIMUM_PASSWORD_LENGTH })}
             </p>
           )}
           {repeated.length > 0 && password !== repeated && (
-            <p className="text-sm text-amber-300">{t("masterPassword.passwordsDiffer")}</p>
+            <p role="alert" className="text-sm text-amber-300">{t("masterPassword.passwordsDiffer")}</p>
           )}
           <label className="flex items-start gap-2 text-sm text-slate-200">
             <input
@@ -187,13 +198,9 @@ export function MasterPasswordSettings() {
             />
             {t("masterPassword.noRecoveryWarning")}
           </label>
-          <button
-            type="submit"
-            disabled={busy || !newPasswordIsUsable}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" disabled={busy || !newPasswordIsUsable}>
             {t("masterPassword.setUpButton")}
-          </button>
+        </Button>
         </form>
       )}
 
@@ -233,18 +240,14 @@ export function MasterPasswordSettings() {
               value={repeated}
               onChange={setRepeated}
             />
-            <button
-              type="submit"
-              disabled={
+            <Button type="submit" variant="primary" disabled={
                 busy ||
                 current.length === 0 ||
                 characterCount(password) < MINIMUM_PASSWORD_LENGTH ||
                 password !== repeated
-              }
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+              }>
               {t("masterPassword.changeButton")}
-            </button>
+          </Button>
           </form>
 
           <div className="space-y-3 border-t border-slate-700 pt-4">
@@ -256,15 +259,11 @@ export function MasterPasswordSettings() {
               label={t("masterPassword.confirmPasswordLabel")}
               value={switchCurrent}
               onChange={setSwitchCurrent}
+              inputRef={switchPasswordRef}
             />
-            <button
-              type="button"
-              disabled={busy || switchCurrent.length === 0}
-              onClick={() => switchToKeychain(false)}
-              className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <Button disabled={busy || switchCurrent.length === 0} onClick={() => switchToKeychain(false)}>
               {t("masterPassword.switchButton")}
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -272,34 +271,34 @@ export function MasterPasswordSettings() {
       {/* Klarstellung 10b: die Frage vor dem Überschreiben eines fremden
        * Schlüssels. Ohne Bestätigung bleibt alles, wie es war. */}
       {askAboutAnotherKey && (
-        <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
-            <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
-              {t("masterPassword.anotherKeyTitle")}
-            </h2>
-            <p className="mb-4 text-sm text-slate-300">{t("masterPassword.anotherKeyText")}</p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
+        <DialogFrame
+          layer="app"
+          size="sm"
+          title={t("masterPassword.anotherKeyTitle")}
+          onClose={() => {
+            setAskAboutAnotherKey(false);
+            clearSecrets();
+          }}
+          initialFocusRef={cancelOverwriteRef}
+          actions={
+            <>
+              <Button
+                ref={cancelOverwriteRef}
                 onClick={() => {
                   setAskAboutAnotherKey(false);
                   clearSecrets();
                 }}
-                className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
               >
                 {t("common.cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => switchToKeychain(true)}
-                className="rounded bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              </Button>
+              <Button variant="danger" disabled={busy} onClick={() => switchToKeychain(true)}>
                 {t("masterPassword.anotherKeyConfirm")}
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
+              </Button>
+            </>
+          }
+        >
+          <p>{t("masterPassword.anotherKeyText")}</p>
+        </DialogFrame>
       )}
 
       {error && (
@@ -323,22 +322,27 @@ function PasswordField({
   label,
   value,
   onChange,
+  inputRef,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   return (
-    <label className="block text-sm text-slate-200">
-      {label}
-      <input
-        {...TECHNICAL_INPUT_PROPS}
-        type="password"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-      />
-    </label>
+    <Field label={label}>
+      {(control) => (
+        <input
+          {...control}
+          {...TECHNICAL_INPUT_PROPS}
+          ref={inputRef}
+          type="password"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${FIELD_CONTROL_CLASS} w-full`}
+        />
+      )}
+    </Field>
   );
 }
 

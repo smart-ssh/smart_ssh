@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Ange ett lokalt program per filändelse som ska användas för \"Öppna lokalt\". Utan post används operativsystemets standardprogram.",
+    "extensionLabel": "Filändelse",
     "appPathPlaceholder": "Sökväg till program",
     "browse": "Bläddra…",
     "remove": "Ta bort rad",

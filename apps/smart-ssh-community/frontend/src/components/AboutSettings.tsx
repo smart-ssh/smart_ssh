@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getAppInfo } from "../api";
 import type { AppInfoDto } from "../types";
 import { ThirdPartyLicensesDialog } from "./ThirdPartyLicensesDialog";
+import { Button } from "./ui";
 
 /** Spec 0052, Abschnitt 3.2: "Über"-Kategorie der zweispaltigen Settings
  * (Spec 0050) — Version + Commit-Hash **sichtbar und kopierbar**, damit ein
@@ -70,23 +71,21 @@ export function AboutSettings() {
   return (
     <div className="space-y-4">
       {loadError && (
-        <p className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">{loadError}</p>
+        <p role="alert" className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">{loadError}</p>
       )}
       {info && (
         <div>
           <span className="block text-xs text-slate-400">{t("about.version")}</span>
-          <div className="mt-1 flex items-center gap-2">
-            <code className="select-text rounded border border-slate-600 bg-slate-900 px-3 py-1.5 font-mono text-sm text-slate-100">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <code
+              title={displayLine}
+              className="min-w-0 select-text break-words rounded border border-slate-600 bg-slate-900 px-3 py-1.5 font-mono text-sm text-slate-100"
+            >
               {displayLine}
             </code>
-            <button
-              type="button"
-              onClick={handleCopy}
-              title={t("about.copyHint")}
-              className="rounded border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
-            >
+            <Button size="sm" onClick={handleCopy} title={t("about.copyHint")}>
               {t("about.copyButton")}
-            </button>
+            </Button>
             {copyState === "copied" && (
               <span className="text-xs text-emerald-400">{t("about.copied")}</span>
             )}
@@ -99,13 +98,9 @@ export function AboutSettings() {
       <div>
         {/* Spec 0099, A4.1: eigener Eintrag, der die Liste in einer
          * scrollbaren Ansicht innerhalb der App öffnet. */}
-        <button
-          type="button"
-          onClick={() => setShowLicenses(true)}
-          className="text-sm text-indigo-400 underline hover:text-indigo-300"
-        >
+        <Button variant="ghost" onClick={() => setShowLicenses(true)} className="underline">
           {t("about.thirdPartyLicenses.openButton")}
-        </button>
+        </Button>
       </div>
       {showLicenses && <ThirdPartyLicensesDialog onClose={() => setShowLicenses(false)} />}
     </div>

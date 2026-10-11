@@ -5,6 +5,7 @@ import { commandErrorMessage, respondToAction } from "../api";
 import { onNoteUpdateSuggested } from "../events";
 import type { NoteUpdateSuggestedEvent } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
+import { Button } from "./ui";
 
 interface PendingSuggestion {
   sessionId: string;
@@ -127,21 +128,20 @@ export function NoteSuggestionToast() {
                 {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
               </span>
               <div className="flex shrink-0 gap-1">
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => updateSuggestion(suggestion.actionId, { expanded: true })}
-                  className="rounded bg-indigo-600 px-2 py-1 text-xs text-slate-950 hover:bg-indigo-500"
                 >
                   {t("noteSuggestion.show")}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
                   onClick={() => decide(suggestion, "deny")}
-                  className="rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
                   aria-label={t("noteSuggestion.dismiss")}
                 >
                   ✕
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -163,24 +163,28 @@ export function NoteSuggestionToast() {
                   newContent={suggestion.newContent}
                 />
               </div>
-              {suggestion.error && <p className="text-xs text-red-400">{suggestion.error}</p>}
+              {suggestion.error && (
+                <p role="alert" className="text-xs text-red-300">
+                  {suggestion.error}
+                </p>
+              )}
               <div className="flex gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={() => decide(suggestion, "deny")}
                   disabled={suggestion.deciding}
-                  className="rounded bg-red-900 px-3 py-1 text-xs text-red-200 hover:bg-red-800 disabled:opacity-50"
                 >
                   {t("noteSuggestion.reject")}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => decide(suggestion, "approve")}
                   disabled={suggestion.deciding}
-                  className="rounded bg-emerald-700 px-3 py-1 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"
                 >
                   {suggestion.deciding ? t("noteSuggestion.applying") : t("noteSuggestion.apply")}
-                </button>
+                </Button>
               </div>
             </div>
           )}

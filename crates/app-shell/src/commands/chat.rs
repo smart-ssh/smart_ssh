@@ -48,13 +48,6 @@ pub async fn send_chat_message(
     .await
 }
 
-/// Spec 0065, Teil 2: sinngemäß aus der Spec-Skizze übernommen (dort bereits
-/// als "sinngemäß"-Formulierung vorgegeben) — analog zu
-/// `orchestration::TITLE_GENERATION_INSTRUCTION`, dieselbe Konvention.
-const CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION: &str =
-    "Deine letzte Antwort wurde wegen des Längenlimits abgeschnitten. Fahre exakt an der \
-     Stelle fort, an der sie endete, ohne den bisherigen Teil zu wiederholen.";
-
 /// Spec 0065, Teil 2: „Weiter"-Knopf nach einem `chat-response-truncated`-
 /// Event — schickt die Fortsetzungs-Anweisung als GANZ NORMALE Nachricht
 /// durch exakt denselben Pfad wie [`send_chat_message`] (Kompaktierung,
@@ -79,7 +72,9 @@ pub async fn continue_truncated_response(
         &TauriEventEmitter(app.clone()),
         &session,
         session_id,
-        CONTINUE_TRUNCATED_RESPONSE_INSTRUCTION.to_string(),
+        app_logic::system_prompt::continue_truncated_response_instruction(
+            crate::ui_language::session_prompt_language(&app),
+        ),
         Some(&state.prompt_history_store),
         state.profile_store.as_ref(),
         &state.policy_store,

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Setați o aplicație locală pentru fiecare extensie de fișier, folosită la „Deschide local”. Fără o intrare se folosește aplicația implicită a sistemului de operare.",
+    "extensionLabel": "Extensie de fișier",
     "appPathPlaceholder": "Calea către aplicație",
     "browse": "Răsfoiește…",
     "remove": "Elimină rândul",

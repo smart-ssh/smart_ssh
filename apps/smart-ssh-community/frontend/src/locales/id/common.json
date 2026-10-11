@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Tetapkan aplikasi lokal untuk setiap ekstensi berkas yang digunakan pada \"Buka secara lokal\". Tanpa entri, aplikasi bawaan sistem operasi akan digunakan.",
+    "extensionLabel": "Ekstensi berkas",
     "appPathPlaceholder": "Jalur ke aplikasi",
     "browse": "Telusuri…",
     "remove": "Hapus baris",

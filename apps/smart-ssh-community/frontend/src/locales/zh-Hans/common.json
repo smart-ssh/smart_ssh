@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "为每种文件扩展名指定一个本地应用程序，用于“在本地打开”。没有对应条目时，将使用操作系统的默认应用程序。",
+    "extensionLabel": "文件扩展名",
     "appPathPlaceholder": "应用程序路径",
     "browse": "浏览…",
     "remove": "移除此行",
