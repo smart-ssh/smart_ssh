@@ -3001,3 +3001,46 @@ fn test_redactor_known_remaining_case_url_password_with_query_and_at_sign() {
         "postgres://u:Secret1?x=Secret2&[REDACTED]"
     );
 }
+
+/// Issue #332: per added UI language, the local word for "password"
+/// announces a credential value (case-insensitive); counter-case: the
+/// word without a value stays untouched.
+#[test]
+fn test_redactor_masks_value_after_password_word_per_language() {
+    let redactor = DefaultOutputRedactor::new();
+    for (lang, word) in [("pt-BR", "senha"), ("nl", "wachtwoord")] {
+        assert!(
+            keywords::keyword_languages().contains(&lang),
+            "no keyword list for {lang}"
+        );
+        for w in [word.to_string(), word.to_uppercase()] {
+            let out = redactor.redact_text(&format!("{w}: hunter2"));
+            assert!(!out.contains("hunter2"), "{lang}: {out}");
+            let out = redactor.redact_text(&format!("{w}=hunter2"));
+            assert!(!out.contains("hunter2"), "{lang}: {out}");
+        }
+        assert_eq!(
+            redactor.redact_text(&format!("Enter {word}")),
+            format!("Enter {word}")
+        );
+    }
+}
+
+/// Issue #332: further credential words of the added languages.
+#[test]
+fn test_redactor_masks_other_credential_words_pt_br_nl() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in [
+        "chave de api",
+        "chave privada",
+        "credenciais",
+        "frase secreta",
+        "api-sleutel",
+        "toegangssleutel",
+        "inloggegevens",
+        "pincode",
+    ] {
+        let out = redactor.redact_text(&format!("{word}: hunter2"));
+        assert!(!out.contains("hunter2"), "{word}: {out}");
+    }
+}
