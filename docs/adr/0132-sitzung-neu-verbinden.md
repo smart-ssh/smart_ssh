@@ -23,11 +23,11 @@ Paarung. Neu verbinden muss aber genau diese Bestandteile austauschen.
    aus `connect_session` in `establish_transport` herausgezogen und wird von
    beiden Wegen genutzt. Dadurch gibt es keine zweite Prüfstrecke und keine
    gemerkte Zustimmung.
-3. Der Redactor ist ein austauschbarer Behälter (`SwappableRedactor`), damit
-   ein neu gelesenes Sudo-Passwort sofort redigiert wird. `Session.
-   sudo_password` (nur für `sudo -S`-Eingaben) bleibt der Wert vom ersten
-   Verbinden: ein geändertes Passwort lässt `sudo` mit dem alten
-   scheitern, es wird dabei nichts offengelegt.
+3. Redactor (`SwappableRedactor`) und Sudo-Passwort (`SwappableSudoPassword`)
+   sind austauschbare Behälter. Beim Erfolg werden beide aus **einem**
+   Lesevorgang zusammen ersetzt: das Passwort für `sudo -S` und die
+   Schwärzung stimmen immer überein, ein altes Passwort bleibt nirgends
+   zurück.
 4. Das Startverzeichnis wird nicht neu geprüft; das einmalige Ergebnis der
    Sitzung (Spec 0102) gilt weiter, damit der Hinweis „Verzeichnis fehlt“
    nicht erneut erscheint.

@@ -540,7 +540,7 @@ pub fn session_with_ai_and_transport(
         model_context_window_tokens: usize::MAX / 1_000,
         summary: AsyncMutex::new(None),
         mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
-        sudo_password: None,
+        sudo_password: crate::session::SwappableSudoPassword::new(None),
         status: std::sync::Mutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: std::sync::Mutex::new(None),
         mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),

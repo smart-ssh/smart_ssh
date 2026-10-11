@@ -1649,8 +1649,8 @@ async fn execute_suggested_command(
     // Spec 0018, Abschnitt 5: nur umschreiben/Stdin füttern, wenn tatsächlich
     // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
     // (`execute()` wie bisher, scheitert wie gewohnt ohne TTY).
-    let effective_command = session
-        .sudo_password
+    let sudo_password = session.sudo_password.get();
+    let effective_command = sudo_password
         .as_ref()
         .and_then(|_| command_with_stdin_password_flag(&command));
 
@@ -1684,7 +1684,7 @@ async fn execute_suggested_command(
                 "session is disconnecting".to_string(),
             ));
         };
-        let stdin = match (&effective_command, &session.sudo_password) {
+        let stdin = match (&effective_command, &sudo_password) {
             (Some(_), Some(password)) => {
                 use secrecy::ExposeSecret;
                 let mut stdin = password.expose_secret().as_bytes().to_vec();

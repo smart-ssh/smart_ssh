@@ -48,8 +48,9 @@ Host-Key zeigt wieder den Host-Key-Dialog; lehnt der Nutzer ab, bleibt der
 Tab getrennt. Fehlende Zugangsdaten führen zu demselben Fehler wie beim
 ersten Verbinden, es gibt keine Passwortabfrage.
 
-Das Sudo-Passwort wird neu aus dem Schlüsselbund gelesen und für die
-Schwärzung von Ausgaben verwendet.
+Das Sudo-Passwort wird neu aus dem Schlüsselbund gelesen und gilt danach
+sowohl für `sudo`-Eingaben als auch für die Schwärzung von Ausgaben; der
+alte Wert wird nicht weiterverwendet.
 
 ## 4. Nach dem Erfolg
 

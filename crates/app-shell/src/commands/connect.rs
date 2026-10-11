@@ -706,7 +706,7 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             model_context_window_tokens,
             summary: tokio::sync::Mutex::new(initial_summary),
             mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
-            sudo_password,
+            sudo_password: app_logic::session::SwappableSudoPassword::new(sudo_password),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
             mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
@@ -824,13 +824,13 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         );
         let redactor =
             app_logic::server_redaction::redactor_with_sudo_password(sudo_password.as_ref());
-        Ok::<_, CommandError>((transport, redactor))
+        Ok::<_, CommandError>((transport, redactor, sudo_password))
     }
     .await;
 
     match result {
-        Ok((transport, redactor)) => {
-            claim.succeed(transport, redactor).await;
+        Ok((transport, redactor, sudo_password)) => {
+            claim.succeed(transport, redactor, sudo_password).await;
             tracing::info!(session_id = %session_id, "session reconnected");
             emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Connected, None);
             Ok(())
@@ -2138,6 +2138,48 @@ mod connect_flow_tests {
                 .is_some_and(|p| p.contains("connected") && !p.contains("dis")),
             "{seen:?}"
         );
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_rereads_sudo_password_for_sudo_and_redactor() {
+        use app_logic::server_credentials::sudo_password_credential_ref;
+        use secrecy::ExposeSecret;
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let old_closed = Arc::new(AtomicBool::new(false));
+        let new_closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&old_closed));
+        let fx = fixture(connector.clone()).await;
+        let cred_ref = sudo_password_credential_ref(fx.server_id);
+        fx.state
+            .credential_store
+            .set(&cred_ref, "old-sudo-pw".to_string().into())
+            .unwrap();
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &old_closed).await;
+        assert_eq!(
+            session.sudo_password.get().unwrap().expose_secret(),
+            "old-sudo-pw"
+        );
+        fx.state
+            .credential_store
+            .set(&cred_ref, "new-sudo-pw".to_string().into())
+            .unwrap();
+        connector.push(connected(&new_closed));
+        let (elevated, grants) = registry_pair();
+
+        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
+            .await
+            .expect("reconnect should succeed");
+
+        let after = fx.state.sessions.get(session_id).unwrap();
+        // The password used for `sudo -S` and the redactor come from one read.
+        assert_eq!(
+            after.sudo_password.get().unwrap().expose_secret(),
+            "new-sudo-pw"
+        );
+        let redacted = after.redactor.redact_text("echo new-sudo-pw");
+        assert!(!redacted.contains("new-sudo-pw"), "{redacted}");
         reset(app.handle());
     }
 

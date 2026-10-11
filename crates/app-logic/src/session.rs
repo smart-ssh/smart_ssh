@@ -46,6 +46,32 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
+/// Issue #355: the stored sudo password of a session. Behind a lock so a
+/// reconnect can replace it together with the redactor.
+pub struct SwappableSudoPassword(std::sync::RwLock<Option<Arc<secrecy::SecretString>>>);
+
+impl SwappableSudoPassword {
+    pub fn new(value: Option<secrecy::SecretString>) -> Self {
+        Self(std::sync::RwLock::new(value.map(Arc::new)))
+    }
+
+    pub fn get(&self) -> Option<Arc<secrecy::SecretString>> {
+        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    pub fn is_some(&self) -> bool {
+        self.get().is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.get().is_none()
+    }
+
+    fn replace(&self, value: Option<secrecy::SecretString>) {
+        *self.0.write().unwrap_or_else(|e| e.into_inner()) = value.map(Arc::new);
+    }
+}
+
 /// Issue #355: the redactor of a session. Behind a lock so a reconnect can
 /// rebuild it with the sudo password read again from the keychain; every
 /// reader sees either the old or the new redactor, never none.
@@ -212,8 +238,11 @@ impl ReconnectClaim<'_> {
         mut self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        sudo_password: Option<secrecy::SecretString>,
     ) {
-        self.session.replace_connection(transport, redactor).await;
+        self.session
+            .replace_connection(transport, redactor, sudo_password)
+            .await;
         *crate::poison::lock_tolerating_poison(&self.session.status) = ConnectionStatus::Connected;
         self.settled = true;
     }
@@ -607,7 +636,7 @@ pub struct SessionParts {
     /// Wird ausschließlich über Stdin an genau einen `sudo -S`-Aufruf
     /// weitergereicht (`crate::orchestration::execute_suggested_command`),
     /// nie auf dem Zielserver abgelegt.
-    pub sudo_password: Option<secrecy::SecretString>,
+    pub sudo_password: SwappableSudoPassword,
     /// Spec 0017, Abschnitt 2: `list_sessions()`-Statusfeld. Startet bei
     /// `Connected` (`Session` wird erst nach erfolgreichem Verbindungsaufbau
     /// konstruiert, s. `app_shell::commands::connect`) und wird von
@@ -878,9 +907,13 @@ impl Session {
         &self,
         transport: Box<dyn SshTransport>,
         redactor: Box<dyn OutputRedactor>,
+        sudo_password: Option<secrecy::SecretString>,
     ) {
         *self.sftp.inner.lock().await = None;
         self.transport.replace(transport).await;
+        // One read feeds both: the password sent to `sudo -S` and the
+        // redactor always agree.
+        self.sudo_password.replace(sudo_password);
         self.redactor.replace(redactor);
     }
 
@@ -1024,7 +1057,7 @@ impl Session {
 
     #[cfg(any(test, feature = "test-support"))]
     pub fn set_sudo_password_for_tests(&mut self, value: Option<secrecy::SecretString>) {
-        self.parts.sudo_password = value;
+        self.parts.sudo_password = SwappableSudoPassword::new(value);
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -1612,7 +1645,7 @@ mod tests {
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
             mcp_origin_flags: StdMutex::new(Vec::new()),
-            sudo_password: None,
+            sudo_password: SwappableSudoPassword::new(None),
             status: StdMutex::new(ConnectionStatus::Connected),
             pending_action: StdMutex::new(None),
             mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),

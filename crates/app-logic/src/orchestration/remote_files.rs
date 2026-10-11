@@ -453,7 +453,7 @@ pub(crate) async fn execute_write_remote_file(
             // (Review-Fund: keine Neuberechnung, die auseinanderlaufen kann).
             let Some(password) = session
                 .sudo_password
-                .clone()
+                .get()
                 .filter(|_| sudo_fallback_announced)
             else {
                 return emit_action_error(
