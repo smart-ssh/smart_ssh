@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Ta operacja nie pasuje do miejsca, w którym klucz jest obecnie przechowywany. Nic nie zmieniono — otwórz ustawienia ponownie, pokazują aktywny tryb.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Ostrzeżenie o haśle głównym nie zostało potwierdzone. Bez tego hasła wszystkie dane przepadają, a odzyskanie nie jest możliwe — zaznacz pole i skonfiguruj ponownie. Nic nie zmieniono.",
     "KEYCHAIN_KEY_MISMATCH": "Klucz w magazynie kluczy nie należy do tej bazy danych. Nic nie zmieniono — zapisanie go uniemożliwiłoby odczyt bazy przy następnym uruchomieniu.",
-    "SFTP_CONTENT_TOO_LARGE": "Plik jest większy niż 50 MB i nie można go skopiować do schowka."
+    "SFTP_CONTENT_TOO_LARGE": "Plik jest większy niż 50 MB i nie można go skopiować do schowka.",
+    "CLIPBOARD_FILE_FAILED": "Nie udało się umieścić pliku w schowku w tym systemie."
   },
   "mcpServer": {
     "hint": "Zewnętrzni klienci MCP mogą przez niego proponować polecenia, odczyty/zapisy plików i aktualizacje notatek na serwerach z listy dozwolonych — każde żądanie zawsze wymaga potwierdzenia w aplikacji, niezależnie od istniejących reguł zezwalających.",
@@ -651,6 +652,7 @@
     "chmodFailed": "Nie udało się ustawić uprawnień „{{name}}”: {{reason}}",
     "pathCopied": "Ścieżka skopiowana do schowka",
     "contentCopied": "Zawartość „{{name}}” skopiowana do schowka",
+    "fileCopied": "„{{name}}” skopiowano do schowka jako plik",
     "copyFailed": "Kopiowanie do schowka nie powiodło się: {{reason}}",
     "openedLocally": "„{{name}}” otwarto lokalnie — zmiany zostaną zaproponowane do wysłania",
     "openLocallyFailed": "Nie udało się otworzyć „{{name}}” lokalnie: {{reason}}",
@@ -997,6 +999,7 @@
       "download": "Pobierz",
       "downloadTo": "Pobierz do…",
       "copyContent": "Kopiuj zawartość pliku",
+      "copyFile": "Kopiuj plik",
       "openLocally": "Otwórz lokalnie…",
       "copyPath": "Kopiuj ścieżkę",
       "properties": "Właściwości",

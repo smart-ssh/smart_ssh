@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Operasi ini tidak sesuai dengan tempat kunci disimpan saat ini. Tidak ada yang diubah — buka kembali pengaturan, di sana ditampilkan mode yang aktif.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Peringatan kata sandi utama belum dikonfirmasi. Tanpa kata sandi itu semua data hilang dan tidak ada pemulihan — centang kotaknya dan atur lagi. Tidak ada yang diubah.",
     "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya.",
-    "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip."
+    "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip.",
+    "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini."
   },
   "mcpServer": {
     "hint": "Klien MCP eksternal dapat menggunakan ini untuk mengusulkan perintah, pembacaan/penulisan berkas, dan pembaruan catatan pada server yang masuk daftar izin — setiap permintaan selalu memerlukan konfirmasi di aplikasi, terlepas dari aturan izin yang ada.",
@@ -636,6 +637,7 @@
     "chmodFailed": "Izin “{{name}}” tidak dapat diatur: {{reason}}",
     "pathCopied": "Jalur disalin ke papan klip",
     "contentCopied": "Isi “{{name}}” disalin ke papan klip",
+    "fileCopied": "“{{name}}” disalin ke papan klip sebagai berkas",
     "copyFailed": "Gagal menyalin ke papan klip: {{reason}}",
     "openedLocally": "“{{name}}” dibuka secara lokal — perubahan akan ditawarkan untuk diunggah",
     "openLocallyFailed": "“{{name}}” tidak dapat dibuka secara lokal: {{reason}}",
@@ -976,6 +978,7 @@
       "download": "Unduh",
       "downloadTo": "Unduh ke…",
       "copyContent": "Salin isi berkas",
+      "copyFile": "Salin berkas",
       "openLocally": "Buka secara lokal…",
       "copyPath": "Salin jalur",
       "properties": "Properti",

@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Questa operazione non corrisponde a dove è attualmente conservata la chiave. Nulla è stato modificato: riapra le impostazioni, che mostrano la modalità attiva.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L'avviso sulla password principale non è stato confermato. Senza quella password tutti i dati vanno persi e non c'è recupero: selezioni la casella e la imposti di nuovo. Nulla è stato modificato.",
     "KEYCHAIN_KEY_MISMATCH": "La chiave nel portachiavi non appartiene a questo database. Nulla è stato modificato: memorizzarla renderebbe il database illeggibile al prossimo avvio.",
-    "SFTP_CONTENT_TOO_LARGE": "Il file supera i 50 MB e non può essere copiato negli appunti."
+    "SFTP_CONTENT_TOO_LARGE": "Il file supera i 50 MB e non può essere copiato negli appunti.",
+    "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema."
   },
   "mcpServer": {
     "hint": "I client MCP esterni possono usarlo per proporre comandi, letture/scritture di file e aggiornamenti di note sui server in elenco consentito; ogni richiesta richiede sempre conferma nell'app, indipendentemente dalle regole di consenso esistenti.",
@@ -646,6 +647,7 @@
     "chmodFailed": "Impossibile impostare i permessi di “{{name}}”: {{reason}}",
     "pathCopied": "Percorso copiato negli appunti",
     "contentCopied": "Contenuto di “{{name}}” copiato negli appunti",
+    "fileCopied": "«{{name}}» copiato negli appunti come file",
     "copyFailed": "Copia negli appunti non riuscita: {{reason}}",
     "openedLocally": "“{{name}}” aperto localmente: le modifiche verranno proposte per il caricamento",
     "openLocallyFailed": "Impossibile aprire “{{name}}” localmente: {{reason}}",
@@ -990,6 +992,7 @@
       "download": "Scarica",
       "downloadTo": "Scarica in…",
       "copyContent": "Copia contenuto del file",
+      "copyFile": "Copia file",
       "openLocally": "Apri localmente…",
       "copyPath": "Copia percorso",
       "properties": "Proprietà",

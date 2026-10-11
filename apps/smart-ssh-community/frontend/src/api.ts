@@ -626,6 +626,28 @@ export const sftpCopyContent = (
   });
 };
 
+/** Issue #358: „Datei kopieren" — legt die Remote-Datei (bis 50 MB) als
+ * Dateiverweis in die Zwischenablage. Abbruch über `sftpCancelCopyContent`
+ * (Code `SFTP_COPY_CANCELLED`); zu groß: `SFTP_CONTENT_TOO_LARGE`; Zwischenablage
+ * nicht belegbar: `CLIPBOARD_FILE_FAILED`. */
+export const sftpCopyFile = (
+  sessionId: string,
+  path: string,
+  elevatedUser: string | null,
+  requestId: string,
+  onProgress: (progress: CopyContentProgress) => void,
+) => {
+  const channel = new Channel<CopyContentProgress>();
+  channel.onmessage = onProgress;
+  return invoke<void>("sftp_copy_file", {
+    sessionId,
+    path,
+    elevatedUser,
+    requestId,
+    onProgress: channel,
+  });
+};
+
 export const sftpCancelCopyContent = (requestId: string) =>
   invoke<void>("sftp_cancel_copy_content", { requestId });
 

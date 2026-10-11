@@ -1302,13 +1302,13 @@ async fn copy_content_impl(
     }
 }
 
-async fn copy_content_read(
+async fn copy_content_read_bytes(
     session: &Session,
     channel: &BrowserChannel,
     path: &str,
     limit: u64,
     report: &mut (dyn FnMut(CopyContentProgress) + Send),
-) -> CommandResult<String> {
+) -> CommandResult<Vec<u8>> {
     let mut guard = lock_browser_sftp(session, channel).await;
     let mut sftp = guard.sftp().await?;
 
@@ -1337,8 +1337,88 @@ async fn copy_content_read(
     if bytes.len() as u64 > limit {
         return Err(content_too_large_for_clipboard());
     }
+    Ok(bytes)
+}
+
+async fn copy_content_read(
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    limit: u64,
+    report: &mut (dyn FnMut(CopyContentProgress) + Send),
+) -> CommandResult<String> {
+    let bytes = copy_content_read_bytes(session, channel, path, limit, report).await?;
     String::from_utf8(bytes)
         .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))
+}
+
+/// Issue #358: "Copy file" — reads a remote file (any type) up to 50 MB with
+/// the same bounded read, progress and cancel as [`sftp_copy_content`]
+/// (cancel via `sftp_cancel_copy_content`), stages it in the app-private
+/// clipboard folder under its original name and puts it on the system
+/// clipboard as a file reference. Nothing is opened or executed. A cancelled
+/// or failed copy leaves no staged file and does not touch the clipboard; the
+/// previous staged file is removed only after the new one is on the clipboard.
+/// Returns the file name. No filter-engine/AI gate (Spec 0054 security model).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn sftp_copy_file(
+    state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
+    jobs: State<'_, CopyContentJobs>,
+    clipboard: State<'_, crate::file_clipboard::FileClipboard>,
+    session_id: SessionId,
+    path: String,
+    elevated_user: Option<String>,
+    request_id: String,
+    on_progress: Channel<CopyContentProgress>,
+) -> CommandResult<()> {
+    let file_name = file_name_of(&path);
+    safe_local_segment(&file_name)?;
+    let cancel = jobs.register(&request_id);
+    let result = run_browser_command(
+        &state,
+        elevated.inner(),
+        session_id,
+        elevated_user,
+        |session, channel| {
+            let cancel = cancel.clone();
+            async move {
+                let mut send = |p: CopyContentProgress| {
+                    let _ = on_progress.send(p);
+                };
+                tokio::select! {
+                    result = copy_content_read_bytes(
+                        &session, &channel, &path, MAX_COPY_CONTENT_BYTES, &mut send,
+                    ) => result,
+                    _ = cancel.notified() => Err(copy_cancelled()),
+                }
+            }
+        },
+    )
+    .await;
+    jobs.remove(&request_id);
+    let bytes = result?;
+
+    let root = crate::edit_copies::clipboard_root()
+        .ok_or_else(|| CommandError::from("No cache directory available for the clipboard"))?;
+    let staged = {
+        let root = root.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::file_clipboard::stage_file(&root, &file_name, &bytes)
+        })
+        .await
+        .map_err(|e| format!("Background task for Copy file failed: {e}"))??
+    };
+    if let Err(err) = clipboard.set_file(&staged) {
+        crate::file_clipboard::discard(&staged);
+        return Err(CommandError::with_code(
+            format!("The file could not be placed on the clipboard: {err}"),
+            app_logic::error::CLIPBOARD_FILE_FAILED,
+        ));
+    }
+    crate::file_clipboard::retire_others(&root, &staged);
+    Ok(())
 }
 
 /// Spec 0054, Teil 3: die "neue" (lokale) Seite der Upload-Überschreib-Diff-

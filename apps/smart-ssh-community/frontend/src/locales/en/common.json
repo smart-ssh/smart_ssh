@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "This operation does not match where the key is currently kept. Nothing was changed — reopen the settings, they show the active mode.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "The master password warning has not been confirmed. Without that password all data is lost and there is no recovery — tick the box and set it up again. Nothing was changed.",
     "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup.",
-    "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard."
+    "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard.",
+    "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system."
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -641,6 +642,7 @@
     "chmodFailed": "Permissions of “{{name}}” could not be set: {{reason}}",
     "pathCopied": "Path copied to clipboard",
     "contentCopied": "Content of “{{name}}” copied to clipboard",
+    "fileCopied": "“{{name}}” copied to clipboard as a file",
     "copyFailed": "Copying to clipboard failed: {{reason}}",
     "openedLocally": "“{{name}}” opened locally — changes will be offered for upload",
     "openLocallyFailed": "“{{name}}” could not be opened locally: {{reason}}",
@@ -983,6 +985,7 @@
       "download": "Download",
       "downloadTo": "Download to…",
       "copyContent": "Copy file content",
+      "copyFile": "Copy file",
       "openLocally": "Open locally…",
       "copyPath": "Copy path",
       "properties": "Properties",

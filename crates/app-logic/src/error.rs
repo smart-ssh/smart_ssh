@@ -99,6 +99,10 @@ pub const SFTP_CONTENT_TOO_LARGE: &str = "SFTP_CONTENT_TOO_LARGE";
 /// nichts an.
 pub const SFTP_COPY_CANCELLED: &str = "SFTP_COPY_CANCELLED";
 
+/// Issue #358: „Datei kopieren" konnte die Datei nicht als Dateiverweis in
+/// die Zwischenablage legen (Plattform oder Sitzung ohne Unterstützung).
+pub const CLIPBOARD_FILE_FAILED: &str = "CLIPBOARD_FILE_FAILED";
+
 /// Spec 0077, 3.1.3: Wandelt einen [`RuleWriteError`] in einen
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
@@ -330,6 +334,8 @@ mod code_tests {
             // Issue #357, Spec 0086 A1.1/A1.5.
             super::SFTP_CONTENT_TOO_LARGE,
             super::SFTP_COPY_CANCELLED,
+            // Issue #358.
+            super::CLIPBOARD_FILE_FAILED,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();

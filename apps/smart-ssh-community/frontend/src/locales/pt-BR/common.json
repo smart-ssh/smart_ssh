@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Esta operação não corresponde a onde a chave está guardada atualmente. Nada foi alterado — reabra as configurações, que mostram o modo ativo.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "O aviso sobre a senha mestra não foi confirmado. Sem essa senha, todos os dados são perdidos e não há recuperação — marque a caixa e configure novamente. Nada foi alterado.",
     "KEYCHAIN_KEY_MISMATCH": "A chave no chaveiro não pertence a este banco de dados. Nada foi alterado — armazená-la tornaria o banco de dados ilegível na próxima inicialização.",
-    "SFTP_CONTENT_TOO_LARGE": "O arquivo é maior que 50 MB e não pode ser copiado para a área de transferência."
+    "SFTP_CONTENT_TOO_LARGE": "O arquivo é maior que 50 MB e não pode ser copiado para a área de transferência.",
+    "CLIPBOARD_FILE_FAILED": "Não foi possível colocar o arquivo na área de transferência neste sistema."
   },
   "mcpServer": {
     "hint": "Clientes MCP externos podem usá-lo para propor comandos, leituras/gravações de arquivos e atualizações de anotações em servidores da lista de permitidos — toda solicitação sempre exige confirmação no app, independentemente das regras de permissão existentes.",
@@ -646,6 +647,7 @@
     "chmodFailed": "Não foi possível definir as permissões de “{{name}}”: {{reason}}",
     "pathCopied": "Caminho copiado para a área de transferência",
     "contentCopied": "Conteúdo de “{{name}}” copiado para a área de transferência",
+    "fileCopied": "“{{name}}” copiado para a área de transferência como arquivo",
     "copyFailed": "Falha ao copiar para a área de transferência: {{reason}}",
     "openedLocally": "“{{name}}” aberto localmente — as alterações serão oferecidas para envio",
     "openLocallyFailed": "Não foi possível abrir “{{name}}” localmente: {{reason}}",
@@ -990,6 +992,7 @@
       "download": "Baixar",
       "downloadTo": "Baixar para…",
       "copyContent": "Copiar conteúdo do arquivo",
+      "copyFile": "Copiar arquivo",
       "openLocally": "Abrir localmente…",
       "copyPath": "Copiar caminho",
       "properties": "Propriedades",
