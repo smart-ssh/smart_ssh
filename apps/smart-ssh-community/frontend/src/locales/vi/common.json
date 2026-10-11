@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "Không thể lấy ý kiến thứ hai của AI. Mức rủi ro hiển thị là mức dựa trên quy tắc.",
     "riskHint": "Đánh giá dựa trên các mẫu đã biết — không đảm bảo.",
     "runningSince": "đang chạy {{seconds}} giây…",
+    "waitingForInputHint": "Lệnh này có thể đang chờ nhập liệu. Hãy dừng nó, AI sẽ đề xuất một biến thể không tương tác.",
     "cancelCommand": "Ngắt kết nối lệnh này",
     "cancellingCommand": "Đang ngắt kết nối…",
     "commandCancelledNotice": "⚠ Đã hủy thủ công — đầu ra có thể chưa đầy đủ, không có mã thoát thông thường.",

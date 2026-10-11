@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "De AI second opinion kon niet worden verkregen. Het getoonde risico is het regelgebaseerde.",
     "riskHint": "Beoordeling op basis van bekende patronen — geen garantie.",
     "runningSince": "loopt al {{seconds}}s…",
+    "waitingForInputHint": "Dit commando wacht waarschijnlijk op invoer. Stop het, dan stelt de AI een niet-interactieve variant voor.",
     "cancelCommand": "Deze opdracht loskoppelen",
     "cancellingCommand": "Loskoppelen…",
     "commandCancelledNotice": "⚠ Handmatig geannuleerd — uitvoer kan onvolledig zijn, geen reguliere exitcode.",

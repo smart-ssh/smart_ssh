@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "Die KI-Zweitmeinung konnte nicht eingeholt werden. Angezeigt wird die regelbasierte Einstufung.",
     "riskHint": "Einschätzung basierend auf bekannten Mustern — keine Garantie.",
     "runningSince": "läuft seit {{seconds}}s…",
+    "waitingForInputHint": "Dieses Kommando wartet vermutlich auf eine Eingabe. Stoppe es, dann schlägt die KI eine nicht-interaktive Variante vor.",
     "cancelCommand": "Verbindung zu diesem Kommando trennen",
     "cancellingCommand": "Wird getrennt…",
     "commandCancelledNotice": "⚠ Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code.",

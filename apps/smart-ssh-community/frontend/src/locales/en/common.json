@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "The AI second opinion could not be obtained. The risk shown is the rule-based one.",
     "riskHint": "Assessment based on known patterns — no guarantee.",
     "runningSince": "running for {{seconds}}s…",
+    "waitingForInputHint": "This command is probably waiting for input. Stop it, and the AI will propose a non-interactive variant.",
     "cancelCommand": "Disconnect this command",
     "cancellingCommand": "Disconnecting…",
     "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code.",

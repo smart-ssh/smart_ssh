@@ -737,6 +737,34 @@ pub fn emit_chat_action_output(
     );
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatActionWaitingInputPayload {
+    session_id: SessionId,
+    action_id: ActionId,
+    waiting: bool,
+}
+
+/// Issue #327: a running command is probably waiting for input (`waiting:
+/// true`) or produced output again (`false`). Display only; the cancel
+/// note is decided in the backend, not from this event.
+pub fn emit_chat_action_waiting_input(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    waiting: bool,
+) {
+    emit(
+        emitter,
+        "chat-action-waiting-input",
+        &ChatActionWaitingInputPayload {
+            session_id,
+            action_id,
+            waiting,
+        },
+    );
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ChatErrorPayload {

@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "No se pudo obtener la segunda opinión de la IA. El riesgo mostrado es el basado en reglas.",
     "riskHint": "Evaluación basada en patrones conocidos: sin garantía.",
     "runningSince": "en ejecución desde hace {{seconds}} s…",
+    "waitingForInputHint": "Este comando probablemente está esperando una entrada. Deténlo y la IA propondrá una variante no interactiva.",
     "cancelCommand": "Desconectar este comando",
     "cancellingCommand": "Desconectando…",
     "commandCancelledNotice": "⚠ Cancelado manualmente: la salida puede estar incompleta y no hay código de salida normal.",

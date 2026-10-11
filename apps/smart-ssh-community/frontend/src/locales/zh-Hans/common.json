@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "无法获取 AI 二次意见。所示风险为基于规则的评估。",
     "riskHint": "基于已知模式的评估——不作保证。",
     "runningSince": "已运行 {{seconds}} 秒…",
+    "waitingForInputHint": "该命令可能正在等待输入。停止它后，AI 会建议一个非交互式的替代方案。",
     "cancelCommand": "断开此命令",
     "cancellingCommand": "正在断开…",
     "commandCancelledNotice": "⚠ 已手动取消——输出可能不完整，也没有正常的退出码。",

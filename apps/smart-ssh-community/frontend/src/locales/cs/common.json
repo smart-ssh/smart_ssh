@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "Druhý názor AI se nepodařilo získat. Zobrazené riziko vychází z pravidel.",
     "riskHint": "Posouzení na základě známých vzorů — bez záruky.",
     "runningSince": "běží {{seconds}} s…",
+    "waitingForInputHint": "Tento příkaz pravděpodobně čeká na vstup. Zastavte ho a AI navrhne neinteraktivní variantu.",
     "cancelCommand": "Odpojit tento příkaz",
     "cancellingCommand": "Odpojování…",
     "commandCancelledNotice": "⚠ Zrušeno ručně — výstup může být neúplný, bez běžného návratového kódu.",

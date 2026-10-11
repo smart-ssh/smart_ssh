@@ -237,14 +237,18 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         }
-        drop(sink);
-        match stdin {
+        // Issue #327: like a real transport, a command that never ends on
+        // its own keeps the live channel open until it is cancelled.
+        let held_sink = self.never_completing.contains(command).then_some(sink);
+        let outcome = match stdin {
             Some(stdin) => {
                 self.execute_with_stdin_cancellable(command, stdin, cancel)
                     .await
             }
             None => self.execute_cancellable(command, cancel).await,
-        }
+        };
+        drop(held_sink);
+        outcome
     }
 
     /// Issue #328: a never-completing command runs without the transport,
@@ -289,8 +293,11 @@ impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
             let _ = sink.send(chunk);
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
-        drop(sink);
+        // Like a real transport, keep the live channel open until the
+        // command is cancelled (issue #327: the idle timer of the
+        // waiting-for-input hint needs the forwarder to stay alive).
         let _ = cancel.await;
+        drop(sink);
         Ok(ssh_manager_core::ssh::ExecOutcome {
             output: CommandOutput {
                 stdout: b"partial output before cancel".to_vec(),
