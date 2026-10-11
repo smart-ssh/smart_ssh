@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH masih terkunci. Buka kuncinya terlebih dahulu dengan kata sandi utama Anda.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Operasi ini tidak sesuai dengan tempat kunci disimpan saat ini. Tidak ada yang diubah — buka kembali pengaturan, di sana ditampilkan mode yang aktif.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Peringatan kata sandi utama belum dikonfirmasi. Tanpa kata sandi itu semua data hilang dan tidak ada pemulihan — centang kotaknya dan atur lagi. Tidak ada yang diubah.",
-    "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya."
+    "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya.",
+    "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip."
   },
   "mcpServer": {
     "hint": "Klien MCP eksternal dapat menggunakan ini untuk mengusulkan perintah, pembacaan/penulisan berkas, dan pembaruan catatan pada server yang masuk daftar izin — setiap permintaan selalu memerlukan konfirmasi di aplikasi, terlepas dari aturan izin yang ada.",
@@ -1007,7 +1008,9 @@
     "renamePrompt": {
       "renameTitle": "Ubah nama",
       "newFolderTitle": "Folder baru"
-    }
+    },
+    "copyProgress": "Menyalin… {{done}} MB dari {{total}} MB",
+    "copyProgressUnknownTotal": "Menyalin… {{done}} MB"
   },
   "chat": {
     "newChat": "Obrolan baru",

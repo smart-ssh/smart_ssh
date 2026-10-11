@@ -1054,6 +1054,14 @@ mod tests {
         ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
             unreachable!()
         }
+        async fn read_file_capped(
+            &mut self,
+            _path: &str,
+            _max_bytes: u64,
+            _progress: &mut (dyn FnMut(u64) + Send),
+        ) -> Result<Vec<u8>, ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
         async fn write_file(
             &mut self,
             _path: &str,

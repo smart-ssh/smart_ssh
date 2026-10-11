@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH on yhä lukittu. Avaa lukitus ensin pääsalasanallasi.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Tämä toiminto ei vastaa sitä, missä avainta tällä hetkellä säilytetään. Mitään ei muutettu – avaa asetukset uudelleen, ne näyttävät aktiivisen tilan.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Pääsalasanan varoitusta ei ole vahvistettu. Ilman salasanaa kaikki tiedot menetetään eikä palautusta ole – valitse ruutu ja määritä uudelleen. Mitään ei muutettu.",
-    "KEYCHAIN_KEY_MISMATCH": "Avainrenkaan avain ei kuulu tähän tietokantaan. Mitään ei muutettu – tallennus tekisi tietokannasta lukukelvottoman seuraavassa käynnistyksessä."
+    "KEYCHAIN_KEY_MISMATCH": "Avainrenkaan avain ei kuulu tähän tietokantaan. Mitään ei muutettu – tallennus tekisi tietokannasta lukukelvottoman seuraavassa käynnistyksessä.",
+    "SFTP_CONTENT_TOO_LARGE": "Tiedosto on yli 50 Mt eikä sitä voi kopioida leikepöydälle."
   },
   "mcpServer": {
     "hint": "Ulkoiset MCP-asiakkaat voivat ehdottaa sen kautta komentoja, tiedostojen lukua ja kirjoitusta sekä muistiinpanojen päivityksiä sallituilla palvelimilla – jokainen pyyntö vaatii aina vahvistuksen sovelluksessa, voimassa olevista sallimissäännöistä riippumatta.",
@@ -1014,7 +1015,9 @@
     "renamePrompt": {
       "renameTitle": "Nimeä uudelleen",
       "newFolderTitle": "Uusi kansio"
-    }
+    },
+    "copyProgress": "Kopioidaan… {{done}} Mt / {{total}} Mt",
+    "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt"
   },
   "chat": {
     "newChat": "Uusi keskustelu",

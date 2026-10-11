@@ -15,38 +15,36 @@
  * aktivem Session-Tab auf — ohne Portal wäre dieser Dialog also fast immer
  * unsichtbar. `ModalBackdrop layer="app"` rendert nach `document.body` und behebt das. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { FeatureLockedPayload } from "./entitlements";
 import { subscribeFeatureLocked } from "./featureLockedBus";
-import { ModalBackdrop } from "../components/ModalBackdrop";
+import { Button, DialogFrame } from "../components/ui";
 
 export function FeatureLockedDialog() {
   const { t } = useTranslation();
   const [locked, setLocked] = useState<FeatureLockedPayload | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => subscribeFeatureLocked(setLocked), []);
 
   if (!locked) return null;
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm space-y-3 rounded border border-slate-700 bg-slate-900 p-5 text-slate-100">
-        <h2 className="font-heading text-sm font-semibold tracking-wide">
-          {t("featureLocked.title")}
-        </h2>
-        <p className="text-sm text-slate-300">
-          {t("featureLocked.body", { feature: locked.feature, tier: locked.tier })}
-        </p>
-        <button
-          type="button"
-          onClick={() => setLocked(null)}
-          className="w-full rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-semibold hover:bg-slate-700"
-        >
+    <DialogFrame
+      layer="app"
+      size="sm"
+      title={t("featureLocked.title")}
+      onClose={() => setLocked(null)}
+      initialFocusRef={closeRef}
+      actions={
+        <Button ref={closeRef} variant="secondary" onClick={() => setLocked(null)}>
           {t("featureLocked.close")}
-        </button>
-      </div>
-    </ModalBackdrop>
+        </Button>
+      }
+    >
+      <p>{t("featureLocked.body", { feature: locked.feature, tier: locked.tier })}</p>
+    </DialogFrame>
   );
 }

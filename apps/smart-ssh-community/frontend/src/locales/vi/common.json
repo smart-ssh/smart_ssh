@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH vẫn đang bị khóa. Hãy mở khóa bằng mật khẩu chính trước.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Thao tác này không khớp với nơi khóa hiện đang được giữ. Không có gì bị thay đổi — hãy mở lại cài đặt, nơi hiển thị chế độ đang dùng.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Cảnh báo về mật khẩu chính chưa được xác nhận. Không có mật khẩu đó thì toàn bộ dữ liệu sẽ mất và không thể khôi phục — hãy đánh dấu ô và thiết lập lại. Không có gì bị thay đổi.",
-    "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo."
+    "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo.",
+    "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm."
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",
@@ -1007,7 +1008,9 @@
     "renamePrompt": {
       "renameTitle": "Đổi tên",
       "newFolderTitle": "Thư mục mới"
-    }
+    },
+    "copyProgress": "Đang sao chép… {{done}} MB trên {{total}} MB",
+    "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB"
   },
   "chat": {
     "newChat": "Cuộc trò chuyện mới",

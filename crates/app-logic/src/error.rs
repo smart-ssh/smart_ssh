@@ -89,6 +89,16 @@ pub const IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND: &str = "IDENTITY_FILE_ROLLBACK
 /// übersetzen — die Regel wurde deshalb **nicht** gespeichert.
 pub const FILTER_RULE_PATTERN_INVALID: &str = "FILTER_RULE_PATTERN_INVALID";
 
+/// Issue #357, Spec 0086 A1.1: „Dateiinhalt kopieren" lehnt eine Datei über
+/// 50 MB ab. Das Frontend übersetzt den Code (`errorCodes.ts`), der Text hier
+/// ist nur der Fallback.
+pub const SFTP_CONTENT_TOO_LARGE: &str = "SFTP_CONTENT_TOO_LARGE";
+
+/// Issue #357, Spec 0086 A1.5: der Nutzer hat „Dateiinhalt kopieren"
+/// abgebrochen. Kein Fehler im eigentlichen Sinn; das Frontend zeigt dazu
+/// nichts an.
+pub const SFTP_COPY_CANCELLED: &str = "SFTP_COPY_CANCELLED";
+
 /// Spec 0077, 3.1.3: Wandelt einen [`RuleWriteError`] in einen
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
@@ -317,6 +327,9 @@ mod code_tests {
             "KEY_FILE_INVALID_KEY",
             // Spec 0077, 3.1.3 (BL-0249).
             super::FILTER_RULE_PATTERN_INVALID,
+            // Issue #357, Spec 0086 A1.1/A1.5.
+            super::SFTP_CONTENT_TOO_LARGE,
+            super::SFTP_COPY_CANCELLED,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();

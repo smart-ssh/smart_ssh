@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH 仍处于锁定状态。请先用您的主密码将其解锁。",
     "MASTER_PASSWORD_MODE_MISMATCH": "此操作与密钥当前的保存位置不符。未做任何更改——请重新打开设置，其中会显示当前生效的模式。",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "尚未确认主密码警告。没有该密码，所有数据都会丢失且无法恢复——请勾选复选框后重新设置。未做任何更改。",
-    "KEYCHAIN_KEY_MISMATCH": "密钥环中的密钥不属于此数据库。未做任何更改——保存它会导致数据库在下次启动时无法读取。"
+    "KEYCHAIN_KEY_MISMATCH": "密钥环中的密钥不属于此数据库。未做任何更改——保存它会导致数据库在下次启动时无法读取。",
+    "SFTP_CONTENT_TOO_LARGE": "文件大于 50 MB，无法复制到剪贴板。"
   },
   "mcpServer": {
     "hint": "外部 MCP 客户端可借此在允许列表中的服务器上提出命令、文件读写和备注更新的请求——无论现有的允许规则如何，每个请求始终都需要在应用中确认。",
@@ -1007,7 +1008,9 @@
     "renamePrompt": {
       "renameTitle": "重命名",
       "newFolderTitle": "新建文件夹"
-    }
+    },
+    "copyProgress": "正在复制… {{done}} MB / {{total}} MB",
+    "copyProgressUnknownTotal": "正在复制… {{done}} MB"
   },
   "chat": {
     "newChat": "新聊天",

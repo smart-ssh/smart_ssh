@@ -149,6 +149,26 @@ impl SftpSession for MockSftpSession {
             .ok_or_else(|| Self::not_found(path))
     }
 
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("read_file_capped {path}"));
+        let content = inner
+            .files
+            .get(path)
+            .map(|f| f.content.clone())
+            .ok_or_else(|| Self::not_found(path))?;
+        let len = content
+            .len()
+            .min(usize::try_from(max_bytes).unwrap_or(usize::MAX));
+        progress(len as u64);
+        Ok(content[..len].to_vec())
+    }
+
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {
         let mut inner = self.inner.lock().unwrap();
         inner.calls.push(format!("write_file {path}"));

@@ -1,4 +1,4 @@
-import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { Channel, invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type { FeatureLockedPayload } from "./extensions/entitlements";
 import { publishFeatureLocked } from "./extensions/featureLockedBus";
 import type {
@@ -591,6 +591,38 @@ export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string 
  * `crate::commands::sftp_read_text`). */
 export const sftpReadText = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<string>("sftp_read_text", { sessionId, path, elevatedUser });
+
+/** Fortschritt von `sftpCopyContent`: `done` gelesene Bytes, `total` die
+ * per `stat` gemeldete Größe (`null`, wenn sie unbekannt ist). */
+export interface CopyContentProgress {
+  done: number;
+  total: number | null;
+}
+
+/** Issue #357, Spec 0086 A1.1/A1.5: „Dateiinhalt kopieren" bis 50 MB. Liest
+ * begrenzt (Grenze + 1 Bytes), meldet den Fortschritt und lässt sich über
+ * `sftpCancelCopyContent(requestId)` abbrechen (Fehler-Code
+ * `SFTP_COPY_CANCELLED`). Zu groß: Code `SFTP_CONTENT_TOO_LARGE`. */
+export const sftpCopyContent = (
+  sessionId: string,
+  path: string,
+  elevatedUser: string | null,
+  requestId: string,
+  onProgress: (progress: CopyContentProgress) => void,
+) => {
+  const channel = new Channel<CopyContentProgress>();
+  channel.onmessage = onProgress;
+  return invoke<string>("sftp_copy_content", {
+    sessionId,
+    path,
+    elevatedUser,
+    requestId,
+    onProgress: channel,
+  });
+};
+
+export const sftpCancelCopyContent = (requestId: string) =>
+  invoke<void>("sftp_cancel_copy_content", { requestId });
 
 /** Spec 0054, Teil 3: existiert `path` bereits? Grundlage für die
  * Kollisionsprüfung bei Umbenennen/Verschieben/Hochladen. */
