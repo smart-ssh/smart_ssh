@@ -55,6 +55,22 @@ eingestellten UI-Sprache.
 - Eine Kategorie, die sich erst nach dem ersten Aufbau der Einstellungen
   registriert, erscheint ohne Neuladen in der Navigation.
 
+## Einheitliche Bedienelemente
+
+Schaltflächen, Dialoge und Formularfelder folgen einem gemeinsamen Muster
+(Leitfaden `docs/ui-guidelines.md`), damit jeder Bildschirm gleich aussieht und
+sich gleich bedient:
+
+- Schaltflächen gibt es als Primär-, Sekundär-, Gefahr- und Link-Variante. Pro
+  Dialog oder Formular gibt es höchstens eine Primäraktion.
+- Dialoge zeigen Titel, scrollenden Inhalt und eine Aktionsleiste rechts unten;
+  Abbrechen steht links von der Primäraktion. Escape schließt den Dialog, Tab
+  bleibt im Dialog, und der Fokus kehrt beim Schließen zurück.
+- In einem Formular löst Enter die Primäraktion aus.
+- Formularfelder haben eine sichtbare Beschriftung; Hilfetext und Fehlermeldung
+  stehen darunter und sind dem Feld für Screenreader zugeordnet.
+- Der Tastaturfokus ist an jedem Bedienelement als Rahmen sichtbar.
+
 ## Kontrast und Lesbarkeit
 
 Jeder Text erreicht gegen seinen tatsächlichen Hintergrund mindestens das
