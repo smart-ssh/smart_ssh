@@ -129,6 +129,17 @@ pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulat
         .map(|segment| resolve_effective_command(segment))
         .collect();
     segments.extend(resolved);
+    // Trailing-space form (issue #374): `segment_command` trims every
+    // segment, so `rm  ` inside a chain reaches the patterns as `rm`,
+    // while the same text classified alone matches the `rm *` glob. Also
+    // match each segment with exactly one trailing space so chaining can
+    // never rate a command lower than the command on its own.
+    let padded: Vec<String> = segments
+        .iter()
+        .filter(|segment| !segment.is_empty() && !segment.ends_with(char::is_whitespace))
+        .map(|segment| format!("{segment} "))
+        .collect();
+    segments.extend(padded);
 
     for segment in &segments {
         // Wie die Hard-Blacklist der Filter-Engine (s.

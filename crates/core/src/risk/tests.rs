@@ -1287,3 +1287,31 @@ fn test_server_risk_benign_function_not_fork_bomb() {
         );
     }
 }
+
+// --- Issue #374: whitespace-padded segments in a chain -----------------
+
+#[test]
+fn chaining_whitespace_padded_segment_never_lowers_risk() {
+    // Failing proptest case: `rm  ` alone matches `rm *`, but inside a
+    // chain the segment is trimmed to `rm`.
+    let alone = classify("rm  ");
+    let chained = classify("a ;rm  ");
+    assert!(alone.server_risk > RiskLevel::None);
+    assert!(chained.server_risk >= alone.server_risk);
+    assert!(chained.data_risk >= alone.data_risk);
+}
+
+#[test]
+fn chaining_trailing_space_glob_commands_never_lower_risk() {
+    for word in ["rm", "kill", "env", "printenv"] {
+        for sep in [";", "&&", "||", "|", "\n"] {
+            let part = format!("{word}  ");
+            let alone = classify(&part);
+            let chained = classify(&format!("a {sep}{part}"));
+            assert!(
+                chained.server_risk >= alone.server_risk && chained.data_risk >= alone.data_risk,
+                "risk fell for {word:?} after {sep:?}"
+            );
+        }
+    }
+}
