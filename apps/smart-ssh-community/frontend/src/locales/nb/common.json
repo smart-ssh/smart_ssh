@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "AI-andremeningen kunne ikke hentes. Risikoen som vises er den regelbaserte.",
     "riskHint": "Vurdering basert på kjente mønstre – ingen garanti.",
     "runningSince": "kjører i {{seconds}} s…",
+    "waitingForInputHint": "Denne kommandoen venter sannsynligvis på inndata. Stopp den, så foreslår AI-en en ikke-interaktiv variant.",
     "cancelCommand": "Koble fra denne kommandoen",
     "cancellingCommand": "Kobler fra…",
     "commandCancelledNotice": "⚠ Avbrutt manuelt – utdata kan være ufullstendige, ingen vanlig avslutningskode.",

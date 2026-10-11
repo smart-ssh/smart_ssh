@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "AI-anden vurdering kunne ikke indhentes. Den viste risiko er den regelbaserede.",
     "riskHint": "Vurdering baseret på kendte mønstre – ingen garanti.",
     "runningSince": "kører i {{seconds}} s…",
+    "waitingForInputHint": "Denne kommando venter sandsynligvis på input. Stop den, så foreslår AI'en en ikke-interaktiv variant.",
     "cancelCommand": "Afbryd forbindelsen til denne kommando",
     "cancellingCommand": "Afbryder…",
     "commandCancelledNotice": "⚠ Annulleret manuelt – udskriften kan være ufuldstændig, ingen almindelig afslutningskode.",

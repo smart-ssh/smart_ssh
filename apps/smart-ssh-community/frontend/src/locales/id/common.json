@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "Opini kedua AI tidak dapat diperoleh. Risiko yang ditampilkan berdasarkan aturan.",
     "riskHint": "Penilaian berdasarkan pola yang dikenal — tanpa jaminan.",
     "runningSince": "berjalan selama {{seconds}} dtk…",
+    "waitingForInputHint": "Perintah ini kemungkinan menunggu input. Hentikan, lalu AI akan mengusulkan varian non-interaktif.",
     "cancelCommand": "Putuskan perintah ini",
     "cancellingCommand": "Memutuskan…",
     "commandCancelledNotice": "⚠ Dibatalkan secara manual — keluaran mungkin tidak lengkap, tanpa kode keluar normal.",
