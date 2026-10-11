@@ -22,7 +22,8 @@ use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio::sync::oneshot;
 
 use ssh_manager_core::ssh::{
-    CommandOutput, ExecOutcome, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
+    CommandOutput, ExecOutcome, ExecOutputSink, InteractiveShell, PtySize, SftpSession, SshError,
+    SshTransport,
 };
 
 use crate::exec::{CappedOutput, MAX_STREAM_OUTPUT_BYTES};
@@ -242,6 +243,7 @@ impl LocalTransport {
         &self,
         command: &str,
         cancel: Option<oneshot::Receiver<()>>,
+        sink: Option<ExecOutputSink>,
     ) -> Result<ExecOutcome, SshError> {
         let mut cmd = shell_command(command);
         // Issue #10: run in the home directory like an SSH exec channel
@@ -291,7 +293,7 @@ impl LocalTransport {
             .take()
             .expect("stderr wurde als Stdio::piped() angefordert");
 
-        let mut capped = CappedOutput::with_limit(self.max_output_bytes);
+        let mut capped = CappedOutput::with_limit_and_sink(self.max_output_bytes, sink);
         let mut pipes = ChildPipes::new(stdout, stderr);
         // spec-reviewer-Fund: ein echter Lese-Fehler auf der Pipe ist NICHT
         // dasselbe wie ein reguläres EOF (`Ok(0)`) — beide vorher gleich zu
@@ -427,7 +429,20 @@ impl SshTransport for LocalTransport {
     /// Rest seiner Ausgabe wird verworfen, das Ergebnis als `truncated`
     /// markiert.
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        Ok(self.run(command, None).await?.output)
+        Ok(self.run(command, None, None).await?.output)
+    }
+
+    /// Issue #325: same process handling as `execute_cancellable`, every kept
+    /// chunk is additionally forwarded to `sink`. `stdin` is ignored like in
+    /// the other local variants (`Stdio::null()`).
+    async fn execute_streaming(
+        &mut self,
+        command: &str,
+        _stdin: Option<&[u8]>,
+        cancel: oneshot::Receiver<()>,
+        sink: ExecOutputSink,
+    ) -> Result<ExecOutcome, SshError> {
+        self.run(command, Some(cancel), Some(sink)).await
     }
 
     fn set_max_output_bytes(&mut self, limit: usize) {
@@ -453,7 +468,7 @@ impl SshTransport for LocalTransport {
         command: &str,
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel)).await
+        self.run(command, Some(cancel), None).await
     }
 
     /// Wie [`execute_cancellable`](Self::execute_cancellable); `stdin` wird
@@ -464,7 +479,7 @@ impl SshTransport for LocalTransport {
         _stdin: &[u8],
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        self.run(command, Some(cancel)).await
+        self.run(command, Some(cancel), None).await
     }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
@@ -1103,5 +1118,115 @@ mod tests {
         assert!(!outcome.cancelled);
         assert_eq!(outcome.output.exit_code, Some(0));
         assert_eq!(String::from_utf8_lossy(&outcome.output.stdout), "a\nb\n");
+    }
+
+    /// Issue #325: on the local pseudo-server, `execute_streaming` delivers
+    /// the first line while the command is still running (it sleeps before
+    /// the second line), stdout and stderr each on their own stream, and
+    /// the final result equals what `execute()` returns.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_execute_streaming_delivers_lines_while_running() {
+        use ssh_manager_core::ssh::{ExecOutputChunk, OutputStream};
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let mut transport = LocalTransport::new();
+        let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+        let finished = Arc::new(AtomicBool::new(false));
+        let finished_in_exec = finished.clone();
+
+        let exec = async move {
+            let outcome = transport
+                .execute_streaming(
+                    "echo first; echo oops 1>&2; sleep 1; echo second",
+                    None,
+                    cancel_rx,
+                    sink,
+                )
+                .await;
+            finished_in_exec.store(true, Ordering::SeqCst);
+            outcome
+        };
+        let watch = async {
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let mut first_seen_while_running = None;
+            while let Some(chunk) = chunks.recv().await {
+                match chunk {
+                    ExecOutputChunk::Data {
+                        stream: OutputStream::Stdout,
+                        bytes,
+                    } => {
+                        stdout.extend(bytes);
+                        if first_seen_while_running.is_none() && stdout.starts_with(b"first\n") {
+                            first_seen_while_running = Some(!finished.load(Ordering::SeqCst));
+                        }
+                    }
+                    ExecOutputChunk::Data {
+                        stream: OutputStream::Stderr,
+                        bytes,
+                    } => stderr.extend(bytes),
+                    ExecOutputChunk::Truncated => panic!("unexpected truncation"),
+                }
+            }
+            (stdout, stderr, first_seen_while_running)
+        };
+        let (outcome, (stdout, stderr, first_seen_while_running)) =
+            tokio::time::timeout(NO_HANG_TIMEOUT, async { tokio::join!(exec, watch) })
+                .await
+                .expect("execute_streaming() must not hang");
+        let outcome = outcome.unwrap();
+
+        assert_eq!(first_seen_while_running, Some(true));
+        assert_eq!(stdout, b"first\nsecond\n");
+        assert_eq!(stderr, b"oops\n");
+        assert!(!outcome.cancelled);
+        assert_eq!(outcome.output.stdout, stdout);
+        assert_eq!(outcome.output.stderr, stderr);
+        assert_eq!(outcome.output.exit_code, Some(0));
+    }
+
+    /// Issue #325: the local cap stops the live stream at the limit, sends
+    /// one `Truncated`, and the final result is the capped result.
+    #[tokio::test]
+    async fn test_execute_streaming_stops_forwarding_at_the_cap() {
+        use ssh_manager_core::ssh::ExecOutputChunk;
+
+        let mut transport = LocalTransport::new();
+        const SMALL_LIMIT: usize = 4096;
+        transport.set_max_output_bytes(SMALL_LIMIT);
+        #[cfg(unix)]
+        let command = "yes AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        #[cfg(windows)]
+        let command = "for /L %i in (1,0,2) do @echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let (sink, mut chunks) = tokio::sync::mpsc::unbounded_channel();
+        let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+
+        let outcome = tokio::time::timeout(
+            NO_HANG_TIMEOUT,
+            transport.execute_streaming(command, None, cancel_rx, sink),
+        )
+        .await
+        .expect("execute_streaming() must not hang on a flooding command")
+        .expect("execute_streaming() should succeed despite truncation");
+
+        let mut live = Vec::new();
+        let mut truncated_events = 0;
+        while let Some(chunk) = chunks.recv().await {
+            match chunk {
+                ExecOutputChunk::Data { bytes, .. } => {
+                    assert_eq!(truncated_events, 0, "no data after the cap");
+                    live.extend(bytes);
+                }
+                ExecOutputChunk::Truncated => truncated_events += 1,
+            }
+        }
+        assert_eq!(live.len(), SMALL_LIMIT);
+        assert_eq!(truncated_events, 1);
+        assert!(outcome.output.truncated);
+        let mut expected = live.clone();
+        expected.extend_from_slice(crate::exec::TRUNCATION_NOTICE);
+        assert_eq!(outcome.output.stdout, expected);
     }
 }

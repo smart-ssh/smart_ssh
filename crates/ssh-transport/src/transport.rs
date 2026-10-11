@@ -6,7 +6,8 @@ use russh::{Channel, ChannelMsg};
 use tokio::sync::oneshot;
 
 use ssh_manager_core::ssh::{
-    CommandOutput, ExecOutcome, InteractiveShell, PtySize, SftpSession, SshError, SshTransport,
+    CommandOutput, ExecOutcome, ExecOutputSink, InteractiveShell, PtySize, SftpSession, SshError,
+    SshTransport,
 };
 
 use crate::error::map_session_russh_error;
@@ -98,8 +99,9 @@ async fn drain_channel_cancellable(
     mut channel: Channel<Msg>,
     mut cancel: oneshot::Receiver<()>,
     max_output_bytes: usize,
+    sink: Option<ExecOutputSink>,
 ) -> Result<ExecOutcome, SshError> {
-    let mut acc = ExecAccumulator::with_limit(max_output_bytes);
+    let mut acc = ExecAccumulator::with_limit_and_sink(max_output_bytes, sink);
     loop {
         if acc.cap_reached() {
             let _ = channel.eof().await;
@@ -194,7 +196,7 @@ impl SshTransport for RusshTransport {
             .exec(true, command)
             .await
             .map_err(map_session_russh_error)?;
-        drain_channel_cancellable(channel, cancel, self.max_output_bytes).await
+        drain_channel_cancellable(channel, cancel, self.max_output_bytes, None).await
     }
 
     async fn execute_with_stdin_cancellable(
@@ -219,7 +221,38 @@ impl SshTransport for RusshTransport {
                 .map_err(map_session_russh_error)?;
         }
         channel.eof().await.map_err(map_session_russh_error)?;
-        drain_channel_cancellable(channel, cancel, self.max_output_bytes).await
+        drain_channel_cancellable(channel, cancel, self.max_output_bytes, None).await
+    }
+
+    /// Issue #325: same channel handling as `execute_cancellable` /
+    /// `execute_with_stdin_cancellable`, the accumulator additionally
+    /// forwards every kept chunk to `sink`.
+    async fn execute_streaming(
+        &mut self,
+        command: &str,
+        stdin: Option<&[u8]>,
+        cancel: oneshot::Receiver<()>,
+        sink: ExecOutputSink,
+    ) -> Result<ExecOutcome, SshError> {
+        let channel = self
+            .handle
+            .channel_open_session()
+            .await
+            .map_err(map_session_russh_error)?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(map_session_russh_error)?;
+        if let Some(stdin) = stdin {
+            if !stdin.is_empty() {
+                channel
+                    .data_bytes(stdin.to_vec())
+                    .await
+                    .map_err(map_session_russh_error)?;
+            }
+            channel.eof().await.map_err(map_session_russh_error)?;
+        }
+        drain_channel_cancellable(channel, cancel, self.max_output_bytes, Some(sink)).await
     }
 
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {

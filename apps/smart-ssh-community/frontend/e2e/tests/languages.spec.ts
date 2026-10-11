@@ -48,10 +48,13 @@ async function expectNoRawKeys(page: Page, where: string) {
   await expect.poll(() => rawKeysOnScreen(page), { message: `raw i18n keys on ${where}` }).toEqual([]);
 }
 
+// The picker labels each language by its own name, whatever the UI language.
+const ENDONYMS = { de: "Deutsch", en: "English" } as const;
+
 async function switchLanguage(page: Page, from: Catalog, to: "de" | "en") {
   await page.getByRole("button", { name: tr(from, "settings.title"), exact: true }).click();
   await page.getByRole("button", { name: tr(from, "settings.categories.displayLanguage"), exact: true }).click();
-  await page.getByRole("button", { name: tr(from, `settings.language.${to}`), exact: true }).click();
+  await page.getByRole("button", { name: ENDONYMS[to], exact: true }).click();
   // The UI switches at once: the settings title is now in the new language.
   await expect(page.getByRole("heading", { name: tr(CATALOGS[to], "settings.title"), exact: true })).toBeVisible();
   await page.getByRole("button", { name: tr(CATALOGS[to], "common.close"), exact: true }).click();

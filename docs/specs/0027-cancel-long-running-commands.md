@@ -2,7 +2,7 @@
 
 Status: umgesetzt
 Zweck: Ein von der KI vorgeschlagenes Kommando, das nicht von selbst endet (`tail -f`, `journalctl -f`, `watch`), blockiert nicht für immer die Sitzung: der Nutzer kann die Verbindung zu genau diesem Kommando trennen und bekommt die bis dahin gesammelte Ausgabe als Ergebnis.
-Bezüge: Spec 0005 (Einzelkommando), Spec 0006 (Redaction), Spec 0007 (Kernschleife, Bestätigung), Spec 0018 (Sudo-Passwort), Spec 0020 (Dateikanal), Spec 0021 (automatische Folgerunden), Spec 0024 (Texte), Spec 0032 (Localhost), Spec 0039 (Fencing), Spec 0043 (Ausgabegrenze), Spec 0066 (Stopp), ADR 0057.
+Bezüge: Spec 0005 (Einzelkommando), Spec 0006 (Redaction), Spec 0007 (Kernschleife, Bestätigung), Spec 0018 (Sudo-Passwort), Spec 0020 (Dateikanal), Spec 0021 (automatische Folgerunden), Spec 0024 (Texte), Spec 0032 (Localhost), Spec 0039 (Fencing), Spec 0043 (Ausgabegrenze), Spec 0066 (Stopp), Spec 0106 (Live-Ausgabe), ADR 0057.
 
 ## 1. Ziel
 
@@ -42,6 +42,9 @@ vor, erscheint an der Aktionskarte:
 
 Die Beschriftung sagt bewusst nicht „Kommando stoppen", weil sie keinen
 garantierten Kill verspricht (Abschnitt 3.4).
+
+Die Live-Ausgabe des laufenden Kommandos (Spec 0106) erscheint unabhängig
+davon im selben Block; Indikator und Abbruch wirken mit ihr unverändert.
 
 **2.2 Nur Kommandos.** Der Indikator erscheint nur für vorgeschlagene
 Shell-Kommandos. Lesen und Schreiben von Dateien läuft über den

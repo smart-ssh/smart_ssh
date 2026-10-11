@@ -4,10 +4,16 @@ import {
   MASTER_PASSWORD_ERROR_CODES,
   translateErrorCode,
 } from "./errorCodes";
+import { SUPPORTED_LANGUAGES } from "./languages";
 import { testI18n } from "./testI18n";
 
 /** Testdouble für `useTranslation()`s `t` — löst bekannte Keys auf einen
  * erkennbaren String auf, damit sich Treffer/Fallback klar unterscheiden. */
+/** Sprachen, für die dieser Test den Wortlaut prüft (Regex auf den
+ * deutschen/englischen Text). Weitere Sprachen laufen über die generischen
+ * Registry-Tests unten bzw. in `locales/localeKeyParity.test.ts`. */
+const TEXT_ASSERTION_LANGUAGES = SUPPORTED_LANGUAGES.filter((l) => l.startsWith("de") || l === "en");
+
 const fakeT = (key: string) => `translated:${key}`;
 
 describe("translateErrorCode", () => {
@@ -65,7 +71,7 @@ describe("translateErrorCode", () => {
 
   // Issue #96: Verbindungsverlust einer laufenden Sitzung bekommt einen
   // eigenen Text, nicht den des Verbindungsaufbaus.
-  it.each(["de", "en"] as const)(
+  it.each(TEXT_ASSERTION_LANGUAGES)(
     "übersetzt SSH_SESSION_CLOSED (%s) mit eigenem Text ohne Aufbau-Bezug",
     (language) => {
       const t = testI18n.getFixedT(language);
@@ -84,7 +90,7 @@ describe("translateErrorCode", () => {
   // übersetzten Text zeigen, nicht den `message`-Fallback. Ohne den Eintrag
   // in `KNOWN_ERROR_CODES` stünde hier der rohe englische
   // `keyring`-Bibliothekstext, also genau der Fehler aus BL-0031.
-  it.each(["de", "en"] as const)(
+  it.each(TEXT_ASSERTION_LANGUAGES)(
     "übersetzt KEYCHAIN_UNAVAILABLE (%s) statt den rohen Bibliothekstext zu zeigen",
     (language) => {
       const raw = "Credential-Backend-Fehler: No default store has been set";
@@ -103,7 +109,7 @@ describe("translateErrorCode", () => {
   // der Nutzlast der Bibliothek, aber deutsch und technisch („Zugriff auf den
   // Schlüsselbund fehlgeschlagen (Passphrase)"). Ohne den Eintrag in
   // `KNOWN_ERROR_CODES` sähe ein Nutzer mit englischer UI genau den.
-  it.each(["de", "en"] as const)(
+  it.each(TEXT_ASSERTION_LANGUAGES)(
     "übersetzt KEYCHAIN_ACCESS_FAILED (%s) statt den Backend-Text zu zeigen",
     (language) => {
       const raw = "Zugriff auf den Schlüsselbund fehlgeschlagen (Passphrase)";
@@ -124,7 +130,7 @@ describe("translateErrorCode", () => {
   // Spec 0098, T8/A6: Die beiden Schlüsselbund-Codes sind unterschiedliche
   // Aussagen und dürfen nicht denselben Text bekommen — sonst wäre der
   // ganze Unterschied zwischen A1 und A2 für den Nutzer unsichtbar.
-  it.each(["de", "en"] as const)(
+  it.each(TEXT_ASSERTION_LANGUAGES)(
     "unterscheidet KEYCHAIN_ACCESS_FAILED von KEYCHAIN_UNAVAILABLE (%s)",
     (language) => {
       const t = testI18n.getFixedT(language);
@@ -142,7 +148,7 @@ describe("translateErrorCode", () => {
   // eines übersetzten Satzes. *Gegenbeweis:* Entfernt man den Eintrag aus
   // `KNOWN_ERROR_CODES`, liefert `translateErrorCode` den `raw`-Fallback,
   // und dieser Test scheitert an der ersten Zusicherung.
-  it.each(["de", "en"] as const)(
+  it.each(TEXT_ASSERTION_LANGUAGES)(
     "übersetzt SECRET_STORE_FAILED (%s) statt den rohen Backend-Text zu zeigen",
     (language) => {
       const raw = "credential store backend failure: disk I/O error";
@@ -159,7 +165,7 @@ describe("translateErrorCode", () => {
   // Derselbe Grund wie bei den beiden Schlüsselbund-Codes oben: Ein
   // gescheiterter Secret-Zugriff und ein gescheiterter Schlüsselbund-Zugriff
   // sind unterschiedliche Ursachen mit unterschiedlichem nächsten Schritt.
-  it.each(["de", "en"] as const)("unterscheidet SECRET_STORE_FAILED von KEYCHAIN_ACCESS_FAILED (%s)", (language) => {
+  it.each(TEXT_ASSERTION_LANGUAGES)("unterscheidet SECRET_STORE_FAILED von KEYCHAIN_ACCESS_FAILED (%s)", (language) => {
     const t = testI18n.getFixedT(language);
 
     expect(translateErrorCode(t, "SECRET_STORE_FAILED", "fallback")).not.toBe(
@@ -179,14 +185,15 @@ describe("FIVE_MINUTE_PATH_ERROR_CODES", () => {
   const FALLBACK = "__FALLBACK_SENTINEL__";
 
   it.each(FIVE_MINUTE_PATH_ERROR_CODES)("%s ist bekannt und DE/EN unterscheiden sich", (code) => {
-    const de = translateErrorCode(testI18n.getFixedT("de"), code, FALLBACK);
     const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
-
-    expect(de).not.toBe(FALLBACK);
     expect(en).not.toBe(FALLBACK);
-    expect(de.trim().length).toBeGreaterThan(0);
     expect(en.trim().length).toBeGreaterThan(0);
-    expect(de).not.toBe(en);
+    for (const lng of SUPPORTED_LANGUAGES.filter((l) => l !== "en")) {
+      const text = translateErrorCode(testI18n.getFixedT(lng), code, FALLBACK);
+      expect(text, lng).not.toBe(FALLBACK);
+      expect(text.trim().length, lng).toBeGreaterThan(0);
+      expect(text, lng).not.toBe(en);
+    }
   });
 
   it("enthält keine doppelten Codes", () => {
@@ -204,16 +211,18 @@ describe("MASTER_PASSWORD_ERROR_CODES", () => {
   const FALLBACK = "__FALLBACK_SENTINEL__";
 
   it.each(MASTER_PASSWORD_ERROR_CODES)("%s ist bekannt und DE/EN unterscheiden sich", (code) => {
-    const de = translateErrorCode(testI18n.getFixedT("de"), code, FALLBACK);
     const en = translateErrorCode(testI18n.getFixedT("en"), code, FALLBACK);
-
-    expect(de).not.toBe(FALLBACK);
     expect(en).not.toBe(FALLBACK);
-    // Ein fehlender Schlüssel käme als `errors.<CODE>` durch — das ist
-    // kein Text, den ein Nutzer lesen soll.
-    expect(de).not.toBe(`errors.${code}`);
     expect(en).not.toBe(`errors.${code}`);
-    expect(de).not.toBe(en);
+    for (const lng of SUPPORTED_LANGUAGES.filter((l) => l !== "en")) {
+      const text = translateErrorCode(testI18n.getFixedT(lng), code, FALLBACK);
+      expect(text, lng).not.toBe(FALLBACK);
+      expect(text.trim().length, lng).toBeGreaterThan(0);
+      // Ein fehlender Schlüssel käme als `errors.<CODE>` durch — das ist
+      // kein Text, den ein Nutzer lesen soll.
+      expect(text, lng).not.toBe(`errors.${code}`);
+      expect(text, lng).not.toBe(en);
+    }
   });
 
   it("MASTER_PASSWORD_FILE_ABSENT behauptet keine unlesbare Datei (review-09, Runde 2 Teil A, Fund 2 „Rest“)", () => {
@@ -261,7 +270,7 @@ describe("MASTER_PASSWORD_ERROR_CODES", () => {
 // kopiertes/erwartetes Textstück, damit ein künftig geändertes Label nicht
 // unbemerkt aus dem Fehlertext herausfällt.
 describe("AI_CONTEXT_TOO_LARGE (Spec 0087)", () => {
-  it.each(["de", "en"] as const)(
+  it.each(TEXT_ASSERTION_LANGUAGES)(
     "(%s) nennt das Label der Max.-Antwortlänge-Einstellung",
     (language) => {
       const t = testI18n.getFixedT(language);
@@ -277,7 +286,7 @@ describe("AI_CONTEXT_TOO_LARGE (Spec 0087)", () => {
 describe("FILTER_RULE_PATTERN_INVALID (Spec 0077)", () => {
   const RAW = "regex parse error: unclosed group";
 
-  it.each(["de", "en"] as const)(
+  it.each(TEXT_ASSERTION_LANGUAGES)(
     "übersetzt den Code (%s) statt den Rohcode oder den Bibliothekstext zu zeigen",
     (language) => {
       const text = translateErrorCode(
@@ -388,7 +397,7 @@ describe("Prüfung nicht verfügbar (Issue #102)", () => {
     "AI_INJECTION_CHECK_INACTIVE",
   ];
   for (const code of codes) {
-    for (const lng of ["de", "en"]) {
+    for (const lng of SUPPORTED_LANGUAGES) {
       it(`${code} hat einen ${lng}-Text`, () => {
         const text = translateErrorCode(testI18n.getFixedT(lng), code, "fallback");
         expect(text).not.toBe("fallback");

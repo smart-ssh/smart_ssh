@@ -84,6 +84,14 @@ Fertige Installer und Binaries für alle Plattformen stehen unter [Releases](htt
 
 ---
 
+## 🌍 Übersetzungen
+
+Deutsch und Englisch werden von Hand gepflegt. Alle weiteren Sprachen sind
+maschinell übersetzt und können Fehler enthalten. Fehlerhafte oder
+unpassende Übersetzungen gern als Issue melden (Sprache, Stelle in der App,
+besserer Text) – Korrekturen sind willkommen. Terminologie:
+[docs/i18n-glossary.md](docs/i18n-glossary.md).
+
 ## 🛠️ Entwicklung & Bauen
 
 ### Voraussetzungen

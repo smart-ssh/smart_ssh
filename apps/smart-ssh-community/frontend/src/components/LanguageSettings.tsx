@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage } from "../api";
-import { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "../i18n";
+import { setLanguage, type SupportedLanguage } from "../i18n";
+import { languagesForPicker } from "../languages";
 
 /** Spec 0050, Teil 1: aus `AiProviderSettings` herausgelöster
  * Sprachumschalter — eigene Kategorie ("Anzeige & Sprache") in der
  * zweispaltigen Settings-Struktur statt Teil der KI-Provider-Sektion. */
 export function LanguageSettings() {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const [error, setError] = useState<string | null>(null);
 
   /** Spec 0024, Abschnitt 4: Wirkung sofort ohne Neustart —
@@ -24,8 +25,9 @@ export function LanguageSettings() {
     <div>
       {error && <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
       <div className="flex gap-2">
-        {SUPPORTED_LANGUAGES.map((language) => (
+        {languagesForPicker().map(({ code: language, endonym }) => (
           <button
+            lang={language}
             key={language}
             type="button"
             onClick={() => handleLanguageChange(language)}
@@ -36,7 +38,7 @@ export function LanguageSettings() {
                 : "bg-slate-700 text-slate-200 hover:bg-slate-600"
             }`}
           >
-            {t(`settings.language.${language}`)}
+            {endonym}
           </button>
         ))}
       </div>
