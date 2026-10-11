@@ -153,7 +153,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                   ref={rejectButtonRef}
                   type="button"
                   onClick={() => decide("reject")}
-                  className="font-heading flex-1 bg-red-600 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
+                  className="font-heading flex-1 bg-red-700 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
                 >
                   {t("hostKeyDialog.cancelConnection")}
                 </button>
