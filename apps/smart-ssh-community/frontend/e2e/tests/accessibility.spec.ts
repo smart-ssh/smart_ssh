@@ -1,17 +1,33 @@
 // Case 10: axe scans of the main screen, the settings and the command
 // confirmation. Known violations that this issue does not fix are listed,
 // with a reason, in `support/axe.ts`.
-import { expect, test } from "../support/app";
+import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
 import { openSession, redCommandProposal } from "../support/session";
 
-test.describe("accessibility", () => {
-  test("main screen", async ({ app }) => {
+// New screens: add one line here. `open` brings the app into the state
+// to scan; the key is the screen name used in the axe allowlist.
+const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
+  main: async (app) => {
     await app.launch(populated());
     await expect(app.page.getByText("db-primary")).toBeVisible();
-    await expectNoSeriousA11yViolations(app.page, "main");
-  });
+  },
+  "command confirmation": async (app) => {
+    await app.launch(populated());
+    const sessionId = await openSession(app, "db-primary");
+    await app.emit("chat-action-proposed", redCommandProposal(sessionId, "rm -rf /var/lib/app/cache"));
+    await expect(app.page.getByRole("button", { name: "Execute", exact: true })).toBeVisible();
+  },
+};
+
+test.describe("accessibility", () => {
+  for (const [name, open] of Object.entries(SCREENS)) {
+    test(name, async ({ app }) => {
+      await open(app);
+      await expectNoSeriousA11yViolations(app.page, name);
+    });
+  }
 
   test("settings, every category", async ({ app }) => {
     test.setTimeout(90_000);
@@ -27,13 +43,5 @@ test.describe("accessibility", () => {
       await expect(category).toHaveAttribute("aria-current", "page");
       await expectNoSeriousA11yViolations(page, `settings: ${await category.innerText()}`);
     }
-  });
-
-  test("command confirmation", async ({ app }) => {
-    await app.launch(populated());
-    const sessionId = await openSession(app, "db-primary");
-    await app.emit("chat-action-proposed", redCommandProposal(sessionId, "rm -rf /var/lib/app/cache"));
-    await expect(app.page.getByRole("button", { name: "Execute", exact: true })).toBeVisible();
-    await expectNoSeriousA11yViolations(app.page, "command confirmation");
   });
 });
