@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Đặt một ứng dụng cục bộ cho từng phần mở rộng tệp để dùng với \"Mở cục bộ\". Nếu không có mục nào, ứng dụng mặc định của hệ điều hành sẽ được dùng.",
+    "extensionLabel": "Phần mở rộng tệp",
     "appPathPlaceholder": "Đường dẫn đến ứng dụng",
     "browse": "Duyệt…",
     "remove": "Xóa dòng",

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Defina um aplicativo local por extensão de arquivo para usar em \"Abrir localmente\". Sem uma entrada, é usado o aplicativo padrão do sistema operacional.",
+    "extensionLabel": "Extensão do arquivo",
     "appPathPlaceholder": "Caminho do aplicativo",
     "browse": "Procurar…",
     "remove": "Remover linha",

@@ -8,6 +8,7 @@ import {
   type FileTypeAppSettings,
 } from "../fileTypeSettings";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { Button, FIELD_CONTROL_CLASS } from "./ui";
 
 interface Row {
   /** Stabiler React-`key`, unabhängig vom (während der Bearbeitung
@@ -110,7 +111,7 @@ export function FileTypeSettings() {
       <p className="mb-4 text-sm text-slate-400">{t("fileTypes.description")}</p>
 
       {loadError && (
-        <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{loadError}</p>
+        <p role="alert" className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{loadError}</p>
       )}
 
       <div className="mb-3 space-y-2">
@@ -121,49 +122,39 @@ export function FileTypeSettings() {
               value={row.extension}
               onChange={(e) => updateRow(row.id, { extension: e.target.value })}
               placeholder=".conf"
-              className="w-24 rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-sm text-slate-100 focus:outline-none"
+              aria-label={t("fileTypes.extensionLabel")}
+              className={`${FIELD_CONTROL_CLASS} w-24 font-mono`}
             />
             <input
               {...TECHNICAL_INPUT_PROPS}
               value={row.appPath}
               onChange={(e) => updateRow(row.id, { appPath: e.target.value })}
               placeholder={t("fileTypes.appPathPlaceholder")}
-              className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-sm text-slate-100 focus:outline-none"
+              aria-label={t("fileTypes.appPathPlaceholder")}
+              title={row.appPath || undefined}
+              className={`${FIELD_CONTROL_CLASS} min-w-0 flex-1 font-mono`}
             />
-            <button
-              type="button"
-              onClick={() => handleBrowse(row.id)}
-              className="rounded border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
-            >
+            <Button onClick={() => handleBrowse(row.id)} className="shrink-0">
               {t("fileTypes.browse")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => removeRow(row.id)}
               title={t("fileTypes.remove")}
-              className="px-2 text-slate-400 hover:text-red-400"
+              aria-label={t("fileTypes.remove")}
+              className="shrink-0"
             >
               ✕
-            </button>
+            </Button>
           </div>
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={addRow}
-          className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
-        >
-          {t("fileTypes.addRow")}
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-indigo-500"
-        >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={addRow}>{t("fileTypes.addRow")}</Button>
+        <Button variant="primary" onClick={handleSave}>
           {t("fileTypes.save")}
-        </button>
+        </Button>
         {saveState === "saved" && (
           <span className="text-xs text-emerald-400">{t("fileTypes.saved")}</span>
         )}

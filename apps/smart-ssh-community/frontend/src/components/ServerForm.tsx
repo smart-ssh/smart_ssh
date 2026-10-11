@@ -998,6 +998,7 @@ export function ServerForm({
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">{t("serverForm.authFieldset")}</legend>
           <select
+            aria-label={t("serverForm.authFieldset")}
             value={auth.kind}
             onChange={(e) => setAuth(authStateFromKind(e.target.value as AuthFormState["kind"]))}
             className="mb-3 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"

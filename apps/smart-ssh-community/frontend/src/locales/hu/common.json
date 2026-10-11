@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Fájlkiterjesztésenként megadható egy helyi alkalmazás a \"Megnyitás helyben\" művelethez. Bejegyzés nélkül az operációs rendszer alapértelmezett alkalmazása indul.",
+    "extensionLabel": "Fájlkiterjesztés",
     "appPathPlaceholder": "Az alkalmazás útvonala",
     "browse": "Tallózás…",
     "remove": "Sor eltávolítása",

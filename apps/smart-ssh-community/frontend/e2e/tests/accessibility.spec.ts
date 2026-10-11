@@ -4,6 +4,7 @@
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
+import { NOTE_COMMANDS, openNotes } from "../support/notes";
 import { openSession, redCommandProposal } from "../support/session";
 
 // New screens: add one line here. `open` brings the app into the state
@@ -12,6 +13,19 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
   main: async (app) => {
     await app.launch(populated());
     await expect(app.page.getByText("db-primary")).toBeVisible();
+  },
+  "settings: third-party licenses dialog": async (app) => {
+    await app.launch(populated());
+    await app.page.getByRole("button", { name: "Settings", exact: true }).click();
+    await app.page.getByRole("button", { name: "About", exact: true }).click();
+    await app.page.getByRole("button", { name: "Third-party licenses", exact: true }).click();
+    await expect(app.page.getByRole("heading", { name: "Third-party licenses" })).toBeVisible();
+  },
+  "notes panel": async (app) => {
+    await app.launch({ ...populated(), commands: NOTE_COMMANDS });
+    await openNotes(app);
+    await app.page.getByRole("button", { name: "Show history", exact: true }).click();
+    await expect(app.page.getByRole("button", { name: "Restore" }).first()).toBeVisible();
   },
   "command confirmation": async (app) => {
     await app.launch(populated());
