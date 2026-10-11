@@ -134,6 +134,7 @@ async fn establish_transport<R: tauri::Runtime>(
     server_id: ServerId,
     session_id: SessionId,
     server: &ssh_manager_core::profiles::Server,
+    interactive: bool,
 ) -> CommandResult<Box<dyn ssh_manager_core::ssh::SshTransport>> {
     let is_local = app_logic::dto::is_local(server_id);
     Ok(if is_local {
@@ -261,6 +262,24 @@ async fn establish_transport<R: tauri::Runtime>(
                     raw_key,
                     decision,
                 } => {
+                    if !interactive {
+                        // Issue #356, Spec 0107 §8: an automatic attempt
+                        // never opens the host key dialog and never trusts
+                        // a key; the user decides with the Reconnect button.
+                        tracing::info!(
+                            session_id = %session_id,
+                            host = %host,
+                            port,
+                            "automatic reconnect stops: host key needs confirmation",
+                        );
+                        return Err(CommandError::with_code(
+                            format!(
+                                "Verbindung zu {host}:{port} nicht möglich (Host-Key nicht vertraut)"
+                            ),
+                            "SSH_HOST_KEY_NOT_TRUSTED",
+                        )
+                        .with_connect_log(attempt_log.snapshot()));
+                    }
                     let key_type = app_logic::host_key_store::offered_key_type(&raw_key);
                     let (kind, fingerprint, expected_fingerprint) = match decision {
                         HostKeyDecision::Unknown { fingerprint } => {
@@ -426,7 +445,8 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
     // Verbindungszustand, keinen Host-Key und keine Credentials — "Verbinden"
     // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
     // `russh`/Host-Key-Schleife unten zu durchlaufen.
-    let mut transport = establish_transport(app, state, server_id, session_id, &server).await?;
+    let mut transport =
+        establish_transport(app, state, server_id, session_id, &server, true).await?;
 
     let sanitized_os = if let Ok(uname_output) = transport.execute("uname -a").await {
         let uname_text = String::from_utf8_lossy(&uname_output.stdout);
@@ -739,10 +759,12 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             ledger_store: chat_session_id.map(|_| state.ledger_store.clone()),
             chat_session_id: tokio::sync::Mutex::new(chat_session_id),
             ai_request_paced_at: tokio::sync::Mutex::new(None),
+            auto_reconnect: Default::default(),
         })
         .with_start_directory(start_directory),
     );
     state.sessions.insert(session_id, Arc::clone(&session));
+    crate::auto_reconnect::install_hook(app, &session);
     if let Some(watch) = loss_watch {
         app_logic::session::spawn_connection_watch(
             session_id,
@@ -778,15 +800,22 @@ pub async fn reconnect_session(
     grants: State<'_, app_logic::local_path_grants::LocalPathGrants>,
     session_id: SessionId,
 ) -> CommandResult<()> {
-    reconnect_session_inner(&app, &state, &elevated, &grants, session_id).await
+    // Issue #356: a manual reconnect takes over from the automatic attempts.
+    if let Some(session) = state.sessions.get(session_id) {
+        session.auto_reconnect.stop();
+    }
+    reconnect_session_inner(&app, &state, &elevated, &grants, session_id, true).await
 }
 
+/// `interactive = false` is the automatic attempt (Issue #356): it never
+/// opens the host key dialog.
 pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
     app: &AppHandle<R>,
     state: &AppState,
     elevated: &crate::elevated_sftp::ElevatedSftpRegistry,
     grants: &app_logic::local_path_grants::LocalPathGrants,
     session_id: SessionId,
+    interactive: bool,
 ) -> CommandResult<()> {
     let session = state
         .sessions
@@ -824,7 +853,8 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         } else {
             state.profile_store.get_server(&server_id).await?
         };
-        let transport = establish_transport(app, state, server_id, session_id, &server).await?;
+        let transport =
+            establish_transport(app, state, server_id, session_id, &server, interactive).await?;
         // The sudo password is read again, so the redactor knows the
         // current value.
         let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
@@ -2126,9 +2156,16 @@ mod connect_flow_tests {
         connector.push(connected(&new_closed));
         let (elevated, grants) = registry_pair();
 
-        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .expect("reconnect should succeed");
+        reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .expect("reconnect should succeed");
 
         let after = fx.state.sessions.get(session_id).unwrap();
         assert!(Arc::ptr_eq(&session, &after), "same session object and id");
@@ -2177,9 +2214,16 @@ mod connect_flow_tests {
         connector.push(connected(&new_closed));
         let (elevated, grants) = registry_pair();
 
-        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .expect("reconnect should succeed");
+        reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .expect("reconnect should succeed");
 
         let after = fx.state.sessions.get(session_id).unwrap();
         // The password used for `sudo -S` and the redactor come from one read.
@@ -2204,9 +2248,16 @@ mod connect_flow_tests {
         let calls = connector.calls.load(Ordering::SeqCst);
         let (elevated, grants) = registry_pair();
 
-        let err = reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .unwrap_err();
+        let err = reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .unwrap_err();
 
         assert_eq!(err.code, Some("SESSION_NOT_RECONNECTABLE"));
         assert_eq!(connector.calls.load(Ordering::SeqCst), calls);
@@ -2227,9 +2278,16 @@ mod connect_flow_tests {
 
         // The first trigger holds the claim (its connect is "running").
         let running = session.begin_reconnect().expect("first trigger claims");
-        let err = reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .unwrap_err();
+        let err = reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .unwrap_err();
 
         assert_eq!(err.code, Some("SESSION_NOT_RECONNECTABLE"));
         assert_eq!(connector.calls.load(Ordering::SeqCst), calls);
@@ -2256,9 +2314,16 @@ mod connect_flow_tests {
         let (elevated, grants) = registry_pair();
         connector.push(Err(SshError::ConnectionFailed("down".to_string())));
 
-        let err = reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .unwrap_err();
+        let err = reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .unwrap_err();
         assert!(err.code.is_some(), "the translated error code is reported");
         assert_eq!(
             *session.status.lock().unwrap(),
@@ -2267,9 +2332,16 @@ mod connect_flow_tests {
 
         let fresh = Arc::new(AtomicBool::new(false));
         connector.push(connected(&fresh));
-        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .expect("the button stays usable");
+        reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .expect("the button stays usable");
         assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
         reset(app.handle());
     }
@@ -2288,13 +2360,68 @@ mod connect_flow_tests {
         connector.push(connected(&Arc::new(AtomicBool::new(false))));
         let (elevated, grants) = registry_pair();
 
-        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .unwrap();
+        reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .unwrap();
 
         assert!(
             matches!(waiting.await, Ok(app_logic::dto::ActionUserDecision::Deny)),
             "the waiting action is denied, never approved"
+        );
+        reset(app.handle());
+    }
+
+    /// Issue #356: an automatic attempt never opens the host key dialog and
+    /// never trusts a key; the tab stays disconnected.
+    #[tokio::test]
+    async fn test_automatic_attempt_stops_at_a_changed_host_key_without_a_dialog() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let closed = Arc::new(AtomicBool::new(false));
+        let connector = ScriptedConnector::new(connected(&closed));
+        let fx = fixture(connector.clone()).await;
+        let (session_id, session) = connected_then_lost(&app, &fx, &connector, &closed).await;
+        connector.push(Ok(ConnectOutcome::PendingHostKeyConfirmation {
+            host: "example.invalid".to_string(),
+            port: 22,
+            raw_key: vec![1, 2, 3],
+            decision: HostKeyDecision::Mismatch {
+                expected_fingerprint: "SHA256:old".to_string(),
+                actual_fingerprint: "SHA256:new".to_string(),
+            },
+        }));
+        let (elevated, grants) = registry_pair();
+
+        let err = reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            false,
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(err.code, Some("SSH_HOST_KEY_NOT_TRUSTED"));
+        assert!(!app_logic::auto_reconnect::is_retryable_code(err.code));
+        assert!(
+            fx.state
+                .pending_host_key_confirmations
+                .resolve(&session_id, HostKeyUserDecision::Trust)
+                .is_err(),
+            "no host key question was registered"
+        );
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
         );
         reset(app.handle());
     }
@@ -2332,7 +2459,14 @@ mod connect_flow_tests {
             }
         };
         let (result, ()) = tokio::join!(
-            reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id),
+            reconnect_session_inner(
+                app.handle(),
+                &fx.state,
+                &elevated,
+                &grants,
+                session_id,
+                true
+            ),
             reject
         );
 
@@ -2368,9 +2502,16 @@ mod connect_flow_tests {
         connector.push(connected(&Arc::new(AtomicBool::new(false))));
         let (elevated, grants) = registry_pair();
 
-        reconnect_session_inner(app.handle(), &fx.state, &elevated, &grants, session_id)
-            .await
-            .unwrap();
+        reconnect_session_inner(
+            app.handle(),
+            &fx.state,
+            &elevated,
+            &grants,
+            session_id,
+            true,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             connector.last_hops.load(Ordering::SeqCst),

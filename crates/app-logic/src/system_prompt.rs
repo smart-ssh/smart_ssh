@@ -404,6 +404,23 @@ pub fn note_truncated_notice(language: PromptLanguage) -> &'static str {
     }
 }
 
+/// Issue #356 (Spec 0107): the note the AI receives after an automatic
+/// reconnect that interrupted one of its turns. Same language as the system
+/// prompt of the session.
+pub fn connection_restored_notice(language: PromptLanguage) -> &'static str {
+    match language {
+        PromptLanguage::De => {
+            "Die Verbindung zum Server ging verloren und wurde wiederhergestellt. Das letzte \
+             Kommando wurde möglicherweise nicht abgeschlossen; prüfe seine Wirkung, bevor du \
+             es wiederholst."
+        }
+        PromptLanguage::En | PromptLanguage::Other(_) => {
+            "The connection to the server was lost and restored. The last command may not have \
+             completed; check its effect before repeating it."
+        }
+    }
+}
+
 /// Issue #129 (Spec 0057, §3.2): der Hinweis, den die Kompaktierung an die
 /// Stelle entfernter alter Gesprächsrunden setzt — auch der Fallback, wenn
 /// die Zusammenfassung fehlschlägt (Spec 0057, §2.2). Dieselbe Sprache wie
@@ -958,5 +975,17 @@ mod tests {
         assert_eq!(name("nn-NO"), Some("Norwegian Bokmål"));
         assert_eq!(name("xx-XX"), None);
         assert_eq!(prompt_language(None, Some("zh-TW")), PromptLanguage::En);
+    }
+
+    #[test]
+    fn test_connection_restored_notice_exists_in_both_prompt_languages() {
+        let de = connection_restored_notice(PromptLanguage::De);
+        let en = connection_restored_notice(PromptLanguage::En);
+        assert!(de.contains("wiederhergestellt") && de.contains("nicht abgeschlossen"));
+        assert_eq!(
+            en,
+            "The connection to the server was lost and restored. The last command may not have \
+             completed; check its effect before repeating it."
+        );
     }
 }

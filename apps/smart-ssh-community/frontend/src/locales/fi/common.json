@@ -1100,7 +1100,10 @@
     "splitHandle": "Paneelien jakaja",
     "terminalTab": "Pääte",
     "filesTab": "Tiedostot",
-    "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}"
+    "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
+    "reconnectingAuto": "Yhdistetään uudelleen… (yritys {{attempt}})",
+    "stopReconnect": "Pysäytä",
+    "reconnectGaveUp": "Yhteyttä ei voitu palauttaa."
   },
   "unusableServer": {
     "badge": "Ei käytettävissä",
@@ -1111,5 +1114,12 @@
     "host": "Isäntä: {{host}}",
     "delete": "Poista palvelin",
     "deleteSecrets": "Kaikki salaisuudet, jotka tämä versio osaa tallentaa tälle palvelimelle, poistetaan. Sovelluksen uudemman version lisäämät salaisuudet voivat jäädä."
+  },
+  "autoReconnect": {
+    "label": "Yhdistä uudelleen automaattisesti",
+    "off": "Pois",
+    "seconds30": "30 sekuntia",
+    "seconds60": "60 sekuntia",
+    "minutes5": "5 minuuttia"
   }
 }

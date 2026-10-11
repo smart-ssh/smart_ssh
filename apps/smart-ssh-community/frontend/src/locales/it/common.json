@@ -1108,7 +1108,10 @@
     "splitHandle": "Divisore del pannello",
     "terminalTab": "Terminale",
     "filesTab": "File",
-    "terminalOpenFailed": "Impossibile aprire il terminale: {{error}}"
+    "terminalOpenFailed": "Impossibile aprire il terminale: {{error}}",
+    "reconnectingAuto": "Riconnessione… (tentativo {{attempt}})",
+    "stopReconnect": "Interrompi",
+    "reconnectGaveUp": "Impossibile ripristinare la connessione."
   },
   "unusableServer": {
     "badge": "Non utilizzabile",
@@ -1119,5 +1122,12 @@
     "host": "Host: {{host}}",
     "delete": "Elimina server",
     "deleteSecrets": "Viene eliminato ogni segreto che questa versione sa memorizzare per questo server. I segreti aggiunti da una versione più recente dell'app possono restare."
+  },
+  "autoReconnect": {
+    "label": "Riconnetti automaticamente",
+    "off": "Disattivato",
+    "seconds30": "30 secondi",
+    "seconds60": "60 secondi",
+    "minutes5": "5 minuti"
   }
 }

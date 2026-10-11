@@ -1100,7 +1100,10 @@
     "splitHandle": "पैनल विभाजक",
     "terminalTab": "टर्मिनल",
     "filesTab": "फ़ाइलें",
-    "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}"
+    "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
+    "reconnectingAuto": "फिर से कनेक्ट हो रहा है… (प्रयास {{attempt}})",
+    "stopReconnect": "रोकें",
+    "reconnectGaveUp": "कनेक्शन बहाल नहीं हो सका।"
   },
   "unusableServer": {
     "badge": "अनुपयोगी",
@@ -1111,5 +1114,12 @@
     "host": "होस्ट: {{host}}",
     "delete": "सर्वर हटाएँ",
     "deleteSecrets": "इस सर्वर के लिए यह संस्करण जो भी सीक्रेट संग्रहीत करना जानता है, वे सब हटा दिए जाते हैं। ऐप के नए संस्करण द्वारा जोड़े गए सीक्रेट बचे रह सकते हैं।"
+  },
+  "autoReconnect": {
+    "label": "अपने-आप दोबारा कनेक्ट करें",
+    "off": "बंद",
+    "seconds30": "30 सेकंड",
+    "seconds60": "60 सेकंड",
+    "minutes5": "5 मिनट"
   }
 }
