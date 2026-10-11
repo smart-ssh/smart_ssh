@@ -807,13 +807,27 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     // Nachricht ein (kehrt sofort zurück) und schickt sie mit der nächsten
     // Anfrage an die KI — die laufende Antwort läuft weiter.
     const queued = sending;
+    const itemId = freshId();
     setItems((prev) => [
       ...prev,
-      queued ? { type: "user", id: freshId(), text, queued: true } : { type: "user", id: freshId(), text },
+      queued ? { type: "user", id: itemId, text, queued: true } : { type: "user", id: itemId, text },
     ]);
     setDraft("");
     setHistoryNav(initialHistoryNavState);
-    await runSend(() => sendChatMessage(sessionId, text));
+    await runSend(async () => {
+      try {
+        await sendChatMessage(sessionId, text);
+      } catch (err) {
+        // Issue #315: „Neuer Chat" tauscht den Chat gerade aus; das Backend hat
+        // die Nachricht abgelehnt. Sie verschwindet aus dem Verlauf und bleibt
+        // im Eingabefeld (ein inzwischen getippter Entwurf bleibt unberührt).
+        if (commandErrorCode(err) === "CHAT_SWITCHING") {
+          setItems((prev) => prev.filter((it) => it.id !== itemId));
+          setDraft((current) => (current === "" ? text : current));
+        }
+        throw err;
+      }
+    });
   };
 
   // Spec 0015, Abschnitt 5: Pfeil-oben/-unten lösen Historien-Navigation nur
