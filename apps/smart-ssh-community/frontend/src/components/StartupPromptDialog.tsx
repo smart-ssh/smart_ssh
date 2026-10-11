@@ -225,7 +225,7 @@ export function StartupPromptDialog({
               type="checkbox"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
             />
             {t("startup.noRecoveryWarning")}
           </label>

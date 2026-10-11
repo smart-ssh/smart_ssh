@@ -24,7 +24,7 @@ test("unlock screen: Tab follows the visual order and every stop shows focus", a
 
   const stops = await walkTabOrder(page, 3);
   expect(stops.map((s) => s.name)).toEqual(["Unlock", "Quit", "Start over"]);
-  expect(stops.every((s) => s.indicator)).toBe(true);
+  expect(stops.filter((s) => !s.indicator).map((s) => s.name)).toEqual([]);
   await expectUsable(page.getByRole("button", { name: "Start over", exact: true }));
 });
 
@@ -81,7 +81,7 @@ test("new master password: fields in Tab order, Enter submits only when usable",
     // "Yes, continue" is disabled and skipped: the order wraps to the first field.
     "New master p",
   ]);
-  expect(stops.every((s) => s.indicator)).toBe(true);
+  expect(stops.filter((s) => !s.indicator).map((s) => s.name)).toEqual([]);
   // "Yes, continue" is disabled until repeated and acknowledged: Enter in a field sends nothing.
   await first.press("Enter");
   expect(await app.calls("answer_startup_prompt")).toEqual([]);
@@ -120,7 +120,7 @@ test("host key dialog: Escape rejects, Tab cycles Trust and Reject inside the di
   await expect(dialog.getByRole("button", { name: "Reject", exact: true })).toBeFocused();
   const stops = await walkTabOrder(page, 2);
   expect(stops.map((s) => s.name)).toEqual(["Trust", "Reject"]);
-  expect(stops.every((s) => s.indicator)).toBe(true);
+  expect(stops.filter((s) => !s.indicator).map((s) => s.name)).toEqual([]);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   const decisions = await app.calls("confirm_host_key");

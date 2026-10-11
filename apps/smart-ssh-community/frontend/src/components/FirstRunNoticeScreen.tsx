@@ -134,7 +134,7 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
           type="checkbox"
           checked={checked}
           onChange={(e) => setChecked(e.target.checked)}
-          className="mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
         />
         {t("firstRunNotice.checkboxLabel")}
       </label>
