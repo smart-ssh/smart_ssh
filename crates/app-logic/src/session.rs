@@ -46,6 +46,44 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::events::{emit_connection_status_changed, ConnectionStatus, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
+/// Issue #355: the redactor of a session. Behind a lock so a reconnect can
+/// rebuild it with the sudo password read again from the keychain; every
+/// reader sees either the old or the new redactor, never none.
+pub struct SwappableRedactor(std::sync::RwLock<Arc<dyn OutputRedactor>>);
+
+impl SwappableRedactor {
+    pub fn new(redactor: Box<dyn OutputRedactor>) -> Self {
+        Self(std::sync::RwLock::new(Arc::from(redactor)))
+    }
+
+    fn current(&self) -> Arc<dyn OutputRedactor> {
+        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    fn replace(&self, redactor: Box<dyn OutputRedactor>) {
+        *self.0.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
+    }
+}
+
+impl OutputRedactor for SwappableRedactor {
+    fn redact(
+        &self,
+        output: &ssh_manager_core::ssh::CommandOutput,
+    ) -> ssh_manager_core::ssh::CommandOutput {
+        self.current().redact(output)
+    }
+
+    fn redact_text(&self, text: &str) -> String {
+        self.current().redact_text(text)
+    }
+}
+
+impl AsRef<dyn OutputRedactor> for SwappableRedactor {
+    fn as_ref(&self) -> &(dyn OutputRedactor + 'static) {
+        self
+    }
+}
+
 /// Objektsicherer Wrapper um `FilterEngine<S>::evaluate` (Aufgabenstellung
 /// Teil 1, Punkt 4). `FilterEngine<S>` selbst ist über den `PolicyStore`-Typ
 /// generisch, `Session` soll dieses Detail aber nicht nach außen tragen
@@ -160,6 +198,36 @@ impl NormalSftpGuard<'_> {
     }
 }
 
+/// Issue #355: proof that this caller owns the running reconnect of a
+/// session. Dropped without [`ReconnectClaim::succeed`], the session goes
+/// back to `Disconnected`, so the button stays usable after a failure.
+pub struct ReconnectClaim<'a> {
+    session: &'a Session,
+    settled: bool,
+}
+
+impl ReconnectClaim<'_> {
+    /// Installs the new connection and marks the session `Connected`.
+    pub async fn succeed(
+        mut self,
+        transport: Box<dyn SshTransport>,
+        redactor: Box<dyn OutputRedactor>,
+    ) {
+        self.session.replace_connection(transport, redactor).await;
+        *crate::poison::lock_tolerating_poison(&self.session.status) = ConnectionStatus::Connected;
+        self.settled = true;
+    }
+}
+
+impl Drop for ReconnectClaim<'_> {
+    fn drop(&mut self) {
+        if !self.settled {
+            *crate::poison::lock_tolerating_poison(&self.session.status) =
+                ConnectionStatus::Disconnected;
+        }
+    }
+}
+
 /// Spec 0086, A3: der Transport einer Sitzung — ihre eine SSH-Verbindung.
 ///
 /// **Eigener Typ mit privatem Inneren** statt eines nackten
@@ -243,6 +311,16 @@ impl SessionTransport {
 
     pub fn is_closed(&self) -> bool {
         self.closed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Issue #355: puts the freshly connected transport of a reconnect in
+    /// place of the dead one and reopens the session for commands. Only
+    /// [`Session::replace_connection`] calls this, so transport and the
+    /// normal SFTP channel are always replaced together.
+    async fn replace(&self, transport: Box<dyn SshTransport>) {
+        *self.inner.lock().await = transport;
+        self.closed
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Issue #328: resolves once no AI command runs in this session.
@@ -465,7 +543,7 @@ pub struct SessionParts {
     /// `chat-action-result` und `context.history` landet (Spec 0006,
     /// Abschnitt 5) — pro Session eine Instanz statt bei jeder Ausführung
     /// neu aufgebaut (baut intern eine feste Regex-Liste auf).
-    pub redactor: Box<dyn OutputRedactor>,
+    pub redactor: SwappableRedactor,
     /// Für `NoteEditor::Ai { provider, model }` bei `ProposeNoteUpdate`
     /// (Spec 0003, Abschnitt 5.3) — aus der aktiven `AiProviderConfig` zum
     /// Verbindungszeitpunkt übernommen, damit spätere Notiz-Historie
@@ -757,6 +835,53 @@ impl Session {
 
     pub(crate) fn start_directory_state(&self) -> &crate::start_directory::SessionStartDirectory {
         &self.start_directory
+    }
+
+    /// Issue #355, Spec 0105: claims the reconnect of a disconnected
+    /// session. Only a session in `Disconnected` state can be claimed, and
+    /// only once: the state flips to `Reconnecting` under the lock, so a
+    /// second trigger (double click, `R` key held down) gets `None`.
+    pub fn begin_reconnect(&self) -> Option<ReconnectClaim<'_>> {
+        let mut status = crate::poison::lock_tolerating_poison(&self.status);
+        if *status != ConnectionStatus::Disconnected {
+            return None;
+        }
+        *status = ConnectionStatus::Reconnecting;
+        Some(ReconnectClaim {
+            session: self,
+            settled: false,
+        })
+    }
+
+    /// Issue #355: retires the dead connection before a reconnect: no new
+    /// command starts, a running AI command is told to stop (by the
+    /// caller, via `running_action`), the old transport is closed on a
+    /// best-effort basis.
+    pub async fn retire_connection(&self) {
+        self.transport.mark_closed();
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            self.transport.wait_until_idle(),
+        )
+        .await;
+        let _ = self.transport.lock().await.disconnect().await;
+        *crate::poison::lock_tolerating_poison(&self.terminal) = None;
+    }
+
+    /// Issue #355: replaces transport, normal SFTP channel and redactor of
+    /// this session in place. Tab, session id, chat history, AI context,
+    /// summary and system context parts stay untouched. The normal SFTP
+    /// channel is emptied (it belonged to the old transport) and reopens
+    /// lazily from the new one. Elevated state lives outside the session
+    /// and is dropped by the caller.
+    async fn replace_connection(
+        &self,
+        transport: Box<dyn SshTransport>,
+        redactor: Box<dyn OutputRedactor>,
+    ) {
+        *self.sftp.inner.lock().await = None;
+        self.transport.replace(transport).await;
+        self.redactor.replace(redactor);
     }
 
     /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.
@@ -1476,7 +1601,7 @@ mod tests {
             server_id,
             tags: Vec::new(),
             terminal: StdMutex::new(None),
-            redactor: Box::new(DefaultOutputRedactor::new()),
+            redactor: SwappableRedactor::new(Box::new(DefaultOutputRedactor::new())),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
             system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),

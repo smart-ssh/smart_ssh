@@ -7,8 +7,14 @@ import { commandErrorMessage, openTerminal, terminalInput, terminalResize } from
 import { base64ToBytes, onTerminalOutput } from "../events";
 import { notifyMissingStartDirectory } from "../startDirectory";
 
+/** Issue #355: Verbindungszustand, den `SessionView` dem Terminal meldet. */
+export type TerminalLink = "live" | "lost" | "reconnecting";
+
 interface TerminalViewProps {
   sessionId: string;
+  link?: TerminalLink;
+  /** Taste R im toten Terminal. */
+  onReconnect?: () => void;
 }
 
 /**
@@ -17,9 +23,16 @@ interface TerminalViewProps {
  * `terminal_input`, Größenänderungen (Fenster-Resize, `ResizeObserver`)
  * über `terminal_resize`.
  */
-export function TerminalView({ sessionId }: TerminalViewProps) {
+export function TerminalView({ sessionId, link = "live", onReconnect }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
+  const termRef = useRef<XTerm | null>(null);
+  const startShellRef = useRef<() => void>(() => {});
+  const linkRef = useRef(link);
+  const onReconnectRef = useRef(onReconnect);
+  const lostShownRef = useRef(false);
+  linkRef.current = link;
+  onReconnectRef.current = onReconnect;
 
   useEffect(() => {
     // xterm.js liest weder CSS-Custom-Properties noch die `font-mono`-
@@ -68,21 +81,32 @@ export function TerminalView({ sessionId }: TerminalViewProps) {
     }
 
     const dataSubscription = term.onData((data) => {
+      // Issue #355: im toten Terminal geht nichts an den Server; nur R
+      // (oder r) löst den Reconnect aus.
+      if (linkRef.current !== "live") {
+        if (data === "r" || data === "R") onReconnectRef.current?.();
+        return;
+      }
       terminalInput(sessionId, new TextEncoder().encode(data)).catch((err) =>
         console.error(commandErrorMessage(err)),
       );
     });
 
-    openTerminal(sessionId)
-      .then((start) => {
-        notifyMissingStartDirectory(t, start?.missingDirectory ?? null);
-        return terminalResize(sessionId, term.cols, term.rows);
-      })
-      .catch((err) => {
-        term.writeln(
-          `\r\n[${t("session.terminalOpenFailed", { error: commandErrorMessage(err) })}]`,
-        );
-      });
+    const startShell = () => {
+      openTerminal(sessionId)
+        .then((start) => {
+          notifyMissingStartDirectory(t, start?.missingDirectory ?? null);
+          return terminalResize(sessionId, term.cols, term.rows);
+        })
+        .catch((err) => {
+          term.writeln(
+            `\r\n[${t("session.terminalOpenFailed", { error: commandErrorMessage(err) })}]`,
+          );
+        });
+    };
+    startShellRef.current = startShell;
+    termRef.current = term;
+    startShell();
 
     onTerminalOutput((event) => {
       if (event.sessionId !== sessionId || disposed) return;
@@ -108,6 +132,7 @@ export function TerminalView({ sessionId }: TerminalViewProps) {
 
     return () => {
       disposed = true;
+      termRef.current = null;
       dataSubscription.dispose();
       resizeObserver?.disconnect();
       unlistenOutput?.();
@@ -117,6 +142,22 @@ export function TerminalView({ sessionId }: TerminalViewProps) {
     // Terminal nicht neu öffnen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // Issue #355: Hinweiszeile beim Verlust, Trennlinie und neue Shell nach
+  // dem Reconnect — der alte Verlauf bleibt stehen.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (link === "lost" && !lostShownRef.current) {
+      lostShownRef.current = true;
+      term.writeln(`\r\n${t("session.connectionLostPressR")}`);
+    } else if (link === "live" && lostShownRef.current) {
+      lostShownRef.current = false;
+      term.writeln(`\r\n${t("session.reconnectedSeparator")}`);
+      startShellRef.current();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [link]);
 
   return <div ref={containerRef} className="h-full w-full overflow-hidden" />;
 }

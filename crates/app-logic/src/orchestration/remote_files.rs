@@ -192,12 +192,15 @@ pub(crate) async fn execute_read_remote_file(
 
     match raw {
         Ok(bytes) => {
-            let redacted = session.redactor.redact(&CommandOutput {
-                stdout: bytes,
-                stderr: Vec::new(),
-                exit_code: Some(0),
-                truncated: false,
-            });
+            let redacted = ssh_manager_core::ai::OutputRedactor::redact(
+                &session.redactor,
+                &CommandOutput {
+                    stdout: bytes,
+                    stderr: Vec::new(),
+                    exit_code: Some(0),
+                    truncated: false,
+                },
+            );
             let content = String::from_utf8_lossy(&redacted.stdout).into_owned();
             emit_chat_action_result(
                 emitter,

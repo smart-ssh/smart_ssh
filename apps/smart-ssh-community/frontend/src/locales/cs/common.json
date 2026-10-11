@@ -1104,6 +1104,10 @@
   "session": {
     "disconnected": "Odpojeno",
     "disconnectedWithReason": "Odpojeno: {{reason}}",
+    "reconnect": "Znovu připojit",
+    "reconnecting": "Připojuji znovu…",
+    "connectionLostPressR": "Spojení ztraceno. Stiskněte R pro opětovné připojení.",
+    "reconnectedSeparator": "— znovu připojeno —",
     "disconnect": "Odpojit",
     "splitHandle": "Dělicí lišta panelů",
     "terminalTab": "Terminál",

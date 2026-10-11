@@ -240,10 +240,36 @@ export function FileBrowserPanel({
   }, [sessionId]);
 
   // Verbindung weg → erhöhter Kanal ist weg (lebt nur in der Session).
+  // Issue #355: nach einem Reconnect das bisherige Verzeichnis neu laden
+  // (Home, falls es nicht mehr existiert). Der erhöhte Kanal kommt nicht
+  // zurück, daher immer im normalen Modus.
+  const pathRef = useRef(path);
+  pathRef.current = path;
+  const connectionLostRef = useRef(false);
+  const reloadAfterReconnect = () => {
+    setLoading(true);
+    setError(null);
+    const show = (target: string) => (result: RemoteEntryDto[]) => {
+      setEntries(result);
+      setPath(target);
+      setPathInput(target);
+    };
+    const previous = pathRef.current;
+    sftpList(sessionId, previous, null)
+      .then(show(previous), () => sftpList(sessionId, ".", null).then(show(".")))
+      .catch((err) => setError(commandErrorMessage(err)))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     const unlisten = onConnectionStatusChanged((event) => {
-      if (event.sessionId === sessionId && event.status !== "connected") {
+      if (event.sessionId !== sessionId) return;
+      if (event.status !== "connected") {
+        connectionLostRef.current = true;
         updateElevation(null);
+      } else if (connectionLostRef.current) {
+        connectionLostRef.current = false;
+        reloadAfterReconnect();
       }
     });
     return () => {

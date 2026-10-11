@@ -705,6 +705,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::stop_auto_continuation,
             commands::start_new_chat,
             commands::disconnect,
+            commands::reconnect_session,
             commands::list_chat_sessions,
             commands::resume_chat_session,
             commands::rename_chat_session,

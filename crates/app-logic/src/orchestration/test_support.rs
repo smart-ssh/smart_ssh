@@ -411,7 +411,7 @@ pub(crate) fn session_with_ai_provider(
         server_id: ServerId::new(),
         tags: Vec::new(),
         terminal: StdMutex::new(None),
-        redactor: Box::new(DefaultOutputRedactor::new()),
+        redactor: crate::session::SwappableRedactor::new(Box::new(DefaultOutputRedactor::new())),
         ai_provider_label: "test-provider".to_string(),
         ai_model: "test-model".to_string(),
         system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),

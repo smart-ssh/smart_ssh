@@ -236,6 +236,11 @@ export const respondToAction = (
 
 export const disconnect = (sessionId: string) => invoke<void>("disconnect", { sessionId });
 
+/** Issue #355, Spec 0107: verbindet eine verlorene Sitzung im selben Tab neu
+ * (gleiche Session-ID, Chat-Verlauf und KI-Kontext bleiben). */
+export const reconnectSession = (sessionId: string) =>
+  invoke<void>("reconnect_session", { sessionId });
+
 /** Spec 0021, Abschnitt 5: bricht die automatische Fortsetzungskette für die
  * aktuelle Nutzer-Nachricht sofort ab — lässt einen bereits offenen
  * Bestätigungsdialog unangetastet (s. `crate::commands::

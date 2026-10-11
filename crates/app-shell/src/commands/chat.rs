@@ -697,7 +697,9 @@ mod send_chat_message_persistence_tests {
             server_id,
             tags: Vec::new(),
             terminal: std::sync::Mutex::new(None),
-            redactor: Box::new(DefaultOutputRedactor::new()),
+            redactor: app_logic::session::SwappableRedactor::new(Box::new(
+                DefaultOutputRedactor::new(),
+            )),
             ai_provider_label: "test-provider".to_string(),
             ai_model: "test-model".to_string(),
             system_context_parts: AsyncMutex::new(

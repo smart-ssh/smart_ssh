@@ -1080,6 +1080,10 @@
   "session": {
     "disconnected": "切断されました",
     "disconnectedWithReason": "切断されました: {{reason}}",
+    "reconnect": "再接続",
+    "reconnecting": "再接続中…",
+    "connectionLostPressR": "接続が失われました。R キーを押すと再接続します。",
+    "reconnectedSeparator": "— 再接続しました —",
     "disconnect": "切断",
     "splitHandle": "パネルの区切り",
     "terminalTab": "ターミナル",

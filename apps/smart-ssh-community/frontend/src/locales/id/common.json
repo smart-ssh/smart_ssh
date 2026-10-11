@@ -1080,6 +1080,10 @@
   "session": {
     "disconnected": "Terputus",
     "disconnectedWithReason": "Terputus: {{reason}}",
+    "reconnect": "Hubungkan ulang",
+    "reconnecting": "Menghubungkan ulang…",
+    "connectionLostPressR": "Koneksi terputus. Tekan R untuk menghubungkan ulang.",
+    "reconnectedSeparator": "— terhubung kembali —",
     "disconnect": "Putuskan",
     "splitHandle": "Pembagi panel",
     "terminalTab": "Terminal",

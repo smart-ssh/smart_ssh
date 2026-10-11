@@ -1088,6 +1088,10 @@
   "session": {
     "disconnected": "Verbinding verbroken",
     "disconnectedWithReason": "Verbinding verbroken: {{reason}}",
+    "reconnect": "Opnieuw verbinden",
+    "reconnecting": "Opnieuw verbinden…",
+    "connectionLostPressR": "Verbinding verloren. Druk op R om opnieuw te verbinden.",
+    "reconnectedSeparator": "— opnieuw verbonden —",
     "disconnect": "Verbinding verbreken",
     "splitHandle": "Paneelscheiding",
     "terminalTab": "Terminal",

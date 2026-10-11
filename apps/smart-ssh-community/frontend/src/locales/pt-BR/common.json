@@ -1096,6 +1096,10 @@
   "session": {
     "disconnected": "Desconectado",
     "disconnectedWithReason": "Desconectado: {{reason}}",
+    "reconnect": "Reconectar",
+    "reconnecting": "Reconectando…",
+    "connectionLostPressR": "Conexão perdida. Pressione R para reconectar.",
+    "reconnectedSeparator": "— reconectado —",
     "disconnect": "Desconectar",
     "splitHandle": "Divisor de painel",
     "terminalTab": "Terminal",
