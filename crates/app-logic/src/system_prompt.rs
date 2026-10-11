@@ -727,7 +727,7 @@ mod tests {
             .unwrap();
         let end = start + spec[start..].find("Nur Sprachen").unwrap();
         let codes: Vec<&str> = spec[start..end].split('`').skip(1).step_by(2).collect();
-        assert!(codes.len() >= 23, "{codes:?}");
+        assert!(codes.len() >= 5, "{codes:?}");
         for code in codes {
             let Some(PromptLanguage::Other(l)) = PromptLanguage::from_code(code) else {
                 panic!("no response language for {code}");

@@ -65,7 +65,7 @@ describe("registry", () => {
   it("sorts the picker by English name and carries the endonym", () => {
     const fake: LanguageEntry = { code: "zz", endonym: "Zzz", englishName: "Aardvarkish", resources: {} };
     const sorted = languagesForPicker([...LANGUAGE_REGISTRY, fake]);
-    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Chinese (Simplified)", "Czech", "Dutch", "English", "French", "German", "Italian", "Japanese", "Korean", "Polish", "Portuguese (Brazil)", "Russian", "Spanish", "Ukrainian"]);
-    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["简体中文", "Čeština", "Nederlands", "English", "Français", "Deutsch", "Italiano", "日本語", "한국어", "Polski", "Português (Brasil)", "Русский", "Español", "Українська"]);
+    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Chinese (Simplified)", "Czech", "Danish", "Dutch", "English", "Finnish", "French", "German", "Italian", "Japanese", "Korean", "Norwegian Bokmål", "Polish", "Portuguese (Brazil)", "Russian", "Spanish", "Swedish", "Ukrainian"]);
+    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["简体中文", "Čeština", "Dansk", "Nederlands", "English", "Suomi", "Français", "Deutsch", "Italiano", "日本語", "한국어", "Norsk bokmål", "Polski", "Português (Brasil)", "Русский", "Español", "Svenska", "Українська"]);
   });
 });

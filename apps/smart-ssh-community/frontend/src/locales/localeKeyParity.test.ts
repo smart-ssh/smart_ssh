@@ -7,7 +7,7 @@ import { identicalProblems, keyParityProblems, leafValues, lengthProblems, marke
 
 // Spec 0072, C2 / Spec 0024: jede registrierte Sprache hat dieselben
 // Schlüssel wie Englisch; Pluralformen folgen `Intl.PluralRules` der Sprache.
-const NEW_LANGUAGES = ["fr", "es", "it", "pl", "cs", "uk", "ru", "ja", "zh-Hans", "ko"];
+const NEW_LANGUAGES = ["fr", "es", "it", "pl", "cs", "uk", "ru", "ja", "zh-Hans", "ko", "sv", "da", "nb", "fi"];
 
 // Neue Sprachen kommen allein über die Registry (`languages.ts`) dazu.
 describe.each(LANGUAGE_REGISTRY.filter((l) => l.code !== "en"))(
