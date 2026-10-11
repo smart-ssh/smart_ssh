@@ -618,7 +618,7 @@ pub async fn suggest_note_update_on_disconnect(
     // Spec 0010, Abschnitt 2, Punkt 3: keine `SuggestCommand`-Schemas
     // anbieten — die KI kann in diesem Aufruf gar nicht erst ein Kommando
     // vorschlagen.
-    request_context.available_actions = vec![ActionSchema::propose_note_update()];
+    request_context.available_actions = vec![ActionSchema::propose_server_note_update()];
     // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar
     // (analog zur Auto-Titel-Stelle oben).
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
@@ -642,7 +642,15 @@ pub async fn suggest_note_update_on_disconnect(
                 // Vorschlag" (Spec Abschnitt 2, Punkt 4), statt eine
                 // `AiAction`, die wir gar nicht ausführen könnten,
                 // weiterzureichen.
-                if matches!(action, AiAction::ProposeNoteUpdate { .. }) {
+                // Spec 0010, Abschnitt 3: nur die Notiz des Servers selbst —
+                // ein Gruppen-Ziel zählt ebenfalls als "kein Vorschlag".
+                if matches!(
+                    action,
+                    AiAction::ProposeNoteUpdate {
+                        target: NoteTargetSelector::CurrentServer,
+                        ..
+                    }
+                ) {
                     proposed = Some(action);
                 }
                 break;

@@ -73,7 +73,7 @@ pub struct PlannedTag {
 }
 
 impl PlannedTag {
-    /// §5.2a/§9: ob dieses Schlagwort in der Vorschau **standardmäßig
+    /// §5.2a: ob dieses Schlagwort in der Vorschau **standardmäßig
     /// angewählt** ist. Die **einzige** Stelle, die diese Vorgabe trägt —
     /// das Vorschau-DTO reicht sie an den Dialog durch, und `apply` nimmt
     /// sie für einen Eintrag ohne Wahl des Nutzers.
@@ -539,9 +539,9 @@ pub fn build_plan(sources: &[ImportSource], inv: Inventory<'_>) -> ImportPlan {
                         // will: Es wird gekennzeichnet (`is_literal`) und ist
                         // in der Vorschau einzeln abwählbar. Welche der
                         // beiden Richtungen die Vorgabe trägt, entscheidet
-                        // `PlannedTag::default_selected` (§5.2a/§9 der
+                        // `PlannedTag::default_selected` (§5.2a der
                         // Spec): ein Allow-Treffer ohne Deny-Treffer startet
-                        // abgewählt — s. ADR 0074 Punkt 8, ADR 0075 §9/§12.
+                        // abgewählt — s. ADR 0074 Punkt 8, ADR 0075 §12.
                         if !c.matches(alias) || tag_seen.contains(&c.pattern) {
                             continue;
                         }
@@ -899,7 +899,7 @@ fn resolve_hop(raw: &str, by_alias: &HashMap<&str, usize>, inv: Inventory<'_>) -
 }
 
 /// §3.1.11: Jump-Host-**Ziele** vor den Profilen, die auf sie zeigen —
-/// `servers.jump_host_id` ist ein Fremdschlüssel (§1.4). Die Indizes in
+/// `servers.jump_host_id` ist ein Fremdschlüssel (§3.1.11). Die Indizes in
 /// [`JumpTarget::Planned`] werden dabei mitgezogen.
 fn order_entries(entries: Vec<PlannedEntry>) -> Vec<PlannedEntry> {
     let n = entries.len();

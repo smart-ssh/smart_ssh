@@ -38,8 +38,8 @@ pub enum Feature {
 }
 
 impl Feature {
-    /// Trennt lokale von Dienst-gebundenen Features (Spec 0042, Abschnitt
-    /// 3.5) — Metadaten fürs Lizenzsystem des privaten Repos, das im
+    /// Trennt lokale von Dienst-gebundenen Features —
+    /// Metadaten fürs Lizenzsystem des privaten Repos, das im
     /// versions-basierten Perpetual-Fallback (abgelaufenes Abo, App-Version
     /// noch in der zuletzt bezahlten Minor-Reihe) nur die **lokalen**
     /// Pro-Features aktiv lässt. `core` selbst trifft keine
@@ -188,7 +188,7 @@ impl EntitlementProvider for FixedEntitlements {
 mod tests {
     use super::*;
 
-    /// Spec 0042, Abschnitt 3.5: ein Assert pro Variante statt einer
+    /// Einordnung der Features: ein Assert pro Variante statt einer
     /// Schleife über ein Array — das exhaustive `match` in
     /// `is_service_bound` selbst sorgt bereits dafür, dass eine künftig
     /// hinzugefügte `Feature`-Variante ohne Klassifizierung nicht

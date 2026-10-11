@@ -59,8 +59,11 @@ beiden Sprachen die KI an:
   Nutzer warten.
 
 Die Werkzeug-Beschreibung für Kommando-Vorschläge beschreibt ein Kommando
-je Aufruf und erlaubt mehrere Aufrufe je Antwort. Sie steht in derselben
-Sprache wie der System-Prompt. Eine Einstellung dafür gibt es nicht.
+je Aufruf und erlaubt mehrere Aufrufe je Antwort. Alle Werkzeug-
+Beschreibungen und die Beschreibungen ihrer Parameter (nicht nur die für
+Kommando-Vorschläge) stehen in derselben Sprache wie der System-Prompt;
+Namen, Parameter und Reihenfolge der Werkzeuge sind in jeder Sprache gleich.
+Eine Einstellung dafür gibt es nicht.
 
 ## Sicherheitszusagen
 
@@ -94,4 +97,5 @@ Sprache wie der System-Prompt. Eine Einstellung dafür gibt es nicht.
   Anweisung zu nicht-interaktiven Varianten mit mindestens `-y`/`--yes`
   und `DEBIAN_FRONTEND=noninteractive`.
 - Die Werkzeug-Beschreibung für Kommando-Vorschläge erlaubt mehrere
-  Aufrufe je Antwort und steht in der Sprache des System-Prompts.
+  Aufrufe je Antwort. Alle Werkzeug- und Parameter-Beschreibungen stehen in
+  der Sprache des System-Prompts.
