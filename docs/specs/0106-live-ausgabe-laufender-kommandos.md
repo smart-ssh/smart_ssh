@@ -139,5 +139,5 @@ Ausgabebereichs für Hilfsmittel („Live-Ausgabe" / „Live output") und der
 Hinweis zur Ausgabegrenze aus Abschnitt 4.
 
 Hinweis zu Abschnitt 6: Text im Hinweis neben dem Knopf in Deutsch und
-Englisch; der Zusatz für die KI (Abschnitt 6.3) ist wie der Abbruch-Hinweis
-der Spec 0027 in Englisch formuliert und sprachunabhängig.
+Englisch; der Zusatz für die KI (Abschnitt 6.3) enthält den Text in Englisch und
+Deutsch zugleich, damit er in beiden Prompt-Sprachen verständlich ist.

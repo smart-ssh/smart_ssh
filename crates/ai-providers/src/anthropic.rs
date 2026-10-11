@@ -402,7 +402,7 @@ fn format_command_result(
     // the AI should retry non-interactively (the proposal runs through
     // filter and confirmation like any other command).
     let waiting_notice = if cancelled && waiting_for_input {
-        "\n<waiting_for_input>The user stopped this command because it appeared to be waiting for interactive input (the last output line looks like a question). Propose a non-interactive variant of the command, for example with -y/--yes or an equivalent flag, instead of repeating it unchanged. The new command is checked and confirmed like any other.</waiting_for_input>"
+        "\n<waiting_for_input>The user stopped this command because it appeared to be waiting for interactive input (the last output line looks like a question). Propose a non-interactive variant of the command, for example with -y/--yes or an equivalent flag, instead of repeating it unchanged. The new command is checked and confirmed like any other. / Der Nutzer hat dieses Kommando gestoppt, weil es offenbar auf eine interaktive Eingabe wartete (die letzte Ausgabezeile sieht wie eine Frage aus). Schlage eine nicht-interaktive Variante vor, z. B. mit -y/--yes oder einer gleichwertigen Option, statt das Kommando unverändert zu wiederholen. Das neue Kommando wird wie jedes andere geprüft und bestätigt.</waiting_for_input>"
     } else {
         ""
     };
@@ -2899,6 +2899,7 @@ mod tests {
         let waiting = format_command_result("apt install x", &output, true, true);
         assert!(waiting.contains("<waiting_for_input>"), "{waiting}");
         assert!(waiting.contains("non-interactive"), "{waiting}");
+        assert!(waiting.contains("nicht-interaktive"), "{waiting}");
         assert!(waiting.contains("<cancelled_by_user>"));
         let plain = format_command_result("apt install x", &output, true, false);
         assert!(!plain.contains("<waiting_for_input>"));
