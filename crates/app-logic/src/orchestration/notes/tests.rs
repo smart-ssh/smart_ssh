@@ -2624,3 +2624,30 @@ async fn test_issue_107_disconnect_suggestion_never_sets_the_pending_action_indi
     assert!(suggested);
     assert_eq!(*session.pending_action.lock().unwrap(), None);
 }
+
+/// Issue #330: Titel- und Abschluss-Instruktion folgen der Prompt-Sprache.
+#[test]
+fn test_title_and_disconnect_instructions_follow_the_prompt_language() {
+    use crate::system_prompt::{prompt_language, PromptLanguage};
+    let lang = |c: &str| prompt_language(Some(&serde_json::json!(c)), None);
+    let de_title = super::title_generation_instruction(PromptLanguage::De);
+    assert!(de_title.starts_with("Die Sitzung wird jetzt beendet"));
+    let en_title = super::title_generation_instruction(PromptLanguage::En);
+    assert!(en_title.starts_with("The session is ending now"));
+    assert!(!en_title.contains("Always respond in"));
+    assert_eq!(
+        super::title_generation_instruction(lang("fr")),
+        format!("{en_title} Always respond in French.")
+    );
+    assert_eq!(super::title_generation_instruction(lang("xx")), en_title);
+
+    let de = super::disconnect_completion_instruction(PromptLanguage::De);
+    assert!(de.contains("künftige Sitzungen"));
+    let en = super::disconnect_completion_instruction(PromptLanguage::En);
+    assert!(en.starts_with("The session is ending now"));
+    assert_eq!(
+        super::disconnect_completion_instruction(lang("fr")),
+        format!("{en} Always respond in French.")
+    );
+    assert_eq!(super::disconnect_completion_instruction(lang("xx")), en);
+}
