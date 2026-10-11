@@ -6,7 +6,7 @@ import { expect, test } from "../support/app";
 import { openChatWithConfirmation, openChatWithMessages } from "../support/chatScreens";
 import { expectFullyInViewport } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
-import { chatInput } from "../support/session";
+import { chatInput, redCommandProposal } from "../support/session";
 
 const SIZES = [
   { width: 1280, height: 800 },
@@ -23,13 +23,20 @@ async function tabStops(page: Page, count: number) {
     stops.push(
       await page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
+        // Position inside the scrolling chat column, so scrolling a focused
+        // element into view does not change the order.
+        let scroller: HTMLElement | null = el.parentElement;
+        while (scroller && !["auto", "scroll"].includes(getComputedStyle(scroller).overflowY)) {
+          scroller = scroller.parentElement;
+        }
         const r = el.getBoundingClientRect();
+        const offset = scroller ? scroller.scrollTop - scroller.getBoundingClientRect().top : 0;
         const cs = getComputedStyle(el);
         const outline = cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0;
         const shadow = cs.boxShadow !== "none" && cs.boxShadow !== "";
         return {
           name: el.getAttribute("aria-label") ?? (el.innerText || el.tagName).trim().slice(0, 40),
-          top: Math.round(r.top),
+          top: Math.round(r.top + offset),
           left: Math.round(r.left),
           ring: outline || shadow,
         };
@@ -106,20 +113,11 @@ test.describe("chat panel review", () => {
     test(`no clipped text in the chat at ${size.width}×${size.height}`, async ({ app }) => {
       await app.page.setViewportSize(size);
       await openChatWithMessages(app);
-      await app.emit("chat-action-proposed", {
-        sessionId: (await app.page.evaluate(() => (window.__e2e!.snapshot() as { sessions: { sessionId: string }[] }).sessions[0].sessionId)),
-        actionId: "a-long",
-        action: { SuggestCommand: { command: `echo ${"x".repeat(300)}` } },
-        decision: "Allow",
-        previousNoteContent: null,
-        usesStoredSudoPassword: false,
-        previousFileContent: null,
-        previousFileSize: null,
-        targetName: null,
-        riskAssessment: null,
-        origin: { kind: "internal" },
-      });
-      await expect(app.page.getByText(/^echo x+/).first()).toBeVisible();
+      const sessionId = await app.page.evaluate(
+        () => (window.__e2e!.snapshot() as { sessions: { sessionId: string }[] }).sessions[0].sessionId,
+      );
+      await app.emit("chat-action-proposed", redCommandProposal(sessionId, `echo ${"x".repeat(300)}`));
+      await expect(app.page.getByRole("button", { name: "Execute", exact: true })).toBeAttached();
       // No element in the chat column is wider than its scroll container
       // (nothing sticks out or is cut off horizontally).
       const overflowing: string[] = await app.page.evaluate(() => {
