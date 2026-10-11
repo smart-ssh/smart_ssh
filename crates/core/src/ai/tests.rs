@@ -3115,3 +3115,51 @@ fn test_redactor_masks_other_credential_words_pt_br_nl() {
         assert!(!out.contains("hunter2"), "{word}: {out}");
     }
 }
+
+/// Issue #337: per added UI language (id, vi, hi), the local word for
+/// "password" announces a credential value; counter-case: the word without
+/// a value stays untouched.
+#[test]
+fn test_redactor_masks_value_after_password_word_id_vi_hi() {
+    let redactor = DefaultOutputRedactor::new();
+    for (lang, word) in [("id", "kata sandi"), ("vi", "mật khẩu"), ("hi", "पासवर्ड")]
+    {
+        assert!(
+            keywords::keyword_languages().contains(&lang),
+            "no keyword list for {lang}"
+        );
+        for w in [word.to_string(), word.to_uppercase()] {
+            for sep in [": ", "="] {
+                let out = redactor.redact_text(&format!("{w}{sep}hunter2"));
+                assert!(!out.contains("hunter2"), "{lang}: {out}");
+            }
+        }
+        assert_eq!(
+            redactor.redact_text(&format!("Enter {word}")),
+            format!("Enter {word}")
+        );
+    }
+}
+
+/// Issue #337: further credential words of id, vi and hi.
+#[test]
+fn test_redactor_masks_other_credential_words_id_vi_hi() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in [
+        "frasa sandi",
+        "kunci pribadi",
+        "kredensial",
+        "kode pin",
+        "cụm mật khẩu",
+        "khóa riêng",
+        "thông tin xác thực",
+        "mã pin",
+        "पासफ़्रेज़",
+        "निजी कुंजी",
+        "क्रेडेंशियल",
+        "टोकन",
+    ] {
+        let out = redactor.redact_text(&format!("{word}: hunter2"));
+        assert!(!out.contains("hunter2"), "{word}: {out}");
+    }
+}
