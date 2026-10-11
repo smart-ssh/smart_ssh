@@ -7,8 +7,17 @@ Bezüge: Spec 0005 (Einzelkommando), Spec 0006 (Redaction), Spec 0007 (Kernschle
 ## 1. Ziel
 
 Ein Kommando wartet bis zum Ende seines Kanals. Bei einem Kommando, das nie
-endet, wäre das für immer; solange es läuft, halten weitere Kommandos und das
-Öffnen eines Terminals derselben Sitzung an.
+endet, wäre das für immer.
+
+Während ein KI-Kommando läuft, bleiben in derselben Sitzung Dateibrowser
+(Auflisten, Lesen, Schreiben, Hoch- und Herunterladen), Terminal und Trennen
+benutzbar. Nur ein zweites KI-Kommando derselben Sitzung wartet, bis das erste
+endet; KI-Kommandos laufen je Sitzung nie gleichzeitig.
+
+**Trennen während ein Kommando läuft:** Die Sitzung wird zuerst als beendet
+markiert, das laufende Kommando wie bei einem Abbruch (Abschnitt 3) beendet,
+danach die Verbindung getrennt. Ein wartendes zweites Kommando startet nicht
+mehr, und die KI bekommt nach dem Trennen keine Folgerunde.
 
 Diese Spec ergänzt eine **manuelle** Abbruchmöglichkeit: Läuft ein
 KI-vorgeschlagenes Kommando länger als 5 Sekunden, erscheint an der

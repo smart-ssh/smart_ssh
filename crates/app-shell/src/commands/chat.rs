@@ -452,6 +452,18 @@ pub async fn disconnect(
     // Best-effort: ein Fehler beim Trennen selbst (z. B. Verbindung bereits
     // tot) soll `disconnect()` nicht scheitern lassen — die Session wird in
     // jedem Fall aus `state.sessions` entfernt.
+    // Issue #328: a running AI command does not hold the transport any more;
+    // cancel it (Spec 0027) and give it a moment to wind down, then
+    // disconnect. Closing the connection ends the command channel anyway.
+    session.transport.mark_closed();
+    if let Some(action_id) = session.transport.running_action() {
+        let _ = state.running_command_cancellations.resolve(&action_id, ());
+    }
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        session.transport.wait_until_idle(),
+    )
+    .await;
     let _ = session.transport.lock().await.disconnect().await;
     // Droppt den Sender -> der Terminal-Aktor (falls einer läuft) beendet
     // sich selbst beim nächsten `commands.recv()` (s. dortiger Kommentar),

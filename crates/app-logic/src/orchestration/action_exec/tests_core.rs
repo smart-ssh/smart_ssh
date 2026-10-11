@@ -549,6 +549,78 @@ async fn test_execute_suggested_command_cancellation_returns_partial_output() {
     );
 }
 
+/// Issue #328: while a long AI command runs, the session's transport is
+/// free (file browser, terminal, disconnect take the lock), and a second AI
+/// command of the same session waits until the first one has ended.
+#[tokio::test]
+async fn test_running_command_does_not_hold_transport_and_commands_stay_serial() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default()
+            .with_never_completing("sleep 60")
+            .with_response("ls", output("a")),
+    );
+    let emitter = TestEmitter::default();
+    let session_id = Uuid::new_v4();
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+
+    let run = |id: Uuid, cmd: &'static str| {
+        execute_suggested_command(
+            &session,
+            session_id,
+            id,
+            cmd.to_string(),
+            &emitter,
+            true,
+            LedgerSource::Ai,
+        )
+    };
+    let probe = async {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        // Transport is free while `sleep 60` runs.
+        let guard =
+            tokio::time::timeout(std::time::Duration::from_secs(2), session.transport.lock())
+                .await
+                .expect("transport lock must be free while a command runs");
+        drop(guard);
+        assert_eq!(session.transport.running_action(), Some(first));
+        // The second command is queued behind the first one: it must not
+        // have run yet.
+        let second_run = run(second, "ls");
+        tokio::pin!(second_run);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(200), &mut second_run)
+                .await
+                .is_err(),
+            "second AI command must wait for the first"
+        );
+        session
+            .running_command_cancellations
+            .resolve(&first, ())
+            .expect("first command is registered");
+        assert!(second_run.await);
+    };
+    let (first_done, ()) = tokio::join!(run(first, "sleep 60"), probe);
+    assert!(first_done);
+}
+
+/// Issue #328: after the session was marked closed (disconnect), a queued
+/// command does not start and the turn gets no follow-up round.
+#[tokio::test]
+async fn test_closed_session_does_not_start_new_commands() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default().with_response("ls", output("a")),
+    );
+    session.transport.mark_closed();
+    assert!(session
+        .transport
+        .begin_command(Uuid::new_v4())
+        .await
+        .is_none());
+}
+
 /// Ohne Abbruch darf in der Registry kein Eintrag zurückbleiben — sonst
 /// würde jedes regulär beendete Kommando die Registry unbegrenzt
 /// wachsen lassen.

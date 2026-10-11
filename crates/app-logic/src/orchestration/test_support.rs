@@ -247,6 +247,22 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
         }
     }
 
+    /// Issue #328: a never-completing command runs without the transport,
+    /// like on the real transports; everything else keeps the locked path.
+    async fn start_exec(
+        &mut self,
+        command: &str,
+        _stdin: Option<&[u8]>,
+    ) -> Result<Option<Box<dyn ssh_manager_core::ssh::RunningExec>>, SshError> {
+        if self.never_completing.contains(command) {
+            self.executed.lock().unwrap().push(command.to_string());
+            return Ok(Some(Box::new(NeverCompletingExec {
+                chunks: self.streamed.get(command).cloned().unwrap_or_default(),
+            })));
+        }
+        Ok(None)
+    }
+
     async fn open_shell(&mut self, _size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
         Err(SshError::ChannelError(
             "in diesem Test nicht unterstützt".to_string(),
@@ -255,6 +271,35 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
 
     async fn disconnect(&mut self) -> Result<(), SshError> {
         Ok(())
+    }
+}
+
+struct NeverCompletingExec {
+    chunks: Vec<ssh_manager_core::ssh::ExecOutputChunk>,
+}
+
+#[async_trait]
+impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
+    async fn run(
+        self: Box<Self>,
+        cancel: tokio::sync::oneshot::Receiver<()>,
+        sink: ssh_manager_core::ssh::ExecOutputSink,
+    ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
+        for chunk in self.chunks {
+            let _ = sink.send(chunk);
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+        drop(sink);
+        let _ = cancel.await;
+        Ok(ssh_manager_core::ssh::ExecOutcome {
+            output: CommandOutput {
+                stdout: b"partial output before cancel".to_vec(),
+                stderr: Vec::new(),
+                exit_code: None,
+                truncated: false,
+            },
+            cancelled: true,
+        })
     }
 }
 
