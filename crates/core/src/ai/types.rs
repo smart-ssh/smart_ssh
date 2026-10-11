@@ -416,7 +416,11 @@ impl ActionSchema {
             name: "propose_note_update".to_string(),
             description: "Schlägt eine Aktualisierung der Kontextnotiz des aktuell verbundenen \
                 Servers oder dessen Gruppe vor. Wird immer als Diff zur manuellen Bestätigung \
-                angezeigt, nie automatisch übernommen."
+                angezeigt, nie automatisch übernommen. Nur für dauerhafte, neue oder geänderte \
+                Fakten, nicht für bloße Ereignisse. Die Notiz ist kompakt und folgt festen \
+                Abschnitten (Constraints, Platform, Services, Paths, Runtime & Network, Quirks & \
+                Workarounds, Conventions & Users, Scripts & Aliases, Recent changes); Format und \
+                Regeln stehen im System-Prompt."
                 .to_string(),
             parameters: vec![
                 ActionParameter {
@@ -432,7 +436,7 @@ impl ActionSchema {
                 },
                 ActionParameter {
                     name: "new_content".to_string(),
-                    description: "Vollständiger neuer Notiztext, nicht nur ein Diff.".to_string(),
+                    description: "Vollständiger neuer Notiztext im Notiz-Format des System-Prompts, nicht nur ein Diff.".to_string(),
                     kind: ActionParameterKind::String,
                     required: true,
                 },
@@ -450,11 +454,15 @@ impl ActionSchema {
             name: "propose_note_update".to_string(),
             description: "Schlägt eine Aktualisierung der Kontextnotiz des aktuell verbundenen \
                 Servers vor. Wird immer als Diff zur manuellen Bestätigung angezeigt, nie \
-                automatisch übernommen."
+                automatisch übernommen. Nur für dauerhafte, neue oder geänderte Fakten, nicht \
+                für bloße Ereignisse. Die Notiz ist kompakt und folgt festen Abschnitten \
+                (Constraints, Platform, Services, Paths, Runtime & Network, Quirks & \
+                Workarounds, Conventions & Users, Scripts & Aliases, Recent changes); Format \
+                und Regeln stehen im System-Prompt."
                 .to_string(),
             parameters: vec![ActionParameter {
                 name: "new_content".to_string(),
-                description: "Vollständiger neuer Notiztext, nicht nur ein Diff.".to_string(),
+                description: "Vollständiger neuer Notiztext im Notiz-Format des System-Prompts, nicht nur ein Diff.".to_string(),
                 kind: ActionParameterKind::String,
                 required: true,
             }],
@@ -548,12 +556,33 @@ impl ActionSchema {
         let mut schema = Self::propose_note_update();
         schema.description = "Proposes an update to the context note of the currently connected \
             server or its group. Always shown as a diff for manual confirmation, never applied \
-            automatically."
+            automatically. Only for durable facts that are new or changed, not for events alone. \
+            The note is compact and follows fixed sections (Constraints, Platform, Services, \
+            Paths, Runtime & Network, Quirks & Workarounds, Conventions & Users, Scripts & \
+            Aliases, Recent changes); the format and rules are in the system prompt."
             .to_string();
         schema.parameters[0].description = "Whether the proposal applies to the currently \
             connected server or to its group. Optional, default: current_server."
             .to_string();
-        schema.parameters[1].description = "Complete new note text, not just a diff.".to_string();
+        schema.parameters[1].description =
+            "Complete new note text in the note format of the system prompt, not just a diff."
+                .to_string();
+        schema
+    }
+
+    /// English version of [`Self::propose_server_note_update`] (issue #359).
+    pub fn propose_server_note_update_en() -> Self {
+        let mut schema = Self::propose_server_note_update();
+        schema.description = "Proposes an update to the context note of the currently connected \
+            server. Always shown as a diff for manual confirmation, never applied \
+            automatically. Only for durable facts that are new or changed, not for events \
+            alone. The note is compact and follows fixed sections (Constraints, Platform, \
+            Services, Paths, Runtime & Network, Quirks & Workarounds, Conventions & Users, \
+            Scripts & Aliases, Recent changes); the format and rules are in the system prompt."
+            .to_string();
+        schema.parameters[0].description =
+            "Complete new note text in the note format of the system prompt, not just a diff."
+                .to_string();
         schema
     }
 
