@@ -108,6 +108,9 @@ describe("lengthProblems", () => {
 // und Platzhalter-only-Werte sind immer erlaubt.
 const SAME_WORDS: Record<string, readonly string[]> = {
   "pt-BR": ["ok", "mcp", "logs", "host", "tags", "tag", "enter", "global", "terminal", "token", "local", "mac"],
+  id: ["ok", "mcp", "server", "host", "token", "port", "proxy", "mac", "terminal", "tag", "tags", "log", "logs", "model", "ai", "api", "url", "default", "global", "online", "offline", "email", "pin"],
+  vi: ["ok", "mcp", "server", "host", "token", "proxy", "mac", "terminal", "tag", "tags", "log", "logs", "ai", "api", "url", "email", "pin"],
+  hi: ["ok", "mcp"],
   nl: [
     "ok", "mcp", "server", "servers", "database", "host", "type", "model", "token", "details",
     "later", "terminal", "hop", "cipher", "mac", "extra", "headers", "header", "openai",
@@ -128,7 +131,7 @@ function isAllowedSame(code: string, value: string): boolean {
 const tokens = (s: string) => (s.match(/\{\{[^}]*\}\}|<\/?[a-zA-Z0-9]+\s*\/?>/g) ?? []).sort();
 const stripped = (s: string) => s.replace(/\{\{[^}]*\}\}|<\/?[a-zA-Z0-9]+\s*\/?>/g, "").trim();
 
-describe.each(LANGUAGE_REGISTRY.filter((l) => ["pt-BR", "nl"].includes(l.code)))(
+describe.each(LANGUAGE_REGISTRY.filter((l) => ["pt-BR", "nl", "id", "vi", "hi"].includes(l.code)))(
   "Platzhalter und Eigenständigkeit $code",
   ({ code, resources }) => {
     const enValues = leafValues(en);

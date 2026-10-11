@@ -8,13 +8,16 @@ import {
   type LanguageEntry,
 } from "./languages";
 
-const ALL = ["de", "en", "pt-BR", "zh-Hans", "nb", "fr", "pl", "cs", "uk", "ru", "ja", "ko"];
+const ALL = ["de", "en", "pt-BR", "zh-Hans", "nb", "fr", "pl", "cs", "uk", "ru", "ja", "ko", "id", "vi", "hi"];
 
 describe("languageForLocale", () => {
   it.each([
     ["de-DE", "de"],
     ["en-US", "en"],
     ["pt-BR", "pt-BR"],
+    ["id-ID", "id"],
+    ["vi-VN", "vi"],
+    ["hi-IN", "hi"],
     ["pt-PT", "pt-BR"],
     ["pt", "pt-BR"],
     ["zh-CN", "zh-Hans"],
@@ -65,7 +68,7 @@ describe("registry", () => {
   it("sorts the picker by English name and carries the endonym", () => {
     const fake: LanguageEntry = { code: "zz", endonym: "Zzz", englishName: "Aardvarkish", resources: {} };
     const sorted = languagesForPicker([...LANGUAGE_REGISTRY, fake]);
-    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Chinese (Simplified)", "Czech", "Danish", "Dutch", "English", "Finnish", "French", "German", "Italian", "Japanese", "Korean", "Norwegian Bokmål", "Polish", "Portuguese (Brazil)", "Russian", "Spanish", "Swedish", "Ukrainian"]);
-    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["简体中文", "Čeština", "Dansk", "Nederlands", "English", "Suomi", "Français", "Deutsch", "Italiano", "日本語", "한국어", "Norsk bokmål", "Polski", "Português (Brasil)", "Русский", "Español", "Svenska", "Українська"]);
+    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Chinese (Simplified)", "Czech", "Danish", "Dutch", "English", "Finnish", "French", "German", "Hindi", "Indonesian", "Italian", "Japanese", "Korean", "Norwegian Bokmål", "Polish", "Portuguese (Brazil)", "Russian", "Spanish", "Swedish", "Ukrainian", "Vietnamese"]);
+    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["简体中文", "Čeština", "Dansk", "Nederlands", "English", "Suomi", "Français", "Deutsch", "हिन्दी", "Bahasa Indonesia", "Italiano", "日本語", "한국어", "Norsk bokmål", "Polski", "Português (Brasil)", "Русский", "Español", "Svenska", "Українська", "Tiếng Việt"]);
   });
 });

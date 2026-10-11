@@ -16,6 +16,9 @@ import da from "./locales/da/common.json";
 import fi from "./locales/fi/common.json";
 import nb from "./locales/nb/common.json";
 import sv from "./locales/sv/common.json";
+import id from "./locales/id/common.json";
+import vi from "./locales/vi/common.json";
+import hi from "./locales/hi/common.json";
 
 // Spec 0024, Abschnitt 3/4: die einzige Quelle der Wahrheit für die
 // unterstützten UI-Sprachen. Eine neue Sprache = eine Locale-Datei + ein
@@ -143,6 +146,24 @@ export const LANGUAGE_REGISTRY: readonly LanguageEntry[] = [
     endonym: "Svenska",
     englishName: "Swedish",
     resources: sv,
+  },
+  {
+    code: "id",
+    endonym: "Bahasa Indonesia",
+    englishName: "Indonesian",
+    resources: id,
+  },
+  {
+    code: "vi",
+    endonym: "Tiếng Việt",
+    englishName: "Vietnamese",
+    resources: vi,
+  },
+  {
+    code: "hi",
+    endonym: "हिन्दी",
+    englishName: "Hindi",
+    resources: hi,
   },
 ];
 
