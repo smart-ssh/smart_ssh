@@ -224,3 +224,75 @@ async fn test_two_sessions_stream_only_their_own_output() {
     assert_eq!(live_stdout(&emitter, action_a), "alpha 1\n");
     assert_eq!(live_stdout(&emitter, action_b), "beta 1\n");
 }
+
+fn waiting_hint_shown(emitter: &TestEmitter) -> bool {
+    emitter
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(name, payload)| name == "chat-action-waiting-input" && payload["waiting"] == true)
+}
+
+/// Issue #327: stopping while the "probably waiting for input" hint is
+/// shown marks the history entry, so the AI note asks for a non-interactive
+/// variant. Stopping a silent command (no prompt as last line) does not.
+async fn stop_after(command: &str, chunk: &str, wait_for_hint: bool) -> (bool, bool) {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default()
+            .with_streamed_output(command, vec![stdout_chunk(chunk)])
+            .with_never_completing(command),
+    );
+    let emitter = TestEmitter::default();
+    let action_id = Uuid::new_v4();
+    let exec_future = execute_suggested_command(
+        &session,
+        Uuid::new_v4(),
+        action_id,
+        command.to_string(),
+        &emitter,
+        true,
+        LedgerSource::Ai,
+    );
+    let cancel_future = async {
+        if wait_for_hint {
+            while !waiting_hint_shown(&emitter) {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        } else {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+        session
+            .running_command_cancellations
+            .resolve(&action_id, ())
+            .expect("a waiting cancel registration");
+    };
+    let (executed, ()) = tokio::join!(exec_future, cancel_future);
+    assert!(executed);
+    let history = session.context.lock().await.history.clone();
+    let MessageContent::CommandResult {
+        cancelled,
+        waiting_for_input,
+        ..
+    } = &history[0].content
+    else {
+        panic!("expected CommandResult, got {:?}", history[0].content);
+    };
+    (*cancelled, *waiting_for_input)
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_stop_while_waiting_for_input_is_marked_for_the_ai() {
+    let (cancelled, waiting) =
+        stop_after("apt install x", "Do you want to continue? [Y/n] ", true).await;
+    assert!(cancelled);
+    assert!(waiting);
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_stop_of_a_command_without_prompt_is_not_marked() {
+    let (cancelled, waiting) = stop_after("tail -f log", "working\n", false).await;
+    assert!(cancelled);
+    assert!(!waiting);
+}

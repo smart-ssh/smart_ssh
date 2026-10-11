@@ -435,6 +435,14 @@ export interface ChatActionOutputEvent {
   truncated: boolean;
 }
 
+/** Issue #327 — the backend's guess whether a running command waits for
+ * input; `waiting: false` when output arrived again. Display only. */
+export interface ChatActionWaitingInputEvent {
+  sessionId: string;
+  actionId: string;
+  waiting: boolean;
+}
+
 export interface ChatErrorEvent {
   sessionId: string;
   message: string;

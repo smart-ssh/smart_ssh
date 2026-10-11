@@ -50,6 +50,7 @@ vi.mock("../events", () => ({
   onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
   onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
+  onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),

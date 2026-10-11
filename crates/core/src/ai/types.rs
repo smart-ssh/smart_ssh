@@ -275,6 +275,14 @@ pub enum MessageContent {
         /// expliziten Hinweis an den Kontext-Block an, damit die KI den
         /// fehlenden Exit-Code nicht fälschlich als Kommandofehler liest.
         cancelled: bool,
+        /// Issue #327: `true` zusammen mit `cancelled`, wenn das Kommando
+        /// beim Abbruch vermutlich auf eine Eingabe wartete (die App
+        /// hatte den Hinweis „wartet auf Eingabe" angezeigt). Der Provider
+        /// hängt dann an den Abbruch-Hinweis die Bitte, eine nicht-
+        /// interaktive Variante vorzuschlagen. Vom Backend gesetzt, nie
+        /// vom Frontend.
+        #[serde(default)]
+        waiting_for_input: bool,
     },
     /// Spec 0021, Abschnitt 3, Fälle 3/4: eine vorgeschlagene Aktion wurde
     /// **nicht** ausgeführt — entweder hat der Nutzer sie im

@@ -144,6 +144,7 @@ async fn write_secret_through_all_stores(
                         truncated: false,
                     },
                     cancelled: false,
+                    waiting_for_input: false,
                 },
             },
         )

@@ -12,6 +12,7 @@ pub mod connect_log;
 pub mod elevated;
 mod error;
 mod host_key;
+pub mod input_prompt;
 mod jump_host;
 #[cfg(any(test, feature = "test-support"))]
 pub mod mock;

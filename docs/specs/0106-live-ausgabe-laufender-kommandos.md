@@ -1,6 +1,6 @@
 # Spec 0106 — Live-Ausgabe laufender Kommandos im Chat
 
-Status: umgesetzt · Issue: #325
+Status: umgesetzt · Issue: #325, #327
 Zweck: Während ein von der KI vorgeschlagenes Kommando läuft, sieht der
 Nutzer dessen Ausgabe Zeile für Zeile im Chat, statt bis zum Ende nur einen
 Lauf-Indikator. Eine Paketinstallation oder ein langer Kopiervorgang zeigt
@@ -9,7 +9,7 @@ Review-Priorität: ERHÖHT (Redaction, Ausführungspfad)
 
 Bezüge: Spec 0005 (Einzelkommando), Spec 0006 (Redaction), Spec 0024
 (Texte), Spec 0027 (Abbruch, Lauf-Indikator), Spec 0032 (Localhost),
-Spec 0043/0044 (Ausgabegrenze), ADR 0131 (Entscheidungen zu dieser Spec).
+Spec 0018 (sudo-Passwort), Spec 0043/0044 (Ausgabegrenze), ADR 0131 (Entscheidungen zu dieser Spec).
 
 ## 1. Was sich nicht ändert
 
@@ -93,8 +93,51 @@ Ergebnis.
 Auf dem lokalen Pseudo-Server erscheint die Ausgabe genauso live. Abbrechen
 lässt sich ein Kommando dort weiterhin nicht (Spec 0027).
 
-## 6. Texte
+## 6. Wartet auf Eingabe
+
+Ein Kommando auf dem SSH-Server hält seine Standardeingabe offen und
+beantwortet keine Rückfragen. Die App antwortet nie für den Nutzer oder die
+KI und bietet kein Eingabefeld; der Nutzer kann nur abbrechen (Spec 0027).
+
+**6.1 Erkennung.** Ein laufendes Kommando gilt als „wartet vermutlich auf
+Eingabe“, wenn beides zutrifft:
+
+- seit 3 Sekunden kam keine neue Ausgabe, und
+- die letzte Ausgabezeile (ohne umgebenden Leerraum) endet auf `?`, `:`,
+  `]`, `)` oder `>` und enthält ein Frage-Muster, z. B. `[Y/n]`, `[y/N]`,
+  `(yes/no)`, `continue?`, `password:`, `Passwort:`, `[sudo]`,
+  `press any key`, `Press ENTER`.
+
+Die Erkennung läuft im Backend auf der unveränderten Ausgabe, unabhängig
+davon, was die Live-Anzeige (Abschnitt 3.2) schon zeigt. Ein Kommando, das
+nur lange rechnet oder dessen letzte Zeile keine Frage ist, bekommt keinen
+Hinweis.
+
+**6.2 Anzeige.** Neben dem Abbrechen-Knopf (Spec 0027) steht dann der
+Hinweis „Dieses Kommando wartet vermutlich auf eine Eingabe. Stoppe es, dann
+schlägt die KI eine nicht-interaktive Variante vor.“, und der Knopf ist
+sofort verfügbar (nicht erst nach 5 Sekunden). Kommt neue Ausgabe, verschwindet
+der Hinweis; er erscheint erst wieder, wenn die Bedingung aus 6.1 erneut
+zutrifft. Mit dem Ergebnis verschwindet der Hinweis ebenfalls.
+
+**6.3 Stopp im Wartezustand.** Die KI erhält wie bei jedem Abbruch die
+Teil-Ausgabe mit Abbruch-Kennzeichen und zusätzlich den Hinweis, dass das
+Kommando wegen einer Eingabeaufforderung gestoppt wurde und sie eine
+nicht-interaktive Variante vorschlagen soll (z. B. mit `-y`/`--yes`). Ob der
+Hinweis gesetzt wird, entscheidet das Backend anhand seines eigenen Zustands
+zum Zeitpunkt des Stopps. Der neue Vorschlag durchläuft Filter, Risiko und
+Bestätigung wie jedes andere Kommando; der Stopp erlaubt nichts vorab.
+
+**6.4 Sudo.** Ist ein sudo-Passwort hinterlegt (Spec 0018), erscheint die
+`[sudo]`-Abfrage normalerweise nicht. Tritt sie doch auf, ist der Hinweis
+trotzdem richtig.
+
+## 7. Texte
 
 Neue Texte (Deutsch und Englisch, Spec 0024): Bezeichnung des
 Ausgabebereichs für Hilfsmittel („Live-Ausgabe" / „Live output") und der
 Hinweis zur Ausgabegrenze aus Abschnitt 4.
+
+Hinweis zu Abschnitt 6: Text im Hinweis neben dem Knopf in Deutsch und
+Englisch; der Zusatz für die KI (Abschnitt 6.3) ist wie der Abbruch-Hinweis
+der Spec 0027 in Englisch formuliert und sprachunabhängig.

@@ -560,10 +560,12 @@ pub(crate) fn reapply_redaction_for_send(
                     command,
                     output,
                     cancelled,
+                    waiting_for_input,
                 } => MessageContent::CommandResult {
                     command,
                     output: redactor.redact(&output),
                     cancelled,
+                    waiting_for_input,
                 },
                 other @ MessageContent::ActionRejected { .. } => other,
                 // Issue #162: nur-additiv wie oben; der Webinhalt wird erst

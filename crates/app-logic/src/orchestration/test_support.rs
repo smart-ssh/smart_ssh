@@ -237,14 +237,18 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         }
-        drop(sink);
-        match stdin {
+        // Issue #327: like a real transport, a command that never ends on
+        // its own keeps the live channel open until it is cancelled.
+        let held_sink = self.never_completing.contains(command).then_some(sink);
+        let outcome = match stdin {
             Some(stdin) => {
                 self.execute_with_stdin_cancellable(command, stdin, cancel)
                     .await
             }
             None => self.execute_cancellable(command, cancel).await,
-        }
+        };
+        drop(held_sink);
+        outcome
     }
 
     async fn open_shell(&mut self, _size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
