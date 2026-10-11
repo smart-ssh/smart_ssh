@@ -73,15 +73,15 @@ test.describe("file browser", () => {
   test("Tab follows the visual order and every stop shows a focus indicator", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;
-    const start = page.getByRole("button", { name: "Go to start directory" });
-    await start.focus();
+    // Focus is on the "Files" tab after opening it; every further stop is
+    // reached with the keyboard, so :focus-visible applies.
     const seen: { x: number; y: number }[] = [];
     for (let i = 0; i < 9; i++) {
+      await page.keyboard.press("Tab");
       const active = page.locator(":focus");
       expect(await focusRing(active), `focus indicator on stop ${i}`).toBe(true);
       const box = (await active.boundingBox())!;
       seen.push({ x: box.x, y: box.y });
-      await page.keyboard.press("Tab");
     }
     // Reading order: rows top to bottom, within a row left to right.
     for (let i = 1; i < seen.length; i++) {
