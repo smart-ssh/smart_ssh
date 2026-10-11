@@ -45,6 +45,10 @@ unvollständigen Kommandovorschlag:
   letzte Antwort wurde abgeschnitten, fahre exakt dort fort, ohne zu
   wiederholen). Das funktioniert bei jedem Anbieter und erzeugt nur den
   fehlenden Teil.
+- Die Fortsetzungs-Nachricht folgt der Sprache der Oberfläche wie die anderen
+  KI-Anweisungen (Spec 0024): Deutsch und Englisch haben je einen eigenen Text,
+  jede andere Sprache bekommt den englischen Text plus „Always respond in
+  <Sprache>.“, ein unbekannter Code fällt auf Englisch zurück.
 - Die Fortsetzung läuft durch den normalen Pfad (Kompaktierung, Drosselung,
   Caching, Redaction, Filter-Engine), keine Sonderbahn.
 - Es gibt **kein automatisches „Weiter"**; der Nutzer entscheidet.
