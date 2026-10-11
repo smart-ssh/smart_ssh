@@ -668,6 +668,7 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
     // durchweg `false`, unabhängig vom Resume-/Frisch-Fall.
     let initial_mcp_origin_flags = vec![false; initial_history.len()];
 
+    let loss_watch = transport.connection_loss_watch();
     let session = Arc::new(
         Session::new(SessionParts {
             transport: app_logic::session::SessionTransport::new(transport),
@@ -725,7 +726,15 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
         })
         .with_start_directory(start_directory),
     );
-    state.sessions.insert(session_id, session);
+    state.sessions.insert(session_id, Arc::clone(&session));
+    if let Some(watch) = loss_watch {
+        app_logic::session::spawn_connection_watch(
+            session_id,
+            &session,
+            watch,
+            Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+        );
+    }
 
     tracing::info!(session_id = %session_id, server_id = %server_id.0, "session connected");
     emit_connection_status_changed(

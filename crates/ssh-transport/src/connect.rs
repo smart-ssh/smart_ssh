@@ -191,6 +191,21 @@ pub async fn connect_with_limits(
     result
 }
 
+/// Issue #353: SSH keepalive interval; every hop uses the same config.
+pub(crate) const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(15);
+/// Issue #353: unanswered keepalives before the connection counts as lost.
+pub(crate) const KEEPALIVE_MAX: usize = 3;
+
+/// Client configuration shared by every connection and every jump hop.
+pub(crate) fn client_config() -> client::Config {
+    client::Config {
+        nodelay: true,
+        keepalive_interval: Some(KEEPALIVE_INTERVAL),
+        keepalive_max: KEEPALIVE_MAX,
+        ..Default::default()
+    }
+}
+
 async fn connect_inner(
     target: &ConnectionTarget,
     credentials: &(dyn CredentialStore + Send + Sync),
@@ -205,13 +220,12 @@ async fn connect_inner(
     // im selben TCP-Segment ankommen/koalesziert werden — für den einfachen
     // Fall unschädlich, im Tunnel-Fall aber ein zusätzlicher Unsicherheits-
     // faktor beim Debuggen von Framing-Problemen.
-    let config = Arc::new(client::Config {
-        nodelay: true,
-        ..Default::default()
-    });
+    let config = Arc::new(client_config());
+    let (loss_tx, loss_rx) = tokio::sync::watch::channel(None);
 
     let mut hops = RusshHops {
         config,
+        loss: Arc::new(loss_tx),
         host_keys,
         credentials,
         key_files,
@@ -237,6 +251,7 @@ async fn connect_inner(
         handle: std::sync::Arc::new(handle),
         _intermediate_hops: sessions,
         max_output_bytes: crate::exec::MAX_STREAM_OUTPUT_BYTES,
+        loss: loss_rx,
     })))
 }
 
@@ -339,6 +354,7 @@ async fn drive_chain<C: HopConnector>(
 /// Die echten Phasen über `russh`.
 struct RusshHops<'a> {
     config: Arc<client::Config>,
+    loss: Arc<tokio::sync::watch::Sender<Option<ssh_manager_core::ssh::ConnectionLoss>>>,
     host_keys: Arc<dyn HostKeyStore>,
     credentials: &'a (dyn CredentialStore + Send + Sync),
     key_files: &'a (dyn KeyFileReader + Send + Sync),
@@ -365,6 +381,7 @@ impl HopConnector for RusshHops<'_> {
             port: hop.port,
             host_keys: self.host_keys.clone(),
             steps: HopSteps::start(self.log, 0, &label),
+            loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), socket, handler).await;
         match resolve_or_pending(connect_result, &hop.host, hop.port) {
@@ -406,6 +423,7 @@ impl HopConnector for RusshHops<'_> {
             port: hop.port,
             host_keys: self.host_keys.clone(),
             steps: HopSteps::start(self.log, hop_index, &label),
+            loss: self.loss.clone(),
         };
         let connect_result = client::connect_stream(self.config.clone(), stream, handler).await;
         Ok(
@@ -981,5 +999,23 @@ mod phase_limit_tests {
         let result = drive_chain(&mut fake, &[], ConnectLimits::DEFAULT).await;
         assert!(matches!(result, Err(SshError::ConnectionFailed(_))));
         assert!(fake.calls.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod keepalive_tests {
+    use super::*;
+
+    /// Issue #353: every connection and every jump hop is built from this
+    /// one config (`RusshHops` clones the same `Arc` for all hops).
+    #[test]
+    fn client_config_sets_keepalive_interval_15s_and_max_3() {
+        let config = client_config();
+        assert_eq!(
+            config.keepalive_interval,
+            Some(std::time::Duration::from_secs(15))
+        );
+        assert_eq!(config.keepalive_max, 3);
+        assert!(config.nodelay);
     }
 }

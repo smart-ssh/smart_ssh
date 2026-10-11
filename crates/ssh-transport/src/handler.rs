@@ -3,7 +3,8 @@ use ssh_manager_core::ssh::connect_log::{
     sanitize_server_version, HOST_KEY_CHANGED, HOST_KEY_UNKNOWN,
 };
 use ssh_manager_core::ssh::{
-    ConnectLog, ConnectStep, HostKeyCheckResult, HostKeyDecision, HostKeyStore, StepId,
+    ConnectLog, ConnectStep, ConnectionLoss, HostKeyCheckResult, HostKeyDecision, HostKeyStore,
+    StepId,
 };
 use std::sync::Arc;
 
@@ -30,6 +31,9 @@ pub(crate) struct ClientHandler {
     pub(crate) port: u16,
     pub(crate) host_keys: Arc<dyn HostKeyStore>,
     pub(crate) steps: HopSteps,
+    /// Issue #353: shared by all hops of one connection; set when any hop's
+    /// session ends.
+    pub(crate) loss: Arc<tokio::sync::watch::Sender<Option<ConnectionLoss>>>,
 }
 
 /// Aufzeichnungszustand eines Hops im Handler.
@@ -87,6 +91,27 @@ impl HopSteps {
 
 impl russh::client::Handler for ClientHandler {
     type Error = TransportError;
+
+    /// Issue #353: record that the session ended (also for keepalive
+    /// timeouts) before the default handling runs.
+    async fn disconnected(
+        &mut self,
+        reason: russh::client::DisconnectReason<Self::Error>,
+    ) -> Result<(), Self::Error> {
+        let text = loss_reason(&reason);
+        // `send_if_modified`: the first loss wins; works without receivers.
+        self.loss.send_if_modified(|current| {
+            if current.is_some() {
+                return false;
+            }
+            *current = Some(ConnectionLoss { reason: text });
+            true
+        });
+        match reason {
+            russh::client::DisconnectReason::ReceivedDisconnect(_) => Ok(()),
+            russh::client::DisconnectReason::Error(e) => Err(e),
+        }
+    }
 
     /// Issue #51: nur die Namen der ausgehandelten Algorithmen und die
     /// Versionskennung des Servers werden gelesen. Das gemeinsame Geheimnis
@@ -169,5 +194,43 @@ impl russh::client::Handler for ClientHandler {
         }
 
         decision
+    }
+}
+
+/// Issue #353: user-facing reason for a session end. `None` for a clean
+/// disconnect message.
+pub(crate) fn loss_reason(
+    reason: &russh::client::DisconnectReason<TransportError>,
+) -> Option<String> {
+    match reason {
+        russh::client::DisconnectReason::ReceivedDisconnect(_) => None,
+        russh::client::DisconnectReason::Error(TransportError::Russh(
+            russh::Error::KeepaliveTimeout,
+        )) => Some("The server stopped responding".to_string()),
+        russh::client::DisconnectReason::Error(_) => Some("The connection was lost".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod loss_tests {
+    use super::*;
+    use russh::client::DisconnectReason;
+
+    #[test]
+    fn keepalive_timeout_says_the_server_stopped_responding() {
+        let reason = DisconnectReason::Error(TransportError::Russh(russh::Error::KeepaliveTimeout));
+        assert_eq!(
+            loss_reason(&reason).as_deref(),
+            Some("The server stopped responding")
+        );
+    }
+
+    #[test]
+    fn other_errors_get_a_generic_reason() {
+        let err = DisconnectReason::Error(TransportError::Russh(russh::Error::Disconnect));
+        assert_eq!(
+            loss_reason(&err).as_deref(),
+            Some("The connection was lost")
+        );
     }
 }

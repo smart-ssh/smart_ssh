@@ -23,8 +23,8 @@ Bestätigung wartet und — bei einer MCP-Sitzung — der Name des Clients
 **2.2 Status.** Eine Sitzung ist
 
 - *verbunden*,
-- *getrennt* — wenn die Terminal-Verbindung endet oder die Sitzung ausdrücklich
-  getrennt wurde; der Tab bleibt dann stehen, bis der Nutzer ihn schließt, oder
+- *getrennt* — wenn die Verbindung abreißt (Terminal-Ende oder Server antwortet
+  nicht mehr, s. 2.3) oder die Sitzung ausdrücklich getrennt wurde; der Tab bleibt dann stehen, bis der Nutzer ihn schließt, oder
 - *wartet auf Host-Key* — solange ein Verbindungsaufbau auf die Entscheidung
   zum Host-Key wartet (Spec 0005). Diesen Status sieht man nur in der
   Sitzungsliste, etwa nach einem Neuladen der Oberfläche; er löst kein
@@ -143,11 +143,17 @@ Schließen-Schaltfläche und `Cmd`/`Ctrl+W` trennen die Sitzung. Dabei:
 - **Keine Wiederherstellung nach App-Neustart.** Offene Tabs überstehen einen
   Neustart nicht (die Verbindungen enden mit der App); es gibt keinen
   automatischen Wiederaufbau mehrerer Server beim Start.
-- **„Getrennt" nur über das Terminal.** Der Status wird auf „getrennt" gesetzt,
-  wenn das Terminal der Sitzung endet oder der Nutzer trennt. Eine Sitzung ohne
-  geöffnetes Terminal (etwa eine MCP-Sitzung) zeigt weiter „verbunden", auch
-  wenn die Verbindung gerissen ist; Kommandos scheitern dann mit „Sitzung
-  verloren" (Spec 0005).
+- **Verbindungsabriss wird aktiv erkannt.** Jede SSH-Verbindung, auch jeder
+  Sprung-Host, sendet alle 15 Sekunden einen Keepalive. Antwortet der Server auf
+  drei Keepalives nacheinander nicht, gilt die Verbindung als verloren (nach
+  etwa einer Minute Stille), auch wenn das Netz still ausfällt und ein Terminal
+  nie geöffnet wurde. Die Sitzung wechselt dann auf „getrennt" und das Ereignis
+  `connection-status-changed` nennt als Grund, dass der Server nicht mehr
+  antwortet. Das Ereignis kommt genau einmal je Sitzung, egal ob Keepalive,
+  Terminal-Ende oder ein gescheitertes Kommando den Abriss zuerst bemerkt. Die
+  Sitzung wird dabei nicht stärker verändert als bei einem Terminal-Ende. Die
+  Keepalive-Werte sind nicht einstellbar; `ServerAliveInterval` aus der
+  ssh_config wird weiter nicht importiert.
 - **Kein Zuordnungs-Hinweis nach Reload.** Nach einem Neuladen kennt die
   Oberfläche die konkrete wartende Aktion nicht mehr, zeigt aber den Hinweis
   und die Rückfrage weiterhin an; das Ablehnen übernimmt das Backend.
