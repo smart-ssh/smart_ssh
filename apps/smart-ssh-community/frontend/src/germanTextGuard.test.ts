@@ -41,6 +41,18 @@ function isConsoleCall(node: ts.Node): boolean {
   );
 }
 
+/** Endonyme im Sprachregister (`endonym: "Türkçe"`) sind Eigennamen der
+ * Sprache, kein deutscher Oberflächentext (Issue #336). */
+function isEndonym(node: ts.Node): boolean {
+  const parent = node.parent;
+  return (
+    ts.isStringLiteral(node) &&
+    ts.isPropertyAssignment(parent) &&
+    ts.isIdentifier(parent.name) &&
+    parent.name.text === "endonym"
+  );
+}
+
 function textOf(node: ts.Node): string | null {
   if (ts.isJsxText(node)) return node.text;
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
@@ -58,7 +70,7 @@ function findGermanText(source: string, fileName: string): GermanTextFinding[] {
   const findings: GermanTextFinding[] = [];
   const visit = (node: ts.Node): void => {
     if (isConsoleCall(node)) return;
-    const text = textOf(node);
+    const text = isEndonym(node) ? null : textOf(node);
     if (text !== null && GERMAN_MARKERS.test(text)) {
       const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
       findings.push({ line: line + 1, text: text.trim() });
@@ -84,6 +96,11 @@ function relative(file: string): string {
 }
 
 describe("findGermanText", () => {
+  it("ignoriert Endonyme im Sprachregister, nicht aber andere Eigenschaften", () => {
+    expect(findGermanText('const a = { endonym: "Türkçe" };', "x.ts")).toEqual([]);
+    expect(findGermanText('const a = { label: "Türkçe" };', "x.ts")).toHaveLength(1);
+  });
+
   it("findet deutschen JSX-Text", () => {
     const source = "export const X = () => <span>Schließen</span>;";
     expect(findGermanText(source, "x.tsx")).toEqual([{ line: 1, text: "Schließen" }]);
