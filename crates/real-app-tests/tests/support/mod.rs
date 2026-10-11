@@ -26,6 +26,10 @@ pub const APP_BINARY_ENV: &str = "SMART_SSH_REAL_APP_BINARY";
 /// Environment variable naming the `tauri-driver` executable. Default:
 /// `tauri-driver` from `PATH`.
 pub const DRIVER_BINARY_ENV: &str = "TAURI_DRIVER";
+/// Optional directory that receives the app's logs (one sub-directory per
+/// started app), so CI can upload them when a case fails. Default: inside
+/// the data directory.
+pub const LOG_DIR_ENV: &str = "SMART_SSH_REAL_APP_LOG_DIR";
 
 /// Master password of the password-mode fixture. Fake, public on purpose.
 pub const FIXTURE_MASTER_PASSWORD: &str = "fixture-master-password-0235";
@@ -186,7 +190,15 @@ impl RealApp {
         let native_port = free_port()?;
         let driver_bin =
             std::env::var_os(DRIVER_BINARY_ENV).unwrap_or_else(|| "tauri-driver".into());
+        // The app logs to `$XDG_STATE_HOME/smart-ssh/logs` on Linux. Point it
+        // at a known place so a failed start can show and upload the log.
+        let state_home = match std::env::var_os(LOG_DIR_ENV) {
+            Some(dir) => PathBuf::from(dir).join(format!("app-{port}")),
+            None => data_dir.join("state"),
+        };
+        std::fs::create_dir_all(&state_home)?;
         let child = Command::new(driver_bin)
+            .env("XDG_STATE_HOME", &state_home)
             .arg("--port")
             .arg(port.to_string())
             .arg("--native-port")
@@ -214,7 +226,18 @@ impl RealApp {
             "tauri:options",
             json!({ "application": binary.to_string_lossy() }),
         )?;
-        let driver = WebDriver::new(format!("http://127.0.0.1:{port}"), caps).await?;
+        let driver = match WebDriver::new(format!("http://127.0.0.1:{port}"), caps).await {
+            Ok(driver) => driver,
+            Err(err) => {
+                let tail = log_tail(&state_home.join("smart-ssh/logs"));
+                let mut child = child;
+                let _ = child.kill().await;
+                return Err(format!(
+                    "no WebDriver session: {err}\n--- app log (last lines) ---\n{tail}"
+                )
+                .into());
+            }
+        };
         Ok(Self { driver, child })
     }
 
@@ -320,6 +343,25 @@ impl RealApp {
         let _ = self.driver.clone().quit().await;
         let _ = self.child.kill().await;
         Ok(())
+    }
+}
+
+/// The last lines of the newest log file in `dir`, or a note why there are
+/// none. Only used to explain a failed start.
+fn log_tail(dir: &Path) -> String {
+    let newest = std::fs::read_dir(dir).ok().and_then(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .filter(|e| e.path().is_file())
+            .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
+    });
+    match newest {
+        Some(entry) => {
+            let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
+            let lines: Vec<&str> = text.lines().collect();
+            lines[lines.len().saturating_sub(60)..].join("\n")
+        }
+        None => format!("(no log file in {})", dir.display()),
     }
 }
 
