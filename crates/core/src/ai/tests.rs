@@ -2750,6 +2750,15 @@ const KEYWORD_SAMPLES: &[&str] = &[
     "пароль",
     "закрытый ключ",
     "учетные данные",
+    "パスワード",
+    "秘密鍵",
+    "認証情報",
+    "密码",
+    "私钥",
+    "凭据",
+    "비밀번호",
+    "개인 키",
+    "자격 증명",
 ];
 
 /// Issue #331: per added UI language, the local word for "password" masks
@@ -2802,6 +2811,26 @@ fn test_redactor_masks_value_after_password_word_in_pl_cs_uk_ru() {
         "Zapomniałeś hasła?",
         "Zapomněli jste heslo?",
         "Забули пароль?",
+    ] {
+        assert_eq!(redactor.redact_text(text), text);
+    }
+}
+
+/// Issue #335: per added UI language (ja, zh-Hans, ko), the local word for
+/// "password" masks the value after it; harmless text stays untouched.
+#[test]
+fn test_redactor_masks_value_after_password_word_in_ja_zh_ko() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in ["パスワード", "密码", "비밀번호"] {
+        for sep in [": ", "=", ":"] {
+            let out = redactor.redact_text(&format!("{word}{sep}hunter2"));
+            assert!(!out.contains("hunter2"), "{word:?}{sep:?} leaked: {out}");
+        }
+    }
+    for text in [
+        "パスワードを忘れましたか？",
+        "忘记密码了吗？",
+        "비밀번호를 잊으셨나요?",
     ] {
         assert_eq!(redactor.redact_text(text), text);
     }
