@@ -1254,3 +1254,36 @@ fn test_server_risk_red_fork_bomb_chained_and_wrapped() {
         );
     }
 }
+
+// --- Issue #318: fork bomb under a renamed function --------------------
+// The regex has no backreferences, so the rule matches `x(){ y|z& };w`
+// for any identifiers (over-approximation, raise-only).
+
+#[test]
+fn test_server_risk_red_renamed_fork_bomb() {
+    for command in [
+        "b(){ b|b& };b",
+        "f() { f | f & }; f",
+        "a;b(){ b|b& };b",
+        "sudo sh -c 'b(){ b|b& };b'",
+        "$(b(){ b|b& };b)",
+        "bomb() { bomb | bomb & }; bomb",
+    ] {
+        assert_eq!(
+            classify(command).server_risk,
+            RiskLevel::Red,
+            "renamed fork bomb not red: {command:?}"
+        );
+    }
+}
+
+#[test]
+fn test_server_risk_benign_function_not_fork_bomb() {
+    for command in ["f(){ echo hi; }; f", "f(){ g | h; }; f"] {
+        assert_ne!(
+            classify(command).server_risk,
+            RiskLevel::Red,
+            "benign function rated red: {command:?}"
+        );
+    }
+}
