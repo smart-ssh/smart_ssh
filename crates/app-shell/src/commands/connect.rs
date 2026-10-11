@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, State};
 
-use ssh_manager_core::ai::{default_action_schemas, ChatMessage, OutputRedactor, SessionContext};
+use ssh_manager_core::ai::{ChatMessage, OutputRedactor, SessionContext};
 use ssh_manager_core::filter::{EffectiveScope, EvalContext, FilterEngine, PolicyStore};
 use ssh_manager_core::profiles::effective_notes_sections;
 use ssh_manager_core::profiles::ProfileStore;
@@ -429,6 +429,10 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
     )
     .await;
     let system_context = system_context_parts.assemble();
+    // Issue #323: die `suggest_command`-Beschreibung folgt derselben Sprache
+    // wie der System-Prompt.
+    let available_actions =
+        app_logic::system_prompt::session_action_schemas(system_context_parts.language);
 
     // Spec 0064 (Prompt-Caching): der `uname`-Banner geht als eigene,
     // gefencte Verlaufs-Nachricht rein, nicht mehr in den System-Prompt
@@ -672,7 +676,7 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             context: tokio::sync::Mutex::new(SessionContext {
                 system_context,
                 history: initial_history,
-                available_actions: default_action_schemas(),
+                available_actions,
                 max_tokens_hint: None,
             }),
             filter_engine: Box::new(FilterEngine::new(state.policy_store.clone())),
@@ -856,7 +860,7 @@ mod connect_session_gate_tests {
     use crate::first_run_notice::test_support::{lock, reset, test_app};
     use tauri_plugin_store::StoreExt;
 
-    /// Spec 0031, Abschnitt 6: "`connect()` schlägt fehl/wird blockiert,
+    /// Spec 0031, Abschnitt 4: "`connect()` schlägt fehl/wird blockiert,
     /// solange `first_run_notice_acknowledged` `false` ist" — geprüft am
     /// exakten Türsteher-Schritt, den `connect_session` als Allererstes
     /// aufruft, bevor irgendein anderer Teil der Verbindungslogik läuft.
@@ -891,7 +895,7 @@ mod connect_session_gate_tests {
         reset(&handle);
     }
 
-    /// Spec 0031, Abschnitt 6: "Bestätigung setzt die Einstellung korrekt
+    /// Spec 0031, Abschnitt 4: "Bestätigung setzt die Einstellung korrekt
     /// und dauerhaft (übersteht einen simulierten Neustart)" — eine zweite,
     /// unabhängig aufgebaute `App`-Instanz (= simulierter Neustart) muss
     /// den zuvor per `.save()` auf die Festplatte geschriebenen Wert

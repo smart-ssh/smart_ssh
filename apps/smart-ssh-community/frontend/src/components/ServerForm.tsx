@@ -112,7 +112,7 @@ function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
  * das Backend verlangt dort zwingend einen Wert und lehnt sonst ab). Die
  * Passphrase ist immer optional, auch bei Neuanlage.
  *
- * Spec 0073, §9 (Q-BL-0149-02): Derselbe `buildInput()` bedient auch
+ * Spec 0073, A6–A8 (Q-BL-0149-02): Derselbe `buildInput()` bedient auch
  * "Verbindung testen" (s. unten) — und dort gilt seither dieselbe Regel.
  * Ein leeres Pflichtfeld bei Neuanlage endet also in beiden Fällen in der
  * Fehlermeldung, nicht in einem Anmeldeversuch mit leerem Secret. Auf

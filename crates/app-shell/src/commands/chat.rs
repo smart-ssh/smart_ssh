@@ -122,6 +122,12 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
     // einem späteren Reset verschluckt werden.
     let queued_only = {
         let mut turn = session.chat_turn.lock().unwrap();
+        // Issue #315: während „Neuer Chat" den Chat austauscht, nichts
+        // einreihen — die Nachricht würde sonst unbemerkt der ersten Anfrage
+        // des neuen Chats anhängen. Abgelehnt, der Text bleibt beim Nutzer.
+        if turn.swapping {
+            return Err(app_logic::orchestration::chat_switching_error());
+        }
         if turn.running {
             turn.queued.push(text.clone());
             true
@@ -196,6 +202,12 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
         {
             let mut ctx = session.context.lock().await;
             ctx.system_context = updated_system_context;
+            // Issue #323: ein Wechsel der UI-Sprache gilt ab der nächsten
+            // Nachricht auch für die `suggest_command`-Beschreibung — sonst
+            // stünde der englische Prompt neben der deutschen Beschreibung.
+            ctx.available_actions = app_logic::system_prompt::session_action_schemas(
+                updated_system_context_parts.language,
+            );
         }
         *session.system_context_parts.lock().await = updated_system_context_parts;
         // Spec 0040, Abschnitt 2: über `push_history` statt eines direkten
@@ -381,6 +393,35 @@ pub async fn stop_auto_continuation(
     Ok(())
 }
 
+/// Issue #271, Spec 0034 §11: "Neuer Chat" innerhalb der bestehenden
+/// Verbindung — s. `app_logic::orchestration::start_new_chat`. Liefert die
+/// ID der neuen `chat_sessions`-Zeile (`None` für einen lokalen Tab).
+#[tauri::command]
+pub async fn start_new_chat(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<Option<String>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    // Der aktuell aktive Anbieter, wie beim Verbinden; ohne aktiven Anbieter
+    // bleibt die Spalte leer, statt den Chat zu verhindern.
+    let provider_id = super::ai_providers::active_ai_provider_config(&state)
+        .await
+        .ok()
+        .map(|config| config.id.0);
+    let new_id = app_logic::orchestration::start_new_chat(
+        &session,
+        session_id,
+        &TauriEventEmitter(app),
+        provider_id,
+    )
+    .await?;
+    Ok(new_id.map(|id| id.to_string()))
+}
+
 #[tauri::command]
 pub async fn disconnect(
     app: AppHandle,
@@ -417,6 +458,18 @@ pub async fn disconnect(
     // Best-effort: ein Fehler beim Trennen selbst (z. B. Verbindung bereits
     // tot) soll `disconnect()` nicht scheitern lassen — die Session wird in
     // jedem Fall aus `state.sessions` entfernt.
+    // Issue #328: a running AI command does not hold the transport any more;
+    // cancel it (Spec 0027) and give it a moment to wind down, then
+    // disconnect. Closing the connection ends the command channel anyway.
+    session.transport.mark_closed();
+    if let Some(action_id) = session.transport.running_action() {
+        let _ = state.running_command_cancellations.resolve(&action_id, ());
+    }
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        session.transport.wait_until_idle(),
+    )
+    .await;
     let _ = session.transport.lock().await.disconnect().await;
     // Droppt den Sender -> der Terminal-Aktor (falls einer läuft) beendet
     // sich selbst beim nächsten `commands.recv()` (s. dortiger Kommentar),
@@ -725,8 +778,8 @@ mod send_chat_message_persistence_tests {
         let chat_session_id = chat_store.create_session(&server_id, None).await.unwrap();
 
         let mut session = test_session(server_id);
-        session.parts_mut_for_tests().chat_session_store = Some(chat_store.clone());
-        session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+        session.set_chat_session_store_for_tests(Some(chat_store.clone()));
+        session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
 
         (session, profile_store, chat_store, tmp_dir)
     }
@@ -808,6 +861,43 @@ mod send_chat_message_persistence_tests {
             .collect()
     }
 
+    /// Issue #315: eine Nachricht, die eintrifft, während „Neuer Chat" den
+    /// Turn-Slot hält, wird abgelehnt und nicht eingereiht — sonst hinge sie
+    /// unbemerkt an der ersten Anfrage des neuen Chats.
+    #[tokio::test]
+    async fn test_message_sent_during_new_chat_swap_is_rejected_not_queued() {
+        let session = test_session(ServerId::new());
+        {
+            let mut turn = session.chat_turn.lock().unwrap();
+            turn.running = true;
+            turn.swapping = true;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        let err = send_chat_message_impl(
+            app.handle(),
+            &TestEmitter::default(),
+            &session,
+            uuid::Uuid::new_v4(),
+            "während des Wechsels".to_string(),
+            None,
+            &InMemoryProfileStore::default(),
+            &policy_store,
+            &ConfirmationRegistry::new(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, Some(app_logic::orchestration::CHAT_SWITCHING));
+        let turn = session.chat_turn.lock().unwrap();
+        assert!(turn.queued.is_empty(), "nothing may leak into the new chat");
+        assert!(turn.running, "the swap's claim stays untouched");
+    }
+
     /// Spec 0066, §2: eine Nachricht, die während eines laufenden Turns
     /// gesendet wird, kehrt sofort zurück (Eingabe nie blockiert), wird
     /// eingereiht und nach Turn-Ende als normale Nachricht gesendet — über
@@ -817,10 +907,10 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
             persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
@@ -991,14 +1081,15 @@ mod send_chat_message_persistence_tests {
         let gate = Arc::new(tokio::sync::Notify::new());
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().transport =
-            app_logic::session::SessionTransport::new(Box::new(EchoTransport));
-        session.parts_mut_for_tests().filter_engine =
-            Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedActionProvider {
+        session.set_transport_for_tests(app_logic::session::SessionTransport::new(Box::new(
+            EchoTransport,
+        )));
+        session
+            .set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
+        session.set_ai_provider_for_tests(Box::new(GatedActionProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         let dir = tempfile::tempdir().unwrap();
         let policy_store =
             persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
@@ -1079,10 +1170,10 @@ mod send_chat_message_persistence_tests {
     async fn test_run_chat_turn_does_not_swallow_an_early_stop() {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: Arc::new(tokio::sync::Notify::new()),
             contexts: contexts.clone(),
-        });
+        }));
         session.request_auto_continue_stop();
         let emitter = TestEmitter::default();
         let profile_store = InMemoryProfileStore::default();
@@ -1114,10 +1205,10 @@ mod send_chat_message_persistence_tests {
         let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
         let mut session = test_session(ServerId::new());
         let gate = Arc::new(tokio::sync::Notify::new());
-        session.parts_mut_for_tests().ai_provider = Box::new(GatedRecordingProvider {
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
             gate: gate.clone(),
             contexts: contexts.clone(),
-        });
+        }));
         session.request_auto_continue_stop();
         let dir = tempfile::tempdir().unwrap();
         let policy_store =

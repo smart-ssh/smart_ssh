@@ -24,7 +24,7 @@ mod local_server;
 mod mcp_backend;
 mod mcp_settings;
 mod risk_second_opinion;
-/// Spec 0101, Teil 0 Frage 2: die gemessene Annahme über Tauris
+/// Spec 0101, §2 Frage 2: die gemessene Annahme über Tauris
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
@@ -32,10 +32,10 @@ mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
 mod single_instance;
-/// Spec 0075, §7.3: den bestätigten Importplan ausführen — der einzige
+/// Spec 0075, §3.1.11: den bestätigten Importplan ausführen — der einzige
 /// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
 mod ssh_config_apply;
-/// Spec 0075, §7.4: Export nach `ssh_config` — Dateidialog,
+/// Spec 0075, §3.2: Export nach `ssh_config` — Dateidialog,
 /// `~/.ssh/config`-Ablehnung, Schreiben. Die Abbildung selbst liegt in
 /// `ssh_manager_core::profiles::ssh_config::export`.
 mod ssh_config_export;
@@ -54,7 +54,7 @@ mod startup_prompt;
 mod test_support;
 /// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
 mod ui_language;
-/// Spec 0101, Teil 0 Frage 3: die Startdialoge im Fenster, fuer den
+/// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
 /// Passwort-Modus.
 mod window_prompt;
 mod wiring;
@@ -76,7 +76,7 @@ use app_logic::state::AppState;
 /// K beschafft wird.
 ///
 /// **Eigener Typ seit Spec 0101 Etappe 3:** Im Passwort-Modus wird der
-/// Startablauf in zwei Hälften geteilt (Teil 0 Frage 3). Die erste läuft in
+/// Startablauf in zwei Hälften geteilt (§2 Frage 3). Die erste läuft in
 /// [`run`] vor dem Fenster, die zweite im Entsperr-Kommando. Beide brauchen
 /// dieselben Angaben, und sie dürfen sich nicht unterscheiden — die
 /// Umgebung wird deshalb genau einmal gelesen.
@@ -418,7 +418,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `State`.
     let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
 
-    // Spec 0101, Etappe 3 (Teil 0 Frage 3): Der Startablauf hat seit dem
+    // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
     //
     // **Schlüsselbund-Modus** (Standard, E8): unverändert — der `AppState`
@@ -510,7 +510,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                     drop(_log_guard);
                     std::process::exit(0);
                 }
-                // Teil 0 Frage 3: „Master-Passwort einrichten" aus D1
+                // §2 Frage 3: „Master-Passwort einrichten" aus D1
                 // braucht eine Texteingabe, die rfd nicht hat. Es ist
                 // nichts verändert; die App startet ohne Zustand und
                 // wiederholt den Ablauf aus dem Fenster.
@@ -660,6 +660,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // kein Feld von `AppState`, damit der Kanal auch dann hier bleibt,
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
+        .manage(crate::commands::CopyContentJobs::default())
         // Issue #89: local paths the user granted to a session (native open
         // dialog, native drop, own edit copy). The drop paths come from the
         // window's native drag-and-drop event below, never from the webview.
@@ -703,6 +704,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::respond_to_action,
             commands::cancel_running_command,
             commands::stop_auto_continuation,
+            commands::start_new_chat,
             commands::disconnect,
             commands::list_chat_sessions,
             commands::resume_chat_session,
@@ -752,12 +754,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::accept_and_create_rule,
             commands::export_document,
             commands::read_credential_file,
-            // Spec 0075, §7.3: Vorschau und Ausführung des
+            // Spec 0075, §3.1.11: Vorschau und Ausführung des
             // `ssh_config`-Imports. Die Vorschau öffnet den Dateidialog
             // selbst; das Ausführen nimmt nur Indizes (§5.1).
             ssh_config_apply::preview_ssh_config_import,
             ssh_config_apply::apply_ssh_config_import,
-            // Spec 0075, §7.4: Export nach `ssh_config`. Öffnet den
+            // Spec 0075, §3.2: Export nach `ssh_config`. Öffnet den
             // Speichern-Dialog selbst (§5.1-Muster).
             ssh_config_export::export_ssh_config,
             commands::get_platform,
@@ -788,6 +790,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_rename,
             commands::sftp_mkdir,
             commands::sftp_read_text,
+            commands::sftp_copy_content,
+            commands::sftp_cancel_copy_content,
             commands::sftp_exists,
             commands::sftp_stat,
             commands::sftp_chmod,

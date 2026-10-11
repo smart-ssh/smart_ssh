@@ -26,6 +26,7 @@ use crate::events::{
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
+use crate::system_prompt::{with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
@@ -332,10 +333,25 @@ pub(crate) async fn handle_document_generated(
 /// Chat-Eintrag".
 /// Spec 0034, Abschnitt 7, letzter Satz vor den Punkten: reine Textanfrage,
 /// kein Tool-Schema — die KI kann in diesem Aufruf keine Aktion vorschlagen.
-const TITLE_GENERATION_INSTRUCTION: &str = "Die Sitzung wird jetzt beendet. Fasse den Zweck \
+const TITLE_GENERATION_INSTRUCTION_DE: &str = "Die Sitzung wird jetzt beendet. Fasse den Zweck \
      dieser Unterhaltung in 2-4 Worten zusammen, als kurzer Titel zum Wiedererkennen. \
      Antworte NUR mit dem Titel selbst — keine Anführungszeichen, keine Erklärung, kein \
      Satzzeichen am Ende.";
+
+/// Issue #330: englische Fassung (für `en` und, mit Antwortsprach-Anweisung,
+/// jede andere UI-Sprache).
+const TITLE_GENERATION_INSTRUCTION_EN: &str = "The session is ending now. Summarize the \
+     purpose of this conversation in 2-4 words, as a short title for recognition. Reply \
+     ONLY with the title itself — no quotation marks, no explanation, no punctuation at \
+     the end.";
+
+/// Titel-Instruktion in der Prompt-Sprache der Sitzung (Issue #330).
+fn title_generation_instruction(language: PromptLanguage) -> String {
+    match language {
+        PromptLanguage::De => TITLE_GENERATION_INSTRUCTION_DE.to_string(),
+        _ => with_response_language(TITLE_GENERATION_INSTRUCTION_EN, language),
+    }
+}
 
 /// Spec 0034, Abschnitt 7, letzter Punkt vor "`rename_chat_session`":
 /// defensive Obergrenze für den von der KI gelieferten Titel-Text — ein
@@ -396,7 +412,7 @@ pub async fn generate_session_title_on_disconnect(
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     request_context.history.push(ChatMessage {
         role: Role::User,
-        content: MessageContent::Text(TITLE_GENERATION_INSTRUCTION.to_string()),
+        content: MessageContent::Text(title_generation_instruction(system_context_parts.language)),
     });
     // Kein Tool-Schema anbieten (Spec 0034, Abschnitt 7: "hier aber ohne
     // Tool-Schema, reine Textanfrage") — analog zu `available_actions:
@@ -488,11 +504,25 @@ fn sanitize_generated_title(raw: &str, redactor: &dyn OutputRedactor) -> Option<
     Some(trimmed.chars().take(MAX_GENERATED_TITLE_LENGTH).collect())
 }
 
-const DISCONNECT_COMPLETION_INSTRUCTION: &str = "Die Sitzung wird jetzt beendet. Gibt es aus \
+const DISCONNECT_COMPLETION_INSTRUCTION_DE: &str = "Die Sitzung wird jetzt beendet. Gibt es aus \
      dieser Sitzung Informationen, die für künftige Sitzungen an diesem Server als Notiz \
      festgehalten werden sollten (z. B. neue Pfade, installierte Versionen, getroffene \
      Entscheidungen)? Schlage eine Notiz-Aktualisierung nur bei echtem Mehrwert vor — keine \
      Wiederholung bereits bestehender Notizinhalte.";
+
+/// Issue #330: englische Fassung, s. [`TITLE_GENERATION_INSTRUCTION_EN`].
+const DISCONNECT_COMPLETION_INSTRUCTION_EN: &str = "The session is ending now. Is there \
+     information from this session that should be recorded as a note for future sessions \
+     on this server (e.g. new paths, installed versions, decisions made)? Propose a note \
+     update only if it adds real value — do not repeat existing note content.";
+
+/// Abschluss-Instruktion in der Prompt-Sprache der Sitzung (Issue #330).
+fn disconnect_completion_instruction(language: PromptLanguage) -> String {
+    match language {
+        PromptLanguage::De => DISCONNECT_COMPLETION_INSTRUCTION_DE.to_string(),
+        _ => with_response_language(DISCONNECT_COMPLETION_INSTRUCTION_EN, language),
+    }
+}
 
 /// Spec 0010: nach `disconnect()` aufgerufen (`app_shell::commands::disconnect`,
 /// als eigener `tokio::spawn`-Task — läuft nicht blockierend für den
@@ -581,12 +611,14 @@ pub async fn suggest_note_update_on_disconnect(
         reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
     request_context.history.push(ChatMessage {
         role: Role::User,
-        content: MessageContent::Text(DISCONNECT_COMPLETION_INSTRUCTION.to_string()),
+        content: MessageContent::Text(disconnect_completion_instruction(
+            system_context_parts.language,
+        )),
     });
     // Spec 0010, Abschnitt 2, Punkt 3: keine `SuggestCommand`-Schemas
     // anbieten — die KI kann in diesem Aufruf gar nicht erst ein Kommando
     // vorschlagen.
-    request_context.available_actions = vec![ActionSchema::propose_note_update()];
+    request_context.available_actions = vec![ActionSchema::propose_server_note_update()];
     // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar
     // (analog zur Auto-Titel-Stelle oben).
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
@@ -610,7 +642,15 @@ pub async fn suggest_note_update_on_disconnect(
                 // Vorschlag" (Spec Abschnitt 2, Punkt 4), statt eine
                 // `AiAction`, die wir gar nicht ausführen könnten,
                 // weiterzureichen.
-                if matches!(action, AiAction::ProposeNoteUpdate { .. }) {
+                // Spec 0010, Abschnitt 3: nur die Notiz des Servers selbst —
+                // ein Gruppen-Ziel zählt ebenfalls als "kein Vorschlag".
+                if matches!(
+                    action,
+                    AiAction::ProposeNoteUpdate {
+                        target: NoteTargetSelector::CurrentServer,
+                        ..
+                    }
+                ) {
                     proposed = Some(action);
                 }
                 break;

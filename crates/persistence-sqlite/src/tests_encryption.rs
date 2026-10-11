@@ -1,4 +1,4 @@
-//! Spec 0101, Commit 4: A4, A6–A8 und die Tests T1, T4–T6, T19, T20.
+//! Spec 0101: A4, A6–A8 und die Tests T1, T4–T6, T19, T20.
 //! T1 ist seit Commit 8 vollständig (Secret- und Token-Marker).
 //!
 //! **Eigene Datei, wie `tests_raw_file`:** Diese Tests arbeiten auf echten
@@ -42,7 +42,7 @@ fn lock_for(db_path: &std::path::Path) -> DataDirLock {
     DataDirLock::acquire_for_database(db_path).expect("Temp-Verzeichnis sperren")
 }
 
-/// Die Marker aus Spec 0101 §7. Mit Commit 8 ist T1 **vollständig**:
+/// Die Marker aus Spec 0101 §7. T1 ist **vollständig**:
 /// `Secret-0101` (A9, Secrets in der Datenbank) und `Token-0101` (A12,
 /// MCP-Token in der Datenbank) sind seit den Commits 6–8 wirklich
 /// Datenbankinhalt und damit prüfbar.
@@ -69,13 +69,13 @@ const TEST_ROOT_KEY: [u8; 32] = [
 ];
 
 fn test_key() -> DatabaseKey {
-    DatabaseKey::from_root_key(&TEST_ROOT_KEY)
+    DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(TEST_ROOT_KEY))
 }
 
 fn other_key() -> DatabaseKey {
     let mut root = TEST_ROOT_KEY;
     root[0] ^= 0xff;
-    DatabaseKey::from_root_key(&root)
+    DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(root))
 }
 
 /// Sucht `needle` roh in allen Dateien des Verzeichnisses `dir` (nicht nur
@@ -471,7 +471,7 @@ async fn test_a2_the_database_key_never_appears_in_a_tracing_event() {
     // beide gleichzeitig, wäre dieser Test grundlos rot — und eine
     // sporadisch rote Sicherheitszusicherung wird später beruhigt statt
     // untersucht.
-    let key = DatabaseKey::from_root_key(&[0x5a; 32]);
+    let key = DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests([0x5a; 32]));
     let pragma = key.pragma_value();
     let hex = secrecy::ExposeSecret::expose_secret(&pragma)
         .trim_start_matches("x'")
@@ -814,7 +814,9 @@ async fn test_t4_converting_the_pre_sqlcipher_fixture_keeps_everything() {
     // lesbar — die Umwandlung darf die Blobs nicht anfassen. Die
     // Umstellung danach (Issue #113) entschlüsselt ihn mit demselben K.
     let decryption = store
-        .decrypt_field_encrypted_content(&TEST_ROOT_KEY)
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(
+            TEST_ROOT_KEY,
+        ))
         .await
         .expect("Umstellung nach der Umwandlung gelingt");
     assert!(

@@ -1,296 +1,174 @@
-# Spec 0085 — Erhöhter Kanal: Widerruf innerhalb laufender Befehle, Kanal-Ende, Schutz des normalen Kanals
+# Spec 0085 — Erhöhter Kanal: Widerruf in laufenden Befehlen, Kanal-Ende, Schutz des normalen Kanals
 
-Status: **freigegeben** · Backlog: BL-0270, BL-0271, BL-0272, BL-0273 · Gate: —
-Repo: **öffentlich** `smart-ssh` — `crates/app-shell/`, `crates/app-logic/`,
-`crates/ssh-transport/` (nur Tests)
-Review-Priorität: **ERHÖHT** (Teil 1: Schreibzugriffe über den erhöhten
-Dateibrowser-Kanal, Spec 0067 A, Spec 0084 §9)
-Zweck: Ein Widerruf des erhöhten Modus beendet auch Befehle, die schon
-laufen. Dass der Kanal danach wirklich zu ist, wird durch einen Test
-gesichert. Und außerhalb von `app-logic` lässt sich kein Kanal in den
-normalen SFTP-Kanal einer Sitzung schieben.
+Status: umgesetzt
+Zweck: Ein Widerruf des erhöhten Dateibrowser-Modus beendet auch Befehle, die schon laufen. Der erhöhte Kanal ist danach wirklich geschlossen, und außerhalb der Anwendungslogik lässt sich kein anderer Kanal in den normalen SFTP-Kanal einer Sitzung schieben.
+Bezüge: Spec 0067 (erhöhter Modus), Spec 0084 §9 (Widerruf wirkt beim Zugriff), Spec 0020 (Dateikanal), Spec 0086 (Transport-Paarung, Transfer-Meldung), Spec 0088 (Kanal-Zugang ohne Panic), ADR 0078, ADR 0080.
+Review-Priorität: erhöht (Schreibzugriffe über den erhöhten Kanal).
 
-## 1. Ausgangslage (gemessen, Stand `28ca814`)
+## 1. Verhalten im Überblick
 
-- **Rekursive Befehle prüfen den Widerruf nur einmal.** `sftp_delete`,
-  `sftp_chmod` und `sftp_delete_preview` holen den Kanal einmal über
-  `lock_browser_sftp` und `BrowserSftpGuard::sftp` und laufen dann durch
-  `delete_recursive`, `chmod_recursive` bzw. `walk_dirs_and_count_files`.
-  Der Widerrufs-Merker (`ElevatedSftpSlot::is_revoked`, Spec 0084 §9) wird
-  nur in `BrowserSftpGuard::sftp` geprüft, also vor dem ersten Zugriff.
-  Wird der Modus während der Rekursion ausgeschaltet, die Sitzung
-  entfernt oder für einen anderen Nutzer neu aktiviert, laufen die übrigen
-  Zugriffe weiter mit den alten Rechten. `ElevatedSftpSlot::revoke` wartet
-  dabei auf die Kanal-Sperre, also auf das Ende der ganzen Rekursion.
-  `download_recursive` holt den Kanal je Verzeichnis neu und ist nicht
-  betroffen. Mehrere Operationen unter einem Zugriff führen auch
-  `sftp_read_text` und `sftp_open_for_editing` aus (`stat`, danach
-  `read_file`).
-- **Kanal-Ende gemessen** (russh 0.63.1, russh-sftp 2.4.0, OpenSSH im
-  Test-Container aus `dev/ssh-test-servers/`, sudo ohne Passwort). Der
-  Kanal wird wie in `open_sftp_via_exec_inner` geöffnet
-  (`sudo -n /usr/lib/ssh/sftp-server`). Solange der Client ihn hält, laufen
-  `sudo` und `sftp-server` als `root`. Wird der Client-Wert verworfen,
-  sind beide Prozesse sofort beendet, und zwar bei **stehender**
-  Verbindung. Nach dem Ende der Verbindung läuft ebenfalls keiner mehr.
-  Ein explizites `close()` ändert daran nichts. Gesichert ist das nur durch
-  das `Drop` der beiden Bibliotheken. Kein Test im Repo würde es merken,
-  wenn ein Versions-Update es ändert.
-- `ElevatedSftpSlot::revoke` (Deaktivieren) nimmt den Kanal unter der Sperre
-  heraus und verwirft ihn. `remove_session` (Trennen) setzt nur den
-  Merker. Der Kanal endet dann mit dem letzten Halter des Slots, spätestens
-  aber mit dem Trennen des Transports in `disconnect`.
-- **`Session::sftp` ist `pub`** (`app_logic::session::Session`). `app-shell`
-  nutzt den normalen Kanal über `lock_browser_sftp`
-  (`BrowserSftpGuard::Normal` hält den `MutexGuard<Option<Box<dyn
-  SftpSession>>>`), und `BrowserSftpGuard::sftp` liefert `&mut Box<dyn
-  SftpSession>`. Über beide Wege ließe sich der Kanal **ersetzen**, auch
-  durch einen erhöhten. KI (`orchestration::remote_files`) und MCP liefen
-  dann erhöht. Heute tut das kein Produktivcode. Tests in `app-shell`
-  schreiben das Feld direkt (`commands/elevation.rs`, Modul
-  `browser_channel_tests`). Außerdem baut `app-shell` `Session` per
-  Struct-Literal: im Produktivcode beim Verbinden (`commands/connect.rs`)
-  und in Tests (`commands/chat.rs`).
-- **Doku-Verweise:** In `crates/app-logic` zeigen 42 Kommentar-Verweise auf
-  Elemente, die in `app-shell` liegen: `crate::commands` (24),
-  `crate::run` (5), `crate::mcp_backend` (4), `crate::mcp_settings` (4),
-  je einmal `crate::elevated_sftp`, `crate::event_emitter`,
-  `crate::local_server`, `crate::risk_second_opinion`,
-  `crate::startup_dialog`. Gezählt mit dem
-  Befehl in T12. Alle stehen in Kommentaren, keiner ist ein Intra-Doc-Link.
-- Der Test `test_ai_and_mcp_file_actions_never_use_the_elevated_channel`
-  begrenzt den MCP-Zweig mit einem Timeout (5 s), den KI-Zweig
-  (`run_chat_turn`) nicht. Wartet dieser Zweig auf eine Bestätigung, greift
-  erst `PENDING_ACTION_CONFIRM_TIMEOUT` (3600 s).
+Der erhöhte Modus (Spec 0067) kann auf vier Wegen enden: Der Nutzer schaltet
+ihn aus, die Sitzung wird getrennt, er wird für einen anderen Nutzer neu
+aktiviert, oder der Kanal fällt weg. In jedem Fall gilt:
 
-## 2. Ziel und Nicht-Ziele
+- Kein Browser-Befehl führt danach noch eine SFTP-Operation mit den alten
+  Rechten aus, auch wenn er vor dem Widerruf begonnen hat.
+- Der Kanal ist verworfen; auf dem Server laufen weder `sudo` noch
+  `sftp-server` weiter, die Verbindung selbst bleibt bestehen.
+- Der normale SFTP-Kanal der Sitzung gehört der Sitzung; kein Code außerhalb
+  der Anwendungslogik kann ihn setzen, ersetzen oder entnehmen. KI und MCP
+  können dadurch nicht über einen untergeschobenen erhöhten Kanal laufen.
 
-Ziel: A1–A5.
+## 2. Nicht-Ziele
 
-Nicht-Ziele: kein Zähler „x von y erledigt“ bei Abbruch (Entscheidung §8).
-Kein neuer Nutzertext. Kein Rückgängigmachen schon geänderter
-Einträge. Keine Änderung an `download_recursive`, am Aufbau des erhöhten
-Kanals, an russh/russh-sftp-Versionen oder an KI- und MCP-Pfaden.
-Der Bestätigungs-Timeout bleibt unverändert.
+- Kein Zähler „x von y erledigt“ bei einem Abbruch.
+- Kein neuer Nutzertext: Der Abbruch meldet den bestehenden Fehler.
+- Kein Rückgängigmachen schon geänderter Einträge. Das wäre unvollständig und
+  selbst ein erhöhter Schreibvorgang nach dem Widerruf.
+- Der Bestätigungs-Timeout der KI-Aktionen bleibt unverändert.
 
 ## 3. Anforderungen
 
-**A1 — Widerruf wirkt auch innerhalb eines laufenden Befehls** (BL-0270).
-1. Nach einem Widerruf, also Deaktivieren, Entfernen der Sitzung (Spec 0084
-   A2.1) oder Neu-Aktivieren für einen anderen Nutzer, führt **kein**
+**A1 — Widerruf wirkt auch innerhalb eines laufenden Befehls.**
+
+1. Nach einem Widerruf (Ausschalten, Entfernen der Sitzung nach Spec 0084
+   A2.1, Neu-Aktivieren für einen anderen Nutzer) führt **kein**
    Browser-Befehl mehr eine SFTP-Operation über den widerrufenen Kanal aus.
-   Das gilt auch für Befehle, die vor dem Widerruf begonnen haben. Eine
-   schon laufende einzelne SFTP-Operation darf zu Ende laufen.
-2. Ein so abgebrochener Befehl endet mit dem bestehenden Fehler
-   `ELEVATED_CHANNEL_INACTIVE`, nicht mit `Ok` und nicht mit einem
-   SFTP-Fehler. Schon geänderte Einträge bleiben geändert.
-3. Deaktivieren wartet höchstens auf die gerade laufende einzelne
-   SFTP-Operation, nicht auf den Rest des Befehls. Das präzisiert Spec 0084
-   §9 („wartet, bis ein laufender Vorgang fertig ist“): Mit „Vorgang“ ist
-   von hier an eine einzelne SFTP-Operation gemeint.
-4. Ein abgebrochener erhöhter `delete`/`chmod`, bei dem mindestens eine
-   Operation lief, schreibt die Audit-Zeile wie bei jedem Fehlschlag:
-   `ok = false`, **mit** dem Ziel-Nutzer, unter dem die schon ausgeführten
-   Operationen liefen. Scheitert schon der Zugriff auf den Kanal
-   (`BrowserSftpGuard::sftp`), gibt es wie bisher keine Zeile. Eine Zeile
-   `ok = false` ohne ausgeführte Operation ist zulässig. Sie behauptet
-   keinen Erfolg.
+   Das gilt auch für Befehle, die vor dem Widerruf begonnen haben. Eine schon
+   laufende einzelne SFTP-Operation darf zu Ende laufen.
+2. Ein so abgebrochener Befehl endet mit dem Fehler
+   `ELEVATED_CHANNEL_INACTIVE` („Der erhöhte Modus ist nicht mehr aktiv …“),
+   nicht mit Erfolg und nicht mit einem SFTP-Fehler. Schon geänderte Einträge
+   bleiben geändert.
+3. Das Ausschalten wartet höchstens auf die gerade laufende einzelne
+   SFTP-Operation, nicht auf den Rest des Befehls. „Vorgang“ in Spec 0084 §9
+   heißt seitdem: eine einzelne SFTP-Operation.
+4. Ein abgebrochener erhöhter Lösch- oder chmod-Befehl, bei dem mindestens
+   eine Operation lief, schreibt die Protokollzeile wie bei jedem Fehlschlag:
+   `ok = false`, **mit** dem Zielnutzer, unter dem die schon ausgeführten
+   Operationen liefen. Scheitert schon der Zugriff auf den Kanal, gibt es wie
+   bisher keine Zeile. Eine Zeile `ok = false` ohne ausgeführte Operation ist
+   zulässig; sie behauptet keinen Erfolg.
 5. Über den normalen Kanal ändert sich nichts.
-6. Kein Rückfall: Nach dem Abbruch läuft keine Operation dieses Befehls
-   über den normalen Kanal weiter.
+6. Kein Rückfall: Nach dem Abbruch läuft keine Operation dieses Befehls über
+   den normalen Kanal weiter.
 
-**A2 — Kanal-Ende gesichert** (BL-0271).
-1. Ein Test auf Transport-Ebene scheitert, wenn das Verwerfen einer über
-   `open_sftp_via_exec` geöffneten SFTP-Sitzung den SSH-Kanal auf der
-   Server-Seite nicht innerhalb einer festen Frist schließt, während die
-   Verbindung weiter steht.
-2. Ein Test scheitert, wenn nach dem Deaktivieren noch irgendein Zustand
-   den Kanal-Wert hält, wenn er also nur als widerrufen markiert statt
-   verworfen wird.
+**A2 — Kanal-Ende ist gesichert.**
 
-**A3 — Normaler Kanal außerhalb von `app-logic` nicht ersetzbar**
-(BL-0272).
-1. Code außerhalb von `app-logic` kann den normalen SFTP-Kanal einer
-   `Session` weder setzen noch ersetzen noch herausnehmen. Er erhält nur
-   Zugriff, um ihn zu **benutzen**, unter derselben Sperre wie heute.
-   Keine Referenz, die er erhält, erlaubt ein Ersetzen des Kanals, auch
-   nicht über `std::mem::replace`/`swap`/`take`.
-2. Befüllt wird der Kanal nur in `app-logic`, aus dem Transport der
-   Sitzung selbst (heute `ensure_sftp_open`).
-3. Tests, die einen Test-Kanal einsetzen, tun das über eine Testhilfe
-   hinter dem Feature `test-support` (Spec 0084 A5). Produktivbauten
-   aktivieren das Feature weiterhin nicht.
-4. Ein automatischer Test im Gate scheitert, wenn A3.1 verletzt wird.
+1. Wird eine über den erhöhten Weg geöffnete SFTP-Sitzung verworfen, schließt
+   der Server den zugehörigen SSH-Kanal innerhalb einer festen Frist, während
+   die Verbindung weiter steht (danach ist ein weiterer Befehl auf ihr
+   möglich).
+2. Nach dem Ausschalten hält kein Zustand den Kanal mehr. Er ist verworfen,
+   nicht nur als widerrufen markiert, auch wenn ein wartender Befehl noch eine
+   Referenz auf den Platz des Kanals hält.
 
-**A4 — Doku-Verweise** (BL-0273). Kommentare in `crates/app-logic`
-verweisen auf Elemente in `app-shell` als `app_shell::…`, nicht als
-`crate::…`. Die Zählung aus T12 ergibt 0.
+**A3 — Der normale Kanal ist außerhalb der Anwendungslogik nicht
+ersetzbar.**
 
-**A5 — Test hängt nicht** (BL-0273). Der KI-Zweig von
-`test_ai_and_mcp_file_actions_never_use_the_elevated_channel` ist wie der
-MCP-Zweig zeitlich begrenzt. Wartet er, scheitert der Test mit einer
-Meldung, statt zu hängen.
+1. Code außerhalb der Anwendungslogik kann den normalen SFTP-Kanal einer
+   Sitzung weder setzen noch ersetzen noch herausnehmen. Er erhält nur
+   Zugriff, um ihn zu **benutzen**, unter derselben Sperre wie sonst. Keine
+   herausgegebene Referenz erlaubt ein Ersetzen, auch nicht durch Tauschen
+   oder Entnehmen des Werts.
+2. Befüllt wird der Kanal nur in der Anwendungslogik, aus dem Transport der
+   Sitzung selbst. Eine neu gebaute Sitzung hat immer einen leeren normalen
+   Kanal.
+3. Tests, die einen Test-Kanal einsetzen, tun das über eine Testhilfe, die in
+   Produktivbauten nicht enthalten ist. Produktivbauten aktivieren sie nie.
+4. Ein automatischer Test im Gate scheitert, wenn A3.1 verletzt wird: Die
+   verbotenen Fälle sind aus Sicht eines anderen Crates als
+   Übersetzungsfehler belegt, jeder mit einem kompilierenden Zwilling, der
+   sich nur in der verbotenen Zeile unterscheidet.
 
-**A6 — Gate grün** (Repo-`CLAUDE.md`), keine neuen `#[allow(…)]`, kein
-bestehender Test entfällt oder wird `#[ignore]`. Changelog-Fragment für A1
-nach `changelog.d/README.md`: nennt das Verhalten beim Ausschalten, keine
-Einzelheiten zur früheren Lücke.
+**A4 — Verweise in Kommentaren.** Entfallen: eine einmalige Aufräumaufgabe
+(Verweise der Anwendungslogik auf Elemente der App-Hülle), erledigt. Die
+Kennung bleibt vergeben.
 
-## 4. Design
+**A5 — Test hängt nicht.** Entfallen: Eine Test-Eigenschaft der KI-Zweig-Prüfung
+(zeitlich begrenzt), keine Produktfunktion. Die Kennung bleibt vergeben.
 
-- A1 ist eine Verhaltensanforderung. Wie der Merker geprüft wird,
-  entscheidet der Coder. Die Prüfung muss **jede einzelne** Operation über
-  den erhöhten Kanal abdecken, auch in künftigen Befehlen. Eine Lösung, die
-  nur einzelne Schleifen anfasst, genügt A1.1 nicht, denn auch
-  `sftp_read_text` und `sftp_open_for_editing` führen zwei Operationen aus.
-- Der Abbruch muss beim Aufrufer als `ELEVATED_CHANNEL_INACTIVE` ankommen,
-  und zwar wörtlich. Ein `SshError`, der über die allgemeine Umwandlung
-  (`impl From<E: Display> for CommandError`) zu „Channel-Fehler: …“ wird,
-  verletzt A1.2. **Festlegung:** Die Prüfung sitzt zentral am Zugang zum
-  erhöhten Kanal in `app-shell`. Dort wird auch vermerkt, dass ein Abbruch
-  wegen Widerrufs stattfand. Ebenso zentral wird das Ergebnis des Befehls
-  in `ELEVATED_CHANNEL_INACTIVE` übersetzt, sobald dieser Vermerk gesetzt
-  ist. Die Übersetzung gilt auch dann, wenn der Befehl den SFTP-Fehler
-  selbst abfängt. Ein einheitlicher Abschluss-Aufruf je Befehl ist
-  erlaubt, eine eigene Regel je Befehl nicht. Heute schlucken
-  `sftp_exists` (`stat(..).is_ok()` → `Ok(false)`), `sftp_download`
-  (`.ok()`, die Gesamtgröße vor dem Speichern-Dialog; der Transfer danach
-  greift erneut zu und scheitert dort) und `sftp_read_text` (`if let Ok`)
-  einen Fehler bei `stat`.
-  Ohne die Übersetzung würde ein Widerruf dort zu `Ok` und verletzte A1.2.
-  `crates/core` wird nicht geändert.
-- A3: Eine Referenz auf das Trait-Objekt (`&mut dyn SftpSession`) lässt
-  sich nicht ersetzen, eine Referenz auf `Box` oder `Option` schon. Die
-  Grenze verläuft also am Typ der herausgegebenen Referenz, nicht nur an
-  der Sichtbarkeit des Felds.
-- A3: Wie `app-shell` danach eine `Session` erzeugt (heute Struct-Literal
-  in `commands/connect.rs`), wählt der Coder. Er braucht dafür kein
-  `#[allow(clippy::too_many_arguments)]` (A6), z. B. mit einem
-  Parameter-Struct. Ein neu erzeugter normaler Kanal ist immer leer. Der
-  Konstruktor nimmt keinen Kanal an.
-- Verworfen: Abbruch mit Zähler (Entscheidung).
-  Aufräumen/Rückgängigmachen bei Abbruch: unvollständig und selbst ein
-  erhöhter Schreibvorgang nach dem Widerruf.
+**A6 — Gate.** Entfallen; gilt für jede Änderung (Repo-`CLAUDE.md`).
 
-## 5. Sicherheits-Invarianten
+## 4. Entscheidungen
 
-- **Spec 0067 A / Spec 0084 A1 (erhöhter Kanal nur für Browser-Befehle):**
-  wird strenger (A3). Eine Abweichung, die KI oder MCP einen Weg zum
+- A1 ist eine Verhaltensanforderung: Die Prüfung deckt **jede einzelne**
+  Operation über den erhöhten Kanal ab, auch in künftigen Befehlen, nicht nur
+  einzelne Schleifen.
+- Der Abbruch kommt beim Aufrufer wörtlich als
+  `ELEVATED_CHANNEL_INACTIVE` an, auch wenn ein Befehl den SFTP-Fehler
+  selbst abfängt (etwa die Existenzprüfung oder die Größenabfrage vor dem
+  Lesen). Die Übersetzung sitzt zentral am Zugang zum erhöhten Kanal, nicht
+  je Befehl.
+- A3 verläuft an der Art der herausgegebenen Referenz: Eine Referenz auf das
+  Trait-Objekt lässt sich nicht ersetzen, eine auf den umhüllenden Container
+  schon.
+- Verworfen: Abbruch mit Zähler; Aufräumen oder Rückgängigmachen beim
+  Abbruch. Begründungen und die Sperre je Operation: ADR 0078; Aufbau der
+  Sitzung: ADR 0080.
+
+## 5. Sicherheitszusagen
+
+- **Erhöhter Kanal nur für Browser-Befehle** (Spec 0067 A, Spec 0084 A1):
+  durch A3 strenger. Eine Abweichung, die KI oder MCP einen Weg zum
   erhöhten Kanal öffnet, ist ein Blocker.
-- **Spec 0084 §9 (Widerruf wirkt beim Zugriff):** wird vollständig (A1).
-  Die Tests 0084-T10 bis 0084-T10c (`test_t10_…`) und die beiden
-  Widerrufs-Regressionstests aus 0084 bleiben
-  unverändert grün.
+- **Widerruf wirkt beim Zugriff** (Spec 0084 §9): durch A1 vollständig.
 - **Keine stillen Rückfälle:** A1.6.
-- **Audit:** Keine Audit-Zeile behauptet einen Erfolg, der nicht
-  stattfand. Keine unterschlägt eine erhöhte Änderung, die stattfand (A1.4).
-- Filter-Engine, Risiko-Klassifizierung, Redaktion, Bestätigung,
-  Credentials: nicht berührt.
+- **Protokoll:** Keine Zeile behauptet einen Erfolg, der nicht stattfand.
+  Keine unterschlägt eine erhöhte Änderung, die stattfand (A1.4).
 
-## 6. Tests
+## 6. Abnahmefälle
 
-Für jeden mit ⚑ markierten Test im Bericht belegen, dass er gegen die
-genannte kaputte Variante scheitert (lokal umgestellt, nicht committet).
+Jeder mit ⚑ markierte Fall muss gegen die genannte kaputte Variante
+scheitern.
 
-Teil 1 — adversarial (A1):
-- **T1 ⚑** Rekursives Löschen über den erhöhten Kanal, Mock-Kanal, der nach
-  der k-ten Operation auf ein Signal wartet. Währenddessen Deaktivieren.
-  Erwartet: nach dem Widerruf keine weitere Operation am Mock,
-  Befehlsergebnis ist **gleich** `ELEVATED_CHANNEL_INACTIVE`, nicht nur
-  „enthält“ (gilt ebenso für T2–T4, T6, T6b und T6c). Kaputte Variante: Merker
-  nur bei Befehlsbeginn geprüft (Stand heute). Zweite kaputte Variante für
-  den Gleichheits-Vergleich: Abbruch kommt als SFTP-Fehler zurück.
+Widerruf (A1):
+
+- **T1 ⚑** Rekursives Löschen über den erhöhten Kanal, der nach der k-ten
+  Operation wartet; währenddessen Ausschalten. Nach dem Widerruf läuft keine
+  weitere Operation, das Ergebnis ist **gleich** `ELEVATED_CHANNEL_INACTIVE`
+  (nicht nur „enthält“; gilt auch für T2–T4, T6, T6b, T6c). Kaputt:
+  Widerruf nur bei Befehlsbeginn geprüft; oder Abbruch kommt als SFTP-Fehler.
 - **T2 ⚑** Wie T1 für rekursives chmod.
-- **T3 ⚑** Wie T1, aber Entfernen der Sitzung (A2.1 aus 0084) statt
-  Deaktivieren. Zusätzlich kehrt das Entfernen zurück, ohne auf den Befehl
-  zu warten.
+- **T3 ⚑** Wie T1, aber Entfernen der Sitzung; das Entfernen kehrt zurück,
+  ohne auf den Befehl zu warten.
 - **T4 ⚑** Wie T1, aber Neu-Aktivieren für einen anderen Nutzer. Keine
-  weitere Operation des laufenden Befehls läuft über den alten **oder** den
-  neuen Kanal.
-- **T5 ⚑** Deaktivieren während T1: Das Deaktivieren kehrt zurück, sobald
-  die gerade laufende Operation fertig ist, und nicht erst nach allen
-  restlichen Elementen (Mock mit vielen Elementen, Zähler der danach
-  ausgeführten Operationen = 0). Kaputte Variante: Merker nur bei
-  Befehlsbeginn geprüft, Sperre bis zum Ende gehalten.
-- **T6 ⚑** Wie T1 für die Lösch-Vorschau (`sftp_delete_preview`): kein
-  weiterer Lesezugriff nach dem Widerruf, Fehler statt Zählergebnis.
-- **T6b ⚑** `sftp_read_text` und `sftp_open_for_editing`: Widerruf zwischen
-  `stat` und `read_file`. Die Datei wird nicht gelesen, das Ergebnis ist
+  weitere Operation läuft über den alten **oder** den neuen Kanal.
+- **T5 ⚑** Das Ausschalten kehrt zurück, sobald die laufende Operation fertig
+  ist, nicht erst nach allen restlichen Elementen.
+- **T6 ⚑** Wie T1 für die Lösch-Vorschau: kein weiterer Lesezugriff, Fehler
+  statt Zählergebnis.
+- **T6b ⚑** „Dateiinhalt kopieren“ und „Lokal öffnen“: Widerruf zwischen
+  Größenabfrage und Lesen. Die Datei wird nicht gelesen, das Ergebnis ist
   `ELEVATED_CHANNEL_INACTIVE`.
-- **T7 ⚑** Audit: T1 und T2 mit erfasster Log-Ausgabe. Je genau eine Zeile
-  `ok = false` mit dem ursprünglichen Ziel-Nutzer. Kaputte Variante:
-  Ziel-Nutzer erst nach dem Widerruf abgefragt (dann fehlt die Zeile).
-  Dazu Widerruf vor `BrowserSftpGuard::sftp`: keine Zeile. Lassen sich Logs im
-  Test nicht zuverlässig einfangen, weil der Test-Subscriber nur für einen
-  Thread gilt, dann meldet der Coder das und prüft stattdessen die
-  Eingaben der Audit-Funktion.
-- **T6c ⚑** `sftp_exists`: Widerruf vor dem `stat`
-  über den erhöhten Kanal. Ergebnis `ELEVATED_CHANNEL_INACTIVE`, nicht
-  `Ok(false)`. Kaputte Variante:
-  Prüfung je Operation ohne zentrale Übersetzung.
-- **T8** Kein Rückfall: In T1 zählt ein Mock des **normalen** Kanals der
-  Sitzung 0 Operationen.
-- **T9** Regression: rekursives Löschen und chmod über den normalen Kanal
-  und über einen nicht widerrufenen erhöhten Kanal verhalten sich wie
-  bisher (bestehende Tests grün, dazu ein Durchlauf mit erhöhtem Kanal
-  ohne Widerruf bis `Ok`).
+- **T6c ⚑** Existenzprüfung mit Widerruf davor: Ergebnis
+  `ELEVATED_CHANNEL_INACTIVE`, nicht „existiert nicht“.
+- **T7 ⚑** Protokoll: T1 und T2 hinterlassen je genau eine Zeile `ok = false`
+  mit dem ursprünglichen Zielnutzer; bei Widerruf vor dem Zugriff auf den
+  Kanal keine Zeile.
+- **T8** Kein Rückfall: Ein Mock des normalen Kanals zählt in T1 0
+  Operationen.
+- **T9** Regression: rekursives Löschen und chmod über den normalen und den
+  nicht widerrufenen erhöhten Kanal verhalten sich wie bisher und enden mit
+  Erfolg.
 
-Teil 1 — A2:
-- **T14 ⚑** Transport-Ebene (Test-Server im Prozess, wie
-  `test_sftp_via_exec_runs_sftp_over_the_exec_channel`): Sitzung über
-  `open_sftp_via_exec` öffnen, benutzen, verwerfen. Der Server sieht das
-  Schließen dieses Kanals innerhalb einer festen Frist, die Verbindung
-  steht weiter (danach ist ein weiterer Befehl auf ihr möglich). Kaputte
-  Variante: Sitzung gehalten statt verworfen. Dann darf das Schließen
-  nicht beobachtet werden.
-- **T15 ⚑** App-Ebene: Mock-Kanal, der sein Verwerfen meldet. Der Test
-  hält während des Deaktivierens selbst eine Kopie des Slots, so wie ein
-  wartender Befehl (etwa über `BrowserChannel::from_request`). Nach dem
-  Deaktivieren ist der Kanal verworfen, **obwohl diese Kopie noch lebt**.
-  Kaputte Variante: Deaktivieren setzt nur den Merker.
+Kanal-Ende (A2):
 
-Teil 1 — adversarial (A3):
-- **T11 ⚑** Ein Test im Gate scheitert, wenn Code außerhalb von
-  `app-logic` den normalen Kanal einer `Session` setzen kann, ob durch
-  Zuweisung ans Feld oder über eine erhaltene Referenz (`mem::replace`,
-  `swap`, `take`). Der Nachweis muss aus Sicht eines **anderen** Crates
-  geführt werden. Kaputte Variante: Feld wieder `pub` bzw. Zugriff liefert
-  `&mut Box<dyn SftpSession>`. Belegt im Bericht für beide. Wird der
-  Nachweis mit Code geführt, der nicht kompilieren darf, dann gibt es zu
-  jedem Fall einen **kompilierenden Zwilling**, der sich nur in der
-  verbotenen Zeile unterscheidet und kein Feature `test-support` braucht
-  (z. B. `&Session` als Parameter statt einer Konstruktion). So scheitert
-  der Fall nachweislich an der verbotenen Zeile und nicht an einem
-  Tippfehler.
-- **T11b** Bestehende Tests in `app-shell`, die heute das Feld schreiben,
-  laufen über die Testhilfe aus A3.3 und sind unter gleichem Namen grün.
-  `cargo tree -p smart-ssh-community -e features` zeigt `test-support`
-  weiterhin nicht.
+- **T14 ⚑** Gegen einen Test-Server im Prozess: eine über den erhöhten Weg
+  geöffnete Sitzung benutzen und verwerfen; der Server sieht das Schließen
+  des Kanals innerhalb der Frist, die Verbindung steht weiter. Kaputt:
+  Sitzung gehalten statt verworfen; dann darf das Schließen nicht
+  beobachtet werden.
+- **T15 ⚑** Mock-Kanal, der sein Verwerfen meldet; der Test hält während des
+  Ausschaltens selbst eine Kopie des Platzes, wie ein wartender Befehl. Nach
+  dem Ausschalten ist der Kanal verworfen, obwohl die Kopie lebt.
 
-Teil 2 (A4/A5):
-- **T12** `grep -rnE 'crate::(commands|elevated_sftp|mcp_backend|mcp_settings|local_server|wiring|risk_second_opinion|ssh_config_apply|ssh_config_export|startup_dialog|first_run_notice|chat_retention|event_emitter|run|Wiring|Edition)\b' crates/app-logic | wc -l`
-  ergibt 0 (heute 42). Die Liste deckt alle Module von `crates/app-shell/src`
-  ab, die es in `app-logic` nicht gibt, dazu die öffentlichen Elemente aus
-  `app-shell/src/lib.rs`. Der Coder gleicht sie vorher mit `ls` ab
-  und nennt eine Abweichung im Bericht.
-- **T13 ⚑** KI-Zweig mit Timeout: Wird der Test lokal so verändert, dass
-  der KI-Zweig auf eine Bestätigung wartet, scheitert er innerhalb der
-  Frist mit Meldung. Kaputte Variante: ohne Timeout (hängt).
+Normaler Kanal (A3):
 
-## 7. Umsetzungsreihenfolge
-
-1. **Teil 1 (Opus):** A1 mit T1–T9, Gate, Commit
-   `fix(app-shell): stop elevated browser commands on revocation [BL-0270]`.
-   A2 mit T14/T15, Gate, Commit `test: … [BL-0271]`. A3 mit T11/T11b,
-   Gate, Commit `refactor(app-logic): … [BL-0272]`.
-2. **Teil 2 (Sonnet):** A4, A5 mit T12/T13, Changelog-Fragment (A6),
-   Gate, Commit(s) `[BL-0273]`.
-
-## 8. Offene Punkte
-
-Keine. Entschieden (2026-09-28): Abbruch bei Widerruf ohne
-Zähler und ohne neuen Nutzertext (A1.2).
-
-## 9. Klarstellungen
-
-(wird während der Umsetzung nachgetragen: Datum · Frage-ID · Antwort)
+- **T11 ⚑** Aus Sicht eines anderen Crates übersetzt nicht: Zuweisung an den
+  Kanal, `replace`/`swap`/`take` über eine erhaltene Referenz. Kaputt:
+  Feld wieder öffentlich oder Zugriff liefert eine Referenz auf den
+  Container.
+- **T11b** Bestehende Tests, die einen Kanal einsetzen, laufen über die
+  Testhilfe unter gleichem Namen grün; Produktivbauten enthalten die Testhilfe
+  nicht.

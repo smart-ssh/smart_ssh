@@ -22,7 +22,7 @@ async fn store_in(dir: &std::path::Path) -> (SqliteProfileStore, SqliteCredentia
     let db_path = dir.join("smart-ssh.db");
     let profile_store = SqliteProfileStore::connect_encrypted(
         &db_path,
-        &DatabaseKey::from_root_key(&TEST_ROOT_KEY),
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(TEST_ROOT_KEY)),
     )
     .await
     .unwrap();
@@ -151,9 +151,14 @@ fn test_t0_question_2_the_store_works_outside_any_runtime() {
     let db_path = dir.path().join("smart-ssh.db");
 
     let profile_store = runtime.block_on(async {
-        SqliteProfileStore::connect_encrypted(&db_path, &DatabaseKey::from_root_key(&TEST_ROOT_KEY))
-            .await
-            .unwrap()
+        SqliteProfileStore::connect_encrypted(
+            &db_path,
+            &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(
+                TEST_ROOT_KEY,
+            )),
+        )
+        .await
+        .unwrap()
     });
     let credentials = profile_store.credential_store(runtime.handle().clone());
 

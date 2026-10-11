@@ -8,7 +8,7 @@ use std::pin::Pin;
 use futures::Stream;
 use ssh_manager_core::ai::{AiError, AiEvent};
 
-/// Spec 0072, A5 (vormals Spec 0069, Teil A2/Teil 0.2): Auffangnetz
+/// Spec 0072, A5 (vormals Spec 0069, Teil A2): Auffangnetz
 /// **hinter** [`is_structured_model_not_found`] — Textbausteine
 /// (case-insensitive), die auf "das angefragte Modell existiert nicht"
 /// hindeuten, für Provider-Antworten, die kein strukturiertes Feld dafür
@@ -155,8 +155,8 @@ fn contains_model_not_found_marker(body: &str) -> bool {
 /// Spec 0069, Teil A2/§4.2: `is_connect()` **und** der Host aus `err.url()`
 /// ist eine Loopback-Adresse (`localhost`, `127.0.0.0/8`, `::1`) →
 /// `LocalProviderUnreachable` (typischerweise: Ollama läuft nicht).
-/// `is_connect()` ohne Loopback (DNS-Fehler, abgelehnt, TLS — Teil 0.5
-/// belegt: `reqwest` liefert `is_connect() == true` für beides, DNS-Fehler
+/// `is_connect()` ohne Loopback (DNS-Fehler, abgelehnt, TLS —
+/// gemessen: `reqwest` liefert `is_connect() == true` für beides, DNS-Fehler
 /// wie abgelehnte Verbindung) → weiterhin `NetworkError`. `is_timeout()` →
 /// `Timeout`. **Bewusst nicht** nach Provider-*Typ* unterschieden (s.
 /// Modul-Doc-Verweis auf Spec 0069 §4.2): ein Ollama auf einem anderen

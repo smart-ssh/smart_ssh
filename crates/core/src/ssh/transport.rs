@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use tokio::sync::oneshot;
 
 use super::error::SshError;
-use super::types::{CommandOutput, ExecOutcome, PtySize, RemoteEntry};
+use super::types::{CommandOutput, ExecOutcome, ExecOutputSink, PtySize, RemoteEntry};
 
 /// Offene Verbindung zu einem SSH-Server (Spec 0005, Abschnitt 1/4). Exec-
 /// und interaktiver Modus laufen über **denselben** Transport (SSH-
@@ -62,6 +62,47 @@ pub trait SshTransport: Send + Sync {
             cancelled: false,
         })
     }
+    /// Like [`execute_cancellable`](Self::execute_cancellable) /
+    /// [`execute_with_stdin_cancellable`](Self::execute_with_stdin_cancellable)
+    /// (chosen by `stdin`), but additionally sends every output chunk to
+    /// `sink` while the command runs (issue #325, live output in the chat).
+    /// The returned [`ExecOutcome`] is identical to the one of the
+    /// non-streaming method: the stream is display-only.
+    ///
+    /// Default: no live chunks, delegates unchanged — existing
+    /// implementations and test mocks keep working; `RusshTransport` and
+    /// `LocalTransport` override it.
+    async fn execute_streaming(
+        &mut self,
+        command: &str,
+        stdin: Option<&[u8]>,
+        cancel: oneshot::Receiver<()>,
+        sink: ExecOutputSink,
+    ) -> Result<ExecOutcome, SshError> {
+        drop(sink);
+        match stdin {
+            Some(stdin) => {
+                self.execute_with_stdin_cancellable(command, stdin, cancel)
+                    .await
+            }
+            None => self.execute_cancellable(command, cancel).await,
+        }
+    }
+    /// Issue #328: split form of [`execute_streaming`](Self::execute_streaming).
+    /// Opens the exec channel (and writes `stdin`) while the caller holds the
+    /// transport, and returns a [`RunningExec`] that no longer needs the
+    /// transport: the caller can release its lock while the command runs, so
+    /// file browser, terminal and disconnect of the same session are not
+    /// blocked. `Ok(None)` (default) means "not supported, use
+    /// `execute_streaming`"; `RusshTransport` and `LocalTransport` override it.
+    async fn start_exec(
+        &mut self,
+        command: &str,
+        stdin: Option<&[u8]>,
+    ) -> Result<Option<Box<dyn RunningExec>>, SshError> {
+        let _ = (command, stdin);
+        Ok(None)
+    }
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError>;
     /// Öffnet eine SFTP-Session als weiteren Subsystem-Channel derselben
     /// Verbindung (Spec 0020, Abschnitt 3) — kein zweiter Verbindungsaufbau,
@@ -107,6 +148,20 @@ pub trait SshTransport: Send + Sync {
     fn set_max_output_bytes(&mut self, _limit: usize) {}
 }
 
+/// A started exec channel that runs independently of the transport it was
+/// opened from (issue #328, see [`SshTransport::start_exec`]).
+#[async_trait]
+pub trait RunningExec: Send {
+    /// Waits for the command to end (or for `cancel`), forwarding output
+    /// chunks to `sink`; same result semantics as
+    /// [`SshTransport::execute_streaming`].
+    async fn run(
+        self: Box<Self>,
+        cancel: oneshot::Receiver<()>,
+        sink: ExecOutputSink,
+    ) -> Result<ExecOutcome, SshError>;
+}
+
 /// Dateizugriff über SFTP (Spec 0020, Abschnitt 3) — läuft, wie
 /// [`SshTransport::execute`], **nicht** über die Filter-Engine; Kontrolle
 /// über SFTP-initiierte Datei-Operationen ist Sache der aufrufenden Ebene
@@ -137,6 +192,19 @@ pub trait SshTransport: Send + Sync {
 pub trait SftpSession: Send {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError>;
     async fn read_file(&mut self, path: &str) -> Result<Vec<u8>, SshError>;
+    /// Wie `read_file`, liest aber **höchstens** `max_bytes` Bytes und hört
+    /// dann auf (Issue #357): der Speicher hält nie mehr als `max_bytes`,
+    /// auch wenn die Datei viel größer ist oder ihre Größe unbekannt war.
+    /// Wer „größer als N" erkennen will, übergibt `N + 1` und prüft die
+    /// Länge des Ergebnisses. `progress` bekommt nach jedem gelesenen Stück
+    /// die bisher gelesene Byte-Zahl. Abbrechen heißt, den Aufruf fallen zu
+    /// lassen (Drop des Futures).
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError>;
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError>;
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
     /// Wie `stat`, folgt aber KEINEM Symlink am Zielpfad selbst (SFTP

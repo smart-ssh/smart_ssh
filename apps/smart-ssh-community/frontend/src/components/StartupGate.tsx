@@ -62,7 +62,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
    * Klarstellung 10e, „ein geöffnetes Passwortfeld ist leer" — mit einem
    * neuen `key` entsteht der Zustand des Dialogs je Frage neu. */
   const [questionSerial, setQuestionSerial] = useState(0);
-  /** Teil 0 Frage 3: Der Startablauf wird genau **einmal** je Programmlauf
+  /** §2 Frage 3: Der Startablauf wird genau **einmal** je Programmlauf
    * aus dem Fenster fortgesetzt. Ohne den Merker schickte ein zweiter
    * Durchlauf des Effekts (React im Entwicklungsmodus) einen zweiten
    * Aufruf, der im Backend auf der Entsperr-Sperre wartet, bis die erste
@@ -160,7 +160,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     };
   }, [initialState, refresh, listenAttempt]);
 
-  // Teil 0 Frage 3: Im Schlüsselbund-Modus **ohne** Zustand ist der Start in
+  // §2 Frage 3: Im Schlüsselbund-Modus **ohne** Zustand ist der Start in
   // D1 gelandet und soll im Fenster weitergehen — dort gibt es das
   // Eingabefeld, das die nativen Dialoge nicht haben. Der Aufruf setzt den
   // Ablauf fort; die Wahl selbst fällt im Dialog D1, der daraufhin kommt.

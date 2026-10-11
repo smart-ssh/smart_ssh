@@ -1,121 +1,95 @@
-# Spec: Architektur-Übersicht
+# Spec 0001 — Architektur-Übersicht
 
-Status: Entwurf
-Betrifft: Gesamtprojekt
-Abhängigkeiten: keine — dies ist die Grundlage für alle weiteren Specs
+Status: umgesetzt
+Zweck: Ziel des Projekts und die Grundregeln, nach denen alle anderen Bereiche aufgebaut sind: Schichtung, Testbarkeit der Außenanbindungen und Entwicklungsprozess.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0084 (Abgrenzung der beiden Anwendungs-Crates), ADR 0005, ADR 0006.
 
 ## 1. Ziel des Projekts
 
 Ein plattformübergreifender SSH-Client (macOS, Windows, Linux) mit:
 
-- Server-Manager (Profile, Passwort-/Key-/Zertifikats-Auth)
-- KI-Chat-Integration: Nutzer chattet mit einer frei wählbaren KI (eigene
-  API-Keys), die SSH-Kommandos vorschlägt
-- Vorschläge laufen durch eine Filter-/Policy-Engine, die je nach Regel
-  automatisch ausführt oder eine explizite Bestätigung verlangt
-- Kernprinzip des gesamten Projekts: **volle Transparenz und Kontrolle über
-  jedes Kommando, das auf einem Server landet.** Die KI ist Copilot, nie
-  autonomer Akteur ohne Sichtbarkeit für den Nutzer.
+- Server-Verwaltung (Profile, Passwort-, Schlüssel- und Zertifikats-Anmeldung)
+- KI-Chat: Der Nutzer chattet mit einer frei wählbaren KI (eigene
+  API-Schlüssel), die SSH-Kommandos vorschlägt
+- Vorschlägen, die durch eine Filter- und Regel-Engine laufen, die je nach
+  Regel automatisch ausführt oder eine ausdrückliche Bestätigung verlangt
+- dem Kernprinzip des gesamten Projekts: **volle Transparenz und Kontrolle
+  über jedes Kommando, das auf einem Server landet.** Die KI ist Copilot,
+  nie autonomer Akteur ohne Sichtbarkeit für den Nutzer.
 
-## 2. Tech-Stack-Entscheidung
+## 2. Technik-Entscheidung
 
-**Gewählt: Tauri 2.0 (Rust-Backend + Web-Frontend)**
+Die Anwendung ist eine Desktop-Anwendung mit einem Rust-Kern und einer
+Web-Oberfläche (Tauri 2, Frontend in React). Gründe, kurz:
 
-Begründung:
-- Deutlich kleinere Bundle-Size und geringerer Ressourcenverbrauch als
-  Electron; kein mitgeliefertes Node.js-Backend als zusätzliche Angriffsfläche
-- Ausgereifte SSH-Bibliotheken in Rust (`russh` favorisiert, `libssh2`-Bindings
-  als Alternative)
-- Plattformübergreifender Zugriff auf OS-Schlüsselbunde über die `keyring`-
-  Crate (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-  ohne plattformspezifischen Sonderaufwand
-- Die Kernlogik lässt sich als UI-unabhängige Rust-Library bauen und später
-  1:1 in einer TUI wiederverwenden (siehe Abschnitt 3)
+- geringe Paketgröße und geringer Ressourcenverbrauch, kein mitgeliefertes
+  Node.js-Backend als zusätzliche Angriffsfläche
+- ausgereifte SSH-Bibliothek in Rust
+- Zugriff auf den Schlüsselbund des Betriebssystems ohne
+  plattformspezifischen Sonderaufwand
+- Die Kernlogik ist eine oberflächenunabhängige Bibliothek und lässt sich
+  später unverändert in einer Terminal-Oberfläche wiederverwenden.
 
-Alternativen wurden verworfen: Electron (größere Angriffsfläche, höherer
-Ressourcenverbrauch), native Implementierung pro Plattform (dreifacher
-Wartungsaufwand, keine geteilte Kernlogik).
+Verworfen wurden Electron (größere Angriffsfläche, höherer
+Ressourcenverbrauch) und eine native Implementierung je Plattform
+(dreifacher Wartungsaufwand, keine geteilte Kernlogik).
 
-Frontend-Framework innerhalb von Tauri: noch nicht final entschieden
-(React/Svelte/Solid) — siehe offene Punkte, Abschnitt 6.
+## 3. Schichtung
 
-## 3. Architektur-Layering
+Die Anwendung besteht aus diesen Schichten (die Crate-Übersicht steht in
+der Projektanleitung für Beitragende, die Abgrenzung der beiden
+Anwendungs-Crates in Spec 0084):
 
-```
-crates/
-├── core/          # reine Logik, KEIN UI, KEIN Tauri
-│   ├── ssh/         # Verbindungs-Handling, trait-basiert
-│   ├── credentials/ # Credential-Store-Abstraktion
-│   ├── filter/       # Policy-Engine (siehe Spec 0002)
-│   ├── ai/            # AI-Provider-Abstraktion
-│   └── audit/          # Logging
-├── tui/            # später, nutzt core direkt
-└── app-tauri/      # dünner Wrapper um core, Tauri-Commands/Events
-frontend/            # React/Svelte, spricht ausschließlich mit app-tauri
-```
+- **Kern:** reine Fachlogik ohne Oberfläche und ohne Tauri — SSH-Verbindung
+  (als Schnittstelle), Filter-Engine, Risiko-Einstufung, KI-Anbindung mit
+  Ausgabe-Schwärzung, Server-, Gruppen- und Credential-Typen.
+- **Konkrete Anbindungen:** je eine Crate für Transport, Persistenz,
+  Schlüsselbund, KI-Anbieter und MCP-Server.
+- **Anwendungslogik:** Tauri-freie Abläufe (Chat-Runde, Bestätigung,
+  Verwaltung) über dem Kern.
+- **Anwendungs-Hülle:** dünner Wrapper, der Tauri-Commands und -Events auf
+  die Anwendungslogik abbildet.
+- **Frontend:** spricht ausschließlich mit der Anwendungs-Hülle.
 
-**Verbindliche Regel:** `core` hat keine Abhängigkeit auf Tauri oder ein
-UI-Framework. Jede fachliche Logik gehört dorthin, nicht in `app-tauri`.
-`app-tauri` übersetzt lediglich zwischen Tauri-Commands/Events und den
-`core`-APIs. Das stellt sicher, dass die spätere TUI (`crates/tui`) dieselbe
-Logik ohne Duplikation nutzen kann.
+**Verbindliche Regel:** Der Kern hat keine Abhängigkeit auf Tauri oder ein
+UI-Framework. Jede fachliche Logik gehört in den Kern oder die
+Anwendungslogik, nicht in die Hülle. Das stellt sicher, dass eine spätere
+Terminal-Oberfläche dieselbe Logik ohne Duplikation nutzen kann.
+
+Eine Server-Identität (auch der lokale Pseudo-Server) wird in der
+Sicherheitslogik nie unterschieden; Sonderbehandlung gehört an die Stelle,
+an der der Transport gebaut wird (Spec 0032).
 
 ## 4. Testbarkeits-Prinzip
 
-Für jede Außenanbindung (SSH-Verbindung, KI-API, Credential-Store) wird ein
-Trait definiert, bevor die konkrete Implementierung entsteht:
+Für jede Außenanbindung (SSH-Verbindung, Dateiübertragung, interaktive
+Shell, KI-Anbieter, Regel-, Profil- und Credential-Speicher) wird eine
+Schnittstelle definiert, bevor die konkrete Umsetzung entsteht. Jede hat
+eine In-Memory- oder Mock-Umsetzung für Tests. Dadurch lässt sich jede
+Fachlogik — vor allem die sicherheitskritische Filter-Engine — ohne echte
+SSH-Verbindung, ohne API-Aufruf und ohne Schlüsselbund testen. Jedes
+fachliche Modul im Kern hat eine eigene Testsuite; die Oberfläche bleibt
+bewusst dünn und wird nicht auf dieselbe Weise durchgetestet.
 
-```rust
-trait SshTransport {
-    fn execute(&mut self, cmd: &str) -> Result<CommandOutput>;
-}
+## 5. Entwicklungsprozess
 
-trait AiProvider {
-    fn suggest(&self, context: &SessionContext) -> Result<AiSuggestion>;
-}
+- **Spec-first je Bereich:** Jeder fachliche Bereich hat eine nummerierte
+  Spec (Form: `docs/specs/README.md`), die im selben Pull Request wie die
+  Änderung angepasst wird.
+- **Tests vor oder parallel zur Umsetzung**, besonders bei
+  sicherheitskritischen Modulen.
+- **Kleine, prüfbare Schritte.**
+- **ADRs** für Entscheidungen, die über eine einzelne Spec hinausgehen.
+- **Test-Gate vor jedem Commit:** Formatprüfung, Clippy ohne Warnungen und
+  alle Tests müssen grün sein (lokal und in der CI, Spec 0090).
+- **Unabhängiger Review nach jedem Umsetzungsschritt:** durch eine Instanz,
+  die nicht an der Umsetzung beteiligt war, gegen die betroffene Spec bzw.
+  das Issue und den Diff; sie ändert selbst keinen Code und liefert einen
+  strukturierten Bericht. Bei sicherheitskritischen Modulen (Filter-Engine,
+  Risiko-Klassifizierer, Schwärzung, Credential-Handling) mit erhöhter
+  Priorität, inklusive gezielter Umgehungsversuche.
 
-trait PolicyStore {
-    fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule>;
-}
-```
+## 6. Grenzen
 
-Dadurch lässt sich jede Modul-Logik (insbesondere die sicherheitskritische
-Filter-Engine, siehe Spec 0002) mit In-Memory-/Mock-Implementierungen testen,
-ganz ohne echte SSH-Verbindung oder API-Calls. Jedes fachliche Modul in
-`core` bekommt eine eigene Testsuite; UI-Code wird nicht auf dieselbe Weise
-durchgetestet, sondern bleibt bewusst dünn.
-
-## 5. Entwicklungsprozess (projektübergreifend)
-
-Da das Projekt KI-gestützt entwickelt wird (siehe Diskussion zu Claude Code):
-
-- **Spec-first pro Modul**: jedes fachliche Modul bekommt eine nummerierte
-  Spec in `docs/specs/`, bevor Code entsteht
-- **Tests vor/parallel zur Implementierung**, besonders bei sicherheitskritischen
-  Modulen wie der Filter-Engine
-- **Kleine, review-bare Schritte**: ein Modul/eine Funktion pro Durchgang
-- **ADRs** in `docs/adr/` für Architekturentscheidungen, die über den Scope
-  einer einzelnen Spec hinausgehen (z. B. "warum russh statt libssh2")
-- **Test-Gate vor jedem Commit**: `cargo test --workspace`,
-  `cargo clippy --workspace -- -D warnings`, `cargo fmt --check` müssen grün
-  sein, bevor committet wird (durchgesetzt sowohl lokal als auch in CI)
-- **Unabhängiger Review-Pass nach größeren Implementierungsschritten**: In
-  einer **frischen** Claude-Code-Session (kein `--resume`/`--continue` der
-  Implementierungs-Session), damit die Bewertung nicht durch die gerade
-  getroffenen Implementierungsentscheidungen voreingenommen ist — dieselbe
-  Logik wie bei menschlichem Code-Review durch eine zweite Person. Die
-  Review-Session liest ausschließlich die betroffene(n) Spec(s) und den
-  Diff, ändert selbst keinen Code, sondern liefert einen strukturierten
-  Bericht. Vorlage dafür liegt unter `docs/review-prompt-template.md`. Bei
-  sicherheitskritischen Modulen (Filter-Engine, Risiko-Klassifizierer,
-  Redactor, Credential-Handling) läuft der Review-Pass mit erhöhter
-  Priorität inklusive adversarialem Testen (gezielte Versuche, die Logik zu
-  umgehen), bei den übrigen Modulen genügt der reguläre
-  Spec-Konformitäts-/Invarianten-Check.
-
-## 6. Offene Punkte
-
-- Frontend-Framework (React/Svelte/Solid) — noch nicht entschieden
-- Genaues Datenformat für Server-Profile und Credentials (eigene Spec folgt)
-- Lizenzmodell des Projekts (Open Source? Falls ja, welche Lizenz?)
-- Ob/wie Team-Sharing von Server-Profilen langfristig unterstützt wird
+- Ein Teamfreigabe-Konzept für Server-Profile gibt es nicht.
+- Die Lizenz des Projekts ist Apache-2.0.

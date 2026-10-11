@@ -706,7 +706,7 @@ pub struct ServerInput {
 /// sicherer absoluter Pfad sein — er landet in einem `sudo`-Kommando und in
 /// der angezeigten sudoers-Zeile.
 ///
-/// Spec 0073, §9 (Q-BL-0149-01): Getrimmt wird über den geteilten
+/// Spec 0073, A6–A8 (Q-BL-0149-01): Getrimmt wird über den geteilten
 /// [`trim_credential_value`], obwohl der Pfad kein Zugangsdaten-Wert ist —
 /// §1 der Spec listet diese Stelle, A3 verlangt für sie den Helfer. Der
 /// Unterschied zu `str::trim` ist **nicht** kosmetisch:
@@ -2146,7 +2146,7 @@ mod sftp_server_path_tests {
         }
     }
 
-    // --- Spec 0073, §9 (Q-BL-0149-01) -----------------------------------
+    // --- Spec 0073, A6–A8 (Q-BL-0149-01) -----------------------------------
     //
     // Der Pfad-Override läuft über denselben geteilten
     // `trim_credential_value` wie die Zugangsdaten-Werte. Die

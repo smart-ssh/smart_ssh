@@ -283,7 +283,7 @@ mod tests {
         }
     }
 
-    /// Spec 0057, §7: "alles erfasst" — alle vier Ereignistypen, in
+    /// Spec 0057, §1.1: alle vier Ereignistypen, in
     /// Reihenfolge.
     #[tokio::test]
     async fn test_append_entry_persists_all_four_entry_types_in_order() {

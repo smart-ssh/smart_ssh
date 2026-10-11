@@ -44,10 +44,6 @@
       "chatRetention": "Sessions & Data",
       "mcpServer": "MCP Server",
       "masterPassword": "Master password"
-    },
-    "language": {
-      "de": "German",
-      "en": "English"
     }
   },
   "about": {
@@ -347,6 +343,8 @@
     "cancellingCommand": "Disconnecting…",
     "commandCancelledNotice": "⚠ Manually cancelled — output may be incomplete, no regular exit code.",
     "commandTruncatedNotice": "⚠ Output was cut off at the size limit — it may be incomplete.",
+    "liveOutputLabel": "Live output",
+    "liveOutputTruncatedNotice": "⚠ Size limit reached — further output is no longer shown.",
     "mcpOrigin": "External tool (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "external tool (MCP)",
     "mcpOriginHint": "This action was not requested by the internal chat, but by an external tool via the local MCP server."
@@ -425,6 +423,8 @@
     "discoverModels": "Load models",
     "discoveringModels": "Loading models…",
     "modelDiscoveryFailedHint": "Could not load models automatically — enter the model name manually.",
+    "modelDiscoveryEmptyHint": "The provider returned no models. Enter the model name by hand.",
+    "modelDiscoveryAuthFailed": "✗ The provider rejected these credentials – check the API key",
     "advanced": "Advanced",
     "extraHeadersLabel": "Extra headers",
     "extraHeadersHint": "Attached to every request to this provider (e.g. OpenRouter's HTTP-Referer/X-Title).",
@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH is still locked. Unlock it with your master password first.",
     "MASTER_PASSWORD_MODE_MISMATCH": "This operation does not match where the key is currently kept. Nothing was changed — reopen the settings, they show the active mode.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "The master password warning has not been confirmed. Without that password all data is lost and there is no recovery — tick the box and set it up again. Nothing was changed.",
-    "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup."
+    "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup.",
+    "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard."
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -1014,9 +1015,13 @@
     "renamePrompt": {
       "renameTitle": "Rename",
       "newFolderTitle": "New folder"
-    }
+    },
+    "copyProgress": "Copying… {{done}} MB of {{total}} MB",
+    "copyProgressUnknownTotal": "Copying… {{done}} MB"
   },
   "chat": {
+    "newChat": "New chat",
+    "newChatDisabledHint": "Not available while the AI is responding or a confirmation is open.",
     "autoContinuing": "Automatic mode running — the AI responds to the last result on its own…",
     "stopAutoContinuation": "Stop automatic mode",
     "generating": "AI is generating a response / document…",

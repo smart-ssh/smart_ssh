@@ -24,7 +24,7 @@ use crate::database_startup::{StartupAbort, StartupPrompt};
 /// wurde.
 pub async fn decrypt_field_encrypted_content(
     store: &SqliteProfileStore,
-    root_key: &[u8; 32],
+    root_key: &ssh_manager_core::crypto::RootKey,
     prompt: &dyn StartupPrompt,
 ) -> Result<(), StartupAbort> {
     let outcome = store

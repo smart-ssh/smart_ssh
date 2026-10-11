@@ -34,7 +34,7 @@ futures = "0.3.34"
 # für die volle Begründung): löst `Include`-Pfad-Platzhalter auf
 # (`ssh_config_import`).
 globset = "0.4.20"
-# Spec 0076, §9 K-3 (übernommen aus app-shell/Cargo.toml): `O_NONBLOCK` für
+# ADR 0065 §3 (Nachtrag) (übernommen aus app-shell/Cargo.toml): `O_NONBLOCK` für
 # `key_files.rs`.
 libc = "0.2.189"
 mcp-server = { version = "0.6.0", path = "../mcp-server" }

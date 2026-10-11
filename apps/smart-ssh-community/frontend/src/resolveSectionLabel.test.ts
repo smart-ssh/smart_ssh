@@ -1,5 +1,5 @@
-// Spec 0055, Teil 4 ("Testbarkeit"): "eine Registrierung mit festem String
-// ohne passenden Key bricht nicht."
+// Spec 0055, Teil 4: eine Registrierung mit festem String
+// ohne passenden Schlüssel bricht nicht.
 import { describe, expect, it } from "vitest";
 import { resolveSectionLabel } from "./resolveSectionLabel";
 import { testI18n } from "./testI18n";

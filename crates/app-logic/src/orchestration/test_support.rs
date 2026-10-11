@@ -1,7 +1,7 @@
 //! Gemeinsame Test-Hilfen (Fixtures, Mock-Aufbauten) für die Testmodule von
 //! `orchestration`s Untermodulen `chat_turn`, `action_exec`, `notes` und
-//! `remote_files` — Spec 0083, Design (§4): "Gemeinsame Test-Hilfen ...
-//! kommen in ein gemeinsames cfg(test)-Modul, nicht dupliziert." Reine
+//! `remote_files` — gemeinsame Test-Hilfen liegen in einem
+//! `cfg(test)`-Modul, nicht dupliziert (ADR 0076). Reine
 //! Verschiebung aus dem bisherigen `orchestration::tests`-Modulkopf, keine
 //! Verhaltensänderung.
 
@@ -118,6 +118,9 @@ pub(crate) struct MockSshTransport {
     /// ein Test prüfen kann, dass der KI-Ausführungspfad das Kommando nicht
     /// verändert (z. B. kein vorangestelltes `cd`).
     executed: Arc<StdMutex<Vec<String>>>,
+    /// Issue #325: live chunks `execute_streaming` sends (one every 200 ms
+    /// of virtual time) before it returns the regular response.
+    streamed: HashMap<String, Vec<ssh_manager_core::ssh::ExecOutputChunk>>,
 }
 
 pub(crate) type StdinCalls = Arc<StdMutex<Vec<(String, Vec<u8>)>>>;
@@ -147,6 +150,15 @@ impl MockSshTransport {
 
     pub(crate) fn stdin_calls_handle(&self) -> StdinCalls {
         self.stdin_calls.clone()
+    }
+
+    pub(crate) fn with_streamed_output(
+        mut self,
+        command: impl Into<String>,
+        chunks: Vec<ssh_manager_core::ssh::ExecOutputChunk>,
+    ) -> Self {
+        self.streamed.insert(command.into(), chunks);
+        self
     }
 
     pub(crate) fn with_never_completing(mut self, command: impl Into<String>) -> Self {
@@ -212,6 +224,45 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
         })
     }
 
+    async fn execute_streaming(
+        &mut self,
+        command: &str,
+        stdin: Option<&[u8]>,
+        cancel: tokio::sync::oneshot::Receiver<()>,
+        sink: ssh_manager_core::ssh::ExecOutputSink,
+    ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
+        if let Some(chunks) = self.streamed.get(command).cloned() {
+            for chunk in chunks {
+                let _ = sink.send(chunk);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+        }
+        drop(sink);
+        match stdin {
+            Some(stdin) => {
+                self.execute_with_stdin_cancellable(command, stdin, cancel)
+                    .await
+            }
+            None => self.execute_cancellable(command, cancel).await,
+        }
+    }
+
+    /// Issue #328: a never-completing command runs without the transport,
+    /// like on the real transports; everything else keeps the locked path.
+    async fn start_exec(
+        &mut self,
+        command: &str,
+        _stdin: Option<&[u8]>,
+    ) -> Result<Option<Box<dyn ssh_manager_core::ssh::RunningExec>>, SshError> {
+        if self.never_completing.contains(command) {
+            self.executed.lock().unwrap().push(command.to_string());
+            return Ok(Some(Box::new(NeverCompletingExec {
+                chunks: self.streamed.get(command).cloned().unwrap_or_default(),
+            })));
+        }
+        Ok(None)
+    }
+
     async fn open_shell(&mut self, _size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError> {
         Err(SshError::ChannelError(
             "in diesem Test nicht unterstützt".to_string(),
@@ -220,6 +271,35 @@ impl ssh_manager_core::ssh::SshTransport for MockSshTransport {
 
     async fn disconnect(&mut self) -> Result<(), SshError> {
         Ok(())
+    }
+}
+
+struct NeverCompletingExec {
+    chunks: Vec<ssh_manager_core::ssh::ExecOutputChunk>,
+}
+
+#[async_trait]
+impl ssh_manager_core::ssh::RunningExec for NeverCompletingExec {
+    async fn run(
+        self: Box<Self>,
+        cancel: tokio::sync::oneshot::Receiver<()>,
+        sink: ssh_manager_core::ssh::ExecOutputSink,
+    ) -> Result<ssh_manager_core::ssh::ExecOutcome, SshError> {
+        for chunk in self.chunks {
+            let _ = sink.send(chunk);
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+        drop(sink);
+        let _ = cancel.await;
+        Ok(ssh_manager_core::ssh::ExecOutcome {
+            output: CommandOutput {
+                stdout: b"partial output before cancel".to_vec(),
+                stderr: Vec::new(),
+                exit_code: None,
+                truncated: false,
+            },
+            cancelled: true,
+        })
     }
 }
 
@@ -292,6 +372,27 @@ pub(crate) fn test_session(ai_events: Vec<AiEvent>, transport: MockSshTransport)
     session_with_ai_provider(MockAiProvider::new(ai_events), transport)
 }
 
+/// Wie [`test_session`], aber mit einer Filter-Engine, die alles erlaubt
+/// (`AllowEverythingPolicyStore`) — für Tests, die nur eine durchlässige
+/// Policy brauchen und nicht die Standard-Engine ohne Regeln.
+pub(crate) fn test_session_allowing_everything(
+    ai_events: Vec<AiEvent>,
+    transport: MockSshTransport,
+) -> Session {
+    session_with_ai_provider_allowing_everything(MockAiProvider::new(ai_events), transport)
+}
+
+/// Wie [`session_with_ai_provider`], aber mit einer Filter-Engine, die alles
+/// erlaubt.
+pub(crate) fn session_with_ai_provider_allowing_everything(
+    ai_provider: impl AiProvider + 'static,
+    transport: MockSshTransport,
+) -> Session {
+    let mut session = session_with_ai_provider(ai_provider, transport);
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
+    session
+}
+
 pub(crate) fn session_with_ai_provider(
     ai_provider: impl AiProvider + 'static,
     transport: MockSshTransport,
@@ -330,7 +431,7 @@ pub(crate) fn session_with_ai_provider(
         // Kommando und Allow-Regel sichtbar bricht statt still auf „aus" zu
         // laufen. Tests, die das Verhalten bei ausgeschalteter Einstellung
         // prüfen, setzen es ausdrücklich über
-        // `parts_mut_for_tests().red_risk_always_confirm = false`.
+        // `set_red_risk_always_confirm_for_tests(false)`.
         red_risk_always_confirm: true,
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
@@ -363,10 +464,10 @@ pub(crate) fn session_with_second_opinion(
     // Spec 0085, A3: `Session` hat ein privates Feld, also kein Struct-Update
     // („`..base`") mehr — die beiden Felder werden nach dem Bau gesetzt.
     let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
-    session.parts_mut_for_tests().risk_second_opinion_provider =
-        Some(Box::new(second_opinion_provider));
-    session.parts_mut_for_tests().risk_second_opinion_budget =
-        Some(Arc::new(ai_providers::ProviderBudgetGuard::new()));
+    session.set_risk_second_opinion_provider_for_tests(Some(Box::new(second_opinion_provider)));
+    session.set_risk_second_opinion_budget_for_tests(Some(Arc::new(
+        ai_providers::ProviderBudgetGuard::new(),
+    )));
     session
 }
 
@@ -634,10 +735,10 @@ pub(crate) async fn session_with_real_chat_and_ledger_persistence(
     let ledger_store = profile_store.ledger_store();
 
     let mut session = session_with_ai_provider(MockAiProvider::new(ai_events), transport);
-    session.parts_mut_for_tests().server_id = server_id;
-    session.parts_mut_for_tests().chat_session_store = Some(chat_store.clone());
-    session.parts_mut_for_tests().ledger_store = Some(ledger_store.clone());
-    session.parts_mut_for_tests().chat_session_id = AsyncMutex::new(Some(chat_session_id));
+    session.set_server_id_for_tests(server_id);
+    session.set_chat_session_store_for_tests(Some(chat_store.clone()));
+    session.set_ledger_store_for_tests(Some(ledger_store.clone()));
+    session.set_chat_session_id_for_tests(AsyncMutex::new(Some(chat_session_id)));
 
     (session, chat_store, chat_session_id, tmp_dir, ledger_store)
 }

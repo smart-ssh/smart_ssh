@@ -34,11 +34,11 @@ pub mod test_support;
 
 #[cfg(test)]
 mod tests;
-/// Spec 0101, Commit 6 — eigene Datei: T10 (Vertrag des
-/// Datenbank-`CredentialStore`) und die drei Aufruforte aus Teil 0 Frage 2.
+/// Spec 0101 — eigene Datei: T10 (Vertrag des
+/// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
 #[cfg(test)]
 mod tests_credential_store;
-/// Spec 0101, Commit 4 — eigene Datei: A4, A6–A8 und die Tests T1 (Teil),
+/// Spec 0101 — eigene Datei: A4, A6–A8 und die Tests T1 (Teil),
 /// T4–T6, T19, T20.
 #[cfg(test)]
 mod tests_encryption;

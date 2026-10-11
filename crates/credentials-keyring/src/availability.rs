@@ -1,6 +1,6 @@
-//! Warum der Systemschlüsselbund nicht verfügbar ist (Spec 0071, Teil 1).
+//! Warum der Systemschlüsselbund nicht verfügbar ist (Spec 0071, A1–A4).
 //!
-//! **Warum hier und nicht in `app-shell`** (Spec 0071, §4.1): In dieser
+//! **Warum hier und nicht in `app-shell`** (Spec 0071, §1): In dieser
 //! Crate liegt bereits das gesamte Wissen über die `keyring`-Crate;
 //! `app-shell` "enthält keine fachliche Logik" (Spec 0007, Abschnitt 3) und
 //! bekommt deshalb nur den fertigen [`KeychainUnavailableReason`] und wählt
@@ -8,7 +8,7 @@
 //! gegenüber `startup_dialog` zieht.
 //!
 //! **Warum [`keyring::Entry::store_status`] und nicht der Fehler aus
-//! `Entry::new`** (Spec 0071, §4.2): `keyring` initialisiert den
+//! `Entry::new`** (Spec 0071, §1): `keyring` initialisiert den
 //! Plattform-Store einmalig und faul in einem `LazyLock`. Schlägt das fehl,
 //! liefert jedes spätere `Entry::new` nur noch
 //! [`keyring::Error::NoDefaultStore`] — die eigentliche Ursache ist dort
@@ -38,7 +38,7 @@ pub enum StoreFailure {
     /// Session-Bus" (`secret_service::Error::Unavailable`) als auch "Bus da,
     /// aber niemand besitzt `org.freedesktop.secrets`"
     /// (`zbus::Error::MethodError(ServiceUnknown)`) — die beiden sind am
-    /// `keyring`-API nicht mehr unterscheidbar (Spec 0071, §4.3), deshalb
+    /// `keyring`-API nicht mehr unterscheidbar (Spec 0071, §1), deshalb
     /// entscheidet darüber das Session-Bus-Indiz.
     PlatformUnreachable,
     /// [`keyring::Error::NoStorageAccess`] — der Store ist vorhanden und

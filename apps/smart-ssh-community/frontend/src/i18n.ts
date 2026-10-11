@@ -2,22 +2,22 @@ import { locale as systemLocale } from "@tauri-apps/plugin-os";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
-import de from "./locales/de/common.json";
-import en from "./locales/en/common.json";
+import {
+  DEFAULT_LANGUAGE,
+  isSupportedLanguage,
+  LANGUAGE_REGISTRY,
+  languageForLocale,
+  SUPPORTED_LANGUAGES,
+  type SupportedLanguage,
+} from "./languages";
+
+export { SUPPORTED_LANGUAGES, type SupportedLanguage };
 
 // Spec 0024, Abschnitt 3/4: `react-i18next` mit `de`/`en` als
 // mitgebundene JSON-Ressourcen (kein Nachladen über HTTP nötig — die App
 // läuft ohnehin nur lokal) und einem einzigen `common`-Namensraum, solange
 // der nicht zu unübersichtlich wird (Spec nennt `servers.json` etc. als
 // spätere Option, aktuell nicht nötig).
-
-export const SUPPORTED_LANGUAGES = ["de", "en"] as const;
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-const DEFAULT_LANGUAGE: SupportedLanguage = "en";
-
-function isSupportedLanguage(value: string | null | undefined): value is SupportedLanguage {
-  return SUPPORTED_LANGUAGES.includes(value as SupportedLanguage);
-}
 
 /** Spec 0024, Abschnitt 4: eigene Store-Datei statt der SQLite-Datenbank —
  * eine einzelne, nicht sicherheitsrelevante UI-Einstellung braucht keine
@@ -72,8 +72,7 @@ async function savedLanguage(): Promise<SupportedLanguage | null> {
 async function detectedSystemLanguage(): Promise<SupportedLanguage> {
   try {
     const raw = await systemLocale();
-    const lang = raw?.split(/[-_]/)[0]?.toLowerCase();
-    return isSupportedLanguage(lang) ? lang : DEFAULT_LANGUAGE;
+    return languageForLocale(raw);
   } catch (err) {
     console.error("System-Locale konnte nicht ermittelt werden:", err);
     return DEFAULT_LANGUAGE;
@@ -101,15 +100,21 @@ async function resolveInitialLanguage(): Promise<SupportedLanguage> {
 export async function initI18n(forced?: SupportedLanguage): Promise<void> {
   const language = forced ?? (await resolveInitialLanguage());
   await i18next.use(initReactI18next).init({
-    resources: {
-      de: { common: de },
-      en: { common: en },
-    },
+    resources: Object.fromEntries(
+      LANGUAGE_REGISTRY.map((l) => [l.code, { common: l.resources }]),
+    ),
     lng: language,
     fallbackLng: DEFAULT_LANGUAGE,
     defaultNS: "common",
     interpolation: { escapeValue: false }, // React escaped bereits selbst
   });
+  // `lang` am Wurzelelement: wählt die passende CJK-Glyphenvariante und
+  // die Zeilenumbruchregeln (Issue #335).
+  const setDocumentLang = (code: string) => {
+    if (typeof document !== "undefined") document.documentElement.lang = code;
+  };
+  setDocumentLang(language);
+  i18next.on("languageChanged", setDocumentLang);
 }
 
 /** Spec 0024, Abschnitt 4: "Auswahl in den Einstellungen jederzeit

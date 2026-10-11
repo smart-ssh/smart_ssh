@@ -94,7 +94,9 @@ fn keychain_entries(keychain: &InMemoryCredentialStore) -> Vec<(String, String)>
 }
 
 fn database_key() -> DatabaseKey {
-    DatabaseKey::from_root_key(&RELEASE_FIXTURE_ROOT_KEY)
+    DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(
+        RELEASE_FIXTURE_ROOT_KEY,
+    ))
 }
 
 /// Fragesteller für Starts, die nichts fragen dürfen: Jeder Dialog wird
@@ -374,7 +376,8 @@ async fn test_history_under_an_earlier_key_is_removed_and_announced_once() {
 
     assert!(prompt.asked().is_empty(), "asked {:?}", prompt.asked());
     assert_eq!(prompt.removed_notices(), vec![legacy_rows as u64]);
-    let new_key = DatabaseKey::from_root_key(&new_root_key);
+    let new_key =
+        DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(new_root_key));
     let after = snapshot_database(&db_path, Some(&new_key)).await;
     for (table, column) in FIELD_ENCRYPTED_COLUMNS {
         assert!(

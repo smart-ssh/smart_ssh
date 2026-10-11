@@ -218,7 +218,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     expect(onImported).toHaveBeenCalled();
   });
 
-  // Q-BL-0216-02 (Spec 0075, §9): Ein buchstäbliches Schlagwort, das eine
+  // Q-BL-0216-02 (Spec 0075, §5.2a): Ein buchstäbliches Schlagwort, das eine
   // bestehende Tag-Allow-Regel trifft, ist in der Vorschau standardmäßig
   // abgewählt; trifft es nur eine Deny- oder Confirm-Regel (oder keine),
   // bleibt es angewählt. Gegen den alten Stand (`defaultTagSelected` gab

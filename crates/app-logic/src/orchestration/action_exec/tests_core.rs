@@ -17,7 +17,7 @@ use super::*;
 
 #[tokio::test]
 async fn test_autoexec_path_runs_command_and_records_result() {
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "ls -la".to_string(),
@@ -26,8 +26,6 @@ async fn test_autoexec_path_runs_command_and_records_result() {
         ],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -84,8 +82,8 @@ async fn test_ai_command_is_unchanged_by_start_directory() {
                 &[],
             )))
             .await;
-        session.parts_mut_for_tests().filter_engine =
-            Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+        session
+            .set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
         let browser = crate::start_directory::file_browser_start(&session).await;
         if configured.is_some() {
             assert_ne!(browser.path, ".", "Startverzeichnis sollte gefunden sein");
@@ -237,7 +235,7 @@ async fn test_text_then_done_does_not_emit_chat_response_empty() {
 /// irrelevant.
 #[tokio::test]
 async fn test_action_proposed_without_text_in_the_same_round_does_not_emit_chat_response_empty() {
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "ls -la".to_string(),
@@ -246,8 +244,6 @@ async fn test_action_proposed_without_text_in_the_same_round_does_not_emit_chat_
         ],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -307,7 +303,7 @@ async fn test_error_round_does_not_emit_chat_response_empty() {
 /// Klarstellung in Spec 0080 §8 zugunsten von Variante (b) verwirft.
 #[tokio::test]
 async fn test_silent_followup_round_after_executed_action_does_not_emit_chat_response_empty() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "ls -la".to_string(),
@@ -316,9 +312,7 @@ async fn test_silent_followup_round_after_executed_action_does_not_emit_chat_res
         ],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+    session.set_ai_provider_for_tests(Box::new(MockAiProvider::with_rounds(vec![
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "ls -la".to_string(),
@@ -329,7 +323,7 @@ async fn test_silent_followup_round_after_executed_action_does_not_emit_chat_res
         // Aktion) — bleibt ohne jeden Text, wie ein Modell, das der
         // Aktion nichts mehr hinzuzufügen hat.
         vec![AiEvent::Done],
-    ]));
+    ])));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -362,13 +356,11 @@ async fn test_silent_followup_round_after_executed_action_does_not_emit_chat_res
 /// Folgerunde, s. Test oben).
 #[tokio::test]
 async fn test_followup_round_answering_a_queued_message_emits_chat_response_empty() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().ai_provider = Box::new(MockAiProvider::with_rounds(vec![
+    session.set_ai_provider_for_tests(Box::new(MockAiProvider::with_rounds(vec![
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "ls -la".to_string(),
@@ -378,7 +370,7 @@ async fn test_followup_round_answering_a_queued_message_emits_chat_response_empt
         // Runde 2 beantwortet die eingereihte Nachricht unten, bleibt
         // aber ohne jeden eigenen Text.
         vec![AiEvent::Done],
-    ]));
+    ])));
     // Spec 0066, §2: identisch zu `commands::send_chat_message_impl`s
     // "es läuft schon ein Turn" -Zweig — hier direkt gesetzt, weil
     // dieser Test `run_chat_turn` ohne den umschließenden Tauri-Command
@@ -423,12 +415,10 @@ async fn test_followup_round_answering_a_queued_message_emits_chat_response_empt
 /// Allow-Regeln nie automatisch ausnutzen.
 #[tokio::test]
 async fn test_mcp_origin_downgrades_autoexec_to_confirm_despite_allow_rule() {
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -557,6 +547,78 @@ async fn test_execute_suggested_command_cancellation_returns_partial_output() {
         cancelled,
         "der Kontext-Eintrag für die KI muss den Abbruch tragen"
     );
+}
+
+/// Issue #328: while a long AI command runs, the session's transport is
+/// free (file browser, terminal, disconnect take the lock), and a second AI
+/// command of the same session waits until the first one has ended.
+#[tokio::test]
+async fn test_running_command_does_not_hold_transport_and_commands_stay_serial() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default()
+            .with_never_completing("sleep 60")
+            .with_response("ls", output("a")),
+    );
+    let emitter = TestEmitter::default();
+    let session_id = Uuid::new_v4();
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+
+    let run = |id: Uuid, cmd: &'static str| {
+        execute_suggested_command(
+            &session,
+            session_id,
+            id,
+            cmd.to_string(),
+            &emitter,
+            true,
+            LedgerSource::Ai,
+        )
+    };
+    let probe = async {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        // Transport is free while `sleep 60` runs.
+        let guard =
+            tokio::time::timeout(std::time::Duration::from_secs(2), session.transport.lock())
+                .await
+                .expect("transport lock must be free while a command runs");
+        drop(guard);
+        assert_eq!(session.transport.running_action(), Some(first));
+        // The second command is queued behind the first one: it must not
+        // have run yet.
+        let second_run = run(second, "ls");
+        tokio::pin!(second_run);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(200), &mut second_run)
+                .await
+                .is_err(),
+            "second AI command must wait for the first"
+        );
+        session
+            .running_command_cancellations
+            .resolve(&first, ())
+            .expect("first command is registered");
+        assert!(second_run.await);
+    };
+    let (first_done, ()) = tokio::join!(run(first, "sleep 60"), probe);
+    assert!(first_done);
+}
+
+/// Issue #328: after the session was marked closed (disconnect), a queued
+/// command does not start and the turn gets no follow-up round.
+#[tokio::test]
+async fn test_closed_session_does_not_start_new_commands() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default().with_response("ls", output("a")),
+    );
+    session.transport.mark_closed();
+    assert!(session
+        .transport
+        .begin_command(Uuid::new_v4())
+        .await
+        .is_none());
 }
 
 /// Ohne Abbruch darf in der Registry kein Eintrag zurückbleiben — sonst
@@ -708,8 +770,7 @@ async fn test_second_opinion_escalates_none_to_yellow_end_to_end() {
             AiEvent::Done,
         ]),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -752,8 +813,7 @@ async fn test_second_opinion_cannot_downgrade_rule_based_red_end_to_end() {
             AiEvent::Done,
         ]),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -794,7 +854,7 @@ async fn test_second_opinion_cannot_downgrade_rule_based_red_end_to_end() {
 /// Event, also auch kein Lade-Indikator, der je aufgelöst werden müsste.
 #[tokio::test]
 async fn test_disabled_second_opinion_yields_no_update_event() {
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "cat ~/.ssh/id_rsa".to_string(),
@@ -803,8 +863,6 @@ async fn test_disabled_second_opinion_yields_no_update_event() {
         ],
         MockSshTransport::default().with_response("cat ~/.ssh/id_rsa", output("")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     assert!(session.risk_second_opinion_provider.is_none());
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -903,7 +961,7 @@ async fn test_sudo_command_with_stored_password_uses_stdin_and_rewritten_command
     // (analog zu `MockAiProvider::received_contexts_handle`).
     let stdin_calls = transport.stdin_calls_handle();
 
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "sudo systemctl restart nginx".to_string(),
@@ -912,10 +970,7 @@ async fn test_sudo_command_with_stored_password_uses_stdin_and_rewritten_command
         ],
         transport,
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().sudo_password =
-        Some(secrecy::SecretString::from("hunter2".to_string()));
+    session.set_sudo_password_for_tests(Some(secrecy::SecretString::from("hunter2".to_string())));
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -973,7 +1028,7 @@ async fn test_sudo_command_without_stored_password_runs_unchanged_via_plain_exec
     // bekannte, unveränderte Fehlverhalten von `sudo` ohne TTY bleibt
     // erhalten (kein automatisches Umschreiben ohne hinterlegtes
     // Passwort), s. Spec 0018, Abschnitt 5, Punkt 2.
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "sudo systemctl restart nginx".to_string(),
@@ -982,8 +1037,6 @@ async fn test_sudo_command_without_stored_password_runs_unchanged_via_plain_exec
         ],
         MockSshTransport::default().with_response("sudo systemctl restart nginx", output("done")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1007,7 +1060,7 @@ async fn test_sudo_command_without_stored_password_runs_unchanged_via_plain_exec
 
 #[tokio::test]
 async fn test_chat_action_proposed_flags_uses_stored_sudo_password() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "sudo apt update".to_string(),
@@ -1016,10 +1069,7 @@ async fn test_chat_action_proposed_flags_uses_stored_sudo_password() {
         ],
         MockSshTransport::default().with_response("sudo -S apt update", output("")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().sudo_password =
-        Some(secrecy::SecretString::from("hunter2".to_string()));
+    session.set_sudo_password_for_tests(Some(secrecy::SecretString::from("hunter2".to_string())));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1051,14 +1101,11 @@ async fn test_chat_action_proposed_flags_uses_stored_sudo_password() {
 /// Dual-Text-Matching (ADR 0002) zufällig mit abdeckt.
 #[tokio::test]
 async fn test_uses_stored_sudo_password_downgrades_autoexec_to_confirm() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("ls -la", output("total 0")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().sudo_password =
-        Some(secrecy::SecretString::from("hunter2".to_string()));
+    session.set_sudo_password_for_tests(Some(secrecy::SecretString::from("hunter2".to_string())));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1101,10 +1148,9 @@ async fn test_uses_stored_sudo_password_downgrades_autoexec_to_confirm() {
 /// `Confirm` eskaliert.
 #[tokio::test]
 async fn test_post_ingest_policy_strict_escalates_even_a_pure_read_action() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Strict);
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1131,10 +1177,9 @@ async fn test_post_ingest_policy_strict_escalates_even_a_pure_read_action() {
 /// bleibt eine reine Leseaktion `AutoExec`.
 #[tokio::test]
 async fn test_post_ingest_policy_balanced_leaves_pure_read_action_autoexec() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Balanced;
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Balanced);
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1157,10 +1202,9 @@ async fn test_post_ingest_policy_balanced_leaves_pure_read_action_autoexec() {
 /// (Server-Risiko ≠ `None`) wird zu `Confirm` eskaliert.
 #[tokio::test]
 async fn test_post_ingest_policy_balanced_escalates_modifying_action() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Balanced;
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Balanced);
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1194,10 +1238,9 @@ async fn test_post_ingest_policy_balanced_escalates_modifying_action() {
 /// greifen unverändert.
 #[tokio::test]
 async fn test_post_ingest_policy_standard_does_not_escalate() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Standard;
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Standard);
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1242,8 +1285,8 @@ async fn test_post_ingest_policy_never_downgrades_a_deny_decision() {
     }
 
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyLsPolicyStore)));
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Strict);
     session
         .untrusted_content_ingested
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1269,14 +1312,12 @@ async fn test_post_ingest_policy_never_downgrades_a_deny_decision() {
 /// das Flag (nicht mehr für die übernächste Aktion gesetzt).
 #[tokio::test]
 async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().injection_check_provider =
-        Some(Box::new(MockAiProvider::new(vec![
-            AiEvent::TextDelta("ja - enthält eine eingeschleuste Anweisung".to_string()),
-            AiEvent::Done,
-        ])));
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_injection_check_provider_for_tests(Some(Box::new(MockAiProvider::new(vec![
+        AiEvent::TextDelta("ja - enthält eine eingeschleuste Anweisung".to_string()),
+        AiEvent::Done,
+    ]))));
 
     let emitter = TestEmitter::default();
     check_for_injected_instructions(
@@ -1323,14 +1364,12 @@ async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
 /// jede Prüfung auch).
 #[tokio::test]
 async fn test_injection_check_no_does_not_change_followup_decision() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().injection_check_provider =
-        Some(Box::new(MockAiProvider::new(vec![
-            AiEvent::TextDelta("nein, wirkt wie eine gewöhnliche Log-Zeile".to_string()),
-            AiEvent::Done,
-        ])));
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_injection_check_provider_for_tests(Some(Box::new(MockAiProvider::new(vec![
+        AiEvent::TextDelta("nein, wirkt wie eine gewöhnliche Log-Zeile".to_string()),
+        AiEvent::Done,
+    ]))));
 
     let emitter = TestEmitter::default();
     check_for_injected_instructions(
@@ -1367,12 +1406,11 @@ async fn test_injection_check_no_does_not_change_followup_decision() {
 /// ändert schlicht nichts (kein Crash, kein gesetztes Flag).
 #[tokio::test]
 async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_flag() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().injection_check_provider = Some(Box::new(MockAiProvider::new(
-        vec![AiEvent::Error(AiError::NetworkError("boom".to_string()))],
-    )));
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_injection_check_provider_for_tests(Some(Box::new(MockAiProvider::new(vec![
+        AiEvent::Error(AiError::NetworkError("boom".to_string())),
+    ]))));
 
     // Muss ohne Panik zurückkehren.
     let emitter = TestEmitter::default();
@@ -1405,14 +1443,12 @@ async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_fla
 /// überschreiten würde.
 #[tokio::test(start_paused = true)]
 async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_content() {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().injection_check_provider =
-        Some(Box::new(MockAiProvider::new(vec![
-            AiEvent::TextDelta("nein".to_string()),
-            AiEvent::Done,
-        ])));
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_injection_check_provider_for_tests(Some(Box::new(MockAiProvider::new(vec![
+        AiEvent::TextDelta("nein".to_string()),
+        AiEvent::Done,
+    ]))));
     let budget = Arc::new(ai_providers::ProviderBudgetGuard::new());
     budget.record_headers(ai_providers::RateLimitHeaderSnapshot {
         input_tokens: ai_providers::RawCounter {
@@ -1422,7 +1458,7 @@ async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_conten
         },
         ..Default::default()
     });
-    session.parts_mut_for_tests().injection_check_budget = Some(budget);
+    session.set_injection_check_budget_for_tests(Some(budget));
 
     // Deutlich über dem 16-KB-Kürzungslimit (~4096 geschätzte Tokens),
     // aber deutlich unter den 50.000 verbleibenden Tokens des Budgets —
@@ -1468,7 +1504,7 @@ async fn test_injection_suspected_never_downgrades_a_deny_decision() {
     }
 
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyLsPolicyStore)));
     session
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1513,7 +1549,7 @@ async fn test_injection_suspected_survives_an_unrelated_denied_action() {
     }
 
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(DenyLsPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyLsPolicyStore)));
     session
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1540,8 +1576,7 @@ async fn test_injection_suspected_survives_an_unrelated_denied_action() {
     // eskaliert werden, und zwar sichtbar über den
     // Injection-spezifischen Code, nicht zufällig über
     // `FILTER_NO_RULE_MATCHED` o. ä.
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     let (second_decision, payload) = proposed_decision_code(
         &session,
         AiAction::SuggestCommand {
@@ -1566,13 +1601,11 @@ async fn test_injection_suspected_survives_an_unrelated_denied_action() {
 /// zurückgesetzt wird).
 #[tokio::test]
 async fn test_untrusted_content_ingested_flag_is_monotonic_across_actions() {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response("uptime", output("up 3 days")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Strict);
     assert!(!session
         .untrusted_content_ingested
         .load(std::sync::atomic::Ordering::SeqCst));
@@ -1611,7 +1644,7 @@ async fn test_untrusted_content_ingested_flag_is_monotonic_across_actions() {
 
 #[tokio::test]
 async fn test_chat_action_proposed_does_not_flag_sudo_usage_without_stored_password() {
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::SuggestCommand {
                 command: "sudo apt update".to_string(),
@@ -1620,8 +1653,6 @@ async fn test_chat_action_proposed_does_not_flag_sudo_usage_without_stored_passw
         ],
         MockSshTransport::default().with_response("sudo apt update", output("")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1741,8 +1772,7 @@ async fn test_edited_command_that_hits_deny_rule_is_blocked_not_executed() {
         ],
         MockSshTransport::default().with_response("echo hi-edited", output("hi-edited")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(DenyEditedPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyEditedPolicyStore)));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1842,7 +1872,7 @@ async fn test_deny_path_executes_nothing_and_does_not_block_further_events() {
         }
     }
     let mut session = session;
-    session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(DenyCurlPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyCurlPolicyStore)));
 
     run_chat_turn(
         &session,
@@ -1912,8 +1942,7 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
     // Spec 0016, Abschnitt 6: die KI liefert keine ID mehr — das Backend
     // löst `CurrentServer` selbst auf `session.server_id` auf.
     let expected_server_id = session.server_id;
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();
@@ -1984,7 +2013,7 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
 /// `chat-action-result`.
 #[tokio::test]
 async fn test_executed_action_triggers_automatic_followup_round_with_final_answer() {
-    let mut session = session_with_ai_provider(
+    let session = session_with_ai_provider_allowing_everything(
         MockAiProvider::with_rounds(vec![
             vec![
                 AiEvent::ActionProposed(AiAction::SuggestCommand {
@@ -1999,8 +2028,6 @@ async fn test_executed_action_triggers_automatic_followup_round_with_final_answe
         ]),
         MockSshTransport::default().with_response("uptime", output("up 3 days")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();

@@ -168,6 +168,29 @@ impl RootKey {
         Self { bytes }
     }
 
+    /// Nimmt einen bereits in `Zeroizing` liegenden K auf (Keychain-Pfade,
+    /// Issue #267): Der Wert wird verschoben, nicht kopiert.
+    pub(crate) fn from_zeroizing(bytes: Zeroizing<[u8; DATABASE_KEY_LEN]>) -> Self {
+        Self::new(bytes)
+    }
+
+    /// Eine ausdrückliche, selbst wieder überschriebene Zweitkopie von K.
+    ///
+    /// **Bewusst kein `Clone`:** Ein `.clone()` fiele in keinem Review auf.
+    /// Diese Methode gibt es für die eine Stelle, an der K aus dem
+    /// Entsperr-Zustand in den Startablauf wandert, während der
+    /// Entsperr-Zustand weiterlebt (`app_logic::database_startup`). Beide
+    /// Kopien werden beim Freigeben überschrieben.
+    pub fn duplicate(&self) -> Self {
+        Self::new(Zeroizing::new(*self.bytes))
+    }
+
+    /// Nur für Tests: baut einen `RootKey` aus einem festen Array.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn for_tests(bytes: [u8; DATABASE_KEY_LEN]) -> Self {
+        Self::new(Zeroizing::new(bytes))
+    }
+
     /// Nimmt einen frisch erzeugten K in den schützenden Typ (A19,
     /// Klarstellung 9).
     ///
@@ -341,10 +364,7 @@ fn derive_wrapping_key(
 /// Der Rückgabewert ist der vollständige Inhalt der Verpackungsdatei. Er
 /// enthält K nur als Chiffrat — ein Blick in die Datei zeigt Parameter,
 /// Salt und Nonce, nichts weiter.
-pub fn wrap_root_key(
-    root_key: &[u8; DATABASE_KEY_LEN],
-    password: &SecretString,
-) -> Result<Vec<u8>, KeyWrapError> {
+pub fn wrap_root_key(root_key: &RootKey, password: &SecretString) -> Result<Vec<u8>, KeyWrapError> {
     check_password_length(password)?;
 
     let header = Header {
@@ -370,7 +390,7 @@ pub fn wrap_root_key(
         .encrypt(
             &nonce_of(&header.nonce),
             Payload {
-                msg: root_key,
+                msg: root_key.expose(),
                 aad: &aad,
             },
         )

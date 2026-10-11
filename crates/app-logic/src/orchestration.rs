@@ -68,6 +68,8 @@
 
 mod action_exec;
 mod chat_turn;
+mod live_output;
+mod new_chat;
 mod notes;
 /// Spec 0088, A1: das Warten auf eine Bestätigung als Wert mit `Drop`.
 mod pending_confirmation;
@@ -78,6 +80,7 @@ mod remote_files;
 pub(crate) mod test_support;
 
 pub use chat_turn::run_chat_turn;
+pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHAT_BUSY};
 // `push_history`/`PENDING_ACTION_CONFIRM_TIMEOUT`: auch von `app-shell`
 // gebraucht (`commands::chat`/`commands::connect`), deshalb `pub` statt
 // `pub(crate)` (Spec 0084, A6.4).

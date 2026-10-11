@@ -15,6 +15,7 @@ import {
   respondToAction,
   sendChatMessage,
   stopAutoContinuation,
+  startNewChat,
   suggestRulePatterns,
   takeChatContentIntoNote,
 } from "../api";
@@ -22,6 +23,7 @@ import {
   onActionDecisionEscalated,
   onAiBudgetWaiting,
   onChatActionProposed,
+  onChatActionOutput,
   onChatActionResult,
   onChatAutoContinuationLimitReached,
   onChatAutoContinuationStarted,
@@ -37,6 +39,8 @@ import {
   onRiskAssessmentUpdated,
 } from "../events";
 import { translateErrorCode } from "../errorCodes";
+import { appendLiveOutput, type LiveOutput } from "../liveOutput";
+import { LiveCommandOutput } from "./LiveCommandOutput";
 import { listDocumentActions } from "../extensions/registry";
 import { formatBytes } from "../format";
 import {
@@ -301,6 +305,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * zuverlässige "die ganze Kette ist zu Ende"-Signal, unabhängig davon, ob
    * sie regulär endete, am Sicherheits-Cap oder durch "Automatik stoppen". */
   const [autoContinuing, setAutoContinuing] = useState(false);
+  /** Issue #271: „Neuer Chat" läuft (Doppelklick-Schutz) bzw. ist gescheitert. */
+  const [startingNewChat, setStartingNewChat] = useState(false);
+  const [newChatError, setNewChatError] = useState<string | null>(null);
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
   /** Spec 0026, Abschnitt 4: nur bei aktivierter Zweitmeinung überhaupt
    * einen Lade-Indikator zeigen — sonst käme (bis ein `risk-assessment-
@@ -312,6 +319,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * akzeptierter kleiner Randfall, kein Korrektheitsproblem. */
   const [riskSecondOpinionEnabled, setRiskSecondOpinionEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Issue #325: live output per running action, kept outside `items` so
+   * that its updates (up to ten per second) do not trigger the chat's
+   * jump-to-the-end effect below. Removed when the result arrives. */
+  const [liveOutputs, setLiveOutputs] = useState<Record<string, LiveOutput>>({});
   // Spec 0055, Teil 1: `<textarea>` statt `<input type="text">` für die
   // mehrzeilige Eingabe (Shift+Enter/Auto-Grow) — dieselbe DOM-API
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
@@ -501,8 +512,21 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           ),
         );
       }),
+      onChatActionOutput((event) => {
+        if (event.sessionId !== sessionId) return;
+        setLiveOutputs((prev) => ({
+          ...prev,
+          [event.actionId]: appendLiveOutput(prev[event.actionId], event),
+        }));
+      }),
       onChatActionResult((event) => {
         if (event.sessionId !== sessionId) return;
+        // Issue #325: the final result replaces the live view.
+        setLiveOutputs((prev) => {
+          if (!(event.actionId in prev)) return prev;
+          const { [event.actionId]: _finished, ...rest } = prev;
+          return rest;
+        });
         setItems((prev) =>
           prev.map((item) =>
             item.type === "action" && item.actionId === event.actionId
@@ -783,13 +807,27 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     // Nachricht ein (kehrt sofort zurück) und schickt sie mit der nächsten
     // Anfrage an die KI — die laufende Antwort läuft weiter.
     const queued = sending;
+    const itemId = freshId();
     setItems((prev) => [
       ...prev,
-      queued ? { type: "user", id: freshId(), text, queued: true } : { type: "user", id: freshId(), text },
+      queued ? { type: "user", id: itemId, text, queued: true } : { type: "user", id: itemId, text },
     ]);
     setDraft("");
     setHistoryNav(initialHistoryNavState);
-    await runSend(() => sendChatMessage(sessionId, text));
+    await runSend(async () => {
+      try {
+        await sendChatMessage(sessionId, text);
+      } catch (err) {
+        // Issue #315: „Neuer Chat" tauscht den Chat gerade aus; das Backend hat
+        // die Nachricht abgelehnt. Sie verschwindet aus dem Verlauf und bleibt
+        // im Eingabefeld (ein inzwischen getippter Entwurf bleibt unberührt).
+        if (commandErrorCode(err) === "CHAT_SWITCHING") {
+          setItems((prev) => prev.filter((it) => it.id !== itemId));
+          setDraft((current) => (current === "" ? text : current));
+        }
+        throw err;
+      }
+    });
   };
 
   // Spec 0015, Abschnitt 5: Pfeil-oben/-unten lösen Historien-Navigation nur
@@ -894,6 +932,32 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [draft]);
 
+  // Issue #271 (Entscheidung 3): gesperrt, solange ein Turn läuft oder eine
+  // Bestätigung offen ist — das Backend prüft zusätzlich.
+  const confirmationOpen = items.some(
+    (it) =>
+      it.type === "action" &&
+      !it.responded &&
+      typeof it.decision === "object" &&
+      "Confirm" in it.decision,
+  );
+  const newChatDisabled = sending || autoContinuing || confirmationOpen || startingNewChat;
+
+  const handleNewChat = async () => {
+    if (newChatDisabled) return;
+    setStartingNewChat(true);
+    setNewChatError(null);
+    try {
+      await startNewChat(sessionId);
+      setItems([]);
+      setHistoryNav(initialHistoryNavState);
+    } catch (err) {
+      setNewChatError(commandErrorMessage(err));
+    } finally {
+      setStartingNewChat(false);
+    }
+  };
+
   const handleDraftChange = (value: string) => {
     setDraft(value);
     // Spec 0015, Abschnitt 5, bewusste MVP-Vereinfachung: jede normale
@@ -909,11 +973,30 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 
   return (
     <div className="flex h-full flex-col">
+      {readOnlyHint === undefined && (
+        <div className="flex items-center justify-end gap-2 border-b border-slate-700 px-3 py-1.5">
+          {newChatError !== null && (
+            <span role="alert" className="flex-1 text-xs text-red-300">
+              {newChatError}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleNewChat}
+            disabled={newChatDisabled}
+            title={newChatDisabled ? t("chat.newChatDisabledHint") : undefined}
+            className="font-heading border border-slate-600 px-2 py-1 text-xs font-semibold tracking-wide text-slate-200 hover:bg-slate-700/50 disabled:opacity-50"
+          >
+            {t("chat.newChat")}
+          </button>
+        </div>
+      )}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {items.map((item) => (
           <ChatItemView
             key={item.id}
             item={item}
+            liveOutput={item.type === "action" ? liveOutputs[item.actionId] : undefined}
             onRespond={respond}
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
@@ -1087,6 +1170,7 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
 // genutzt.
 export function ChatItemView({
   item,
+  liveOutput,
   onRespond,
   onAcceptWithRule,
   onExport,
@@ -1095,6 +1179,9 @@ export function ChatItemView({
   sessionId,
 }: {
   item: ChatItem;
+  /** Issue #325: live output while the command runs (`undefined` before
+   * the first output and after the result). */
+  liveOutput?: LiveOutput;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
@@ -1374,6 +1461,9 @@ export function ChatItemView({
        * abbrechbaren Exec-Kanal (s. Spec, Abschnitt 5). */}
       {!item.result && "SuggestCommand" in item.action && item.startedAt !== null && (
         <RunningCommandIndicator actionId={item.actionId} startedAt={item.startedAt} />
+      )}
+      {!item.result && "SuggestCommand" in item.action && liveOutput && (
+        <LiveCommandOutput output={liveOutput} />
       )}
 
       {item.result && <ActionResultView result={item.result} sessionId={sessionId} />}

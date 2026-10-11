@@ -18,6 +18,7 @@
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::ChaCha20Poly1305;
 
+use super::key_wrapping::RootKey;
 use super::CipherError;
 
 /// Länge des Nonce-Präfixes jeder Altzeile (96 Bit, RFC 8439).
@@ -32,7 +33,7 @@ pub const LEGACY_NONCE_LEN: usize = 12;
 ///   ersten beiden sind beim AEAD-Verfahren absichtlich nicht
 ///   unterscheidbar.
 pub fn decrypt_legacy_field_content(
-    root_key: &[u8; 32],
+    root_key: &RootKey,
     blob: &[u8],
 ) -> Result<String, CipherError> {
     if blob.len() < LEGACY_NONCE_LEN {
@@ -41,7 +42,7 @@ pub fn decrypt_legacy_field_content(
     let (nonce_bytes, ciphertext) = blob.split_at(LEGACY_NONCE_LEN);
     let mut nonce = [0u8; LEGACY_NONCE_LEN];
     nonce.copy_from_slice(nonce_bytes);
-    let cipher = ChaCha20Poly1305::new(&(*root_key).into());
+    let cipher = ChaCha20Poly1305::new(root_key.expose().into());
     let plaintext = cipher
         .decrypt(&nonce.into(), ciphertext)
         .map_err(|_| CipherError::DecryptionFailed)?;
@@ -74,7 +75,7 @@ mod tests {
     fn test_a_legacy_row_decrypts_to_its_plaintext() {
         let blob = encrypt_for_tests(&KEY, "geheime Nachricht mit Umlauten äöü");
         assert_eq!(
-            decrypt_legacy_field_content(&KEY, &blob).unwrap(),
+            decrypt_legacy_field_content(&RootKey::for_tests(KEY), &blob).unwrap(),
             "geheime Nachricht mit Umlauten äöü"
         );
     }
@@ -82,14 +83,17 @@ mod tests {
     #[test]
     fn test_an_empty_legacy_row_decrypts() {
         let blob = encrypt_for_tests(&KEY, "");
-        assert_eq!(decrypt_legacy_field_content(&KEY, &blob).unwrap(), "");
+        assert_eq!(
+            decrypt_legacy_field_content(&RootKey::for_tests(KEY), &blob).unwrap(),
+            ""
+        );
     }
 
     #[test]
     fn test_a_row_under_another_key_fails_cleanly() {
         let blob = encrypt_for_tests(&KEY, "geheim");
         assert_eq!(
-            decrypt_legacy_field_content(&[1u8; 32], &blob),
+            decrypt_legacy_field_content(&RootKey::for_tests([1u8; 32]), &blob),
             Err(CipherError::DecryptionFailed)
         );
     }
@@ -100,7 +104,7 @@ mod tests {
         let last = blob.len() - 1;
         blob[last] ^= 0xFF;
         assert_eq!(
-            decrypt_legacy_field_content(&KEY, &blob),
+            decrypt_legacy_field_content(&RootKey::for_tests(KEY), &blob),
             Err(CipherError::DecryptionFailed)
         );
     }
@@ -108,7 +112,7 @@ mod tests {
     #[test]
     fn test_a_too_short_row_is_rejected_without_panicking() {
         assert_eq!(
-            decrypt_legacy_field_content(&KEY, &[1, 2, 3]),
+            decrypt_legacy_field_content(&RootKey::for_tests(KEY), &[1, 2, 3]),
             Err(CipherError::InvalidBlob)
         );
     }
@@ -116,7 +120,7 @@ mod tests {
     #[test]
     fn test_plaintext_bytes_are_not_mistaken_for_a_legacy_row() {
         assert_eq!(
-            decrypt_legacy_field_content(&KEY, b"just some plaintext prompt"),
+            decrypt_legacy_field_content(&RootKey::for_tests(KEY), b"just some plaintext prompt"),
             Err(CipherError::DecryptionFailed)
         );
     }

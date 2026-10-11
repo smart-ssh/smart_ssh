@@ -59,9 +59,8 @@ async fn test_runaway_followup_rounds_are_bounded() {
         MockAiProvider::new(Vec::new()),
         MockSshTransport::default().with_response("echo again", output("again")),
     );
-    session.parts_mut_for_tests().ai_provider = Box::new(RepeatingAiProvider);
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_ai_provider_for_tests(Box::new(RepeatingAiProvider));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     let confirmations = ConfirmationRegistry::new();
     let emitter = AutoApprovingEmitter {
         inner: TestEmitter::default(),
@@ -144,9 +143,8 @@ async fn test_run_chat_turn_paces_consecutive_main_round_requests() {
         MockAiProvider::new(Vec::new()),
         MockSshTransport::default().with_response("echo again", output("again")),
     );
-    session.parts_mut_for_tests().ai_provider = Box::new(RepeatingAiProvider);
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    session.set_ai_provider_for_tests(Box::new(RepeatingAiProvider));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowEverythingPolicyStore)));
     let confirmations = ConfirmationRegistry::new();
     let emitter = AutoApprovingEmitter {
         inner: TestEmitter::default(),
@@ -208,7 +206,7 @@ fn test_t5_uname_prompt_injection_sanitized() {
 /// Ausführung von Runde 1 setzt, bevor Runde 2 automatisch folgt.
 #[tokio::test]
 async fn test_server_output_ingestion_escalates_followup_action_under_strict_policy() {
-    let mut session = session_with_ai_provider(
+    let mut session = session_with_ai_provider_allowing_everything(
         MockAiProvider::with_rounds(vec![
             // Runde 1: Erste legitime Aktion — Ausführung setzt
             // `untrusted_content_ingested`.
@@ -232,9 +230,7 @@ async fn test_server_output_ingestion_escalates_followup_action_under_strict_pol
         ]),
         MockSshTransport::default().with_response("uptime", output("up 3 days")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().post_ingest_policy = PostIngestPolicy::Strict;
+    session.set_post_ingest_policy_for_tests(PostIngestPolicy::Strict);
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
     let confirmations = ConfirmationRegistry::new();

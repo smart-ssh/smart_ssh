@@ -65,6 +65,10 @@ mod tests_red_risk_second_opinion;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_not_assessable;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_live_output;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
@@ -110,8 +114,8 @@ pub(crate) async fn handle_action_proposed(
     announce_second_opinion_setup_failure(session, session_id, emitter);
 
     // Spec 0057, §1.1, erster Punkt: "Kommando vorgeschlagen". Bewusst auf
-    // `SuggestCommand` beschränkt (diese Etappe deckt nur diesen
-    // Aktionstyp ab, s. Spec 0057 §8 "Etappe 1") — `ReadRemoteFile`/
+    // `SuggestCommand` beschränkt (das Ledger deckt nur diesen
+    // Aktionstyp ab, s. Spec 0057 §9, Grenzen) — `ReadRemoteFile`/
     // `WriteRemoteFile`/`ProposeNoteUpdate` folgen in einer späteren
     // Erweiterung.
     if let AiAction::SuggestCommand { command } = &action {
@@ -401,7 +405,7 @@ pub(crate) async fn handle_action_proposed(
                 action_id,
                 matches!(origin, ActionOrigin::Mcp { .. }),
             ) else {
-                // Issue #108 / Spec 0104 §5: höchstens eine wartende
+                // Issue #108 / Spec 0104 §3: höchstens eine wartende
                 // Bestätigung je MCP-Sitzung; der Vorschlag wird nicht
                 // ausgeführt und dem Client als Fehler gemeldet.
                 return emit_action_error(
@@ -1663,20 +1667,61 @@ async fn execute_suggested_command(
     // nie entfernter Eintrag in der Registry zurück.
     let cancel_rx = session.running_command_cancellations.register(action_id);
 
-    let raw_outcome = {
-        let mut transport = session.transport.lock().await;
-        match (&effective_command, &session.sudo_password) {
-            (Some(rewritten), Some(password)) => {
+    // Issue #325 (Spec 0106): the transport additionally hands every output
+    // chunk to `live_sink` while the command runs; `forward_live_output`
+    // redacts and throttles it into `chat-action-output` events. Display
+    // only — the outcome below (history, ledger, AI) is unchanged. The
+    // forwarder ends when the transport drops the sink, i.e. before the
+    // final result is emitted.
+    let (live_sink, live_chunks) = tokio::sync::mpsc::unbounded_channel();
+    let execution = async {
+        // Issue #328: AI commands of one session stay serial through the
+        // command slot, but the transport lock is only held to open the exec
+        // channel. While the command runs, file browser, terminal and
+        // disconnect can use the transport.
+        let Some(_slot) = session.transport.begin_command(action_id).await else {
+            return Err(ssh_manager_core::ssh::SshError::ChannelError(
+                "session is disconnecting".to_string(),
+            ));
+        };
+        let stdin = match (&effective_command, &session.sudo_password) {
+            (Some(_), Some(password)) => {
                 use secrecy::ExposeSecret;
                 let mut stdin = password.expose_secret().as_bytes().to_vec();
                 stdin.push(b'\n');
+                Some(stdin)
+            }
+            _ => None,
+        };
+        let run_command = match (&effective_command, &stdin) {
+            (Some(rewritten), Some(_)) => rewritten.as_str(),
+            _ => command.as_str(),
+        };
+        let mut transport = session.transport.lock().await;
+        match transport.start_exec(run_command, stdin.as_deref()).await? {
+            Some(running) => {
+                drop(transport);
+                running.run(cancel_rx, live_sink).await
+            }
+            // Transport without split start/run: keeps the lock for the
+            // whole command, as before.
+            None => {
                 transport
-                    .execute_with_stdin_cancellable(rewritten, &stdin, cancel_rx)
+                    .execute_streaming(run_command, stdin.as_deref(), cancel_rx, live_sink)
                     .await
             }
-            _ => transport.execute_cancellable(&command, cancel_rx).await,
         }
     };
+    let (raw_outcome, ()) = tokio::join!(
+        execution,
+        super::live_output::forward_live_output(
+            live_chunks,
+            session.redactor.as_ref(),
+            emitter,
+            session_id,
+            action_id,
+        )
+    );
     let _ = session
         .running_command_cancellations
         .resolve(&action_id, ());

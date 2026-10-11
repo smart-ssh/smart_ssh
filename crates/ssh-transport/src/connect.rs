@@ -17,9 +17,8 @@ use crate::transport::RusshTransport;
 
 /// Ergebnis eines Verbindungsversuchs.
 ///
-/// Weicht von der Signatur in Spec 0005 Abschnitt 4
-/// (`connect() -> Result<Box<dyn SshTransport>, SshError>`) bewusst ab:
-/// Abschnitt 6 verlangt ausdrücklich, dass ein `Unknown`/`Mismatch`-
+/// Ist bewusst kein reines `Result<Box<dyn SshTransport>, SshError>`:
+/// Spec 0005 Abschnitt 6 verlangt ausdrücklich, dass ein `Unknown`/`Mismatch`-
 /// Host-Key **nicht** stillschweigend im Fehlerfall versteckt wird, sondern
 /// die UI-Schicht ihn für einen Bestätigungsdialog nutzen kann. Ein reiner
 /// `Result<Box<dyn SshTransport>, SshError>` kann "verbunden" nicht von
@@ -40,8 +39,7 @@ pub enum ConnectOutcome {
 /// Baut eine (ggf. über Jump-Hosts verkettete) SSH-Verbindung zu `target`
 /// auf (Spec 0005, Abschnitt 4/5).
 ///
-/// `host_keys: Arc<dyn HostKeyStore>` statt `&dyn HostKeyStore` (Spec-
-/// Signatur): `russh::client::Handler` verlangt `Self: 'static` (der
+/// `host_keys: Arc<dyn HostKeyStore>` statt `&dyn HostKeyStore`: `russh::client::Handler` verlangt `Self: 'static` (der
 /// Handler wird in einen Tokio-Task verschoben, dessen Lebensdauer die des
 /// `connect()`-Aufrufs überdauert) — eine geliehene Referenz mit
 /// Aufruf-Lebensdauer kann das nicht erfüllen. `credentials` bleibt dagegen
@@ -547,7 +545,7 @@ fn resolve_or_pending<H>(
 /// `crate::error::map_io_error`) sind bereits präziser zugeordnet und
 /// brauchen keine weitere Unterscheidung. Wird ausschließlich für den
 /// **ersten** Hop aufgerufen (s. `connect()` oben) — Jump-Hosts ab dem
-/// zweiten Hop bleiben wie vor dieser Spec (§2, Nicht-Ziele).
+/// zweiten Hop bleiben wie vor dieser Spec (Spec 0076, Abschnitt „Entscheidungen“).
 async fn diagnose_connection_failed_dns(err: SshError, host: &str, port: u16) -> SshError {
     let SshError::ConnectionFailed(detail) = &err else {
         return err;

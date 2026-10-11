@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { formatDateTime } from "../formatDateTime";
 import {
   commandErrorCode,
   commandErrorMessage,
@@ -37,7 +38,7 @@ interface NotesPanelProps {
 export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = false }: NotesPanelProps) {
   // Spec 0071, A13: Fehlercodes werden übersetzt gezeigt, nicht der rohe
   // Backend-Text (s. `translateErrorCode`).
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [draft, setDraft] = useState(currentNotes);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +233,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     className="flex flex-1 items-center gap-1.5 text-left text-xs text-slate-400 hover:text-slate-200"
                   >
                     <span className="select-none">{expanded ? "▾" : "▸"}</span>
-                    {new Date(r.createdAt).toLocaleString()} ·{" "}
+                    {formatDateTime(r.createdAt, i18n.language)} ·{" "}
                     {r.editedBy.kind === "user"
                       ? t("notes.editedByUser")
                       : t("notes.editedByAi", {

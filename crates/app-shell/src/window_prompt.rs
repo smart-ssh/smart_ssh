@@ -1,4 +1,4 @@
-//! Spec 0101, Teil 0 Frage 3: die Startdialoge **im Fenster**, für den
+//! Spec 0101, §2 Frage 3: die Startdialoge **im Fenster**, für den
 //! Passwort-Modus.
 //!
 //! **Warum nicht die nativen Dialoge aus `startup_prompt`:** Im
@@ -20,7 +20,7 @@
 //! läuft aber in einer asynchronen Aufgabe. Es schickt die Frage als
 //! Ereignis ans Frontend und wartet auf dem Kanal — mit
 //! `tokio::task::block_in_place`, derselben gemessenen Zusicherung wie beim
-//! synchronen Secret-Speicher (Teil 0 Frage 2: Tauris Laufzeit ist eine
+//! synchronen Secret-Speicher (§2 Frage 2: Tauris Laufzeit ist eine
 //! Multi-Thread-Laufzeit, s. `runtime_assumptions`).
 
 use std::path::PathBuf;

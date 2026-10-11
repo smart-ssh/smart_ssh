@@ -104,11 +104,10 @@ struct HostKeyVerificationNeededPayload {
     port: u16,
     kind: HostKeyKind,
     fingerprint: String,
-    /// Nur bei `kind: Mismatch` gesetzt. Die Spec-Skizze (Abschnitt 5)
-    /// nennt nur ein einzelnes `fingerprint`-Feld — für den Mismatch-Fall
-    /// (Spec 0005 Abschnitt 6, "besonders strenge Warnung") reicht das
-    /// nicht, um dem Frontend alten und neuen Fingerprint nebeneinander
-    /// zeigen zu lassen, deshalb hier bewusst ergänzt.
+    /// Nur bei `kind: Mismatch` gesetzt. Für den Mismatch-Fall (Spec 0005
+    /// Abschnitt 6.3, Warnung „Bekannt"/„Jetzt angeboten") reicht ein
+    /// einzelnes `fingerprint`-Feld nicht, um dem Frontend alten und neuen
+    /// Fingerprint nebeneinander zeigen zu lassen.
     expected_fingerprint: Option<String>,
     /// Algorithm name of the key the server offers now (e.g.
     /// `ssh-ed25519`); `null` when it cannot be determined. Display-only.
@@ -694,6 +693,43 @@ pub fn emit_chat_action_result(
             session_id,
             action_id,
             result,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatActionOutputPayload<'a> {
+    session_id: SessionId,
+    action_id: ActionId,
+    stdout: &'a str,
+    stderr: &'a str,
+    truncated: bool,
+}
+
+/// Issue #325 (Spec 0106): live output of a running `SuggestCommand`,
+/// throttled (at most one event per `LIVE_OUTPUT_INTERVAL` and action).
+/// `stdout`/`stderr` are the newly released, already redacted text to
+/// append; `truncated` is `true` once the output cap was reached. Display
+/// only: never persisted, never sent to the AI; `chat-action-result`
+/// replaces the live view with the final result.
+pub fn emit_chat_action_output(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    action_id: ActionId,
+    stdout: &str,
+    stderr: &str,
+    truncated: bool,
+) {
+    emit(
+        emitter,
+        "chat-action-output",
+        &ChatActionOutputPayload {
+            session_id,
+            action_id,
+            stdout,
+            stderr,
+            truncated,
         },
     );
 }

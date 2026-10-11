@@ -23,6 +23,8 @@ use secrecy::SecretString;
 use sha2::Sha256;
 use zeroize::Zeroize;
 
+use super::key_wrapping::RootKey;
+
 /// Länge des abgeleiteten Schlüssels in Byte (256 Bit — SQLCipher erwartet
 /// bei der `x'…'`-Schreibweise genau 32 Byte).
 pub const DATABASE_KEY_LEN: usize = 32;
@@ -59,8 +61,8 @@ pub const ROOT_KEY_FINGERPRINT_HKDF_INFO: &[u8] = b"smart-ssh/root-key-fingerpri
 /// lassen — das Gegenteil von A19. Die Kennung ist eine Einwegableitung
 /// (HKDF-SHA256 mit eigener `info`); sie genügt, um „derselbe Schlüssel?"
 /// zu beantworten, und taugt zu nichts anderem.
-pub fn root_key_fingerprint(root_key: &[u8; DATABASE_KEY_LEN]) -> [u8; DATABASE_KEY_LEN] {
-    let hkdf = Hkdf::<Sha256>::new(None, root_key);
+pub fn root_key_fingerprint(root_key: &RootKey) -> [u8; DATABASE_KEY_LEN] {
+    let hkdf = Hkdf::<Sha256>::new(None, root_key.expose());
     let mut bytes = [0u8; DATABASE_KEY_LEN];
     hkdf.expand(ROOT_KEY_FINGERPRINT_HKDF_INFO, &mut bytes)
         .expect("32 Byte sind eine gültige Länge für HKDF-SHA256");
@@ -102,8 +104,8 @@ impl DatabaseKey {
     /// 255 · 32 Byte einen Fehler, und [`DATABASE_KEY_LEN`] ist eine
     /// Konstante weit darunter — deshalb `expect` statt eines
     /// `Result`-Rückgabewerts, den jeder Aufrufer sinnlos behandeln müsste.
-    pub fn from_root_key(root_key: &[u8; DATABASE_KEY_LEN]) -> Self {
-        let hkdf = Hkdf::<Sha256>::new(None, root_key);
+    pub fn from_root_key(root_key: &RootKey) -> Self {
+        let hkdf = Hkdf::<Sha256>::new(None, root_key.expose());
         let mut bytes = [0u8; DATABASE_KEY_LEN];
         hkdf.expand(DATABASE_KEY_HKDF_INFO, &mut bytes)
             .expect("HKDF-Expand auf 32 Byte kann nicht scheitern (< 255 · 32)");
@@ -180,7 +182,7 @@ mod tests {
     /// bestehende Datenbanken unlesbar, und genau dann ist hier Rot.
     #[test]
     fn test_t2_known_answer_for_a_fixed_root_key() {
-        let key = DatabaseKey::from_root_key(&FIXED_ROOT_KEY);
+        let key = DatabaseKey::from_root_key(&RootKey::for_tests(FIXED_ROOT_KEY));
 
         // Gegenrechnung in diesem Test selbst, aus den RFC-5869-Bausteinen
         // (Extract mit Null-Salt, dann ein einzelner Expand-Block) — eine
@@ -251,8 +253,8 @@ mod tests {
     /// Datei nach einem Neustart nicht mehr öffenbar).
     #[test]
     fn test_t2_different_root_keys_yield_different_database_keys() {
-        let a = DatabaseKey::from_root_key(&FIXED_ROOT_KEY);
-        let a_again = DatabaseKey::from_root_key(&FIXED_ROOT_KEY);
+        let a = DatabaseKey::from_root_key(&RootKey::for_tests(FIXED_ROOT_KEY));
+        let a_again = DatabaseKey::from_root_key(&RootKey::for_tests(FIXED_ROOT_KEY));
         assert_eq!(
             a.bytes_for_tests(),
             a_again.bytes_for_tests(),
@@ -263,11 +265,11 @@ mod tests {
         // anderen Datenbankschlüssel ergeben.
         let mut other_root = FIXED_ROOT_KEY;
         other_root[31] ^= 0x01;
-        let b = DatabaseKey::from_root_key(&other_root);
+        let b = DatabaseKey::from_root_key(&RootKey::for_tests(other_root));
         assert_ne!(a.bytes_for_tests(), b.bytes_for_tests());
 
         // Und ein zweiter, deutlich verschiedener Wurzelschlüssel.
-        let c = DatabaseKey::from_root_key(&[0xaa; 32]);
+        let c = DatabaseKey::from_root_key(&RootKey::for_tests([0xaa; 32]));
         assert_ne!(a.bytes_for_tests(), c.bytes_for_tests());
         assert_ne!(b.bytes_for_tests(), c.bytes_for_tests());
     }
@@ -279,7 +281,7 @@ mod tests {
     #[test]
     fn test_t2_database_key_is_not_the_root_key() {
         for root in [FIXED_ROOT_KEY, [0x00; 32], [0xff; 32]] {
-            let key = DatabaseKey::from_root_key(&root);
+            let key = DatabaseKey::from_root_key(&RootKey::for_tests(root));
             assert_ne!(
                 key.bytes_for_tests(),
                 root,
@@ -292,7 +294,7 @@ mod tests {
     /// nimmt — 64 Hex-Zeichen in Kleinschreibung, keine Trennzeichen.
     #[test]
     fn test_pragma_value_is_the_raw_key_hex_form() {
-        let key = DatabaseKey::from_root_key(&FIXED_ROOT_KEY);
+        let key = DatabaseKey::from_root_key(&RootKey::for_tests(FIXED_ROOT_KEY));
         let pragma = key.pragma_value();
         let value = pragma.expose_secret();
 
@@ -318,7 +320,7 @@ mod tests {
     /// `tracing`-Makro, `{:?}` in einem Fehlertext).
     #[test]
     fn test_debug_output_contains_no_key_material() {
-        let key = DatabaseKey::from_root_key(&FIXED_ROOT_KEY);
+        let key = DatabaseKey::from_root_key(&RootKey::for_tests(FIXED_ROOT_KEY));
         let rendered = format!("{key:?}");
         let hex: String = key
             .bytes_for_tests()

@@ -44,10 +44,6 @@
       "chatRetention": "Sitzungen & Daten",
       "mcpServer": "MCP-Server",
       "masterPassword": "Master-Passwort"
-    },
-    "language": {
-      "de": "Deutsch",
-      "en": "Englisch"
     }
   },
   "about": {
@@ -347,6 +343,8 @@
     "cancellingCommand": "Wird getrennt…",
     "commandCancelledNotice": "⚠ Manuell abgebrochen — Ausgabe möglicherweise unvollständig, kein regulärer Exit-Code.",
     "commandTruncatedNotice": "⚠ Ausgabe wurde am Größenlimit abgeschnitten — möglicherweise unvollständig.",
+    "liveOutputLabel": "Live-Ausgabe",
+    "liveOutputTruncatedNotice": "⚠ Größenlimit erreicht — weitere Ausgabe wird nicht mehr angezeigt.",
     "mcpOrigin": "Externes Tool (MCP): „{{name}}“",
     "mcpOriginGeneric": "externes Tool (MCP)",
     "mcpOriginHint": "Diese Aktion wurde nicht vom internen Chat, sondern über den lokalen MCP-Server von einem externen Tool angefragt."
@@ -425,6 +423,8 @@
     "discoverModels": "Modelle laden",
     "discoveringModels": "Lädt Modelle…",
     "modelDiscoveryFailedHint": "Modelle konnten nicht automatisch geladen werden — Modellname manuell eingeben.",
+    "modelDiscoveryEmptyHint": "Der Anbieter hat keine Modelle geliefert. Modellname manuell eingeben.",
+    "modelDiscoveryAuthFailed": "✗ Der Anbieter hat diese Zugangsdaten abgelehnt – API-Key prüfen",
     "advanced": "Erweitert",
     "extraHeadersLabel": "Zusatz-Header",
     "extraHeadersHint": "Werden an jede Anfrage an diesen Provider angehängt (z. B. OpenRouters HTTP-Referer/X-Title).",
@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH ist noch gesperrt. Entsperre es zuerst mit deinem Master-Passwort.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Dieser Vorgang passt nicht dazu, wo der Schlüssel gerade liegt. Es wurde nichts verändert — öffne die Einstellungen erneut, dort steht der aktive Modus.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind alle Daten verloren, und es gibt keine Wiederherstellung — setze das Häkchen und richte es erneut ein. Es wurde nichts verändert.",
-    "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar."
+    "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar.",
+    "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden."
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
@@ -1014,9 +1015,13 @@
     "renamePrompt": {
       "renameTitle": "Umbenennen",
       "newFolderTitle": "Neuer Ordner"
-    }
+    },
+    "copyProgress": "Kopiere… {{done}} MB von {{total}} MB",
+    "copyProgressUnknownTotal": "Kopiere… {{done}} MB"
   },
   "chat": {
+    "newChat": "Neuer Chat",
+    "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",
     "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",
     "stopAutoContinuation": "Automatik stoppen",
     "generating": "KI generiert Antwort / Dokument…",

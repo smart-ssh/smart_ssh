@@ -248,9 +248,12 @@ async fn decryption_state(store: &SqliteProfileStore) -> String {
 }
 
 async fn open_encrypted(path: &Path) -> SqliteProfileStore {
-    SqliteProfileStore::connect_encrypted(path, &DatabaseKey::from_root_key(&K))
-        .await
-        .expect("encrypted test database opens")
+    SqliteProfileStore::connect_encrypted(
+        path,
+        &DatabaseKey::from_root_key(&ssh_manager_core::crypto::RootKey::for_tests(K)),
+    )
+    .await
+    .expect("encrypted test database opens")
 }
 
 /// AC 1: Nach der Umstellung trägt keine der vier Spalten mehr ein
@@ -266,7 +269,10 @@ async fn test_all_four_columns_are_decrypted_and_read_back_identically() {
         blob_counts(&store).await
     );
 
-    let outcome = store.decrypt_field_encrypted_content(&K).await.unwrap();
+    let outcome = store
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+        .await
+        .unwrap();
 
     let FieldContentDecryption::Completed(report) = outcome else {
         panic!("expected a completed run, got {outcome:?}");
@@ -302,10 +308,16 @@ async fn test_a_second_run_is_a_no_op() {
     let dir = tempfile::tempdir().unwrap();
     let store = open_encrypted(&dir.path().join("smart-ssh.db")).await;
     let expected = plant_legacy_rows(&store).await;
-    store.decrypt_field_encrypted_content(&K).await.unwrap();
+    store
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+        .await
+        .unwrap();
 
     assert_eq!(
-        store.decrypt_field_encrypted_content(&K).await.unwrap(),
+        store
+            .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+            .await
+            .unwrap(),
         FieldContentDecryption::AlreadyDone
     );
     assert_readable_through_the_app(&store, &expected).await;
@@ -320,7 +332,10 @@ async fn test_a_fresh_database_completes_with_nothing_to_do() {
     let store = open_encrypted(&dir.path().join("smart-ssh.db")).await;
     assert_eq!(decryption_state(&store).await, "open");
 
-    let outcome = store.decrypt_field_encrypted_content(&K).await.unwrap();
+    let outcome = store
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+        .await
+        .unwrap();
 
     assert_eq!(
         outcome,
@@ -351,7 +366,10 @@ async fn test_pre_0040_plaintext_prompt_rows_are_kept_as_they_are() {
     .await
     .unwrap();
 
-    let outcome = store.decrypt_field_encrypted_content(&K).await.unwrap();
+    let outcome = store
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+        .await
+        .unwrap();
 
     assert_eq!(
         outcome,
@@ -418,7 +436,10 @@ async fn test_rows_not_decryptable_with_the_current_key_are_removed_in_every_col
     )
     .await;
 
-    let outcome = store.decrypt_field_encrypted_content(&K).await.unwrap();
+    let outcome = store
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+        .await
+        .unwrap();
 
     let FieldContentDecryption::Completed(report) = outcome else {
         panic!("expected a completed run, got {outcome:?}");
@@ -487,7 +508,10 @@ async fn test_an_interrupted_run_keeps_the_old_state_and_completes_on_the_next_s
 
     // 3 von 7 Altzeilen bearbeitet: beide Nachrichten und ein Ledger-Eintrag.
     let interrupted = store
-        .decrypt_field_encrypted_content_failing_after(&K, 3)
+        .decrypt_field_encrypted_content_failing_after(
+            &ssh_manager_core::crypto::RootKey::for_tests(K),
+            3,
+        )
         .await;
     assert!(interrupted.is_err(), "the injected failure must surface");
     store.close().await;
@@ -510,7 +534,10 @@ async fn test_an_interrupted_run_keeps_the_old_state_and_completes_on_the_next_s
     assert_eq!(rows, 6, "no row may be lost by the interrupted run");
 
     // Der nächste Lauf stellt vollständig um.
-    let outcome = store.decrypt_field_encrypted_content(&K).await.unwrap();
+    let outcome = store
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+        .await
+        .unwrap();
     let FieldContentDecryption::Completed(report) = outcome else {
         panic!("expected a completed run, got {outcome:?}");
     };
@@ -552,7 +579,10 @@ async fn test_decrypted_content_never_appears_in_any_database_file() {
     insert_prompt(&store, server.id, 0, encrypt_for_tests(&K, markers[2])).await;
     set_summary(&store, session_id, encrypt_for_tests(&K, markers[3]), 1).await;
 
-    store.decrypt_field_encrypted_content(&K).await.unwrap();
+    store
+        .decrypt_field_encrypted_content(&ssh_manager_core::crypto::RootKey::for_tests(K))
+        .await
+        .unwrap();
     // Gegenprobe innerhalb der Datenbank: die Werte sind jetzt Klartext.
     let chat_raw: String = sqlx::query_scalar("SELECT content FROM chat_messages")
         .fetch_one(&store.pool)

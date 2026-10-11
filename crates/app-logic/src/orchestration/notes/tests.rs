@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use tokio::sync::Mutex as AsyncMutex;
 
 use ssh_manager_core::ai::{AiError, AiEvent, DefaultOutputRedactor};
-use ssh_manager_core::filter::FilterEngine;
 use ssh_manager_core::profiles::{Group, GroupId, NoteRevision, ProfileResult, Server};
 use ssh_manager_core::shared::ServerId;
 
@@ -99,6 +98,20 @@ async fn test_disconnect_suggestion_calls_ai_with_restricted_actions_when_comman
     );
     assert_eq!(recorded[0].available_actions[0].name, "propose_note_update");
     assert!(
+        recorded[0].available_actions[0]
+            .parameters
+            .iter()
+            .all(|p| p.name != "target"),
+        "kein Ziel-Parameter: nur die Notiz des Servers selbst (Spec 0010, Abschnitt 3)"
+    );
+    assert!(
+        !recorded[0].available_actions[0]
+            .description
+            .to_lowercase()
+            .contains("gruppe"),
+        "die Beschreibung darf die Gruppe nicht erwähnen"
+    );
+    assert!(
         recorded[0]
             .history
             .iter()
@@ -126,7 +139,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
         .history
         .push(command_result_message());
     // Winziges Fenster + große Notiz erzwingt Schritt 3 (Notiz-Kürzung).
-    session.parts_mut_for_tests().model_context_window_tokens = 2_000;
+    session.set_model_context_window_tokens_for_tests(2_000);
     let parts = crate::compaction::SystemContextParts {
         base: "Basis".to_string(),
         note_sections: vec![("Server \"web-01\"".to_string(), "n".repeat(50_000))],
@@ -136,7 +149,7 @@ async fn test_disconnect_suggestion_skipped_when_compaction_shortens_the_note() 
         let mut ctx = session.context.lock().await;
         ctx.system_context = parts.assemble();
     }
-    session.parts_mut_for_tests().system_context_parts = AsyncMutex::new(parts);
+    session.set_system_context_parts_for_tests(AsyncMutex::new(parts));
 
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -193,6 +206,48 @@ async fn test_disconnect_suggestion_no_event_when_ai_proposes_nothing() {
     assert!(
         !suggested,
         "Rückgabewert muss false sein, s. Etappe-4-Kommentar oben"
+    );
+}
+
+#[tokio::test]
+async fn test_disconnect_suggestion_ignores_group_target_proposal() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![
+            AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
+                target: NoteTargetSelector::CurrentServerGroup,
+                new_content: "Gruppen-Notiz per Disconnect".to_string(),
+            }),
+            AiEvent::Done,
+        ]),
+        MockSshTransport::default(),
+    );
+    session
+        .context
+        .lock()
+        .await
+        .history
+        .push(command_result_message());
+    let emitter = TestEmitter::default();
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+
+    let suggested = suggest_note_update_on_disconnect(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &profile_store,
+        &confirmations,
+    )
+    .await;
+
+    assert!(
+        emitter.events.lock().unwrap().is_empty(),
+        "Gruppen-Ziel beim Verbindungsende: kein Event, kein Dialog"
+    );
+    assert!(!suggested, "Rückgabewert muss false sein");
+    assert!(
+        profile_store.note_revisions.lock().unwrap().is_empty(),
+        "keine Revision"
     );
 }
 
@@ -1835,7 +1890,7 @@ async fn test_malformed_tool_call_yields_chat_error_without_ending_session() {
 /// `session.server_id` auf — die KI nennt nie eine ID.
 #[tokio::test]
 async fn test_propose_note_update_current_server_resolves_to_session_server_id() {
-    let mut session = test_session(
+    let session = test_session_allowing_everything(
         vec![
             AiEvent::ActionProposed(AiAction::ProposeNoteUpdate {
                 target: NoteTargetSelector::CurrentServer,
@@ -1845,8 +1900,6 @@ async fn test_propose_note_update_current_server_resolves_to_session_server_id()
         ],
         MockSshTransport::default(),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     let expected_server_id = session.server_id;
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -2626,4 +2679,31 @@ async fn test_issue_107_disconnect_suggestion_never_sets_the_pending_action_indi
 
     assert!(suggested);
     assert_eq!(*session.pending_action.lock().unwrap(), None);
+}
+
+/// Issue #330: Titel- und Abschluss-Instruktion folgen der Prompt-Sprache.
+#[test]
+fn test_title_and_disconnect_instructions_follow_the_prompt_language() {
+    use crate::system_prompt::{prompt_language, PromptLanguage};
+    let lang = |c: &str| prompt_language(Some(&serde_json::json!(c)), None);
+    let de_title = super::title_generation_instruction(PromptLanguage::De);
+    assert!(de_title.starts_with("Die Sitzung wird jetzt beendet"));
+    let en_title = super::title_generation_instruction(PromptLanguage::En);
+    assert!(en_title.starts_with("The session is ending now"));
+    assert!(!en_title.contains("Always respond in"));
+    assert_eq!(
+        super::title_generation_instruction(lang("fr")),
+        format!("{en_title} Always respond in French.")
+    );
+    assert_eq!(super::title_generation_instruction(lang("xx")), en_title);
+
+    let de = super::disconnect_completion_instruction(PromptLanguage::De);
+    assert!(de.contains("künftige Sitzungen"));
+    let en = super::disconnect_completion_instruction(PromptLanguage::En);
+    assert!(en.starts_with("The session is ending now"));
+    assert_eq!(
+        super::disconnect_completion_instruction(lang("fr")),
+        format!("{en} Always respond in French.")
+    );
+    assert_eq!(super::disconnect_completion_instruction(lang("xx")), en);
 }

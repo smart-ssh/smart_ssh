@@ -58,7 +58,7 @@ const DESTRUCTIVE: ReadonlySet<StartupPromptAnswer> = new Set<StartupPromptAnswe
 ]);
 
 /**
- * Spec 0101, Teil 0 Frage 3: die Startdialoge **im Fenster** (D1–D4, die
+ * Spec 0101, §2 Frage 3: die Startdialoge **im Fenster** (D1–D4, die
  * zweiten Bestätigungen aus A5, die Eingabe eines neuen Master-Passworts
  * aus A13 und der Hinweis nach dem Umbenennen).
  *

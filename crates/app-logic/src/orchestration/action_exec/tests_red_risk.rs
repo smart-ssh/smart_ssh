@@ -69,9 +69,7 @@ fn confirm_reason(payload: &serde_json::Value) -> &str {
 
 /// Eine Sitzung mit Allow-für-alles und eingeschalteter Einstellung.
 fn red_risk_session(transport: MockSshTransport) -> Session {
-    let mut session = test_session(vec![AiEvent::Done], transport);
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
+    let session = test_session_allowing_everything(vec![AiEvent::Done], transport);
     assert!(
         session.red_risk_always_confirm,
         "Spec 0092, A1.2: Test-Fixtures starten mit eingeschalteter Einstellung"
@@ -260,7 +258,7 @@ async fn test_t3_setting_off_keeps_todays_autoexec() {
     for command in [SERVER_RED, DATA_RED] {
         let mut session =
             red_risk_session(MockSshTransport::default().with_response(command, output("ok")));
-        session.parts_mut_for_tests().red_risk_always_confirm = false;
+        session.set_red_risk_always_confirm_for_tests(false);
         let (decision, payload) = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             proposed_decision_code(
@@ -308,7 +306,7 @@ async fn test_t4_yellow_alone_is_not_escalated() {
 #[tokio::test]
 async fn test_t5_deny_rule_stays_deny_for_a_red_command() {
     let mut session = red_risk_session(MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine = Box::new(FilterEngine::new(DenyIptablesStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(DenyIptablesStore)));
     let (decision, payload) = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         proposed_decision_code(
@@ -507,8 +505,7 @@ async fn test_t8b_sudo_form_under_a_non_sudo_allow_rule_is_escalated() {
     let sudo_command = format!("sudo {SERVER_RED}");
     let mut session =
         red_risk_session(MockSshTransport::default().with_response(&sudo_command, output("")));
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowExactIptablesFlushStore));
+    session.set_filter_engine_for_tests(Box::new(FilterEngine::new(AllowExactIptablesFlushStore)));
     assert!(
         session.sudo_password.is_none(),
         "Vorbedingung: kein gespeichertes Sudo-Passwort"

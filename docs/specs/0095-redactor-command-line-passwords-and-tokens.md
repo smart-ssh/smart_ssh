@@ -8,8 +8,12 @@ Bezüge: Spec 0006 (Redaction), Spec 0078 (Zugangsdaten in URLs), Spec 0094 (Log
 
 **A1.** Es wird nur der Wert redigiert; der Rest der Eingabe bleibt stehen.
 
-- A1.1 `mysql`, `mariadb`, `mysqldump`, `mysqladmin`: `-p<wert>` (angehängt),
-  auch in einfachen oder doppelten Anführungszeichen. `--password=<wert>`
+- A1.1 `mysql`, `mysql5`, `mysqlsh`, `mysqlpump`, `mysqldump`, `mysqladmin`,
+  `mariadb` und die `mariadb-*`-Clients (`mariadb-dump`, `mariadb-admin`, …):
+  `-p<wert>` (angehängt), auch in einfachen oder doppelten
+  Anführungszeichen. Ein Wert in Anführungszeichen darf einen
+  Zeilenumbruch enthalten, solange der schließende Quote in der folgenden
+  Zeile steht; fehlt er, bleibt der Folgetext unverändert. `--password=<wert>`
   wurde schon vorher erkannt. Formen mit Leerzeichen (`mysql -p mydb`,
   `--password mydb`) bleiben unverändert: Ohne angehängten Wert fragt der
   Client interaktiv, der folgende Wert ist der Datenbankname.
@@ -26,7 +30,8 @@ Bezüge: Spec 0006 (Redaction), Spec 0078 (Zugangsdaten in URLs), Spec 0094 (Log
 - A1.6 `smbclient`/`rpcclient` `-U user%wert` und `--user=user%wert`.
 - A1.7 `openssl`: bei `-pass`, `-passin`, `-passout` die Form `pass:<wert>`,
   auch in Anführungszeichen (`env:`, `file:`, `fd:`, `stdin` bleiben); bei
-  `-k <wert>` der Wert selbst.
+  `-k <wert>` und `-K <wert>` (roher Hex-Schlüssel) der Wert selbst;
+  `-iv <wert>` bleibt lesbar.
 - A1.8 Die Regeln greifen auch mitten in Verkettungen (`&&`, `;`, `|`,
   `$(…)`) und nach `sudo`, `env VAR=x`, `command`, absoluten Pfaden
   (`/usr/bin/mysql`), mit Tab oder mehreren Leerzeichen, unabhängig von der
@@ -46,7 +51,8 @@ das wird hingenommen.
   `SharedAccessKey=` bis zum nächsten `;`, Leerraum oder Anführungszeichen.
   `AccountName=` bleibt lesbar.
 - A2.4 Argon2 (`$argon2id$`, `$argon2i$`, `$argon2d$` mit Parametern, Salt,
-  Hash) und phpass (`$P$`/`$H$` + 31 Zeichen), wie die übrigen Crypt-Hashes.
+  Hash), phpass (`$P$`/`$H$` + 31 Zeichen) und Drupal 7 (`$S$` + Hash-Körper),
+  wie die übrigen Crypt-Hashes. Ein `$S` ohne Hash-Körper bleibt.
 - A2.5 Ein JWT ohne Präfix: drei durch `.` getrennte base64url-Teile, die
   ersten beiden beginnen mit `eyJ`.
 
@@ -90,6 +96,13 @@ Bewusst nicht erkannt:
   `ssh -p <port>`.
 - Datenbank-Strings mit rohem `,`, `;` oder `"` im Passwort (bräuchte
   Prozent-Dekodierung oder URL-Parsing).
+- `--password<U+00A0>wert` und andere Unicode-Leerzeichen zwischen Schalter
+  und Wert: Sie gehören für die Shell zum Wort (wie auch `-pSEC<U+00A0>RET`
+  ganz geschwärzt wird); die Form mit ASCII-Leerzeichen bleibt ohnehin
+  unverändert.
+- Bekannte Teilschwärzung (Spec 0078): `postgres://u:Secret1?x=Secret2&token=b@h/db`
+  wird zu `postgres://u:Secret1?x=Secret2&[REDACTED]`; ein Test hält den
+  Ausgang fest.
 - Solaris-Crypt-Formen (`$sha1$`, `$md5$`).
 - Ein generischer Hoch-Entropie-Fallback.
 

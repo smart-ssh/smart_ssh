@@ -1,8 +1,8 @@
-# Spec: Schutz persistierter Chat-Inhalte
+# Spec 0036 — Schutz persistierter Chat-Inhalte
 
-Status: umgesetzt (feldweise Verschlüsselung zurückgebaut, Issue #113)
-Abhängigkeiten: Chat-Session-Persistenz (Spec 0034), Datenbankverschlüsselung
-(Spec 0101), Rohdatei-Nachweis (Spec 0096)
+Status: umgesetzt
+Zweck: Beschreibt, wie Chat-Inhalte auf der Platte geschützt sind (durch die Verschlüsselung der ganzen Datenbank) und wie vorhandene, früher feldweise verschlüsselte Daten umgestellt werden.
+Bezüge: Spec 0034 (Chat-Sitzungen), Spec 0101 (Datenbankverschlüsselung), Spec 0096 (Rohdatei-Nachweis).
 
 ## 1. Was geschützt ist
 
@@ -26,7 +26,7 @@ liegen ebenso in der verschlüsselten Datei; für sie gilt dasselbe.
 
 Bis Issue #113 lagen die vier Inhalte aus Abschnitt 1 zusätzlich je Eintrag
 unter ChaCha20-Poly1305 mit K in der Datenbank. Diese Schicht ist
-zurückgebaut, weil die Datei seit Spec 0101 mit einem aus demselben K
+zurückgenommen (Issue #113), weil die Datei seit Spec 0101 mit einem aus demselben K
 abgeleiteten Schlüssel verschlüsselt ist und die zweite Schicht nichts
 zusätzlich schützte. K bleibt die Wurzel des Datenbankschlüssels; an
 Schlüsselbund, Master-Passwort und Schlüsselableitung ändert sich nichts.

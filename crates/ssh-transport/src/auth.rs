@@ -18,8 +18,8 @@ use crate::handler::ClientHandler;
 /// Ergebnis in den passenden `russh`-Auth-Aufruf.
 ///
 /// Spec 0076, §4.2: `key_files` reist neben `credentials` mit — die
-/// Anmeldelogik selbst bleibt dabei inhaltlich unverändert (§2, Nicht-Ziel
-/// 5: keine neue Verzweigung auf die Anmeldeart im Transport).
+/// Anmeldelogik selbst bleibt dabei inhaltlich unverändert (Spec 0076, 4.1:
+/// keine neue Verzweigung auf die Anmeldeart im Transport).
 ///
 /// Issue #51: `steps` zeichnet den Versuch als einen Schritt auf — Art der
 /// Methode, Ergebnis und, bei Ablehnung, die Methoden, die der Server noch
@@ -163,7 +163,7 @@ pub enum KeyClassification {
 /// `PrivateKey::from_openssh`-Zeile), und `app-shell` hat keine eigene
 /// Schlüssel-Bibliothek — sie dafür aufzunehmen wäre eine neue
 /// Abhängigkeit für eine Zeile, die es hier schon gibt. `core` scheidet
-/// ohnehin aus (keine I/O- und keine `russh`-Abhängigkeit, §1.3).
+/// ohnehin aus (keine I/O- und keine `russh`-Abhängigkeit, Spec 0076 4.2).
 pub fn classify_openssh_key(bytes: &[u8]) -> KeyClassification {
     match PrivateKey::from_openssh(bytes) {
         Ok(parsed) => KeyClassification::Valid {

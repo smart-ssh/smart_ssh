@@ -83,7 +83,7 @@ impl StartupPrompt for NativeStartupPrompt {
                 tracing::info!(
                     offers_password_setup,
                     "D1: offering the master-password setup button; the form itself is in the \
-                     window (Spec 0101, A13, Teil 0 Frage 3)"
+                     window (Spec 0101, A13, §2 Frage 3)"
                 );
                 let text = texts::d1_keychain_unreachable_text(
                     self.keychain
@@ -178,7 +178,7 @@ impl StartupPrompt for NativeStartupPrompt {
     ) -> Option<app_logic::database_startup::NewMasterPassword> {
         tracing::error!(
             "the native startup dialog cannot ask for a password; this should have been \
-             deferred to the window (Spec 0101, Teil 0 Frage 3)"
+             deferred to the window (Spec 0101, §2 Frage 3)"
         );
         None
     }

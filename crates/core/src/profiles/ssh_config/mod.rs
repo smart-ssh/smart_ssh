@@ -13,11 +13,11 @@
 //!
 //! Wer die Dateien beschafft und `Include` auflöst — mit Tiefe,
 //! Schleifenerkennung und den Gesamtgrenzen aus §3.3 — ist `app-shell`
-//! (§7.2). Diese Trennung ist der Grund, warum die Rekursion überhaupt
-//! begrenzbar ist (§9/Q-1, letzter Absatz).
+//! (§4.1). Diese Trennung ist der Grund, warum die Rekursion überhaupt
+//! begrenzbar ist (§4.1).
 //!
-//! **Eigener Parser, keine Abhängigkeit** (§4.2, §9/M-1 und §9/Q-1): Die
-//! Messung aus §7.0 hat `ssh2-config` 0.7.2 verworfen — unter anderem,
+//! **Eigener Parser, keine Abhängigkeit** (§4.2, ADR 0074 und §4.2): Die
+//! Messung aus ADR 0074 hat `ssh2-config` 0.7.2 verworfen — unter anderem,
 //! weil sie keine Zeilennummern liefert (§3.1.5), `Include` selbst gegen
 //! `$HOME/.ssh` auflöst und einen `Match`-Block in den vorhergehenden
 //! `Host`-Block mischt.
@@ -25,7 +25,7 @@
 //! Die **Gegenrichtung** — Profile nach `ssh_config` schreiben (§3.2) —
 //! liegt in [`export`]. Beide Richtungen teilen sich [`quoting`]: welche
 //! Zeichen ein Wert quoten braucht, ist eine Eigenschaft des Formats, nicht
-//! der Leserichtung (§9/Q-1 Punkt 5).
+//! der Leserichtung (§4.2 (Zitier- und Trennerregeln)).
 
 pub mod export;
 pub mod parser;

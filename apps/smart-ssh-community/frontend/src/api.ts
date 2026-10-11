@@ -1,4 +1,4 @@
-import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { Channel, invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type { FeatureLockedPayload } from "./extensions/entitlements";
 import { publishFeatureLocked } from "./extensions/featureLockedBus";
 import type {
@@ -242,6 +242,12 @@ export const disconnect = (sessionId: string) => invoke<void>("disconnect", { se
  * stop_auto_continuation`-Doc-Kommentar). */
 export const stopAutoContinuation = (sessionId: string) =>
   invoke<void>("stop_auto_continuation", { sessionId });
+
+/** Issue #271, Spec 0034 §11: beginnt in der bestehenden Verbindung einen
+ * neuen Chat (SSH, Terminal und Dateibrowser bleiben). Liefert die ID der
+ * neuen Chat-Sitzung, `null` für einen lokalen Tab ohne gespeicherten Chat. */
+export const startNewChat = (sessionId: string) =>
+  invoke<string | null>("start_new_chat", { sessionId });
 
 /** Spec 0027, Abschnitt 3: schließt nur den Exec-Kanal dieses einen
  * Kommandos (nicht die SSH-Verbindung/Session) und liefert die bis dahin
@@ -581,6 +587,38 @@ export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string 
 export const sftpReadText = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<string>("sftp_read_text", { sessionId, path, elevatedUser });
 
+/** Fortschritt von `sftpCopyContent`: `done` gelesene Bytes, `total` die
+ * per `stat` gemeldete Größe (`null`, wenn sie unbekannt ist). */
+export interface CopyContentProgress {
+  done: number;
+  total: number | null;
+}
+
+/** Issue #357, Spec 0086 A1.1/A1.5: „Dateiinhalt kopieren" bis 50 MB. Liest
+ * begrenzt (Grenze + 1 Bytes), meldet den Fortschritt und lässt sich über
+ * `sftpCancelCopyContent(requestId)` abbrechen (Fehler-Code
+ * `SFTP_COPY_CANCELLED`). Zu groß: Code `SFTP_CONTENT_TOO_LARGE`. */
+export const sftpCopyContent = (
+  sessionId: string,
+  path: string,
+  elevatedUser: string | null,
+  requestId: string,
+  onProgress: (progress: CopyContentProgress) => void,
+) => {
+  const channel = new Channel<CopyContentProgress>();
+  channel.onmessage = onProgress;
+  return invoke<string>("sftp_copy_content", {
+    sessionId,
+    path,
+    elevatedUser,
+    requestId,
+    onProgress: channel,
+  });
+};
+
+export const sftpCancelCopyContent = (requestId: string) =>
+  invoke<void>("sftp_cancel_copy_content", { requestId });
+
 /** Spec 0054, Teil 3: existiert `path` bereits? Grundlage für die
  * Kollisionsprüfung bei Umbenennen/Verschieben/Hochladen. */
 export const sftpExists = (sessionId: string, path: string, elevatedUser: string | null = null) =>
@@ -694,7 +732,7 @@ export const exportSshConfig = (title: string) =>
 export const getStartupState = () => invoke<StartupStateDto>("get_startup_state");
 
 /** A16: entsperren und den Zustand nachbauen. Im Schlüsselbund-Modus
- * (Startmaske `setUpMasterPassword`, Teil 0 Frage 3) wird das Passwort
+ * (Startmaske `setUpMasterPassword`, §2 Frage 3) wird das Passwort
  * nicht gebraucht — dort setzt der Aufruf den Startablauf im Fenster fort,
  * und die Entscheidung fällt im Dialog D1. */
 export const unlockWithMasterPassword = (password: string) =>
@@ -706,7 +744,7 @@ export const unlockWithMasterPassword = (password: string) =>
 export const startOverFromUnlockScreen = () =>
   invoke<StartupStateDto>("start_over_from_unlock_screen");
 
-/** Teil 0 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
+/** §2 Frage 3: die Antwort auf eine Startfrage im Fenster. Das neue
  * Master-Passwort kommt getrennt mit — es gehört nicht in das Ereignis, mit
  * dem gefragt wurde (§6: kein Passwort in einem DTO).
  *

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
+import { formatDateTime } from "../formatDateTime";
 import {
   claimDroppedPaths,
+  commandErrorCode,
   commandErrorMessage,
   pickUploadFiles,
   pickUploadFolder,
@@ -23,11 +25,14 @@ import {
   sftpExists,
   sftpList,
   sftpMkdir,
+  sftpCancelCopyContent,
+  sftpCopyContent,
   sftpReadText,
   sftpRename,
   sftpStartDirectory,
   sftpUpload,
 } from "../api";
+import { translateErrorCode } from "../errorCodes";
 import {
   onConnectionStatusChanged,
   onSftpTransferFinished,
@@ -75,6 +80,13 @@ const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
   modified: 90,
 };
 const NAME_MIN_WIDTH = 120;
+
+/** Issue #357: ab dieser Größe zeigt "Dateiinhalt kopieren" Fortschritt. */
+const COPY_PROGRESS_FROM_BYTES = 5 * 1024 * 1024;
+
+function formatMb(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
 /** Feste, nicht verstellbare Aktionsspalte (⋮-Menü) — kein Label, immer
  * gleich schmal, kein Drag-Handle. */
 const ACTIONS_COLUMN_WIDTH = 36;
@@ -148,6 +160,13 @@ export function FileBrowserPanel({
     entry: RemoteEntryDto;
     anchor: "row" | { x: number; y: number };
   } | null>(null);
+  /** Laufendes "Dateiinhalt kopieren" (Issue #357). */
+  const [copyJob, setCopyJob] = useState<{
+    requestId: string;
+    name: string;
+    done: number;
+    total: number | null;
+  } | null>(null);
   const [properties, setProperties] = useState<RemoteEntryDto | null>(null);
   const [renaming, setRenaming] = useState<{ entry: RemoteEntryDto; value: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RemoteEntryDto | null>(null);
@@ -194,7 +213,7 @@ export function FileBrowserPanel({
 
   // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
   const localEdit = useLocalEditSession(sessionId);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Spec 0067, A5: erhöhter Modus pro Browser-Ansicht — nie Default, nicht
   // persistiert. `null` = normaler Modus.
@@ -729,17 +748,36 @@ export function FileBrowserPanel({
     }
   };
 
-  /** Spec 0054, Teil 2: "Dateiinhalt kopieren" — liest den Inhalt (Backend
-   * lehnt zu große/nicht-Text-Dateien mit einer erklärenden Meldung ab, s.
-   * `sftp_read_text`) und kopiert ihn in die Zwischenablage. */
+  /** Spec 0054, Teil 2 / Issue #357 (Spec 0086 A1.1, A1.5): "Dateiinhalt
+   * kopieren" — liest den Inhalt begrenzt bis 50 MB (das Backend lehnt zu
+   * große und nicht-Text-Dateien ab, s. `sftp_copy_content`) und kopiert ihn
+   * in die Zwischenablage. Ab 5 MB zeigt das Panel Fortschritt und einen
+   * Abbrechen-Knopf. */
   const handleCopyContent = async (entry: RemoteEntryDto) => {
     setOpenMenu(null);
+    const requestId = crypto.randomUUID();
+    setCopyJob({ requestId, name: entry.name, done: 0, total: entry.size });
     try {
-      const content = await sftpReadText(sessionId, entry.path, channelUser);
+      const content = await sftpCopyContent(sessionId, entry.path, channelUser, requestId, (p) =>
+        setCopyJob((job) =>
+          job?.requestId === requestId ? { ...job, done: p.done, total: p.total ?? job.total } : job,
+        ),
+      );
       await navigator.clipboard.writeText(content);
       notifyOk("fileToasts.contentCopied", { name: entry.name });
     } catch (err) {
-      notifyFailed("fileToasts.copyFailed", entry.name, err);
+      // Ein Abbruch durch den Nutzer ist keine Störung: nichts anzeigen.
+      if (commandErrorCode(err) === "SFTP_COPY_CANCELLED") return;
+      const code = commandErrorCode(err);
+      notifyFailed(
+        "fileToasts.copyFailed",
+        entry.name,
+        code === "SFTP_CONTENT_TOO_LARGE"
+          ? { message: translateErrorCode(t, code, commandErrorMessage(err)) }
+          : err,
+      );
+    } finally {
+      setCopyJob((job) => (job?.requestId === requestId ? null : job));
     }
   };
 
@@ -1102,6 +1140,29 @@ export function FileBrowserPanel({
         </div>
       )}
 
+      {copyJob && Math.max(copyJob.done, copyJob.total ?? 0) >= COPY_PROGRESS_FROM_BYTES && (
+        <output
+          className="flex items-center gap-2 border-b border-slate-700 px-2 py-1.5 text-xs text-slate-200"
+        >
+          <span className="min-w-0 flex-1 truncate">
+            {copyJob.total !== null
+              ? t("fileBrowser.copyProgress", {
+                  done: formatMb(copyJob.done),
+                  total: formatMb(copyJob.total),
+                })
+              : t("fileBrowser.copyProgressUnknownTotal", { done: formatMb(copyJob.done) })}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              void sftpCancelCopyContent(copyJob.requestId).catch(() => {});
+            }}
+            className="rounded border border-slate-600 px-2 py-0.5 hover:bg-slate-800"
+          >
+            {t("common.cancel")}
+          </button>
+        </output>
+      )}
       <div
         ref={tableContainerRef}
         className={`relative min-h-0 flex-1 overflow-auto ${dragOver ? "bg-indigo-950/40" : ""}`}
@@ -1219,7 +1280,7 @@ export function FileBrowserPanel({
                     {entry.permissions}
                   </td>
                   <td className="px-2 py-1 whitespace-nowrap text-slate-500">
-                    {entry.modified ? new Date(entry.modified).toLocaleString() : "—"}
+                    {entry.modified ? formatDateTime(entry.modified, i18n.language) : "—"}
                   </td>
                   <td className="relative px-2 py-1 text-right">
                     <button
@@ -1781,7 +1842,7 @@ function FilePropertiesDialog({
   entry: RemoteEntryDto;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const octal = entry.permissionsOctal.toString(8).padStart(3, "0");
   const owner = entry.owner ?? (entry.uid !== null ? String(entry.uid) : "—");
   const group = entry.group ?? (entry.gid !== null ? String(entry.gid) : "—");
@@ -1813,7 +1874,7 @@ function FilePropertiesDialog({
           {row(t("fileBrowser.properties.group"), group)}
           {row(
             t("fileBrowser.properties.modified"),
-            entry.modified ? new Date(entry.modified).toLocaleString() : "—",
+            entry.modified ? formatDateTime(entry.modified, i18n.language) : "—",
           )}
         </div>
         <div className="mt-4 flex justify-end">

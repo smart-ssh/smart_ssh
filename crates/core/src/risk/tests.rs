@@ -1234,3 +1234,84 @@ fn test_commands_without_c_code_keep_their_rating() {
     let data_red = classify("cat ~/.ssh/id_rsa");
     assert_eq!(data_red.data_risk, RiskLevel::Red);
 }
+
+// --- Issue #255: fork bomb inside a longer command ---------------------
+
+#[test]
+fn test_server_risk_red_fork_bomb_chained_and_wrapped() {
+    for command in [
+        ":(){ :|:& };:;rm",
+        "ls && :(){ :|:& };:",
+        "sudo :(){ :|:& };:",
+        "$(:(){ :|:& };:)",
+        "bash -c ':(){ :|:& };:'",
+        ":(){ :|:& };: ",
+    ] {
+        assert_eq!(
+            classify(command).server_risk,
+            RiskLevel::Red,
+            "fork bomb not red: {command:?}"
+        );
+    }
+}
+
+// --- Issue #318: fork bomb under a renamed function --------------------
+// The regex has no backreferences, so the rule matches `x(){ y|z& };w`
+// for any identifiers (over-approximation, raise-only).
+
+#[test]
+fn test_server_risk_red_renamed_fork_bomb() {
+    for command in [
+        "b(){ b|b& };b",
+        "f() { f | f & }; f",
+        "a;b(){ b|b& };b",
+        "sudo sh -c 'b(){ b|b& };b'",
+        "$(b(){ b|b& };b)",
+        "bomb() { bomb | bomb & }; bomb",
+    ] {
+        assert_eq!(
+            classify(command).server_risk,
+            RiskLevel::Red,
+            "renamed fork bomb not red: {command:?}"
+        );
+    }
+}
+
+#[test]
+fn test_server_risk_benign_function_not_fork_bomb() {
+    for command in ["f(){ echo hi; }; f", "f(){ g | h; }; f"] {
+        assert_ne!(
+            classify(command).server_risk,
+            RiskLevel::Red,
+            "benign function rated red: {command:?}"
+        );
+    }
+}
+
+// --- Issue #374: whitespace-padded segments in a chain -----------------
+
+#[test]
+fn chaining_whitespace_padded_segment_never_lowers_risk() {
+    // Failing proptest case: `rm  ` alone matches `rm *`, but inside a
+    // chain the segment is trimmed to `rm`.
+    let alone = classify("rm  ");
+    let chained = classify("a ;rm  ");
+    assert!(alone.server_risk > RiskLevel::None);
+    assert!(chained.server_risk >= alone.server_risk);
+    assert!(chained.data_risk >= alone.data_risk);
+}
+
+#[test]
+fn chaining_trailing_space_glob_commands_never_lower_risk() {
+    for word in ["rm", "kill", "env", "printenv"] {
+        for sep in [";", "&&", "||", "|", "\n"] {
+            let part = format!("{word}  ");
+            let alone = classify(&part);
+            let chained = classify(&format!("a {sep}{part}"));
+            assert!(
+                chained.server_risk >= alone.server_risk && chained.data_risk >= alone.data_risk,
+                "risk fell for {word:?} after {sep:?}"
+            );
+        }
+    }
+}

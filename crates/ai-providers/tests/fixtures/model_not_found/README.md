@@ -1,4 +1,4 @@
-# Fixtures: „Modell nicht gefunden“ (Spec 0069, Teil 0.2; Spec 0072, A4)
+# Fixtures: „Modell nicht gefunden“ (Spec 0072, A4)
 
 | Datei | Status | Datum |
 |---|---|---|

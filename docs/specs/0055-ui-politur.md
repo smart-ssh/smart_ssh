@@ -1,112 +1,88 @@
-# Spec: UI-Politur-Runde
+# Spec 0055 — UI-Politur: Chat-Eingabe, Nachrichten-Aktionen, Settings-Überschriften und -Labels
 
-Status: Umgesetzt
-Repo: **öffentlich** `smart_ssh`, Frontend
-Abhängigkeiten: Chat-UI, Settings-Neustruktur (0050), Extension-Registry (0038)
+Status: umgesetzt
+Zweck: Vier kleine, unabhängige Verbesserungen des Frontends, die das Produkt fertiger wirken lassen: mehrzeilige Chat-Eingabe, aufgeräumte Nachrichten-Aktionen, keine doppelten Überschriften in den Einstellungen, übersetzte Namen registrierter Einstellungs-Kategorien. Dazu die Kontrast-Zusage für alle Texte.
+Bezüge: Spec 0012 (Dokumente), Spec 0038 (Erweiterungs-Registry), Spec 0050 (Einstellungen), Spec 0065 (abgeschnittene Antworten), Spec 0080, ADR 0046.
 
-> Mehrere kleine, unabhängige UI-Verbesserungen, die zusammen den „rau →
-> fertig"-Unterschied Richtung 1.0 machen. Alle **öffentliches Frontend,
-> risikoarm, Priorität NORMAL**. Kein server-verändernder Zugriff, keine
-> Filter-Engine-Berührung. Jeder Teil ein eigener Commit — sie sind nur
-> gebündelt, weil alle klein und UI-nah.
+Nichts davon berührt Server-Zugriff oder Filter-Engine.
 
-## Teil 1: Multiline-Eingabe im Chat-Input (Shift+Enter)
+## Teil 1 — Mehrzeilige Eingabe im Chat
 
-Das Chat-Eingabefeld erlaubt aktuell keine mehrzeilige Eingabe wie gewohnt.
-**Standard-Verhalten herstellen:**
-- **Enter** sendet die Nachricht.
-- **Shift+Enter** fügt einen **Zeilenumbruch** ein (kein Senden).
-- Das Feld **wächst** mit dem Inhalt (auto-grow, bis zu einer sinnvollen
-  Maximalhöhe, danach scrollt es intern).
-- Auf Mobile/Touch (falls relevant) das plattformübliche Verhalten.
-Das ist das Verhalten, das Nutzer aus jedem Chat-Tool kennen — mehrzeilige
-Kommandos/Erklärungen eingeben ist sonst umständlich.
+- **Enter** sendet die Nachricht, **Shift+Enter** fügt einen Zeilenumbruch ein.
+- Während einer IME-Komposition (z. B. Pinyin, Tot-Tasten für Akzente)
+  bestätigt Enter nur die Komposition und sendet nicht.
+- Das Feld wächst mit dem Inhalt bis zu einer Maximalhöhe von etwa acht Zeilen
+  und scrollt darüber hinaus intern; es schrumpft wieder, wenn der Text kürzer
+  wird.
 
-## Teil 2: Nachrichten-Aktionen entrümpeln
+## Teil 2 — Nachrichten-Aktionen dezent
 
-Aktuell hängen an **jeder** KI-Chat-Nachricht „Export to Markdown" und „Take
-into Note" — auch an trivialen Antworten („ok, verstanden"). Das verwässert
-die Bedeutung dieser Aktionen und wirkt unaufgeräumt.
+„In Notiz übernehmen" und der Markdown-Export hängen an Antworten des
+Assistenten, aber nicht dauerhaft sichtbar: die Aktionsleiste blendet erst bei
+Hover oder Tastaturfokus auf einem ihrer Buttons ein. Triviale Antworten wirken so
+nicht überladen.
 
-**Aufräumen** (wähle den saubersten Weg, beschreibe ihn mir):
-- Entweder die Aktionen nur an **substanziellen** Antworten zeigen (ab einer
-  Mindestlänge / bei tatsächlichem Inhalt), oder
-- die Aktionen dezenter darstellen (z. B. erst bei Hover sichtbar, statt
-  permanent), oder
-- klar zwischen „normale Antwort" und „generiertes Dokument" (DocumentCard,
-  Spec 0012) unterscheiden — Export/Notiz primär an Dokumenten, nicht an
-  jeder Plauderei.
-Ziel: Das UI wirkt aufgeräumter, die Aktionen erscheinen dort, wo sie Sinn
-ergeben. **Keine** bestehende Funktion entfernen — nur die Darstellung/
-Platzierung verbessern.
+- Die Aktionen bleiben an jeder Antwort mit Text erreichbar, auch an kurzen
+  Antworten und per Tastatur; keine Funktion entfällt.
+- Läuft eine Aktion, hat sie fehlgeschlagen oder zeigt sie eine Bestätigung,
+  bleibt die Leiste sichtbar, damit der Nutzer das Ergebnis sieht.
+- Ohne Text (z. B. eine leere, abgeschnittene Antwort) gibt es keine Leiste
+  (Spec 0080).
+- Generierte Dokumente haben ihre eigene Darstellung (Spec 0012) und tragen
+  diese Leiste nicht.
+- Der Hinweis auf eine abgeschnittene Antwort samt „Fortsetzen" ist nicht
+  Teil der Hover-Leiste, sondern dauerhaft sichtbar (Spec 0065).
 
-## Teil 3: Doppelte Überschrift in Settings-Sektionen (aus 0050-Review)
+## Teil 3 — Keine doppelten Überschriften in den Einstellungen
 
-Nach der Settings-Neustruktur (0050) rendert `SettingsScreen` den
-Sektions-Titel als Überschrift (`{active?.label}`) — aber die einzelnen
-Sektionen rendern **zusätzlich** ihre eigene `<h3>` (z. B.
-`ChatRetentionSettings`, `McpServerSettings`). Ergebnis: **doppelte
-Überschrift**.
+Den Titel einer Einstellungs-Kategorie zeigt der Einstellungs-Bildschirm
+selbst. Die Kategorien darunter wiederholen ihn nicht noch einmal als eigene
+Überschrift.
 
-**Fix:** Die Sektionen rendern ihre eigene Titelzeile **nicht** mehr — der
-`SettingsScreen` übernimmt den Titel. Alle eingebauten Sektionen durchgehen
-und die redundante `<h3>` entfernen. (Die private Lizenz-Sektion zieht im
-selben Muster nach — das ist ein separater privater Folgeschritt, hier nur
-die öffentlichen Sektionen.)
+## Teil 4 — Namen registrierter Kategorien folgen der Sprache
 
-## Teil 4: i18n-Labels der registrierten Settings-Sektionen (aus 0050-Review)
+Einstellungs-Kategorien, die sich über die Erweiterungs-Registry eintragen
+(z. B. Chat-Aufbewahrung, MCP-Server), erscheinen in der Navigation in der
+eingestellten UI-Sprache.
 
-Die über `registerSettingsSection` registrierten Sektionen (`chat-retention`,
-`mcp-server`) tragen **feste deutsche `label`-Strings** — in der **englischen
-UI** stehen dadurch deutsche Nav-Einträge zwischen englischen.
+- Der Name einer Kategorie kann ein Übersetzungsschlüssel oder ein fester
+  Text sein. Existiert ein Übersetzungsschlüssel mit genau diesem Namen, wird
+  übersetzt; sonst wird der Text unverändert angezeigt. Registrierungen mit
+  festem Text (auch von außen oder aus einer anderen Edition) bleiben
+  funktionsfähig; ohne Namen gilt die Kennung der Kategorie (ADR 0046).
+- Die eingebauten registrierten Kategorien sind in Deutsch und Englisch
+  übersetzt.
+- Eine Kategorie, die sich erst nach dem ersten Aufbau der Einstellungen
+  registriert, erscheint ohne Neuladen in der Navigation.
 
-**Fix:** Das `label`-Feld der Registry so nutzen, dass es einen
-**Übersetzungs-Schlüssel** aufnimmt (statt eines festen Anzeigetexts), den
-das Frontend beim Rendern über den bestehenden i18n-Mechanismus auflöst.
-- Die Registry-API bleibt rückwärtskompatibel (ein fester String ohne
-  passenden Übersetzungs-Schlüssel wird weiterhin direkt angezeigt — kein
-  Bruch für Registrierungen, die keinen Key nutzen).
-- Die eingebauten Sektionen auf Übersetzungs-Schlüssel umstellen (DE+EN).
-- Beschreibe mir, wie du den Schlüssel-vs-Text-Fall unterscheidest (z. B. ein
-  Konventions-Präfix, oder ein separates Feld).
+## Einheitliche Bedienelemente
 
-## Nicht Teil dieser Spec
+Schaltflächen, Dialoge und Formularfelder folgen einem gemeinsamen Muster
+(Leitfaden `docs/ui-guidelines.md`), damit jeder Bildschirm gleich aussieht und
+sich gleich bedient:
 
-- Settings-Registry-**Notify-Mechanismus** (spät registrierte Sektion nach
-  Async-Render) — eigener, größerer Punkt, bleibt im Backlog.
-- Die **private** Lizenz-Sektion (`<h3>` entfernen) — separater privater
-  Folgeschritt zu Teil 3.
-- „Wann ist etwas ein Dokument"/Dokument-Erkennung — eigenes größeres Thema.
+- Schaltflächen gibt es als Primär-, Sekundär-, Gefahr- und Link-Variante. Pro
+  Dialog oder Formular gibt es höchstens eine Primäraktion.
+- Dialoge zeigen Titel, scrollenden Inhalt und eine Aktionsleiste rechts unten;
+  Abbrechen steht links von der Primäraktion. Escape schließt den Dialog, Tab
+  bleibt im Dialog, und der Fokus kehrt beim Schließen zurück.
+- In einem Formular löst Enter die Primäraktion aus.
+- Formularfelder haben eine sichtbare Beschriftung; Hilfetext und Fehlermeldung
+  stehen darunter und sind dem Feld für Screenreader zugeordnet.
+- Der Tastaturfokus ist an jedem Bedienelement als Rahmen sichtbar.
 
-## Design/Konventionen
+## Kontrast und Lesbarkeit
 
-- **frontend-design-Skill** beachten (Tokens, keine Ad-hoc-Styles).
-- Teil 1 (auto-grow) und Teil 2 (Hover-Aktionen) sollen sich natürlich ins
-  bestehende Chat-Layout einfügen.
-- **Textkontrast:** Jeder Text erreicht mindestens das WCAG-2.1-AA-Verhältnis
-  von 4,5:1 (große Schrift 3:1) gegen seinen tatsächlichen Hintergrund. Das
-  gilt auch für abgesetzte Texte (Sekundärbeschriftungen, inaktive Tabs,
-  Hinweise) und für Text auf Akzentflächen (Primärbuttons, aktive Auswahl).
-  Abgesetzte Texte bleiben durch ihre Abstufung (hell → gedämpft) vom
-  Haupttext unterscheidbar. Deaktivierte Bedienelemente sind nach WCAG
-  ausgenommen. Die automatischen Barrierefreiheits-Scans der Browser-Tests
-  prüfen das ohne Ausnahme für das Hauptfenster, jede Einstellungskategorie
-  und die Befehlsbestätigung.
+Jeder Text erreicht gegen seinen tatsächlichen Hintergrund mindestens das
+WCAG-2.1-AA-Verhältnis von 4,5:1 (große Schrift 3:1). Das gilt auch für
+abgesetzte Texte (Sekundärbeschriftungen, inaktive Tabs, Hinweise) und für
+Text auf Akzentflächen (Primärbuttons, aktive Auswahl). Abgesetzte Texte
+bleiben durch ihre Abstufung vom Haupttext unterscheidbar. Deaktivierte
+Bedienelemente sind nach WCAG ausgenommen. Die automatischen
+Barrierefreiheits-Scans der Browser-Tests prüfen das ohne Ausnahme für das
+Hauptfenster, jede Einstellungskategorie und die Befehlsbestätigung.
 
-## Testbarkeit
+## Grenzen
 
-- Teil 1: Enter sendet; Shift+Enter fügt Zeilenumbruch; Feld wächst bis Max,
-  dann intern scrollbar.
-- Teil 2: Aktionen erscheinen nach der gewählten Regel (substanziell/Hover/
-  Dokument), bestehende Funktion (Export/Notiz) weiter erreichbar.
-- Teil 3: Keine Sektion zeigt ihren Titel doppelt; der SettingsScreen-Titel
-  bleibt.
-- Teil 4: Registrierte Sektionen erscheinen in der UI-Sprache übersetzt;
-  eine Registrierung mit festem String ohne Key bricht nicht.
-
-## Reihenfolge
-
-1. Multiline-Input (Teil 1) — abgegrenzt, hoher Nutzen.
-2. Doppelte Überschrift (Teil 3) — kleiner Aufräumer.
-3. i18n-Labels (Teil 4) — Registry-nah.
-4. Nachrichten-Aktionen (Teil 2) — etwas mehr Design-Spielraum, zuletzt.
+- Es gibt keine automatische Unterscheidung, wann eine Antwort ein Dokument
+  ist.

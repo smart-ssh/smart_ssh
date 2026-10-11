@@ -6087,6 +6087,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
+ "libc",
  "portable-pty",
  "rand 0.10.2",
  "russh",

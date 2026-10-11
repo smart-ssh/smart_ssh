@@ -1,197 +1,240 @@
-# Spec: SSH-Verbindungsmodul
+# Spec 0005 — SSH-Verbindungsmodul
 
-Status: Entwurf
-Modul: Trait-Definitionen in `crates/core/src/ssh/`, konkrete Implementierung
-in neuer Crate `crates/ssh-transport`
-Abhängigkeiten: `ssh-manager-core` (nutzt `AuthMethod`/`CredentialStore` aus
-Spec 0003 zur Auth-Auflösung)
+Status: umgesetzt
+Zweck: Wie Smart SSH eine Verbindung zu einem Server aufbaut (auch über Jump-Hosts), dessen Host-Key prüft und über dieselbe Verbindung einzelne Kommandos, ein interaktives Terminal und Dateizugriffe bedient.
+Bezüge: Spec 0003 (Server-Profile, Anmeldearten, Jump-Host-Feld), Spec 0002 (Filter-Engine), Spec 0007 (Sitzung, Host-Key-Abfrage im Ablauf), Spec 0020 (SFTP), Spec 0027 (Abbruch), Spec 0043 (Ausgabegrenzen), Spec 0069 (Fehlerarten, Zeitgrenzen), Spec 0076 (Schlüsseldatei), Spec 0100 (Host-Key-Dialog per Tastatur), ADR 0007, ADR 0012, ADR 0110.
 
-## 1. Ziel
+## 1. Ziel und Betriebsarten
 
-Aufbau und Verwaltung von SSH-Verbindungen, inklusive Jump-Host-Verkettung,
-Host-Key-Verifikation und zwei Nutzungsarten:
+Eine Verbindung wird einmal aufgebaut und dann auf zwei Arten genutzt:
 
-- **Exec-Modus**: einzelnes Kommando ausführen, stdout/stderr/exit-code
-  einsammeln — das ist der Modus, den die Filter-Engine (Spec 0002) und der
-  KI-Workflow nutzen, weil dort jedes Kommando einzeln geprüft/bestätigt wird.
-- **Interaktiver Modus**: PTY-Shell für das Terminal-Tab (xterm.js-Anbindung
-  im Frontend) — freier Tastatur-Stream, keine Filter-Engine-Prüfung, weil
-  hier der Nutzer direkt selbst tippt.
+- **Einzelkommando.** Ein Kommando läuft in einem eigenen Kanal, Standardausgabe,
+  Fehlerausgabe und Exit-Code werden eingesammelt. Das ist der Weg für alles,
+  was die KI vorschlägt: jedes Kommando wird einzeln geprüft (Spec 0002) und
+  bestätigt (Spec 0007), bevor es hier ankommt.
+- **Interaktives Terminal.** Eine Shell mit Pseudo-Terminal für das
+  Terminal-Panel. Hier tippt der Nutzer selbst; die Filter-Engine prüft diese
+  Eingaben nicht, weil kein Vorschlag einer KI dazwischen liegt.
 
-Beide Modi laufen über **dieselbe** offene Verbindung (SSH-Multiplexing über
-Channels), nicht über separate Neuverbindungen pro Kommando.
+Beide Arten (und der Dateizugriff, Spec 0020) laufen als getrennte Kanäle über
+**dieselbe** offene Verbindung; ein Kommando löst keinen neuen
+Verbindungsaufbau aus. Je geöffnetem Server-Tab gibt es genau eine Verbindung
+(kein Teilen zwischen Tabs).
 
-## 2. Architektur-Entscheidung: Trait in `core`, Implementierung separat
+## 2. Austauschbarkeit
 
-Wie schon bei der Persistenz (Spec 0004) gilt dasselbe Prinzip: `core`
-definiert nur die Traits (`SshTransport`, `HostKeyStore` u. a.), die konkrete
-`russh`-basierte Umsetzung lebt in einer eigenen Crate `crates/ssh-transport`.
-Begründung identisch — `core` bleibt schnell testbar über Mock-Implementierungen,
-und ein späterer Wechsel der SSH-Bibliothek (z. B. falls `russh` an Grenzen
-stößt) betrifft nicht den Rest der Codebasis.
+Alles oberhalb des Transports (Filter-Engine, Risiko-Einstufung, Bestätigung,
+KI-Anbindung) kennt nur die abstrakte Schnittstelle „Kommando ausführen,
+Shell öffnen, Dateien lesen/schreiben, trennen". Der lokale Pseudo-Server
+(Spec 0032) hängt an derselben Schnittstelle und durchläuft deshalb dieselben
+Prüfungen. Die Host-Key-Ablage ist ebenfalls austauschbar; die Verbindungslogik
+hängt nicht an ihrem Speicherort.
 
-## 3. Technologie
+## 3. Keine externe SSH-Installation nötig
 
-**`russh`** (reine Rust-Implementierung, async, `tokio`-basiert).
+Smart SSH bringt seinen SSH-Client mit. Ein installiertes OpenSSH oder
+`libssh` ist weder nötig noch wird es benutzt; das Verhalten ist auf Windows,
+macOS und Linux gleich. Ein SSH-Agent des Systems wird nur für die Anmeldeart
+„Agent" befragt (Spec 0003).
 
-Begründung: kein Binding gegen System-`libssh`/OpenSSH nötig — das
-vereinfacht plattformübergreifendes Bauen erheblich (kein Cross-Compile-Ärger
-mit C-Abhängigkeiten auf Windows/macOS/Linux). Zusätzlicher Vorteil für
-Tests: `russh` implementiert sowohl Client- als auch Server-Seite, wodurch
-sich für Integrationstests ein echter SSH-Server **in-process** hochfahren
-lässt, ganz ohne Docker oder externe Testinfrastruktur (siehe Abschnitt 7).
+## 4. Betriebsarten im Einzelnen
 
-## 4. Kernabstraktionen
+**4.1 Einzelkommando.** Ergebnis ist Standardausgabe, Fehlerausgabe und der
+Exit-Code. Beendet sich der Kanal ohne Exit-Code (etwa nach einem Abbruch,
+Spec 0027), bleibt der Exit-Code leer; das ist kein Fehler.
 
-```rust
-pub struct CommandOutput {
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
-    pub exit_code: Option<i32>,
-}
+**4.2 Eingabe über Standardeingabe.** Ein Kommando kann Eingabedaten
+mitbekommen, die sofort nach dem Start geschrieben werden und danach den Kanal
+für die Eingabe schließen. Das nutzt die Sudo-Passwort-Funktion (Spec 0018),
+weil ein Einzelkommando kein Terminal hat.
 
-pub struct PtySize {
-    pub cols: u16,
-    pub rows: u16,
-}
+**4.3 Ausgabegrenze.** Die eingesammelte Ausgabe je Kommando ist auf 2 MiB
+begrenzt. Wird die Grenze erreicht, wird der Kanal geschlossen, die Ausgabe
+endet mit dem Hinweis `[Output truncated: exceeded limit]`, und das Ergebnis
+ist als abgeschnitten gekennzeichnet (Spec 0043).
 
-#[async_trait]
-pub trait SshTransport: Send + Sync {
-    async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError>;
-    async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError>;
-    async fn disconnect(&mut self) -> Result<(), SshError>;
-}
+**4.4 Interaktives Terminal.** Die Shell wird mit Terminal-Typ `xterm-256color`
+geöffnet, die Größe wird beim Öffnen übergeben und kann später geändert werden.
+Gelesen wird ein freier Datenstrom; Ende des Kanals meldet sich als leere
+Antwort, danach gilt die Sitzung als getrennt (Spec 0017).
 
-#[async_trait]
-pub trait InteractiveShell: Send {
-    async fn write(&mut self, data: &[u8]) -> Result<(), SshError>;
-    async fn read(&mut self) -> Result<Vec<u8>, SshError>; // blockiert bis Daten verfügbar oder EOF
-    async fn resize(&mut self, size: PtySize) -> Result<(), SshError>;
-}
-```
+**4.5 Trennen.** Trennen schließt die Verbindung samt aller Kanäle. Ein Fehler
+dabei lässt die Sitzung trotzdem als beendet gelten.
 
-Eine Verbindung entsteht über eine freie Funktion, nicht Teil des Traits
-selbst (Verbindungsaufbau braucht Auth-Auflösung, siehe Abschnitt 6):
+## 5. Jump-Hosts
 
-```rust
-pub async fn connect(
-    target: &ConnectionTarget,
-    credentials: &dyn CredentialStore,
-    host_keys: &dyn HostKeyStore,
-) -> Result<Box<dyn SshTransport>, SshError>;
-```
+Hat ein Server im Profil einen Jump-Host (Spec 0003), wird die Kette vom
+äußersten Jump-Host bis zum Ziel aufgelöst und in dieser Reihenfolge
+verbunden:
 
-## 5. Jump-Host-Verkettung
+- Zum ersten Hop gibt es eine TCP-Verbindung. Jeder weitere Hop wird durch
+  einen Tunnel-Kanal der vorherigen Verbindung erreicht, darüber läuft ein
+  eigener SSH-Handshake. Es entsteht kein weiterer TCP-Socket vom eigenen
+  Rechner aus.
+- Jeder Hop meldet sich mit der **eigenen** Anmeldeart und den eigenen
+  Zugangsdaten an; nichts von einem Hop wird an einen anderen weitergereicht.
+- Jeder Hop hat eine **eigene** Host-Key-Prüfung (Abschnitt 6). Ein
+  unbekannter Schlüssel auf der Bastion wird ebenso einzeln abgefragt wie
+  der des Ziels.
+- Eine Kette, die auf sich selbst zurückführt, endet vor jedem Netzwerkzugriff
+  mit dem Fehler „Jump-Host-Zyklus". Ein Jump-Host, der nicht mehr gefunden
+  wird, endet mit einem Verbindungsfehler, der ihn nennt.
+- Der lokale Pseudo-Server kann kein Jump-Host sein (Spec 0032).
 
-`ConnectionTarget` wird aus einem `Server`-Profil (Spec 0003) rekursiv über
-dessen `jump_host`-Feld aufgelöst, vom äußersten Jump-Host zum eigentlichen
-Ziel:
+Befehle, Dateizugriffe und das Terminal laufen auf dem **letzten** Hop; die
+Zwischenverbindungen bleiben so lange offen wie die Sitzung.
 
-```rust
-pub struct ConnectionTarget {
-    pub hops: Vec<Hop>, // erster Eintrag = erster Sprung, letzter = eigentliches Ziel
-}
+## 6. Host-Key-Prüfung (Trust on First Use)
 
-pub struct Hop {
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub auth: AuthMethod,
-}
-```
+Smart SSH akzeptiert **nie** einen unbekannten oder geänderten Host-Key
+von selbst.
 
-Verbindungsaufbau: TCP-Verbindung zum ersten Hop, SSH-Handshake. Für jeden
-weiteren Hop wird **kein neuer TCP-Socket** geöffnet, sondern ein
-`direct-tcpip`-Channel über die bereits bestehende SSH-Verbindung zum
-nächsten Hop aufgebaut, und darüber wiederum ein SSH-Handshake geführt
-(Standard-Technik für SSH-Tunneling durch Bastions). Zirkelerkennung bei der
-Auflösung der `jump_host`-Kette aus dem `ProfileStore` ist Pflicht (siehe
-bereits etabliertes Muster aus `effective_notes()` in Spec 0003) — eine
-zyklische Jump-Host-Kette darf nicht zu einer Endlosschleife führen, sondern
-muss einen Fehler liefern.
+**6.1 Ablauf.** Der Schlüssel wird während des Handshakes geprüft, **bevor** die
+Anmeldung beginnt: Zugangsdaten gehen nie an einen Server, dessen Schlüssel
+nicht bestätigt ist. Das Ergebnis ist eines von drei:
 
-## 6. Host-Key-Verifikation (Trust-on-First-Use)
+- **Bekannt.** Der gespeicherte Schlüssel für diesen Host, diesen Port und diesen
+  Schlüsselalgorithmus stimmt überein; der Aufbau läuft ohne Rückfrage weiter.
+- **Unbekannt.** Für Host und Port ist (für diesen Algorithmus) noch kein
+  Schlüssel gespeichert. Der Aufbau hält an, der Nutzer sieht Host:Port und den
+  Fingerprint und entscheidet. Erst mit „Vertrauen" wird der Schlüssel
+  gespeichert und der Aufbau von vorn wiederholt; bei einer Kette folgt für
+  jeden weiteren unbekannten Hop eine eigene Abfrage.
+- **Geändert.** Für Host, Port und Algorithmus ist ein anderer Schlüssel
+  gespeichert. Das ist ein harter Stopp mit eigener, deutlich strengerer
+  Warnung (Abschnitt 6.3).
 
-Sicherheitsrelevanter Teil, analog im Transparenz-Prinzip zur Filter-Engine:
-**kein automatisches Akzeptieren unbekannter oder geänderter Host-Keys.**
+**6.2 Fingerprint und Schlüsseltyp.** Der Fingerprint wird als `SHA256:` mit
+Base64 angezeigt, wie ihn `ssh-keygen -l` und OpenSSH-Clients ausgeben, sodass
+er sich mit einer Angabe des Server-Betreibers vergleichen lässt. Beide
+Abfragen zeigen zusätzlich den Schlüsseltyp (z. B. `ssh-ed25519`), damit der
+Nutzer Host:Port, Fingerprint und Typ gegen eine Quelle außerhalb der
+Verbindung halten kann. Lässt sich der Typ nicht lesen, entfällt die Zeile.
+Der Typ ist rein anzeigend und fließt nie in die Entscheidung ein. Präsentiert
+der Server ein Host-Zertifikat, zählt der darin enthaltene Schlüssel.
 
-```rust
-pub enum HostKeyDecision {
-    Trusted,
-    Unknown { fingerprint: String },
-    Mismatch { expected_fingerprint: String, actual_fingerprint: String },
-}
+**6.3 Dialog.**
 
-pub trait HostKeyStore: Send + Sync {
-    fn check(&self, host: &str, port: u16, key: &[u8]) -> HostKeyDecision;
-    fn trust(&self, host: &str, port: u16, key: &[u8]) -> Result<(), SshError>;
-}
-```
+- *Unbekannt:* Überschrift „Unbekannter Host", Host:Port, Fingerprint,
+  Schlüsseltyp, Schaltflächen „Ablehnen" und „Vertrauen".
+- *Geändert:* rot gestalteter Warndialog „Host-Schlüssel geändert" mit dem
+  Hinweis auf einen möglichen Man-in-the-Middle-Angriff und der
+  Gegenüberstellung „Bekannt" und „Jetzt angeboten"; Schaltflächen
+  „Verbindung abbrechen" und „Trotzdem vertrauen". Der Anfangsfokus liegt auf
+  der ablehnenden Schaltfläche; Escape lehnt ab (Spec 0100).
 
-Verhalten:
-- `Trusted` → Verbindung geht normal weiter.
-- `Unknown` → Verbindungsaufbau pausiert, UI zeigt den Fingerprint zur
-  expliziten Bestätigung (wie bei der ersten Verbindung zu einem neuen
-  Server üblich). Erst nach Nutzer-Bestätigung wird `trust()` aufgerufen und
-  der Verbindungsaufbau fortgesetzt.
-- `Mismatch` → **harter Stopp, keine einfache Bestätigung wie bei `Unknown`.**
-  Ein geänderter Host-Key ist ein möglicher Hinweis auf einen
-  Man-in-the-Middle-Angriff. Die UI muss das prominent und unmissverständlich
-  als Warnung darstellen (deutlich strenger gestaltet als ein normaler
-  Bestätigungsdialog), bevor ein Nutzer den neuen Key explizit als korrekt
-  markieren kann (z. B. weil der Server tatsächlich neu aufgesetzt wurde).
-- Beide Abfragen zeigen neben Host:Port und Fingerprint den Schlüsseltyp
-  (Algorithmus-Name, z. B. `ssh-ed25519`) des angebotenen Schlüssels, damit
-  der Nutzer alle drei Angaben mit einer Referenz außerhalb der Verbindung
-  vergleichen kann. Lässt sich der Typ nicht bestimmen, entfällt die Zeile.
-  Der Typ ist rein anzeigend und fließt nicht in die Entscheidung ein.
+**6.4 Entscheidung.**
 
-Die konkrete Speicherung bekannter Host-Keys (eigene Tabelle in
-`persistence-sqlite`, oder klassische `known_hosts`-Datei) ist nicht Teil
-dieser Spec, sondern folgt in einer eigenen kleinen Ergänzung zu Spec 0004,
-sobald dieses Modul steht. Für dieses Modul zählt nur: `HostKeyStore` ist ein
-Trait, sodass die Verbindungslogik unabhängig von der konkreten Speicherung
-entwickelt und getestet werden kann.
+- „Ablehnen"/„Verbindung abbrechen", Escape und eine ungelöste Abfrage nach
+  einer Stunde gelten als Ablehnung. Die Verbindung wird
+  nicht aufgebaut, der Schlüssel nicht gespeichert; der Fehler trägt den Code
+  `SSH_HOST_KEY_NOT_TRUSTED` bzw. beim Ablauf die Meldung „Die Host-Key-Abfrage
+  für host:port ist abgelaufen. Die Verbindung wurde nicht aufgebaut, dem
+  Schlüssel wird nicht vertraut."
+- „Vertrauen" speichert den Schlüssel. Bei „geändert" ersetzt der neue Schlüssel
+  den alten desselben Algorithmus, sodass der alte, womöglich kompromittierte
+  Schlüssel nicht weiter gilt. Schlüssel anderer Algorithmen desselben Hosts
+  bleiben nebeneinander bestehen.
 
-## 7. Fehlerbehandlung
+**6.5 Wo die Abfrage erscheint.** Dieselbe Abfrage erscheint bei jedem
+Verbindungsaufbau: aus der Serverliste, bei „Verbindung testen" im Server-Formular
+(nach „Vertrauen" wird erneut getestet) und für eine von einem externen
+MCP-Client ausgelöste Verbindung (Spec 0028). Sie steht über der Oberfläche,
+auch wenn gerade ein anderer Tab aktiv ist. Ein Neuladen der Oberfläche
+während der Abfrage lässt die wartende Verbindung nicht verschwinden: sie
+bleibt als „wartet auf Host-Key" in der Sitzungsliste (Spec 0017).
 
-```rust
-pub enum SshError {
-    ConnectionFailed(String),
-    AuthenticationFailed,
-    HostKeyRejected,
-    ChannelError(String),
-    Timeout,
-    JumpHostCycle,
-    CredentialResolutionFailed(String),
-}
-```
+**6.6 Ablage.** Bekannte Schlüssel liegen dauerhaft in einer Datei im
+App-Datenverzeichnis, je Eintrag Host, Port und Schlüssel, getrennt nach
+Algorithmus. Host und Port gelten so, wie sie im Profil stehen; es gibt keine
+Zuordnung zwischen verschiedenen Schreibweisen oder Aliasen desselben Servers.
+Unter Unix ist die Datei nur für den Besitzer lesbar. Sie wird atomar
+geschrieben; ein Schreibfehler bei „Vertrauen" bricht die Verbindung ab, statt
+den Schlüssel nur für diese Sitzung zu merken. Eine nicht lesbare oder defekte
+Datei verhindert den App-Start mit einer Fehlermeldung; sie wird nie
+stillschweigend durch eine leere ersetzt.
 
-## 8. Testbarkeit
+Das Server-Formular zeigt die für Host und Port gespeicherten Schlüssel
+(Algorithmus und Fingerprint) schreibgeschützt an.
 
-Zwei Ebenen, bewusst getrennt:
+## 7. Fehler und Zeitgrenzen
 
-- **Unit-Tests (Standard, laufen immer bei `cargo test`)**: reine Logik ohne
-  echtes Netzwerk — Jump-Host-Ketten-Auflösung inkl. Zirkelerkennung,
-  Host-Key-Entscheidungslogik (`Trusted`/`Unknown`/`Mismatch`) gegen einen
-  In-Memory-`HostKeyStore`, Fehler-Mapping. Nutzt Mock-Implementierungen von
-  `SshTransport`/`HostKeyStore`.
-- **Integrationstests (separat markiert, z. B. eigenes Test-Target oder
-  `#[ignore]` per Default)**: echter Verbindungsaufbau, Exec- und
-  PTY-Modus, Jump-Host-Verkettung end-to-end — gegen einen **in-process
-  `russh`-Server**, der als Test-Fixture in der Test-Crate selbst hochgefahren
-  wird (kein externer Docker-Container nötig). Das hält den normalen
-  `cargo test`-Lauf schnell, ermöglicht aber trotzdem echte Protokolltests
-  ohne manuelle Infrastruktur.
+Ein Verbindungsfehler trägt eine Kategorie, damit die Oberfläche eine
+verständliche Meldung zeigen kann (Texte und Codes: Spec 0069, Spec 0024):
 
-## 9. Offene Punkte
+| Kategorie | Bedeutung |
+|---|---|
+| Verbindung fehlgeschlagen | allgemeiner Fehler beim Aufbau |
+| Verbindung abgelehnt | Port zu oder kein SSH-Dienst dort |
+| Host nicht gefunden | Name nicht auflösbar |
+| Host nicht erreichbar | keine Route |
+| Verbindung beendet | Gegenseite hat den Aufbau abgebrochen |
+| Anmeldung fehlgeschlagen | Server hat die Zugangsdaten abgelehnt |
+| Host-Key abgelehnt | siehe Abschnitt 6 |
+| Zeitüberschreitung | eine Zeitgrenze (unten) ist abgelaufen |
+| Jump-Host-Zyklus | siehe Abschnitt 5 |
+| Zugangsdaten nicht auflösbar | Eintrag fehlt oder ist ungültig |
+| Secret-Speicher nicht erreichbar | der Speicher der Zugangsdaten hat nicht geantwortet (Spec 0098, Spec 0101) |
+| Kanalfehler | Fehler bei einem Kommando, einer Shell oder einem Dateizugriff |
+| Sitzung verloren | eine bereits aufgebaute Verbindung ist abgerissen |
+| fehlende Rechte | Dateizugriff ohne die nötigen Rechte (Spec 0020) |
 
-- SFTP-Unterstützung (Datei-Up-/Download) ist nicht Teil dieser Spec — falls
-  später gewünscht, eigene Spec.
-- Reconnect-Verhalten bei Verbindungsabbruch mitten in einer Session (z. B.
-  Netzwerkwechsel): aktuell nicht spezifiziert, vermutlich manueller
-  Reconnect-Button im MVP statt automatischer Retry-Logik.
-- Wiederverwendung einer offenen Verbindung über mehrere Server-Tabs/Sessions
-  hinweg (Connection-Pooling) vs. eine Verbindung pro Tab — MVP-Annahme:
-  eine Verbindung pro geöffnetem Server-Tab, kein Pooling, der Sache halber
-  einfacher zu debuggen.
+Je Hop gilt eine Zeitgrenze von 10 Sekunden für Verbindung und Handshake und
+60 Sekunden für die Anmeldung. Um den gesamten Versuch liegt ein
+Sicherheitsnetz, das mit der Zahl der Hops wächst. Das Warten auf eine
+Host-Key-Entscheidung zählt nicht dazu und kann nie als „vertraut"
+enden. Scheitert das Lesen von Zugangsdaten in einer Kette, nennt die Meldung den
+betroffenen Hop als `Benutzer@Host:Port`.
+
+Jeder Schritt des Aufbaus (Namensauflösung, TCP-Verbindung, Tunnel, Handshake,
+Host-Key-Prüfung, Anmeldung, Sitzung bereit) wird mit Dauer und Ergebnis in ein
+Schritt-Protokoll geschrieben, das im Fehlerfall und beim Verbindungstest
+zugeklappt unter der Meldung steht (ADR 0110). Es enthält keine
+Zugangsdaten, nur die Art der Anmeldung, und geht nie in die Log-Datei oder den
+Diagnose-Export.
+
+## 8. Prüfbarkeit
+
+Die Zusagen dieser Spec sind ohne echtes Netzwerk prüfbar: Auflösung und
+Zirkelerkennung der Jump-Host-Kette, die Entscheidungslogik „bekannt /
+unbekannt / geändert" und die Abbildung der Fehlerkategorien laufen gegen
+Ersatzimplementierungen des Transports und der Host-Key-Ablage. Echte
+Protokolltests (Einzelkommando, Terminal, Dateizugriff, Kette mit mehreren
+Hops, Host-Key-Abfrage je Hop, Abbruch eines nie endenden Kommandos) laufen in
+einer eigenen Testsuite gegen einen im Testprozess gestarteten SSH-Server; ein
+Docker-Container oder ein externer Server ist dafür nicht nötig.
+
+## 9. Sicherheitszusagen
+
+- Kein unbekannter und kein geänderter Host-Key wird ohne ausdrückliche
+  Entscheidung des Nutzers vertraut; Zeitablauf, Abbruch, Escape und
+  Tab-Schließen sind Ablehnung.
+- Zugangsdaten werden erst gesendet, nachdem der Schlüssel des jeweiligen Hops
+  bekannt oder bestätigt ist.
+- Ein geänderter Schlüssel wird nie wie ein unbekannter behandelt: eigener
+  Dialog, kein „Vertrauen"-Standard, Fokus auf Ablehnen.
+- Jeder Hop einer Kette wird einzeln geprüft; ein bestätigter Hop macht den
+  nächsten nicht vertrauenswürdig.
+- Ein Fehler im Fehlerpfad (Schreibfehler der Ablage, unlesbarer Schlüssel
+  des Servers) endet als Fehler der Verbindung, nie als stilles „vertraut".
+- Das Schritt-Protokoll beobachtet nur; keine Vertrauens- oder
+  Anmeldeentscheidung hängt an ihm.
+
+## 10. Grenzen
+
+- **Kein automatischer Wiederaufbau.** Reißt die Verbindung ab, schlagen
+  Kommandos und Dateizugriffe mit „Sitzung verloren" fehl. Der Tab zeigt
+  „getrennt", sobald das Terminal endet; ohne geöffnetes Terminal bleibt der
+  Statuspunkt auf „verbunden", bis der Tab geschlossen wird (Spec 0017). Der
+  Nutzer schließt den Tab und verbindet neu.
+- **Keine geteilten Verbindungen.** Ein Server-Tab hat seine eigene Verbindung;
+  mehrere Tabs zum selben Server oder ein Pool werden nicht angeboten.
+- **Neuer Algorithmus gilt als „unbekannt".** Hat ein Host bisher nur einen
+  Schlüssel eines Algorithmus gespeichert und bietet er jetzt einen anderen an,
+  erscheint die normale „Unbekannt"-Abfrage, nicht die Warnung „geändert";
+  verglichen wird nur je Algorithmus. Der Fingerprint des anderen gespeicherten
+  Schlüssels wird in der Abfrage nicht gezeigt.
+- **Abbruch ohne Garantie.** Das Schließen eines Kommando-Kanals beendet nur
+  das lokale Warten, nicht den Prozess auf dem Server (Spec 0027).
+- **Host-Key-Datei ohne Austauschformat.** Die Ablage ist keine
+  `known_hosts`-Datei; es gibt keinen Import oder Export der Schlüssel.

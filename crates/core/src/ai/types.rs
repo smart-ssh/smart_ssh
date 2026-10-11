@@ -352,17 +352,44 @@ pub enum ActionParameterKind {
 }
 
 impl ActionSchema {
-    /// Entspricht `AiAction::SuggestCommand` (Spec 0003, Abschnitt 5.2).
+    /// Entspricht `AiAction::SuggestCommand` (Spec 0003, Abschnitt 5.2) —
+    /// deutsche Fassung. Issue #323: ein Kommando je Aufruf, aber mehrere
+    /// Aufrufe in einer Antwort erlaubt. Die englische Fassung mit demselben
+    /// Inhalt ist [`Self::suggest_command_en`]; welche Fassung eine Sitzung
+    /// bekommt, entscheidet die Prompt-Sprache (`app-logic`).
     pub fn suggest_command() -> Self {
         Self {
             name: "suggest_command".to_string(),
-            description: "Schlägt ein einzelnes Shell-Kommando zur Ausführung vor. \
-                Läuft vor jeder Ausführung durch die Filter-Engine; nichts wird \
-                automatisch ausgeführt."
+            description: "Schlägt ein Shell-Kommando zur Ausführung vor — ein Kommando je \
+                Aufruf. Voneinander unabhängige Kommandos dürfen als mehrere Aufrufe in \
+                derselben Antwort vorgeschlagen werden; der Nutzer bestätigt oder lehnt \
+                jedes einzeln ab. Läuft vor jeder Ausführung durch die Filter-Engine; \
+                nichts wird automatisch ausgeführt."
                 .to_string(),
             parameters: vec![ActionParameter {
                 name: "command".to_string(),
                 description: "Das vorzuschlagende Shell-Kommando.".to_string(),
+                kind: ActionParameterKind::String,
+                required: true,
+            }],
+        }
+    }
+
+    /// Englische Fassung von [`Self::suggest_command`] (Issue #323):
+    /// derselbe Name, dasselbe Parameter-Schema, nur Beschreibungstexte auf
+    /// Englisch.
+    pub fn suggest_command_en() -> Self {
+        Self {
+            name: "suggest_command".to_string(),
+            description: "Proposes a shell command for execution — one command per call. \
+                Independent commands may be proposed as several calls in the same \
+                response; the user confirms or rejects each one individually. Runs \
+                through the filter engine before any execution; nothing is executed \
+                automatically."
+                .to_string(),
+            parameters: vec![ActionParameter {
+                name: "command".to_string(),
+                description: "The shell command to propose.".to_string(),
                 kind: ActionParameterKind::String,
                 required: true,
             }],
@@ -402,6 +429,27 @@ impl ActionSchema {
                     required: true,
                 },
             ],
+        }
+    }
+
+    /// Variante von [`Self::propose_note_update`] nur für die Notiz-Anregung
+    /// beim Verbindungsende (Spec 0010, Abschnitt 3): bietet ausschließlich
+    /// die Notiz des Servers selbst an, weder ein `target`-Feld noch eine
+    /// Erwähnung der Gruppe. Der Name bleibt `propose_note_update`, damit die
+    /// Anbieter-Abbildung unverändert greift (Default-Ziel: `current_server`).
+    pub fn propose_server_note_update() -> Self {
+        Self {
+            name: "propose_note_update".to_string(),
+            description: "Schlägt eine Aktualisierung der Kontextnotiz des aktuell verbundenen \
+                Servers vor. Wird immer als Diff zur manuellen Bestätigung angezeigt, nie \
+                automatisch übernommen."
+                .to_string(),
+            parameters: vec![ActionParameter {
+                name: "new_content".to_string(),
+                description: "Vollständiger neuer Notiztext, nicht nur ein Diff.".to_string(),
+                kind: ActionParameterKind::String,
+                required: true,
+            }],
         }
     }
 
@@ -484,6 +532,70 @@ impl ActionSchema {
             ],
         }
     }
+
+    /// English version of [`Self::propose_note_update`] (issue #339): same
+    /// name, parameters, order and `required` flags; only the descriptions
+    /// differ.
+    pub fn propose_note_update_en() -> Self {
+        let mut schema = Self::propose_note_update();
+        schema.description = "Proposes an update to the context note of the currently connected \
+            server or its group. Always shown as a diff for manual confirmation, never applied \
+            automatically."
+            .to_string();
+        schema.parameters[0].description = "Whether the proposal applies to the currently \
+            connected server or to its group. Optional, default: current_server."
+            .to_string();
+        schema.parameters[1].description = "Complete new note text, not just a diff.".to_string();
+        schema
+    }
+
+    /// English version of [`Self::generate_document`] (issue #339).
+    pub fn generate_document_en() -> Self {
+        let mut schema = Self::generate_document();
+        schema.description = "Creates a standalone formatted document (report, summary, \
+            analysis, documentation, export). MUST be called when the user asks for a \
+            document, report, a summary as a file, an analysis or a Word/Markdown export, \
+            instead of outputting the document content as plain chat text."
+            .to_string();
+        schema.parameters[0].description = "Short title of the document, also used as the \
+            basis for the suggested file name."
+            .to_string();
+        schema.parameters[1].description = "Complete document content as Markdown (headings, \
+            paragraphs, bold/italic, lists)."
+            .to_string();
+        schema
+    }
+
+    /// English version of [`Self::read_remote_file`] (issue #339).
+    pub fn read_remote_file_en() -> Self {
+        let mut schema = Self::read_remote_file();
+        schema.description = "Reads the content of a file on the connected server over SFTP. \
+            Runs through the filter engine like a command and can be blocked by user rules or \
+            require confirmation. Better suited than a `cat` command for larger text files (no \
+            escaping risk, a clear size limit instead of truncated command output)."
+            .to_string();
+        schema.parameters[0].description =
+            "Absolute path of the file to read on the server.".to_string();
+        schema
+    }
+
+    /// English version of [`Self::write_remote_file`] (issue #339).
+    pub fn write_remote_file_en() -> Self {
+        let mut schema = Self::write_remote_file();
+        schema.description = "Writes a file on the connected server over SFTP (creates it or \
+            overwrites an existing one). Runs through the filter engine like a command, but is \
+            ALWAYS shown to the user for confirmation with a change preview and never executed \
+            automatically. For existing files a backup copy is created automatically before \
+            writing. Better suited than a `cat <<EOF` command for config files: no shell \
+            quoting risk with special characters/quotes/`$` variables, and the user sees a real \
+            diff instead of just the raw command text."
+            .to_string();
+        schema.parameters[0].description =
+            "Absolute path of the file to write on the server.".to_string();
+        schema.parameters[1].description =
+            "Complete new file content, not just a diff.".to_string();
+        schema
+    }
 }
 
 /// Alle in Spec 0003/0012/0020 definierten `AiAction`-Varianten als
@@ -498,6 +610,18 @@ pub fn default_action_schemas() -> Vec<ActionSchema> {
         ActionSchema::generate_document(),
         ActionSchema::read_remote_file(),
         ActionSchema::write_remote_file(),
+    ]
+}
+
+/// English counterpart of [`default_action_schemas`] (issue #339): same
+/// tools, parameters and order, all descriptions in English.
+pub fn english_action_schemas() -> Vec<ActionSchema> {
+    vec![
+        ActionSchema::suggest_command_en(),
+        ActionSchema::propose_note_update_en(),
+        ActionSchema::generate_document_en(),
+        ActionSchema::read_remote_file_en(),
+        ActionSchema::write_remote_file_en(),
     ]
 }
 
@@ -553,6 +677,37 @@ mod tests {
     /// Löschen/Umbenennen/Verzeichnis-Anlegen angeboten werden — diese
     /// Operationen bleiben ausschließlich über `suggest_command()` (also
     /// mit voller Filter-Engine- und Hard-Blacklist-Prüfung) erreichbar.
+    /// Issue #323: beide Fassungen beschreiben ein Kommando je Aufruf und
+    /// erlauben mehrere Aufrufe je Antwort; „einzelnes"/„single" begrenzt die
+    /// Antwort nicht mehr. Name und Parameter-Schema sind identisch.
+    #[test]
+    fn test_suggest_command_descriptions_allow_several_calls_per_response() {
+        let de = ActionSchema::suggest_command();
+        let en = ActionSchema::suggest_command_en();
+        assert!(de.description.contains("ein Kommando je Aufruf"));
+        assert!(de
+            .description
+            .contains("mehrere Aufrufe in derselben Antwort"));
+        assert!(!de.description.contains("einzelnes"));
+        assert!(en.description.contains("one command per call"));
+        assert!(en
+            .description
+            .contains("several calls in the same response"));
+        assert!(!en.description.to_lowercase().contains("single"));
+        assert_eq!(de.name, en.name);
+        assert_eq!(de.parameters.len(), en.parameters.len());
+        for (d, e) in de.parameters.iter().zip(&en.parameters) {
+            assert_eq!(
+                (&d.name, &d.kind, d.required),
+                (&e.name, &e.kind, e.required)
+            );
+        }
+        for german in ["ä", "ö", "ü", "ß", "Kommando", "Aufruf"] {
+            assert!(!en.description.contains(german), "{german:?}");
+            assert!(!en.parameters[0].description.contains(german), "{german:?}");
+        }
+    }
+
     #[test]
     fn test_default_action_schemas_excludes_delete_rename_mkdir() {
         let schemas = default_action_schemas();

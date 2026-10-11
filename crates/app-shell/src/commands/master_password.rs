@@ -226,7 +226,7 @@ pub enum StartupScreen {
     /// „Beenden", **kein** „Neu anfangen" — über den Inhalt ist nichts
     /// gesagt, und morgen ist die Datei vielleicht wieder lesbar.
     UnreachableWrapping,
-    /// Teil 0 Frage 3 / A13: Schlüsselbund-Modus, aber der Zustand steht
+    /// §2 Frage 3 / A13: Schlüsselbund-Modus, aber der Zustand steht
     /// nicht — der Start ist in D1 gelandet und soll mit dem Einrichten
     /// eines Master-Passworts im Fenster weitergehen.
     SetUpMasterPassword,
@@ -290,7 +290,7 @@ fn decide_startup_screen(
     match health {
         // Keine Verpackungsdatei: Schlüsselbund-Modus. Dass der Zustand
         // trotzdem nicht steht, heißt, dass der Start in D1 gelandet ist
-        // (Teil 0 Frage 3).
+        // (§2 Frage 3).
         H::Absent => StartupScreenDecision {
             screen: StartupScreen::SetUpMasterPassword,
             offers_start_over: false,
@@ -640,7 +640,7 @@ async fn assemble_and_open_the_gate(
     Ok(startup_state(gate, pending))
 }
 
-/// Die Antwort auf einen Startdialog im Fenster (Teil 0 Frage 3).
+/// Die Antwort auf einen Startdialog im Fenster (§2 Frage 3).
 ///
 /// Das neue Master-Passwort kommt getrennt mit — es gehört nicht in das
 /// Ereignis, mit dem gefragt wurde (§6: kein Passwort in einem DTO).
@@ -745,7 +745,13 @@ fn check_set_up_preconditions(
     warning_confirmed: bool,
     open_root_key_fingerprint: &[u8; 32],
     read_key: impl FnOnce() -> ssh_manager_core::crypto::RootKeyState,
-) -> Result<(master_password::LossWarning, [u8; 32]), CommandError> {
+) -> Result<
+    (
+        master_password::LossWarning,
+        ssh_manager_core::crypto::RootKey,
+    ),
+    CommandError,
+> {
     let warning = loss_warning(warning_confirmed);
     if warning != master_password::LossWarning::ConfirmedByTheUser {
         return Err(to_command_error(
@@ -982,7 +988,7 @@ mod tests {
             decide_startup_screen(Some(H::Absent), 0).screen,
             StartupScreen::SetUpMasterPassword,
             "keine Verpackungsdatei und trotzdem kein Zustand: der Start ist in D1 gelandet \
-             (Teil 0 Frage 3)"
+             (§2 Frage 3)"
         );
         assert_eq!(
             decide_startup_screen(Some(H::Usable), 0).screen,
@@ -1144,7 +1150,7 @@ mod tests {
         std::fs::remove_file(&wrapping).expect("entfernen");
         master_password::set_up_master_password(
             &db_path,
-            &[7u8; 32],
+            &ssh_manager_core::crypto::RootKey::for_tests([7u8; 32]),
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
             master_password::LossWarning::ConfirmedByTheUser,
@@ -1196,7 +1202,7 @@ mod tests {
         let db_path = dir.path().join("smart-ssh.db");
         master_password::set_up_master_password(
             &db_path,
-            &[9u8; 32],
+            &ssh_manager_core::crypto::RootKey::for_tests([9u8; 32]),
             &SecretString::from("Passwort-0101-lang"),
             &SecretString::from("Passwort-0101-lang"),
             master_password::LossWarning::ConfirmedByTheUser,
@@ -1277,7 +1283,7 @@ mod tests {
         );
     }
 
-    fn key_state(key: [u8; 32]) -> ssh_manager_core::crypto::RootKeyState {
+    fn key_state(key: ssh_manager_core::crypto::RootKey) -> ssh_manager_core::crypto::RootKeyState {
         ssh_manager_core::crypto::RootKeyState::Present(key)
     }
 
@@ -1285,7 +1291,7 @@ mod tests {
     /// der Schlüsselbund wird nicht einmal gelesen.
     #[test]
     fn test_set_up_without_confirmation_is_rejected_before_the_keychain_is_read() {
-        let key = [3u8; 32];
+        let key = ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]);
         let fp = ssh_manager_core::crypto::root_key_fingerprint(&key);
         let read = std::cell::Cell::new(false);
         let err = check_set_up_preconditions(false, &fp, || {
@@ -1305,9 +1311,13 @@ mod tests {
     /// Datenbank wird mit `KEYCHAIN_KEY_MISMATCH` abgelehnt.
     #[test]
     fn test_set_up_with_a_foreign_keychain_key_is_rejected_with_mismatch() {
-        let fp = ssh_manager_core::crypto::root_key_fingerprint(&[3u8; 32]);
-        let err = check_set_up_preconditions(true, &fp, || key_state([4u8; 32]))
-            .expect_err("fremder Schlüssel abgelehnt");
+        let fp = ssh_manager_core::crypto::root_key_fingerprint(
+            &ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]),
+        );
+        let err = check_set_up_preconditions(true, &fp, || {
+            key_state(ssh_manager_core::crypto::RootKey::for_tests([4u8; 32]))
+        })
+        .expect_err("fremder Schlüssel abgelehnt");
         assert_eq!(err.code, Some(KEYCHAIN_KEY_MISMATCH_CODE));
     }
 
@@ -1315,7 +1325,9 @@ mod tests {
     #[test]
     fn test_set_up_without_a_readable_keychain_key_is_rejected() {
         use ssh_manager_core::crypto::RootKeyState;
-        let fp = ssh_manager_core::crypto::root_key_fingerprint(&[3u8; 32]);
+        let fp = ssh_manager_core::crypto::root_key_fingerprint(
+            &ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]),
+        );
         for state in [
             RootKeyState::NotFound,
             RootKeyState::Invalid,
@@ -1330,11 +1342,11 @@ mod tests {
     /// Der Erfolgsfall: Bestätigung da, Kennung passt — K wird zurückgegeben.
     #[test]
     fn test_set_up_preconditions_pass_for_the_key_the_database_is_open_with() {
-        let key = [3u8; 32];
+        let key = ssh_manager_core::crypto::RootKey::for_tests([3u8; 32]);
         let fp = ssh_manager_core::crypto::root_key_fingerprint(&key);
-        let (warning, got) =
-            check_set_up_preconditions(true, &fp, || key_state(key)).expect("zugelassen");
+        let (warning, got) = check_set_up_preconditions(true, &fp, || key_state(key.duplicate()))
+            .expect("zugelassen");
         assert_eq!(warning, master_password::LossWarning::ConfirmedByTheUser);
-        assert_eq!(got, key);
+        assert_eq!(got.expose(), key.expose());
     }
 }

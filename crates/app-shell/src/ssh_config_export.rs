@@ -1,4 +1,4 @@
-//! Export nach `ssh_config` (Spec 0075, §3.2, §7.4).
+//! Export nach `ssh_config` (Spec 0075, §3.2, §3.2).
 //!
 //! Öffnet den nativen Speichern-unter-Dialog **im Backend** (dasselbe
 //! Vertrauensgefälle wie beim Import, s. `ssh_config_apply`-Moduldoc: das

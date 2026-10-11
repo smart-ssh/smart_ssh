@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
-use ssh_manager_core::filter::FilterEngine;
 
 use crate::events::TestEmitter;
 use crate::test_support::log_capture;
@@ -43,9 +42,10 @@ impl AiProvider for TextProvider {
 }
 
 fn attach_second_opinion(session: &mut Session, provider: impl AiProvider + 'static) {
-    session.parts_mut_for_tests().risk_second_opinion_provider = Some(Box::new(provider));
-    session.parts_mut_for_tests().risk_second_opinion_budget =
-        Some(Arc::new(ai_providers::ProviderBudgetGuard::new()));
+    session.set_risk_second_opinion_provider_for_tests(Some(Box::new(provider)));
+    session.set_risk_second_opinion_budget_for_tests(Some(Arc::new(
+        ai_providers::ProviderBudgetGuard::new(),
+    )));
 }
 
 fn find<'a>(
@@ -86,12 +86,10 @@ async fn propose_with_second_opinion(
     provider: impl AiProvider + 'static,
     command: &str,
 ) -> Vec<(String, serde_json::Value)> {
-    let mut session = test_session(
+    let mut session = test_session_allowing_everything(
         vec![AiEvent::Done],
         MockSshTransport::default().with_response(command, output("ok")),
     );
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
     attach_second_opinion(&mut session, provider);
     let emitter = TestEmitter::default();
     let profile_store = InMemoryProfileStore::default();
@@ -205,10 +203,9 @@ async fn test_unavailable_second_opinion_never_lowers_rule_based_red() {
 // --- Injection-Check -------------------------------------------------------
 
 fn session_with_injection_check(provider: impl AiProvider + 'static) -> Session {
-    let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
-    session.parts_mut_for_tests().filter_engine =
-        Box::new(FilterEngine::new(AllowEverythingPolicyStore));
-    session.parts_mut_for_tests().injection_check_provider = Some(Box::new(provider));
+    let mut session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    session.set_injection_check_provider_for_tests(Some(Box::new(provider)));
     session
 }
 

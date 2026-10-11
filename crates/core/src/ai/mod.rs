@@ -14,6 +14,7 @@
 
 mod fencing;
 pub mod keywords;
+mod live_redaction;
 mod provider;
 mod redactor;
 #[cfg(test)]
@@ -29,13 +30,15 @@ mod types;
 mod tests;
 
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
+pub use live_redaction::LiveOutputRedactor;
 pub use provider::AiProvider;
 pub use redactor::{
     default_log_redactor, DefaultOutputRedactor, OutputRedactor, REDACTED_PLACEHOLDER,
 };
 pub use second_opinion::{truncate_for_second_opinion, DEFAULT_SECOND_OPINION_MAX_LEN};
 pub use types::{
-    default_action_schemas, ActionParameter, ActionParameterKind, ActionSchema, AiError, AiEvent,
-    ChatMessage, MessageContent, ProviderId, ProviderType, RejectionReason, Role, SessionContext,
-    WebActivity, WebActivityKind, WebSource, WEB_CONTENT_MAX_CHARS,
+    default_action_schemas, english_action_schemas, ActionParameter, ActionParameterKind,
+    ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, ProviderId, ProviderType,
+    RejectionReason, Role, SessionContext, WebActivity, WebActivityKind, WebSource,
+    WEB_CONTENT_MAX_CHARS,
 };

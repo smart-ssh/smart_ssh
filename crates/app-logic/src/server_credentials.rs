@@ -253,14 +253,14 @@ fn write_or_reuse_secret(
 }
 
 /// Welche Schlüsselbund-Einträge zu einer [`AuthMethod`] gehören — die
-/// **eine** Stelle, an der diese Zuordnung steht (Spec 0082, §5).
+/// **eine** Stelle, an der diese Zuordnung steht (Spec 0082, §4).
 ///
 /// Vorher gab es sie zweimal: als Paarliste in einem `cleanup_abandoned_
 /// slots` („ist die neue Art dieselbe wie die alte?") und in
 /// [`delete_auth_method_secrets`]. Die Paarliste hatte einen impliziten
 /// `false`-Zweig — fehlte dort das Paar für eine `AuthMethod`-Variante,
 /// galt schon das bloße **Bearbeiten** eines solchen Servers als Wechsel,
-/// und seine Secrets wurden gelöscht (Spec 0076, §7.1: genau das war
+/// und seine Secrets wurden gelöscht (ADR 0065, Review-Fund: genau das war
 /// einmal passiert). Dieses `match` hat keinen solchen Zweig: Eine neue
 /// Variante erzwingt hier einen Compilerfehler.
 ///
@@ -349,7 +349,7 @@ fn remove_obsolete_secret(
 /// alte Wert unter dem Sudo-Slot stehen, statt geleert zu werden — ein
 /// verwaister Eintrag, der ab da als Sudo-Passwort gälte. Das ist der
 /// gewollte Tausch: ein Eintrag zu viel statt ein Credential zu wenig. S.
-/// Spec 0082 §9 (K1) und `docs/adr/0081`.
+/// Spec 0082 §8 (K1) und `docs/adr/0081`.
 pub(crate) fn cleanup_replaced_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
@@ -633,7 +633,7 @@ pub fn delete_auth_method_secrets(
     credential_store: &dyn CredentialStore,
     auth: &AuthMethod,
 ) -> Vec<CredentialRef> {
-    // Spec 0082, §5: dieselbe Zuordnung, die auch das Aufräumen nach einem
+    // Spec 0082, §4: dieselbe Zuordnung, die auch das Aufräumen nach einem
     // Methodenwechsel benutzt — sie steht nur noch an einer Stelle.
     auth_method_credential_refs(auth)
         .into_iter()
@@ -961,7 +961,7 @@ mod tests {
         }
     }
 
-    /// **Spec 0076, §7.1 — die Stelle, die still brach.**
+    /// **Spec 0076, A-5 (ADR 0065) — die Stelle, die still brach.**
     ///
     /// Damals zählte ein `cleanup_abandoned_slots` Paare von Anmeldearten
     /// auf, um „ist das dieselbe Art?" zu beantworten, mit einem impliziten

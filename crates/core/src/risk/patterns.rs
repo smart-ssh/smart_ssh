@@ -277,6 +277,29 @@ pub(super) fn server_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static 
                 RiskLevel::Red,
                 "Fork-Bombe",
             ),
+            // Issue #255: the exact form above only matches a command that
+            // is nothing but the fork bomb. Chained (`…;:(){ :|:& };:`),
+            // substituted (`$(…)`) or wrapped (`sudo …`) it slipped through
+            // as "no risk"; the unanchored pattern also catches it inside a
+            // longer command and with varying whitespace. Additive: the
+            // exact entry stays.
+            (
+                Regex(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:".to_string()),
+                RiskLevel::Red,
+                "Fork-Bombe",
+            ),
+            // Issue #318: the same bomb under any function name. The `regex`
+            // crate has no backreferences, so "same name" is not enforced:
+            // the body must be `ident | ident &` (a pipe followed by a
+            // background `&`) and be followed by a call. Benign definitions
+            // (`f(){ g | h; }`, no trailing `&`) don't match.
+            (
+                Regex(
+                    r"[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\|\s*[A-Za-z_][A-Za-z0-9_]*\s*&\s*\}\s*;?\s*[A-Za-z_]".to_string(),
+                ),
+                RiskLevel::Red,
+                "Fork-Bombe",
+            ),
             (
                 Glob("shutdown*".to_string()),
                 RiskLevel::Red,
