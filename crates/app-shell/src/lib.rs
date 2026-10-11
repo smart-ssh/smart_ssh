@@ -660,6 +660,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // kein Feld von `AppState`, damit der Kanal auch dann hier bleibt,
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
+        .manage(crate::commands::CopyContentJobs::default())
         // Issue #89: local paths the user granted to a session (native open
         // dialog, native drop, own edit copy). The drop paths come from the
         // window's native drag-and-drop event below, never from the webview.
@@ -789,6 +790,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_rename,
             commands::sftp_mkdir,
             commands::sftp_read_text,
+            commands::sftp_copy_content,
+            commands::sftp_cancel_copy_content,
             commands::sftp_exists,
             commands::sftp_stat,
             commands::sftp_chmod,

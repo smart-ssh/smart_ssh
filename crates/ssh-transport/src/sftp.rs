@@ -10,7 +10,7 @@ use russh::client::Handle;
 use russh_sftp::client::error::Error as RusshSftpError;
 use russh_sftp::client::SftpSession as RusshSftpClient;
 use russh_sftp::protocol::{FileAttributes, StatusCode};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
 
@@ -218,6 +218,42 @@ impl SftpSession for RusshSftpSession {
             .read(path)
             .await
             .map_err(|e| self.map_error(path, e))
+    }
+
+    async fn read_file_capped(
+        &mut self,
+        path: &str,
+        max_bytes: u64,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<Vec<u8>, SshError> {
+        // Issue #357: anders als `read_file` (`SftpSession::read` liest bis
+        // zum Ende) hört dieser Pfad nach `max_bytes` auf, auch wenn die
+        // Datei größer ist. Der Puffer wächst mit dem Gelesenen, nicht mit
+        // der behaupteten Dateigröße.
+        let file = self
+            .inner
+            .open(path)
+            .await
+            .map_err(|e| self.map_error(path, e))?;
+        let mut reader = file.take(max_bytes);
+        let mut out = Vec::new();
+        let mut chunk = vec![0u8; 64 * 1024];
+        loop {
+            let n = reader.read(&mut chunk).await.map_err(|e| {
+                let message = format!("SFTP-Lesefehler bei '{path}': {e}");
+                if is_channel_gone_io(&e) && self.session.is_closed() {
+                    SshError::SessionClosed(message)
+                } else {
+                    SshError::ChannelError(message)
+                }
+            })?;
+            if n == 0 {
+                break;
+            }
+            out.extend_from_slice(&chunk[..n]);
+            progress(out.len() as u64);
+        }
+        Ok(out)
     }
 
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError> {

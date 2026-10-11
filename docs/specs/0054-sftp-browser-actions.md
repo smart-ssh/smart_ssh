@@ -49,8 +49,9 @@ dann die server-verändernden Aktionen.
   rekursiv heruntergeladen und landen als `<Zielordner>/<Ordnername>/…`.
   Jede Datei erscheint als eigene Übertragung mit Fortschritt.
 - **Dateiinhalt kopieren:** Der Text der Datei geht in die Zwischenablage.
-  Binärdateien und Dateien über der Grenze aus Spec 0086 werden mit einer
-  Meldung abgelehnt.
+  Binärdateien und Dateien über der Grenze aus Spec 0086 (50 MB) werden mit
+  einer Meldung abgelehnt; große Dateien zeigen Fortschritt und lassen sich
+  abbrechen.
 - **Pfad kopieren:** der Remote-Pfad in die Zwischenablage.
 - **Eigenschaften:** Name, Pfad, Typ, Größe, Rechte (symbolisch und
   numerisch), Besitzer, Gruppe und Änderungsdatum.

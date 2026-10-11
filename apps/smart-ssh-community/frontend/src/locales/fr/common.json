@@ -563,7 +563,8 @@
     "APP_LOCKED": "Smart SSH est toujours verrouillé. Déverrouillez-le d’abord avec votre mot de passe principal.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Cette opération ne correspond pas à l’endroit où la clé est actuellement conservée. Rien n’a été modifié — rouvrez les paramètres, ils indiquent le mode actif.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L’avertissement sur le mot de passe principal n’a pas été confirmé. Sans ce mot de passe, toutes les données sont perdues et il n’existe aucune récupération — cochez la case et recommencez la configuration. Rien n’a été modifié.",
-    "KEYCHAIN_KEY_MISMATCH": "La clé du trousseau n’appartient pas à cette base de données. Rien n’a été modifié — l’enregistrer rendrait la base illisible au prochain démarrage."
+    "KEYCHAIN_KEY_MISMATCH": "La clé du trousseau n’appartient pas à cette base de données. Rien n’a été modifié — l’enregistrer rendrait la base illisible au prochain démarrage.",
+    "SFTP_CONTENT_TOO_LARGE": "Le fichier dépasse 50 Mo et ne peut pas être copié dans le presse-papiers."
   },
   "mcpServer": {
     "hint": "Des clients MCP externes peuvent l’utiliser pour proposer des commandes, des lectures/écritures de fichiers et des mises à jour de notes sur les serveurs autorisés — chaque demande exige toujours une confirmation dans l’application, indépendamment des règles d’autorisation existantes.",
@@ -1021,7 +1022,9 @@
     "renamePrompt": {
       "renameTitle": "Renommer",
       "newFolderTitle": "Nouveau dossier"
-    }
+    },
+    "copyProgress": "Copie… {{done}} Mo sur {{total}} Mo",
+    "copyProgressUnknownTotal": "Copie… {{done}} Mo"
   },
   "chat": {
     "newChat": "Nouveau chat",
