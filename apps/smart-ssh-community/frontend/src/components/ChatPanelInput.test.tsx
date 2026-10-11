@@ -1,5 +1,5 @@
-// Spec 0055, Teil 1 ("Testbarkeit"): "Enter sendet; Shift+Enter fügt
-// Zeilenumbruch; Feld wächst bis Max, dann intern scrollbar." Eigene Datei
+// Spec 0055, Teil 1: Enter sendet; Shift+Enter fügt einen
+// Zeilenumbruch ein; das Feld wächst bis zu einem Maximum, dann scrollt es intern. Eigene Datei
 // statt einer Erweiterung von `ChatPanel.test.tsx` — jene Datei testet
 // bewusst nur `ChatItemView` isoliert (kein API-Mocking nötig), das
 // Eingabefeld lebt aber in `ChatPanel` selbst, das für einen sinnvollen

@@ -2750,6 +2750,15 @@ const KEYWORD_SAMPLES: &[&str] = &[
     "пароль",
     "закрытый ключ",
     "учетные данные",
+    "パスワード",
+    "秘密鍵",
+    "認証情報",
+    "密码",
+    "私钥",
+    "凭据",
+    "비밀번호",
+    "개인 키",
+    "자격 증명",
 ];
 
 /// Issue #331: per added UI language, the local word for "password" masks
@@ -2807,6 +2816,26 @@ fn test_redactor_masks_value_after_password_word_in_pl_cs_uk_ru() {
     }
 }
 
+/// Issue #335: per added UI language (ja, zh-Hans, ko), the local word for
+/// "password" masks the value after it; harmless text stays untouched.
+#[test]
+fn test_redactor_masks_value_after_password_word_in_ja_zh_ko() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in ["パスワード", "密码", "비밀번호"] {
+        for sep in [": ", "=", ":"] {
+            let out = redactor.redact_text(&format!("{word}{sep}hunter2"));
+            assert!(!out.contains("hunter2"), "{word:?}{sep:?} leaked: {out}");
+        }
+    }
+    for text in [
+        "パスワードを忘れましたか？",
+        "忘记密码了吗？",
+        "비밀번호를 잊으셨나요?",
+    ] {
+        assert_eq!(redactor.redact_text(text), text);
+    }
+}
+
 #[test]
 fn test_redactor_redacts_keywords_of_every_language() {
     let redactor = DefaultOutputRedactor::new();
@@ -2855,6 +2884,48 @@ fn test_redactor_keeps_keyword_text_without_value_unchanged() {
         "PWD=/home/user",
     ] {
         assert_eq!(redactor.redact_text(text), text);
+    }
+}
+
+/// Issue #333: je hinzugefügter Sprache maskiert der Redactor einen Wert
+/// hinter dem Wort für „Passwort“ (Gegenprobe: ohne Wert bleibt der Text).
+#[test]
+fn test_redactor_masks_value_after_password_word_of_nordic_languages() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in ["lösenord", "adgangskode", "kodeord", "passord", "salasana"] {
+        for text in [
+            format!("{word}: hunter2"),
+            format!("{}: hunter2", word.to_uppercase()),
+        ] {
+            let out = redactor.redact_text(&text);
+            assert!(!out.contains("hunter2"), "{word}: leaked: {out}");
+            assert!(out.contains(REDACTED_PLACEHOLDER), "{out}");
+        }
+        assert_eq!(redactor.redact_text(word), word);
+    }
+}
+
+/// Issue #333: Die neuen Listen sind klein geschrieben, ohne Duplikate
+/// innerhalb der Liste und ohne Einträge der englischen Liste.
+#[test]
+fn test_nordic_keyword_lists_are_lowercase_and_distinct_from_english() {
+    let english: &[&str] = keywords::CREDENTIAL_KEYWORDS
+        .iter()
+        .find(|(l, _)| *l == "en")
+        .map(|(_, k)| *k)
+        .expect("en list");
+    for code in ["sv", "da", "nb", "fi"] {
+        let list = keywords::CREDENTIAL_KEYWORDS
+            .iter()
+            .find(|(l, _)| *l == code)
+            .unwrap_or_else(|| panic!("no list for {code}"))
+            .1;
+        let mut seen = std::collections::HashSet::new();
+        for kw in list {
+            assert_eq!(*kw, kw.to_lowercase(), "{code}: {kw}");
+            assert!(!english.contains(kw), "{code}: {kw} duplicates en");
+            assert!(seen.insert(*kw), "{code}: duplicate {kw}");
+        }
     }
 }
 
@@ -3039,6 +3110,54 @@ fn test_redactor_masks_other_credential_words_pt_br_nl() {
         "toegangssleutel",
         "inloggegevens",
         "pincode",
+    ] {
+        let out = redactor.redact_text(&format!("{word}: hunter2"));
+        assert!(!out.contains("hunter2"), "{word}: {out}");
+    }
+}
+
+/// Issue #337: per added UI language (id, vi, hi), the local word for
+/// "password" announces a credential value; counter-case: the word without
+/// a value stays untouched.
+#[test]
+fn test_redactor_masks_value_after_password_word_id_vi_hi() {
+    let redactor = DefaultOutputRedactor::new();
+    for (lang, word) in [("id", "kata sandi"), ("vi", "mật khẩu"), ("hi", "पासवर्ड")]
+    {
+        assert!(
+            keywords::keyword_languages().contains(&lang),
+            "no keyword list for {lang}"
+        );
+        for w in [word.to_string(), word.to_uppercase()] {
+            for sep in [": ", "="] {
+                let out = redactor.redact_text(&format!("{w}{sep}hunter2"));
+                assert!(!out.contains("hunter2"), "{lang}: {out}");
+            }
+        }
+        assert_eq!(
+            redactor.redact_text(&format!("Enter {word}")),
+            format!("Enter {word}")
+        );
+    }
+}
+
+/// Issue #337: further credential words of id, vi and hi.
+#[test]
+fn test_redactor_masks_other_credential_words_id_vi_hi() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in [
+        "frasa sandi",
+        "kunci pribadi",
+        "kredensial",
+        "kode pin",
+        "cụm mật khẩu",
+        "khóa riêng",
+        "thông tin xác thực",
+        "mã pin",
+        "पासफ़्रेज़",
+        "निजी कुंजी",
+        "क्रेडेंशियल",
+        "टोकन",
     ] {
         let out = redactor.redact_text(&format!("{word}: hunter2"));
         assert!(!out.contains("hunter2"), "{word}: {out}");

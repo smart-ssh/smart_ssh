@@ -250,7 +250,7 @@ pub(crate) fn log_openai_round_summary(request_id: Uuid, text_len: usize, reason
     );
 }
 
-/// Spec 0063, Teil 1: warum ein Turn endete — Anthropics `stop_reason`
+/// warum ein Turn endete — Anthropics `stop_reason`
 /// (`message_delta`) bzw. eines OpenAI-kompatiblen Providers `finish_reason`
 /// (`choices[].finish_reason`) wurden vorher nirgends geparst oder geloggt.
 /// Ohne dieses Feld lässt sich ein beobachtetes "KI bricht mitten in der
@@ -1070,7 +1070,7 @@ mod error_logging_tests {
         assert!(log_text.contains("AI_MODEL_NOT_FOUND"));
     }
 
-    /// Spec 0063, Teil 1: `end_turn` (Modell hat bewusst aufgehört) und
+    /// `end_turn` (Modell hat bewusst aufgehört) und
     /// `max_tokens` (Antwort technisch abgeschnitten) müssen im Log klar
     /// unterscheidbar sein — sonst lässt sich ein "KI bricht mitten in der
     /// Antwort ab" nicht einordnen.

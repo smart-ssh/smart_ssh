@@ -1,161 +1,33 @@
 # Spec 0075 — Server-Profile aus `ssh_config` importieren und dorthin exportieren
 
-Status: **freigegeben** · Backlog: BL-0216, BL-0218 · Gate: release-1.0/D
-Repo: **öffentlich** `smart-ssh` — `crates/core/src/profiles/` (Abbildung),
-`crates/app-shell/src/` (Kommandos, Dateizugriff, DTOs), Frontend
-(Vorschau-Dialog)
-**Setzt Spec 0076 voraus** (Anmeldeart `AuthMethod::IdentityFile`); deren
-Umsetzung geht dieser voraus, s. §7.
-Review-Priorität: **ERHÖHT** (der Import erzeugt Server-Profile — die
-Objekte, gegen die später Filterregeln, Risikobewertung und der
-Ausführungspfad laufen — und er öffnet Dateien, deren Pfade aus einer
-fremden Datei stammen; adversariale Fälle in §6.4)
+Status: umgesetzt
+Zweck: Ein Nutzer liest eine `ssh_config` ein, sieht vorab, welche Server-Profile entstehen würden, und kann seine Server wieder als `ssh_config` hinausschreiben. Die Datei enthält keine Geheimnisse; derselbe Leser und Schreiber laufen in beide Richtungen, der Rundlauf prüft beide Seiten zugleich.
+Bezüge: Spec 0076 (Anmeldeart Schlüsseldatei), Spec 0073 (Randzeichen von Zugangsdaten), Spec 0002 (Filter-Engine, Schlagworte als Geltungsbereich), ADR 0074, ADR 0075.
+Review-Priorität: ERHÖHT — der Import erzeugt Server-Profile, gegen die Filterregeln, Risikobewertung und Ausführungspfad laufen, und er öffnet Dateien, deren Pfade aus einer fremden Datei stammen.
 
-> Wer heute umsteigt, tippt jeden Server ab; wer geht, nimmt nichts mit.
-> Beides ändert eine Datei, die jedes Werkzeug liest und die **keine
-> Geheimnisse enthält**: `ssh_config`. Import und Export gehören in eine
-> Spec, weil derselbe Parser in beide Richtungen läuft und der Rundlauf
-> der einzige Test ist, der beide Seiten gleichzeitig prüft.
+## 1. Modell, auf das der Import trifft
 
-## 1. Ausgangslage (belegt)
-
-**Es gibt heute keinen Import und keinen Export.** Gemessen am
-2026-09-23:
-
-```
-$ grep -rlnE "ssh_config|\.ssh/config|SshConfig" --include="*.rs" .
-crates/core/src/risk/tests.rs
-```
-
-Der einzige Treffer ist `crates/core/src/risk/tests.rs:547` — dort steht
-`"cat ~/.ssh/config"` als Beispielkommando in einer Filter-Testvorlage.
-Kein produktiver Lese- oder Schreibpfad.
-
-### 1.1 Das Datenmodell, das der Import füllen muss
-
-`Server` (`crates/core/src/profiles/types.rs:44-79`), die für diese Spec
-erheblichen Felder:
-
-| Feld | Zeile | Bedeutung hier |
-|---|---|---|
-| `name: String` | 46 | Anzeigename — der `Host`-Alias |
-| `host: String` | 47 | Adresse — `HostName` |
-| `port: u16` | 48 | `Port` |
-| `username: String` | 49 | `User` |
-| `group_id: Option<GroupId>` | 50 | Gruppe — §4.5 |
-| `tags: Vec<String>` | 57 | Platzhalter-Zugehörigkeit — §4.5 |
-| `auth: AuthMethod` | 58 | §1.2 |
-| `notes: String` | 60 | unberührt |
-| `jump_host: Option<ServerId>` | 62 | „Bastion/Jump-Host-Verkettung" — `ProxyJump` |
-| `post_ingest_policy` | 67 | Sicherheitsverhalten, **nie aus der Datei** |
-| `ai_injection_check_enabled: bool` | 73 | ebenso |
-| `sftp_server_path: Option<String>` | 76 | unberührt |
-
-`Group` (`types.rs:32-40`) ist über `parent_id: Option<GroupId>`
-verschachtelbar; die Kette liest `ProfileStore::group_chain`
-(`crates/core/src/profiles/store.rs:107`). Auf dieser Verschachtelung
-setzt §4.5 auf.
-
-### 1.2 `IdentityFile` passt nicht ins Modell — das ist der Kern
-
-`AuthMethod` (`types.rs:114-127`) kennt vier Formen:
-`Password { credential_ref }`, `PrivateKey { credential_ref,
-passphrase_ref }`, `Agent`, `Certificate { cert_ref, key_ref }`. Jedes
-`CredentialRef` (`types.rs:137`) ist ein **undurchsichtiger
-Schlüsselbund-Schlüssel**, kein Pfad.
-
-Und was dahinter liegt, ist der Schlüssel **selbst**, nicht sein Ort. Die
-Eingabe heißt `key_content` (`crates/app-shell/src/dto.rs`,
-`AuthMethodInput::PrivateKey { key_content, passphrase }`), und beim
-Verbinden wird genau dieser Inhalt geparst:
-
-```rust
-// crates/ssh-transport/src/auth.rs:69
-let parsed = PrivateKey::from_openssh(key.expose_secret().as_bytes())
-```
-
-**Damit gibt es in Smart SSH heute keine dateibasierte
-Schlüssel-Authentifizierung.** `ssh_config` kennt aber nur den Pfad.
-
-Entschieden (§9, E-2): **Spec 0076 führt sie ein** — eine fünfte Variante
-`AuthMethod::IdentityFile { path, passphrase_ref }`, in der Oberfläche
-wählbar wie jede andere, plus einen Knopf, der eine Schlüsseldatei in einen
-gespeicherten Schlüssel überführt. Diese Spec **benutzt** sie und fragt
-beim Import, welchen Weg der Nutzer will (§3.1.9).
-
-Dass das ohne Wanderung geht, ist gemessen: `auth_method` liegt als **JSON**
-in einer Textspalte (`crates/persistence-sqlite/migrations/0001_initial.sql:31`
-— „JSON-serialisiertes AuthMethod-Enum"), serialisiert über
-`auth_method_to_json`/`_from_json` (`crates/persistence-sqlite/src/mapping.rs:9-17`).
-Eine zusätzliche Variante braucht deshalb **keine Schema-Änderung** — und
-kein eigenes Feld neben der Anmeldeart, in dem derselbe Pfad ein zweites
-Mal stünde.
-
-### 1.3 Was beim Anlegen eines Servers **nicht** geprüft wird
-
-Gemessen in `crates/app-shell/src/servers.rs:33-80` und
-`crates/app-shell/src/dto.rs:492-521`:
-
-- **Kein Pflichtfeld-Check.** Weder `name` noch `host` werden auf
-  nicht-leer geprüft.
-- **Keine Namenseindeutigkeit.** Kein Konflikt-Check, keine
-  `UNIQUE`-Einschränkung.
-- **Keine Zyklusprüfung der Jump-Host-Kette.** Sie existiert nur beim
-  Verbindungsaufbau: `crates/core/src/ssh/jump_host.rs:27-29`,
-  `if !visited.insert(jump_id) { return Err(SshError::JumpHostCycle); }`.
-- Geprüft wird: `normalize_sftp_server_path` (servers.rs:41), die
-  Auflösung der Geheimnisse in den Schlüsselbund mit Rollback
-  (servers.rs:44-54, 75-78) und — im dünnen Wrapper, nicht in
-  `create_server` — `reject_local_jump_host`
-  (`crates/app-shell/src/commands.rs:2527-2535`, Code
-  `SERVER_JUMP_HOST_LOCAL`).
-
-Das ist heute vertretbar, weil jeder Server einzeln von Hand entsteht.
-**Ein Import kippt diese Voraussetzung**: Eine Datei aus fremder Hand
-legt beliebig viele Profile auf einmal an. Die Prüfungen, die bisher der
-Mensch im Formular war, muss deshalb der Import mitbringen (§3.1.7,
-§3.1.8).
-
-### 1.4 Vorhandene Wege, auf denen diese Spec aufsetzt
-
-- Der lokale Pseudo-Server ist `ServerId(Uuid::nil())`, erkennbar an
-  `app_shell::local_server::is_local` (`local_server.rs:34`).
-- `servers.jump_host_id` ist ein **Fremdschlüssel** auf `servers(id)`
-  (`crates/persistence-sqlite/migrations/0001_initial.sql:33`). Ein Profil
-  mit `jump_host` lässt sich also erst anlegen, wenn sein Ziel schon
-  existiert — das bestimmt die Einfügereihenfolge beim Import (3.1.11).
+- Ein Server hat Name, Adresse, Port, Benutzername, optional einen Jump-Host (einwertig, ein anderer Server), Schlagworte, genau eine Gruppe und eine Anmeldeart: Passwort, Agent, im Schlüsselbund gespeicherter Schlüssel oder Schlüsseldatei (Spec 0076). Gruppen sind verschachtelbar.
+- Schlagworte sind derselbe Typ wie der Geltungsbereich „Schlagwort" der Filter-Engine (§5.2a).
+- Beim Anlegen von Hand gibt es keine Pflichtfeldprüfung; der Import bringt für den Namen eine mit (§4.3).
+- Eine Jump-Host-Schleife fällt außerhalb des Imports erst beim Verbinden auf; der Import prüft vorab (§5.3).
 
 ## 2. Ziel und Nicht-Ziele
 
-**Ziel.** Ein Nutzer kann eine `ssh_config` einlesen, vorher sehen, was
-entstehen würde, und seine Server wieder hinausschreiben. Der Rundlauf
-ergibt dieselben Profile.
+**Ziel.** Ein Nutzer kann eine `ssh_config` einlesen, vorher sehen, was entstehen würde, und seine Server wieder hinausschreiben. Der Rundlauf ergibt dieselben Profile (Grenzen: §4.4).
 
-**Nicht-Ziele** — ausdrücklich, damit nicht mitrepariert wird:
+**Nicht-Ziele:**
 
-1. **Kein Zugriff auf Termius-Interna.** Termius hat keine dokumentierte
-   Exportfunktion; die Community-Werkzeuge lesen seine verschlüsselte
-   Electron-IndexedDB über einen Remote-Debugging-Port. Darauf setzt hier
-   nichts auf, und empfohlen wird es auch nicht. Wir lesen Dateien, die
-   der Nutzer selbst erzeugt (BL-0216).
-2. **Kein CSV-Import.** Das ist BL-0217 und hängt an einer eigenen
-   Entscheidung über Geheimnisse im Klartext.
-3. **Kein verschlüsseltes Eigenformat.** Das ist BL-0081.
-4. **Keine neue Anmeldeart.** Die Anmeldeart `AuthMethod::IdentityFile`,
-   ihre Oberfläche und der Überführungsknopf sind **Spec 0076**. Diese
-   Spec benutzt sie nur; §7 macht 0076 zur harten Vorbedingung.
-5. **Keine Schlüsseldatei wird ungefragt geöffnet.** Der Import liest eine
-   Schlüsseldatei **nur**, wenn der Nutzer in der Vorschau ausdrücklich
-   Weg (b) gewählt hat, und nur die Dateien, die die Vorschau vorher
-   namentlich genannt hat (§3.1.9, §5.1).
-6. **Kein Geheimnis im Export.** Der Export schreibt nie ein Passwort,
-   eine Passphrase oder Schlüsselmaterial — nur Pfade.
-7. **Keine Verwaltung der echten `~/.ssh/config`.** Wir schreiben nie in
-   die Datei des Nutzers (§3.2.5).
+1. Kein Zugriff auf die Interna anderer Werkzeuge; gelesen werden nur Dateien, die der Nutzer selbst erzeugt.
+2. Kein CSV-Import und kein verschlüsseltes Eigenformat.
+3. Keine neue Anmeldeart; die Schlüsseldatei als Anmeldeart ist Spec 0076.
+4. Keine Schlüsseldatei wird ungefragt geöffnet: nur auf Weg (b) (§3.1.9) und nur die, die die Vorschau vorher namentlich genannt hat (§5.1).
+5. Kein Geheimnis im Export: nie Passwort, Passphrase oder Schlüsselmaterial, nur Pfade.
+6. Keine Verwaltung der echten `~/.ssh/config`; sie wird nie beschrieben (§3.2.5).
 
 ## 3. Anforderungen
 
-### 3.1 Teil A — Import (BL-0216)
+### 3.1 Teil A — Import
 
 **3.1.1** Der Import liest eine vom Nutzer im Dateidialog gewählte Datei
 im OpenSSH-`ssh_config`-Format. Er liest **keine** Datei von sich aus,
@@ -166,20 +38,17 @@ auch nicht `~/.ssh/config`. Weitere Dateien öffnet er nur über
 
 | Direktive | Ziel | Anmerkung |
 |---|---|---|
-| `Host <alias>` | `name` | **je Alias** ein Profil; `Host web1 web2` ergibt zwei |
-| `HostName` | `host` | fehlt sie, gilt der Alias als Adresse (`ssh`-Verhalten) |
-| `Port` | `port` | fehlt sie: 22 |
-| `User` | `username` | fehlt sie: leer |
-| `ProxyJump` | `jump_host` | §3.1.6 |
+| `Host <alias>` | Name | **je Alias** ein Profil; `Host web1 web2` ergibt zwei |
+| `HostName` | Adresse | fehlt sie, gilt der Alias als Adresse (`ssh`-Verhalten) |
+| `Port` | Port | fehlt sie: 22 |
+| `User` | Benutzername | fehlt sie: leer |
+| `ProxyJump` | Jump-Host | §3.1.6 |
 | `IdentityFile` | Anmeldeart | der Nutzer wählt, §3.1.9 |
 | `Include` | Untergruppe | §3.1.4 |
 
 **Randzeichen.** Von jedem übernommenen Wert werden am **Rand** dieselben
 unsichtbaren Zeichen entfernt, die Spec 0073 für Zugangsdaten festlegt.
-Die Liste existiert bereits als `INVISIBLE_CREDENTIAL_EDGE_CHARS`
-(`crates/core/src/profiles/credentials.rs:17`, re-exportiert in
-`profiles/mod.rs:17-18`) — sie wird **benutzt**, nicht abgeschrieben,
-sonst steht dieselbe Tatsache an zwei Stellen. Nicht weil es
+Es ist dieselbe Liste wie dort. Nicht weil es
 Zugangsdaten wären — 0073 gilt ausdrücklich nur für die —, sondern damit
 ein aus einer Webseite kopierter `HostName` nicht an einem unsichtbaren
 Zeichen scheitert. Die **Zeichenliste** wird geteilt, nicht der
@@ -194,7 +63,7 @@ einzelnen Server und wird **nicht** als Profil angelegt. Stattdessen:
 - Seine Werte gelten als Vorgabe für alle passenden konkreten Blöcke,
   nach der OpenSSH-Regel „**der erste gewinnt**": Der zuerst gelesene
   Wert für eine Direktive bleibt stehen.
-- Jeder passende Server erhält das Muster als **Schlagwort** (`tags`),
+- Jeder passende Server erhält das Muster als **Schlagwort** (Schlagwörter),
   wörtlich, also `*.prod.de`. Passt ein Server auf mehrere Muster, erhält
   er mehrere Schlagworte. **Aus einem Platzhalterblock entsteht niemals
   eine Gruppe** — Gruppen kommen ausschließlich aus Dateien (§4.5).
@@ -205,7 +74,7 @@ Die Vorschau zeigt bei jedem betroffenen Feld, aus welchem Block der
 Wert stammt.
 
 **3.1.4 `Include` wird gefolgt, und jede eingebundene Datei wird eine
-Untergruppe.** Entschieden in §9/E-4.
+Untergruppe.** Entschieden in der Entscheidung zu `Include`.
 
 - **Pfade werden nicht eingeschränkt.** Absolute Pfade, `~` und `..`
   sind zulässig. Ein relativer Pfad wird relativ zum **Verzeichnis der
@@ -225,7 +94,7 @@ Untergruppe.** Entschieden in §9/E-4.
   darin führt auf Tiefe 1. Ein `Include` auf Tiefe 3 wird nicht mehr
   gefolgt, sondern als nicht übernommen gemeldet (3.1.5).
 - **Keine Anzahlgrenze für Dateien** — wohl aber die Gesamtgrenzen aus
-  §3.3, die über alle Dateien zusammen gelten (§9/E-4).
+  §3.3, die über alle Dateien zusammen gelten (der Entscheidung zu `Include`).
 - **Keine Schleifen.** Jede Datei wird je Import **höchstens einmal**
   gelesen; entschieden über den aufgelösten, kanonischen Pfad. Ein
   zweites Vorkommen wird übersprungen und gemeldet — das erschlägt sowohl
@@ -256,42 +125,40 @@ Gemeldet wird der **Name** der Direktive, also das erste Wort der Zeile,
 ein Direktivenname aus (nicht `[A-Za-z][A-Za-z0-9-]{0,31}`), lautet die
 Meldung `unlesbare Zeile` mit der Zeilennummer und sonst nichts.
 
-Stillschweigend verschlucken bleibt ausgeschlossen (BL-0216,
-Akzeptanz) — der Nutzer erfährt **dass** und **wo** etwas nicht
+Stillschweigend verschlucken ist ausgeschlossen: der Nutzer erfährt **dass** und **wo** etwas nicht
 übernommen wurde, nur eben nicht den Inhalt.
 
-**3.1.6 `ProxyJump`** bildet auf `jump_host: Option<ServerId>` ab:
+**3.1.6 `ProxyJump`** bildet auf den Jump-Host des Servers ab:
 
 - Ein einzelner Hop, dessen Ziel im selben Import (über alle Dateien
-  hinweg) oder bereits im Bestand vorkommt → `jump_host` zeigt darauf.
+  hinweg) oder bereits im Bestand vorkommt → Jump-Host zeigt darauf.
 - **Mehrere Hops** (`ProxyJump a,b,c`): Unser Modell kettet über je ein
-  `jump_host` **pro Server**, kann eine Kette also nur darstellen, indem
-  es `jump_host` **an den Zwischenstationen** setzt.
+  Jump-Host **pro Server**, kann eine Kette also nur darstellen, indem
+  es Jump-Host **an den Zwischenstationen** setzt.
 
   **Die Richtung gehört hingeschrieben, sonst rät sie jemand.** In
   OpenSSH ist `a` der **zuerst** kontaktierte Hop; bei uns zeigt
-  `jump_host` auf den Hop, **über den** ein Server erreicht wird. Für
+  Jump-Host auf den Hop, **über den** ein Server erreicht wird. Für
   `Host x` mit `ProxyJump a,b,c` entstehen also genau diese Kanten:
 
   ```
-  x.jump_host = c
-  c.jump_host = b
-  b.jump_host = a
-  a.jump_host = (nicht gesetzt)
+  x springt über c
+  c springt über b
+  b springt über a
+  a springt über niemanden
   ```
 
   „Zwischenstation" meint im Folgenden `a`, `b` und `c` — alle in der
   `ProxyJump`-Zeile genannten Hosts, auch `a`, an dem am Ende kein
-  `jump_host` steht. Daraus folgen zwei harte Bedingungen, ohne die der
+  Jump-Host steht. Daraus folgen zwei harte Bedingungen, ohne die der
   Import bestehende Profile verändern oder Unmögliches versuchen würde:
 
   1. **Alle Zwischenstationen entstehen in diesem Import neu.** Liegt
      auch nur eine schon im Bestand, wird die Kette **nicht** angelegt —
      sie zu bauen hieße, ein fremdes Profil zu ändern, und das verbietet
      3.1.8.
-  2. **Für das `jump_host` einer Zwischenstation gibt es genau eine
-     Quelle.** `jump_host` ist einwertig (`types.rs:62`,
-     `Option<ServerId>`). Eine zweite Quelle entsteht auf zwei Wegen, und
+  2. **Für das Jump-Host einer Zwischenstation gibt es genau eine
+     Quelle.** Der Jump-Host eines Servers ist einwertig. Eine zweite Quelle entsteht auf zwei Wegen, und
      beide zählen: wenn `b` in **zwei Ketten** mit verschiedenen
      Vorgängern vorkommt, **oder** wenn `b` in seinem **eigenen**
      `Host`-Block ein `ProxyJump` trägt (`Host x` mit `ProxyJump a,b`
@@ -304,14 +171,13 @@ Akzeptanz) — der Nutzer erfährt **dass** und **wo** etwas nicht
 - **Schleifen** (`a` über `b`, `b` über `a`, oder länger, auch über
   mehrere Dateien): Der Import legt sie **nicht** an und meldet
   `ProxyJump` bei **allen** beteiligten Einträgen als nicht übernommen.
-  Heute fällt eine Schleife erst beim Verbinden auf
-  (`jump_host.rs:27-29`); der Import zieht die Prüfung nach vorn (§5.3).
+  Außerhalb des Imports fällt eine Schleife erst beim Verbinden auf; der Import prüft vorab (§5.3).
 - Ein Hop, der sich nicht auflösen lässt (Host weder in einer der
   gelesenen Dateien noch im Bestand, oder `user@host:port`-Form ohne
   zugehöriges Profil) → nicht übernommen, gemeldet.
 - `ProxyJump none` → kein Jump-Host.
 - Zeigt ein Hop auf den lokalen Pseudo-Server, wird er abgelehnt
-  (bestehende Regel `SERVER_JUMP_HOST_LOCAL`).
+  (Fehler „Jump-Host darf nicht der lokale Server sein").
 
 **3.1.7 Vorschau vor dem Anlegen.** Der Nutzer sieht die vollständige
 Liste der Profile, die entstehen würden, samt Feldern, Herkunft der
@@ -321,7 +187,7 @@ Werte (3.1.3), gelesenen Dateien (3.1.4), nicht übernommenen Direktiven
 abwählen. Bricht er ab, entsteht nichts.
 
 **3.1.8 Kein Überschreiben.** Existiert bereits ein Server mit gleichem
-`name` **oder** gleicher Kombination aus `host`, `port` und `username`,
+Name **oder** gleicher Kombination aus Adresse, Port und Benutzername,
 wird nicht überschrieben. Die Vorschau zeigt den Konflikt; der Nutzer
 wählt je Eintrag: überspringen (Vorgabe) oder als neues Profil mit
 abweichendem Namen anlegen.
@@ -334,7 +200,7 @@ einzeln je Eintrag. Voreingestellt ist (a), weil nur dieser Weg keine
 einzige zusätzliche Datei öffnet:
 
 **(a) Als Schlüsseldatei übernehmen** *(Vorgabe)*. Der Server bekommt
-`AuthMethod::IdentityFile { path, passphrase_ref: None }` (Spec 0076).
+Anmeldeart „Schlüsseldatei" (Pfad, ohne Passphrase-Verweis) (Spec 0076).
 Der Pfad wird **unverändert** übernommen — kein `realpath`, keine
 Existenzprüfung, kein Auflösen von `~` (§4.6). **Die Datei bleibt
 ungeöffnet.** Später überführt der Nutzer sie mit einem Knopfdruck in
@@ -350,7 +216,7 @@ einen gespeicherten Schlüssel, wenn er will (Spec 0076).
 **(b) Schlüssel einlesen und im Schlüsselbund ablegen.** Beim
 **Bestätigen** des Imports — nicht in der Vorschau — wird jede betroffene
 Datei **einmal** gelesen und ihr Inhalt in den Schlüsselbund gelegt; der
-Server bekommt `AuthMethod::PrivateKey`. Dabei gilt:
+Server bekommt „im Schlüsselbund gespeicherter Schlüssel". Dabei gilt:
 
   - Die Vorschau nennt **vorher** jede Datei, die dabei geöffnet würde,
     mit vollem Pfad, und wie viele es insgesamt sind.
@@ -358,7 +224,7 @@ Server bekommt `AuthMethod::PrivateKey`. Dabei gilt:
     OpenSSH-Schlüssel ist, lässt den Import **nicht** scheitern: Dieser
     eine Server fällt auf Weg (a) zurück und die Meldung sagt, warum.
   - **Ein verschlüsselter Schlüssel wird verschlüsselt übernommen**
-    (Spec 0076, C-4: der Dateiinhalt geht byte-gleich in den
+    (Spec 0076: der Dateiinhalt geht byte-gleich in den
     Schlüsselbund). **Nach einer Passphrase wird beim Import nicht
     gefragt.** Die Vorschau sagt bei solchen Einträgen, dass die
     Passphrase nachzutragen ist, bevor die erste Verbindung gelingt.
@@ -366,7 +232,7 @@ Server bekommt `AuthMethod::PrivateKey`. Dabei gilt:
     nicht in den Plan, nicht in die Datenbank, nicht in ein Log
     (§5.1, §6.4.1).
 
-**(c) Nicht übernehmen.** Der Server bekommt `AuthMethod::Agent`,
+**(c) Nicht übernehmen.** Der Server bekommt Agent,
 `IdentityFile` erscheint unter „nicht übernommen" (3.1.5).
 
 Mehrere `IdentityFile`-Zeilen in einem Block: Der erste Wert gewinnt, die
@@ -380,17 +246,12 @@ Vorgabe „überspringen") — auch keine zweite Gruppe.
 in einem bestätigten Import fehl, bleibt kein halb angelegter Zustand:
 Bereits erzeugte Profile **und Gruppen** dieses Laufs werden
 zurückgenommen, und die Meldung nennt den fehlgeschlagenen Eintrag. Das
-entspricht dem bestehenden Rollback-Verhalten in `servers.rs:44-54`.
+entspricht dem Rollback-Verhalten beim Anlegen von Hand.
 
-**Reihenfolge:** `servers.jump_host_id` ist ein Fremdschlüssel auf
-`servers(id)` (§1.4). Jump-Host-**Ziele** werden deshalb vor den
-Profilen angelegt, die auf sie zeigen. `groups.parent_id` ist ebenfalls
-ein Fremdschlüssel (`0001_initial.sql:16`), und §4.5 baut einen
-mehrstufigen Baum — also: **Elterngruppen vor Untergruppen, Gruppen vor
-ihren Servern, Jump-Host-Ziele vor ihren Nutzern.**
+**Reihenfolge:** Jump-Host-Ziele werden vor den Profilen angelegt, die auf sie zeigen, Elterngruppen vor Untergruppen, Gruppen vor ihren Servern.
 
 **3.1.12 Keine Sicherheitseinstellung aus der Datei.** Der Import setzt
-`post_ingest_policy` und `ai_injection_check_enabled` **ausschließlich**
+die Nachprüfungs-Richtlinie für Ausgaben und die Injection-Prüfung der KI **ausschließlich**
 auf die Vorgabewerte des Produkts. Keine Direktive und kein Kommentar
 darf sie beeinflussen (§5.2).
 
@@ -399,13 +260,13 @@ nichts anlegen, wenn: die gewählte Datei nicht lesbar ist, in keiner
 gelesenen Datei ein `Host`-Block gefunden wird, oder eine Grenze aus
 §3.3 überschritten ist.
 
-### 3.2 Teil B — Export (BL-0218)
+### 3.2 Teil B — Export
 
 **3.2.1** Exportiert werden je Server: `Host <name>`, `HostName <host>`,
 `Port <port>` (wenn ≠ 22), `User <username>` (wenn nicht leer),
 `ProxyJump <Alias des Jump-Hosts>` (wenn gesetzt) und `IdentityFile
 <pfad>` — Letzteres genau dann, wenn die Anmeldeart des Servers
-`AuthMethod::IdentityFile` ist (Spec 0076).
+„Schlüsseldatei" ist (Spec 0076).
 
 **`ProxyJump` nennt den Alias, nicht den Namen.** Wurde der Jump-Host
 beim Export nach §4.3 umbenannt (Leerzeichen im Namen, Kollision), trägt
@@ -415,15 +276,15 @@ scheitert.
 
 **3.2.2 Kein Geheimnis in der Datei.** Nie ein Passwort, nie eine
 Passphrase, nie Schlüsselmaterial. Ein Server mit
-`AuthMethod::Password` verliert beim Export seine Anmeldung — das ist
+Passwort verliert beim Export seine Anmeldung — das ist
 beabsichtigt und wird als Kommentar vermerkt (3.2.3).
 
 **3.2.3 Was sich nicht abbilden lässt, wird benannt.** Gruppen,
 Schlagworte, Notizen, Filterregeln, Risiko-Einstellungen,
-`post_ingest_policy`, `ai_injection_check_enabled`, `sftp_server_path`
+Nachprüfungs-Richtlinie, Injection-Prüfung, Startverzeichnis und SFTP-Pfad
 und die Art der Anmeldung haben in `ssh_config` kein Gegenstück. Das
 trifft ausdrücklich auch den Server, dessen Schlüssel **im
-Schlüsselbund** liegt (`AuthMethod::PrivateKey`): Für ihn gibt es keinen
+Schlüsselbund** liegt („im Schlüsselbund gespeicherter Schlüssel"): Für ihn gibt es keinen
 Pfad, den wir schreiben könnten, also steht im Kommentar, dass sein
 Schlüssel in der Datei fehlt und woher er stammt. Diese Angaben
 erscheinen als Kommentarzeilen über dem jeweiligen Block, beginnend mit
@@ -431,7 +292,7 @@ erscheinen als Kommentarzeilen über dem jeweiligen Block, beginnend mit
 Datei. Diese Kommentare sind **Hinweis, kein Format**: Der Import liest
 sie nicht zurück (§4.4).
 
-**3.2.4** Der lokale Pseudo-Server (`is_local`, `local_server.rs:34`)
+**3.2.4** Der lokale Pseudo-Server 
 wird **nicht** exportiert; er ist kein SSH-Ziel.
 
 **3.2.5 Keine bestehende Datei wird überschrieben.** Der Export schreibt
@@ -458,7 +319,7 @@ kennt.
 
 Eine Datei aus fremder Hand darf Smart SSH nicht lahmlegen. Die Grenzen
 gelten **über alle gelesenen Dateien zusammen**, nicht je Datei — sonst
-umginge eine Kette von `Include`-Dateien jede einzelne (§9/E-4). Wird
+umginge eine Kette von `Include`-Dateien jede einzelne (der Entscheidung zu `Include`). Wird
 eine überschritten, bricht der Import mit verständlicher Meldung ab und
 legt nichts an.
 
@@ -471,105 +332,36 @@ legt nichts an.
 | `Include`-Tiefe | 3 (§3.1.4) |
 | Anzahl eingebundener Dateien | unbegrenzt |
 
-## 4. Design
+## 4. Abbildung und Darstellung
 
-### 4.1 Wo der Code liegt
+### 4.1 Lesen und Dateizugriff
 
-Die Abbildung von geparsten Blöcken auf `Server`/`Group` ist **reine
-Logik** und gehört nach `crates/core/src/profiles/ssh_config/` — ohne
-Tauri, ohne Dateisystem. Sie nimmt **drei** Eingaben entgegen und gibt
-einen Importplan zurück: die Liste bereits gelesener Dateien (Pfad +
-Inhalt), den **bestehenden Bestand** an Servern und Gruppen und die
-**bestehenden Filterregeln**.
+Der Parser liest selbst keine Dateien; er liefert Blöcke und rohe `Include`-Werte. Das Öffnen der gewählten und der eingebundenen Dateien geschieht getrennt davon, unter den Regeln aus §3.1.4, §3.1.4a und §3.3. Die Grenzen aus §3.3 greifen, bevor Inhalt in den Parser geht.
 
-Die letzten beiden sind keine Zutat, sondern Voraussetzung: Ohne den
-Bestand lassen sich weder Konflikte (3.1.8) noch `ProxyJump`-Ziele im
-Bestand (3.1.6) bestimmen, ohne die Regeln nicht die Schlagwort-Treffer
-(5.2a). Läge diese Arbeit stattdessen in `app-shell`, liefen Vorschau
-und Plan wieder auseinander — genau das, was dieser Abschnitt
-verhindert.
+### 4.2 Parser
 
-**Das Lesen der Dateien, inklusive `Include`-Auflösung, macht
-`app-shell`** — es ist der einzige Teil, der das Dateisystem anfasst, und
-genau der Teil, der Grenzen und Schleifenerkennung durchsetzt. Damit
-bleibt die Architekturregel gewahrt („`core` never depends on Tauri")
-**und** die gesamte Abbildungslogik ist ohne Dateisystem testbar.
-
-Die Abbildung erzeugt **keinen** Server, sondern einen **Plan**: eine
-Liste beabsichtigter Profile und Gruppen mit Herkunft, Konflikten und
-nicht übernommenen Direktiven. Genau dieser Plan ist die Vorschau
-(3.1.7), und genau er wird bestätigt ausgeführt. Damit können Vorschau
-und Ergebnis nicht auseinanderlaufen — sie sind dasselbe Objekt.
-
-### 4.2 Parser: eigener, zeilenweiser Parser
-
-**Es gibt keine Parser-Abhängigkeit.** E-1 hatte eine vorgesehen
-(`ssh2-config`), aber ausdrücklich unter der Bedingung, dass §7.0 ihr
-Verhalten vorher **misst**. Die Messung ist gefahren und fiel schlecht aus
-(§9/M-1, Befunde im Einzelnen); damit greift der zweite Zweig, den §7.0
-selbst vorschreibt: **`crates/core/src/profiles/ssh_config/` bringt einen
-eigenen, zeilenweisen Parser mit** — er kennt genau die Direktiven aus
-§3.1.2, gibt für alles andere Name und Zeilennummer zurück (§3.1.5),
-behandelt `Match` als Blockgrenze, liefert `Include` als **Rohwert** und
-liest selbst **keine** Dateien (§4.1). Was daran im Einzelnen hängt —
-Schlüsselwortliste für §3.1.4a, Musterabgleich, geteilte Zitierroutine —
-steht in §9/Q-1 und ist verbindlich.
-
-Die Grenzen aus §3.3 setzen wir in **jedem** Fall selbst davor, bevor
-Inhalt in den Parser geht.
-
-`Match` wird in dieser Spec **nicht** ausgewertet: Es hängt von Laufzeit
-und Umgebung ab (`exec`, `originalhost`, `user`), also von Dingen, die
-zum Importzeitpunkt niemand kennt. `Match`-Blöcke werden als nicht
-übernommen gemeldet (3.1.5).
+- Erkannt werden genau die Direktiven aus §3.1.2, ohne Rücksicht auf Groß-/Kleinschreibung; Werte bleiben unverändert. Anführungszeichen und `=` als Trenner werden nach OpenSSH-Regeln gelesen, Kommentare und Leerzeilen ändern nichts.
+- Ob eine eingebundene Datei eine `ssh_config` ist (§3.1.4a), entscheidet eine feste Liste bekannter Schlüsselwörter (`Host`, `Match`, `Include` gehören dazu), nicht die bloße Form des ersten Worts. Die Liste muss nicht vollständig sein: Eine Lücke führt höchstens dazu, dass eine dünn besetzte echte Datei übersprungen und mit Pfad gemeldet wird — die Richtung, in der nichts nach außen gelangt. Die Form des Direktivennamens (§3.1.5) entscheidet nur, ob innerhalb einer anerkannten Datei ein Name oder „unlesbare Zeile" gemeldet wird.
+- `Match` wird nicht ausgewertet, weil es von Laufzeit und Umgebung abhängt. Es ist eine **Blockgrenze**: Es beendet den laufenden `Host`-Block, keine Zeile darin wirkt auf ein Profil. `Match` und jede Direktive darin werden nach §3.1.5 gemeldet (Name, Zeilennummer, kein Wert). Beispiel: `Host a` / `User x`, danach `Match host b` / `User y` ergibt für `a` den Benutzer `x`. Ein `Include` innerhalb eines `Match`-Blocks wird gemeldet, nicht gefolgt.
+- Platzhalter nur in der letzten Pfadkomponente eines `Include`; weiter vorne wird gemeldet. Ein ungültiger `Port` fällt auf 22 zurück **und** erscheint unter „nicht übernommen".
+- `Host`-Muster kennen genau `*`, `?` und `!` (OpenSSH-Semantik). Eckige oder geschweifte Klammern sind wörtliche Zeichen: `Host web[1` ist ein wörtlicher Name, `Host web[1-9]` trifft nicht `web3`. Der Musterabgleich ist unabhängig von der Muster-Grammatik der Filter-Engine, weil ein importiertes Schlagwort wörtlich zu einem Geltungsbereich der Filter-Engine wird (§5.2a).
+- Leser und Schreiber teilen die Zitier- und Trennerregeln. Damit der Rundlauf sie nicht allein belegt, prüft §6.3.2 den Export mit `ssh` selbst, und zwar mit einem Wert, der Anführungszeichen erzwingt.
 
 ### 4.3 Namen
 
-Import: Der `Host`-Alias wird `name`. Ist er **schon vergeben**, greift
-3.1.8. Ist er **leer** — auch erst nach dem Randzeichen-Trim aus §3.1.2,
-siehe §6.4.7 (c) —, wird **kein Profil angelegt**, sondern der Block als
-nicht übernommen gemeldet (3.1.5). Beim Anlegen von Hand greift heute
-kein Pflichtfeld-Check (§1.3); der Import bringt ihn mit, weil er sonst
-namenlose Profile in Serie erzeugen könnte.
+Import: Der `Host`-Alias wird der Name. Ist er schon vergeben, greift §3.1.8. Ist er leer — auch erst nach dem Randzeichen-Trim aus §3.1.2 —, wird **kein Profil angelegt**, sondern der Block als nicht übernommen gemeldet (§3.1.5).
 
-Export: Ein Alias darf keine Leerzeichen, kein `#`, keine
-Anführungszeichen und keine Platzhalter enthalten. Regel: Zeichen
-außerhalb `[A-Za-z0-9._-]` werden zu `-`, Mehrfach-`-` zusammengezogen,
-Ränder beschnitten; ist das Ergebnis leer, wird `server-<n>` benutzt;
-bei Kollision wird `-2`, `-3` … angehängt. Die Abbildung wird gemeldet
-(3.2.7).
+Export: Ein Alias darf keine Leerzeichen, kein `#`, keine Anführungszeichen und keine Platzhalter enthalten. Regel: Zeichen außerhalb `[A-Za-z0-9._-]` werden zu `-`, Mehrfach-`-` zusammengezogen, Ränder beschnitten; ist das Ergebnis leer, wird `server-<n>` benutzt; bei Kollision wird `-2`, `-3` … angehängt. Die Abbildung wird gemeldet (§3.2.7).
 
-**Werte** brauchen eine eigene Regel, nicht nur Aliase: Ein `username`
-mit Leerzeichen ist möglich (§6.1.5 liest ihn ausdrücklich ein). Beim
-Export wird ein Wert, der Leerzeichen, `#` oder `"` enthält, nach
-OpenSSH-Regeln in Anführungszeichen gesetzt und ein enthaltenes `"`
-maskiert. Ohne diese Regel erzeugt ein solcher Server eine Datei, die
-§3.2.6 nicht besteht.
+Werte folgen einer eigenen Regel: Ein Wert, der Leerzeichen, `#` oder `"` enthält, wird nach OpenSSH-Regeln in Anführungszeichen gesetzt und ein enthaltenes `"` maskiert; sonst bestünde die erzeugte Datei §3.2.6 nicht.
 
-### 4.4 Warum der Import die eigenen Kommentare nicht zurückliest
+### 4.4 Der Import liest die eigenen Kommentare nicht zurück
 
-Man könnte Gruppen und Schlagworte in `# smart-ssh:`-Kommentare
-schreiben und beim Import wieder herausziehen. Das wäre ein
-**verstecktes Eigenformat in fremder Kleidung**: Eine Datei sähe aus wie
-eine `ssh_config`, trüge aber Bedeutung, die nur wir kennen — und ein
-Nutzer, der sie von Hand bearbeitet, zerstörte sie unbemerkt. Das eigene
-Austauschformat ist BL-0081 und darf sich als solches zu erkennen geben.
-Verworfen.
-
-**Folge, ehrlich benannt:** Der Rundlauf (§6.3.3) erhält Name, Adresse,
-Port, Benutzer, Jump-Host-Kette und den Schlüsselpfad — **nicht**
-Gruppe, Schlagworte und Notizen. Die Meldung nach dem Export sagt das
-(3.2.3).
+Gruppen und Schlagworte werden nicht in `# smart-ssh:`-Kommentare geschrieben und zurückgelesen: Das wäre ein verstecktes Eigenformat in einer Datei, die wie eine `ssh_config` aussieht. Folge: Der Rundlauf (§6.3.3) erhält Name, Adresse, Port, Benutzer, Jump-Host-Kette und Schlüsselpfad — **nicht** Gruppe, Schlagworte und Notizen. Die Meldung nach dem Export sagt das (§3.2.3).
 
 ### 4.5 Gruppen kommen nur aus Dateien, Platzhalter immer aus Schlagworten
 
-Entschieden (§9/E-3). `ssh_config` kennt weder Gruppen noch Schlagworte;
-beides müssen wir ableiten, und ein Server kann bei uns nur in **einer**
-Gruppe liegen. Zwei Kandidaten für diese eine Gruppe standen zur Wahl:
-die Herkunftsdatei und der Platzhalterblock.
-
-**Die Datei gewinnt**, weil sie eindeutig ist: Jede Zeile stammt aus
-genau einer Datei. Es entsteht:
+Ein Server liegt in genau einer Gruppe. Jede Zeile stammt aus genau einer Datei, daher bestimmt die **Herkunftsdatei** die Gruppe; Platzhalterblöcke werden ausnahmslos Schlagworte (§3.1.3), weil sich Muster überlappen und der Import sonst raten müsste:
 
 ```
 <Dateiname der gewählten Datei>        ← Gruppe des Laufs
@@ -578,59 +370,19 @@ genau einer Datei. Es entsteht:
 └── prod.conf
 ```
 
-Jeder Server liegt in der Gruppe seiner Herkunftsdatei. Die
-Verschachtelung nutzt `Group::parent_id` (`types.rs:35`); die Kette ist
-über `group_chain` (`store.rs:107`) lesbar.
+Jeder Server liegt in der Gruppe seiner Herkunftsdatei; die Verschachtelung folgt der `Include`-Kette.
 
-**Der Platzhalterblock wird ausnahmslos ein Schlagwort** (3.1.3) — es
-gibt keinen Fall, in dem aus einem Platzhalter eine Gruppe wird, und
-keinen, in dem eine Gruppe aus etwas anderem als einer Datei entsteht.
-Das löst das
-Problem, an dem die Gruppenlösung scheitert: Muster überlappen. Ein Host
-passt auf `*.prod.de` **und** auf `*`; als Gruppe müsste der Import
-raten, welche gewinnt, als Schlagwort bekommt der Server schlicht beide.
-Keine Raterei, kein Informationsverlust.
+Existiert der Gruppenname schon, wird eine **neue** Gruppe mit angehängter Nummer angelegt statt in die bestehende zu schreiben, damit sich zwei Importe nicht unbemerkt vermischen. Die Wiederholbarkeit (§3.1.10) bleibt gewahrt, weil bei einem zweiten Import derselben Datei kein Server übrig bleibt und die Gruppe nicht angelegt wird.
 
-Erzeugt der Import eine Gruppe, deren Name schon existiert, wird eine
-**neue** Gruppe mit angehängter Nummer angelegt statt in die bestehende
-hineinzuschreiben — sonst vermischen sich zwei Importe unbemerkt.
-Wiederholbarkeit (3.1.10) bleibt gewahrt, weil bei einem zweiten Import
-derselben Datei ohnehin kein Server übrig bleibt und die Gruppe dann
-gar nicht erst angelegt wird.
+### 4.6 Der Schlüsselpfad steht in der Anmeldeart
 
-### 4.6 Warum kein eigenes Feld neben der Anmeldeart
+Der Pfad einer Schlüsseldatei steht als Zeichenkette in der Anmeldeart, **unverändert**: kein `realpath`, keine Existenzprüfung, kein Auflösen von `~` (`ssh` löst es selbst auf). Es gibt kein zweites Feld daneben, das ihn doppelt führte. Was beim Verbinden mit dem Pfad geschieht, regelt Spec 0076. Nach dem Import auf Weg (a) hat der Nutzer einen Server, der sich wie mit `ssh` per Schlüsseldatei anmeldet, und den Knopf aus Spec 0076, der daraus einen im Schlüsselbund gespeicherten Schlüssel macht.
 
-Ein früherer Entwurf dieser Spec hatte ein Feld `identity_file` am
-`Server`, neben `auth`. Das ist verworfen: Mit `AuthMethod::IdentityFile
-{ path, .. }` aus Spec 0076 steht der Pfad **in** der Anmeldeart, wo er
-hingehört. Ein zweites Feld daneben würde denselben Wert doppelt führen,
-und zwei Quellen für dieselbe Tatsache laufen früher oder später
-auseinander — spätestens, wenn der Überführungsknopf aus 0076 die
-Anmeldeart auf `PrivateKey` umstellt und niemand daran denkt, das Feld
-mitzuziehen.
-
-Gemessene Folge: **keine Wanderung** (§1.2). `auth_method` ist eine
-JSON-Textspalte; eine Variante mehr ändert am Schema nichts.
-
-Der Pfad wird als Zeichenkette gespeichert, **unverändert**: kein
-`realpath`, keine Existenzprüfung, kein Auflösen von `~`. Das ist beim
-Import Absicht (§5.5) — `ssh` löst `~` selbst auf, und jede Auflösung
-unsererseits wäre eine Aussage darüber, welche Dateien auf dem Rechner
-liegen. Was beim **Verbinden** mit dem Pfad geschieht, regelt Spec 0076,
-nicht diese.
-
-**Was der Nutzer nach dem Import in der Hand hat** (Weg (a) aus §3.1.9):
-einen Server, der sich mit der Schlüsseldatei anmeldet, genau wie `ssh`
-es täte — und einen Knopf, der daraus einen im Schlüsselbund
-gespeicherten Schlüssel macht, wenn er das lieber hat. Beides kommt aus
-0076; diese Spec sorgt nur dafür, dass der Import dort richtig ankommt.
-
-## 5. Sicherheits-Invarianten
+## 5. Sicherheitszusagen
 
 Berührt sind **Credential-Handling**, mittelbar über die erzeugten
 Profile **Ausführungspfad** und **Filter-/Risiko-Bewertung**, und neu:
-**Dateizugriff auf Pfade, die aus einer fremden Datei stammen**. Daher
-`Review-Priorität: ERHÖHT`.
+**Dateizugriff auf Pfade, die aus einer fremden Datei stammen**. Daher Review-Priorität ERHÖHT.
 
 **5.1 Eine Schlüsseldatei wird nur geöffnet, wenn der Nutzer es
 ausdrücklich verlangt hat — und nur die angekündigten.**
@@ -650,7 +402,7 @@ ausdrücklich verlangt hat — und nur die angekündigten.**
 Nachgewiesen durch §6.4.1, §6.4.1a, §6.4.1b und §6.4.2.
 
 **5.2 Eine fremde Datei ändert keine Sicherheitseinstellung.**
-`post_ingest_policy` und `ai_injection_check_enabled` kommen
+Nachprüfungs-Richtlinie und Injection-Prüfung kommen
 ausschließlich aus den Produktvorgaben (3.1.12). Eine `ssh_config` darf
 nicht dazu führen, dass ein Profil mit schwächerer Prüfung entsteht.
 Nachgewiesen durch §6.4.3.
@@ -659,27 +411,26 @@ Nachgewiesen durch §6.4.3.
 treffen.** Das ist der **einzige** Weg, auf dem eine fremde Datei die
 Filterauswertung erreicht, und er gehört benannt: `Server.tags` ist
 bewusst derselbe Typ wie `Scope::Tag` der Filter-Engine
-(`crates/core/src/profiles/types.rs:51-57`, so im Code kommentiert;
-`crates/core/src/filter/types.rs:115-119`). Ein Muster aus der fremden
+. Ein Muster aus der fremden
 Datei wird also wörtlich zu einem Geltungsbereich, gegen den bestehende
 Regeln greifen.
 
 Entschärfend, und nachgesehen: Die Engine sortiert
 `Deny`/`Confirm`/`Allow` als Stufen **vor** der Scope-Genauigkeit
-(`crates/core/src/filter/engine.rs:473`) — ein `Deny` lässt sich durch
+ — ein `Deny` lässt sich durch
 ein importiertes Schlagwort **nicht** abschwächen. Was bleibt, ist eine
 Tag-`Allow`-Regel, die ein importiertes Profil von der Vorgabe
 `Confirm` auf `Allow` hebt. Importierte Schlagworte enthalten meist
 `*`, `?` oder `!` (3.1.3), aber **nicht immer**: Ein gemischter Block wie
 `Host prod *` gibt dem Server `prod` das buchstäbliche Schlagwort `prod`
-(Klarstellung Q-BL-0216-02 in §9). Die Trefferfläche ist also nicht leer.
+. Die Trefferfläche ist also nicht leer.
 
 **Anforderung daraus:** Die Vorschau MUSS Schlagworte, die auf eine
 **bestehende** Filterregel passen, als solche kennzeichnen und die
 betroffene Regel nennen. Der Nutzer kann sie einzeln abwählen.
 Nachgewiesen durch §6.4.3a.
 
-**Vorgabe in der Vorschau (§9):** Jedes importierte Schlagwort — ob
+**Vorgabe in der Vorschau:** Jedes importierte Schlagwort — ob
 buchstäblich oder Muster —, das eine bestehende Tag-`Allow`-Regel trifft,
 ist standardmäßig **abgewählt**, es sei denn, es trifft zugleich eine
 Tag-`Deny`-Regel; dann bleibt es angewählt, damit die `Deny`-Abdeckung
@@ -689,17 +440,15 @@ in beide Richtungen umwählen. Bestätigt der Import einen Eintrag, ohne
 dass eine Wahl dazu vorliegt, gilt dieselbe Vorgabe: Die standardmäßig
 abgewählten Schlagworte entstehen nicht.
 
-**5.3 Kein unbemerkter Jump-Host.** Jeder `jump_host`, der beim Import
+**5.3 Kein unbemerkter Jump-Host.** Jeder Jump-Host, der beim Import
 entsteht, steht in der Vorschau. Eine Jump-Host-**Schleife** wird beim
-Import abgelehnt, nicht erst beim Verbinden — heute prüft das nur
-`jump_host.rs:27-29`, also nachdem ein Nutzer sich schon verbinden
-wollte. Der Import bringt die Prüfung nach vorn (§1.3). Nachgewiesen
+Import abgelehnt, nicht erst beim Verbinden — sonst fiele sie erst beim Verbinden auf. Nachgewiesen
 durch §6.4.4.
 
 **5.4 Aus einer gelesenen Datei gelangt kein Inhalt nach draußen — auch
 nicht auf den Bildschirm.**
 
-Mit der Entscheidung E-4 bestimmt eine fremde Datei, welche weiteren
+Weil `Include` gefolgt wird, bestimmt eine fremde Datei, welche weiteren
 Dateien wir öffnen, ohne Einschränkung der Pfade. Das ist weniger
 dramatisch, als es zunächst klingt, und die Einordnung gehört in die
 Spec, damit sie nicht bei jeder Lesung neu erfunden wird:
@@ -714,7 +463,7 @@ Spec, damit sie nicht bei jeder Lesung neu erfunden wird:
   Support-Anhang landet.
 
 **Diesen einen Kanal macht der Parser zu, nicht eine Liste von Verboten**
-(E-7):
+:
 
 1. Eine eingebundene Datei ohne erkannte Direktive, mit NUL-Byte oder
    ohne gültiges UTF-8 wird übersprungen (3.1.4a) — nicht Zeile für
@@ -752,9 +501,9 @@ nicht zu Speicherdruck oder einer Endlosschleife. Nachgewiesen durch
 Sonderbehandlung in der Sicherheitslogik, nur an der Grenze: genau so,
 wie es die Architekturregel verlangt.
 
-## 6. Tests
+## 6. Abnahmefälle
 
-### 6.1 Abbildung (in `core`, ohne Dateisystem)
+### 6.1 Abbildung (ohne Dateisystem)
 
 1. Ein Block mit `HostName`, `Port`, `User` → ein Plan-Eintrag mit genau
    diesen Werten. **Scheitert bei kaputter Implementierung**, weil ein
@@ -780,7 +529,7 @@ wie es die Architekturregel verlangt.
     Direktiven (3.1.9).
 12. Kommentare und Leerzeilen ändern nichts.
 
-### 6.2 Dateien, `Include`, Gruppen (in `app-shell`)
+### 6.2 Dateien, `Include`, Gruppen 
 
 1. Datei ohne `Include` → eine Gruppe, benannt nach der Datei, alle
    Server darin.
@@ -791,7 +540,7 @@ wie es die Architekturregel verlangt.
 4. Relativer `Include`-Pfad wird relativ zum Verzeichnis der
    **einbindenden** Datei aufgelöst, nicht zum Arbeitsverzeichnis
    (3.1.4).
-5. Absoluter Pfad und ein Pfad mit `..` werden gefolgt (E-4).
+5. Absoluter Pfad und ein Pfad mit `..` werden gefolgt (§3.1.4).
 6. `Include` auf Tiefe 3 wird nicht mehr gefolgt und erscheint als nicht
    übernommen (3.1.4).
 7. Eine nicht lesbare `Include`-Datei lässt den Import weiterlaufen und
@@ -804,9 +553,9 @@ wie es die Architekturregel verlangt.
 ### 6.3 Vorschau, Konflikte, Export, Rundlauf
 
 1. Zwölf Hosts, Platzhalterblock, ein `ProxyJump` → Vorschau und
-   Ergebnis stimmen Feld für Feld überein (BL-0216, Akzeptanz).
+   Ergebnis stimmen Feld für Feld überein .
 2. **`ssh -F <datei> -G <host>`** gibt 0 zurück und meldet `hostname`,
-   `port`, `user` und — für einen Server mit `AuthMethod::IdentityFile`
+   `port`, `user` und — für einen Server mit „Schlüsseldatei"
    — `identityfile` wie erwartet (3.2.6). **Auf den konkreten Pfad
    prüfen, nicht auf das Vorkommen des Schlüsselworts:** `ssh -G` gibt
    `identityfile`-Zeilen auch aus seinen Vorgaben aus, ein Test auf das
@@ -816,7 +565,7 @@ wie es die Architekturregel verlangt.
 3. **Rundlauf** (Import auf Weg (a)): Export → Import in einen leeren
    Bestand → Name, Adresse, Port, Benutzer, Jump-Host-Kette **und der
    Schlüsselpfad in der Anmeldeart** stimmen mit dem Original überein
-   (BL-0218, Akzeptanz). Gruppe, Schlagworte und Notizen werden
+   . Gruppe, Schlagworte und Notizen werden
    ausdrücklich **nicht** verglichen (§4.4).
 3a. **Rundlauf nach Weg (b):** Ein Server, dessen Schlüssel im
    Schlüsselbund liegt, erzeugt beim Export **kein** `IdentityFile`,
@@ -840,7 +589,7 @@ wie es die Architekturregel verlangt.
     unterschiedliche Aliase (4.3) — **und** ein Server, dessen Jump-Host
     dabei umbenannt wurde, trägt in `ProxyJump` den umbenannten Alias;
     `ssh -F … -G` besteht (3.2.1).
-13. Ein `username` mit Leerzeichen wird in Anführungszeichen exportiert;
+13. Ein Benutzername mit Leerzeichen wird in Anführungszeichen exportiert;
     `ssh -F … -G` liefert 0 und meldet den Benutzernamen vollständig
     (4.3).
 14. `~/.ssh/config` als Exportziel wird abgelehnt, auch bei bestätigtem
@@ -851,7 +600,7 @@ wie es die Architekturregel verlangt.
 16. Ein **verschlüsselter** Schlüssel auf Weg (b): Der Eintrag ist in
     der Vorschau als „Passphrase nachzutragen" gekennzeichnet; nach dem
     Import steht der Schlüssel verschlüsselt im Schlüsselbund und es
-    gibt keine `passphrase_ref` (3.1.9 b).
+    gibt kein Passphrase-Verweis (3.1.9 b).
 
 ### 6.4 Adversariale Fälle (Pflicht bei ERHÖHT)
 
@@ -885,16 +634,14 @@ wie es die Architekturregel verlangt.
 3. **Eine fremde Datei schwächt keine Einstellung.** Eine Konfiguration
    mit `PostIngestPolicy allow`, `AiInjectionCheck no` und denselben
    Werten als `# smart-ssh:`-Kommentar. Ergebnis: beide Felder stehen
-   auf den Produktvorgaben (5.2). Der Test scheitert, sobald der Import
-   irgendeinen Weg öffnet, sie zu setzen.
+   auf den Produktvorgaben (5.2). 
 3a. **Ein importiertes Schlagwort trifft eine bestehende Filterregel.**
    Im Bestand liegt eine Tag-Regel mit `Allow` auf `*.prod.de`; die
    importierte Datei enthält einen Platzhalterblock `Host *.prod.de`.
    Erwartung: Die Vorschau kennzeichnet das Schlagwort und nennt die
    Regel (5.2a); der Nutzer kann es abwählen; wählt er ab, trägt das
    Profil das Schlagwort nicht. Zweiter Fall: eine `Deny`-Regel — sie
-   bleibt in jedem Fall wirksam (Stufen vor Scope-Genauigkeit,
-   `engine.rs:473`). Vorgabe (§5.2a, §9): Trifft `*.prod.de` nur die
+   bleibt in jedem Fall wirksam (Stufen vor Scope-Genauigkeit). Vorgabe (§5.2a): Trifft `*.prod.de` nur die
    `Allow`-Regel, startet es abgewählt; trifft es `Allow` und `Deny`,
    bleibt es angewählt — für ein buchstäbliches Schlagwort ebenso.
 
@@ -908,7 +655,7 @@ wie es die Architekturregel verlangt.
 4a. **Mehr-Hop-Ketten: richtige Richtung, keine fremden Profile.** (a)
    `Host x` mit `ProxyJump a,b,c`, alle neu im Import → es entstehen
    **genau** die Kanten `x→c`, `c→b`, `b→a`, und `a` hat kein
-   `jump_host` (3.1.6). Der Test prüft jede Kante einzeln; ohne das
+   Jump-Host (3.1.6). Der Test prüft jede Kante einzeln; ohne das
    würde eine seitenverkehrt gebaute Kette grün.
    (b) `b` liegt bereits im Bestand → Kette wird **nicht** angelegt,
    gemeldet, und `b` ist danach Feld für Feld unverändert. (c) `b` kommt
@@ -935,8 +682,7 @@ wie es die Architekturregel verlangt.
 6a. **Dieselben Namen, Exportseite.** Ein Server, dessen Name `\n`, `#`
    oder ein Anführungszeichen enthält, erzeugt beim Export **keine**
    zweite Zeile und keinen Kommentarabbruch; `ssh -F … -G` besteht
-   (4.3). Getrennt von 6, weil der Schreiber erst in Schritt 4 entsteht
-   und Schritt 1 sonst nicht für sich prüfbar wäre.
+   (4.3). Getrennt von 6, weil für den Schreiber eigene Regeln gelten.
 7. **Unsichtbare Randzeichen.** (a) Ein `HostName` mit BOM und
    Zero-Width-Space an den **Rändern** → die Zeichen sind entfernt, der
    Wert ist der erwartete (3.1.2, Absatz „Randzeichen"). (b) Dieselben
@@ -944,10 +690,10 @@ wie es die Architekturregel verlangt.
    vom bereinigten ab. (c) Ein Wert, der **nur** aus solchen Zeichen
    besteht → gilt als leer, also als „nicht angegeben". Ohne (b) und (c)
    hätte der Test kein Soll und würde bei jeder Implementierung grün —
-   genau der Fehler, den §6 sonst ausschließt.
+   ein Test ohne Soll.
 8. **Der lokale Pseudo-Server als Jump-Host.** Eine Konfiguration, deren
    `ProxyJump` auf den Namen des lokalen Servers zeigt → abgelehnt mit
-   `SERVER_JUMP_HOST_LOCAL` (5.7).
+   dem Fehler „Jump-Host darf nicht der lokale Server sein" (5.7).
 9. **Fremdinhalt erscheint nirgends, auch nicht in der Vorschau.** Vier
    Fälle, je mit `Include` auf eine Datei, die kein `ssh_config` ist:
    (a) ein privater Schlüssel im OpenSSH-Format; (b) eine Textdatei mit
@@ -966,297 +712,5 @@ wie es die Architekturregel verlangt.
    `UnknownDirective` mit Zeilennummern — und **keinen** der beiden
    Werte (3.1.5).
 
-## 7. Umsetzungsreihenfolge
+10. **`Match` als Blockgrenze und Klammern in Mustern.** `Host a` / `User x`, danach `Match host b` / `User y` ⇒ `a` hat Benutzer `x`. `Host web[1` ergibt einen wörtlichen Namen; `Host web[1-9]` trifft `web3` nicht. `Include` innerhalb von `Match` wird gemeldet, nicht gefolgt; Platzhalter in einer vorderen Pfadkomponente werden gemeldet, nicht aufgelöst; ein ungültiger `Port` fällt auf 22 zurück und erscheint unter „nicht übernommen".
 
-**Vorbedingung: Spec 0076 ist umgesetzt, und zwar einschließlich ihres
-Schritts 5 (Frontend)** — nicht nur des Teils, der
-`AuthMethod::IdentityFile` einführt und persistiert. Sonst erzeugt der
-Import Server, die die Oberfläche nicht darstellen kann (Spec 0076 §9
-K-1). Ohne sie fehlt Weg
-(a) aus §3.1.9; der Import wäre dann auf (b) und (c) beschränkt und der
-Rundlauf (§6.3.3) nicht fahrbar.
-
-Jeder Schritt ist für sich committbar und lässt das Gate grün.
-
-**0. Messen, bevor die Abhängigkeit steht** *(vor Schritt 1, ~15 min)* —
-**erledigt, Ergebnis in §9/M-1: schlechter Ausgang, Schritt 1 wird der
-eigene Parser (§9/Q-1).**
-Kleines Testprogramm gegen `ssh2-config` 0.7.2: Wie behandelt sie
-`Include`, `Match` und einen Platzhalterblock? Liefert sie
-`unsupported_fields` mit Zeilennummern? Ergebnis als Klarstellung in §9.
-Fällt es schlecht aus, wird Schritt 1 ein eigener Parser — dieselben
-Tests, andere Innerei.
-
-1. **Parser und Abbildung** in
-   `crates/core/src/profiles/ssh_config/` *(keine Abhängigkeit, §9/Q-1:
-   der Parser ist eigener Code, mit Schlüsselwortliste (§3.1.4a),
-   Zeilennummern (§3.1.5), `Match` als Blockgrenze und `Include` als
-   Rohwert)*: Blöcke → Importplan, inklusive
-   Platzhalter-Vorgaben und -Schlagworten (3.1.3), `ProxyJump`-Auflösung
-   (3.1.6) inklusive der Kantenrichtung, Konflikten (3.1.8),
-   Zyklusprüfung (5.3). Tests §6.1, §6.4.3, §6.4.4, §6.4.4a, §6.4.6,
-   §6.4.7. *(opus — hier entsteht die Logik, gegen die §6.4 fährt)*
-2. **Dateizugriff in `app-shell`**: `Include`-Auflösung mit Tiefe,
-   Schleifenerkennung und Platzhalterpfaden (3.1.4), Übergehen von
-   Nicht-`ssh_config`-Dateien (3.1.4a), Gesamtgrenzen (§3.3),
-   Gruppenbaum (§4.5). Tests §6.2, §6.4.5, §6.4.9, §6.4.9a. *(opus —
-   hier liegt die neue Angriffsfläche)*
-3. **Kommandos**: `preview_ssh_config_import`,
-   `apply_ssh_config_import`, `export_ssh_config`; die drei Wege aus
-   §3.1.9 inklusive Rückfall auf (a); Rollback für Profile **und**
-   Gruppen (3.1.11); `is_local` ausschließen. Tests §6.3.4–9,
-   §6.3.15–16, §6.4.1, §6.4.1a, §6.4.1b, §6.4.3a, §6.4.8. *(opus —
-   Credential-Nähe, und der einzige Schritt, in dem überhaupt eine
-   Schlüsseldatei geöffnet wird)*
-4. **Schreiber** (Export) inklusive Alias- und Wert-Regel (4.3),
-   `ProxyJump`-Alias (3.2.1), Ablehnung von `~/.ssh/config` (3.2.5) und
-   Kommentaren (3.2.3). Tests §6.3.1–3, §6.3.3a, §6.3.10–14, §6.4.2,
-   §6.4.6a. *(sonnet)*
-
-   **Warum die Export-Tests hier stehen und nicht früher:** §6.3.10
-   („kommt in der exportierten Datei nicht vor"), §6.4.2 (erzeugte Datei
-   gegen die Leak-Muster) und §6.4.6a brauchen alle den Schreiber. In
-   einem früheren Schritt zugeordnet, wäre „jeder Schritt lässt das Gate
-   grün" nicht haltbar.
-5. **Frontend**: Vorschau-Dialog mit Abwahl je Eintrag, Konfliktanzeige,
-   Dateiliste, Gruppenbaum, Liste der nicht übernommenen Direktiven; die
-   Wahl zwischen den drei Wegen aus §3.1.9 samt der Liste der Dateien,
-   die auf Weg (b) geöffnet würden; Kennzeichnung relativer Pfade und
-   nachzutragender Passphrasen (3.1.9); Kennzeichnung von Schlagworten,
-   die bestehende Filterregeln treffen (5.2a); Export-Dialog mit der
-   `Include`-Zeile. i18n vollständig. *(sonnet)*
-6. **`CHANGELOG.md`** unter `[Unreleased]`, Nutzersicht. *(sonnet)*
-
-Der Rundlauftest (§6.3.3) läuft ab Schritt 4 und ist die Abnahme für
-beide Items.
-
-## 8. Offene Punkte
-
-Keine. Die vier Punkte, die diese Spec zur Entscheidung vorgelegt hat,
-sind in §9 als E-1 bis E-4 entschieden und in den Text eingearbeitet.
-
-Ein Punkt bleibt **bewusst** außerhalb und ist kein offener Punkt,
-sondern eine benannte Folge: Der Rundlauf ist **nicht verlustfrei** —
-Gruppen, Schlagworte und Notizen gehen nur als Kommentar mit und werden
-beim Import nicht zurückgelesen (§4.4). Der verlustfreie Weg ist
-BL-0081.
-
-## 9. Klarstellungen
-
-**2026-09-23 · E-1 · Parser.** Entschieden: `ssh2-config` (MIT, 0.7.2) wird
-als Abhängigkeit aufgenommen, statt einen eigenen Parser zu schreiben —
-mit der Bedingung, dass Schritt 7.0 ihr Verhalten bei `Include`, `Match`
-und Platzhalterblöcken **misst**, bevor die Abhängigkeit steht.
-Eingearbeitet in §4.2 und §7.0.
-
-**2026-09-23 · E-2 · `IdentityFile`** *(ersetzt eine frühere Fassung
-desselben Punktes)*. Entschieden: Eine Schlüsseldatei wird **als solche
-übernommen** und von der Platte gelesen — das ist eine **weitere
-Anmeldeart**, nicht ein Merkposten. Sie ist in der Oberfläche wählbar
-(„Privater Schlüssel" / „Schlüsseldatei"), sonst ließe sie sich nur durch
-einen Import erzeugen. Dazu kommt ein Knopf, der eine Schlüsseldatei mit
-einem Druck in einen gespeicherten Schlüssel überführt. Beim Import wird
-gefragt, was der Nutzer will.
-
-Daraus wurden **zwei Specs** („mach daraus mehrere specs wenn du
-willst"): **0076** führt die Anmeldeart, ihre Oberfläche und den
-Überführungsknopf ein; **0075** benutzt sie und stellt die Frage beim
-Import. 0076 wird zuerst umgesetzt (§7, Vorbedingung).
-
-Die frühere Fassung — Pfad in einem eigenen Feld merken, nicht benutzen —
-ist damit hinfällig. Sie hätte denselben Wert doppelt geführt (§4.6).
-Eingearbeitet in Kopf, §1.2, §2 (Nicht-Ziele 4 und 5), §3.1.2, §3.1.9,
-§3.2.1, §3.2.3, §4.6, §5.1, §5.5, §6.3.2–3a, §6.4.1/1a/1b und §7.
-
-**2026-09-23 · E-3 · Gruppen und Schlagworte.** Entschieden: eine Gruppe je
-Import, darin je eine Untergruppe pro eingebundener Datei; die
-Zugehörigkeit zu einem Platzhalterblock wird ein **Schlagwort**, nicht
-eine Gruppe. Damit ist die Zuordnung eindeutig (jede Zeile stammt aus
-genau einer Datei) und überlappende Muster lösen sich von selbst, statt
-dass der Import raten muss. Eingearbeitet in §3.1.3, §4.5 und §6.1.7–10.
-
-**2026-09-23 · E-4 · `Include`.** Entschieden: `Include` wird **gefolgt**.
-Pfade werden nicht eingeschränkt (absolut, `~` und `..` zulässig), Tiefe
-höchstens 3, keine Schleifen, **keine Anzahlgrenze** für Dateien, und
-jede eingebundene Datei wird ein Ordner in Smart SSH. Eingearbeitet in
-§3.1.4, §4.5 und §5.4.
-
-**2026-09-23 · E-5 · Zuschnitt von Spec 0076.** Aus E-2: 0076 umfasst
-(1) die Anmeldeart `AuthMethod::IdentityFile { path, passphrase_ref }`
-samt allem, was beim Verbinden daran hängt — Dateirechte, symbolische
-Links, Passphrase, fehlende Datei; (2) ihre Wahl in der Oberfläche beim
-**Anlegen und Bearbeiten** eines Servers, nicht nur über den Import;
-(3) den Knopf, der eine Schlüsseldatei einliest, den Inhalt in den
-Schlüsselbund legt und die Anmeldeart auf `PrivateKey` umstellt. Die
-Datei bleibt dabei unberührt; was sich ändert, ist nur, woher Smart SSH
-den Schlüssel nimmt.
-
-**2026-09-23 · E-6 · Wahl beim Import.** Entschieden: „beim import können wir
-fragen, wie die es wollen." Umgesetzt als die drei Wege in §3.1.9, mit
-(a) als Vorgabe — es ist der einzige, der keine zusätzliche Datei
-öffnet, und der Nutzer kann jeden Server später einzeln mit dem Knopf
-aus 0076 umstellen. Die Wahl gilt für den ganzen Import und ist je
-Eintrag umstellbar.
-
-**2026-09-23 · E-7 · Der Parser filtert, statt dass Regeln es auffangen.**
-Frage zu E-4: „warum ist das mit den includes so gefährlich? sollte das
-der parser nicht filtern? also wenn die kein ssh format haben, ignoriert
-der die?" — Berechtigt, und die frühere Fassung von §5.4 hat die Gefahr
-überzeichnet und die Abhilfe an der falschen Stelle gesucht. Es gibt
-weder Rechteausweitung noch Ausführung; der einzige reale Kanal war die
-**Anzeige** — und zwar durch meine eigene Anforderung 3.1.5, die
-unbekannte Zeilen mitsamt Inhalt in die Vorschau geschrieben hätte.
-
-Umgesetzt: Eine eingebundene Datei, die keine `ssh_config` ist, wird
-übersprungen statt Zeile für Zeile gemeldet (3.1.4a), und von einer nicht
-übernommenen Zeile erscheint nur der Direktivenname, nie sein Wert
-(3.1.5). Damit kann kein Fremdinhalt mehr auf den Schirm, und §5.4 ist
-von einer Liste von Verboten auf eine Eigenschaft des Parsers
-geschrumpft. Zusätzliche Tests: §6.4.9 (vier Fälle) und §6.4.9a.
-
-**2026-09-25 · M-1 · Ergebnis der Messung aus §7.0: `ssh2-config` fällt
-durch, Schritt 1 wird ein eigener Parser.** Gemessen gegen
-`ssh2-config` 0.7.2, Quelle mit `cargo vendor` gegengelesen
-(Frage `Q-BL-0216-01`). E-1 war ausdrücklich an diese Messung geknüpft;
-§4.2, §7.0 und §7.1 schreiben für einen schlechten Ausgang den eigenen
-Parser vor. Die Befunde:
-
-| Anforderung | `ssh2-config` 0.7.2 |
-|---|---|
-| §3.1.5 Meldung **mit Zeilennummer** | `ignored_fields`/`unsupported_fields` sind `HashMap<String, Vec<String>>` (params.rs:74-76): Name→Werte, **keine** Zeilennummern und als `HashMap` auch keine Lesereihenfolge. Strukturell nicht nachrüstbar. |
-| §3.1.5/§5.4 nur der **Name**, nie der Wert | liefert Name **und** Wert (`{"UnknownDirective": ["SECRETVALUE"]}`); der `STRICT`-Fehler trägt den Wert ebenfalls. |
-| §4.1 Dateien liest **`app-shell`** | löst `Include` **selbst** auf, mit `File::open` und `glob` (parser.rs:383, 576, 583) — das Dateisystem läge damit in `core`. |
-| §3.1.4 relativer `Include` relativ zur **einbindenden Datei** | löst gegen `$HOME/.ssh` auf (parser.rs:541-561) — genau das Verhalten, das §3.1.4 verwirft. Eine gewählte Datei aus `/tmp/import/` mit `Include conf.d/*.conf` läse `~/.ssh/conf.d/*.conf`. |
-| §3.1.4/§5.6 Tiefe ≤ 3, keine Schleifen | kein Tiefenzähler, keine Besuchtmenge; `include_files` ruft `Self::parse` rekursiv. Belegt: eine Datei, die sich selbst einbindet, ergibt `fatal runtime error: stack overflow, aborting` — ein **Prozessabbruch**, nicht per `catch_unwind` abfangbar. §6.4.5 (d) wäre damit nicht erfüllbar. |
-| §3.3 Gesamtgrenzen | keine — und weil `Include` intern aufgelöst wird, käme eine Grenze davor an die eingebundenen Dateien gar nicht heran. |
-| §4.2 `Match` nicht auswerten, melden | **mischt den `Match`-Block in den vorhergehenden `Host`-Block**: `Host a / User x` + `Match host b / User y` ergibt für `Host a` `user = "y"`. Ein `Match … / User root` verschöbe also stillschweigend den Benutzer eines fremden Profils. |
-| §3.1.4a Nicht-`ssh_config` überspringen | Binärmüll wird zur „Direktive": `{"\0\u{1}binary": ["junk"]}`. |
-| §3.1.3 Platzhalter, „erster gewinnt", Herkunft | `get_hosts()` liefert **rohe** Blöcke ohne Vererbung — Merge und Herkunft hätten wir ohnehin selbst gebaut. |
-| §3.1.2 `Host web1 web2`, Anführungszeichen, `=` | korrekt. |
-| `ProxyJump`, mehrere `IdentityFile` | vorhanden und brauchbar. |
-
-Ausschlaggebend sind die Zeilennummern (harte Anforderung aus §3.1.5,
-nicht nachrüstbar) und die `Include`-Behandlung (falsches
-Basisverzeichnis, keine Tiefe, keine Schleifenerkennung mit belegtem
-Prozessabbruch). Der `Match`-Fehlmerge ist der Grund, warum auch „nur
-die `Host`-Blöcke übernehmen" nicht trägt: schon die übernommenen Felder
-wären falsch.
-
-**Folge:** `crates/core/src/profiles/ssh_config/` bringt einen eigenen,
-zeilenweisen Parser mit — er kennt genau die Direktiven aus §3.1.2, gibt
-für alles andere Name und Zeilennummer zurück und liest **keine**
-Dateien. **Keine neue Abhängigkeit** (und keine sechs transitiven).
-Die Tests aus §6 bleiben unverändert — „dieselben Tests, andere
-Innerei" (§7.1).
-
-**2026-09-25 · Q-1 · Antwort auf `Q-BL-0216-01`: der eigene Parser ist
-bestätigt, und was daran hängt.** M-1 ist der zweite Zweig von E-1, nicht
-sein Gegenteil: Die Aufnahme der Abhängigkeit war ausdrücklich an die
-Messung geknüpft, und §4.2/§7.0/§7.1 schreiben für einen schlechten
-Ausgang den eigenen Parser vor. Keine Anforderung aus §3 ändert sich.
-Sechs Punkte werden dadurch verbindlich:
-
-1. **Kein Ersatzpaket.** Der Wegfall von `ssh2-config` erlaubt keine
-   andere Kiste an seiner Stelle. Ein Paket, das nicht bereits in
-   `Cargo.lock` steht, ist eine neue Abhängigkeit und wird vorgelegt,
-   nicht angenommen. Bereits im Baum: `globset` (direkte Abhängigkeit von
-   `core`); wird es in `app-shell` für die Platzhalter im `Include`-Pfad
-   (§3.1.4) gebraucht, darf es dort eine direkte Zeile werden — mit
-   begründendem Kommentar wie bei `libc` (Spec 0076 K-3), weil es kein
-   neues Paket ist, sondern eine direkte statt einer transitiven Kante.
-2. **`globset` nicht für `Host`-Muster.** OpenSSH kennt dort genau `*`,
-   `?` und `!` (§3.1.3). `globset` bringt zusätzlich `[…]` und `{…}` und
-   kennt kein `!`: `Host web[1` wäre ein Übersetzungsfehler statt eines
-   wörtlichen Namens — dass ein unbalanciertes `[` in `globset` ein Fehler
-   ist, steht schon als Zusicherung in `crates/core/src/filter/pattern.rs`
-   (`Glob::new("systemctl [stop").unwrap_err()`) —, und `Host web[1-9]`
-   träfe Server, die `ssh` nie trifft (§6.4.6). Der Musterabgleich ist eigener Code nach OpenSSH-Semantik —
-   und er benutzt `filter::Pattern` **nicht**: Ein importiertes Schlagwort
-   wird wörtlich zu einem `Scope::Tag` (§5.2a), und zwei Grammatiken an
-   einem sicherheitskritischen Typ gehören getrennt.
-3. **„Erkannte Direktive" in §3.1.4a ist ein Schlüsselwort aus einer
-   festen Liste**, die der Parser mitbringt (`Host`, `Match`, `Include`
-   gehören hinein), verglichen ohne Rücksicht auf
-   Groß-/Kleinschreibung. **Nicht** die Form
-   `[A-Za-z][A-Za-z0-9-]{0,31}` aus §3.1.5 — die bricht §6.4.9 (b): In
-   einer eingebundenen Prosadatei hat fast jede Zeile ein formgültiges
-   erstes Wort, die Datei zählte als `ssh_config`, und §3.1.5 meldete
-   dieses Wort. Also zwei Ebenen: Die **Liste** entscheidet über die
-   Datei (§3.1.4a), die **Form** nur noch darüber, ob innerhalb einer
-   anerkannten Datei ein Name gemeldet wird oder `unlesbare Zeile`
-   (§3.1.5). Die Liste muss nicht vollständig sein: Eine Lücke lässt eine
-   dünn besetzte echte `ssh_config` übersprungen und mit Pfad gemeldet
-   werden — die Richtung, in der nichts nach außen gelangt. Im Zweifel
-   die kürzere Liste. Die **gewählte** Datei betrifft das nicht (§3.1.13).
-4. **`Match` ist eine Blockgrenze.** Ein `Match` beendet den laufenden
-   `Host`-Block; keine Zeile darin wirkt auf ein Profil. Gemeldet werden
-   `Match` und jede Direktive im Block nach §3.1.5 (Name, Zeilennummer,
-   kein Wert). Der Test in §6.1 („`Match`-Block erscheint als nicht
-   übernommen") bekommt den Fall aus M-1 dazu: `Host a` / `User x`, dann
-   `Match host b` / `User y` ⇒ `a.username == "x"`. Ohne ihn kann der Test
-   nicht scheitern, wenn der Fehlmerge nachgebaut wird.
-5. **Leser und Schreiber teilen eine Zitier- und Trennerroutine — dann
-   belegt der Rundlauf sie nicht allein.** Eine symmetrisch falsche
-   Zitierregel besteht §6.3.3 fehlerfrei. Äußerer Zeuge ist §6.3.2
-   (`ssh -F … -G`), und dessen Prüfling MUSS deshalb mindestens einen Wert
-   enthalten, der Anführungszeichen erzwingt: ein `username` mit
-   Leerzeichen (§6.1.5, §4.3).
-6. **Zuschnitt von §7 unverändert**, nur Schritt 1 trägt jetzt den Parser
-   (Empfehlung: eigener Modulteil mit eigenen Tests, §6.1.4/5 zielen
-   ohnehin dorthin). Die Grenzen aus §3.3 greifen weiter **vor** dem
-   Parser.
-7. **Zwei Genauigkeiten am Prüfling von §6.4.9a**, damit der Test aus dem
-   richtigen Grund grün wird: Die Datei braucht einen `Host`-Block (ohne
-   ihn greift §3.1.13 und die Liste der nicht übernommenen Direktiven
-   entsteht nie), und `Compression` gehört in die Schlüsselwortliste aus
-   Punkt 3 — liegt der Prüfling hinter einem `Include` und fehlt das Wort
-   in der Liste, gilt die Datei nach §3.1.4a als keine `ssh_config` und
-   wird übersprungen, der Test scheiterte also an der Einordnung statt an
-   der Meldung.
-
-Gewinn, der zum Protokoll gehört: Die Rekursion liegt jetzt allein in der
-`Include`-Auflösung von `app-shell` (§7.2), mit Tiefe ≤ 3 und
-Besuchtmenge. Damit sind §6.4.5 (d), (e) und (f) überhaupt erst fahrbar —
-zuvor endete (d) in einem Prozessabbruch, den kein Test abfängt. Genau
-diese Eigenschaft trägt §5.6.
-
-*Anmerkung des Architekten zur Grenze:* „Unbegrenzt viele Dateien"
-bezieht sich auf die **Anzahl**. Die Gesamtgrenzen aus §3.3 (Bytes,
-Zeilen, `Host`-Blöcke) gelten weiterhin — aber ausdrücklich **über alle
-Dateien zusammen** statt je Datei, weil eine Grenze je Datei durch eine
-Kette von `Include`-Dateien umgangen würde. Ohne irgendeine
-Gesamtgrenze wäre §5.6 nicht haltbar. Am 2026-09-23 vorgelegt,
-kein Widerspruch — die Grenzen aus §3.3 gelten damit als entschieden,
-§8 bleibt bei „keine offenen Punkte".
-
-**Q-BL-0216-02 entschieden (2026-09-25), erweitert durch Issue #105.**
-Ein buchstäbliches importiertes Schlagwort (aus einem gemischten Block
-wie `Host prod *`) entsteht wie jedes andere, damit bestehende
-Tag-`Deny`-Regeln weiter greifen. **Trifft ein importiertes Schlagwort —
-buchstäblich oder Muster — eine bestehende Tag-`Allow`-Regel, ist es in
-der Vorschau standardmäßig abgewählt** und deutlich als solches
-gekennzeichnet, samt der betroffenen Regel. **Ausnahme:** Trifft es
-zugleich eine Tag-`Deny`-Regel, bleibt es angewählt — eine Abwahl nähme
-dem Profil sonst auch die `Deny`-Abdeckung, und `Deny` geht ohnehin vor
-`Allow` (§5.2a). Trifft es nur `Deny`- oder `Confirm`-Regeln oder keine,
-bleibt es angewählt. Der Nutzer kann in beide Richtungen umwählen. Ein
-Eintrag, zu dem beim Bestätigen keine Wahl vorliegt, folgt derselben
-Vorgabe. Tests: buchstäbliches Schlagwort mit Treffer nur auf eine
-Tag-`Allow`-Regel → abgewählt; Muster-Schlagwort `*.prod.de` mit Treffer
-auf eine `Allow`-Regel mit Scope `*.prod.de` → abgewählt; buchstäbliches
-oder Muster-Schlagwort mit Treffer auf `Allow` und `Deny` → angewählt;
-Treffer nur auf `Deny`/`Confirm` oder keiner → angewählt.
-
-**Klarstellung zu §3.1.9 (b) und §5.1 (Architekt, 2026-09-25, K2).**
-„Die Vorschau nennt den Passphrase-Bedarf" gilt für Weg (b) als „die
-Abschlussmeldung nach dem Bestätigen nennt ihn", denn vor dem Bestätigen
-darf keine Schlüsseldatei geöffnet werden (§5.1). Die Vorschau zeigt dazu
-einen allgemeinen Hinweis. So umgesetzt (ADR 0075, Punkt 8).
-
-**Annahmen A-1 bis A-3 aus ADR 0074 bestätigt (Architekt, 2026-09-25,
-K2).** A-1: `Include` innerhalb eines `Match`-Blocks wird gemeldet, nicht
-gefolgt. A-2: Platzhalter nur in der letzten Pfadkomponente eines
-`Include`; weiter vorne wird gemeldet, nicht aufgelöst. A-3: Ein
-ungültiger `Port` fällt auf 22 zurück **und** erscheint unter „nicht
-übernommen". A-1 und A-2 bekommen je einen Test, der gegen das
-gegenteilige Verhalten scheitert.

@@ -89,9 +89,9 @@
    zeichenkette anfassen zu müssen, und ohne das Risiko, beim manuellen
    Durchgehen aller ~15 Komponenten-Dateien eine Stelle zu übersehen. */
 @theme {
-  --font-sans: "Barlow", system-ui, sans-serif;
-  --font-heading: "Barlow Condensed", "Barlow", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  --font-sans: "Barlow", system-ui, "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", sans-serif;
+  --font-heading: "Barlow Condensed", "Barlow", system-ui, "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", monospace;
 
   /* slate: dunkles Navy-Grundflächen-/Textsystem (Entwurf: #090c14 Fenster-
      grund, #0f1420 Oberflächen, #e6e9f2 hellster Text). */
@@ -231,4 +231,17 @@
 :root {
   --decoration-tb-actions-icon-bg: rgba(255, 255, 255, 0.18);
   --decoration-tb-actions-icon-active-bg: rgba(255, 255, 255, 0.32);
+}
+
+/* CJK-Text hat keine Leerzeichen zwischen Wörtern: Zeilen dürfen an
+   Zeichengrenzen umbrechen, damit nichts aus Buttons und Dialogen läuft
+   (Issue #335). `line-break: strict` hält Satzzeichen am Zeilenanfang fern. */
+:lang(ja),
+:lang(zh),
+:lang(ko) {
+  overflow-wrap: anywhere;
+  line-break: strict;
+}
+:lang(ko) {
+  word-break: keep-all;
 }

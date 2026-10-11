@@ -728,6 +728,10 @@ pub struct SessionParts {
 pub struct ChatTurnState {
     pub running: bool,
     pub queued: Vec<String>,
+    /// Issue #315: `true`, solange „Neuer Chat" den Turn-Slot hält. Nutzer-
+    /// Nachrichten werden dann abgelehnt statt eingereiht (sonst landeten sie
+    /// unbemerkt in der ersten Anfrage des neuen Chats).
+    pub swapping: bool,
 }
 
 impl Session {

@@ -4,11 +4,21 @@ import en from "./locales/en/common.json";
 import es from "./locales/es/common.json";
 import fr from "./locales/fr/common.json";
 import it from "./locales/it/common.json";
+import ja from "./locales/ja/common.json";
+import ko from "./locales/ko/common.json";
 import pl from "./locales/pl/common.json";
 import ru from "./locales/ru/common.json";
 import uk from "./locales/uk/common.json";
 import nl from "./locales/nl/common.json";
 import ptBR from "./locales/pt-BR/common.json";
+import zhHans from "./locales/zh-Hans/common.json";
+import da from "./locales/da/common.json";
+import fi from "./locales/fi/common.json";
+import nb from "./locales/nb/common.json";
+import sv from "./locales/sv/common.json";
+import id from "./locales/id/common.json";
+import vi from "./locales/vi/common.json";
+import hi from "./locales/hi/common.json";
 
 // Spec 0024, Abschnitt 3/4: die einzige Quelle der Wahrheit für die
 // unterstützten UI-Sprachen. Eine neue Sprache = eine Locale-Datei + ein
@@ -94,6 +104,66 @@ export const LANGUAGE_REGISTRY: readonly LanguageEntry[] = [
     endonym: "Português (Brasil)",
     englishName: "Portuguese (Brazil)",
     resources: ptBR,
+  },
+  {
+    code: "ja",
+    endonym: "日本語",
+    englishName: "Japanese",
+    resources: ja,
+  },
+  {
+    code: "ko",
+    endonym: "한국어",
+    englishName: "Korean",
+    resources: ko,
+  },
+  {
+    code: "zh-Hans",
+    endonym: "简体中文",
+    englishName: "Chinese (Simplified)",
+    resources: zhHans,
+  },
+  {
+    code: "da",
+    endonym: "Dansk",
+    englishName: "Danish",
+    resources: da,
+  },
+  {
+    code: "fi",
+    endonym: "Suomi",
+    englishName: "Finnish",
+    resources: fi,
+  },
+  {
+    code: "nb",
+    endonym: "Norsk bokmål",
+    englishName: "Norwegian Bokmål",
+    resources: nb,
+  },
+  {
+    code: "sv",
+    endonym: "Svenska",
+    englishName: "Swedish",
+    resources: sv,
+  },
+  {
+    code: "id",
+    endonym: "Bahasa Indonesia",
+    englishName: "Indonesian",
+    resources: id,
+  },
+  {
+    code: "vi",
+    endonym: "Tiếng Việt",
+    englishName: "Vietnamese",
+    resources: vi,
+  },
+  {
+    code: "hi",
+    endonym: "हिन्दी",
+    englishName: "Hindi",
+    resources: hi,
   },
 ];
 

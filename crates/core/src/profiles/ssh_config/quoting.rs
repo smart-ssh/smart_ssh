@@ -1,5 +1,5 @@
 //! Welche Zeichen ein `ssh_config`-Wert **quotet** braucht — geteilt
-//! zwischen Leser und Schreiber (Spec 0075, §9/Q-1 Punkt 5).
+//! zwischen Leser und Schreiber (Spec 0075, §4.2 (Zitier- und Trennerregeln)).
 //!
 //! Der Leser (`parser::split_keyword`/`parser::tokenize`) trennt an
 //! Leerraum und behandelt `"…"` als ein zusammenhängendes Wort; ein `#`
@@ -13,7 +13,7 @@
 //! Implementierungen:** Eine symmetrisch falsche Zeichenliste bestünde den
 //! Rundlauftest (§6.3.3) trotzdem — Leser und Schreiber wären sich einig,
 //! nur eben falsch einig. Deshalb ist `ssh -F … -G` (§6.3.2) der äußere
-//! Zeuge, nicht der Rundlauf allein (§9/Q-1 Punkt 5).
+//! Zeuge, nicht der Rundlauf allein (§4.2 (Zitier- und Trennerregeln)).
 //!
 //! Bewusst **keine** Änderung an `parser.rs`: Die Leseseite ist Teil der
 //! bereits geprüften Schritte 1–3 (ADR 0074) und wird hier nicht angefasst.
@@ -39,7 +39,7 @@ pub fn needs_quoting(value: &str) -> bool {
 /// **eigene** Zeile in der Datei und kann eine wirksame Direktive werden
 /// (spec-reviewer-Fund, Runde 1). Betrifft jeden Wert, der ungeprüft aus
 /// dem Bestand kommt — `host`/`username` haben beim Anlegen von Hand
-/// keinen Format-Zwang (§1.3) — und jeden `# smart-ssh:`-Kommentar
+/// keinen Format-Zwang (§4.3) — und jeden `# smart-ssh:`-Kommentar
 /// (Gruppenname, Schlagworte, `sftp_server_path`).
 ///
 /// **Nicht nur `\n`/`\r`** (spec-reviewer-Fund, Runde 2): Ein `\0` schriebe

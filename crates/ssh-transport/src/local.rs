@@ -154,16 +154,7 @@ async fn terminate_tree(
     }
     #[cfg(windows)]
     if let Some(pid) = pid {
-        let taskkill = std::env::var_os("SystemRoot")
-            .map(|root| PathBuf::from(root).join("System32").join("taskkill.exe"))
-            .unwrap_or_else(|| PathBuf::from("taskkill"));
-        let _ = Command::new(taskkill)
-            .args(["/T", "/F", "/PID", &pid.to_string()])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await;
+        taskkill_tree(pid).await;
     }
 
     let _ = tokio::time::timeout(CANCEL_GRACE, async {
@@ -184,6 +175,49 @@ async fn terminate_tree(
     // Kindprozess beenden. Für einen schon beendeten Prozess wirkungslos.
     let _ = child.start_kill();
     let _ = child.wait().await;
+}
+
+/// Windows: `taskkill /T /F` beendet den Prozessbaum ab `pid`.
+#[cfg(windows)]
+async fn taskkill_tree(pid: u32) {
+    let taskkill = std::env::var_os("SystemRoot")
+        .map(|root| PathBuf::from(root).join("System32").join("taskkill.exe"))
+        .unwrap_or_else(|| PathBuf::from("taskkill"));
+    let _ = Command::new(taskkill)
+        .args(["/T", "/F", "/PID", &pid.to_string()])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await;
+}
+
+/// Issue #345 (Spec 0044): beendet nach Erreichen des Output-Caps (oder
+/// einem Lese-Fehler) sofort das ganze Kommando, ohne Schonfrist — die
+/// weitere Ausgabe wird ohnehin verworfen. Unix: `SIGKILL` an die
+/// Prozessgruppe, Windows: Prozessbaum per `taskkill`. Rückfallebene: der
+/// direkte Kindprozess. Wie bei [`terminate_tree`] muss das *vor* dem
+/// Einsammeln (`wait`) des Kindprozesses geschehen, damit die Gruppen-ID
+/// nicht von einem fremden Prozess wiederverwendet sein kann.
+async fn kill_tree_now(child: &mut Child, pid: Option<u32>) {
+    #[cfg(unix)]
+    if let Some(pgid) = pid
+        .and_then(|p| libc::pid_t::try_from(p).ok())
+        .filter(|p| *p > 0)
+    {
+        // SAFETY: `killpg` hat keine Speicher-Vorbedingungen; `pgid` ist die
+        // Gruppe unseres noch nicht eingesammelten Kindprozesses.
+        unsafe {
+            libc::killpg(pgid, libc::SIGKILL);
+        }
+    }
+    #[cfg(windows)]
+    if let Some(pid) = pid {
+        taskkill_tree(pid).await;
+    }
+    #[cfg(not(any(unix, windows)))]
+    let _ = pid;
+    let _ = child.start_kill();
 }
 
 /// Standard-Shell des Nutzers für den interaktiven Modus (Spec 0032,
@@ -367,18 +401,11 @@ impl LocalTransport {
         }
 
         // Cap gegriffen, bevor der Prozess von selbst beendet war (oder ein
-        // Lese-Fehler zwingt zum Abbruch): Rest der Ausgabe verwerfen,
-        // Kindprozess beenden statt auf sein reguläres Ende zu warten
-        // (best effort — `kill()` beendet nur den direkten Kindprozess
-        // selbst, z. B. `sh`; ein von ihm gestartetes Pipeline-Glied wie
-        // bei `yes | head` läuft weiter, bis es beim nächsten Schreib-
-        // versuch auf die inzwischen geschlossene Pipe `EPIPE`/`SIGPIPE`
-        // bekommt — kein Hänger für uns, aber kein garantiertes sofortiges
-        // Beenden der gesamten Pipeline, s. `RusshTransport::
-        // drain_channel_cancellable`s identisch begründetem Best-effort-
-        // Kommentar für den Remote-Fall).
+        // Lese-Fehler zwingt zum Abbruch): Rest der Ausgabe verwerfen und
+        // das ganze Kommando beenden (Prozessgruppe/-baum, Issue #345),
+        // nicht nur die `sh`. Eingesammelt wird erst danach.
         if capped.cap_reached() || io_error.is_some() {
-            let _ = child.kill().await;
+            kill_tree_now(&mut child, pid).await;
         }
         if let Some(e) = io_error {
             let _ = child.wait().await;
@@ -395,7 +422,7 @@ impl LocalTransport {
         let output = CommandOutput {
             stdout,
             stderr,
-            // Unix: `kill()` beendet den Prozess per Signal statt eines
+            // Unix: das Beenden per Signal (Cap/Lese-Fehler) statt eines
             // regulären Exits — `status.code()` ist dann `None`, der
             // Exit-Code geht beim Cap-Abbruch also verloren (identisch zum
             // Remote-Pfad, dessen `ExitStatus`-Nachricht beim Cap ebenfalls
@@ -955,6 +982,77 @@ mod tests {
                 );
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             }
+        }
+    }
+
+    /// Issue #345: hitting the output cap ends the whole command, including
+    /// a background job that never writes again. On the old code (kill of
+    /// the direct `sh` only) the `sleep` kept running.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue345_cap_kills_background_member() {
+        let mut transport = LocalTransport::new();
+        transport.set_max_output_bytes(4096);
+
+        let output = tokio::time::timeout(
+            NO_HANG_TIMEOUT,
+            transport.execute("sleep 30 & echo $!; yes AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        )
+        .await
+        .expect("execute() must not hang")
+        .unwrap();
+
+        assert!(output.truncated);
+        let pid = String::from_utf8_lossy(&output.stdout)
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .to_string();
+        assert!(pid.parse::<u32>().is_ok(), "not a pid: {pid:?}");
+        wait_until_gone(&pid).await;
+    }
+
+    /// Issue #345: a flooding pipeline is ended promptly at the cap and no
+    /// member survives.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_issue345_cap_ends_whole_pipeline() {
+        let mut transport = LocalTransport::new();
+        transport.set_max_output_bytes(4096);
+
+        let output = tokio::time::timeout(
+            NO_HANG_TIMEOUT,
+            transport.execute(
+                "echo $$; sh -c 'echo $$ >&2; exec yes AAAAAAAAAAAAAAAA' | \\\n                 sh -c 'echo $$ >&2; exec cat'",
+            ),
+        )
+        .await
+        .expect("execute() must not hang")
+        .unwrap();
+
+        assert!(output.truncated);
+        // stdout starts with the outer shell's pid; stderr holds the pids of
+        // the two pipeline members.
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        let mut pids: Vec<&str> = stdout.lines().take(1).collect();
+        pids.extend(stderr.split_whitespace());
+        assert_eq!(pids.len(), 3, "expected 3 pids, got {pids:?}");
+        for pid in pids {
+            wait_until_gone(pid).await;
+        }
+    }
+
+    /// The process must be gone (or a zombie) within 2 s.
+    #[cfg(unix)]
+    async fn wait_until_gone(pid: &str) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while process_alive(pid) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "process {pid} survived the output cap"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
     }
 

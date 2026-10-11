@@ -1,4 +1,4 @@
-//! Dateizugriff für den `ssh_config`-Import (Spec 0075, §4.1 und §7.2).
+//! Dateizugriff für den `ssh_config`-Import (Spec 0075, §4.1 und §4.1).
 //!
 //! **Dies ist der einzige Teil, der das Dateisystem anfasst** — und damit
 //! genau der Teil, der die Grenzen aus §3.3, die `Include`-Tiefe und die
@@ -7,7 +7,7 @@
 //!
 //! Dass die Rekursion **allein hier** liegt, ist die Eigenschaft, die §5.6
 //! trägt: Eine sich selbst einbindende Datei ist eine Meldung, kein
-//! Hänger und kein Speicherdruck. Die Messung aus §9/M-1 hat gezeigt, wie
+//! Hänger und kein Speicherdruck. Die Messung aus ADR 0074 hat gezeigt, wie
 //! das andernfalls ausgeht — dort beendete derselbe Fall den Prozess mit
 //! einem Stapelüberlauf, den kein Test abfangen kann.
 
@@ -21,7 +21,7 @@ use ssh_manager_core::profiles::ssh_config::{
 
 /// §3.3 — die Grenzen gelten **über alle gelesenen Dateien zusammen**, nicht
 /// je Datei. Eine Grenze je Datei würde durch eine Kette von
-/// `Include`-Dateien umgangen (§9, Anmerkung zur Grenze).
+/// `Include`-Dateien umgangen (§3.3).
 pub const MAX_TOTAL_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_TOTAL_LINES: u64 = 100_000;
 pub const MAX_HOST_BLOCKS: usize = 2_000;
@@ -198,7 +198,7 @@ impl Walker {
         }
         self.bytes += bytes.len() as u64;
 
-        // §4.2 und §9/Q-1 Punkt 6: „Die Grenzen aus §3.3 greifen weiter
+        // §4.2 und §4.2 (Punkt 6): „Die Grenzen aus §3.3 greifen weiter
         // **vor** dem Parser." Für die Zeilengrenze galt das vorher nicht —
         // eine 8-MiB-Datei mit Millionen kurzer unbekannter Zeilen wurde
         // erst vollständig geparst und baute dabei Millionen Meldungen auf,
@@ -323,7 +323,7 @@ fn has_wildcard(s: &str) -> bool {
 ///   Datei** — nicht relativ zu `~/.ssh`, wie OpenSSH es für die
 ///   Nutzerkonfiguration tut, weil die gewählte Datei eben nicht
 ///   `~/.ssh/config` sein muss. Genau hier lag einer der Messbefunde gegen
-///   `ssh2-config` (§9/M-1): Sie löst gegen `$HOME/.ssh` auf und läse damit
+///   `ssh2-config` (ADR 0074): Sie löst gegen `$HOME/.ssh` auf und läse damit
 ///   das echte SSH-Verzeichnis des Nutzers.
 /// - Platzhalter werden aufgelöst; jede getroffene Datei zählt einzeln.
 ///

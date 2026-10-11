@@ -1,174 +1,170 @@
-# Spec: Sicherheitshärtung vor dem Launch
+# Spec 0068 — Sicherheitshärtung: Redaction, Secret-Pfade, Sudo-Ankündigung, mehrere Tool-Calls, Timeouts
 
-Status: Entwurf
-Repo: **öffentlich** `smart_ssh` — `crates/core` (Redactor, Risiko-
-Klassifizierer), `crates/app-shell` (Orchestrierung, Confirm, Host-Key-
-Registry), `crates/ai-providers` (discovery.rs), Frontend (Schreib-Dialog)
-Abhängigkeiten: Redactor + Härtungen (Shadow/DB/Token-Runden), Risiko-
-Klassifizierer (0022/0026), Filter-Engine + Glob-Fix (0002/0060),
-Untrusted-Eskalation (0039), Datei-Write + Sudo-Fallback (0020),
-max_tokens (0065), Stopp/Einreihen (0066), Body-Timeout-Fix,
-Confirm-Timeout (0046 Fund 4)
+Status: umgesetzt
+Zweck: Fünf Schutzmaßnahmen, die ein sicherheitsbewusster Nutzer beim ersten Ausprobieren prüfen würde: nackte API-Keys werden geschwärzt, das Lesen von Secret-Dateien verlangt immer eine Bestätigung, ein Sudo-Fallback beim Schreiben wird vorab angekündigt, mehrere Tool-Calls in einer Antwort werden einzeln entschieden, und Wartezeiten auf Provider und Host-Key-Bestätigung sind begrenzt.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0006 und Spec 0095 (Redaction), Spec 0018 (Sudo-Passwort), Spec 0020 (Datei schreiben), Spec 0021 (Fortsetzung), Spec 0026 (Risiko-Einstufung), Spec 0039 (Eskalation nach untrusted Inhalt), Spec 0060 (Pfad-Auswertung), Spec 0065 (abgeschnittene Antworten), Spec 0066 (Stopp, Prompt-Regel „sensible Dateien nicht lesen"), Spec 0069 (Fehlermeldungen, Zeitgrenzen), Spec 0078 (Passwort in URLs), Spec 0092 (rotes Risiko), ADR 0058 (Abschnitt 8, `sftp-server`), ADR 0069, ADR 0108 (Host-Key-Abfrage beenden).
+Review-Priorität: ERHÖHT
 
-> Fünf kleine Punkte, die ein sicherheitsbewusster Nutzer beim ersten
-> Ausprobieren finden könnte. Bei einem Sicherheitsprodukt kostet so ein Fund
-> nach dem Launch mehr als vorher.
->
-> **Grundsatz für alle fünf Teile: Jede Änderung verschärft, keine lockert.**
-> Bei jedem Teil muss gelten: Kein bestehender Schutz wird aufgeweicht, keine
-> bestehende Regel/kein bestehendes Muster wird schwächer.
-> **Priorität ERHÖHT, Review adversarial.**
-
----
+**Grundsatz für alle fünf Teile:** Jede Änderung verschärft, keine lockert. Kein
+bestehender Schutz, keine bestehende Regel und kein bestehendes Muster wird
+schwächer.
 
 ## Teil 1 — Redaction: nackte API-Keys und Auth-Header
 
-**Problem:** Die Redaction erkennt nackte Key-Formate nicht, wenn kein
-Schlüsselwort (`password=`, `token=`) davorsteht. Genau diese Keys liegen bei
-unserer Zielgruppe in `.env`-Dateien, Configs und Logs auf ihren Servern —
-inklusive der Keys der Provider, die die App selbst unterstützt.
+Die Redaction erkennt Schlüssel auch dann, wenn kein Stichwort wie
+`password=` davorsteht — so liegen sie in `.env`-Dateien, Konfigurationen und
+Logs. Erkannt und durch `[REDACTED]` ersetzt werden:
 
-**Ergänzen** (jeweils das exakte, eindeutige Format — **gegen die aktuelle
-Provider-Doku bzw. echte Beispielformate prüfen, nicht aus dem Gedächtnis**):
-- Anthropic (`sk-ant-…`)
-- OpenAI (`sk-proj-…`, Service-Account-/Admin-Formate)
-- OpenRouter (`sk-or-…`)
-- GitLab (`glpat-…`), Hugging Face (`hf_…`)
-- HTTP-Header: `x-api-key: …`, `Authorization: Basic <base64>`
-- Generische URL-Zugangsdaten `schema://user:pass@host` außerhalb der
-  bekannten DB-Schemata (http/https/ftp/redis …) — **Achtung:** die
-  DB-String-Runde hatte zwei Regressionen durch zu gierige Zeichenklassen
-  (siehe Backlog); dieselbe Lehre anwenden.
+- Anthropic-Keys (`sk-ant-…`, auch Admin- und OAuth-Formen),
+- OpenAI-Keys (`sk-proj-…`, `sk-svcacct-…`, `sk-admin-…`, das ältere Format
+  mit festem Wasserzeichen),
+- OpenRouter (`sk-or-v…`), GitLab (`glpat-…` samt routbarem Suffix, ebenso
+  Runner- und Deploy-Token), Hugging Face (`hf_…`, `api_org_…`), Groq
+  (`gsk_…`), xAI (`xai-…`),
+- HTTP-Header `x-api-key`, `api-key`, `x-goog-api-key` und
+  `Authorization: Basic …` bzw. `Token …` (auch `Proxy-Authorization`),
+- Zugangsdaten in beliebigen URLs (`schema://user:passwort@host`), nicht nur
+  in Datenbank-Schemata; ersetzt wird nur das Passwort,
+- die Formate der Dateien aus Teil 2 (Docker-`auth`, kubeconfig-
+  `client-key-data`, `.netrc`), damit auch ein bestätigtes Lesen sie nicht im
+  Klartext an die KI gibt.
 
-**Lehren aus den früheren Redaction-Runden (verbindlich):**
-- **Reihenfolge**: Neue Muster so einordnen, dass kein anderes Muster sie
-  vorher zerteilt (Shadow-Fix-Lehre) — und umgekehrt kein neues Muster ein
-  bestehendes zerstört (DB-String-Lehre, „never loosen an existing check").
-- **Falsch-Positive testen**: Ein bloßes `sk-` in normalem Text, Git-SHAs,
-  UUIDs, Base64-Bilddaten dürfen nicht getroffen werden.
-- **Kein generisches Hoch-Entropie-Fallback** (analysiert und verworfen).
+Regeln dafür:
 
-## Teil 2 — Filter: Lesebefehle auf Secret-Pfade eskalieren
+- **Reihenfolge.** Neue Muster stehen so, dass kein anderes sie zerteilt und
+  sie kein bestehendes zerstören; Muster, die einen Header- oder
+  Schlüsselnamen mitverbrauchen, stehen am Ende. Die Zeichenklassen der
+  URL-Regel sind nicht gieriger als die der Datenbank-Regel (frühere
+  Regressionen).
+- **Mindest- statt exakter Länge** hinter einem eindeutigen Präfix: Ein leicht
+  abweichend langer echter Key rutscht nicht durch.
+- **Keine Falsch-Positive** auf normalen Text: ein bloßes `sk-`, Git-SHAs,
+  UUIDs, Base64-Bilddaten, Bezeichner wie `hf_hub_download`, Fließtext wie
+  „Basic authentication" bleiben unverändert.
+- **Kein generisches Hoch-Entropie-Muster** (bewusst verworfen: zu viele
+  Falsch-Positive).
 
-**Problem:** Die Prompt-Regel aus 0066 („sensible Dateien nicht lesen") ist
-weich — die KI folgt ihr meistens, nicht garantiert. Es braucht die harte
-Ergänzung in der Risiko-Klassifizierung.
+## Teil 2 — Lesebefehle auf Secret-Pfade verlangen Bestätigung
 
-- **Bestehenden Mechanismus erweitern**, keinen neuen bauen: Es gibt bereits
-  ein Risiko-Muster für Lesebefehle auf `shadow` (`data_risk: Red`). Dieses
-  Muster-Set um typische Secret-Pfade erweitern.
-- **Pfade** (Vorschlag, prüfen/ergänzen): `~/.ssh/id_*` (**nicht** `*.pub`),
-  `*.pem`, `*.key`, `.env` / `.env.*` (Grenzfall `.env.example`: begründet
-  entscheiden, im Zweifel eskalieren), `/etc/shadow`, `/etc/gshadow`,
-  `~/.aws/credentials`, `~/.docker/config.json`, `~/.kube/config`,
-  `~/.netrc`, `~/.pgpass`, `~/.git-credentials`.
-- **Befehle**, die Inhalt in die Ausgabe bringen: `cat`, `less`, `more`,
-  `head`, `tail`, `bat`, `grep`, `sed`, `awk`, `xxd`, `od`, `strings`,
-  `base64`, `openssl` (Key-Ausgabe) — **und die Datei-Lese-Aktion**
-  (`ReadRemoteFile` / `sftp-read`), sowohl im Chat- als auch im MCP-Pfad.
-  **Nicht** eskalieren: `cp`, `install`, `mv`, Umleitungen ohne Ausgabe —
-  das sind genau die Wege, die die Prompt-Regel empfiehlt.
-- **Wirkung**: Treffer → **immer Confirm, nie AutoExec — auch wenn eine
-  User-Allow-Regel greift.** Das ist eine reine Eskalation (analog zur
-  Untrusted-Eskalation aus 0039), sie kann nichts lockern.
-- **Fail-safe bei Unklarheit**: Shell-Metazeichen/Quoting im Pfad-Token
-  (0060-Lehre) → im Zweifel eskalieren (strenger ist hier die sichere
-  Richtung). Verkettungen (`echo x; cat ~/.ssh/id_rsa`) über die bestehenden
-  Sub-Kommando-Traces.
-- **Nicht prüfbare Kommandos**: Ist ein Kommando zu lang für die Prüfung
-  oder enthält es tiefer verschachtelte Shell-Code-Strings, als die Prüfung
-  zerlegt (dasselbe gilt für die Prüfung auf `sftp-server`-Aufrufe), wird es
-  ebenso eskaliert (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`). Der
-  Bestätigungsdialog nennt dann aber den eigenen Grund „Kommando ist zu lang
-  oder zu tief verschachtelt für eine Prüfung – erfordert immer
-  Bestätigung“, nicht „Liest eine Datei mit Zugangsdaten“ bzw. „Startet
-  sftp-server“. Ein Verdacht auf eingeschleuste Anweisungen hat als Grund
-  weiterhin Vorrang.
-- **Ehrlich dokumentieren**: lexikalisch, über Variablen/Symlinks umgehbar
-  — Redaction und Confirm bleiben die weiteren Schichten.
+Die Prompt-Regel „sensible Dateien nicht lesen" (Spec 0066) ist weich. Als
+harte Ergänzung stuft die Risiko-Einstufung das Lesen von Secret-Pfaden so ein,
+dass es **immer** eine Bestätigung verlangt.
 
-## Teil 3 — Sudo-Fallback im Schreib-Bestätigungsdialog ankündigen
+- **Pfade** (Auswahl): private SSH-Schlüssel `~/.ssh/id_*` (nicht `*.pub`) und
+  Host-Schlüssel, `*.pem`, `*.key`, Schlüsselspeicher (`.p12`, `.pfx`, `.jks`),
+  `.env`-Dateien (auch `.env.example`: Beispieldateien enthalten oft echte
+  Werte), `/etc/shadow`, `/etc/gshadow`, `~/.aws/credentials`,
+  `~/.docker/config.json`, `~/.kube/config`, `~/.netrc`, `~/.pgpass`,
+  `~/.git-credentials`, `.npmrc`, `.pypirc`, `.my.cnf`, Vault-Token, GnuPG-
+  Schlüsselbund, private TLS-Schlüssel, Shell-Historien, Prozess-Umgebungen.
+- **Befehle**, die Inhalt in die Ausgabe oder vom Server weg bringen: unter
+  anderem `cat`, `less`, `head`, `tail`, `grep`, `sed`, `awk`, `xxd`, `od`,
+  `strings`, `base64`, `openssl`, Editoren, Interpreter sowie `curl`, `wget`,
+  `scp`, `rsync` — **und die Datei-Lese-Aktion** (als `sftp-read`), in Chat
+  und MCP. Nicht erfasst werden `cp`, `install`, `mv` und Umleitungen ohne
+  Ausgabe: Das sind die Wege, die die Prompt-Regel empfiehlt, weil der Inhalt
+  dabei nie in einer Ausgabe landet.
+- **Wirkung.** Ein Treffer macht aus automatischer Ausführung immer eine
+  Bestätigung — auch wenn eine Allow-Regel greift. Das ist reine Eskalation
+  wie in Spec 0039: `Deny` bleibt `Deny`, nichts wird gelockert. Der Dialog
+  nennt den Grund „Liest eine Datei mit Zugangsdaten (z. B. SSH-Schlüssel,
+  .env, /etc/shadow) – erfordert immer Bestätigung". Hat die App den Verdacht
+  auf eingeschleuste Anweisungen, hat dieser Grund Vorrang.
+- **Im Zweifel streng.** Anführungszeichen und Backslashes im Pfad ändern das
+  Ergebnis nicht. Platzhalter auf mögliche Secret-Dateien, `find -exec`/`xargs`
+  mit Lesebefehl und Variablen im Pfad eskalieren. Verkettungen (`echo x; cat
+  ~/.ssh/id_rsa`), verschachtelte Shells und `cd`-Präfixe werden über die
+  Teilkommandos ausgewertet.
+- **Nicht prüfbare Kommandos.** Ist ein Kommando zu lang für die Prüfung oder
+  enthält es tiefer verschachtelte Shell-Code-Strings, als die Prüfung zerlegt
+  (dasselbe gilt für die Prüfung auf `sftp-server`-Aufrufe), wird es ebenso
+  eskaliert (nur automatische Ausführung → Bestätigung, `Deny` bleibt `Deny`).
+  Der Dialog nennt dann den eigenen Grund „Kommando ist zu lang oder zu tief
+  verschachtelt für eine Prüfung – erfordert immer Bestätigung", nicht
+  „Liest eine Datei mit Zugangsdaten" bzw. „Startet sftp-server". Ein Verdacht
+  auf eingeschleuste Anweisungen hat weiterhin Vorrang.
+- **Ehrlich begrenzt.** Die Prüfung ist lexikalisch und über Variablen oder
+  Symlinks umgehbar. Redaction (Teil 1) und Bestätigung bleiben die weiteren
+  Schichten.
 
-**Problem (Release-Gate C, MUSS):** Beim Datei-Schreiben (0020) nutzt die App
-ggf. das gespeicherte Sudo-Passwort, wenn der normale Write an Rechten
-scheitert. Der Bestätigungsdialog zeigt das **nicht** an — die bestehende
-„nutzt gespeichertes Sudo-Passwort"-Warnung prüft nur `SuggestCommand`.
+## Teil 3 — Sudo-Fallback beim Schreiben wird angekündigt
 
-- Der Schreib-Bestätigungsdialog zeigt **vor** der Bestätigung deutlich an,
-  wenn der Write mit Sudo erfolgen wird bzw. kann (gleicher Stil wie die
-  bestehende Warnung).
-- Wird Sudo erst *nach* der Bestätigung als Fallback nötig (Rechte-Fehler
-  beim ersten Versuch): **nicht still** mit Sudo nachschieben, sondern
-  entweder bereits im Dialog als Möglichkeit ankündigen oder erneut
-  bestätigen lassen. Beschreibe mir, wie der Fallback heute abläuft, und
-  wähle die Variante, bei der der Nutzer nie ohne Wissen Sudo auslöst.
-- Gilt für Chat **und** MCP.
+Beim Schreiben einer Datei (Spec 0020) nutzt die App das hinterlegte
+Sudo-Passwort, wenn das normale Schreiben an fehlenden Rechten scheitert.
 
-## Teil 4 — Multi-`tool_use`-Pfad mit Tests absichern
+- Hat der Server ein Sudo-Passwort, zeigt der Bestätigungsdialog einer
+  Schreib-Aktion **vor** der Bestätigung: „Fehlen die Rechte zum Schreiben,
+  schreibt die App mit dem hinterlegten Sudo-Passwort (sudo)." (Für Kommandos
+  mit `sudo` bleibt die bestehende Warnung „Wird mit hinterlegtem
+  Sudo-Passwort ausgeführt.")
+- Die Aktion verlangt dann immer eine Bestätigung, auch gegen eine Allow-Regel.
+- **Der Fallback ist an die Ankündigung gebunden.** Er läuft nur, wenn der
+  Dialog ihn angekündigt hat; sonst endet das Schreiben mit der Meldung, dass
+  erhöhte Rechte nötig sind und kein Sudo-Passwort hinterlegt ist. Die App
+  schiebt Sudo nie still nach.
+- Gilt für Chat und MCP.
 
-**Problem:** Eine Antwort mit **mehreren vollständigen** Tool-Calls wird
-sequenziell verarbeitet — funktioniert heute, hat aber **keinen einzigen
-Test** (Batching-Diagnose). Provider dürfen das jederzeit schicken
-(`tool_choice: auto`, OpenAI parallele `tool_calls`).
+## Teil 4 — Mehrere Tool-Calls in einer Antwort
 
-Tests (Anthropic- und OpenAI-Format), mindestens:
-- Zwei vollständige Tool-Calls → beide einzeln durch die Filter-Engine,
-  jeweils eigene Confirm-/AutoExec-Entscheidung.
-- **Eskalation greift über Aktionen hinweg**: Aktion 1 liest untrusted
-  content → Aktion 2 derselben Antwort wird eskaliert (0039).
-- Aktion 1 abgelehnt → Aktion 2 wird trotzdem einzeln entschieden (nicht
-  still mit-abgelehnt und nicht still mit-ausgeführt) — prüfe das Ist-
-  Verhalten und dokumentiere es; falls es heikel ist, melden statt raten.
-- Stopp (0066) zwischen Aktion 1 und 2 → Aktion 2 wird nicht ausgeführt.
-- Kombination mit `max_tokens` (0065) bleibt: letzte abgeschnitten → keine.
-Findet der Test ein Fehlverhalten, **beheben** (und melden).
+Liefert ein Provider mehrere vollständige Tool-Calls in einer Antwort (Anthropic
+`tool_use`, OpenAI parallele `tool_calls`), werden sie nacheinander verarbeitet:
 
-## Teil 5 — Timeouts: Host-Key-Bestätigung und discovery.rs
+- Jede Aktion läuft einzeln durch die Filter-Engine und bekommt ihre eigene
+  Entscheidung (Bestätigung oder automatische Ausführung).
+- **Die Eskalation wirkt über Aktionen hinweg.** Hat Aktion 1 untrusted Inhalt
+  gelesen, wird Aktion 2 derselben Antwort eskaliert (Spec 0039).
+- **Nach einer Ablehnung wird nicht mehr automatisch ausgeführt.** Wird eine
+  Aktion abgelehnt oder blockiert (auch ein vollständig geschwärzter
+  Notiz-Vorschlag oder ein vom Nutzer bearbeitetes, dann blockiertes
+  Kommando), verlangen die übrigen Aktionen derselben Antwort immer eine
+  Bestätigung, weil sie auf der abgelehnten aufbauen können. Sie werden weder
+  still mit abgelehnt noch still ausgeführt, sondern einzeln entschieden.
+- Ein **Stopp** (Spec 0066) zwischen zwei Aktionen verhindert die Ausführung
+  der folgenden.
+- Ist die Antwort am Längenlimit abgeschnitten, wird der letzte, unvollständige
+  Tool-Call nie ausgeführt (Spec 0065).
 
-**5a — discovery.rs** (Modell-Laden, Attestierung): Verbindung und
-Body-Lesen **ohne** Timeout. Denselben Mechanismus wie im Provider-Pfad
-nutzen (`SSE_INACTIVITY_TIMEOUT` bzw. `read_error_body_with_timeout`) — keine
-neue Konstante.
+## Teil 5 — Zeitgrenzen
 
-**5b — Host-Key-Bestätigung** (`pending_host_key_confirmations`): hat **gar
-keinen** Timeout, kann nach Frontend-Verlust ewig warten.
-- Timeout wie beim Confirm-Timeout (0046 Fund 4).
-- **Timeout = Ablehnung.** Ein Host-Key wird durch Zeitablauf **nie**
-  akzeptiert (Invariante 5: Host-Key-Änderungen nie automatisch akzeptiert).
-- **Die bekannte Falle** (im Backlog und im Doc-Kommentar von
-  `ConfirmationRegistry::cancel()` beschrieben): Ein `cancel()` auf eine
-  `SessionId`, die inzwischen von einem `connect()`-Retry neu registriert
-  wurde, würde den **falschen** Eintrag löschen. Lösung über eine
-  **Generation/Identität pro Eintrag** — der Timeout darf nur *seinen*
-  Eintrag entfernen. Regressionstest genau für diesen Fall.
-- Nachtrag (Issue #37, ADR 0108): jeder Ausgang des Wartens (Entscheidung,
-  Timeout, Abbruch) sendet `host-key-verification-ended { session_id,
-  prompt_id, reason }`; `prompt_id` ist diese Generation. Das Frontend
-  schließt damit die passende Abfrage. Timeout bleibt Ablehnung.
+**5a — Modell-Erkennung und Zugangsdaten-Prüfung.** Verbindungsaufbau und
+Lesen der Antwort sind begrenzt, mit derselben Zeitgrenze wie im Chat-Pfad
+(90 Sekunden ohne Aktivität); es gibt keine zweite Konstante. Ein Server, der
+nie antwortet, führt zum Fehler „Zeitüberschreitung" (Spec 0069), nicht zu
+einem hängenden Dialog.
 
----
+**5b — Host-Key-Bestätigung.**
 
-## Invarianten
-- Kein Teil lockert einen bestehenden Schutz (Muster, Regel, Eskalation).
-- Secret-Pfad-Eskalation ist reine Verschärfung, übersteuert Allow-Regeln
-  nur Richtung Confirm.
+- Die Abfrage wartet höchstens so lange wie eine Aktions-Bestätigung (eine
+  Stunde). Geht das Frontend verloren, hängt der Verbindungsaufbau nicht ewig.
+- **Zeitablauf ist Ablehnung.** Ein Host-Key wird durch Zeitablauf nie
+  akzeptiert und nie als bekannt gespeichert. Die Verbindung endet mit der
+  Meldung, dass die Host-Key-Bestätigung nicht rechtzeitig beantwortet wurde
+  (nicht vertraut).
+- **Nur der eigene Eintrag.** Jede Abfrage trägt eine eigene Kennung
+  (Generation). Wiederholt der Nutzer den Verbindungsaufbau, während die alte
+  Abfrage noch wartet, entfernt ein späteres Aufgeben der alten Abfrage nie die
+  neue.
+- Jeder Ausgang des Wartens (Entscheidung, Zeitablauf, Abbruch) meldet dem
+  Frontend, dass genau diese Abfrage beendet ist; das Frontend schließt damit
+  die passende Abfrage. Das Ereignis entscheidet nichts (ADR 0108).
+
+## Sicherheitszusagen
+
+- Kein Teil lockert einen bestehenden Schutz; alle Eskalationen gehen nur in
+  Richtung Bestätigung.
+- Das Lesen von Secret-Pfaden verlangt immer eine Bestätigung, auch gegen
+  Allow-Regeln, in Chat und MCP; `Deny` bleibt `Deny`.
+- Ein nicht prüfbares Kommando wird nie stillschweigend durchgelassen.
 - Kein Sudo ohne Wissen des Nutzers.
-- Host-Key nie durch Timeout akzeptiert; Timeout entfernt nur den eigenen
-  Eintrag.
-- Keine neuen Timeout-Konstanten, wo es schon welche gibt.
+- Nach einer Ablehnung läuft in derselben Antwort nichts mehr ohne Rückfrage.
+- Ein Host-Key wird nie durch Zeitablauf akzeptiert.
+- Von der Redaction erkannte Geheimnisse gehen nicht im Klartext an die KI.
 
-## Reihenfolge / Commits
-1. Teil 1 (Redaction)
-2. Teil 2 (Secret-Pfad-Eskalation)
-3. Teil 3 (Sudo-Ankündigung)
-4. Teil 4 (Multi-tool_use-Tests + ggf. Fixes)
-5. Teil 5 (Timeouts)
+## Grenzen
 
-## Abschluss
-- `spec-reviewer` **ERHÖHT, adversarial** — je Teil: Umgehungsversuche
-  (Teil 1: Muster-Kollisionen/Falsch-Negative; Teil 2: Quoting, Verkettung,
-  MCP-Pfad, Allow-Regel-Übersteuerung; Teil 3: stiller Sudo-Fallback; Teil 4:
-  Eskalation zwischen Aktionen; Teil 5: falscher Eintrag gelöscht, Host-Key
-  durch Timeout akzeptiert).
-- CHANGELOG (Security-Kategorie).
-- Manuelle Testabläufe.
+- Die Secret-Pfad-Prüfung ist lexikalisch; Variablen, Symlinks und Pfade, die
+  erst zur Laufzeit entstehen, erkennt sie nicht.
+- Die Redaction ist musterbasiert; ein unbekanntes Schlüsselformat wird nicht
+  erkannt.
+- Ein Befehl wie `cp ~/.ssh/id_rsa /tmp/x` löst keine Bestätigung aus Teil 2
+  aus (er bringt keinen Inhalt in eine Ausgabe).
