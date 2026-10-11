@@ -1141,8 +1141,7 @@ export function FileBrowserPanel({
       )}
 
       {copyJob && Math.max(copyJob.done, copyJob.total ?? 0) >= COPY_PROGRESS_FROM_BYTES && (
-        <div
-          role="status"
+        <output
           className="flex items-center gap-2 border-b border-slate-700 px-2 py-1.5 text-xs text-slate-200"
         >
           <span className="min-w-0 flex-1 truncate">
@@ -1162,7 +1161,7 @@ export function FileBrowserPanel({
           >
             {t("common.cancel")}
           </button>
-        </div>
+        </output>
       )}
       <div
         ref={tableContainerRef}
