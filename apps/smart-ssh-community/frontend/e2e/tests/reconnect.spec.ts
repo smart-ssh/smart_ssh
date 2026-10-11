@@ -3,8 +3,11 @@ import { expect, test } from "../support/app";
 import { populated } from "../support/data";
 import { chatInput, openSession } from "../support/session";
 
-const terminalKeys = (app: { page: import("@playwright/test").Page }) =>
-  app.page.locator(".xterm-helper-textarea").locator("visible=true");
+/** Focuses the visible terminal and types `key` into it. */
+async function pressInTerminal(app: { page: import("@playwright/test").Page }, key: string) {
+  await app.page.locator(".xterm-screen").locator("visible=true").click();
+  await app.page.keyboard.press(key);
+}
 
 test("a lost session is reconnected in the same tab with the button", async ({ app }) => {
   await app.launch(populated());
@@ -19,6 +22,8 @@ test("a lost session is reconnected in the same tab with the button", async ({ a
   await expect(button).toBeVisible();
   await expect(app.page.getByText("Disconnected: network down")).toBeVisible();
 
+  const shellsBefore = (await app.calls("open_terminal")).length;
+
   // The reconnect runs until the backend answers: the button is disabled.
   await app.setCommand("reconnect_session", { hold: true });
   await button.click();
@@ -31,7 +36,7 @@ test("a lost session is reconnected in the same tab with the button", async ({ a
   const calls = await app.calls("reconnect_session");
   expect(calls.map((c) => c.args.sessionId)).toEqual([sessionId]);
   // The terminal opens a new shell for the same session.
-  await expect.poll(async () => (await app.calls("open_terminal")).length).toBe(2);
+  await expect.poll(async () => (await app.calls("open_terminal")).length).toBe(shellsBefore + 1);
 });
 
 test("R in the dead terminal reconnects, other keys do not, R in a live terminal is input", async ({
@@ -40,17 +45,17 @@ test("R in the dead terminal reconnects, other keys do not, R in a live terminal
   await app.launch(populated());
   const sessionId = await openSession(app, "web-1");
 
-  await terminalKeys(app).press("r");
+  await pressInTerminal(app, "r");
   await expect.poll(async () => (await app.calls("terminal_input")).length).toBe(1);
   expect(await app.calls("reconnect_session")).toHaveLength(0);
 
   await app.emit("connection-status-changed", { sessionId, status: "disconnected", reason: null });
   await expect(app.page.getByRole("button", { name: "Reconnect", exact: true })).toBeVisible();
-  await terminalKeys(app).press("x");
+  await pressInTerminal(app, "x");
   expect(await app.calls("reconnect_session")).toHaveLength(0);
   expect(await app.calls("terminal_input")).toHaveLength(1);
 
-  await terminalKeys(app).press("R");
+  await pressInTerminal(app, "R");
   await expect.poll(async () => (await app.calls("reconnect_session")).length).toBe(1);
 });
 
