@@ -62,18 +62,14 @@ use ssh_manager_core::ai::OutputRedactor;
 const SAFE_LOG_MESSAGES: &[&str] = &[
     // app_shell::run / Startup-Lifecycle
     "Smart SSH startet",
-    "connecting to SQLite database",
     "running database migrations",
     "database migrations complete",
     "SQLite database connected",
-    "resolving chat-content encryption key from OS keychain",
-    "chat-content encryption key resolved",
     "loading host-key store",
     "host-key store loaded",
     "app setup complete, creating main window",
     "mcp server started",
     "mcp notification could not be shown",
-    "fatal: SQLite database connect/migrate failed",
     "fatal: host-key store failed to load",
     "showing fatal startup error dialog",
     "showing non-fatal startup warning dialog",
@@ -92,8 +88,6 @@ const SAFE_LOG_MESSAGES: &[&str] = &[
     "chat session mark_ended failed",
     "chat session retention cleanup failed",
     "ledger entry persistence failed",
-    "legacy plaintext prompt_history rows encrypted",
-    "prompt_history encryption migration failed",
     "note shrink persistence failed",
     "note shrink summarization failed",
     "note shrink summarization timed out",
@@ -380,6 +374,61 @@ mod tests {
         assert!(!bundle.contains("nginx.conf"));
         assert!(!bundle.contains("internal.example.corp"));
         assert!(!bundle.contains("192.168.1.42"));
+    }
+
+    /// Alle `.rs`-Dateien unter `dir` (rekursiv), ohne `target/`.
+    fn collect_rs_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read_dir") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n == "target") {
+                    continue;
+                }
+                collect_rs_files(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    /// Jeder Eintrag in `SAFE_LOG_MESSAGES` braucht eine Emissionsstelle im
+    /// Workspace (als String-Literal ausserhalb dieser Datei). Veraltete
+    /// Eintraege (Code entfernt/umbenannt) lassen die Positivliste
+    /// unbemerkt verwaisen; der Test schlaegt dann fehl.
+    #[test]
+    fn test_every_safe_log_message_has_an_emitter() {
+        let crates_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let this_file = std::path::Path::new(file!())
+            .file_name()
+            .expect("file name")
+            .to_owned();
+        let mut files = Vec::new();
+        collect_rs_files(&crates_dir, &mut files);
+        let mut sources = String::new();
+        for f in files {
+            if f.ends_with(std::path::Path::new("app-logic/src").join(&this_file)) {
+                continue;
+            }
+            let text = std::fs::read_to_string(&f).expect("read source");
+            // Zeilenfortsetzungen (`\` + Newline + Einrueckung) wie der
+            // Compiler zusammenziehen.
+            let mut joined = String::new();
+            let mut rest = text.as_str();
+            while let Some(i) = rest.find("\\\n") {
+                joined.push_str(&rest[..i]);
+                rest = rest[i + 2..].trim_start();
+            }
+            joined.push_str(rest);
+            sources.push_str(&joined);
+        }
+        let stale: Vec<&&str> = SAFE_LOG_MESSAGES
+            .iter()
+            .filter(|m| !sources.contains(&format!("\"{m}\"")))
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "SAFE_LOG_MESSAGES-Eintraege ohne Emissionsstelle: {stale:?}"
+        );
     }
 
     /// Fail-closed-Gegenprobe: eine unbekannte/nicht gelistete `message`
