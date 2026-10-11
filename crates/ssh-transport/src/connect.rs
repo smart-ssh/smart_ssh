@@ -184,7 +184,69 @@ pub async fn connect_with_limits(
     log: &ConnectLog,
     limits: ConnectLimits,
 ) -> Result<ConnectOutcome, SshError> {
-    let result = connect_inner(target, credentials, key_files, host_keys, log, limits).await;
+    connect_with_config(
+        target,
+        credentials,
+        key_files,
+        host_keys,
+        log,
+        limits,
+        client_config(),
+    )
+    .await
+}
+
+/// Like [`connect_with_limits`], with explicit keepalive timing (issue
+/// #353). Production code uses the fixed 15 s / 3 of [`client_config`];
+/// this exists so tests can exercise the real keepalive chain in seconds.
+#[doc(hidden)]
+#[allow(clippy::too_many_arguments)]
+pub async fn connect_with_keepalive(
+    target: &ConnectionTarget,
+    credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_keys: Arc<dyn HostKeyStore>,
+    log: &ConnectLog,
+    limits: ConnectLimits,
+    keepalive_interval: Duration,
+    keepalive_max: usize,
+) -> Result<ConnectOutcome, SshError> {
+    let config = client::Config {
+        keepalive_interval: Some(keepalive_interval),
+        keepalive_max,
+        ..client_config()
+    };
+    connect_with_config(
+        target,
+        credentials,
+        key_files,
+        host_keys,
+        log,
+        limits,
+        config,
+    )
+    .await
+}
+
+async fn connect_with_config(
+    target: &ConnectionTarget,
+    credentials: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_keys: Arc<dyn HostKeyStore>,
+    log: &ConnectLog,
+    limits: ConnectLimits,
+    config: client::Config,
+) -> Result<ConnectOutcome, SshError> {
+    let result = connect_inner(
+        target,
+        credentials,
+        key_files,
+        host_keys,
+        log,
+        limits,
+        config,
+    )
+    .await;
     if let Err(err) = &result {
         log.fail_running(err.code());
     }
@@ -213,6 +275,7 @@ async fn connect_inner(
     host_keys: Arc<dyn HostKeyStore>,
     log: &ConnectLog,
     limits: ConnectLimits,
+    config: client::Config,
 ) -> Result<ConnectOutcome, SshError> {
     // `nodelay: true` (Nagle deaktiviert): standardmäßig `false` in `russh`.
     // Bei mehrstufigen Verbindungen (Jump-Hosts) kann Nagles Algorithmus
@@ -220,7 +283,7 @@ async fn connect_inner(
     // im selben TCP-Segment ankommen/koalesziert werden — für den einfachen
     // Fall unschädlich, im Tunnel-Fall aber ein zusätzlicher Unsicherheits-
     // faktor beim Debuggen von Framing-Problemen.
-    let config = Arc::new(client_config());
+    let config = Arc::new(config);
     let (loss_tx, loss_rx) = tokio::sync::watch::channel(None);
 
     let mut hops = RusshHops {

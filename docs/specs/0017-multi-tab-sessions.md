@@ -24,7 +24,7 @@ Bestätigung wartet und — bei einer MCP-Sitzung — der Name des Clients
 
 - *verbunden*,
 - *getrennt* — wenn die Verbindung abreißt (Terminal-Ende oder Server antwortet
-  nicht mehr, s. 2.3) oder die Sitzung ausdrücklich getrennt wurde; der Tab bleibt dann stehen, bis der Nutzer ihn schließt, oder
+  nicht mehr, s. „Verbindungsabriss wird aktiv erkannt“ bei den Grenzen) oder die Sitzung ausdrücklich getrennt wurde; der Tab bleibt dann stehen, bis der Nutzer ihn schließt, oder
 - *wartet auf Host-Key* — solange ein Verbindungsaufbau auf die Entscheidung
   zum Host-Key wartet (Spec 0005). Diesen Status sieht man nur in der
   Sitzungsliste, etwa nach einem Neuladen der Oberfläche; er löst kein
