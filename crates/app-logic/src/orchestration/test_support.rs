@@ -1,7 +1,7 @@
 //! Gemeinsame Test-Hilfen (Fixtures, Mock-Aufbauten) für die Testmodule von
 //! `orchestration`s Untermodulen `chat_turn`, `action_exec`, `notes` und
-//! `remote_files` — Spec 0083, Design (§4): "Gemeinsame Test-Hilfen ...
-//! kommen in ein gemeinsames cfg(test)-Modul, nicht dupliziert." Reine
+//! `remote_files` — gemeinsame Test-Hilfen liegen in einem
+//! `cfg(test)`-Modul, nicht dupliziert (ADR 0076). Reine
 //! Verschiebung aus dem bisherigen `orchestration::tests`-Modulkopf, keine
 //! Verhaltensänderung.
 
