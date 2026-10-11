@@ -300,6 +300,16 @@ impl ElevatedSftpRegistry {
         session
     }
 
+    /// Issue #355: a reconnect keeps the session but never its elevated
+    /// channel (it belonged to the dead connection). The channel is revoked
+    /// like on disconnect; the user elevates again.
+    pub(crate) fn revoke_session(&self, session_id: SessionId) {
+        let slot = self.slots.lock().unwrap().remove(&session_id);
+        if let Some(slot) = slot {
+            slot.mark_revoked();
+        }
+    }
+
     /// Nur für Tests, die einen aktiven Kanal als Ausgangslage brauchen,
     /// ohne den vollen Aktivierungs-Ablauf (Proben, sudo-Prüfung) zu fahren
     /// — die Prüfung aus A2.2 gehört zu genau diesem Ablauf und wird

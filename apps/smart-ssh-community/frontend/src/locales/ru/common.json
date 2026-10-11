@@ -1107,6 +1107,10 @@
   "session": {
     "disconnected": "Отключено",
     "disconnectedWithReason": "Отключено: {{reason}}",
+    "reconnect": "Переподключиться",
+    "reconnecting": "Переподключение…",
+    "connectionLostPressR": "Соединение потеряно. Нажмите R для переподключения.",
+    "reconnectedSeparator": "— переподключено —",
     "disconnect": "Отключиться",
     "splitHandle": "Разделитель панелей",
     "terminalTab": "Терминал",

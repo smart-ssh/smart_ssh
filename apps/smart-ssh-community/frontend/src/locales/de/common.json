@@ -1091,6 +1091,10 @@
   "session": {
     "disconnected": "Verbindung getrennt",
     "disconnectedWithReason": "Verbindung getrennt: {{reason}}",
+    "reconnect": "Neu verbinden",
+    "reconnecting": "Verbinde neu …",
+    "connectionLostPressR": "Verbindung verloren. R drücken, um neu zu verbinden.",
+    "reconnectedSeparator": "— neu verbunden —",
     "disconnect": "Trennen",
     "splitHandle": "Bereichsaufteilung",
     "terminalTab": "Terminal",
