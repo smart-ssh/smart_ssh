@@ -18,11 +18,11 @@ export interface DialogFrameProps {
   /** Element focused on open. Default: the dialog itself. */
   initialFocusRef?: RefObject<HTMLElement | null>;
   role?: "dialog" | "alertdialog";
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   children?: ReactNode;
 }
 
-const SIZES = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl" } as const;
+const SIZES = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" } as const;
 
 /** Shared modal dialog: backdrop (`ModalBackdrop`), focus trap and Escape
  * (`useDialogFocusTrap`), title, scrolling body, action row. Only the body

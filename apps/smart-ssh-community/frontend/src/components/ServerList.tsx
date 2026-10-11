@@ -36,6 +36,7 @@ import { ConnectStepLog } from "./ConnectStepLog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../unusableServer";
+import { Button } from "./ui";
 
 interface ServerListProps {
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
@@ -309,7 +310,7 @@ export function ServerList({
         onClick={() => handleConnect(server)}
         disabled={connectingId !== null}
         style={{ paddingLeft: `${depth * 16 + 16}px` }}
-        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 disabled:opacity-60"
+        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 disabled:opacity-60"
       >
         <div>
           <p className="font-medium text-slate-100">{server.name}</p>
@@ -327,7 +328,7 @@ export function ServerList({
            * hängt, und wo sie liegt — `title` zeigt den vollen Pfad, falls
            * er abgeschnitten wird. */}
           {server.identityFilePath && (
-            <p className="truncate text-xs text-slate-500" title={server.identityFilePath}>
+            <p className="truncate text-xs text-slate-400" title={server.identityFilePath}>
               {/* spec-reviewer-Fund (Review dieses Schritts): das Emoji
                * allein trägt keine barrierefreie Bedeutung — `aria-hidden`
                * nimmt es aus dem Accessibility-Baum, der sichtbare Pfad
@@ -362,9 +363,9 @@ export function ServerList({
           <p className="font-medium text-slate-300">
             <span aria-hidden="true">⚠️</span> {server.name}
           </p>
-          <p className="text-sm text-slate-500">{server.host}</p>
+          <p className="text-sm text-slate-400">{server.host}</p>
           <p className="text-xs text-amber-300">{unusableReasonText(t, server.reason)}</p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-400">
             {t("unusableServer.listHint", { manage: t("nav.manage") })}
           </p>
         </div>
@@ -396,21 +397,23 @@ export function ServerList({
             type="button"
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
+            title={node.group.name}
             style={{ paddingLeft: `${depth * 16 + 16}px` }}
-            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 pr-2 text-left text-sm font-medium text-slate-200"
+            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 pr-2 text-left text-sm font-medium text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
           >
-            <span className="w-3 text-slate-500">{collapsed ? "▸" : "▾"}</span>
-            <span className="truncate">📁 {node.group.name}</span>
+            <span className="w-3 text-slate-400">{collapsed ? "▸" : "▾"}</span>
+            <span className="truncate" title={node.group.name}>
+              📁 {node.group.name}
+            </span>
           </button>
-          <button
-            type="button"
+          <Button variant="ghost" size="sm"
             onClick={() => onCreateServerInGroup(node.group.id)}
             title={t("mainScreen.newServerInGroup", { name: node.group.name })}
             aria-label={t("mainScreen.newServerInGroup", { name: node.group.name })}
-            className="mr-3 rounded px-2 py-0.5 text-sm text-slate-400 hover:bg-slate-700 hover:text-slate-100"
+            className="mr-3"
           >
             +
-          </button>
+          </Button>
         </div>
         {!collapsed &&
           (node.children.length > 0 ||
@@ -477,14 +480,13 @@ export function ServerList({
             {t("mainScreen.emptyStateTitle")}
           </p>
           <p className="mt-1 text-sm text-slate-400">{t("mainScreen.emptyStateHint")}</p>
-          <button
-            type="button"
+          <Button variant="primary"
             onClick={onCreateFirstServer}
-            className="mt-3 rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+            className="mt-3"
           >
             {t("mainScreen.emptyStateCreateFirstServer")}
-          </button>
-          <p className="mt-3 text-xs text-slate-500">{t("mainScreen.emptyStateTryLocalhost")}</p>
+          </Button>
+          <p className="mt-3 text-xs text-slate-400">{t("mainScreen.emptyStateTryLocalhost")}</p>
         </div>
       )}
 

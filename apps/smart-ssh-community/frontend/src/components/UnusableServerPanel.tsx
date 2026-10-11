@@ -4,6 +4,7 @@ import { commandErrorCode, commandErrorMessage, deleteUnusableServer } from "../
 import { translateErrorCode } from "../errorCodes";
 import type { DeleteUnusableServerResult, UnusableServerDto } from "../types";
 import { unusableReasonText } from "../unusableServer";
+import { Button } from "./ui";
 
 interface UnusableServerPanelProps {
   server: UnusableServerDto;
@@ -72,13 +73,11 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
 
       <div className="border-t border-slate-700 pt-4">
         {!secretsLeftBehind && (
-          <button
-            type="button"
+          <Button variant="danger" size="sm"
             onClick={handleDeleteClick}
-            className="rounded bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800"
           >
             {t("unusableServer.delete")}
-          </button>
+          </Button>
         )}
 
         {secretsLeftBehind && (
@@ -95,16 +94,14 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
                 <li key={ref}>{ref}</li>
               ))}
             </ul>
-            <button
-              type="button"
+            <Button size="sm"
               onClick={() => {
                 setSecretsLeftBehind(null);
                 onDeleted();
               }}
-              className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
             >
               {t("common.close")}
-            </button>
+            </Button>
           </div>
         )}
 
@@ -119,21 +116,17 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
             </ul>
             <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
             <div className="flex gap-2">
-              <button
-                type="button"
+              <Button size="sm"
                 onClick={() => setPreview(null)}
-                className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
               >
                 {t("common.cancel")}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button variant="danger" size="sm"
                 onClick={handleConfirmDelete}
                 disabled={deleting}
-                className="rounded bg-red-700 px-3 py-1 text-xs text-white hover:bg-red-600 disabled:opacity-50"
               >
                 {deleting ? t("common.deleting") : t("serverForm.confirmDeleteServer")}
-              </button>
+              </Button>
             </div>
           </div>
         )}
