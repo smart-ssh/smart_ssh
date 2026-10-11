@@ -8,7 +8,7 @@ import {
   type LanguageEntry,
 } from "./languages";
 
-const ALL = ["de", "en", "pt-BR", "zh-Hans", "nb", "fr", "pl", "cs", "uk", "ru"];
+const ALL = ["de", "en", "pt-BR", "zh-Hans", "nb", "fr", "pl", "cs", "uk", "ru", "ja", "ko"];
 
 describe("languageForLocale", () => {
   it.each([
@@ -37,6 +37,9 @@ describe("languageForLocale", () => {
     ["uk-UA", "uk"],
     ["ru-RU", "ru"],
     ["ru", "ru"],
+    ["ja-JP", "ja"],
+    ["ko-KR", "ko"],
+    ["zh_CN", "zh-Hans"],
     ["xx-YY", "en"],
     ["", "en"],
   ])("%s -> %s", (raw, expected) => {
@@ -62,7 +65,7 @@ describe("registry", () => {
   it("sorts the picker by English name and carries the endonym", () => {
     const fake: LanguageEntry = { code: "zz", endonym: "Zzz", englishName: "Aardvarkish", resources: {} };
     const sorted = languagesForPicker([...LANGUAGE_REGISTRY, fake]);
-    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Czech", "Dutch", "English", "French", "German", "Italian", "Polish", "Portuguese (Brazil)", "Russian", "Spanish", "Ukrainian"]);
-    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["Čeština", "Nederlands", "English", "Français", "Deutsch", "Italiano", "Polski", "Português (Brasil)", "Русский", "Español", "Українська"]);
+    expect(sorted.map((l) => l.englishName)).toEqual(["Aardvarkish", "Chinese (Simplified)", "Czech", "Dutch", "English", "French", "German", "Italian", "Japanese", "Korean", "Polish", "Portuguese (Brazil)", "Russian", "Spanish", "Ukrainian"]);
+    expect(languagesForPicker().map((l) => l.endonym)).toEqual(["简体中文", "Čeština", "Nederlands", "English", "Français", "Deutsch", "Italiano", "日本語", "한국어", "Polski", "Português (Brasil)", "Русский", "Español", "Українська"]);
   });
 });

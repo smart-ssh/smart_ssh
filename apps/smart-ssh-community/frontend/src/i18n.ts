@@ -108,6 +108,13 @@ export async function initI18n(forced?: SupportedLanguage): Promise<void> {
     defaultNS: "common",
     interpolation: { escapeValue: false }, // React escaped bereits selbst
   });
+  // `lang` am Wurzelelement: wählt die passende CJK-Glyphenvariante und
+  // die Zeilenumbruchregeln (Issue #335).
+  const setDocumentLang = (code: string) => {
+    if (typeof document !== "undefined") document.documentElement.lang = code;
+  };
+  setDocumentLang(language);
+  i18next.on("languageChanged", setDocumentLang);
 }
 
 /** Spec 0024, Abschnitt 4: "Auswahl in den Einstellungen jederzeit

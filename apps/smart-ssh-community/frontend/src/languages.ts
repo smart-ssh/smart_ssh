@@ -4,11 +4,14 @@ import en from "./locales/en/common.json";
 import es from "./locales/es/common.json";
 import fr from "./locales/fr/common.json";
 import it from "./locales/it/common.json";
+import ja from "./locales/ja/common.json";
+import ko from "./locales/ko/common.json";
 import pl from "./locales/pl/common.json";
 import ru from "./locales/ru/common.json";
 import uk from "./locales/uk/common.json";
 import nl from "./locales/nl/common.json";
 import ptBR from "./locales/pt-BR/common.json";
+import zhHans from "./locales/zh-Hans/common.json";
 
 // Spec 0024, Abschnitt 3/4: die einzige Quelle der Wahrheit für die
 // unterstützten UI-Sprachen. Eine neue Sprache = eine Locale-Datei + ein
@@ -94,6 +97,24 @@ export const LANGUAGE_REGISTRY: readonly LanguageEntry[] = [
     endonym: "Português (Brasil)",
     englishName: "Portuguese (Brazil)",
     resources: ptBR,
+  },
+  {
+    code: "ja",
+    endonym: "日本語",
+    englishName: "Japanese",
+    resources: ja,
+  },
+  {
+    code: "ko",
+    endonym: "한국어",
+    englishName: "Korean",
+    resources: ko,
+  },
+  {
+    code: "zh-Hans",
+    endonym: "简体中文",
+    englishName: "Chinese (Simplified)",
+    resources: zhHans,
   },
 ];
 
