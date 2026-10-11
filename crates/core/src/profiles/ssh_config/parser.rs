@@ -49,14 +49,14 @@ impl Known {
 
 /// Echte `ssh_config`-Schlüsselwörter, die wir **nicht** übernehmen.
 ///
-/// Zweck ist allein §3.1.4a (§9/Q-1, Punkt 3): zu entscheiden, ob eine
+/// Zweck ist allein §3.1.4a (§4.2 (Punkt 3)): zu entscheiden, ob eine
 /// eingebundene Datei überhaupt eine `ssh_config` ist. Über die Datei
 /// entscheidet die **Liste**, über „Name oder `unlesbare Zeile`"
 /// anschließend nur noch die **Form** (§3.1.5) — zwei Ebenen, weil die
 /// Form allein §6.4.9 (b) bräche: In einer Prosadatei hat fast jede Zeile
 /// ein formgültiges erstes Wort.
 ///
-/// **Bewusst kurz** (§9/Q-1, Punkt 3: „Im Zweifel die kürzere Liste").
+/// **Bewusst kurz** (§4.2 (Punkt 3): „Im Zweifel die kürzere Liste").
 /// Jedes Wort hier ist ein Wort, mit dem eine Prosazeile beginnen und die
 /// Datei damit als `ssh_config` durchgehen lassen könnte. Eine Lücke
 /// kostet dagegen nur, dass eine dünn besetzte echte `ssh_config`
@@ -64,7 +64,7 @@ impl Known {
 /// nichts nach außen gelangt. Eine echte `ssh_config`, aus der ein Profil
 /// entstehen soll, enthält ohnehin `Host` (aus [`Known`]).
 ///
-/// `Compression` steht hier, weil §9/Q-1 Punkt 7 es für den Prüfling von
+/// `Compression` steht hier, weil §4.2 (Punkt 7) es für den Prüfling von
 /// §6.4.9a verlangt.
 const OTHER_KEYWORDS: &[&str] = &[
     "match",
@@ -295,7 +295,7 @@ pub fn parse_source(bytes: &[u8]) -> Result<FileParse, ValueTooLong> {
     let mut too_long: Option<ValueTooLong> = None;
     let mut current: Option<HostBlock> = None;
     // Stehen wir in einem `Match`-Block? Dann wirkt keine Zeile auf ein
-    // Profil, bis das nächste `Host` kommt (§9/Q-1, Punkt 4).
+    // Profil, bis das nächste `Host` kommt (§4.2 (Punkt 4)).
     let mut in_match = false;
 
     for (idx, raw_line) in text.lines().enumerate() {
@@ -311,10 +311,10 @@ pub fn parse_source(bytes: &[u8]) -> Result<FileParse, ValueTooLong> {
             saw_known_keyword = true;
         }
 
-        // §4.2 und §9/Q-1 Punkt 4: **`Match` ist eine Blockgrenze.** Es
+        // §4.2 und §4.2 (Punkt 4): **`Match` ist eine Blockgrenze.** Es
         // beendet den laufenden `Host`-Block, damit keine Zeile aus dem
         // `Match`-Block auf ein Profil wirkt. Genau das war der schwerste
-        // Messbefund gegen `ssh2-config` (§9/M-1): Dort landete `User y`
+        // Messbefund gegen `ssh2-config` (ADR 0074): Dort landete `User y`
         // aus `Match host b` im vorhergehenden `Host a`. Ohne diese Zeile
         // hätten wir den Fehler nachgebaut.
         if kw_lower == "match" {

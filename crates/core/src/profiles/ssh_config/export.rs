@@ -4,7 +4,7 @@
 //! Import-Seite (§4.1). Dieses Modul bekommt den Bestand und gibt fertigen
 //! Dateitext samt einer Zusammenfassung zurück; wer den Dateidialog öffnet,
 //! `~/.ssh/config` als Ziel ablehnt und tatsächlich schreibt, ist
-//! `app-shell` — dieselbe Aufgabenteilung wie beim Import (§7.2).
+//! `app-shell` — dieselbe Aufgabenteilung wie beim Import (§4.1).
 //!
 //! **Kein Geheimnis verlässt dieses Modul** (§3.2.2, §5.1 letzter Satz:
 //! „Der Export schreibt keinen Wert, der aus dem Schlüsselbund stammt."):
@@ -241,7 +241,7 @@ pub fn build_export(servers: &[Server], groups: &[Group], local_server_id: Serve
         }
         block.push_str(&format!("Host {}\n", quote_value(&alias)));
         // §3.2.1 nennt `HostName` ohne Bedingung — die Spec setzt einen
-        // nicht-leeren `host` voraus. §1.3 hält aber ausdrücklich fest,
+        // nicht-leeren `host` voraus. §4.3 hält aber ausdrücklich fest,
         // dass das Anlegen von Hand keinen Pflichtfeld-Check kennt; ein
         // leerer `host` ist also erreichbar. `HostName ""` ist eine
         // fragwürdige Zeile (ob `ssh -G` sie akzeptiert, hängt von der

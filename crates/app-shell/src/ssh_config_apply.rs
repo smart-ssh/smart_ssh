@@ -1,4 +1,4 @@
-//! Den bestätigten Importplan ausführen (Spec 0075, §7.3).
+//! Den bestätigten Importplan ausführen (Spec 0075, §3.1.11).
 //!
 //! Dies ist der einzige Schritt, in dem überhaupt eine **Schlüsseldatei**
 //! geöffnet wird — und nur auf Weg (b) aus §3.1.9, nur beim Bestätigen, und
@@ -173,7 +173,7 @@ pub async fn apply_import(
                 selected: true,
                 identity_mode: IdentityMode::default(),
                 rename_to: None,
-                // §5.2a/§9: dieselbe Vorgabe wie in der Vorschau — ein
+                // §5.2a: dieselbe Vorgabe wie in der Vorschau — ein
                 // Schlagwort, das dort standardmäßig abgewählt startet,
                 // entsteht auch ohne Wahl des Nutzers nicht.
                 dropped_tags: plan
@@ -614,7 +614,7 @@ pub struct PreviewTagDto {
     /// deutlicher gekennzeichnet (§5.2a). Nur Kennzeichnung — die Vorgabe
     /// trägt [`Self::default_selected`].
     pub is_literal: bool,
-    /// §5.2a/§9: `false` ⇒ das Schlagwort startet in der Vorschau
+    /// §5.2a: `false` ⇒ das Schlagwort startet in der Vorschau
     /// abgewählt (Allow-Treffer ohne Deny-Treffer). Berechnet allein von
     /// `PlannedTag::default_selected` in `core`; der Dialog übernimmt den
     /// Wert, statt ihn selbst abzuleiten.

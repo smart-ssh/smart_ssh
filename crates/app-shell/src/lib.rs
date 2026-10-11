@@ -32,10 +32,10 @@ mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
 mod single_instance;
-/// Spec 0075, §7.3: den bestätigten Importplan ausführen — der einzige
+/// Spec 0075, §3.1.11: den bestätigten Importplan ausführen — der einzige
 /// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
 mod ssh_config_apply;
-/// Spec 0075, §7.4: Export nach `ssh_config` — Dateidialog,
+/// Spec 0075, §3.2: Export nach `ssh_config` — Dateidialog,
 /// `~/.ssh/config`-Ablehnung, Schreiben. Die Abbildung selbst liegt in
 /// `ssh_manager_core::profiles::ssh_config::export`.
 mod ssh_config_export;
@@ -753,12 +753,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::accept_and_create_rule,
             commands::export_document,
             commands::read_credential_file,
-            // Spec 0075, §7.3: Vorschau und Ausführung des
+            // Spec 0075, §3.1.11: Vorschau und Ausführung des
             // `ssh_config`-Imports. Die Vorschau öffnet den Dateidialog
             // selbst; das Ausführen nimmt nur Indizes (§5.1).
             ssh_config_apply::preview_ssh_config_import,
             ssh_config_apply::apply_ssh_config_import,
-            // Spec 0075, §7.4: Export nach `ssh_config`. Öffnet den
+            // Spec 0075, §3.2: Export nach `ssh_config`. Öffnet den
             // Speichern-Dialog selbst (§5.1-Muster).
             ssh_config_export::export_ssh_config,
             commands::get_platform,
