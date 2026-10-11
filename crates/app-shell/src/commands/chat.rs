@@ -122,6 +122,12 @@ async fn send_chat_message_impl<R: tauri::Runtime>(
     // einem späteren Reset verschluckt werden.
     let queued_only = {
         let mut turn = session.chat_turn.lock().unwrap();
+        // Issue #315: während „Neuer Chat" den Chat austauscht, nichts
+        // einreihen — die Nachricht würde sonst unbemerkt der ersten Anfrage
+        // des neuen Chats anhängen. Abgelehnt, der Text bleibt beim Nutzer.
+        if turn.swapping {
+            return Err(app_logic::orchestration::chat_switching_error());
+        }
         if turn.running {
             turn.queued.push(text.clone());
             true
@@ -853,6 +859,43 @@ mod send_chat_message_persistence_tests {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Issue #315: eine Nachricht, die eintrifft, während „Neuer Chat" den
+    /// Turn-Slot hält, wird abgelehnt und nicht eingereiht — sonst hinge sie
+    /// unbemerkt an der ersten Anfrage des neuen Chats.
+    #[tokio::test]
+    async fn test_message_sent_during_new_chat_swap_is_rejected_not_queued() {
+        let session = test_session(ServerId::new());
+        {
+            let mut turn = session.chat_turn.lock().unwrap();
+            turn.running = true;
+            turn.swapping = true;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        let err = send_chat_message_impl(
+            app.handle(),
+            &TestEmitter::default(),
+            &session,
+            uuid::Uuid::new_v4(),
+            "während des Wechsels".to_string(),
+            None,
+            &InMemoryProfileStore::default(),
+            &policy_store,
+            &ConfirmationRegistry::new(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, Some(app_logic::orchestration::CHAT_SWITCHING));
+        let turn = session.chat_turn.lock().unwrap();
+        assert!(turn.queued.is_empty(), "nothing may leak into the new chat");
+        assert!(turn.running, "the swap's claim stays untouched");
     }
 
     /// Spec 0066, §2: eine Nachricht, die während eines laufenden Turns

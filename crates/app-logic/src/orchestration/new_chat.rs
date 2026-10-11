@@ -17,6 +17,19 @@ use super::generate_session_title_on_disconnect;
 /// Bestätigung.
 pub const NEW_CHAT_BUSY: &str = "NEW_CHAT_BUSY";
 
+/// Stabiler Fehlercode (Issue #315): Eine Nutzer-Nachricht traf ein, während
+/// „Neuer Chat" den Chat austauscht. Sie wird abgelehnt, nicht eingereiht.
+pub const CHAT_SWITCHING: &str = "CHAT_SWITCHING";
+
+/// Fehler für `send_chat_message`, wenn gerade ein „Neuer Chat" läuft.
+pub fn chat_switching_error() -> CommandError {
+    CommandError::with_code(
+        "Die Nachricht wurde nicht gesendet: Gerade wird ein neuer Chat begonnen. \
+         Bitte noch einmal senden.",
+        CHAT_SWITCHING,
+    )
+}
+
 /// Der `uname -a`-Banner steht seit Spec 0064 als erste, nie persistierte
 /// Verlaufs-Nachricht (gefencter `<remote_system>`-Block, Rolle
 /// `ActionResult`) im Kontext. Er gehört zur Verbindung, nicht zum Chat, und
@@ -53,6 +66,7 @@ impl Drop for TurnClaim<'_> {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         turn.running = false;
+        turn.swapping = false;
     }
 }
 
@@ -102,6 +116,7 @@ pub async fn start_new_chat(
             return Err(busy_error());
         }
         turn.running = true;
+        turn.swapping = true;
     }
     let _claim = TurnClaim(session);
     if is_confirmation_open(session) {
@@ -278,6 +293,16 @@ mod tests {
             assert!(rows[0].ended_at.is_none());
             assert!(rows[0].title.is_none());
         }
+    }
+
+    #[tokio::test]
+    async fn test_new_chat_releases_turn_slot_and_swap_flag_afterwards() {
+        let (session, _store, _old_id, _tmp) = persisted_session().await;
+        start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
+            .await
+            .unwrap();
+        let turn = session.chat_turn.lock().unwrap();
+        assert!(!turn.running && !turn.swapping && turn.queued.is_empty());
     }
 
     #[tokio::test]
