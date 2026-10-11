@@ -104,9 +104,9 @@ pub async fn update_ai_provider(
     Ok(())
 }
 
-/// Spec 0007, Abschnitt 8.2/9: erst `CredentialStore::delete()`, dann die
+/// Spec 0007, Abschnitt 8.2: erst `CredentialStore::delete()`, dann die
 /// DB-Zeile — aber erst, nachdem geprüft wurde, dass der Provider nicht
-/// aktiv ist (Abschnitt 9: Löschen eines aktiven Providers ist verboten).
+/// aktiv ist (Abschnitt 8.2: Löschen eines aktiven Providers ist verboten).
 /// Würde man `is_active` nicht **vor** dem Credential-Löschen prüfen, könnte
 /// ein verbotener Löschversuch trotzdem den Credential eines weiterhin
 /// aktiven, in der DB unverändert bleibenden Providers entfernen.

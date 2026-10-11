@@ -126,7 +126,7 @@ describe("AppHeader platform/decoration-mode layout (Spec 0049, Fund 3/4)", () =
   });
 });
 
-/** Spec 0052, Abschnitt 6: "Titelzeile: enthält die Version". */
+/** Spec 0052, Abschnitt 3.3: die Titelzeile enthält die Version. */
 describe("AppHeader version display (Spec 0052)", () => {
   beforeEach(() => {
     invokeMock.mockReset();

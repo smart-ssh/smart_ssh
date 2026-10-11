@@ -1,97 +1,83 @@
-# Spec: Chat-Prompt-Historie (Pfeiltasten-Navigation)
+# Spec 0015 — Chat-Prompt-Historie (Pfeiltasten-Navigation)
 
-Status: Entwurf
-Modul: Erweiterung `persistence-sqlite`, `crates/app-tauri`, `frontend/`
-Abhängigkeiten: Chat-Kernschleife (Spec 0007, Abschnitt 6)
+Status: umgesetzt
+Zweck: Im Chat-Eingabefeld lassen sich zuletzt an einen Server gesendete Prompts mit den Pfeiltasten durchblättern, wie der Befehlsverlauf einer Shell. Die Historie gehört zum Server und überlebt Verbindungstrennung und App-Neustart.
+Bezüge: Spec 0007 (Kernschleife, Chat-Eingabe), Spec 0017 (Tabs, Entwurf und Navigation je Tab), Spec 0036 und Spec 0101 (Schutz gespeicherter Inhalte durch die verschlüsselte Datenbank), Spec 0040 (Eingabe-Historie als sensibler Text).
 
 ## 1. Ziel
 
-Im Chat-Eingabefeld lassen sich zuletzt an einen bestimmten Server gesendete
-Prompts per Pfeiltaste-nach-oben durchblättern (jüngster zuerst), analog zum
-Befehlsverlauf einer Shell — Pfeiltaste-nach-unten navigiert wieder zurück
-Richtung aktuellem/neuestem Eintrag. Die Historie ist **pro Server**
-gespeichert, nicht global und nicht nur pro laufender Session — sie
-überlebt Verbindungstrennung und App-Neustart.
+Pfeil-nach-oben im Chat-Eingabefeld zeigt den jüngsten zuvor an diesen Server
+gesendeten Prompt, weiteres Pfeil-nach-oben den jeweils älteren.
+Pfeil-nach-unten blättert zurück Richtung neuestem Eintrag und schließlich zum
+eigenen, noch nicht gesendeten Entwurf. Die Historie ist **pro Server**
+gespeichert, nicht global und nicht nur pro laufender Sitzung.
 
-## 2. Schema-Erweiterung (`persistence-sqlite`)
+## 2. Speicherung und Löschung
 
-```sql
--- migrations/0004_prompt_history.sql
+Die Historie liegt in der lokalen Datenbank, verknüpft mit dem Server. Wird der
+Server gelöscht, wird seine Historie mit entfernt.
 
-CREATE TABLE prompt_history (
-    id          TEXT PRIMARY KEY,
-    server_id   TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-    content     TEXT NOT NULL,
-    created_at  TEXT NOT NULL
-);
-
-CREATE INDEX idx_prompt_history_server ON prompt_history(server_id, created_at);
-```
-
-`ON DELETE CASCADE`: Wird ein Server gelöscht, ist seine Prompt-Historie
-mit ihm bedeutungslos, sie wird automatisch mitentfernt.
-
-Kein neues Sicherheits-/Verschlüsselungsthema — Prompt-Inhalte fallen unter
-dieselbe bereits getroffene Annahme wie Notizen und der Rest der DB (Spec
-0004, Abschnitt 7: OS-Festplattenverschlüsselung vorausgesetzt, keine
-zusätzliche Verschlüsselung dieser Tabelle).
+Prompt-Inhalte sind freier, womöglich sensibler Text. Sie sind wie Notizen und
+der Chat-Verlauf durch die Verschlüsselung der ganzen Datenbankdatei geschützt
+(Spec 0036, Spec 0101); eine eigene Verschlüsselung dieser Daten gibt es nicht.
 
 ## 3. Speicherung neuer Einträge
 
-Kein eigener Speichern-Command nötig — jeder Aufruf von
-`send_chat_message(session_id, text)` (Spec 0007) schreibt den gesendeten
-Text zusätzlich in `prompt_history`, verknüpft mit dem `server_id` der
-Session. Aufeinanderfolgende **identische** Prompts (z. B. zweimal
-hintereinander exakt derselbe Text) werden nicht doppelt gespeichert,
-sondern nur der bestehende jüngste Eintrag bleibt bestehen — vermeidet
-unnötiges Aufblähen der Historie.
+Es gibt keine eigene Speichern-Aktion: Jede an den KI-Chat gesendete
+Nachricht wird zusätzlich in der Historie des Servers der Sitzung abgelegt.
+Das gilt auch für eine Nachricht, die während eines laufenden Durchgangs
+eingereiht wird.
 
-Begrenzung: pro Server werden maximal die letzten 200 Einträge behalten,
-ältere werden beim Einfügen eines neuen Eintrags automatisch entfernt.
+- Ein Prompt, der exakt dem jüngsten gespeicherten Eintrag dieses Servers
+  entspricht, wird nicht doppelt gespeichert. Der bestehende Eintrag gilt dann
+  als jüngster.
+- Pro Server bleiben höchstens die letzten 200 Einträge. Beim Speichern eines
+  neuen Eintrags werden darüber hinaus die ältesten entfernt.
+- Die Historie ist eine Zusatzfunktion: Lässt sich ein Prompt nicht speichern,
+  wird die Nachricht trotzdem gesendet; der Fehler erscheint nur im Log.
 
-## 4. Tauri-Command
+## 4. Abruf
 
-```
-list_prompt_history(server_id: ServerId) -> Vec<String>
-```
+Das Frontend kann die gespeicherten Prompts eines Servers abrufen. Sie kommen
+in chronologischer Reihenfolge, älteste zuerst; die Navigation greift von
+hinten zu.
 
-Liefert die gespeicherten Prompts in chronologischer Reihenfolge (älteste
-zuerst) — das Frontend kehrt die Reihenfolge für die Navigation selbst um
-oder greift von hinten zu, je nach Implementierungspräferenz.
+## 5. Navigation im Eingabefeld
 
-## 5. Navigations-Verhalten im Chat-Eingabefeld
+Das Eingabefeld ist mehrzeilig (Spec 0007). Die Pfeiltasten-Navigation muss
+sich deshalb von der normalen Cursor-Bewegung in einem mehrzeiligen Entwurf
+unterscheiden:
 
-Das Eingabefeld ist ein mehrzeiliges Textfeld (Spec 0007), daher muss die
-Pfeiltasten-Navigation gezielt von normaler Cursor-Bewegung innerhalb eines
-mehrzeiligen Entwurfs unterschieden werden:
+- **Pfeil-nach-oben** löst die Historien-Navigation nur aus, wenn der Cursor
+  an Position 0 steht (Anfang der ersten Zeile) und nichts markiert ist. Sonst
+  bewegt sich der Cursor wie gewohnt.
+- **Pfeil-nach-unten** löst sie nur aus, wenn der Cursor am Ende des Textes
+  steht und nichts markiert ist. Sonst bewegt sich der Cursor wie gewohnt.
+- Beim ersten Pfeil-nach-oben wird der aktuelle, noch nicht gesendete Entwurf
+  zwischengespeichert, und das Feld zeigt den jüngsten Eintrag. Jedes weitere
+  Pfeil-nach-oben zeigt den nächstälteren, bis der älteste erreicht ist; dort
+  bleibt es stehen, ohne Fehlermeldung. Gibt es keine Einträge, passiert
+  nichts.
+- Pfeil-nach-unten geht in die Gegenrichtung. Nach dem jüngsten Eintrag
+  erscheint wieder der zwischengespeicherte Entwurf, auch wenn er leer war.
+  Außerhalb der Navigation bewirkt Pfeil-nach-unten nichts Besonderes.
+- Nach dem Einsetzen eines Eintrags steht der Cursor am Ende des Textes.
+- Jede normale Texteingabe beendet die Navigation. Ein erneutes
+  Pfeil-nach-oben beginnt dann wieder beim jüngsten Eintrag, statt an der
+  zuvor erreichten Stelle fortzusetzen. Auch das Senden setzt die Navigation
+  zurück. Bearbeitete Historieneinträge verhalten sich nicht wie ein neuer
+  Zwischenzustand (kein volles Readline-Verhalten).
+- Die Historie wird beim Öffnen des Server-Chats (und beim Wechsel auf einen
+  anderen Server) einmal geladen und nicht bei jeder Pfeiltaste neu. Kann sie
+  nicht geladen werden, ist sie leer. Der Navigationszustand wird beim
+  Serverwechsel zurückgesetzt.
 
-- **Pfeil-nach-oben** löst Historien-Navigation nur aus, wenn sich der
-  Cursor an **Position 0** des Textfelds befindet (Anfang der ersten
-  Zeile) — sonst bewegt sich der Cursor wie gewohnt innerhalb des Texts.
-- **Pfeil-nach-unten** löst Historien-Navigation nur aus, wenn sich der
-  Cursor am **Ende des Textfelds** befindet — sonst normale Cursor-Bewegung.
-- Wird zum ersten Mal in der aktuellen Eingabe nach oben navigiert: der
-  aktuell eingegebene, noch nicht gesendete Text (Entwurf) wird
-  zwischengespeichert, das Feld zeigt den jüngsten Historieneintrag.
-  Weiteres Pfeil-nach-oben zeigt jeweils den nächstälteren Eintrag, bis der
-  älteste erreicht ist (dort bleibt es stehen, keine Fehlermeldung).
-- Pfeil-nach-unten bewegt sich in umgekehrter Richtung; wird über den
-  jüngsten Historieneintrag hinaus navigiert, erscheint wieder der
-  ursprüngliche zwischengespeicherte Entwurf (auch falls dieser leer war).
-- **Bewusste MVP-Vereinfachung**: Jede Texteingabe (Tippen) außerhalb der
-  Pfeiltasten-Navigation selbst beendet den Navigations-Modus — ein erneutes
-  Pfeil-nach-oben beginnt wieder beim jüngsten Eintrag, statt an der zuvor
-  erreichten Position fortzusetzen. Das ist einfacher und vorhersehbarer als
-  volles Readline-Verhalten (bei dem bearbeitete Historieneinträge sich wie
-  ein neuer Zwischenzustand verhalten), für den beschriebenen Anwendungsfall
-  aber ausreichend.
-- Die Historie wird beim Öffnen/Wechseln zu einem Server-Chat einmalig über
-  `list_prompt_history` geladen und im Frontend-State für die laufende
-  Session gehalten — kein wiederholtes Nachladen bei jeder Pfeiltaste.
+## 6. Grenzen
 
-## 6. Offene Punkte
-
-- Keine UI zum manuellen Löschen/Durchsuchen der Historie in dieser Spec —
-  nur die Pfeiltasten-Navigation selbst. Eine durchsuchbare Historienansicht
-  (ähnlich Shell `Ctrl+R`) wäre eine naheliegende spätere Ergänzung, aber
-  nicht Teil dieses Schritts.
+- Es gibt keine Oberfläche zum Löschen oder Durchsuchen der Historie, nur die
+  Pfeiltasten-Navigation.
+- Prompts, die im geöffneten Chat gesendet werden, sind erst nach dem
+  nächsten Öffnen des Server-Chats per Pfeiltaste erreichbar, weil die Liste
+  nur beim Öffnen geladen wird.
+- Der lokale Pseudo-Server (Localhost-Sitzung) hat keinen gespeicherten Server
+  und damit keine Historie.

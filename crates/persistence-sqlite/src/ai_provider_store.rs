@@ -91,7 +91,7 @@ pub struct AiProviderConfigUpdate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AiProviderStoreError {
     NotFound(ProviderId),
-    /// Spec 0007, Abschnitt 9: Löschen eines aktiven Providers ist
+    /// Spec 0007, Abschnitt 8.2: Löschen eines aktiven Providers ist
     /// verboten, nicht automatisch aufgelöst (verbindliche Entscheidung,
     /// s. Aufgabenstellung).
     ActiveProviderDeletionForbidden(ProviderId),
@@ -216,7 +216,7 @@ impl SqliteAiProviderStore {
     /// Einzelabfrage — genutzt von `app-shell`s `delete_ai_provider`-Befehl,
     /// um `is_active` **vor** dem (nicht rücknehmbaren) `CredentialStore::delete()`
     /// zu prüfen, ohne die komplette Liste zu laden (s. Spec 0007 Abschnitt
-    /// 8.2 zur Lösch-Reihenfolge und Abschnitt 9 zum Aktiv-Löschverbot).
+    /// 8.2 zur Lösch-Reihenfolge und zum Aktiv-Löschverbot).
     pub async fn get(&self, id: &ProviderId) -> Result<AiProviderConfig, AiProviderStoreError> {
         let row = sqlx::query(
             "SELECT id, provider_type, display_name, base_url, model, \
@@ -348,7 +348,7 @@ impl SqliteAiProviderStore {
 
     /// Löscht `id` — schlägt mit
     /// [`AiProviderStoreError::ActiveProviderDeletionForbidden`] fehl, wenn
-    /// der Provider gerade aktiv ist (Spec 0007, Abschnitt 9: als
+    /// der Provider gerade aktiv ist (Spec 0007, Abschnitt 8.2: als
     /// verbindliche Entscheidung "verbieten" statt automatisch
     /// aufzulösen). `SELECT` und `DELETE` laufen nicht in einer expliziten
     /// Transaktion: der Pool dieser Crate hat durchgehend
