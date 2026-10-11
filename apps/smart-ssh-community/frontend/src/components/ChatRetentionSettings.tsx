@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AutoReconnectSettings } from "./AutoReconnectSettings";
+import { FIELD_CONTROL_CLASS } from "./ui";
 import { commandErrorMessage, getChatSessionRetentionDays, setChatSessionRetentionDays } from "../api";
 
 /** Spec 0034, Abschnitt 5: optionale Aufbewahrungsdauer für persistente
@@ -63,7 +64,7 @@ export function ChatRetentionSettings() {
   // SettingsScreen-eigenen Header-Rahmen sähe wie eine doppelte Linie aus.
   return (
     <div>
-      {error && <p className="mb-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{error}</p>}
+      {error && <p role="alert" className="mb-2 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
       {/* Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): die
        * entfernte `<h3>` (Teil 3) war NICHT nur eine doppelte Kategorie-
        * Überschrift, sondern trug auch die einzige Feldbeschriftung ("Chat-
@@ -76,6 +77,7 @@ export function ChatRetentionSettings() {
       <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
         <input
           type="checkbox"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           checked={days !== null}
           disabled={busy}
           onChange={(e) => handleToggleEnabled(e.target.checked)}
@@ -91,10 +93,11 @@ export function ChatRetentionSettings() {
           value={days}
           disabled={busy}
           onChange={(e) => handleDaysChange(e.target.valueAsNumber)}
-          className="w-20 rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-sm text-slate-200"
+          aria-label={t("chatRetention.label")}
+          className={`${FIELD_CONTROL_CLASS} w-24`}
         />
       )}
-      <p className="mt-1 text-xs text-slate-500">{t("chatRetention.hint")}</p>
+      <p className="mt-1 text-xs text-slate-400">{t("chatRetention.hint")}</p>
       <AutoReconnectSettings />
     </div>
   );

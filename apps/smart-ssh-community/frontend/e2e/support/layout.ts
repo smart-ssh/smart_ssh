@@ -61,7 +61,7 @@ export async function expectUsable(locator: Locator): Promise<void> {
  * Safari's default and skips buttons on a plain Tab; Option+Tab is the
  * platform's "every control" variant. Elsewhere it is Tab.
  */
-function tabKey(page: Page): string {
+export function tabKey(page: Page): string {
   const isMacWebKit = page.context().browser()?.browserType().name() === "webkit" && process.platform === "darwin";
   return isMacWebKit ? "Alt+Tab" : "Tab";
 }
@@ -139,4 +139,84 @@ export async function expectOnlyContentScrolls(
   await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   const after = await Promise.all(fixedParts.map((p) => p.boundingBox()));
   expect(after, "header/buttons moved while the content scrolled").toEqual(before);
+}
+
+/**
+ * Tab order and focus indicators inside `scope`: the visible, focusable
+ * controls are collected in DOM order; pressing Tab from the first one must
+ * visit exactly these controls in this order, each with a visible focus
+ * indicator (outline or ring), and that order must follow the visual order
+ * (rows top to bottom, within a row left to right). Controls in a nested
+ * `[role=dialog]` of the scope are ignored.
+ */
+export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locator): Promise<number> {
+  const stops = await scope.evaluate((root) => {
+    const selector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const all = Array.from(root.querySelectorAll<HTMLElement>(selector)).filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+    });
+    all.forEach((el, i) => el.setAttribute("data-e2e-stop", String(i)));
+    return all.map((el, i) => {
+      const r = el.getBoundingClientRect();
+      return { index: i, top: r.top, left: r.left, bottom: r.bottom, name: el.outerHTML.slice(0, 80) };
+    });
+  });
+  expect(stops.length, "no focusable controls in scope").toBeGreaterThan(0);
+
+  // Visual order: a stop may not sit clearly above its predecessor, and in
+  // the same row (vertical overlap) not left of it.
+  for (let i = 1; i < stops.length; i++) {
+    const prev = stops[i - 1]!;
+    const cur = stops[i]!;
+    const sameRow = cur.top < prev.bottom - 2 && prev.top < cur.bottom - 2;
+    const ok = sameRow ? cur.left >= prev.left - 1 : cur.top >= prev.top - 1;
+    expect(ok, `Tab stop ${cur.name} comes after ${prev.name} but is placed before it`).toBe(true);
+  }
+
+  await scope.locator(`[data-e2e-stop="0"]`).focus();
+  for (let i = 0; i < stops.length; i++) {
+    if (i > 0) await page.keyboard.press(tabKey(page));
+    const focus = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      const outline = cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0;
+      const ring = cs.boxShadow !== "none" && cs.boxShadow !== "";
+      return { stop: el.getAttribute("data-e2e-stop"), visible: outline || ring, html: el.outerHTML.slice(0, 80) };
+    });
+    expect(focus?.stop, `Tab press ${i} should reach stop ${i}`).toBe(String(i));
+    expect(focus?.visible, `no visible focus indicator on ${focus?.html}`).toBe(true);
+  }
+  return stops.length;
+}
+
+/**
+ * Nothing in `scope` sticks out of it sideways and no element cuts its own
+ * text off (horizontal overflow). Vertical overflow is fine: the content
+ * scrolls.
+ */
+export async function expectNoClippedText(scope: Locator): Promise<void> {
+  const problems = await scope.evaluate((root) => {
+    const box = root.getBoundingClientRect();
+    const out: string[] = [];
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>("*"))) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0 || !el.textContent?.trim()) continue;
+      const describe = `<${el.tagName.toLowerCase()}> "${el.textContent.trim().slice(0, 40)}"`;
+      if (r.right > box.right + 1 || r.left < box.left - 1) out.push(`${describe} sticks out sideways`);
+      const cs = getComputedStyle(el);
+      if (
+        cs.textOverflow === "ellipsis" ||
+        cs.overflowX === "hidden"
+      ) {
+        if (el.scrollWidth > el.clientWidth + 1 && !el.hasAttribute("title")) {
+          out.push(`${describe} is cut off without a title`);
+        }
+      }
+    }
+    return out;
+  });
+  expect(problems).toEqual([]);
 }

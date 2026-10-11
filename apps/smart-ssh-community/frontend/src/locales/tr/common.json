@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "\"Yerel olarak aç\" için her dosya uzantısına bir yerel uygulama atayın. Girdi yoksa işletim sisteminin varsayılan uygulaması kullanılır.",
+    "extensionLabel": "Dosya uzantısı",
     "appPathPlaceholder": "Uygulama yolu",
     "browse": "Gözat…",
     "remove": "Satırı kaldır",

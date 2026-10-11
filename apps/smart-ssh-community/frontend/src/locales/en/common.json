@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Set a local application per file extension to use for \"Open locally\". Without an entry, the operating system default application is used.",
+    "extensionLabel": "File extension",
     "appPathPlaceholder": "Path to application",
     "browse": "Browse…",
     "remove": "Remove row",

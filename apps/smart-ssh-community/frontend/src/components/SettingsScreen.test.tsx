@@ -278,3 +278,74 @@ describe("SettingsScreen registered section labels follow the UI language (Spec 
     }
   });
 });
+
+describe("SettingsScreen keyboard behaviour (issue #385)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  function renderWithTrigger(onClose: () => void) {
+    return render(
+      <I18nextProvider i18n={testI18n}>
+        <button type="button">open settings</button>
+        <SettingsScreen onClose={onClose} onProvidersChanged={vi.fn()} />
+      </I18nextProvider>,
+    );
+  }
+
+  it("is a labelled modal dialog and focuses the active category on open", () => {
+    renderWithTrigger(vi.fn());
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveAccessibleName(testI18n.t("settings.title"));
+    expect(document.activeElement).toBe(screen.getByRole("button", { current: "page" }));
+  });
+
+  it("closes on Escape from inside the dialog", () => {
+    const onClose = vi.fn();
+    renderWithTrigger(onClose);
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores Escape from a dialog opened on top of it", () => {
+    const onClose = vi.fn();
+    renderWithTrigger(onClose);
+    const nested = document.createElement("button");
+    document.body.appendChild(nested);
+    fireEvent.keyDown(nested, { key: "Escape" });
+    nested.remove();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("wraps Tab at both ends and keeps focus inside", () => {
+    renderWithTrigger(vi.fn());
+    const dialog = screen.getByRole("dialog");
+    const stops = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input, select, textarea"));
+    const first = stops[0]!;
+    const last = stops[stops.length - 1]!;
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+    first.focus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("returns focus to the previously focused element when it closes", () => {
+    const { unmount } = renderWithTrigger(vi.fn());
+    unmount();
+    // The trigger was unmounted too; a fresh one stands in for it.
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    trigger.focus();
+    const view = render(
+      <I18nextProvider i18n={testI18n}>
+        <SettingsScreen onClose={vi.fn()} onProvidersChanged={vi.fn()} />
+      </I18nextProvider>,
+    );
+    expect(document.activeElement).not.toBe(trigger);
+    view.unmount();
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
+});
