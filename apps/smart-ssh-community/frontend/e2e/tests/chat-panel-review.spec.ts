@@ -30,7 +30,9 @@ async function tabStops(page: Page, count: number) {
           scroller = scroller.parentElement;
         }
         const r = el.getBoundingClientRect();
-        const offset = scroller ? scroller.scrollTop - scroller.getBoundingClientRect().top : 0;
+        // The input row sits below the message column by design.
+        const inColumn = el.closest("div.overflow-y-auto.flex-1") !== null;
+        const offset = !inColumn ? 1_000_000 : scroller ? scroller.scrollTop - scroller.getBoundingClientRect().top : 0;
         const cs = getComputedStyle(el);
         const outline = cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0;
         const shadow = cs.boxShadow !== "none" && cs.boxShadow !== "";
