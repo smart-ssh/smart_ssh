@@ -17,12 +17,12 @@ usted / …).
 
 Filled per language by the translation issues. English is the reference.
 
-| English term | de | fr | es | it |
-|---|---|---|---|---|
-| filter rule | Filterregel (Regel) | règle de filtrage | regla de filtro | regola di filtro |
-| allow / deny | Allow / Deny (Ablehnen) | autoriser / refuser | Permitir / Denegar | Consenti / Nega |
-| session | Sitzung | session | sesión | sessione |
-| server | Server | serveur | servidor | server |
-| file browser | Dateibrowser | explorateur de fichiers | explorador de archivos | file browser |
-| redaction | redigiert | caviardage | ocultación de datos sensibles | oscuramento |
-| second opinion | Zweitmeinung | second avis | segunda opinión | seconda opinione |
+| English term | de | fr | es | it | pl | cs | uk | ru |
+|---|---|---|---|---|---|---|---|---|
+| filter rule | Filterregel (Regel) | règle de filtrage | regla de filtro | regola di filtro | reguła filtrowania | pravidlo filtru | правило фільтра | правило фильтра |
+| allow / deny | Allow / Deny (Ablehnen) | autoriser / refuser | Permitir / Denegar | Consenti / Nega | Zezwól / Odmów | Povolit / Zamítnout | Дозволити / Заборонити | Разрешить / Запретить |
+| session | Sitzung | session | sesión | sessione | sesja | relace | сеанс | сеанс |
+| server | Server | serveur | servidor | server | serwer | server | сервер | сервер |
+| file browser | Dateibrowser | explorateur de fichiers | explorador de archivos | file browser | przeglądarka plików | prohlížeč souborů | провідник файлів | обозреватель файлов |
+| redaction | redigiert | caviardage | ocultación de datos sensibles | oscuramento | redakcja (maskowanie danych wrażliwych) | redakce (maskování citlivých údajů) | редагування (приховування чутливих даних) | редактирование (скрытие конфиденциальных данных) |
+| second opinion | Zweitmeinung | second avis | segunda opinión | seconda opinione | druga opinia | druhý názor | друга думка | второе мнение |
