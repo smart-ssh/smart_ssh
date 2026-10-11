@@ -22,8 +22,8 @@ use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio::sync::oneshot;
 
 use ssh_manager_core::ssh::{
-    CommandOutput, ExecOutcome, ExecOutputSink, InteractiveShell, PtySize, SftpSession, SshError,
-    SshTransport,
+    CommandOutput, ExecOutcome, ExecOutputSink, InteractiveShell, PtySize, RunningExec,
+    SftpSession, SshError, SshTransport,
 };
 
 use crate::exec::{CappedOutput, MAX_STREAM_OUTPUT_BYTES};
@@ -207,6 +207,7 @@ fn default_shell_command() -> CommandBuilder {
 
 /// Kein Verbindungszustand nötig (Spec 0032, Abschnitt 2) — jeder
 /// Methodenaufruf startet unabhängig einen neuen lokalen Prozess.
+#[derive(Clone)]
 pub struct LocalTransport {
     /// Output-Cap für `execute()` (Spec 0044, dieselbe Mechanik/derselbe
     /// Default wie `RusshTransport::max_output_bytes`, Spec 0043 Fund A).
@@ -411,6 +412,25 @@ impl LocalTransport {
     }
 }
 
+/// Issue #328: a local command that runs without the transport lock.
+struct RunningLocalExec {
+    transport: LocalTransport,
+    command: String,
+}
+
+#[async_trait]
+impl RunningExec for RunningLocalExec {
+    async fn run(
+        self: Box<Self>,
+        cancel: oneshot::Receiver<()>,
+        sink: ExecOutputSink,
+    ) -> Result<ExecOutcome, SshError> {
+        self.transport
+            .run(&self.command, Some(cancel), Some(sink))
+            .await
+    }
+}
+
 impl Default for LocalTransport {
     fn default() -> Self {
         Self::new()
@@ -443,6 +463,20 @@ impl SshTransport for LocalTransport {
         sink: ExecOutputSink,
     ) -> Result<ExecOutcome, SshError> {
         self.run(command, Some(cancel), Some(sink)).await
+    }
+
+    /// Issue #328: nothing is held between start and run, so the running
+    /// command takes a copy of the (stateless) settings and the caller's
+    /// lock can be released right away.
+    async fn start_exec(
+        &mut self,
+        command: &str,
+        _stdin: Option<&[u8]>,
+    ) -> Result<Option<Box<dyn RunningExec>>, SshError> {
+        Ok(Some(Box::new(RunningLocalExec {
+            transport: self.clone(),
+            command: command.to_string(),
+        })))
     }
 
     fn set_max_output_bytes(&mut self, limit: usize) {
