@@ -1,5 +1,5 @@
 //! Tests zu Spec 0075, Schritt 1 (§6.1, §6.4.3, §6.4.4, §6.4.4a, §6.4.6,
-//! §6.4.7) und zu den Messbefunden aus §9/M-1.
+//! §6.4.7) und zu den Messbefunden aus ADR 0074.
 
 use chrono::Utc;
 use uuid::Uuid;
@@ -231,14 +231,14 @@ fn t_6_1_12_kommentare_und_leerzeilen_aendern_nichts() {
     );
 }
 
-// ---------------------------------------- §4.2 / §9/Q-1 P.4: Match
+// ---------------------------------------- §4.2 / §4.2: Match
 
 #[test]
 fn t_match_ist_blockgrenze_kein_fehlmerge() {
-    // Der Messbefund aus §9/M-1, als Test: `ssh2-config` gab `Host a` hier
+    // Der Messbefund aus ADR 0074, als Test: `ssh2-config` gab `Host a` hier
     // `user = "y"`.
     //
-    // **Der Fall aus §9/Q-1 Punkt 4 allein genügt nicht**, und das ist beim
+    // **Der Fall aus §4.2 (Punkt 4) allein genügt nicht**, und das ist beim
     // Gegenbeweis aufgefallen: Nimmt man die Blockgrenze heraus, bleibt
     // `a.username == "x"` trotzdem stehen — „der erste gewinnt" innerhalb
     // des Blocks fängt den Fehlmerge zufällig ab. Der Test wäre damit einer,
@@ -280,11 +280,11 @@ fn t_match_beendet_block_auch_fuer_folgende_hosts() {
     assert_eq!(entry(&plan, "b").port.value, 22);
 }
 
-// ------------------------------ ANNAHME A-1 (ADR 0074 Punkt 5/8, §9 Spec)
+// ------------------------------ ANNAHME A-1 (ADR 0074 Punkt 5/8)
 
 #[test]
 fn t_a1_include_im_match_block_wird_gemeldet_nicht_gefolgt() {
-    // ANNAHME A-1, bestätigt (Architekt, 2026-09-25, §9 der Spec): Ein
+    // ANNAHME A-1, bestätigt (Architekt, 2026-09-25, §3.3): Ein
     // `Include` **innerhalb** eines `Match`-Blocks wird gemeldet, nicht
     // gefolgt — wir werten die `Match`-Bedingung nicht aus (§4.2) und
     // wüssten deshalb nicht, ob `ssh` sie erfüllt sähe.
@@ -364,7 +364,7 @@ fn t_3_1_4a_ungueltiges_utf8_ist_keine_ssh_config() {
 fn t_3_1_4a_prosadatei_ist_keine_ssh_config() {
     // §6.4.9 (b): Eine Textdatei mit erkennbarer Zeichenfolge. Ihr erstes
     // Wort je Zeile ist formgültig — die Schlüsselwortliste ist deshalb
-    // die Ebene, die hier greifen muss (§9/Q-1, Punkt 3).
+    // die Ebene, die hier greifen muss (§4.2 (Punkt 3)).
     let text = "Liebe Kollegin\nGEHEIM_MARKER_42 steht hier\nViele Gruesse\n";
     assert_eq!(
         parse_source(text.as_bytes()).unwrap(),
@@ -863,7 +863,7 @@ fn t_musterabgleich_nach_openssh_semantik() {
     assert!(!matches_pattern("*.prod.de", "web1.test.de"));
     // `*` trifft auch Punkte — anders als ein Dateiglob.
     assert!(matches_pattern("*.de", "a.b.c.de"));
-    // §9/Q-1 Punkt 2: kein `globset`. `[` und `{` sind **wörtlich**.
+    // §4.2 (Punkt 2): kein `globset`. `[` und `{` sind **wörtlich**.
     assert!(matches_pattern("web[1", "web[1"));
     assert!(!matches_pattern("web[1-9]", "web5"));
     assert!(matches_pattern("a{b,c}", "a{b,c}"));
@@ -962,7 +962,7 @@ fn t_review2_buchstaebliches_schlagwort_bleibt_aber_ist_gekennzeichnet() {
     assert!(!entry(&plan2, "web1.prod.de").tags[0].is_literal);
 }
 
-// ------------------- Issue #105: Vorgabe „angewählt" je Schlagwort (§5.2a/§9)
+// ------------------- Issue #105: Vorgabe „angewählt" je Schlagwort (§5.2a)
 
 fn tag_rule(id: &str, action: RuleAction, scope: &str) -> Rule {
     Rule {

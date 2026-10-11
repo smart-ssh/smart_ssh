@@ -236,7 +236,7 @@ fn t_6_3_13_username_mit_leerzeichen_wird_gequotet() {
     assert!(plan.text.contains("User \"max mustermann\"\n"));
 
     // Und der Rundlauf durch unseren eigenen Leser liefert den vollen Wert
-    // zurück — genau der Fall aus §9/Q-1 Punkt 5, der den symmetrischen
+    // zurück — genau der Fall aus §4.2 (Zitier- und Trennerregeln), der den symmetrischen
     // Fehler ausschließt, den ein reiner Rundlauf sonst verdecken könnte.
     let reimported = reparse(&plan.text);
     let e = reimported.entries.first().expect("ein Eintrag");
@@ -305,7 +305,7 @@ fn t_6_4_6a_name_mit_newline_raute_anfuehrungszeichen() {
 }
 
 /// spec-reviewer Fall 3, Runde 1: `username` hat beim Anlegen von Hand
-/// keinen Format-Zwang (§1.3) — ein eingebettetes `\n` durfte nicht dazu
+/// keinen Format-Zwang (§4.3) — ein eingebettetes `\n` durfte nicht dazu
 /// führen, dass aus dem Rest des Werts eine eigene, wirksame Zeile wird.
 #[test]
 fn t_review1_username_mit_newline_bricht_nicht_aus_dem_wert_aus() {
@@ -473,7 +473,7 @@ fn startverzeichnis_mit_newline_bricht_nicht_aus_dem_kommentar_aus() {
     );
 }
 
-/// §1.3: das Anlegen von Hand kennt keinen Pflichtfeld-Check — ein leerer
+/// §4.3: das Anlegen von Hand kennt keinen Pflichtfeld-Check — ein leerer
 /// `host` ist erreichbar. `HostName ""` ist gegenüber echtem `ssh`
 /// fragwürdig; die Zeile bleibt deshalb ganz weg (§3.2.1 setzt implizit
 /// einen nicht-leeren Wert voraus, s. Moduldoc).
