@@ -1094,6 +1094,7 @@ async fn skip_auto_exec_after_stop(
                     truncated: false,
                 },
                 cancelled: true,
+                waiting_for_input: false,
             },
         },
         persist,
@@ -1674,6 +1675,10 @@ async fn execute_suggested_command(
     // forwarder ends when the transport drops the sink, i.e. before the
     // final result is emitted.
     let (live_sink, live_chunks) = tokio::sync::mpsc::unbounded_channel();
+    // Issue #327: set by the forwarder while the "probably waiting for
+    // input" hint is shown. Backend-owned, so the cancel note does not
+    // depend on anything the frontend claims.
+    let waiting_for_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let execution = async {
         // Issue #328: AI commands of one session stay serial through the
         // command slot, but the transport lock is only held to open the exec
@@ -1720,6 +1725,7 @@ async fn execute_suggested_command(
             emitter,
             session_id,
             action_id,
+            waiting_for_input.clone(),
         )
     );
     let _ = session
@@ -1796,6 +1802,10 @@ async fn execute_suggested_command(
                         command,
                         output: redacted,
                         cancelled,
+                        // The flag is only meaningful for a stop; a command
+                        // that ended on its own never gets the note.
+                        waiting_for_input: cancelled
+                            && waiting_for_input.load(std::sync::atomic::Ordering::SeqCst),
                     },
                 },
                 persist,

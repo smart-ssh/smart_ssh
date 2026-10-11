@@ -5,6 +5,7 @@ import type {
   ChatActionOutputEvent,
   ChatActionProposedEvent,
   ChatActionResultEvent,
+  ChatActionWaitingInputEvent,
   ChatAutoContinuationLimitReachedEvent,
   ChatAutoContinuationStartedEvent,
   ChatDocumentGeneratedEvent,
@@ -94,6 +95,12 @@ export const onChatActionOutput = (
   handler: (event: ChatActionOutputEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatActionOutputEvent>("chat-action-output", (e) => handler(e.payload));
+
+/** Issue #327 — a running command is probably waiting for input. */
+export const onChatActionWaitingInput = (
+  handler: (event: ChatActionWaitingInputEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatActionWaitingInputEvent>("chat-action-waiting-input", (e) => handler(e.payload));
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));

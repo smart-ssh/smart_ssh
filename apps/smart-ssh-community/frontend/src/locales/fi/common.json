@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "Tekoälyn toista mielipidettä ei saatu. Näytetty riski perustuu sääntöihin.",
     "riskHint": "Arvio perustuu tunnettuihin kuvioihin – ei takuuta.",
     "runningSince": "käynnissä {{seconds}} s…",
+    "waitingForInputHint": "Tämä komento odottaa todennäköisesti syötettä. Pysäytä se, niin tekoäly ehdottaa ei-interaktiivista vaihtoehtoa.",
     "cancelCommand": "Katkaise tämä komento",
     "cancellingCommand": "Katkaistaan…",
     "commandCancelledNotice": "⚠ Peruttu käsin – tuloste voi olla vajaa, ei normaalia paluuarvoa.",

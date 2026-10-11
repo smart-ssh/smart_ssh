@@ -92,6 +92,7 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
                 command,
                 output,
                 cancelled,
+                ..
             } => format!(
                 "[command_result] command_len={} exit={:?} stdout_len={} stderr_len={} \
                  cancelled={cancelled}",
@@ -137,7 +138,7 @@ fn history_contents(context: &SessionContext) -> Vec<String> {
         .iter()
         .map(|m| match &m.content {
             MessageContent::Text(t) => redactor.redact_text(t),
-            MessageContent::CommandResult { command, output, cancelled } => format!(
+            MessageContent::CommandResult { command, output, cancelled, .. } => format!(
                 "[command_result] {} (exit={:?}, stdout_len={}, stderr_len={}, cancelled={cancelled})",
                 redactor.redact_text(command),
                 output.exit_code,
@@ -706,6 +707,7 @@ mod error_logging_tests {
                             truncated: false,
                         },
                         cancelled: false,
+                        waiting_for_input: false,
                     },
                 },
                 ChatMessage {
@@ -767,6 +769,7 @@ mod error_logging_tests {
                             truncated: false,
                         },
                         cancelled: false,
+                        waiting_for_input: false,
                     },
                 },
                 ChatMessage {

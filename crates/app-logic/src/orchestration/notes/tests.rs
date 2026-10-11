@@ -27,6 +27,7 @@ fn command_result_message() -> ChatMessage {
             command: "uptime".to_string(),
             output: output("up 3 days"),
             cancelled: false,
+            waiting_for_input: false,
         },
     }
 }

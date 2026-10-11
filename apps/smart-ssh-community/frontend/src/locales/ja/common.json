@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "AIのセカンドオピニオンを取得できませんでした。表示されているリスクはルールベースのものです。",
     "riskHint": "既知のパターンに基づく評価です。保証するものではありません。",
     "runningSince": "{{seconds}}秒間実行中…",
+    "waitingForInputHint": "このコマンドは入力待ちの可能性があります。停止すると、AI が非対話型の代替案を提案します。",
     "cancelCommand": "このコマンドを切断",
     "cancellingCommand": "切断中…",
     "commandCancelledNotice": "⚠ 手動でキャンセルされました — 出力が不完全な可能性があり、通常の終了コードはありません。",

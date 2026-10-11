@@ -1702,6 +1702,7 @@ mod tests {
                     truncated: false,
                 },
                 cancelled: false,
+                waiting_for_input: false,
             },
         }];
         assert!(

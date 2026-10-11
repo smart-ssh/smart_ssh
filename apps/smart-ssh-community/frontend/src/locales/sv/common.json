@@ -339,6 +339,7 @@
     "riskSecondOpinionUnavailableHint": "AI:s andra åsikt kunde inte hämtas. Den visade risken är den regelbaserade.",
     "riskHint": "Bedömning baserad på kända mönster — ingen garanti.",
     "runningSince": "körs sedan {{seconds}} s…",
+    "waitingForInputHint": "Det här kommandot väntar sannolikt på inmatning. Stoppa det, så föreslår AI:n en icke-interaktiv variant.",
     "cancelCommand": "Koppla från det här kommandot",
     "cancellingCommand": "Kopplar från…",
     "commandCancelledNotice": "⚠ Avbrutet manuellt — utdata kan vara ofullständig, ingen vanlig slutkod.",

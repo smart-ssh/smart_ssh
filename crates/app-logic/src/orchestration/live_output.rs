@@ -4,19 +4,26 @@
 //! [`LIVE_OUTPUT_INTERVAL`] and action. Display only: nothing here reaches
 //! the chat history, the ledger or the AI.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::time::MissedTickBehavior;
+use tokio::time::{Instant, MissedTickBehavior};
 
 use ssh_manager_core::ai::{LiveOutputRedactor, OutputRedactor};
+use ssh_manager_core::ssh::input_prompt::{looks_like_input_prompt, PROMPT_TAIL_BYTES};
 use ssh_manager_core::ssh::{ExecOutputChunk, OutputStream};
 
-use crate::events::{emit_chat_action_output, EventEmitter};
+use crate::events::{emit_chat_action_output, emit_chat_action_waiting_input, EventEmitter};
 use crate::state::{ActionId, SessionId};
 
 /// At most ten live updates per second and action.
 pub(crate) const LIVE_OUTPUT_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Issue #327: no new output for this long, with a question as the last
+/// line, marks the command as "probably waiting for input".
+pub(crate) const WAITING_FOR_INPUT_AFTER: Duration = Duration::from_secs(3);
 
 /// Runs until the transport drops its end of the channel (the command has
 /// ended, was cancelled or failed). Output still held back at that point is
@@ -27,7 +34,13 @@ pub(crate) async fn forward_live_output(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
     action_id: ActionId,
+    waiting_for_input: Arc<AtomicBool>,
 ) {
+    // Raw (unredacted) tail of the output in arrival order; only used to
+    // decide on the hint, never shown or sent anywhere.
+    let mut tail: Vec<u8> = Vec::new();
+    let mut idle_deadline: Option<Instant> = None;
+    let mut waiting = false;
     let mut stdout = LiveOutputRedactor::new();
     let mut stderr = LiveOutputRedactor::new();
     let mut truncated = false;
@@ -43,6 +56,19 @@ pub(crate) async fn forward_live_output(
             chunk = chunks.recv() => match chunk {
                 None => break,
                 Some(ExecOutputChunk::Data { stream, bytes }) => {
+                    tail.extend_from_slice(&bytes);
+                    if tail.len() > PROMPT_TAIL_BYTES {
+                        tail.drain(..tail.len() - PROMPT_TAIL_BYTES);
+                    }
+                    // New output: any hint is stale; re-arm the timer only
+                    // when the output now ends in a question.
+                    idle_deadline = looks_like_input_prompt(&tail)
+                        .then(|| Instant::now() + WAITING_FOR_INPUT_AFTER);
+                    if waiting {
+                        waiting = false;
+                        waiting_for_input.store(false, Ordering::SeqCst);
+                        emit_chat_action_waiting_input(emitter, session_id, action_id, false);
+                    }
                     match stream {
                         OutputStream::Stdout => stdout.push(&bytes),
                         OutputStream::Stderr => stderr.push(&bytes),
@@ -54,6 +80,14 @@ pub(crate) async fn forward_live_output(
                     dirty = true;
                 }
             },
+            _ = async { tokio::time::sleep_until(idle_deadline.unwrap_or_else(Instant::now)).await },
+                if idle_deadline.is_some() =>
+            {
+                idle_deadline = None;
+                waiting = true;
+                waiting_for_input.store(true, Ordering::SeqCst);
+                emit_chat_action_waiting_input(emitter, session_id, action_id, true);
+            }
             _ = ticker.tick(), if dirty => {
                 dirty = false;
                 let out = stdout.release(redactor);
@@ -119,7 +153,14 @@ mod tests {
         let started = tokio::time::Instant::now();
         tokio::join!(
             producer,
-            forward_live_output(chunks, &redactor, &emitter, session_id, action_id)
+            forward_live_output(
+                chunks,
+                &redactor,
+                &emitter,
+                session_id,
+                action_id,
+                Default::default()
+            )
         );
         let elapsed = started.elapsed();
 
@@ -158,7 +199,14 @@ mod tests {
         };
         tokio::join!(
             producer,
-            forward_live_output(chunks, &redactor, &emitter, Uuid::new_v4(), Uuid::new_v4())
+            forward_live_output(
+                chunks,
+                &redactor,
+                &emitter,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                Default::default()
+            )
         );
 
         let stdout: Vec<String> = output_events(&emitter)
@@ -190,7 +238,14 @@ mod tests {
         };
         tokio::join!(
             producer,
-            forward_live_output(chunks, &redactor, &emitter, Uuid::new_v4(), Uuid::new_v4())
+            forward_live_output(
+                chunks,
+                &redactor,
+                &emitter,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                Default::default()
+            )
         );
 
         let events = output_events(&emitter);
@@ -220,7 +275,14 @@ mod tests {
         };
         tokio::join!(
             producer,
-            forward_live_output(chunks, &redactor, &emitter, Uuid::new_v4(), Uuid::new_v4())
+            forward_live_output(
+                chunks,
+                &redactor,
+                &emitter,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                Default::default()
+            )
         );
 
         let shown = joined(&output_events(&emitter), "stdout");
@@ -247,12 +309,108 @@ mod tests {
         };
         tokio::join!(
             producer,
-            forward_live_output(chunks, &redactor, &emitter, Uuid::new_v4(), Uuid::new_v4())
+            forward_live_output(
+                chunks,
+                &redactor,
+                &emitter,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                Default::default()
+            )
         );
 
         let events = output_events(&emitter);
         assert_eq!(events.len(), 1, "{events:?}");
         assert_eq!(events[0]["truncated"], serde_json::json!(true));
         assert_eq!(events[0]["stdout"], serde_json::json!("a\n"));
+    }
+
+    fn waiting_events(emitter: &TestEmitter) -> Vec<bool> {
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "chat-action-waiting-input")
+            .map(|(_, payload)| payload["waiting"].as_bool().unwrap())
+            .collect()
+    }
+
+    /// Runs the forwarder against `script` (delay before each chunk, bytes)
+    /// and `quiet_after` of silence before the channel closes.
+    async fn run_script(script: Vec<(u64, &'static [u8])>, quiet_after: u64) -> (Vec<bool>, bool) {
+        let (sink, chunks) = tokio::sync::mpsc::unbounded_channel();
+        let emitter = TestEmitter::default();
+        let redactor = DefaultOutputRedactor::new();
+        let flag = Arc::new(AtomicBool::new(false));
+        let producer = async move {
+            for (delay_ms, bytes) in script {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                sink.send(ExecOutputChunk::Data {
+                    stream: OutputStream::Stdout,
+                    bytes: bytes.to_vec(),
+                })
+                .unwrap();
+            }
+            tokio::time::sleep(Duration::from_millis(quiet_after)).await;
+            drop(sink);
+        };
+        tokio::join!(
+            producer,
+            forward_live_output(
+                chunks,
+                &redactor,
+                &emitter,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                flag.clone()
+            )
+        );
+        (waiting_events(&emitter), flag.load(Ordering::SeqCst))
+    }
+
+    /// AC 1: a question as the last line, 3 s without output -> hint.
+    #[tokio::test(start_paused = true)]
+    async fn test_prompt_without_output_for_3s_sets_waiting() {
+        let (events, flag) = run_script(vec![(0, b"Continue? [Y/n] ")], 3500).await;
+        assert_eq!(events, vec![true]);
+        assert!(flag);
+    }
+
+    /// No hint before 3 s have passed.
+    #[tokio::test(start_paused = true)]
+    async fn test_prompt_shorter_than_3s_shows_no_hint() {
+        let (events, flag) = run_script(vec![(0, b"Continue? [Y/n] ")], 2900).await;
+        assert!(events.is_empty());
+        assert!(!flag);
+    }
+
+    /// AC 2: silence (`sleep 30`) and a non-question last line
+    /// (`echo working; sleep 30`) never show a hint.
+    #[tokio::test(start_paused = true)]
+    async fn test_silence_and_plain_last_line_show_no_hint() {
+        let (events, _) = run_script(vec![], 30_000).await;
+        assert!(events.is_empty());
+        let (events, flag) = run_script(vec![(0, b"working\n")], 30_000).await;
+        assert!(events.is_empty());
+        assert!(!flag);
+    }
+
+    /// A heading ending in `:` that is followed by more output within 3 s
+    /// is not a prompt.
+    #[tokio::test(start_paused = true)]
+    async fn test_heading_followed_by_output_shows_no_hint() {
+        let (events, _) = run_script(vec![(0, b"Password:"), (1000, b"\nrow 1\n")], 10_000).await;
+        assert!(events.is_empty());
+    }
+
+    /// AC 3: output arriving after the hint removes it (and the backend
+    /// flag, so a later stop carries no "waiting" note).
+    #[tokio::test(start_paused = true)]
+    async fn test_output_after_hint_clears_it() {
+        let (events, flag) =
+            run_script(vec![(0, b"Continue? [Y/n] "), (4000, b"y\ndone\n")], 100).await;
+        assert_eq!(events, vec![true, false]);
+        assert!(!flag);
     }
 }
