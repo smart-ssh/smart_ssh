@@ -1,62 +1,58 @@
-# Spec: Gruppierte Server-Übersicht
+# Spec 0033 — Gruppierte Server-Übersicht
 
-Status: Entwurf
-Modul: `frontend/` (Haupt-Serverübersicht)
-Abhängigkeiten: Gruppen-Datenmodell (Spec 0003), bestehende Gruppen-Baum-
-Logik der Verwaltungs-Sidebar (Spec 0008, Abschnitt 6), lokaler
-Pseudo-Server (Spec 0032)
+Status: umgesetzt
+Zweck: Die Haupt-Serverübersicht, über die ein Server zum Verbinden gewählt wird, zeigt die Server nach ihren Gruppen gegliedert statt als flache Liste.
+Bezüge: Spec 0003 (Gruppen), Spec 0008 (Verwaltungs-Sidebar, Abschnitt 6 und 6a), Spec 0032 (lokaler Pseudo-Server).
 
-## 1. Problem
+## 1. Ziel
 
-Die Haupt-Serverübersicht (der Bildschirm, über den ein Server zum
-Verbinden ausgewählt wird — zu unterscheiden von der Sidebar im
-Bearbeiten-Formular aus Spec 0008) zeigt Server aktuell als flache Liste,
-ohne die längst vorhandene Gruppenstruktur (Spec 0003) sichtbar zu machen.
-Bei mehr als einer Handvoll Server wird das schnell unübersichtlich.
+Die Gruppierung, die in der Verwaltungs-Sidebar (Bearbeiten-Formular, Spec 0008)
+als Baum sichtbar ist, erscheint auch in der Haupt-Übersicht. Server werden nach
+ihrer Gruppenzugehörigkeit abschnittsweise dargestellt, nicht als ein großer
+Haufen.
 
-## 2. Ziel
+## 2. Abgrenzung
 
-Dieselbe Gruppierung, die im Bearbeiten-Formular bereits als Baum sichtbar
-ist (Spec 0008, Abschnitt 6), auch in der Haupt-Übersicht — Server werden
-nach ihrer Gruppenzugehörigkeit abschnittsweise dargestellt, nicht mehr als
-ein großer Haufen.
+Die Haupt-Übersicht ist der Bildschirm, über den ein Server zum Verbinden
+gewählt wird; ein Klick auf einen Server verbindet direkt. Die
+Verwaltungs-Sidebar öffnet stattdessen das Bearbeiten-Formular. Beide
+Ansichten dürfen sich in Darstellung und Interaktion unterscheiden.
 
 ## 3. Struktur
 
-- Ein einklappbarer Abschnitt pro Gruppe (inkl. verschachtelter
-  Untergruppen, eingerückt entsprechend der Hierarchietiefe).
-- Ein zusätzlicher Abschnitt **"Ohne Gruppe"** für Server ohne
-  `group_id`, am Ende der Liste.
+- Ein einklappbarer Abschnitt pro Gruppe, verschachtelte Untergruppen
+  entsprechend ihrer Tiefe eingerückt. Die Kopfzeile trägt außerdem ein „+", das
+  einen neuen Server in dieser Gruppe anlegt.
+- Ein Abschnitt **„Ohne Gruppe"** für Server ohne Gruppe, am Ende der Liste. Er
+  erscheint, sobald mindestens ein Server ungruppiert ist (beim Ziehen eines
+  Eintrags auch ohne, als Ablageziel für die oberste Ebene).
 - Der lokale Pseudo-Server (Spec 0032) erscheint **fest angepinnt oberhalb**
-  aller Gruppen-Abschnitte, niemals innerhalb eines Ordners — visuell klar
-  als eigene Kategorie abgesetzt (z. B. durch eine Trennlinie).
+  aller Gruppen-Abschnitte in einem eigenen abgesetzten Kasten, niemals innerhalb
+  eines Ordners und nie unter „Ohne Gruppe".
+- Nicht nutzbare Server (Spec 0008, Abschnitt 6a) stehen an ihrem Platz in der
+  Gruppe bzw. unter „Ohne Gruppe", als solche markiert und nicht verbindbar.
+- Ohne einen einzigen echten Server zeigt die Übersicht zusätzlich einen
+  Einstiegs-Block zum Anlegen des ersten Servers; vorhandene Gruppen werden
+  daneben trotzdem angezeigt.
 
 ## 4. Verhalten
 
-- Klick auf eine Gruppen-Kopfzeile klappt sie ein-/aus.
-- Der Auf-/Zugeklappt-Zustand bleibt mindestens für die laufende
-  App-Sitzung erhalten (State im Frontend); ob er darüber hinaus dauerhaft
-  gespeichert wird (`tauri-plugin-store`, Spec 0024-Muster), ist ein
-  offener Punkt (Abschnitt 6) — kein Blocker für diese Spec.
-- Leere Gruppen (keine direkten Server, aber ggf. Untergruppen mit
-  Servern) werden trotzdem angezeigt, damit die Hierarchie nachvollziehbar
-  bleibt, nicht übersprungen.
+- Ein Klick auf eine Gruppen-Kopfzeile klappt sie ein oder aus. Neu angezeigte
+  Gruppen sind aufgeklappt.
+- Der Auf-/Zuklappzustand bleibt für die laufende App-Sitzung erhalten, auch
+  wenn der Nutzer zwischendurch in einen anderen Bereich (Verwalten,
+  Filter-Regeln) wechselt. Über einen Neustart hinweg bleibt er nicht erhalten.
+- Leere Gruppen (keine direkten Server, aber ggf. Untergruppen mit Servern)
+  werden trotzdem angezeigt, damit die Hierarchie nachvollziehbar bleibt.
 
-## 5. Wiederverwendung statt Neubau
+## 5. Eine gemeinsame Gruppen-Aufbereitung
 
-Die Logik "aus `list_groups()` + `list_servers()` einen Baum aufbauen"
-existiert bereits für die Verwaltungs-Sidebar (Spec 0008). Extrahiere diese
-Logik in eine gemeinsame Komponente/einen gemeinsamen Hook, den sowohl die
-Verwaltungs-Sidebar als auch die neue gruppierte Haupt-Übersicht nutzen —
-keine zweite Implementierung derselben Baum-Aufbau-Logik. Die beiden
-Ansichten dürfen sich in Darstellung/Interaktion unterscheiden (die eine
-öffnet ein Bearbeiten-Formular, die andere verbindet direkt), aber nicht in
-der zugrunde liegenden Datenstruktur-Aufbereitung.
+Verwaltungs-Sidebar und Haupt-Übersicht bauen den Gruppenbaum aus denselben
+Daten mit derselben Regel auf: dieselbe Reihenfolge, dieselbe Zuordnung der
+Server zu Gruppen, derselbe Ausschluss des lokalen Pseudo-Servers aus den
+Gruppen. Ein Server erscheint in beiden Ansichten in derselben Gruppe.
 
-## 6. Offene Punkte
+## 6. Grenzen
 
-- Dauerhafte Speicherung des Ein-/Ausklapp-Zustands über einen Neustart
-  hinweg — naheliegend, aber nicht zwingend Teil dieses Schritts.
-- Soll es eine Volltextsuche/Filter über alle Server hinweg geben (die
-  Gruppenstruktur bei Bedarf temporär "aufhebt")? Nicht Teil dieser Spec,
-  denkbare spätere Ergänzung bei wachsender Serverzahl.
+- Der Auf-/Zuklappzustand wird nicht dauerhaft gespeichert.
+- Es gibt keine Suche und keinen Filter über alle Server hinweg.

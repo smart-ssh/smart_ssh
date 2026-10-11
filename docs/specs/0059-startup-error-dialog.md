@@ -1,107 +1,111 @@
-# Spec: Fataler Startfehler zeigt immer ein UI
+# Spec 0059 — Fataler Startfehler zeigt immer eine Meldung
 
-Status: Entwurf
-Repo: **öffentlich** `smart_ssh` (Startup-Pfad, `app-shell`/`main`)
-Modul: Der früheste Startup-Pfad, vor/während der Tauri-Initialisierung
-Abhängigkeiten: SQLite-Migrationen (0004/0047), Keychain/Secret-Service-Zugriff
-(0004/0036), Startup-Logging (0047 B1), Panic-Hook (0047 B1)
-Release-Gate: **A (MUSS)** — ohne diesen Punkt kein Launch.
+Status: umgesetzt
+Zweck: Kann Smart SSH nicht starten, sieht der Nutzer eine verständliche Meldung mit Ursache, Datenpfad und nächstem Schritt — kein Aufblitzen ohne Fenster, kein stiller Absturz.
+Bezüge: Spec 0071 (Schlüsselbund nicht verfügbar, Sprache der Startdialoge), Spec 0101 (verschlüsselte Datenbank, Dialoge D1–D4, Entsperrmaske), Spec 0094 (Logregeln), ADR 0052 (Mechanismus und offene Entscheidungen), ADR 0093.
 
-> **Das Problem:** Es gibt aktuell **keinen** Fehlerpfad für „die App kann gar
-> nicht erst starten". Ein Panic *vor* dem ersten Fenster führt nur zu kurzem
-> Aufblitzen ohne Fenster — für einen Doppelklick-Nutzer völlig
-> undiagnostizierbar (die App „geht einfach nicht"). Für ein Produkt zum
-> Herunterladen+Doppelklicken ist das der schlechteste erste Eindruck.
-> **Priorität ERHÖHT** (Startphase, plattformspezifisch, berührt die
-> „kein Fehlerpfad bricht ab statt sichtbar behandelt"-Invariante — die für
-> die *laufende* App gilt, aber für die *Startphase* fehlt).
+## 1. Grundsatz
 
-## Die vier Fehlerfälle (Release-Gate A)
+Tritt vor dem ersten Fenster ein Fehler auf, der den Start unmöglich macht,
+zeigt Smart SSH einen **nativen Dialog des Betriebssystems** (es gibt zu
+diesem Zeitpunkt noch kein App-Fenster). Der Dialog blockiert, nennt die
+Ursache, den Datenpfad und einen nächsten Schritt; danach beendet sich die
+App mit Fehlerstatus. Sie läuft nie in einem halb aufgebauten Zustand
+weiter.
 
-Ein **nativer OS-Dialog** (nicht ein Tauri-Fenster — das steht ja noch nicht)
-muss erscheinen bei:
-1. **DB von neuerer Version angelegt** (Downgrade-Fall): älteres Binary trifft
-   neuere DB. Meldung sinngemäß: „Die Datenbank wurde von einer neueren
-   Version angelegt (Version X, dieses Programm kennt bis Y). Bitte die
-   neueste Version installieren." + Datenpfad.
-2. **DB korrupt / nicht lesbar.** Meldung + Pfad + nächster Schritt (Backup
-   einspielen / Support).
-3. **Keychain / Secret Service beim Start gesperrt oder nicht vorhanden.**
-   (Das ist derselbe Fund wie der `.expect()`-Panic aus Spec 0040 Teil 6
-   Punkt 1 — **dabei entfernen**.) Auf Linux: welches Paket fehlt
-   (gnome-keyring / kwallet / KeePassXC-Secret-Service).
-4. **Datenverzeichnis nicht schreibbar** (Rechteproblem). Meldung + Pfad.
+- **Logging zuerst.** Der Fehler steht im Log, bevor der Dialog erscheint;
+  der Dialog ersetzt das Log nicht. Auch ein Panic wird mit seiner Ursache
+  geloggt.
+- **Sprache.** Titel und Text folgen der Sprache der Systemumgebung, mit
+  Deutsch als Vorgabe (Spec 0071, A11a/A11b). Die englischen Fassungen sagen
+  dasselbe wie die deutschen.
+- **Anzeige.** Der Datenpfad wird bereinigt angezeigt: Steuer- und
+  Richtungszeichen erscheinen als `?`, damit ein Pfad den Text nicht optisch
+  fortsetzen kann.
+- **Dialoge mit Wahl.** Ein Dialog mit Wahl (Spec 0101, D1–D4:
+  „Erneut versuchen", „Beenden", ggf. „Master-Passwort einrichten") gehört
+  zu Spec 0101. Wählt der Nutzer dort „Beenden", endet die App ohne
+  zweiten Dialog und mit Status 0.
 
-Jeder Dialog: **verständlich, mit Pfadangabe und nächstem Schritt** — kein
-Aufblitzen ohne Fenster, kein stiller Absturz.
+## 2. Die Fehlerfälle
 
-## Teil 0 — ZUERST Diagnose (die eigentliche Herausforderung)
+Die Fälle 1 bis 4 sind die ursprünglich geforderten; die Nummern bleiben
+stabil, auch wo ein Fall inzwischen von einer anderen Spec getragen wird.
 
-Bevor du baust, kläre und berichte mir:
-- **Wo genau im Startup** tritt jeder der vier Fälle auf? (Migration bei
-  `lib.rs:52`-Umfeld? Keychain-Zugriff wann? Datenverzeichnis-Anlage wann?)
-- **Wie früh** ist das jeweils — vor oder während der Tauri-Builder-
-  Initialisierung? Das bestimmt, ob ein nativer Dialog dort überhaupt möglich
-  ist.
-- **Welcher native Dialog-Mechanismus** pro Plattform: macOS `NSAlert` (oder
-  eine plattformübergreifende Crate wie `rfd`/`native-dialog`?), Windows
-  `MessageBox`, Linux (GTK/`zenity`/Crate?). **Eine plattformübergreifende
-  Crate wäre einfacher als drei native Wege** — prüfe, ob eine geeignete
-  existiert, die *ohne* laufendes Tauri-/Fenster-System funktioniert (ganz
-  früh im `main`).
-- Melde mir deinen Plan, bevor du die vier Fälle verdrahtest.
+1. **Datenbank von einer neueren Version angelegt** (älteres Programm trifft
+   neuere Datenbank). Die Meldung nennt beide Versionsnummern („Datenbank-
+   Version X, dieses Programm kennt Versionen bis Y"), rät, die neueste
+   Version zu installieren, und nennt den Datenpfad.
+2. **Datenbank nicht lesbar oder beschädigt.** Die Meldung ist bewusst
+   zurückhaltend („konnte nicht geöffnet werden — möglicherweise beschädigt,
+   oder von einem anderen laufenden Programm gesperrt"), weil dieser Fall
+   auch jeden anderen nicht eigens benannten Fehler beim Öffnen oder
+   Migrieren abdeckt. Nächster Schritt: prüfen, ob eine zweite Instanz läuft;
+   Details stehen im Log, dessen Ordner genannt wird; hilft das nicht, ein
+   Backup einspielen oder den Support kontaktieren. Dazu der Datenpfad.
+3. **Schlüsselbund beim Start nicht verfügbar** (gesperrt, kein Anbieter,
+   kein Session-Bus). Das ist kein Panic mehr und läuft nicht mehr in eine
+   Warnung mit weiterlaufender App: Ohne den Schlüssel im Schlüsselbund lässt
+   sich die verschlüsselte Datenbank nicht öffnen, der Start endet im
+   Dialog D1 aus Spec 0101. Ursache, blockierte Funktionen und der eine
+   nächste Schritt (unter Linux mit Paketnamen, sonst OS-neutral) stehen in
+   Spec 0071.
+4. **Datenverzeichnis nicht lesbar oder nicht beschreibbar.** Die App prüft
+   das aktiv, indem sie im Datenverzeichnis kurz eine leere Testdatei anlegt
+   und wieder löscht; auch ein bestehendes, aber nur nicht mehr
+   beschreibbares Verzeichnis wird so erkannt. Eine nur nicht beschreibbare
+   Datenbankdatei wird ebenfalls erkannt, ohne sie zu verändern. Die Meldung
+   nennt „Zugriff verweigert", rät, die Zugriffsrechte zu prüfen, und nennt
+   den Datenpfad. Dieser Fall führt nie zum Rat „Backup einspielen" — die
+   Datenbank ist intakt.
 
-## Teil 1 — Nativer Dialog-Mechanismus
+Weitere Startfehler folgen demselben Muster (Ursache, Pfad, nächster
+Schritt, ohne Backup-Rat, wo ein Backup nichts hülfe):
 
-Ein Mechanismus, der **so früh wie möglich** im `main`/Startup einen nativen
-Fehlerdialog zeigen kann, **unabhängig vom Tauri-Fenster-System**. Wähle den
-saubersten Weg aus Teil 0 (bevorzugt eine plattformübergreifende Crate, falls
-eine ohne Fenster-System funktioniert; sonst plattformspezifisch mit
-`#[cfg(...)]`).
-- Der Dialog blockiert, zeigt die Meldung, und die App **beendet sich danach
-  sauber** (kein Weiterlaufen in einen kaputten Zustand).
-- **Logging zuerst**: Der Fehler wird *auch* geloggt (der 0047-B1-Log läuft
-  ja schon als Allererstes) — der Dialog ist zusätzlich, nicht statt.
+- **Host-Key-Speicher nicht ladbar** (Datei beschädigt oder Zugriffsproblem;
+  genannt wird der Pfad des Host-Key-Speichers, nicht der der Datenbank).
+  Die Meldung warnt, dass eine nach dem Löschen erneut bestätigte
+  Server-Kennung **keinen** Schutz vor einem seither untergeschobenen Server
+  bietet und gegen eine vertrauenswürdige Quelle zu prüfen ist. Diese
+  Warnung steht in beiden Sprachen gleich deutlich.
+- **Schlüssel passt nicht zur Datenbank** (Datei beschädigt oder zu einem
+  anderen Schlüssel gehörig): Ohne den Schlüssel ist auch ein Backup nicht
+  lesbar; die Meldung sagt das.
+- **Umwandlung, Umzug der gespeicherten Geheimnisse oder Umstellung der
+  Chat-Inhalte gescheitert:** Die Meldung sagt, ob nichts verändert wurde und
+  dass die Datenbank selbst offen und nicht beschädigt ist; der nächste
+  Schritt ist, Platz und Schreibrechte zu prüfen und neu zu starten.
+- **Datenbankdatei ist ein Symlink:** wird nicht automatisch verschlüsselt;
+  nichts wird verändert; die Meldung nennt den Schritt.
+- **Master-Passwort einrichten oder „Neu anfangen" gescheitert:** Die Meldung
+  sagt genau, ob nichts verändert wurde oder wo die zur Seite gelegten Dateien
+  liegen, und rät nie zu einem Backup.
+- **Smart SSH läuft bereits mit diesem Datenverzeichnis:** Die Meldung nennt,
+  zur laufenden Instanz zu wechseln oder sie zu beenden; es wurde nichts
+  verändert. (Wo die laufende Instanz sich selbst nach vorn holen kann,
+  erscheint kein Dialog.)
 
-## Teil 2 — Die vier Fälle verdrahten
+Läuft die App im Master-Passwort-Modus (Spec 0101), erscheinen
+Startfehler nach der Entsperrung als Meldung in der Entsperrmaske statt als
+nativer Dialog, damit das Fenster nicht verschwindet, bevor der Nutzer den
+Grund gelesen hat.
 
-Jeden der vier Startup-Fehlerpfade so umbauen, dass er **nicht paniced/still
-abbricht**, sondern den nativen Dialog (Teil 1) mit der passenden Meldung
-zeigt und dann sauber beendet.
-- **Fall 3 (Keychain)**: den `.expect()`-Panic aus Spec 0040 Teil 6 Punkt 1
-  **entfernen** und durch diesen Pfad ersetzen.
-- **Fall 1 (DB-Downgrade)**: die Versionsnummern (angelegt mit X, Binary kennt
-  bis Y) in die Meldung.
+## 3. Sicherheitszusagen
 
-## Invarianten / Sicherheit
-- Kein Secret/kein sensibler Inhalt im Dialog-Text (nur Fehlerart + Pfad +
-  Schritt) — die Meldungen sind generisch, kein DB-Inhalt, kein Key.
-- Der Dialog ändert **nichts** an den Daten (kein „automatisch reparieren" —
-  nur melden + beenden; Reparatur ist Nutzer-/Support-Sache).
-- Logging läuft weiter zuerst (0047 B1) — der Dialog ist die *sichtbare*
-  Ergänzung.
-- Kein Absturz ohne Dialog mehr in diesen vier Fällen.
+- **Kein Inhalt im Dialog.** Der Text nennt nur Fehlerart, Datenpfad und
+  nächsten Schritt. Er enthält weder Datenbankinhalte noch Schlüssel,
+  Passwörter oder rohe Fehlertexte einer Bibliothek; Letztere stehen nur im
+  Log.
+- **Nur melden, nie reparieren.** Der Dialog ändert nichts an den Daten.
+  Reparatur ist Sache des Nutzers oder des Supports.
+- **Kein Absturz ohne Meldung** in den genannten Fällen.
+- **Kein Rat zur Abschwächung.** Kein Text empfiehlt einen weniger sicheren
+  Speicherort für Geheimnisse.
 
-## Testbarkeit
-- Jeder der vier Fälle **künstlich herbeigeführt** → verständlicher Dialog
-  mit Pfad + nächstem Schritt, kein Aufblitzen ohne Fenster:
-  - DB von neuerer Version: eine DB mit höherer Schema-Version anlegen, altes
-    Binary starten.
-  - DB korrupt: DB-Datei mit Müll überschreiben.
-  - Keychain gesperrt/fehlt: Linux-VM ohne Keyring; macOS mit gesperrter
-    Keychain.
-  - Datenverzeichnis nicht schreibbar: Rechte entziehen.
-- Automatisierbar, soweit möglich (der Dialog selbst ist schwer im
-  Headless-Test — mind. die *Fehlererkennung* + dass der richtige
-  Dialog-Aufruf mit dem richtigen Text erfolgt, unit-testbar machen; die
-  visuelle Bestätigung erfolgt pro Plattform).
+## 4. Grenzen
 
-## Abschluss
-- Melde mir: den Diagnose-Befund (Teil 0 — wo/wie früh, welcher Mechanismus),
-  ob eine plattformübergreifende Crate reicht oder es plattformspezifisch
-  wird, und je Fall einen manuellen Testablauf (pro Plattform, weil
-  der native Dialog nur echt sichtbar ist).
-- Volle Gates grün. `spec-reviewer` ERHÖHT (Startphase, Panic-Entfernung,
-  plattformspezifischer Code).
-- CHANGELOG-Eintrag (nutzerrelevant: „App zeigt jetzt bei Startfehlern eine
-  verständliche Meldung statt stillem Absturz").
+- Ein Fehler, der im Log-Verzeichnis selbst auftritt (bevor das Logging
+  steht), kann nicht geloggt werden.
+- Die visuelle Darstellung des nativen Dialogs unterscheidet sich je
+  Plattform; verbindlich ist der Inhalt, nicht das Aussehen.
+- Fehler, die erst nach dem Start des Fensters auftreten, behandelt Spec 0098.

@@ -1,251 +1,187 @@
-# Spec: Tauri-App — Architektur & MVP-Screens
+# Spec 0007 — Desktop-App: Aufbau, Kernschleife und KI-Anbieter-Verwaltung
 
-Status: Entwurf
-Modul: `crates/app-tauri` (Backend-Wrapper) + `frontend/` (Web-UI)
-Abhängigkeiten: alle bisherigen Core-Module (`ssh-manager-core`,
-`persistence-sqlite`, `ssh-transport`, `ai-providers`) — dieses Modul
-verdrahtet sie erstmals zu einer benutzbaren App.
+Status: umgesetzt
+Zweck: Die Desktop-App verdrahtet die Module zu einer benutzbaren Oberfläche: Server wählen, verbinden, Chat und Terminal nebeneinander, die KI schlägt Kommandos vor, die Filter-Engine entscheidet, der Nutzer bestätigt, das Ergebnis geht an die KI zurück. Dazu gehört die Verwaltung der KI-Anbieter.
+Bezüge: Spec 0002 (Filter-Engine), Spec 0003 (Profile, Notizen, Credential-Ablage), Spec 0004 (Persistenz), Spec 0005 (SSH, Host-Key-Prüfung), Spec 0006 (KI-Anbieter, Redaction), Spec 0008 (Server- und Gruppenverwaltung), Spec 0017 (Tabs und mehrere Sitzungen), Spec 0021 (Fortsetzung nach Aktionsergebnis), Spec 0092 (rotes Risiko verlangt Bestätigung), Spec 0100 (Host-Key-Dialog per Tastatur), ADR 0038 (Ablauf einer unbeantworteten Bestätigung), ADR 0108 (Ende einer Host-Key-Abfrage).
 
 ## 1. Ziel
 
-Dieses Modul ist bewusst in zwei Ausbaustufen unterteilt:
+Die App ist der Ort, an dem der Kern-Workflow erlebbar wird: Server auswählen,
+verbinden, im Chat mit der KI arbeiten, Vorschläge prüfen und bestätigen, mit
+dem Terminal daneben. Die KI ist dabei Copilot, nie ein eigenständig
+handelnder Akteur: Nichts erreicht einen Server, ohne durch die Filter-Engine
+zu laufen und, wo verlangt, vom Nutzer bestätigt zu sein.
 
-- **MVP-Slice 1**: der kleinstmögliche Screen, der den kompletten
-  Kern-Workflow einmal echt erlebbar macht — Server auswählen, verbinden,
-  Terminal + Chat nebeneinander, KI schlägt Kommando vor, Nutzer bestätigt,
-  Ausführung passiert, Ergebnis geht zurück an die KI. Enthält bewusst schon
-  eine einfache **AI-Provider-Verwaltung** (Abschnitt 8), da ohne
-  hinterlegten API-Key kein echter Test möglich ist — aber weiterhin keine
-  Server-/Gruppen-Anlege-UI.
-- **Ausbaustufe 2** (eigene Folge-Spec): Server-/Gruppen-Verwaltung im UI,
-  Notiz-Historie, mehrere Tabs/Sessions parallel.
+Server- und Gruppenverwaltung (Spec 0008), mehrere parallele Sitzungen
+(Spec 0017) und Notiz-Historie sind eigene Bereiche und stehen dort.
 
-Diese Spec deckt nur die Architektur (die für beide Stufen trägt) und den
-MVP-Slice-1-Screen ab.
+## 2. Oberfläche
 
-## 2. Frontend-Stack-Entscheidung
+Die App ist eine Desktop-Anwendung mit einer Web-Oberfläche (React,
+TypeScript, Tailwind) und einem eingebetteten Terminal (xterm.js). Die Wahl
+des Frameworks ist eine pragmatische Vorgabe ohne Auswirkung auf das
+Verhalten.
 
-**React + TypeScript**, Styling über Tailwind, Terminal über `xterm.js`.
-Begründung: größtes Tauri-Ökosystem/meiste Referenzbeispiele, gute
-Verfügbarkeit fertiger Komponenten für Chat-UIs und Split-Panes. Das ist eine
-pragmatische Default-Entscheidung, kein hartes technisches Erfordernis — falls
-du eine andere Präferenz hast (Svelte/Solid), lässt sich das an dieser Stelle
-noch ohne größere Folgekosten ändern, da noch kein Frontend-Code existiert.
+## 3. Aufbau: Oberfläche und Fachlogik
 
-## 3. Architektur: `app-tauri` als dünner Wrapper
+Die App-Hülle enthält keine Fachlogik. Sie übersetzt Aufrufe der Oberfläche in
+Aufrufe der Kernmodule und reicht deren Ergebnisse als reine Datenobjekte
+zurück. Asynchrone Abläufe (Chat-Text, Terminal-Ausgabe, Statuswechsel) kommen
+als Ereignisse bei der Oberfläche an. Laufende Sitzungen (Verbindung,
+KI-Anbieter, Gesprächsverlauf, Filter-Engine) hält die App im Arbeitsspeicher.
+Die Aufteilung zwischen Fachlogik und App-Hülle beschreibt Spec 0038.
 
-> **Geändert durch Spec 0038 (Repository-Trennung & App-Shell)**: Die hier
-> als `app-tauri` beschriebene Crate wird zur Library **`app-shell`**
-> refaktoriert; das eigentliche Binary ist ein dünnes
-> `apps/smart-ssh-community/src/main.rs`, das
-> `app_shell::run(Wiring::community())` aufruft. Inhaltlich bleibt alles in
-> diesem Abschnitt unverändert gültig — es liegt nur in einer anderen
-> Crate. Zusätzlich bekommt `AppState` ein
-> `entitlements: Arc<dyn EntitlementProvider>`-Feld (Spec 0037).
+## 4. Aktionen der Oberfläche
 
-`app-tauri` enthält **keine fachliche Logik**, nur:
-- Tauri-Commands, die Core-APIs aufrufen und Ergebnisse als DTOs (serde-
-  serialisierbare Structs) an das Frontend zurückgeben
-- Tauri-Events, um asynchrone Streams (Chat-Tokens, Terminal-Output) an das
-  Frontend zu pushen
-- In-Memory-`AppState` (Tauri-managed state), das laufende Sessions hält
+Die Oberfläche kann:
 
-```rust
-pub struct AppState {
-    pub sessions: Mutex<HashMap<SessionId, Session>>,
-    pub profile_store: Arc<dyn ProfileStore>,      // Spec 0003/0004
-    pub credential_store: Arc<dyn CredentialStore>, // Spec 0003
-    pub host_key_store: Arc<dyn HostKeyStore>,      // Spec 0005
-}
+- die Server auflisten und zu einem Server **verbinden**; beim Aufbau kann eine
+  Host-Key-Abfrage entstehen, die der Nutzer mit „Vertrauen" oder „Ablehnen"
+  beantwortet (Spec 0005, Abschnitt 6);
+- für eine Sitzung ein **Terminal** öffnen, Eingaben senden und die Größe
+  ändern;
+- eine **Chat-Nachricht** senden;
+- auf eine wartende Aktion mit **Ausführen**, **Ablehnen** oder
+  **Ausführen nach Bearbeiten** (mit geändertem Kommando) antworten;
+- die Sitzung **trennen**;
+- KI-Anbieter **auflisten, anlegen, ändern, löschen** und einen davon als
+  aktiv setzen (Abschnitt 8).
 
-pub struct Session {
-    pub transport: Box<dyn SshTransport>,   // Spec 0005
-    pub ai_provider: Box<dyn AiProvider>,   // Spec 0006
-    pub context: SessionContext,             // wächst mit jeder Chat-Runde
-    pub filter_engine: Arc<FilterEngine<...>>, // Spec 0002
-}
-```
+## 5. Ereignisse an die Oberfläche
 
-## 4. Tauri-Commands (MVP-Slice 1)
+Die Oberfläche erfährt:
 
-```
-list_servers() -> Vec<ServerDto>
-connect(server_id) -> SessionId
-    // kann während des Aufbaus ein host-key-verification-needed Event auslösen
-confirm_host_key(session_id, decision: Trust | Reject)
-open_terminal(session_id) -> ()
-    // startet PTY-Channel, Output kommt fortan über terminal-output Events
-terminal_input(session_id, data: Vec<u8>)
-terminal_resize(session_id, cols: u16, rows: u16)
-send_chat_message(session_id, text: String)
-respond_to_action(session_id, action_id, decision: Approve | Deny | EditThenApprove { command: String })
-disconnect(session_id)
+- **Verbindungsstatus:** Wechsel des Status einer Sitzung.
+- **Host-Key-Abfrage:** Sitzung, Abfrage, Host und Port, ob der Schlüssel
+  unbekannt ist oder vom gespeicherten abweicht, Fingerprint (bei „geändert"
+  zusätzlich der erwartete) und der Schlüsseltyp. Der Schlüsseltyp ist der
+  Algorithmus des vom Server angebotenen Schlüssels (z. B. `ssh-ed25519`,
+  `ecdsa-sha2-nistp256`) oder fehlt, wenn er sich nicht bestimmen lässt. Er ist
+  rein anzeigend und beeinflusst die Vertrauensentscheidung nicht.
+- **Ende einer Host-Key-Abfrage:** Das Backend wartet nicht mehr auf eine
+  Abfrage, weil sie entschieden wurde, abgelaufen ist oder abgebrochen
+  wurde. Jede Abfrage hat eine eigene Kennung, damit bei einem erneuten
+  Versuch derselben Sitzung nur die passende Abfrage geschlossen wird. Das
+  Ereignis ist rein informativ; Ablauf und Abbruch bleiben eine Ablehnung
+  (ADR 0108).
+- **Terminal-Ausgabe** einer Sitzung.
+- **Chat-Text** der KI, in Teilen, sobald er eintrifft.
+- **Vorgeschlagene Aktion** mit der Entscheidung der Filter-Engine
+  (automatisch ausführen, bestätigen lassen oder blockiert).
+- **Ergebnis** einer ausgeführten Aktion.
 
-list_ai_providers() -> Vec<AiProviderConfigDto>
-add_ai_provider(config: AiProviderConfigInput) -> ProviderId
-update_ai_provider(id: ProviderId, config: AiProviderConfigInput)
-delete_ai_provider(id: ProviderId)
-set_active_ai_provider(id: ProviderId)
-```
-
-## 5. Tauri-Events (Push Richtung Frontend)
-
-```
-connection-status-changed   { session_id, status }
-host-key-verification-needed { session_id, prompt_id, host, port, kind: Unknown | Mismatch, fingerprint, expected_fingerprint, key_type }
-host-key-verification-ended  { session_id, prompt_id, reason: Decided | TimedOut | Abandoned }
-terminal-output              { session_id, data: Vec<u8> }
-chat-text-delta               { session_id, delta: String }
-chat-action-proposed          { session_id, action_id, action: AiAction, decision: AutoExec | Confirm | Deny }
-chat-action-result            { session_id, action_id, output: CommandOutput }
-```
-
-`key_type` in `host-key-verification-needed` ist der Algorithmus-Name des
-Schlüssels, den der Server gerade anbietet (z. B. `ssh-ed25519`,
-`ecdsa-sha2-nistp256`), oder `null`, wenn er sich nicht bestimmen lässt. Das
-Feld ist rein anzeigend und beeinflusst die Vertrauensentscheidung nicht.
-
-`host-key-verification-ended` (Issue #37, ADR 0108): das Backend wartet nicht
-mehr auf die Abfrage `prompt_id` — gesendet bei jedem Ausgang des Wartens.
-`prompt_id` unterscheidet zwei Abfragen derselben `session_id` (Retry); das
-Frontend schließt nur die Abfrage mit passender `session_id` und
-`prompt_id`. Rein informativ: Timeout und Abbruch bleiben Ablehnung.
-
-Wichtig für die Transparenz-Philosophie des Projekts: **Auch ein `Deny`
-durch die Filter-Engine wird als `chat-action-proposed`-Event mit
-`decision: Deny` an das Frontend geschickt, nicht stillschweigend verworfen.**
-Der Nutzer soll sehen können, dass die KI etwas vorgeschlagen hat, das
-blockiert wurde — inklusive des Grundes aus `Decision::Deny { reason }`
-(Spec 0002). Bei `AutoExec` wird das Event ebenfalls geschickt (informativ),
-aber ohne auf `respond_to_action` zu warten — die Ausführung läuft parallel
-sofort an.
+**Transparenz:** Auch ein von der Filter-Engine blockierter Vorschlag
+(`Deny`) wird der Oberfläche gemeldet, nie stillschweigend verworfen. Der
+Nutzer sieht, dass die KI etwas vorgeschlagen hat, das blockiert wurde, samt
+Grund aus der Entscheidung (Spec 0002). Auch bei „automatisch ausführen"
+erscheint der Vorschlag (informativ); die Ausführung läuft dann sofort, ohne
+auf eine Antwort zu warten.
 
 ## 6. Ablauf eines Kommando-Vorschlags (Kernschleife)
 
-1. Nutzer schreibt eine Chat-Nachricht → `send_chat_message`
-2. Backend baut `SessionContext` (inkl. `effective_notes()`, Spec 0003) und
-   ruft `AiProvider::send()` auf
-3. `AiEvent::TextDelta` → sofort als `chat-text-delta` weitergereicht
-4. `AiEvent::ActionProposed(AiAction::SuggestCommand { command })` → Backend
-   ruft `FilterEngine::evaluate(command, ctx)` auf (Spec 0002)
-5. Ergebnis wird als `chat-action-proposed` gesendet:
-   - `AutoExec` → Backend führt sofort über `SshTransport::execute()` aus
-     (Spec 0005), Output läuft durch `OutputRedactor` (Spec 0006), Ergebnis
-     als `chat-action-result` Event **und** zusätzlich als
-     `MessageContent::CommandResult` in den `SessionContext` für die nächste
-     KI-Runde übernommen
-   - `Confirm` → Backend wartet auf `respond_to_action` vom Frontend, bevor
-     etwas ausgeführt wird
-   - `Deny` → keine Ausführung möglich, Event informiert nur
-6. Bei `AiAction::ProposeNoteUpdate` (Spec 0003, Abschnitt 5.2): analoges
-   Event, aber **immer** wartend auf Bestätigung, nie `AutoExec` — das gilt
-   unabhängig von der Filter-Engine, wie in Spec 0003 festgelegt
+1. Der Nutzer sendet eine Chat-Nachricht.
+2. Das Backend baut den Kontext für die KI (einschließlich der wirksamen
+   Notizen, Spec 0003) und fragt den KI-Anbieter.
+3. Text der KI erscheint sofort im Chat.
+4. Schlägt die KI ein Kommando vor, wertet die Filter-Engine es aus
+   (Spec 0002).
+5. Je nach Entscheidung:
+   - **Automatisch ausführen:** Das Kommando läuft sofort über die
+     SSH-Verbindung, die Ausgabe wird redigiert (Spec 0006), das Ergebnis
+     erscheint im Chat und geht zusätzlich in den Verlauf für die nächste
+     KI-Runde.
+   - **Bestätigen:** Es wird nichts ausgeführt, bevor der Nutzer antwortet.
+   - **Blockiert:** Es wird nichts ausgeführt; der Nutzer wird nur informiert.
+6. Ein Notiz-Vorschlag der KI (Spec 0003, Abschnitt 5.2) wartet **immer** auf
+   Bestätigung, nie automatisch, unabhängig von der Filter-Engine.
 
-## 7. MVP-Slice-1-Screen (UI-Umfang)
+Ein rot eingestufter Vorschlag verlangt zusätzlich Bestätigung (Spec 0092).
+Wie nach einem Aktionsergebnis weitergedacht wird, steht in Spec 0021.
 
-Bewusst minimal, um schnell zum ersten echten End-to-End-Test zu kommen:
+**Bestätigung mit Bearbeitung.** Bearbeitet der Nutzer das Kommando vor dem
+Ausführen, läuft das geänderte Kommando erneut durch die Filter-Engine. Nur
+ein hartes `Deny` überstimmt dann die Freigabe und blockiert das Kommando; ein
+erneutes „Bestätigen" nicht, weil der Klick auf „Ausführen" im Dialog bereits
+diese Bestätigung ist. Ein bearbeitetes Kommando umgeht die Prüfung nie. Es
+gilt im Verlauf als vom Nutzer verfasst. Für Aktionen ohne Kommando (Notiz,
+Dateizugriff) gibt es kein Bearbeiten; geht trotzdem eine Bearbeitung ein, läuft
+die ursprüngliche Aktion unverändert.
 
-- Einfache Serverliste (aus bereits bestehender SQLite-Persistenz, **keine**
-  Anlege-/Bearbeiten-UI für Server/Gruppen in diesem Schritt — Testserver
-  werden vorerst direkt über das `profiles_demo`-Beispiel oder einen kleinen
-  CLI-Helfer angelegt)
-- Klick auf Server → Verbindung, bei `Unknown`/`Mismatch` Host-Key-Dialog
-  (Abschnitt 6, Spec 0005)
-- Ein Screen: Chat-Panel groß links, Terminal kompakt rechts (xterm.js,
-  verbunden über `terminal-*` Commands/Events) — der Chat ist der primäre
+**Ohne Antwort.** Ein Bestätigungsdialog, auf den eine Stunde lang niemand
+antwortet, läuft ab und gilt als abgelehnt (ADR 0038).
+
+## 7. Hauptansicht
+
+- Eine **Serverliste** aus der gespeicherten Konfiguration (gruppiert: Spec
+  0033). Ein Klick auf einen Server baut die Verbindung auf; bei einem
+  unbekannten oder geänderten Host-Key erscheint der Host-Key-Dialog (Spec
+  0005, Abschnitt 6; Spec 0100).
+- Eine Sitzungsansicht: der **Chat** groß links, das **Terminal** kompakt
+  rechts, mit verstellbarer Aufteilung (Spec 0053). Der Chat ist der primäre
   Interaktionskanal, das Terminal dient vor allem der Beobachtung und für
-  manuelle Zwischen-Eingriffe
-- Bestätigungs-Dialog für `Confirm`-Aktionen: zeigt das exakte Kommando,
-  erlaubt Editieren vor Bestätigung (deckt `EditThenApprove` ab), zwei klare
-  Buttons (Ausführen/Ablehnen)
-- Ein einfacher Settings-Screen/Modal für die AI-Provider-Verwaltung
-  (Abschnitt 8) — im Gegensatz zu Server-/Gruppen-Verwaltung **ist** das
-  bereits Teil von Slice 1, da ohne funktionierenden Provider kein
-  End-to-End-Test möglich ist
+  manuelle Zwischen-Eingriffe.
+- Ein **Bestätigungsdialog** für Aktionen, die Bestätigung verlangen: Er zeigt
+  das exakte Kommando, erlaubt das Bearbeiten vor der Bestätigung und bietet
+  zwei klare Schaltflächen, Ausführen und Ablehnen.
+- Die **Einstellungen** mit der Verwaltung der KI-Anbieter (Abschnitt 8).
 
-## 8. AI-Provider-Verwaltung
+Mehrere gleichzeitige Sitzungen und ihre Tab-Leiste beschreibt Spec 0017.
 
-Persistiert die nicht-geheimen Teile einer Provider-Konfiguration in der
-SQLite-DB (Erweiterung von Spec 0004 um eine neue Tabelle), den API-Key
-selbst ausschließlich im `CredentialStore` (Spec 0003) — nie in der DB.
+## 8. KI-Anbieter-Verwaltung
 
-### 8.1 Schema-Erweiterung (`persistence-sqlite`)
+Die nicht geheimen Teile einer Anbieter-Konfiguration liegen in der lokalen
+Datenbank, der API-Key ausschließlich in der Credential-Ablage (Spec 0003),
+nie in der Datenbank.
 
-```sql
--- migrations/0002_ai_provider_configs.sql
+### 8.1 Gespeicherte Konfiguration
 
-CREATE TABLE ai_provider_configs (
-    id                          TEXT PRIMARY KEY,
-    provider_type               TEXT NOT NULL CHECK (
-        provider_type IN ('openai', 'anthropic', 'generic_openai_compatible', 'ollama')
-    ),
-    display_name                TEXT NOT NULL,
-    base_url                    TEXT,             -- nur für generic/ollama relevant
-    model                       TEXT NOT NULL,
-    supports_native_tool_calling BOOLEAN NOT NULL DEFAULT TRUE,
-    credential_ref              TEXT NOT NULL,    -- Schlüssel in den CredentialStore
-    is_active                   BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at                  TEXT NOT NULL,
-    updated_at                  TEXT NOT NULL
-);
+Je Anbieter gespeichert sind: Typ, Anzeigename, Basis-URL, Modell, ob
+natives Tool-Calling unterstützt wird, der Verweis auf den Key in der
+Credential-Ablage und ob der Anbieter aktiv ist. Typen sind `openai`,
+`anthropic`, `generic_openai_compatible` und `ollama`. Die Basis-URL ist nur
+bei `generic_openai_compatible` und `ollama` relevant. Es ist höchstens ein
+Anbieter gleichzeitig aktiv. Weitere Felder und Prüfungen der Anbieter-
+Konfiguration beschreiben die Specs 0025, 0050, 0065 und 0072.
 
--- höchstens ein aktiver Provider gleichzeitig (MVP-Annahme, s. Spec 0006 Abschnitt 8)
-CREATE UNIQUE INDEX idx_ai_provider_single_active
-    ON ai_provider_configs(is_active) WHERE is_active = TRUE;
-```
+### 8.2 Verhalten
 
-### 8.2 DTOs und Verhalten
+- Die Oberfläche bekommt eine Konfiguration **ohne** API-Key zurück. Der Key
+  geht nie zurück an die Oberfläche.
+- **Anlegen:** Das Backend vergibt eine neue Kennung, leitet daraus den
+  Verweis auf den Key ab (`ai-provider:{Kennung}`), speichert den Key in der
+  Credential-Ablage und danach erst die übrigen Felder. Scheitert das
+  Speichern der Felder, wird der gerade abgelegte Key wieder entfernt.
+- **Ändern:** Ein leeres Key-Feld heißt „Key unverändert lassen", nicht „auf
+  leer setzen". Zuerst werden die Felder aktualisiert (unbekannte Kennung
+  scheitert sauber), nur bei nicht leerem Key wird danach der Key
+  überschrieben. Ein Key, der nach dem Trimmen leer ist, zählt als leer
+  (Spec 0073).
+- **Löschen:** Der Key wird zuerst aus der Credential-Ablage entfernt, dann
+  die Konfiguration gelöscht.
+- **Der aktive Anbieter lässt sich nicht löschen.** Der Löschversuch scheitert
+  mit klarer Fehlermeldung, bevor am Key etwas verändert wird; zuerst muss ein
+  anderer Anbieter aktiv gesetzt werden. So entsteht kein impliziter Zustand
+  „kein Anbieter aktiv", der gesondert behandelt werden müsste.
 
-```rust
-pub struct AiProviderConfigInput {
-    pub provider_type: ProviderType,
-    pub display_name: String,
-    pub base_url: Option<String>,
-    pub model: String,
-    pub supports_native_tool_calling: bool,
-    pub api_key: String, // niemals persistiert, nur zur Weitergabe an CredentialStore
-}
+### 8.3 Oberfläche
 
-pub struct AiProviderConfigDto {
-    pub id: ProviderId,
-    pub provider_type: ProviderType,
-    pub display_name: String,
-    pub base_url: Option<String>,
-    pub model: String,
-    pub supports_native_tool_calling: bool,
-    pub is_active: bool,
-    // bewusst KEIN api_key-Feld — der Key geht nie zurück ans Frontend
-}
-```
+Die Einstellungen zeigen die Liste der Anbieter (Name, Typ, Modell, aktiv oder
+inaktiv), ein Formular zum Anlegen (Typ-Auswahl, Name, Modell, Basis-URL nur
+bei `generic_openai_compatible` und `ollama`, API-Key als Passwortfeld), eine
+Löschen-Schaltfläche je Eintrag und die Wahl des aktiven Anbieters.
 
-Ablauf bei `add_ai_provider`: Backend generiert eine neue `ProviderId`,
-erzeugt daraus einen `CredentialRef` (z. B. `"ai-provider:{id}"`), speichert
-den `api_key` über `CredentialStore::set()`, und erst danach die restlichen
-(nicht-geheimen) Felder in `ai_provider_configs`. Bei `delete_ai_provider`
-symmetrisch: zuerst `CredentialStore::delete()`, dann die DB-Zeile entfernen.
-Wird `update_ai_provider` mit leerem `api_key`-Feld aufgerufen, bleibt der
-bestehende Credential unverändert (Frontend zeigt den Key ohnehin nie an,
-ein leeres Feld heißt "nicht ändern", nicht "auf leer setzen").
+Ist kein Anbieter aktiv, steht im Chat statt der Eingabezeile ein Hinweis, den
+Anbieter zuerst in den Einstellungen einzurichten, statt eine Eingabe
+anzubieten, die ohnehin fehlschlüge. Die Hauptansicht zeigt einen entsprechenden
+Hinweis.
 
-### 8.3 UI (Teil von Slice 1)
+## 9. Sicherheitszusagen
 
-Einfaches Modal/Screen: Liste konfigurierter Provider (Name, Typ, Modell,
-aktiv/inaktiv), Formular zum Hinzufügen (Typ-Dropdown, Name, Modell,
-Base-URL-Feld nur bei `generic_openai_compatible`/`ollama` sichtbar,
-API-Key-Eingabefeld als Passwortfeld), Lösch-Button pro Eintrag, Auswahl des
-aktiven Providers (z. B. Radio-Button/Stern-Icon). Ist noch kein Provider
-konfiguriert, wird das Chat-Panel im MVP-Screen durch einen Hinweis ersetzt,
-der direkt zu diesem Formular führt, statt eine Chat-Eingabe anzuzeigen, die
-ohnehin fehlschlagen würde.
-
-## 9. Offene Punkte
-
-- Reconnect-Verhalten bei Verbindungsabbruch während einer offenen Session
-  (siehe bereits offener Punkt aus Spec 0005) muss spätestens hier UI-seitig
-  sichtbar werden (z. B. Terminal zeigt "Verbindung getrennt"-Zustand) —
-  Umsetzung im Detail noch offen.
-- Soll das Löschen eines Providers, der gerade `is_active` ist, verboten
-  sein (erst einen anderen aktiv setzen), oder automatisch "kein aktiver
-  Provider" zur Folge haben? Tendenz: verbieten, mit klarer Fehlermeldung —
-  vermeidet einen impliziten "kein Provider aktiv"-Zustand, den das Frontend
-  gesondert behandeln müsste.
+- Kein Kommando erreicht einen Server, ohne durch die Filter-Engine gelaufen zu
+  sein; auch ein bearbeitetes Kommando wird erneut geprüft (Abschnitt 6).
+- Blockierte Vorschläge bleiben sichtbar (Abschnitt 5).
+- Ein Notiz-Vorschlag wird nie automatisch übernommen.
+- Ein unbekannter oder geänderter Host-Key wird nie ohne ausdrückliche
+  Entscheidung des Nutzers akzeptiert (Spec 0005, Abschnitt 6).
+- Der API-Key liegt nie in der Datenbank und geht nie zurück an die
+  Oberfläche.

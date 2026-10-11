@@ -10,7 +10,7 @@
 //! `choices[0].delta.content` für Text-Fragmente,
 //! `choices[0].delta.tool_calls[].function.{name,arguments}` für
 //! akkumulierende Tool-Call-Fragmente (nach `index` gruppiert),
-//! `choices[0].finish_reason` (Spec 0063, Teil 1: geloggt; seit Spec 0065,
+//! `choices[0].finish_reason` (geloggt; seit Spec 0065,
 //! Teil 3 zusätzlich sicherheitskritisch ausgewertet — ein Tool-Call aus
 //! einer Antwort mit `finish_reason: length` wird nie freigegeben, s.
 //! `OpenAiStreamState::finalize`), Abschluss durch das Literal
@@ -880,7 +880,7 @@ impl OpenAiStreamState {
     pub(crate) fn handle_chunk(&mut self, chunk: &Value) {
         let choice = chunk.get("choices").and_then(|choices| choices.get(0));
 
-        // Spec 0063, Teil 1: analog zu Anthropics `stop_reason` (s.
+        // analog zu Anthropics `stop_reason` (s.
         // `AnthropicStreamState::handle_event`s `message_delta`-Zweig) —
         // `finish_reason` steht auf demselben `choices[0]`-Objekt wie
         // `delta`, meist im letzten Chunk mit leerem/fehlendem `delta`, also
@@ -1362,7 +1362,7 @@ mod tests {
         })
     }
 
-    /// Spec 0063, Teil 1: das OpenAI-kompatible Gegenstück zu
+    /// das OpenAI-kompatible Gegenstück zu
     /// `anthropic::tests::test_message_delta_with_end_turn_stop_reason_is_logged`
     /// — `choices[0].finish_reason` muss über den echten SSE-Parsing-Pfad
     /// geloggt werden.

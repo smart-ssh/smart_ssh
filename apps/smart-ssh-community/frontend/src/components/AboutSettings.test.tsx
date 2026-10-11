@@ -1,5 +1,5 @@
-// Spec 0052, Abschnitt 6 ("Testbarkeit"): "Über-Dialog: zeigt Version +
-// Hash, Text ist selektierbar/kopierbar."
+// Spec 0052, Abschnitt 3.2: die Kategorie „Über" zeigt Version + Hash,
+// der Text ist markierbar und kopierbar.
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
