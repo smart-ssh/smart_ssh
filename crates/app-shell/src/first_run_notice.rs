@@ -76,10 +76,27 @@ pub(crate) mod test_support {
     }
 
     pub(crate) fn test_app() -> tauri::App<MockRuntime> {
-        mock_builder()
+        let app = mock_builder()
             .plugin(tauri_plugin_store::Builder::new().build())
             .build(mock_context(noop_assets()))
-            .expect("mock app konnte nicht gebaut werden")
+            .expect("mock app konnte nicht gebaut werden");
+        // Open the settings store up front with its debounced auto-save
+        // switched off (issue #390). A plain `set` otherwise schedules a
+        // save ~100 ms later on a background task that outlives the test
+        // and its `lock()` guard. That stale save then rewrites
+        // `settings.json` while the next test writes it too; the plugin
+        // writes by truncate + write, so two interleaved writers of
+        // different length leave a corrupt file (old tail after the new
+        // JSON) and the next `settings_store::update` refuses to write.
+        // Every test that needs content on disk calls `save` explicitly.
+        // A file that cannot be parsed still opens as an empty store here,
+        // exactly like on the first `app.store(..)`.
+        app.handle()
+            .store_builder(super::SETTINGS_STORE_FILE)
+            .disable_auto_save()
+            .build()
+            .expect("settings store konnte nicht geöffnet werden");
+        app
     }
 
     /// Löscht den Bestätigungs-Schlüssel wieder — Aufrufer muss bereits
