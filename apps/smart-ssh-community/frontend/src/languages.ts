@@ -12,6 +12,10 @@ import uk from "./locales/uk/common.json";
 import nl from "./locales/nl/common.json";
 import ptBR from "./locales/pt-BR/common.json";
 import zhHans from "./locales/zh-Hans/common.json";
+import da from "./locales/da/common.json";
+import fi from "./locales/fi/common.json";
+import nb from "./locales/nb/common.json";
+import sv from "./locales/sv/common.json";
 
 // Spec 0024, Abschnitt 3/4: die einzige Quelle der Wahrheit für die
 // unterstützten UI-Sprachen. Eine neue Sprache = eine Locale-Datei + ein
@@ -115,6 +119,30 @@ export const LANGUAGE_REGISTRY: readonly LanguageEntry[] = [
     endonym: "简体中文",
     englishName: "Chinese (Simplified)",
     resources: zhHans,
+  },
+  {
+    code: "da",
+    endonym: "Dansk",
+    englishName: "Danish",
+    resources: da,
+  },
+  {
+    code: "fi",
+    endonym: "Suomi",
+    englishName: "Finnish",
+    resources: fi,
+  },
+  {
+    code: "nb",
+    endonym: "Norsk bokmål",
+    englishName: "Norwegian Bokmål",
+    resources: nb,
+  },
+  {
+    code: "sv",
+    endonym: "Svenska",
+    englishName: "Swedish",
+    resources: sv,
   },
 ];
 
