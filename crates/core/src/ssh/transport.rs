@@ -88,6 +88,21 @@ pub trait SshTransport: Send + Sync {
             None => self.execute_cancellable(command, cancel).await,
         }
     }
+    /// Issue #328: split form of [`execute_streaming`](Self::execute_streaming).
+    /// Opens the exec channel (and writes `stdin`) while the caller holds the
+    /// transport, and returns a [`RunningExec`] that no longer needs the
+    /// transport: the caller can release its lock while the command runs, so
+    /// file browser, terminal and disconnect of the same session are not
+    /// blocked. `Ok(None)` (default) means "not supported, use
+    /// `execute_streaming`"; `RusshTransport` and `LocalTransport` override it.
+    async fn start_exec(
+        &mut self,
+        command: &str,
+        stdin: Option<&[u8]>,
+    ) -> Result<Option<Box<dyn RunningExec>>, SshError> {
+        let _ = (command, stdin);
+        Ok(None)
+    }
     async fn open_shell(&mut self, size: PtySize) -> Result<Box<dyn InteractiveShell>, SshError>;
     /// Öffnet eine SFTP-Session als weiteren Subsystem-Channel derselben
     /// Verbindung (Spec 0020, Abschnitt 3) — kein zweiter Verbindungsaufbau,
@@ -131,6 +146,20 @@ pub trait SshTransport: Send + Sync {
     /// Default nach oben geklemmt, s. jeweiliger `set_max_output_bytes`-
     /// Kommentar).
     fn set_max_output_bytes(&mut self, _limit: usize) {}
+}
+
+/// A started exec channel that runs independently of the transport it was
+/// opened from (issue #328, see [`SshTransport::start_exec`]).
+#[async_trait]
+pub trait RunningExec: Send {
+    /// Waits for the command to end (or for `cancel`), forwarding output
+    /// chunks to `sink`; same result semantics as
+    /// [`SshTransport::execute_streaming`].
+    async fn run(
+        self: Box<Self>,
+        cancel: oneshot::Receiver<()>,
+        sink: ExecOutputSink,
+    ) -> Result<ExecOutcome, SshError>;
 }
 
 /// Dateizugriff über SFTP (Spec 0020, Abschnitt 3) — läuft, wie

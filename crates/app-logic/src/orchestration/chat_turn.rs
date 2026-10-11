@@ -386,6 +386,11 @@ pub async fn run_chat_turn(
             {
                 return false;
             }
+            // Issue #328: a disconnect during a command ends the turn, the
+            // AI gets no follow-up round on a closed session.
+            if session.transport.is_closed() {
+                return false;
+            }
             // Spec 0066, §2: während der vorigen Runde eingereihte
             // Nutzer-Nachrichten gehen mit dieser Anfrage mit — als ganz
             // normale Nutzer-Nachrichten im Verlauf (außerhalb jeder

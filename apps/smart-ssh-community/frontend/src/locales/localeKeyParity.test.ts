@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { LANGUAGE_REGISTRY } from "../languages";
 import allowlist from "./lengthAllowlist.json";
 import en from "./en/common.json";
-import { keyParityProblems, lengthProblems } from "./parity";
+import identicalAllowlist from "./identicalAllowlist.json";
+import { identicalProblems, keyParityProblems, lengthProblems, markerProblems } from "./parity";
 
 // Spec 0072, C2 / Spec 0024: jede registrierte Sprache hat dieselben
 // Schlüssel wie Englisch; Pluralformen folgen `Intl.PluralRules` der Sprache.
+const NEW_LANGUAGES = ["fr", "es", "it", "pl", "cs", "uk", "ru"];
+
 // Neue Sprachen kommen allein über die Registry (`languages.ts`) dazu.
 describe.each(LANGUAGE_REGISTRY.filter((l) => l.code !== "en"))(
   "Übersetzung $code gegen Englisch",
@@ -18,8 +21,42 @@ describe.each(LANGUAGE_REGISTRY.filter((l) => l.code !== "en"))(
       const allowed = (allowlist as Record<string, Record<string, string>>)[code] ?? {};
       expect(lengthProblems(resources, en, allowed)).toEqual([]);
     });
+
+    it.runIf(NEW_LANGUAGES.includes(code))("enthält alle Platzhalter und Tags des Englischen unverändert", () => {
+      expect(markerProblems(resources, en)).toEqual([]);
+    });
+
+    // Gilt nur für die Sprachen aus Issue #331/#334; de/pt-BR/… sind älter.
+    it.runIf(NEW_LANGUAGES.includes(code))("hat keinen Wert, der dem Englischen gleicht (Ausnahmen: identicalAllowlist.json)", () => {
+      const allowed = (identicalAllowlist as Record<string, Record<string, string>>)[code] ?? {};
+      expect(identicalProblems(resources, en, allowed)).toEqual([]);
+    });
   },
 );
+
+describe("Allowlist der Gleichheitsprüfung", () => {
+  it("nennt nur registrierte Sprachen und gibt je Schlüssel einen Grund an", () => {
+    const codes = new Set(LANGUAGE_REGISTRY.map((l) => l.code));
+    for (const [lang, keys] of Object.entries(identicalAllowlist as Record<string, Record<string, string>>)) {
+      expect(codes.has(lang), lang).toBe(true);
+      for (const [key, reason] of Object.entries(keys)) {
+        expect(reason.trim().length, `${lang}:${key}`).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("markerProblems / identicalProblems", () => {
+  it("erkennt veränderte Platzhalter und Tags", () => {
+    expect(markerProblems({ a: "{{n}} x" }, { a: "{{count}} x" })).toHaveLength(1);
+    expect(markerProblems({ a: "<0>x</0>" }, { a: "<0>x</0>" })).toEqual([]);
+    expect(markerProblems({ a: "x" }, { a: "<0>x</0>" })).toHaveLength(1);
+  });
+  it("erkennt gleiche Werte, ignoriert reine Platzhalter", () => {
+    expect(identicalProblems({ a: "Open", b: "{{n}}" }, { a: "Open", b: "{{n}}" })).toEqual(["a: identical to English"]);
+    expect(identicalProblems({ a: "Open" }, { a: "Open" }, { a: "same word" })).toEqual([]);
+  });
+});
 
 describe("Allowlist der Längenprüfung", () => {
   it("nennt nur registrierte Sprachen und gibt je Schlüssel einen Grund an", () => {

@@ -463,10 +463,24 @@ pub struct RollingSummary {
 /// `DISCONNECT_COMPLETION_INSTRUCTION` (eine reine Text-Anfrage ohne
 /// Werkzeug-Schema, die Instruktion steht am Ende, nach dem
 /// zusammenzufassenden Material).
-const SUMMARY_INSTRUCTION: &str = "Fasse die vorstehende Konversation bündig und rein faktisch \
+const SUMMARY_INSTRUCTION_DE: &str = "Fasse die vorstehende Konversation bündig und rein faktisch \
      zusammen: was wurde getan, welcher Stand wurde erreicht, welche offenen Punkte gibt es. \
      Antworte NUR mit der Zusammenfassung selbst, ohne Einleitung, Anführungszeichen oder \
      Meta-Kommentar.";
+
+/// Issue #330: englische Fassung (für `en` und, mit Antwortsprach-Anweisung,
+/// jede andere UI-Sprache).
+const SUMMARY_INSTRUCTION_EN: &str = "Summarize the preceding conversation concisely and \
+     purely factually: what was done, what state was reached, what open items remain. Reply \
+     ONLY with the summary itself, without introduction, quotation marks or meta commentary.";
+
+/// Zusammenfassungs-Instruktion in der Prompt-Sprache der Sitzung.
+fn summary_instruction(language: PromptLanguage) -> String {
+    match language {
+        PromptLanguage::De => SUMMARY_INSTRUCTION_DE.to_string(),
+        _ => crate::system_prompt::with_response_language(SUMMARY_INSTRUCTION_EN, language),
+    }
+}
 
 /// Äußerer Sicherheits-Zeitrahmen für den GESAMTEN Zusammenfassungs-Aufruf
 /// (Spec 0057, §2.1: "mit Rate-Limit-Handling (0051) + Body-Timeout —
@@ -642,6 +656,7 @@ async fn compact_rounds_with_summary(
                     emitter,
                     previous_summary_text,
                     &new_rounds,
+                    language,
                 )
                 .await
                 {
@@ -719,6 +734,7 @@ async fn generate_rolling_summary(
     emitter: &dyn EventEmitter,
     previous_summary: Option<&str>,
     new_rounds: &[ChatMessage],
+    language: PromptLanguage,
 ) -> Option<String> {
     let mut history = Vec::new();
     if let Some(previous) = previous_summary {
@@ -733,9 +749,12 @@ async fn generate_rolling_summary(
         let redacted_previous = session.redactor.redact_text(previous);
         history.push(ChatMessage {
             role: Role::Assistant,
-            content: MessageContent::Text(format!(
-                "Bisherige Zusammenfassung:\n{redacted_previous}"
-            )),
+            content: MessageContent::Text(match language {
+                PromptLanguage::De => {
+                    format!("Bisherige Zusammenfassung:\n{redacted_previous}")
+                }
+                _ => format!("Previous summary:\n{redacted_previous}"),
+            }),
         });
     }
     history.extend(reapply_redaction_for_send(
@@ -744,11 +763,17 @@ async fn generate_rolling_summary(
     ));
     history.push(ChatMessage {
         role: Role::User,
-        content: MessageContent::Text(SUMMARY_INSTRUCTION.to_string()),
+        content: MessageContent::Text(summary_instruction(language)),
     });
 
     let summary_context = SessionContext {
-        system_context: "Du fasst Chat-Verläufe präzise und knapp zusammen.".to_string(),
+        system_context: match language {
+            PromptLanguage::De => "Du fasst Chat-Verläufe präzise und knapp zusammen.".to_string(),
+            _ => crate::system_prompt::with_response_language(
+                "You summarize chat histories precisely and concisely.",
+                language,
+            ),
+        },
         history,
         available_actions: Vec::new(),
         // Spec 0065, Teil 1: Nebenaufruf — s. `orchestration::
@@ -1177,6 +1202,22 @@ pub(crate) async fn compact_for_send(
 
 #[cfg(test)]
 mod tests {
+    /// Issue #330: die Zusammenfassungs-Instruktion folgt der Prompt-Sprache.
+    #[test]
+    fn test_summary_instruction_follows_the_prompt_language() {
+        use crate::system_prompt::prompt_language;
+        let lang = |c: &str| prompt_language(Some(&serde_json::json!(c)), None);
+        assert!(summary_instruction(PromptLanguage::De).starts_with("Fasse die"));
+        let en = summary_instruction(PromptLanguage::En);
+        assert!(en.starts_with("Summarize the preceding conversation"));
+        assert!(!en.contains("Always respond in"));
+        assert_eq!(
+            summary_instruction(lang("fr")),
+            format!("{en} Always respond in French.")
+        );
+        assert_eq!(summary_instruction(lang("xx")), en);
+    }
+
     use super::*;
     use ssh_manager_core::ssh::CommandOutput;
 

@@ -1,5 +1,12 @@
+import cs from "./locales/cs/common.json";
 import de from "./locales/de/common.json";
 import en from "./locales/en/common.json";
+import es from "./locales/es/common.json";
+import fr from "./locales/fr/common.json";
+import it from "./locales/it/common.json";
+import pl from "./locales/pl/common.json";
+import ru from "./locales/ru/common.json";
+import uk from "./locales/uk/common.json";
 
 // Spec 0024, Abschnitt 3/4: die einzige Quelle der Wahrheit für die
 // unterstützten UI-Sprachen. Eine neue Sprache = eine Locale-Datei + ein
@@ -31,6 +38,48 @@ export const LANGUAGE_REGISTRY: readonly LanguageEntry[] = [
     endonym: "English",
     englishName: "English",
     resources: en,
+  },
+  {
+    code: "es",
+    endonym: "Español",
+    englishName: "Spanish",
+    resources: es,
+  },
+  {
+    code: "fr",
+    endonym: "Français",
+    englishName: "French",
+    resources: fr,
+  },
+  {
+    code: "it",
+    endonym: "Italiano",
+    englishName: "Italian",
+    resources: it,
+  },
+  {
+    code: "cs",
+    endonym: "Čeština",
+    englishName: "Czech",
+    resources: cs,
+  },
+  {
+    code: "pl",
+    endonym: "Polski",
+    englishName: "Polish",
+    resources: pl,
+  },
+  {
+    code: "ru",
+    endonym: "Русский",
+    englishName: "Russian",
+    resources: ru,
+  },
+  {
+    code: "uk",
+    endonym: "Українська",
+    englishName: "Ukrainian",
+    resources: uk,
   },
 ];
 

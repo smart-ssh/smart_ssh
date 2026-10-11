@@ -1680,19 +1680,39 @@ async fn execute_suggested_command(
     // depend on anything the frontend claims.
     let waiting_for_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let execution = async {
-        let mut transport = session.transport.lock().await;
-        match (&effective_command, &session.sudo_password) {
-            (Some(rewritten), Some(password)) => {
+        // Issue #328: AI commands of one session stay serial through the
+        // command slot, but the transport lock is only held to open the exec
+        // channel. While the command runs, file browser, terminal and
+        // disconnect can use the transport.
+        let Some(_slot) = session.transport.begin_command(action_id).await else {
+            return Err(ssh_manager_core::ssh::SshError::ChannelError(
+                "session is disconnecting".to_string(),
+            ));
+        };
+        let stdin = match (&effective_command, &session.sudo_password) {
+            (Some(_), Some(password)) => {
                 use secrecy::ExposeSecret;
                 let mut stdin = password.expose_secret().as_bytes().to_vec();
                 stdin.push(b'\n');
-                transport
-                    .execute_streaming(rewritten, Some(&stdin), cancel_rx, live_sink)
-                    .await
+                Some(stdin)
             }
-            _ => {
+            _ => None,
+        };
+        let run_command = match (&effective_command, &stdin) {
+            (Some(rewritten), Some(_)) => rewritten.as_str(),
+            _ => command.as_str(),
+        };
+        let mut transport = session.transport.lock().await;
+        match transport.start_exec(run_command, stdin.as_deref()).await? {
+            Some(running) => {
+                drop(transport);
+                running.run(cancel_rx, live_sink).await
+            }
+            // Transport without split start/run: keeps the lock for the
+            // whole command, as before.
+            None => {
                 transport
-                    .execute_streaming(&command, None, cancel_rx, live_sink)
+                    .execute_streaming(run_command, stdin.as_deref(), cancel_rx, live_sink)
                     .await
             }
         }

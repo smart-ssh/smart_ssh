@@ -179,6 +179,29 @@ impl NormalSftpGuard<'_> {
 /// nur lesbar.
 pub struct SessionTransport {
     inner: AsyncMutex<Box<dyn SshTransport>>,
+    /// Issue #328: AI commands of one session stay serial even though the
+    /// transport lock is released while a command runs. Held for the whole
+    /// command by [`SessionTransport::begin_command`].
+    command_guard: AsyncMutex<()>,
+    /// Issue #328: set by [`SessionTransport::mark_closed`] on disconnect;
+    /// no new command starts and no follow-up AI round follows afterwards.
+    closed: std::sync::atomic::AtomicBool,
+    /// Issue #328: action currently running as an AI command, so a
+    /// disconnect can cancel it (Spec 0027).
+    running_action: std::sync::Mutex<Option<ActionId>>,
+}
+
+/// Issue #328: proof that this AI command is the only one running in its
+/// session; dropping it lets the next one start.
+pub struct CommandSlot<'a> {
+    owner: &'a SessionTransport,
+    _guard: tokio::sync::MutexGuard<'a, ()>,
+}
+
+impl Drop for CommandSlot<'_> {
+    fn drop(&mut self) {
+        *self.owner.running_action.lock().unwrap() = None;
+    }
 }
 
 impl SessionTransport {
@@ -188,7 +211,43 @@ impl SessionTransport {
     pub fn new(transport: Box<dyn SshTransport>) -> Self {
         Self {
             inner: AsyncMutex::new(transport),
+            command_guard: AsyncMutex::new(()),
+            closed: std::sync::atomic::AtomicBool::new(false),
+            running_action: std::sync::Mutex::new(None),
         }
+    }
+
+    /// Issue #328: waits until no other AI command of this session runs and
+    /// claims the slot for `action_id`. `None` if the session was closed.
+    pub async fn begin_command(&self, action_id: ActionId) -> Option<CommandSlot<'_>> {
+        let guard = self.command_guard.lock().await;
+        if self.is_closed() {
+            return None;
+        }
+        *self.running_action.lock().unwrap() = Some(action_id);
+        Some(CommandSlot {
+            owner: self,
+            _guard: guard,
+        })
+    }
+
+    /// Issue #328: the AI command running right now, if any.
+    pub fn running_action(&self) -> Option<ActionId> {
+        *self.running_action.lock().unwrap()
+    }
+
+    /// Issue #328: the session is being disconnected.
+    pub fn mark_closed(&self) {
+        self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Issue #328: resolves once no AI command runs in this session.
+    pub async fn wait_until_idle(&self) {
+        drop(self.command_guard.lock().await);
     }
 
     /// Der Transport, gesperrt — **zum Benutzen**.
