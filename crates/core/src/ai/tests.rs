@@ -3163,3 +3163,102 @@ fn test_redactor_masks_other_credential_words_id_vi_hi() {
         assert!(!out.contains("hunter2"), "{word}: {out}");
     }
 }
+
+/// Issue #336: per added UI language (tr, el, hu, ro), the local word for
+/// "password" masks the value after it (case-insensitive); the word without a
+/// value stays untouched.
+#[test]
+fn test_redactor_masks_value_after_password_word_in_tr_el_hu_ro() {
+    let redactor = DefaultOutputRedactor::new();
+    for (lang, words) in [
+        (
+            "tr",
+            vec![
+                "şifre", "Şifre", "ŞİFRE", "ŞIFRE", "sifre", "SIFRE", "parola",
+            ],
+        ),
+        (
+            "el",
+            vec![
+                "κωδικός πρόσβασης",
+                "κωδικός",
+                "ΚΩΔΙΚΟΣ",
+                "κωδικος",
+                "συνθηματικό",
+            ],
+        ),
+        ("hu", vec!["jelszó", "Jelszó", "JELSZÓ", "jelszo"]),
+        ("ro", vec!["parolă", "Parolă", "PAROLĂ", "parola"]),
+    ] {
+        assert!(
+            keywords::keyword_languages().contains(&lang),
+            "no keyword list for {lang}"
+        );
+        for word in words {
+            for sep in [": ", "="] {
+                let out = redactor.redact_text(&format!("{word}{sep}hunter2"));
+                assert!(
+                    !out.contains("hunter2"),
+                    "{lang} {word:?}{sep:?} leaked: {out}"
+                );
+            }
+            assert_eq!(
+                redactor.redact_text(&format!("Enter {word}")),
+                format!("Enter {word}")
+            );
+        }
+    }
+}
+
+/// Issue #336: Turkish dotted/dotless i. `(?i)` alone does not map `İ`
+/// (U+0130) to `i` or `ı` (U+0131) to `I`, so the Turkish list carries the
+/// upper-case dotted and ASCII forms explicitly.
+#[test]
+fn test_redactor_turkish_dotted_and_dotless_i() {
+    let redactor = DefaultOutputRedactor::new();
+    for text in [
+        "şifre: hunter2",
+        "ŞİFRE: hunter2",
+        "Şifre=hunter2",
+        "GİZLİ ANAHTAR: hunter2",
+        "gizli anahtar: hunter2",
+        "API ANAHTARI: hunter2",
+        "api anahtarı: hunter2",
+        "ERİŞİM ANAHTARI=hunter2",
+        "KİMLİK BİLGİLERİ: hunter2",
+        "PAROLA İFADESİ: hunter2",
+        "PİN KODU: 1234secret",
+    ] {
+        let out = redactor.redact_text(text);
+        assert!(
+            !out.contains("hunter2") && !out.contains("1234secret"),
+            "{text:?} leaked: {out}"
+        );
+    }
+}
+
+/// Issue #336: further credential words of the added languages.
+#[test]
+fn test_redactor_masks_other_credential_words_tr_el_hu_ro() {
+    let redactor = DefaultOutputRedactor::new();
+    for word in [
+        "parola ifadesi",
+        "özel anahtar",
+        "kimlik bilgileri",
+        "ιδιωτικό κλειδί",
+        "κλειδί api",
+        "διαπιστευτήρια",
+        "jelmondat",
+        "titkos kulcs",
+        "privát kulcs",
+        "hitelesítő adatok",
+        "frază secretă",
+        "cheie api",
+        "cheie privată",
+        "date de autentificare",
+        "cod pin",
+    ] {
+        let out = redactor.redact_text(&format!("{word}: hunter2"));
+        assert!(!out.contains("hunter2"), "{word}: {out}");
+    }
+}
