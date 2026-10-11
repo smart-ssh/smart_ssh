@@ -135,17 +135,53 @@ pub fn sftp_server_safety_probe_command(path: &str) -> Option<String> {
     })
 }
 
-/// Der Prüf-Text in POSIX-sh-Syntax (kein GNU-`stat`): löst Symlinks der
-/// Datei (`readlink`, begrenzt) und des Verzeichnisses (`cd -P`/`pwd -P`)
-/// auf und prüft dann Datei und alle Elternverzeichnisse bis `/` mit
-/// `find -prune`. Ausgabe `SAFE` oder `UNSAFE <aufgelöster Pfad>`; jeder
-/// Fehler endet mit Exit 4 (und damit als unsicher).
+/// Der Prüf-Text in POSIX-sh-Syntax (kein GNU-`stat`): löst den Pfad
+/// Komponente für Komponente auf (`readlink`, höchstens 20 Links). Jeden
+/// dabei durchlaufenen Symlink prüft er selbst (ohne ihn zu verfolgen) und
+/// das Verzeichnis, das ihn enthält, samt allen Eltern bis `/`; am Ende
+/// folgen Datei und alle Elternverzeichnisse. Geprüft wird jeweils mit
+/// `find -prune`: root gehört der Eintrag und weder Gruppe noch andere dürfen
+/// schreiben. Bei einem Symlink zählt nur der Eigentümer: seine Rechtebits
+/// sind (Linux: immer `rwxrwxrwx`) ohne Bedeutung, ob ihn jemand ersetzen
+/// kann, entscheidet das Verzeichnis, das ihn enthält. Ausgabe `SAFE` oder `UNSAFE <erster auffälliger Pfad>` (Link
+/// bzw. Verzeichnis, nicht der Ziel-Pfad des Links); jeder Fehler endet mit
+/// Exit 4 (und damit als unsicher).
 pub fn posix_sftp_server_safety_probe(path: &str) -> String {
-    let mut cmd = format!("r={}; n=0; ", shell_single_quote(path));
-    cmd.push_str(
-        r#"while [ -L "$r" ]; do n=$((n+1)); [ "$n" -gt 20 ] && exit 4; t=$(readlink "$r") || exit 4; case "$t" in /*) r=$t;; *) r=$(dirname "$r")/$t;; esac; done; d=$(cd -P "$(dirname "$r")" 2>/dev/null && pwd -P) || exit 4; e=$d/$(basename "$r"); while :; do o=$(find "$e" -prune \( ! -user 0 -o -perm -g+w -o -perm -o+w \) -print) || exit 4; if [ -n "$o" ]; then echo "UNSAFE $e"; exit 0; fi; [ "$e" = / ] && break; e=$(dirname "$e"); done; echo SAFE"#,
-    );
-    cmd
+    safety_probe_script(path, "0", None)
+}
+
+/// Wie [`posix_sftp_server_safety_probe`], aber mit wählbarer Nutzer-ID für
+/// „gehört root“ und optionalem Verzeichnis, an dem der Aufstieg endet (es
+/// wird nicht mehr geprüft). Produktiv gilt immer `0` und kein Stopp; die
+/// Parameter erlauben Tests ohne root-Rechte.
+fn safety_probe_script(path: &str, owner_uid: &str, stop: Option<&str>) -> String {
+    let stop_check = stop.map_or_else(String::new, |s| {
+        format!("[ \"$e\" = {} ] && return 0; ", shell_single_quote(s))
+    });
+    format!(
+        concat!(
+            "chk() {{ o=$(find \"$1\" -prune \\( ! -user {uid} -o -perm -g+w -o -perm -o+w \\) -print) || exit 4; ",
+            "if [ -n \"$o\" ]; then echo \"UNSAFE $1\"; exit 0; fi; }}; ",
+            "chklink() {{ o=$(find \"$1\" -prune ! -user {uid} -print) || exit 4; ",
+            "if [ -n \"$o\" ]; then echo \"UNSAFE $1\"; exit 0; fi; }}; ",
+            "chkdir() {{ e=$1; while :; do {stop}chk \"$e\"; [ \"$e\" = / ] && return 0; e=$(dirname \"$e\"); done; }}; ",
+            "cur=/; rest={path}; n=0; ",
+            "while [ -n \"$rest\" ]; do ",
+            "c=${{rest%%/*}}; case \"$rest\" in */*) rest=${{rest#*/}};; *) rest=;; esac; ",
+            "case \"$c\" in ''|.) continue;; ..) cur=$(dirname \"$cur\"); continue;; esac; ",
+            "next=${{cur%/}}/$c; ",
+            "if [ -L \"$next\" ]; then ",
+            "n=$((n+1)); [ \"$n\" -gt 20 ] && exit 4; ",
+            "chklink \"$next\"; chkdir \"$cur\"; ",
+            "t=$(readlink \"$next\") || exit 4; ",
+            "case \"$t\" in /*) cur=/; rest=${{t#/}}/$rest;; *) rest=$t/$rest;; esac; ",
+            "else cur=$next; fi; done; ",
+            "chkdir \"$cur\"; echo SAFE"
+        ),
+        uid = owner_uid,
+        stop = stop_check,
+        path = shell_single_quote(path),
+    )
 }
 
 /// Liest das Ergebnis von [`sftp_server_safety_probe_command`]. Alles außer
@@ -598,50 +634,209 @@ mod tests {
         assert!(!cmd.contains("stat -c"));
     }
 
+    /// Führt die Probe unter `/bin/sh` aus. „Gehört root“ gilt hier für den
+    /// aktuellen Nutzer, und der Aufstieg endet am (nicht geprüften)
+    /// Testverzeichnis: `/tmp` und Co. sind nie root-eigen und sicher.
+    #[cfg(unix)]
+    fn run_probe(path: &std::path::Path, stop: &std::path::Path) -> (Option<i32>, String) {
+        use std::os::unix::fs::MetadataExt;
+        let uid = std::fs::metadata(path.ancestors().find(|a| a.parent() == Some(stop)).unwrap())
+            .unwrap()
+            .uid()
+            .to_string();
+        let script = safety_probe_script(
+            &path.display().to_string(),
+            &uid,
+            Some(&stop.display().to_string()),
+        );
+        let o = std::process::Command::new("/bin/sh")
+            .args(["-c", &script])
+            .output()
+            .unwrap();
+        (
+            o.status.code(),
+            String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        )
+    }
+
+    #[cfg(unix)]
+    fn mode(p: &std::path::Path, m: u32) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(m)).unwrap();
+    }
+
+    #[cfg(unix)]
+    struct Tree(std::path::PathBuf);
+    #[cfg(unix)]
+    impl Tree {
+        fn new(name: &str) -> Self {
+            let d = std::env::temp_dir().join(format!("safety-{name}-{}", std::process::id()));
+            std::fs::remove_dir_all(&d).ok();
+            std::fs::create_dir_all(&d).unwrap();
+            mode(&d, 0o755);
+            Tree(std::fs::canonicalize(&d).unwrap())
+        }
+        fn dir(&self, rel: &str) -> std::path::PathBuf {
+            let d = self.0.join(rel);
+            std::fs::create_dir_all(&d).unwrap();
+            mode(&d, 0o755);
+            d
+        }
+        fn bin(&self, rel: &str) -> std::path::PathBuf {
+            let f = self.0.join(rel);
+            std::fs::write(&f, "#!/bin/sh\n").unwrap();
+            mode(&f, 0o755);
+            f
+        }
+    }
+    #[cfg(unix)]
+    impl Drop for Tree {
+        fn drop(&mut self) {
+            // Schreibrechte zurück, damit das Aufräumen nie hängen bleibt.
+            std::fs::remove_dir_all(&self.0).ok();
+        }
+    }
+
+    #[cfg(unix)]
+    fn unsafe_at(p: &std::path::Path) -> (Option<i32>, String) {
+        (Some(0), format!("UNSAFE {}", p.display()))
+    }
+
     #[cfg(unix)]
     #[test]
-    fn test_safety_probe_under_real_sh_resolves_symlinks_and_flags_unsafe() {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let dir = std::env::temp_dir().join(format!("safety-test-{}", std::process::id()));
-        let real = dir.join("real");
-        std::fs::create_dir_all(&real).unwrap();
-        let bin = real.join("sftp-server");
-        std::fs::write(&bin, "#!/bin/sh\n").unwrap();
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let link_dir = dir.join("link");
-        std::os::unix::fs::symlink(&real, &link_dir).unwrap();
-        let link_file = dir.join("sftp-server");
-        std::os::unix::fs::symlink(&bin, &link_file).unwrap();
-
-        let run = |p: &std::path::Path| {
-            let cmd = sftp_server_safety_probe_command(&p.display().to_string()).unwrap();
-            let o = std::process::Command::new("/bin/sh")
-                .args(["-c", &cmd])
-                .output()
-                .unwrap();
-            (
-                o.status.code(),
-                String::from_utf8_lossy(&o.stdout).trim().to_string(),
-            )
-        };
-        let owned_by_root = std::fs::metadata(&bin).unwrap().uid() == 0;
-        let resolved = std::fs::canonicalize(&bin).unwrap();
-        let via_dir_link = run(&link_dir.join("sftp-server"));
-        let via_file_link = run(&link_file);
-        // Gegenprobe: ein Test-Nutzer ist nicht root → die Datei selbst ist
-        // der erste unsichere Eintrag, und zwar unter ihrem aufgelösten Pfad.
-        if !owned_by_root {
-            let expect = format!("UNSAFE {}", resolved.display());
-            assert_eq!(via_dir_link, (Some(0), expect.clone()));
-            assert_eq!(via_file_link, (Some(0), expect));
-        }
-        // Welt-beschreibbare Datei wird auch bei root-Eigentum gemeldet.
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o757)).unwrap();
-        let (code, out_text) = run(&bin);
-        assert_eq!(code, Some(0));
-        assert!(out_text.starts_with("UNSAFE "), "{out_text}");
+    fn test_safety_probe_real_sh_plain_tree_safe_and_writable_file_unsafe() {
+        let t = Tree::new("plain");
+        let real = t.dir("real");
+        let bin = t.bin("real/sftp-server");
+        let stop = t.0.parent().unwrap().to_path_buf();
+        assert_eq!(run_probe(&bin, &stop), (Some(0), "SAFE".to_string()));
+        mode(&bin, 0o757);
+        assert_eq!(run_probe(&bin, &stop), unsafe_at(&bin));
+        mode(&bin, 0o755);
+        mode(&real, 0o775);
+        assert_eq!(run_probe(&bin, &stop), unsafe_at(&real));
         // Fehlende Datei: Exit != 0 (fail closed durch den Parser).
-        assert_ne!(run(&real.join("missing/sftp-server")).0, Some(0));
-        std::fs::remove_dir_all(&dir).ok();
+        assert_ne!(
+            run_probe(&real.join("missing/sftp-server"), &stop).0,
+            Some(0)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_safety_probe_real_sh_link_in_writable_dir_is_unsafe_with_link_path() {
+        let t = Tree::new("linkdir");
+        let bin = t.bin("sftp-server-real");
+        let ld = t.dir("links");
+        let link = ld.join("sftp-server");
+        std::os::unix::fs::symlink(&bin, &link).unwrap();
+        let stop = t.0.parent().unwrap().to_path_buf();
+        assert_eq!(run_probe(&link, &stop), (Some(0), "SAFE".to_string()));
+        mode(&ld, 0o777);
+        // Das Ziel ist sicher; gemeldet wird das Verzeichnis des Links.
+        assert_eq!(run_probe(&link, &stop), unsafe_at(&ld));
+        mode(&ld, 0o770);
+        assert_eq!(run_probe(&link, &stop), unsafe_at(&ld));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_safety_probe_real_sh_link_owned_by_other_user_is_unsafe() {
+        let t = Tree::new("owner");
+        let bin = t.bin("real");
+        let link = t.0.join("sftp-server");
+        std::os::unix::fs::symlink(&bin, &link).unwrap();
+        // Gegenprobe: „root“ ist hier eine fremde UID → der Link selbst
+        // fällt vor Ziel und Eltern auf.
+        use std::os::unix::fs::MetadataExt;
+        let other = (std::fs::metadata(&bin).unwrap().uid() + 1).to_string();
+        let script = safety_probe_script(
+            &link.display().to_string(),
+            &other,
+            Some(&t.0.parent().unwrap().display().to_string()),
+        );
+        let o = std::process::Command::new("/bin/sh")
+            .args(["-c", &script])
+            .output()
+            .unwrap();
+        assert_eq!(o.status.code(), Some(0));
+        assert_eq!(
+            String::from_utf8_lossy(&o.stdout).trim(),
+            format!("UNSAFE {}", link.display())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_safety_probe_real_sh_chain_flags_only_intermediate_link_dir() {
+        let t = Tree::new("chain");
+        let bin = t.bin("target");
+        let d1 = t.dir("a");
+        let d2 = t.dir("b");
+        let d3 = t.dir("c");
+        // c/l3 -> ../target ; b/l2 -> ../c/l3 (relativ) ; a/l1 -> b/l2 (relativ)
+        std::os::unix::fs::symlink("../target", d3.join("l3")).unwrap();
+        std::os::unix::fs::symlink("../c/l3", d2.join("l2")).unwrap();
+        std::os::unix::fs::symlink("../b/l2", d1.join("l1")).unwrap();
+        let _ = bin;
+        let stop = t.0.parent().unwrap().to_path_buf();
+        let entry = d1.join("l1");
+        assert_eq!(run_probe(&entry, &stop), (Some(0), "SAFE".to_string()));
+        mode(&d2, 0o757);
+        assert_eq!(run_probe(&entry, &stop), unsafe_at(&d2));
+        mode(&d2, 0o755);
+        mode(&d3, 0o775);
+        assert_eq!(run_probe(&entry, &stop), unsafe_at(&d3));
+        mode(&d3, 0o755);
+        // Verzeichnis-Symlink als Pfad-Komponente zählt ebenfalls.
+        let dl = t.0.join("dirlink");
+        std::os::unix::fs::symlink(&d1, &dl).unwrap();
+        assert_eq!(
+            run_probe(&dl.join("l1"), &stop),
+            (Some(0), "SAFE".to_string())
+        );
+        mode(&t.0, 0o777);
+        // Das Verzeichnis, das den Link enthält, ist jetzt beschreibbar.
+        assert_eq!(run_probe(&dl.join("l1"), &stop), unsafe_at(&t.0));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_safety_probe_real_sh_loops_and_depth_limit_fail_closed() {
+        let t = Tree::new("loop");
+        let stop = t.0.parent().unwrap().to_path_buf();
+        let (a, b) = (t.0.join("a"), t.0.join("b"));
+        std::os::unix::fs::symlink(&b, &a).unwrap();
+        std::os::unix::fs::symlink(&a, &b).unwrap();
+        assert_eq!(run_probe(&a, &stop).0, Some(4));
+        // 21 Links hintereinander überschreiten die Grenze, 20 nicht.
+        let bin = t.bin("target");
+        let mut prev = bin;
+        for i in 0..21 {
+            let l = t.0.join(format!("l{i}"));
+            std::os::unix::fs::symlink(&prev, &l).unwrap();
+            if i == 19 {
+                assert_eq!(run_probe(&l, &stop), (Some(0), "SAFE".to_string()));
+            }
+            prev = l;
+        }
+        assert_eq!(run_probe(&prev, &stop).0, Some(4));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_safety_probe_production_script_flags_non_root_tree() {
+        // Produktiv gilt „gehört root“ wörtlich; ein Test-Nutzer ist nie root.
+        if std::env::var("USER").as_deref() == Ok("root") {
+            return;
+        }
+        let t = Tree::new("prod");
+        let bin = t.bin("sftp-server");
+        let script = posix_sftp_server_safety_probe(&bin.display().to_string());
+        let o = std::process::Command::new("/bin/sh")
+            .args(["-c", &script])
+            .output()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&o.stdout).starts_with("UNSAFE "));
     }
 }

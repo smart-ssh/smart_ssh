@@ -68,6 +68,7 @@
 
 mod action_exec;
 mod chat_turn;
+mod live_output;
 mod new_chat;
 mod notes;
 /// Spec 0088, A1: das Warten auf eine Bestätigung als Wert mit `Drop`.

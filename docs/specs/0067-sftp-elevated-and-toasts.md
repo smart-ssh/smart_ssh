@@ -63,7 +63,13 @@ verständliche Meldung mit konkreter Anleitung statt eines kryptischen Fehlers:
 vorschlägt (und vor dem sudo-Check), prüft sie lesend auf dem Server, dass
 `sftp-server` — nach Auflösen von Symlinks — und **jedes übergeordnete
 Verzeichnis bis `/`** root gehören und weder für die Gruppe noch für andere
-beschreibbar sind. Die Prüfung läuft nie mit sudo und nutzt nur
+beschreibbar sind. Das gilt auch für **jeden Symlink, den der konfigurierte
+Pfad auf dem Weg durchläuft** (auch Verzeichnis-Links und Ketten): Der Link
+selbst muss root gehören — seine Rechtebits zählen nicht, sie sind auf vielen
+Systemen immer offen — und das Verzeichnis, das ihn enthält, samt allen
+Eltern muss die Regel erfüllen. Gemeldet wird der erste auffällige Eintrag
+(Link oder Verzeichnis). Mehr als 20 Links hintereinander oder ein Link-Kreis
+gelten als unsicher. Die Prüfung läuft nie mit sudo und nutzt nur
 POSIX-Werkzeuge. Ist ein Eintrag unsicher, oder scheitert die Prüfung oder
 liefert nichts Verwertbares (im Zweifel unsicher):
 
