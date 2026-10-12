@@ -1315,3 +1315,29 @@ fn chaining_trailing_space_glob_commands_never_lower_risk() {
         }
     }
 }
+
+// --- Issue #433: unsplittable tail (here-doc operator) after a command ---
+
+#[test]
+fn chaining_command_with_unterminated_heredoc_never_lowers_risk() {
+    let alone = classify("rm");
+    assert!(alone.server_risk > RiskLevel::None);
+    for tail in ["<<", "<", "<<-"] {
+        for sep in [";", "&&", "||", "|", "\n"] {
+            let joined = format!("rm{sep}{tail}");
+            let chained = classify(&joined);
+            assert!(
+                chained.server_risk >= alone.server_risk && chained.data_risk >= alone.data_risk,
+                "risk fell for {joined:?}: {chained:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn heredoc_fragments_never_lower_risk_for_red_commands() {
+    let alone = classify("shutdown now");
+    let chained = classify("shutdown now;<<");
+    assert_eq!(alone.server_risk, RiskLevel::Red);
+    assert_eq!(chained.server_risk, RiskLevel::Red);
+}

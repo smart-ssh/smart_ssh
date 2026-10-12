@@ -103,6 +103,23 @@ fn assert_deny_or_confirm(decision: &Decision) {
 
 // --- Testfall-Katalog, Spec Abschnitt 6 -------------------------------
 
+/// Issue #433: `rm;<<` is unsplittable (here-doc operator) and must reach the
+/// user as a confirmation, never as auto-exec, even with `rm` allowed.
+#[tokio::test]
+async fn test_unterminated_heredoc_after_command_is_confirmed() {
+    let eng = engine(vec![glob_rule(
+        "allow-rm",
+        "rm*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    for cmd in ["rm;<<", "rm;<", "rm|<<", "rm&&<<"] {
+        let decision = eng.evaluate(cmd, &ctx("srv1", &[])).await;
+        assert_confirm(&decision);
+    }
+}
+
 /// Tabellenzeile 1: einfacher Whitelist-Treffer.
 #[tokio::test]
 async fn test_whitelist_hit_grants_autoexec() {
