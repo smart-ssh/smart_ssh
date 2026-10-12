@@ -583,7 +583,10 @@
     "exampleConfigHint": "Cấu hình ví dụ cho Claude Code (.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "Sao chép cấu hình",
     "copyConfigCopied": "Đã sao chép cấu hình.",
-    "copyConfigFailed": "Không thể sao chép cấu hình."
+    "copyConfigFailed": "Không thể sao chép cấu hình.",
+    "tokenReveal": "Hiện token",
+    "tokenHide": "Ẩn token",
+    "copyConfigNote": "Sao chép cấu hình đầy đủ với token thật, kể cả khi token đang ẩn."
   },
   "firstRunNotice": {
     "title": "Trước khi bắt đầu",
