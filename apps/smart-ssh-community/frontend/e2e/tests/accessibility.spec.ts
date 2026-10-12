@@ -5,6 +5,7 @@ import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
 import { NOTE_COMMANDS, openNotes } from "../support/notes";
+import { openChatWithConfirmation, openChatWithMessages } from "../support/chatScreens";
 import { openSession, redCommandProposal } from "../support/session";
 
 // New screens: add one line here. `open` brings the app into the state
@@ -49,6 +50,17 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     const sessionId = await openSession(app, "db-primary");
     await app.emit("chat-action-proposed", redCommandProposal(sessionId, "rm -rf /var/lib/app/cache"));
     await expect(app.page.getByRole("button", { name: "Execute", exact: true })).toBeVisible();
+  },
+  "chat messages": async (app) => {
+    await openChatWithMessages(app);
+  },
+  "chat confirmation, long command": async (app) => {
+    await openChatWithConfirmation(app);
+  },
+  "chat quick-rule popup": async (app) => {
+    await openChatWithConfirmation(app);
+    await app.page.getByRole("button", { name: "Show rule suggestions" }).click();
+    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
   },
 };
 
