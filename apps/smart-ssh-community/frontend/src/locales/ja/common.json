@@ -680,7 +680,8 @@
       "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。"
     },
     "channelLost": "昇格した権限が終了しました — 昇格したチャネルはもう有効ではありません。",
-    "targetUserLabel": "昇格した権限の対象ユーザー（既定: root）"
+    "targetUserLabel": "昇格した権限の対象ユーザー（既定: root）",
+    "group": "昇格された権限"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",
@@ -902,6 +903,7 @@
     "toStartDirectory": "開始ディレクトリへ移動",
     "parentDirectory": "親ディレクトリ",
     "newFolderButton": "+ フォルダー",
+    "fileActionsGroup": "ファイル操作",
     "upload": "アップロード",
     "uploadDialogTitle": "ファイルをアップロード",
     "uploadFolder": "フォルダーをアップロード",

@@ -695,7 +695,8 @@
       "startFailed": "Не удалось запустить sftp-server через sudo (возможная причина: «requiretty» в sudoers)."
     },
     "channelLost": "Повышенные права завершены — повышенный канал больше не активен.",
-    "targetUserLabel": "Целевой пользователь для повышенных прав (по умолчанию: root)"
+    "targetUserLabel": "Целевой пользователь для повышенных прав (по умолчанию: root)",
+    "group": "Повышенные права"
   },
   "sshConfigImport": {
     "dialogTitle": "Импорт ssh_config",
@@ -917,6 +918,7 @@
     "toStartDirectory": "Перейти в начальный каталог",
     "parentDirectory": "Родительский каталог",
     "newFolderButton": "+ Папка",
+    "fileActionsGroup": "Действия с файлами",
     "upload": "Загрузить",
     "uploadDialogTitle": "Загрузка файлов",
     "uploadFolder": "Загрузить папку",
