@@ -43,6 +43,10 @@ export const test = base.extend<{ app: AppDriver }>({
       // `main.tsx` renders only after its start-up `invoke`s resolved; the
       // root then has content (main screen, or a dialog over it).
       await expect(page.locator("#root")).not.toBeEmpty({ timeout: 20_000 });
+      // The shell renders before its start-up commands (servers, settings, …)
+      // answer. A click in that window lands on UI that is replaced a moment
+      // later (slow WebKit runs), so wait until the app has gone quiet.
+      await page.evaluate(() => window.__e2e!.settle());
     };
 
     const driver: AppDriver = {

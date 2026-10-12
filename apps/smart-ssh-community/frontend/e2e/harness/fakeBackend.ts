@@ -279,7 +279,16 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     },
   };
 
+  let inFlight = 0;
   const invoke = async (cmd: string, rawArgs: unknown): Promise<unknown> => {
+    inFlight++;
+    try {
+      return await invokeInner(cmd, rawArgs);
+    } finally {
+      inFlight--;
+    }
+  };
+  const invokeInner = async (cmd: string, rawArgs: unknown): Promise<unknown> => {
     const args = (rawArgs ?? {}) as Args;
     if (!cmd.startsWith("plugin:event|")) calls.push({ cmd, args });
     const canned = model.commands[cmd];
@@ -323,6 +332,17 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
         else resolve(response.result ?? null);
       }
       return waiting.length;
+    },
+    settle: async () => {
+      // Quiet = no call in flight and no new call over two animation frames,
+      // so the app's start-up data has been rendered.
+      for (let quiet = 0; quiet < 2; ) {
+        const before = calls.length;
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const held_ = [...held.values()].reduce((n, l) => n + l.length, 0);
+        // A deliberately held call is not "loading".
+        quiet = inFlight - held_ === 0 && calls.length === before ? quiet + 1 : 0;
+      }
     },
     heldCount: (cmd) => held.get(cmd)?.length ?? 0,
     snapshot: () => JSON.parse(JSON.stringify(model)),
