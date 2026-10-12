@@ -1,9 +1,7 @@
 # Spec 0108 — Spracheingabe im KI-Chat
 
-Status: teilweise umgesetzt (Abschnitte 1–4, 5.3,
-5.6, 5.7 und 6 sind umgesetzt; der Mikrofon-Knopf, die Tastenkürzel und der
-Zustimmungsdialog folgen in einem eigenen Issue; #416 lieferte die
-Modellverwaltung, #417 die Aufnahme und Erkennung)
+Status: umgesetzt (#416 Modellverwaltung, #417 Aufnahme und Erkennung,
+#418 Oberfläche)
 Zweck: Der Nutzer diktiert Text in das Eingabefeld des KI-Chats. Die
 Erkennung läuft vollständig auf dem eigenen Rechner mit einem lokalen
 Whisper-Modell; Audio verlässt den Rechner nie.
@@ -74,12 +72,12 @@ nicht möglich (erst abbrechen).
 **4.1** Logs enthalten höchstens Modellname, Größe und Ergebnis, nie
 Dateiinhalte, Audio oder erkannten Text.
 
-## 5. Aufnahme und Oberfläche (Soll-Verhalten der Folge-Issues)
+## 5. Aufnahme und Oberfläche
 
 **5.1** Neben dem Senden-Knopf des Chats steht ein Mikrofon-Knopf. Ein Klick
 startet die Aufnahme, ein weiterer Klick beendet sie und startet die
 Erkennung; Esc bricht ab und verwirft die Aufnahme. Zusätzlich gibt es einen
-Tastaturkurzbefehl zum Starten und Beenden.
+Tastaturkurzbefehl zum Starten und Beenden (Abschnitt 5.8).
 
 **5.2** Der erkannte Text wird an den aktuellen Entwurf im Eingabefeld
 angehängt. Er wird nie automatisch gesendet; der Nutzer sendet mit Enter.
@@ -124,6 +122,40 @@ Logs nennen höchstens Dauer und Ergebnis.
   `speech_permission_denied`, `speech_transcription_failed`.
 - macOS: Der Systemdialog für den Mikrofonzugriff erscheint erst beim ersten
   Start; der Hinweistext erklärt, dass die Erkennung lokal läuft.
+
+**5.8** Oberfläche im Einzelnen:
+- Der Knopf erscheint nur, wo das Eingabefeld sichtbar ist (nicht ohne
+  aktiven KI-Anbieter, nicht in schreibgeschützten Sitzungen) und solange
+  Spracheingabe eingeschaltet ist.
+- Kurzbefehl: `Strg+Umschalt+M` (`Cmd+Umschalt+M` auf macOS) startet und
+  beendet die Aufnahme, solange der Fokus im Chat-Bereich liegt. Er kollidiert
+  mit keinem bestehenden Kurzbefehl.
+- Während der Aufnahme ist der Knopf rot und pulsiert und zeigt die
+  verstrichene Zeit (`m:ss`); während der Erkennung zeigt er einen
+  Ladeindikator und ist gesperrt. Alle drei Zustände haben eine
+  Screenreader-Beschriftung.
+- Esc während der Aufnahme verwirft sie; der Entwurf bleibt unverändert.
+  Verlässt der Nutzer den Chat während der Aufnahme, wird sie verworfen.
+- Endet die Aufnahme nach 120 Sekunden von selbst, wird der Text wie bei
+  einem Klick auf „Beenden“ übernommen.
+- Der Text kommt wie getippter Text in den Entwurf (angehängt, mit einem
+  Leerzeichen getrennt, wenn der Entwurf nicht leer ist) und gilt als
+  ungeprüfte Nutzereingabe; er geht erst mit Enter auf dem normalen Sendeweg
+  an die KI. Der Fokus wechselt ins Eingabefeld.
+- Zustimmungsdialog (ohne bereites Modell): nennt Modell, Größe und Quelle
+  und sagt, dass die Erkennung danach vollständig lokal läuft. „Herunterladen“
+  startet den Download mit Fortschrittsanzeige; „Abbrechen“ schließt den
+  Dialog ohne Netzwerkanfrage, während des Downloads bricht es ihn ab. Erst
+  nach erfolgreichem Download beginnt die Aufnahme (das Betriebssystem fragt
+  dann ggf. nach dem Mikrofonzugriff).
+- Fehler (kein Mikrofon, Zugriff verweigert, Download fehlgeschlagen,
+  Prüfsumme falsch, Erkennung fehlgeschlagen) erscheinen als übersetzter,
+  nicht technischer Text mit Hinweis, was zu tun ist; der Knopf kehrt in den
+  Ruhezustand zurück.
+- Einstellungen, Abschnitt „Spracheingabe“: Ein/Aus (Standard an), Modell
+  `base`/`small` mit Zustand, Herunterladen/Abbrechen/Löschen, und die
+  Erkennungssprache (automatisch oder eine feste Sprache). Alle Werte bleiben
+  über Neustarts erhalten.
 
 ## 6. Sicherheitszusagen
 

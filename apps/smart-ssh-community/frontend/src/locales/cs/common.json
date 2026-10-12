@@ -43,7 +43,8 @@
       "fileTypes": "Soubory",
       "chatRetention": "Relace a data",
       "mcpServer": "Server MCP",
-      "masterPassword": "Hlavní heslo"
+      "masterPassword": "Hlavní heslo",
+      "voiceInput": "Hlasový vstup"
     }
   },
   "about": {
@@ -1156,5 +1157,43 @@
     "seconds30": "30 sekund",
     "seconds60": "60 sekund",
     "minutes5": "5 minut"
+  },
+  "voice": {
+    "start": "Spustit hlasový vstup",
+    "stop": "Zastavit nahrávání a přepsat ({{time}})",
+    "transcribing": "Přepisuje se…",
+    "recordingStatus": "Nahrávání",
+    "dismiss": "Skrýt",
+    "consent": {
+      "title": "Stáhnout jazykový model?",
+      "body": "Jazykový model ({{model}}, asi {{size}} MiB) se jednorázově stáhne z {{source}}. Poté rozpoznávání řeči běží celé na tomto počítači; zvuk ani text jej nikdy neopustí.",
+      "download": "Stáhnout",
+      "cancel": "Zrušit",
+      "progress": "Průběh stahování"
+    },
+    "errors": {
+      "noDevice": "Nebyl nalezen žádný mikrofon. Připojte mikrofon a zkontrolujte vstupní zařízení v nastavení systému.",
+      "permissionDenied": "Přístup k mikrofonu byl odepřen. Povolte Smart SSH mikrofon v nastavení systému a zkuste to znovu.",
+      "transcriptionFailed": "Řeč se nepodařilo rozpoznat. Zkuste to znovu nebo v nastavení zvolte jiný model.",
+      "hashMismatch": "Stažený jazykový model neprošel kontrolou integrity a byl zahozen. Stáhněte jej znovu.",
+      "downloadFailed": "Jazykový model se nepodařilo stáhnout. Zkontrolujte připojení k internetu a zkuste to znovu.",
+      "generic": "Hlasový vstup selhal. Zkuste to prosím znovu."
+    },
+    "settings": {
+      "description": "Diktujte zprávy pro AI. Rozpoznávání běží na tomto počítači; jediné síťové spojení je jednorázové stažení modelu z {{source}}.",
+      "enabled": "Zobrazit v chatu tlačítko mikrofonu",
+      "model": "Jazykový model",
+      "models": {
+        "base": "Base (asi {{size}} MiB, výchozí)",
+        "small": "Small (asi {{size}} MiB, přesnější, pomalejší)"
+      },
+      "statusReady": "Staženo",
+      "statusNotDownloaded": "Nestaženo",
+      "statusDownloading": "Stahuje se… {{percent}} %",
+      "download": "Stáhnout",
+      "delete": "Smazat model",
+      "language": "Jazyk rozpoznávání",
+      "languageAuto": "Automaticky"
+    }
   }
 }

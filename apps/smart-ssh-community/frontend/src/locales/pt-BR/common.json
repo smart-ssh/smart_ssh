@@ -43,7 +43,8 @@
       "fileTypes": "Arquivos",
       "chatRetention": "Sessões e dados",
       "mcpServer": "Servidor MCP",
-      "masterPassword": "Senha mestra"
+      "masterPassword": "Senha mestra",
+      "voiceInput": "Entrada de voz"
     }
   },
   "about": {
@@ -1148,5 +1149,43 @@
     "seconds30": "30 segundos",
     "seconds60": "60 segundos",
     "minutes5": "5 minutos"
+  },
+  "voice": {
+    "start": "Iniciar entrada de voz",
+    "stop": "Parar a gravação e transcrever ({{time}})",
+    "transcribing": "Transcrevendo…",
+    "recordingStatus": "Gravando",
+    "dismiss": "Dispensar",
+    "consent": {
+      "title": "Baixar o modelo de voz?",
+      "body": "Um modelo de voz ({{model}}, cerca de {{size}} MiB) será baixado uma única vez de {{source}}. Depois disso, o reconhecimento de voz roda inteiramente neste computador; áudio e texto nunca saem dele.",
+      "download": "Baixar",
+      "cancel": "Cancelar",
+      "progress": "Progresso do download"
+    },
+    "errors": {
+      "noDevice": "Nenhum microfone encontrado. Conecte um microfone e verifique o dispositivo de entrada nas configurações do sistema.",
+      "permissionDenied": "O acesso ao microfone foi negado. Permita que o Smart SSH use o microfone nas configurações do sistema e tente novamente.",
+      "transcriptionFailed": "Não foi possível reconhecer a fala. Tente novamente ou escolha outro modelo nas configurações.",
+      "hashMismatch": "O modelo de voz baixado falhou na verificação de integridade e foi descartado. Baixe-o novamente.",
+      "downloadFailed": "Não foi possível baixar o modelo de voz. Verifique sua conexão com a internet e tente novamente.",
+      "generic": "A entrada de voz falhou. Tente novamente."
+    },
+    "settings": {
+      "description": "Dite mensagens para a IA. O reconhecimento roda neste computador; a única conexão de rede é o download único do modelo de {{source}}.",
+      "enabled": "Mostrar o botão de microfone no chat",
+      "model": "Modelo de voz",
+      "models": {
+        "base": "Base (cerca de {{size}} MiB, padrão)",
+        "small": "Small (cerca de {{size}} MiB, mais preciso, mais lento)"
+      },
+      "statusReady": "Baixado",
+      "statusNotDownloaded": "Não baixado",
+      "statusDownloading": "Baixando… {{percent}} %",
+      "download": "Baixar",
+      "delete": "Excluir modelo",
+      "language": "Idioma de reconhecimento",
+      "languageAuto": "Automático"
+    }
   }
 }

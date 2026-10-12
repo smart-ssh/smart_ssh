@@ -43,7 +43,8 @@
       "fileTypes": "Pliki",
       "chatRetention": "Sesje i dane",
       "mcpServer": "Serwer MCP",
-      "masterPassword": "Hasło główne"
+      "masterPassword": "Hasło główne",
+      "voiceInput": "Wprowadzanie głosowe"
     }
   },
   "about": {
@@ -1156,5 +1157,43 @@
     "seconds30": "30 sekund",
     "seconds60": "60 sekund",
     "minutes5": "5 minut"
+  },
+  "voice": {
+    "start": "Rozpocznij wprowadzanie głosowe",
+    "stop": "Zatrzymaj nagrywanie i zamień na tekst ({{time}})",
+    "transcribing": "Zamiana na tekst…",
+    "recordingStatus": "Nagrywanie",
+    "dismiss": "Zamknij",
+    "consent": {
+      "title": "Pobrać model mowy?",
+      "body": "Model mowy ({{model}}, ok. {{size}} MiB) zostanie pobrany jednorazowo z {{source}}. Potem rozpoznawanie mowy działa w całości na tym komputerze; dźwięk i tekst nigdy go nie opuszczają.",
+      "download": "Pobierz",
+      "cancel": "Anuluj",
+      "progress": "Postęp pobierania"
+    },
+    "errors": {
+      "noDevice": "Nie znaleziono mikrofonu. Podłącz mikrofon i sprawdź urządzenie wejściowe w ustawieniach systemu.",
+      "permissionDenied": "Odmówiono dostępu do mikrofonu. Zezwól Smart SSH na użycie mikrofonu w ustawieniach systemu i spróbuj ponownie.",
+      "transcriptionFailed": "Nie udało się rozpoznać mowy. Spróbuj ponownie lub wybierz inny model w ustawieniach.",
+      "hashMismatch": "Pobrany model mowy nie przeszedł kontroli integralności i został odrzucony. Pobierz go ponownie.",
+      "downloadFailed": "Nie udało się pobrać modelu mowy. Sprawdź połączenie z internetem i spróbuj ponownie.",
+      "generic": "Wprowadzanie głosowe nie powiodło się. Spróbuj ponownie."
+    },
+    "settings": {
+      "description": "Dyktuj wiadomości do AI. Rozpoznawanie działa na tym komputerze; jedyne połączenie sieciowe to jednorazowe pobranie modelu z {{source}}.",
+      "enabled": "Pokaż przycisk mikrofonu w czacie",
+      "model": "Model mowy",
+      "models": {
+        "base": "Base (ok. {{size}} MiB, domyślny)",
+        "small": "Small (ok. {{size}} MiB, dokładniejszy, wolniejszy)"
+      },
+      "statusReady": "Pobrano",
+      "statusNotDownloaded": "Nie pobrano",
+      "statusDownloading": "Pobieranie… {{percent}} %",
+      "download": "Pobierz",
+      "delete": "Usuń model",
+      "language": "Język rozpoznawania",
+      "languageAuto": "Automatycznie"
+    }
   }
 }

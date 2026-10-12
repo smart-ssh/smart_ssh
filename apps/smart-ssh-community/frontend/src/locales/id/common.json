@@ -43,7 +43,8 @@
       "fileTypes": "Berkas",
       "chatRetention": "Sesi & Data",
       "mcpServer": "Server MCP",
-      "masterPassword": "Kata sandi utama"
+      "masterPassword": "Kata sandi utama",
+      "voiceInput": "Input suara"
     }
   },
   "about": {
@@ -1132,5 +1133,43 @@
     "seconds30": "30 detik",
     "seconds60": "60 detik",
     "minutes5": "5 menit"
+  },
+  "voice": {
+    "start": "Mulai input suara",
+    "stop": "Hentikan rekaman dan transkripsikan ({{time}})",
+    "transcribing": "Mentranskripsikan…",
+    "recordingStatus": "Merekam",
+    "dismiss": "Tutup",
+    "consent": {
+      "title": "Unduh model suara?",
+      "body": "Model suara ({{model}}, sekitar {{size}} MiB) akan diunduh sekali dari {{source}}. Setelah itu, pengenalan suara berjalan sepenuhnya di komputer ini; audio dan teks tidak pernah keluar darinya.",
+      "download": "Unduh",
+      "cancel": "Batal",
+      "progress": "Progres unduhan"
+    },
+    "errors": {
+      "noDevice": "Mikrofon tidak ditemukan. Sambungkan mikrofon dan periksa perangkat input di pengaturan sistem.",
+      "permissionDenied": "Akses mikrofon ditolak. Izinkan Smart SSH memakai mikrofon di pengaturan sistem, lalu coba lagi.",
+      "transcriptionFailed": "Suara tidak dapat dikenali. Coba lagi atau pilih model lain di pengaturan.",
+      "hashMismatch": "Model suara yang diunduh gagal pemeriksaan integritas dan dibuang. Unduh ulang.",
+      "downloadFailed": "Model suara tidak dapat diunduh. Periksa koneksi internet Anda dan coba lagi.",
+      "generic": "Input suara gagal. Silakan coba lagi."
+    },
+    "settings": {
+      "description": "Dikte pesan ke AI. Pengenalan berjalan di komputer ini; satu-satunya koneksi jaringan adalah unduhan model sekali saja dari {{source}}.",
+      "enabled": "Tampilkan tombol mikrofon di obrolan",
+      "model": "Model suara",
+      "models": {
+        "base": "Base (sekitar {{size}} MiB, bawaan)",
+        "small": "Small (sekitar {{size}} MiB, lebih akurat, lebih lambat)"
+      },
+      "statusReady": "Sudah diunduh",
+      "statusNotDownloaded": "Belum diunduh",
+      "statusDownloading": "Mengunduh… {{percent}} %",
+      "download": "Unduh",
+      "delete": "Hapus model",
+      "language": "Bahasa pengenalan",
+      "languageAuto": "Otomatis"
+    }
   }
 }

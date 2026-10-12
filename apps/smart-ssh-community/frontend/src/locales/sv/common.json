@@ -43,7 +43,8 @@
       "fileTypes": "Filer",
       "chatRetention": "Sessioner och data",
       "mcpServer": "MCP-server",
-      "masterPassword": "Huvudlösenord"
+      "masterPassword": "Huvudlösenord",
+      "voiceInput": "Röstinmatning"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 sekunder",
     "seconds60": "60 sekunder",
     "minutes5": "5 minuter"
+  },
+  "voice": {
+    "start": "Starta röstinmatning",
+    "stop": "Stoppa inspelningen och transkribera ({{time}})",
+    "transcribing": "Transkriberar…",
+    "recordingStatus": "Spelar in",
+    "dismiss": "Stäng",
+    "consent": {
+      "title": "Ladda ner språkmodell?",
+      "body": "En språkmodell ({{model}}, ca {{size}} MiB) laddas ner en gång från {{source}}. Därefter körs taligenkänningen helt på den här datorn; ljud och text lämnar den aldrig.",
+      "download": "Ladda ner",
+      "cancel": "Avbryt",
+      "progress": "Nedladdningens förlopp"
+    },
+    "errors": {
+      "noDevice": "Ingen mikrofon hittades. Anslut en mikrofon och kontrollera ingångsenheten i systeminställningarna.",
+      "permissionDenied": "Åtkomst till mikrofonen nekades. Ge Smart SSH åtkomst till mikrofonen i systeminställningarna och försök igen.",
+      "transcriptionFailed": "Talet kunde inte kännas igen. Försök igen eller välj en annan modell i inställningarna.",
+      "hashMismatch": "Den nedladdade språkmodellen klarade inte integritetskontrollen och kasserades. Ladda ner den igen.",
+      "downloadFailed": "Språkmodellen kunde inte laddas ner. Kontrollera internetanslutningen och försök igen.",
+      "generic": "Röstinmatningen misslyckades. Försök igen."
+    },
+    "settings": {
+      "description": "Diktera meddelanden till AI:n. Igenkänningen körs på den här datorn; den enda nätverksanslutningen är den engångsnedladdning av modellen från {{source}}.",
+      "enabled": "Visa mikrofonknappen i chatten",
+      "model": "Språkmodell",
+      "models": {
+        "base": "Base (ca {{size}} MiB, standard)",
+        "small": "Small (ca {{size}} MiB, noggrannare, långsammare)"
+      },
+      "statusReady": "Nedladdad",
+      "statusNotDownloaded": "Inte nedladdad",
+      "statusDownloading": "Laddar ner… {{percent}} %",
+      "download": "Ladda ner",
+      "delete": "Ta bort modell",
+      "language": "Igenkänningsspråk",
+      "languageAuto": "Automatiskt"
+    }
   }
 }

@@ -43,7 +43,8 @@
       "fileTypes": "Tệp",
       "chatRetention": "Phiên & Dữ liệu",
       "mcpServer": "Máy chủ MCP",
-      "masterPassword": "Mật khẩu chính"
+      "masterPassword": "Mật khẩu chính",
+      "voiceInput": "Nhập bằng giọng nói"
     }
   },
   "about": {
@@ -1132,5 +1133,43 @@
     "seconds30": "30 giây",
     "seconds60": "60 giây",
     "minutes5": "5 phút"
+  },
+  "voice": {
+    "start": "Bắt đầu nhập bằng giọng nói",
+    "stop": "Dừng ghi âm và chuyển thành văn bản ({{time}})",
+    "transcribing": "Đang chuyển thành văn bản…",
+    "recordingStatus": "Đang ghi âm",
+    "dismiss": "Đóng",
+    "consent": {
+      "title": "Tải mô hình giọng nói?",
+      "body": "Một mô hình giọng nói ({{model}}, khoảng {{size}} MiB) sẽ được tải một lần từ {{source}}. Sau đó, việc nhận dạng giọng nói chạy hoàn toàn trên máy tính này; âm thanh và văn bản không bao giờ rời khỏi máy.",
+      "download": "Tải xuống",
+      "cancel": "Hủy",
+      "progress": "Tiến trình tải xuống"
+    },
+    "errors": {
+      "noDevice": "Không tìm thấy micrô. Hãy kết nối micrô và kiểm tra thiết bị đầu vào trong cài đặt hệ thống.",
+      "permissionDenied": "Quyền truy cập micrô bị từ chối. Hãy cho phép Smart SSH dùng micrô trong cài đặt hệ thống rồi thử lại.",
+      "transcriptionFailed": "Không nhận dạng được giọng nói. Hãy thử lại hoặc chọn mô hình khác trong cài đặt.",
+      "hashMismatch": "Mô hình giọng nói đã tải không qua được bước kiểm tra toàn vẹn và đã bị loại bỏ. Hãy tải lại.",
+      "downloadFailed": "Không thể tải mô hình giọng nói. Hãy kiểm tra kết nối internet và thử lại.",
+      "generic": "Nhập bằng giọng nói thất bại. Vui lòng thử lại."
+    },
+    "settings": {
+      "description": "Đọc tin nhắn cho AI. Việc nhận dạng chạy trên máy tính này; kết nối mạng duy nhất là lần tải mô hình một lần từ {{source}}.",
+      "enabled": "Hiện nút micrô trong cuộc trò chuyện",
+      "model": "Mô hình giọng nói",
+      "models": {
+        "base": "Base (khoảng {{size}} MiB, mặc định)",
+        "small": "Small (khoảng {{size}} MiB, chính xác hơn, chậm hơn)"
+      },
+      "statusReady": "Đã tải",
+      "statusNotDownloaded": "Chưa tải",
+      "statusDownloading": "Đang tải… {{percent}} %",
+      "download": "Tải xuống",
+      "delete": "Xóa mô hình",
+      "language": "Ngôn ngữ nhận dạng",
+      "languageAuto": "Tự động"
+    }
   }
 }

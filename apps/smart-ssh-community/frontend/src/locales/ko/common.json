@@ -43,7 +43,8 @@
       "fileTypes": "파일",
       "chatRetention": "세션 및 데이터",
       "mcpServer": "MCP 서버",
-      "masterPassword": "마스터 비밀번호"
+      "masterPassword": "마스터 비밀번호",
+      "voiceInput": "음성 입력"
     }
   },
   "about": {
@@ -1132,5 +1133,43 @@
     "seconds30": "30초",
     "seconds60": "60초",
     "minutes5": "5분"
+  },
+  "voice": {
+    "start": "음성 입력 시작",
+    "stop": "녹음 중지 및 텍스트 변환 ({{time}})",
+    "transcribing": "텍스트로 변환 중…",
+    "recordingStatus": "녹음 중",
+    "dismiss": "닫기",
+    "consent": {
+      "title": "음성 모델을 다운로드할까요?",
+      "body": "음성 모델({{model}}, 약 {{size}} MiB)을 {{source}}에서 한 번만 다운로드합니다. 이후 음성 인식은 이 컴퓨터에서만 실행되며, 오디오와 텍스트는 절대 외부로 나가지 않습니다.",
+      "download": "다운로드",
+      "cancel": "취소",
+      "progress": "다운로드 진행률"
+    },
+    "errors": {
+      "noDevice": "마이크를 찾을 수 없습니다. 마이크를 연결하고 시스템 설정에서 입력 장치를 확인하세요.",
+      "permissionDenied": "마이크 접근이 거부되었습니다. 시스템 설정에서 Smart SSH의 마이크 사용을 허용한 뒤 다시 시도하세요.",
+      "transcriptionFailed": "음성을 인식하지 못했습니다. 다시 시도하거나 설정에서 다른 모델을 선택하세요.",
+      "hashMismatch": "다운로드한 음성 모델이 무결성 검사를 통과하지 못해 삭제되었습니다. 다시 다운로드하세요.",
+      "downloadFailed": "음성 모델을 다운로드하지 못했습니다. 인터넷 연결을 확인하고 다시 시도하세요.",
+      "generic": "음성 입력에 실패했습니다. 다시 시도하세요."
+    },
+    "settings": {
+      "description": "AI에게 보낼 메시지를 음성으로 받아쓰세요. 인식은 이 컴퓨터에서 실행되며, 네트워크 연결은 {{source}}에서 모델을 한 번 다운로드할 때뿐입니다.",
+      "enabled": "채팅에 마이크 버튼 표시",
+      "model": "음성 모델",
+      "models": {
+        "base": "Base (약 {{size}} MiB, 기본값)",
+        "small": "Small (약 {{size}} MiB, 더 정확하지만 느림)"
+      },
+      "statusReady": "다운로드됨",
+      "statusNotDownloaded": "다운로드 안 됨",
+      "statusDownloading": "다운로드 중… {{percent}} %",
+      "download": "다운로드",
+      "delete": "모델 삭제",
+      "language": "인식 언어",
+      "languageAuto": "자동"
+    }
   }
 }

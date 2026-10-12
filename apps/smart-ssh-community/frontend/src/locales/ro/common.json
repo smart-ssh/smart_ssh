@@ -43,7 +43,8 @@
       "fileTypes": "Fișiere",
       "chatRetention": "Sesiuni și date",
       "mcpServer": "Server MCP",
-      "masterPassword": "Parolă principală"
+      "masterPassword": "Parolă principală",
+      "voiceInput": "Intrare vocală"
     }
   },
   "about": {
@@ -1148,5 +1149,43 @@
     "seconds30": "30 de secunde",
     "seconds60": "60 de secunde",
     "minutes5": "5 minute"
+  },
+  "voice": {
+    "start": "Pornește intrarea vocală",
+    "stop": "Oprește înregistrarea și transcrie ({{time}})",
+    "transcribing": "Se transcrie…",
+    "recordingStatus": "Se înregistrează",
+    "dismiss": "Închide",
+    "consent": {
+      "title": "Descarci modelul vocal?",
+      "body": "Un model vocal ({{model}}, aprox. {{size}} MiB) va fi descărcat o singură dată de la {{source}}. După aceea, recunoașterea vocală rulează integral pe acest calculator; sunetul și textul nu îl părăsesc niciodată.",
+      "download": "Descarcă",
+      "cancel": "Anulează",
+      "progress": "Progresul descărcării"
+    },
+    "errors": {
+      "noDevice": "Nu a fost găsit niciun microfon. Conectează un microfon și verifică dispozitivul de intrare în setările sistemului.",
+      "permissionDenied": "Accesul la microfon a fost refuzat. Permite Smart SSH să folosească microfonul în setările sistemului și încearcă din nou.",
+      "transcriptionFailed": "Vorbirea nu a putut fi recunoscută. Încearcă din nou sau alege alt model în setări.",
+      "hashMismatch": "Modelul vocal descărcat nu a trecut verificarea de integritate și a fost eliminat. Descarcă-l din nou.",
+      "downloadFailed": "Modelul vocal nu a putut fi descărcat. Verifică conexiunea la internet și încearcă din nou.",
+      "generic": "Intrarea vocală a eșuat. Încearcă din nou."
+    },
+    "settings": {
+      "description": "Dictează mesaje către IA. Recunoașterea rulează pe acest calculator; singura conexiune de rețea este descărcarea unică a modelului de la {{source}}.",
+      "enabled": "Afișează butonul de microfon în chat",
+      "model": "Model vocal",
+      "models": {
+        "base": "Base (aprox. {{size}} MiB, implicit)",
+        "small": "Small (aprox. {{size}} MiB, mai precis, mai lent)"
+      },
+      "statusReady": "Descărcat",
+      "statusNotDownloaded": "Nedescărcat",
+      "statusDownloading": "Se descarcă… {{percent}} %",
+      "download": "Descarcă",
+      "delete": "Șterge modelul",
+      "language": "Limba de recunoaștere",
+      "languageAuto": "Automat"
+    }
   }
 }

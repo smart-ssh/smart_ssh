@@ -43,7 +43,8 @@
       "fileTypes": "Fájlok",
       "chatRetention": "Munkamenetek és adatok",
       "mcpServer": "MCP-szerver",
-      "masterPassword": "Mesterjelszó"
+      "masterPassword": "Mesterjelszó",
+      "voiceInput": "Hangbevitel"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 másodperc",
     "seconds60": "60 másodperc",
     "minutes5": "5 perc"
+  },
+  "voice": {
+    "start": "Hangbevitel indítása",
+    "stop": "Felvétel leállítása és átírás ({{time}})",
+    "transcribing": "Átírás…",
+    "recordingStatus": "Felvétel",
+    "dismiss": "Bezárás",
+    "consent": {
+      "title": "Letölti a beszédmodellt?",
+      "body": "Egy beszédmodell ({{model}}, kb. {{size}} MiB) egyszer letöltődik innen: {{source}}. Utána a beszédfelismerés teljesen ezen a számítógépen fut; a hang és a szöveg soha nem hagyja el.",
+      "download": "Letöltés",
+      "cancel": "Mégse",
+      "progress": "Letöltés előrehaladása"
+    },
+    "errors": {
+      "noDevice": "Nem található mikrofon. Csatlakoztass mikrofont, és ellenőrizd a bemeneti eszközt a rendszerbeállításokban.",
+      "permissionDenied": "A mikrofonhozzáférést megtagadták. Engedélyezd a Smart SSH mikrofonhasználatát a rendszerbeállításokban, majd próbáld újra.",
+      "transcriptionFailed": "A beszédet nem sikerült felismerni. Próbáld újra, vagy válassz másik modellt a beállításokban.",
+      "hashMismatch": "A letöltött beszédmodell nem felelt meg az integritásellenőrzésnek, ezért el lett vetve. Töltsd le újra.",
+      "downloadFailed": "A beszédmodellt nem sikerült letölteni. Ellenőrizd az internetkapcsolatot, és próbáld újra.",
+      "generic": "A hangbevitel sikertelen. Próbáld újra."
+    },
+    "settings": {
+      "description": "Diktálj üzeneteket az AI-nak. A felismerés ezen a számítógépen fut; az egyetlen hálózati kapcsolat a modell egyszeri letöltése innen: {{source}}.",
+      "enabled": "Mikrofongomb megjelenítése a csevegésben",
+      "model": "Beszédmodell",
+      "models": {
+        "base": "Base (kb. {{size}} MiB, alapértelmezett)",
+        "small": "Small (kb. {{size}} MiB, pontosabb, lassabb)"
+      },
+      "statusReady": "Letöltve",
+      "statusNotDownloaded": "Nincs letöltve",
+      "statusDownloading": "Letöltés… {{percent}} %",
+      "download": "Letöltés",
+      "delete": "Modell törlése",
+      "language": "Felismerés nyelve",
+      "languageAuto": "Automatikus"
+    }
   }
 }

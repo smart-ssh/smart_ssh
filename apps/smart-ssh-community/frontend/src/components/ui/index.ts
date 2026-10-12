@@ -6,3 +6,4 @@ export { DialogFrame } from "./DialogFrame";
 export type { DialogFrameProps } from "./DialogFrame";
 export { Field, FIELD_CONTROL_CLASS } from "./Field";
 export type { FieldControlProps, FieldProps } from "./Field";
+export { Spinner } from "./Spinner";

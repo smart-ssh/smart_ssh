@@ -43,7 +43,8 @@
       "fileTypes": "File",
       "chatRetention": "Sessioni e dati",
       "mcpServer": "Server MCP",
-      "masterPassword": "Password principale"
+      "masterPassword": "Password principale",
+      "voiceInput": "Input vocale"
     }
   },
   "about": {
@@ -1148,5 +1149,43 @@
     "seconds30": "30 secondi",
     "seconds60": "60 secondi",
     "minutes5": "5 minuti"
+  },
+  "voice": {
+    "start": "Avvia input vocale",
+    "stop": "Ferma la registrazione e trascrivi ({{time}})",
+    "transcribing": "Trascrizione in corso…",
+    "recordingStatus": "Registrazione",
+    "dismiss": "Chiudi",
+    "consent": {
+      "title": "Scaricare il modello vocale?",
+      "body": "Un modello vocale ({{model}}, circa {{size}} MiB) verrà scaricato una sola volta da {{source}}. Poi il riconoscimento vocale funziona interamente su questo computer; audio e testo non lo lasciano mai.",
+      "download": "Scarica",
+      "cancel": "Annulla",
+      "progress": "Avanzamento del download"
+    },
+    "errors": {
+      "noDevice": "Nessun microfono trovato. Collega un microfono e controlla il dispositivo di ingresso nelle impostazioni di sistema.",
+      "permissionDenied": "L'accesso al microfono è stato negato. Consenti a Smart SSH di usare il microfono nelle impostazioni di sistema e riprova.",
+      "transcriptionFailed": "Non è stato possibile riconoscere il parlato. Riprova o scegli un altro modello nelle impostazioni.",
+      "hashMismatch": "Il modello vocale scaricato non ha superato il controllo di integrità ed è stato scartato. Scaricalo di nuovo.",
+      "downloadFailed": "Non è stato possibile scaricare il modello vocale. Controlla la connessione a internet e riprova.",
+      "generic": "L'input vocale non è riuscito. Riprova."
+    },
+    "settings": {
+      "description": "Detta i messaggi all'IA. Il riconoscimento funziona su questo computer; l'unica connessione di rete è il download una tantum del modello da {{source}}.",
+      "enabled": "Mostra il pulsante del microfono nella chat",
+      "model": "Modello vocale",
+      "models": {
+        "base": "Base (circa {{size}} MiB, predefinito)",
+        "small": "Small (circa {{size}} MiB, più preciso, più lento)"
+      },
+      "statusReady": "Scaricato",
+      "statusNotDownloaded": "Non scaricato",
+      "statusDownloading": "Download in corso… {{percent}} %",
+      "download": "Scarica",
+      "delete": "Elimina modello",
+      "language": "Lingua di riconoscimento",
+      "languageAuto": "Automatica"
+    }
   }
 }

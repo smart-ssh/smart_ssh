@@ -43,7 +43,8 @@
       "fileTypes": "Dosyalar",
       "chatRetention": "Oturumlar ve veriler",
       "mcpServer": "MCP sunucusu",
-      "masterPassword": "Ana parola"
+      "masterPassword": "Ana parola",
+      "voiceInput": "Sesli giriş"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 saniye",
     "seconds60": "60 saniye",
     "minutes5": "5 dakika"
+  },
+  "voice": {
+    "start": "Sesli girişi başlat",
+    "stop": "Kaydı durdur ve metne dönüştür ({{time}})",
+    "transcribing": "Metne dönüştürülüyor…",
+    "recordingStatus": "Kaydediliyor",
+    "dismiss": "Kapat",
+    "consent": {
+      "title": "Konuşma modeli indirilsin mi?",
+      "body": "Bir konuşma modeli ({{model}}, yaklaşık {{size}} MiB) {{source}} adresinden bir kez indirilecek. Sonrasında konuşma tanıma tamamen bu bilgisayarda çalışır; ses ve metin bilgisayardan asla çıkmaz.",
+      "download": "İndir",
+      "cancel": "İptal",
+      "progress": "İndirme ilerlemesi"
+    },
+    "errors": {
+      "noDevice": "Mikrofon bulunamadı. Bir mikrofon bağlayın ve sistem ayarlarından giriş aygıtını denetleyin.",
+      "permissionDenied": "Mikrofon erişimi reddedildi. Sistem ayarlarında Smart SSH'nin mikrofonu kullanmasına izin verin ve yeniden deneyin.",
+      "transcriptionFailed": "Konuşma tanınamadı. Yeniden deneyin veya ayarlardan başka bir model seçin.",
+      "hashMismatch": "İndirilen konuşma modeli bütünlük denetimini geçemedi ve silindi. Yeniden indirin.",
+      "downloadFailed": "Konuşma modeli indirilemedi. İnternet bağlantınızı denetleyin ve yeniden deneyin.",
+      "generic": "Sesli giriş başarısız oldu. Lütfen yeniden deneyin."
+    },
+    "settings": {
+      "description": "Mesajları yapay zekâya dikte edin. Tanıma bu bilgisayarda çalışır; tek ağ bağlantısı modelin {{source}} adresinden bir kerelik indirilmesidir.",
+      "enabled": "Sohbette mikrofon düğmesini göster",
+      "model": "Konuşma modeli",
+      "models": {
+        "base": "Base (yaklaşık {{size}} MiB, varsayılan)",
+        "small": "Small (yaklaşık {{size}} MiB, daha doğru, daha yavaş)"
+      },
+      "statusReady": "İndirildi",
+      "statusNotDownloaded": "İndirilmedi",
+      "statusDownloading": "İndiriliyor… {{percent}} %",
+      "download": "İndir",
+      "delete": "Modeli sil",
+      "language": "Tanıma dili",
+      "languageAuto": "Otomatik"
+    }
   }
 }

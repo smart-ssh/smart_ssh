@@ -10,6 +10,7 @@ import { DiagnosticsSettings } from "./DiagnosticsSettings";
 import { FileTypeSettings } from "./FileTypeSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
+import { VoiceInputSettings } from "./VoiceInputSettings";
 import { ModalBackdrop } from "./ModalBackdrop";
 import { Button } from "./ui";
 
@@ -24,6 +25,7 @@ const DIAGNOSTICS_CATEGORY_ID = "diagnostics";
 const FILE_TYPES_CATEGORY_ID = "file-types";
 /** Spec 0101, A18: Wo der Schlüssel zur verschlüsselten Datenbank liegt. */
 const MASTER_PASSWORD_CATEGORY_ID = "master-password";
+const VOICE_INPUT_CATEGORY_ID = "voice-input";
 const ABOUT_CATEGORY_ID = "about";
 
 // A variable, not a literal: `<dialog>` has no modal semantics without `showModal()`, which the shared backdrop does not use (same as `DialogFrame`).
@@ -76,6 +78,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
     // eingebauter Eintrag, nicht strikt nach einer eventuellen
     // Lizenz-Sektion; eine vollständige Neuordnung dafür wäre für diese
     // reine Anzeige-Ergänzung unverhältnismäßig.
+    { id: VOICE_INPUT_CATEGORY_ID, label: t("settings.categories.voiceInput") },
     { id: ABOUT_CATEGORY_ID, label: t("settings.categories.about") },
   ];
 
@@ -199,6 +202,7 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
             {active?.id === DIAGNOSTICS_CATEGORY_ID && <DiagnosticsSettings />}
             {active?.id === FILE_TYPES_CATEGORY_ID && <FileTypeSettings />}
             {active?.id === MASTER_PASSWORD_CATEGORY_ID && <MasterPasswordSettings />}
+            {active?.id === VOICE_INPUT_CATEGORY_ID && <VoiceInputSettings />}
             {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
             {registeredSections.map(
               ({ id, component: Section }) => active?.id === id && <Section key={id} />,

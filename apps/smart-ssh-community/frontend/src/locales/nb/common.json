@@ -43,7 +43,8 @@
       "fileTypes": "Filer",
       "chatRetention": "Økter og data",
       "mcpServer": "MCP-server",
-      "masterPassword": "Hovedpassord"
+      "masterPassword": "Hovedpassord",
+      "voiceInput": "Taleinndata"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 sekunder",
     "seconds60": "60 sekunder",
     "minutes5": "5 minutter"
+  },
+  "voice": {
+    "start": "Start taleinndata",
+    "stop": "Stopp opptaket og transkriber ({{time}})",
+    "transcribing": "Transkriberer…",
+    "recordingStatus": "Tar opp",
+    "dismiss": "Lukk",
+    "consent": {
+      "title": "Laste ned språkmodell?",
+      "body": "En språkmodell ({{model}}, ca. {{size}} MiB) lastes ned én gang fra {{source}}. Deretter kjører talegjenkjenningen helt på denne datamaskinen; lyd og tekst forlater den aldri.",
+      "download": "Last ned",
+      "cancel": "Avbryt",
+      "progress": "Nedlastingsfremdrift"
+    },
+    "errors": {
+      "noDevice": "Fant ingen mikrofon. Koble til en mikrofon og sjekk inndataenheten i systeminnstillingene.",
+      "permissionDenied": "Tilgang til mikrofonen ble avslått. Gi Smart SSH tilgang til mikrofonen i systeminnstillingene og prøv igjen.",
+      "transcriptionFailed": "Talen kunne ikke gjenkjennes. Prøv igjen, eller velg en annen modell i innstillingene.",
+      "hashMismatch": "Den nedlastede språkmodellen besto ikke integritetskontrollen og ble forkastet. Last den ned på nytt.",
+      "downloadFailed": "Språkmodellen kunne ikke lastes ned. Sjekk internettforbindelsen og prøv igjen.",
+      "generic": "Taleinndata mislyktes. Prøv igjen."
+    },
+    "settings": {
+      "description": "Dikter meldinger til KI-en. Gjenkjenningen kjører på denne datamaskinen; den eneste nettverksforbindelsen er den engangs modellnedlastingen fra {{source}}.",
+      "enabled": "Vis mikrofonknappen i chatten",
+      "model": "Språkmodell",
+      "models": {
+        "base": "Base (ca. {{size}} MiB, standard)",
+        "small": "Small (ca. {{size}} MiB, mer presis, tregere)"
+      },
+      "statusReady": "Lastet ned",
+      "statusNotDownloaded": "Ikke lastet ned",
+      "statusDownloading": "Laster ned… {{percent}} %",
+      "download": "Last ned",
+      "delete": "Slett modell",
+      "language": "Gjenkjenningsspråk",
+      "languageAuto": "Automatisk"
+    }
   }
 }
