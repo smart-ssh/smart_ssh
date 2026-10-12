@@ -9,6 +9,7 @@ import {
   setMcpServerConfirmTimeoutSecs,
   setMcpServerEnabled,
 } from "../api";
+import { Button, FIELD_CONTROL_CLASS } from "./ui";
 import type { McpServerSettingsDto, ServerDto } from "../types";
 
 /** Beispiel-Konfiguration für Claude Code (`.mcp.json`/`claude mcp add
@@ -135,7 +136,7 @@ export function McpServerSettings() {
   // (auch für den hier ebenfalls entfernten `border-t`/`pt-4`-Rahmen).
   return (
     <div>
-      <p className="mb-2 text-xs text-slate-500">{t("mcpServer.hint")}</p>
+      <p className="mb-2 text-xs text-slate-400">{t("mcpServer.hint")}</p>
 
       {error && <p className="mb-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{error}</p>}
 
@@ -164,18 +165,13 @@ export function McpServerSettings() {
                 {settings.token}
               </code>
             </div>
-            <button
-              type="button"
-              onClick={handleRegenerateToken}
-              disabled={busy}
-              className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
-            >
+            <Button size="sm" onClick={handleRegenerateToken} disabled={busy}>
               {t("mcpServer.regenerateToken")}
-            </button>
+            </Button>
           </div>
 
           <div className="mb-3">
-            <label className="mb-1 flex items-center gap-2 text-xs text-slate-400">
+            <label className="mb-1 flex items-center gap-2 text-sm text-slate-200">
               {t("mcpServer.confirmTimeoutLabel")}
               <input
                 type="number"
@@ -185,19 +181,19 @@ export function McpServerSettings() {
                 key={settings.confirmTimeoutSecs}
                 disabled={busy}
                 onBlur={(e) => handleChangeConfirmTimeoutMinutes(e.target.valueAsNumber)}
-                className="w-16 rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-sm text-slate-200"
+                className={`${FIELD_CONTROL_CLASS} w-16`}
               />
               {t("mcpServer.confirmTimeoutUnit")}
             </label>
-            <p className="text-xs text-slate-500">{t("mcpServer.confirmTimeoutHint")}</p>
+            <p className="text-xs text-slate-400">{t("mcpServer.confirmTimeoutHint")}</p>
           </div>
 
           <div className="mb-3">
-            <p className="mb-1 text-xs font-semibold text-slate-400">
+            <p className="mb-1 text-sm font-medium text-slate-200">
               {t("mcpServer.allowListLabel")}
             </p>
             {servers.length === 0 ? (
-              <p className="text-xs text-slate-500">{t("mcpServer.noServers")}</p>
+              <p className="text-xs text-slate-400">{t("mcpServer.noServers")}</p>
             ) : (
               <ul className="max-h-40 divide-y divide-slate-700 overflow-y-auto rounded border border-slate-700">
                 {servers.map((server) => (
@@ -209,7 +205,9 @@ export function McpServerSettings() {
                         disabled={busy}
                         onChange={(e) => handleToggleAllowedServer(server.id, e.target.checked)}
                       />
-                      {server.name}
+                      <span className="min-w-0 truncate" title={server.name}>
+                        {server.name}
+                      </span>
                     </label>
                   </li>
                 ))}
@@ -217,18 +215,14 @@ export function McpServerSettings() {
             )}
           </div>
 
-          <p className="mb-1 text-xs text-slate-500">{t("mcpServer.exampleConfigHint")}</p>
+          <p className="mb-1 text-xs text-slate-400">{t("mcpServer.exampleConfigHint")}</p>
           <pre className="rounded border border-slate-700 bg-slate-950 p-2 text-xs break-all whitespace-pre-wrap text-slate-300">
             {exampleConfig(settings)}
           </pre>
           <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleCopyConfig()}
-              className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-700"
-            >
+            <Button size="sm" onClick={() => void handleCopyConfig()}>
               {t("mcpServer.copyConfig")}
-            </button>
+            </Button>
             <output
               className={`text-xs ${copyStatus === "failed" ? "text-red-300" : "text-slate-400"}`}
             >

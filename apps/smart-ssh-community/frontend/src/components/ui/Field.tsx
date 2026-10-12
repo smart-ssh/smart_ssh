@@ -58,5 +58,5 @@ export function Field({ label, help, error, children, className }: FieldProps) {
 /** Class string for text inputs/selects/textareas, so fields look alike. */
 export const FIELD_CONTROL_CLASS =
   "rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 " +
-  "placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 " +
+  "placeholder:text-slate-500 focus:outline-2 focus:outline-indigo-400 " +
   "aria-[invalid=true]:border-red-500 disabled:opacity-50";
