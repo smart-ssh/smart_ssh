@@ -685,7 +685,8 @@
       "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben)."
     },
     "channelLost": "Az emelt jogok véget értek – az emelt csatorna már nem aktív.",
-    "targetUserLabel": "Célfelhasználó az emelt jogokhoz (alapért.: root)"
+    "targetUserLabel": "Célfelhasználó az emelt jogokhoz (alapért.: root)",
+    "group": "Emelt jogosultságok"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Ugrás a kezdőkönyvtárra",
     "parentDirectory": "Szülőkönyvtár",
     "newFolderButton": "+ Mappa",
+    "fileActionsGroup": "Fájlműveletek",
     "upload": "Feltöltés",
     "uploadDialogTitle": "Fájl(ok) feltöltése",
     "uploadFolder": "Mappa feltöltése",
@@ -1012,7 +1014,10 @@
       "execute": "Végrehajtás",
       "numeric": "Numerikus",
       "recursive": "Rekurzív",
-      "recursiveWarning": "– a mappa ÖSSZES fájljának és almappájának jogosultságait módosítja. Erőteljes művelet, nem vonható vissza."
+      "recursiveWarning": "– a mappa ÖSSZES fájljának és almappájának jogosultságait módosítja. Erőteljes művelet, nem vonható vissza.",
+      "owner": "Tulajdonos",
+      "group": "Csoport",
+      "other": "Mások"
     },
     "renamePrompt": {
       "renameTitle": "Átnevezés",

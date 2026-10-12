@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { HostKeyInfo, HostKeyUserDecision } from "../types";
 import { useDialogFocusTrap } from "../useDialogFocusTrap";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { Button } from "./ui";
 
 interface HostKeyDialogProps {
   event: HostKeyInfo;
@@ -90,8 +91,9 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
         aria-modal="true"
         aria-labelledby={headingId}
         aria-describedby={descriptionId}
+        tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`w-full max-w-md border p-0 shadow-xl ${
+        className={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl focus:outline-none ${
           isMismatch ? "border-red-600 bg-red-950/95" : "border-slate-600 bg-slate-800"
         }`}
       >
@@ -101,14 +103,15 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
              * GEÄNDERT"-Dialog: diagonale Rot-Schwarz-Schraffur als
              * unübersehbarer Alarm-Kopf. */}
             <div
-              className="h-3"
+              className="h-3 shrink-0"
               style={{
                 background:
                   "repeating-linear-gradient(135deg, var(--color-red-600) 0 10px, var(--color-red-950) 10px 20px)",
               }}
             />
-            <div className="p-6">
-              <div className="font-mono text-[11px] tracking-[0.18em] text-red-400 uppercase">
+            <div className="flex min-h-0 flex-1 flex-col p-6">
+              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="font-mono text-xs tracking-[0.18em] text-red-400 uppercase">
                 {t("hostKeyDialog.mismatchLabel")}
               </div>
               <h2 id={headingId} className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-red-100">
@@ -116,7 +119,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
               </h2>
               <p id={descriptionId} className="mb-4 text-sm text-red-200/90">
                 {t("hostKeyDialog.mismatchBodyBeforeHost")}
-                <strong>{event.host}:{event.port}</strong>
+                <strong className="break-all">{event.host}:{event.port}</strong>
                 {t("hostKeyDialog.mismatchBodyAfterHost")}
               </p>
               {event.keyType ? (
@@ -126,7 +129,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
               ) : null}
               <div className="mb-4 grid grid-cols-2 gap-px border border-red-700/40 bg-red-700/25">
                 <div className="flex flex-col gap-1 bg-red-950 p-3">
-                  <span className="font-heading text-[11px] font-semibold tracking-wide text-red-400/80 uppercase">
+                  <span className="font-heading text-xs font-semibold tracking-wide text-red-300 uppercase">
                     {t("hostKeyDialog.known")}
                   </span>
                   <span className="font-mono text-xs break-all text-emerald-300">
@@ -134,7 +137,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                   </span>
                 </div>
                 <div className="flex flex-col gap-1 bg-red-950 p-3">
-                  <span className="font-heading text-[11px] font-semibold tracking-wide text-red-300 uppercase">
+                  <span className="font-heading text-xs font-semibold tracking-wide text-red-300 uppercase">
                     {t("hostKeyDialog.offeredNow")}
                   </span>
                   <span className="font-mono text-xs break-all text-red-300">
@@ -143,19 +146,21 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                 </div>
               </div>
 
-              <div className="flex gap-2 border-t border-red-700/30 pt-4">
+              </div>
+
+              <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-red-700/30 pt-4">
                 <button
                   ref={rejectButtonRef}
                   type="button"
                   onClick={() => decide("reject")}
-                  className="font-heading flex-1 bg-red-600 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-500"
+                  className="font-heading bg-red-700 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
                 >
                   {t("hostKeyDialog.cancelConnection")}
                 </button>
                 <button
                   type="button"
                   onClick={() => decide("trust")}
-                  className="font-heading flex-1 border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6"
+                  className="font-heading border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
                 >
                   {t("hostKeyDialog.trustAnyway")}
                 </button>
@@ -163,13 +168,14 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
             </div>
           </>
         ) : (
-          <div className="p-6">
+          <div className="flex min-h-0 flex-1 flex-col p-6">
             <h2 id={headingId} className="font-heading mb-2 text-lg font-semibold text-slate-100">
               {t("hostKeyDialog.unknownHeading")}
             </h2>
+            <div className="min-h-0 flex-1 overflow-y-auto">
             <p id={descriptionId} className="mb-4 text-sm text-slate-300">
               {t("hostKeyDialog.unknownBodyBeforeHost")}
-              <strong>{event.host}:{event.port}</strong>
+              <strong className="break-all">{event.host}:{event.port}</strong>
               {t("hostKeyDialog.unknownBodyAfterHost")}
             </p>
             {event.keyType ? (
@@ -177,26 +183,22 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                 {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
               </p>
             ) : null}
-            <div className="mb-4 border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-300">
+            <div className="mb-4 border border-slate-700 bg-slate-950 p-2 font-mono text-xs break-all text-slate-300">
               {event.fingerprint}
             </div>
 
-            <div className="flex gap-2">
-              <button
+            </div>
+
+            <div className="flex shrink-0 justify-end gap-2">
+              <Button
                 ref={rejectButtonRef}
-                type="button"
                 onClick={() => decide("reject")}
-                className="font-heading flex-1 border border-slate-600 px-3 py-2 text-sm font-semibold tracking-wide text-slate-100 hover:bg-slate-700"
               >
                 {t("hostKeyDialog.reject")}
-              </button>
-              <button
-                type="button"
-                onClick={() => decide("trust")}
-                className="font-heading flex-1 bg-indigo-600 px-3 py-2 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500"
-              >
+              </Button>
+              <Button variant="primary" onClick={() => decide("trust")}>
                 {t("hostKeyDialog.trust")}
-              </button>
+              </Button>
             </div>
           </div>
         )}

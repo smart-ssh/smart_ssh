@@ -695,7 +695,8 @@
       "startFailed": "Nie udało się uruchomić sftp-server przez sudo (możliwa przyczyna: „requiretty” w sudoers)."
     },
     "channelLost": "Podwyższone uprawnienia zakończone — kanał podwyższony nie jest już aktywny.",
-    "targetUserLabel": "Użytkownik docelowy dla podwyższonych uprawnień (domyślnie: root)"
+    "targetUserLabel": "Użytkownik docelowy dla podwyższonych uprawnień (domyślnie: root)",
+    "group": "Podwyższone uprawnienia"
   },
   "sshConfigImport": {
     "dialogTitle": "Importuj ssh_config",
@@ -917,6 +918,7 @@
     "toStartDirectory": "Przejdź do katalogu startowego",
     "parentDirectory": "Katalog nadrzędny",
     "newFolderButton": "+ Folder",
+    "fileActionsGroup": "Operacje na plikach",
     "upload": "Wyślij",
     "uploadDialogTitle": "Wyślij pliki",
     "uploadFolder": "Wyślij folder",
@@ -1026,7 +1028,10 @@
       "execute": "Wykonywanie",
       "numeric": "Numerycznie",
       "recursive": "Rekurencyjnie",
-      "recursiveWarning": "— zmienia uprawnienia WSZYSTKICH plików i podfolderów w tym folderze. Potężna operacja, nie można jej cofnąć."
+      "recursiveWarning": "— zmienia uprawnienia WSZYSTKICH plików i podfolderów w tym folderze. Potężna operacja, nie można jej cofnąć.",
+      "owner": "Właściciel",
+      "group": "Grupa",
+      "other": "Pozostali"
     },
     "renamePrompt": {
       "renameTitle": "Zmień nazwę",

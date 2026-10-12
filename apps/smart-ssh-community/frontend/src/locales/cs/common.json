@@ -695,7 +695,8 @@
       "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers)."
     },
     "channelLost": "Zvýšená práva skončila — zvýšený kanál již není aktivní.",
-    "targetUserLabel": "Cílový uživatel pro zvýšená práva (výchozí: root)"
+    "targetUserLabel": "Cílový uživatel pro zvýšená práva (výchozí: root)",
+    "group": "Zvýšená oprávnění"
   },
   "sshConfigImport": {
     "dialogTitle": "Importovat ssh_config",
@@ -917,6 +918,7 @@
     "toStartDirectory": "Přejít do úvodního adresáře",
     "parentDirectory": "Nadřazený adresář",
     "newFolderButton": "+ Složka",
+    "fileActionsGroup": "Akce se soubory",
     "upload": "Nahrát",
     "uploadDialogTitle": "Nahrát soubory",
     "uploadFolder": "Nahrát složku",
@@ -1026,7 +1028,10 @@
       "execute": "Spuštění",
       "numeric": "Číselně",
       "recursive": "Rekurzivně",
-      "recursiveWarning": "— změní oprávnění VŠECH souborů a podsložek v této složce. Mocná akce, nelze vrátit zpět."
+      "recursiveWarning": "— změní oprávnění VŠECH souborů a podsložek v této složce. Mocná akce, nelze vrátit zpět.",
+      "owner": "Vlastník",
+      "group": "Skupina",
+      "other": "Ostatní"
     },
     "renamePrompt": {
       "renameTitle": "Přejmenovat",

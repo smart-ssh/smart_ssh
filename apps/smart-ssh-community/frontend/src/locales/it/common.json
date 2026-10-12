@@ -690,7 +690,8 @@
       "startFailed": "Impossibile avviare sftp-server tramite sudo (possibile causa: “requiretty” in sudoers)."
     },
     "channelLost": "Diritti elevati terminati: il canale elevato non è più attivo.",
-    "targetUserLabel": "Utente di destinazione per i diritti elevati (predefinito: root)"
+    "targetUserLabel": "Utente di destinazione per i diritti elevati (predefinito: root)",
+    "group": "Diritti elevati"
   },
   "sshConfigImport": {
     "dialogTitle": "Importa ssh_config",
@@ -912,6 +913,7 @@
     "toStartDirectory": "Vai alla directory iniziale",
     "parentDirectory": "Directory superiore",
     "newFolderButton": "+ Cartella",
+    "fileActionsGroup": "Azioni sui file",
     "upload": "Carica",
     "uploadDialogTitle": "Carica file",
     "uploadFolder": "Carica cartella",
@@ -1019,7 +1021,10 @@
       "execute": "Esecuzione",
       "numeric": "Numerico",
       "recursive": "Ricorsivo",
-      "recursiveWarning": "— modifica i permessi di TUTTI i file e sottocartelle in questa cartella. Azione potente, non annullabile."
+      "recursiveWarning": "— modifica i permessi di TUTTI i file e sottocartelle in questa cartella. Azione potente, non annullabile.",
+      "owner": "Proprietario",
+      "group": "Gruppo",
+      "other": "Altri"
     },
     "renamePrompt": {
       "renameTitle": "Rinomina",

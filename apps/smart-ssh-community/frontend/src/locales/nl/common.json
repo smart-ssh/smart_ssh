@@ -685,7 +685,8 @@
       "startFailed": "sftp-server kon niet via sudo worden gestart (mogelijke oorzaak: “requiretty” in sudoers)."
     },
     "channelLost": "Verhoogde rechten beëindigd — het verhoogde kanaal is niet meer actief.",
-    "targetUserLabel": "Doelgebruiker voor verhoogde rechten (standaard: root)"
+    "targetUserLabel": "Doelgebruiker voor verhoogde rechten (standaard: root)",
+    "group": "Verhoogde rechten"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importeren",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Naar startmap",
     "parentDirectory": "Bovenliggende map",
     "newFolderButton": "+ Map",
+    "fileActionsGroup": "Bestandsacties",
     "upload": "Uploaden",
     "uploadDialogTitle": "Bestand(en) uploaden",
     "uploadFolder": "Map uploaden",
@@ -1012,7 +1014,10 @@
       "execute": "Uitvoeren",
       "numeric": "Numeriek",
       "recursive": "Recursief",
-      "recursiveWarning": "— wijzigt de rechten van ALLE bestanden en submappen in deze map. Krachtige actie, niet ongedaan te maken."
+      "recursiveWarning": "— wijzigt de rechten van ALLE bestanden en submappen in deze map. Krachtige actie, niet ongedaan te maken.",
+      "owner": "Eigenaar",
+      "group": "Groep",
+      "other": "Overig"
     },
     "renamePrompt": {
       "renameTitle": "Hernoemen",

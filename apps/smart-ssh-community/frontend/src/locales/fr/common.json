@@ -690,7 +690,8 @@
       "startFailed": "sftp-server n’a pas pu être démarré via sudo (cause possible : « requiretty » dans sudoers)."
     },
     "channelLost": "Droits élevés terminés — le canal élevé n’est plus actif.",
-    "targetUserLabel": "Utilisateur cible pour les droits élevés (par défaut : root)"
+    "targetUserLabel": "Utilisateur cible pour les droits élevés (par défaut : root)",
+    "group": "Droits élevés"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -912,6 +913,7 @@
     "toStartDirectory": "Aller au répertoire de départ",
     "parentDirectory": "Répertoire parent",
     "newFolderButton": "+ Dossier",
+    "fileActionsGroup": "Actions sur les fichiers",
     "upload": "Téléverser",
     "uploadDialogTitle": "Téléverser des fichiers",
     "uploadFolder": "Téléverser un dossier",
@@ -1019,7 +1021,10 @@
       "execute": "Exécution",
       "numeric": "Numérique",
       "recursive": "Récursif",
-      "recursiveWarning": "— modifie les permissions de TOUS les fichiers et sous-dossiers de ce dossier. Action puissante, irréversible."
+      "recursiveWarning": "— modifie les permissions de TOUS les fichiers et sous-dossiers de ce dossier. Action puissante, irréversible.",
+      "owner": "Propriétaire",
+      "group": "Groupe",
+      "other": "Autres"
     },
     "renamePrompt": {
       "renameTitle": "Renommer",

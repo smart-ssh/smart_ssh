@@ -13,9 +13,13 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
   });
   const page = app.page;
 
-  await page.getByRole("button", { name: /^fresh-host\b/ }).click();
+  const entry = page.getByRole("button", { name: /^fresh-host\b/ });
+  await entry.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
+  // Issue #407: while the attempt is pending the entry stays a focusable
+  // button (aria-disabled, not disabled), so focus can return to it.
+  await expect(entry).toHaveAttribute("aria-disabled", "true");
   await expect(dialog).toContainText("fresh.example.test:2222");
   await expect(dialog).toContainText(FINGERPRINT);
   await expect(dialog).toContainText("ssh-ed25519");
@@ -33,6 +37,8 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
 
   await reject.click();
   await expect(dialog).toBeHidden();
+  await expect(entry).toBeFocused();
+  await expect(entry).not.toHaveAttribute("aria-disabled", "true");
   const decisions = await app.calls("confirm_host_key");
   expect(decisions).toHaveLength(1);
   expect(decisions[0].args.decision).toEqual({ decision: "reject" });

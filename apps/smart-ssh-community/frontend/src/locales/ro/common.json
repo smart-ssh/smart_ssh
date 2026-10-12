@@ -690,7 +690,8 @@
       "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers)."
     },
     "channelLost": "Drepturile ridicate s-au încheiat — canalul cu drepturi ridicate nu mai este activ.",
-    "targetUserLabel": "Utilizator țintă pentru drepturi ridicate (implicit: root)"
+    "targetUserLabel": "Utilizator țintă pentru drepturi ridicate (implicit: root)",
+    "group": "Drepturi ridicate"
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",
@@ -912,6 +913,7 @@
     "toStartDirectory": "Mergi la directorul de pornire",
     "parentDirectory": "Director părinte",
     "newFolderButton": "+ Folder",
+    "fileActionsGroup": "Acțiuni pe fișiere",
     "upload": "Încarcă",
     "uploadDialogTitle": "Încarcă fișiere",
     "uploadFolder": "Încarcă folder",
@@ -1019,7 +1021,10 @@
       "execute": "Execuție",
       "numeric": "Numeric",
       "recursive": "Recursiv",
-      "recursiveWarning": "— modifică permisiunile TUTUROR fișierelor și subfolderelor din acest folder. Acțiune puternică, ireversibilă."
+      "recursiveWarning": "— modifică permisiunile TUTUROR fișierelor și subfolderelor din acest folder. Acțiune puternică, ireversibilă.",
+      "owner": "Proprietar",
+      "group": "Grup",
+      "other": "Alții"
     },
     "renamePrompt": {
       "renameTitle": "Redenumește",

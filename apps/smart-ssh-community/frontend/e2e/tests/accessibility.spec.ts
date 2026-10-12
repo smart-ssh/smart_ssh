@@ -3,13 +3,60 @@
 // with a reason, in `support/axe.ts`.
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
-import { populated } from "../support/data";
+import { ACKNOWLEDGED, populated, server } from "../support/data";
 import { NOTE_COMMANDS, openNotes } from "../support/notes";
+import { openChatWithConfirmation, openChatWithMessages } from "../support/chatScreens";
 import { openSession, redCommandProposal } from "../support/session";
 
 // New screens: add one line here. `open` brings the app into the state
 // to scan; the key is the screen name used in the axe allowlist.
+const UNLOCK = {
+  screen: "unlock",
+  mode: "password",
+  offersStartOver: true,
+  failedUnlockAttempts: 3,
+  language: "en",
+};
+
 const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
+  unlock: async (app) => {
+    await app.launch({ commands: { get_startup_state: { result: UNLOCK } } });
+    await expect(app.page.getByLabel("Master password")).toBeVisible();
+  },
+  "startup question": async (app) => {
+    await app.launch({ commands: { get_startup_state: { result: UNLOCK } } });
+    await app.emit("startup:prompt", { kind: "confirmStartOver", title: "Start over?", message: "All data is lost." });
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+  },
+  "new master password": async (app) => {
+    await app.launch({ commands: { get_startup_state: { result: UNLOCK } } });
+    await app.emit("startup:prompt", { kind: "newMasterPassword", title: "Set a master password", message: "Choose one." });
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+    await app.page.getByLabel("Repeat").fill("x");
+  },
+  "first-run notice": async (app) => {
+    await app.launch({ servers: [server({ id: "s-1", name: "alpha" })] });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+  },
+  "host key unknown": async (app) => {
+    await app.launch({
+      settings: { ...ACKNOWLEDGED },
+      servers: [server({ id: "s-1", name: "alpha" })],
+      hostKeys: { "s-1": { kind: "unknown", fingerprint: "SHA256:abc", keyType: "ssh-ed25519" } },
+    });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+  },
+  "host key changed": async (app) => {
+    await app.launch({
+      settings: { ...ACKNOWLEDGED },
+      servers: [server({ id: "s-1", name: "alpha" })],
+      hostKeys: { "s-1": { kind: "mismatch", fingerprint: "SHA256:new", expectedFingerprint: "SHA256:old", keyType: "ssh-ed25519" } },
+    });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await expect(app.page.getByRole("alertdialog")).toBeVisible();
+  },
   main: async (app) => {
     await app.launch(populated());
     await expect(app.page.getByText("db-primary")).toBeVisible();
@@ -27,11 +74,51 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     await app.page.getByRole("button", { name: "Show history", exact: true }).click();
     await expect(app.page.getByRole("button", { name: "Restore" }).first()).toBeVisible();
   },
+  "filter rules": async (app) => {
+    await app.launch({
+      ...populated(),
+      commands: {
+        list_rules: {
+          result: [
+            { id: "r1", patternType: "glob", patternValue: "ls *", action: "Allow", scope: "Global", priority: 10, patternError: null },
+            { id: "r2", patternType: "glob", patternValue: "rm *", action: "Deny", scope: "Global", priority: 20, patternError: null },
+            { id: "r3", patternType: "exact", patternValue: "reboot", action: "Confirm", scope: "Global", priority: 5, patternError: null },
+          ],
+        },
+        list_hard_blacklist: { result: [{ kind: "regex", value: "rm -rf /" }] },
+      },
+    });
+    await app.page.getByRole("button", { name: "Filter Rules", exact: true }).click();
+    await expect(app.page.getByText("ls *")).toBeVisible();
+  },
+  "session view": async (app) => {
+    await app.launch(populated());
+    await openSession(app, "db-primary");
+    await app.page.getByRole("button", { name: "Overview", exact: true }).click();
+    await openSession(app, "web-1");
+  },
+  "mcp session view": async (app) => {
+    await app.launch(populated());
+    await app.emit("mcp-action-tab-requested", { sessionId: "mcp-session-1", serverId: "s-lab", clientName: "Claude Desktop" });
+    await app.page.getByRole("button", { name: /Claude Desktop @/ }).first().click();
+    await expect(app.page.getByText(/This session belongs to an external tool/)).toBeVisible();
+  },
   "command confirmation": async (app) => {
     await app.launch(populated());
     const sessionId = await openSession(app, "db-primary");
     await app.emit("chat-action-proposed", redCommandProposal(sessionId, "rm -rf /var/lib/app/cache"));
     await expect(app.page.getByRole("button", { name: "Execute", exact: true })).toBeVisible();
+  },
+  "chat messages": async (app) => {
+    await openChatWithMessages(app);
+  },
+  "chat confirmation, long command": async (app) => {
+    await openChatWithConfirmation(app);
+  },
+  "chat quick-rule popup": async (app) => {
+    await openChatWithConfirmation(app);
+    await app.page.getByRole("button", { name: "Show rule suggestions" }).click();
+    await expect(app.page.getByText("rm -rf /var/lib/app/*")).toBeVisible();
   },
 };
 

@@ -695,7 +695,8 @@
       "startFailed": "Не удалось запустить sftp-server через sudo (возможная причина: «requiretty» в sudoers)."
     },
     "channelLost": "Повышенные права завершены — повышенный канал больше не активен.",
-    "targetUserLabel": "Целевой пользователь для повышенных прав (по умолчанию: root)"
+    "targetUserLabel": "Целевой пользователь для повышенных прав (по умолчанию: root)",
+    "group": "Повышенные права"
   },
   "sshConfigImport": {
     "dialogTitle": "Импорт ssh_config",
@@ -917,6 +918,7 @@
     "toStartDirectory": "Перейти в начальный каталог",
     "parentDirectory": "Родительский каталог",
     "newFolderButton": "+ Папка",
+    "fileActionsGroup": "Действия с файлами",
     "upload": "Загрузить",
     "uploadDialogTitle": "Загрузка файлов",
     "uploadFolder": "Загрузить папку",
@@ -1026,7 +1028,10 @@
       "execute": "Выполнение",
       "numeric": "Числовые",
       "recursive": "Рекурсивно",
-      "recursiveWarning": "— меняет права ВСЕХ файлов и подпапок в этой папке. Мощное действие, отменить нельзя."
+      "recursiveWarning": "— меняет права ВСЕХ файлов и подпапок в этой папке. Мощное действие, отменить нельзя.",
+      "owner": "Владелец",
+      "group": "Группа",
+      "other": "Остальные"
     },
     "renamePrompt": {
       "renameTitle": "Переименовать",

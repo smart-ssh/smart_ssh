@@ -339,7 +339,7 @@ describe("FileBrowserPanel row action menu (Spec 0054, Teil 0 — Bug-Fix)", () 
     renderPanel();
     await screen.findByText(/a\.txt/);
 
-    const triggers = screen.getAllByRole("button", { name: "⋮" });
+    const triggers = screen.getAllByRole("button", { name: /^(Aktionen|Actions): / });
     expect(triggers).toHaveLength(2);
 
     fireEvent.click(triggers[0]);
@@ -360,7 +360,7 @@ describe("FileBrowserPanel row action menu (Spec 0054, Teil 0 — Bug-Fix)", () 
     renderPanel();
     await screen.findByText(/a\.txt/);
 
-    const triggers = screen.getAllByRole("button", { name: "⋮" });
+    const triggers = screen.getAllByRole("button", { name: /^(Aktionen|Actions): / });
     fireEvent.click(triggers[0]);
     expect(screen.getAllByText("Löschen")).toHaveLength(1);
 
@@ -431,7 +431,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Herunterladen"));
 
     expect(sftpDownloadDefault).toHaveBeenCalledWith("session-1", "a.txt", null);
@@ -444,7 +444,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/logs/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Herunterladen nach…"));
 
     expect(sftpDownloadDir).toHaveBeenCalledWith("session-1", "logs", "Zielordner wählen", null);
@@ -457,7 +457,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Pfad kopieren"));
 
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("a.txt"));
@@ -475,7 +475,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
     await waitFor(() =>
@@ -499,7 +499,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(big));
@@ -515,7 +515,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
     await waitFor(() =>
@@ -546,7 +546,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
     const status = await screen.findByRole("status");
@@ -568,7 +568,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
     await waitFor(() => expect(sftpCopyContent).toHaveBeenCalled());
     expect(screen.queryByRole("status")).toBeNull();
@@ -581,7 +581,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
     await waitFor(() =>
@@ -601,7 +601,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Eigenschaften"));
 
     expect(await screen.findByText("Eigenschaften")).toBeVisible();
@@ -617,7 +617,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Aktualisieren"));
 
     await waitFor(() => expect(sftpList).toHaveBeenCalledTimes(2));
@@ -647,12 +647,12 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
 
     expect(await screen.findByText("Rechte bearbeiten")).toBeVisible();
-    // fileEntry ist 644 (rw-r--r--) — "Owner Schreiben" (0o200) abwählen.
-    fireEvent.click(screen.getByLabelText("Owner 128"));
+    // fileEntry ist 644 (rw-r--r--) — "Besitzer Schreiben" (0o200) abwählen.
+    fireEvent.click(screen.getByLabelText("Besitzer: Schreiben"));
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
@@ -668,7 +668,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     await screen.findByText(/a\.txt/);
     expect(screen.getByRole("columnheader", { name: "Aktionen" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
     expect(await screen.findByRole("columnheader", { name: "Gilt für" })).toBeInTheDocument();
   });
@@ -680,7 +680,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
 
     const numeric = await screen.findByDisplayValue("0644");
@@ -710,7 +710,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/suid-bin/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
 
     expect(await screen.findByDisplayValue("4755")).toBeInTheDocument();
@@ -729,7 +729,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/logs/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
 
     const recursiveLabel = await screen.findByText(/Rekursiv/);
@@ -748,7 +748,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/logs/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Löschen"));
 
     expect(await screen.findByText(/Ordner löschen/)).toBeVisible();
@@ -770,7 +770,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Umbenennen"));
 
     const input = screen.getByDisplayValue("a.txt");
@@ -793,7 +793,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Umbenennen"));
 
     const input = screen.getByDisplayValue("a.txt");
@@ -822,7 +822,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     // Mock liefert `[fileEntry, dirEntry]` in dieser Reihenfolge (echtes
     // Sortieren übernimmt das Backend, nicht diese Komponente) — Zeile 0
     // ist also a.txt.
-    const rows = screen.getAllByRole("button", { name: "⋮" });
+    const rows = screen.getAllByRole("button", { name: /^(Aktionen|Actions): / });
     fireEvent.click(rows[0]);
     fireEvent.click(screen.getByText("Ausschneiden"));
 
@@ -1038,7 +1038,7 @@ describe("FileBrowserPanel 'Lokal öffnen' flow (Spec 0054, Teil 4)", () => {
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Lokal öffnen…"));
 
     await waitFor(() =>
@@ -1059,7 +1059,7 @@ describe("FileBrowserPanel 'Lokal öffnen' flow (Spec 0054, Teil 4)", () => {
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Lokal öffnen…"));
     await screen.findByText(/wird lokal bearbeitet/);
 
@@ -1091,7 +1091,7 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Herunterladen"));
 
     await waitFor(() =>
@@ -1114,7 +1114,7 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
 
     renderPanel();
     await screen.findByText(/logs/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Herunterladen"));
 
     await waitFor(() =>
@@ -1135,7 +1135,7 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Herunterladen"));
 
     await waitFor(() =>
@@ -1168,7 +1168,7 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
 
     renderPanel();
     await screen.findByText(/logs/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
     const recursiveLabel = await screen.findByText(/Rekursiv/);
     fireEvent.click(recursiveLabel.closest("label")!.querySelector("input")!);
@@ -1189,7 +1189,7 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
 
     renderPanel();
     await screen.findByText(/logs/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Löschen"));
     await screen.findByText("3");
     const confirm = screen.getAllByText("Löschen").at(-1)!;
@@ -1242,7 +1242,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     expect(document.querySelector('[data-elevated="true"]')).not.toBeNull();
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", "root"));
 
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Löschen"));
     expect(await screen.findByText("Datei als root löschen?")).toBeVisible();
     vi.mocked(sftpDelete).mockResolvedValue(undefined);
@@ -1543,7 +1543,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     // `advanceTimersByTimeAsync` flushen und synchron (`getBy*`) prüfen.
     vi.useFakeTimers();
     try {
-      fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+      fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
       fireEvent.click(screen.getByText("Lokal öffnen…"));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
@@ -1717,7 +1717,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
   }
 
   function openMenu() {
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
   }
 
   beforeEach(() => {
@@ -1870,12 +1870,30 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     for (const header of ["Read", "Write", "Execute"]) {
       expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
+    for (const label of ["Owner", "Group", "Other"]) {
+      expect(screen.getByRole("cell", { name: label })).toBeVisible();
+    }
+    expect(screen.getByLabelText("Owner: Write")).toBeInTheDocument();
     expect(screen.getByText("Numeric")).toBeVisible();
     expect(screen.getByText("Recursive")).toBeVisible();
     expect(screen.getByText(/changes the permissions of ALL files and subfolders/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Apply" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
     expectNoGerman();
+  });
+
+  it("chmod dialog row labels are translated in a non-English locale", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+
+    renderEn(testI18n.cloneInstance({ lng: "fr" }));
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: /^Actions: / }));
+    fireEvent.click(screen.getByRole("button", { name: "Modifier les permissions…" }));
+
+    for (const label of ["Propriétaire", "Groupe", "Autres"]) {
+      expect(await screen.findByRole("cell", { name: label })).toBeVisible();
+    }
+    expect(screen.queryByRole("cell", { name: "Owner" })).not.toBeInTheDocument();
   });
 
   it("rename and new-folder prompts are English", async () => {

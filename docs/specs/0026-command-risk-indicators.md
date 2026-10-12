@@ -41,6 +41,12 @@ exakt wie in der Filter-Engine zerlegt (Spec 0002, Abschnitt 4). Jedes
 Teilkommando wird einzeln eingestuft; je Achse gilt das höchste Level aller
 Teile.
 
+Text, den die Filter-Engine nicht sicher zerlegen kann (Here-Doc-Operator,
+unausgeglichene Anführungszeichen), wird als Ganzes eingestuft und zusätzlich
+an `;`, `&`, `|` und Zeilenumbrüchen in Bruchstücke geteilt, die einzeln
+eingestuft werden. Eine Verkettung wird so nie niedriger eingestuft als ihr
+Teilkommando allein (z. B. `rm;<<`).
+
 **Dieselbe Normalisierung und dieselben Begrenzungen wie die Filter-Engine.**
 Der Klassifizierer vergleicht gegen das **normalisierte** effektive Kommando
 (Spec 0002, Abschnitt 4, Punkt 6: Wrapper, Rechteerhöhung und

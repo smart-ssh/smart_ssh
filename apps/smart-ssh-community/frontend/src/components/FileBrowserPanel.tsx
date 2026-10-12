@@ -59,7 +59,7 @@ import type {
 import { useDragResize } from "../useDragResize";
 import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
@@ -488,8 +488,22 @@ export function FileBrowserPanel({
   useEffect(() => {
     if (openMenu === null) return;
     const handler = () => setOpenMenu(null);
+    // Escape closes the menu too; focus goes back to the ⋮ button that
+    // opened it (docs/ui-guidelines.md, Keyboard).
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const closing = openMenu;
+      setOpenMenu(null);
+      if (closing.anchor === "row") {
+        focusMenuTrigger(closing.entry.path);
+      }
+    };
     document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("click", handler);
+      document.removeEventListener("keydown", keyHandler);
+    };
   }, [openMenu]);
 
   useEffect(() => {
@@ -1022,7 +1036,7 @@ export function FileBrowserPanel({
           <button
             type="button"
             onClick={handleToggleElevation}
-            className="border border-slate-950/40 px-2 py-0.5 hover:bg-amber-500"
+            className="rounded border border-slate-950/40 px-2 py-0.5 hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
           >
             {t("fileElevation.toggleOff")}
           </button>
@@ -1033,26 +1047,27 @@ export function FileBrowserPanel({
           {t("fileElevation.failure.sftpServerUnsafe", { path: elevationWarning })}
         </div>
       )}
-      <div className="flex items-center gap-1.5 border-b border-slate-800 px-2 py-1.5">
-        <button
-          type="button"
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-slate-800 px-2 py-1.5">
+        <div className="flex min-w-[12rem] flex-1 items-center gap-1.5">
+        <Button
+          size="sm"
           onClick={() => load(startPath)}
           title={t("fileBrowser.toStartDirectory")}
-          className="border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+          aria-label={t("fileBrowser.toStartDirectory")}
         >
           ⌂
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          size="sm"
           onClick={() => load(parentPath(path))}
           disabled={path === "."}
           title={t("fileBrowser.parentDirectory")}
-          className="border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+          aria-label={t("fileBrowser.parentDirectory")}
         >
           ↑
-        </button>
+        </Button>
         <form
-          className="min-w-0 flex-1"
+          className="min-w-32 flex-1"
           onSubmit={(e) => {
             e.preventDefault();
             load(pathInput.trim() || ".");
@@ -1062,69 +1077,66 @@ export function FileBrowserPanel({
             {...TECHNICAL_INPUT_PROPS}
             value={pathInput}
             onChange={(e) => setPathInput(e.target.value)}
-            className="w-full border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-200 focus:outline-none"
+            aria-label={t("fileBrowser.properties.path")}
+            title={pathInput}
+            className={`${FIELD_CONTROL_CLASS} w-full px-2 py-1 font-mono text-xs`}
           />
         </form>
-        <button
-          type="button"
-          onClick={() => setMkdirOpen("")}
-          className="border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+        </div>
+        <fieldset
+          aria-label={t("fileBrowser.fileActionsGroup")}
+          className="m-0 flex min-w-0 items-center gap-1.5 border-0 p-0"
         >
+        <Button size="sm" onClick={() => setMkdirOpen("")}>
           {t("fileBrowser.newFolderButton")}
-        </button>
-        <button
-          type="button"
-          onClick={handleUploadButton}
-          className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
-        >
+        </Button>
+        <Button size="sm" onClick={handleUploadButton}>
           {t("fileBrowser.upload")}
-        </button>
-        <button
-          type="button"
-          onClick={handleUploadFolderButton}
-          className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
-        >
+        </Button>
+        <Button size="sm" onClick={handleUploadFolderButton}>
           {t("fileBrowser.uploadFolder")}
-        </button>
+        </Button>
+        </fieldset>
         {!elevated && (
+          <fieldset
+            aria-label={t("fileElevation.group")}
+            className="m-0 flex min-w-0 items-center gap-1.5 border-0 border-l border-slate-700 p-0 pl-2"
+          >
           <input
             {...TECHNICAL_INPUT_PROPS}
             value={elevationTargetUser}
             onChange={(e) => setElevationTargetUser(e.target.value)}
             aria-label={t("fileElevation.targetUserLabel")}
             title={t("fileElevation.targetUserLabel")}
-            className="w-20 border border-amber-600/40 bg-slate-950 px-1.5 py-1 font-mono text-xs text-amber-200 focus:outline-none"
+            className={`${FIELD_CONTROL_CLASS} w-20 px-1.5 py-1 font-mono text-xs`}
           />
-        )}
-        {!elevated && (
-          <button
-            type="button"
+          <Button
+            size="sm"
             onClick={handleToggleElevation}
             disabled={enablingElevation}
             title={t("fileElevation.toggleTitle")}
-            className="border border-amber-600/60 px-2 py-1 text-xs text-amber-300 hover:bg-amber-600/14 disabled:opacity-50"
           >
             {enablingElevation ? t("fileElevation.enabling") : `🔓 ${t("fileElevation.toggle")}`}
-          </button>
+          </Button>
+          </fieldset>
         )}
         {cutEntry && (
           <>
-            <button
-              type="button"
+            <Button
+              size="sm"
               onClick={handlePaste}
               title={t("fileBrowser.pasteTitle", { name: cutEntry.name })}
-              className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-600/14"
             >
               {t("fileBrowser.paste")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
               onClick={() => setCutEntry(null)}
               title={t("fileBrowser.cancelCut")}
-              className="border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
+              aria-label={t("fileBrowser.cancelCut")}
             >
               ✕
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -1139,13 +1151,15 @@ export function FileBrowserPanel({
                   <span className="min-w-0 flex-1 truncate text-red-300">
                     {transfer.fileName}: {transfer.error}
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
-                    className="text-red-400 hover:text-red-300"
+                    aria-label={t("common.close")}
+                    title={t("common.close")}
                   >
                     ✕
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>
@@ -1178,15 +1192,14 @@ export function FileBrowserPanel({
                 })
               : t("fileBrowser.copyProgressUnknownTotal", { done: formatMb(copyJob.done) })}
           </span>
-          <button
-            type="button"
+          <Button
+            size="sm"
             onClick={() => {
               void sftpCancelCopyContent(copyJob.requestId).catch(() => {});
             }}
-            className="rounded border border-slate-600 px-2 py-0.5 hover:bg-slate-800"
           >
             {t("common.cancel")}
-          </button>
+          </Button>
         </output>
       )}
       <div
@@ -1196,7 +1209,7 @@ export function FileBrowserPanel({
         {loading && <p className="p-3 text-xs text-slate-400">{t("fileBrowser.loading")}</p>}
         {error && <p className="p-3 text-xs text-red-400">{error}</p>}
         {!loading && !error && entries.length === 0 && (
-          <p className="p-3 text-xs text-slate-500">{t("fileBrowser.emptyDirectory")}</p>
+          <p className="p-3 text-xs text-slate-400">{t("fileBrowser.emptyDirectory")}</p>
         )}
         {!loading && !error && entries.length > 0 && (
           <table
@@ -1236,7 +1249,7 @@ export function FileBrowserPanel({
               <col style={{ width: columnWidths.modified }} />
               <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
             </colgroup>
-            <thead className="sticky top-0 bg-slate-900 text-slate-500">
+            <thead className="sticky top-0 bg-slate-900 text-slate-400">
               <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
                 <th>{t("fileBrowser.column.name")}</th>
                 <th className="relative">
@@ -1288,7 +1301,7 @@ export function FileBrowserPanel({
                       <button
                         type="button"
                         onClick={() => load(entry.path)}
-                        className="truncate text-left text-indigo-300 hover:underline"
+                        className="block max-w-full truncate rounded text-left text-indigo-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         title={entry.name}
                       >
                         📁 {entry.name}
@@ -1302,10 +1315,10 @@ export function FileBrowserPanel({
                   <td className="px-2 py-1 whitespace-nowrap text-slate-400">
                     {entry.isDir ? "—" : formatBytes(entry.size)}
                   </td>
-                  <td className="px-2 py-1 whitespace-nowrap font-mono text-slate-500">
+                  <td className="px-2 py-1 whitespace-nowrap font-mono text-slate-400">
                     {entry.permissions}
                   </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-slate-500">
+                  <td className="px-2 py-1 whitespace-nowrap text-slate-400">
                     {entry.modified ? formatDateTime(entry.modified, i18n.language) : "—"}
                   </td>
                   <td className="relative px-2 py-1 text-right">
@@ -1340,7 +1353,11 @@ export function FileBrowserPanel({
                             : { entry, anchor: "row" },
                         );
                       }}
-                      className="px-1.5 text-slate-400 hover:text-slate-100"
+                      data-menu-trigger={entry.path}
+                      aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
+                      aria-haspopup="true"
+                      aria-expanded={openMenu?.anchor === "row" && openMenu.entry.path === entry.path}
+                      className="rounded px-1.5 text-slate-400 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
                       ⋮
                     </button>
@@ -1427,20 +1444,12 @@ export function FileBrowserPanel({
               <span className="flex-1 text-amber-300">
                 {t("fileBrowser.localEdit.changed", { name: localEdit.session.entry.name })}
               </span>
-              <button
-                type="button"
-                onClick={handleOfferEditUpload}
-                className="font-heading border border-indigo-600/50 px-2 py-1 text-xs font-semibold text-indigo-300 hover:bg-indigo-600/14"
-              >
+              <Button size="sm" variant="primary" onClick={handleOfferEditUpload}>
                 {t("fileBrowser.upload")}
-              </button>
-              <button
-                type="button"
-                onClick={localEdit.dismissChange}
-                className="border border-slate-700 px-2 py-1 text-slate-400 hover:bg-slate-800"
-              >
+              </Button>
+              <Button size="sm" onClick={localEdit.dismissChange}>
                 {t("fileBrowser.localEdit.later")}
-              </button>
+              </Button>
             </>
           ) : (
             <span className="flex-1 text-slate-300">
@@ -1452,13 +1461,9 @@ export function FileBrowserPanel({
               )}
             </span>
           )}
-          <button
-            type="button"
-            onClick={localEdit.endSession}
-            className="border border-slate-700 px-2 py-1 text-slate-400 hover:bg-slate-800"
-          >
+          <Button size="sm" onClick={localEdit.endSession}>
             {t("fileBrowser.localEdit.end")}
-          </button>
+          </Button>
           {localEdit.session.error && (
             <span className="w-full text-red-300">{localEdit.session.error}</span>
           )}
@@ -1466,46 +1471,39 @@ export function FileBrowserPanel({
       )}
 
       {editUploadOffer && (
-        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
-            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              {localEdit.session?.elevatedUser
-                ? t("fileElevation.editUploadTitle", { user: localEdit.session.elevatedUser })
-                : t("fileBrowser.localEdit.uploadTitle")}
-            </h2>
-            {editUploadOffer.remoteChangedSinceDownload && (
-              <p className="mb-3 border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
-                {t("fileBrowser.localEdit.remoteChanged")}
-              </p>
-            )}
-            {editUploadOffer.localText !== null && editUploadOffer.remoteText !== null ? (
-              <NoteDiffPreview
-                previousContent={editUploadOffer.remoteText}
-                newContent={editUploadOffer.localText}
-              />
-            ) : (
-              <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-                {t("fileBrowser.localEdit.noDiff", { size: formatBytes(editUploadOffer.localSize) })}
-              </p>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditUploadOffer(null)}
-                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-              >
-                {t("fileBrowser.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmEditUpload}
-                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
-              >
+        <DialogFrame
+          layer="sessionTab"
+          title={
+            localEdit.session?.elevatedUser
+              ? t("fileElevation.editUploadTitle", { user: localEdit.session.elevatedUser })
+              : t("fileBrowser.localEdit.uploadTitle")
+          }
+          onClose={() => setEditUploadOffer(null)}
+          actions={
+            <>
+              <Button onClick={() => setEditUploadOffer(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button variant="primary" onClick={handleConfirmEditUpload}>
                 {t("fileBrowser.upload")}
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
+              </Button>
+            </>
+          }
+        >
+          {editUploadOffer.remoteChangedSinceDownload && (
+            <p className="mb-3 border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
+              {t("fileBrowser.localEdit.remoteChanged")}
+            </p>
+          )}
+          {editUploadOffer.localText !== null && editUploadOffer.remoteText !== null ? (
+            <NoteDiffPreview
+              previousContent={editUploadOffer.remoteText}
+              newContent={editUploadOffer.localText}
+            />
+          ) : (
+            <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+              {t("fileBrowser.localEdit.noDiff", { size: formatBytes(editUploadOffer.localSize) })}
+            </p>
+          )}
+        </DialogFrame>
       )}
 
       {properties && (
@@ -1532,58 +1530,52 @@ export function FileBrowserPanel({
       )}
 
       {deleteTarget && (
-        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm border border-red-700/50 bg-slate-900 p-5 shadow-xl">
-            <h2 className="font-heading mb-2 text-sm font-semibold text-red-300">
-              {elevated
-                ? t(deleteTarget.isDir ? "fileElevation.deleteDirTitle" : "fileElevation.deleteFileTitle", {
-                    user: elevatedUser,
-                  })
-                : deleteTarget.isDir
-                  ? t("fileBrowser.deleteDialog.dirTitle")
-                  : t("fileBrowser.deleteDialog.fileTitle")}
-            </h2>
-            <p className="mb-4 text-sm text-slate-300">
-              <span className="font-mono text-xs break-all">{deleteTarget.path}</span>{" "}
-              {t("fileBrowser.deleteDialog.body")}
-              {deleteTarget.isDir &&
-                (deletePreview ? (
-                  <>
-                    {" "}
-                    <Trans
-                      t={t}
-                      i18nKey="fileBrowser.deleteDialog.contents"
-                      values={{
-                        fileCount: deletePreview.fileCount,
-                        dirCount: deletePreview.dirCount,
-                        files: t("fileBrowser.deleteDialog.files", { count: deletePreview.fileCount }),
-                        dirs: t("fileBrowser.deleteDialog.dirs", { count: deletePreview.dirCount }),
-                      }}
-                      components={{ strong: <strong /> }}
-                    />
-                  </>
-                ) : (
-                  ` ${t("fileBrowser.deleteDialog.counting")}`
-                ))}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-              >
-                {t("fileBrowser.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                className="font-heading bg-red-600 px-3 py-1.5 text-xs font-semibold text-red-50 hover:bg-red-500"
-              >
+        <DialogFrame
+          layer="sessionTab"
+          size="sm"
+          title={
+            elevated
+              ? t(deleteTarget.isDir ? "fileElevation.deleteDirTitle" : "fileElevation.deleteFileTitle", {
+                  user: elevatedUser,
+                })
+              : deleteTarget.isDir
+                ? t("fileBrowser.deleteDialog.dirTitle")
+                : t("fileBrowser.deleteDialog.fileTitle")
+          }
+          onClose={() => setDeleteTarget(null)}
+          actions={
+            <>
+              <Button onClick={() => setDeleteTarget(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button variant="danger" onClick={handleConfirmDelete}>
                 {t("fileBrowser.delete")}
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
+              </Button>
+            </>
+          }
+        >
+          <p>
+            <span className="font-mono text-xs break-all">{deleteTarget.path}</span>{" "}
+            {t("fileBrowser.deleteDialog.body")}
+            {deleteTarget.isDir &&
+              (deletePreview ? (
+                <>
+                  {" "}
+                  <Trans
+                    t={t}
+                    i18nKey="fileBrowser.deleteDialog.contents"
+                    values={{
+                      fileCount: deletePreview.fileCount,
+                      dirCount: deletePreview.dirCount,
+                      files: t("fileBrowser.deleteDialog.files", { count: deletePreview.fileCount }),
+                      dirs: t("fileBrowser.deleteDialog.dirs", { count: deletePreview.dirCount }),
+                    }}
+                    components={{ strong: <strong /> }}
+                  />
+                </>
+              ) : (
+                ` ${t("fileBrowser.deleteDialog.counting")}`
+              ))}
+          </p>
+        </DialogFrame>
       )}
 
       {chmodTarget && (
@@ -1596,161 +1588,132 @@ export function FileBrowserPanel({
       )}
 
       {moveCollision && (
-        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
-            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              {elevated
-                ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
-                : t("fileBrowser.moveCollision.title")}
-            </h2>
-            <p className="mb-4 text-sm text-slate-300">
-              <span className="font-mono text-xs break-all">{moveCollision.to}</span>{" "}
-              {t("fileBrowser.moveCollision.body")}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setMoveCollision(null)}
-                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-              >
-                {t("fileBrowser.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmMoveCollision}
-                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
-              >
+        <DialogFrame
+          layer="sessionTab"
+          size="sm"
+          title={
+            elevated
+              ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
+              : t("fileBrowser.moveCollision.title")
+          }
+          onClose={() => setMoveCollision(null)}
+          actions={
+            <>
+              <Button onClick={() => setMoveCollision(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button variant="danger" onClick={handleConfirmMoveCollision}>
                 {t("fileBrowser.overwrite")}
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
+              </Button>
+            </>
+          }
+        >
+          <p>
+            <span className="font-mono text-xs break-all">{moveCollision.to}</span>{" "}
+            {t("fileBrowser.moveCollision.body")}
+          </p>
+        </DialogFrame>
       )}
 
       {uploadConflict && (
-        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
-            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              {elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
-            </h2>
-            <p className="mb-3 text-sm text-slate-300">
-              <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
-              {t("fileBrowser.uploadConflict.body")}
-            </p>
-            {uploadConflict.localPreview.text !== null && uploadConflict.remoteText !== null ? (
-              <NoteDiffPreview
-                previousContent={uploadConflict.remoteText}
-                newContent={uploadConflict.localPreview.text}
-              />
-            ) : (
-              <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-                {t("fileBrowser.uploadConflict.noDiff", {
-                  remoteSize: formatBytes(uploadConflict.remoteSize),
-                  localSize: formatBytes(uploadConflict.localPreview.size),
-                })}
-              </p>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setUploadConflict(null)}
-                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-              >
-                {t("fileBrowser.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmUpload}
-                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
-              >
+        <DialogFrame
+          layer="sessionTab"
+          title={elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
+          onClose={() => setUploadConflict(null)}
+          actions={
+            <>
+              <Button onClick={() => setUploadConflict(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button variant="danger" onClick={handleConfirmUpload}>
                 {t("fileBrowser.overwrite")}
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-3">
+            <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
+            {t("fileBrowser.uploadConflict.body")}
+          </p>
+          {uploadConflict.localPreview.text !== null && uploadConflict.remoteText !== null ? (
+            <NoteDiffPreview
+              previousContent={uploadConflict.remoteText}
+              newContent={uploadConflict.localPreview.text}
+            />
+          ) : (
+            <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+              {t("fileBrowser.uploadConflict.noDiff", {
+                remoteSize: formatBytes(uploadConflict.remoteSize),
+                localSize: formatBytes(uploadConflict.localPreview.size),
+              })}
+            </p>
+          )}
+        </DialogFrame>
       )}
 
       {folderConfirm && (
-        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl">
-            <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-              {t("fileBrowser.folderUpload.conflictTitle")}
-            </h2>
-            <p className="mb-3 text-sm text-slate-300">
-              {t("fileBrowser.folderUpload.conflictBody", {
-                name: folderConfirm.preview.folderName,
-                count: folderConfirm.preview.overwrites.length,
-              })}
-            </p>
-            <ul className="max-h-48 overflow-y-auto border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono text-xs break-all text-slate-300">
-              {folderConfirm.preview.overwrites.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setFolderConfirm(null)}
-                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-              >
-                {t("fileBrowser.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmFolderUpload}
-                className="font-heading bg-amber-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-amber-500"
-              >
+        <DialogFrame
+          layer="sessionTab"
+          title={t("fileBrowser.folderUpload.conflictTitle")}
+          onClose={() => setFolderConfirm(null)}
+          actions={
+            <>
+              <Button onClick={() => setFolderConfirm(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button variant="danger" onClick={handleConfirmFolderUpload}>
                 {t("fileBrowser.overwrite")}
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-3">
+            {t("fileBrowser.folderUpload.conflictBody", {
+              name: folderConfirm.preview.folderName,
+              count: folderConfirm.preview.overwrites.length,
+            })}
+          </p>
+          <ul className="max-h-48 overflow-y-auto border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono text-xs break-all text-slate-300">
+            {folderConfirm.preview.overwrites.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </DialogFrame>
       )}
 
       {folderSummary && (
-        <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg border border-slate-700 bg-slate-900 p-5 shadow-xl">
-            <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
-              {t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
-            </h2>
-            <p className="mb-3 text-sm text-slate-300">
-              {t("fileBrowser.folderUpload.summary", {
-                uploaded: folderSummary.filesUploaded,
-                skipped: folderSummary.skipped.length,
-                failed: folderSummary.failed.length,
-              })}
+        <DialogFrame
+          layer="sessionTab"
+          title={t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
+          onClose={() => setFolderSummary(null)}
+          actions={
+            <Button variant="primary" onClick={() => setFolderSummary(null)}>
+              {t("fileBrowser.folderUpload.close")}
+            </Button>
+          }
+        >
+          <p className="mb-3">
+            {t("fileBrowser.folderUpload.summary", {
+              uploaded: folderSummary.filesUploaded,
+              skipped: folderSummary.skipped.length,
+              failed: folderSummary.failed.length,
+            })}
+          </p>
+          {folderSummary.notAttempted > 0 && (
+            <p className="mb-3 text-amber-300">
+              {t("fileBrowser.folderUpload.notAttempted", { count: folderSummary.notAttempted })}
             </p>
-            {folderSummary.notAttempted > 0 && (
-              <p className="mb-3 text-sm text-amber-300">
-                {t("fileBrowser.folderUpload.notAttempted", { count: folderSummary.notAttempted })}
-              </p>
-            )}
-            <ul className="max-h-60 overflow-y-auto border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-300">
-              {folderSummary.failed.map((f) => (
-                <li key={"f:" + f.path} className="break-all">
-                  <span className="text-red-400">{t("fileBrowser.folderUpload.failed")}:</span>{" "}
-                  <span className="font-mono">{f.path}</span> — {f.error}
-                </li>
-              ))}
-              {folderSummary.skipped.map((e) => (
-                <li key={"s:" + e.path} className="break-all">
-                  <span className="text-amber-300">{t("fileBrowser.folderUpload.skipped")}:</span>{" "}
-                  <span className="font-mono">{e.path}</span> —{" "}
-                  {t("fileBrowser.folderUpload.reason." + e.reason)}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setFolderSummary(null)}
-                className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-              >
-                {t("fileBrowser.folderUpload.close")}
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
+          )}
+          <ul className="max-h-60 overflow-y-auto border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-300">
+            {folderSummary.failed.map((f) => (
+              <li key={"f:" + f.path} className="break-all">
+                <span className="text-red-400">{t("fileBrowser.folderUpload.failed")}:</span>{" "}
+                <span className="font-mono">{f.path}</span> — {f.error}
+              </li>
+            ))}
+            {folderSummary.skipped.map((e) => (
+              <li key={"s:" + e.path} className="break-all">
+                <span className="text-amber-300">{t("fileBrowser.folderUpload.skipped")}:</span>{" "}
+                <span className="font-mono">{e.path}</span> —{" "}
+                {t("fileBrowser.folderUpload.reason." + e.reason)}
+              </li>
+            ))}
+          </ul>
+        </DialogFrame>
       )}
 
       {elevationFailure && (
@@ -1761,6 +1724,13 @@ export function FileBrowserPanel({
       )}
     </div>
   );
+}
+
+/** Focuses the ⋮ button of the entry with this path (no-op for the context menu). */
+function focusMenuTrigger(path: string): void {
+  for (const el of document.querySelectorAll<HTMLElement>("[data-menu-trigger]")) {
+    if (el.dataset.menuTrigger === path) el.focus();
+  }
 }
 
 /** Spec 0054, Teil 1: die EINE Aktionsliste, die sowohl vom Drei-Punkte-
@@ -1803,51 +1773,58 @@ function FileEntryMenu({
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
   const { t } = useTranslation();
-  const itemClass = "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14";
+  // The menu unmounts when an action runs. Focus the ⋮ button first, so a
+  // dialog opened by the action remembers it and gives focus back on close.
+  const act = (fn: () => void) => () => {
+    focusMenuTrigger(entry.path);
+    fn();
+  };
+  const itemClass =
+    "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
   return (
     <div
       className={`${className} w-52 border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg`}
       style={style}
     >
-      <button type="button" onClick={() => onDownloadDefault(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onDownloadDefault(entry))} className={itemClass}>
         {t("fileBrowser.menu.download")}
       </button>
-      <button type="button" onClick={() => onDownloadChoose(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onDownloadChoose(entry))} className={itemClass}>
         {t("fileBrowser.menu.downloadTo")}
       </button>
       {!entry.isDir && (
-        <button type="button" onClick={() => onCopyContent(entry)} className={itemClass}>
+        <button type="button" onClick={act(() => onCopyContent(entry))} className={itemClass}>
           {t("fileBrowser.menu.copyContent")}
         </button>
       )}
       {!entry.isDir && (
-        <button type="button" onClick={() => onOpenLocally(entry)} className={itemClass}>
+        <button type="button" onClick={act(() => onOpenLocally(entry))} className={itemClass}>
           {t("fileBrowser.menu.openLocally")}
         </button>
       )}
-      <button type="button" onClick={() => onCopyPath(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onCopyPath(entry))} className={itemClass}>
         {t("fileBrowser.menu.copyPath")}
       </button>
-      <button type="button" onClick={() => onShowProperties(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onShowProperties(entry))} className={itemClass}>
         {t("fileBrowser.menu.properties")}
       </button>
-      <button type="button" onClick={onRefresh} className={itemClass}>
+      <button type="button" onClick={act(onRefresh)} className={itemClass}>
         {t("fileBrowser.menu.refresh")}
       </button>
       <div className="my-1 border-t border-slate-800" />
-      <button type="button" onClick={() => onChmod(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onChmod(entry))} className={itemClass}>
         {t("fileBrowser.menu.chmod")}
       </button>
-      <button type="button" onClick={() => onRename(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onRename(entry))} className={itemClass}>
         {t("fileBrowser.menu.rename")}
       </button>
-      <button type="button" onClick={() => onCut(entry)} className={itemClass}>
+      <button type="button" onClick={act(() => onCut(entry))} className={itemClass}>
         {t("fileBrowser.menu.cut")}
       </button>
       <button
         type="button"
-        onClick={() => onDelete(entry)}
-        className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12"
+        onClick={act(() => onDelete(entry))}
+        className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
       >
         {t("fileBrowser.menu.delete")}
       </button>
@@ -1875,55 +1852,47 @@ function FilePropertiesDialog({
 
   const row = (label: string, value: string) => (
     <div className="flex justify-between gap-4 py-1">
-      <span className="text-slate-400">{label}</span>
-      <span className="text-right font-mono text-slate-100 break-all">{value}</span>
+      <span className="shrink-0 text-slate-400">{label}</span>
+      <span className="min-w-0 text-right font-mono text-slate-100 break-all">{value}</span>
     </div>
   );
 
   return (
-    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
-        <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
-          {t("fileBrowser.properties.title")}
-        </h2>
-        <div className="divide-y divide-slate-800/70 text-xs">
-          {row(t("fileBrowser.properties.name"), entry.name)}
-          {row(t("fileBrowser.properties.path"), entry.path)}
-          {row(
-            t("fileBrowser.properties.type"),
-            entry.isDir ? t("fileBrowser.properties.typeFolder") : t("fileBrowser.properties.typeFile"),
-          )}
-          {row(t("fileBrowser.properties.size"), entry.isDir ? "—" : formatBytes(entry.size))}
-          {row(t("fileBrowser.properties.permissionsSymbolic"), entry.permissions)}
-          {row(t("fileBrowser.properties.permissionsNumeric"), octal)}
-          {row(t("fileBrowser.properties.owner"), owner)}
-          {row(t("fileBrowser.properties.group"), group)}
-          {row(
-            t("fileBrowser.properties.modified"),
-            entry.modified ? formatDateTime(entry.modified, i18n.language) : "—",
-          )}
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-          >
-            {t("fileBrowser.properties.close")}
-          </button>
-        </div>
+    <DialogFrame
+      layer="sessionTab"
+      size="sm"
+      title={t("fileBrowser.properties.title")}
+      onClose={onClose}
+      actions={<Button onClick={onClose}>{t("fileBrowser.properties.close")}</Button>}
+    >
+      <div className="divide-y divide-slate-800/70 text-sm">
+        {row(t("fileBrowser.properties.name"), entry.name)}
+        {row(t("fileBrowser.properties.path"), entry.path)}
+        {row(
+          t("fileBrowser.properties.type"),
+          entry.isDir ? t("fileBrowser.properties.typeFolder") : t("fileBrowser.properties.typeFile"),
+        )}
+        {row(t("fileBrowser.properties.size"), entry.isDir ? "—" : formatBytes(entry.size))}
+        {row(t("fileBrowser.properties.permissionsSymbolic"), entry.permissions)}
+        {row(t("fileBrowser.properties.permissionsNumeric"), octal)}
+        {row(t("fileBrowser.properties.owner"), owner)}
+        {row(t("fileBrowser.properties.group"), group)}
+        {row(
+          t("fileBrowser.properties.modified"),
+          entry.modified ? formatDateTime(entry.modified, i18n.language) : "—",
+        )}
       </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }
 
 /** Reihen-Reihenfolge der chmod-Checkbox-Matrix: owner/group/other × je
  * einer Bit-Maske pro Spalte (r/w/x), spiegelt exakt `RemoteEntry::
  * permissions` (Spec 0020: "reine Unix-Rechte-Bits, `0o755`-Stil"). */
-const CHMOD_ROWS: { label: string; read: number; write: number; execute: number }[] = [
-  { label: "Owner", read: 0o400, write: 0o200, execute: 0o100 },
-  { label: "Group", read: 0o040, write: 0o020, execute: 0o010 },
-  { label: "Other", read: 0o004, write: 0o002, execute: 0o001 },
+const CHMOD_ROWS: { key: "owner" | "group" | "other"; read: number; write: number; execute: number }[] = [
+  { key: "owner", read: 0o400, write: 0o200, execute: 0o100 },
+  { key: "group", read: 0o040, write: 0o020, execute: 0o010 },
+  { key: "other", read: 0o004, write: 0o002, execute: 0o001 },
 ];
 
 /** Spec 0054, Teil 3: chmod-Dialog — Checkbox-Matrix (owner/group/other ×
@@ -1977,92 +1946,96 @@ function ChmodDialog({
   };
 
   return (
-    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
-        <h2 className="font-heading mb-1 text-sm font-semibold text-slate-100">
-          {t("fileBrowser.chmod.title")}
-        </h2>
-        <p className="mb-3 font-mono text-xs break-all text-slate-400">{entry.path}</p>
-        {modeNote && (
-          <p className="mb-3 border border-amber-600/60 bg-amber-950/40 px-2 py-1 text-xs text-amber-300">
-            ⚠ {modeNote}
-          </p>
-        )}
+    <DialogFrame
+      layer="sessionTab"
+      size="sm"
+      title={t("fileBrowser.chmod.title")}
+      onClose={onCancel}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onConfirm(mode, recursive);
+      }}
+      actions={
+        <>
+          <Button onClick={onCancel}>{t("fileBrowser.cancel")}</Button>
+          <Button type="submit" variant="primary">
+            {t("fileBrowser.apply")}
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-3 font-mono text-xs break-all text-slate-400">{entry.path}</p>
+      {modeNote && (
+        <p className="mb-3 border border-amber-600/60 bg-amber-950/40 px-2 py-1 text-xs text-amber-300">
+          ⚠ {modeNote}
+        </p>
+      )}
 
-        <table className="mb-3 w-full text-xs text-slate-300">
-          <thead>
-            <tr className="text-slate-500">
-              <th className="text-left font-normal">
-                <span className="sr-only">{t("fileBrowser.chmodClassColumn")}</span>
-              </th>
-              <th className="font-normal">{t("fileBrowser.chmod.read")}</th>
-              <th className="font-normal">{t("fileBrowser.chmod.write")}</th>
-              <th className="font-normal">{t("fileBrowser.chmod.execute")}</th>
+      <table className="mb-3 w-full text-sm text-slate-300">
+        <thead>
+          <tr className="text-slate-400">
+            <th className="text-left font-normal">
+              <span className="sr-only">{t("fileBrowser.chmodClassColumn")}</span>
+            </th>
+            <th className="font-normal">{t("fileBrowser.chmod.read")}</th>
+            <th className="font-normal">{t("fileBrowser.chmod.write")}</th>
+            <th className="font-normal">{t("fileBrowser.chmod.execute")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CHMOD_ROWS.map((row) => (
+            <tr key={row.key}>
+              <td>{t(`fileBrowser.chmod.${row.key}`)}</td>
+              {(
+                [
+                  [row.read, "read"],
+                  [row.write, "write"],
+                  [row.execute, "execute"],
+                ] as const
+              ).map(([bit, key]) => (
+                <td key={bit} className="text-center">
+                  <input
+                    type="checkbox"
+                    checked={(mode & bit) !== 0}
+                    onChange={() => toggleBit(bit)}
+                    aria-label={`${t(`fileBrowser.chmod.${row.key}`)}: ${t(`fileBrowser.chmod.${key}`)}`}
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  />
+                </td>
+              ))}
             </tr>
-          </thead>
-          <tbody>
-            {CHMOD_ROWS.map((row) => (
-              <tr key={row.label}>
-                <td>{row.label}</td>
-                {[row.read, row.write, row.execute].map((bit) => (
-                  <td key={bit} className="text-center">
-                    <input
-                      type="checkbox"
-                      checked={(mode & bit) !== 0}
-                      onChange={() => toggleBit(bit)}
-                      aria-label={`${row.label} ${bit}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          ))}
+        </tbody>
+      </table>
 
-        <label className="mb-3 flex items-center gap-2 text-xs text-slate-300">
-          {t("fileBrowser.chmod.numeric")}
+      <Field label={t("fileBrowser.chmod.numeric")} className="mb-3">
+        {(control) => (
           <input
             {...TECHNICAL_INPUT_PROPS}
+            {...control}
             value={numericInput}
             onChange={(e) => handleNumericChange(e.target.value)}
             maxLength={4}
-            className="w-16 border border-slate-600 bg-slate-950 px-2 py-1 font-mono text-slate-100 focus:outline-none"
+            className={`${FIELD_CONTROL_CLASS} w-24 font-mono`}
           />
-        </label>
-
-        {entry.isDir && (
-          <label className="mb-3 flex items-start gap-2 text-xs text-amber-300">
-            <input
-              type="checkbox"
-              checked={recursive}
-              onChange={(e) => setRecursive(e.target.checked)}
-              className="mt-0.5"
-            />
-            <span>
-              <strong>{t("fileBrowser.chmod.recursive")}</strong>{" "}
-              {t("fileBrowser.chmod.recursiveWarning")}
-            </span>
-          </label>
         )}
+      </Field>
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-          >
-            {t("fileBrowser.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onConfirm(mode, recursive)}
-            className="font-heading bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-indigo-500"
-          >
-            {t("fileBrowser.apply")}
-          </button>
-        </div>
-      </div>
-    </ModalBackdrop>
+      {entry.isDir && (
+        <label className="flex items-start gap-2 text-sm text-amber-300">
+          <input
+            type="checkbox"
+            checked={recursive}
+            onChange={(e) => setRecursive(e.target.checked)}
+            className="mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          />
+          <span>
+            <strong>{t("fileBrowser.chmod.recursive")}</strong>{" "}
+            {t("fileBrowser.chmod.recursiveWarning")}
+          </span>
+        </label>
+      )}
+    </DialogFrame>
   );
 }
 
@@ -2091,42 +2064,38 @@ function RenamePrompt({
   }, []);
 
   return (
-    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-sm border border-slate-700 bg-slate-900 p-5 shadow-xl">
-        <h2 className="font-heading mb-2 text-sm font-semibold text-slate-100">
-          {title ?? t("fileBrowser.renamePrompt.renameTitle")}
-        </h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            onConfirm();
-          }}
-        >
+    <DialogFrame
+      layer="sessionTab"
+      size="sm"
+      title={title ?? t("fileBrowser.renamePrompt.renameTitle")}
+      onClose={onCancel}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onConfirm();
+      }}
+      initialFocusRef={inputRef}
+      actions={
+        <>
+          <Button onClick={onCancel}>{t("fileBrowser.cancel")}</Button>
+          <Button type="submit" variant="primary">
+            {t("fileBrowser.apply")}
+          </Button>
+        </>
+      }
+    >
+      <Field label={t("fileBrowser.properties.name")}>
+        {(control) => (
           <input
             {...TECHNICAL_INPUT_PROPS}
+            {...control}
             ref={inputRef}
             value={initialValue}
             onChange={(e) => onChange(e.target.value)}
-            className="mb-4 w-full border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-sm text-slate-100 focus:outline-none"
+            className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
           />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-            >
-              {t("fileBrowser.cancel")}
-            </button>
-            <button
-              type="submit"
-              className="font-heading bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-indigo-500"
-            >
-              {t("fileBrowser.apply")}
-            </button>
-          </div>
-        </form>
-      </div>
-    </ModalBackdrop>
+        )}
+      </Field>
+    </DialogFrame>
   );
 }
 
@@ -2192,52 +2161,38 @@ function ElevationFailureDialog({
   };
 
   return (
-    <ModalBackdrop layer="sessionTab" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div
-        // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- ein natives <dialog> bleibt ohne showModal()/`open` unsichtbar und bringt eigene Browser-Stile und Top-Layer-Stapelung mit; das Overlay darüber liefert das modale Layout bereits (Issue #112).
-        role="dialog"
-        className="w-full max-w-lg border border-amber-700/50 bg-slate-900 p-5 shadow-xl"
-      >
-        <h2 className="font-heading mb-2 text-sm font-semibold text-amber-300">
-          {t("fileElevation.failureTitle")}
-        </h2>
-        <p className="mb-3 text-sm text-slate-300">{t(`fileElevation.failure.${failure.kind}`, { path: failure.detail ?? "" })}</p>
+    <DialogFrame
+      layer="sessionTab"
+      title={t("fileElevation.failureTitle")}
+      onClose={onClose}
+      size="md"
+      actions={<Button onClick={onClose}>{t("fileElevation.close")}</Button>}
+    >
+      <div className="space-y-3">
+        <p>{t(`fileElevation.failure.${failure.kind}`, { path: failure.detail ?? "" })}</p>
         {failure.sudoersLine && (
           <>
-            <p className="mb-2 text-sm text-slate-300">{t("fileElevation.sudoersIntro")}</p>
-            <div className="mb-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 select-text break-all border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-xs text-slate-100">
+            <p>{t("fileElevation.sudoersIntro")}</p>
+            <div className="flex items-center gap-2">
+              <code className="min-w-0 flex-1 select-text break-all rounded border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-xs text-slate-100">
                 {failure.sudoersLine}
               </code>
-              <button
-                type="button"
-                onClick={copy}
-                className="shrink-0 border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-              >
+              <Button size="sm" onClick={copy} className="shrink-0">
                 {copied ? t("fileElevation.copied") : t("fileElevation.copy")}
-              </button>
+              </Button>
             </div>
-            <p className="mb-2 text-xs text-slate-400">{t("fileElevation.sudoersHowTo")}</p>
-            <p className="mb-3 border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
+            <p className="text-xs text-slate-400">{t("fileElevation.sudoersHowTo")}</p>
+            <p className="border border-red-700/50 bg-red-950/40 px-2 py-1.5 text-xs text-red-300">
               {t("fileElevation.sudoersWarning", { user: result.targetUser })}
             </p>
           </>
         )}
         {failure.detail && failure.kind !== "sftpServerUnsafe" && (
-          <p className="mb-3 font-mono text-xs break-all text-slate-500">
+          <p className="font-mono text-xs break-all text-slate-400">
             {t("fileElevation.detail", { detail: failure.detail })}
           </p>
         )}
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="font-heading border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-          >
-            {t("fileElevation.close")}
-          </button>
-        </div>
       </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }

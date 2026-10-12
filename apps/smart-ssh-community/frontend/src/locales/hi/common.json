@@ -685,7 +685,8 @@
       "startFailed": "sftp-server sudo से शुरू नहीं हो सका (संभावित कारण: sudoers में “requiretty”)।"
     },
     "channelLost": "उन्नत अधिकार समाप्त हुए — उन्नत चैनल अब सक्रिय नहीं है।",
-    "targetUserLabel": "उन्नत अधिकारों के लिए लक्ष्य उपयोगकर्ता (डिफ़ॉल्ट: root)"
+    "targetUserLabel": "उन्नत अधिकारों के लिए लक्ष्य उपयोगकर्ता (डिफ़ॉल्ट: root)",
+    "group": "उन्नत अधिकार"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config आयात करें",
@@ -907,6 +908,7 @@
     "toStartDirectory": "प्रारंभ डायरेक्टरी पर जाएँ",
     "parentDirectory": "मूल डायरेक्टरी",
     "newFolderButton": "+ फ़ोल्डर",
+    "fileActionsGroup": "फ़ाइल क्रियाएँ",
     "upload": "अपलोड करें",
     "uploadDialogTitle": "फ़ाइल(ें) अपलोड करें",
     "uploadFolder": "फ़ोल्डर अपलोड करें",
@@ -1012,7 +1014,10 @@
       "execute": "चलाना",
       "numeric": "संख्यात्मक",
       "recursive": "पुनरावर्ती",
-      "recursiveWarning": "— इस फ़ोल्डर की सभी फ़ाइलों और उप-फ़ोल्डरों की अनुमतियाँ बदल देता है। शक्तिशाली कार्रवाई, पूर्ववत नहीं की जा सकती।"
+      "recursiveWarning": "— इस फ़ोल्डर की सभी फ़ाइलों और उप-फ़ोल्डरों की अनुमतियाँ बदल देता है। शक्तिशाली कार्रवाई, पूर्ववत नहीं की जा सकती।",
+      "owner": "स्वामी",
+      "group": "समूह",
+      "other": "अन्य"
     },
     "renamePrompt": {
       "renameTitle": "नाम बदलें",

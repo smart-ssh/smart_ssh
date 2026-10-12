@@ -685,7 +685,8 @@
       "startFailed": "sftp-serveriä ei voitu käynnistää sudolla (mahdollinen syy: “requiretty” sudoersissa)."
     },
     "channelLost": "Korotetut oikeudet päättyivät – korotettu kanava ei ole enää aktiivinen.",
-    "targetUserLabel": "Korotettujen oikeuksien kohdekäyttäjä (oletus: root)"
+    "targetUserLabel": "Korotettujen oikeuksien kohdekäyttäjä (oletus: root)",
+    "group": "Korotetut oikeudet"
   },
   "sshConfigImport": {
     "dialogTitle": "Tuo ssh_config",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Siirry aloitushakemistoon",
     "parentDirectory": "Ylempi hakemisto",
     "newFolderButton": "+ Kansio",
+    "fileActionsGroup": "Tiedostotoiminnot",
     "upload": "Lähetä",
     "uploadDialogTitle": "Lähetä tiedostoja",
     "uploadFolder": "Lähetä kansio",
@@ -1012,7 +1014,10 @@
       "execute": "Suoritus",
       "numeric": "Numeerinen",
       "recursive": "Rekursiivinen",
-      "recursiveWarning": "– muuttaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden oikeuksia. Voimakas toiminto, ei peruttavissa."
+      "recursiveWarning": "– muuttaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden oikeuksia. Voimakas toiminto, ei peruttavissa.",
+      "owner": "Omistaja",
+      "group": "Ryhmä",
+      "other": "Muut"
     },
     "renamePrompt": {
       "renameTitle": "Nimeä uudelleen",

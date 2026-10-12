@@ -685,7 +685,8 @@
       "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsak: “requiretty” i sudoers)."
     },
     "channelLost": "Utvidede rettigheter er avsluttet – den utvidede kanalen er ikke lenger aktiv.",
-    "targetUserLabel": "Målbruker for utvidede rettigheter (standard: root)"
+    "targetUserLabel": "Målbruker for utvidede rettigheter (standard: root)",
+    "group": "Utvidede rettigheter"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Gå til startkatalogen",
     "parentDirectory": "Overordnet katalog",
     "newFolderButton": "+ Mappe",
+    "fileActionsGroup": "Filhandlinger",
     "upload": "Last opp",
     "uploadDialogTitle": "Last opp fil(er)",
     "uploadFolder": "Last opp mappe",
@@ -1012,7 +1014,10 @@
       "execute": "Kjør",
       "numeric": "Numerisk",
       "recursive": "Rekursivt",
-      "recursiveWarning": "– endrer tillatelsene til ALLE filer og undermapper i denne mappen. Kraftig handling, kan ikke angres."
+      "recursiveWarning": "– endrer tillatelsene til ALLE filer og undermapper i denne mappen. Kraftig handling, kan ikke angres.",
+      "owner": "Eier",
+      "group": "Gruppe",
+      "other": "Andre"
     },
     "renamePrompt": {
       "renameTitle": "Gi nytt navn",

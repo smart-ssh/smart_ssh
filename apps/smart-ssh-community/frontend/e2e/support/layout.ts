@@ -146,7 +146,7 @@ export async function expectOnlyContentScrolls(
  * controls are collected in DOM order; pressing Tab from the first one must
  * visit exactly these controls in this order, each with a visible focus
  * indicator (outline or ring), and that order must follow the visual order
- * (rows top to bottom, within a row left to right). Controls in a nested
+ * (rows top to bottom, within a row left to right). A named radio group counts as one stop. Controls in a nested
  * `[role=dialog]` of the scope are ignored.
  */
 export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locator): Promise<number> {
@@ -155,12 +155,16 @@ export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locato
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const all = Array.from(root.querySelectorAll<HTMLElement>(selector)).filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+      return el.tabIndex >= 0 && r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+    }).filter((el) => {
+      // A radio group is one Tab stop (the checked radio); the arrow keys move within it.
+      if (!(el instanceof HTMLInputElement) || el.type !== "radio" || el.checked || !el.name) return true;
+      return !root.querySelector(`input[type=radio][name="${CSS.escape(el.name)}"]:checked`);
     });
     all.forEach((el, i) => el.setAttribute("data-e2e-stop", String(i)));
     return all.map((el, i) => {
       const r = el.getBoundingClientRect();
-      return { index: i, top: r.top, left: r.left, bottom: r.bottom, name: el.outerHTML.slice(0, 80) };
+      return { index: i, top: r.top, left: r.left, bottom: r.bottom, name: `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"` };
     });
   });
   expect(stops.length, "no focusable controls in scope").toBeGreaterThan(0);
@@ -190,7 +194,7 @@ export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locato
       const cs = getComputedStyle(el);
       const outline = cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0;
       const ring = cs.boxShadow !== "none" && cs.boxShadow !== "";
-      return { stop: el.getAttribute("data-e2e-stop"), visible: outline || ring, html: el.outerHTML.slice(0, 80) };
+      return { stop: el.getAttribute("data-e2e-stop"), visible: outline || ring, html: el.outerHTML.slice(0, 80) + ` outline=${cs.outlineStyle}/${cs.outlineWidth} shadow=${cs.boxShadow} focusVisible=${el.matches(":focus-visible")} focus=${el.matches(":focus")}` };
     });
     expect(focus?.stop, `Tab press ${i} should reach stop ${i}`).toBe(String(i));
     expect(focus?.visible, `no visible focus indicator on ${focus?.html}`).toBe(true);
@@ -225,4 +229,36 @@ export async function expectNoClippedText(scope: Locator): Promise<void> {
     return out;
   });
   expect(problems).toEqual([]);
+}
+
+/**
+ * Walks the Tab order from the current focus and returns, for each stop, the
+ * accessible name (aria-label, label text or text content) and whether the
+ * focused element shows a focus indicator (outline or ring).
+ */
+export async function walkTabOrder(
+  page: Page,
+  stops: number,
+): Promise<{ name: string; indicator: boolean }[]> {
+  const result: { name: string; indicator: boolean }[] = [];
+  for (let i = 0; i < stops; i++) {
+    await page.keyboard.press(tabKey(page));
+    result.push(
+      await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el) return { name: "none", indicator: false };
+        const style = getComputedStyle(el);
+        const labelled = el.getAttribute("aria-labelledby");
+        const name =
+          el.getAttribute("aria-label") ??
+          (labelled ? document.getElementById(labelled)?.textContent : null) ??
+          (el as HTMLInputElement).labels?.[0]?.textContent ??
+          el.textContent ??
+          "";
+        const outline = style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0;
+        return { name: name.trim(), indicator: outline || style.boxShadow !== "none" };
+      }),
+    );
+  }
+  return result;
 }

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { characterCount } from "../passwordLength";
 import type { StartupPromptAnswer, StartupPromptKind, StartupPromptRequest } from "../types";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+import type { ButtonVariant } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0101, A13: Mindestlänge des Master-Passworts.
@@ -29,7 +30,11 @@ interface StartupPromptDialogProps {
   onDismiss: () => void;
 }
 
-/** Welche Knöpfe eine Frageart zeigen darf.
+/** Welche Knöpfe eine Frageart zeigen darf, **in Anzeigereihenfolge**
+ * (docs/ui-guidelines.md, Issue #408): Quit/Cancel zuerst, die
+ * Hauptaktion zuletzt.
+ *
+ * Welche Knöpfe eine Frageart zeigen darf.
  *
  * **Die Liste ist eine Positivliste** (A3): Das Frontend bildet die Knöpfe
  * ab, die das Backend je Frageart vorsieht, und erfindet keine. Ein Knopf,
@@ -38,14 +43,14 @@ interface StartupPromptDialogProps {
  * (`window_prompt::choice_for`). Doppelt, weil die Antwort über IPC geht.
  */
 const ANSWERS_BY_KIND: Record<StartupPromptKind, StartupPromptAnswer[]> = {
-  retryOrQuit: ["retry", "quit"],
-  retrySkipOrQuit: ["retry", "continueWithoutMigration", "quit"],
-  retrySetUpOrQuit: ["retry", "setUpMasterPassword", "quit"],
-  startOverOrQuit: ["startOver", "quit"],
-  newKeyOrQuit: ["generateNewKey", "quit"],
-  confirmStartOver: ["confirm", "cancel"],
-  confirmNewKey: ["confirm", "cancel"],
-  newMasterPassword: ["confirm", "cancel"],
+  retryOrQuit: ["quit", "retry"],
+  retrySkipOrQuit: ["quit", "continueWithoutMigration", "retry"],
+  retrySetUpOrQuit: ["quit", "setUpMasterPassword", "retry"],
+  startOverOrQuit: ["quit", "startOver"],
+  newKeyOrQuit: ["quit", "generateNewKey"],
+  confirmStartOver: ["cancel", "confirm"],
+  confirmNewKey: ["cancel", "confirm"],
+  newMasterPassword: ["cancel", "confirm"],
   notice: [],
 };
 
@@ -109,97 +114,127 @@ export function StartupPromptDialog({
     onAnswer(choice);
   };
 
-  return (
-    // Issue #163 / Spec 0014, Abschnitt 5: oben ein Rand in Titelleistenhöhe
-    // (`pt-9` zusätzlich zum `p-4`, also `pt-13`) — dort liegt die
-    // Drag-Leiste über dem Backdrop, und kein Knopf und keine Eingabe des
-    // Dialogs darf darunter rücken.
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 pb-4 pt-13">
-      <div className="w-full max-w-md rounded-lg bg-slate-800 p-6 shadow-xl">
-        <h2 className="font-heading mb-4 text-lg font-semibold tracking-wide text-slate-100">
-          {request.title}
-        </h2>
-        {/* `whitespace-pre-line`: Die Backend-Texte gliedern Ursache,
-         * Datenpfad und nächsten Schritt in Zeilen (Spec 0059). */}
-        <p className="mb-4 whitespace-pre-line text-sm text-slate-300">{request.message}</p>
+  // Initial focus (docs/ui-guidelines.md): the first field of the password
+  // form, otherwise the safest button (Cancel/Quit, or OK for a notice).
+  // Dialogs that wait for a decision from the backend have no neutral way
+  // to close, so Escape only acts where a "cancel" answer exists (or for a
+  // notice, which waits for nothing).
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const safeButtonRef = useRef<HTMLButtonElement>(null);
+  const answers = ANSWERS_BY_KIND[request.kind];
+  const escapeChoice: "dismiss" | "cancel" | null =
+    request.kind === "notice" ? "dismiss" : answers.includes("cancel") ? "cancel" : null;
+  const onEscape = () => {
+    if (escapeChoice === "dismiss") onDismiss();
+    else if (escapeChoice === "cancel") answer("cancel");
+  };
+  const isSafeButton = (choice: StartupPromptAnswer) =>
+    choice === "quit" || choice === "cancel";
+  const variantFor = (choice: StartupPromptAnswer): ButtonVariant =>
+    DESTRUCTIVE.has(choice) || (choice === "confirm" && confirmIsDestructive)
+      ? "danger"
+      : isSafeButton(choice)
+        ? "secondary"
+        : "primary";
 
-        {wantsPassword && (
-          <div className="mb-4 space-y-3">
-            <label className="block text-sm text-slate-200">
-              {t("startup.newPasswordLabel")}
+  const passwordTooShort =
+    password.length > 0 && characterCount(password) < MINIMUM_PASSWORD_LENGTH;
+  const passwordsDiffer = repeated.length > 0 && password !== repeated;
+
+  return (
+    // Issue #163 / Spec 0014, Abschnitt 5: Die Drag-Leiste liegt in
+    // Titelleistenhöhe über dem Backdrop; `reserveTitlebar` hält dort den
+    // Rand frei (`pt-13`), kein Knopf und keine Eingabe rückt darunter.
+    <DialogFrame
+      layer="app"
+      size="sm"
+      reserveTitlebar
+      title={request.title}
+      onClose={onEscape}
+      initialFocusRef={wantsPassword ? passwordRef : safeButtonRef}
+      onSubmit={
+        wantsPassword
+          ? (e) => {
+              e.preventDefault();
+              if (passwordIsUsable) answer("confirm");
+            }
+          : undefined
+      }
+      actions={
+        request.kind === "notice" ? (
+          <Button ref={safeButtonRef} variant="primary" onClick={onDismiss}>
+            {t("common.ok")}
+          </Button>
+        ) : (
+          answers.map((choice) => (
+            <Button
+              key={choice}
+              ref={isSafeButton(choice) ? safeButtonRef : undefined}
+              variant={variantFor(choice)}
+              type={choice === "confirm" && wantsPassword ? "submit" : "button"}
+              onClick={choice === "confirm" && wantsPassword ? undefined : () => answer(choice)}
+              disabled={choice === "confirm" && wantsPassword && !passwordIsUsable}
+            >
+              {t(`startup.answers.${choice}`)}
+            </Button>
+          ))
+        )
+      }
+    >
+      {/* `whitespace-pre-line`: Die Backend-Texte gliedern Ursache,
+       * Datenpfad und nächsten Schritt in Zeilen (Spec 0059). */}
+      <p className="whitespace-pre-line break-words text-slate-300">{request.message}</p>
+
+      {wantsPassword && (
+        <div className="mt-4 space-y-3">
+          <Field label={t("startup.newPasswordLabel")}>
+            {(control) => (
               <input
+                {...control}
                 {...TECHNICAL_INPUT_PROPS}
+                ref={passwordRef}
                 type="password"
-                // eslint-disable-next-line jsx-a11y/no-autofocus -- gewollter Anfangsfokus des Dialogs (Issue #112): das Passwortfeld ist die einzige Eingabe.
-                autoFocus
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                className={FIELD_CONTROL_CLASS}
               />
-            </label>
-            <label className="block text-sm text-slate-200">
-              {t("startup.repeatPasswordLabel")}
+            )}
+          </Field>
+          <Field
+            label={t("startup.repeatPasswordLabel")}
+            error={
+              passwordTooShort
+                ? t("startup.passwordTooShort", { minimum: MINIMUM_PASSWORD_LENGTH })
+                : passwordsDiffer
+                  ? t("startup.passwordsDiffer")
+                  : undefined
+            }
+          >
+            {(control) => (
               <input
+                {...control}
                 {...TECHNICAL_INPUT_PROPS}
                 type="password"
                 value={repeated}
                 onChange={(e) => setRepeated(e.target.value)}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                className={FIELD_CONTROL_CLASS}
               />
-            </label>
-            {password.length > 0 && characterCount(password) < MINIMUM_PASSWORD_LENGTH && (
-              <p className="text-sm text-amber-300">
-                {t("startup.passwordTooShort", { minimum: MINIMUM_PASSWORD_LENGTH })}
-              </p>
             )}
-            {repeated.length > 0 && password !== repeated && (
-              <p className="text-sm text-amber-300">{t("startup.passwordsDiffer")}</p>
-            )}
-            {/* A13/E10: die Warnung mit ausdrücklicher Bestätigung — ohne
-             * Passwort sind die Daten verloren, es gibt keine
-             * Wiederherstellung. */}
-            <label className="flex items-start gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={acknowledged}
-                onChange={(e) => setAcknowledged(e.target.checked)}
-                className="mt-1"
-              />
-              {t("startup.noRecoveryWarning")}
-            </label>
-          </div>
-        )}
-
-        <div className="flex flex-wrap justify-end gap-2">
-          {request.kind === "notice" ? (
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500"
-            >
-              {t("common.ok")}
-            </button>
-          ) : (
-            ANSWERS_BY_KIND[request.kind].map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                onClick={() => answer(choice)}
-                disabled={choice === "confirm" && wantsPassword && !passwordIsUsable}
-                className={`rounded px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
-                  DESTRUCTIVE.has(choice) || (choice === "confirm" && confirmIsDestructive)
-                    ? "bg-red-700 text-white hover:bg-red-600"
-                    : choice === "quit" || choice === "cancel"
-                      ? "bg-slate-700 text-white hover:bg-slate-600"
-                      : "bg-indigo-600 text-slate-950 hover:bg-indigo-500"
-                }`}
-              >
-                {t(`startup.answers.${choice}`)}
-              </button>
-            ))
-          )}
+          </Field>
+          {/* A13/E10: die Warnung mit ausdrücklicher Bestätigung — ohne
+           * Passwort sind die Daten verloren, es gibt keine
+           * Wiederherstellung. */}
+          <label className="flex items-start gap-2 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+              className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+            />
+            {t("startup.noRecoveryWarning")}
+          </label>
         </div>
-      </div>
-    </ModalBackdrop>
+      )}
+    </DialogFrame>
   );
 }

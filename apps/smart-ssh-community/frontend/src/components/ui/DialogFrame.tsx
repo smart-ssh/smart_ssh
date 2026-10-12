@@ -18,11 +18,14 @@ export interface DialogFrameProps {
   /** Element focused on open. Default: the dialog itself. */
   initialFocusRef?: RefObject<HTMLElement | null>;
   role?: "dialog" | "alertdialog";
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
+  /** Keep the top of the window free at title-bar height, for screens
+   * where a drag strip lies over the backdrop (start-up dialogs, Spec 0014 §5). */
+  reserveTitlebar?: boolean;
   children?: ReactNode;
 }
 
-const SIZES = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl" } as const;
+const SIZES = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" } as const;
 
 /** Shared modal dialog: backdrop (`ModalBackdrop`), focus trap and Escape
  * (`useDialogFocusTrap`), title, scrolling body, action row. Only the body
@@ -36,6 +39,7 @@ export function DialogFrame({
   initialFocusRef,
   role = "dialog",
   size = "md",
+  reserveTitlebar = false,
   children,
 }: DialogFrameProps) {
   const titleId = useId();
@@ -61,7 +65,9 @@ export function DialogFrame({
   return (
     <ModalBackdrop
       layer={layer}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 ${
+        reserveTitlebar ? "px-4 pb-4 pt-13" : "p-4"
+      }`}
     >
       {/* `role` is a dynamic value (dialog | alertdialog), which the linter cannot see; the key handler only wraps Tab (focus trap). */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}

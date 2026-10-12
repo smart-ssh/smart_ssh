@@ -685,7 +685,8 @@
       "startFailed": "sftp-server kunde inte startas via sudo (möjlig orsak: “requiretty” i sudoers)."
     },
     "channelLost": "Förhöjda rättigheter avslutade — den förhöjda kanalen är inte längre aktiv.",
-    "targetUserLabel": "Målanvändare för förhöjda rättigheter (standard: root)"
+    "targetUserLabel": "Målanvändare för förhöjda rättigheter (standard: root)",
+    "group": "Förhöjda rättigheter"
   },
   "sshConfigImport": {
     "dialogTitle": "Importera ssh_config",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Gå till startkatalogen",
     "parentDirectory": "Överordnad katalog",
     "newFolderButton": "+ Mapp",
+    "fileActionsGroup": "Filåtgärder",
     "upload": "Ladda upp",
     "uploadDialogTitle": "Ladda upp fil(er)",
     "uploadFolder": "Ladda upp mapp",
@@ -1012,7 +1014,10 @@
       "execute": "Kör",
       "numeric": "Numeriskt",
       "recursive": "Rekursivt",
-      "recursiveWarning": "— ändrar behörigheterna för ALLA filer och undermappar i den här mappen. Kraftfull åtgärd som inte kan ångras."
+      "recursiveWarning": "— ändrar behörigheterna för ALLA filer och undermappar i den här mappen. Kraftfull åtgärd som inte kan ångras.",
+      "owner": "Ägare",
+      "group": "Grupp",
+      "other": "Övriga"
     },
     "renamePrompt": {
       "renameTitle": "Byt namn",

@@ -49,21 +49,21 @@ export function WebActivityCard({ activity }: { activity: WebActivityDto }) {
           <ul className="mt-0.5 list-disc pl-4">
             {activity.cited.map((source) => (
               <li key={source.url} className="break-all">
-                {source.title} <span className="text-slate-500">— {source.url}</span>
+                {source.title} <span className="text-slate-400">— {source.url}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
       {errorText === null && activity.cited.length === 0 && (
-        <p className="mt-1 text-slate-500">
+        <p className="mt-1 text-slate-400">
           {activity.kind === "search"
             ? t("chat.webNoCitedSearch", { count: activity.results.length })
             : t("chat.webNoCitedFetch")}
         </p>
       )}
       {activity.contentTruncated && (
-        <p className="mt-1 text-slate-500">{t("chat.webContentTruncated")}</p>
+        <p className="mt-1 text-slate-400">{t("chat.webContentTruncated")}</p>
       )}
     </div>
   );

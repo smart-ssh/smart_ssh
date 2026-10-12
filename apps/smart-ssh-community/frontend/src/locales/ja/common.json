@@ -680,7 +680,8 @@
       "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。"
     },
     "channelLost": "昇格した権限が終了しました — 昇格したチャネルはもう有効ではありません。",
-    "targetUserLabel": "昇格した権限の対象ユーザー（既定: root）"
+    "targetUserLabel": "昇格した権限の対象ユーザー（既定: root）",
+    "group": "昇格された権限"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",
@@ -902,6 +903,7 @@
     "toStartDirectory": "開始ディレクトリへ移動",
     "parentDirectory": "親ディレクトリ",
     "newFolderButton": "+ フォルダー",
+    "fileActionsGroup": "ファイル操作",
     "upload": "アップロード",
     "uploadDialogTitle": "ファイルをアップロード",
     "uploadFolder": "フォルダーをアップロード",
@@ -1005,7 +1007,10 @@
       "execute": "実行",
       "numeric": "数値",
       "recursive": "再帰的",
-      "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの権限を変更します。影響の大きい操作で、元に戻せません。"
+      "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの権限を変更します。影響の大きい操作で、元に戻せません。",
+      "owner": "所有者",
+      "group": "グループ",
+      "other": "その他"
     },
     "renamePrompt": {
       "renameTitle": "名前を変更",

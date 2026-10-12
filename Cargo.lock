@@ -184,6 +184,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "speech",
  "ssh-manager-core",
  "ssh-transport",
  "tauri",
@@ -5781,6 +5782,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "speech"
+version = "0.6.0"
+dependencies = [
+ "futures",
+ "reqwest",
+ "serde",
+ "sha2 0.11.0",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6080,6 +6094,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "unicode-normalization",
  "uuid",
  "zeroize",
 ]

@@ -512,16 +512,21 @@ pub fn keyword_alternation() -> &'static str {
             .collect();
         all.sort_unstable();
         all.dedup();
-        // Zusätzlich die NFD-Form jedes Eintrags mit Umlaut (`u` + U+0308),
-        // damit zerlegte Eingaben (macOS, Zwischenablage) ebenfalls greifen.
-        // Der Eingabetext wird nicht normalisiert, Offsets bleiben gleich.
-        let mut variants: Vec<String> = all.iter().map(|k| k.to_string()).collect();
+        // Zusätzlich je Eintrag die NFD-Form (Grundbuchstabe + kombinierendes
+        // Zeichen, macOS, Zwischenablage) und, bei ASCII-Apostroph, die Form mit
+        // typografischem Apostroph (U+2019), jeweils auch kombiniert. Der
+        // Eingabetext wird nicht normalisiert, Offsets bleiben gleich.
+        let mut variants: Vec<String> = Vec::new();
         for k in &all {
-            let d = decompose_umlauts(k);
-            if d != *k {
-                variants.push(d);
+            let curly = k.replace('\'', "\u{2019}");
+            let nfd = decompose_accents(k);
+            let curly_nfd = decompose_accents(&curly);
+            for v in [k.to_string(), curly, nfd, curly_nfd] {
+                variants.push(v);
             }
         }
+        variants.sort_unstable();
+        variants.dedup();
         variants
             .iter()
             .map(|k| regex::escape(k).replace(' ', "[ _-]"))
@@ -531,17 +536,189 @@ pub fn keyword_alternation() -> &'static str {
     &ALT
 }
 
-/// Ersetzt vorkomponierte Umlaute (`ä`, `ö`, `ü`) durch Grundbuchstabe +
-/// kombinierendes Trema (U+0308), also die NFD-Form.
-fn decompose_umlauts(k: &str) -> String {
-    let mut out = String::with_capacity(k.len() + 2);
+/// Zerlegt vorkomponierte Buchstaben mit Akzent in Grundbuchstabe +
+/// kombinierendes Zeichen, also die NFD-Form. Tabelle statt Normalisierungs-
+/// Crate: sie deckt die Akzentbuchstaben der Schlüsselwortlisten ab (Buchstaben
+/// ohne Zerlegung wie `ø`, `ł`, `ı` bleiben unverändert).
+fn decompose_accents(k: &str) -> String {
+    let mut out = String::with_capacity(k.len() + 4);
     for c in k.chars() {
-        match c {
-            'ä' => out.push_str("a\u{308}"),
-            'ö' => out.push_str("o\u{308}"),
-            'ü' => out.push_str("u\u{308}"),
-            _ => out.push(c),
-        }
+        decompose_char(c, &mut out);
     }
     out
+}
+
+/// Volle kanonische Zerlegung eines Zeichens (rekursiv, damit Buchstaben mit
+/// mehreren Zeichen wie `ậ` = `a` + U+0323 + U+0302 stimmen): Akzenttabelle,
+/// Kana mit (Halb-)Dakuten und Hangul-Silben (algorithmisch zu Jamo).
+fn decompose_char(c: char, out: &mut String) {
+    let code = c as u32;
+    if (0xAC00..=0xD7A3).contains(&code) {
+        let s = code - 0xAC00;
+        let (l, v, t) = (s / 588, (s % 588) / 28, s % 28);
+        out.extend(char::from_u32(0x1100 + l));
+        out.extend(char::from_u32(0x1161 + v));
+        if t > 0 {
+            out.extend(char::from_u32(0x11A7 + t));
+        }
+        return;
+    }
+    match kana_base(c).or_else(|| accent_base(c)) {
+        Some((base, mark)) => {
+            decompose_char(base, out);
+            out.push(mark);
+        }
+        None => out.push(c),
+    }
+}
+
+/// Hiragana/Katakana mit Dakuten (U+3099) oder Handakuten (U+309A).
+fn kana_base(c: char) -> Option<(char, char)> {
+    const VOICED: char = '\u{3099}';
+    const SEMI: char = '\u{309A}';
+    let code = c as u32;
+    match code {
+        0x309E => return Some(('\u{309D}', VOICED)),
+        0x30FE => return Some(('\u{30FD}', VOICED)),
+        0x30F7..=0x30FA => return Some((char::from_u32(code - 0x30F7 + 0x30EF)?, VOICED)),
+        _ => {}
+    }
+    // Katakana liegt 0x60 hinter Hiragana.
+    let (hira, shift) = match code {
+        0x30A1..=0x30F6 => (code - 0x60, 0x60),
+        _ => (code, 0),
+    };
+    let back = |x: u32| char::from_u32(x + shift);
+    // Reihen mit Dakuten direkt hinter dem Grundzeichen (か-ち, て, と, は-ほ).
+    let voiced_after = |h: u32| matches!(h, 0x304B..=0x3062 | 0x3064..=0x3069 | 0x306F..=0x307D);
+    match hira {
+        0x3094 => Some((back(0x3046)?, VOICED)), // ゔ
+        h if voiced_after(h) => {
+            // Grundzeichen stehen an ungeraden/geraden Stellen je nach Reihe.
+            let (base, mark) = if (0x304B..=0x3062).contains(&h) {
+                // か(304B)=か, が(304C): Grundzeichen sind ungerade.
+                if h % 2 == 0 {
+                    (h - 1, VOICED)
+                } else {
+                    return None;
+                }
+            } else if (0x3064..=0x3069).contains(&h) {
+                // つ(3064) づ(3065) て(3066) で(3067) と(3068) ど(3069)
+                if h % 2 == 1 {
+                    (h - 1, VOICED)
+                } else {
+                    return None;
+                }
+            } else {
+                // は(306F) ば(3070) ぱ(3071) ひ(3072) …: Dreiergruppen.
+                match (h - 0x306F) % 3 {
+                    1 => (h - 1, VOICED),
+                    2 => (h - 2, SEMI),
+                    _ => return None,
+                }
+            };
+            Some((back(base)?, mark))
+        }
+        _ => None,
+    }
+}
+
+fn accent_base(c: char) -> Option<(char, char)> {
+    const GRAVE: char = '\u{300}';
+    const ACUTE: char = '\u{301}';
+    const CIRC: char = '\u{302}';
+    const TILDE: char = '\u{303}';
+    const BREVE: char = '\u{306}';
+    const DOT: char = '\u{307}';
+    const DIAER: char = '\u{308}';
+    const RING: char = '\u{30A}';
+    const DACUTE: char = '\u{30B}';
+    const CARON: char = '\u{30C}';
+    const CEDILLA: char = '\u{327}';
+    const OGONEK: char = '\u{328}';
+    const COMMA_BELOW: char = '\u{326}';
+    Some(match c {
+        'à' => ('a', GRAVE),
+        'á' => ('a', ACUTE),
+        'â' => ('a', CIRC),
+        'ã' => ('a', TILDE),
+        'ä' => ('a', DIAER),
+        'å' => ('a', RING),
+        'ă' => ('a', BREVE),
+        'ą' => ('a', OGONEK),
+        'ç' => ('c', CEDILLA),
+        'ć' => ('c', ACUTE),
+        'č' => ('c', CARON),
+        'ď' => ('d', CARON),
+        'è' => ('e', GRAVE),
+        'é' => ('e', ACUTE),
+        'ê' => ('e', CIRC),
+        'ë' => ('e', DIAER),
+        'ę' => ('e', OGONEK),
+        'ě' => ('e', CARON),
+        'ì' => ('i', GRAVE),
+        'í' => ('i', ACUTE),
+        'î' => ('i', CIRC),
+        'ï' => ('i', DIAER),
+        'İ' => ('I', DOT),
+        'ń' => ('n', ACUTE),
+        'ñ' => ('n', TILDE),
+        'ň' => ('n', CARON),
+        'ò' => ('o', GRAVE),
+        'ó' => ('o', ACUTE),
+        'ô' => ('o', CIRC),
+        'õ' => ('o', TILDE),
+        'ö' => ('o', DIAER),
+        'ő' => ('o', DACUTE),
+        'ř' => ('r', CARON),
+        'ś' => ('s', ACUTE),
+        'ş' => ('s', CEDILLA),
+        'Ş' => ('S', CEDILLA),
+        'š' => ('s', CARON),
+        'ș' => ('s', COMMA_BELOW),
+        'ť' => ('t', CARON),
+        'ț' => ('t', COMMA_BELOW),
+        'ù' => ('u', GRAVE),
+        'ú' => ('u', ACUTE),
+        'û' => ('u', CIRC),
+        'ü' => ('u', DIAER),
+        'ů' => ('u', RING),
+        'ű' => ('u', DACUTE),
+        'ý' => ('y', ACUTE),
+        'ź' => ('z', ACUTE),
+        'ż' => ('z', DOT),
+        'ž' => ('z', CARON),
+        'ụ' => ('u', '\u{323}'),
+        'ạ' => ('a', '\u{323}'),
+        'ậ' => ('ạ', CIRC),
+        'ẩ' => ('â', '\u{309}'),
+        'ư' => ('u', '\u{31B}'),
+        'ơ' => ('o', '\u{31B}'),
+        'ự' => ('ư', '\u{323}'),
+        'й' => ('и', BREVE),
+        'ё' => ('е', DIAER),
+        'ά' => ('α', ACUTE),
+        'ή' => ('η', ACUTE),
+        'ί' => ('ι', ACUTE),
+        'ό' => ('ο', ACUTE),
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod nfd_tests {
+    use super::decompose_char;
+    use unicode_normalization::UnicodeNormalization;
+
+    /// Issue #366: Kana und Hangul werden wie die Referenz-NFD zerlegt.
+    #[test]
+    fn kana_and_hangul_decompose_like_reference_nfd() {
+        for code in (0x3041..=0x30FF).chain(0xAC00..=0xD7A3) {
+            let c = char::from_u32(code).unwrap();
+            let mut ours = String::new();
+            decompose_char(c, &mut ours);
+            let reference: String = c.to_string().nfd().collect();
+            assert_eq!(ours, reference, "U+{code:04X}");
+        }
+    }
 }

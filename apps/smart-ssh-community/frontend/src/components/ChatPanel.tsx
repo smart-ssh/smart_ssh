@@ -64,6 +64,7 @@ import type {
   WebActivityDto,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
+import { Button } from "./ui";
 import { WebActivityCard } from "./WebActivityCard";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
@@ -834,6 +835,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     await runSend(async () => {
       try {
         await sendChatMessage(sessionId, text);
+        // Spec 0015, Abschnitt 5: das Backend hat den Prompt gespeichert (samt
+        // Dedup und 200er-Grenze) — Liste neu laden, damit er sofort per
+        // Pfeiltaste erreichbar ist. Beim lokalen Pseudo-Server bleibt sie leer.
+        void listPromptHistory(serverId)
+          .then(setPromptHistory)
+          .catch(() => {});
       } catch (err) {
         // Issue #315: „Neuer Chat" tauscht den Chat gerade aus; das Backend hat
         // die Nachricht abgelehnt. Sie verschwindet aus dem Verlauf und bleibt
@@ -997,15 +1004,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               {newChatError}
             </span>
           )}
-          <button
-            type="button"
+          <Button
+            size="sm"
             onClick={handleNewChat}
             disabled={newChatDisabled}
             title={newChatDisabled ? t("chat.newChatDisabledHint") : undefined}
-            className="font-heading border border-slate-600 px-2 py-1 text-xs font-semibold tracking-wide text-slate-200 hover:bg-slate-700/50 disabled:opacity-50"
           >
             {t("chat.newChat")}
-          </button>
+          </Button>
         </div>
       )}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -1033,13 +1039,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             <span className="flex-1">
               🤖 {t("chat.autoContinuing")}
             </span>
-            <button
-              type="button"
-              onClick={handleStopAutoContinuation}
-              className="font-heading border border-indigo-500/60 px-2 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-indigo-600/20"
-            >
+            <Button size="sm" onClick={handleStopAutoContinuation}>
               {t("chat.stopAutoContinuation")}
-            </button>
+            </Button>
           </div>
         ) : (
           sending && (
@@ -1047,13 +1049,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
               <span className="flex-1">{t("chat.generating")}</span>
               {/* Spec 0066, §1: bricht den laufenden KI-Request sofort ab. */}
-              <button
-                type="button"
-                onClick={handleStopAutoContinuation}
-                className="font-heading border border-indigo-500/60 px-2 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-indigo-600/20"
-              >
+              <Button size="sm" onClick={handleStopAutoContinuation}>
                 {t("chat.stop")}
-              </button>
+              </Button>
             </div>
           )
         )}
@@ -1085,15 +1083,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           />
-          <button
-            type="submit"
-            disabled={draft.trim().length === 0}
-            className="font-heading bg-indigo-600 px-4 py-1.5 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" disabled={draft.trim().length === 0}>
             {t("chat.send")}
-          </button>
+          </Button>
         </form>
       )}
     </div>
@@ -1137,7 +1131,7 @@ function RiskBadges({
       {hasServerBadge && (
         <span
           title={assessment.serverRiskReason ?? undefined}
-          className={`font-heading px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.serverRisk as "yellow" | "red"]}`}
+          className={`font-heading px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.serverRisk as "yellow" | "red"]}`}
         >
           {t("actionCard.riskServerLabel")}
         </span>
@@ -1145,7 +1139,7 @@ function RiskBadges({
       {hasDataBadge && (
         <span
           title={assessment.dataRiskReason ?? undefined}
-          className={`font-heading px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.dataRisk as "yellow" | "red"]}`}
+          className={`font-heading px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.dataRisk as "yellow" | "red"]}`}
         >
           {t("actionCard.riskDataLabel")}
         </span>
@@ -1153,7 +1147,7 @@ function RiskBadges({
       {unavailable && (
         <output
           title={t("actionCard.riskSecondOpinionUnavailableHint")}
-          className="font-sans text-[10px] text-amber-300"
+          className="font-sans text-xs text-amber-300"
         >
           {t("actionCard.riskSecondOpinionUnavailable")}
         </output>
@@ -1161,7 +1155,7 @@ function RiskBadges({
       {pending && (
         <span
           title={t("actionCard.riskSecondOpinionPending")}
-          className="inline-flex items-center gap-1 text-[10px] text-slate-500"
+          className="inline-flex items-center gap-1 text-xs text-slate-400"
         >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-500" />
         </span>
@@ -1180,7 +1174,7 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
   const { t } = useTranslation();
   if (!assessment) return null;
   if (assessment.serverRisk === "none" && assessment.dataRisk === "none") return null;
-  return <p className="mb-1 text-right text-[10px] text-slate-500">{t("actionCard.riskHint")}</p>;
+  return <p className="mb-1 text-right text-xs text-slate-400">{t("actionCard.riskHint")}</p>;
 }
 
 // Exportiert für Komponententests (Spec 0029, Abschnitt 4: strukturelle
@@ -1315,7 +1309,7 @@ export function ChatItemView({
         )}
         {item.stderr && <pre className="mt-1 whitespace-pre-wrap text-red-400">{item.stderr}</pre>}
         {!item.cancelled && (
-          <p className="mt-1 text-slate-500">exit code: {item.exitCode ?? "—"}</p>
+          <p className="mt-1 text-slate-400">exit code: {item.exitCode ?? "—"}</p>
         )}
       </div>
     );
@@ -1395,9 +1389,9 @@ export function ChatItemView({
       <RiskHintFootnote assessment={item.riskAssessment} />
       {command && (
         <code
-          className={`block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs ${
+          className={`block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs break-words whitespace-pre-wrap ${
             rejectedByUser || blockedByFilter
-              ? "text-slate-500 line-through decoration-red-500/60"
+              ? "text-slate-400 line-through decoration-red-500/60"
               : "text-slate-200"
           }`}
         >
@@ -1540,14 +1534,9 @@ function RunningCommandIndicator({
           ? t("actionCard.waitingForInputHint")
           : t("actionCard.runningSince", { seconds: elapsedSeconds })}
       </span>
-      <button
-        type="button"
-        onClick={handleCancel}
-        disabled={cancelling}
-        className="shrink-0 border border-slate-600 px-2 py-0.5 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-      >
+      <Button size="sm" className="shrink-0" onClick={handleCancel} disabled={cancelling}>
         {cancelling ? t("actionCard.cancellingCommand") : t("actionCard.cancelCommand")}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1606,20 +1595,23 @@ function ConfirmActionForm({
        * daneben, der Regel-Schnellvorschlag als eigene, deutlich
        * abgesetzte Aktionsgruppe rechts. */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
+         * look stays hand-written; the focus ring is the shared one. */}
         <button
           type="button"
           onClick={handleApprove}
-          className="font-heading bg-emerald-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-emerald-950 hover:bg-emerald-500"
+          className="font-heading bg-emerald-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-emerald-950 hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"
         >
           {t("confirmDialog.execute")}
         </button>
-        <button
-          type="button"
+        <Button
+          variant="danger"
+          size="sm"
+          className="px-4 py-1.5"
           onClick={() => onRespond(actionId, { decision: "deny" })}
-          className="font-heading border border-red-600/50 px-4 py-1.5 text-xs font-semibold tracking-wide text-red-400 hover:bg-red-600/12"
         >
           {t("confirmDialog.deny")}
-        </button>
+        </Button>
         {/* Spec 0011: nur für Kommando-Vorschläge sinnvoll, nicht für
          * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
         {initialCommand !== undefined && (
@@ -1682,6 +1674,21 @@ function QuickRuleButton({
     setSuggestions([]);
   }, [command]);
 
+  const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Escape closes the popup and returns focus to its trigger (docs/ui-guidelines.md).
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+      dropdownTriggerRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   const toggleOpen = () => {
     const next = !open;
     setOpen(next);
@@ -1717,21 +1724,20 @@ function QuickRuleButton({
 
   return (
     <div className="relative ml-auto inline-flex border border-indigo-600/50">
-      <button
-        type="button"
-        onClick={toggleOpen}
-        className="font-heading px-3 py-1.5 text-xs font-semibold tracking-wide text-indigo-400 hover:bg-indigo-600/14"
-      >
+      <Button variant="ghost" size="sm" className="rounded-none px-3" onClick={toggleOpen}>
         {t("confirmDialog.quickRule")}
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+        ref={dropdownTriggerRef}
+        variant="ghost"
+        size="sm"
         onClick={toggleOpen}
         aria-label={t("confirmDialog.quickRuleDropdownAria")}
-        className="border-l border-indigo-600/40 px-2 font-mono text-xs text-indigo-400 hover:bg-indigo-600/14"
+        aria-expanded={open}
+        className="rounded-none border-l border-indigo-600/40 px-2 font-mono"
       >
         ▾
-      </button>
+      </Button>
       {open && (
         <div className="absolute right-0 top-full z-10 mt-1 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg">
           <div className="font-heading border-b border-slate-800 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
@@ -1781,13 +1787,14 @@ function QuickRuleButton({
           <ul className="space-y-1">
             {suggestions.map((suggestion) => (
               <li key={suggestion.patternValue}>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handlePick(suggestion)}
-                  className="w-full px-2 py-1 text-left font-mono text-xs text-slate-200 hover:bg-indigo-600/14"
+                  className="w-full justify-start text-left font-mono break-all text-slate-200"
                 >
                   {suggestion.label}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -1871,7 +1878,7 @@ function ActionResultView({
       {result.stderr && (
         <pre className="whitespace-pre-wrap text-red-300">{truncate(result.stderr)}</pre>
       )}
-      {!result.cancelled && <p className="text-slate-500">exit code: {result.exitCode ?? "—"}</p>}
+      {!result.cancelled && <p className="text-slate-400">exit code: {result.exitCode ?? "—"}</p>}
     </div>
   );
 }
@@ -1916,15 +1923,15 @@ function TakeIntoNoteButton({
   };
 
   return (
-    <button
-      type="button"
+    <Button
+      size="sm"
+      className="shrink-0"
       onClick={handleClick}
       disabled={state === "sending"}
-      className="shrink-0 border border-slate-700 px-1.5 py-0.5 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200 disabled:opacity-50"
       title={t("actionCard.takeIntoNote")}
     >
       {state === "error" ? t("actionCard.takeIntoNoteFailed") : t("actionCard.takeIntoNote")}
-    </button>
+    </Button>
   );
 }
 
@@ -1971,29 +1978,28 @@ function DocumentCard({
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{contentMarkdown}</ReactMarkdown>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={exporting !== null}
           onClick={() => handleExportClick("markdown")}
-          className="rounded bg-indigo-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
         >
           {exporting === "markdown" ? t("common.saving") : t("chat.saveAsMarkdown")}
-        </button>
+        </Button>
         {savedFormat && <span className="text-xs text-emerald-400">✓ {t("chat.exportedAsMarkdown")}</span>}
         {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
          * Export — der bestehende Export-Button bleibt unverändert an
          * seinem Platz, die Registry-Aktionen kommen daneben, nicht statt. */}
         {listDocumentActions().map((action) => (
-          <button
+          <Button
             key={action.id}
-            type="button"
+            size="sm"
             disabled={action.disabled}
             title={action.disabled ? action.disabledReason : undefined}
             onClick={() => action.onInvoke({ contentMarkdown, title })}
-            className="rounded bg-slate-700/80 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {action.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -2090,14 +2096,13 @@ function AssistantMessageView({
         >
           <TakeIntoNoteButton sessionId={sessionId} content={text} onStateChange={setNoteState} />
           <span className="text-slate-400">Export:</span>
-          <button
-            type="button"
+          <Button
+            size="sm"
             disabled={exporting !== null}
             onClick={() => handleExportClick("markdown")}
-            className="rounded bg-slate-700/80 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600 hover:text-white disabled:opacity-50"
           >
             {exporting === "markdown" ? t("common.saving") : `📄 ${t("chat.exportAsMarkdown")}`}
-          </button>
+          </Button>
           {savedFormat && <span className="text-xs text-emerald-400">✓ {t("chat.exportedAsMarkdown")}</span>}
         </div>
       )}
@@ -2109,13 +2114,9 @@ function AssistantMessageView({
         // Flag, nicht Teil von `text` (nicht fälschbar, s. Feld-Kommentar).
         <div className="flex flex-wrap items-center gap-2 border-t border-amber-700/40 pt-2 text-xs text-amber-300">
           <span>✂ {t("chat.responseTruncated")}</span>
-          <button
-            type="button"
-            onClick={onContinue}
-            className="rounded bg-amber-700/80 px-2 py-1 text-xs text-amber-50 hover:bg-amber-600"
-          >
+          <Button size="sm" onClick={onContinue}>
             {t("chat.continue")}
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
