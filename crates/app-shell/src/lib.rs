@@ -33,6 +33,7 @@ mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
 mod single_instance;
+mod speech_models;
 /// Spec 0075, §3.1.11: den bestätigten Importplan ausführen — der einzige
 /// Schritt, in dem überhaupt eine Schlüsseldatei geöffnet wird (§5.1).
 mod ssh_config_apply;
@@ -677,6 +678,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 }
             }
         })
+        .manage(crate::speech_models::SpeechModels::default())
         .manage(edition)
         .manage(edition_data_paths)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
@@ -715,6 +717,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::delete_chat_session,
             chat_retention::get_chat_session_retention_days,
             chat_retention::set_chat_session_retention_days,
+            speech_models::get_selected_speech_model,
+            speech_models::set_selected_speech_model,
+            speech_models::get_speech_model_status,
+            speech_models::start_speech_model_download,
+            speech_models::cancel_speech_model_download,
+            speech_models::delete_speech_model,
             commands::list_sessions,
             commands::get_chat_history,
             commands::list_groups,
