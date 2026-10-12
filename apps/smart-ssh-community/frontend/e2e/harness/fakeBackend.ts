@@ -167,6 +167,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       nonCommercial: false,
       licensee: null,
     }),
+    answer_startup_prompt: () => null,
     get_platform: () => "linux",
     create_overlay_titlebar: () => "native",
     get_app_info: () => ({

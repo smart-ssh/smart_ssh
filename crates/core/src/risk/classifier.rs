@@ -1,7 +1,7 @@
 use crate::filter::{
-    exceeds_command_length_limit, extract_shell_c_style_codes, program_source,
-    resolve_effective_command, segment_command, Pattern, ProgramSource, DEFAULT_MAX_COMMAND_LENGTH,
-    MAX_SUBSTITUTION_DEPTH,
+    ambiguous_text_fragments, exceeds_command_length_limit, extract_shell_c_style_codes,
+    program_source, resolve_effective_command, segment_command, Pattern, ProgramSource,
+    DEFAULT_MAX_COMMAND_LENGTH, MAX_SUBSTITUTION_DEPTH,
 };
 
 use super::patterns::{
@@ -111,6 +111,14 @@ pub(super) fn classify_into(command: &str, depth: usize, acc: &mut RiskAccumulat
     // ohne eine (hier nicht gewollte) Änderung an `filter::parser`
     // selbst auf.
     segments.push(command.to_lowercase());
+    // Issue #433: unsplittable text (here-doc operator, unbalanced quotes)
+    // is one block above; also rate its naive fragments so `rm;<<` is never
+    // lower than `rm`.
+    segments.extend(
+        ambiguous_text_fragments(command)
+            .iter()
+            .map(|f| f.to_lowercase()),
+    );
     // Unabhängiger Review-Pass (Spec 0026): ohne dieselbe Normalisierung,
     // die die Filter-Engine für ihre eigene Hard-Blacklist anwendet
     // (`resolve_effective_command` — wiederholtes Entfernen von

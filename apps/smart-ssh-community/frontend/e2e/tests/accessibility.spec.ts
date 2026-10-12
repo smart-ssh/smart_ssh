@@ -3,14 +3,60 @@
 // with a reason, in `support/axe.ts`.
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
-import { populated } from "../support/data";
+import { ACKNOWLEDGED, populated, server } from "../support/data";
 import { NOTE_COMMANDS, openNotes } from "../support/notes";
 import { openChatWithConfirmation, openChatWithMessages } from "../support/chatScreens";
 import { openSession, redCommandProposal } from "../support/session";
 
 // New screens: add one line here. `open` brings the app into the state
 // to scan; the key is the screen name used in the axe allowlist.
+const UNLOCK = {
+  screen: "unlock",
+  mode: "password",
+  offersStartOver: true,
+  failedUnlockAttempts: 3,
+  language: "en",
+};
+
 const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
+  unlock: async (app) => {
+    await app.launch({ commands: { get_startup_state: { result: UNLOCK } } });
+    await expect(app.page.getByLabel("Master password")).toBeVisible();
+  },
+  "startup question": async (app) => {
+    await app.launch({ commands: { get_startup_state: { result: UNLOCK } } });
+    await app.emit("startup:prompt", { kind: "confirmStartOver", title: "Start over?", message: "All data is lost." });
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+  },
+  "new master password": async (app) => {
+    await app.launch({ commands: { get_startup_state: { result: UNLOCK } } });
+    await app.emit("startup:prompt", { kind: "newMasterPassword", title: "Set a master password", message: "Choose one." });
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+    await app.page.getByLabel("Repeat").fill("x");
+  },
+  "first-run notice": async (app) => {
+    await app.launch({ servers: [server({ id: "s-1", name: "alpha" })] });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+  },
+  "host key unknown": async (app) => {
+    await app.launch({
+      settings: { ...ACKNOWLEDGED },
+      servers: [server({ id: "s-1", name: "alpha" })],
+      hostKeys: { "s-1": { kind: "unknown", fingerprint: "SHA256:abc", keyType: "ssh-ed25519" } },
+    });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await expect(app.page.getByRole("dialog")).toBeVisible();
+  },
+  "host key changed": async (app) => {
+    await app.launch({
+      settings: { ...ACKNOWLEDGED },
+      servers: [server({ id: "s-1", name: "alpha" })],
+      hostKeys: { "s-1": { kind: "mismatch", fingerprint: "SHA256:new", expectedFingerprint: "SHA256:old", keyType: "ssh-ed25519" } },
+    });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await expect(app.page.getByRole("alertdialog")).toBeVisible();
+  },
   main: async (app) => {
     await app.launch(populated());
     await expect(app.page.getByText("db-primary")).toBeVisible();
