@@ -6,9 +6,9 @@ import type { Page } from "@playwright/test";
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated, server } from "../support/data";
-import { expectNoClippedText, expectTabOrderFollowsVisualOrder, expectUsable } from "../support/layout";
+import { expectFullyInViewport, expectNoClippedText, expectTabOrderFollowsVisualOrder, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
-import { openSession } from "../support/session";
+import { chatInput, openSession } from "../support/session";
 
 const LONG_NAME = `production-database-cluster-${"eu-central-".repeat(6)}primary`;
 
@@ -132,3 +132,18 @@ test("no-provider hint: Settings opened from the link close with Escape and focu
   await expect(link).toBeFocused();
 });
 
+
+test("toasts: do not cover the chat composer and stay inside the viewport (#422)", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  await openSession(app, "db-primary");
+  await showToasts(page);
+  const host = page.getByRole("status");
+  await expectFullyInViewport(host);
+  await expectUsable(chatInput(page));
+  await expectFullyInViewport(page.getByRole("button", { name: "Undo" }));
+  await expectUsable(page.getByRole("button", { name: "Undo" }));
+  const hostBox = (await host.boundingBox())!;
+  const inputBox = (await chatInput(page).boundingBox())!;
+  expect(hostBox.y + hostBox.height, "toast stack ends above the composer").toBeLessThanOrEqual(inputBox.y);
+});

@@ -140,8 +140,10 @@ Jede Aktion aus Spec 0054 meldet ihr Ergebnis:
 
 ### B2. Form
 
-- Die Meldung erscheint als Toast unten links im App-Fenster, getrennt von
-  den Notiz-Karten unten rechts (Spec 0010) und in derselben Optik.
+- Die Meldung erscheint als Toast oben rechts im App-Fenster, unter dem
+  Header, getrennt von den Notiz-Karten unten rechts (Spec 0010) und in
+  derselben Optik. Er verdeckt auch bei kleinem Fenster (800×560) nicht das
+  Eingabefeld des Chats.
 - **Erfolg:** kurz, verschwindet nach einigen Sekunden.
 - **Fehler:** bleibt stehen, bis der Nutzer ihn schließt, mit verständlichem
   Grund (Rechte, Ziel existiert, Verbindung weg).
