@@ -44,11 +44,8 @@ test.describe("server tree", () => {
     const page = app.page;
     await page.getByRole("treeitem", { name: "📁 Lab" }).click();
     await page.getByRole("button", { name: "+ Server", exact: true }).click();
-    // The form's "Group" field (a select inside its label).
-    const groupField = page
-      .locator("label")
-      .filter({ hasText: /^\s*Group/ })
-      .locator("select");
+    // The form's "Group" field, found through its label.
+    const groupField = page.getByLabel("Group", { exact: true });
     await expect(groupField).toHaveValue("g-lab");
   });
 });

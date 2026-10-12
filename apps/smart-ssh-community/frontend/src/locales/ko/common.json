@@ -583,7 +583,10 @@
     "exampleConfigHint": "Claude Code용 예시 설정(.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "설정 복사",
     "copyConfigCopied": "설정을 복사했습니다.",
-    "copyConfigFailed": "설정을 복사하지 못했습니다."
+    "copyConfigFailed": "설정을 복사하지 못했습니다.",
+    "tokenReveal": "토큰 표시",
+    "tokenHide": "토큰 숨기기",
+    "copyConfigNote": "토큰이 숨겨져 있어도 실제 토큰이 포함된 전체 구성을 복사합니다."
   },
   "firstRunNotice": {
     "title": "시작하기 전에",
