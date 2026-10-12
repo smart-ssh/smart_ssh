@@ -1012,7 +1012,10 @@
       "execute": "Çalıştırma",
       "numeric": "Sayısal",
       "recursive": "Özyinelemeli",
-      "recursiveWarning": "— bu klasördeki TÜM dosya ve alt klasörlerin izinlerini değiştirir. Güçlü eylem, geri alınamaz."
+      "recursiveWarning": "— bu klasördeki TÜM dosya ve alt klasörlerin izinlerini değiştirir. Güçlü eylem, geri alınamaz.",
+      "owner": "Sahip",
+      "group": "Grup",
+      "other": "Diğer"
     },
     "renamePrompt": {
       "renameTitle": "Yeniden adlandır",
