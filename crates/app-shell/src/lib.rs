@@ -56,6 +56,7 @@ mod startup_prompt;
 mod test_support;
 /// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
 mod ui_language;
+mod voice_input;
 /// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
 /// Passwort-Modus.
 mod window_prompt;
@@ -679,6 +680,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             }
         })
         .manage(crate::speech_models::SpeechModels::default())
+        .manage(crate::voice_input::VoiceRecorder::default())
         .manage(edition)
         .manage(edition_data_paths)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
@@ -723,6 +725,11 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             speech_models::start_speech_model_download,
             speech_models::cancel_speech_model_download,
             speech_models::delete_speech_model,
+            voice_input::get_speech_language,
+            voice_input::set_speech_language,
+            voice_input::start_voice_recording,
+            voice_input::stop_voice_recording,
+            voice_input::cancel_voice_recording,
             commands::list_sessions,
             commands::get_chat_history,
             commands::list_groups,

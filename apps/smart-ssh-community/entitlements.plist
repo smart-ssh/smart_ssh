@@ -2,7 +2,7 @@
 <!--
   Hardened-Runtime-Entitlements für die macOS-Release-Signierung
   (Developer ID + Notarisierung, s. README_DEV.md, Abschnitt 6). Bewusst
-  minimal — nur die drei Berechtigungen, die eine Tauri-2-WebView-App
+  minimal — nur die vier Berechtigungen, die eine Tauri-2-WebView-App
   unter Hardened Runtime tatsächlich braucht, keine darüber
   hinausgehenden (Prinzip der minimalen Rechte, konsistent mit dem Rest
   des Projekts, s. z. B. `apps/smart-ssh-community/capabilities/`).
@@ -17,6 +17,10 @@
     Verbindungsaufbau, KI-Provider-API-Aufrufe) — ohne dieses Entitlement
     blockiert die Sandbox-/Netzwerk-Durchsetzung unter Hardened Runtime
     jeden ausgehenden Socket.
+  - com.apple.security.device.audio-input: Mikrofonzugriff, ausschließlich
+    für die Spracheingabe (Spec 0108). Das Mikrofon wird nur nach
+    ausdrücklichem Start durch den Nutzer geöffnet; ohne dieses Entitlement
+    liefert macOS unter Hardened Runtime nur Stille.
 
   Kein App-Sandbox-Entitlement (`com.apple.security.app-sandbox`): die
   App wird nicht über den Mac App Store vertrieben (s. release.yml,
@@ -36,6 +40,8 @@
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
     <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
     <true/>
 </dict>
 </plist>
