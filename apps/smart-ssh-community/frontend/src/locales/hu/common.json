@@ -1012,7 +1012,10 @@
       "execute": "Végrehajtás",
       "numeric": "Numerikus",
       "recursive": "Rekurzív",
-      "recursiveWarning": "– a mappa ÖSSZES fájljának és almappájának jogosultságait módosítja. Erőteljes művelet, nem vonható vissza."
+      "recursiveWarning": "– a mappa ÖSSZES fájljának és almappájának jogosultságait módosítja. Erőteljes művelet, nem vonható vissza.",
+      "owner": "Tulajdonos",
+      "group": "Csoport",
+      "other": "Mások"
     },
     "renamePrompt": {
       "renameTitle": "Átnevezés",

@@ -1005,7 +1005,10 @@
       "execute": "Eksekusi",
       "numeric": "Numerik",
       "recursive": "Rekursif",
-      "recursiveWarning": "— mengubah izin SEMUA berkas dan subfolder di folder ini. Tindakan berdampak besar, tidak dapat dibatalkan."
+      "recursiveWarning": "— mengubah izin SEMUA berkas dan subfolder di folder ini. Tindakan berdampak besar, tidak dapat dibatalkan.",
+      "owner": "Pemilik",
+      "group": "Grup",
+      "other": "Lainnya"
     },
     "renamePrompt": {
       "renameTitle": "Ubah nama",

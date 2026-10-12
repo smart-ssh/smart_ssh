@@ -1019,7 +1019,10 @@
       "execute": "Execução",
       "numeric": "Numérico",
       "recursive": "Recursivo",
-      "recursiveWarning": "— altera as permissões de TODOS os arquivos e subpastas desta pasta. Ação poderosa, não pode ser desfeita."
+      "recursiveWarning": "— altera as permissões de TODOS os arquivos e subpastas desta pasta. Ação poderosa, não pode ser desfeita.",
+      "owner": "Proprietário",
+      "group": "Grupo",
+      "other": "Outros"
     },
     "renamePrompt": {
       "renameTitle": "Renomear",

@@ -1012,7 +1012,10 @@
       "execute": "Suoritus",
       "numeric": "Numeerinen",
       "recursive": "Rekursiivinen",
-      "recursiveWarning": "– muuttaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden oikeuksia. Voimakas toiminto, ei peruttavissa."
+      "recursiveWarning": "– muuttaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden oikeuksia. Voimakas toiminto, ei peruttavissa.",
+      "owner": "Omistaja",
+      "group": "Ryhmä",
+      "other": "Muut"
     },
     "renamePrompt": {
       "renameTitle": "Nimeä uudelleen",

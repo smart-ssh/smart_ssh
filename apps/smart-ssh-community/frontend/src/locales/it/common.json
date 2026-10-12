@@ -1019,7 +1019,10 @@
       "execute": "Esecuzione",
       "numeric": "Numerico",
       "recursive": "Ricorsivo",
-      "recursiveWarning": "— modifica i permessi di TUTTI i file e sottocartelle in questa cartella. Azione potente, non annullabile."
+      "recursiveWarning": "— modifica i permessi di TUTTI i file e sottocartelle in questa cartella. Azione potente, non annullabile.",
+      "owner": "Proprietario",
+      "group": "Gruppo",
+      "other": "Altri"
     },
     "renamePrompt": {
       "renameTitle": "Rinomina",

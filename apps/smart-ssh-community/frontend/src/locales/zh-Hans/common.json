@@ -1005,7 +1005,10 @@
       "execute": "执行",
       "numeric": "数字",
       "recursive": "递归",
-      "recursiveWarning": "——会更改此文件夹中所有文件和子文件夹的权限。这是影响很大的操作，无法撤销。"
+      "recursiveWarning": "——会更改此文件夹中所有文件和子文件夹的权限。这是影响很大的操作，无法撤销。",
+      "owner": "所有者",
+      "group": "群组",
+      "other": "其他"
     },
     "renamePrompt": {
       "renameTitle": "重命名",
