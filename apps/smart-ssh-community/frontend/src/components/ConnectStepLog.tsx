@@ -13,6 +13,7 @@ import {
   stepStatusText,
 } from "../connectStepLog";
 import type { ConnectStepRecord } from "../types";
+import { Button } from "./ui";
 
 export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
   const { t } = useTranslation();
@@ -66,7 +67,7 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                       </span>
                       <span className="font-medium">{stepLabel(t, record.step)}</span>
                       <span>{stepStatusText(t, record)}</span>
-                      <span className="text-slate-500">{formatDuration(record.durationMs)}</span>
+                      <span className="text-slate-400">{formatDuration(record.durationMs)}</span>
                     </div>
                     {details && <div className="ml-5 break-all text-slate-400">{details}</div>}
                   </li>
@@ -76,13 +77,11 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
           </div>
         ))}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button size="sm"
             onClick={() => void copy()}
-            className="rounded bg-slate-800 px-2 py-1 hover:bg-slate-700"
           >
             {t("connectLog.copy")}
-          </button>
+          </Button>
           {copied === "ok" && <span className="text-emerald-400">{t("connectLog.copied")}</span>}
           {copied === "failed" && <span className="text-red-400">{t("connectLog.copyFailed")}</span>}
         </div>

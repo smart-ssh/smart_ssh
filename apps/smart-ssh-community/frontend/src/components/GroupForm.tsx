@@ -6,6 +6,7 @@ import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import type { DeleteGroupResult, GroupDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { Button } from "./ui";
 
 /** Issue #63: neuer Ort des geöffneten Elements nach einem erfolgreichen
  * Verschieben per Drag-and-drop — `groupId` ist die neue Gruppe (Server)
@@ -175,13 +176,12 @@ export function GroupForm({
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
-        <button
+        <Button variant="primary"
           type="submit"
           disabled={saving}
-          className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
         >
           {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-        </button>
+        </Button>
       </form>
 
       {!isCreate && groupId && existing && (
@@ -189,13 +189,11 @@ export function GroupForm({
           <NotesPanel target={{ Group: groupId }} currentNotes={existing.notes} onNotesChanged={onSaved} />
 
           <div className="border-t border-slate-700 pt-4">
-            <button
-              type="button"
+            <Button variant="danger" size="sm"
               onClick={handleDeleteClick}
-              className="rounded bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800"
             >
               {t("groupForm.delete")}
-            </button>
+            </Button>
 
             {deletePreview && (
               <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
@@ -220,21 +218,17 @@ export function GroupForm({
                   </ul>
                 )}
                 <div className="flex gap-2">
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={() => setDeletePreview(null)}
-                    className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
                   >
                     {t("common.cancel")}
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button variant="danger" size="sm"
                     onClick={handleConfirmDelete}
                     disabled={deleting}
-                    className="rounded bg-red-700 px-3 py-1 text-xs text-white hover:bg-red-600 disabled:opacity-50"
                   >
                     {deleting ? t("common.deleting") : t("groupForm.confirmDelete")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
