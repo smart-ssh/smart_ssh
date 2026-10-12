@@ -588,7 +588,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Passwort-Modus (`None`) übergibt `unlock_with_master_password` ihn nach
     // der Entsperrung (`AppHandle::manage`).
     let builder = match app_state {
-        Some(state) => builder.manage(state),
+        Some(_state) => builder,
         None => builder,
     };
 
