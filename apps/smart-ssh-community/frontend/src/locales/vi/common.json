@@ -1005,7 +1005,10 @@
       "execute": "Thực thi",
       "numeric": "Dạng số",
       "recursive": "Đệ quy",
-      "recursiveWarning": "— thay đổi quyền của TẤT CẢ tệp và thư mục con trong thư mục này. Thao tác mạnh, không thể hoàn tác."
+      "recursiveWarning": "— thay đổi quyền của TẤT CẢ tệp và thư mục con trong thư mục này. Thao tác mạnh, không thể hoàn tác.",
+      "owner": "Chủ sở hữu",
+      "group": "Nhóm",
+      "other": "Khác"
     },
     "renamePrompt": {
       "renameTitle": "Đổi tên",

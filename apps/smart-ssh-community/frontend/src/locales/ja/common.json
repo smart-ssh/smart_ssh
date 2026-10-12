@@ -1005,7 +1005,10 @@
       "execute": "実行",
       "numeric": "数値",
       "recursive": "再帰的",
-      "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの権限を変更します。影響の大きい操作で、元に戻せません。"
+      "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの権限を変更します。影響の大きい操作で、元に戻せません。",
+      "owner": "所有者",
+      "group": "グループ",
+      "other": "その他"
     },
     "renamePrompt": {
       "renameTitle": "名前を変更",

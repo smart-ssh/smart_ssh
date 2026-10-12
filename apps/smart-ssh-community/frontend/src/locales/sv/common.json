@@ -1012,7 +1012,10 @@
       "execute": "Kör",
       "numeric": "Numeriskt",
       "recursive": "Rekursivt",
-      "recursiveWarning": "— ändrar behörigheterna för ALLA filer och undermappar i den här mappen. Kraftfull åtgärd som inte kan ångras."
+      "recursiveWarning": "— ändrar behörigheterna för ALLA filer och undermappar i den här mappen. Kraftfull åtgärd som inte kan ångras.",
+      "owner": "Ägare",
+      "group": "Grupp",
+      "other": "Övriga"
     },
     "renamePrompt": {
       "renameTitle": "Byt namn",

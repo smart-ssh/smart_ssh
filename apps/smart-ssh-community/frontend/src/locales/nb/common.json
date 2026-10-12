@@ -1012,7 +1012,10 @@
       "execute": "Kjør",
       "numeric": "Numerisk",
       "recursive": "Rekursivt",
-      "recursiveWarning": "– endrer tillatelsene til ALLE filer og undermapper i denne mappen. Kraftig handling, kan ikke angres."
+      "recursiveWarning": "– endrer tillatelsene til ALLE filer og undermapper i denne mappen. Kraftig handling, kan ikke angres.",
+      "owner": "Eier",
+      "group": "Gruppe",
+      "other": "Andre"
     },
     "renamePrompt": {
       "renameTitle": "Gi nytt navn",

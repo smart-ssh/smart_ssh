@@ -1019,7 +1019,10 @@
       "execute": "Execuție",
       "numeric": "Numeric",
       "recursive": "Recursiv",
-      "recursiveWarning": "— modifică permisiunile TUTUROR fișierelor și subfolderelor din acest folder. Acțiune puternică, ireversibilă."
+      "recursiveWarning": "— modifică permisiunile TUTUROR fișierelor și subfolderelor din acest folder. Acțiune puternică, ireversibilă.",
+      "owner": "Proprietar",
+      "group": "Grup",
+      "other": "Alții"
     },
     "renamePrompt": {
       "renameTitle": "Redenumește",

@@ -1012,7 +1012,10 @@
       "execute": "Execute",
       "numeric": "Numeric",
       "recursive": "Recursive",
-      "recursiveWarning": "— changes the permissions of ALL files and subfolders in this folder. Powerful action, cannot be undone."
+      "recursiveWarning": "— changes the permissions of ALL files and subfolders in this folder. Powerful action, cannot be undone.",
+      "owner": "Owner",
+      "group": "Group",
+      "other": "Other"
     },
     "renamePrompt": {
       "renameTitle": "Rename",
