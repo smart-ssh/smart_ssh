@@ -1054,21 +1054,9 @@ mod tests {
         assert_eq!(parse_injection_check("VERDICT:"), None);
     }
 
-    /// SYNTHETISCH (nicht aufgezeichnet, ADR 0125): Antwort eines
-    /// OpenAI-kompatiblen Anbieters, bis eine Aufzeichnung vorliegt (#223).
-    /// Kein Fixture eines echten Anbieters.
-    #[test]
-    fn synthetic_openai_style_answer() {
-        let text = "**VERDICT: yellow**\nPossible tokens in env output.";
-        assert_eq!(
-            parse_second_opinion(text).map(|(l, _)| l),
-            Some(RiskLevel::Yellow)
-        );
-    }
-
     /// AUFGEZEICHNET (Issue #223, ADR 0125): echte Antworten von Anthropic
-    /// (claude-haiku-5-5) und Ollama (qwen2.5:0.5b), aufgenommen am
-    /// 2026-10-12. Jede Antwort wird über das strukturierte Feld gelesen
+    /// (claude-haiku-5-5, 2026-10-12), Ollama (qwen2.5:0.5b, 2026-10-12) und
+    /// einem OpenAI-kompatiblen Endpunkt (qwen/qwen3-32b, 2026-10-13). Jede Antwort wird über das strukturierte Feld gelesen
     /// (nicht über den Rückfall), und der Wert entspricht dem Feld.
     /// Kein Anbieter ignorierte das Format, der Rückfall wird hier nicht gebraucht.
     #[test]
@@ -1076,6 +1064,7 @@ mod tests {
         let fixtures = [
             include_str!("../tests/fixtures/recorded_verdicts_anthropic.json"),
             include_str!("../tests/fixtures/recorded_verdicts_ollama.json"),
+            include_str!("../tests/fixtures/recorded_verdicts_openai.json"),
         ];
         for raw in fixtures {
             let fx: serde_json::Value = serde_json::from_str(raw).unwrap();
@@ -1084,8 +1073,10 @@ mod tests {
             assert_eq!(answers.len(), 11);
             for a in answers {
                 let text = a["answer"].as_str().unwrap();
-                let first = text.lines().next().unwrap();
-                let word = first.strip_prefix("VERDICT: ").expect(text);
+                // Der OpenAI-kompatible Anbieter beginnt mit Leerzeilen und
+                // hängt Leerzeichen an die Urteilszeile an.
+                let first = text.lines().find(|l| !l.trim().is_empty()).unwrap();
+                let word = first.trim_end().strip_prefix("VERDICT: ").expect(text);
                 match a["prompt"].as_str().unwrap() {
                     "second_opinion" => {
                         let want = match word {

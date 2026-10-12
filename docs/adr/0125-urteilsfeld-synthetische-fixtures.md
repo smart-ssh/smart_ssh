@@ -42,7 +42,12 @@ Fixtures unter `crates/app-logic/tests/fixtures/` abgelegt:
 - Das kleine Ollama-Modell urteilt oft falsch (z. B. `env | grep -i token`
   → `none`, beide Injektionen → `no`). Das ist Modellqualität, nicht Format;
   ein so kleines lokales Modell ist keine brauchbare Zweitmeinung.
-- **OpenAI-kompatibel**: noch **nicht** aufgezeichnet (Konto ohne Guthaben,
-  HTTP 429). Dessen Beispielantwort bleibt ausdrücklich synthetisch
-  (`synthetic_openai_style_answer`). Requirement 6 aus #104 ist daher erst
-  mit dieser Aufzeichnung erfüllt.
+- **OpenAI-kompatibel** (gehosteter Endpunkt, `qwen/qwen3-32b`, aufgezeichnet
+  am 2026-10-13): alle 11 Antworten folgen dem Format, die Urteile sind
+  plausibel. Jede Antwort beginnt mit Leerzeilen, und die Urteilszeile endet
+  mit zwei Leerzeichen; der strukturierte Parser verträgt beides, der Test
+  deckt es mit diesem Fixture ab. Das Format bleibt unverändert.
+
+Damit liegen Aufzeichnungen aller drei Anbietertypen vor, keine synthetische Antwort
+wird mehr als Anbieterausgabe ausgegeben, und Requirement 6 aus #104 ist
+**erfüllt**.
