@@ -1014,7 +1014,10 @@
       "execute": "Ausführen",
       "numeric": "Numerisch",
       "recursive": "Rekursiv",
-      "recursiveWarning": "— ändert die Rechte für ALLE Dateien und Unterordner in diesem Ordner. Mächtige Aktion, nicht rückgängig machbar."
+      "recursiveWarning": "— ändert die Rechte für ALLE Dateien und Unterordner in diesem Ordner. Mächtige Aktion, nicht rückgängig machbar.",
+      "owner": "Besitzer",
+      "group": "Gruppe",
+      "other": "Andere"
     },
     "renamePrompt": {
       "renameTitle": "Umbenennen",

@@ -1021,7 +1021,10 @@
       "execute": "Exécution",
       "numeric": "Numérique",
       "recursive": "Récursif",
-      "recursiveWarning": "— modifie les permissions de TOUS les fichiers et sous-dossiers de ce dossier. Action puissante, irréversible."
+      "recursiveWarning": "— modifie les permissions de TOUS les fichiers et sous-dossiers de ce dossier. Action puissante, irréversible.",
+      "owner": "Propriétaire",
+      "group": "Groupe",
+      "other": "Autres"
     },
     "renamePrompt": {
       "renameTitle": "Renommer",

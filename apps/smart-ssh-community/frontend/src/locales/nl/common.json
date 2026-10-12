@@ -1014,7 +1014,10 @@
       "execute": "Uitvoeren",
       "numeric": "Numeriek",
       "recursive": "Recursief",
-      "recursiveWarning": "— wijzigt de rechten van ALLE bestanden en submappen in deze map. Krachtige actie, niet ongedaan te maken."
+      "recursiveWarning": "— wijzigt de rechten van ALLE bestanden en submappen in deze map. Krachtige actie, niet ongedaan te maken.",
+      "owner": "Eigenaar",
+      "group": "Groep",
+      "other": "Overig"
     },
     "renamePrompt": {
       "renameTitle": "Hernoemen",

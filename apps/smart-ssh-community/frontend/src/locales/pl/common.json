@@ -1028,7 +1028,10 @@
       "execute": "Wykonywanie",
       "numeric": "Numerycznie",
       "recursive": "Rekurencyjnie",
-      "recursiveWarning": "— zmienia uprawnienia WSZYSTKICH plików i podfolderów w tym folderze. Potężna operacja, nie można jej cofnąć."
+      "recursiveWarning": "— zmienia uprawnienia WSZYSTKICH plików i podfolderów w tym folderze. Potężna operacja, nie można jej cofnąć.",
+      "owner": "Właściciel",
+      "group": "Grupa",
+      "other": "Pozostali"
     },
     "renamePrompt": {
       "renameTitle": "Zmień nazwę",

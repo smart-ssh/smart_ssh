@@ -1007,7 +1007,10 @@
       "execute": "실행",
       "numeric": "숫자",
       "recursive": "재귀적으로",
-      "recursiveWarning": "— 이 폴더의 모든 파일과 하위 폴더의 권한을 변경합니다. 강력한 동작이며 되돌릴 수 없습니다."
+      "recursiveWarning": "— 이 폴더의 모든 파일과 하위 폴더의 권한을 변경합니다. 강력한 동작이며 되돌릴 수 없습니다.",
+      "owner": "소유자",
+      "group": "그룹",
+      "other": "기타"
     },
     "renamePrompt": {
       "renameTitle": "이름 바꾸기",

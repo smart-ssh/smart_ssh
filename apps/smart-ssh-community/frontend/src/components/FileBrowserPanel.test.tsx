@@ -651,8 +651,8 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Rechte bearbeiten…"));
 
     expect(await screen.findByText("Rechte bearbeiten")).toBeVisible();
-    // fileEntry ist 644 (rw-r--r--) — "Owner Schreiben" (0o200) abwählen.
-    fireEvent.click(screen.getByLabelText("Owner: Schreiben"));
+    // fileEntry ist 644 (rw-r--r--) — "Besitzer Schreiben" (0o200) abwählen.
+    fireEvent.click(screen.getByLabelText("Besitzer: Schreiben"));
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
@@ -1870,12 +1870,30 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     for (const header of ["Read", "Write", "Execute"]) {
       expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
+    for (const label of ["Owner", "Group", "Other"]) {
+      expect(screen.getByRole("cell", { name: label })).toBeVisible();
+    }
+    expect(screen.getByLabelText("Owner: Write")).toBeInTheDocument();
     expect(screen.getByText("Numeric")).toBeVisible();
     expect(screen.getByText("Recursive")).toBeVisible();
     expect(screen.getByText(/changes the permissions of ALL files and subfolders/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Apply" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
     expectNoGerman();
+  });
+
+  it("chmod dialog row labels are translated in a non-English locale", async () => {
+    vi.mocked(sftpList).mockResolvedValue([dirEntry]);
+
+    renderEn(testI18n.cloneInstance({ lng: "fr" }));
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: /^Actions: / }));
+    fireEvent.click(screen.getByRole("button", { name: "Modifier les permissions…" }));
+
+    for (const label of ["Propriétaire", "Groupe", "Autres"]) {
+      expect(await screen.findByRole("cell", { name: label })).toBeVisible();
+    }
+    expect(screen.queryByRole("cell", { name: "Owner" })).not.toBeInTheDocument();
   });
 
   it("rename and new-folder prompts are English", async () => {

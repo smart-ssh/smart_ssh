@@ -1021,7 +1021,10 @@
       "execute": "Ejecución",
       "numeric": "Numérico",
       "recursive": "Recursivo",
-      "recursiveWarning": "— cambia los permisos de TODOS los archivos y subcarpetas de esta carpeta. Acción potente, no se puede deshacer."
+      "recursiveWarning": "— cambia los permisos de TODOS los archivos y subcarpetas de esta carpeta. Acción potente, no se puede deshacer.",
+      "owner": "Propietario",
+      "group": "Grupo",
+      "other": "Otros"
     },
     "renamePrompt": {
       "renameTitle": "Renombrar",
