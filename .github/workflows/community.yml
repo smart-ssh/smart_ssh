@@ -328,7 +328,7 @@ jobs:
 
       - name: Upload Playwright traces and report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-traces
           path: |
@@ -419,7 +419,18 @@ jobs:
         run: cargo build -p smart-ssh-community --features tauri/custom-protocol
 
       - name: Real app startup tests
+        env:
+          SMART_SSH_REAL_APP_LOG_DIR: ${{ runner.temp }}/real-app-logs
         run: |
           xvfb-run -a dbus-run-session -- bash -c '
             echo -n "ci-keyring-pw" | gnome-keyring-daemon --unlock --components=secrets
             cargo test -p real-app-tests -- --ignored --test-threads=1'
+
+      - name: Upload app logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: real-app-logs
+          path: ${{ runner.temp }}/real-app-logs/
+          if-no-files-found: ignore
+          retention-days: 14
