@@ -336,7 +336,11 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     settle: async () => {
       // Quiet = no call in flight and no new call over two animation frames,
       // so the app's start-up data has been rendered.
+      const deadline = performance.now() + 10_000;
       for (let quiet = 0; quiet < 2; ) {
+        if (performance.now() > deadline) {
+          throw new Error(`settle(): start-up commands still in flight after 10 s (${inFlight} pending)`);
+        }
         const before = calls.length;
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         const held_ = [...held.values()].reduce((n, l) => n + l.length, 0);
