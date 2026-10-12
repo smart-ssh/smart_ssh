@@ -9,7 +9,7 @@ import type {
   SshConfigPreviewEntryDto,
   SshConfigPreviewTagDto,
 } from "../types";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { Button, DialogFrame } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 interface SshConfigImportDialogProps {
@@ -188,15 +188,23 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
   };
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded border border-slate-600 bg-slate-900 shadow-xl">
-        <div className="border-b border-slate-700 p-4">
-          <h2 className="font-heading text-lg font-semibold text-slate-100">
-            {t("sshConfigImport.dialogTitle")}
-          </h2>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 text-sm text-slate-300">
+    <DialogFrame
+      layer="app"
+      size="xl"
+      title={t("sshConfigImport.dialogTitle")}
+      onClose={onClose}
+      actions={
+        <>
+          <Button onClick={onClose} disabled={applying}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="primary" onClick={handleConfirm} disabled={!preview || applying || loading}>
+            {applying ? t("sshConfigImport.applying") : t("sshConfigImport.confirm")}
+          </Button>
+        </>
+      }
+    >
+      <div>
           {loading && <p>{t("common.loading")}</p>}
           {error && <p className="mb-3 rounded border border-red-700 bg-red-950/50 p-2 text-red-300">{error}</p>}
 
@@ -208,9 +216,9 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                 <ul className="space-y-0.5 font-mono text-xs">
                   {preview.files.map((f) => (
                     <li key={f.path} className="flex gap-2">
-                      <span className="text-slate-500">{"  ".repeat(f.depth)}</span>
+                      <span className="text-slate-400">{"  ".repeat(f.depth)}</span>
                       <span className="break-all">{f.path}</span>
-                      <span className="text-slate-500">— {t(`sshConfigImport.fileStatus.${f.status}`)}</span>
+                      <span className="text-slate-400">— {t(`sshConfigImport.fileStatus.${f.status}`)}</span>
                     </li>
                   ))}
                 </ul>
@@ -284,6 +292,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                         <div className="mb-2 flex items-center gap-2">
                           <input
                             type="checkbox"
+                            aria-label={e.name}
                             checked={st.selected}
                             onChange={(ev) => setEntry(e.index, { selected: ev.target.checked })}
                           />
@@ -314,33 +323,33 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                               />
                             </label>
                             {!st.renameTo.trim() && (
-                              <p className="mt-1 text-slate-500">{t("sshConfigImport.conflict.skipHint")}</p>
+                              <p className="mt-1 text-slate-400">{t("sshConfigImport.conflict.skipHint")}</p>
                             )}
                           </div>
                         )}
 
                         <dl className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5 pl-6 text-xs">
-                          <dt className="text-slate-500">{t("sshConfigImport.field.host")}</dt>
+                          <dt className="text-slate-400">{t("sshConfigImport.field.host")}</dt>
                           <dd>
                             {e.host.value}{" "}
-                            <span className="text-slate-500">— {originLabel(t, e.host.origin)}</span>
+                            <span className="text-slate-400">— {originLabel(t, e.host.origin)}</span>
                           </dd>
-                          <dt className="text-slate-500">{t("sshConfigImport.field.port")}</dt>
+                          <dt className="text-slate-400">{t("sshConfigImport.field.port")}</dt>
                           <dd>
                             {e.port.value}{" "}
-                            <span className="text-slate-500">— {originLabel(t, e.port.origin)}</span>
+                            <span className="text-slate-400">— {originLabel(t, e.port.origin)}</span>
                           </dd>
-                          <dt className="text-slate-500">{t("sshConfigImport.field.username")}</dt>
+                          <dt className="text-slate-400">{t("sshConfigImport.field.username")}</dt>
                           <dd>
                             {e.username.value || t("sshConfigImport.field.emptyValue")}{" "}
-                            <span className="text-slate-500">— {originLabel(t, e.username.origin)}</span>
+                            <span className="text-slate-400">— {originLabel(t, e.username.origin)}</span>
                           </dd>
                           {e.jumpHost && (
                             <>
-                              <dt className="text-slate-500">{t("sshConfigImport.field.jumpHost")}</dt>
+                              <dt className="text-slate-400">{t("sshConfigImport.field.jumpHost")}</dt>
                               <dd>
                                 {e.jumpHost.name}{" "}
-                                <span className="text-slate-500">
+                                <span className="text-slate-400">
                                   —{" "}
                                   {e.jumpHost.existing
                                     ? t("sshConfigImport.jumpHost.existing")
@@ -353,9 +362,9 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
 
                         {e.identityFile && (
                           <div className="mt-2 pl-6 text-xs">
-                            <span className="text-slate-500">{t("sshConfigImport.field.identityFile")}: </span>
+                            <span className="text-slate-400">{t("sshConfigImport.field.identityFile")}: </span>
                             <span className="font-mono break-all">{e.identityFile.path}</span>{" "}
-                            <span className="text-slate-500">— {originLabel(t, e.identityFile.origin)}</span>
+                            <span className="text-slate-400">— {originLabel(t, e.identityFile.origin)}</span>
                             {!e.identityFile.usableWhenConnecting && (
                               <span className="ml-2 rounded bg-amber-900/60 px-1.5 py-0.5 text-amber-300">
                                 {t("sshConfigImport.identityFile.notUsable")}
@@ -465,27 +474,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
               )}
             </>
           )}
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-slate-700 p-4">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={applying}
-            className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={!preview || applying || loading}
-            className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
-          >
-            {applying ? t("sshConfigImport.applying") : t("sshConfigImport.confirm")}
-          </button>
-        </div>
       </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }

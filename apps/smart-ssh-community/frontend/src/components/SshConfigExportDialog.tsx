@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, exportSshConfig } from "../api";
 import type { SshConfigExportResultDto } from "../types";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { Button, DialogFrame } from "./ui";
 
 interface SshConfigExportDialogProps {
   onClose: () => void;
@@ -60,17 +60,22 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
   if (!result && !error) return null;
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg rounded border border-slate-600 bg-slate-900 p-6 shadow-xl">
-        <h2 className="font-heading mb-3 text-lg font-semibold text-slate-100">
-          {t("sshConfigExport.dialogTitle")}
-        </h2>
+    <DialogFrame
+      layer="app"
+      title={t("sshConfigExport.dialogTitle")}
+      onClose={onClose}
+      actions={
+        <Button variant="primary" onClick={onClose}>
+          {t("common.close")}
+        </Button>
+      }
+    >
 
         {error && <p className="mb-3 rounded border border-red-700 bg-red-950/50 p-2 text-sm text-red-300">{error}</p>}
 
         {result && (
           <div className="space-y-3 text-sm text-slate-300">
-            <p>{t("sshConfigExport.result.summary", { count: result.exported.length, path: result.path })}</p>
+            <p className="break-words">{t("sshConfigExport.result.summary", { count: result.exported.length, path: result.path })}</p>
 
             {result.exported.some((e) => e.renamed) && (
               <div className="rounded border border-slate-700 bg-slate-800/60 p-2">
@@ -93,31 +98,17 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
                 <code className="flex-1 overflow-x-auto rounded border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-xs text-slate-100">
                   {result.includeHint}
                 </code>
-                <button
-                  type="button"
-                  onClick={handleCopyIncludeHint}
-                  className="rounded border border-slate-600 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
-                >
+                <Button size="sm" onClick={handleCopyIncludeHint}>
                   {t("sshConfigExport.result.copy")}
-                </button>
+                </Button>
                 {copyState === "copied" && <span className="text-xs text-emerald-400">{t("about.copied")}</span>}
               </div>
             </div>
 
-            <p className="text-xs text-slate-500">{t("sshConfigExport.result.notRepresentedHint")}</p>
+            <p className="text-xs text-slate-400">{t("sshConfigExport.result.notRepresentedHint")}</p>
           </div>
         )}
 
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-indigo-500"
-          >
-            {t("common.close")}
-          </button>
-        </div>
-      </div>
-    </ModalBackdrop>
+    </DialogFrame>
   );
 }

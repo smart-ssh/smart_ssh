@@ -12,6 +12,7 @@ import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { useTreeDrag } from "../useTreeDrag";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../unusableServer";
+import { Button } from "./ui";
 
 export type Selection =
   | { kind: "group"; id: string }
@@ -90,8 +91,9 @@ export function Sidebar({
         type="button"
         {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
         onClick={() => onSelect({ kind: "group", id: node.group.id })}
+        title={node.group.name}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 ${
+        className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
           isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
         }`}
       >
@@ -112,8 +114,9 @@ export function Sidebar({
         ? {}
         : handlersFor({ kind: "server", id: server.id, label: server.name }))}
       onClick={() => onSelect({ kind: "server", id: server.id })}
+      title={server.name}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 ${
+      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
         isSelected("server", server.id) ? "bg-slate-800 text-white" : "text-slate-300"
       }`}
     >
@@ -131,50 +134,46 @@ export function Sidebar({
       onClick={() => onSelect({ kind: "unusableServer", id: server.id })}
       title={unusableReasonText(t, server.reason)}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-slate-800 ${
+      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
         isSelected("unusableServer", server.id) ? "bg-slate-800 text-amber-200" : "text-amber-300/80"
       }`}
     >
       <span aria-hidden="true">⚠️</span> {server.name}{" "}
-      <span className="text-xs not-italic text-slate-500">({t("unusableServer.badge")})</span>
+      <span className="text-xs not-italic text-slate-400">({t("unusableServer.badge")})</span>
     </button>
   );
 
   return (
     <div className="flex w-64 shrink-0 flex-col border-r border-slate-800">
       <div className="flex gap-1 border-b border-slate-800 p-2">
-        <button
-          type="button"
+        <Button size="sm"
           onClick={() => onSelect({ kind: "newGroup", parentId: currentFolder })}
-          className="flex-1 rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
+          className="flex-1"
         >
           {t("sidebar.addGroup")}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button size="sm"
           onClick={() => onSelect({ kind: "newServer", groupId: currentFolder })}
-          className="flex-1 rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
+          className="flex-1"
         >
           {t("sidebar.addServer")}
-        </button>
+        </Button>
       </div>
       <div className="flex gap-1 border-b border-slate-800 p-2">
-        <button
-          type="button"
+        <Button size="sm"
           onClick={onImportSshConfig}
           title={t("sidebar.importSshConfigHint")}
-          className="flex-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+          className="flex-1"
         >
           {t("sidebar.importSshConfig")}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button size="sm"
           onClick={onExportSshConfig}
           title={t("sidebar.exportSshConfigHint")}
-          className="flex-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+          className="flex-1"
         >
           {t("sidebar.exportSshConfig")}
-        </button>
+        </Button>
       </div>
       {/* Issue #48: der ganze Baumbereich ist das Ablageziel „Wurzelebene"
        * (ohne Gruppe / oberste Ebene); Gruppen darin sind innere Ziele.
@@ -194,7 +193,7 @@ export function Sidebar({
         {groups.length === 0 &&
           tree.ungroupedServers.length === 0 &&
           tree.ungroupedUnusableServers.length === 0 && (
-          <p className="px-2 py-1 text-sm text-slate-500">{t("sidebar.empty")}</p>
+          <p className="px-2 py-1 text-sm text-slate-400">{t("sidebar.empty")}</p>
         )}
         {drag && (
           <p className="mt-2 rounded border border-dashed border-slate-600 px-2 py-2 text-xs text-slate-400">
