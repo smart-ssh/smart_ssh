@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "이 작업은 키가 현재 보관된 위치와 맞지 않습니다. 아무것도 변경되지 않았습니다. 설정을 다시 열면 현재 모드가 표시됩니다.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "마스터 비밀번호 경고가 확인되지 않았습니다. 이 비밀번호가 없으면 모든 데이터를 잃게 되며 복구할 방법이 없습니다. 확인란을 선택하고 다시 설정하십시오. 아무것도 변경되지 않았습니다.",
     "KEYCHAIN_KEY_MISMATCH": "키체인의 키가 이 데이터베이스의 것이 아닙니다. 아무것도 변경되지 않았습니다. 저장하면 다음 시작 시 데이터베이스를 읽을 수 없게 됩니다.",
-    "SFTP_CONTENT_TOO_LARGE": "파일이 50MB보다 커서 클립보드에 복사할 수 없습니다."
+    "SFTP_CONTENT_TOO_LARGE": "파일이 50MB보다 커서 클립보드에 복사할 수 없습니다.",
+    "CLIPBOARD_FILE_FAILED": "이 시스템에서는 파일을 클립보드에 넣을 수 없습니다."
   },
   "mcpServer": {
     "hint": "외부 MCP 클라이언트는 이를 통해 허용 목록에 있는 서버에 명령, 파일 읽기/쓰기, 메모 업데이트를 제안할 수 있습니다. 기존 허용 규칙과 관계없이 모든 요청은 항상 앱에서 확인이 필요합니다.",
@@ -639,6 +640,7 @@
     "chmodFailed": "“{{name}}”의 권한을 설정할 수 없습니다: {{reason}}",
     "pathCopied": "경로를 클립보드에 복사했습니다",
     "contentCopied": "“{{name}}”의 내용을 클립보드에 복사했습니다",
+    "fileCopied": "“{{name}}”을(를) 파일로 클립보드에 복사했습니다",
     "copyFailed": "클립보드에 복사하지 못했습니다: {{reason}}",
     "openedLocally": "“{{name}}”을(를) 로컬에서 열었습니다 — 변경 사항은 업로드하도록 안내됩니다",
     "openLocallyFailed": "“{{name}}”을(를) 로컬에서 열 수 없습니다: {{reason}}",
@@ -979,6 +981,7 @@
       "download": "다운로드",
       "downloadTo": "다음 위치로 다운로드…",
       "copyContent": "파일 내용 복사",
+      "copyFile": "파일 복사",
       "openLocally": "로컬에서 열기…",
       "copyPath": "경로 복사",
       "properties": "속성",

@@ -68,7 +68,8 @@ jobs:
             libssl-dev \
             libasound2-dev \
             cmake \
-            libclang-dev
+            libclang-dev \
+            xvfb
 
       - name: cargo fmt --check
         run: cargo fmt --all --check
@@ -80,7 +81,17 @@ jobs:
         # Spec 0090, A9: ohne `--no-fail-fast` bricht der Schritt beim
         # ersten scheiternden Test-Binary ab und ein einzelner Lauf zeigt
         # nie alle betroffenen Crates auf einmal.
-        run: cargo test --workspace --no-fail-fast
+        # Issue #358: the clipboard round-trip test needs a display; Linux
+        # runs under a virtual X server, and the test must not be skipped.
+        env:
+          SMART_SSH_REQUIRE_CLIPBOARD_TESTS: "1"
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a cargo test --workspace --no-fail-fast
+          else
+            cargo test --workspace --no-fail-fast
+          fi
+        shell: bash
 
       - name: cargo build
         run: cargo build --workspace

@@ -37,6 +37,7 @@ import {
   sftpOpenForEditing,
   sftpCancelCopyContent,
   sftpCopyContent,
+  sftpCopyFile,
   sftpReadText,
   sftpRename,
   sftpStat,
@@ -62,6 +63,7 @@ vi.mock("../api", () => ({
       ? String((err as { code: unknown }).code)
       : null,
   sftpCopyContent: vi.fn(),
+  sftpCopyFile: vi.fn(),
   sftpCancelCopyContent: vi.fn(() => Promise.resolve()),
   sftpList: vi.fn(),
   sftpDelete: vi.fn(),
@@ -489,6 +491,50 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
         }),
       ),
     );
+  });
+
+  it("offers Copy file for files only and confirms a successful copy", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpCopyFile).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Datei kopieren"));
+
+    await waitFor(() => expect(sftpCopyFile).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "success", message: expect.stringContaining("a.txt") }),
+      ),
+    );
+  });
+
+  it("shows nothing for a cancelled Copy file and the translated message for a failure", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpCopyFile).mockRejectedValueOnce({ code: "SFTP_COPY_CANCELLED", message: "x" });
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Datei kopieren"));
+    await waitFor(() => expect(sftpCopyFile).toHaveBeenCalledTimes(1));
+    expect(showToast).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "error" }));
+
+    vi.mocked(sftpCopyFile).mockRejectedValueOnce({
+      code: "CLIPBOARD_FILE_FAILED",
+      message: "raw backend text",
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Datei kopieren"));
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "error", message: expect.stringContaining("Zwischenablage") }),
+      ),
+    );
+    expect(vi.mocked(showToast).mock.calls.at(-1)?.[0].message).not.toContain("raw backend text");
   });
 
   it("copies a 10 MB file completely to the clipboard", async () => {

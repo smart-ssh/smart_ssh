@@ -20,6 +20,7 @@ mod elevated_sftp;
 /// Spec 0084, §4: der Newtype, der die `EventEmitter`-Impl für
 /// `tauri::AppHandle` trägt (s. dortiger Moduldoc-Kommentar).
 mod event_emitter;
+mod file_clipboard;
 mod first_run_notice;
 mod local_server;
 mod mcp_backend;
@@ -478,6 +479,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // eines abgestürzten oder beendeten Prozesses. Best effort, blockiert
     // den Start nie.
     edit_copies::sweep_at_startup(data_dir_lock.dir());
+    // Issue #358: staged "Copy file" files of a previous process.
+    file_clipboard::sweep_at_startup();
 
     let inputs = startup_inputs(db_path, data_dir_lock, language);
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
@@ -664,6 +667,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
         .manage(crate::commands::CopyContentJobs::default())
+        .manage(crate::file_clipboard::FileClipboard::default())
         // Issue #89: local paths the user granted to a session (native open
         // dialog, native drop, own edit copy). The drop paths come from the
         // window's native drag-and-drop event below, never from the webview.
@@ -809,6 +813,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_mkdir,
             commands::sftp_read_text,
             commands::sftp_copy_content,
+            commands::sftp_copy_file,
             commands::sftp_cancel_copy_content,
             commands::sftp_exists,
             commands::sftp_stat,
@@ -837,8 +842,14 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::master_password::change_master_password,
             commands::master_password::switch_to_os_keychain,
         ]))
-        .run(context)
-        .expect("Fehler beim Starten der Tauri-App");
+        .build(context)
+        .expect("Fehler beim Starten der Tauri-App")
+        .run(|_app, event| {
+            // Issue #358: staged "Copy file" files are removed at exit.
+            if matches!(event, tauri::RunEvent::Exit) {
+                file_clipboard::cleanup_at_exit();
+            }
+        });
 }
 
 /// Spec 0101, A16: die Hintergrundaufgaben, die einen fertigen `AppState`

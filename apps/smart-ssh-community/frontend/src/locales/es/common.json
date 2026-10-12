@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Esta operación no corresponde a dónde se guarda actualmente la clave. No se cambió nada: vuelva a abrir los ajustes, que muestran el modo activo.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "No se confirmó la advertencia de la contraseña maestra. Sin esa contraseña se pierden todos los datos y no hay recuperación: marque la casilla y vuelva a configurarla. No se cambió nada.",
     "KEYCHAIN_KEY_MISMATCH": "La clave del llavero no pertenece a esta base de datos. No se cambió nada: guardarla dejaría la base de datos ilegible en el próximo inicio.",
-    "SFTP_CONTENT_TOO_LARGE": "El archivo supera los 50 MB y no se puede copiar al portapapeles."
+    "SFTP_CONTENT_TOO_LARGE": "El archivo supera los 50 MB y no se puede copiar al portapapeles.",
+    "CLIPBOARD_FILE_FAILED": "No se pudo colocar el archivo en el portapapeles de este sistema."
   },
   "mcpServer": {
     "hint": "Los clientes MCP externos pueden usarlo para proponer comandos, lecturas y escrituras de archivos y actualizaciones de notas en servidores de la lista de permitidos; cada solicitud requiere siempre confirmación en la aplicación, con independencia de las reglas de permiso existentes.",
@@ -649,6 +650,7 @@
     "chmodFailed": "No se pudieron establecer los permisos de “{{name}}”: {{reason}}",
     "pathCopied": "Ruta copiada al portapapeles",
     "contentCopied": "Contenido de “{{name}}” copiado al portapapeles",
+    "fileCopied": "«{{name}}» copiado al portapapeles como archivo",
     "copyFailed": "Error al copiar al portapapeles: {{reason}}",
     "openedLocally": "“{{name}}” abierto localmente: se ofrecerá subir los cambios",
     "openLocallyFailed": "No se pudo abrir “{{name}}” localmente: {{reason}}",
@@ -993,6 +995,7 @@
       "download": "Descargar",
       "downloadTo": "Descargar en…",
       "copyContent": "Copiar contenido del archivo",
+      "copyFile": "Copiar archivo",
       "openLocally": "Abrir localmente…",
       "copyPath": "Copiar ruta",
       "properties": "Propiedades",

@@ -63,6 +63,10 @@ allow = [
     "Apache-2.0 WITH LLVM-exception",
     "CDLA-Permissive-2.0",
     "MPL-2.0",
+    # Boost Software License 1.0 (permissive, OSI-approved; not BUSL).
+    # Maintainer decision (#358): only `clipboard-win` and `error-code`,
+    # Windows-only, pulled in by `clipboard-rs`.
+    "BSL-1.0",
 ]
 confidence-threshold = 0.8
 

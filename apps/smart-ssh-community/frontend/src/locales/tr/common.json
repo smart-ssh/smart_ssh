@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Bu işlem anahtarın şu an tutulduğu yerle uyuşmuyor. Hiçbir şey değiştirilmedi — ayarları yeniden açın, etkin modu gösterirler.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Ana parola uyarısı onaylanmadı. Bu parola olmadan tüm veriler kaybolur ve kurtarma yoktur — kutuyu işaretleyin ve yeniden kurun. Hiçbir şey değiştirilmedi.",
     "KEYCHAIN_KEY_MISMATCH": "Anahtarlıktaki anahtar bu veritabanına ait değil. Hiçbir şey değiştirilmedi — saklamak, veritabanını bir sonraki başlatmada okunamaz hale getirirdi.",
-    "SFTP_CONTENT_TOO_LARGE": "Dosya 50 MB'tan büyük olduğu için panoya kopyalanamaz."
+    "SFTP_CONTENT_TOO_LARGE": "Dosya 50 MB'tan büyük olduğu için panoya kopyalanamaz.",
+    "CLIPBOARD_FILE_FAILED": "Dosya bu sistemde panoya konulamadı."
   },
   "mcpServer": {
     "hint": "Harici MCP istemcileri bununla izin listesindeki sunucularda komut, dosya okuma/yazma ve not güncellemesi önerebilir — mevcut izin kurallarından bağımsız olarak her istek uygulamada her zaman onay gerektirir.",
@@ -644,6 +645,7 @@
     "chmodFailed": "“{{name}}” izinleri ayarlanamadı: {{reason}}",
     "pathCopied": "Yol panoya kopyalandı",
     "contentCopied": "“{{name}}” içeriği panoya kopyalandı",
+    "fileCopied": "“{{name}}” dosya olarak panoya kopyalandı",
     "copyFailed": "Panoya kopyalama başarısız: {{reason}}",
     "openedLocally": "“{{name}}” yerel olarak açıldı — değişiklikler yükleme için sunulacak",
     "openLocallyFailed": "“{{name}}” yerel olarak açılamadı: {{reason}}",
@@ -986,6 +988,7 @@
       "download": "İndir",
       "downloadTo": "Şuraya indir…",
       "copyContent": "Dosya içeriğini kopyala",
+      "copyFile": "Dosyayı kopyala",
       "openLocally": "Yerel olarak aç…",
       "copyPath": "Yolu kopyala",
       "properties": "Özellikler",

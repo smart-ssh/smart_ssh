@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Dieser Vorgang passt nicht dazu, wo der Schlüssel gerade liegt. Es wurde nichts verändert — öffne die Einstellungen erneut, dort steht der aktive Modus.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind alle Daten verloren, und es gibt keine Wiederherstellung — setze das Häkchen und richte es erneut ein. Es wurde nichts verändert.",
     "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar.",
-    "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden."
+    "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden.",
+    "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden."
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
@@ -644,6 +645,7 @@
     "chmodFailed": "Rechte von „{{name}}“ konnten nicht gesetzt werden: {{reason}}",
     "pathCopied": "Pfad in die Zwischenablage kopiert",
     "contentCopied": "Inhalt von „{{name}}“ in die Zwischenablage kopiert",
+    "fileCopied": "„{{name}}“ als Datei in die Zwischenablage kopiert",
     "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen: {{reason}}",
     "openedLocally": "„{{name}}“ lokal geöffnet — Änderungen werden zum Hochladen angeboten",
     "openLocallyFailed": "„{{name}}“ konnte nicht lokal geöffnet werden: {{reason}}",
@@ -986,6 +988,7 @@
       "download": "Herunterladen",
       "downloadTo": "Herunterladen nach…",
       "copyContent": "Dateiinhalt kopieren",
+      "copyFile": "Datei kopieren",
       "openLocally": "Lokal öffnen…",
       "copyPath": "Pfad kopieren",
       "properties": "Eigenschaften",
