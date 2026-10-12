@@ -81,6 +81,9 @@ const HTTP_STACK_CRATES: &[&str] = &[
 const ALLOWED_DEPENDENTS: &[(&str, &str)] = &[
     // KI-Provider: Chat, Modellsuche, Schlüsselprüfung, Attestierung.
     ("ai-providers", "reqwest"),
+    // Sprachmodell-Download (Spec 0108): genau ein fester Host, nur nach
+    // ausdrücklicher Nutzeraktion; Hash-Prüfung vor dem Ablegen.
+    ("speech", "reqwest"),
     // Lokaler MCP-Listener (`mcp-server`, nur 127.0.0.1): axum nutzt hyper
     // als Server.
     ("axum", "hyper"),
@@ -412,6 +415,9 @@ fn http_client_edges_catch_direct_and_transitive_additions() {
 2hyper v1.8.1
 2hyper-rustls v0.27.7
 3hyper v1.8.1
+0speech v0.5.2 (/ws/crates/speech)
+1reqwest v0.13.4
+2hyper v1.8.1
 0mcp-server v0.5.2 (/ws/crates/mcp-server)
 1axum v0.8.9
 2hyper v1.8.1

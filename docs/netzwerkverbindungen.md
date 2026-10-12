@@ -22,6 +22,7 @@ listet jede Verbindung, die die App aufbauen kann (Issue #14).
 | Modellsuche | Basis-URL aus dem Provider-Formular (`/models`) | Verlassen des API-Key- oder Base-URL-Felds im Provider-Formular mit eingegebenem Key (nur bei geänderten Eingaben), oder Klick auf „Modelle laden" | je nach Provider-URL¹ |
 | Schlüsselprüfung | Basis-URL aus dem Provider-Formular | Klick auf „Zugangsdaten testen" im Provider-Formular | je nach Provider-URL¹ |
 | Attestierungs-Abruf | die vom Nutzer im Provider hinterlegte Attestierungs-URL | Klick auf „Attestierung abrufen" in den KI-Einstellungen | je nach URL |
+| Sprachmodell-Download | `huggingface.co` (`ggerganov/whisper.cpp`, fester Stand, Spec 0108) | Nutzer bestätigt den Download im Dialog der Spracheingabe bzw. in den Einstellungen; nie beim Start, nie im Hintergrund | ja (Anfrage an den Host; das Modell wird geladen, es werden keine Nutzerdaten gesendet) |
 | Ollama-Suche | `http://127.0.0.1:11434/v1/models` | einmal beim Öffnen der KI-Einstellungen, wenn noch kein Ollama-Provider existiert; erneut nur per Klick auf „Erneut suchen" (Spec 0069, E1) | **nein, nur lokal** |
 | MCP-Server (eingehend) | lauscht auf `127.0.0.1:47823`, Pfad `/mcp` | Nutzer schaltet den MCP-Server in den Einstellungen ein; danach bei jedem Start, bis er ihn ausschaltet | **nein, nur lokal** |
 
