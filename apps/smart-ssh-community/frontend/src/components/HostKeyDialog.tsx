@@ -148,19 +148,19 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
 
               </div>
 
-              <div className="mt-4 flex shrink-0 gap-2 border-t border-red-700/30 pt-4">
+              <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-red-700/30 pt-4">
                 <button
                   ref={rejectButtonRef}
                   type="button"
                   onClick={() => decide("reject")}
-                  className="font-heading flex-1 bg-red-700 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
+                  className="font-heading bg-red-700 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
                 >
                   {t("hostKeyDialog.cancelConnection")}
                 </button>
                 <button
                   type="button"
                   onClick={() => decide("trust")}
-                  className="font-heading flex-1 border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
+                  className="font-heading border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
                 >
                   {t("hostKeyDialog.trustAnyway")}
                 </button>
@@ -189,15 +189,14 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
 
             </div>
 
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 justify-end gap-2">
               <Button
                 ref={rejectButtonRef}
-                className="flex-1"
                 onClick={() => decide("reject")}
               >
                 {t("hostKeyDialog.reject")}
               </Button>
-              <Button variant="primary" className="flex-1" onClick={() => decide("trust")}>
+              <Button variant="primary" onClick={() => decide("trust")}>
                 {t("hostKeyDialog.trust")}
               </Button>
             </div>

@@ -32,14 +32,14 @@ function renderDialog(kind: StartupPromptKind) {
 /** Die Knöpfe, die eine Frageart zeigen **darf** — dieselbe Positivliste
  * wie im Backend (`window_prompt::choice_for`). */
 const EXPECTED: Record<StartupPromptKind, string[]> = {
-  retryOrQuit: ["Erneut versuchen", "Beenden"],
-  retrySkipOrQuit: ["Erneut versuchen", "Ohne Übernahme fortfahren", "Beenden"],
-  retrySetUpOrQuit: ["Erneut versuchen", "Master-Passwort einrichten", "Beenden"],
-  startOverOrQuit: ["Neu anfangen", "Beenden"],
-  newKeyOrQuit: ["Neuen Schlüssel erzeugen", "Beenden"],
-  confirmStartOver: ["Ja, fortfahren", "Abbrechen"],
-  confirmNewKey: ["Ja, fortfahren", "Abbrechen"],
-  newMasterPassword: ["Ja, fortfahren", "Abbrechen"],
+  retryOrQuit: ["Beenden", "Erneut versuchen"],
+  retrySkipOrQuit: ["Beenden", "Ohne Übernahme fortfahren", "Erneut versuchen"],
+  retrySetUpOrQuit: ["Beenden", "Master-Passwort einrichten", "Erneut versuchen"],
+  startOverOrQuit: ["Beenden", "Neu anfangen"],
+  newKeyOrQuit: ["Beenden", "Neuen Schlüssel erzeugen"],
+  confirmStartOver: ["Abbrechen", "Ja, fortfahren"],
+  confirmNewKey: ["Abbrechen", "Ja, fortfahren"],
+  newMasterPassword: ["Abbrechen", "Ja, fortfahren"],
   notice: ["OK"],
 };
 
@@ -63,6 +63,9 @@ describe("StartupPromptDialog", () => {
         const present = screen.queryByRole("button", { name: label }) !== null;
         expect(present, `${kind}: Knopf „${label}“`).toBe(expected.includes(label));
       }
+      // Issue #408: display order is Quit/Cancel first, the main action last.
+      const shown = screen.getAllByRole("button").map((b) => b.textContent);
+      expect(shown, `${kind}: Reihenfolge`).toEqual(expected);
       view.unmount();
     }
   });

@@ -30,7 +30,11 @@ interface StartupPromptDialogProps {
   onDismiss: () => void;
 }
 
-/** Welche Knöpfe eine Frageart zeigen darf.
+/** Welche Knöpfe eine Frageart zeigen darf, **in Anzeigereihenfolge**
+ * (docs/ui-guidelines.md, Issue #408): Quit/Cancel zuerst, die
+ * Hauptaktion zuletzt.
+ *
+ * Welche Knöpfe eine Frageart zeigen darf.
  *
  * **Die Liste ist eine Positivliste** (A3): Das Frontend bildet die Knöpfe
  * ab, die das Backend je Frageart vorsieht, und erfindet keine. Ein Knopf,
@@ -39,14 +43,14 @@ interface StartupPromptDialogProps {
  * (`window_prompt::choice_for`). Doppelt, weil die Antwort über IPC geht.
  */
 const ANSWERS_BY_KIND: Record<StartupPromptKind, StartupPromptAnswer[]> = {
-  retryOrQuit: ["retry", "quit"],
-  retrySkipOrQuit: ["retry", "continueWithoutMigration", "quit"],
-  retrySetUpOrQuit: ["retry", "setUpMasterPassword", "quit"],
-  startOverOrQuit: ["startOver", "quit"],
-  newKeyOrQuit: ["generateNewKey", "quit"],
-  confirmStartOver: ["confirm", "cancel"],
-  confirmNewKey: ["confirm", "cancel"],
-  newMasterPassword: ["confirm", "cancel"],
+  retryOrQuit: ["quit", "retry"],
+  retrySkipOrQuit: ["quit", "continueWithoutMigration", "retry"],
+  retrySetUpOrQuit: ["quit", "setUpMasterPassword", "retry"],
+  startOverOrQuit: ["quit", "startOver"],
+  newKeyOrQuit: ["quit", "generateNewKey"],
+  confirmStartOver: ["cancel", "confirm"],
+  confirmNewKey: ["cancel", "confirm"],
+  newMasterPassword: ["cancel", "confirm"],
   notice: [],
 };
 
