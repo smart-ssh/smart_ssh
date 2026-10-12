@@ -3,8 +3,16 @@ name: Mutants
 # Manually triggered mutation test run over the security-critical modules
 # (filter engine, risk classifier). Too heavy for developer machines and
 # for every PR, so it only runs on demand. Surviving mutants do not fail
-# the job; they are published in the `mutants-out` artifact (`missed.txt`,
-# `caught.txt`, ...) so weak or tautological tests become visible.
+# the job; they are published in the `mutants-out` artifact so weak or
+# tautological tests become visible.
+#
+# The run is split into one shard per module so each job stays well below
+# the 6h runner limit. cargo-mutants gets its own time budget that ends
+# before the job timeout, so the shard upload always runs. The final
+# `merge` job always produces ONE artifact `mutants-out` with:
+#   missed.txt         union of the missed mutants of all shards
+#   shards.txt         one line per shard: complete / incomplete (reason)
+#   <shard>/           raw mutants.out of each shard (caught.txt, ...)
 on:
   workflow_dispatch:
 
@@ -16,9 +24,13 @@ env:
 
 jobs:
   mutants:
-    name: cargo-mutants (filter, risk)
+    name: cargo-mutants (${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [filter, risk]
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -28,24 +40,96 @@ jobs:
 
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: mutants-${{ matrix.shard }}
 
       - name: Install cargo-mutants
         run: cargo install cargo-mutants --version 27.1.0 --locked
 
-      # Surviving mutants are the expected result, not a failure.
+      # Surviving mutants are the expected result, not a failure. The time
+      # budget (300 min) ends before the job timeout (330 min); SIGINT lets
+      # cargo-mutants stop cleanly, SIGKILL follows after 2 minutes.
+      # cargo-mutants appends to missed.txt as it goes, so a timed-out
+      # shard still yields the mutants tested so far.
       - name: Run cargo-mutants
+        env:
+          SHARD: ${{ matrix.shard }}
         run: |
-          cargo mutants -p ssh-manager-core \
-            --file 'crates/core/src/filter/**' \
-            --file 'crates/core/src/risk/**' \
-            --exclude '**/*tests*.rs' \
-            --no-shuffle -j 2 --timeout 300 || true
+          set +e
+          timeout --signal=INT --kill-after=2m 300m \
+            cargo mutants -p ssh-manager-core \
+              --file "crates/core/src/${SHARD}/**" \
+              --exclude '**/*tests*.rs' \
+              --no-shuffle -j 4 --timeout 300
+          rc=$?
+          mkdir -p mutants.out
+          # 0 = no survivors, 2 = survivors found, 3 = some mutants timed
+          # out: all mean the run finished. 124/137 = time budget hit.
+          case "$rc" in
+            0|2|3) echo "complete (cargo-mutants exit $rc)" > mutants.out/shard-status.txt ;;
+            124|137) echo "incomplete (time budget of 300 min reached)" > mutants.out/shard-status.txt ;;
+            *) echo "incomplete (cargo-mutants exit $rc)" > mutants.out/shard-status.txt ;;
+          esac
+          cat mutants.out/shard-status.txt
+          exit 0
 
-      - name: Upload mutants.out
+      - name: Upload shard result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutants-shard-${{ matrix.shard }}
+          path: mutants.out/
+          retention-days: 3
+          if-no-files-found: warn
+
+  merge:
+    name: Merge shards into mutants-out
+    needs: mutants
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download shard results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: true
+        with:
+          pattern: mutants-shard-*
+          path: shards
+
+      - name: Merge
+        run: |
+          mkdir -p shards mutants-out
+          : > mutants-out/shards.txt
+          for shard in filter risk; do
+            src="shards/mutants-shard-${shard}"
+            if [ -d "$src" ]; then
+              cp -R "$src" "mutants-out/${shard}"
+              if [ -f "$src/shard-status.txt" ]; then
+                status=$(cat "$src/shard-status.txt")
+              else
+                status="incomplete (job ended before the run finished)"
+              fi
+            else
+              status="incomplete (no shard result uploaded)"
+            fi
+            echo "${shard}: ${status}" >> mutants-out/shards.txt
+          done
+          find mutants-out -mindepth 2 -name missed.txt -exec cat {} + \
+            | sort -u > mutants-out/missed.txt
+          {
+            echo "## cargo-mutants"
+            echo
+            sed 's/^/- /' mutants-out/shards.txt
+            echo
+            echo "Missed mutants: $(wc -l < mutants-out/missed.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat mutants-out/shards.txt
+
+      - name: Upload mutants-out
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mutants-out
-          path: mutants.out/
+          path: mutants-out/
           retention-days: 14
           if-no-files-found: warn
