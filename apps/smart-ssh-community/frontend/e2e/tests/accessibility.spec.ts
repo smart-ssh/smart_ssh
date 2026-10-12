@@ -27,6 +27,23 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     await app.page.getByRole("button", { name: "Show history", exact: true }).click();
     await expect(app.page.getByRole("button", { name: "Restore" }).first()).toBeVisible();
   },
+  "filter rules": async (app) => {
+    await app.launch({
+      ...populated(),
+      commands: {
+        list_rules: {
+          result: [
+            { id: "r1", patternType: "glob", patternValue: "ls *", action: "Allow", scope: "Global", priority: 10, patternError: null },
+            { id: "r2", patternType: "glob", patternValue: "rm *", action: "Deny", scope: "Global", priority: 20, patternError: null },
+            { id: "r3", patternType: "exact", patternValue: "reboot", action: "Confirm", scope: "Global", priority: 5, patternError: null },
+          ],
+        },
+        list_hard_blacklist: { result: [{ kind: "regex", value: "rm -rf /" }] },
+      },
+    });
+    await app.page.getByRole("button", { name: "Filter Rules", exact: true }).click();
+    await expect(app.page.getByText("ls *")).toBeVisible();
+  },
   "command confirmation": async (app) => {
     await app.launch(populated());
     const sessionId = await openSession(app, "db-primary");
