@@ -1047,7 +1047,8 @@ export function FileBrowserPanel({
           {t("fileElevation.failure.sftpServerUnsafe", { path: elevationWarning })}
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800 px-2 py-1.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-slate-800 px-2 py-1.5">
+        <div className="flex min-w-[12rem] flex-1 items-center gap-1.5">
         <Button
           size="sm"
           onClick={() => load(startPath)}
@@ -1081,6 +1082,11 @@ export function FileBrowserPanel({
             className={`${FIELD_CONTROL_CLASS} w-full px-2 py-1 font-mono text-xs`}
           />
         </form>
+        </div>
+        <fieldset
+          aria-label={t("fileBrowser.fileActionsGroup")}
+          className="m-0 flex min-w-0 items-center gap-1.5 border-0 p-0"
+        >
         <Button size="sm" onClick={() => setMkdirOpen("")}>
           {t("fileBrowser.newFolderButton")}
         </Button>
@@ -1090,7 +1096,12 @@ export function FileBrowserPanel({
         <Button size="sm" onClick={handleUploadFolderButton}>
           {t("fileBrowser.uploadFolder")}
         </Button>
+        </fieldset>
         {!elevated && (
+          <fieldset
+            aria-label={t("fileElevation.group")}
+            className="m-0 flex min-w-0 items-center gap-1.5 border-0 border-l border-slate-700 p-0 pl-2"
+          >
           <input
             {...TECHNICAL_INPUT_PROPS}
             value={elevationTargetUser}
@@ -1099,8 +1110,6 @@ export function FileBrowserPanel({
             title={t("fileElevation.targetUserLabel")}
             className={`${FIELD_CONTROL_CLASS} w-20 px-1.5 py-1 font-mono text-xs`}
           />
-        )}
-        {!elevated && (
           <Button
             size="sm"
             onClick={handleToggleElevation}
@@ -1109,6 +1118,7 @@ export function FileBrowserPanel({
           >
             {enablingElevation ? t("fileElevation.enabling") : `🔓 ${t("fileElevation.toggle")}`}
           </Button>
+          </fieldset>
         )}
         {cutEntry && (
           <>

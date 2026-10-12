@@ -685,7 +685,8 @@
       "startFailed": "sftp-server sudo ile başlatılamadı (olası neden: sudoers'ta “requiretty”)."
     },
     "channelLost": "Yükseltilmiş haklar sona erdi — yükseltilmiş kanal artık etkin değil.",
-    "targetUserLabel": "Yükseltilmiş haklar için hedef kullanıcı (varsayılan: root)"
+    "targetUserLabel": "Yükseltilmiş haklar için hedef kullanıcı (varsayılan: root)",
+    "group": "Yükseltilmiş haklar"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config içe aktar",
@@ -907,6 +908,7 @@
     "toStartDirectory": "Başlangıç dizinine git",
     "parentDirectory": "Üst dizin",
     "newFolderButton": "+ Klasör",
+    "fileActionsGroup": "Dosya işlemleri",
     "upload": "Yükle",
     "uploadDialogTitle": "Dosya(ları) yükle",
     "uploadFolder": "Klasör yükle",

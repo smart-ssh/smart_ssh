@@ -680,7 +680,8 @@
       "startFailed": "Không thể khởi động sftp-server qua sudo (nguyên nhân có thể: “requiretty” trong sudoers)."
     },
     "channelLost": "Quyền nâng cao đã kết thúc — kênh nâng cao không còn hoạt động.",
-    "targetUserLabel": "Người dùng đích cho quyền nâng cao (mặc định: root)"
+    "targetUserLabel": "Người dùng đích cho quyền nâng cao (mặc định: root)",
+    "group": "Quyền nâng cao"
   },
   "sshConfigImport": {
     "dialogTitle": "Nhập ssh_config",
@@ -902,6 +903,7 @@
     "toStartDirectory": "Đến thư mục khởi đầu",
     "parentDirectory": "Thư mục cha",
     "newFolderButton": "+ Thư mục",
+    "fileActionsGroup": "Thao tác tệp",
     "upload": "Tải lên",
     "uploadDialogTitle": "Tải tệp lên",
     "uploadFolder": "Tải thư mục lên",
