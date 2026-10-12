@@ -1012,7 +1012,10 @@
       "execute": "Udfør",
       "numeric": "Numerisk",
       "recursive": "Rekursivt",
-      "recursiveWarning": "– ændrer rettighederne for ALLE filer og undermapper i denne mappe. Kraftfuld handling, kan ikke fortrydes."
+      "recursiveWarning": "– ændrer rettighederne for ALLE filer og undermapper i denne mappe. Kraftfuld handling, kan ikke fortrydes.",
+      "owner": "Ejer",
+      "group": "Gruppe",
+      "other": "Andre"
     },
     "renamePrompt": {
       "renameTitle": "Omdøb",

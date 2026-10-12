@@ -1879,10 +1879,10 @@ function FilePropertiesDialog({
 /** Reihen-Reihenfolge der chmod-Checkbox-Matrix: owner/group/other × je
  * einer Bit-Maske pro Spalte (r/w/x), spiegelt exakt `RemoteEntry::
  * permissions` (Spec 0020: "reine Unix-Rechte-Bits, `0o755`-Stil"). */
-const CHMOD_ROWS: { label: string; read: number; write: number; execute: number }[] = [
-  { label: "Owner", read: 0o400, write: 0o200, execute: 0o100 },
-  { label: "Group", read: 0o040, write: 0o020, execute: 0o010 },
-  { label: "Other", read: 0o004, write: 0o002, execute: 0o001 },
+const CHMOD_ROWS: { key: "owner" | "group" | "other"; read: number; write: number; execute: number }[] = [
+  { key: "owner", read: 0o400, write: 0o200, execute: 0o100 },
+  { key: "group", read: 0o040, write: 0o020, execute: 0o010 },
+  { key: "other", read: 0o004, write: 0o002, execute: 0o001 },
 ];
 
 /** Spec 0054, Teil 3: chmod-Dialog — Checkbox-Matrix (owner/group/other ×
@@ -1974,8 +1974,8 @@ function ChmodDialog({
         </thead>
         <tbody>
           {CHMOD_ROWS.map((row) => (
-            <tr key={row.label}>
-              <td>{row.label}</td>
+            <tr key={row.key}>
+              <td>{t(`fileBrowser.chmod.${row.key}`)}</td>
               {(
                 [
                   [row.read, "read"],
@@ -1988,7 +1988,7 @@ function ChmodDialog({
                     type="checkbox"
                     checked={(mode & bit) !== 0}
                     onChange={() => toggleBit(bit)}
-                    aria-label={`${row.label}: ${t(`fileBrowser.chmod.${key}`)}`}
+                    aria-label={`${t(`fileBrowser.chmod.${row.key}`)}: ${t(`fileBrowser.chmod.${key}`)}`}
                     className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   />
                 </td>
