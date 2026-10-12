@@ -403,6 +403,9 @@ jobs:
             librsvg2-dev \
             patchelf \
             libssl-dev \
+            libasound2-dev \
+            cmake \
+            libclang-dev \
             webkit2gtk-driver \
             xvfb \
             gnome-keyring \
