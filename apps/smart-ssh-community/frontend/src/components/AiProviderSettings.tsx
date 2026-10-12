@@ -13,6 +13,7 @@ import {
   testAiProviderCredentials,
   updateAiProvider,
 } from "../api";
+import { Button, FIELD_CONTROL_CLASS } from "./ui";
 import { translateErrorCode } from "../errorCodes";
 import { effectiveApiKey, OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../ollama";
 import {
@@ -102,22 +103,7 @@ type OllamaProbeState =
 const CARD_CLASS = "rounded-lg border border-slate-700 bg-slate-900/40 p-4";
 const LABEL_CLASS = "block text-sm";
 const LABEL_TEXT_CLASS = "font-medium text-slate-200";
-const FIELD_CLASS =
-  "rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-slate-100 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40";
-// Spec-Reviewer-Fund: `focus:` (statt `focus-visible:`) hielt den Ring auf
-// Buttons auch nach einem reinen Mausklick sichtbar stehen, statt nur bei
-// Tastaturfokus — für Eingabefelder ist `focus:` üblich (Klick = Fokus =
-// aktive Eingabe), für Buttons wechselt diese Klasse deshalb auf
-// `focus-visible:`.
-const SECONDARY_BUTTON_CLASS =
-  "shrink-0 rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50";
-// Spec-Reviewer-Fund: "Aktiv setzen"/"Löschen" trugen eigene, von
-// `SECONDARY_BUTTON_CLASS` abweichende Ad-hoc-Klassenketten (kleinere
-// Innenabstände) — für eine konsistente Aktionshierarchie jetzt dieselbe
-// Größe/denselben Rahmen-Stil wie jeder andere sekundäre Button, nur mit
-// den etablierten semantischen Farben (Spec 0009: `red` = destruktiv).
-const DANGER_BUTTON_CLASS =
-  "shrink-0 rounded border border-red-800 bg-red-900 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-red-200 transition-colors hover:bg-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50";
+const FIELD_CLASS = FIELD_CONTROL_CLASS;
 
 interface AiProviderSettingsProps {
   /** Löst neu laden von `list_ai_providers` im Elternscreen aus (z. B. für
@@ -616,32 +602,36 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           {providers.map((provider) => (
             <li key={provider.id} className="px-4 py-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-medium text-slate-100">
-                    {provider.displayName}
+                <div className="min-w-0">
+                  <p className="flex items-center font-medium text-slate-100">
+                    <span className="truncate" title={provider.displayName}>
+                      {provider.displayName}
+                    </span>
                     {provider.isActive && (
-                      <span className="ml-2 rounded bg-emerald-900 px-2 py-0.5 text-xs text-emerald-300">
+                      <span className="ml-2 shrink-0 rounded bg-emerald-900 px-2 py-0.5 text-xs text-emerald-300">
                         {t("aiProvider.active")}
                       </span>
                     )}
                   </p>
-                  <p className="text-sm text-slate-400">
+                  <p
+                    className="truncate text-sm text-slate-400"
+                    title={`${t(`aiProvider.providerTypes.${provider.providerType}`)} · ${provider.model}`}
+                  >
                     {t(`aiProvider.providerTypes.${provider.providerType}`)} · {provider.model}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   {!provider.isActive && (
-                    <button
-                      type="button"
+                    <Button size="sm"
                       onClick={() => handleSetActive(provider.id)}
-                      className={SECONDARY_BUTTON_CLASS}
+                      
                     >
                       {t("aiProvider.setActive")}
-                    </button>
+                    </Button>
                   )}
-                  <button type="button" onClick={() => handleDelete(provider.id)} className={DANGER_BUTTON_CLASS}>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(provider.id)} >
                     {t("common.delete")}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -658,16 +648,15 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
               {provider.attestationUrl && (
                 <div className="mt-2 space-y-1.5">
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={() => handleFetchAttestation(provider.id)}
                     disabled={attestationLoading[provider.id]}
-                    className={SECONDARY_BUTTON_CLASS}
+                    
                   >
                     {attestationLoading[provider.id]
                       ? t("aiProvider.attestationFetching")
                       : t("aiProvider.attestationFetch")}
-                  </button>
+                  </Button>
                   {attestationErrors[provider.id] && (
                     <p className="text-xs text-red-400">{attestationErrors[provider.id]}</p>
                   )}
@@ -703,7 +692,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
           {t("aiProvider.riskClassifierTitle")}
         </h3>
-        <p className="mb-2 text-xs text-slate-500">{t("aiProvider.riskClassifierHint")}</p>
+        <p className="mb-2 text-xs text-slate-400">{t("aiProvider.riskClassifierHint")}</p>
         <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
@@ -743,7 +732,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
           {t("aiProvider.redRiskAlwaysConfirmTitle")}
         </h3>
-        <p className="mb-2 text-xs text-slate-500">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
+        <p className="mb-2 text-xs text-slate-400">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
         <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
@@ -786,27 +775,22 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                   ))}
                 </select>
               </label>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 {providers.some((p) => p.isActive)
                   ? t("aiProvider.ollamaProbeFoundHintInactive")
                   : t("aiProvider.ollamaProbeFoundHintWillActivate")}
               </p>
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
+                <Button size="sm"
                   onClick={handleAdoptOllama}
                   disabled={ollamaAdding}
-                  className={SECONDARY_BUTTON_CLASS}
+                  
                 >
                   {ollamaAdding ? t("aiProvider.adding") : t("aiProvider.ollamaProbeAdopt")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOllamaDismissed(true)}
-                  className="text-xs text-slate-400 underline hover:text-slate-200"
-                >
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setOllamaDismissed(true)}>
                   {t("aiProvider.ollamaProbeDismiss")}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -816,10 +800,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               <p className="text-sm font-medium text-slate-100">
                 {t("aiProvider.ollamaProbeEmptyHeading")}
               </p>
-              <p className="text-xs text-slate-500">{t("aiProvider.ollamaProbePullHint")}</p>
-              <button type="button" onClick={runOllamaProbe} className={SECONDARY_BUTTON_CLASS}>
+              <p className="text-xs text-slate-400">{t("aiProvider.ollamaProbePullHint")}</p>
+              <Button size="sm" onClick={runOllamaProbe} >
                 {t("aiProvider.ollamaProbeRetry")}
-              </button>
+              </Button>
             </div>
           )}
 
@@ -833,12 +817,12 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 <p className="text-sm font-medium text-slate-100">
                   {t("aiProvider.ollamaProbeNotFoundHeading")}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400">
                   {t("aiProvider.ollamaProbeNotFoundInstructions")}
                 </p>
-                <button type="button" onClick={runOllamaProbe} className={SECONDARY_BUTTON_CLASS}>
+                <Button size="sm" onClick={runOllamaProbe} >
                   {t("aiProvider.ollamaProbeRetry")}
-                </button>
+                </Button>
               </div>
             )}
 
@@ -915,8 +899,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 className={`w-full ${FIELD_CLASS}`}
               />
               {supportsModelDiscovery(form.providerType) && (
-                <button
-                  type="button"
+                <Button size="sm"
                   onClick={handleDiscoverModels}
                   // Unabhängiger Review-Pass (Spec 0024/0025): dieser Button
                   // ist `type="button"`, das `required`-Attribut des
@@ -930,10 +913,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     modelsLoading ||
                     (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
                   }
-                  className={SECONDARY_BUTTON_CLASS}
+                  
                 >
                   {modelsLoading ? t("aiProvider.discoveringModels") : t("aiProvider.discoverModels")}
-                </button>
+                </Button>
               )}
             </div>
             {/* Spec 0025, Abschnitt 2: `<datalist>` macht das Feld
@@ -947,11 +930,11 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               ))}
             </datalist>
             {modelsEmpty && (
-              <p className="mt-1 text-xs text-slate-500">{t("aiProvider.modelDiscoveryEmptyHint")}</p>
+              <p className="mt-1 text-xs text-slate-400">{t("aiProvider.modelDiscoveryEmptyHint")}</p>
             )}
             {modelsFailed && (
               <>
-                <p className="mt-1 text-xs text-slate-500">{t("aiProvider.modelDiscoveryFailedHint")}</p>
+                <p className="mt-1 text-xs text-slate-400">{t("aiProvider.modelDiscoveryFailedHint")}</p>
                 {/* Spec 0069, Teil A5: zusätzlich der übersetzte Grund,
                  * wenn der Fehler einen bekannten Code trägt (z. B.
                  * AI_MODEL_NOT_FOUND, AI_LOCAL_PROVIDER_UNREACHABLE) —
@@ -961,7 +944,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                  * hier explizit unterdrücken statt eine leere Box zu
                  * zeigen. */}
                 {modelsFailedCode && translateErrorCode(t, modelsFailedCode, "") && (
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-slate-400">
                     {translateErrorCode(t, modelsFailedCode, "")}
                   </p>
                 )}
@@ -993,7 +976,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               {t("aiProvider.apiKey")}
               {/* Spec 0069, Teil B5: Ollama braucht keinen Key. */}
               {form.providerType === "ollama" && (
-                <span className="ml-1 font-normal text-slate-500">
+                <span className="ml-1 font-normal text-slate-400">
                   {t("aiProvider.apiKeyNotNeededForOllama")}
                 </span>
               )}
@@ -1055,8 +1038,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
            * hier nur visuell (eigene Ergebnis-Box) in die neue Struktur
            * eingebettet, keine funktionale Änderung. */}
           <div>
-            <button
-              type="button"
+            <Button size="sm"
               onClick={handleTestCredentials}
               // Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts):
               // dieselbe Sperre wie beim "Modelle laden"-Button oben — ohne
@@ -1073,10 +1055,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 (form.providerType !== "ollama" && !form.apiKey.trim()) ||
                 (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
               }
-              className={SECONDARY_BUTTON_CLASS}
+              
             >
               {credentialTestRunning ? t("aiProvider.testingCredentials") : t("aiProvider.testCredentials")}
-            </button>
+            </Button>
             {credentialTestResult && (
               <p
                 className={`mt-1.5 rounded border px-2.5 py-1.5 text-xs ${
@@ -1128,7 +1110,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                 />
                 {t("aiProvider.webResearch")}
               </label>
-              <p className="mt-1 text-xs text-slate-500">{t("aiProvider.webResearchHint")}</p>
+              <p className="mt-1 text-xs text-slate-400">{t("aiProvider.webResearchHint")}</p>
             </div>
           )}
 
@@ -1141,26 +1123,29 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
            * Untergruppe ist, nicht gleichrangig mit den Kernfeldern
            * darüber. */}
           <div className="border-t border-slate-700/60 pt-3">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showAdvanced}
               onClick={() => setShowAdvanced((prev) => !prev)}
-              className="font-heading text-xs font-semibold tracking-wide text-slate-400 uppercase hover:text-slate-200"
+              className="font-heading tracking-wide uppercase"
             >
-              {showAdvanced ? "▾ " : "▸ "}
+              <span aria-hidden="true">{showAdvanced ? "▾" : "▸"}</span>
               {t("aiProvider.advanced")}
-            </button>
+            </Button>
 
             {showAdvanced && (
               <div className="mt-3 space-y-3 rounded-md border border-slate-800 bg-slate-950/30 p-3">
                 <div>
                   <p className="text-sm text-slate-300">{t("aiProvider.extraHeadersLabel")}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{t("aiProvider.extraHeadersHint")}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">{t("aiProvider.extraHeadersHint")}</p>
                   <div className="mt-2 space-y-2">
                     {form.extraHeaders.map(([key, value], index) => (
                       <div key={index} className="flex gap-2">
                         <input
                           {...TECHNICAL_INPUT_PROPS}
                           type="text"
+                          aria-label={t("aiProvider.extraHeaderKeyPlaceholder")}
                           placeholder={t("aiProvider.extraHeaderKeyPlaceholder")}
                           value={key}
                           onChange={(e) => updateExtraHeader(index, e.target.value, value)}
@@ -1169,25 +1154,26 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                         <input
                           {...TECHNICAL_INPUT_PROPS}
                           type="text"
+                          aria-label={t("aiProvider.extraHeaderValuePlaceholder")}
                           placeholder={t("aiProvider.extraHeaderValuePlaceholder")}
                           value={value}
                           onChange={(e) => updateExtraHeader(index, key, e.target.value)}
                           className={`w-1/2 text-sm ${FIELD_CLASS}`}
                         />
-                        <button
-                          type="button"
+                        <Button
+                          size="sm"
                           onClick={() => removeExtraHeader(index)}
                           aria-label={t("aiProvider.extraHeaderRemoveAria")}
-                          className="shrink-0 px-1 text-slate-500 hover:text-slate-200"
+                          className="shrink-0"
                         >
-                          ✕
-                        </button>
+                          <span aria-hidden="true">✕</span>
+                        </Button>
                       </div>
                     ))}
                   </div>
-                  <button type="button" onClick={addExtraHeader} className={`mt-2 ${SECONDARY_BUTTON_CLASS}`}>
+                  <Button size="sm" onClick={addExtraHeader} className="mt-2">
                     {t("aiProvider.extraHeaderAdd")}
-                  </button>
+                  </Button>
                 </div>
 
                 <label className={LABEL_CLASS}>
@@ -1225,7 +1211,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                     }}
                     className={`mt-1 w-full ${FIELD_CLASS}`}
                   />
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-slate-400">
                     {t("aiProvider.maxTokensOverrideHint")}
                   </p>
                   {form.maxTokensOverride !== null && form.maxTokensOverride <= 0 && (
@@ -1243,15 +1229,16 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
             Provider aktiv ist (erst nach dem Laden der Liste, sonst
             blitzte er bei schon aktivem Provider kurz auf). */}
         {providersLoaded && !providers.some((p) => p.isActive) && (
-          <p className="text-xs text-slate-500">{t("aiProvider.addHintWillActivate")}</p>
+          <p className="text-xs text-slate-400">{t("aiProvider.addHintWillActivate")}</p>
         )}
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          className="w-full"
           disabled={submitting || (form.maxTokensOverride !== null && form.maxTokensOverride <= 0)}
-          className="w-full rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
-        </button>
+        </Button>
       </form>
     </div>
   );
