@@ -57,6 +57,36 @@ anderen nicht ab, jedes meldet sein eigenes Ergebnis.
   TypeScript übersetzt; das steht ausdrücklich in der Konfiguration und
   hängt nicht von der Voreinstellung des Compilers ab.
 
+## 2a. Start der echten App
+
+Eigener Job, nur auf Linux. Er baut die Community-App und startet sie
+tatsächlich — nicht gegen ein nachgebautes Backend (Browser-Tests) und nicht
+ohne Tauri (Rust-Tests). Er fängt einen Start, der seinen eigenen Zustand
+fallen lässt, bevor ein Release entsteht (Issue #234: im Schlüsselbund-Modus
+scheiterte jedes Kommando, das Fenster zeigte keine Server).
+
+- **A14 — Drei Startpfade.** Je Pfad startet die App auf einem eigenen,
+  vorbereiteten Datenverzeichnis, in einer Sitzung mit einem entsperrten
+  Test-Schlüsselbund und einer virtuellen Anzeige:
+  1. frisches Datenverzeichnis im Schlüsselbund-Modus,
+  2. Aktualisierung: eine von Version 0.5.2 geschriebene Klartext-Datenbank
+     mit den zugehörigen Zugangsdaten im Schlüsselbund,
+  3. Passwort-Modus: gesperrter Start, Entsperren im Fenster, Liste.
+- **A15 — Was jeder Pfad prüft.** Das Fenster listet die erwarteten
+  Server, und kein Kommando wird mit einem Zustands- oder Sperrfehler
+  abgelehnt. Im Passwort-Modus wird vor dem Entsperren jedes Kommando
+  abgelehnt und danach beantwortet. Scheitert der Start der App, der
+  Treiber oder eine Erwartung, ist der Job rot; ein Pfad wird nie
+  übersprungen.
+- **A16 — Testdaten.** Die Fixtures enthalten ausschließlich erkennbar
+  erfundene Werte, keine echten Zugangsdaten. Die Aktualisierung geht von
+  einer Datei aus, die das Release selbst geschrieben hat, nicht von einer
+  mit dem heutigen Code erzeugten.
+- **A17 — Wann.** Auf `main`, `develop`, `release/*` und `hotfix/*` immer;
+  bei einem Pull Request, wenn er den Start der App, die Anwendungslogik
+  des Starts oder den Einstiegspunkt des Frontends berührt. Der Job bleibt
+  kurz: ein Build, drei Starts.
+
 ## 3. Prüfung der Abhängigkeiten
 
 Ein eigener Job, nur auf Linux (das Ergebnis hängt nicht vom
@@ -113,5 +143,9 @@ Betriebssystem ab).
 - Release-Pakete aus diesem Repository werden weder signiert noch
   notarisiert; der Release-Lauf braucht keine Secrets außer dem Zugang zum
   eigenen Repository.
+- Der Start der echten App (§2a) läuft nur auf Linux. Der Start unter
+  Windows und macOS (anderer Schlüsselbund, anderer Treiber) ist nicht
+  abgedeckt, ebenso wenig der Pfad „Neu anfangen“, der native Dialoge
+  braucht.
 - Es gibt keinen zeitgesteuerten Lauf; neue Advisories fallen beim nächsten
   Lauf auf.
