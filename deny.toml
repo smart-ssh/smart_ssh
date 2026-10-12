@@ -70,6 +70,15 @@ allow = [
 ]
 confidence-threshold = 0.8
 
+# Unlicense (whisper-rs, whisper-rs-sys; Spracheingabe, Spec 0108): Verzicht
+# auf Urheberrechte zugunsten der Allgemeinheit, strikt permissiver als MIT,
+# kein Copyleft. Bewusst nur als Ausnahme für diese beiden Crates, nicht in
+# der allgemeinen Allow-Liste (ADR 0135). Das gebündelte whisper.cpp ist MIT.
+exceptions = [
+    { crate = "whisper-rs", allow = ["Unlicense"] },
+    { crate = "whisper-rs-sys", allow = ["Unlicense"] },
+]
+
 [licenses.private]
 # Spec 0090, A12 gilt für Abhängigkeiten, nicht für die eigene Lizenz des
 # Projekts (`[workspace.package] license = "Apache-2.0"`, Spec 0099, L1) —
