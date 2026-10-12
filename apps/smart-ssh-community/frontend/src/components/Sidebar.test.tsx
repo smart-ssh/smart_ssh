@@ -195,14 +195,13 @@ describe("Sidebar new items in the current folder (issue #49)", () => {
 describe("Sidebar tree entries are keyboard-operable (issue #112)", () => {
   // Native Buttons lösen Enter/Leertaste selbst als Klick aus — jsdom
   // simuliert diese Aktivierung nicht, darum prüft der Test das Element.
-  it("renders groups and servers as native buttons that select on click", () => {
+  it("renders groups and servers as tree items that select on click", () => {
     const { onSelect } = renderSidebar();
 
-    const groupEntry = screen.getByRole("button", { name: /Prod/ });
-    const serverEntry = screen.getByRole("button", { name: /free-1/ });
+    const groupEntry = screen.getByRole("treeitem", { name: /Prod/ });
+    const serverEntry = screen.getByRole("treeitem", { name: /free-1/ });
     for (const entry of [groupEntry, serverEntry]) {
-      expect(entry.tagName).toBe("BUTTON");
-      expect(entry.getAttribute("type")).toBe("button");
+      expect(entry.getAttribute("role")).toBe("treeitem");
     }
 
     fireEvent.click(groupEntry);
@@ -243,5 +242,42 @@ describe("Sidebar not-usable servers (issue #100)", () => {
     expect(entry).toHaveTextContent("Nicht nutzbar");
     fireEvent.click(entry);
     expect(onSelect).toHaveBeenCalledWith({ kind: "unusableServer", id: "u-1" });
+  });
+});
+
+describe("Sidebar tree arrow-key navigation (issue #425)", () => {
+  const items = () => screen.getAllByRole("treeitem");
+
+  it("is a single Tab stop (roving tabindex)", () => {
+    renderSidebar();
+    const stops = items().filter((i) => i.getAttribute("tabindex") === "0");
+    expect(items().length).toBeGreaterThan(2);
+    expect(stops).toHaveLength(1);
+  });
+
+  it("moves with Up/Down/Home/End without wrapping, and moves the tab stop", () => {
+    renderSidebar();
+    const rows = items();
+    rows[0].focus();
+    fireEvent.keyDown(rows[0], { key: "ArrowUp" });
+    expect(document.activeElement).toBe(rows[0]);
+    fireEvent.keyDown(rows[0], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(rows[1]);
+    expect(rows[1].getAttribute("tabindex")).toBe("0");
+    expect(rows[0].getAttribute("tabindex")).toBe("-1");
+    fireEvent.keyDown(rows[1], { key: "End" });
+    const last = rows[rows.length - 1];
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(last, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(last, { key: "Home" });
+    expect(document.activeElement).toBe(rows[0]);
+  });
+
+  it("activates the focused row with Enter", () => {
+    const { onSelect } = renderSidebar();
+    const row = items()[0];
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 });
