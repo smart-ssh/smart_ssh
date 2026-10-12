@@ -500,7 +500,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Datei kopieren"));
 
     await waitFor(() => expect(sftpCopyFile).toHaveBeenCalled());
@@ -518,7 +518,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Datei kopieren"));
     await waitFor(() => expect(sftpCopyFile).toHaveBeenCalledTimes(1));
     expect(showToast).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "error" }));
@@ -527,7 +527,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
       code: "CLIPBOARD_FILE_FAILED",
       message: "raw backend text",
     });
-    fireEvent.click(screen.getByRole("button", { name: "⋮" }));
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Datei kopieren"));
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith(
