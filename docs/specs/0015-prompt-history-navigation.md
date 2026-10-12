@@ -68,7 +68,11 @@ unterscheiden:
   zurück. Bearbeitete Historieneinträge verhalten sich nicht wie ein neuer
   Zwischenzustand (kein volles Readline-Verhalten).
 - Die Historie wird beim Öffnen des Server-Chats (und beim Wechsel auf einen
-  anderen Server) einmal geladen und nicht bei jeder Pfeiltaste neu. Kann sie
+  anderen Server) geladen und nicht bei jeder Pfeiltaste neu. Nach jedem
+  erfolgreich gesendeten Prompt wird sie erneut geladen: Ein im geöffneten
+  Chat gesendeter Prompt ist sofort per Pfeil-nach-oben erreichbar. Doppelte
+  aufeinanderfolgende Prompts und die Grenze von 200 Einträgen gelten dabei
+  unverändert (Abschnitt 3). Kann sie
   nicht geladen werden, ist sie leer. Der Navigationszustand wird beim
   Serverwechsel zurückgesetzt.
 
@@ -76,8 +80,5 @@ unterscheiden:
 
 - Es gibt keine Oberfläche zum Löschen oder Durchsuchen der Historie, nur die
   Pfeiltasten-Navigation.
-- Prompts, die im geöffneten Chat gesendet werden, sind erst nach dem
-  nächsten Öffnen des Server-Chats per Pfeiltaste erreichbar, weil die Liste
-  nur beim Öffnen geladen wird.
 - Der lokale Pseudo-Server (Localhost-Sitzung) hat keinen gespeicherten Server
   und damit keine Historie.
