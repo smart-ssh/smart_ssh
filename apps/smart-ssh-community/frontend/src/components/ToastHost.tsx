@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button } from "./ui";
 import { subscribeToasts, type Toast } from "../toastBus";
 
 /** Erfolgsmeldungen verschwinden von selbst, Fehler (und Hinweise, Issue
@@ -32,7 +33,7 @@ export function ToastHost() {
 
   return (
     <div
-      className="fixed bottom-4 left-4 z-50 flex w-96 flex-col gap-2"
+      className="fixed bottom-4 left-4 z-50 flex max-h-[calc(100vh-2rem)] w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto"
       // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- <output> ist ein Formular-Element, dessen Live-Region-Unterstützung je nach Webview und Screenreader schwankt; role="status" auf einem einfachen Container hält die Ansage verlässlich (Issue #112).
       role="status"
     >
@@ -51,29 +52,24 @@ export function ToastHost() {
           </p>
           <div className="flex shrink-0 gap-1">
             {toast.action && (
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() => {
                   toast.action?.onClick();
                   dismiss(toast.id);
                 }}
-                className="rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
               >
                 {toast.action.label}
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant={toast.kind === "error" ? "danger" : "secondary"}
               onClick={() => dismiss(toast.id)}
               aria-label={t("toast.dismiss")}
-              className={`rounded px-2 py-1 text-xs ${
-                toast.kind === "error"
-                  ? "bg-red-900 text-red-200 hover:bg-red-800"
-                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-              }`}
             >
               ✕
-            </button>
+            </Button>
           </div>
         </div>
       ))}

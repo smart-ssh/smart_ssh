@@ -8,6 +8,7 @@ import { sessionTabLabel } from "../useSessionTabs";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
 import { useDragResize } from "../useDragResize";
 import { ChatPanel } from "./ChatPanel";
+import { Button } from "./ui";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 import { TerminalView, type TerminalLink } from "./TerminalView";
 
@@ -278,23 +279,22 @@ export function SessionView({
   if (mcp) {
     return (
       <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
-        <header className="flex items-center justify-between border-b border-fuchsia-900/60 px-4 py-2">
-          <div className="flex items-center gap-3">
-            <span className="border border-fuchsia-500/60 px-1.5 text-xs text-fuchsia-300">
+        <header className="flex items-center justify-between gap-3 border-b border-fuchsia-900/60 px-4 py-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="shrink-0 border border-fuchsia-500/60 px-1.5 text-xs text-fuchsia-300">
               {t("sessionTabs.mcp.badge")}
             </span>
-            <span className="font-heading font-semibold tracking-wide">
+            <span
+              title={sessionTabLabel({ serverName, mcp }, t("sessionTabs.mcp.unnamedClient"))}
+              className="font-heading min-w-0 truncate font-semibold tracking-wide"
+            >
               {sessionTabLabel({ serverName, mcp }, t("sessionTabs.mcp.unnamedClient"))}
             </span>
             {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
           </div>
-          <button
-            type="button"
-            onClick={onRequestClose}
-            className="font-heading border border-slate-700 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-200 hover:bg-slate-800"
-          >
+          <Button onClick={onRequestClose} className="shrink-0">
             {t("session.disconnect")}
-          </button>
+          </Button>
         </header>
         <div className="min-h-0 flex-1">
           <ChatPanel
@@ -310,9 +310,11 @@ export function SessionView({
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
-      <header className="flex items-center justify-between border-b border-slate-800 px-4 py-2">
-        <div className="flex items-center gap-3">
-          <span className="font-heading font-semibold tracking-wide">{serverName}</span>
+      <header className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <span title={serverName} className="font-heading min-w-0 truncate font-semibold tracking-wide">
+            {serverName}
+          </span>
           {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
           {autoAttempt !== null && (
             <>
@@ -322,7 +324,7 @@ export function SessionView({
               <button
                 type="button"
                 onClick={handleStopAutoReconnect}
-                className="text-xs text-indigo-300 underline hover:text-indigo-200"
+                className="shrink-0 text-xs text-indigo-300 underline hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 {t("session.stopReconnect")}
               </button>
@@ -334,14 +336,15 @@ export function SessionView({
             </output>
           )}
           {link !== "live" && autoAttempt === null && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleReconnect}
               disabled={link === "reconnecting"}
-              className="font-heading border border-indigo-500/60 px-3 py-1 text-xs font-semibold tracking-wide text-indigo-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="shrink-0"
             >
               {link === "reconnecting" ? t("session.reconnecting") : t("session.reconnect")}
-            </button>
+            </Button>
           )}
           {reconnectError && (
             <span role="alert" className="font-mono text-xs text-red-300">
@@ -349,13 +352,9 @@ export function SessionView({
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onRequestClose}
-          className="font-heading border border-slate-700 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-200 hover:bg-slate-800"
-        >
+        <Button onClick={onRequestClose} className="shrink-0">
           {t("session.disconnect")}
-        </button>
+        </Button>
       </header>
       <div ref={splitContainerRef} className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">
@@ -381,8 +380,9 @@ export function SessionView({
             <button
               type="button"
               onClick={() => setRightPanelView("terminal")}
-              className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase ${
-                rightPanelView === "terminal" ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+              aria-pressed={rightPanelView === "terminal"}
+              className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                rightPanelView === "terminal" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {t("session.terminalTab")}
@@ -390,8 +390,9 @@ export function SessionView({
             <button
               type="button"
               onClick={() => setRightPanelView("files")}
-              className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase ${
-                rightPanelView === "files" ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"
+              aria-pressed={rightPanelView === "files"}
+              className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                rightPanelView === "files" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {t("session.filesTab")}

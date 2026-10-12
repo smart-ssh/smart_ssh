@@ -44,6 +44,18 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     await app.page.getByRole("button", { name: "Filter Rules", exact: true }).click();
     await expect(app.page.getByText("ls *")).toBeVisible();
   },
+  "session view": async (app) => {
+    await app.launch(populated());
+    await openSession(app, "db-primary");
+    await app.page.getByRole("button", { name: "Overview", exact: true }).click();
+    await openSession(app, "web-1");
+  },
+  "mcp session view": async (app) => {
+    await app.launch(populated());
+    await app.emit("mcp-action-tab-requested", { sessionId: "mcp-session-1", serverId: "s-lab", clientName: "Claude Desktop" });
+    await app.page.getByRole("button", { name: /Claude Desktop @/ }).first().click();
+    await expect(app.page.getByText(/This session belongs to an external tool/)).toBeVisible();
+  },
   "command confirmation": async (app) => {
     await app.launch(populated());
     const sessionId = await openSession(app, "db-primary");
