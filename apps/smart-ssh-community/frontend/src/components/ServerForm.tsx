@@ -44,6 +44,7 @@ import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { Button } from "./ui";
 
 interface ServerFormProps {
   /** `null` = Neuanlage. */
@@ -183,7 +184,7 @@ function IdentityFileFacts({
   }
   if (facts === null) {
     return loading ? (
-      <p className="mt-1 text-xs text-slate-500">{t("serverForm.identityFile.checking")}</p>
+      <p className="mt-1 text-xs text-slate-400">{t("serverForm.identityFile.checking")}</p>
     ) : null;
   }
 
@@ -222,13 +223,13 @@ function IdentityFileFacts({
         (facts.permissionsTooOpen ? (
           <li className="text-amber-400">{t("serverForm.identityFile.permissionsTooOpen")}</li>
         ) : (
-          <li className="text-slate-500">{t("serverForm.identityFile.permissionsOk")}</li>
+          <li className="text-slate-400">{t("serverForm.identityFile.permissionsOk")}</li>
         ))}
       {/* `encrypted` ist nur aussagekräftig, wenn der Schlüssel überhaupt
        * gültig ist (bei einem Problem steht das Feld immer auf `false`,
        * s. `crate::dto::KeyFileFactsDto::from`). */}
       {!facts.problem && (
-        <li className="text-slate-500">
+        <li className="text-slate-400">
           {facts.encrypted
             ? t("serverForm.identityFile.encrypted")
             : t("serverForm.identityFile.notEncrypted")}
@@ -800,7 +801,7 @@ export function ServerForm({
                 <button
                   type="button"
                   onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="text-slate-400 hover:text-white"
+                  className="rounded text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -820,17 +821,16 @@ export function ServerForm({
               }}
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
-              className="flex-1 bg-transparent px-1 py-0.5 text-sm text-slate-100 outline-none"
+              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
           </div>
-          <button
-            type="button"
+          <Button variant="primary" size="sm"
             onClick={handleSaveLocalTags}
             disabled={savingLocalTags}
-            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
+            className="mt-2"
           >
             {savingLocalTags ? t("common.saving") : t("common.save")}
-          </button>
+          </Button>
         </div>
 
         <div className="block text-sm text-slate-300">
@@ -856,14 +856,13 @@ export function ServerForm({
             rows={6}
             className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
           />
-          <button
-            type="button"
+          <Button variant="primary" size="sm"
             onClick={handleSaveLocalNotes}
             disabled={savingLocalNotes}
-            className="mt-2 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
+            className="mt-2"
           >
             {savingLocalNotes ? t("common.saving") : t("common.save")}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -970,7 +969,7 @@ export function ServerForm({
                 <button
                   type="button"
                   onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="text-slate-400 hover:text-white"
+                  className="rounded text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -990,7 +989,7 @@ export function ServerForm({
               }}
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
-              className="flex-1 bg-transparent px-1 py-0.5 text-sm text-slate-100 outline-none"
+              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
           </div>
         </div>
@@ -1013,7 +1012,7 @@ export function ServerForm({
           {auth.kind === "password" && (
             <label className="block text-sm text-slate-300">
               {t("serverForm.password")}{" "}
-              {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
+              {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
               <input
                 {...TECHNICAL_INPUT_PROPS}
                 type="password"
@@ -1031,20 +1030,18 @@ export function ServerForm({
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.privateKeyLabel")}{" "}
-                    {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
+                    {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
                   </span>
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={async () => {
                       const content = await pickAndReadTextFile(
                         t("serverForm.choosePrivateKeyDialogTitle"),
                       );
                       if (content !== null) setAuth({ ...auth, keyContent: content });
                     }}
-                    className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
                     {t("serverForm.chooseFile")}
-                  </button>
+                  </Button>
                 </div>
                 <textarea
                   {...TECHNICAL_INPUT_PROPS}
@@ -1058,7 +1055,7 @@ export function ServerForm({
                  * Prüfung des Inhalts, keine Sperre, kein Einfluss auf
                  * Speichern/Verbinden. RSA-Schlüssel funktionieren
                  * unverändert weiter. */}
-                <p className="mt-1 text-xs text-slate-500">{t("serverForm.ed25519Recommendation")}</p>
+                <p className="mt-1 text-xs text-slate-400">{t("serverForm.ed25519Recommendation")}</p>
               </div>
               <label className="block text-sm text-slate-300">
                 {t("serverForm.passphraseOptional")}
@@ -1083,20 +1080,18 @@ export function ServerForm({
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.certificateLabel")}{" "}
-                    {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
+                    {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
                   </span>
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={async () => {
                       const content = await pickAndReadTextFile(
                         t("serverForm.chooseCertificateDialogTitle"),
                       );
                       if (content !== null) setAuth({ ...auth, certContent: content });
                     }}
-                    className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
                     {t("serverForm.chooseFile")}
-                  </button>
+                  </Button>
                 </div>
                 <textarea
                   {...TECHNICAL_INPUT_PROPS}
@@ -1111,18 +1106,16 @@ export function ServerForm({
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.associatedKey")}{" "}
-                    {!isCreate && <span className="text-slate-500">{t("serverForm.unchangedHint")}</span>}
+                    {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
                   </span>
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={async () => {
                       const content = await pickAndReadTextFile(t("serverForm.chooseKeyDialogTitle"));
                       if (content !== null) setAuth({ ...auth, keyContent: content });
                     }}
-                    className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
                     {t("serverForm.chooseFile")}
-                  </button>
+                  </Button>
                 </div>
                 <textarea
                   {...TECHNICAL_INPUT_PROPS}
@@ -1141,16 +1134,14 @@ export function ServerForm({
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-300">{t("serverForm.identityFilePathLabel")}</span>
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={async () => {
                       const path = await pickFilePath(t("serverForm.chooseIdentityFileDialogTitle"));
                       if (path !== null) setAuth({ ...auth, path });
                     }}
-                    className="rounded bg-slate-700 px-2 py-0.5 text-xs hover:bg-slate-600"
                   >
                     {t("serverForm.chooseFile")}
-                  </button>
+                  </Button>
                 </div>
                 <input
                   {...TECHNICAL_INPUT_PROPS}
@@ -1193,17 +1184,15 @@ export function ServerForm({
             <legend className="px-1 text-sm text-slate-300">
               {t("serverForm.convertToKeychain.legend")}
             </legend>
-            <p className="mb-2 text-xs text-slate-500">{t("serverForm.convertToKeychain.hint")}</p>
+            <p className="mb-2 text-xs text-slate-400">{t("serverForm.convertToKeychain.hint")}</p>
             {!convertConfirmOpen && (
               <>
-                <button
-                  type="button"
+                <Button size="sm"
                   onClick={() => setConvertConfirmOpen(true)}
                   disabled={!convertFacts?.validKey}
-                  className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700 disabled:opacity-50"
                 >
                   {t("serverForm.convertToKeychain.button")}
-                </button>
+                </Button>
                 {!convertFacts?.validKey && (
                   <p className="mt-2 text-xs text-amber-400">
                     {convertFactsError
@@ -1228,26 +1217,22 @@ export function ServerForm({
                 </p>
                 {convertError && <p className="mb-2 text-xs text-red-400">{convertError}</p>}
                 <div className="flex gap-2">
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={() => {
                       setConvertConfirmOpen(false);
                       setConvertError(null);
                     }}
-                    className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
                   >
                     {t("common.cancel")}
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button variant="primary" size="sm"
                     onClick={handleConvertToKeychain}
                     disabled={converting}
-                    className="rounded bg-indigo-600 px-3 py-1 text-xs text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
                   >
                     {converting
                       ? t("serverForm.convertToKeychain.converting")
                       : t("serverForm.convertToKeychain.confirm")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -1256,10 +1241,10 @@ export function ServerForm({
 
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">{t("serverForm.sudoFieldset")}</legend>
-          <p className="mb-2 text-xs text-slate-500">{t("serverForm.sudoHint")}</p>
+          <p className="mb-2 text-xs text-slate-400">{t("serverForm.sudoHint")}</p>
           <label className="block text-sm text-slate-300">
             {t("serverForm.sudoLabel")}{" "}
-            <span className="text-slate-500">
+            <span className="text-slate-400">
               {sudoPasswordUnknown
                 ? t("serverForm.sudoUnchangedUnknown")
                 : hasSudoPassword
@@ -1275,14 +1260,13 @@ export function ServerForm({
             />
           </label>
           {(hasSudoPassword || sudoPasswordUnknown) && (
-            <button
-              type="button"
+            <Button size="sm"
               onClick={handleClearSudoPassword}
               disabled={clearingSudoPassword}
-              className="mt-2 rounded bg-slate-800 px-2 py-1 text-xs text-red-300 hover:bg-slate-700 disabled:opacity-50"
+              className="mt-2"
             >
               {clearingSudoPassword ? t("common.removing") : t("serverForm.removeSudoPassword")}
-            </button>
+            </Button>
           )}
         </fieldset>
 
@@ -1290,7 +1274,7 @@ export function ServerForm({
           <legend className="px-1 text-sm text-slate-300">
             {t("serverForm.postIngestFieldset")}
           </legend>
-          <p className="mb-2 text-xs text-slate-500">{t("serverForm.postIngestHint")}</p>
+          <p className="mb-2 text-xs text-slate-400">{t("serverForm.postIngestHint")}</p>
           <div className="space-y-2">
             {(["strict", "balanced", "standard"] as PostIngestPolicy[]).map((option) => (
               <label key={option} className="flex items-start gap-2 text-sm text-slate-300">
@@ -1305,7 +1289,7 @@ export function ServerForm({
                 <span>
                   <span className="font-medium">{t(`serverForm.postIngest.${option}.label`)}</span>
                   <br />
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-400">
                     {t(`serverForm.postIngest.${option}.description`)}
                   </span>
                 </span>
@@ -1328,7 +1312,7 @@ export function ServerForm({
             />
             <span>{t("serverForm.aiInjectionCheckLabel")}</span>
           </label>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-slate-400">
             {secondOpinionAvailable
               ? t("serverForm.aiInjectionCheckHint")
               : t("serverForm.aiInjectionCheckUnavailableHint")}
@@ -1345,13 +1329,13 @@ export function ServerForm({
                 onChange={(e) => setStartDirectory(e.target.value)}
                 placeholder={t("serverForm.startDirectoryPlaceholder")}
                 aria-invalid={startDirectoryError !== null}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus:outline-none"
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               />
             </label>
             {startDirectoryError ? (
               <p className="mt-1 text-xs text-red-400">{startDirectoryError}</p>
             ) : (
-              <p className="mt-1 text-xs text-slate-500">{t("serverForm.startDirectoryHint")}</p>
+              <p className="mt-1 text-xs text-slate-400">{t("serverForm.startDirectoryHint")}</p>
             )}
           </div>
         )}
@@ -1368,10 +1352,10 @@ export function ServerForm({
                 value={sftpServerPath}
                 onChange={(e) => setSftpServerPath(e.target.value)}
                 placeholder={t("serverForm.sftpServerPathPlaceholder")}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus:outline-none"
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               />
             </label>
-            <p className="mt-2 text-xs text-slate-500">{t("serverForm.sftpServerPathHint")}</p>
+            <p className="mt-2 text-xs text-slate-400">{t("serverForm.sftpServerPathHint")}</p>
           </details>
         )}
 
@@ -1381,7 +1365,7 @@ export function ServerForm({
               {t("serverForm.hostKeys.title")}
             </h3>
             {storedHostKeys.length === 0 ? (
-              <p className="text-xs text-slate-500">{t("serverForm.hostKeys.none")}</p>
+              <p className="text-xs text-slate-400">{t("serverForm.hostKeys.none")}</p>
             ) : (
               <ul className="space-y-1">
                 {storedHostKeys.map((k) => (
@@ -1398,21 +1382,18 @@ export function ServerForm({
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <Button variant="primary"
             type="submit"
             disabled={saving}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
           >
             {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={runTest}
             disabled={testing}
-            className="rounded bg-slate-800 px-4 py-2 text-sm hover:bg-slate-700 disabled:opacity-50"
           >
             {testing ? t("common.testing") : t("serverForm.testConnection")}
-          </button>
+          </Button>
           {testResult && <TestResultBadge result={testResult} />}
         </div>
         {/* Issue #51: Schritt-Protokoll des letzten Tests, zugeklappt —
@@ -1432,14 +1413,12 @@ export function ServerForm({
           />
 
           <div>
-            <button
-              type="button"
+            <Button size="sm"
               onClick={handlePreview}
               disabled={previewLoading}
-              className="rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700 disabled:opacity-50"
             >
               {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
-            </button>
+            </Button>
             {preview !== null && (
               <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
                 {preview || t("serverForm.noContext")}
@@ -1448,13 +1427,11 @@ export function ServerForm({
           </div>
 
           <div className="border-t border-slate-700 pt-4">
-            <button
-              type="button"
+            <Button variant="danger" size="sm"
               onClick={handleDeleteClick}
-              className="rounded bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800"
             >
               {t("serverForm.deleteServer")}
-            </button>
+            </Button>
 
             {/* Spec 0071, A17: Der Server ist weg, aber mindestens ein
              * Secret blieb im Schlüsselbund. Kein stilles Schließen — der
@@ -1476,16 +1453,14 @@ export function ServerForm({
                     <li key={ref}>{ref}</li>
                   ))}
                 </ul>
-                <button
-                  type="button"
+                <Button size="sm"
                   onClick={() => {
                     setSecretsLeftBehind(null);
                     onDeleted();
                   }}
-                  className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
                 >
                   {t("common.close")}
-                </button>
+                </Button>
               </div>
             )}
 
@@ -1547,21 +1522,17 @@ export function ServerForm({
                  * CASCADE`, Spec 0034/0008). */}
                 <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
+                  <Button size="sm"
                     onClick={() => setDeletePreview(null)}
-                    className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
                   >
                     {t("common.cancel")}
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button variant="danger" size="sm"
                     onClick={handleConfirmDelete}
                     disabled={deleting}
-                    className="rounded bg-red-700 px-3 py-1 text-xs text-white hover:bg-red-600 disabled:opacity-50"
                   >
                     {deleting ? t("common.deleting") : t("serverForm.confirmDeleteServer")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

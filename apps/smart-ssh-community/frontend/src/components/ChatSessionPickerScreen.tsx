@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../formatDateTime";
 import { deleteChatSession, renameChatSession } from "../api";
 import type { ChatSessionSummaryDto } from "../types";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { Button, DialogFrame } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 interface ChatSessionPickerScreenProps {
@@ -34,6 +34,7 @@ export function ChatSessionPickerScreen({
   onCancel,
 }: ChatSessionPickerScreenProps) {
   const { t, i18n } = useTranslation();
+  const newConversationRef = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -75,99 +76,97 @@ export function ChatSessionPickerScreen({
   };
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg rounded-lg bg-slate-800 p-6 shadow-xl">
-        <h2 className="font-heading mb-1 text-lg font-semibold tracking-wide text-slate-100">
-          {serverName}
-        </h2>
-        <p className="mb-4 text-sm text-slate-400">{t("chatSessionPicker.subtitle")}</p>
+    <DialogFrame
+      layer="app"
+      title={<span className="break-words">{serverName}</span>}
+      onClose={onCancel}
+      initialFocusRef={newConversationRef}
+      actions={<Button onClick={onCancel}>{t("chatSessionPicker.cancel")}</Button>}
+    >
+      <p className="mb-4 text-sm text-slate-400">{t("chatSessionPicker.subtitle")}</p>
 
-        {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
-
-        <button
-          type="button"
-          onClick={onNewConversation}
-          className="mb-4 w-full rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-indigo-500"
-        >
-          {t("chatSessionPicker.newConversation")}
-        </button>
-
-        <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
-          {t("chatSessionPicker.pastSessions")}
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-red-400">
+          {error}
         </p>
-        <ul className="max-h-72 divide-y divide-slate-700 overflow-y-auto rounded border border-slate-700">
-          {sessions.map((session) => (
-            <li key={session.sessionId} className="flex items-center gap-2 px-3 py-2">
-              <button
-                type="button"
-                onClick={() => onResume(session.sessionId)}
-                disabled={busySessionId === session.sessionId}
-                className="flex-1 text-left disabled:opacity-50"
-              >
-                {renamingId === session.sessionId ? (
-                  <input
-                    {...TECHNICAL_INPUT_PROPS}
-                    // eslint-disable-next-line jsx-a11y/no-autofocus -- das Umbenennen-Feld erscheint erst auf die ausdrückliche Aktion „Umbenennen“ und muss den Fokus bekommen, damit man sofort tippen kann (Issue #112).
-                    autoFocus
-                    type="text"
-                    value={renameDraft}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => setRenameDraft(e.target.value)}
-                    onBlur={() => commitRename(session.sessionId)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitRename(session.sessionId);
-                      if (e.key === "Escape") setRenamingId(null);
-                    }}
-                    className="w-full rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-sm text-slate-100"
-                  />
-                ) : (
-                  <p className="text-sm text-slate-100">
-                    {session.title ?? t("chatSessionPicker.untitled")}
-                  </p>
-                )}
-                <p className="text-xs text-slate-500">
-                  {formatDateTime(session.startedAt, i18n.language)} ·{" "}
-                  {t("chatSessionPicker.messageCount", { count: session.messageCount })}
-                </p>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startRename(session);
-                }}
-                disabled={busySessionId === session.sessionId}
-                title={t("chatSessionPicker.rename")}
-                className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
-              >
-                ✎
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(session.sessionId);
-                }}
-                disabled={busySessionId === session.sessionId}
-                title={t("chatSessionPicker.delete")}
-                className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-red-900 hover:text-red-300 disabled:opacity-50"
-              >
-                🗑
-              </button>
-            </li>
-          ))}
-        </ul>
+      )}
 
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
-          >
-            {t("chatSessionPicker.cancel")}
-          </button>
-        </div>
-      </div>
-    </ModalBackdrop>
+      <Button ref={newConversationRef} variant="primary" onClick={onNewConversation} className="mb-4 w-full">
+        {t("chatSessionPicker.newConversation")}
+      </Button>
+
+      <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
+        {t("chatSessionPicker.pastSessions")}
+      </p>
+      <ul className="max-h-72 divide-y divide-slate-700 overflow-y-auto rounded border border-slate-700">
+        {sessions.map((session) => (
+          <li key={session.sessionId} className="flex items-center gap-2 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => onResume(session.sessionId)}
+              disabled={busySessionId === session.sessionId}
+              className="min-w-0 flex-1 rounded text-left focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none disabled:opacity-50"
+            >
+              {renamingId === session.sessionId ? (
+                <input
+                  {...TECHNICAL_INPUT_PROPS}
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- das Umbenennen-Feld erscheint erst auf die ausdrückliche Aktion „Umbenennen“ und muss den Fokus bekommen, damit man sofort tippen kann (Issue #112).
+                  autoFocus
+                  type="text"
+                  aria-label={t("chatSessionPicker.rename")}
+                  value={renameDraft}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onBlur={() => commitRename(session.sessionId)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitRename(session.sessionId);
+                    if (e.key === "Escape") {
+                      // Cancels the rename only; the dialog stays open.
+                      e.stopPropagation();
+                      setRenamingId(null);
+                    }
+                  }}
+                  className="w-full rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-sm text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none"
+                />
+              ) : (
+                <p className="truncate text-sm text-slate-100" title={session.title ?? undefined}>
+                  {session.title ?? t("chatSessionPicker.untitled")}
+                </p>
+              )}
+              <p className="text-xs text-slate-400">
+                {formatDateTime(session.startedAt, i18n.language)} ·{" "}
+                {t("chatSessionPicker.messageCount", { count: session.messageCount })}
+              </p>
+            </button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                startRename(session);
+              }}
+              disabled={busySessionId === session.sessionId}
+              title={t("chatSessionPicker.rename")}
+              aria-label={t("chatSessionPicker.rename")}
+            >
+              ✎
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(session.sessionId);
+              }}
+              disabled={busySessionId === session.sessionId}
+              title={t("chatSessionPicker.delete")}
+              aria-label={t("chatSessionPicker.delete")}
+            >
+              🗑
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </DialogFrame>
   );
 }
