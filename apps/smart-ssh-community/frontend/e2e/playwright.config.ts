@@ -16,6 +16,7 @@ const viewports = [
 ] as const;
 
 export default defineConfig({
+  globalSetup: "./global-setup.ts",
   testDir: "./tests",
   outputDir: "./test-results",
   fullyParallel: true,
