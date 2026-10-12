@@ -38,8 +38,8 @@ oder offen zu lassen. Es trägt dieselben Aktionen wie das Kontextmenü.
 
 Rechtsklick auf einen Eintrag öffnet das Kontextmenü; das Drei-Punkte-Menü am
 Zeilenende zeigt **dieselben** Aktionen. Welche erscheinen, hängt vom Typ ab
-(Datei oder Ordner); „Dateiinhalt kopieren“ und „Lokal öffnen“ gibt es nur
-für Dateien. Die Reihenfolge ist: lesende und lokale Aktionen, ein Trenner,
+(Datei oder Ordner); „Dateiinhalt kopieren“, „Datei kopieren“ und „Lokal
+öffnen“ gibt es nur für Dateien. Die Reihenfolge ist: lesende und lokale Aktionen, ein Trenner,
 dann die server-verändernden Aktionen.
 
 ## Teil 2: Lesende und lokale Aktionen (ohne Bestätigung)
@@ -52,6 +52,19 @@ dann die server-verändernden Aktionen.
   Binärdateien und Dateien über der Grenze aus Spec 0086 (50 MB) werden mit
   einer Meldung abgelehnt; große Dateien zeigen Fortschritt und lassen sich
   abbrechen.
+- **Datei kopieren:** Eine einzelne Remote-Datei beliebigen Typs geht als
+  Datei in die Zwischenablage; im Dateimanager des Betriebssystems (Finder,
+  Explorer, Linux-Dateimanager) lässt sie sich einfügen. Gilt nicht für Ordner
+  und nicht für mehrere Einträge. Die Obergrenze ist 50 MB wie bei „Dateiinhalt
+  kopieren“; darüber erscheint dieselbe Meldung und nichts wird geladen.
+  Fortschritt und Abbrechen wie dort; ein Abbruch hinterlässt keine Datei und
+  ändert die Zwischenablage nicht. Die Aktion arbeitet im normalen und im
+  erhöhten Kanal. Die Datei wird mit ihrem Namen in einen privaten
+  Zwischenordner der App geladen (nur für den eigenen Nutzer lesbar); die
+  Zwischenablage verweist darauf. Die App öffnet oder startet die Datei nie.
+  Eine neue „Datei kopieren“-Aktion ersetzt die vorige Zwischendatei. Kann die
+  Plattform oder Sitzung keine Datei in die Zwischenablage legen, erscheint
+  eine Meldung und sonst ändert sich nichts.
 - **Pfad kopieren:** der Remote-Pfad in die Zwischenablage.
 - **Eigenschaften:** Name, Pfad, Typ, Größe, Rechte (symbolisch und
   numerisch), Besitzer, Gruppe und Änderungsdatum.
@@ -165,11 +178,18 @@ scheitert) werden sichtbar gemeldet.
   die einzige Ausnahme ist die aufgelistete Ordner-Bestätigung (Teil 3).
 - Temporäre Bearbeitungskopien liegen in einem kontrollierten Pfad und werden
   spätestens beim nächsten Start entfernt, auch nach einem Absturz.
+- Zwischendateien von „Datei kopieren“ liegen in einem privaten Ordner der
+  App und werden beim Beenden und spätestens beim nächsten Start entfernt,
+  auch nach einem Absturz.
 - Lokale Pfade aus der Oberfläche werden nur gelesen, wenn sie freigegeben
   sind (Spec 0020, Abschnitt 5.2).
 
 ## Grenzen
 
+- Nach dem Beenden der App ist eine kopierte Datei nicht mehr einfügbar, weil
+  die Zwischendatei dann entfernt ist (unter Linux hält zudem nur der
+  laufende Prozess die Zwischenablage). Unter Wayland steht die Datei über
+  XWayland bereit; ein reiner Wayland-Dateimanager sieht sie womöglich nicht.
 - Kopien, die eine Version vor Einführung des Aufräumens beim Start liegen
   gelassen hat, räumt die App nicht automatisch weg, weil sie noch zu einer
   laufenden älteren Installation gehören können.

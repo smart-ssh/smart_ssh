@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Åtgärden stämmer inte med var nyckeln förvaras just nu. Inget ändrades — öppna inställningarna igen, de visar aktivt läge.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Varningen om huvudlösenordet har inte bekräftats. Utan lösenordet går alla data förlorade och det finns ingen återställning — kryssa i rutan och ställ in det igen. Inget ändrades.",
     "KEYCHAIN_KEY_MISMATCH": "Nyckeln i nyckelringen hör inte till den här databasen. Inget ändrades — att spara den skulle göra databasen oläsbar vid nästa start.",
-    "SFTP_CONTENT_TOO_LARGE": "Filen är större än 50 MB och kan inte kopieras till urklipp."
+    "SFTP_CONTENT_TOO_LARGE": "Filen är större än 50 MB och kan inte kopieras till urklipp.",
+    "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet."
   },
   "mcpServer": {
     "hint": "Externa MCP-klienter kan använda detta för att föreslå kommandon, filläsningar/filskrivningar och anteckningsuppdateringar på tillåtlistade servrar — varje begäran kräver alltid bekräftelse i appen, oavsett befintliga tillåtregler.",
@@ -644,6 +645,7 @@
     "chmodFailed": "Behörigheterna för “{{name}}” kunde inte sättas: {{reason}}",
     "pathCopied": "Sökvägen kopierad till urklipp",
     "contentCopied": "Innehållet i “{{name}}” kopierat till urklipp",
+    "fileCopied": "”{{name}}” kopierad till Urklipp som fil",
     "copyFailed": "Kopieringen till urklipp misslyckades: {{reason}}",
     "openedLocally": "“{{name}}” öppnad lokalt — ändringar erbjuds för uppladdning",
     "openLocallyFailed": "“{{name}}” kunde inte öppnas lokalt: {{reason}}",
@@ -986,6 +988,7 @@
       "download": "Ladda ned",
       "downloadTo": "Ladda ned till…",
       "copyContent": "Kopiera filinnehåll",
+      "copyFile": "Kopiera fil",
       "openLocally": "Öppna lokalt…",
       "copyPath": "Kopiera sökväg",
       "properties": "Egenskaper",

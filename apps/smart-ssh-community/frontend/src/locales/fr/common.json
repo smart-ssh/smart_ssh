@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Cette opération ne correspond pas à l’endroit où la clé est actuellement conservée. Rien n’a été modifié — rouvrez les paramètres, ils indiquent le mode actif.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L’avertissement sur le mot de passe principal n’a pas été confirmé. Sans ce mot de passe, toutes les données sont perdues et il n’existe aucune récupération — cochez la case et recommencez la configuration. Rien n’a été modifié.",
     "KEYCHAIN_KEY_MISMATCH": "La clé du trousseau n’appartient pas à cette base de données. Rien n’a été modifié — l’enregistrer rendrait la base illisible au prochain démarrage.",
-    "SFTP_CONTENT_TOO_LARGE": "Le fichier dépasse 50 Mo et ne peut pas être copié dans le presse-papiers."
+    "SFTP_CONTENT_TOO_LARGE": "Le fichier dépasse 50 Mo et ne peut pas être copié dans le presse-papiers.",
+    "CLIPBOARD_FILE_FAILED": "Le fichier n’a pas pu être placé dans le presse-papiers sur ce système."
   },
   "mcpServer": {
     "hint": "Des clients MCP externes peuvent l’utiliser pour proposer des commandes, des lectures/écritures de fichiers et des mises à jour de notes sur les serveurs autorisés — chaque demande exige toujours une confirmation dans l’application, indépendamment des règles d’autorisation existantes.",
@@ -649,6 +650,7 @@
     "chmodFailed": "Les permissions de « {{name}} » n’ont pas pu être définies : {{reason}}",
     "pathCopied": "Chemin copié dans le presse-papiers",
     "contentCopied": "Contenu de « {{name}} » copié dans le presse-papiers",
+    "fileCopied": "« {{name}} » copié dans le presse-papiers en tant que fichier",
     "copyFailed": "Échec de la copie dans le presse-papiers : {{reason}}",
     "openedLocally": "« {{name}} » ouvert localement — les modifications seront proposées au téléversement",
     "openLocallyFailed": "« {{name}} » n’a pas pu être ouvert localement : {{reason}}",
@@ -993,6 +995,7 @@
       "download": "Télécharger",
       "downloadTo": "Télécharger vers…",
       "copyContent": "Copier le contenu du fichier",
+      "copyFile": "Copier le fichier",
       "openLocally": "Ouvrir localement…",
       "copyPath": "Copier le chemin",
       "properties": "Propriétés",

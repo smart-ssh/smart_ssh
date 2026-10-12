@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Denne handling passer ikke til, hvor nøglen opbevares lige nu. Intet blev ændret – åbn indstillingerne igen, de viser den aktive tilstand.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Advarslen om hovedadgangskoden er ikke bekræftet. Uden den adgangskode går alle data tabt, og der er ingen gendannelse – markér feltet, og opsæt den igen. Intet blev ændret.",
     "KEYCHAIN_KEY_MISMATCH": "Nøglen i nøgleringen hører ikke til denne database. Intet blev ændret – at gemme den ville gøre databasen ulæselig ved næste opstart.",
-    "SFTP_CONTENT_TOO_LARGE": "Filen er større end 50 MB og kan ikke kopieres til udklipsholderen."
+    "SFTP_CONTENT_TOO_LARGE": "Filen er større end 50 MB og kan ikke kopieres til udklipsholderen.",
+    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system."
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruge dette til at foreslå kommandoer, fillæsninger/-skrivninger og noteopdateringer på servere på tilladelseslisten – hver anmodning kræver altid bekræftelse i appen, uanset eksisterende tillad-regler.",
@@ -644,6 +645,7 @@
     "chmodFailed": "Rettigheder for “{{name}}” kunne ikke sættes: {{reason}}",
     "pathCopied": "Sti kopieret til udklipsholderen",
     "contentCopied": "Indholdet af “{{name}}” kopieret til udklipsholderen",
+    "fileCopied": "“{{name}}” kopieret til udklipsholderen som fil",
     "copyFailed": "Kopiering til udklipsholderen mislykkedes: {{reason}}",
     "openedLocally": "“{{name}}” åbnet lokalt – ændringer tilbydes uploadet",
     "openLocallyFailed": "“{{name}}” kunne ikke åbnes lokalt: {{reason}}",
@@ -986,6 +988,7 @@
       "download": "Hent",
       "downloadTo": "Hent til…",
       "copyContent": "Kopiér filindhold",
+      "copyFile": "Kopiér fil",
       "openLocally": "Åbn lokalt…",
       "copyPath": "Kopiér sti",
       "properties": "Egenskaber",

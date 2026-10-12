@@ -102,7 +102,9 @@ Betriebssystem ab).
   Liste (permissive Lizenzen wie MIT, Apache-2.0, BSD, ISC, Zlib, Unicode).
   GPL, AGPL und LGPL stehen nicht darauf: Ein solcher Fund ist rot und
   verlangt eine bewusste Entscheidung. MPL-2.0 ist erst nach einer
-  Einzelprüfung auf die Liste gekommen. Die Liste gilt für
+  Einzelprüfung auf die Liste gekommen, BSL-1.0 (Boost) nach einer
+  Maintainer-Entscheidung (permissive, nur Windows-Zwischenabhängigkeiten).
+  Die Liste gilt für
   Drittabhängigkeiten, nicht für die eigenen, unveröffentlichten Crates des
   Workspace. Dieselbe Liste gilt auch für die Drittlizenzen des Frontends
   (Spec 0099, A1.5).

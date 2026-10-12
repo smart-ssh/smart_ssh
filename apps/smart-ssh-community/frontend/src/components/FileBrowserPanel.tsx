@@ -27,6 +27,7 @@ import {
   sftpMkdir,
   sftpCancelCopyContent,
   sftpCopyContent,
+  sftpCopyFile,
   sftpReadText,
   sftpRename,
   sftpStartDirectory,
@@ -821,6 +822,35 @@ export function FileBrowserPanel({
     }
   };
 
+  /** Issue #358: "Datei kopieren" — legt die Datei (bis 50 MB) als
+   * Dateiverweis in die Zwischenablage; Fortschritt und Abbrechen wie bei
+   * "Dateiinhalt kopieren". Bei Abbruch bleibt die Zwischenablage unverändert. */
+  const handleCopyFile = async (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    const requestId = crypto.randomUUID();
+    setCopyJob({ requestId, name: entry.name, done: 0, total: entry.size });
+    try {
+      await sftpCopyFile(sessionId, entry.path, channelUser, requestId, (p) =>
+        setCopyJob((job) =>
+          job?.requestId === requestId ? { ...job, done: p.done, total: p.total ?? job.total } : job,
+        ),
+      );
+      notifyOk("fileToasts.fileCopied", { name: entry.name });
+    } catch (err) {
+      const code = commandErrorCode(err);
+      if (code === "SFTP_COPY_CANCELLED") return;
+      notifyFailed(
+        "fileToasts.copyFailed",
+        entry.name,
+        code === "SFTP_CONTENT_TOO_LARGE" || code === "CLIPBOARD_FILE_FAILED"
+          ? { message: translateErrorCode(t, code, commandErrorMessage(err)) }
+          : err,
+      );
+    } finally {
+      setCopyJob((job) => (job?.requestId === requestId ? null : job));
+    }
+  };
+
   const handleShowProperties = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     setProperties(entry);
@@ -1369,6 +1399,7 @@ export function FileBrowserPanel({
                         onDownloadDefault={handleDownloadDefault}
                         onDownloadChoose={handleDownloadChoose}
                         onCopyContent={handleCopyContent}
+                        onCopyFile={handleCopyFile}
                         onCopyPath={handleCopyPath}
                         onShowProperties={handleShowProperties}
                         onRefresh={handleRefresh}
@@ -1412,6 +1443,7 @@ export function FileBrowserPanel({
           onDownloadDefault={handleDownloadDefault}
           onDownloadChoose={handleDownloadChoose}
           onCopyContent={handleCopyContent}
+                        onCopyFile={handleCopyFile}
           onCopyPath={handleCopyPath}
           onShowProperties={handleShowProperties}
           onRefresh={handleRefresh}
@@ -1749,6 +1781,7 @@ function FileEntryMenu({
   onDownloadDefault,
   onDownloadChoose,
   onCopyContent,
+  onCopyFile,
   onCopyPath,
   onShowProperties,
   onRefresh,
@@ -1764,6 +1797,7 @@ function FileEntryMenu({
   onDownloadDefault: (entry: RemoteEntryDto) => void;
   onDownloadChoose: (entry: RemoteEntryDto) => void;
   onCopyContent: (entry: RemoteEntryDto) => void;
+  onCopyFile: (entry: RemoteEntryDto) => void;
   onCopyPath: (entry: RemoteEntryDto) => void;
   onShowProperties: (entry: RemoteEntryDto) => void;
   onRefresh: () => void;
@@ -1795,6 +1829,11 @@ function FileEntryMenu({
       {!entry.isDir && (
         <button type="button" onClick={act(() => onCopyContent(entry))} className={itemClass}>
           {t("fileBrowser.menu.copyContent")}
+        </button>
+      )}
+      {!entry.isDir && (
+        <button type="button" onClick={act(() => onCopyFile(entry))} className={itemClass}>
+          {t("fileBrowser.menu.copyFile")}
         </button>
       )}
       {!entry.isDir && (

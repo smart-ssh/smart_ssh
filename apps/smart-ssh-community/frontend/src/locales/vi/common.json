@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Thao tác này không khớp với nơi khóa hiện đang được giữ. Không có gì bị thay đổi — hãy mở lại cài đặt, nơi hiển thị chế độ đang dùng.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Cảnh báo về mật khẩu chính chưa được xác nhận. Không có mật khẩu đó thì toàn bộ dữ liệu sẽ mất và không thể khôi phục — hãy đánh dấu ô và thiết lập lại. Không có gì bị thay đổi.",
     "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo.",
-    "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm."
+    "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm.",
+    "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này."
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",
@@ -639,6 +640,7 @@
     "chmodFailed": "Không thể đặt quyền của “{{name}}”: {{reason}}",
     "pathCopied": "Đã sao chép đường dẫn vào bộ nhớ tạm",
     "contentCopied": "Đã sao chép nội dung của “{{name}}” vào bộ nhớ tạm",
+    "fileCopied": "Đã sao chép “{{name}}” vào bộ nhớ tạm dưới dạng tệp",
     "copyFailed": "Sao chép vào bộ nhớ tạm thất bại: {{reason}}",
     "openedLocally": "Đã mở “{{name}}” cục bộ — các thay đổi sẽ được đề nghị tải lên",
     "openLocallyFailed": "Không thể mở “{{name}}” cục bộ: {{reason}}",
@@ -979,6 +981,7 @@
       "download": "Tải xuống",
       "downloadTo": "Tải xuống vào…",
       "copyContent": "Sao chép nội dung tệp",
+      "copyFile": "Sao chép tệp",
       "openLocally": "Mở cục bộ…",
       "copyPath": "Sao chép đường dẫn",
       "properties": "Thuộc tính",

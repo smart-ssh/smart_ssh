@@ -82,6 +82,17 @@ pub(crate) fn instance_root() -> Option<PathBuf> {
         .clone()
 }
 
+/// Issue #358: root of the "Copy file" clipboard staging area of this
+/// process: `<cache>/smart-ssh/clipboard-files/<scope>`, a sibling of the
+/// edit-copy root with the same scope (and so the same single-process
+/// guarantee through the data-directory lock).
+pub(crate) fn clipboard_root() -> Option<PathBuf> {
+    let root = instance_root()?;
+    let scope = root.file_name()?.to_owned();
+    let cache_smart_ssh = root.parent()?.parent()?;
+    Some(cache_smart_ssh.join("clipboard-files").join(scope))
+}
+
 /// What a sweep did. Only counts — the paths of failures go to the log.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct SweepReport {
@@ -114,7 +125,7 @@ fn remove_entry(path: &Path) -> std::io::Result<()> {
 /// effort: each failure is logged (path and error, never file content) and
 /// the sweep continues. A link or file in place of `dir` itself is removed
 /// as such, never followed.
-fn sweep_dir(dir: &Path) -> SweepReport {
+pub(crate) fn sweep_dir(dir: &Path) -> SweepReport {
     let mut report = SweepReport::default();
     match std::fs::symlink_metadata(dir) {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return report,

@@ -566,7 +566,8 @@
     "MASTER_PASSWORD_MODE_MISMATCH": "Această operațiune nu corespunde locului în care este păstrată cheia în prezent. Nimic nu a fost modificat — redeschideți setările, ele arată modul activ.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Avertismentul privind parola principală nu a fost confirmat. Fără această parolă toate datele se pierd și nu există recuperare — bifați caseta și configurați din nou. Nimic nu a fost modificat.",
     "KEYCHAIN_KEY_MISMATCH": "Cheia din portchei nu aparține acestei baze de date. Nimic nu a fost modificat — stocarea ei ar face baza de date ilizibilă la următoarea pornire.",
-    "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard."
+    "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard.",
+    "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem."
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
@@ -649,6 +650,7 @@
     "chmodFailed": "Permisiunile pentru „{{name}}” nu au putut fi setate: {{reason}}",
     "pathCopied": "Calea a fost copiată în clipboard",
     "contentCopied": "Conținutul „{{name}}” a fost copiat în clipboard",
+    "fileCopied": "„{{name}}” a fost copiat în clipboard ca fișier",
     "copyFailed": "Copierea în clipboard a eșuat: {{reason}}",
     "openedLocally": "„{{name}}” deschis local — modificările vor fi oferite spre încărcare",
     "openLocallyFailed": "„{{name}}” nu a putut fi deschis local: {{reason}}",
@@ -993,6 +995,7 @@
       "download": "Descarcă",
       "downloadTo": "Descarcă în…",
       "copyContent": "Copiază conținutul fișierului",
+      "copyFile": "Copiază fișierul",
       "openLocally": "Deschide local…",
       "copyPath": "Copiază calea",
       "properties": "Proprietăți",
