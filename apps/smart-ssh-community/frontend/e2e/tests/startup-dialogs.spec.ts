@@ -163,3 +163,31 @@ test("screenshots of the scoped screens", async ({ app }) => {
   await expect(app.page.getByRole("dialog")).toBeVisible();
   await captureScreen(app.page, "startup-new-master-password");
 });
+
+test("screenshots of the startup question", async ({ app }) => {
+  test.skip(!process.env.SCREENSHOT_LABEL, "only when SCREENSHOT_LABEL is set");
+  await app.launch({ commands: { get_startup_state: { result: UNLOCK_STATE } } });
+  await app.emit("startup:prompt", { kind: "confirmStartOver", title: "Start over?", message: "This deletes the data file." });
+  await expect(app.page.getByRole("dialog")).toBeVisible();
+  await captureScreen(app.page, "startup-question");
+});
+
+test("screenshots of the first-run notice", async ({ app }) => {
+  test.skip(!process.env.SCREENSHOT_LABEL, "only when SCREENSHOT_LABEL is set");
+  await app.launch({ servers: [server({ id: "s-1", name: "alpha" })] });
+  await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+  await expect(app.page.getByRole("dialog")).toBeVisible();
+  await captureScreen(app.page, "first-run-notice");
+});
+
+test("screenshots of the host key dialog", async ({ app }) => {
+  test.skip(!process.env.SCREENSHOT_LABEL, "only when SCREENSHOT_LABEL is set");
+  await app.launch({
+    settings: { ...ACKNOWLEDGED },
+    servers: [server({ id: "s-new", name: "fresh-host", host: "fresh.example.test" })],
+    hostKeys: { "s-new": { kind: "unknown", fingerprint: "SHA256:abc", keyType: "ssh-ed25519" } },
+  });
+  await app.page.getByRole("button", { name: /^fresh-host\b/ }).click();
+  await expect(app.page.getByRole("dialog")).toBeVisible();
+  await captureScreen(app.page, "host-key-unknown");
+});
