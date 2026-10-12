@@ -65,7 +65,10 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libssl-dev
+            libssl-dev \
+            libasound2-dev \
+            cmake \
+            libclang-dev
 
       - name: cargo fmt --check
         run: cargo fmt --all --check
