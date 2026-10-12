@@ -43,3 +43,34 @@ test("an MCP session gets its own tab, and closing the active user tab never act
   await expect(page.getByText(/This session belongs to an external tool/)).toBeHidden();
   expect((await app.calls("disconnect")).map((c) => c.args.sessionId)).toEqual([webSession]);
 });
+
+test("title bar: the version text yields to the tab strip in a narrow window, the Dev marker stays", async ({ app }) => {
+  await app.launch(populated());
+  const page = app.page;
+  await openSession(app, "db-primary");
+  await page.getByRole("button", { name: "Overview", exact: true }).click();
+  await openSession(app, "web-1");
+
+  const full = page.getByTestId("titlebar-version-full");
+  const dev = page.getByTestId("titlebar-dev-marker");
+  const tabs = page.locator("header div.group").first();
+  const narrow = (page.viewportSize()?.width ?? 0) < 1024;
+
+  await expect(tabs).toBeVisible();
+  if (narrow) {
+    await expect(full).toBeHidden();
+    await expect(dev).toBeVisible();
+  } else {
+    await expect(full).toBeVisible();
+    await expect(dev).toBeHidden();
+  }
+
+  // Nothing in the title bar overlaps the tab strip.
+  const header = page.locator("header").first();
+  const overlaps = await header.evaluate((h) => {
+    const strip = h.querySelector("div.group")!.closest("div.flex-1")!.getBoundingClientRect();
+    const brand = h.querySelector("[data-testid^='titlebar-']")!.closest("div")!.getBoundingClientRect();
+    return brand.right > strip.left + 0.5 && brand.left < strip.right - 0.5;
+  });
+  expect(overlaps, "title-bar brand area overlaps the tab strip area").toBe(false);
+});
