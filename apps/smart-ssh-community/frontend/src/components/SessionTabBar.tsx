@@ -1,5 +1,9 @@
+import { useState, type FocusEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { sessionTabLabel, type SessionTab } from "../useSessionTabs";
+
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
 
 const STATUS_DOT: Record<SessionTab["status"], string> = {
   connected: "bg-emerald-500",
@@ -35,15 +39,58 @@ interface SessionTabBarProps {
  */
 export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose }: SessionTabBarProps) {
   const { t } = useTranslation();
+  // Roving Tab stop (docs/ui-guidelines.md, "Keyboard"): the strip is one Tab
+  // stop; arrow keys, Home and End move between the tabs. `focused` follows the
+  // keyboard focus, otherwise the active tab is the stop.
+  const [focused, setFocused] = useState<string | null | undefined>(undefined);
   if (tabs.length === 0) return null;
+  const stopId = focused !== undefined && (focused === null || tabs.some((x) => x.sessionId === focused)) ? focused : activeSessionId;
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const stops = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("[data-tab-stop]"));
+    const current = stops.indexOf(e.target as HTMLButtonElement);
+    if (current < 0) return;
+    const key = e.key;
+    if (key === "Delete" && tabs.length > 0 && current > 0) {
+      e.preventDefault();
+      onRequestClose(tabs[current - 1]!.sessionId);
+      return;
+    }
+    let next: number;
+    if (key === "ArrowRight") next = (current + 1) % stops.length;
+    else if (key === "ArrowLeft") next = (current - 1 + stops.length) % stops.length;
+    else if (key === "Home") next = 0;
+    else if (key === "End") next = stops.length - 1;
+    else return;
+    e.preventDefault();
+    stops[next]!.focus();
+  };
+  const onBlur = (e: FocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) setFocused(undefined);
+  };
+  const stopProps = (id: string | null) => ({
+    "data-tab-stop": "",
+    tabIndex: stopId === id ? 0 : -1,
+    onFocus: () => setFocused(id),
+  });
 
   return (
-    <div data-tauri-drag-region className="flex w-full items-center gap-1 overflow-x-auto">
+    // eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/interactive-supports-focus -- Werkzeugleiste mit Roving-Tabindex; die Pfeiltasten werden hier abgefangen, der Fokus liegt auf den Buttons darin.
+    <div
+      data-tauri-drag-region
+      role="toolbar"
+      aria-orientation="horizontal"
+      onKeyDown={onKeyDown}
+      onBlur={onBlur}
+      className="flex w-full items-center gap-1 overflow-x-auto"
+    >
       <button
         type="button"
+        {...stopProps(null)}
+        aria-current={activeSessionId === null ? "page" : undefined}
         onClick={() => onSwitch(null)}
         title={t("sessionTabs.overview")}
-        className={`font-heading shrink-0 border px-2.5 py-1 text-xs font-semibold tracking-wide ${
+        className={`${FOCUS_RING} font-heading shrink-0 border px-2.5 py-1 text-xs font-semibold tracking-wide ${
           activeSessionId === null
             ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
             : "border-transparent text-slate-400 hover:bg-slate-800"
@@ -71,17 +118,22 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
           >
             <button
               type="button"
+              {...stopProps(tab.sessionId)}
+              aria-current={active ? "page" : undefined}
               onClick={() => onSwitch(tab.sessionId)}
-              className="font-heading flex items-center gap-1.5 font-semibold tracking-wide"
+              className={`${FOCUS_RING} font-heading flex items-center gap-1.5 font-semibold tracking-wide`}
               title={tab.mcp ? `${label} — ${t("sessionTabs.mcp.tabHint")}` : tab.serverName}
             >
-              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
+              <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
               {tab.mcp && (
                 <span className="shrink-0 border border-fuchsia-500/60 px-1 text-[10px] leading-tight text-fuchsia-300">
                   {t("sessionTabs.mcp.badge")}
                 </span>
               )}
-              <span className={tab.mcp ? "max-w-[24ch] truncate" : "max-w-[12ch] truncate"}>
+              <span
+                title={label}
+                className={tab.mcp ? "max-w-[24ch] truncate" : "max-w-[12ch] truncate"}
+              >
                 {label}
               </span>
               {tab.hasPendingAction &&
@@ -100,7 +152,10 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
               type="button"
               onClick={() => onRequestClose(tab.sessionId)}
               aria-label={t("sessionTabs.closeTab", { name: label })}
-              className="shrink-0 px-0.5 text-slate-500 hover:text-slate-200"
+              // Eigener Tab-Stopp nur im aktiven Tab; die übrigen schließt die
+              // Entf-Taste auf dem fokussierten Tab (Roving-Tabindex).
+              tabIndex={active ? 0 : -1}
+              className={`${FOCUS_RING} shrink-0 px-1 text-slate-400 hover:text-slate-200`}
             >
               ✕
             </button>
