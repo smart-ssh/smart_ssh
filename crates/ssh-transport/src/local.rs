@@ -1067,8 +1067,13 @@ mod tests {
         let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
         #[cfg(unix)]
         let command = "echo ready; touch marker; sleep 600";
+        // Windows: the marker is written by the long-running PowerShell
+        // process itself (right before it sleeps), so it can only appear once
+        // the command is really in its long-running phase. No inner double
+        // quotes and no `|`, which `cmd /C` would treat differently.
         #[cfg(windows)]
-        let command = "echo ready& type nul > marker& ping -n 600 127.0.0.1 > NUL";
+        let command =
+            "echo ready& powershell -NoProfile -NonInteractive -Command Set-Content -Path marker -Value x; Start-Sleep -Seconds 600";
 
         let (outcome, after_cancel) =
             run_and_cancel_at_marker(&mut transport, home.path(), command).await;
