@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
 import { folderForNewItem } from "../newItemFolder";
@@ -40,6 +41,26 @@ interface SidebarProps {
   onMove: (item: DragItem, target: DropTarget) => void;
 }
 
+/** Reihenfolge der sichtbaren Baumzeilen (Issue #425) — spiegelt die
+ * Render-Reihenfolge; Gruppen klappen nicht zu, alle Zeilen sind sichtbar. */
+function visibleKeys(
+  tree: ReturnType<typeof buildGroupTree>,
+  localServer: ServerDto | undefined,
+): string[] {
+  const keys: string[] = [];
+  if (localServer) keys.push(`server:${localServer.id}`);
+  const walk = (node: GroupTreeNode) => {
+    keys.push(`group:${node.group.id}`);
+    node.children.forEach(walk);
+    node.servers.forEach((s) => keys.push(`server:${s.id}`));
+    node.unusableServers.forEach((s) => keys.push(`unusableServer:${s.id}`));
+  };
+  tree.roots.forEach(walk);
+  tree.ungroupedServers.forEach((s) => keys.push(`server:${s.id}`));
+  tree.ungroupedUnusableServers.forEach((s) => keys.push(`unusableServer:${s.id}`));
+  return keys;
+}
+
 /** Spec 0008, Abschnitt 6: rekursiv aus `list_groups()`/`list_servers()`
  * clientseitig aufgebauter Baum — Baum-Aufbau selbst über
  * `../groupTree`s `buildGroupTree` (Spec 0033, Abschnitt 5: dieselbe
@@ -78,27 +99,72 @@ export function Sidebar({
   // Gruppe bzw. Gruppe des ausgewählten Servers), s. `folderForNewItem`.
   const currentFolder = folderForNewItem(selection, servers, unusableServers);
 
+  // Issue #425: Roving tabindex — genau eine Zeile ist Tab-Stopp. Ist die
+  // zuletzt fokussierte Zeile verschwunden, gilt die Auswahl, sonst die erste.
+  const treeRef = useRef<HTMLDivElement>(null);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const keys = visibleKeys(tree, localServer);
+  const selectionKey = selection ? `${selection.kind}:${"id" in selection ? selection.id : ""}` : null;
+  const tabStopKey =
+    [focusedKey, selectionKey].find((k) => k !== null && keys.includes(k)) ?? keys[0] ?? null;
+
+  const onTreeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.getAttribute("role") !== "treeitem") return;
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      target.click();
+      return;
+    }
+    const rows = Array.from(
+      treeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [],
+    );
+    const index = rows.indexOf(target);
+    let next: number;
+    if (event.key === "ArrowDown") next = Math.min(index + 1, rows.length - 1);
+    else if (event.key === "ArrowUp") next = Math.max(index - 1, 0);
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = rows.length - 1;
+    else return;
+    event.preventDefault();
+    rows[next]?.focus();
+  };
+
+  const tabIndexFor = (key: string) => (key === tabStopKey ? 0 : -1);
+
+  /** Gemeinsame Attribute einer Baumzeile (Tree-Semantik + Roving tabindex). */
+  const rowProps = (key: string, depth: number, selected: boolean) => ({
+    "aria-level": depth + 1,
+    "aria-selected": selected,
+    "data-tree-key": key,
+    onFocus: () => setFocusedKey(key),
+  });
+
   const isSelected = (kind: "group" | "server" | "unusableServer", id: string) =>
     selection?.kind === kind && selection.id === id;
 
   const renderNode = (node: GroupTreeNode, depth: number) => (
     <div
       key={node.group.id}
+      role="none"
       data-drop-target={groupDropTargetValue(node.group.id)}
       className={`rounded ${highlightFor({ kind: "group", id: node.group.id })}`}
     >
-      <button
-        type="button"
+      <div
+        role="treeitem"
+      onKeyDown={onTreeKeyDown}
+      tabIndex={tabIndexFor(`group:${node.group.id}`)}
+      {...rowProps(`group:${node.group.id}`, depth, isSelected("group", node.group.id))}
         {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
         onClick={() => onSelect({ kind: "group", id: node.group.id })}
         title={node.group.name}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
           isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
         }`}
       >
         📁 {node.group.name}
-      </button>
+      </div>
       {node.children.map((child) => renderNode(child, depth + 1))}
       {node.servers.map((s) => renderServer(s, depth + 1))}
       {node.unusableServers.map((s) => renderUnusableServer(s, depth + 1))}
@@ -106,9 +172,12 @@ export function Sidebar({
   );
 
   const renderServer = (server: ServerDto, depth: number) => (
-    <button
+    <div
       key={server.id}
-      type="button"
+      role="treeitem"
+      onKeyDown={onTreeKeyDown}
+      tabIndex={tabIndexFor(`server:${server.id}`)}
+      {...rowProps(`server:${server.id}`, depth, isSelected("server", server.id))}
       // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
       {...(server.isLocal
         ? {}
@@ -116,31 +185,34 @@ export function Sidebar({
       onClick={() => onSelect({ kind: "server", id: server.id })}
       title={server.name}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
         isSelected("server", server.id) ? "bg-slate-800 text-white" : "text-slate-300"
       }`}
     >
       🖥️ {server.name}
-    </button>
+    </div>
   );
 
   /** Issue #100: auswählbar, damit das Löschen erreichbar ist — aber kein
    * Ziehen und kein Bearbeiten-Formular. */
   const renderUnusableServer = (server: UnusableServerDto, depth: number) => (
-    <button
+    <div
       key={server.id}
-      type="button"
+      role="treeitem"
+      onKeyDown={onTreeKeyDown}
+      tabIndex={tabIndexFor(`unusableServer:${server.id}`)}
+      {...rowProps(`unusableServer:${server.id}`, depth, isSelected("unusableServer", server.id))}
       data-testid="unusable-server-entry"
       onClick={() => onSelect({ kind: "unusableServer", id: server.id })}
       title={unusableReasonText(t, server.reason)}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
         isSelected("unusableServer", server.id) ? "bg-slate-800 text-amber-200" : "text-amber-300/80"
       }`}
     >
       <span aria-hidden="true">⚠️</span> {server.name}{" "}
       <span className="text-xs not-italic text-slate-400">({t("unusableServer.badge")})</span>
-    </button>
+    </div>
   );
 
   return (
@@ -182,14 +254,22 @@ export function Sidebar({
         data-drop-target="root"
         className={`flex flex-1 flex-col overflow-y-auto p-2 ${highlightFor({ kind: "root" })}`}
       >
+        {keys.length > 0 && (
+          <div
+            ref={treeRef}
+            role="tree"
+            className="flex flex-col"
+          >
         {localServer && (
-          <div data-drop-target="none" className="mb-2 border-b border-slate-800 pb-2">
+          <div role="none" data-drop-target="none" className="mb-2 border-b border-slate-800 pb-2">
             {renderServer(localServer, 0)}
           </div>
         )}
         {tree.roots.map((node) => renderNode(node, 0))}
         {tree.ungroupedServers.map((s) => renderServer(s, 0))}
         {tree.ungroupedUnusableServers.map((s) => renderUnusableServer(s, 0))}
+          </div>
+        )}
         {groups.length === 0 &&
           tree.ungroupedServers.length === 0 &&
           tree.ungroupedUnusableServers.length === 0 && (

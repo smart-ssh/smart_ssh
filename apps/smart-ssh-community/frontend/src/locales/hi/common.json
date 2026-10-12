@@ -584,7 +584,10 @@
     "exampleConfigHint": "Claude Code के लिए उदाहरण कॉन्फ़िगरेशन (.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "कॉन्फ़िगरेशन कॉपी करें",
     "copyConfigCopied": "कॉन्फ़िगरेशन कॉपी हो गया।",
-    "copyConfigFailed": "कॉन्फ़िगरेशन कॉपी नहीं हो सका।"
+    "copyConfigFailed": "कॉन्फ़िगरेशन कॉपी नहीं हो सका।",
+    "tokenReveal": "टोकन दिखाएँ",
+    "tokenHide": "टोकन छिपाएँ",
+    "copyConfigNote": "टोकन छिपा होने पर भी असली टोकन के साथ पूरा कॉन्फ़िगरेशन कॉपी करता है।"
   },
   "firstRunNotice": {
     "title": "शुरू करने से पहले",

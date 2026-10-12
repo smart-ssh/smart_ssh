@@ -584,7 +584,10 @@
     "exampleConfigHint": "Παράδειγμα ρύθμισης για το Claude Code (.mcp.json / «claude mcp add --transport http»):",
     "copyConfig": "Αντιγραφή ρύθμισης",
     "copyConfigCopied": "Η ρύθμιση αντιγράφηκε.",
-    "copyConfigFailed": "Δεν ήταν δυνατή η αντιγραφή της ρύθμισης."
+    "copyConfigFailed": "Δεν ήταν δυνατή η αντιγραφή της ρύθμισης.",
+    "tokenReveal": "Εμφάνιση διακριτικού",
+    "tokenHide": "Απόκρυψη διακριτικού",
+    "copyConfigNote": "Αντιγράφει ολόκληρη τη ρύθμιση με το πραγματικό διακριτικό, ακόμη και όταν είναι κρυφό."
   },
   "firstRunNotice": {
     "title": "Πριν ξεκινήσετε",

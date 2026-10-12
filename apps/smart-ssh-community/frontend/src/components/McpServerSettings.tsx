@@ -15,14 +15,14 @@ import type { McpServerSettingsDto, ServerDto } from "../types";
 /** Beispiel-Konfiguration für Claude Code (`.mcp.json`/`claude mcp add
  * --transport http`) — exakt das Format, das Claude Code für einen
  * HTTP-MCP-Server mit Bearer-Token erwartet. */
-function exampleConfig(settings: McpServerSettingsDto): string {
+function exampleConfig(settings: McpServerSettingsDto, token: string = settings.token): string {
   return JSON.stringify(
     {
       mcpServers: {
         "smart-ssh": {
           type: "http",
           url: settings.endpoint,
-          headers: { Authorization: `Bearer ${settings.token}` },
+          headers: { Authorization: `Bearer ${token}` },
         },
       },
     },
@@ -30,6 +30,10 @@ function exampleConfig(settings: McpServerSettingsDto): string {
     2,
   );
 }
+
+/** Fixed-length placeholder: never derived from the real token, so neither
+ * its text nor its length leaks while the token is hidden (Spec 0028). */
+const MASKED_TOKEN = "••••••••••••••••";
 
 /** Spec 0028, Abschnitt 9: eigener Abschnitt im Einstellungen-Screen
  * (`AiProviderSettings`) für den lokalen MCP-Server — standardmäßig
@@ -46,6 +50,7 @@ export function McpServerSettings() {
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tokenRevealed, setTokenRevealed] = useState(false);
   const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | null>(null);
 
   useEffect(() => {
@@ -57,8 +62,8 @@ export function McpServerSettings() {
       .catch((err) => setError(commandErrorMessage(err)));
   }, []);
 
-  /** Kopiert exakt den angezeigten Konfigurationstext (enthält das Token —
-   * nie loggen). */
+  /** Kopiert immer die vollständige Konfiguration mit dem echten Token,
+   * unabhängig vom Anzeigezustand (nie loggen). */
   const handleCopyConfig = async () => {
     if (!settings) return;
     try {
@@ -161,13 +166,20 @@ export function McpServerSettings() {
             </div>
             <div>
               <p className="text-xs text-slate-400">{t("mcpServer.tokenLabel")}</p>
-              <code className="block text-xs break-all text-slate-200 select-all">
-                {settings.token}
+              <code
+                className={`block text-xs break-all text-slate-200 ${tokenRevealed ? "select-all" : "select-none"}`}
+              >
+                {tokenRevealed ? settings.token : MASKED_TOKEN}
               </code>
             </div>
-            <Button size="sm" onClick={handleRegenerateToken} disabled={busy}>
-              {t("mcpServer.regenerateToken")}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setTokenRevealed((v) => !v)}>
+                {tokenRevealed ? t("mcpServer.tokenHide") : t("mcpServer.tokenReveal")}
+              </Button>
+              <Button size="sm" onClick={handleRegenerateToken} disabled={busy}>
+                {t("mcpServer.regenerateToken")}
+              </Button>
+            </div>
           </div>
 
           <div className="mb-3">
@@ -216,13 +228,16 @@ export function McpServerSettings() {
           </div>
 
           <p className="mb-1 text-xs text-slate-400">{t("mcpServer.exampleConfigHint")}</p>
-          <pre className="rounded border border-slate-700 bg-slate-950 p-2 text-xs break-all whitespace-pre-wrap text-slate-300">
-            {exampleConfig(settings)}
+          <pre
+            className={`rounded border border-slate-700 bg-slate-950 p-2 text-xs break-all whitespace-pre-wrap text-slate-300 ${tokenRevealed ? "" : "select-none"}`}
+          >
+            {exampleConfig(settings, tokenRevealed ? settings.token : MASKED_TOKEN)}
           </pre>
           <div className="mt-1 flex items-center gap-2">
             <Button size="sm" onClick={() => void handleCopyConfig()}>
               {t("mcpServer.copyConfig")}
             </Button>
+            <span className="text-xs text-slate-400">{t("mcpServer.copyConfigNote")}</span>
             <output
               className={`text-xs ${copyStatus === "failed" ? "text-red-300" : "text-slate-400"}`}
             >

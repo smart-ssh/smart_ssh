@@ -584,7 +584,10 @@
     "exampleConfigHint": "Claude Code için örnek yapılandırma (.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "Yapılandırmayı kopyala",
     "copyConfigCopied": "Yapılandırma kopyalandı.",
-    "copyConfigFailed": "Yapılandırma kopyalanamadı."
+    "copyConfigFailed": "Yapılandırma kopyalanamadı.",
+    "tokenReveal": "Belirteci göster",
+    "tokenHide": "Belirteci gizle",
+    "copyConfigNote": "Belirteç gizli olsa bile gerçek belirteçle tam yapılandırmayı kopyalar."
   },
   "firstRunNotice": {
     "title": "Başlamadan önce",

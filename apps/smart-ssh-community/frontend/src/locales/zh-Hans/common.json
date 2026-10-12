@@ -584,7 +584,10 @@
     "exampleConfigHint": "Claude Code 的示例配置（.mcp.json / “claude mcp add --transport http”）：",
     "copyConfig": "复制配置",
     "copyConfigCopied": "配置已复制。",
-    "copyConfigFailed": "无法复制配置。"
+    "copyConfigFailed": "无法复制配置。",
+    "tokenReveal": "显示令牌",
+    "tokenHide": "隐藏令牌",
+    "copyConfigNote": "即使令牌已隐藏，也会复制包含真实令牌的完整配置。"
   },
   "firstRunNotice": {
     "title": "开始之前",

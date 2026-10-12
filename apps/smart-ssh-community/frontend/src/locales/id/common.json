@@ -584,7 +584,10 @@
     "exampleConfigHint": "Contoh konfigurasi untuk Claude Code (.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "Salin konfigurasi",
     "copyConfigCopied": "Konfigurasi disalin.",
-    "copyConfigFailed": "Tidak dapat menyalin konfigurasi."
+    "copyConfigFailed": "Tidak dapat menyalin konfigurasi.",
+    "tokenReveal": "Tampilkan token",
+    "tokenHide": "Sembunyikan token",
+    "copyConfigNote": "Menyalin konfigurasi lengkap dengan token asli, meskipun token disembunyikan."
   },
   "firstRunNotice": {
     "title": "Sebelum Anda mulai",

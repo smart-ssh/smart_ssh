@@ -20,7 +20,7 @@ async function expectSidebar(app: AppDriver, entries: string[]) {
   await expectUsable(page.getByRole("button", { name: "+ Server", exact: true }));
   await expectUsable(page.getByRole("button", { name: "+ Group", exact: true }));
   for (const entry of entries) {
-    await expect(page.getByRole("button", { name: entry, exact: true })).toBeVisible();
+    await expect(page.getByRole("treeitem", { name: entry, exact: true })).toBeVisible();
   }
   if (entries.length === 0) await expect(page.getByText("Nothing created yet.")).toBeVisible();
   await page.getByRole("button", { name: "Connect", exact: true }).click();
