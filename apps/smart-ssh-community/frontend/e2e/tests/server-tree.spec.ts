@@ -27,8 +27,8 @@ test.describe("server tree", () => {
 
   test("dragging a server onto a folder moves it there", async ({ app }) => {
     const page = app.page;
-    const serverRow = page.getByRole("button", { name: "🖥️ standalone" });
-    const labRow = page.getByRole("button", { name: "📁 Lab" });
+    const serverRow = page.getByRole("treeitem", { name: "🖥️ standalone" });
+    const labRow = page.getByRole("treeitem", { name: "📁 Lab" });
     await expect(folderBlock(page, labRow)).not.toContainText("standalone");
 
     await dragOnto(page, serverRow, labRow);
@@ -37,12 +37,12 @@ test.describe("server tree", () => {
       { cmd: "move_server_to_group", args: { id: "s-loose", groupId: "g-lab" } },
     ]);
     // The tree reloads and shows the server inside the folder.
-    await expect(folderBlock(page, labRow).getByRole("button", { name: "🖥️ standalone" })).toBeVisible();
+    await expect(folderBlock(page, labRow).getByRole("treeitem", { name: "🖥️ standalone" })).toBeVisible();
   });
 
   test("a new server created while a folder is selected starts in that folder", async ({ app }) => {
     const page = app.page;
-    await page.getByRole("button", { name: "📁 Lab" }).click();
+    await page.getByRole("treeitem", { name: "📁 Lab" }).click();
     await page.getByRole("button", { name: "+ Server", exact: true }).click();
     // The form's "Group" field (a select inside its label).
     const groupField = page

@@ -66,7 +66,7 @@ async function checkMainScreens(page: Page, c: Catalog) {
   await expectNoRawKeys(page, "Connect");
 
   await page.getByRole("button", { name: tr(c, "nav.manage"), exact: true }).click();
-  await page.getByRole("button", { name: "🖥️ db-primary" }).click();
+  await page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
   await expect(page.getByRole("button", { name: tr(c, "serverForm.testConnection"), exact: true })).toBeVisible();
   await expectNoRawKeys(page, "Manage (server form)");
 
