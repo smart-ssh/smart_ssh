@@ -223,6 +223,9 @@ export function ServerList({
    * immer eine leere Liste; kein gesonderter Fall hier nötig.
    */
   const handleConnect = async (server: ServerDto) => {
+    // Issue #407: the buttons stay focusable (aria-disabled instead of
+    // disabled) while an attempt is pending, so the guard lives here.
+    if (connectingId !== null) return;
     const existingSessionId = findExistingSessionId(server.id);
     if (existingSessionId) {
       onSwitchToExistingTab(existingSessionId);
@@ -308,9 +311,9 @@ export function ServerList({
           ? {}
           : handlersFor({ kind: "server", id: server.id, label: server.name }))}
         onClick={() => handleConnect(server)}
-        disabled={connectingId !== null}
+        aria-disabled={connectingId !== null ? "true" : undefined}
         style={{ paddingLeft: `${depth * 16 + 16}px` }}
-        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 disabled:opacity-60"
+        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 aria-disabled:opacity-60"
       >
         <div>
           <p className="font-medium text-slate-100">{server.name}</p>

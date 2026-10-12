@@ -115,6 +115,25 @@ pub(crate) fn segment_command(command: &str) -> Vec<String> {
 /// hinnehmbar, weil die eigentliche Sicherheitsentscheidung über die
 /// Filter-Engine läuft, die bei Tiefenüberschreitung separat auf
 /// `Confirm` eskaliert, s. `engine::evaluate_parsed_explained`).
+/// Conservative extra fragments for text the parser rates as one unsplit
+/// block (issue #433): a here-doc operator, unbalanced quotes etc. make
+/// [`split_command`] return `Ambiguous`, and the whole text is then matched
+/// against start-anchored patterns only — so `rm;<<` rated lower than `rm`.
+/// For such text this splits naively at `;`, `&`, `|` and newlines (quotes
+/// are NOT honoured, on purpose: more fragments can only raise a risk
+/// rating, never lower it). Returns an empty list for text the parser
+/// can split itself.
+pub(crate) fn ambiguous_text_fragments(command: &str) -> Vec<String> {
+    if !matches!(split_command(command), ParseResult::Ambiguous { .. }) {
+        return Vec::new();
+    }
+    command
+        .split([';', '&', '|', '\n', '\r'])
+        .map(normalize_whitespace)
+        .filter(|fragment| !fragment.is_empty())
+        .collect()
+}
+
 fn segment_command_at_depth(command: &str, depth: usize) -> Vec<String> {
     match split_command(command) {
         ParseResult::Empty => Vec::new(),
