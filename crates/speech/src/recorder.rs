@@ -89,6 +89,7 @@ struct Inner {
     transcriber: Arc<dyn Transcriber>,
     max: Duration,
     on_state: StateCallback,
+    runtime: tokio::runtime::Handle,
     state: Mutex<State>,
     next_id: Mutex<u64>,
 }
@@ -102,12 +103,14 @@ impl Recorder {
         transcriber: Arc<dyn Transcriber>,
         max: Duration,
         on_state: StateCallback,
+        runtime: tokio::runtime::Handle,
     ) -> Self {
         Recorder(Arc::new(Inner {
             source,
             transcriber,
             max,
             on_state,
+            runtime,
             state: Mutex::new(State::Idle),
             next_id: Mutex::new(0),
         }))
@@ -136,7 +139,7 @@ impl Recorder {
         };
         let this = self.clone();
         let max = inner.max;
-        let timer = tokio::spawn(async move {
+        let timer = inner.runtime.spawn(async move {
             tokio::time::sleep(max).await;
             this.auto_stop(id).await;
         });

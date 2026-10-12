@@ -38,6 +38,7 @@ fn recorder<R: Runtime>(app: &AppHandle<R>) -> Recorder {
                 Arc::new(move |s: RecorderState| {
                     let _ = emit_app.emit(STATE_EVENT, serde_json::json!({ "state": s }));
                 }),
+                tauri::async_runtime::handle().inner().clone(),
             )
         })
         .clone()
@@ -79,7 +80,7 @@ pub fn set_speech_language(app: AppHandle, language: String) -> CommandResult<()
 
 /// Starts recording. Errors with `speech_no_model` before the input device
 /// is touched when the selected model is not ready.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_voice_recording(app: AppHandle) -> CommandResult<()> {
     let selected = speech_models::read_selected_model(&app);
     let model = speech_models::manager(&app).ok().and_then(|m| {

@@ -114,6 +114,7 @@ fn recorder(
         tr,
         max,
         Arc::new(move |s| ev.lock().unwrap().push(s)),
+        tokio::runtime::Handle::current(),
     );
     (rec, events)
 }
@@ -271,4 +272,25 @@ fn whisper_engine_runs_on_the_bundled_wav() {
     let t = crate::WhisperTranscriber;
     t.transcribe(Path::new(&path), &decode_wav(WAV), None)
         .unwrap();
+}
+
+/// Regression: `start` is called from a plain (non-async) Tauri command,
+/// i.e. on a thread without a Tokio runtime context. The timer must be
+/// spawned on the injected handle instead of panicking.
+#[test]
+fn start_works_outside_a_runtime_context() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let events: Events = Arc::default();
+    let ev = Arc::clone(&events);
+    let rec = Recorder::new(
+        FakeSource::new(vec![0.1; 16_000]),
+        Arc::new(FakeTranscriber::default()),
+        Duration::from_secs(60),
+        Arc::new(move |s| ev.lock().unwrap().push(s)),
+        rt.handle().clone(),
+    );
+    // No `#[tokio::test]`: this thread has no runtime entered.
+    rec.start(model(), None)
+        .expect("start without runtime context");
+    rec.cancel();
 }
