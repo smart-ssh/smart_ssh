@@ -583,7 +583,10 @@
     "exampleConfigHint": "Példakonfiguráció a Claude Code-hoz (.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "Konfiguráció másolása",
     "copyConfigCopied": "Konfiguráció másolva.",
-    "copyConfigFailed": "A konfiguráció nem másolható."
+    "copyConfigFailed": "A konfiguráció nem másolható.",
+    "tokenReveal": "Token megjelenítése",
+    "tokenHide": "Token elrejtése",
+    "copyConfigNote": "A teljes konfigurációt a valódi tokennel másolja, akkor is, ha el van rejtve."
   },
   "firstRunNotice": {
     "title": "Mielőtt elkezdi",

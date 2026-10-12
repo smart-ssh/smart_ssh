@@ -113,16 +113,32 @@ export function AppHeader({ children }: AppHeaderProps) {
           >
             Smart SSH
             {SHOW_EARLY_ACCESS_TITLEBAR_INFO && appInfo && (
-              <span
-                data-tauri-drag-region
-                className="ml-1.5 font-normal tracking-normal text-slate-400"
-              >
-                {appInfo.versionDisplay}
-                {appInfo.edition && ` · ${appInfo.edition}`}
-                {/* Dev- und Release-Build nutzen getrennte Datenverzeichnisse —
-                    nur Dev wird markiert, Release bleibt der Normalfall. */}
-                {appInfo.buildType === "Dev" && " · Dev"} — Early Access
-              </span>
+              <>
+                {/* Issue #421: Voller Text nur ab 1024 px Fensterbreite, sonst
+                    bedrängt er die Tab-Leiste in der Mitte. Darunter bleibt
+                    nur die Dev-Markierung; Version und Edition stehen
+                    weiterhin unter Einstellungen > Über. */}
+                <span
+                  data-tauri-drag-region
+                  data-testid="titlebar-version-full"
+                  className="ml-1.5 hidden font-normal tracking-normal text-slate-400 lg:inline"
+                >
+                  {appInfo.versionDisplay}
+                  {appInfo.edition && ` · ${appInfo.edition}`}
+                  {/* Dev- und Release-Build nutzen getrennte Datenverzeichnisse —
+                      nur Dev wird markiert, Release bleibt der Normalfall. */}
+                  {appInfo.buildType === "Dev" && " · Dev"} — Early Access
+                </span>
+                {appInfo.buildType === "Dev" && (
+                  <span
+                    data-tauri-drag-region
+                    data-testid="titlebar-dev-marker"
+                    className="ml-1.5 font-normal tracking-normal text-slate-400 lg:hidden"
+                  >
+                    · Dev
+                  </span>
+                )}
+              </>
             )}
           </span>
         </div>

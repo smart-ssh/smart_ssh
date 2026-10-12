@@ -45,8 +45,8 @@ describe("McpServerSettings copy action (issue #184)", () => {
     fireEvent.click(button);
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const shown = container.querySelector("pre")?.textContent;
-    expect(writeText).toHaveBeenCalledWith(shown);
-    expect(shown).toContain("Bearer tok-secret-123");
+    expect(shown).not.toContain("tok-secret-123");
+    expect(writeText.mock.calls[0][0]).toContain("Bearer tok-secret-123");
     expect(await screen.findByText("Konfiguration kopiert.")).toBeInTheDocument();
   });
 
@@ -67,5 +67,37 @@ describe("McpServerSettings copy action (issue #184)", () => {
     } finally {
       await testI18n.changeLanguage("de");
     }
+  });
+});
+
+describe("McpServerSettings token masking (issue #427)", () => {
+  beforeEach(() => {
+    vi.mocked(getMcpServerSettings).mockResolvedValue(settings);
+    vi.mocked(listServers).mockResolvedValue([]);
+  });
+
+  it("masks the token in the field and the config by default", async () => {
+    const { container } = renderIt();
+    await screen.findByRole("button", { name: "Token anzeigen" });
+    expect(container.textContent).not.toContain("tok-secret-123");
+  });
+
+  it("reveals and hides the token in both places", async () => {
+    const { container } = renderIt();
+    fireEvent.click(await screen.findByRole("button", { name: "Token anzeigen" }));
+    expect(container.querySelectorAll("code")[1].textContent).toBe("tok-secret-123");
+    expect(container.querySelector("pre")?.textContent).toContain("Bearer tok-secret-123");
+    fireEvent.click(screen.getByRole("button", { name: "Token verbergen" }));
+    expect(container.textContent).not.toContain("tok-secret-123");
+  });
+
+  it("copies the real token in the revealed state too", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderIt();
+    fireEvent.click(await screen.findByRole("button", { name: "Token anzeigen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Konfiguration kopieren" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain("Bearer tok-secret-123");
   });
 });

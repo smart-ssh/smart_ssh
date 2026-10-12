@@ -131,7 +131,15 @@ MCP-Konfiguration seines Clients ein.
 Eigener Abschnitt „MCP-Server" in den Einstellungen:
 
 - Schalter „MCP-Server aktivieren" (Standard aus).
-- Endpunkt (`http://127.0.0.1:47823`) und Token, immer sichtbar. „Neu
+- Endpunkt (`http://127.0.0.1:47823`) und Token, immer vorhanden (auch bei
+  deaktiviertem Server). Das Token ist standardmäßig verborgen: Feld und
+  Beispiel-Konfiguration zeigen nur einen Platzhalter fester Länge, der echte
+  Wert steht nicht im Text der Seite und wird beim Markieren nicht
+  mitmarkiert. Eine Schaltfläche „Token anzeigen" / „Token verbergen"
+  (per Tastatur erreichbar, der Zustand steht im Namen) zeigt den echten Wert
+  an beiden Stellen oder verbirgt ihn wieder. Der Zustand gilt nur für den
+  geöffneten Einstellungen-Screen und ist beim nächsten Öffnen wieder
+  verborgen; „Neu generieren" ändert ihn nicht. „Neu
   generieren" fragt vorher nach und macht das alte Token sofort ungültig,
   auch für einen laufenden Server und schon verbundene Clients.
 - Timeout für das Warten auf Bestätigung in ganzen Minuten (mindestens 1).
@@ -142,9 +150,11 @@ Eigener Abschnitt „MCP-Server" in den Einstellungen:
 - Beispiel-Konfiguration für einen Client. Sie wird vollständig angezeigt
   (umbrochen, ohne eigenen Scrollbereich) und lässt sich per Schaltfläche
   „Konfiguration kopieren" in die Zwischenablage kopieren, auch per
-  Tastatur. Kopiert wird exakt der angezeigte Text; eine kurze Rückmeldung
-  bestätigt das Kopieren oder meldet, dass es fehlgeschlagen ist. Der Text
-  enthält das Token, die Zwischenablage danach ebenfalls (gleiche
+  Tastatur. Kopiert wird immer die vollständige Konfiguration mit dem echten
+  Token, auch wenn das Token verborgen ist; ein Hinweis neben der
+  Schaltfläche sagt das. Eine kurze Rückmeldung
+  bestätigt das Kopieren oder meldet, dass es fehlgeschlagen ist. Die
+  Zwischenablage enthält das Token (gleiche
   Offenlegung wie beim manuellen Markieren); die App protokolliert den Text
   nicht.
 

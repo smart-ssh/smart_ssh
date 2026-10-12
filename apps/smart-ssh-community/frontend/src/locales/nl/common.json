@@ -583,7 +583,10 @@
     "exampleConfigHint": "Voorbeeldconfiguratie voor Claude Code (.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "Configuratie kopiëren",
     "copyConfigCopied": "Configuratie gekopieerd.",
-    "copyConfigFailed": "De configuratie kon niet worden gekopieerd."
+    "copyConfigFailed": "De configuratie kon niet worden gekopieerd.",
+    "tokenReveal": "Token tonen",
+    "tokenHide": "Token verbergen",
+    "copyConfigNote": "Kopieert de volledige configuratie met het echte token, ook als het verborgen is."
   },
   "firstRunNotice": {
     "title": "Voordat u begint",

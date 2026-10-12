@@ -583,7 +583,10 @@
     "exampleConfigHint": "Esimerkkimääritys Claude Codelle (.mcp.json / \"claude mcp add --transport http\"):",
     "copyConfig": "Kopioi määritys",
     "copyConfigCopied": "Määritys kopioitu.",
-    "copyConfigFailed": "Määritystä ei voitu kopioida."
+    "copyConfigFailed": "Määritystä ei voitu kopioida.",
+    "tokenReveal": "Näytä tunnus",
+    "tokenHide": "Piilota tunnus",
+    "copyConfigNote": "Kopioi koko määrityksen todellisella tunnuksella, vaikka se on piilotettu."
   },
   "firstRunNotice": {
     "title": "Ennen aloitusta",

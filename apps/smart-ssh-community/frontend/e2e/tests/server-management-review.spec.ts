@@ -83,7 +83,7 @@ const SCREENS: Record<string, Screen> = {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
-      await app.page.getByRole("button", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
       await expect(app.page.getByRole("button", { name: "Test Connection", exact: true })).toBeVisible();
     },
     tabs: 40,
@@ -101,7 +101,7 @@ const SCREENS: Record<string, Screen> = {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
-      await app.page.getByRole("button", { name: "📁 Production" }).click();
+      await app.page.getByRole("treeitem", { name: "📁 Production" }).click();
       await expect(app.page.getByRole("heading").first()).toBeVisible();
     },
     tabs: 30,
@@ -125,7 +125,7 @@ const SCREENS: Record<string, Screen> = {
         },
       });
       await manage(app);
-      await app.page.getByRole("button", { name: /legacy-box/ }).click();
+      await app.page.getByRole("treeitem", { name: /legacy-box/ }).click();
       await expect(app.page.getByRole("button", { name: /Delete/ }).first()).toBeVisible();
     },
   },
@@ -136,7 +136,7 @@ const SCREENS: Record<string, Screen> = {
         commands: { test_connection: { result: { kind: "authenticationFailed", steps: failingStepLog(2) } } },
       });
       await manage(app);
-      await app.page.getByRole("button", { name: "🖥️ db-primary" }).click();
+      await app.page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
       await app.page.getByRole("button", { name: "Test Connection", exact: true }).click();
       await app.page.getByText("Details", { exact: true }).click();
       await expect(app.page.getByTestId("connect-step-log")).toHaveAttribute("open");

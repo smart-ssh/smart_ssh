@@ -45,6 +45,7 @@ import { HostKeyDialog } from "./HostKeyDialog";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 import { Button } from "./ui";
+import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
 
 interface ServerFormProps {
   /** `null` = Neuanlage. */
@@ -876,86 +877,98 @@ export function ServerForm({
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <label className="block text-sm text-slate-300">
-            {t("common.name")}
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-            />
-          </label>
-          <label className="block text-sm text-slate-300">
-            {t("serverForm.host")}
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              type="text"
-              required
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-            />
-          </label>
-          <label className="block text-sm text-slate-300">
-            {t("serverForm.port")}
-            <input
-              type="number"
-              required
-              min={1}
-              max={65535}
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-            />
-          </label>
-          <label className="block text-sm text-slate-300">
-            {t("serverForm.username")}
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-            />
-          </label>
+          <Field label={t("common.name")}>
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+          <Field label={t("serverForm.host")}>
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="text"
+                required
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+          <Field label={t("serverForm.port")}>
+            {(control) => (
+              <input
+                {...control}
+                type="number"
+                required
+                min={1}
+                max={65535}
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+          <Field label={t("serverForm.username")}>
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
         </div>
 
-        <label className="block text-sm text-slate-300">
-          {t("serverForm.group")}
-          <select
-            value={groupId ?? ""}
-            onChange={(e) => setGroupId(e.target.value || null)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-          >
-            <option value="">{t("serverForm.noGroup")}</option>
-            {/* Issue #49: hierarchisch (eingerückter voller Pfad), damit
-             * eine vorbelegte Untergruppe erkennbar ist. */}
-            {flattenGroupOptions(allGroups).map((option) => (
-              <option key={option.group.id} value={option.group.id}>
-                {groupOptionLabel(option)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Field label={t("serverForm.group")}>
+          {(control) => (
+            <select
+              {...control}
+              value={groupId ?? ""}
+              onChange={(e) => setGroupId(e.target.value || null)}
+              className={`${FIELD_CONTROL_CLASS} w-full`}
+            >
+              <option value="">{t("serverForm.noGroup")}</option>
+              {/* Issue #49: hierarchisch (eingerückter voller Pfad), damit
+               * eine vorbelegte Untergruppe erkennbar ist. */}
+              {flattenGroupOptions(allGroups).map((option) => (
+                <option key={option.group.id} value={option.group.id}>
+                  {groupOptionLabel(option)}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
-        <label className="block text-sm text-slate-300">
-          {t("serverForm.jumpHost")}
-          <select
-            value={jumpHost ?? ""}
-            onChange={(e) => setJumpHost(e.target.value || null)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-          >
-            <option value="">{t("serverForm.noJumpHost")}</option>
-            {possibleJumpHosts.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Field label={t("serverForm.jumpHost")}>
+          {(control) => (
+            <select
+              {...control}
+              value={jumpHost ?? ""}
+              onChange={(e) => setJumpHost(e.target.value || null)}
+              className={`${FIELD_CONTROL_CLASS} w-full`}
+            >
+              <option value="">{t("serverForm.noJumpHost")}</option>
+              {possibleJumpHosts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
         <div className="block text-sm text-slate-300">
           {t("serverForm.tags")}
@@ -1010,18 +1023,26 @@ export function ServerForm({
           </select>
 
           {auth.kind === "password" && (
-            <label className="block text-sm text-slate-300">
-              {t("serverForm.password")}{" "}
-              {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
-              <input
-                {...TECHNICAL_INPUT_PROPS}
-                type="password"
-                required={isCreate}
-                value={auth.value}
-                onChange={(e) => setAuth({ kind: "password", value: e.target.value })}
-                className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-              />
-            </label>
+            <Field
+              label={
+                <>
+                  {t("serverForm.password")}{" "}
+                  {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
+                </>
+              }
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  {...TECHNICAL_INPUT_PROPS}
+                  type="password"
+                  required={isCreate}
+                  value={auth.value}
+                  onChange={(e) => setAuth({ kind: "password", value: e.target.value })}
+                  className={`${FIELD_CONTROL_CLASS} w-full`}
+                />
+              )}
+            </Field>
           )}
 
           {auth.kind === "privateKey" && (
@@ -1057,16 +1078,18 @@ export function ServerForm({
                  * unverändert weiter. */}
                 <p className="mt-1 text-xs text-slate-400">{t("serverForm.ed25519Recommendation")}</p>
               </div>
-              <label className="block text-sm text-slate-300">
-                {t("serverForm.passphraseOptional")}
-                <input
-                  {...TECHNICAL_INPUT_PROPS}
-                  type="password"
-                  value={auth.passphrase}
-                  onChange={(e) => setAuth({ ...auth, passphrase: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-                />
-              </label>
+              <Field label={t("serverForm.passphraseOptional")}>
+                {(control) => (
+                  <input
+                    {...control}
+                    {...TECHNICAL_INPUT_PROPS}
+                    type="password"
+                    value={auth.passphrase}
+                    onChange={(e) => setAuth({ ...auth, passphrase: e.target.value })}
+                    className={`${FIELD_CONTROL_CLASS} w-full`}
+                  />
+                )}
+              </Field>
             </div>
           )}
 
@@ -1161,16 +1184,18 @@ export function ServerForm({
                   emptyPath={auth.path.trim() === ""}
                 />
               </div>
-              <label className="block text-sm text-slate-300">
-                {t("serverForm.passphraseOptional")}
-                <input
-                  {...TECHNICAL_INPUT_PROPS}
-                  type="password"
-                  value={auth.passphrase}
-                  onChange={(e) => setAuth({ ...auth, passphrase: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-                />
-              </label>
+              <Field label={t("serverForm.passphraseOptional")}>
+                {(control) => (
+                  <input
+                    {...control}
+                    {...TECHNICAL_INPUT_PROPS}
+                    type="password"
+                    value={auth.passphrase}
+                    onChange={(e) => setAuth({ ...auth, passphrase: e.target.value })}
+                    className={`${FIELD_CONTROL_CLASS} w-full`}
+                  />
+                )}
+              </Field>
             </div>
           )}
         </fieldset>
@@ -1187,25 +1212,25 @@ export function ServerForm({
             <p className="mb-2 text-xs text-slate-400">{t("serverForm.convertToKeychain.hint")}</p>
             {!convertConfirmOpen && (
               <>
-                <Button size="sm"
-                  onClick={() => setConvertConfirmOpen(true)}
-                  disabled={!convertFacts?.validKey}
-                >
-                  {t("serverForm.convertToKeychain.button")}
-                </Button>
-                {!convertFacts?.validKey && (
-                  <p className="mt-2 text-xs text-amber-400">
-                    {convertFactsError
-                      ? t("serverForm.convertToKeychain.checkFailed")
-                      : convertFacts
-                        ? translateErrorCode(
-                            t,
-                            convertFacts.problem?.code,
-                            convertFacts.problem?.message ?? t("serverForm.convertToKeychain.checking"),
-                          )
-                        : t("serverForm.convertToKeychain.checking")}
-                  </p>
-                )}
+                  <Button size="sm"
+                    onClick={() => setConvertConfirmOpen(true)}
+                    disabled={!convertFacts?.validKey}
+                  >
+                    {t("serverForm.convertToKeychain.button")}
+                  </Button>
+                  {!convertFacts?.validKey && (
+                    <p className="mt-2 text-xs text-amber-400">
+                      {convertFactsError
+                        ? t("serverForm.convertToKeychain.checkFailed")
+                        : convertFacts
+                          ? translateErrorCode(
+                              t,
+                              convertFacts.problem?.code,
+                              convertFacts.problem?.message ?? t("serverForm.convertToKeychain.checking"),
+                            )
+                          : t("serverForm.convertToKeychain.checking")}
+                    </p>
+                  )}
               </>
             )}
             {convertConfirmOpen && (
@@ -1242,23 +1267,31 @@ export function ServerForm({
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">{t("serverForm.sudoFieldset")}</legend>
           <p className="mb-2 text-xs text-slate-400">{t("serverForm.sudoHint")}</p>
-          <label className="block text-sm text-slate-300">
-            {t("serverForm.sudoLabel")}{" "}
-            <span className="text-slate-400">
-              {sudoPasswordUnknown
-                ? t("serverForm.sudoUnchangedUnknown")
-                : hasSudoPassword
-                  ? t("serverForm.sudoUnchangedStored")
-                  : t("serverForm.sudoUnchanged")}
-            </span>
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              type="password"
-              value={sudoPassword}
-              onChange={(e) => setSudoPassword(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
-            />
-          </label>
+          <Field
+            label={
+              <>
+                {t("serverForm.sudoLabel")}{" "}
+                <span className="text-slate-400">
+                  {sudoPasswordUnknown
+                    ? t("serverForm.sudoUnchangedUnknown")
+                    : hasSudoPassword
+                      ? t("serverForm.sudoUnchangedStored")
+                      : t("serverForm.sudoUnchanged")}
+                </span>
+              </>
+            }
+          >
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="password"
+                value={sudoPassword}
+                onChange={(e) => setSudoPassword(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
           {(hasSudoPassword || sudoPasswordUnknown) && (
             <Button size="sm"
               onClick={handleClearSudoPassword}
@@ -1320,24 +1353,22 @@ export function ServerForm({
         </fieldset>
 
         {!isLocal && (
-          <div>
-            <label className="block text-sm text-slate-300">
-              {t("serverForm.startDirectoryLabel")}
+          <Field
+            label={t("serverForm.startDirectoryLabel")}
+            help={startDirectoryError ? undefined : t("serverForm.startDirectoryHint")}
+            error={startDirectoryError ?? undefined}
+          >
+            {(control) => (
               <input
+                {...control}
                 {...TECHNICAL_INPUT_PROPS}
                 value={startDirectory}
                 onChange={(e) => setStartDirectory(e.target.value)}
                 placeholder={t("serverForm.startDirectoryPlaceholder")}
-                aria-invalid={startDirectoryError !== null}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
               />
-            </label>
-            {startDirectoryError ? (
-              <p className="mt-1 text-xs text-red-400">{startDirectoryError}</p>
-            ) : (
-              <p className="mt-1 text-xs text-slate-400">{t("serverForm.startDirectoryHint")}</p>
             )}
-          </div>
+          </Field>
         )}
 
         {!isLocal && (
@@ -1345,17 +1376,22 @@ export function ServerForm({
             <summary className="cursor-pointer text-sm text-slate-300">
               {t("serverForm.advanced")}
             </summary>
-            <label className="mt-3 block text-sm text-slate-300">
-              {t("serverForm.sftpServerPathLabel")}
-              <input
-                {...TECHNICAL_INPUT_PROPS}
-                value={sftpServerPath}
-                onChange={(e) => setSftpServerPath(e.target.value)}
-                placeholder={t("serverForm.sftpServerPathPlaceholder")}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-              />
-            </label>
-            <p className="mt-2 text-xs text-slate-400">{t("serverForm.sftpServerPathHint")}</p>
+            <Field
+              label={t("serverForm.sftpServerPathLabel")}
+              help={t("serverForm.sftpServerPathHint")}
+              className="mt-3"
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  {...TECHNICAL_INPUT_PROPS}
+                  value={sftpServerPath}
+                  onChange={(e) => setSftpServerPath(e.target.value)}
+                  placeholder={t("serverForm.sftpServerPathPlaceholder")}
+                  className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
+                />
+              )}
+            </Field>
           </details>
         )}
 
@@ -1405,138 +1441,138 @@ export function ServerForm({
 
       {!isCreate && serverId && loaded && (
         <>
-          <NotesPanel
-            target={{ Server: serverId }}
-            currentNotes={loaded.notes}
-            onNotesChanged={onSaved}
-            autoFocus={autoFocusNotes}
-          />
+            <NotesPanel
+              target={{ Server: serverId }}
+              currentNotes={loaded.notes}
+              onNotesChanged={onSaved}
+              autoFocus={autoFocusNotes}
+            />
 
-          <div>
-            <Button size="sm"
-              onClick={handlePreview}
-              disabled={previewLoading}
-            >
-              {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
-            </Button>
-            {preview !== null && (
-              <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
-                {preview || t("serverForm.noContext")}
-              </pre>
-            )}
-          </div>
-
-          <div className="border-t border-slate-700 pt-4">
-            <Button variant="danger" size="sm"
-              onClick={handleDeleteClick}
-            >
-              {t("serverForm.deleteServer")}
-            </Button>
-
-            {/* Spec 0071, A17: Der Server ist weg, aber mindestens ein
-             * Secret blieb im Schlüsselbund. Kein stilles Schließen — der
-             * Nutzer braucht die Refs, um die verwaisten Einträge im
-             * Schlüsselbund-Verwaltungsprogramm wiederzufinden. */}
-            {secretsLeftBehind && (
-              <div
-                className="mt-3 rounded border border-amber-700 bg-amber-950 p-3 text-sm"
-                data-testid="secrets-left-behind"
+            <div>
+              <Button size="sm"
+                onClick={handlePreview}
+                disabled={previewLoading}
               >
-                <p className="mb-2 font-medium text-amber-200">
-                  {t("serverForm.deletedWithLeftoverSecretsTitle")}
-                </p>
-                <p className="mb-2 text-amber-200">
-                  {t("serverForm.deletedWithLeftoverSecretsHint")}
-                </p>
-                <ul className="mb-2 space-y-1 font-mono text-xs text-amber-200">
-                  {secretsLeftBehind.map((ref) => (
-                    <li key={ref}>{ref}</li>
-                  ))}
-                </ul>
-                <Button size="sm"
-                  onClick={() => {
-                    setSecretsLeftBehind(null);
-                    onDeleted();
-                  }}
-                >
-                  {t("common.close")}
-                </Button>
-              </div>
-            )}
+                {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
+              </Button>
+              {preview !== null && (
+                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
+                  {preview || t("serverForm.noContext")}
+                </pre>
+              )}
+            </div>
 
-            {deletePreview && (
-              <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
-                <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
-                {deletePreview.server.authKind === "agent" &&
-                !deletePreview.server.hasSudoPassword &&
-                !deletePreview.server.sudoPasswordUnknown &&
-                deletePreview.serversLosingJumpHost.length === 0 ? (
-                  <p className="mb-2 text-red-200">{t("serverForm.deleteNoKeychainImpact")}</p>
-                ) : (
-                  <ul className="mb-2 space-y-1 text-red-200">
-                    {/* Spec 0076: `identity_file` hat keinen Secret-Inhalt
-                     * im Schlüsselbund, der zwingend existiert — anders als
-                     * bei den übrigen Anmeldearten steht dort höchstens
-                     * eine OPTIONALE Passphrase, und das DTO sagt nicht,
-                     * ob sie gesetzt ist. "Wird gelöscht" wäre hier eine
-                     * Behauptung, die die Oberfläche nicht belegen kann;
-                     * die eigene "mag gelöscht werden"-Zeile unten (wie bei
-                     * `sudoPasswordUnknown`) bleibt deshalb der einzige
-                     * Hinweis für diese Anmeldeart. */}
-                    {deletePreview.server.authKind !== "agent" &&
-                      deletePreview.server.authKind !== "identity_file" && (
-                        <li>
-                          {t("serverForm.secretWillBeDeleted", {
-                            label: authKindLabels(t)[deletePreview.server.authKind],
-                          })}
-                        </li>
-                      )}
-                    {deletePreview.server.authKind === "identity_file" && (
-                      <li>{t("serverForm.identityFilePassphraseMayBeDeleted")}</li>
-                    )}
-                    {deletePreview.server.hasSudoPassword && (
-                      <li>
-                        {t("serverForm.secretWillBeDeleted", { label: t("serverForm.sudoLabel") })}
-                      </li>
-                    )}
-                    {/* Spec 0071, A14: Ist der Schlüsselbund nicht lesbar,
-                     * darf hier weder "wird gelöscht" noch gar nichts
-                     * stehen — beides wäre eine Behauptung über einen
-                     * Zustand, den die Oberfläche nicht kennt. */}
-                    {deletePreview.server.sudoPasswordUnknown && (
-                      <li>
-                        {t("serverForm.secretMayBeDeleted", { label: t("serverForm.sudoLabel") })}
-                      </li>
-                    )}
-                    {deletePreview.serversLosingJumpHost.map((s) => (
-                      <li key={s.id}>{t("serverForm.serverWillLoseJumpHost", { name: s.name })}</li>
+            <div className="border-t border-slate-700 pt-4">
+              <Button variant="danger" size="sm"
+                onClick={handleDeleteClick}
+              >
+                {t("serverForm.deleteServer")}
+              </Button>
+
+              {/* Spec 0071, A17: Der Server ist weg, aber mindestens ein
+               * Secret blieb im Schlüsselbund. Kein stilles Schließen — der
+               * Nutzer braucht die Refs, um die verwaisten Einträge im
+               * Schlüsselbund-Verwaltungsprogramm wiederzufinden. */}
+              {secretsLeftBehind && (
+                <div
+                  className="mt-3 rounded border border-amber-700 bg-amber-950 p-3 text-sm"
+                  data-testid="secrets-left-behind"
+                >
+                  <p className="mb-2 font-medium text-amber-200">
+                    {t("serverForm.deletedWithLeftoverSecretsTitle")}
+                  </p>
+                  <p className="mb-2 text-amber-200">
+                    {t("serverForm.deletedWithLeftoverSecretsHint")}
+                  </p>
+                  <ul className="mb-2 space-y-1 font-mono text-xs text-amber-200">
+                    {secretsLeftBehind.map((ref) => (
+                      <li key={ref}>{ref}</li>
                     ))}
                   </ul>
-                )}
-                {/* spec-reviewer-Fund (Review dieses Schritts): die Vorschau
-                 * oben deckt nur Secrets/Jump-Host ab (Spec 0046, Fund 1) —
-                 * ohne diesen Hinweis läse sich "keine Secrets, keine
-                 * anderen Server betroffen" wie "löschen ist folgenlos",
-                 * obwohl Chat-Historie/Notizen/Tags dieses Servers beim
-                 * Löschen unwiderruflich mitverschwinden (`ON DELETE
-                 * CASCADE`, Spec 0034/0008). */}
-                <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
-                <div className="flex gap-2">
                   <Button size="sm"
-                    onClick={() => setDeletePreview(null)}
+                    onClick={() => {
+                      setSecretsLeftBehind(null);
+                      onDeleted();
+                    }}
                   >
-                    {t("common.cancel")}
-                  </Button>
-                  <Button variant="danger" size="sm"
-                    onClick={handleConfirmDelete}
-                    disabled={deleting}
-                  >
-                    {deleting ? t("common.deleting") : t("serverForm.confirmDeleteServer")}
+                    {t("common.close")}
                   </Button>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+
+              {deletePreview && (
+                <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
+                  <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
+                  {deletePreview.server.authKind === "agent" &&
+                  !deletePreview.server.hasSudoPassword &&
+                  !deletePreview.server.sudoPasswordUnknown &&
+                  deletePreview.serversLosingJumpHost.length === 0 ? (
+                    <p className="mb-2 text-red-200">{t("serverForm.deleteNoKeychainImpact")}</p>
+                  ) : (
+                    <ul className="mb-2 space-y-1 text-red-200">
+                      {/* Spec 0076: `identity_file` hat keinen Secret-Inhalt
+                       * im Schlüsselbund, der zwingend existiert — anders als
+                       * bei den übrigen Anmeldearten steht dort höchstens
+                       * eine OPTIONALE Passphrase, und das DTO sagt nicht,
+                       * ob sie gesetzt ist. "Wird gelöscht" wäre hier eine
+                       * Behauptung, die die Oberfläche nicht belegen kann;
+                       * die eigene "mag gelöscht werden"-Zeile unten (wie bei
+                       * `sudoPasswordUnknown`) bleibt deshalb der einzige
+                       * Hinweis für diese Anmeldeart. */}
+                      {deletePreview.server.authKind !== "agent" &&
+                        deletePreview.server.authKind !== "identity_file" && (
+                          <li>
+                            {t("serverForm.secretWillBeDeleted", {
+                              label: authKindLabels(t)[deletePreview.server.authKind],
+                            })}
+                          </li>
+                        )}
+                      {deletePreview.server.authKind === "identity_file" && (
+                        <li>{t("serverForm.identityFilePassphraseMayBeDeleted")}</li>
+                      )}
+                      {deletePreview.server.hasSudoPassword && (
+                        <li>
+                          {t("serverForm.secretWillBeDeleted", { label: t("serverForm.sudoLabel") })}
+                        </li>
+                      )}
+                      {/* Spec 0071, A14: Ist der Schlüsselbund nicht lesbar,
+                       * darf hier weder "wird gelöscht" noch gar nichts
+                       * stehen — beides wäre eine Behauptung über einen
+                       * Zustand, den die Oberfläche nicht kennt. */}
+                      {deletePreview.server.sudoPasswordUnknown && (
+                        <li>
+                          {t("serverForm.secretMayBeDeleted", { label: t("serverForm.sudoLabel") })}
+                        </li>
+                      )}
+                      {deletePreview.serversLosingJumpHost.map((s) => (
+                        <li key={s.id}>{t("serverForm.serverWillLoseJumpHost", { name: s.name })}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {/* spec-reviewer-Fund (Review dieses Schritts): die Vorschau
+                   * oben deckt nur Secrets/Jump-Host ab (Spec 0046, Fund 1) —
+                   * ohne diesen Hinweis läse sich "keine Secrets, keine
+                   * anderen Server betroffen" wie "löschen ist folgenlos",
+                   * obwohl Chat-Historie/Notizen/Tags dieses Servers beim
+                   * Löschen unwiderruflich mitverschwinden (`ON DELETE
+                   * CASCADE`, Spec 0034/0008). */}
+                  <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm"
+                      onClick={() => setDeletePreview(null)}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                    <Button variant="danger" size="sm"
+                      onClick={handleConfirmDelete}
+                      disabled={deleting}
+                    >
+                      {deleting ? t("common.deleting") : t("serverForm.confirmDeleteServer")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
         </>
       )}
 
