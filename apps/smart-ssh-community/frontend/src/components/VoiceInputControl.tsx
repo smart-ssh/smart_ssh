@@ -64,9 +64,9 @@ export function VoiceInputControl({ onText, panelRef }: VoiceInputControlProps) 
         {transcribing ? <Spinner /> : <MicIcon />}
         {recording && <span className="font-mono text-xs">{formatElapsed(voice.elapsed)}</span>}
       </button>
-      <output className="sr-only">
+      <span aria-live="polite" className="sr-only">
         {recording ? t("voice.recordingStatus") : transcribing ? t("voice.transcribing") : ""}
-      </output>
+      </span>
       {voice.errorKey && (
         <p
           role="alert"
