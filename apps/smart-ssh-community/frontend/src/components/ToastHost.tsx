@@ -7,8 +7,9 @@ import { subscribeToasts, type Toast } from "../toastBus";
  * #37) bleiben stehen, bis der Nutzer sie schließt (Spec 0067, Teil B2). */
 export const SUCCESS_TOAST_MS = 4000;
 
-/** Spec 0067, Teil B: zeigt Meldungen aus `toastBus`. Unten links, damit
- * sie nicht mit den Notiz-Karten unten rechts kollidieren; gleiche Optik. */
+/** Spec 0067, Teil B: zeigt Meldungen aus `toastBus`. Oben rechts unter
+ * dem Header: unten würden sie den Chat-Eingabebereich verdecken (Issue #422)
+ * und mit den Notiz-Karten unten rechts kollidieren. */
 export function ToastHost() {
   const { t } = useTranslation();
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -33,7 +34,7 @@ export function ToastHost() {
 
   return (
     <div
-      className="fixed bottom-4 left-4 z-50 flex max-h-[calc(100vh-2rem)] w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto"
+      className="fixed right-4 top-14 z-50 flex max-h-[calc(100vh-4.5rem)] w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto"
       // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- <output> ist ein Formular-Element, dessen Live-Region-Unterstützung je nach Webview und Screenreader schwankt; role="status" auf einem einfachen Container hält die Ansage verlässlich (Issue #112).
       role="status"
     >
