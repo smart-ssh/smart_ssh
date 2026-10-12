@@ -583,7 +583,10 @@
     "exampleConfigHint": "Exemple de configuration pour Claude Code (.mcp.json / « claude mcp add --transport http ») :",
     "copyConfig": "Copier la configuration",
     "copyConfigCopied": "Configuration copiée.",
-    "copyConfigFailed": "Impossible de copier la configuration."
+    "copyConfigFailed": "Impossible de copier la configuration.",
+    "tokenReveal": "Afficher le jeton",
+    "tokenHide": "Masquer le jeton",
+    "copyConfigNote": "Copie la configuration complète avec le vrai jeton, même s'il est masqué."
   },
   "firstRunNotice": {
     "title": "Avant de commencer",
