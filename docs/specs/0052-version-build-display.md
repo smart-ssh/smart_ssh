@@ -61,6 +61,10 @@ parallel testet, sieht so sofort, welcher läuft.
 - Der gesamte Zusatz hängt an einem einzigen Schalter, der an die Early-
   Access-Kennzeichnung gekoppelt ist und für 1.0 in einem Schritt abgeschaltet
   werden kann; dann steht dort nur „Smart SSH".
+- In schmalen Fenstern (unter 1024 px Breite) entfällt der Zusatz bis auf die
+  Dev-Markierung, damit er die Tab-Leiste nicht bedrängt; bei Dev-Builds steht
+  dann `Smart SSH · Dev`. Version, Hash und Edition bleiben unter
+  Einstellungen > Über (3.2) abrufbar.
 - Lässt sich die Information nicht laden, steht nur „Smart SSH".
 - Der Text ist Teil der Ziehfläche der Leiste und stört weder die Fenster-
   Buttons noch das Ziehen (Spec 0049).
