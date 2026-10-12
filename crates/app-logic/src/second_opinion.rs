@@ -1054,26 +1054,63 @@ mod tests {
         assert_eq!(parse_injection_check("VERDICT:"), None);
     }
 
-    /// SYNTHETISCH (nicht aufgezeichnet, ADR 0125): Antworten, wie sie die
-    /// drei Anbietertypen laut Prompt-Format liefern könnten.
+    /// SYNTHETISCH (nicht aufgezeichnet, ADR 0125): Antwort eines
+    /// OpenAI-kompatiblen Anbieters, bis eine Aufzeichnung vorliegt (#223).
+    /// Kein Fixture eines echten Anbieters.
     #[test]
-    fn synthetic_provider_style_answers() {
-        let answers = [
-            // Anthropic-Stil
-            (
-                "VERDICT: red\n\nThe output contains a private key.",
-                Some(RiskLevel::Red),
-            ),
-            // OpenAI-kompatibel, Markdown
-            (
-                "**VERDICT: yellow**\nPossible tokens in env output.",
-                Some(RiskLevel::Yellow),
-            ),
-            // Ollama, hält Format nicht ein → Rückfall
-            ("Ich denke, none passt hier.", Some(RiskLevel::None)),
+    fn synthetic_openai_style_answer() {
+        let text = "**VERDICT: yellow**\nPossible tokens in env output.";
+        assert_eq!(
+            parse_second_opinion(text).map(|(l, _)| l),
+            Some(RiskLevel::Yellow)
+        );
+    }
+
+    /// AUFGEZEICHNET (Issue #223, ADR 0125): echte Antworten von Anthropic
+    /// (claude-haiku-5-5) und Ollama (qwen2.5:0.5b), aufgenommen am
+    /// 2026-10-12. Jede Antwort wird über das strukturierte Feld gelesen
+    /// (nicht über den Rückfall), und der Wert entspricht dem Feld.
+    /// Kein Anbieter ignorierte das Format, der Rückfall wird hier nicht gebraucht.
+    #[test]
+    fn recorded_provider_answers_use_the_structured_field() {
+        let fixtures = [
+            include_str!("../tests/fixtures/recorded_verdicts_anthropic.json"),
+            include_str!("../tests/fixtures/recorded_verdicts_ollama.json"),
         ];
-        for (text, want) in answers {
-            assert_eq!(parse_second_opinion(text).map(|(l, _)| l), want, "{text:?}");
+        for raw in fixtures {
+            let fx: serde_json::Value = serde_json::from_str(raw).unwrap();
+            assert!(fx["provider_type"].is_string() && fx["recorded"].is_string());
+            let answers = fx["answers"].as_array().unwrap();
+            assert_eq!(answers.len(), 11);
+            for a in answers {
+                let text = a["answer"].as_str().unwrap();
+                let first = text.lines().next().unwrap();
+                let word = first.strip_prefix("VERDICT: ").expect(text);
+                match a["prompt"].as_str().unwrap() {
+                    "second_opinion" => {
+                        let want = match word {
+                            "none" => RiskLevel::None,
+                            "yellow" => RiskLevel::Yellow,
+                            "red" => RiskLevel::Red,
+                            other => panic!("unexpected {other}"),
+                        };
+                        let classify = |w: &str| match w {
+                            "none" => Some(RiskLevel::None),
+                            "yellow" => Some(RiskLevel::Yellow),
+                            "red" => Some(RiskLevel::Red),
+                            _ => None,
+                        };
+                        let (got, _) = parse_structured_verdict(text, classify).expect(text);
+                        assert_eq!(got, want, "{text:?}");
+                        assert_eq!(parse_second_opinion(text).unwrap().0, want);
+                    }
+                    "injection_check" => {
+                        let want = word == "yes";
+                        assert_eq!(parse_injection_check(text).unwrap().0, want, "{text:?}");
+                    }
+                    other => panic!("unknown prompt {other}"),
+                }
+            }
         }
     }
 

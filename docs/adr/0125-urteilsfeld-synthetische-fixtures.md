@@ -28,3 +28,21 @@ nicht selbst.
 ## Folgen
 
 Das Format kann nach der Aufzeichnung noch einmal angepasst werden.
+
+## Nachtrag (Issue #223): Aufzeichnungen
+
+Am 2026-10-12 hat ein Maintainer Antworten aufgezeichnet (je 7 Zweitmeinungs-
+und 4 Injection-Check-Eingaben, ohne Geheimnisse oder echte Hosts) und als
+Fixtures unter `crates/app-logic/tests/fixtures/` abgelegt:
+
+- **Anthropic** (`claude-haiku-5-5`) und **Ollama** (`qwen2.5:0.5b`): alle 22
+  Antworten beginnen exakt mit `VERDICT: <Wert>`; der Test liest sie über das
+  strukturierte Feld, keine braucht den Rückfall. Das Format bleibt
+  unverändert.
+- Das kleine Ollama-Modell urteilt oft falsch (z. B. `env | grep -i token`
+  → `none`, beide Injektionen → `no`). Das ist Modellqualität, nicht Format;
+  ein so kleines lokales Modell ist keine brauchbare Zweitmeinung.
+- **OpenAI-kompatibel**: noch **nicht** aufgezeichnet (Konto ohne Guthaben,
+  HTTP 429). Dessen Beispielantwort bleibt ausdrücklich synthetisch
+  (`synthetic_openai_style_answer`). Requirement 6 aus #104 ist daher erst
+  mit dieser Aufzeichnung erfüllt.
