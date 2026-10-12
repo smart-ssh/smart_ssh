@@ -115,7 +115,7 @@ export function AppHeader({ children }: AppHeaderProps) {
             {SHOW_EARLY_ACCESS_TITLEBAR_INFO && appInfo && (
               <span
                 data-tauri-drag-region
-                className="ml-1.5 font-normal tracking-normal text-slate-500"
+                className="ml-1.5 font-normal tracking-normal text-slate-400"
               >
                 {appInfo.versionDisplay}
                 {appInfo.edition && ` · ${appInfo.edition}`}

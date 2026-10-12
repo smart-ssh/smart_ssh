@@ -155,7 +155,7 @@ export async function expectTabOrderFollowsVisualOrder(page: Page, scope: Locato
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const all = Array.from(root.querySelectorAll<HTMLElement>(selector)).filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+      return el.tabIndex >= 0 && r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
     }).filter((el) => {
       // A radio group is one Tab stop (the checked radio); the arrow keys move within it.
       if (!(el instanceof HTMLInputElement) || el.type !== "radio" || el.checked || !el.name) return true;
