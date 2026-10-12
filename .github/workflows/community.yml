@@ -83,15 +83,19 @@ jobs:
         # nie alle betroffenen Crates auf einmal.
         # Issue #358: the clipboard round-trip test needs a display; Linux
         # runs under a virtual X server, and the test must not be skipped.
+        # Two steps instead of one `shell: bash` step: on Windows bash is Git
+        # Bash, whose perl cannot build the vendored OpenSSL (missing
+        # Locale::Maketext::Simple), so Windows keeps the default shell.
+        if: runner.os == 'Linux'
         env:
           SMART_SSH_REQUIRE_CLIPBOARD_TESTS: "1"
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a cargo test --workspace --no-fail-fast
-          else
-            cargo test --workspace --no-fail-fast
-          fi
-        shell: bash
+        run: xvfb-run -a cargo test --workspace --no-fail-fast
+
+      - name: cargo test
+        if: runner.os != 'Linux'
+        env:
+          SMART_SSH_REQUIRE_CLIPBOARD_TESTS: "1"
+        run: cargo test --workspace --no-fail-fast
 
       - name: cargo build
         run: cargo build --workspace
