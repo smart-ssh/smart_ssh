@@ -230,3 +230,35 @@ export async function expectNoClippedText(scope: Locator): Promise<void> {
   });
   expect(problems).toEqual([]);
 }
+
+/**
+ * Walks the Tab order from the current focus and returns, for each stop, the
+ * accessible name (aria-label, label text or text content) and whether the
+ * focused element shows a focus indicator (outline or ring).
+ */
+export async function walkTabOrder(
+  page: Page,
+  stops: number,
+): Promise<{ name: string; indicator: boolean }[]> {
+  const result: { name: string; indicator: boolean }[] = [];
+  for (let i = 0; i < stops; i++) {
+    await page.keyboard.press(tabKey(page));
+    result.push(
+      await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el) return { name: "none", indicator: false };
+        const style = getComputedStyle(el);
+        const labelled = el.getAttribute("aria-labelledby");
+        const name =
+          el.getAttribute("aria-label") ??
+          (labelled ? document.getElementById(labelled)?.textContent : null) ??
+          (el as HTMLInputElement).labels?.[0]?.textContent ??
+          el.textContent ??
+          "";
+        const outline = style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0;
+        return { name: name.trim(), indicator: outline || style.boxShadow !== "none" };
+      }),
+    );
+  }
+  return result;
+}

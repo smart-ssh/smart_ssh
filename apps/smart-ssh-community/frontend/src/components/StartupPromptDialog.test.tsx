@@ -7,7 +7,7 @@
 // das Tor gibt ihr dafür auch keinen sendenden Rückruf mit). Ein Test, der
 // nur das Zusammenspiel prüft, bliebe grün, solange eine der beiden hält —
 // und sagte nichts darüber, welche.
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import type { StartupPromptKind } from "../types";
@@ -112,5 +112,33 @@ describe("StartupPromptDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
 
     expect(onAnswer).toHaveBeenCalledWith("cancel");
+  });
+
+  // Issue #387: Escape counts as Cancel where a cancel answer exists, closes
+  // a notice, and does nothing where the backend waits for a real choice.
+  it("Escape bricht eine Bestätigung ab, schließt einen Hinweis und lässt eine Wahl offen", () => {
+    const confirm = renderDialog("confirmStartOver");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(confirm.onAnswer).toHaveBeenCalledWith("cancel");
+    cleanup();
+
+    const notice = renderDialog("notice");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(notice.onDismiss).toHaveBeenCalledTimes(1);
+    expect(notice.onAnswer).not.toHaveBeenCalled();
+    cleanup();
+
+    const choice = renderDialog("startOverOrQuit");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(choice.onAnswer).not.toHaveBeenCalled();
+    expect(choice.onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("legt den Anfangsfokus auf die sichere Schaltfläche, bei Passwort auf das erste Feld", () => {
+    renderDialog("startOverOrQuit");
+    expect(screen.getByRole("button", { name: "Beenden" })).toHaveFocus();
+    cleanup();
+    renderDialog("newMasterPassword");
+    expect(screen.getByLabelText("Neues Master-Passwort")).toHaveFocus();
   });
 });
