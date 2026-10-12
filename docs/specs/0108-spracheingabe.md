@@ -105,8 +105,11 @@ Logs nennen höchstens Dauer und Ergebnis.
   `speech_already_recording`; die laufende Aufnahme bleibt unberührt.
 - *Stop* beendet die Aufnahme, erkennt lokal und liefert den Text. Ohne
   laufende Aufnahme: `speech_not_recording`.
+- Während der Erkennung nach einem *Stop* gilt die Aufnahme als laufend:
+  *Start* endet mit `speech_already_recording`, ohne das Mikrofon zu öffnen.
 - *Abbrechen* verwirft die Aufnahme; es wird nichts erkannt und nichts
-  geliefert.
+  geliefert. Läuft die Erkennung nach einem *Stop* schon, wird ihr Ergebnis
+  verworfen und der wartende *Stop* endet mit `speech_not_recording`.
 - Die Aufnahme ist auf 120 Sekunden begrenzt. Danach endet sie von selbst und
   die Erkennung läuft; die Oberfläche erhält den Zustand `finished`, und der
   nächste *Stop* liefert den Text.
