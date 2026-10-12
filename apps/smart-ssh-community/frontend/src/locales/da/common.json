@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Angiv et lokalt program pr. filendelse, der bruges til \"Åbn lokalt\". Uden en post bruges operativsystemets standardprogram.",
+    "extensionLabel": "Filtypenavn",
     "appPathPlaceholder": "Sti til program",
     "browse": "Gennemse…",
     "remove": "Fjern række",
@@ -1100,7 +1101,10 @@
     "splitHandle": "Panelskillelinje",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
-    "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}"
+    "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}",
+    "reconnectingAuto": "Genopretter forbindelsen… (forsøg {{attempt}})",
+    "stopReconnect": "Afbryd",
+    "reconnectGaveUp": "Forbindelsen kunne ikke genoprettes."
   },
   "unusableServer": {
     "badge": "Ubrugelig",
@@ -1111,5 +1115,12 @@
     "host": "Vært: {{host}}",
     "delete": "Slet server",
     "deleteSecrets": "Alle hemmeligheder, som denne version kan gemme for serveren, slettes. Hemmeligheder tilføjet af en nyere version af appen kan blive liggende."
+  },
+  "autoReconnect": {
+    "label": "Opret forbindelse igen automatisk",
+    "off": "Fra",
+    "seconds30": "30 sekunder",
+    "seconds60": "60 sekunder",
+    "minutes5": "5 min."
   }
 }

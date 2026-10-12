@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "\"로컬에서 열기\"에 사용할 로컬 애플리케이션을 파일 확장자별로 지정합니다. 항목이 없으면 운영 체제의 기본 애플리케이션을 사용합니다.",
+    "extensionLabel": "파일 확장자",
     "appPathPlaceholder": "애플리케이션 경로",
     "browse": "찾아보기…",
     "remove": "행 제거",
@@ -1092,7 +1093,10 @@
     "splitHandle": "패널 구분선",
     "terminalTab": "터미널",
     "filesTab": "파일",
-    "terminalOpenFailed": "터미널을 열 수 없습니다: {{error}}"
+    "terminalOpenFailed": "터미널을 열 수 없습니다: {{error}}",
+    "reconnectingAuto": "다시 연결하는 중… ({{attempt}}번째 시도)",
+    "stopReconnect": "중지",
+    "reconnectGaveUp": "연결을 복구하지 못했습니다."
   },
   "unusableServer": {
     "badge": "사용 불가",
@@ -1103,5 +1107,12 @@
     "host": "호스트: {{host}}",
     "delete": "서버 삭제",
     "deleteSecrets": "이 버전이 이 서버에 대해 저장할 수 있는 모든 비밀 정보가 삭제됩니다. 더 새로운 버전의 앱에서 추가한 비밀 정보는 남아 있을 수 있습니다."
+  },
+  "autoReconnect": {
+    "label": "자동으로 다시 연결",
+    "off": "끔",
+    "seconds30": "30초",
+    "seconds60": "60초",
+    "minutes5": "5분"
   }
 }

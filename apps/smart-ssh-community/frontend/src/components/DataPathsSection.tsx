@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorMessage, getDataPaths, openDataPathFolder } from "../api";
 import type { DataPathEntryDto } from "../types";
+import { Button } from "./ui";
 
 /** Issue #16: Wo diese Instanz ihre Daten ablegt — Datenbank, Logs,
  * Host-Keys, Schlüsseldatei des Master-Passworts, MCP-Einstellungen und
@@ -72,25 +73,28 @@ export function DataPathsSection() {
           <li key={entry.id} data-testid={`data-path-${entry.id}`}>
             <div className="text-xs text-slate-400">{labelFor(entry)}</div>
             <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 select-text break-all font-mono text-xs text-slate-100">
+              <code
+                title={entry.path}
+                className="min-w-0 flex-1 select-text break-all font-mono text-xs text-slate-100"
+              >
                 {entry.path}
               </code>
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() => void handleCopy(entry)}
                 aria-label={`${t("diagnostics.dataPaths.copy")}: ${labelFor(entry)}`}
-                className="shrink-0 rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-700"
+                className="shrink-0"
               >
                 {t("diagnostics.dataPaths.copy")}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => void handleOpenFolder(entry)}
                 aria-label={`${t("diagnostics.dataPaths.openFolder")}: ${labelFor(entry)}`}
-                className="shrink-0 rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-700"
+                className="shrink-0"
               >
                 {t("diagnostics.dataPaths.openFolder")}
-              </button>
+              </Button>
             </div>
           </li>
         ))}

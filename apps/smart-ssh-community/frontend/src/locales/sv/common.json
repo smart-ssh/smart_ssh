@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Ange ett lokalt program per filändelse som ska användas för \"Öppna lokalt\". Utan post används operativsystemets standardprogram.",
+    "extensionLabel": "Filändelse",
     "appPathPlaceholder": "Sökväg till program",
     "browse": "Bläddra…",
     "remove": "Ta bort rad",
@@ -1100,7 +1101,10 @@
     "splitHandle": "Panelavdelare",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
-    "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}"
+    "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
+    "reconnectingAuto": "Återansluter… (försök {{attempt}})",
+    "stopReconnect": "Avbryt",
+    "reconnectGaveUp": "Anslutningen kunde inte återställas."
   },
   "unusableServer": {
     "badge": "Oanvändbar",
@@ -1111,5 +1115,12 @@
     "host": "Värd: {{host}}",
     "delete": "Ta bort server",
     "deleteSecrets": "Varje hemlighet som den här versionen kan lagra för servern tas bort. Hemligheter som lagts till av en nyare version av appen kan finnas kvar."
+  },
+  "autoReconnect": {
+    "label": "Återanslut automatiskt",
+    "off": "Av",
+    "seconds30": "30 sekunder",
+    "seconds60": "60 sekunder",
+    "minutes5": "5 minuter"
   }
 }

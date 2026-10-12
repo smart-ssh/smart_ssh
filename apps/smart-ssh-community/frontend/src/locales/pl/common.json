@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Ustaw lokalną aplikację dla każdego rozszerzenia pliku, używaną przy „Otwórz lokalnie”. Bez wpisu używana jest domyślna aplikacja systemu.",
+    "extensionLabel": "Rozszerzenie pliku",
     "appPathPlaceholder": "Ścieżka do aplikacji",
     "browse": "Przeglądaj…",
     "remove": "Usuń wiersz",
@@ -1116,7 +1117,10 @@
     "splitHandle": "Separator paneli",
     "terminalTab": "Terminal",
     "filesTab": "Pliki",
-    "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}"
+    "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}",
+    "reconnectingAuto": "Ponowne łączenie… (próba {{attempt}})",
+    "stopReconnect": "Zatrzymaj",
+    "reconnectGaveUp": "Nie udało się przywrócić połączenia."
   },
   "unusableServer": {
     "badge": "Nieużywalny",
@@ -1127,5 +1131,12 @@
     "host": "Host: {{host}}",
     "delete": "Usuń serwer",
     "deleteSecrets": "Zostanie usunięty każdy sekret, który ta wersja potrafi zapisać dla tego serwera. Sekrety dodane przez nowszą wersję aplikacji mogą pozostać."
+  },
+  "autoReconnect": {
+    "label": "Łącz ponownie automatycznie",
+    "off": "Wyłączone",
+    "seconds30": "30 sekund",
+    "seconds60": "60 sekund",
+    "minutes5": "5 minut"
   }
 }

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Lege pro Dateiendung ein lokales Programm fest, das beim \"Lokal öffnen\" verwendet wird. Ohne Eintrag wird das Standardprogramm des Betriebssystems genutzt.",
+    "extensionLabel": "Dateiendung",
     "appPathPlaceholder": "Pfad zum Programm",
     "browse": "Durchsuchen…",
     "remove": "Zeile entfernen",
@@ -1100,7 +1101,10 @@
     "splitHandle": "Bereichsaufteilung",
     "terminalTab": "Terminal",
     "filesTab": "Dateien",
-    "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}"
+    "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
+    "reconnectingAuto": "Verbinde neu … (Versuch {{attempt}})",
+    "stopReconnect": "Stopp",
+    "reconnectGaveUp": "Die Verbindung konnte nicht wiederhergestellt werden."
   },
   "unusableServer": {
     "badge": "Nicht nutzbar",
@@ -1111,5 +1115,12 @@
     "host": "Host: {{host}}",
     "delete": "Server löschen",
     "deleteSecrets": "Alle Secrets, die diese Version für diesen Server speichern kann, werden gelöscht. Secrets, die eine neuere Version der App angelegt hat, können zurückbleiben."
+  },
+  "autoReconnect": {
+    "label": "Automatisch neu verbinden",
+    "off": "Aus",
+    "seconds30": "30 Sekunden",
+    "seconds60": "60 Sekunden",
+    "minutes5": "5 Minuten"
   }
 }

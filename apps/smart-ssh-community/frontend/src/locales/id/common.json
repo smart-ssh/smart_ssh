@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Tetapkan aplikasi lokal untuk setiap ekstensi berkas yang digunakan pada \"Buka secara lokal\". Tanpa entri, aplikasi bawaan sistem operasi akan digunakan.",
+    "extensionLabel": "Ekstensi berkas",
     "appPathPlaceholder": "Jalur ke aplikasi",
     "browse": "Telusuri…",
     "remove": "Hapus baris",
@@ -1092,7 +1093,10 @@
     "splitHandle": "Pembagi panel",
     "terminalTab": "Terminal",
     "filesTab": "Berkas",
-    "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}"
+    "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
+    "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
+    "stopReconnect": "Berhenti",
+    "reconnectGaveUp": "Koneksi tidak dapat dipulihkan."
   },
   "unusableServer": {
     "badge": "Tidak dapat digunakan",
@@ -1103,5 +1107,12 @@
     "host": "Host: {{host}}",
     "delete": "Hapus server",
     "deleteSecrets": "Setiap rahasia yang dapat disimpan versi ini untuk server ini dihapus. Rahasia yang ditambahkan oleh versi aplikasi yang lebih baru mungkin tetap ada."
+  },
+  "autoReconnect": {
+    "label": "Sambungkan ulang otomatis",
+    "off": "Mati",
+    "seconds30": "30 detik",
+    "seconds60": "60 detik",
+    "minutes5": "5 menit"
   }
 }

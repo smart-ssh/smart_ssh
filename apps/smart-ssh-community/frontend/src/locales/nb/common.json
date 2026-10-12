@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Angi et lokalt program per filtype som brukes til “Åpne lokalt”. Uten oppføring brukes operativsystemets standardprogram.",
+    "extensionLabel": "Filendelse",
     "appPathPlaceholder": "Sti til program",
     "browse": "Bla gjennom…",
     "remove": "Fjern rad",
@@ -1100,7 +1101,10 @@
     "splitHandle": "Panelskille",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
-    "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}"
+    "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
+    "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
+    "stopReconnect": "Stopp",
+    "reconnectGaveUp": "Tilkoblingen kunne ikke gjenopprettes."
   },
   "unusableServer": {
     "badge": "Ubrukelig",
@@ -1111,5 +1115,12 @@
     "host": "Vert: {{host}}",
     "delete": "Slett server",
     "deleteSecrets": "Alle hemmeligheter denne versjonen kan lagre for denne serveren, slettes. Hemmeligheter lagt til av en nyere versjon av appen kan bli igjen."
+  },
+  "autoReconnect": {
+    "label": "Koble til på nytt automatisk",
+    "off": "Av",
+    "seconds30": "30 sekunder",
+    "seconds60": "60 sekunder",
+    "minutes5": "5 minutter"
   }
 }

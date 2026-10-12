@@ -1,14 +1,15 @@
 # Spec 0107 — Verlorene Sitzung im selben Tab neu verbinden
 
-Status: umgesetzt · Issue: #355
-Zweck: Bricht die Verbindung zu einem Server ab, verbindet der Nutzer den
-selben Tab mit einem Klick auf „Neu verbinden“ oder der Taste R neu. Chat-
+Status: umgesetzt · Issues: #355, #356
+Zweck: Bricht die Verbindung zu einem Server ab, verbindet die App den
+selben Tab automatisch neu (Abschnitt 8) oder der Nutzer mit einem Klick auf
+„Neu verbinden“ oder der Taste R. Chat-
 Verlauf und KI-Kontext bleiben, Terminal und Dateibrowser kommen zurück.
 Review-Priorität: ERHÖHT (Verbindungsaufbau, Host-Key, Zugangsdaten, erhöhter Kanal)
 
 Bezüge: Spec 0007 (Sitzungen, Terminal), Spec 0017 (Tabs), Spec 0057
 (Protokoll), Spec 0067 (erhöhter Dateizugriff), Spec 0102 (Startverzeichnis),
-Spec 0104 (MCP-Sitzungen), ADR 0007 (Host-Key-Bestätigung), ADR 0132.
+Spec 0104 (MCP-Sitzungen), ADR 0007 (Host-Key-Bestätigung), ADR 0132, ADR 0133.
 
 ## 1. Auslöser
 
@@ -80,7 +81,59 @@ Die Sitzungsliste meldet während des Neuverbindens ebenfalls `reconnecting`.
 
 ## 7. Nicht Teil dieser Spec
 
-- Automatisches Neuverbinden ohne Zutun des Nutzers.
 - Wiederherstellen des erhöhten Dateikanals, der lokalen Pfadfreigaben oder
   einer Shell-Sitzung (Umgebung, laufende Prozesse).
 - Passwortabfrage bei fehlenden Zugangsdaten.
+- Automatisches Neuverbinden von MCP-Sitzungen (Spec 0104).
+
+## 8. Automatisch neu verbinden
+
+**8.1 Einstellung.** „Automatisch neu verbinden“ in den Einstellungen
+(„Sitzungen & Daten“): Aus, 30 Sekunden, 60 Sekunden, 5 Minuten; Standard
+60 Sekunden. Sie bleibt über Neustarts erhalten und gilt ab dem nächsten
+Verbindungsabbruch. Ein unbekannter gespeicherter Wert gilt als Standard.
+
+**8.2 Auslöser.** Nach jedem unerwarteten Verbindungsabbruch (Terminal-Ende,
+Keepalive, andere Verlustmeldung des Transports) versucht die App von selbst
+neu zu verbinden, außer die Einstellung steht auf Aus; dann erscheint der
+Knopf sofort. Ein vom Nutzer ausgelöstes Trennen und das Schließen des Tabs
+starten keine Versuche und beenden laufende.
+
+**8.3 Zeitplan.** Die Wartezeiten vor den Versuchen sind 2, 4, 8 und danach
+immer 15 Sekunden, gerechnet bis zum Ablauf der eingestellten Zeit. Es läuft
+höchstens ein Versuch je Sitzung. Der Kopf zeigt „Verbinde neu … (Versuch N)“
+und einen Link „Stopp“, der die Versuche sofort beendet; danach erscheint der
+Knopf „Neu verbinden“. Im Terminal steht die Zeile „R drücken“ erst, wenn die
+Versuche enden. Ein Klick auf den Knopf oder R während der Versuche tut
+nichts.
+
+**8.4 Ende ohne Erfolg.** Die Versuche enden sofort, und der Knopf erscheint,
+wenn ein Versuch den Nutzer braucht oder Warten nicht hilft: unbekannter oder
+geänderter Host-Key, fehlende Zugangsdaten oder gesperrter Schlüsselbund,
+abgelehnte Anmeldung (jeder andere Fehler außer Netz- und Zeitüberschreitungs-
+fehlern ebenso). Ein automatischer Versuch öffnet nie den Host-Key-Dialog und
+vertraut nie einem Schlüssel; der Dialog erscheint erst, wenn der Nutzer
+„Neu verbinden“ klickt (Abschnitt 3). Läuft die Zeit ab, zeigt der Kopf
+„Verbindung konnte nicht wiederhergestellt werden.“ mit dem Knopf, das
+Terminal die Zeile „R drücken“.
+
+**8.5 Erfolg.** Gelingt ein Versuch, ist der Tab ohne Zutun wieder verbunden
+(Abschnitt 4).
+
+**8.6 KI-Fortsetzung.** War beim Abbruch ein KI-Turn aktiv (Kommando läuft,
+Bestätigung wartet oder Folgerunde steht an), bekommt die KI nach dem
+automatischen Neuverbinden den Hinweis „Die Verbindung zum Server ging
+verloren und wurde wiederhergestellt. Das letzte Kommando wurde möglicherweise
+nicht abgeschlossen; prüfe seine Wirkung, bevor du es wiederholst.“ (in der
+Sprache des System-Prompts) und eine Folgerunde startet. Das unterbrochene
+Kommando wird nicht wiederholt; jeder neue Vorschlag läuft durch Filter und
+Bestätigung wie sonst. Drückt der Nutzer während des Abbruchs Stopp
+(Spec 0066), entfällt die Fortsetzung. War kein Turn aktiv, geht nichts an die
+KI. Die Fortsetzung gibt es höchstens einmal je Abbruch; bricht die Verbindung
+in der Folgerunde erneut ab, beginnt ein neuer Zyklus nach denselben Regeln.
+Nach einem manuellen Neuverbinden gibt es keine Fortsetzung.
+
+**8.7 Ereignis.** Das Frontend erfährt den Stand über das Ereignis
+`auto-reconnect-changed` (Phase `running` mit Versuchsnummer, `reconnected`,
+`gave_up`, `stopped`, `blocked`); es kommt vor dem Statuswechsel auf
+`disconnected`.

@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "\"Yerel olarak aç\" için her dosya uzantısına bir yerel uygulama atayın. Girdi yoksa işletim sisteminin varsayılan uygulaması kullanılır.",
+    "extensionLabel": "Dosya uzantısı",
     "appPathPlaceholder": "Uygulama yolu",
     "browse": "Gözat…",
     "remove": "Satırı kaldır",
@@ -1100,7 +1101,10 @@
     "connectionLostPressR": "Bağlantı koptu. Yeniden bağlanmak için R'ye basın.",
     "reconnect": "Yeniden bağlan",
     "reconnectedSeparator": "— yeniden bağlanıldı —",
-    "reconnecting": "Yeniden bağlanılıyor…"
+    "reconnecting": "Yeniden bağlanılıyor…",
+    "reconnectingAuto": "Yeniden bağlanılıyor… ({{attempt}}. deneme)",
+    "stopReconnect": "Durdur",
+    "reconnectGaveUp": "Bağlantı geri yüklenemedi."
   },
   "unusableServer": {
     "badge": "Kullanılamaz",
@@ -1111,5 +1115,12 @@
     "host": "Ana makine: {{host}}",
     "delete": "Sunucuyu sil",
     "deleteSecrets": "Bu sürümün bu sunucu için saklayabildiği her gizli veri silinir. Uygulamanın daha yeni bir sürümünün eklediği gizli veriler kalabilir."
+  },
+  "autoReconnect": {
+    "label": "Otomatik olarak yeniden bağlan",
+    "off": "Kapalı",
+    "seconds30": "30 saniye",
+    "seconds60": "60 saniye",
+    "minutes5": "5 dakika"
   }
 }

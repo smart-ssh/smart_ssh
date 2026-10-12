@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "Đặt một ứng dụng cục bộ cho từng phần mở rộng tệp để dùng với \"Mở cục bộ\". Nếu không có mục nào, ứng dụng mặc định của hệ điều hành sẽ được dùng.",
+    "extensionLabel": "Phần mở rộng tệp",
     "appPathPlaceholder": "Đường dẫn đến ứng dụng",
     "browse": "Duyệt…",
     "remove": "Xóa dòng",
@@ -1092,7 +1093,10 @@
     "splitHandle": "Thanh chia khung",
     "terminalTab": "Dòng lệnh",
     "filesTab": "Tệp",
-    "terminalOpenFailed": "Không thể mở terminal: {{error}}"
+    "terminalOpenFailed": "Không thể mở terminal: {{error}}",
+    "reconnectingAuto": "Đang kết nối lại… (lần thử {{attempt}})",
+    "stopReconnect": "Dừng",
+    "reconnectGaveUp": "Không thể khôi phục kết nối."
   },
   "unusableServer": {
     "badge": "Không dùng được",
@@ -1103,5 +1107,12 @@
     "host": "Máy chủ: {{host}}",
     "delete": "Xóa máy chủ",
     "deleteSecrets": "Mọi bí mật mà phiên bản này biết cách lưu cho máy chủ này đều bị xóa. Các bí mật do phiên bản ứng dụng mới hơn thêm vào có thể vẫn còn."
+  },
+  "autoReconnect": {
+    "label": "Tự động kết nối lại",
+    "off": "Tắt",
+    "seconds30": "30 giây",
+    "seconds60": "60 giây",
+    "minutes5": "5 phút"
   }
 }

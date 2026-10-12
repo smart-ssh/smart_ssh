@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "「ローカルで開く」で使用するローカルアプリケーションを、ファイル拡張子ごとに設定します。登録がない場合は、オペレーティングシステムの既定のアプリケーションが使用されます。",
+    "extensionLabel": "ファイル拡張子",
     "appPathPlaceholder": "アプリケーションのパス",
     "browse": "参照…",
     "remove": "行を削除",
@@ -1092,7 +1093,10 @@
     "splitHandle": "パネルの区切り",
     "terminalTab": "ターミナル",
     "filesTab": "ファイル",
-    "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}"
+    "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
+    "reconnectingAuto": "再接続中… ({{attempt}} 回目)",
+    "stopReconnect": "停止",
+    "reconnectGaveUp": "接続を復旧できませんでした。"
   },
   "unusableServer": {
     "badge": "使用不可",
@@ -1103,5 +1107,12 @@
     "host": "ホスト: {{host}}",
     "delete": "サーバーを削除",
     "deleteSecrets": "このバージョンが保存できるこのサーバーのシークレットは、すべて削除されます。新しいバージョンのアプリで追加されたシークレットは残る場合があります。"
+  },
+  "autoReconnect": {
+    "label": "自動的に再接続する",
+    "off": "オフ",
+    "seconds30": "30 秒",
+    "seconds60": "60 秒",
+    "minutes5": "5 分"
   }
 }

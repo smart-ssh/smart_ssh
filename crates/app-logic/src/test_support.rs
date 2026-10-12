@@ -564,6 +564,7 @@ pub fn session_with_ai_and_transport(
         ledger_store: None,
         chat_session_id: AsyncMutex::new(None),
         ai_request_paced_at: AsyncMutex::new(None),
+        auto_reconnect: Default::default(),
     })
 }
 

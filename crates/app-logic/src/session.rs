@@ -828,6 +828,8 @@ pub struct SessionParts {
     /// Feld unmittelbar vor jedem `send()`-Aufruf konsultiert. `None` vor
     /// dem ersten Aufruf.
     pub ai_request_paced_at: AsyncMutex<Option<tokio::time::Instant>>,
+    /// Issue #356, Spec 0107 §8: state of the automatic reconnect.
+    pub auto_reconnect: crate::auto_reconnect::AutoReconnectState,
 }
 
 /// Spec 0066, §2 — s. `Session::chat_turn`.
@@ -1363,6 +1365,14 @@ pub fn report_connection_lost(
         }
         *status = ConnectionStatus::Disconnected;
     }
+    // Issue #356: remember that an AI turn was cut off by the loss (running
+    // command, waiting confirmation or a pending follow-up round), so the
+    // AI can continue after an automatic reconnect.
+    let turn_active = crate::poison::lock_tolerating_poison(&session.chat_turn).running;
+    session.auto_reconnect.set_ai_turn_interrupted(turn_active);
+    // The hook runs first: it announces the automatic attempts before the
+    // status event, so the UI never shows "lost" for a moment.
+    session.auto_reconnect.fire_hook(session_id);
     emit_connection_status_changed(emitter, session_id, ConnectionStatus::Disconnected, reason);
     true
 }
@@ -1717,6 +1727,7 @@ mod tests {
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),
             ai_request_paced_at: AsyncMutex::new(None),
+            auto_reconnect: Default::default(),
         })
     }
 

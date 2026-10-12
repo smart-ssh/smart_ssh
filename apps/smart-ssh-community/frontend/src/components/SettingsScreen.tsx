@@ -1,4 +1,5 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
 import { listSettingsSections, subscribeSettingsSections } from "../extensions/registry";
@@ -10,6 +11,7 @@ import { FileTypeSettings } from "./FileTypeSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { Button } from "./ui";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -23,6 +25,9 @@ const FILE_TYPES_CATEGORY_ID = "file-types";
 /** Spec 0101, A18: Wo der Schlüssel zur verschlüsselten Datenbank liegt. */
 const MASTER_PASSWORD_CATEGORY_ID = "master-password";
 const ABOUT_CATEGORY_ID = "about";
+
+// A variable, not a literal: `<dialog>` has no modal semantics without `showModal()`, which the shared backdrop does not use (same as `DialogFrame`).
+const DIALOG_ROLE: "dialog" = "dialog";
 
 interface NavCategory {
   id: string;
@@ -99,11 +104,61 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
   const [activeId, setActiveId] = useState<string>(categories[0]?.id ?? AI_PROVIDER_CATEGORY_ID);
   const active = categories.find((c) => c.id === activeId) ?? categories[0];
 
+  // Issue #385 (docs/ui-guidelines.md, "Keyboard"): Escape closes, Tab stays
+  // inside, focus starts on the active category and returns to the trigger.
+  // Not `useDialogFocusTrap`: that hook pulls focus back from every element
+  // outside its container, which would fight the dialogs opened from inside
+  // the settings (licenses, master password), which portal to `document.body`.
+  // Keyboard events of such a nested dialog also bubble through the React
+  // tree to this handler, so they are told apart by their DOM target.
+  const titleId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activeNavRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    activeNavRef.current?.focus();
+    return () => {
+      if (previous && document.contains(previous)) previous.focus();
+    };
+  }, []);
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const container = containerRef.current;
+    if (!container || !(event.target instanceof Node) || !container.contains(event.target)) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (focusable.length === 0) return;
+    const index = focusable.indexOf(document.activeElement as HTMLElement);
+    const atEdge = event.shiftKey ? index <= 0 : index === focusable.length - 1;
+    if (atEdge) {
+      event.preventDefault();
+      focusable[event.shiftKey ? focusable.length - 1 : 0]?.focus();
+    }
+  };
+
   return (
     <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl">
+      {/* The key handler only implements Escape and the Tab wrap of the dialog. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div
+        ref={containerRef}
+        role={DIALOG_ROLE}
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onKeyDown={handleKeyDown}
+        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl"
+      >
         <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40">
-          <h2 className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
+          <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
             {t("settings.title")}
           </h2>
           <ul className="flex-1">
@@ -111,9 +166,10 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
               <li key={category.id}>
                 <button
                   type="button"
+                  ref={category.id === active?.id ? activeNavRef : undefined}
                   onClick={() => setActiveId(category.id)}
                   aria-current={category.id === active?.id ? "page" : undefined}
-                  className={`w-full px-4 py-2 text-left text-sm ${
+                  className={`w-full px-4 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
                     category.id === active?.id
                       ? "bg-indigo-600 text-slate-950"
                       : "text-slate-300 hover:bg-slate-800"
@@ -126,19 +182,14 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
           </ul>
         </nav>
 
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
             <h3 className="font-heading text-base font-semibold tracking-wide text-slate-100">
               {active?.label}
             </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-slate-400 hover:text-slate-100"
-              aria-label={t("common.close")}
-            >
+            <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("common.close")}>
               ✕
-            </button>
+            </Button>
           </div>
           <div className="flex-1 overflow-y-auto p-6">
             {active?.id === AI_PROVIDER_CATEGORY_ID && (

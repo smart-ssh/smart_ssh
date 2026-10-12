@@ -100,6 +100,7 @@
   },
   "fileTypes": {
     "description": "为每种文件扩展名指定一个本地应用程序，用于“在本地打开”。没有对应条目时，将使用操作系统的默认应用程序。",
+    "extensionLabel": "文件扩展名",
     "appPathPlaceholder": "应用程序路径",
     "browse": "浏览…",
     "remove": "移除此行",
@@ -1092,7 +1093,10 @@
     "splitHandle": "面板分隔条",
     "terminalTab": "终端",
     "filesTab": "文件",
-    "terminalOpenFailed": "无法打开终端：{{error}}"
+    "terminalOpenFailed": "无法打开终端：{{error}}",
+    "reconnectingAuto": "正在重新连接…（第 {{attempt}} 次尝试）",
+    "stopReconnect": "停止",
+    "reconnectGaveUp": "无法恢复连接。"
   },
   "unusableServer": {
     "badge": "不可用",
@@ -1103,5 +1107,12 @@
     "host": "主机：{{host}}",
     "delete": "删除服务器",
     "deleteSecrets": "此版本所知的、为该服务器保存的所有机密都会被删除。更新版本的应用添加的机密可能会保留。"
+  },
+  "autoReconnect": {
+    "label": "自动重新连接",
+    "off": "关闭",
+    "seconds30": "30 秒",
+    "seconds60": "60 秒",
+    "minutes5": "5 分钟"
   }
 }
