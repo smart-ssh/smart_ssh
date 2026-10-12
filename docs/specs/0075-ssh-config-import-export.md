@@ -2,7 +2,7 @@
 
 Status: umgesetzt
 Zweck: Ein Nutzer liest eine `ssh_config` ein, sieht vorab, welche Server-Profile entstehen würden, und kann seine Server wieder als `ssh_config` hinausschreiben. Die Datei enthält keine Geheimnisse; derselbe Leser und Schreiber laufen in beide Richtungen, der Rundlauf prüft beide Seiten zugleich.
-Bezüge: Spec 0076 (Anmeldeart Schlüsseldatei), Spec 0073 (Randzeichen von Zugangsdaten), Spec 0002 (Filter-Engine, Schlagworte als Geltungsbereich), ADR 0074, ADR 0075.
+Bezüge: Spec 0109 (verschlüsseltes Voll-Backup, die vollständige Sicherung), Spec 0076 (Anmeldeart Schlüsseldatei), Spec 0073 (Randzeichen von Zugangsdaten), Spec 0002 (Filter-Engine, Schlagworte als Geltungsbereich), ADR 0074, ADR 0075.
 Review-Priorität: ERHÖHT — der Import erzeugt Server-Profile, gegen die Filterregeln, Risikobewertung und Ausführungspfad laufen, und er öffnet Dateien, deren Pfade aus einer fremden Datei stammen.
 
 ## 1. Modell, auf das der Import trifft
@@ -19,7 +19,7 @@ Review-Priorität: ERHÖHT — der Import erzeugt Server-Profile, gegen die Filt
 **Nicht-Ziele:**
 
 1. Kein Zugriff auf die Interna anderer Werkzeuge; gelesen werden nur Dateien, die der Nutzer selbst erzeugt.
-2. Kein CSV-Import und kein verschlüsseltes Eigenformat.
+2. Kein CSV-Import und kein verschlüsseltes Eigenformat. Die vollständige, verschlüsselte Sicherung ist eine andere Funktion (Spec 0109); sie ersetzt diesen Import/Export nicht und umgekehrt.
 3. Keine neue Anmeldeart; die Schlüsseldatei als Anmeldeart ist Spec 0076.
 4. Keine Schlüsseldatei wird ungefragt geöffnet: nur auf Weg (b) (§3.1.9) und nur die, die die Vorschau vorher namentlich genannt hat (§5.1).
 5. Kein Geheimnis im Export: nie Passwort, Passphrase oder Schlüsselmaterial, nur Pfade.
@@ -314,6 +314,8 @@ von `~/.ssh/config` (OpenSSH: der erste Wert gewinnt).
 Export in einen gültigen Alias überführt. Die Regel steht in §4.3; die
 Abbildung erscheint in der Meldung, damit der Nutzer den neuen Namen
 kennt.
+
+**3.2.8 Hinweis auf das verschlüsselte Backup.** Der Export-Dialog und die Meldung nach dem Export zeigen den Hinweis: „Enthält keine Zugangsdaten, Regeln oder Notizen – für ein vollständiges Backup den verschlüsselten Export nutzen." (englisch: „Contains no credentials, rules or notes. For a complete backup, use the encrypted backup."). Er ersetzt nicht die Aufstellung nach 3.2.3, sondern steht über ihr. Das vollständige Backup liegt an einer eigenen Stelle unter eigenem Namen („Verschlüsseltes Backup", Spec 0109, §9); beide Funktionen haben verschiedene Dialogtitel.
 
 ### 3.3 Grenzen
 
