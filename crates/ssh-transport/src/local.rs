@@ -1147,8 +1147,10 @@ mod tests {
         let (outcome, _) = run_and_cancel_at_marker(
             &mut transport,
             home.path(),
+            // `wait` is interrupted by the trapped signal at once; a foreground
+            // `sleep` would delay the trap past `CANCEL_GRACE` on slow runners.
             "trap 'printf 0123456789; exit 1' INT; printf ab; : > marker; \
-             while :; do sleep 1; done",
+             sleep 600 & wait",
         )
         .await;
 
