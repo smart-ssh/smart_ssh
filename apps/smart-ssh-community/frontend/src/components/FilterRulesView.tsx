@@ -25,6 +25,7 @@ import type {
   ServerDto,
 } from "../types";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
+import { Button, FIELD_CONTROL_CLASS } from "./ui";
 
 type ScopeKind = "global" | "server" | "tag";
 
@@ -168,13 +169,9 @@ export function FilterRulesView() {
           <h2 className="font-heading text-2xl font-bold tracking-wide text-slate-100">
             {t("filterRules.title")}
           </h2>
-          <button
-            type="button"
-            onClick={() => setSelection({ kind: "new" })}
-            className="font-heading bg-indigo-600 px-3 py-1.5 text-sm font-semibold tracking-wide text-slate-950 hover:bg-indigo-500"
-          >
+          <Button variant="primary" onClick={() => setSelection({ kind: "new" })}>
             {t("filterRules.addRule")}
-          </button>
+          </Button>
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
@@ -200,24 +197,26 @@ export function FilterRulesView() {
                     >
                       {rule.action}
                     </span>
-                    <code className="flex-1 truncate font-mono text-slate-200">
+                    <code
+                      className="min-w-0 flex-1 truncate font-mono text-slate-200"
+                      title={`${rule.patternType}: ${rule.patternValue}`}
+                    >
                       {rule.patternType}: {rule.patternValue}
                     </code>
-                    <span className="font-mono text-xs text-slate-500">
+                    <span className="font-mono text-xs text-slate-400">
                       {t("filterRules.priority", { value: rule.priority })}
                     </span>
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
                       onClick={() => movePriority(group.rules, index, -1)}
                       disabled={index === 0 || !!rule.patternError || !!group.rules[index - 1]?.patternError}
                       title={moveBlockedTitle(rule, group.rules[index - 1])}
-                      className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label={t("filterRules.increasePriority")}
                     >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
+                      <span aria-hidden="true">↑</span>
+                    </Button>
+                    <Button
+                      size="sm"
                       onClick={() => movePriority(group.rules, index, 1)}
                       disabled={
                         index === group.rules.length - 1 ||
@@ -225,25 +224,16 @@ export function FilterRulesView() {
                         !!group.rules[index + 1]?.patternError
                       }
                       title={moveBlockedTitle(rule, group.rules[index + 1])}
-                      className="bg-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-600 disabled:opacity-30"
                       aria-label={t("filterRules.decreasePriority")}
                     >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelection({ kind: "rule", id: rule.id })}
-                      className="bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
-                    >
+                      <span aria-hidden="true">↓</span>
+                    </Button>
+                    <Button size="sm" onClick={() => setSelection({ kind: "rule", id: rule.id })}>
                       {t("common.edit")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(rule.id)}
-                      className="bg-red-900 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
-                    >
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => handleDelete(rule.id)}>
                       {t("common.delete")}
-                    </button>
+                    </Button>
                     </div>
                     {/* Spec 0077, 3.2.3: Eine Regel, deren Muster sich nicht
                         übersetzen lässt, kann nicht greifen, soweit ihr Muster
@@ -376,7 +366,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
           <select
             value={patternType}
             onChange={(e) => setPatternType(e.target.value as PatternType)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
           >
             <option value="glob">Glob</option>
             <option value="regex">Regex</option>
@@ -392,7 +382,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
             value={patternValue}
             onChange={(e) => setPatternValue(e.target.value)}
             placeholder={patternPlaceholder}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-slate-100"
+            className={`mt-1 w-full font-mono ${FIELD_CONTROL_CLASS}`}
           />
         </label>
       </div>
@@ -403,7 +393,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
           <select
             value={action}
             onChange={(e) => setAction(e.target.value as RuleAction)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
           >
             <option value="Allow">Allow</option>
             <option value="Confirm">Confirm</option>
@@ -416,28 +406,31 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
             type="number"
             value={priority}
             onChange={(e) => setPriority(Number(e.target.value))}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
           />
         </label>
       </div>
 
       <div className="space-y-2">
-        <span className="block text-sm text-slate-300">{t("filterRules.scope")}</span>
-        <div className="flex gap-4 text-sm text-slate-300">
+        <span id="filter-rule-scope-label" className="block text-sm text-slate-300">
+          {t("filterRules.scope")}
+        </span>
+        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex gap-4 text-sm text-slate-300">
           <label className="flex items-center gap-1">
             <input
               type="radio"
+              name="filter-rule-scope"
               checked={kind === "global"}
               onChange={() => setKind("global")}
             />
             {t("filterRules.scopeGlobal")}
           </label>
           <label className="flex items-center gap-1">
-            <input type="radio" checked={kind === "server"} onChange={() => setKind("server")} />
+            <input type="radio" name="filter-rule-scope" checked={kind === "server"} onChange={() => setKind("server")} />
             {t("filterRules.scopeServerOption")}
           </label>
           <label className="flex items-center gap-1">
-            <input type="radio" checked={kind === "tag"} onChange={() => setKind("tag")} />
+            <input type="radio" name="filter-rule-scope" checked={kind === "tag"} onChange={() => setKind("tag")} />
             {t("filterRules.scopeTagOption")}
           </label>
         </div>
@@ -445,7 +438,8 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
           <select
             value={serverId}
             onChange={(e) => setServerId(e.target.value)}
-            className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            aria-label={t("filterRules.scopeServerOption")}
+            className={`w-full ${FIELD_CONTROL_CLASS}`}
           >
             <option value="">{t("filterRules.selectServer")}</option>
             {servers.map((s) => (
@@ -463,8 +457,9 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
               type="text"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
+              aria-label={t("filterRules.scopeTagOption")}
               placeholder={t("filterRules.tagInputPlaceholder")}
-              className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+              className={`w-full ${FIELD_CONTROL_CLASS}`}
             />
             <datalist id="known-tags">
               {knownTags.map((t) => (
@@ -487,20 +482,10 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
       )}
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded bg-slate-700 px-3 py-1.5 text-sm hover:bg-slate-600"
-        >
-          {t("common.cancel")}
-        </button>
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
-        >
+        <Button onClick={onCancel}>{t("common.cancel")}</Button>
+        <Button type="submit" variant="primary" disabled={saving}>
           {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -525,7 +510,8 @@ function HardBlacklistSection({ patterns }: { patterns: PatternDto[] }) {
             key={i}
             className="rounded border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300"
           >
-            <span className="text-slate-500">{p.kind}:</span> <code>{p.value}</code>
+            <span className="text-slate-400">{p.kind}:</span>{" "}
+            <code className="break-all">{p.value}</code>
           </li>
         ))}
       </ul>
@@ -673,7 +659,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
           onChange={(e) => setCommand(e.target.value)}
           rows={2}
           placeholder="ls -la && rm -rf /tmp/x"
-          className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-sm text-slate-100"
+          className={`mt-1 w-full font-mono ${FIELD_CONTROL_CLASS}`}
         />
       </label>
 
@@ -683,7 +669,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
           <select
             value={serverId}
             onChange={(e) => setServerId(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
           >
             <option value="">{t("filterRules.noServerOption")}</option>
             {servers.map((s) => (
@@ -716,7 +702,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
                 <button
                   type="button"
                   onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="text-slate-400 hover:text-white"
+                  className="rounded text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -736,20 +722,20 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
               }}
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
-              className="min-w-[6rem] flex-1 bg-transparent text-sm text-slate-100 outline-none"
+              aria-label={t("filterRules.simulateTags")}
+              className="min-w-[6rem] flex-1 rounded bg-transparent text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
           </div>
         </div>
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="primary"
         onClick={handleTest}
         disabled={testing || !command.trim()}
-        className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-slate-950 hover:bg-indigo-500 disabled:opacity-50"
       >
         {testing ? t("common.testing") : t("filterRules.test")}
-      </button>
+      </Button>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
