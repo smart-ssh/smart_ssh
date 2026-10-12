@@ -1,0 +1,22 @@
+[package]
+name = "speech"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "speech"
+path = "src/lib.rs"
+
+[dependencies]
+futures = "0.3.34"
+reqwest = { version = "0.13.4", default-features = false, features = ["stream", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+sha2 = "0.11.0"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "net", "time"] }
