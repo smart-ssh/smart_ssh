@@ -6,6 +6,7 @@ import { ManagementView } from "./components/ManagementView";
 import type { Selection } from "./components/Sidebar";
 import { NoteShrinkSuggestionToast } from "./components/NoteShrinkSuggestionToast";
 import { NoteSuggestionToast } from "./components/NoteSuggestionToast";
+import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
 import { ServerList } from "./components/ServerList";
@@ -16,6 +17,9 @@ import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
 import { commandErrorMessage, listAiProviders } from "./api";
 import { subscribeRequestServerNoteEdit } from "./navigationBus";
 import { useSessionTabs } from "./useSessionTabs";
+
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
 
 type Tab = "connect" | "manage" | "rules";
 
@@ -253,7 +257,8 @@ function MainScreen({
             <button
               type="button"
               onClick={() => setTab("connect")}
-              className={`font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+              aria-current={tab === "connect" ? "page" : undefined}
+              className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
                 tab === "connect"
                   ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
                   : "border-transparent text-slate-400 hover:bg-slate-800"
@@ -264,7 +269,8 @@ function MainScreen({
             <button
               type="button"
               onClick={() => setTab("manage")}
-              className={`font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+              aria-current={tab === "manage" ? "page" : undefined}
+              className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
                 tab === "manage"
                   ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
                   : "border-transparent text-slate-400 hover:bg-slate-800"
@@ -275,7 +281,8 @@ function MainScreen({
             <button
               type="button"
               onClick={() => setTab("rules")}
-              className={`font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+              aria-current={tab === "rules" ? "page" : undefined}
+              className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
                 tab === "rules"
                   ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
                   : "border-transparent text-slate-400 hover:bg-slate-800"
@@ -285,13 +292,7 @@ function MainScreen({
             </button>
           </nav>
         </div>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          className="font-heading border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-semibold tracking-wide hover:bg-slate-700"
-        >
-          {t("settings.title")}
-        </button>
+        <Button onClick={() => setSettingsOpen(true)}>{t("settings.title")}</Button>
       </header>
 
       {tab === "connect" ? (
@@ -302,7 +303,7 @@ function MainScreen({
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}
-                className="underline hover:no-underline"
+                className="rounded underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
               >
                 {t("mainScreen.setupProviderNow")}
               </button>
