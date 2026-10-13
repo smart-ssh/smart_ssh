@@ -26,11 +26,11 @@ Grund: Parallele Coder würden sonst alle denselben `[Unreleased]`-Abschnitt
   `0101-master-passwort.md` und `0101-entsperrmaske.md`.
 - `<thema>`: kurz, Kleinbuchstaben, Wörter mit `-` getrennt.
 
-## Inhalt
+## Content
 
-Fragmente sind auf Englisch geschrieben, nutzerrelevant und verwenden
-dieselben Kategorien wie `CHANGELOG.md` (`### Added`, `### Changed`,
-`### Fixed`, `### Security`), z. B.:
+Fragments are written in English, are user-relevant, and use the same
+categories as `CHANGELOG.md` (`### Added`, `### Changed`, `### Fixed`,
+`### Security`), e.g.:
 
 ```markdown
 ### Security
@@ -38,21 +38,21 @@ dieselben Kategorien wie `CHANGELOG.md` (`### Added`, `### Changed`,
   require confirmation, even if an allow rule matches.
 ```
 
-### Regeln für Einträge
+### Rules for entries
 
-- **Höchstens zwei Zeilen** je Eintrag.
-- Beschreibe die **sichtbare Wirkung**, nicht den Mechanismus: was der Nutzer
-  merkt, nicht wie es umgesetzt ist.
-- **Nichts Internes:** keine internen Abläufe, kein Tooling, keine Issue- oder
-  Spec-Buchhaltung, die der Eintrag nicht braucht.
+- **At most two lines** per entry.
+- Describe the **visible effect**, not the mechanism: what the user notices,
+  not how it is implemented.
+- **Nothing internal:** no internal processes, no tooling, no issue or spec
+  bookkeeping the entry does not need.
 
-Gut:
+Good:
 
 ```markdown
 - When a tab is closed, focus moves to the neighbouring tab.
 ```
 
-Schlecht (Mechanismus, intern, zu lang):
+Bad (mechanism, internal, too long):
 
 ```markdown
 - `TabStrip` now calls `focusNeighbor()` after `closeTab` so that the
@@ -60,8 +60,7 @@ Schlecht (Mechanismus, intern, zu lang):
   ref no longer falls back to `null`.
 ```
 
-Einträge, die nur in einer kostenpflichtigen Edition verfügbar sind, tragen
-`**(Pro)**`.
+Entries that are only available in a paid edition carry `**(Pro)**`.
 
 ## Release
 
