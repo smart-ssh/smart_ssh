@@ -58,6 +58,8 @@ zeroize = "1.9.0"
 # Issue #247: Eigenschaftstest „der Redactor redigiert nie weniger als die
 # eingefrorene Referenz“. Nur für Tests, gleiche Fassung wie in `app-logic`.
 proptest = "1"
+# Issue #469: Serde-Round-trip-Tests für Anhänge und `Feature` (nur Tests; schon im Lockfile).
+serde_json = "1.0.151"
 # Issue #366: Vollständigkeitstest „jedes Schlüsselwort wird auch in NFD-Form
 # redigiert“ gegen die Referenz-Normalisierung. Nur für Tests; die Crate ist
 # schon transitiv im Lockfile.

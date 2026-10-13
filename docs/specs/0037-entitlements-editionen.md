@@ -17,7 +17,8 @@ gesperrte Funktion freigeschaltet ist.
 - **Funktionen** (`Feature`): SharedInventory, SharedNotes,
   CuratedRulePacks, OrgPolicy, MultiServerActions, ManagedAi, OrgAiPolicy,
   TeamAgents, SessionHistory, ActivityReport, SessionHandover, CloudSync,
-  DocumentExport, AuditExport, Sso, SelfHosted. Die Namen werden als
+  DocumentExport, AuditExport, Sso, SelfHosted, ChatAttachments (Dateianhänge
+  im Chat, lokal, nicht dienst-gebunden, Spec 0110). Die Namen werden als
   `snake_case` serialisiert.
 - **Stufen** (`Tier`): Free, Personal, Pro, Team, Business, Enterprise.
 - **Berechtigungen** (`Entitlements`): Stufe, Menge der freigeschalteten

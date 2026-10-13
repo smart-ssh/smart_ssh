@@ -121,6 +121,10 @@ fn estimate_message_tokens(message: &ChatMessage) -> usize {
         // Issue #162: gesendet wird die gefencte Form, s.
         // `WebActivity::to_model_text`.
         MessageContent::WebActivity(activity) => estimate_tokens(&activity.to_model_text()),
+        // Issue #469: Text nach Länge, Bild/PDF mit festem konservativem Wert.
+        MessageContent::Attachments(items) => {
+            items.iter().map(|a| a.estimated_tokens()).sum::<usize>()
+        }
         MessageContent::ActionRejected { command, reason } => {
             let reason_text = match reason {
                 RejectionReason::User => "",
@@ -1292,6 +1296,38 @@ mod tests {
         let actually_fenced =
             fence_untrusted(UntrustedKind::CommandStdout, "cat evil.html", &raw_output);
         assert!(estimated >= estimate_tokens(&actually_fenced));
+    }
+
+    /// Issue #469: Textanhänge nach Länge, Bild/PDF mit festem Wert.
+    #[test]
+    fn test_estimate_message_tokens_handles_attachments() {
+        use ssh_manager_core::ai::{
+            AttachmentKind, ChatAttachment, BINARY_ATTACHMENT_TOKEN_ESTIMATE,
+        };
+        let text = ChatAttachment {
+            name: "a.txt".into(),
+            media_type: "text/plain".into(),
+            kind: AttachmentKind::Text,
+            data: vec![b'a'; 4000],
+            byte_len: 4000,
+        };
+        let image = ChatAttachment {
+            name: "a.png".into(),
+            media_type: "image/png".into(),
+            kind: AttachmentKind::Image,
+            data: vec![0; 10],
+            byte_len: 10,
+        };
+        let message = |items| ChatMessage {
+            role: Role::User,
+            content: MessageContent::Attachments(items),
+        };
+        let text_tokens = estimate_message_tokens(&message(vec![text]));
+        assert!((1000..1100).contains(&text_tokens), "{text_tokens}");
+        assert_eq!(
+            estimate_message_tokens(&message(vec![image])),
+            BINARY_ATTACHMENT_TOKEN_ESTIMATE
+        );
     }
 
     #[test]
