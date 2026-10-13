@@ -15,6 +15,8 @@ mod credential_store;
 /// Klartext-Datei umwandeln.
 mod encryption;
 mod error;
+/// Issue #462: extension-owned tables and migrations (Spec 0038, 2a).
+mod extension_db;
 /// Issue #113: einmalige Umstellung der früher feldweise verschlüsselten
 /// Spalten auf Klartext in der verschlüsselten Datei.
 mod field_content_decryption;
@@ -42,6 +44,8 @@ mod tests_credential_store;
 /// T4–T6, T19, T20.
 #[cfg(test)]
 mod tests_encryption;
+#[cfg(test)]
+mod tests_extension_db;
 /// Issue #113: die Umstellung der feldweise verschlüsselten Spalten.
 #[cfg(test)]
 mod tests_field_content_decryption;
@@ -69,6 +73,10 @@ pub use encryption::{
     DatabaseFileState, SQLITE_PLAINTEXT_HEADER,
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
+pub use extension_db::{
+    validate_prefix, validate_unique_prefixes, ExtensionDb, ExtensionMigration,
+    ExtensionMigrationError, ExtensionRegistration,
+};
 pub use field_content_decryption::{
     ColumnCounts, FieldContentDecryption, FieldContentDecryptionReport,
 };

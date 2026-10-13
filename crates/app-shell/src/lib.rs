@@ -13,6 +13,8 @@
 mod auto_reconnect;
 mod chat_retention;
 mod commands;
+/// Issue #462: extension-owned database tables.
+mod db_extensions;
 /// Issue #93: Ort der „Lokal öffnen"-Kopien je Datenverzeichnis und das
 /// Aufräumen von Überbleibseln beim Start.
 mod edit_copies;
@@ -63,6 +65,7 @@ mod voice_input;
 mod window_prompt;
 mod wiring;
 
+pub use db_extensions::DbExtension;
 pub use wiring::{Edition, Wiring};
 
 /// Spec 0038, section 2a: asks the core to rebuild the redactor of every open
@@ -195,6 +198,7 @@ pub(crate) async fn open_and_assemble(
     access: app_logic::database_startup::RootKeyAccess<'_>,
     prompt: &dyn app_logic::database_startup::StartupPrompt,
     offers_skip: bool,
+    db_extensions: &[DbExtension],
 ) -> Result<AppState, app_logic::database_startup::StartupAbort> {
     let db_path = inputs.db_path.clone();
     let keychain = inputs.keychain;
@@ -282,6 +286,12 @@ pub(crate) async fn open_and_assemble(
     // Issue #113: Chat, Historie und Ledger liegen als Klartext in der
     // verschlüsselten Datei (Spec 0101) — kein eigener Schlüssel, kein
     // `Option` mehr. Ohne K wäre die Datenbank gar nicht offen.
+    // Issue #462 (Spec 0038, 2a): extension migrations — after the core
+    // migrations and the secret move, and only here, i.e. only once the
+    // database is open (after the unlock in master-password mode). A failing
+    // extension is skipped; the core starts without it.
+    db_extensions::start_db_extensions(&profile_store, db_extensions).await;
+
     let (prompt_history_store, chat_session_store, ledger_store) = (
         profile_store.prompt_history_store(),
         profile_store.chat_session_store(),
@@ -504,6 +514,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
 
+    let db_extensions: Arc<Vec<DbExtension>> = Arc::new(wiring.db_extensions);
     let app_state = match mode {
         app_logic::master_password::KeyMode::Password => None,
         app_logic::master_password::KeyMode::Keychain => {
@@ -523,6 +534,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 &prompt,
                 // A11.1 gilt nur im Passwort-Modus.
                 false,
+                &db_extensions,
             )) {
                 Ok(state) => Some(state),
                 // Der Nutzer hat „Beenden" gewählt. Es ist bereits alles
@@ -570,7 +582,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let gate = std::sync::Arc::new(crate::startup_gate::StartupGate::new(app_state.is_some()));
     let pending =
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
-            .with_session_extension(wiring.session_extension.clone());
+            .with_session_extension(wiring.session_extension.clone())
+            .with_db_extensions(db_extensions);
     let plugins = wiring.plugins;
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.
