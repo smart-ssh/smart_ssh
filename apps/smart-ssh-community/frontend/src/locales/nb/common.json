@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Den lokale AI-tjenesten svarer ikke. Start Ollama (eller din lokale server) og prøv igjen.",
     "AI_TIMEOUT": "AI-leverandøren brukte for lang tid på å svare. Vent litt og send på nytt; med en lokal modell, sjekk om maskinen er opptatt eller modellen for stor.",
     "AI_WEB_RESEARCH_REJECTED": "AI-leverandøren avviser nettsøk for denne kontoen. Slå av “Nettsøk” for denne leverandøren under “AI-leverandør” i innstillingene.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Denne modellen kan ikke lese det vedlagte bildet eller PDF-en. Velg en modell som kan det, eller fjern vedlegget.",
     "AI_NO_ACTIVE_PROVIDER": "Ingen aktiv AI-leverandør ennå. Legg til en under Innstillinger → AI-leverandør og gjør den aktiv.",
     "FILTER_EMPTY_COMMAND": "Ingen gyldig kommando (tom inndata)",
     "FILTER_COMMAND_TOO_LONG": "Kommandoen overskrider lengdegrensen",

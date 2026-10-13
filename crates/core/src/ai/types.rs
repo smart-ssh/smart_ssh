@@ -827,6 +827,10 @@ pub enum AiError {
     /// nie auslösen. Der Haupt-Chat wiederholt die Anfrage daraufhin genau
     /// einmal ohne Web-Werkzeuge (`app_logic::orchestration::chat_turn`).
     WebResearchRejected(String),
+    /// Issue #470 (Spec 0110): the selected model cannot read this kind of
+    /// attachment (`Image` or `Pdf`; text attachments never fail). Raised
+    /// before any request is made; nothing is sent.
+    AttachmentUnsupported(super::attachments::AttachmentKind),
 }
 
 impl fmt::Display for AiError {
@@ -874,6 +878,12 @@ impl fmt::Display for AiError {
                 f,
                 "Der KI-Provider lehnt die Web-Recherche für dieses Konto ab: {msg}"
             ),
+            AiError::AttachmentUnsupported(kind) => match kind {
+                super::attachments::AttachmentKind::Pdf => {
+                    write!(f, "Dieses Modell kann keine PDFs lesen.")
+                }
+                _ => write!(f, "Dieses Modell kann keine Bilder lesen."),
+            },
         }
     }
 }
@@ -898,6 +908,7 @@ impl AiError {
             AiError::LocalProviderUnreachable(_) => "AI_LOCAL_PROVIDER_UNREACHABLE",
             AiError::Timeout { .. } => "AI_TIMEOUT",
             AiError::WebResearchRejected(_) => "AI_WEB_RESEARCH_REJECTED",
+            AiError::AttachmentUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
         }
     }
 }
@@ -925,6 +936,7 @@ mod ai_error_code_tests {
             AiError::LocalProviderUnreachable("x".to_string()),
             AiError::Timeout { secs: 90 },
             AiError::WebResearchRejected("x".to_string()),
+            AiError::AttachmentUnsupported(crate::ai::AttachmentKind::Image),
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
         let mut unique = codes.clone();

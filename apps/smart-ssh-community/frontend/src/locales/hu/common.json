@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "A helyi AI-szolgáltatás nem válaszol. Indítsa el az Ollamát (vagy a helyi szerverét), és próbálja újra.",
     "AI_TIMEOUT": "Az AI-szolgáltató túl sokáig válaszolt. Várjon egy kicsit, és küldje újra; helyi modellnél ellenőrizze, nem terhelt-e a gép, illetve nem túl nagy-e a modell.",
     "AI_WEB_RESEARCH_REJECTED": "Az AI-szolgáltató elutasítja a webes kutatást ehhez a fiókhoz. Kapcsolja ki a \"Webes kutatás\" funkciót ennél a szolgáltatónál a Beállítások \"AI-szolgáltató\" részében.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Ez a modell nem tudja elolvasni a csatolt képet vagy PDF-et. Válasszon olyan modellt, amely tudja, vagy távolítsa el a mellékletet.",
     "AI_NO_ACTIVE_PROVIDER": "Még nincs aktív AI-szolgáltató. Adjon hozzá egyet a Beállítások → AI-szolgáltató alatt, és tegye aktívvá.",
     "FILTER_EMPTY_COMMAND": "Nincs érvényes parancs (üres bevitel)",
     "FILTER_COMMAND_TOO_LONG": "A parancs meghaladja a hosszkorlátot",

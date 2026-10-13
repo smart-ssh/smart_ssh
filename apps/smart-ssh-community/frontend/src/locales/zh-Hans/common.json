@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "本地 AI 服务没有响应。请启动 Ollama（或您的本地服务器）后重试。",
     "AI_TIMEOUT": "AI 提供商响应时间过长。请稍候后重新发送；使用本地模型时，请检查机器是否繁忙或模型是否过大。",
     "AI_WEB_RESEARCH_REJECTED": "AI 提供商拒绝为此账户提供联网调研。请在设置的“AI 提供商”中，为该提供商关闭“联网调研”。",
+    "AI_ATTACHMENT_UNSUPPORTED": "此模型无法读取所附的图片或 PDF。请选择支持的模型，或移除附件。",
     "AI_NO_ACTIVE_PROVIDER": "尚无活动的 AI 提供商。请在设置 → AI 提供商中添加一个并设为活动。",
     "FILTER_EMPTY_COMMAND": "没有有效的命令（输入为空）",
     "FILTER_COMMAND_TOO_LONG": "命令超出长度限制",

@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Il servizio IA locale non risponde. Avvii Ollama (o il suo server locale) e riprovi.",
     "AI_TIMEOUT": "Il provider IA ha impiegato troppo tempo a rispondere. Attenda un momento e invii di nuovo; con un modello locale verifichi se la macchina è occupata o il modello troppo grande.",
     "AI_WEB_RESEARCH_REJECTED": "Il provider IA rifiuta la ricerca web per questo account. Disattivi \"Ricerca web\" per questo provider in \"Provider IA\" nelle impostazioni.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Questo modello non può leggere l’immagine o il PDF allegato. Scelga un modello che possa farlo o rimuova l’allegato.",
     "AI_NO_ACTIVE_PROVIDER": "Nessun provider IA attivo. Ne aggiunga uno in Impostazioni → Provider IA e lo imposti come attivo.",
     "FILTER_EMPTY_COMMAND": "Nessun comando valido (input vuoto)",
     "FILTER_COMMAND_TOO_LONG": "Il comando supera il limite di lunghezza",

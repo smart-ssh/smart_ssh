@@ -77,6 +77,9 @@ Authentifizierung fehlgeschlagen, Rate-Limit, Netzwerkfehler, ungültige
 Antwort, Kontext zu groß, Anbieter nicht erreichbar. Ein ungültiger API-Key
 erscheint als Authentifizierungsfehler, nicht als leere Antwort.
 
+Kann das Modell ein angehängtes Bild oder PDF nicht lesen (Abschnitt 8),
+ist das eine eigene Fehlerart; sie tritt vor jeder Anfrage auf.
+
 Bei „Kontext zu groß" kürzt die aufrufende Seite ältere Verlaufseinträge,
 bevor erneut gesendet wird (Spec 0057, Spec 0087).
 
@@ -99,3 +102,25 @@ bevor erneut gesendet wird (Spec 0057, Spec 0087).
   vorgesehen.
 - Die Kontext-Kürzung arbeitet mit einer Näherung, nicht
   mit einem anbieterspezifischen Tokenizer; Aufbau und Kürzung des Kontexts beschreibt Spec 0057.
+
+### Anhänge als Inhaltsblöcke
+
+Bild- und PDF-Anhänge (Spec 0110) gehen als echte Inhaltsblöcke an den
+Anbieter, nicht als Text: bei Anthropic als Bild- bzw. Dokumentblock (Base64),
+bei OpenAI Responses als Bild- bzw. Dateieingabe, bei OpenAI-kompatiblen
+Chat-Completions als Bild-URL (Data-URL) bzw. Dateiteil. Die Bytes gehen
+unverändert; jeder Text derselben Nachricht wird weiter redigiert und
+gefencet.
+
+Ob ein Modell Bilder oder PDFs lesen kann, sagt eine feste Tabelle je
+Anbieter:
+
+- Anthropic: alle Modelle lesen beides, auch unbekannte.
+- OpenAI (offizieller Endpunkt, Responses wie Chat-Completions): beides, außer
+  bei bekannten reinen Textmodellen; unbekannte Modelle sind erlaubt.
+- OpenAI-Responses an einem anderen Endpunkt: nicht unterstützt.
+- Andere OpenAI-kompatible Endpunkte (lokal, Proxys): Bilder nur bei Modellen,
+  deren Name sie als Bildmodell ausweist (z. B. `llava`, `gpt-4o`); PDFs nie.
+
+Nicht unterstützte Anhänge lehnt die Nachricht vor jeder Anfrage mit einem
+eigenen Fehler ab; Text wird nie abgelehnt.

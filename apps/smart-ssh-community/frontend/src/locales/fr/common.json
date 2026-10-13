@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Le service d’IA local ne répond pas. Démarrez Ollama (ou votre serveur local) et réessayez.",
     "AI_TIMEOUT": "Le fournisseur d’IA a mis trop de temps à répondre. Patientez un moment et renvoyez ; avec un modèle local, vérifiez si la machine est occupée ou le modèle trop volumineux.",
     "AI_WEB_RESEARCH_REJECTED": "Le fournisseur d’IA refuse la recherche web pour ce compte. Désactivez « Recherche web » pour ce fournisseur sous « Fournisseur d’IA » dans les paramètres.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Ce modèle ne peut pas lire l’image ou le PDF joint. Choisissez un modèle compatible ou retirez la pièce jointe.",
     "AI_NO_ACTIVE_PROVIDER": "Aucun fournisseur d’IA actif pour l’instant. Ajoutez-en un sous Paramètres → Fournisseur d’IA et activez-le.",
     "FILTER_EMPTY_COMMAND": "Aucune commande valide (saisie vide)",
     "FILTER_COMMAND_TOO_LONG": "La commande dépasse la limite de longueur",

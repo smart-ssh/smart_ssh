@@ -296,10 +296,12 @@ impl OpenAiCompatibleProvider {
         // role (action result + queued user text, several queued texts) go
         // out as one message, texts joined by a blank line. Runs on the
         // already fenced/formatted text; the stored history is untouched.
-        for (role, parts) in group_adjacent_by_role(&context.history) {
+        for (role, parts) in
+            crate::content::group_parts(&context.history, role_str, message_content_text)
+        {
             messages.push(json!({
                 "role": role,
-                "content": parts.join("\n\n"),
+                "content": chat_content(parts),
             }));
         }
 
@@ -333,35 +335,39 @@ impl OpenAiCompatibleProvider {
     }
 }
 
-/// Issue #245: groups adjacent history messages that map to the same
-/// provider role, keeping every original text as its own part (in order).
-/// Operates on the final per-message text, i.e. after fencing and formatting,
-/// so no text moves into or out of an untrusted-content fence and nothing is
-/// redacted twice or skipped. Strict OpenAI-compatible servers and
-/// Anthropic require alternating roles.
-pub(crate) fn group_adjacent_by_role(
-    history: &[ssh_manager_core::ai::ChatMessage],
-) -> Vec<(&'static str, Vec<String>)> {
-    group_adjacent_with(history, role_str, message_content_text)
-}
-
-/// [`group_adjacent_by_role`] with the provider's own role and text mapping
-/// (the Anthropic provider formats its messages itself).
-pub(crate) fn group_adjacent_with(
-    history: &[ssh_manager_core::ai::ChatMessage],
-    role_of: fn(Role) -> &'static str,
-    text_of: fn(&MessageContent) -> String,
-) -> Vec<(&'static str, Vec<String>)> {
-    let mut groups: Vec<(&'static str, Vec<String>)> = Vec::new();
-    for message in history {
-        let role = role_of(message.role);
-        let text = text_of(&message.content);
-        match groups.last_mut() {
-            Some((last_role, parts)) if *last_role == role => parts.push(text),
-            _ => groups.push((role, vec![text])),
-        }
+/// Issue #245/#470: message content for chat completions. Text-only groups
+/// keep the plain string form (texts joined by a blank line); a group with an
+/// image/PDF becomes a content-part array with the texts coalesced between
+/// the binary parts.
+fn chat_content(parts: Vec<crate::content::ContentPart>) -> Value {
+    use crate::content::ContentPart;
+    if parts.iter().all(|p| matches!(p, ContentPart::Text(_))) {
+        let texts: Vec<String> = parts
+            .into_iter()
+            .filter_map(|p| match p {
+                ContentPart::Text(t) => Some(t),
+                _ => None,
+            })
+            .collect();
+        return json!(texts.join("\n\n"));
     }
-    groups
+    let mut blocks: Vec<Value> = Vec::new();
+    let mut pending: Vec<String> = Vec::new();
+    for part in &parts {
+        if let ContentPart::Text(t) = part {
+            pending.push(t.clone());
+            continue;
+        }
+        if !pending.is_empty() {
+            blocks.push(json!({"type": "text", "text": pending.join("\n\n")}));
+            pending.clear();
+        }
+        blocks.push(crate::content::chat_completions_block(part));
+    }
+    if !pending.is_empty() {
+        blocks.push(json!({"type": "text", "text": pending.join("\n\n")}));
+    }
+    Value::Array(blocks)
 }
 
 pub(crate) fn role_str(role: Role) -> &'static str {
@@ -392,9 +398,9 @@ pub(crate) fn message_content_text(content: &MessageContent) -> String {
         // Issue #162: Webinhalt geht nur gefencet zurück an die KI (Spec
         // 0039), s. `WebActivity::to_model_text`.
         MessageContent::WebActivity(activity) => activity.to_model_text(),
-        // Issue #469: Anhänge gehen nur gefencet (`LocalFile`) an die KI;
-        // Text wurde vor dem Versand redigiert (`reapply_redaction_for_send`),
-        // Bild/PDF erscheinen vorerst als Platzhalterzeile mit Dateiname.
+        // Issue #469/#470: Anhänge gehen nur gefencet (`LocalFile`) an die
+        // KI; Text wurde vor dem Versand redigiert. Bild/PDF-Bytes folgen als
+        // eigene Blöcke (`content::message_parts`).
         MessageContent::Attachments(attachments) => attachments
             .iter()
             .map(|a| a.to_model_text(None))
@@ -691,6 +697,15 @@ impl AiProvider for OpenAiCompatibleProvider {
         // Design-Entscheidung (Spec 0016, Abschnitt 4).
         let request_id = Uuid::new_v4();
         log_outgoing_context(request_id, &context);
+
+        // Issue #470: reject unreadable image/PDF attachments before any
+        // request is built.
+        if let Err(err) = crate::content::check_attachments(
+            &context,
+            crate::content::openai_compatible_support(&self.base_url, &self.model),
+        ) {
+            return error_stream(err);
+        }
 
         let client = self.client.clone();
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
@@ -2271,5 +2286,119 @@ mod tests {
         assert!(!plain.contains("<waiting_for_input>"));
         let finished = format_command_result("apt install x", &output, false, true);
         assert!(!finished.contains("<waiting_for_input>"));
+    }
+}
+
+#[cfg(test)]
+mod attachment_tests {
+    use super::*;
+    use crate::content::test_fixtures::{context_with_image_and_pdf, first_events};
+    use ssh_manager_core::ai::{AiEvent, AttachmentKind};
+
+    fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
+        std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
+    }
+
+    #[test]
+    fn test_openai_compatible_image_and_pdf_blocks() {
+        let p = OpenAiCompatibleProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            "k",
+            true,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let body = p.build_request_body(&context_with_image_and_pdf("hello"));
+        let content = body["messages"][1]["content"].as_array().expect("array");
+        let types: Vec<&str> = content
+            .iter()
+            .map(|b| b["type"].as_str().unwrap())
+            .collect();
+        // Trailing texts (fenced PDF notice + next user message) coalesce.
+        assert_eq!(types, ["text", "image_url", "text", "file", "text"]);
+        assert_eq!(content[1]["image_url"]["url"], "data:image/png;base64,AQID");
+        assert_eq!(
+            content[3]["file"],
+            json!({"filename":"d.pdf","file_data":"data:application/pdf;base64,BAU="})
+        );
+    }
+
+    #[tokio::test]
+    async fn test_text_model_rejects_image_without_request() {
+        let p = OpenAiCompatibleProvider::new(
+            "http://127.0.0.1:1/v1",
+            "llama3.1",
+            "k",
+            false,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let events = first_events(&p, context_with_image_and_pdf("x")).await;
+        assert_eq!(events.len(), 1);
+        assert!(
+            matches!(
+                events[0],
+                AiEvent::Error(AiError::AttachmentUnsupported(AttachmentKind::Image))
+            ),
+            "{events:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vision_model_without_pdf_input_rejects_pdf_without_request() {
+        let p = OpenAiCompatibleProvider::new(
+            "http://127.0.0.1:1/v1",
+            "llava:13b",
+            "k",
+            false,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let mut ctx = context_with_image_and_pdf("x");
+        // Drop the image: only the PDF remains unsupported.
+        if let MessageContent::Attachments(items) = &mut ctx.history[0].content {
+            items.retain(|a| a.kind != ssh_manager_core::ai::AttachmentKind::Image);
+        }
+        let events = first_events(&p, ctx).await;
+        assert!(
+            matches!(
+                events[..],
+                [AiEvent::Error(AiError::AttachmentUnsupported(
+                    AttachmentKind::Pdf
+                ))]
+            ),
+            "{events:?}"
+        );
+    }
+
+    /// Counter-proof for the two rejections above: text attachments alone
+    /// pass the check on the same text-only model (it would then try, and
+    /// fail to connect, instead of reporting an attachment error).
+    #[tokio::test]
+    async fn test_text_attachment_is_not_rejected_on_text_model() {
+        let p = OpenAiCompatibleProvider::new(
+            "http://127.0.0.1:1/v1",
+            "llama3.1",
+            "k",
+            false,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let mut ctx = context_with_image_and_pdf("x");
+        if let MessageContent::Attachments(items) = &mut ctx.history[0].content {
+            items.retain(|a| a.kind == ssh_manager_core::ai::AttachmentKind::Text);
+        }
+        let events = first_events(&p, ctx).await;
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, AiEvent::Error(AiError::AttachmentUnsupported(_)))),
+            "{events:?}"
+        );
     }
 }

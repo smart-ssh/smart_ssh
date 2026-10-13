@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Der lokale KI-Dienst antwortet nicht. Ollama (bzw. deinen lokalen Server) starten und erneut versuchen.",
     "AI_TIMEOUT": "Der KI-Provider hat zu lange nicht geantwortet. Kurz warten und erneut senden; bei einem lokalen Modell: ist der Rechner ausgelastet oder das Modell zu groß?",
     "AI_WEB_RESEARCH_REJECTED": "Der KI-Provider lehnt die Web-Recherche für dieses Konto ab. In den Einstellungen unter „KI-Provider“ die „Web-Recherche“ für diesen Provider ausschalten.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Dieses Modell kann das angehängte Bild oder PDF nicht lesen. Ein Modell wählen, das es kann, oder den Anhang entfernen.",
     "AI_NO_ACTIVE_PROVIDER": "Noch kein aktiver KI-Provider. In den Einstellungen unter „KI-Provider“ einen Provider hinzufügen und aktiv setzen.",
     "FILTER_EMPTY_COMMAND": "Kein sinnvolles Kommando (leere Eingabe)",
     "FILTER_COMMAND_TOO_LONG": "Kommando überschreitet das Längenlimit",
