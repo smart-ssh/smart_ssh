@@ -441,6 +441,7 @@ pub(crate) fn session_with_ai_provider(
         // `set_red_risk_always_confirm_for_tests(false)`.
         red_risk_always_confirm: true,
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+        outgoing_transform: None,
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         injection_check_provider: None,

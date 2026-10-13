@@ -39,6 +39,11 @@ pub struct Wiring {
     /// Befehle registrieren, diese erst **nach dem Entsperren** registrieren,
     /// sonst wären sie vor dem Entsperren aufrufbar (ADR 0095 §8).
     pub plugins: Vec<PluginHook>,
+    /// Issue #462 (Spec 0038, 2a): extensions that keep their own tables in
+    /// the encrypted application database. Their migrations run after the
+    /// core migrations and **only after unlock** (never while the app is
+    /// locked in master-password mode).
+    pub db_extensions: Vec<crate::db_extensions::DbExtension>,
     pub edition: Edition,
     /// Issue #16: zusätzliche Datenpfade einer Edition (z. B. eine
     /// Lizenzdatei), die die Einstellungen neben den eingebauten Pfaden
@@ -51,6 +56,11 @@ pub struct Wiring {
     /// Dateien auswählen; eine Edition registriert hier, wie eine opake
     /// Anhang-ID in einen Anhang aufgelöst wird. Community liefert keine.
     pub chat_attachment_resolvers: Vec<Arc<dyn ssh_manager_core::ai::ChatAttachmentResolver>>,
+
+    /// Issue #464 (Spec 0038, section 2): transforms approved commands and
+    /// file content right before they are sent to the server. Community
+    /// registers none, so text is sent unchanged.
+    pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 }
 
 impl Wiring {
@@ -78,10 +88,13 @@ impl Wiring {
             // Spec 0037, Abschnitt 6: kein Git-Sync-Backend in dieser Spec.
             sync_backends: Vec::new(),
             plugins: Vec::new(),
+            db_extensions: Vec::new(),
             edition: Edition::Community,
             extra_data_paths: Vec::new(),
             session_extension: None,
             chat_attachment_resolvers: Vec::new(),
+
+            outgoing_transform: None,
         }
     }
 }

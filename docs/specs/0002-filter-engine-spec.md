@@ -198,6 +198,9 @@ gegriffen hat (Spec 0009, Abschnitt 4).
 - Das Kommando wird vor jeder Prüfung normalisiert, und alle Ebenen sehen
   dieselbe Form.
 - Begrenzungen für Länge und Verschachtelung gelten für alle Konsumenten.
+- Der Filter wertet immer den Text vor einer Umwandlung durch eine Edition
+  aus (Spec 0038, „Umwandlung ausgehender Texte“). Ein umgewandelter Befehl
+  wird danach nur noch gegen die Hard-Blacklist geprüft; ein Treffer lehnt ab.
 
 ## 8. Grenzen
 

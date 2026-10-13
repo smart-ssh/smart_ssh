@@ -13,6 +13,8 @@
 mod auto_reconnect;
 mod chat_retention;
 mod commands;
+/// Issue #462: extension-owned database tables.
+mod db_extensions;
 /// Issue #93: Ort der „Lokal öffnen"-Kopien je Datenverzeichnis und das
 /// Aufräumen von Überbleibseln beim Start.
 mod edit_copies;
@@ -63,6 +65,7 @@ mod voice_input;
 mod window_prompt;
 mod wiring;
 
+pub use db_extensions::DbExtension;
 pub use wiring::{Edition, Wiring};
 
 /// Spec 0038, section 2a: asks the core to rebuild the redactor of every open
@@ -106,6 +109,8 @@ pub(crate) struct StartupInputs {
     pub(crate) data_dir_lock: persistence_sqlite::DataDirLock,
     pub(crate) language: app_logic::startup_error_messages::Language,
     pub(crate) keychain: credentials_keyring::KeychainAvailability,
+    /// Issue #464: from `Wiring`, handed to the `AppState`.
+    pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 }
 
 /// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
@@ -134,6 +139,7 @@ fn startup_inputs(
     db_path: std::path::PathBuf,
     data_dir_lock: persistence_sqlite::DataDirLock,
     language: app_logic::startup_error_messages::Language,
+    outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 ) -> StartupInputs {
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
@@ -175,6 +181,7 @@ fn startup_inputs(
         data_dir_lock,
         language,
         keychain,
+        outgoing_transform,
     }
 }
 
@@ -195,6 +202,7 @@ pub(crate) async fn open_and_assemble(
     access: app_logic::database_startup::RootKeyAccess<'_>,
     prompt: &dyn app_logic::database_startup::StartupPrompt,
     offers_skip: bool,
+    db_extensions: &[DbExtension],
 ) -> Result<AppState, app_logic::database_startup::StartupAbort> {
     let db_path = inputs.db_path.clone();
     let keychain = inputs.keychain;
@@ -282,6 +290,12 @@ pub(crate) async fn open_and_assemble(
     // Issue #113: Chat, Historie und Ledger liegen als Klartext in der
     // verschlüsselten Datei (Spec 0101) — kein eigener Schlüssel, kein
     // `Option` mehr. Ohne K wäre die Datenbank gar nicht offen.
+    // Issue #462 (Spec 0038, 2a): extension migrations — after the core
+    // migrations and the secret move, and only here, i.e. only once the
+    // database is open (after the unlock in master-password mode). A failing
+    // extension is skipped; the core starts without it.
+    db_extensions::start_db_extensions(&profile_store, db_extensions).await;
+
     let (prompt_history_store, chat_session_store, ledger_store) = (
         profile_store.prompt_history_store(),
         profile_store.chat_session_store(),
@@ -357,6 +371,7 @@ pub(crate) async fn open_and_assemble(
         rate_limit_registry: ai_providers::RateLimitRegistry::new(),
         // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
+        outgoing_transform: inputs.outgoing_transform.clone(),
     };
     Ok(app_state)
 }
@@ -371,7 +386,7 @@ pub(crate) async fn open_and_assemble(
 /// Icons/Frontend dieser Library-Crate zugeordnet sein, obwohl `app-shell`
 /// künftig mehrere Binaries (Community/Official) mit je eigener Config
 /// bedienen soll (Spec 0038, Abschnitt 3).
-pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
+pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Spec 0016, Abschnitt 2/3: so früh wie möglich, damit auch Fehler beim
     // App-Setup selbst (z. B. `build_app_state()`s DB-Verbindungsaufbau)
     // bereits strukturiert geloggt würden. `_log_guard` muss über die
@@ -500,10 +515,16 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Issue #358: staged "Copy file" files of a previous process.
     file_clipboard::sweep_at_startup();
 
-    let inputs = startup_inputs(db_path, data_dir_lock, language);
+    let inputs = startup_inputs(
+        db_path,
+        data_dir_lock,
+        language,
+        wiring.outgoing_transform.take(),
+    );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
 
+    let db_extensions: Arc<Vec<DbExtension>> = Arc::new(wiring.db_extensions);
     let app_state = match mode {
         app_logic::master_password::KeyMode::Password => None,
         app_logic::master_password::KeyMode::Keychain => {
@@ -523,6 +544,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 &prompt,
                 // A11.1 gilt nur im Passwort-Modus.
                 false,
+                &db_extensions,
             )) {
                 Ok(state) => Some(state),
                 // Der Nutzer hat „Beenden" gewählt. Es ist bereits alles
@@ -570,7 +592,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let gate = std::sync::Arc::new(crate::startup_gate::StartupGate::new(app_state.is_some()));
     let pending =
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
-            .with_session_extension(wiring.session_extension.clone());
+            .with_session_extension(wiring.session_extension.clone())
+            .with_db_extensions(db_extensions);
     let plugins = wiring.plugins;
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.

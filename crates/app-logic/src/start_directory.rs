@@ -381,6 +381,38 @@ mod tests {
         assert_eq!(dto.missing_directory, None);
     }
 
+    /// Issue #464: the outgoing transform covers AI/MCP actions only. Text
+    /// the terminal path writes into the shell (here the visible `cd` line;
+    /// user keystrokes use the same shell channel) is never transformed.
+    #[tokio::test]
+    async fn terminal_path_never_calls_the_outgoing_transform() {
+        use ssh_manager_core::outgoing::{
+            OutgoingKind, OutgoingScope, OutgoingTransform, Prepared, Rejection,
+        };
+
+        struct Counting(StdMutex<u32>);
+        #[async_trait]
+        impl OutgoingTransform for Counting {
+            async fn prepare_outgoing(
+                &self,
+                _: &OutgoingScope,
+                _: OutgoingKind,
+                text: &str,
+            ) -> Result<Prepared, Rejection> {
+                *self.0.lock().unwrap() += 1;
+                Ok(Prepared::new(text.replace('X', "Y"), Vec::new()))
+            }
+        }
+
+        let (mut session, written) =
+            session_recording(Some("/srv/X"), Some(stub(&["/srv/X"], &[]))).await;
+        let transform = Arc::new(Counting(StdMutex::new(0)));
+        session.set_outgoing_transform_for_tests(Some(transform.clone()));
+        let (_shell, _dto) = open_shell_in_start_directory(&session, SIZE).await.unwrap();
+        assert_eq!(written_text(&written), "cd -- '/srv/X'\r");
+        assert_eq!(*transform.0.lock().unwrap(), 0);
+    }
+
     #[tokio::test]
     async fn not_set_behaves_as_before_and_never_touches_sftp() {
         let sftp = stub(&[], &[]);

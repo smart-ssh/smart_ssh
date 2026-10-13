@@ -21,6 +21,12 @@ Bezüge: Spec 0002 (Filter-Engine), Spec 0005 (SSH), Spec 0016 (Schwärzung), Sp
 
 ## 2. Kommando-Parser und Filter-Engine (SEC-01, SEC-05)
 
+Alle Prüfungen dieses Abschnitts (Filter und Risiko-Einstufung) gelten dem
+Text, den der Nutzer sieht und freigibt, also vor einer Umwandlung durch eine
+Edition (Spec 0038, „Umwandlung ausgehender Texte“). Der umgewandelte Befehl
+wird zusätzlich nur gegen die Hard-Blacklist geprüft; ein Treffer lehnt ab,
+ohne den umgewandelten Text zu zitieren.
+
 ### 2.1 Trenner und Zeilenumbrüche
 
 Außerhalb von Anführungszeichen (`'…'`, `"…"`), Backticks und `$(…)` trennen
