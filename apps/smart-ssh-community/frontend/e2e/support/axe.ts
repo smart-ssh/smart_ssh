@@ -19,9 +19,12 @@ export async function expectNoSeriousA11yViolations(page: Page, screen: string):
   // axe measures the colour that is rendered at that moment. A running
   // opacity/colour transition (e.g. the fade-in of the chat message toolbar)
   // blends the text with the background and gives a false `color-contrast`
-  // finding, so wait until nothing is animating (issue #461).
+  // finding, so wait until no finite animation is running (issue #461).
+  // Endless ones (spinners, pulses) never finish and are ignored.
   await expect
-    .poll(() => page.evaluate(() => document.getAnimations().filter((a) => a.playState === "running").length), {
+    .poll(() => page.evaluate(() => document
+          .getAnimations()
+          .filter((a) => a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity).length), {
       message: "animations still running before the accessibility scan",
     })
     .toBe(0);
