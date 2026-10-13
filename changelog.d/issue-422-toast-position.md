@@ -1,3 +1,3 @@
-### Geändert
-- Meldungen (Toasts) erscheinen jetzt oben rechts statt unten links und
-  verdecken bei kleinem Fenster nicht mehr das Chat-Eingabefeld.
+### Changed
+- Notifications (toasts) now appear at the top right instead of the bottom
+  left and no longer cover the chat input field in small windows.

@@ -1,3 +1,3 @@
-### Neu
-- Die Oberfläche gibt es jetzt auch auf Schwedisch, Dänisch, Norwegisch
-  (Bokmål) und Finnisch; sie lassen sich in den Einstellungen wählen.
+### Added
+- The interface is now also available in Swedish, Danish, Norwegian
+  (Bokmål) and Finnish; they can be chosen in the settings.

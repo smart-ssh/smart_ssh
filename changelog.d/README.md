@@ -26,41 +26,41 @@ Grund: Parallele Coder würden sonst alle denselben `[Unreleased]`-Abschnitt
   `0101-master-passwort.md` und `0101-entsperrmaske.md`.
 - `<thema>`: kurz, Kleinbuchstaben, Wörter mit `-` getrennt.
 
-## Inhalt
+## Content
 
-Deutsch, nutzerrelevant, gleiche Kategorien wie im CHANGELOG
-(Neu / Geändert / Behoben / Sicherheit), z. B.:
-
-```markdown
-### Sicherheit
-- Lesebefehle auf typische Secret-Pfade (SSH-Schlüssel, .env, …) verlangen
-  jetzt immer eine Bestätigung, auch wenn eine Allow-Regel greift.
-```
-
-### Regeln für Einträge
-
-- **Höchstens zwei Zeilen** je Eintrag.
-- Beschreibe die **sichtbare Wirkung**, nicht den Mechanismus: was der Nutzer
-  merkt, nicht wie es umgesetzt ist.
-- **Nichts Internes:** keine internen Abläufe, kein Tooling, keine Issue- oder
-  Spec-Buchhaltung, die der Eintrag nicht braucht.
-
-Gut:
+Fragments are written in English, are user-relevant, and use the same
+categories as `CHANGELOG.md` (`### Added`, `### Changed`, `### Fixed`,
+`### Security`), e.g.:
 
 ```markdown
-- Beim Schließen eines Tabs bleibt der Fokus auf dem Nachbar-Tab.
+### Security
+- Read commands on typical secret paths (SSH keys, .env, …) now always
+  require confirmation, even if an allow rule matches.
 ```
 
-Schlecht (Mechanismus, intern, zu lang):
+### Rules for entries
+
+- **At most two lines** per entry.
+- Describe the **visible effect**, not the mechanism: what the user notices,
+  not how it is implemented.
+- **Nothing internal:** no internal processes, no tooling, no issue or spec
+  bookkeeping the entry does not need.
+
+Good:
 
 ```markdown
-- `TabStrip` ruft nach `closeTab` jetzt `focusNeighbor()` auf, damit der
-  Reducer-Zustand nach Spec 0063 (Issue #69) konsistent bleibt und die
-  Fokus-Ref nicht mehr auf `null` fällt.
+- When a tab is closed, focus moves to the neighbouring tab.
 ```
 
-Einträge, die nur in einer kostenpflichtigen Edition verfügbar sind, tragen
-`**(Pro)**`.
+Bad (mechanism, internal, too long):
+
+```markdown
+- `TabStrip` now calls `focusNeighbor()` after `closeTab` so that the
+  reducer state stays consistent per Spec 0063 (issue #69) and the focus
+  ref no longer falls back to `null`.
+```
+
+Entries that are only available in a paid edition carry `**(Pro)**`.
 
 ## Release
 
@@ -68,10 +68,8 @@ Beim Release (Versions-Bump) werden alle Fragmente in den neuen
 Versionsabschnitt von `CHANGELOG.md` übernommen und die Dateien gelöscht.
 
 Der neue Versionsabschnitt beginnt mit `### Highlights`: 3 bis 6
-Listenpunkte, je genau eine Zeile, nutzerseitig und ohne Interna. Die
-Highlights sind der **einzige englische Teil** des sonst deutschen
-Changelogs, weil sie als Kurzfassung auf der (englischen) Download-Seite
-erscheinen. Sie werden beim Release geschrieben, nicht als Fragment; die
+Listenpunkte, je genau eine Zeile, nutzerseitig und ohne Interna. Sie
+erscheinen als Kurzfassung auf der Download-Seite. Sie werden beim Release geschrieben, nicht als Fragment; die
 übrigen Kategorien folgen danach unverändert. Ein CI-Check
 (`scripts/check-changelog-highlights.mjs`, Teil von `npm run lint`) prüft
 das für alle Versionen nach 0.5.2.

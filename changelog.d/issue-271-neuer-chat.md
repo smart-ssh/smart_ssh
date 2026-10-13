@@ -1,3 +1,3 @@
-### Neu
-- Im Chat-Panel einer verbundenen Sitzung startet „Neuer Chat“ ein frisches
-  Gespräch, ohne die SSH-Verbindung zu trennen. Der alte Chat bleibt in der Liste.
+### Added
+- In the chat panel of a connected session, "New chat" starts a fresh
+  conversation without disconnecting SSH. The old chat stays in the list.

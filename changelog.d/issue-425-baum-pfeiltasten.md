@@ -1,3 +1,3 @@
-### Geändert
-- Der Server-Baum in der Seitenleiste ist ein einziger Tab-Stopp und lässt sich
-  mit Pfeiltasten sowie Pos1/Ende bedienen.
+### Changed
+- The server tree in the sidebar is a single Tab stop and can be operated
+  with the arrow keys and Home/End.

@@ -1,3 +1,3 @@
-### Geändert
-- Gedämpfte Texte und Beschriftungen auf Akzentflächen sind im dunklen Design
-  besser lesbar (Kontrast nach WCAG AA).
+### Changed
+- Muted text and labels on accent surfaces are easier to read in the dark
+  theme (contrast per WCAG AA).

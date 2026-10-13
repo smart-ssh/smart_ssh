@@ -1,3 +1,3 @@
-### Geändert
-- Der Dateibrowser ist einheitlicher und per Tastatur besser bedienbar: Dialoge
-  schließen mit Escape und geben den Fokus zurück, das Aktionsmenü ebenfalls.
+### Changed
+- The file browser is more consistent and easier to use with the keyboard:
+  dialogs close with Escape and return focus, and so does the action menu.

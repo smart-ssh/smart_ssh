@@ -1,2 +1,2 @@
-### Sicherheit
-- Zugangsdaten-Stichwörter mit Umlaut (z. B. `Schlüssel`) werden jetzt auch in zerlegter Unicode-Schreibweise geschwärzt.
+### Security
+- Credential keywords with umlauts (e.g. `Schlüssel`) are now also redacted in decomposed Unicode form.

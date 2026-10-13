@@ -1,3 +1,3 @@
-### Geändert
-- Die Werkzeugleiste des Dateibrowsers trennt Dateiaktionen und erhöhte Rechte
-  optisch in zwei Gruppen und bricht bei kleinen Fenstern um.
+### Changed
+- The file browser toolbar visually separates file actions and elevated
+  privileges into two groups and wraps in small windows.

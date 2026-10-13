@@ -1,4 +1,4 @@
-### Sicherheit
-- Pfade und Dateinamen in Start-Dialogen sowie abgelehnte Eingaben in
-  Serverformularen werden nicht mehr durch Zeilentrenner oder
-  Textrichtungs-Steuerzeichen umgebrochen oder umgekehrt dargestellt.
+### Security
+- Paths and file names in startup dialogs, and rejected input in server
+  forms, are no longer broken up or displayed reversed by line separators
+  or text-direction control characters.

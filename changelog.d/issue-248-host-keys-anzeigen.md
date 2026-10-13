@@ -1,3 +1,3 @@
-### Neu
-- In den Server-Einstellungen werden jetzt die gespeicherten Host-Keys (Algorithmus und
-  Fingerprint) angezeigt, damit sie sich mit einer zweiten Quelle abgleichen lassen.
+### Added
+- The server settings now show the stored host keys (algorithm and
+  fingerprint) so they can be compared against a second source.

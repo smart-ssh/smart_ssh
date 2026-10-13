@@ -1,3 +1,3 @@
-### Behoben
-- Englische Sitzungen bekommen jetzt alle KI-Werkzeugbeschreibungen auf
-  Englisch statt einer Mischung aus Deutsch und Englisch.
+### Fixed
+- English sessions now receive all AI tool descriptions in English instead
+  of a mix of German and English.

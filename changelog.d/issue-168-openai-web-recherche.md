@@ -1,3 +1,3 @@
-### Neu
-- Die Web-Recherche der KI ist jetzt auch mit dem offiziellen OpenAI-Provider
-  verfügbar (Schalter „Web-Recherche“ in den KI-Einstellungen).
+### Added
+- AI web research is now also available with the official OpenAI provider
+  ("Web research" switch in the AI settings).

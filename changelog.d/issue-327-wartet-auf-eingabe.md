@@ -1,4 +1,4 @@
-### Neu
-- Wartet ein laufendes Kommando vermutlich auf eine Eingabe (z. B. „Do you want
-  to continue? [Y/n]“), zeigt der Chat einen Hinweis neben dem Stopp-Knopf. Nach
-  dem Stoppen schlägt die KI eine nicht-interaktive Variante vor.
+### Added
+- If a running command is probably waiting for input (e.g. "Do you want to
+  continue? [Y/n]"), the chat shows a notice next to the stop button. After
+  stopping, the AI suggests a non-interactive variant.

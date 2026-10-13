@@ -1,3 +1,3 @@
-### Neu
-- Grundlage für die Spracheingabe: Aufnahme vom Mikrofon und lokale Erkennung
-  mit dem geladenen Whisper-Modell. Audio bleibt auf dem Rechner.
+### Added
+- Foundation for voice input: recording from the microphone and local
+  recognition with the loaded Whisper model. Audio stays on your computer.

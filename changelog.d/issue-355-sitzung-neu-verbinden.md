@@ -1,3 +1,3 @@
-### Neu
-- Nach einem Verbindungsabbruch lässt sich der Tab mit „Neu verbinden“ oder
-  der Taste R wieder verbinden; Chat-Verlauf und KI-Kontext bleiben erhalten.
+### Added
+- After a connection loss, the tab can be reconnected with "Reconnect" or
+  the R key; chat history and AI context are kept.

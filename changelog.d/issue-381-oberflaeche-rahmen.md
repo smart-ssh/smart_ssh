@@ -1,4 +1,4 @@
-### Geändert
-- Die Tab-Leiste der Sitzungen lässt sich mit Pfeiltasten, Pos1/Ende bedienen;
-  Entf schließt den fokussierten Tab. Lange Servernamen werden gekürzt.
-- Einheitliche Schaltflächen und sichtbarer Fokus in Kopfzeile, Sitzung und Hinweisen.
+### Changed
+- The session tab bar can be operated with the arrow keys and Home/End;
+  Delete closes the focused tab. Long server names are shortened.
+- Consistent buttons and visible focus in the header, session and notices.

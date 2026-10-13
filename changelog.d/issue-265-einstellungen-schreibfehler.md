@@ -1,3 +1,3 @@
-### Behoben
-- Schlägt das Speichern von Einstellungen fehl oder ist die Einstellungsdatei
-  beschädigt, meldet die App den Fehler und überschreibt die Datei nicht mehr.
+### Fixed
+- If saving settings fails or the settings file is corrupted, the app reports
+  the error and no longer overwrites the file.

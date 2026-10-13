@@ -1,3 +1,4 @@
-### Neu
-- Die Ausgabe eines laufenden Kommandos erscheint jetzt live Zeile für Zeile im
-  Chat, getrennt nach Standard- und Fehlerausgabe und wie das Ergebnis maskiert.
+### Added
+- The output of a running command now appears live, line by line, in the
+  chat, separated into standard and error output and redacted like the
+  result.

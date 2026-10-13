@@ -1,3 +1,3 @@
-### Geändert
-- Die KI schlägt voneinander unabhängige Kommandos gesammelt in einer Antwort vor
-  und nutzt nicht-interaktive Optionen (z. B. `-y`), damit Kommandos nicht hängen.
+### Changed
+- The AI proposes independent commands together in one reply and uses
+  non-interactive options (e.g. `-y`) so commands do not hang.

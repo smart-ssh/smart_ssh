@@ -1,3 +1,3 @@
-### Behoben
-- Ein im geöffneten Chat gesendeter Prompt ist sofort mit der Pfeiltaste nach
-  oben erreichbar, nicht erst nach erneutem Öffnen.
+### Fixed
+- A prompt sent in the open chat is immediately reachable with the Up arrow
+  key, not only after reopening.

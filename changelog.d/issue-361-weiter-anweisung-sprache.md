@@ -1,2 +1,2 @@
-### Behoben
-- Der „Weiter"-Knopf nach einer abgeschnittenen KI-Antwort sendet seine Anweisung jetzt in der Sprache der Oberfläche statt immer auf Deutsch.
+### Fixed
+- The "Continue" button after a truncated AI reply now sends its instruction in the interface language instead of always in German.

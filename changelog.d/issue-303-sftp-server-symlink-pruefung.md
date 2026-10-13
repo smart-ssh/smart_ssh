@@ -1,2 +1,2 @@
-### Sicherheit
-- Der erhöhte Datei-Browser prüft jetzt auch die Symlinks auf dem Weg zu `sftp-server` und ihre Verzeichnisse, bevor er eine sudoers-Zeile vorschlägt.
+### Security
+- The elevated file browser now also checks the symlinks on the way to `sftp-server` and their directories before suggesting a sudoers line.

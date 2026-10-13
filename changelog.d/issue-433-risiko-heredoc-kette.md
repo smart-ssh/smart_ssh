@@ -1,3 +1,3 @@
-### Sicherheit
-- Ein Kommando mit unvollständigem Here-Doc-Anhang (z. B. `rm;<<`) wird in der
-  Risiko-Anzeige nicht mehr niedriger bewertet als das Kommando allein.
+### Security
+- A command with an incomplete here-doc suffix (e.g. `rm;<<`) is no longer
+  rated lower in the risk indicator than the command alone.
