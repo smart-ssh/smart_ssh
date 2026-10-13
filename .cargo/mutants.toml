@@ -21,4 +21,24 @@ exclude_re = [
     # empty range, which `push_segment` drops, so the segments are identical. (#483)
     "parser\\.rs:823:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'&'\\) with false in scan_top_level_segments",
     "parser\\.rs:835:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'\\|'\\) with false in scan_top_level_segments",
+
+    # --- Issue #484: redirection detection in filter/parser.rs ---
+    # contains_unquoted_output_redirection: `i + 1 < chars.len()` guards the
+    # two-char skip after a backslash in double quotes. Inside the loop
+    # i < len always holds, so `i * 1 < len`, `i - 1 < len` (i >= 1 in the
+    # double-quote state) and `i + 1 <= len` are always true as well; the
+    # only input where the original is false is a trailing backslash, and
+    # skipping 1 or 2 chars both end the loop with the same result (#484).
+    "parser\\.rs:717:31: replace \\+ with \\* in contains_unquoted_output_redirection",
+    "parser\\.rs:717:31: replace \\+ with - in contains_unquoted_output_redirection",
+    "parser\\.rs:717:35: replace < with <= in contains_unquoted_output_redirection",
+    # unquoted_word_len: the word starts at a non-whitespace char of text that
+    # unquoted_input_redirection_runs already scanned with the same quoting
+    # rules and found balanced, so the "quote left open" result is
+    # unreachable (the `&&` -> `||` mutants only differ there), and the
+    # length is always >= 1 (`len > 0` vs `len >= 0` cannot differ).
+    # Verified by exhaustive enumeration of 7.8M short inputs (#484).
+    "parser\\.rs:450:17: replace && with \\|\\| in unquoted_word_len",
+    "parser\\.rs:450:31: replace && with \\|\\| in unquoted_word_len",
+    "parser\\.rs:450:38: replace > with >= in unquoted_word_len",
 ]
