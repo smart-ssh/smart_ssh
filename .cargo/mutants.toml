@@ -74,4 +74,11 @@ exclude_re = [
     # long_code are empty, so `codes` is always empty there and the guard
     # `codes.is_empty()` is always true. Issue #485.
     'parser\.rs:1977:21: replace match guard codes\.is_empty\(\) with true in analyse_options',
+
+    # --- classifier.rs: glob handling and secret paths (issue #488) ---
+    # `brace_depth > 0` after the glob scan in glob_to_regex: `brace_depth` is
+    # a usize, so `< 0` is never true and the early `None` is skipped. But
+    # `brace_depth > 0` means an unclosed `(?:` is left in the pattern, which
+    # `Regex::new` rejects, so `.ok()` yields `None` all the same. (#488)
+    "classifier\\.rs:1063:20: replace > with < in glob_to_regex",
 ]

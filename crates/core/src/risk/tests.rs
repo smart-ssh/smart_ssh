@@ -1341,3 +1341,251 @@ fn heredoc_fragments_never_lower_risk_for_red_commands() {
     assert_eq!(alone.server_risk, RiskLevel::Red);
     assert_eq!(chained.server_risk, RiskLevel::Red);
 }
+
+// --- Issue #488: Platzhalter und Secret-Pfade -----------------------------
+
+const GLOB_HINT_REASON: &str = "Lesebefehl mit Platzhalter auf einen möglichen Secret-Pfad";
+const CD_UNKNOWN_REASON: &str = "Lesebefehl nach Verzeichniswechsel in ein nicht prüfbares Ziel";
+
+fn reason_of(command: &str) -> Option<&'static str> {
+    secret_path_read_reason(command).map(|finding| finding.reason())
+}
+
+/// Nach `cd $d` (Ziel nicht prüfbar) darf nur die erste Fassung den
+/// Platzhalter melden; jeder der fünf Hinweise (Punktdatei, `~`, `$home`,
+/// `/root`, Secret-Fragment) muss allein genügen.
+#[test]
+fn test_glob_hint_each_branch_alone_is_reported_by_first_version() {
+    for command in [
+        "cd $d; cat .foo*",
+        "cd $d; cat ~x*",
+        "cd $d; cat $home/x*",
+        "cd $d; cat /root/x*",
+        "cd $d; cat zz/.ssh*",
+    ] {
+        assert_eq!(reason_of(command), Some(GLOB_HINT_REASON), "{command}");
+    }
+}
+
+/// Gegenprobe: ohne Hinweis wird nur der Verzeichniswechsel gemeldet.
+#[test]
+fn test_glob_without_hint_after_unknown_cd_only_reports_cd() {
+    assert_eq!(reason_of("cd $d; cat zz/foo*"), Some(CD_UNKNOWN_REASON));
+    assert_eq!(reason_of("cd $d; cat zz/foo"), Some(CD_UNKNOWN_REASON));
+}
+
+/// `glob_has_secret_hint` in der erweiterten Prüfung: jeder Hinweis allein.
+#[test]
+fn test_glob_hint_each_branch_alone_in_extended_check() {
+    for command in [
+        "! cat .foo*",
+        "! cat ~x*",
+        "! cat /root/x*",
+        "! cat zz/.ssh*",
+        "cat .foo* > /dev/null",
+        "cat $home/x* > /dev/null",
+        "cat /root/x* > /dev/null",
+        "cat ~x* > /dev/null",
+        "cat zz/.ssh* > /dev/null",
+    ] {
+        assert_eq!(reason_of(command), Some(GLOB_HINT_REASON), "{command}");
+    }
+}
+
+const SHADOW_REASON: &str = "Liest /etc/shadow bzw. /etc/gshadow";
+const NOT_PARSEABLE_GLOB_REASON: &str = "Lesebefehl mit nicht prüfbarem Platzhalter";
+const BULK_REASON: &str =
+    "Liest Dateien rekursiv bzw. per -exec/xargs – Inhalt nicht vorab prüfbar";
+const XARGS_FILE_REASON: &str =
+    "xargs liest Argumente aus einer Datei – Inhalt nicht vorab prüfbar";
+const NESTING_REASON: &str =
+    "Zu tief verschachtelte Shell-Aufrufe für eine Prüfung auf Secret-Pfade";
+
+/// `glob_to_regex`: Zeichenklassen, Negation und Alternativen werden
+/// ausgewertet (`sh[a]dow`, `sh[!b]dow`, `sha{d,x}ow` treffen `shadow`).
+#[test]
+fn test_glob_to_regex_classes_negation_and_alternatives_hit_secret() {
+    for command in [
+        "cat sh[a]dow",
+        "cat sh[!b]dow",
+        "cat sh[^b]dow",
+        "cat sha{d,x}ow",
+        "cat sh{a,b}{d,x}ow",
+    ] {
+        assert_eq!(reason_of(command), Some(SHADOW_REASON), "{command}");
+    }
+}
+
+/// Gegenprobe: Klassen/Alternativen, die `shadow` nicht treffen, bleiben
+/// ohne Fund — ein Komma bzw. `}` außerhalb von `{…}` ist ein Literal.
+#[test]
+fn test_glob_to_regex_non_matching_globs_stay_unflagged() {
+    for command in [
+        "cat sh[b]dow",
+        "cat sh[!a]dow",
+        "cat sha{x,y}ow",
+        "cat sh*,w",
+        "cat sh*}",
+        "cat sh*,dow",
+    ] {
+        assert_eq!(reason_of(command), None, "{command}");
+    }
+}
+
+/// Nicht schließende Klasse oder Klammer ist nicht prüfbar (fail-closed).
+#[test]
+fn test_glob_to_regex_unclosed_syntax_is_not_assessable_glob() {
+    for command in ["cat sh[adow", "cat sha{dow", "cat sha{d,x"] {
+        assert_eq!(
+            reason_of(command),
+            Some(NOT_PARSEABLE_GLOB_REASON),
+            "{command}"
+        );
+    }
+}
+
+/// `normalize_path`: `x/../` wird lexikalisch aufgelöst, erst danach
+/// entsteht der Secret-Pfad.
+#[test]
+fn test_normalize_path_collapses_parent_segments() {
+    assert_eq!(reason_of("cat /etc/sh/../shadow"), Some(SHADOW_REASON));
+    assert_eq!(
+        reason_of("cat /etc/./a/b/../../shadow"),
+        Some(SHADOW_REASON)
+    );
+    // Nur nach dem Auflösen von `kubernetes/../` entsteht der Pfad
+    // `/etc/kubernetes/admin.conf`.
+    assert_eq!(
+        reason_of("cat /etc/kubernetes/../kubernetes/admin.conf"),
+        Some("Liest eine Kubernetes-Admin-Konfiguration")
+    );
+    assert!(reason_of("cat /etc//kubernetes/admin.conf").is_some());
+    assert_eq!(reason_of("cat /etc//shadow"), Some(SHADOW_REASON));
+    assert_eq!(reason_of("cat /tmp/sh/../hostname"), None);
+}
+
+/// `secret_path_match` (`~/.ssh/`): Name endet am Leerzeichen; bekannte
+/// harmlose Dateien und das Verzeichnis selbst bleiben ohne Fund, jede
+/// andere Datei ist ein möglicher privater Schlüssel.
+#[test]
+fn test_ssh_dir_names_end_at_whitespace() {
+    for command in [
+        "cat ~/.ssh/known_hosts notes.txt",
+        "cat ~/.ssh/config notes.txt",
+        "cat ~/.ssh/authorized_keys2 x",
+        "cat ~/.ssh/ notes.txt",
+        "cat ~/.ssh/",
+        "cat ~/.ssh/id_rsa.pub",
+    ] {
+        assert_eq!(reason_of(command), None, "{command}");
+    }
+    assert_eq!(
+        reason_of("cat ~/.ssh/deploy_key"),
+        Some("Liest eine Datei aus ~/.ssh (möglicher privater Schlüssel)")
+    );
+}
+
+/// `reads_file_via_xargs`: nur `-a`, `-aDATEI` und `--arg…` lesen eine
+/// Datei; andere xargs-Aufrufe sind „nur“ Sammel-Lesen.
+#[test]
+fn test_xargs_arg_file_forms_vs_plain_xargs() {
+    for command in [
+        "xargs -a list.txt cat",
+        "xargs --arg-file=list cat",
+        "xargs -alist.txt cat",
+        "cat x | xargs -a list",
+    ] {
+        assert_eq!(reason_of(command), Some(XARGS_FILE_REASON), "{command}");
+    }
+    for command in ["xargs -n1 cat x", "xargs cat x"] {
+        assert_eq!(reason_of(command), Some(BULK_REASON), "{command}");
+    }
+}
+
+/// `is_bulk_read`: `-x` allein (ohne `fd`) und `fd` allein (ohne `-x`)
+/// sind kein Sammel-Lesen; `grep -d skip` und ein Muster `rec…` auch nicht.
+#[test]
+fn test_bulk_read_negative_lookalikes() {
+    for command in [
+        "grep -x foo notes.txt",
+        "fd notes | cat notes.txt",
+        "grep -d skip foo notes.txt",
+        "grep -e records notes.txt",
+    ] {
+        assert_eq!(reason_of(command), None, "{command}");
+    }
+}
+
+/// `is_bulk_read`: `-d recurse` hinter weiteren Flags wird erkannt (Wort
+/// nach dem `-d`-Token, auch mit Offset), `fd -x` ebenfalls.
+#[test]
+fn test_bulk_read_recursive_forms() {
+    for command in [
+        "grep -i -d recurse x",
+        "grep -i -n -d recurse x",
+        "grep -d recurse x",
+        "fd . -x cat",
+    ] {
+        assert_eq!(reason_of(command), Some(BULK_REASON), "{command}");
+    }
+}
+
+fn nest_in_sh(command: &str, layers: usize) -> String {
+    let mut c = command.to_string();
+    for _ in 0..layers {
+        c = format!("sh -c '{}'", c.replace('\'', "'\\''"));
+    }
+    c
+}
+
+/// Rekursionsgrenze von `extended_secret_read_reason_in`: ein harmloses
+/// Kommando in drei Shell-Schichten ist prüfbar (kein Fund), in vier nicht
+/// (fail-closed).
+#[test]
+fn test_nested_shell_depth_boundary() {
+    for layers in 1..=3 {
+        assert_eq!(reason_of(&nest_in_sh("echo hi", layers)), None, "{layers}");
+    }
+    assert_eq!(reason_of(&nest_in_sh("echo hi", 4)), Some(NESTING_REASON));
+    assert_eq!(reason_of(&nest_in_sh("echo hi", 5)), Some(NESTING_REASON));
+    // Ein Treffer in der dritten Schicht wird noch gefunden.
+    assert_eq!(reason_of(&nest_in_sh("cat sh*", 3)), Some(SHADOW_REASON));
+}
+
+/// Budget der verschachtelten Prüfungen (`MAX_NESTED_CHECKS`): 70
+/// verschiedene Code-Strings sprengen es, 60 nicht.
+#[test]
+fn test_nested_check_budget_is_counted() {
+    let many = |n: usize| {
+        (0..n)
+            .map(|i| format!("sh -c 'echo {i}'"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
+    assert_eq!(reason_of(&many(70)), Some(NESTING_REASON));
+    assert_eq!(reason_of(&many(60)), None);
+    // Genau an der Grenze: der Aufruf selbst plus 63 Code-Strings sind 64
+    // Prüfungen (erlaubt), ein weiterer ist die 65. (zu viel).
+    assert_eq!(reason_of(&many(63)), None);
+    assert_eq!(reason_of(&many(64)), Some(NESTING_REASON));
+}
+
+/// Bereits gesehene Code-Strings werden nicht erneut geprüft, neue schon.
+#[test]
+fn test_nested_code_string_is_checked_on_first_sight() {
+    assert_eq!(reason_of("sh -c 'cat sh*'"), Some(SHADOW_REASON));
+}
+
+/// Lesen aus einer Datei per `<` allein ist ohne Platzhalter kein Fund.
+#[test]
+fn test_stdin_redirect_without_glob_is_not_flagged() {
+    assert_eq!(reason_of("cat notes.txt < in.txt"), None);
+}
+
+/// Optionen mit `=` werden als Pfad-Argument geprüft, einfache Flags nicht.
+#[test]
+fn test_option_with_equals_is_inspected_as_path() {
+    assert_eq!(reason_of("cat --foo=sh*"), Some(SHADOW_REASON));
+    assert_eq!(reason_of("cd /etc; cat --file=shadow"), Some(SHADOW_REASON));
+    assert_eq!(reason_of("cd /etc; cat -n notes.txt"), None);
+}
