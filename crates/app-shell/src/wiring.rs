@@ -39,6 +39,11 @@ pub struct Wiring {
     /// Befehle registrieren, diese erst **nach dem Entsperren** registrieren,
     /// sonst wären sie vor dem Entsperren aufrufbar (ADR 0095 §8).
     pub plugins: Vec<PluginHook>,
+    /// Issue #462 (Spec 0038, 2a): extensions that keep their own tables in
+    /// the encrypted application database. Their migrations run after the
+    /// core migrations and **only after unlock** (never while the app is
+    /// locked in master-password mode).
+    pub db_extensions: Vec<crate::db_extensions::DbExtension>,
     pub edition: Edition,
     /// Issue #16: zusätzliche Datenpfade einer Edition (z. B. eine
     /// Lizenzdatei), die die Einstellungen neben den eingebauten Pfaden
@@ -74,6 +79,7 @@ impl Wiring {
             // Spec 0037, Abschnitt 6: kein Git-Sync-Backend in dieser Spec.
             sync_backends: Vec::new(),
             plugins: Vec::new(),
+            db_extensions: Vec::new(),
             edition: Edition::Community,
             extra_data_paths: Vec::new(),
             session_extension: None,
