@@ -51,4 +51,27 @@ exclude_re = [
     # the closing quote, which is not a `$`, so it only costs one extra
     # step; when the quote is missing (`j == len`) the loop ends either way. (#486)
     "parser\\.rs:940:19: replace \\+ with \\* in contains_ansi_c_escape",
+
+    # --- Issue #485: filter parser, option analysis ---
+    # `letter_option` is only called for specs with a non-empty
+    # `letter_name_value`, which is KSH_LIKE_SHELL_OPTIONS alone. In that spec
+    # code_value, script_value, next_word_value, attached_value and
+    # digit_value are all empty, so `a || b` and `a && b` of any two of them
+    # are both false. Issue #485.
+    'parser\.rs:1827:13: replace \|\| with && in letter_option',
+    'parser\.rs:1830:13: replace \|\| with && in letter_option',
+    'parser\.rs:1831:13: replace \|\| with && in letter_option',
+    # No OptionSpec has a non-empty `long_script`, so `in_list(long_script)`
+    # is always false and `script |= false` equals `script &= false`.
+    # Issue #485.
+    'parser\.rs:1895:24: replace \|= with &= in analyse_options',
+    # The `attached_value` branch only exists in PERL_OPTIONS and
+    # RUBY_OPTIONS, whose stdin_flag and script_value are empty, so
+    # `stdin_flag && script_value` equals `stdin_flag || script_value` (both
+    # false). Issue #485.
+    'parser\.rs:1962:25: replace \|\| with && in analyse_options',
+    # `code_operand` is only set by specs (bash, ksh, csh) whose code_value and
+    # long_code are empty, so `codes` is always empty there and the guard
+    # `codes.is_empty()` is always true. Issue #485.
+    'parser\.rs:1977:21: replace match guard codes\.is_empty\(\) with true in analyse_options',
 ]
