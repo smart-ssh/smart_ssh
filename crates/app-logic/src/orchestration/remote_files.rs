@@ -412,6 +412,29 @@ pub(crate) async fn execute_write_remote_file(
     persist: bool,
     sudo_fallback_announced: bool,
 ) -> bool {
+    // Issue #464 (Spec 0038): the edition's transform runs on the final
+    // approved content, right before it is written. Result, history and
+    // errors below never see `wire_content`.
+    let prepared = match super::outgoing::prepare_for_send(
+        session,
+        ssh_manager_core::outgoing::OutgoingKind::FileContent,
+        &content,
+    )
+    .await
+    {
+        Ok(prepared) => prepared,
+        Err(message) => {
+            return emit_action_error(session, emitter, session_id, message, None, persist).await;
+        }
+    };
+    let wire_content: &str = match &prepared {
+        Some(text) => {
+            use secrecy::ExposeSecret;
+            text.expose_secret()
+        }
+        None => content.as_str(),
+    };
+
     if let Err(err) = ensure_sftp_open(session).await {
         let code = err.code();
         return emit_action_error(
@@ -443,7 +466,7 @@ pub(crate) async fn execute_write_remote_file(
         }
     };
 
-    let regular = write_via_sftp_with_backup(session, &path, &content, existed).await;
+    let regular = write_via_sftp_with_backup(session, &path, wire_content, existed).await;
 
     let (backup_path, used_sudo_password) = match regular {
         Ok(backup_path) => (backup_path, false),
@@ -473,8 +496,15 @@ pub(crate) async fn execute_write_remote_file(
                 )
                 .await;
             };
-            match write_via_sudo_fallback(session, &path, &content, existed, old_mode, &password)
-                .await
+            match write_via_sudo_fallback(
+                session,
+                &path,
+                wire_content,
+                existed,
+                old_mode,
+                &password,
+            )
+            .await
             {
                 Ok(backup_path) => (backup_path, true),
                 Err(err) => {

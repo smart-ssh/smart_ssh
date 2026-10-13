@@ -52,6 +52,10 @@ mod tests_files_and_ledger;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_outgoing;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_pending_confirmation;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
@@ -1651,9 +1655,34 @@ async fn execute_suggested_command(
     // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
     // (`execute()` wie bisher, scheitert wie gewohnt ohne TTY).
     let sudo_password = session.sudo_password.get();
+    // Issue #464 (Spec 0038): the edition's transform runs on the final
+    // approved command, right before the transport call. Everything that
+    // is shown or stored below uses `command`; `wire_command` exists only
+    // for the transport call.
+    let wire_command = match super::outgoing::prepare_for_send(
+        session,
+        ssh_manager_core::outgoing::OutgoingKind::Command,
+        &command,
+    )
+    .await
+    {
+        Ok(prepared) => prepared,
+        Err(message) => {
+            return emit_action_error(session, emitter, session_id, message, None, persist).await;
+        }
+    };
     let effective_command = sudo_password
         .as_ref()
         .and_then(|_| command_with_stdin_password_flag(&command));
+    let wire_effective_command = match &wire_command {
+        Some(prepared) => {
+            use secrecy::ExposeSecret;
+            sudo_password
+                .as_ref()
+                .and_then(|_| command_with_stdin_password_flag(prepared.expose_secret()))
+        }
+        None => effective_command.clone(),
+    };
 
     // Spec 0027, Abschnitt 3: vor dem eigentlichen Aufruf registriert, damit
     // `commands::cancel_running_command` diese `action_id` jederzeit
@@ -1689,7 +1718,7 @@ async fn execute_suggested_command(
                 "session is disconnecting".to_string(),
             ));
         };
-        let stdin = match (&effective_command, &sudo_password) {
+        let stdin = match (&wire_effective_command, &sudo_password) {
             (Some(_), Some(password)) => {
                 use secrecy::ExposeSecret;
                 let mut stdin = password.expose_secret().as_bytes().to_vec();
@@ -1698,9 +1727,15 @@ async fn execute_suggested_command(
             }
             _ => None,
         };
-        let run_command = match (&effective_command, &stdin) {
+        let run_command = match (&wire_effective_command, &stdin) {
             (Some(rewritten), Some(_)) => rewritten.as_str(),
-            _ => command.as_str(),
+            _ => match &wire_command {
+                Some(prepared) => {
+                    use secrecy::ExposeSecret;
+                    prepared.expose_secret()
+                }
+                None => command.as_str(),
+            },
         };
         let mut transport = session.transport.lock().await;
         match transport.start_exec(run_command, stdin.as_deref()).await? {

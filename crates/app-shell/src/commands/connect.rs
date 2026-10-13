@@ -754,6 +754,7 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             risk_second_opinion_budget,
             red_risk_always_confirm,
             running_command_cancellations: state.running_command_cancellations.clone(),
+            outgoing_transform: state.outgoing_transform.clone(),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
                 starts_with_untrusted_content,
             ),
@@ -1899,6 +1900,7 @@ mod connect_flow_tests {
             mcp: app_logic::state::McpState::default(),
             rate_limit_registry: ai_providers::RateLimitRegistry::new(),
             pending_ssh_config_import: std::sync::Mutex::new(None),
+            outgoing_transform: None,
         };
         Fixture {
             state,

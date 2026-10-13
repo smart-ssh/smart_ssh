@@ -122,6 +122,34 @@ impl PolicyStore for CombinedPolicySource {
     }
 }
 
+/// Rule-less store for [`matches_hard_blacklist`].
+struct NoRules;
+
+#[async_trait::async_trait]
+impl PolicyStore for NoRules {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+        Vec::new()
+    }
+}
+
+/// Issue #464: whether `command` (any segment, chained part or command
+/// substitution of it) hits the hard blacklist. User rules, the length limit
+/// and the risk classifier play no part, and nothing is logged: the caller
+/// passes text that must not reach any sink (an outgoing command after a
+/// transform has inserted secrets). Uses the same normalisation as the full
+/// evaluation, so the blacklist cannot be evaded by wrappers or quoting.
+pub async fn matches_hard_blacklist(command: &str) -> bool {
+    fn hit(trace: &EvaluationTrace) -> bool {
+        trace.matched_hard_blacklist_entry.is_some() || trace.sub_command_traces.iter().any(hit)
+    }
+    let engine = FilterEngine::with_max_command_length(NoRules, usize::MAX);
+    let ctx = EvalContext {
+        server_id: crate::shared::ServerId(uuid::Uuid::nil()),
+        tags: Vec::new(),
+    };
+    hit(&engine.evaluate_explained_inner(command, &ctx).await)
+}
+
 /// Wertet Kommandos gegen die Hard-Blacklist und die vom [`PolicyStore`]
 /// gelieferten Nutzerregeln aus (Spec 0002, Abschnitt 5).
 pub struct FilterEngine<S: PolicyStore> {
@@ -1035,5 +1063,38 @@ mod here_string_depth_tests {
             trace.decision
         );
         assert_eq!(trace.sub_command_traces.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod hard_blacklist_only_tests {
+    use super::{matches_hard_blacklist, DEFAULT_MAX_COMMAND_LENGTH};
+
+    #[tokio::test]
+    async fn test_matches_hard_blacklist_catches_plain_chained_wrapped_and_substituted() {
+        for command in [
+            "rm -rf /",
+            "echo ok; rm -rf /",
+            "echo ok && rm -rf /",
+            "sudo -u root rm -rf /",
+            "echo $(rm -rf /)",
+            "\"rm\" -rf /",
+        ] {
+            assert!(matches_hard_blacklist(command).await, "{command}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_matches_hard_blacklist_ignores_harmless_and_overlong_commands() {
+        assert!(!matches_hard_blacklist("echo hello").await);
+        assert!(!matches_hard_blacklist("").await);
+        let long = format!("echo {}", "a".repeat(DEFAULT_MAX_COMMAND_LENGTH * 2));
+        assert!(!matches_hard_blacklist(&long).await);
+        // The length limit does not hide a blacklisted tail.
+        let long_bad = format!(
+            "echo {}; rm -rf /",
+            "a".repeat(DEFAULT_MAX_COMMAND_LENGTH * 2)
+        );
+        assert!(matches_hard_blacklist(&long_bad).await);
     }
 }

@@ -1,0 +1,101 @@
+//! Extension point for transforming approved text right before it is sent
+//! to a server (issue #464, Spec 0038).
+//!
+//! A transform runs **after** filter, risk check, second opinion and
+//! confirmation, on the final approved text, and immediately before the
+//! transport call. Everything before that point (filter, risk, dialog,
+//! ledger, result event, history, logs) sees only the original text. The
+//! prepared text exists only for the transport call, so [`Prepared`] never
+//! shows it in `Debug`.
+
+use async_trait::async_trait;
+use secrecy::SecretString;
+
+use crate::shared::ServerId;
+
+/// What kind of text is about to be sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutgoingKind {
+    /// A shell command (AI-proposed or MCP-proposed).
+    Command,
+    /// The content of an AI `WriteRemoteFile` action.
+    FileContent,
+}
+
+/// The server a text is about to be sent to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutgoingScope {
+    pub server_id: ServerId,
+    pub tags: Vec<String>,
+}
+
+/// The result of a transform: the text to send and the secret values it
+/// inserted. The secret values are added to the session's redactor before the
+/// command starts. `Debug` shows neither the text nor the values.
+pub struct Prepared {
+    text: SecretString,
+    secrets: Vec<SecretString>,
+}
+
+impl Prepared {
+    pub fn new(text: String, secrets: Vec<SecretString>) -> Self {
+        Self {
+            text: SecretString::from(text),
+            secrets,
+        }
+    }
+
+    /// The text to send.
+    pub fn text(&self) -> &SecretString {
+        &self.text
+    }
+
+    /// The secret values the transform inserted into the text.
+    pub fn secrets(&self) -> &[SecretString] {
+        &self.secrets
+    }
+}
+
+impl std::fmt::Debug for Prepared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Prepared")
+            .field("text", &"[REDACTED]")
+            .field("secrets", &self.secrets.len())
+            .finish()
+    }
+}
+
+/// The transform refuses to prepare the text. Nothing is sent; `message` is
+/// returned to the AI as the action result and must not contain secret values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rejection {
+    pub message: String,
+}
+
+/// A trusted edition extension, registered via the app wiring. Without one,
+/// the text is sent unchanged.
+#[async_trait]
+pub trait OutgoingTransform: Send + Sync {
+    async fn prepare_outgoing(
+        &self,
+        scope: &OutgoingScope,
+        kind: OutgoingKind,
+        text: &str,
+    ) -> Result<Prepared, Rejection>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_debug_of_prepared_shows_neither_text_nor_secrets() {
+        let prepared = Prepared::new(
+            "echo hunter2".to_string(),
+            vec![SecretString::from("hunter2".to_string())],
+        );
+        let shown = format!("{prepared:?}");
+        assert!(!shown.contains("hunter2"), "{shown}");
+        assert!(!shown.contains("echo"), "{shown}");
+    }
+}

@@ -51,6 +51,12 @@ pub struct Wiring {
     /// Dateien auswählen; eine Edition registriert hier, wie eine opake
     /// Anhang-ID in einen Anhang aufgelöst wird. Community liefert keine.
     pub chat_attachment_resolvers: Vec<Arc<dyn ssh_manager_core::ai::ChatAttachmentResolver>>,
+
+
+    /// Issue #464 (Spec 0038, section 2): transforms approved commands and
+    /// file content right before they are sent to the server. Community
+    /// registers none, so text is sent unchanged.
+    pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 }
 
 impl Wiring {
@@ -82,6 +88,9 @@ impl Wiring {
             extra_data_paths: Vec::new(),
             session_extension: None,
             chat_attachment_resolvers: Vec::new(),
+
+
+            outgoing_transform: None,
         }
     }
 }

@@ -75,19 +75,72 @@ impl SwappableSudoPassword {
 /// Issue #355: the redactor of a session. Behind a lock so a reconnect can
 /// rebuild it with the sudo password read again from the keychain; every
 /// reader sees either the old or the new redactor, never none.
-pub struct SwappableRedactor(std::sync::RwLock<Arc<dyn OutputRedactor>>);
+pub struct SwappableRedactor {
+    inner: std::sync::RwLock<Arc<dyn OutputRedactor>>,
+    /// Issue #464: literal secret values inserted by an outgoing transform.
+    /// They survive a reconnect (the swap only replaces `inner`) and are
+    /// masked before the pattern-based redactor runs.
+    literal_secrets: std::sync::RwLock<Vec<Vec<u8>>>,
+}
 
 impl SwappableRedactor {
     pub fn new(redactor: Box<dyn OutputRedactor>) -> Self {
-        Self(std::sync::RwLock::new(Arc::from(redactor)))
+        Self {
+            inner: std::sync::RwLock::new(Arc::from(redactor)),
+            literal_secrets: std::sync::RwLock::new(Vec::new()),
+        }
     }
 
     fn current(&self) -> Arc<dyn OutputRedactor> {
-        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.inner.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     fn replace(&self, redactor: Box<dyn OutputRedactor>) {
-        *self.0.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
+        *self.inner.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
+    }
+
+    /// Issue #464: from now on `secrets` are masked wherever this redactor
+    /// runs (live output, result, ledger, history, logs). Called before the
+    /// command that uses them starts, so its own output is already covered.
+    /// Empty values are ignored (they would match everywhere).
+    pub fn add_secret_values(&self, secrets: &[secrecy::SecretString]) {
+        use secrecy::ExposeSecret;
+        let mut known = self
+            .literal_secrets
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        for secret in secrets {
+            let value = secret.expose_secret().as_bytes();
+            if !value.is_empty() && !known.iter().any(|k| k == value) {
+                known.push(value.to_vec());
+            }
+        }
+        // Longest first, so a secret that contains another is masked whole.
+        known.sort_by_key(|k| std::cmp::Reverse(k.len()));
+    }
+
+    fn mask_literals(&self, bytes: &[u8]) -> Vec<u8> {
+        let known = self
+            .literal_secrets
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let placeholder = ssh_manager_core::ai::REDACTED_PLACEHOLDER.as_bytes();
+        let mut out = bytes.to_vec();
+        for secret in known.iter() {
+            let mut next = Vec::with_capacity(out.len());
+            let mut i = 0;
+            while i < out.len() {
+                if out[i..].starts_with(secret) {
+                    next.extend_from_slice(placeholder);
+                    i += secret.len();
+                } else {
+                    next.push(out[i]);
+                    i += 1;
+                }
+            }
+            out = next;
+        }
+        out
     }
 }
 
@@ -96,11 +149,18 @@ impl OutputRedactor for SwappableRedactor {
         &self,
         output: &ssh_manager_core::ssh::CommandOutput,
     ) -> ssh_manager_core::ssh::CommandOutput {
-        self.current().redact(output)
+        let masked = ssh_manager_core::ssh::CommandOutput {
+            stdout: self.mask_literals(&output.stdout),
+            stderr: self.mask_literals(&output.stderr),
+            exit_code: output.exit_code,
+            truncated: output.truncated,
+        };
+        self.current().redact(&masked)
     }
 
     fn redact_text(&self, text: &str) -> String {
-        self.current().redact_text(text)
+        let masked = String::from_utf8_lossy(&self.mask_literals(text.as_bytes())).into_owned();
+        self.current().redact_text(&masked)
     }
 }
 
@@ -735,6 +795,10 @@ pub struct SessionParts {
     /// `handle_action_proposed` anfassen zu müssen (s. Doc-Kommentar auf
     /// `AppState.running_command_cancellations`).
     pub running_command_cancellations: Arc<ConfirmationRegistry<ActionId, ()>>,
+    /// Issue #464 (Spec 0038): the edition's transform for approved text right
+    /// before it is sent (`AppState.outgoing_transform`). `None`: text is sent
+    /// unchanged.
+    pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
     /// Spec 0039, Abschnitt 5: `true`, sobald in dieser Sitzung
     /// **irgendein** durch `ai::fence_untrusted` gelaufener Inhalt in den
     /// KI-Kontext gelangt ist (Kommando-Ausgabe, SFTP-Dateiinhalt oder
@@ -1039,6 +1103,14 @@ impl Session {
     // test` haben das Feature an). Jeder Setter ändert genau ein Feld —
     // `set_filter_engine_for_tests`, `set_ai_provider_for_tests` und
     // `set_sudo_password_for_tests` sind die sicherheitsrelevanten.
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_outgoing_transform_for_tests(
+        &mut self,
+        value: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+    ) {
+        self.parts.outgoing_transform = value;
+    }
 
     #[cfg(any(test, feature = "test-support"))]
     pub fn set_filter_engine_for_tests(&mut self, value: Box<dyn CommandEvaluator>) {
@@ -1655,6 +1727,39 @@ mod tests {
     use super::*;
     use crate::policy::NoRulesPolicyStore;
 
+    /// Issue #464: a secret value added after the session was built is masked
+    /// in output and text, survives a swap of the inner redactor, and an empty
+    /// value does not mask everything.
+    #[test]
+    fn test_added_secret_values_are_masked_and_survive_a_swap() {
+        let redactor = SwappableRedactor::new(Box::new(DefaultOutputRedactor::new()));
+        let text = "value=plain-secret-42 end";
+        assert_eq!(
+            redactor.redact_text(text),
+            text,
+            "unknown before it is added"
+        );
+
+        redactor.add_secret_values(&[
+            secrecy::SecretString::from("plain-secret-42".to_string()),
+            secrecy::SecretString::from(String::new()),
+        ]);
+        assert_eq!(redactor.redact_text(text), "value=[REDACTED] end");
+        let output = CommandOutput {
+            stdout: b"a plain-secret-42 b".to_vec(),
+            stderr: b"plain-secret-42".to_vec(),
+            exit_code: Some(0),
+            truncated: false,
+        };
+        let redacted = redactor.redact(&output);
+        assert_eq!(redacted.stdout, b"a [REDACTED] b".to_vec());
+        assert_eq!(redacted.stderr, b"[REDACTED]".to_vec());
+        assert_eq!(redacted.exit_code, Some(0));
+
+        redactor.replace(Box::new(DefaultOutputRedactor::new()));
+        assert_eq!(redactor.redact_text(text), "value=[REDACTED] end");
+    }
+
     /// Wird in diesen Tests nie tatsächlich aufgerufen (nur die
     /// `SessionManager`-Buchführung selbst steht hier auf dem Prüfstand,
     /// nicht der Chat-/Terminal-Ablauf, s. `crate::orchestration`s Tests
@@ -1723,6 +1828,7 @@ mod tests {
             // „an".
             red_risk_always_confirm: true,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+            outgoing_transform: None,
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,
