@@ -81,4 +81,16 @@ exclude_re = [
     # `brace_depth > 0` means an unclosed `(?:` is left in the pattern, which
     # `Regex::new` rejects, so `.ok()` yields `None` all the same. (#488)
     "classifier\\.rs:1063:20: replace > with < in glob_to_regex",
+
+    # --- Issue #489: risk classifier (classifier.rs) ---
+    # classify_into, padded segments: `&&` -> `||` only adds the candidates
+    # " " (from an empty segment) and `<segment>  ` (two trailing blanks).
+    # No risk pattern matches a lone blank or needs two consecutive blanks
+    # (globs use `*`, the regexes use `\s*`/`\s`/`\b`; checked against all
+    # patterns), so any pattern that accepts `x  ` already accepts `x `. (#489)
+    'classifier\.rs:147:47: replace && with \|\| in classify_into',
+    # cd_prefixes, `~` arm: without it `~` takes the generic arm, where
+    # normalize_path("~") is "~" (it is not changed by any rule), it starts
+    # with `~` (no chaining) and "~/" is pushed - the same prefix. (#489)
+    'classifier\.rs:1089:27: replace match guard word\.text == "~" with false in cd_prefixes',
 ]

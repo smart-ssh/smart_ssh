@@ -1589,3 +1589,308 @@ fn test_option_with_equals_is_inspected_as_path() {
     assert_eq!(reason_of("cd /etc; cat --file=shadow"), Some(SHADOW_REASON));
     assert_eq!(reason_of("cd /etc; cat -n notes.txt"), None);
 }
+
+// --- Mutation tests for the classifier helpers (issue #489) ----------------
+//
+// Each test names the mutants of `.cargo/mutants` runs it kills; the table
+// lives in the pull request description.
+
+mod mutants_489 {
+    use super::super::classifier::{classify_into, RiskAccumulator};
+    use super::super::CommandCheckFinding;
+    use super::super::{secret_path_read_reason, sftp_server_invocation_reason};
+    use super::classify;
+    use crate::filter::MAX_SUBSTITUTION_DEPTH;
+    use crate::risk::RiskLevel;
+
+    const SFTP_REASON: &str = "Startet sftp-server (mit sudo: Dateizugriff mit Root-Rechten)";
+    const UNCHECKABLE_CD: &str = "Lesebefehl nach Verzeichniswechsel in ein nicht prüfbares Ziel";
+    const UNCHECKABLE_VAR: &str = "Lesebefehl mit Variable im Pfad – Ziel nicht prüfbar";
+
+    fn sftp(command: &str) -> Option<CommandCheckFinding> {
+        sftp_server_invocation_reason(command)
+    }
+
+    fn secret_reason(command: &str) -> Option<&'static str> {
+        secret_path_read_reason(command).map(|finding| finding.reason())
+    }
+
+    // --- classify_into: first reason wins at equal level (160, 166) -------
+
+    #[test]
+    fn equal_server_risk_keeps_the_first_reason() {
+        let a = classify("rm -rf /tmp/x ; mkfs.ext4 /dev/sdb1");
+        assert_eq!(a.server_risk, RiskLevel::Red);
+        assert_eq!(
+            a.server_risk_reason.as_deref(),
+            Some("Rekursives, erzwungenes Löschen (rm -rf)")
+        );
+    }
+
+    #[test]
+    fn equal_data_risk_keeps_the_first_reason() {
+        let a = classify("cat ~/.ssh/id_rsa ; cat /etc/shadow");
+        assert_eq!(a.data_risk, RiskLevel::Red);
+        assert_eq!(
+            a.data_risk_reason.as_deref(),
+            Some("Zugriff auf eine SSH-Private-Key-Datei (id_rsa)")
+        );
+    }
+
+    // --- classify_into: nesting depth is counted (197) --------------------
+
+    #[test]
+    fn nesting_beyond_the_depth_cap_is_not_unwrapped_further() {
+        let command = r#"bash -c 'bash -c "reboot"'"#;
+        let rate = |depth: usize| {
+            let mut acc = RiskAccumulator::new();
+            classify_into(command, depth, &mut acc);
+            acc.server_risk
+        };
+        // Two levels still fit below the cap ...
+        assert_eq!(rate(MAX_SUBSTITUTION_DEPTH - 2), RiskLevel::Red);
+        // ... one level below the cap the inner call is unwrapped once and
+        // its own code is no longer unwrapped (the counter advanced).
+        assert_eq!(rate(MAX_SUBSTITUTION_DEPTH - 1), RiskLevel::None);
+        assert_eq!(rate(MAX_SUBSTITUTION_DEPTH), RiskLevel::None);
+    }
+
+    // --- CommandCheckFinding accessors ------------------------------------
+
+    #[test]
+    fn finding_reason_and_not_assessable_follow_the_variant() {
+        let found = CommandCheckFinding::Match("grund a");
+        let unchecked = CommandCheckFinding::NotAssessable("grund b");
+        assert_eq!(found.reason(), "grund a");
+        assert_eq!(unchecked.reason(), "grund b");
+        assert!(!found.is_not_assessable());
+        assert!(unchecked.is_not_assessable());
+    }
+
+    #[test]
+    fn real_findings_carry_their_reason_and_kind() {
+        let found = sftp("nohup sftp-server").expect("match");
+        assert_eq!(found, CommandCheckFinding::Match(SFTP_REASON));
+        assert!(!found.is_not_assessable());
+        let too_long = sftp(&"a ".repeat(100_000)).expect("not assessable");
+        assert!(too_long.is_not_assessable());
+        assert_eq!(
+            too_long.reason(),
+            "Kommando zu lang für eine Prüfung auf sftp-server-Aufrufe"
+        );
+    }
+
+    // --- sftp_server_word_check: what counts as a command prefix ----------
+
+    #[test]
+    fn sftp_server_behind_a_wrapper_program_is_found() {
+        // 334: only the wrapper list makes `nohup` a prefix.
+        assert_eq!(
+            sftp("nohup sftp-server"),
+            Some(CommandCheckFinding::Match(SFTP_REASON))
+        );
+    }
+
+    #[test]
+    fn sftp_server_behind_an_option_is_found() {
+        // 336: `-n` is a prefix only through the leading-dash rule.
+        assert_eq!(
+            sftp("nice -n sftp-server"),
+            Some(CommandCheckFinding::Match(SFTP_REASON))
+        );
+    }
+
+    #[test]
+    fn sftp_server_behind_a_variable_assignment_is_found() {
+        // 337 and `is_env_assignment -> false`; the `sh -c` form is not
+        // normalised by the first (regex) pass, so only the word check sees it.
+        for command in [
+            "nohup foo=bar sftp-server",
+            "sh -c 'foo=bar sftp-server'",
+            "nohup a=b sftp-server",
+            "sh -c 'a=b sftp-server'",
+            "nohup A1=b sftp-server",
+            "sh -c 'A1=b sftp-server'",
+            "nohup Z=b sftp-server",
+            "sh -c 'Z=b sftp-server'",
+        ] {
+            assert_eq!(
+                sftp(command),
+                Some(CommandCheckFinding::Match(SFTP_REASON)),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn sftp_server_behind_underscore_names_is_found() {
+        // 354:58, 354:63, 355:68: `_` is valid first and inner name char.
+        for command in [
+            "nohup _foo=bar sftp-server",
+            "sh -c '_foo=bar sftp-server'",
+            "nohup __=b sftp-server",
+            "sh -c '__=b sftp-server'",
+            "nohup my_var=1 sftp-server",
+            "sh -c 'my_var=1 sftp-server'",
+            "nohup a_9=b sftp-server",
+            "sh -c 'a_9=b sftp-server'",
+        ] {
+            assert_eq!(
+                sftp(command),
+                Some(CommandCheckFinding::Match(SFTP_REASON)),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn sftp_server_behind_a_number_or_duration_is_found() {
+        // 340:49 (digits) and 340:61 (`.` and `s` of `1.5s`).
+        for command in [
+            "timeout 5 sftp-server",
+            "sh -c '5 sftp-server'",
+            "timeout 1.5s sftp-server",
+            "sh -c '1.5s sftp-server'",
+            "timeout . sftp-server",
+            "sh -c '. sftp-server'",
+            "timeout s sftp-server",
+            "sh -c 's sftp-server'",
+        ] {
+            assert_eq!(
+                sftp(command),
+                Some(CommandCheckFinding::Match(SFTP_REASON)),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn sftp_server_behind_a_non_prefix_word_is_clean() {
+        // Invalid assignment names are ordinary words, so the following
+        // `sftp-server` is only an argument (351, 355:13, 355:63, 350).
+        for command in [
+            "nohup 1a=b sftp-server",
+            "nohup a-b=c sftp-server",
+            "nohup =b sftp-server",
+            "nohup -x foo sftp-server",
+        ] {
+            assert_eq!(sftp(command), None, "{command}");
+        }
+    }
+
+    // --- shell_words: quotes and escapes ----------------------------------
+
+    #[test]
+    fn quoted_wrapper_name_is_unquoted_before_the_check() {
+        assert_eq!(
+            sftp(r#""nohup" sftp-server"#),
+            Some(CommandCheckFinding::Match(SFTP_REASON))
+        );
+        // 767: the closing `"` must end the quote; the quoted `|` is then
+        // re-split inside the joined word, so `sftp-server` starts a stage.
+        // Without the closing arm the rest of the command is swallowed.
+        assert_eq!(
+            sftp(r#""x |"sftp-server;"#),
+            Some(CommandCheckFinding::Match(SFTP_REASON))
+        );
+    }
+
+    #[test]
+    fn escaped_quote_inside_double_quotes_stays_in_the_word() {
+        // 768: `\"` inside double quotes is a literal quote, the word `-"`
+        // is an option, so `sftp-server` still follows a prefix.
+        assert_eq!(
+            sftp(r#"nohup "-\"" sftp-server"#),
+            Some(CommandCheckFinding::Match(SFTP_REASON))
+        );
+    }
+
+    #[test]
+    fn variables_in_double_quotes_are_flagged_as_expanding() {
+        // 774:26, 774:33
+        assert_eq!(secret_reason(r#"cat "$x""#), Some(UNCHECKABLE_VAR));
+    }
+
+    #[test]
+    fn backticks_in_double_quotes_are_flagged_as_expanding() {
+        // 774:38
+        assert_eq!(secret_reason(r#"cat "``""#), Some(UNCHECKABLE_VAR));
+    }
+
+    #[test]
+    fn plain_double_quoted_words_do_not_expand() {
+        // 774:26 (`!=` would flag every character)
+        assert_eq!(secret_reason(r#"cat "readme.txt""#), None);
+        assert_eq!(secret_reason(r#"cat "a""#), None);
+        assert_eq!(secret_reason(r#"cat "\$x""#), None);
+    }
+
+    // --- cd_prefixes -------------------------------------------------------
+
+    #[test]
+    fn cd_into_a_variable_target_cannot_be_checked() {
+        // 1086:27 (guard), 1086:40 (expands only)
+        assert_eq!(secret_reason("cd $X && cat readme"), Some(UNCHECKABLE_CD));
+    }
+
+    #[test]
+    fn cd_into_a_glob_target_cannot_be_checked() {
+        // 1086:27 (guard), 1086:62 (glob only)
+        assert_eq!(secret_reason("cd /e* && cat readme"), Some(UNCHECKABLE_CD));
+    }
+
+    #[test]
+    fn cd_into_an_escaped_backtick_target_cannot_be_checked() {
+        // 1086:62: the escaped backtick sets neither `expands` nor a glob.
+        assert_eq!(secret_reason(r"cd \` && cat readme"), Some(UNCHECKABLE_CD));
+    }
+
+    #[test]
+    fn cd_options_are_skipped_but_a_lone_dash_is_the_target() {
+        // 1083:67: with `!=` the option `-P` would become the target.
+        assert_eq!(
+            secret_reason("cd -P /etc/ssl/private && cat x"),
+            Some("Liest private TLS-Schlüssel")
+        );
+        assert_eq!(
+            secret_reason("cd /etc/ssl/private && cat x"),
+            Some("Liest private TLS-Schlüssel")
+        );
+    }
+
+    /// `n` relative `cd`s leave `2^(n+1) - 1`... prefixes (1, 3, 7, ...).
+    fn relative_cds(n: usize) -> String {
+        (0..n)
+            .map(|i| format!("cd d{i}"))
+            .collect::<Vec<_>>()
+            .join(" && ")
+    }
+
+    #[test]
+    fn cd_dash_adds_no_prefix() {
+        // 1090:27: with the guard gone `-` becomes a relative directory and
+        // doubles the prefix list (63 -> 127), past the limit.
+        let command = format!("{} && cd - && cat readme", relative_cds(6));
+        assert_eq!(secret_reason(&command), None);
+    }
+
+    #[test]
+    fn prefix_list_of_exactly_64_is_still_checkable() {
+        // 1107:27 (`>=` and `==`): 63 prefixes + one absolute target = 64.
+        let command = format!("{} && cd /x && cat readme", relative_cds(6));
+        assert_eq!(secret_reason(&command), None);
+    }
+
+    #[test]
+    fn prefix_list_far_beyond_64_cannot_be_checked() {
+        // 1107:27 (`==`): 127 prefixes jump over 64.
+        let command = format!("{} && cat readme", relative_cds(7));
+        assert_eq!(secret_reason(&command), Some(UNCHECKABLE_CD));
+    }
+
+    #[test]
+    fn prefix_list_of_65_cannot_be_checked() {
+        let command = format!("{} && cd /x && cd /y && cat readme", relative_cds(6));
+        assert_eq!(secret_reason(&command), Some(UNCHECKABLE_CD));
+    }
+}
