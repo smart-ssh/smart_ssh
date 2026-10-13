@@ -16,6 +16,15 @@ interface AllowedViolation {
 export const AXE_ALLOWLIST: AllowedViolation[] = [];
 
 export async function expectNoSeriousA11yViolations(page: Page, screen: string): Promise<void> {
+  // axe measures the colour that is rendered at that moment. A running
+  // opacity/colour transition (e.g. the fade-in of the chat message toolbar)
+  // blends the text with the background and gives a false `color-contrast`
+  // finding, so wait until nothing is animating (issue #461).
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().filter((a) => a.playState === "running").length), {
+      message: "animations still running before the accessibility scan",
+    })
+    .toBe(0);
   const results = await new AxeBuilder({ page }).analyze();
   const blocking = results.violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
