@@ -1298,6 +1298,38 @@ mod tests {
         assert!(estimated >= estimate_tokens(&actually_fenced));
     }
 
+    /// Issue #469: Textanhänge nach Länge, Bild/PDF mit festem Wert.
+    #[test]
+    fn test_estimate_message_tokens_handles_attachments() {
+        use ssh_manager_core::ai::{
+            AttachmentKind, ChatAttachment, BINARY_ATTACHMENT_TOKEN_ESTIMATE,
+        };
+        let text = ChatAttachment {
+            name: "a.txt".into(),
+            media_type: "text/plain".into(),
+            kind: AttachmentKind::Text,
+            data: vec![b'a'; 4000],
+            byte_len: 4000,
+        };
+        let image = ChatAttachment {
+            name: "a.png".into(),
+            media_type: "image/png".into(),
+            kind: AttachmentKind::Image,
+            data: vec![0; 10],
+            byte_len: 10,
+        };
+        let message = |items| ChatMessage {
+            role: Role::User,
+            content: MessageContent::Attachments(items),
+        };
+        let text_tokens = estimate_message_tokens(&message(vec![text]));
+        assert!((1000..1100).contains(&text_tokens), "{text_tokens}");
+        assert_eq!(
+            estimate_message_tokens(&message(vec![image])),
+            BINARY_ATTACHMENT_TOKEN_ESTIMATE
+        );
+    }
+
     #[test]
     fn test_estimate_request_tokens_sums_system_context_history_and_actions() {
         let context = context_with("x".repeat(400), vec![user_message(&"y".repeat(400))]);

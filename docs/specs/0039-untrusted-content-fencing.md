@@ -13,7 +13,10 @@ Als nicht vertrauenswürdig gelten:
 - Notizen zu Servern und Gruppen,
 - die Betriebssystemangabe des Servers,
 - Inhalte aus der Web-Recherche des KI-Providers (Suchanfrage, Treffer,
-  Seitentext).
+  Seitentext),
+- Dateianhänge des Nutzers (lokale Dateien, Spec 0110): Text wird als
+  `local_file` gefencet, Bild und PDF erscheinen nur als gefencete
+  Platzhalterzeile.
 
 Gemeinsame Wurzel der Risiken: Würde ein Weg weniger streng behandelt als
 die anderen, wählte ein Angreifer den schwächsten. Notizen sind besonders

@@ -55,13 +55,22 @@ mod base64_bytes {
 /// gesendet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttachmentError {
-    TooMany { count: usize },
-    TooLarge { name: String, bytes: usize },
-    InvalidText { name: String },
+    TooMany {
+        count: usize,
+    },
+    TooLarge {
+        name: String,
+        bytes: usize,
+    },
+    InvalidText {
+        name: String,
+    },
     /// Es wurden Anhang-IDs übergeben, aber keine Edition liefert einen Resolver.
     NoResolver,
     /// Der Resolver kennt die ID nicht oder konnte sie nicht lesen.
-    Unresolved { reason: String },
+    Unresolved {
+        reason: String,
+    },
 }
 
 impl std::fmt::Display for AttachmentError {
@@ -90,14 +99,15 @@ impl std::error::Error for AttachmentError {}
 
 /// Löst eine undurchsichtige Anhang-ID einer Sitzung in einen Anhang auf.
 /// Pfade aus dem Webview werden nie akzeptiert; die ID stammt aus einem
-/// edition-eigenen Auswahlweg.
+/// edition-eigenen Auswahlweg. `Ok(None)` heißt „diese ID gehört nicht
+/// diesem Resolver“ (es können mehrere registriert sein).
 #[async_trait]
 pub trait ChatAttachmentResolver: Send + Sync {
     async fn resolve(
         &self,
         session_id: uuid::Uuid,
         attachment_id: &str,
-    ) -> Result<ChatAttachment, AttachmentError>;
+    ) -> Result<Option<ChatAttachment>, AttachmentError>;
 }
 
 /// Prüft Anzahl, Größe (tatsächliche Bytes, nicht `byte_len`) und UTF-8 bei
@@ -178,7 +188,9 @@ mod tests {
 
     #[test]
     fn test_six_attachments_rejected() {
-        let many: Vec<_> = (0..6).map(|i| text_attachment(&format!("{i}"), "x")).collect();
+        let many: Vec<_> = (0..6)
+            .map(|i| text_attachment(&format!("{i}"), "x"))
+            .collect();
         assert_eq!(
             validate_attachments(&many),
             Err(AttachmentError::TooMany { count: 6 })

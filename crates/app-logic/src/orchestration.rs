@@ -67,6 +67,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod action_exec;
+mod attachments;
 mod chat_turn;
 mod live_output;
 mod new_chat;
@@ -79,6 +80,11 @@ mod remote_files;
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 pub(crate) mod test_support;
 
+pub use attachments::{
+    attachment_error, push_user_attachments, resolve_chat_attachments, ATTACHMENTS_TOO_MANY,
+    ATTACHMENTS_UNAVAILABLE, ATTACHMENTS_WHILE_BUSY, ATTACHMENT_INVALID, ATTACHMENT_TOO_LARGE,
+    ATTACHMENT_UNRESOLVED,
+};
 pub use chat_turn::run_chat_turn;
 pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHAT_BUSY};
 // `push_history`/`PENDING_ACTION_CONFIRM_TIMEOUT`: auch von `app-shell`
