@@ -8,9 +8,7 @@ use ssh_manager_core::profiles::{Group, GroupId};
 
 use app_logic::dto::{DeleteGroupResult, GroupDto};
 use app_logic::error::CommandResult;
-use app_logic::groups::{
-    compute_delete_group_result, move_group as move_group_impl, validate_no_cycle,
-};
+use app_logic::groups::{move_group as move_group_impl, validate_no_cycle};
 use app_logic::state::AppState;
 
 // --- Spec 0008: Gruppen --------------------------------------------------
@@ -81,15 +79,12 @@ pub async fn delete_group(
     id: GroupId,
     confirm_cascade: bool,
 ) -> CommandResult<DeleteGroupResult> {
-    let result = compute_delete_group_result(
+    app_logic::groups::delete_group(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         id,
         confirm_cascade,
+        state.session_extension.as_deref(),
     )
-    .await?;
-    if confirm_cascade {
-        state.profile_store.delete_group(&id).await?;
-    }
-    Ok(result)
+    .await
 }

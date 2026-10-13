@@ -35,6 +35,38 @@ aus dem hinterlegten Schlüssel gebaut, der lokale Regelspeicher erst nach dem
 Die Edition darf in Filter, Risiko-Einstufung und Bestätigung nie eine
 eigene Verzweigung auslösen.
 
+### Sitzungs-Erweiterung (Server-Umgebung)
+
+Die Verdrahtung kann **eine** Sitzungs-Erweiterung enthalten; die Community
+Edition hat keine. Sie liefert dem Kern je Server (Server-Kennung inklusive
+des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
+
+- **Kontext-Abschnitt:** Text, den der Kern dem KI-Kontext der Sitzung nach
+  den eigenen Absätzen anhängt, unter einer eigenen Überschrift (Deutsch und
+  Englisch) und in einem eigenen Fence (Spec 0039). Der Text gilt wie eine
+  Notiz als nicht vertrauenswürdig: er wird erst redigiert, dann gefenct,
+  und setzt wie Notizen das Merkmal „nicht vertrauenswürdiger Inhalt
+  eingelesen“. Der Abschnitt wird bei jeder Nutzernachricht neu erfragt.
+  Liefert die Erweiterung nichts (oder nur Leerraum) oder gibt es keine
+  Erweiterung, ist der Kontext unverändert, ohne leeren Abschnitt.
+- **Bekannte Secrets:** Zeichenfolgen, die der Redactor dieses Servers
+  zusätzlich zum Sudo-Passwort maskiert: in der Sitzung (Live-Ausgabe,
+  gespeicherter Chat, KI-Kontext), beim Wiederverbinden, in Notizen-
+  Vorschlägen und im MCP-Notizen-Abruf. Sie gelten nur für den Server, für
+  den die Erweiterung sie liefert. Sie werden wörtlich verglichen, nie als
+  Regex; leere Werte maskieren nichts. Die Erweiterung kann den Redactor
+  offener Sitzungen eines Servers neu aufbauen lassen (etwa nach geänderten
+  Werten); schon gesendeter Verlauf wird beim nächsten Senden erneut
+  redigiert. Redaction wird dadurch nur erweitert, nie abgeschwächt.
+- **Entfernen:** Nach dem Löschen eines Servers (auch eines nicht nutzbaren)
+  und nach dem Löschen einer Gruppe, einschließlich jeder mitgelöschten
+  Untergruppe, wird die Erweiterung benachrichtigt, damit sie ihre eigenen
+  Daten aufräumen kann.
+
+Die Erweiterung hat keinen Zugriff auf den Profilspeicher, nur auf die
+übergebenen Angaben. Filter, Risiko-Einstufung und Bestätigung kennen sie
+nicht.
+
 **Master-Passwort-Modus** (Spec 0101): Plugins dürfen Befehle erst **nach
 dem Entsperren** registrieren, sonst wären sie vorher aufrufbar.
 
