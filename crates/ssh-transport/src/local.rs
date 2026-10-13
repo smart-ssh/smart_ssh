@@ -933,14 +933,28 @@ mod tests {
         let canceller = async {
             wait_for_marker(&marker).await;
             let at = std::time::Instant::now();
-            tx.send(())
-                .expect("command already finished before the cancel");
-            at
+            // Do not panic here: the outcome of the finished command is
+            // needed for the diagnostic below.
+            (at, tx.send(()).is_ok())
         };
-        let ((outcome, finished_at), cancelled_at) =
+        let ((outcome, finished_at), (cancelled_at, cancel_sent)) =
             tokio::time::timeout(NO_HANG_TIMEOUT, async { tokio::join!(exec, canceller) })
                 .await
                 .expect("execute_cancellable ignored the cancel and kept running");
+        if !cancel_sent {
+            // Issue #466: make a CI failure diagnosable from the log alone.
+            let detail = match &outcome {
+                Ok(o) => format!(
+                    "cancelled={} exit_code={:?} stdout={:?} stderr={:?}",
+                    o.cancelled,
+                    o.output.exit_code,
+                    String::from_utf8_lossy(&o.output.stdout),
+                    String::from_utf8_lossy(&o.output.stderr)
+                ),
+                Err(e) => format!("error: {e:?}"),
+            };
+            panic!("command {command:?} already finished before the cancel: {detail}");
+        }
         (
             outcome.expect("a cancelled command is Ok, not an error"),
             finished_at.saturating_duration_since(cancelled_at),
@@ -1072,10 +1086,14 @@ mod tests {
         // on CI runners and the `;`-joined statements passed through `cmd /C`
         // quoting were fragile, so the marker sometimes did not appear within
         // the timeout. Here `echo x> marker` runs in the `cmd` process (cwd =
-        // the injected home) right before the long-running `ping`, which
-        // `taskkill /T` ends together with `cmd`.
+        // the injected home) right before the long-running part, which
+        // `taskkill /T` ends together with `cmd`. Issue #466: `ping -n 600`
+        // ended on its own on `windows-latest` (it depends on the network
+        // stack and a working ICMP/loopback), so the sleep is PowerShell's
+        // `Start-Sleep`, which needs neither. Its slow start-up is harmless:
+        // the marker already exists by then.
         #[cfg(windows)]
-        let command = "echo ready& echo x> marker& ping -n 600 127.0.0.1 >nul";
+        let command = "echo ready& echo x> marker& powershell -NoProfile -NonInteractive -Command Start-Sleep -Seconds 600";
 
         let (outcome, after_cancel) =
             run_and_cancel_at_marker(&mut transport, home.path(), command).await;
