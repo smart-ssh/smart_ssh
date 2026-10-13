@@ -1087,13 +1087,14 @@ mod tests {
         // quoting were fragile, so the marker sometimes did not appear within
         // the timeout. Here `echo x> marker` runs in the `cmd` process (cwd =
         // the injected home) right before the long-running part, which
-        // `taskkill /T` ends together with `cmd`. Issue #466: `ping -n 600`
-        // ended on its own on `windows-latest` (it depends on the network
-        // stack and a working ICMP/loopback), so the sleep is PowerShell's
-        // `Start-Sleep`, which needs neither. Its slow start-up is harmless:
-        // the marker already exists by then.
+        // `taskkill /T` ends together with `cmd`. Issue #466: external
+        // programs are not reliable here. CI diagnostics showed the child
+        // `cmd` could not find `powershell` ("not recognized", exit code 1),
+        // and `ping -n 600` most likely ended early for the same reason. So the long-running part
+        // is a `cmd` builtin: an endless `for /L` loop (step 0, as in the
+        // streaming-cap test) that needs no other executable.
         #[cfg(windows)]
-        let command = "echo ready& echo x> marker& powershell -NoProfile -NonInteractive -Command Start-Sleep -Seconds 600";
+        let command = "echo ready& echo x> marker& for /L %i in (1,0,2) do @rem";
 
         let (outcome, after_cancel) =
             run_and_cancel_at_marker(&mut transport, home.path(), command).await;
