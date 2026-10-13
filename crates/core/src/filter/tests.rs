@@ -2511,3 +2511,169 @@ async fn test_issue_260_invalid_pattern_is_logged_once_per_rule_and_pattern() {
     let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
     assert_eq!(count_pattern_error_events("deny-broken-260"), 2);
 }
+
+// --- Top-level segmentation: pinned mutation survivors (issue #483) --------
+//
+// `scan_top_level_segments` is private, so these go through `split_command`
+// / `segment_command`. Each test pins the exact segment output for one
+// aspect of the character loop (quotes, escapes, `$( )` depth, separators).
+mod segmentation_pins {
+    use crate::filter::parser::{
+        segment_command, split_command, ParseResult, MAX_SUBSTITUTION_DEPTH,
+    };
+
+    fn segs(cmd: &str) -> Vec<String> {
+        match split_command(cmd) {
+            ParseResult::Segments(s) => s,
+            other => panic!("expected Segments for {cmd:?}, got {other:?}"),
+        }
+    }
+
+    fn assert_ambiguous(cmd: &str) {
+        assert!(
+            matches!(split_command(cmd), ParseResult::Ambiguous { .. }),
+            "expected Ambiguous for {cmd:?}, got {:?}",
+            split_command(cmd)
+        );
+    }
+
+    #[test]
+    fn only_separators_is_ambiguous_not_empty_segments() {
+        // scan returns Some(vec![]) here; the guard must turn it into Ambiguous.
+        for cmd in [";", "&&", "||", "&", "|", ";;", "\n;\n"] {
+            assert_ambiguous(cmd);
+        }
+    }
+
+    #[test]
+    fn separators_inside_single_quotes_do_not_split() {
+        assert_eq!(segs("echo 'a;b' ; ls"), vec!["echo 'a;b'", "ls"]);
+        assert_eq!(segs("echo 'a&&b||c|d'"), vec!["echo 'a&&b||c|d'"]);
+    }
+
+    #[test]
+    fn separators_inside_double_quotes_do_not_split() {
+        assert_eq!(segs("echo \"a;b\" ; ls"), vec!["echo \"a;b\"", "ls"]);
+        assert_eq!(segs("echo \"a&&b||c|d\""), vec!["echo \"a&&b||c|d\""]);
+    }
+
+    #[test]
+    fn separators_inside_backticks_do_not_split() {
+        assert_eq!(segs("echo `a;b` ; ls"), vec!["echo `a;b`", "ls"]);
+        assert_eq!(segs("echo `a&&b|c`"), vec!["echo `a&&b|c`"]);
+    }
+
+    #[test]
+    fn escaped_quote_inside_double_quotes_keeps_quote_open() {
+        assert_eq!(
+            segs(r#"echo "a\"; rm x" ; ls"#),
+            vec![r#"echo "a\"; rm x""#, "ls"]
+        );
+        assert_eq!(segs(r#"echo "\"" ; ls"#), vec![r#"echo "\"""#, "ls"]);
+        assert_eq!(
+            segs(r#"echo "x\\" ; ls"#),
+            vec![r#"echo "x\\""#, "ls"],
+            "an escaped backslash must not escape the closing quote"
+        );
+        assert_eq!(
+            segs(r#"echo "\a\"b;c" ; ls"#),
+            vec![r#"echo "\a\"b;c""#, "ls"]
+        );
+    }
+
+    #[test]
+    fn dollar_paren_substitution_hides_separators() {
+        assert_eq!(segs("echo $(a; b) ; ls"), vec!["echo $(a; b)", "ls"]);
+        assert_eq!(
+            segs("echo $(a && b | c) & ls"),
+            vec!["echo $(a && b | c)", "ls"]
+        );
+    }
+
+    #[test]
+    fn process_substitution_hides_separators() {
+        assert_eq!(segs("cat <(a; b) ; ls"), vec!["cat <(a; b)", "ls"]);
+        assert_eq!(segs("tee >(a | b) ; ls"), vec!["tee >(a | b)", "ls"]);
+    }
+
+    #[test]
+    fn paren_without_substitution_prefix_is_not_a_substitution() {
+        assert_eq!(segs("echo a(b; c)"), vec!["echo a(b", "c)"]);
+        assert_eq!(segs("echo x(a | b"), vec!["echo x(a", "b"]);
+    }
+
+    #[test]
+    fn nested_substitution_closes_only_at_matching_paren() {
+        assert_eq!(
+            segs("echo $(a $(b) ; c) ; ls"),
+            vec!["echo $(a $(b) ; c)", "ls"]
+        );
+        assert_eq!(
+            segs("echo $(a $(b $(c) ; d) ; e) ; ls"),
+            vec!["echo $(a $(b $(c) ; d) ; e)", "ls"]
+        );
+    }
+
+    #[test]
+    fn stray_closing_paren_is_ignored_at_depth_zero() {
+        assert_eq!(segs("echo a) ; ls"), vec!["echo a)", "ls"]);
+    }
+
+    #[test]
+    fn unbalanced_constructs_are_ambiguous() {
+        // A backslash outside quotes is invisible to the scanner but not to
+        // shell-words, so these pass the quote pre-check and reach the
+        // final balance check — each state alone must be enough.
+        assert_ambiguous(r"echo \'abc");
+        assert_ambiguous(r#"echo \"abc"#);
+        assert_ambiguous("echo `abc");
+        assert_ambiguous("echo $(abc");
+        assert_ambiguous("echo <(abc");
+        assert_ambiguous("echo a $(b $(c) ; d");
+    }
+
+    #[test]
+    fn newline_variants_split() {
+        assert_eq!(segs("a\nb"), vec!["a", "b"]);
+        assert_eq!(segs("a\rb"), vec!["a", "b"]);
+        assert_eq!(segs("a\r\nb"), vec!["a", "b"]);
+        // A `\r` preceded by `\n` must not swallow the next character.
+        assert_eq!(segs("ls\n\rpwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("ls\r\n\r\npwd"), vec!["ls", "pwd"]);
+    }
+
+    #[test]
+    fn single_ampersand_does_not_swallow_next_char() {
+        assert_eq!(segs("ls &pwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("ls&pwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("ls &&pwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("a & b && c"), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn single_pipe_does_not_swallow_next_char() {
+        assert_eq!(segs("ls |wc"), vec!["ls", "wc"]);
+        assert_eq!(segs("ls||wc"), vec!["ls", "wc"]);
+        assert_eq!(segs("ls |wc ||x ;y"), vec!["ls", "wc", "x", "y"]);
+    }
+
+    #[test]
+    fn substitution_recursion_stops_at_depth_cap() {
+        // MAX+10 nested `$( )` levels: depth 0..=MAX each contribute exactly
+        // one literal fragment, deeper levels are not descended into.
+        let mut cmd = String::from("x");
+        for _ in 0..MAX_SUBSTITUTION_DEPTH + 10 {
+            cmd = format!("echo $({cmd})");
+        }
+        assert_eq!(segment_command(&cmd).len(), MAX_SUBSTITUTION_DEPTH + 1);
+
+        // Exactly at the cap everything is descended into, incl. the core.
+        let mut cmd = String::from("x");
+        for _ in 0..MAX_SUBSTITUTION_DEPTH {
+            cmd = format!("echo $({cmd})");
+        }
+        let out = segment_command(&cmd);
+        assert_eq!(out.len(), MAX_SUBSTITUTION_DEPTH + 1);
+        assert_eq!(out.last().map(String::as_str), Some("x"));
+    }
+}
