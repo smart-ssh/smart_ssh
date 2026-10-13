@@ -2917,4 +2917,66 @@ mod substitution_and_shell_c_pins {
             })
         );
     }
+
+// --- Issue #487: pinned mutation survivors ----------------------------------
+
+#[test]
+fn test_pattern_display_text_and_kind_str_per_variant() {
+    let cases = [
+        (Pattern::Glob("ls *".to_string()), "ls *", "glob"),
+        (Pattern::Regex("^ls .*$".to_string()), "^ls .*$", "regex"),
+        (Pattern::Exact("ls -la".to_string()), "ls -la", "exact"),
+    ];
+    for (pattern, text, kind) in cases {
+        assert_eq!(pattern.display_text(), text);
+        assert_eq!(pattern.kind_str(), kind);
+    }
+}
+
+/// Several distinct invalid rules in one rule set are each reported once,
+/// however often the set is evaluated: reporting rule B must not forget rule A.
+#[tokio::test]
+async fn test_issue_487_distinct_invalid_rules_are_each_reported_once() {
+    log_capture::start_recording();
+    let eng = engine(vec![
+        regex_rule("broken-a-487", "^a(", RuleAction::Deny, 100),
+        regex_rule("broken-b-487", "^b(", RuleAction::Deny, 100),
+    ]);
+    for _ in 0..3 {
+        let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    }
+    assert_eq!(count_pattern_error_events("broken-a-487"), 1);
+    assert_eq!(count_pattern_error_events("broken-b-487"), 1);
+}
+
+/// Once the dedup set is full (1024 entries), a further new rule clears it
+/// instead of growing without bound: the rule that triggered the clear is
+/// remembered, every earlier one is reported again.
+#[tokio::test]
+async fn test_issue_487_dedup_set_is_cleared_when_full() {
+    struct Shared(Arc<SwappableStore>);
+    #[async_trait]
+    impl PolicyStore for Shared {
+        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+            self.0.rules_for(scope).await
+        }
+    }
+    let rule = |i: usize| regex_rule(&format!("cap-{i}-487"), "^a(", RuleAction::Deny, 100);
+    log_capture::start_recording();
+    let store = Arc::new(SwappableStore(std::sync::Mutex::new(
+        (0..1025).map(rule).collect(),
+    )));
+    let eng = FilterEngine::new(Shared(store.clone()));
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("cap-0-487"), 1);
+    assert_eq!(count_pattern_error_events("cap-1024-487"), 1);
+
+    // The 1025th rule cleared the set and was remembered afterwards: it stays
+    // quiet, while rule 0 (forgotten by the clear) is reported again.
+    *store.0.lock().unwrap() = vec![rule(1024)];
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("cap-1024-487"), 1);
+    *store.0.lock().unwrap() = vec![rule(0)];
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("cap-0-487"), 2);
 }

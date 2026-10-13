@@ -93,4 +93,9 @@ exclude_re = [
     # normalize_path("~") is "~" (it is not changed by any rule), it starts
     # with `~` (no chaining) and "~/" is pushed - the same prefix. (#489)
     'classifier\.rs:1089:27: replace match guard word\.text == "~" with false in cd_prefixes',
+
+    # --- engine.rs: NoRules (issue #487) -------------------------------------
+    # `Vec::new()` and `vec![]` are the same empty vector; no input can tell
+    # the original body from the mutant. (#487)
+    "engine\\.rs:\\d+:\\d+: replace <impl PolicyStore for NoRules>::rules_for -> Vec<Rule> with vec!\\[\\]",
 ]

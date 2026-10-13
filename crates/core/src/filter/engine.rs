@@ -1098,3 +1098,234 @@ mod hard_blacklist_only_tests {
         assert!(matches_hard_blacklist(&long_bad).await);
     }
 }
+
+/// Issue #487: pins for the decision combination, reason-code priority, scope
+/// ranking and the depth cap of the per-segment recursion.
+#[cfg(test)]
+mod mutant_pin_tests {
+    use super::*;
+    use crate::filter::Pattern;
+    use crate::shared::ServerId;
+
+    struct NoRulesStore;
+
+    #[async_trait]
+    impl PolicyStore for NoRulesStore {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+            Vec::new()
+        }
+    }
+
+    fn deny(reason: &str, code: &str) -> Decision {
+        Decision::Deny {
+            reason: reason.to_string(),
+            code: code.to_string(),
+        }
+    }
+
+    fn confirm(reason: &str, code: &str) -> Decision {
+        Decision::Confirm {
+            reason: reason.to_string(),
+            code: code.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_combine_two_denies_merges_reasons_and_keeps_higher_priority_code() {
+        let combined = combine(
+            deny("a; shared", FILTER_RULE_DENY),
+            deny("shared; b", FILTER_HARD_BLACKLIST),
+        );
+        assert_eq!(combined, deny("a; shared; b", FILTER_HARD_BLACKLIST));
+        // Order of the operands does not change the winning code.
+        let flipped = combine(
+            deny("shared; b", FILTER_HARD_BLACKLIST),
+            deny("a; shared", FILTER_RULE_DENY),
+        );
+        assert_eq!(flipped, deny("shared; b; a", FILTER_HARD_BLACKLIST));
+    }
+
+    #[test]
+    fn test_combine_two_confirms_merges_reasons_and_keeps_higher_priority_code() {
+        let combined = combine(
+            confirm("x", FILTER_NO_RULE_MATCHED),
+            confirm("y", FILTER_RULE_CONFIRM),
+        );
+        assert_eq!(combined, confirm("x; y", FILTER_RULE_CONFIRM));
+    }
+
+    #[test]
+    fn test_combine_strictest_wins_and_auto_exec_is_neutral() {
+        let d = deny("d", FILTER_RULE_DENY);
+        let c = confirm("c", FILTER_RULE_CONFIRM);
+        assert_eq!(
+            combine(Decision::AutoExec, Decision::AutoExec),
+            Decision::AutoExec
+        );
+        assert_eq!(combine(Decision::AutoExec, c.clone()), c);
+        assert_eq!(combine(c.clone(), Decision::AutoExec), c);
+        assert_eq!(combine(c.clone(), d.clone()), d);
+        assert_eq!(combine(d.clone(), c), d);
+    }
+
+    /// Every code wins against every code further down the priority list,
+    /// whichever side it is on; an unknown code loses against all of them.
+    #[test]
+    fn test_merge_codes_follows_the_full_priority_order() {
+        let ordered = [
+            FILTER_HARD_BLACKLIST,
+            FILTER_SUBSTITUTION_TOO_DEEP,
+            FILTER_RULE_DENY,
+            FILTER_RULE_CONFIRM,
+            FILTER_COMMAND_SUBSTITUTION,
+            FILTER_OUTPUT_REDIRECTION,
+            FILTER_COMMAND_TOO_LONG,
+            FILTER_PARSE_AMBIGUOUS,
+            FILTER_NO_RULE_MATCHED,
+            FILTER_EMPTY_COMMAND,
+        ];
+        for (i, winner) in ordered.iter().enumerate() {
+            for loser in &ordered[i + 1..] {
+                assert_eq!(
+                    merge_codes(winner.to_string(), loser.to_string()),
+                    *winner,
+                    "{winner} vs {loser}"
+                );
+                assert_eq!(
+                    merge_codes(loser.to_string(), winner.to_string()),
+                    *winner,
+                    "{loser} vs {winner}"
+                );
+            }
+            assert_eq!(
+                merge_codes("FILTER_UNKNOWN".to_string(), winner.to_string()),
+                *winner
+            );
+            assert_eq!(
+                merge_codes(winner.to_string(), "FILTER_UNKNOWN".to_string()),
+                *winner
+            );
+        }
+    }
+
+    fn scoped_rule(id: &str, scope: Scope, priority: i32) -> Rule {
+        Rule {
+            id: RuleId(id.to_string()),
+            pattern: Pattern::Glob("ls*".to_string()),
+            action: RuleAction::Deny,
+            scope,
+            priority,
+            origin: RuleOrigin::User,
+        }
+    }
+
+    /// Scope specificity (Server > Tag > Global) outranks `priority` inside
+    /// one bucket; the inverted priorities make a flat rank visible.
+    #[test]
+    fn test_rule_selection_ranks_server_over_tag_over_global_before_priority() {
+        let server = scoped_rule("server", Scope::Server(ServerId::new()), 0);
+        let tag = scoped_rule("tag", Scope::Tag("prod".to_string()), 50);
+        let global = scoped_rule("global", Scope::Global, 100);
+
+        let pick = |rules: &[Rule]| {
+            evaluate_rules_explained(rules, "ls", "ls", "ls")
+                .1
+                .expect("a rule must match")
+                .0
+        };
+        assert_eq!(
+            pick(&[global.clone(), tag.clone(), server.clone()]),
+            "server"
+        );
+        assert_eq!(
+            pick(&[server.clone(), tag.clone(), global.clone()]),
+            "server"
+        );
+        assert_eq!(pick(&[global.clone(), tag.clone()]), "tag");
+        assert_eq!(pick(&[tag.clone(), global.clone()]), "tag");
+        assert_eq!(pick(&[global, server]), "server");
+    }
+
+    #[test]
+    fn test_scope_applies_checks_tag_and_server_membership() {
+        let me = ServerId::new();
+        let effective = EffectiveScope {
+            server_id: me,
+            tags: vec!["prod".to_string()],
+        };
+        assert!(scope_applies(&Scope::Global, &effective));
+        assert!(scope_applies(&Scope::Tag("prod".to_string()), &effective));
+        assert!(!scope_applies(&Scope::Tag("dev".to_string()), &effective));
+        assert!(scope_applies(&Scope::Server(me), &effective));
+        assert!(!scope_applies(&Scope::Server(ServerId::new()), &effective));
+    }
+
+    /// A rule that only matches the sudo-free text must not fire for a
+    /// command whose sudo-free text does not match either.
+    #[test]
+    fn test_rule_does_not_match_when_stripped_text_differs_but_does_not_match() {
+        let rules = [Rule {
+            id: RuleId("deny-rm".to_string()),
+            pattern: Pattern::Glob("rm *".to_string()),
+            action: RuleAction::Deny,
+            scope: Scope::Global,
+            priority: 0,
+            origin: RuleOrigin::User,
+        }];
+        let (decision, matched, _) = evaluate_rules_explained(&rules, "sudo ls", "ls", "ls");
+        assert!(
+            matches!(decision, Decision::Confirm { ref code, .. } if code == FILTER_NO_RULE_MATCHED)
+        );
+        assert_eq!(matched, None);
+        // Counter-check: it does fire when the stripped text matches.
+        let (decision, matched, _) = evaluate_rules_explained(&rules, "sudo rm x", "rm x", "rm x");
+        assert!(matches!(decision, Decision::Deny { .. }));
+        assert_eq!(matched, Some(RuleId("deny-rm".to_string())));
+    }
+
+    fn is_too_deep(decision: &Decision) -> bool {
+        matches!(decision, Decision::Deny { code, .. } if code == FILTER_SUBSTITUTION_TOO_DEEP)
+    }
+
+    /// Every recursion out of a segment counts one level: at the cap the
+    /// inner code hits the depth-cap `Deny`, one level below it does not.
+    #[test]
+    fn test_segment_recursion_counts_towards_depth_cap() {
+        let engine = FilterEngine::new(NoRulesStore);
+        for command in [
+            "ls; ksh -c 'ls'",    // code argument of a shell
+            "ls; eval ls",        // eval
+            "ls; trap 'ls' EXIT", // trap handler
+            "ls; alias x='ls'",   // alias value
+            "ls; echo $(ls)",     // command substitution
+        ] {
+            let at_cap =
+                engine.evaluate_parsed_explained(command, &[], parser::MAX_SUBSTITUTION_DEPTH);
+            assert!(
+                is_too_deep(&at_cap.decision),
+                "{command}: {:?}",
+                at_cap.decision
+            );
+            let below =
+                engine.evaluate_parsed_explained(command, &[], parser::MAX_SUBSTITUTION_DEPTH - 1);
+            assert!(
+                !is_too_deep(&below.decision),
+                "{command}: {:?}",
+                below.decision
+            );
+        }
+    }
+
+    #[test]
+    fn test_single_segment_trace_is_not_wrapped() {
+        let engine = FilterEngine::new(NoRulesStore);
+        let rules = [scoped_rule("deny-ls", Scope::Global, 0)];
+        let single = engine.evaluate_parsed_explained("ls -la", &rules, 0);
+        assert_eq!(single.matched_rule, Some(RuleId("deny-ls".to_string())));
+        assert!(single.sub_command_traces.is_empty());
+
+        let multi = engine.evaluate_parsed_explained("ls -la; ls -l", &rules, 0);
+        assert_eq!(multi.matched_rule, None);
+        assert_eq!(multi.sub_command_traces.len(), 2);
+    }
+}
