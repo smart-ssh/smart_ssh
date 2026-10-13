@@ -91,6 +91,8 @@ fn content_type_for(content: &MessageContent) -> &'static str {
         MessageContent::ActionRejected { .. } => "action_rejected",
         // Issue #162, Migration `0020_...sql`.
         MessageContent::WebActivity(_) => "web_activity",
+        // Issue #469, Migration `0021_...sql`.
+        MessageContent::Attachments(_) => "attachments",
     }
 }
 
@@ -586,6 +588,114 @@ mod tests {
         assert_eq!(activity.input, "rust release");
         assert!(activity.results.is_empty());
         assert_eq!(activity.content, None);
+    }
+
+    fn sample_attachments() -> MessageContent {
+        use ssh_manager_core::ai::{AttachmentKind, ChatAttachment};
+        MessageContent::Attachments(vec![
+            ChatAttachment {
+                name: "notes.txt".to_string(),
+                media_type: "text/plain".to_string(),
+                kind: AttachmentKind::Text,
+                data: "hello".as_bytes().to_vec(),
+                byte_len: 5,
+            },
+            ChatAttachment {
+                name: "pic.png".to_string(),
+                media_type: "image/png".to_string(),
+                kind: AttachmentKind::Image,
+                data: vec![0, 1, 2, 255],
+                byte_len: 4,
+            },
+        ])
+    }
+
+    /// Issue #469: Anhänge überleben Speichern und Laden (Resume).
+    #[tokio::test]
+    async fn test_attachments_message_round_trips_through_store() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let messages = vec![
+            text_message(Role::User, "see attached"),
+            ChatMessage {
+                role: Role::User,
+                content: sample_attachments(),
+            },
+        ];
+        for m in &messages {
+            chat_store.append_message(session_id, m).await.unwrap();
+        }
+        assert_eq!(chat_store.load_session(session_id).await.unwrap(), messages);
+    }
+
+    /// Issue #469: eine vor dieser Änderung gespeicherte Sitzung (nur die
+    /// alten JSON-Formen, keine Anhänge) lädt unverändert.
+    #[tokio::test]
+    async fn test_session_stored_before_attachments_loads_unchanged() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        for (i, (role, ctype, json)) in [
+            ("user", "text", r#"{"Text":"old question"}"#),
+            (
+                "action_result",
+                "action_rejected",
+                r#"{"ActionRejected":{"command":"ls","reason":"User"}}"#,
+            ),
+        ]
+        .iter()
+        .enumerate()
+        {
+            sqlx::query(
+                "INSERT INTO chat_messages (id, session_id, role, content_type, content, sequence, created_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(session_id.to_string())
+            .bind(role)
+            .bind(ctype)
+            .bind(json)
+            .bind(i as i64)
+            .bind(Utc::now().to_rfc3339())
+            .execute(&profile_store.pool)
+            .await
+            .unwrap();
+        }
+        let loaded = chat_store.load_session(session_id).await.unwrap();
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0], text_message(Role::User, "old question"));
+    }
+
+    /// Issue #469: Löschen der Sitzung entfernt auch die Anhänge.
+    #[tokio::test]
+    async fn test_delete_session_removes_its_attachments() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .append_message(
+                session_id,
+                &ChatMessage {
+                    role: Role::User,
+                    content: sample_attachments(),
+                },
+            )
+            .await
+            .unwrap();
+        let count = |pool: sqlx::SqlitePool| async move {
+            let n: i64 = sqlx::query(
+                "SELECT COUNT(*) AS n FROM chat_messages WHERE content_type = 'attachments'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .get("n");
+            n
+        };
+        assert_eq!(count(profile_store.pool.clone()).await, 1);
+        chat_store.delete_session(session_id).await.unwrap();
+        assert_eq!(count(profile_store.pool.clone()).await, 0);
     }
 
     /// Spec 0034, Abschnitt 4, letzter Punkt: "`sequence` läuft weiter

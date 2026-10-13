@@ -52,6 +52,10 @@ pub struct Wiring {
     /// Spec 0038, section 2a: per-server session context section, known
     /// secrets for redaction and removal callbacks. Community has none.
     pub session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
+    /// Issue #469 (Spec 0110): Quellen für Chat-Anhänge. Der Kern kann keine
+    /// Dateien auswählen; eine Edition registriert hier, wie eine opake
+    /// Anhang-ID in einen Anhang aufgelöst wird. Community liefert keine.
+    pub chat_attachment_resolvers: Vec<Arc<dyn ssh_manager_core::ai::ChatAttachmentResolver>>,
 }
 
 impl Wiring {
@@ -83,6 +87,18 @@ impl Wiring {
             edition: Edition::Community,
             extra_data_paths: Vec::new(),
             session_extension: None,
+            chat_attachment_resolvers: Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Issue #469: Community registers no attachment resolver.
+    #[test]
+    fn test_community_registers_no_chat_attachment_resolvers() {
+        assert!(Wiring::community().chat_attachment_resolvers.is_empty());
     }
 }

@@ -38,6 +38,8 @@ pub enum Feature {
     /// Per-server environment data contributed by an extension (session
     /// context section and known secrets). Local, not service-bound.
     ServerEnvironment,
+    /// Issue #469: Dateianhänge in Chat-Nachrichten (lokal, nicht dienst-gebunden).
+    ChatAttachments,
 }
 
 impl Feature {
@@ -77,7 +79,8 @@ impl Feature {
             | Feature::AuditExport
             | Feature::Sso
             | Feature::SelfHosted
-            | Feature::ServerEnvironment => false,
+            | Feature::ServerEnvironment
+            | Feature::ChatAttachments => false,
         }
     }
 }
@@ -220,6 +223,18 @@ mod tests {
         assert!(!Feature::Sso.is_service_bound());
         assert!(!Feature::SelfHosted.is_service_bound());
         assert!(!Feature::ServerEnvironment.is_service_bound());
+        assert!(!Feature::ChatAttachments.is_service_bound());
+    }
+
+    #[test]
+    fn test_chat_attachments_serialises_snake_case_and_is_locked_in_free() {
+        assert_eq!(
+            serde_json::to_string(&Feature::ChatAttachments).unwrap(),
+            "\"chat_attachments\""
+        );
+        let free = Entitlements::free();
+        assert!(!free.has(Feature::ChatAttachments));
+        assert!(free.require(Feature::ChatAttachments).is_err());
     }
 
     #[test]

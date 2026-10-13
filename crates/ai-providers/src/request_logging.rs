@@ -124,6 +124,12 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
                 activity.results.len(),
                 activity.content.as_ref().map_or(0, |c| c.chars().count())
             ),
+            // Issue #469: nur Anzahl und Bytes, nie Name oder Inhalt.
+            MessageContent::Attachments(items) => format!(
+                "[attachments] count={} bytes={}",
+                items.len(),
+                items.iter().map(|a| a.data.len()).sum::<usize>()
+            ),
         })
         .collect()
 }
@@ -162,6 +168,11 @@ fn history_contents(context: &SessionContext) -> Vec<String> {
                 redactor.redact_text(&activity.input),
                 activity.results.len(),
                 activity.content.as_ref().map_or(0, |c| c.chars().count())
+            ),
+            MessageContent::Attachments(items) => format!(
+                "[attachments] count={} bytes={}",
+                items.len(),
+                items.iter().map(|a| a.data.len()).sum::<usize>()
             ),
         })
         .collect()

@@ -301,6 +301,12 @@ pub enum MessageContent {
     /// einer KI-Antwort (immer mit [`Role::Assistant`] gespeichert). Löst
     /// — anders als `CommandResult`/`ActionRejected` — keine Folgerunde aus.
     WebActivity(WebActivity),
+    /// Issue #469: Dateianhänge einer Nutzer-Nachricht (immer mit
+    /// [`Role::User`], direkt nach dem zugehörigen `Text`). Nicht
+    /// vertrauenswürdig (Spec 0039/0110): Text wird vor jedem Versand
+    /// redigiert und als `LocalFile` gefencet. Löst für sich keine
+    /// Folgerunde aus. Alte Sitzungen ohne Anhänge enthalten die Variante nie.
+    Attachments(Vec<super::ChatAttachment>),
 }
 
 /// Warum eine Aktion nicht ausgeführt wurde (Spec 0021, Abschnitt 3).
