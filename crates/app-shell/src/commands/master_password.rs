@@ -118,6 +118,8 @@ pub struct PendingStartup {
     inputs: crate::StartupInputs,
     entitlements: Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
     session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
+    /// Issue #462: database extensions, started only after the unlock.
+    db_extensions: Arc<Vec<crate::DbExtension>>,
     /// Der Fragesteller im Fenster. Entsteht beim ersten Entsperrversuch,
     /// weil er den `AppHandle` braucht.
     prompt: std::sync::Mutex<Option<Arc<WindowStartupPrompt>>>,
@@ -148,6 +150,14 @@ pub struct PendingStartup {
 }
 
 impl PendingStartup {
+    pub(crate) fn with_db_extensions(
+        mut self,
+        db_extensions: Arc<Vec<crate::DbExtension>>,
+    ) -> Self {
+        self.db_extensions = db_extensions;
+        self
+    }
+
     pub fn new(
         inputs: crate::StartupInputs,
         entitlements: Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
@@ -156,6 +166,7 @@ impl PendingStartup {
             inputs,
             entitlements,
             session_extension: None,
+            db_extensions: Arc::new(Vec::new()),
             prompt: std::sync::Mutex::new(None),
             unlock_lock: tokio::sync::Mutex::new(()),
             failed_unlock_attempts: std::sync::atomic::AtomicU32::new(0),
@@ -621,6 +632,7 @@ async fn assemble_and_open_the_gate(
         access,
         prompt.as_ref(),
         offers_skip,
+        &pending.db_extensions,
     )
     .await
     .map_err(|abort| startup_abort_to_command_error(&pending.inputs, prompt.as_ref(), abort))?;
