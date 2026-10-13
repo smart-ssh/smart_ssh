@@ -160,7 +160,44 @@ export interface ManageViewContribution {
   component: ComponentType;
 }
 
+/** Issue #471 (Spec 0038, Spec 0110): ein ausstehender Anhang im Eingabefeld.
+ * Nur eine undurchsichtige `id` — nie ein Dateipfad im Webview. */
+export interface ComposerAttachment {
+  id: string;
+  name: string;
+  size: number;
+  kind: "text" | "image" | "pdf";
+  /** Zeigt am Chip den Hinweis „unredigiert gesendet". */
+  unredactedHint?: boolean;
+}
+
+/** Was eine Composer-Aktion/ein Drop-Handler beim Aufruf bekommt. */
+export interface ComposerContext {
+  sessionId: string;
+  addAttachment: (attachment: ComposerAttachment) => void;
+  removeAttachment: (id: string) => void;
+}
+
+/** Andockpunkt neben dem Senden-Button des Chat-Eingabefelds (Issue #471).
+ * Wie `DocumentAction` entitlement-agnostisch: Sperrzustand über
+ * `disabled`/`disabledReason`. `icon` ist ein beliebiges React-Element. */
+export interface ComposerAction {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  onInvoke: (ctx: ComposerContext) => void | Promise<void>;
+  disabled?: boolean;
+  disabledReason?: string;
+}
+
+/** Wird bei einem nativen Ablegen von Dateien auf den Chat aufgerufen. Das
+ * Webview reicht keine Pfade weiter; der Handler holt sie im Backend ab
+ * (ADR 0113). */
+export type ComposerDropHandler = (ctx: ComposerContext) => void | Promise<void>;
+
 interface Registry {
+  composerActions: Map<string, ComposerAction>;
+  composerDropHandlers: Map<string, ComposerDropHandler>;
   serverFormSections: Map<string, ServerFormSectionContribution>;
   groupFormSections: Map<string, GroupFormSectionContribution>;
   manageViews: Map<string, ManageViewContribution>;
@@ -170,6 +207,8 @@ interface Registry {
 }
 
 const registry: Registry = {
+  composerActions: new Map(),
+  composerDropHandlers: new Map(),
   serverFormSections: new Map(),
   groupFormSections: new Map(),
   manageViews: new Map(),
@@ -322,4 +361,54 @@ export function resetRegistryForTests(): void {
   registry.groupFormSections.clear();
   registry.manageViews.clear();
   notifyFormSlotsChanged();
+}
+
+type ComposerListener = () => void;
+const composerListeners = new Set<ComposerListener>();
+let composerActionsSnapshot: ComposerAction[] = [];
+let composerDropSnapshot: ComposerDropHandler[] = [];
+
+function notifyComposerChanged(): void {
+  composerActionsSnapshot = Array.from(registry.composerActions.values());
+  composerDropSnapshot = Array.from(registry.composerDropHandlers.values());
+  for (const listener of Array.from(composerListeners)) listener();
+}
+
+/** Registriert (bzw. ersetzt bei gleicher `id`) eine Composer-Aktion
+ * (Issue #471). Die Community Edition registriert keine. */
+export function registerComposerAction(action: ComposerAction): void {
+  registry.composerActions.set(action.id, action);
+  notifyComposerChanged();
+}
+
+/** Registriert (bzw. ersetzt bei gleicher `id`) einen Drop-Handler für
+ * Dateien, die auf den Chat gezogen werden. */
+export function registerComposerDropHandler(id: string, handler: ComposerDropHandler): void {
+  registry.composerDropHandlers.set(id, handler);
+  notifyComposerChanged();
+}
+
+/** Composer-Aktionen in Registrierungsreihenfolge; zwischen zwei Änderungen
+ * dieselbe Array-Referenz (taugt als `getSnapshot`). */
+export function listComposerActions(): ComposerAction[] {
+  return composerActionsSnapshot;
+}
+
+/** Registrierte Drop-Handler; stabile Referenz wie oben. */
+export function listComposerDropHandlers(): ComposerDropHandler[] {
+  return composerDropSnapshot;
+}
+
+export function subscribeComposer(listener: () => void): () => void {
+  composerListeners.add(listener);
+  return () => {
+    composerListeners.delete(listener);
+  };
+}
+
+/** Nur für Tests. */
+export function resetComposerRegistryForTests(): void {
+  registry.composerActions.clear();
+  registry.composerDropHandlers.clear();
+  notifyComposerChanged();
 }

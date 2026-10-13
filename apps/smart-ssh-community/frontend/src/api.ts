@@ -212,8 +212,12 @@ export const terminalInput = (sessionId: string, data: Uint8Array) =>
 export const terminalResize = (sessionId: string, cols: number, rows: number) =>
   invoke<void>("terminal_resize", { sessionId, cols, rows });
 
-export const sendChatMessage = (sessionId: string, text: string) =>
-  invoke<void>("send_chat_message", { sessionId, text });
+export const sendChatMessage = (sessionId: string, text: string, attachmentIds?: string[]) =>
+  invoke<void>("send_chat_message", {
+    sessionId,
+    text,
+    ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
+  });
 
 /** Spec 0065, Teil 2 — „Weiter"-Aktion nach einem `chat-response-truncated`-
  * Event, läuft durch exakt denselben Pfad wie `sendChatMessage`. */

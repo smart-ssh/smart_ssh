@@ -1,9 +1,10 @@
 # Spec 0110 — Dateianhänge im KI-Chat
 
 Status: Kern umgesetzt (Nachrichtenmodell, Grenzen, Fencing, Redaction,
-Speicherung, Auflöser-Erweiterungspunkt). Die Auswahl von Dateien und die
-Anzeige im Eingabefeld liefert eine Edition (eigene Issues); die Community
-Edition registriert keinen Auflöser und verhält sich unverändert.
+Speicherung, Auflöser-Erweiterungspunkt) und der Erweiterungspunkt im
+Eingabefeld (Anhang-Chips, Ablegen). Die Auswahl von Dateien liefert eine
+Edition (eigene Issues); die Community Edition registriert weder Auflöser
+noch Eingabefeld-Aktion und verhält sich unverändert.
 Zweck: Eine Nutzer-Nachricht kann Dateien (Text, Bild, PDF) mitführen. Sie
 werden mit der Sitzung gespeichert und sicher an die KI gesendet.
 Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037
@@ -58,8 +59,8 @@ Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037
   Abschnitt 3) und beim Fortsetzen geladen. Sitzungen ohne Anhänge laden
   unverändert.
 - Löscht man eine Sitzung (oder den Server), verschwinden ihre Anhänge mit.
-- Nach dem Fortsetzen zeigt der Verlauf die Dateinamen der Anhänge als
-  Zeile; Inhalte erscheinen dort nie.
+- Nach dem Fortsetzen zeigt der Verlauf Name und Art (Text, Bild, PDF) der
+  Anhänge als Zeile; Inhalte erscheinen dort nie.
 
 ## 6. Kontextbegrenzung
 
@@ -91,3 +92,21 @@ nicht dienst-gebunden und in der Ausgangsberechtigung „Free" gesperrt.
 5. Sitzung löschen entfernt die Anhänge aus der Datenbank.
 6. Nach einem Anhang wird ein von der KI vorgeschlagenes Kommando gemäß
    Spec 0039, Abschnitt 5 eskaliert.
+
+## 10. Eingabefeld
+
+- Registrierte Aktionen erscheinen als Symbol-Schaltflächen neben „Senden“
+  (Spec 0038, §4). Ohne Aktion sieht das Eingabefeld aus wie zuvor.
+- Ausstehende Anhänge stehen als Chips über dem Textfeld: Name, Größe und
+  eine Schaltfläche zum Entfernen mit zugänglicher Beschriftung. Ein Chip,
+  den die Edition als „unredigiert“ markiert, zeigt sichtbar den Hinweis
+  „unredigiert gesendet“ (in allen UI-Sprachen).
+- Beim Senden gehen die IDs der Chips mit; danach sind die Chips leer. Die
+  gesendete Nachricht zeigt ihre Anhänge (Name, Art).
+- Lehnt das Backend die Nachricht ab (Grenze, Modell ohne Unterstützung,
+  gesperrte Funktion), steht die Meldung am Eingabefeld; Text und Chips
+  bleiben zum Korrigieren erhalten, nichts wurde gesendet. Eine gesperrte
+  Funktion öffnet zusätzlich den zentralen Hinweis-Dialog (Spec 0038, §4).
+- Dateien, die auf den Chat gezogen werden, gehen an den registrierten
+  Ablege-Handler; die Pfade verlassen das Backend nicht (ADR 0113). Ohne
+  Handler passiert beim Ablegen im Chat nichts.

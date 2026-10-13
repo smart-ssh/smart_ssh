@@ -1218,6 +1218,20 @@ pub enum ChatHistoryEntryDto {
         role: ChatHistoryRoleDto,
         activity: WebActivityDto,
     },
+    /// Issue #471 (Spec 0110, §5): Anhänge einer Nutzer-Nachricht — nur
+    /// Name und Art, nie der Inhalt.
+    Attachments {
+        role: ChatHistoryRoleDto,
+        items: Vec<ChatHistoryAttachmentDto>,
+    },
+}
+
+/// Issue #471: ein Anhang in der Historie (Name und Art, kein Inhalt).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatHistoryAttachmentDto {
+    pub name: String,
+    pub kind: ssh_manager_core::ai::AttachmentKind,
 }
 
 /// Issue #162: Anzeige einer Web-Recherche im Chat (Live-Event
@@ -1340,20 +1354,19 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                     activity: WebActivityDto::from(&activity),
                 }
             }
-            // Issue #469: until an edition UI renders attachment chips, a
-            // resumed history shows the attached file names as a plain line
-            // (names only, never content).
-            ssh_manager_core::ai::MessageContent::Attachments(items) => ChatHistoryEntryDto::Text {
-                role,
-                text: format!(
-                    "[attached: {}]",
-                    items
-                        .iter()
-                        .map(|a| a.name.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-            },
+            // Issue #471: names and kinds only, never content.
+            ssh_manager_core::ai::MessageContent::Attachments(items) => {
+                ChatHistoryEntryDto::Attachments {
+                    role,
+                    items: items
+                        .into_iter()
+                        .map(|a| ChatHistoryAttachmentDto {
+                            name: a.name,
+                            kind: a.kind,
+                        })
+                        .collect(),
+                }
+            }
         }
     }
 }
@@ -1662,6 +1675,35 @@ mod tests {
                 "exit_code darf nicht im snake_case vorkommen: {json}"
             );
         }
+    }
+
+    /// Issue #471: a resumed attachment message lists name and kind, never
+    /// the content (Spec 0110, §5).
+    #[test]
+    fn test_chat_history_attachments_list_name_and_kind_without_content() {
+        let content = ssh_manager_core::ai::MessageContent::Attachments(vec![
+            ssh_manager_core::ai::ChatAttachment {
+                name: "notes.txt".to_string(),
+                media_type: "text/plain".to_string(),
+                kind: ssh_manager_core::ai::AttachmentKind::Text,
+                data: b"SECRET-CONTENT".to_vec(),
+                byte_len: 14,
+            },
+        ]);
+        let message = ssh_manager_core::ai::ChatMessage {
+            role: ssh_manager_core::ai::Role::User,
+            content,
+        };
+        let json = serde_json::to_value(ChatHistoryEntryDto::from(message)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "attachments",
+                "role": "user",
+                "items": [{ "name": "notes.txt", "kind": "text" }]
+            })
+        );
+        assert!(!json.to_string().contains("SECRET-CONTENT"));
     }
 
     /// Issue #167: die volle JSON-Form aller Varianten, inklusive der

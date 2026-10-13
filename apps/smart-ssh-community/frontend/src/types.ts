@@ -859,7 +859,13 @@ export type ChatHistoryEntryDto =
     }
   | { type: "actionRejected"; role: ChatHistoryRole; command: string; reason: string }
   /** Spec 0105. */
-  | { type: "webActivity"; role: ChatHistoryRole; activity: WebActivityDto };
+  | { type: "webActivity"; role: ChatHistoryRole; activity: WebActivityDto }
+  /** Issue #471, Spec 0110 §5: nur Name und Art, nie Inhalt. */
+  | {
+      type: "attachments";
+      role: ChatHistoryRole;
+      items: { name: string; kind: "text" | "image" | "pdf" }[];
+    };
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
