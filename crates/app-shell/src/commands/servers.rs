@@ -173,6 +173,7 @@ pub async fn delete_server(
         state.credential_store.as_ref(),
         id,
         confirm,
+        state.session_extension.as_deref(),
     )
     .await
 }
@@ -202,6 +203,7 @@ pub async fn delete_unusable_server(
         state.credential_store.as_ref(),
         id,
         confirm,
+        state.session_extension.as_deref(),
     )
     .await
 }

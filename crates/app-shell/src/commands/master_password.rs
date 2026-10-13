@@ -117,6 +117,7 @@ const ATTEMPTS_BEFORE_STARTING_OVER_IS_OFFERED: u32 = 3;
 pub struct PendingStartup {
     inputs: crate::StartupInputs,
     entitlements: Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
+    session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
     /// Der Fragesteller im Fenster. Entsteht beim ersten Entsperrversuch,
     /// weil er den `AppHandle` braucht.
     prompt: std::sync::Mutex<Option<Arc<WindowStartupPrompt>>>,
@@ -154,10 +155,21 @@ impl PendingStartup {
         Self {
             inputs,
             entitlements,
+            session_extension: None,
             prompt: std::sync::Mutex::new(None),
             unlock_lock: tokio::sync::Mutex::new(()),
             failed_unlock_attempts: std::sync::atomic::AtomicU32::new(0),
         }
+    }
+
+    /// Spec 0038, section 2a: the edition's session extension, handed to the
+    /// `AppState` built at unlock.
+    pub fn with_session_extension(
+        mut self,
+        session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
+    ) -> Self {
+        self.session_extension = session_extension;
+        self
     }
 
     fn failed_unlock_attempts(&self) -> u32 {
@@ -604,6 +616,7 @@ async fn assemble_and_open_the_gate(
     let prompt = pending.prompt_for(app);
     let state = crate::open_and_assemble(
         &pending.entitlements,
+        pending.session_extension.clone(),
         &pending.inputs,
         access,
         prompt.as_ref(),

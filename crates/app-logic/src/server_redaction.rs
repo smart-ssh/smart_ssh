@@ -19,9 +19,9 @@
 //! externen MCP-Client gibt — Spec 0039 behandelt Notizen als
 //! nicht vertrauenswürdige Quelle, das gilt für jeden KI-Empfänger.
 
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 
-use ssh_manager_core::ai::{fence_untrusted, DefaultOutputRedactor, OutputRedactor, UntrustedKind};
+use ssh_manager_core::ai::{fence_untrusted, OutputRedactor, UntrustedKind};
 use ssh_manager_core::profiles::{
     effective_notes_sections, CredentialError, CredentialStore, ProfileResult, ProfileStore, Server,
 };
@@ -41,9 +41,10 @@ use crate::server_credentials::sudo_password_credential_ref;
 pub fn server_redactor(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
+    extension_secrets: &[SecretString],
 ) -> Box<dyn OutputRedactor> {
     let sudo_password = read_sudo_password_for_redaction(credential_store, server_id);
-    redactor_with_sudo_password(sudo_password.as_ref())
+    crate::session_extension::redactor_with_secrets(sudo_password.as_ref(), extension_secrets)
 }
 
 /// Liest das Sudo-Passwort von `server_id` für den Bau eines Redactors —
@@ -87,13 +88,7 @@ pub fn read_sudo_password_for_redaction(
 pub fn redactor_with_sudo_password(
     sudo_password: Option<&SecretString>,
 ) -> Box<dyn OutputRedactor> {
-    match sudo_password {
-        Some(password) => match regex::Regex::new(&regex::escape(password.expose_secret())) {
-            Ok(pattern) => Box::new(DefaultOutputRedactor::with_extra_patterns(vec![pattern])),
-            Err(_) => Box::new(DefaultOutputRedactor::new()),
-        },
-        None => Box::new(DefaultOutputRedactor::new()),
-    }
+    crate::session_extension::redactor_with_secrets(sudo_password, &[])
 }
 
 /// Redigiert jeden (Quelle, Notiztext)-Abschnitt und fenct ihn danach
@@ -129,6 +124,7 @@ pub async fn redacted_fenced_effective_notes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use secrecy::ExposeSecret;
 
     use chrono::Utc;
     use ssh_manager_core::ai::REDACTED_PLACEHOLDER;
@@ -172,7 +168,7 @@ mod tests {
 
     async fn notes_for(server: &Server, store: &InMemoryProfileStore) -> String {
         let credentials = InMemoryCredentialStore::new();
-        let redactor = server_redactor(&credentials, server.id);
+        let redactor = server_redactor(&credentials, server.id, &[]);
         redacted_fenced_effective_notes(server, store, redactor.as_ref())
             .await
             .expect("effektive Notizen")
@@ -211,7 +207,7 @@ mod tests {
         let credentials = InMemoryCredentialStore::new()
             .with_secret(&sudo_password_credential_ref(srv.id), password);
 
-        let redactor = server_redactor(&credentials, srv.id);
+        let redactor = server_redactor(&credentials, srv.id, &[]);
         let out = redacted_fenced_effective_notes(&srv, &store, redactor.as_ref())
             .await
             .unwrap();
@@ -244,7 +240,7 @@ mod tests {
             .with_backend_payload(backend_payload);
 
         log_capture::start_recording();
-        let redactor = server_redactor(&credentials, server_id);
+        let redactor = server_redactor(&credentials, server_id, &[]);
 
         let warnings = recorded_warn_lines();
         assert_eq!(
@@ -283,7 +279,7 @@ mod tests {
         let credentials = InMemoryCredentialStore::new();
 
         log_capture::start_recording();
-        let redactor = server_redactor(&credentials, ServerId::new());
+        let redactor = server_redactor(&credentials, ServerId::new(), &[]);
 
         let warnings = recorded_warn_lines();
         assert!(warnings.is_empty(), "keine Warnung erwartet: {warnings:?}");

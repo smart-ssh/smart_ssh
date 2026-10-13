@@ -44,6 +44,9 @@ pub struct Wiring {
     /// Lizenzdatei), die die Einstellungen neben den eingebauten Pfaden
     /// anzeigen. Community liefert keine.
     pub extra_data_paths: Vec<app_logic::data_paths::ExtraDataPath>,
+    /// Spec 0038, section 2a: per-server session context section, known
+    /// secrets for redaction and removal callbacks. Community has none.
+    pub session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
 }
 
 impl Wiring {
@@ -73,6 +76,7 @@ impl Wiring {
             plugins: Vec::new(),
             edition: Edition::Community,
             extra_data_paths: Vec::new(),
+            session_extension: None,
         }
     }
 }

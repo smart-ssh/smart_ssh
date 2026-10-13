@@ -455,7 +455,40 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
         None
     };
 
-    let (system_context_parts, notes_present) = build_session_system_context(
+    // Spec 0018, Abschnitt 6: einmalig bei `connect()` gelesen, wie
+    // `ai_provider_label`/`ai_model` — ein fehlender Eintrag (kein Sudo-
+    // Passwort hinterlegt) wird zu `None`, kein harter Verbindungsfehler.
+    // Issue #36: über den gemeinsamen Lesepfad, der einen Lesefehler des
+    // Schlüsselbunds (anders als `NotFound`) als `warn` protokolliert.
+    let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
+        state.credential_store.as_ref(),
+        server_id,
+    );
+
+    // Unabhängiger Review-Pass (Spec 0018): `sudo -S` liest die per Stdin
+    // eingespeiste Passwortzeile nur, wenn `sudo` tatsächlich einen Prompt
+    // zeigt — bei einem `NOPASSWD`-Sudoers-Eintrag oder einem noch
+    // gültigen Sudo-Timestamp liest `sudo` nie von Stdin, wodurch die
+    // ganze Zeile stattdessen an das AUSGEFÜHRTE Programm durchgereicht
+    // wird (`sudo tee datei` schreibt das Passwort in die Datei, `sudo
+    // cat`/`sudo bash`/... geben es auf stdout/stderr aus). Ohne diesen
+    // Zweig kannte der Redactor das Sitzungs-Passwort überhaupt nicht —
+    // es hätte in genau diesem Fall unredigiert den KI-Kontext und das
+    // strukturierte Log erreicht. `regex::escape` neutralisiert
+    // Regex-Sonderzeichen im Passwort selbst.
+    // Spec 0038, section 2a: known secrets of a registered session extension
+    // are masked in addition to the sudo password.
+    let extension_scope = extension_scope(app, state.profile_store.as_ref(), server_id).await;
+    let extension_secrets = app_logic::session_extension::known_secrets(
+        state.session_extension.as_deref(),
+        extension_scope.as_ref(),
+    );
+    let redactor: Box<dyn OutputRedactor> = app_logic::session_extension::redactor_with_secrets(
+        sudo_password.as_ref(),
+        &extension_secrets,
+    );
+
+    let (mut system_context_parts, notes_present) = build_session_system_context(
         app,
         &server.name,
         &server_id,
@@ -464,6 +497,13 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
         &state.policy_store,
     )
     .await;
+    let extension_present = app_logic::session_extension::append_extension_section(
+        &mut system_context_parts,
+        state.session_extension.as_deref(),
+        extension_scope.as_ref(),
+        redactor.as_ref(),
+    );
+    let notes_present = notes_present || extension_present;
     let system_context = system_context_parts.assemble();
     // Issue #323: die `suggest_command`-Beschreibung folgt derselben Sprache
     // wie der System-Prompt.
@@ -495,30 +535,6 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
         active_config.provider_type,
         &active_config.model,
     );
-
-    // Spec 0018, Abschnitt 6: einmalig bei `connect()` gelesen, wie
-    // `ai_provider_label`/`ai_model` — ein fehlender Eintrag (kein Sudo-
-    // Passwort hinterlegt) wird zu `None`, kein harter Verbindungsfehler.
-    // Issue #36: über den gemeinsamen Lesepfad, der einen Lesefehler des
-    // Schlüsselbunds (anders als `NotFound`) als `warn` protokolliert.
-    let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
-        state.credential_store.as_ref(),
-        server_id,
-    );
-
-    // Unabhängiger Review-Pass (Spec 0018): `sudo -S` liest die per Stdin
-    // eingespeiste Passwortzeile nur, wenn `sudo` tatsächlich einen Prompt
-    // zeigt — bei einem `NOPASSWD`-Sudoers-Eintrag oder einem noch
-    // gültigen Sudo-Timestamp liest `sudo` nie von Stdin, wodurch die
-    // ganze Zeile stattdessen an das AUSGEFÜHRTE Programm durchgereicht
-    // wird (`sudo tee datei` schreibt das Passwort in die Datei, `sudo
-    // cat`/`sudo bash`/... geben es auf stdout/stderr aus). Ohne diesen
-    // Zweig kannte der Redactor das Sitzungs-Passwort überhaupt nicht —
-    // es hätte in genau diesem Fall unredigiert den KI-Kontext und das
-    // strukturierte Log erreicht. `regex::escape` neutralisiert
-    // Regex-Sonderzeichen im Passwort selbst.
-    let redactor: Box<dyn OutputRedactor> =
-        app_logic::server_redaction::redactor_with_sudo_password(sudo_password.as_ref());
 
     // Spec 0026, Abschnitt 3: einmalig bei `connect()` aufgelöst, s.
     // `Session::risk_second_opinion_provider`-Doc-Kommentar. Spec 0061:
@@ -861,8 +877,15 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
             state.credential_store.as_ref(),
             server_id,
         );
-        let redactor =
-            app_logic::server_redaction::redactor_with_sudo_password(sudo_password.as_ref());
+        let scope = extension_scope(app, state.profile_store.as_ref(), server_id).await;
+        let extension_secrets = app_logic::session_extension::known_secrets(
+            state.session_extension.as_deref(),
+            scope.as_ref(),
+        );
+        let redactor = app_logic::session_extension::redactor_with_secrets(
+            sudo_password.as_ref(),
+            &extension_secrets,
+        );
         Ok::<_, CommandError>((transport, redactor, sudo_password))
     }
     .await;
@@ -1326,6 +1349,19 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
     };
     let has_notes = parts.has_notes();
     (parts, has_notes)
+}
+
+/// Spec 0038, section 2a: the scope handed to the session extension. The
+/// local pseudo-server has no stored row, so its scope is built from the
+/// synthetic server.
+pub(crate) async fn extension_scope<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    profile_store: &dyn ProfileStore,
+    server_id: ServerId,
+) -> Option<app_logic::session_extension::ServerScope> {
+    let local_tags = app_logic::dto::is_local(server_id)
+        .then(|| crate::local_server::synthetic_server(app).tags);
+    app_logic::session_extension::scope_for_id(profile_store, server_id, local_tags).await
 }
 
 /// Ausgang des Wartens auf die Host-Key-Entscheidung (Spec 0068, Teil 5b).
@@ -1841,6 +1877,7 @@ mod connect_flow_tests {
             .with_secret(&CredentialRef::new(PROVIDER_SECRET_REF), "sk-test");
         let state = AppState {
             sessions: app_logic::session::SessionManager::new(),
+            session_extension: None,
             root_key_fingerprint: [0; 32],
             ai_provider_store: Arc::new(main_db.ai_provider_store()),
             policy_store: main_db.policy_store(),

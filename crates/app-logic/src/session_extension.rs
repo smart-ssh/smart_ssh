@@ -1,0 +1,414 @@
+//! Extension point for per-server session data (Spec 0038, section 2a).
+//!
+//! An edition can register one [`SessionExtension`]. It contributes
+//! (1) a text section for the AI session context of a server, (2) literal
+//! secret values the per-server redactor must mask and (3) gets told when a
+//! server or group was deleted. The core only calls the trait; it does not
+//! know what the extension stores. Without an extension nothing changes:
+//! no section in the prompt, the redactor holds the built-in patterns and
+//! the sudo password only.
+//!
+//! Security: the extension text is untrusted for the prompt in the same
+//! sense as notes. It is redacted first and fenced afterwards (Spec 0039,
+//! ADR 0034 order). Known secrets only ever extend the redactor.
+
+use secrecy::{ExposeSecret, SecretString};
+
+use ssh_manager_core::ai::{fence_untrusted, DefaultOutputRedactor, OutputRedactor, UntrustedKind};
+use ssh_manager_core::profiles::{GroupId, ProfileStore, Server};
+use ssh_manager_core::shared::ServerId;
+
+use crate::compaction::SystemContextParts;
+use crate::state::AppState;
+
+/// What the extension is told about the server it is asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServerScope {
+    /// The server id; the local pseudo-server carries `LOCAL_SERVER_ID`.
+    pub server_id: ServerId,
+    /// The group chain of the server, root first. Empty for servers
+    /// without a group and for the local pseudo-server.
+    pub group_chain: Vec<GroupId>,
+    pub tags: Vec<String>,
+}
+
+/// Registered through `Wiring`. All methods have no-op defaults so an
+/// extension only implements what it needs.
+pub trait SessionExtension: Send + Sync {
+    /// Text appended to the session system context of this server. The core
+    /// redacts it and places it in its own fenced section after the core
+    /// paragraphs; it is asked again on every turn.
+    fn context_section(&self, _scope: &ServerScope) -> Option<String> {
+        None
+    }
+
+    /// Literal values the redactor of this server must mask in addition to
+    /// the sudo password. Matched literally, never as a regex.
+    fn known_secrets(&self, _scope: &ServerScope) -> Vec<SecretString> {
+        Vec::new()
+    }
+
+    /// Called after the core deleted the server.
+    fn server_removed(&self, _server_id: ServerId) {}
+
+    /// Called after the core deleted the group (also for every group removed
+    /// by a cascade).
+    fn group_removed(&self, _group_id: GroupId) {}
+}
+
+/// Scope of a stored server. A broken group chain is logged and leaves the
+/// chain empty (the scope is context for the extension, not a security
+/// decision).
+pub async fn server_scope(store: &dyn ProfileStore, server: &Server) -> ServerScope {
+    let group_chain = match server.group_id {
+        None => Vec::new(),
+        Some(group_id) => match store.group_chain(&group_id).await {
+            Ok(chain) => chain.into_iter().map(|g| g.id).collect(),
+            Err(err) => {
+                tracing::warn!(
+                    server_id = %server.id.0,
+                    error = %err,
+                    "group_chain failed — the extension scope has no groups"
+                );
+                Vec::new()
+            }
+        },
+    };
+    ServerScope {
+        server_id: server.id,
+        group_chain,
+        tags: server.tags.clone(),
+    }
+}
+
+/// Scope of a server by id. `local_tags` is `Some` for the local
+/// pseudo-server (it has no stored row).
+pub async fn scope_for_id(
+    store: &dyn ProfileStore,
+    server_id: ServerId,
+    local_tags: Option<Vec<String>>,
+) -> Option<ServerScope> {
+    if let Some(tags) = local_tags {
+        return Some(ServerScope {
+            server_id,
+            group_chain: Vec::new(),
+            tags,
+        });
+    }
+    match store.get_server(&server_id).await {
+        Ok(server) => Some(server_scope(store, &server).await),
+        Err(_) => None,
+    }
+}
+
+/// Builds the redactor: built-in patterns, the sudo password, and the
+/// extension secrets, each as an escaped literal. Empty values are skipped
+/// (an empty literal would match everywhere).
+pub fn redactor_with_secrets(
+    sudo_password: Option<&SecretString>,
+    extra_secrets: &[SecretString],
+) -> Box<dyn OutputRedactor> {
+    let patterns: Vec<regex::Regex> = sudo_password
+        .into_iter()
+        .chain(extra_secrets.iter())
+        .map(|s| s.expose_secret())
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| regex::Regex::new(&regex::escape(s)).ok())
+        .collect();
+    if patterns.is_empty() {
+        Box::new(DefaultOutputRedactor::new())
+    } else {
+        Box::new(DefaultOutputRedactor::with_extra_patterns(patterns))
+    }
+}
+
+/// Known secrets of the extension for `scope`; empty without an extension.
+pub fn known_secrets(
+    extension: Option<&dyn SessionExtension>,
+    scope: Option<&ServerScope>,
+) -> Vec<SecretString> {
+    match (extension, scope) {
+        (Some(ext), Some(scope)) => ext.known_secrets(scope),
+        _ => Vec::new(),
+    }
+}
+
+/// Heading above the extension section.
+pub fn extension_heading(language: crate::system_prompt::PromptLanguage) -> &'static str {
+    match language {
+        crate::system_prompt::PromptLanguage::De => "\n\n## Erweiterungs-Kontext\n",
+        crate::system_prompt::PromptLanguage::En
+        | crate::system_prompt::PromptLanguage::Other(_) => "\n\n## Extension context\n",
+    }
+}
+
+/// Appends the fenced extension section to `parts.base` (redact, then
+/// fence). Returns whether a section was added — the caller treats that like
+/// notes: untrusted content has entered the context (Spec 0039, section 5).
+/// Without an extension, or with an empty section, `parts` stays untouched.
+pub fn append_extension_section(
+    parts: &mut SystemContextParts,
+    extension: Option<&dyn SessionExtension>,
+    scope: Option<&ServerScope>,
+    redactor: &dyn OutputRedactor,
+) -> bool {
+    let (Some(ext), Some(scope)) = (extension, scope) else {
+        return false;
+    };
+    let Some(text) = ext.context_section(scope) else {
+        return false;
+    };
+    if text.trim().is_empty() {
+        return false;
+    }
+    let redacted = redactor.redact_text(&text);
+    parts.base.push_str(extension_heading(parts.language));
+    parts.base.push_str(&fence_untrusted(
+        UntrustedKind::ServerNote,
+        "Extension",
+        &redacted,
+    ));
+    true
+}
+
+/// Rebuilds the redactor of every open session on `server_id` — for an
+/// extension whose secret values changed. The swap goes through
+/// `SwappableRedactor`, so history already in the session is re-redacted on
+/// the next send.
+pub async fn rebuild_server_redactors(state: &AppState, server_id: ServerId) {
+    rebuild_redactors_for_sessions(
+        &state.sessions,
+        state.profile_store.as_ref(),
+        state.credential_store.as_ref(),
+        state.session_extension.as_deref(),
+        server_id,
+    )
+    .await;
+}
+
+/// [`rebuild_server_redactors`] on its parts, so tests need no `AppState`.
+pub async fn rebuild_redactors_for_sessions(
+    sessions_manager: &crate::session::SessionManager,
+    profile_store: &dyn ProfileStore,
+    credential_store: &dyn ssh_manager_core::profiles::CredentialStore,
+    extension: Option<&dyn SessionExtension>,
+    server_id: ServerId,
+) {
+    let sessions: Vec<_> = sessions_manager
+        .snapshot()
+        .into_iter()
+        .filter(|e| e.server_id == server_id)
+        .filter_map(|e| sessions_manager.get(e.session_id))
+        .collect();
+    if sessions.is_empty() {
+        return;
+    }
+    let sudo =
+        crate::server_redaction::read_sudo_password_for_redaction(credential_store, server_id);
+    let group_chain = match profile_store.get_server(&server_id).await {
+        Ok(server) => server_scope(profile_store, &server).await.group_chain,
+        Err(_) => Vec::new(),
+    };
+    for session in sessions {
+        let scope = ServerScope {
+            server_id,
+            group_chain: group_chain.clone(),
+            tags: session.tags.clone(),
+        };
+        let secrets = known_secrets(extension, Some(&scope));
+        session.swap_redactor(redactor_with_secrets(sudo.as_ref(), &secrets));
+    }
+}
+
+/// Test double recording the removal callbacks.
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct RecordingExtension {
+    pub(crate) servers: std::sync::Mutex<Vec<ServerId>>,
+    pub(crate) groups: std::sync::Mutex<Vec<GroupId>>,
+}
+
+#[cfg(test)]
+impl SessionExtension for RecordingExtension {
+    fn server_removed(&self, server_id: ServerId) {
+        self.servers.lock().unwrap().push(server_id);
+    }
+    fn group_removed(&self, group_id: GroupId) {
+        self.groups.lock().unwrap().push(group_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::system_prompt::PromptLanguage;
+    use ssh_manager_core::ai::REDACTED_PLACEHOLDER;
+
+    const SECRET: &str = "a.b*c(d)[e]+?^$|{1}\\x-secret";
+
+    /// Returns a section and a secret for exactly one server.
+    struct TestExtension {
+        server: ServerId,
+        section: Option<String>,
+        secrets: Vec<String>,
+    }
+
+    impl SessionExtension for TestExtension {
+        fn context_section(&self, scope: &ServerScope) -> Option<String> {
+            (scope.server_id == self.server)
+                .then(|| self.section.clone())
+                .flatten()
+        }
+        fn known_secrets(&self, scope: &ServerScope) -> Vec<SecretString> {
+            if scope.server_id != self.server {
+                return Vec::new();
+            }
+            self.secrets
+                .iter()
+                .map(|s| SecretString::from(s.clone()))
+                .collect()
+        }
+    }
+
+    fn scope(server_id: ServerId) -> ServerScope {
+        ServerScope {
+            server_id,
+            group_chain: Vec::new(),
+            tags: Vec::new(),
+        }
+    }
+
+    fn parts(language: PromptLanguage) -> SystemContextParts {
+        SystemContextParts {
+            base: "BASE".to_string(),
+            note_sections: Vec::new(),
+            language,
+        }
+    }
+
+    #[test]
+    fn test_section_is_fenced_after_core_text_in_both_languages() {
+        let id = ServerId::new();
+        let ext = TestExtension {
+            server: id,
+            section: Some("deploys to /srv/app".to_string()),
+            secrets: Vec::new(),
+        };
+        for (language, heading) in [
+            (PromptLanguage::De, "## Erweiterungs-Kontext"),
+            (PromptLanguage::En, "## Extension context"),
+        ] {
+            let mut p = parts(language);
+            let redactor = DefaultOutputRedactor::new();
+            let added = append_extension_section(&mut p, Some(&ext), Some(&scope(id)), &redactor);
+            assert!(added);
+            let text = p.assemble();
+            assert!(text.starts_with("BASE"));
+            let heading_at = text.find(heading).expect("heading");
+            let fence_at = text.find("<server_note").expect("fence");
+            assert!(heading_at < fence_at);
+            assert!(text.contains("deploys to /srv/app"));
+        }
+    }
+
+    #[test]
+    fn test_without_extension_or_section_the_context_is_unchanged() {
+        let id = ServerId::new();
+        let redactor = DefaultOutputRedactor::new();
+        let before = parts(PromptLanguage::En).assemble();
+
+        let mut none = parts(PromptLanguage::En);
+        assert!(!append_extension_section(
+            &mut none,
+            None,
+            Some(&scope(id)),
+            &redactor
+        ));
+        assert_eq!(none.assemble(), before);
+
+        // another server: the extension returns no section
+        let ext = TestExtension {
+            server: id,
+            section: Some("x".to_string()),
+            secrets: Vec::new(),
+        };
+        let mut other = parts(PromptLanguage::En);
+        assert!(!append_extension_section(
+            &mut other,
+            Some(&ext),
+            Some(&scope(ServerId::new())),
+            &redactor
+        ));
+        assert_eq!(other.assemble(), before);
+
+        // whitespace-only section: no empty section either
+        let blank = TestExtension {
+            server: id,
+            section: Some("  \n ".to_string()),
+            secrets: Vec::new(),
+        };
+        let mut p = parts(PromptLanguage::De);
+        let before_de = p.assemble();
+        assert!(!append_extension_section(
+            &mut p,
+            Some(&blank),
+            Some(&scope(id)),
+            &redactor
+        ));
+        assert_eq!(p.assemble(), before_de);
+    }
+
+    #[test]
+    fn test_section_is_redacted_before_it_is_fenced() {
+        let id = ServerId::new();
+        let ext = TestExtension {
+            server: id,
+            section: Some(format!("token is {SECRET}")),
+            secrets: vec![SECRET.to_string()],
+        };
+        let secrets = known_secrets(Some(&ext), Some(&scope(id)));
+        let redactor = redactor_with_secrets(None, &secrets);
+        let mut p = parts(PromptLanguage::En);
+        assert!(append_extension_section(
+            &mut p,
+            Some(&ext),
+            Some(&scope(id)),
+            redactor.as_ref()
+        ));
+        let text = p.assemble();
+        assert!(!text.contains(SECRET));
+        assert!(text.contains(REDACTED_PLACEHOLDER));
+    }
+
+    #[test]
+    fn test_known_secret_is_masked_literally_and_only_for_its_server() {
+        let a = ServerId::new();
+        let b = ServerId::new();
+        let ext = TestExtension {
+            server: a,
+            section: None,
+            secrets: vec![SECRET.to_string(), String::new()],
+        };
+        let text = format!("pre {SECRET} post");
+
+        let for_a = redactor_with_secrets(None, &known_secrets(Some(&ext), Some(&scope(a))));
+        let masked = for_a.redact_text(&text);
+        assert!(!masked.contains(SECRET), "{masked}");
+        // literal: the surrounding text survives, the empty secret masks nothing
+        assert!(masked.starts_with("pre ") && masked.ends_with(" post"));
+
+        let for_b = redactor_with_secrets(None, &known_secrets(Some(&ext), Some(&scope(b))));
+        assert_eq!(for_b.redact_text(&text), text);
+    }
+
+    #[test]
+    fn test_known_secret_does_not_replace_the_sudo_password() {
+        let sudo = SecretString::from("sudo-pw-1234".to_string());
+        let extra = [SecretString::from("ext-secret-xyz".to_string())];
+        let redactor = redactor_with_secrets(Some(&sudo), &extra);
+        let masked = redactor.redact_text("sudo-pw-1234 and ext-secret-xyz");
+        assert!(!masked.contains("sudo-pw-1234"));
+        assert!(!masked.contains("ext-secret-xyz"));
+    }
+}

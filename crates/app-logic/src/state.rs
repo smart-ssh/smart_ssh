@@ -50,6 +50,9 @@ pub type ActionId = Uuid;
 
 pub struct AppState {
     pub sessions: SessionManager,
+    /// Spec 0038, section 2a: the session extension an edition registered
+    /// through `Wiring`; `None` for Community.
+    pub session_extension: Option<Arc<dyn crate::session_extension::SessionExtension>>,
     /// Spec 0101, Klarstellung 9: die Kennung des K, mit dem die Datenbank
     /// **tatsächlich** offen ist (s.
     /// [`ssh_manager_core::crypto::root_key_fingerprint`]).

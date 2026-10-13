@@ -31,6 +31,8 @@ export default defineConfig({
   projects: engines.flatMap((engine) =>
     viewports.map((size) => ({
       name: `${engine.name}-${size.name}`,
+      // WebKit only, CI only: a retried pass shows as "flaky" in the report.
+      retries: engine.name === "webkit" && process.env.CI ? 1 : 0,
       use: { ...engine.device, viewport: size.viewport, deviceScaleFactor: 1 },
     })),
   ),
