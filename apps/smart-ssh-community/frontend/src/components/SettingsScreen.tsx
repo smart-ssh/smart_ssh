@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import "../extensions/registerBuiltinExtensions";
 import { listSettingsSections, subscribeSettingsSections } from "../extensions/registry";
@@ -148,6 +148,18 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
     }
   };
 
+  // Safari/WebKit on macOS does not focus a button on click, so after a click
+  // inside the dialog `document.activeElement` is `<body>` and Escape would
+  // never reach `handleKeyDown`. Move focus into the dialog ourselves, but
+  // only for clicks whose DOM target is inside it (not a portaled nested dialog).
+  const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const container = containerRef.current;
+    if (!container || !(event.target instanceof Element) || !container.contains(event.target)) return;
+    if (container.contains(document.activeElement)) return;
+    const button = event.target.closest("button");
+    (button && container.contains(button) ? button : container).focus();
+  };
+
   return (
     <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
       {/* The key handler only implements Escape and the Tab wrap of the dialog. */}
@@ -158,7 +170,9 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={handleKeyDown}
-        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl"
+        onClick={handleClick}
+        tabIndex={-1}
+        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl outline-none"
       >
         <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40">
           <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">

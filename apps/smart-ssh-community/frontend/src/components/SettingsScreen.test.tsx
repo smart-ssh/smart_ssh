@@ -8,7 +8,7 @@
 // `registerSettingsSection` statt einer der eingebauten Kategorien, damit
 // der Test beweist, dass generisch JEDE registrierte Sektion ankommt, nicht
 // nur die beiden bereits bekannten (`chat-retention`/`mcp-server`).
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerSettingsSection, resetRegistryForTests } from "../extensions/registry";
@@ -305,6 +305,27 @@ describe("SettingsScreen keyboard behaviour (issue #385)", () => {
     renderWithTrigger(onClose);
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // WebKit on macOS does not focus a button on click: focus stays on <body>.
+  it("moves focus back into the dialog after a click that leaves it on body", () => {
+    renderWithTrigger(vi.fn());
+    const dialog = screen.getByRole("dialog");
+    const category = within(dialog).getAllByRole("button", { current: false })[0]!;
+    (document.activeElement as HTMLElement).blur();
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.click(category);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it("does not steal focus for clicks outside the dialog DOM (nested dialog)", () => {
+    renderWithTrigger(vi.fn());
+    const nested = document.createElement("button");
+    document.body.appendChild(nested);
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.click(nested);
+    expect(document.activeElement).toBe(document.body);
+    nested.remove();
   });
 
   it("ignores Escape from a dialog opened on top of it", () => {
