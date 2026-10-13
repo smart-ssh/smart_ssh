@@ -70,6 +70,46 @@ nicht.
 **Master-Passwort-Modus** (Spec 0101): Plugins dürfen Befehle erst **nach
 dem Entsperren** registrieren, sonst wären sie vorher aufrufbar.
 
+### 2a. Erweiterungseigene Datenbanktabellen
+
+Eine Erweiterung kann über die Verdrahtung eigene Tabellen in der
+verschlüsselten Anwendungsdatenbank ablegen, ohne dass der Kern ihr
+Datenmodell kennt und ohne eigene Schlüsselverwaltung. Sie meldet:
+
+- ein **eindeutiges Präfix** der Form `ext_<name>_` (`<name>`: Kleinbuchstaben
+  und Ziffern), und
+- eine **geordnete Liste eigener Migrationen** (aufsteigende, positive
+  Versionsnummern).
+
+Regeln:
+
+- Die Migrationen laufen **nach** den Migrationen des Kerns und **nur nach dem
+  Entsperren**: Im Master-Passwort-Modus (Spec 0101) läuft keine
+  Erweiterungsmigration, und es wird kein Zugriff herausgegeben, solange die
+  App gesperrt ist.
+- Jede Erweiterung führt einen **eigenen Migrationsverlauf** (eine Tabelle mit
+  ihrem Präfix); Versionen von Kern und Erweiterungen kollidieren nie. Eine
+  bereits angewendete Migration läuft nicht erneut; ändert sich eine
+  angewendete Migration nachträglich oder fehlt sie in der Liste, startet die
+  Erweiterung nicht.
+- Eine Migration darf nur Tabellen und Indizes **anlegen, ändern, löschen und
+  beschreiben**, deren Name mit dem Präfix beginnt (Indizes nur auf eigenen
+  Tabellen). Alles andere schlägt die Migration fehl: Zugriff auf Tabellen
+  außerhalb des Präfixes (auch lesend), Sichten, Trigger, virtuelle Tabellen,
+  `PRAGMA`, `ATTACH`/`DETACH`, Transaktionssteuerung sowie Fremdschlüssel auf
+  Tabellen außerhalb des Präfixes.
+- Scheitert eine Migration (abgewiesen oder Datenbankfehler), wird sie
+  vollständig zurückgerollt, die Erweiterung **startet nicht**, und der Kern
+  startet ohne sie; Kerndaten bleiben unverändert. Das Protokoll nennt nur
+  Präfix und Fehlerkategorie, nie SQL-Text oder Werte.
+- Nach erfolgreicher Migration erhält die Erweiterung ein Datenbankhandle für
+  ihre Tabellen. Es ist kein Sandkasten: Erweiterungscode ist Teil des
+  Binaries und wird wie jede andere Verdrahtung vertraut. Erweiterungen
+  protokollieren nie Geheimnisse (Spec 0094).
+- Der Kern liefert weder eine Erweiterungstabelle noch ein Datenmodell. Ohne
+  registrierte Erweiterung ist die Datenbank identisch zu vorher.
+- Erweiterungstabellen sind **nicht Teil des Voll-Backups** (Spec 0109, C2).
+
 ## 3. Ein Binary je Edition
 
 Das Community-Binary ist ein dünnes Programm, das nur die Verdrahtung der
