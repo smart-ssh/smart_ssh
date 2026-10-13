@@ -49,9 +49,17 @@ Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037
   Dateinamen als Quelle; Fence-Marker im Inhalt oder Namen werden
   neutralisiert. Das geschieht bei jedem Senden erneut, auch nach dem
   Fortsetzen.
-- Bilder und PDFs werden nie als Anweisung interpretiert. Solange ein
-  Anbieter keine Binärblöcke unterstützt, sieht die KI nur eine gefencete
-  Platzhalterzeile mit dem Dateinamen, nie die Bytes.
+- Bilder und PDFs werden nie als Anweisung interpretiert. Sie gehen
+  unverändert (nicht redigiert) als eigene Bild- bzw. Dokumentblöcke des
+  Anbieters an die KI (Spec 0006, Abschnitt 8). Direkt davor steht ein
+  gefencter `local_file`-Text mit dem Dateinamen, der sie als nicht
+  vertrauenswürdige lokale Datei kennzeichnet.
+- Kann das gewählte Modell Bilder bzw. PDFs nicht lesen, wird die Nachricht
+  mit einem Fehler abgelehnt („Dieses Modell kann das angehängte Bild oder
+  PDF nicht lesen"), bevor eine Anfrage an den Anbieter geht. Bilder und
+  PDFs werden nie stillschweigend weggelassen; Textanhänge funktionieren
+  immer. Der Fehler gilt, solange ein solcher Anhang im Verlauf steht;
+  Abhilfe ist ein anderes Modell oder ein neuer Chat.
 
 ## 5. Speicherung
 
@@ -65,7 +73,8 @@ Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037
 ## 6. Kontextbegrenzung
 
 - Die Token-Schätzung zählt Textanhänge nach Länge, Bilder und PDFs mit
-  einem festen, konservativen Wert je Anhang.
+  einem festen, konservativen Wert je Anhang. Dieselbe Schätzung gilt für
+  die Ratenbegrenzung (Spec 0051, Spec 0061) und die Kompaktierung.
 - Die Kompaktierung darf einen Anhang wie andere Inhalte durch eine
   Zusammenfassung ersetzen.
 
@@ -92,6 +101,13 @@ nicht dienst-gebunden und in der Ausgangsberechtigung „Free" gesperrt.
 5. Sitzung löschen entfernt die Anhänge aus der Datenbank.
 6. Nach einem Anhang wird ein von der KI vorgeschlagenes Kommando gemäß
    Spec 0039, Abschnitt 5 eskaliert.
+7. Bild und PDF an Claude, OpenAI (Responses) und einen OpenAI-kompatiblen
+   Anbieter: die Anfrage enthält je einen Bild- und einen Dokumentblock im
+   jeweiligen Anbieterformat.
+8. Bild an ein reines Textmodell (z. B. lokales Ollama-Modell): Fehler, kein
+   Anbieteraufruf; derselbe Chat mit nur einem Textanhang geht durch.
+9. Geheimnismuster in einem Textanhang derselben Nachricht wie ein Bild: das
+   Muster fehlt in der Anfrage, die Bildbytes sind unverändert.
 
 ## 10. Eingabefeld
 

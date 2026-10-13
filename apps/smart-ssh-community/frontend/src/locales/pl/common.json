@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Lokalna usługa AI nie odpowiada. Uruchom Ollamę (lub swój lokalny serwer) i spróbuj ponownie.",
     "AI_TIMEOUT": "Dostawca AI odpowiadał zbyt długo. Poczekaj chwilę i wyślij ponownie; przy modelu lokalnym sprawdź, czy komputer nie jest zajęty lub model nie jest zbyt duży.",
     "AI_WEB_RESEARCH_REJECTED": "Dostawca AI odrzuca wyszukiwanie w sieci dla tego konta. Wyłącz „Wyszukiwanie w sieci” dla tego dostawcy w ustawieniach, w sekcji „Dostawca AI”.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Ten model nie potrafi odczytać załączonego obrazu ani pliku PDF. Wybierz model, który to potrafi, albo usuń załącznik.",
     "AI_NO_ACTIVE_PROVIDER": "Brak aktywnego dostawcy AI. Dodaj go w Ustawienia → Dostawca AI i ustaw jako aktywnego.",
     "FILTER_EMPTY_COMMAND": "Brak prawidłowego polecenia (puste dane)",
     "FILTER_COMMAND_TOO_LONG": "Polecenie przekracza limit długości",

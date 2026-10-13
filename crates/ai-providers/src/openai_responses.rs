@@ -108,10 +108,18 @@ impl OpenAiResponsesProvider {
             .history
             .iter()
             .map(|message| {
-                json!({
-                    "role": role_str(message.role),
-                    "content": message_content_text(&message.content),
-                })
+                let mut parts =
+                    crate::content::message_parts(&message.content, message_content_text);
+                // Issue #470: text-only keeps the plain string form;
+                // image/PDF attachments become `input_*` content parts.
+                let content = match parts.as_slice() {
+                    [crate::content::ContentPart::Text(_)] => match parts.remove(0) {
+                        crate::content::ContentPart::Text(text) => json!(text),
+                        _ => unreachable!(),
+                    },
+                    _ => Value::Array(parts.iter().map(crate::content::responses_block).collect()),
+                };
+                json!({"role": role_str(message.role), "content": content})
             })
             .collect();
         let max_tokens = context
@@ -159,6 +167,15 @@ impl AiProvider for OpenAiResponsesProvider {
     fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
         let request_id = Uuid::new_v4();
         log_outgoing_context(request_id, &context);
+
+        // Issue #470: reject unreadable image/PDF attachments before any
+        // request is built.
+        if let Err(err) = crate::content::check_attachments(
+            &context,
+            crate::content::openai_responses_support(&self.base_url, &self.model),
+        ) {
+            return crate::error::error_stream(err);
+        }
 
         let max_tokens_is_user_override =
             context.max_tokens_hint.is_none() && self.max_tokens_override.is_some();
@@ -605,4 +622,66 @@ fn process_frame_stream(
             }
         },
     ))
+}
+
+#[cfg(test)]
+mod attachment_tests {
+    use super::*;
+    use crate::content::test_fixtures::{context_with_image_and_pdf, first_events};
+    use ssh_manager_core::ai::{AiEvent, AttachmentKind};
+
+    fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
+        std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
+    }
+
+    #[test]
+    fn test_responses_image_and_pdf_input_parts() {
+        let p = OpenAiResponsesProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            "k",
+            true,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let body = p.build_request_body(&context_with_image_and_pdf("hello"));
+        let content = body["input"][0]["content"].as_array().expect("array");
+        let types: Vec<&str> = content
+            .iter()
+            .map(|b| b["type"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            types,
+            ["input_text", "input_image", "input_text", "input_file"]
+        );
+        assert_eq!(content[1]["image_url"], "data:image/png;base64,AQID");
+        assert_eq!(content[3]["filename"], "d.pdf");
+        assert_eq!(content[3]["file_data"], "data:application/pdf;base64,BAU=");
+        // A plain text message keeps the string form.
+        assert_eq!(body["input"][1]["content"], "what is this?");
+    }
+
+    #[tokio::test]
+    async fn test_responses_non_openai_endpoint_rejects_image_without_request() {
+        let p = OpenAiResponsesProvider::new(
+            "http://127.0.0.1:1/v1",
+            "gpt-4o",
+            "k",
+            true,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let events = first_events(&p, context_with_image_and_pdf("x")).await;
+        assert!(
+            matches!(
+                events[..],
+                [AiEvent::Error(AiError::AttachmentUnsupported(
+                    AttachmentKind::Image
+                ))]
+            ),
+            "{events:?}"
+        );
+    }
 }

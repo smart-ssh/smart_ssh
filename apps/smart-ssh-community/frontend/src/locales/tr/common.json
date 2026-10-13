@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Yerel yapay zeka hizmeti yanıt vermiyor. Ollama'yı (veya yerel sunucunuzu) başlatın ve yeniden deneyin.",
     "AI_TIMEOUT": "Yapay zeka sağlayıcısı yanıtı çok geç verdi. Biraz bekleyip yeniden gönderin; yerel modelde makinenin meşgul olup olmadığını veya modelin çok büyük olup olmadığını denetleyin.",
     "AI_WEB_RESEARCH_REJECTED": "Yapay zeka sağlayıcısı bu hesap için web araştırmasını reddediyor. Ayarlar'da “Yapay zeka sağlayıcısı” altında bu sağlayıcı için “Web araştırması” seçeneğini kapatın.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Bu model ekli görseli veya PDF’yi okuyamaz. Okuyabilen bir model seçin ya da eki kaldırın.",
     "AI_NO_ACTIVE_PROVIDER": "Henüz etkin yapay zeka sağlayıcısı yok. Ayarlar → Yapay zeka sağlayıcısı altında bir tane ekleyin ve etkin yapın.",
     "FILTER_EMPTY_COMMAND": "Geçerli komut yok (boş girdi)",
     "FILTER_COMMAND_TOO_LONG": "Komut uzunluk sınırını aşıyor",

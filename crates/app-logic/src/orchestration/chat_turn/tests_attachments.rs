@@ -112,6 +112,40 @@ async fn test_binary_attachment_bytes_are_not_modified_by_redaction() {
     assert_eq!(history[0].content, MessageContent::Attachments(vec![png]));
 }
 
+/// Issue #470: a secret in a text attachment of the same message as an image
+/// is still redacted before sending, while the image bytes arrive unchanged.
+#[tokio::test]
+async fn test_secret_next_to_image_is_redacted_and_image_bytes_unchanged() {
+    let provider = done_provider();
+    let sent = provider.received_contexts_handle();
+    let session = session_with_ai_provider(provider, MockSshTransport::default());
+    let png = ChatAttachment {
+        name: "shot.png".into(),
+        media_type: "image/png".into(),
+        kind: AttachmentKind::Image,
+        data: vec![137, 80, 78, 71, 0, 255],
+        byte_len: 6,
+    };
+    let body = format!("key = {PLANTED_KEY}\n");
+    session.context.lock().await.history.push(ChatMessage {
+        role: Role::User,
+        content: MessageContent::Attachments(vec![text_attachment("a.env", &body), png.clone()]),
+    });
+
+    run_turn(&session).await;
+
+    let contexts = sent.lock().unwrap().clone();
+    let request = attachment_texts(&contexts[0].history);
+    assert!(
+        request.contains("a.env") && !request.contains(PLANTED_KEY),
+        "{request}"
+    );
+    let MessageContent::Attachments(items) = &contexts[0].history[0].content else {
+        panic!("attachments expected");
+    };
+    assert_eq!(items[1], png);
+}
+
 /// Spec 0039 §5: after an attachment, an AI-proposed command is escalated
 /// to confirmation (Strict policy); without the attachment it is not. The
 /// second half is the counter-proof.

@@ -1330,6 +1330,35 @@ mod tests {
         );
     }
 
+    /// Issue #470: the request estimate (rate-limit pacing) counts image and
+    /// PDF attachments, which now go out as native content blocks.
+    #[test]
+    fn test_estimate_request_tokens_counts_image_and_pdf_blocks() {
+        use ssh_manager_core::ai::{
+            AttachmentKind, ChatAttachment, BINARY_ATTACHMENT_TOKEN_ESTIMATE,
+        };
+        let binary = |kind, name: &str| ChatAttachment {
+            name: name.into(),
+            media_type: "application/octet-stream".into(),
+            kind,
+            data: vec![0; 10],
+            byte_len: 10,
+        };
+        let base = context_with("sys".into(), vec![user_message("hi")]);
+        let mut with = base.clone();
+        with.history.push(ChatMessage {
+            role: Role::User,
+            content: MessageContent::Attachments(vec![
+                binary(AttachmentKind::Image, "a.png"),
+                binary(AttachmentKind::Pdf, "a.pdf"),
+            ]),
+        });
+        assert_eq!(
+            estimate_request_tokens(&with) - estimate_request_tokens(&base),
+            2 * BINARY_ATTACHMENT_TOKEN_ESTIMATE
+        );
+    }
+
     #[test]
     fn test_estimate_request_tokens_sums_system_context_history_and_actions() {
         let context = context_with("x".repeat(400), vec![user_message(&"y".repeat(400))]);

@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Layanan AI lokal tidak merespons. Jalankan Ollama (atau server lokal Anda) dan coba lagi.",
     "AI_TIMEOUT": "Penyedia AI terlalu lama merespons. Tunggu sebentar dan kirim lagi; dengan model lokal, periksa apakah mesin sedang sibuk atau modelnya terlalu besar.",
     "AI_WEB_RESEARCH_REJECTED": "Penyedia AI menolak riset web untuk akun ini. Matikan “Riset web” untuk penyedia ini di bawah “Penyedia AI” di pengaturan.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Model ini tidak dapat membaca gambar atau PDF yang dilampirkan. Pilih model yang bisa atau hapus lampirannya.",
     "AI_NO_ACTIVE_PROVIDER": "Belum ada penyedia AI aktif. Tambahkan di Pengaturan → Penyedia AI dan jadikan aktif.",
     "FILTER_EMPTY_COMMAND": "Perintah tidak valid (input kosong)",
     "FILTER_COMMAND_TOO_LONG": "Perintah melebihi batas panjang",

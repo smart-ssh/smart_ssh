@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Lokální služba AI neodpovídá. Spusťte Ollamu (nebo svůj lokální server) a zkuste to znovu.",
     "AI_TIMEOUT": "Poskytovatel AI odpovídal příliš dlouho. Chvíli počkejte a odešlete znovu; u lokálního modelu zkontrolujte, zda počítač není vytížený nebo model příliš velký.",
     "AI_WEB_RESEARCH_REJECTED": "Poskytovatel AI webový průzkum pro tento účet odmítá. Vypněte „Webový průzkum“ pro tohoto poskytovatele v nastavení v části „Poskytovatel AI“.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Tento model nedokáže přečíst přiložený obrázek ani PDF. Zvolte model, který to umí, nebo přílohu odeberte.",
     "AI_NO_ACTIVE_PROVIDER": "Zatím není aktivní žádný poskytovatel AI. Přidejte jej v Nastavení → Poskytovatel AI a nastavte jej jako aktivní.",
     "FILTER_EMPTY_COMMAND": "Žádný platný příkaz (prázdný vstup)",
     "FILTER_COMMAND_TOO_LONG": "Příkaz překračuje limit délky",

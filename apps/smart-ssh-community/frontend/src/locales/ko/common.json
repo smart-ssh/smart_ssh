@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "로컬 AI 서비스가 응답하지 않습니다. Ollama(또는 로컬 서버)를 시작한 후 다시 시도하십시오.",
     "AI_TIMEOUT": "AI 제공자의 응답이 너무 오래 걸렸습니다. 잠시 기다린 후 다시 보내십시오. 로컬 모델이라면 컴퓨터가 바쁜지, 모델이 너무 큰지 확인하십시오.",
     "AI_WEB_RESEARCH_REJECTED": "AI 제공자가 이 계정의 웹 조사를 거부합니다. 설정의 “AI 제공자”에서 이 제공자의 “웹 조사”를 끄십시오.",
+    "AI_ATTACHMENT_UNSUPPORTED": "이 모델은 첨부된 이미지나 PDF를 읽을 수 없습니다. 읽을 수 있는 모델을 선택하거나 첨부 파일을 제거하세요.",
     "AI_NO_ACTIVE_PROVIDER": "아직 활성 AI 제공자가 없습니다. 설정 → AI 제공자에서 추가하고 활성으로 설정하십시오.",
     "FILTER_EMPTY_COMMAND": "유효한 명령이 아닙니다(빈 입력)",
     "FILTER_COMMAND_TOO_LONG": "명령이 길이 제한을 초과합니다",

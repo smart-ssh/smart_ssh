@@ -507,6 +507,7 @@
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Dịch vụ AI cục bộ không phản hồi. Hãy khởi động Ollama (hoặc máy chủ cục bộ của bạn) rồi thử lại.",
     "AI_TIMEOUT": "Nhà cung cấp AI phản hồi quá lâu. Hãy chờ một lúc rồi gửi lại; với mô hình cục bộ, kiểm tra xem máy có đang bận hoặc mô hình có quá lớn không.",
     "AI_WEB_RESEARCH_REJECTED": "Nhà cung cấp AI từ chối tra cứu web đối với tài khoản này. Hãy tắt “Tra cứu web” cho nhà cung cấp này tại “Nhà cung cấp AI” trong cài đặt.",
+    "AI_ATTACHMENT_UNSUPPORTED": "Mô hình này không đọc được hình ảnh hoặc PDF đính kèm. Hãy chọn mô hình có thể đọc hoặc xóa tệp đính kèm.",
     "AI_NO_ACTIVE_PROVIDER": "Chưa có nhà cung cấp AI đang hoạt động. Hãy thêm một nhà cung cấp tại Cài đặt → Nhà cung cấp AI và đặt làm đang dùng.",
     "FILTER_EMPTY_COMMAND": "Không có lệnh hợp lệ (đầu vào trống)",
     "FILTER_COMMAND_TOO_LONG": "Lệnh vượt quá giới hạn độ dài",
