@@ -232,10 +232,10 @@ not by hand-editing, so the lockfile stays consistent).
   merge all fragments from `changelog.d/` into that new version section
   and delete the fragment files, write a `### Highlights` section as the
   first heading of the new version section (required: 3–6 bullet items,
-  exactly one line each, user-facing, no internals; **English**, the one
-  English part of the otherwise German changelog — it feeds the English
+  exactly one line each, user-facing, no internals; it feeds the
   download page and release notes; `[Unreleased]` has none), open a fresh empty `[Unreleased]` above
   it, tag the release.
+- **The changelog and the fragments are written in English.**
 - **Fragment rules** (details in `changelog.d/README.md`): at most two
   lines per item; describe the user-visible effect, not the mechanism;
   nothing internal. `scripts/check-changelog-highlights.mjs` (run by

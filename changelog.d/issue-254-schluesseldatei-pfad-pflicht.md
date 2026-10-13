@@ -1,2 +1,2 @@
-### Behoben
-- „Verbindung testen" meldet einen leeren Schlüsseldatei-Pfad jetzt wie das Speichern als fehlende Pflichtangabe, auch wenn der Pfad nur aus Leerraum oder unsichtbaren Zeichen besteht.
+### Fixed
+- "Test connection" now reports an empty key file path as a missing required field, like saving does, even if the path consists only of whitespace or invisible characters.

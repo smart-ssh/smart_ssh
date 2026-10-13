@@ -1,2 +1,2 @@
-### Neu
-- Die App gibt es jetzt auch auf Indonesisch, Vietnamesisch und Hindi. Die Sprache lässt sich in den Einstellungen wählen und wird bei passender Systemsprache automatisch gewählt.
+### Added
+- The app is now also available in Indonesian, Vietnamese and Hindi. The language can be chosen in the settings and is selected automatically when it matches the system language.

@@ -1,2 +1,2 @@
-### Neu
-- Die App gibt es jetzt auch auf Portugiesisch (Brasilien) und Niederländisch. Die Sprache lässt sich in den Einstellungen wählen und wird bei passender Systemsprache automatisch gewählt.
+### Added
+- The app is now also available in Portuguese (Brazil) and Dutch. The language can be chosen in the settings and is selected automatically when it matches the system language.

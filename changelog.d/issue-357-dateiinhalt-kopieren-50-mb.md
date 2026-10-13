@@ -1,3 +1,3 @@
-### Geändert
-- „Dateiinhalt kopieren" funktioniert jetzt für Textdateien bis 50 MB (bisher 256 KB).
-  Ab 5 MB zeigt der Dateibrowser den Fortschritt und lässt das Kopieren abbrechen.
+### Changed
+- "Copy file content" now works for text files up to 50 MB (previously 256 KB).
+  From 5 MB on, the file browser shows progress and lets you cancel the copy.

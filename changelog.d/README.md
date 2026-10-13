@@ -28,13 +28,14 @@ Grund: Parallele Coder würden sonst alle denselben `[Unreleased]`-Abschnitt
 
 ## Inhalt
 
-Deutsch, nutzerrelevant, gleiche Kategorien wie im CHANGELOG
-(Neu / Geändert / Behoben / Sicherheit), z. B.:
+Fragmente sind auf Englisch geschrieben, nutzerrelevant und verwenden
+dieselben Kategorien wie `CHANGELOG.md` (`### Added`, `### Changed`,
+`### Fixed`, `### Security`), z. B.:
 
 ```markdown
-### Sicherheit
-- Lesebefehle auf typische Secret-Pfade (SSH-Schlüssel, .env, …) verlangen
-  jetzt immer eine Bestätigung, auch wenn eine Allow-Regel greift.
+### Security
+- Read commands on typical secret paths (SSH keys, .env, …) now always
+  require confirmation, even if an allow rule matches.
 ```
 
 ### Regeln für Einträge
@@ -48,15 +49,15 @@ Deutsch, nutzerrelevant, gleiche Kategorien wie im CHANGELOG
 Gut:
 
 ```markdown
-- Beim Schließen eines Tabs bleibt der Fokus auf dem Nachbar-Tab.
+- When a tab is closed, focus moves to the neighbouring tab.
 ```
 
 Schlecht (Mechanismus, intern, zu lang):
 
 ```markdown
-- `TabStrip` ruft nach `closeTab` jetzt `focusNeighbor()` auf, damit der
-  Reducer-Zustand nach Spec 0063 (Issue #69) konsistent bleibt und die
-  Fokus-Ref nicht mehr auf `null` fällt.
+- `TabStrip` now calls `focusNeighbor()` after `closeTab` so that the
+  reducer state stays consistent per Spec 0063 (issue #69) and the focus
+  ref no longer falls back to `null`.
 ```
 
 Einträge, die nur in einer kostenpflichtigen Edition verfügbar sind, tragen
@@ -68,10 +69,8 @@ Beim Release (Versions-Bump) werden alle Fragmente in den neuen
 Versionsabschnitt von `CHANGELOG.md` übernommen und die Dateien gelöscht.
 
 Der neue Versionsabschnitt beginnt mit `### Highlights`: 3 bis 6
-Listenpunkte, je genau eine Zeile, nutzerseitig und ohne Interna. Die
-Highlights sind der **einzige englische Teil** des sonst deutschen
-Changelogs, weil sie als Kurzfassung auf der (englischen) Download-Seite
-erscheinen. Sie werden beim Release geschrieben, nicht als Fragment; die
+Listenpunkte, je genau eine Zeile, nutzerseitig und ohne Interna. Sie
+erscheinen als Kurzfassung auf der Download-Seite. Sie werden beim Release geschrieben, nicht als Fragment; die
 übrigen Kategorien folgen danach unverändert. Ein CI-Check
 (`scripts/check-changelog-highlights.mjs`, Teil von `npm run lint`) prüft
 das für alle Versionen nach 0.5.2.

@@ -1,3 +1,3 @@
-### Behoben
-- Allow-Regeln mit ungültigem Muster werden der KI nicht mehr als ohne
-  Rückfrage ausführbar genannt; solche Befehle verlangen weiter eine Bestätigung.
+### Fixed
+- Allow rules with an invalid pattern are no longer described to the AI as
+  runnable without confirmation; such commands still require confirmation.

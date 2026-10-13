@@ -1,3 +1,3 @@
-### Neu
-- Im Dateibrowser legt „Datei kopieren“ eine Remote-Datei (bis 50 MB) als
-  Datei in die Zwischenablage; sie lässt sich im Dateimanager einfügen.
+### Added
+- In the file browser, "Copy file" puts a remote file (up to 50 MB) on the
+  clipboard as a file; it can be pasted in the file manager.

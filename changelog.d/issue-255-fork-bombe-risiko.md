@@ -1,3 +1,3 @@
-### Sicherheit
-- Eine Fork-Bombe wird jetzt auch als hohes Risiko erkannt, wenn sie in ein
-  längeres Kommando eingebettet ist (verkettet, mit `sudo` oder in `$(…)`).
+### Security
+- A fork bomb is now also detected as high risk when embedded in a longer
+  command (chained, with `sudo` or inside `$(…)`).

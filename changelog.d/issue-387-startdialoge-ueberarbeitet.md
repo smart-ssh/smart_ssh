@@ -1,2 +1,2 @@
-### Geändert
-- Entsperr-, Start-, Erststart- und Host-Key-Dialoge sind einheitlicher gestaltet, per Tastatur besser bedienbar und bei kleinen Fenstern nicht mehr abgeschnitten.
+### Changed
+- The unlock, startup, first-run and host key dialogs are more consistently designed, easier to use with the keyboard and no longer cut off in small windows.
