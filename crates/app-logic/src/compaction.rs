@@ -121,6 +121,10 @@ fn estimate_message_tokens(message: &ChatMessage) -> usize {
         // Issue #162: gesendet wird die gefencte Form, s.
         // `WebActivity::to_model_text`.
         MessageContent::WebActivity(activity) => estimate_tokens(&activity.to_model_text()),
+        // Issue #469: Text nach Länge, Bild/PDF mit festem konservativem Wert.
+        MessageContent::Attachments(items) => {
+            items.iter().map(|a| a.estimated_tokens()).sum::<usize>()
+        }
         MessageContent::ActionRejected { command, reason } => {
             let reason_text = match reason {
                 RejectionReason::User => "",

@@ -20,7 +20,8 @@ export type Feature =
   | "audit_export"
   | "sso"
   | "self_hosted"
-  | "server_environment";
+  | "server_environment"
+  | "chat_attachments";
 
 export interface Entitlements {
   tier: Tier;

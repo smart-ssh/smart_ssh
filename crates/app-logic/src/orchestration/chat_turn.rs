@@ -579,7 +579,32 @@ pub(crate) fn reapply_redaction_for_send(
                 MessageContent::WebActivity(activity) => {
                     MessageContent::WebActivity(redact_web_activity(activity, redactor))
                 }
+                // Issue #469: Textanhänge werden bei JEDEM Versand erneut
+                // redigiert (auch nach Resume); gefencet wird erst beim
+                // Request-Aufbau (`ChatAttachment::to_model_text`).
+                MessageContent::Attachments(items) => {
+                    MessageContent::Attachments(redact_attachments(items, redactor))
+                }
             },
+        })
+        .collect()
+}
+
+/// Issue #469: redigiert den Inhalt von Textanhängen (roh, vor dem Fencing);
+/// Bild/PDF-Bytes werden nie als Anweisung interpretiert und bleiben
+/// unverändert. Der Dateiname wird ebenfalls redigiert, er geht in den Fence.
+pub(crate) fn redact_attachments(
+    items: Vec<ssh_manager_core::ai::ChatAttachment>,
+    redactor: &dyn OutputRedactor,
+) -> Vec<ssh_manager_core::ai::ChatAttachment> {
+    items
+        .into_iter()
+        .map(|mut a| {
+            a.name = redactor.redact_text(&a.name);
+            if a.kind == ssh_manager_core::ai::AttachmentKind::Text {
+                a.data = redactor.redact_text(&a.text()).into_bytes();
+            }
+            a
         })
         .collect()
 }

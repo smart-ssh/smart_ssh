@@ -12,6 +12,7 @@
 //! frei von I/O-Abhängigkeiten (kein HTTP-Client hier) und schnell über
 //! Mock-Implementierungen testbar.
 
+mod attachments;
 mod fencing;
 pub mod keywords;
 mod live_redaction;
@@ -29,6 +30,10 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+pub use attachments::{
+    validate_attachments, AttachmentError, AttachmentKind, ChatAttachment, ChatAttachmentResolver,
+    BINARY_ATTACHMENT_TOKEN_ESTIMATE, MAX_ATTACHMENTS_PER_MESSAGE, MAX_ATTACHMENT_BYTES,
+};
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
 pub use live_redaction::LiveOutputRedactor;
 pub use provider::AiProvider;

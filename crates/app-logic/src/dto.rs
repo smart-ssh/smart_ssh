@@ -1340,6 +1340,22 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                     activity: WebActivityDto::from(&activity),
                 }
             }
+            // Issue #469: until an edition UI renders attachment chips, a
+            // resumed history shows the attached file names as a plain line
+            // (names only, never content).
+            ssh_manager_core::ai::MessageContent::Attachments(items) => {
+                ChatHistoryEntryDto::Text {
+                    role,
+                    text: format!(
+                        "[attached: {}]",
+                        items
+                            .iter()
+                            .map(|a| a.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                }
+            }
         }
     }
 }

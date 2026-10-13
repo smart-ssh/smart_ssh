@@ -360,6 +360,14 @@ fn message_content_text(content: &MessageContent) -> String {
         // Issue #162: Webinhalt geht nur gefencet zurück an die KI (Spec
         // 0039), s. `WebActivity::to_model_text`.
         MessageContent::WebActivity(activity) => activity.to_model_text(),
+        // Issue #469: Anhänge gehen nur gefencet (`LocalFile`) an die KI;
+        // Text wurde vor dem Versand redigiert (`reapply_redaction_for_send`),
+        // Bild/PDF erscheinen vorerst als Platzhalterzeile mit Dateiname.
+        MessageContent::Attachments(attachments) => attachments
+            .iter()
+            .map(|a| a.to_model_text(None))
+            .collect::<Vec<_>>()
+            .join("\n\n"),
     }
 }
 
