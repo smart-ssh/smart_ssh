@@ -220,7 +220,7 @@ function MainScreen({
   tab,
   setTab,
   settingsOpen,
-  setSettingsOpen,
+  setSettingsOpen: setSettingsOpenRaw,
   hasActiveProvider,
   refreshProviderStatus,
   onConnected,
@@ -232,6 +232,13 @@ function MainScreen({
   onCreateServerInGroup,
 }: MainScreenProps) {
   const { t } = useTranslation();
+  // WebKit on macOS does not focus a clicked button, so the opener is taken
+  // from the click event and handed to the dialog as the focus-return target.
+  const [settingsOpener, setSettingsOpener] = useState<HTMLElement | null>(null);
+  const openSettingsFrom = (event: { currentTarget: HTMLElement }) => {
+    setSettingsOpener(event.currentTarget);
+    setSettingsOpenRaw(true);
+  };
   // Spec 0033, Abschnitt 4: hier statt in `ServerList` selbst gehalten,
   // damit der Auf-/Zuklapp-Zustand einen Tab-Wechsel weg von "Verbinden"
   // übersteht (`ServerList` wird beim Wechsel zu "Verwalten"/"Filter-Regeln"
@@ -292,7 +299,7 @@ function MainScreen({
             </button>
           </nav>
         </div>
-        <Button onClick={() => setSettingsOpen(true)}>{t("settings.title")}</Button>
+        <Button onClick={openSettingsFrom}>{t("settings.title")}</Button>
       </header>
 
       {tab === "connect" ? (
@@ -302,7 +309,7 @@ function MainScreen({
               {t("mainScreen.noActiveProvider")}{" "}
               <button
                 type="button"
-                onClick={() => setSettingsOpen(true)}
+                onClick={openSettingsFrom}
                 className="rounded underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
               >
                 {t("mainScreen.setupProviderNow")}
@@ -337,7 +344,8 @@ function MainScreen({
 
       {settingsOpen && (
         <SettingsScreen
-          onClose={() => setSettingsOpen(false)}
+          returnFocusTo={settingsOpener}
+          onClose={() => setSettingsOpenRaw(false)}
           onProvidersChanged={refreshProviderStatus}
         />
       )}

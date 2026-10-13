@@ -16,6 +16,8 @@ import { Button } from "./ui";
 
 interface SettingsScreenProps {
   onClose: () => void;
+  /** Element that opened the dialog; focus returns there on close. Falls back to the element focused at mount. */
+  returnFocusTo?: HTMLElement | null;
   onProvidersChanged: () => void;
 }
 
@@ -56,7 +58,7 @@ interface NavCategory {
  * Sektionen (`registerBuiltinExtensions.ts`), keine neuen eingebauten
  * Kategorien.
  */
-export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenProps) {
+export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: SettingsScreenProps) {
   const { t, i18n } = useTranslation();
 
   const builtinCategories: NavCategory[] = [
@@ -118,11 +120,14 @@ export function SettingsScreen({ onClose, onProvidersChanged }: SettingsScreenPr
   const containerRef = useRef<HTMLDivElement>(null);
   const activeNavRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previous =
+      returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     activeNavRef.current?.focus();
     return () => {
       if (previous && document.contains(previous)) previous.focus();
     };
+    // Mount-only: the return target is captured when the dialog opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const container = containerRef.current;

@@ -369,4 +369,20 @@ describe("SettingsScreen keyboard behaviour (issue #385)", () => {
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
   });
+
+  // WebKit on macOS: a clicked trigger loses focus, so activeElement is <body> at mount.
+  it("returns focus to the explicit returnFocusTo element even when body was focused at mount", () => {
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    const view = render(
+      <I18nextProvider i18n={testI18n}>
+        <SettingsScreen onClose={vi.fn()} onProvidersChanged={vi.fn()} returnFocusTo={trigger} />
+      </I18nextProvider>,
+    );
+    view.unmount();
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
 });
