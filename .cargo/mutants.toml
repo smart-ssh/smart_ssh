@@ -1,0 +1,24 @@
+# cargo-mutants configuration. Every entry excludes exactly one provably
+# equivalent mutant (no input changes the observable result); add a reason
+# and the issue number for each.
+
+# --- parser.rs: top-level segmentation (issue #483) -------------------------
+exclude_re = [
+    # Backslash inside double quotes: `i + 1 < chars.len()` only differs from
+    # its mutants when the backslash is the LAST char. Then the escape skip
+    # (`i += 2`) and the plain advance (`i += 1`) both end the loop with the
+    # double quote still open, so the result is `None` either way. (#483)
+    "parser\\.rs:764:31: replace \\+ with \\* in scan_top_level_segments",
+    "parser\\.rs:764:31: replace \\+ with - in scan_top_level_segments",
+    "parser\\.rs:764:35: replace < with <= in scan_top_level_segments",
+    # CRLF handling: not swallowing the `\n` after a `\r` only yields an
+    # empty segment on the next iteration, which `push_segment` drops; and
+    # swallowing a `\n` that follows a `\n` skips just an empty segment. (#483)
+    "parser\\.rs:816:26: replace == with != in scan_top_level_segments",
+    "parser\\.rs:816:49: replace \\+ with \\* in scan_top_level_segments",
+    "parser\\.rs:817:27: replace \\+= with \\*= in scan_top_level_segments",
+    # `&&` / `||` treated as two single operators: the second one pushes an
+    # empty range, which `push_segment` drops, so the segments are identical. (#483)
+    "parser\\.rs:823:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'&'\\) with false in scan_top_level_segments",
+    "parser\\.rs:835:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'\\|'\\) with false in scan_top_level_segments",
+]
