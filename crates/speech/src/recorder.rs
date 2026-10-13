@@ -161,10 +161,19 @@ impl Recorder {
     /// automatic stop it returns that recording's result.
     pub async fn stop(&self) -> Result<String, RecordError> {
         let inner = &self.0;
+        let (tx, rx) = watch::channel(None);
         let taken = {
             let mut state = inner.state.lock().expect("recorder state");
             match std::mem::replace(&mut *state, State::Idle) {
-                State::Recording(active) => Ok(active),
+                State::Recording(active) => {
+                    // Stay busy while recognising: start is refused, cancel
+                    // can discard the result.
+                    *state = State::Transcribing {
+                        id: active.id,
+                        done: rx,
+                    };
+                    Ok(active)
+                }
                 State::Finished(outcome) => {
                     drop(state);
                     (inner.on_state)(RecorderState::Idle);
@@ -184,9 +193,20 @@ impl Recorder {
             Ok(active) => {
                 active.timer.abort();
                 (inner.on_state)(RecorderState::Transcribing);
+                let id = active.id;
                 let outcome = self.transcribe(active).await;
-                (inner.on_state)(RecorderState::Idle);
-                outcome
+                let _ = tx.send(Some(outcome.clone()));
+                let mut state = inner.state.lock().expect("recorder state");
+                if matches!(&*state, State::Transcribing { id: i, .. } if *i == id) {
+                    *state = State::Idle;
+                    drop(state);
+                    (inner.on_state)(RecorderState::Idle);
+                    outcome
+                } else {
+                    // Cancelled meanwhile (cancel already reported Idle):
+                    // the result is discarded.
+                    Err(RecordError::NotRecording)
+                }
             }
             Err((id, mut done)) => {
                 // Automatic stop already transcribing: wait for its result.
