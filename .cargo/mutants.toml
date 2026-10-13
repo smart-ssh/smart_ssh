@@ -41,4 +41,14 @@ exclude_re = [
     "parser\\.rs:450:17: replace && with \\|\\| in unquoted_word_len",
     "parser\\.rs:450:31: replace && with \\|\\| in unquoted_word_len",
     "parser\\.rs:450:38: replace > with >= in unquoted_word_len",
+
+    # --- parser.rs: substitutions, ANSI-C escapes, shell -c (issue #486) ---
+    # `name.len() > 2` in unclassified_shell_source: the only 2-char name
+    # ending in `sh` is `sh`, which `program_kind` always classifies, so
+    # the fallback is never called with it. (#486)
+    "parser\\.rs:1496:39: replace > with >= in unclassified_shell_source",
+    # `i = j + 1` in contains_ansi_c_escape: with `j * 1` the scan resumes at
+    # the closing quote, which is not a `$`, so it only costs one extra
+    # step; when the quote is missing (`j == len`) the loop ends either way. (#486)
+    "parser\\.rs:940:19: replace \\+ with \\* in contains_ansi_c_escape",
 ]

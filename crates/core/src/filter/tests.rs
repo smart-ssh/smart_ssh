@@ -2782,3 +2782,139 @@ mod redirection_detection_mutants {
         assert!(code("bash /dev/fd/0 <<< 'echo hi'").len() == 1);
     }
 }
+
+// --- Substitutions, ANSI-C escapes and shell -c code: pinned mutation survivors (issue #486) ---
+//
+// Each test pins the concrete result of one parser helper (directly where it
+// is `pub(super)`/`pub(crate)`, through a public path otherwise) for the
+// input that distinguishes the cargo-mutants survivors.
+mod substitution_and_shell_c_pins {
+    use crate::filter::parser::{
+        deferred_code, extract_here_string_codes, extract_shell_c_style_codes,
+        opaque_encoding_reason, split_command, strip_substitutions, DeferredCode, DeferredCodeKind,
+        ParseResult,
+    };
+
+    fn strip(text: &str) -> (String, Vec<String>) {
+        strip_substitutions(text)
+    }
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    // strip_substitutions
+
+    #[test]
+    fn dollar_paren_stops_at_matching_paren_and_keeps_the_tail() {
+        assert_eq!(
+            strip("$(echo a) tail"),
+            ("  tail".to_string(), v(&["echo a"]))
+        );
+        assert_eq!(
+            strip("x $(a) y $(b) z"),
+            ("x   y   z".to_string(), v(&["a", "b"]))
+        );
+    }
+
+    #[test]
+    fn backtick_substitution_is_extracted_with_exact_bounds() {
+        assert_eq!(
+            strip("echo `id` done"),
+            ("echo   done".to_string(), v(&["id"]))
+        );
+        assert_eq!(strip("`a``b`"), ("  ".to_string(), v(&["a", "b"])));
+    }
+
+    #[test]
+    fn plain_text_without_backtick_is_unchanged() {
+        assert_eq!(strip("echo hi"), ("echo hi".to_string(), v(&[])));
+        // A lone backtick without a closing one stays literal.
+        assert_eq!(strip("a`b"), ("a`b".to_string(), v(&[])));
+    }
+
+    // opaque_encoding_reason / contains_ansi_c_escape
+
+    #[test]
+    fn ansi_c_escape_detection_is_exact() {
+        assert!(opaque_encoding_reason("echo $'\\x72m'").is_some());
+        assert!(opaque_encoding_reason("echo $'ab\\n'").is_some());
+        // Plain ANSI-C literal without a backslash.
+        assert_eq!(opaque_encoding_reason("echo $'abc'"), None);
+        // Trailing `$`, unterminated `$'`, `$'` as the last two chars.
+        assert_eq!(opaque_encoding_reason("echo $"), None);
+        assert_eq!(opaque_encoding_reason("echo $'abc"), None);
+        assert_eq!(opaque_encoding_reason("echo $'"), None);
+        // A quote that is not preceded by `$` must not start an ANSI-C string.
+        assert_eq!(opaque_encoding_reason("echo 'a\\b'"), None);
+        // `$'$'` is a complete ANSI-C string; the backslash after it is outside.
+        assert_eq!(opaque_encoding_reason("echo $'$'abc\\x"), None);
+        // An escape in a later ANSI-C string is still found.
+        assert!(opaque_encoding_reason("echo $'a' $'\\x41'").is_some());
+    }
+
+    // extract_shell_c_style_codes / is_complex_shell_c_invocation
+
+    #[test]
+    fn shell_c_code_is_extracted() {
+        assert_eq!(
+            extract_shell_c_style_codes("bash -c 'rm -rf /'"),
+            v(&["rm -rf /"])
+        );
+        assert_eq!(
+            extract_shell_c_style_codes("bash -xc 'rm -rf /'"),
+            v(&["rm -rf /"])
+        );
+        assert_eq!(
+            extract_shell_c_style_codes("sudo bash -lc 'ls'"),
+            v(&["ls"])
+        );
+        assert_eq!(
+            extract_shell_c_style_codes("python3 -c 'print(1)'"),
+            v(&["print(1)"])
+        );
+    }
+
+    #[test]
+    fn wrapped_non_shell_command_yields_no_code() {
+        assert!(extract_shell_c_style_codes("sudo ls -la /tmp").is_empty());
+        assert!(extract_shell_c_style_codes("env FOO=1 ls -la /tmp").is_empty());
+        assert!(extract_shell_c_style_codes("ls -la /tmp").is_empty());
+    }
+
+    #[test]
+    fn wrapped_shell_c_is_a_single_block() {
+        for cmd in ["sudo bash -c 'ls; id'", "env bash -c 'ls; id'"] {
+            assert!(
+                matches!(split_command(cmd), ParseResult::Ambiguous { .. }),
+                "{cmd}"
+            );
+        }
+    }
+
+    // extract_here_string_codes
+
+    #[test]
+    fn here_string_code_is_extracted_only_without_expansion() {
+        assert_eq!(
+            extract_here_string_codes("bash <<< 'echo hi'"),
+            v(&["echo hi"])
+        );
+        assert!(extract_here_string_codes("bash <<< '$(rm -rf /)'").is_empty());
+        assert!(extract_here_string_codes("bash <<< \"`id`\"").is_empty());
+        assert!(extract_here_string_codes("bash <<< ~/script").is_empty());
+    }
+
+    // deferred_code
+
+    #[test]
+    fn untokenisable_trap_with_operand_is_floored() {
+        assert_eq!(
+            deferred_code("trap 'unterminated EXIT"),
+            Some(DeferredCode {
+                kind: DeferredCodeKind::Trap,
+                codes: Vec::new()
+            })
+        );
+    }
+}
