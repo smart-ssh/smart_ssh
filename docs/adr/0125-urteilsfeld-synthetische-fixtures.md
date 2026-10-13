@@ -28,3 +28,26 @@ nicht selbst.
 ## Folgen
 
 Das Format kann nach der Aufzeichnung noch einmal angepasst werden.
+
+## Nachtrag (Issue #223): Aufzeichnungen
+
+Am 2026-10-12 hat ein Maintainer Antworten aufgezeichnet (je 7 Zweitmeinungs-
+und 4 Injection-Check-Eingaben, ohne Geheimnisse oder echte Hosts) und als
+Fixtures unter `crates/app-logic/tests/fixtures/` abgelegt:
+
+- **Anthropic** (`claude-haiku-5-5`) und **Ollama** (`qwen2.5:0.5b`): alle 22
+  Antworten beginnen exakt mit `VERDICT: <Wert>`; der Test liest sie über das
+  strukturierte Feld, keine braucht den Rückfall. Das Format bleibt
+  unverändert.
+- Das kleine Ollama-Modell urteilt oft falsch (z. B. `env | grep -i token`
+  → `none`, beide Injektionen → `no`). Das ist Modellqualität, nicht Format;
+  ein so kleines lokales Modell ist keine brauchbare Zweitmeinung.
+- **OpenAI-kompatibel** (gehosteter Endpunkt, `qwen/qwen3-32b`, aufgezeichnet
+  am 2026-10-13): alle 11 Antworten folgen dem Format, die Urteile sind
+  plausibel. Jede Antwort beginnt mit Leerzeilen, und die Urteilszeile endet
+  mit zwei Leerzeichen; der strukturierte Parser verträgt beides, der Test
+  deckt es mit diesem Fixture ab. Das Format bleibt unverändert.
+
+Damit liegen Aufzeichnungen aller drei Anbietertypen vor, keine synthetische Antwort
+wird mehr als Anbieterausgabe ausgegeben, und Requirement 6 aus #104 ist
+**erfüllt**.

@@ -100,6 +100,22 @@ impl Transcriber for FakeTranscriber {
     }
 }
 
+/// Blocks inside `transcribe` until released, to observe the busy state.
+#[derive(Default)]
+struct GatedTranscriber {
+    entered: std::sync::atomic::AtomicBool,
+    release: std::sync::atomic::AtomicBool,
+}
+impl Transcriber for GatedTranscriber {
+    fn transcribe(&self, _: &Path, _: &[f32], _: Option<&str>) -> Result<String, TranscribeError> {
+        self.entered.store(true, Ordering::SeqCst);
+        while !self.release.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        Ok("late text".to_owned())
+    }
+}
+
 type Events = Arc<Mutex<Vec<RecorderState>>>;
 
 fn recorder(
@@ -293,4 +309,57 @@ fn start_works_outside_a_runtime_context() {
     rec.start(model(), None)
         .expect("start without runtime context");
     rec.cancel();
+}
+
+async fn manual_stop_in_transcription() -> (
+    Recorder,
+    Arc<FakeSource>,
+    Arc<GatedTranscriber>,
+    Events,
+    tokio::task::JoinHandle<Result<String, RecordError>>,
+) {
+    let src = FakeSource::new(decode_wav(WAV));
+    let tr = Arc::new(GatedTranscriber::default());
+    let events: Events = Arc::default();
+    let ev = Arc::clone(&events);
+    let rec = Recorder::new(
+        src.clone(),
+        tr.clone(),
+        MAX_RECORDING,
+        Arc::new(move |s| ev.lock().unwrap().push(s)),
+        tokio::runtime::Handle::current(),
+    );
+    rec.start(model(), None).unwrap();
+    let r2 = rec.clone();
+    let stop = tokio::spawn(async move { r2.stop().await });
+    while !tr.entered.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    (rec, src, tr, events, stop)
+}
+
+#[tokio::test]
+async fn start_during_manual_transcription_is_refused() {
+    let (rec, src, tr, _, stop) = manual_stop_in_transcription().await;
+    assert_eq!(rec.start(model(), None), Err(RecordError::AlreadyRecording));
+    assert_eq!(
+        src.opens.load(Ordering::SeqCst),
+        1,
+        "microphone stays closed"
+    );
+    tr.release.store(true, Ordering::SeqCst);
+    assert_eq!(stop.await.unwrap().unwrap(), "late text");
+    rec.start(model(), None).unwrap(); // idle again
+    rec.cancel();
+}
+
+#[tokio::test]
+async fn cancel_during_manual_transcription_discards_the_text() {
+    let (rec, _, tr, events, stop) = manual_stop_in_transcription().await;
+    rec.cancel();
+    assert_eq!(events.lock().unwrap().last(), Some(&RecorderState::Idle));
+    tr.release.store(true, Ordering::SeqCst);
+    assert_eq!(stop.await.unwrap(), Err(RecordError::NotRecording));
+    assert_eq!(events.lock().unwrap().last(), Some(&RecorderState::Idle));
+    assert_eq!(rec.stop().await, Err(RecordError::NotRecording));
 }
