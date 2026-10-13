@@ -11,6 +11,7 @@ import { translateErrorCode } from "../errorCodes";
 import { performMove, type DragItem, type DropTarget } from "../treeDrag";
 import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { GroupForm, type MovedTo } from "./GroupForm";
+import { useManageViews } from "../extensions/FormSlots";
 import { ServerForm } from "./ServerForm";
 import { Sidebar, type Selection } from "./Sidebar";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
@@ -40,6 +41,7 @@ export function ManagementView({
   onInitialSelectionConsumed,
 }: ManagementViewProps) {
   const { t } = useTranslation();
+  const manageViews = useManageViews();
   const [groups, setGroups] = useState<GroupDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
   // Issue #100: Server mit unlesbarer Anmeldeart — nur anzeigen und löschen.
@@ -227,6 +229,11 @@ export function ManagementView({
             onDeleted={handleDeleted}
           />
         )}
+        {selection?.kind === "extensionView" &&
+          (() => {
+            const View = manageViews.find((v) => v.id === selection.id)?.component;
+            return View ? <View key={selection.id} /> : null;
+          })()}
         {!selection && (
           // Spec 0072, Teil 3 (BL-0202): dieser Platzhaltertext stand fest
           // deutsch da und erschien so auch in der englischen Oberfläche —

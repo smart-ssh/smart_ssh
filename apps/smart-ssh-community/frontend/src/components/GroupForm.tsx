@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commandErrorCode, commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
 import { translateErrorCode } from "../errorCodes";
+import { GroupFormSections } from "../extensions/FormSlots";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import type { DeleteGroupResult, GroupDto } from "../types";
 import { NotesPanel } from "./NotesPanel";
@@ -46,6 +47,8 @@ export function GroupForm({
   const [name, setName] = useState(existing?.name ?? "");
   const [parentId, setParentId] = useState<string | null>(existing?.parentId ?? defaultParentId);
   const [saving, setSaving] = useState(false);
+  // Spec 0038, Abschnitt 4: ungespeicherte Änderungen für Erweiterungs-Abschnitte.
+  const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletePreview, setDeletePreview] = useState<DeleteGroupResult | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -107,6 +110,7 @@ export function GroupForm({
       } else if (groupId) {
         await updateGroup(groupId, name, parentId);
       }
+      setDirty(false);
       onSaved();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -145,7 +149,7 @@ export function GroupForm({
         {isCreate ? t("groupForm.titleNew") : t("groupForm.titleExisting", { name: existing?.name ?? "" })}
       </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} onChange={() => setDirty(true)} className="space-y-3">
         <label className="block text-sm text-slate-300">
           {t("common.name")}
           <input
@@ -186,6 +190,7 @@ export function GroupForm({
 
       {!isCreate && groupId && existing && (
         <>
+          <GroupFormSections groupId={groupId} dirty={dirty} />
           <NotesPanel target={{ Group: groupId }} currentNotes={existing.notes} onNotesChanged={onSaved} />
 
           <div className="border-t border-slate-700 pt-4">

@@ -33,5 +33,7 @@ export function folderForNewItem(
       return selection.parentId;
     case "newServer":
       return selection.groupId;
+    case "extensionView":
+      return null;
   }
 }
