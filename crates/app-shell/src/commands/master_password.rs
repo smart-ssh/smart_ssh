@@ -1137,6 +1137,7 @@ mod tests {
                 db_path,
                 language: app_logic::startup_error_messages::Language::De,
                 keychain: credentials_keyring::KeychainAvailability::Available,
+                outgoing_transform: None,
             },
             Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
                 ssh_manager_core::entitlements::Entitlements::free(),

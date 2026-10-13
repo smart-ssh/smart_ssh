@@ -72,6 +72,7 @@ mod chat_turn;
 mod live_output;
 mod new_chat;
 mod notes;
+mod outgoing;
 /// Spec 0088, A1: das Warten auf eine Bestätigung als Wert mit `Drop`.
 mod pending_confirmation;
 mod remote_files;

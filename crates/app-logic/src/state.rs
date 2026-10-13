@@ -186,6 +186,9 @@ pub struct AppState {
     /// angekündigten Dateien geöffnet werden, „auch dann nicht, wenn sich
     /// die Konfigurationsdatei zwischenzeitlich geändert hat".
     pub pending_ssh_config_import: std::sync::Mutex<Option<PendingImport>>,
+    /// Issue #464 (Spec 0038): the edition's transform for approved text right
+    /// before it is sent; handed to every new session. `None` in Community.
+    pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 }
 
 pub struct McpState {

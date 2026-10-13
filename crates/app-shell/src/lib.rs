@@ -109,6 +109,8 @@ pub(crate) struct StartupInputs {
     pub(crate) data_dir_lock: persistence_sqlite::DataDirLock,
     pub(crate) language: app_logic::startup_error_messages::Language,
     pub(crate) keychain: credentials_keyring::KeychainAvailability,
+    /// Issue #464: from `Wiring`, handed to the `AppState`.
+    pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 }
 
 /// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
@@ -137,6 +139,7 @@ fn startup_inputs(
     db_path: std::path::PathBuf,
     data_dir_lock: persistence_sqlite::DataDirLock,
     language: app_logic::startup_error_messages::Language,
+    outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 ) -> StartupInputs {
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
@@ -178,6 +181,7 @@ fn startup_inputs(
         data_dir_lock,
         language,
         keychain,
+        outgoing_transform,
     }
 }
 
@@ -367,6 +371,7 @@ pub(crate) async fn open_and_assemble(
         rate_limit_registry: ai_providers::RateLimitRegistry::new(),
         // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
+        outgoing_transform: inputs.outgoing_transform.clone(),
     };
     Ok(app_state)
 }
@@ -381,7 +386,7 @@ pub(crate) async fn open_and_assemble(
 /// Icons/Frontend dieser Library-Crate zugeordnet sein, obwohl `app-shell`
 /// künftig mehrere Binaries (Community/Official) mit je eigener Config
 /// bedienen soll (Spec 0038, Abschnitt 3).
-pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
+pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Spec 0016, Abschnitt 2/3: so früh wie möglich, damit auch Fehler beim
     // App-Setup selbst (z. B. `build_app_state()`s DB-Verbindungsaufbau)
     // bereits strukturiert geloggt würden. `_log_guard` muss über die
@@ -510,7 +515,12 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Issue #358: staged "Copy file" files of a previous process.
     file_clipboard::sweep_at_startup();
 
-    let inputs = startup_inputs(db_path, data_dir_lock, language);
+    let inputs = startup_inputs(
+        db_path,
+        data_dir_lock,
+        language,
+        wiring.outgoing_transform.take(),
+    );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
 

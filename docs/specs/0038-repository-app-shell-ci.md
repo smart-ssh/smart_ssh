@@ -67,6 +67,51 @@ Die Erweiterung hat keinen Zugriff auf den Profilspeicher, nur auf die
 übergebenen Angaben. Filter, Risiko-Einstufung und Bestätigung kennen sie
 nicht.
 
+### Umwandlung ausgehender Texte
+
+Die Verdrahtung kann eine **Umwandlung ausgehender Texte** enthalten. Sie
+ist vertrauenswürdiger Code der Edition und wird mit dem Ziel-Server
+(Kennung und Tags), der Art des Textes (Kommando oder Dateiinhalt) und dem
+Text selbst gefragt. Sie liefert entweder den zu sendenden Text samt der
+Liste der Geheimnisse, die sie eingesetzt hat, oder eine Ablehnung mit einer
+Meldung. Ohne registrierte Umwandlung (Community) wird der Text unverändert
+gesendet.
+
+**Wann sie läuft.** Genau auf diesen Wegen: von der KI vorgeschlagene
+Kommandos, von der KI vorgeschlagener Inhalt einer `WriteRemoteFile`-Aktion
+und über MCP vorgeschlagene Kommandos. Nie bei Eingaben im Terminal. Sie läuft
+**nach** Filter, Risiko-Einstufung, Zweitmeinung und Bestätigung, auf dem
+endgültig freigegebenen Text (bei „Bearbeiten und freigeben“ also auf dem
+bearbeiteten Text), und unmittelbar vor dem Senden. Die Einsetzung des
+gespeicherten Sudo-Passworts (Spec 0018) kommt danach: Sie wirkt auf das
+umgewandelte Kommando.
+
+**Wer was sieht.** Filter, Risiko-Einstufung, Zweitmeinung, Bestätigungsdialog,
+Ledger, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
+ursprünglichen Text. Der umgewandelte Text existiert nur im Aufruf an den
+Transport und steht in keiner Anzeige, keinem Verlauf, keinem Ledger und
+keiner Log-Zeile; auch die Debug-Ausgabe des Ergebnisses der Umwandlung zeigt
+ihn nicht.
+
+**Geheimnisse.** Die gemeldeten eingesetzten Werte werden dem Redactor der
+Sitzung hinzugefügt, bevor das Kommando startet. Bereits die Ausgabe genau
+dieses Kommandos ist damit maskiert (Live-Ausgabe, Ergebnis, Ledger, Verlauf,
+Logs).
+
+**Ablehnung.** Lehnt die Umwandlung ab, wird nichts gesendet und nichts
+ausgeführt. Die KI bekommt die Meldung als Ergebnis der Aktion; die Meldung
+läuft zuvor durch den Redactor.
+
+**Hard-Blacklist als zweite Absicherung.** Der Kern prüft einen
+umgewandelten Befehl noch einmal **nur gegen die Hard-Blacklist** (Spec 0002,
+Abschnitt 3; mit denselben Normalisierungen wie dort, ohne Nutzerregeln und
+ohne Längenlimit). Trifft sie, wird abgelehnt: Nichts wird gesendet, die KI
+bekommt eine allgemeine Meldung, die den umgewandelten Text nicht zitiert.
+Darüber hinaus wertet der Kern den umgewandelten Text nicht erneut aus; der
+ausgewertete und freigegebene Text bleibt die Grundlage jeder Entscheidung.
+Die Umwandlung kann keine Prüfung umgehen oder abschwächen. Für Dateiinhalt
+gibt es keine Hard-Blacklist-Prüfung, weil die Blacklist Kommandos beschreibt.
+
 **Master-Passwort-Modus** (Spec 0101): Plugins dürfen Befehle erst **nach
 dem Entsperren** registrieren, sonst wären sie vorher aufrufbar.
 
