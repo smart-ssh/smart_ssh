@@ -580,7 +580,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let pending =
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
             .with_session_extension(wiring.session_extension.clone())
-            .with_db_extensions(db_extensions);    let plugins = wiring.plugins;
+            .with_db_extensions(db_extensions);
+    let plugins = wiring.plugins;
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.
     let builder = crate::single_instance::register_on(tauri::Builder::default());
