@@ -23,6 +23,7 @@ use ssh_manager_core::profiles::{CredentialStore, ProfileStore};
 use ssh_manager_core::shared::ServerId;
 
 use crate::server_redaction::{redacted_fenced_effective_notes, server_redactor};
+use crate::session_extension::{known_secrets, server_scope, SessionExtension};
 use crate::state::AppState;
 
 /// Die Abhängigkeiten der lesenden MCP-Tools, einzeln statt als ganzer
@@ -34,6 +35,7 @@ pub struct McpLookup<'a> {
     allowed_servers: &'a Mutex<HashSet<ServerId>>,
     profile_store: &'a dyn ProfileStore,
     credential_store: &'a (dyn CredentialStore + Send + Sync),
+    session_extension: Option<&'a dyn SessionExtension>,
 }
 
 impl<'a> McpLookup<'a> {
@@ -43,6 +45,7 @@ impl<'a> McpLookup<'a> {
             allowed_servers: &state.mcp.allowed_servers,
             profile_store: state.profile_store.as_ref(),
             credential_store: state.credential_store.as_ref(),
+            session_extension: state.session_extension.as_deref(),
         }
     }
 
@@ -95,7 +98,9 @@ impl<'a> McpLookup<'a> {
             .get_server(&server_id)
             .await
             .map_err(|_| LookupError::UnknownServer)?;
-        let redactor = server_redactor(self.credential_store, server_id);
+        let scope = server_scope(self.profile_store, &server).await;
+        let extension_secrets = known_secrets(self.session_extension, Some(&scope));
+        let redactor = server_redactor(self.credential_store, server_id, &extension_secrets);
         redacted_fenced_effective_notes(&server, self.profile_store, redactor.as_ref())
             .await
             .map_err(|_| LookupError::UnknownServer)
@@ -180,6 +185,7 @@ mod tests {
             allowed_servers: &allowed,
             profile_store: &profiles,
             credential_store: &credentials,
+            session_extension: None,
         };
 
         assert_eq!(
@@ -200,6 +206,7 @@ mod tests {
             allowed_servers: &allowed,
             profile_store: &profiles,
             credential_store: &credentials,
+            session_extension: None,
         };
 
         assert_eq!(
@@ -222,6 +229,7 @@ mod tests {
             allowed_servers: &allowed,
             profile_store: &profiles,
             credential_store: &credentials,
+            session_extension: None,
         };
 
         let out = lookup.server_notes(srv.id).await.expect("Notizen");
@@ -234,6 +242,49 @@ mod tests {
         );
         assert!(out.contains(REDACTED_PLACEHOLDER), "{out}");
         assert!(out.contains("Wartungsfenster: So 02:00"), "{out}");
+    }
+
+    /// Spec 0038, section 2a: a known secret of the session extension is
+    /// masked in the notes for MCP (literally, regex characters included) —
+    /// for its server only.
+    #[tokio::test]
+    async fn test_server_notes_masks_extension_secret_for_that_server_only() {
+        use crate::session_extension::{ServerScope, SessionExtension};
+        use secrecy::SecretString;
+
+        const EXT_SECRET: &str = "ext.(secret)+[1]*";
+        struct Ext(ServerId);
+        impl SessionExtension for Ext {
+            fn known_secrets(&self, scope: &ServerScope) -> Vec<SecretString> {
+                if scope.server_id == self.0 {
+                    vec![SecretString::from(EXT_SECRET.to_string())]
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+
+        let notes = format!("login with {EXT_SECRET} please");
+        let a = server("a", &notes, None);
+        let b = server("b", &notes, None);
+        let profiles = InMemoryProfileStore::new()
+            .with_server(a.clone())
+            .with_server(b.clone());
+        let credentials = InMemoryCredentialStore::new();
+        let allowed = allow(&[a.id, b.id]);
+        let ext = Ext(a.id);
+        let lookup = McpLookup {
+            allowed_servers: &allowed,
+            profile_store: &profiles,
+            credential_store: &credentials,
+            session_extension: Some(&ext),
+        };
+
+        let out_a = lookup.server_notes(a.id).await.expect("Notizen");
+        assert!(!out_a.contains(EXT_SECRET), "{out_a}");
+        assert!(out_a.contains("login with"), "{out_a}");
+        let out_b = lookup.server_notes(b.id).await.expect("Notizen");
+        assert!(out_b.contains(EXT_SECRET), "{out_b}");
     }
 
     /// Issue #35, AC 3: Jeder Abschnitt (Gruppe, dann Server) ist einzeln
@@ -251,6 +302,7 @@ mod tests {
             allowed_servers: &allowed,
             profile_store: &profiles,
             credential_store: &credentials,
+            session_extension: None,
         };
 
         let out = lookup.server_notes(srv.id).await.expect("Notizen");
@@ -285,6 +337,7 @@ mod tests {
             allowed_servers: &allowed,
             profile_store: &profiles,
             credential_store: &credentials,
+            session_extension: None,
         };
 
         let mut listed = lookup.list_servers().await;
@@ -317,6 +370,7 @@ mod tests {
             allowed_servers: &allowed,
             profile_store: &profiles,
             credential_store: &credentials,
+            session_extension: None,
         };
 
         assert!(lookup.list_servers().await.is_empty());

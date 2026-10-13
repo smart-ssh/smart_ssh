@@ -919,6 +919,12 @@ impl Session {
         self.redactor.replace(redactor);
     }
 
+    /// Replaces the redactor of the open session (an extension's secret
+    /// values changed). History is re-redacted on the next send.
+    pub fn swap_redactor(&self, redactor: Box<dyn OutputRedactor>) {
+        self.redactor.replace(redactor);
+    }
+
     /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.
     ///
     /// Spec 0085, A3.1/T11: Weder über diese Referenz noch über das Feld
@@ -1729,6 +1735,59 @@ mod tests {
             ai_request_paced_at: AsyncMutex::new(None),
             auto_reconnect: Default::default(),
         })
+    }
+
+    /// Spec 0038, section 2a: after an extension triggers a rebuild, a
+    /// newly added secret is masked by the open session of that server only.
+    #[tokio::test]
+    async fn test_rebuild_server_redactors_masks_new_secret_for_that_server_only() {
+        use crate::session_extension::{
+            rebuild_redactors_for_sessions, ServerScope, SessionExtension,
+        };
+        use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+        use secrecy::SecretString;
+
+        struct Changing(StdMutex<Vec<String>>);
+        impl SessionExtension for Changing {
+            fn known_secrets(&self, _scope: &ServerScope) -> Vec<SecretString> {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .map(|s| SecretString::from(s.clone()))
+                    .collect()
+            }
+        }
+
+        let manager = SessionManager::new();
+        let server_id = ServerId::new();
+        let other_server = ServerId::new();
+        let id = Uuid::new_v4();
+        let other_id = Uuid::new_v4();
+        manager.insert(id, Arc::new(dummy_session(server_id)));
+        manager.insert(other_id, Arc::new(dummy_session(other_server)));
+        let ext = Changing(StdMutex::new(Vec::new()));
+        let profiles = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new();
+        let text = "key=late-secret-77";
+
+        assert_eq!(manager.get(id).unwrap().redactor.redact_text(text), text);
+
+        ext.0.lock().unwrap().push("late-secret-77".to_string());
+        rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id)
+            .await;
+
+        assert!(!manager
+            .get(id)
+            .unwrap()
+            .redactor
+            .redact_text(text)
+            .contains("late-secret-77"));
+        // the session of the other server keeps its old redactor
+        assert_eq!(
+            manager.get(other_id).unwrap().redactor.redact_text(text),
+            text
+        );
     }
 
     // --- Spec 0039, Abschnitt 5: history_contains_untrusted_content -------

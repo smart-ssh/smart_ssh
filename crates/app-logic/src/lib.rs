@@ -78,6 +78,7 @@ pub mod server_credentials;
 pub mod server_redaction;
 pub mod servers;
 pub mod session;
+pub mod session_extension;
 pub mod single_instance;
 pub mod ssh_config_import;
 /// Spec 0102: Startverzeichnis für Terminal und Dateibrowser.

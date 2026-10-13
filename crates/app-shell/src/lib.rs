@@ -65,6 +65,19 @@ mod wiring;
 
 pub use wiring::{Edition, Wiring};
 
+/// Spec 0038, section 2a: asks the core to rebuild the redactor of every open
+/// session on `server_id` — for a session extension whose secret values
+/// changed. History already in the sessions is re-redacted on the next send.
+pub async fn rebuild_server_redactors<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    server_id: ssh_manager_core::shared::ServerId,
+) {
+    use tauri::Manager;
+    if let Some(state) = app.try_state::<AppState>() {
+        app_logic::session_extension::rebuild_server_redactors(&state, server_id).await;
+    }
+}
+
 use std::sync::Arc;
 
 use credentials_keyring::KeyringCredentialStore;
@@ -177,6 +190,7 @@ fn startup_inputs(
 /// `offers_skip` ist A11.1 und gilt nur im Passwort-Modus.
 pub(crate) async fn open_and_assemble(
     entitlements: &Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
+    session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
     inputs: &StartupInputs,
     access: app_logic::database_startup::RootKeyAccess<'_>,
     prompt: &dyn app_logic::database_startup::StartupPrompt,
@@ -313,6 +327,7 @@ pub(crate) async fn open_and_assemble(
 
     let app_state = AppState {
         sessions: SessionManager::new(),
+        session_extension,
         // Klarstellung 9: die Kennung des K, mit dem diese Datenbank gerade
         // geöffnet wurde — damit das Einrichten aus den Einstellungen
         // prüfen kann, dass es denselben Schlüssel verpackt (Fund 10).
@@ -499,6 +514,7 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             // jeder Laufzeit (s. `runtime_assumptions`).
             match tauri::async_runtime::block_on(open_and_assemble(
                 &wiring.entitlements,
+                wiring.session_extension.clone(),
                 &inputs,
                 app_logic::database_startup::RootKeyAccess::Keychain(&keyring),
                 &prompt,
@@ -550,7 +566,8 @@ pub fn run(wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // ist.
     let gate = std::sync::Arc::new(crate::startup_gate::StartupGate::new(app_state.is_some()));
     let pending =
-        crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone());
+        crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
+            .with_session_extension(wiring.session_extension.clone());
     let plugins = wiring.plugins;
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.

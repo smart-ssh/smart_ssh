@@ -173,7 +173,7 @@ pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
         // einmalig bei `connect()` eingefügte Verlaufs-Nachricht (s.
         // `os_banner_message`-Kommentar in `connect_session`), nicht mehr in
         // `SystemContextParts` — hier also nichts mehr zu übernehmen.
-        let (updated_system_context_parts, notes_present) = build_session_system_context(
+        let (mut updated_system_context_parts, notes_present) = build_session_system_context(
             app,
             &server_name,
             &session.server_id,
@@ -182,6 +182,24 @@ pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
             policy_store,
         )
         .await;
+        // Spec 0038, section 2a: a registered session extension adds its own
+        // fenced section; it counts as untrusted content like notes.
+        let session_extension = app
+            .try_state::<AppState>()
+            .and_then(|state| state.session_extension.clone());
+        let notes_present = if let Some(extension) = session_extension.as_deref() {
+            let scope =
+                super::connect::extension_scope(app, profile_store, session.server_id).await;
+            let present = app_logic::session_extension::append_extension_section(
+                &mut updated_system_context_parts,
+                Some(extension),
+                scope.as_ref(),
+                &session.redactor,
+            );
+            notes_present || present
+        } else {
+            notes_present
+        };
         // Spec 0039, Abschnitt 5: der System-Prompt wird bei JEDER
         // Nutzer-Nachricht neu gebaut — enthält er gefencte Notizen (auch
         // wenn er das schon in einer früheren Nachricht tat), muss das Flag
