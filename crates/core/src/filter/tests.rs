@@ -2917,6 +2917,7 @@ mod substitution_and_shell_c_pins {
             })
         );
     }
+}
 
 // --- Issue #487: pinned mutation survivors ----------------------------------
 
@@ -2979,4 +2980,34 @@ async fn test_issue_487_dedup_set_is_cleared_when_full() {
     *store.0.lock().unwrap() = vec![rule(0)];
     let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
     assert_eq!(count_pattern_error_events("cap-0-487"), 2);
+}
+
+/// Issue #487: with several inner shell codes the reported rule comes from
+/// the trace that decided the outcome, not from the first inner trace.
+#[tokio::test]
+async fn test_issue_487_inner_trace_reports_deciding_rule() {
+    let eng = engine(vec![
+        glob_rule(
+            "confirm-ls",
+            "ls *",
+            RuleAction::Confirm,
+            Scope::Global,
+            100,
+        ),
+        glob_rule(
+            "deny-docker",
+            "docker *",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        ),
+    ]);
+    let trace = eng
+        .evaluate_explained("perl -e 'ls -la' -e 'docker rm -f prod'", &ctx("srv1", &[]))
+        .await;
+    assert_deny(&trace.decision);
+    assert_eq!(
+        trace.matched_rule.as_ref().map(|r| r.0.as_str()),
+        Some("deny-docker")
+    );
 }
