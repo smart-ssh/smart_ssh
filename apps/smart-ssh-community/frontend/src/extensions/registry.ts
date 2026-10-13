@@ -42,7 +42,7 @@
  * ein geöffnetes Einstellungsfenster den neuen Abschnitt ohne erneutes
  * Öffnen zeigt. */
 
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export interface SettingsSectionContribution {
   id: string;
@@ -124,13 +124,55 @@ export interface FirstRunNoticeExtension {
   Component: ComponentType<FirstRunNoticeExtensionContext>;
 }
 
+/** Spec 0038, Abschnitt 4: Kontext für einen Abschnitt im Server-Formular.
+ * `serverId` ist immer gesetzt — für einen neuen, ungespeicherten Server
+ * wird kein Abschnitt gerendert. `dirty` ist `true`, solange das Formular
+ * ungespeicherte Änderungen hat. */
+export interface ServerFormSectionContext {
+  serverId: string;
+  dirty: boolean;
+}
+
+export interface ServerFormSectionContribution {
+  id: string;
+  component: ComponentType<ServerFormSectionContext>;
+}
+
+/** Kontext für einen Abschnitt im Gruppen-Formular (nur bestehende Gruppen). */
+export interface GroupFormSectionContext {
+  groupId: string;
+  dirty: boolean;
+}
+
+export interface GroupFormSectionContribution {
+  id: string;
+  component: ComponentType<GroupFormSectionContext>;
+}
+
+/** Eigene Ansicht im Verwalten-Tab: erscheint als zusätzlicher Eintrag
+ * unterhalb des Server-Baums in der Seitenleiste. `label` ist ein fester
+ * Text oder ein i18next-Schlüssel (wie bei Settings-Abschnitten), `icon`
+ * ein beliebiges React-Element (dekorativ). */
+export interface ManageViewContribution {
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  component: ComponentType;
+}
+
 interface Registry {
+  serverFormSections: Map<string, ServerFormSectionContribution>;
+  groupFormSections: Map<string, GroupFormSectionContribution>;
+  manageViews: Map<string, ManageViewContribution>;
   settingsSections: Map<string, SettingsSectionContribution>;
   documentActions: Map<string, DocumentAction>;
   firstRunNoticeExtensions: Map<string, FirstRunNoticeExtension>;
 }
 
 const registry: Registry = {
+  serverFormSections: new Map(),
+  groupFormSections: new Map(),
+  manageViews: new Map(),
   settingsSections: new Map(),
   documentActions: new Map(),
   firstRunNoticeExtensions: new Map(),
@@ -216,6 +258,59 @@ export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[] {
   );
 }
 
+// Server-/Gruppen-Formular-Abschnitte und Verwalten-Ansichten teilen sich
+// einen Benachrichtigungskanal (`subscribeFormSlots`, kompatibel mit
+// `useSyncExternalStore`), damit eine spätere Registrierung ohne Neuladen
+// erscheint. Die Schnappschüsse ändern sich nur bei einer Änderung.
+const formSlotListeners = new Set<() => void>();
+let serverFormSectionsSnapshot: ServerFormSectionContribution[] = [];
+let groupFormSectionsSnapshot: GroupFormSectionContribution[] = [];
+let manageViewsSnapshot: ManageViewContribution[] = [];
+
+function notifyFormSlotsChanged(): void {
+  serverFormSectionsSnapshot = Array.from(registry.serverFormSections.values());
+  groupFormSectionsSnapshot = Array.from(registry.groupFormSections.values());
+  manageViewsSnapshot = Array.from(registry.manageViews.values());
+  for (const listener of Array.from(formSlotListeners)) listener();
+}
+
+export function subscribeFormSlots(listener: () => void): () => void {
+  formSlotListeners.add(listener);
+  return () => {
+    formSlotListeners.delete(listener);
+  };
+}
+
+/** Registriert (bzw. ersetzt bei gleicher `id`) einen Abschnitt im
+ * Server-Formular (normale Server und lokaler Pseudo-Server). Ob er
+ * gesperrt ist, entscheidet der Registrierende in der Komponente (die
+ * Registry kennt keine Entitlements, s. `DocumentAction`). */
+export function registerServerFormSection(section: ServerFormSectionContribution): void {
+  registry.serverFormSections.set(section.id, section);
+  notifyFormSlotsChanged();
+}
+
+export function registerGroupFormSection(section: GroupFormSectionContribution): void {
+  registry.groupFormSections.set(section.id, section);
+  notifyFormSlotsChanged();
+}
+
+export function registerManageView(view: ManageViewContribution): void {
+  registry.manageViews.set(view.id, view);
+  notifyFormSlotsChanged();
+}
+
+/** Zwischen zwei Änderungen dieselbe Array-Referenz (nicht verändern). */
+export function listServerFormSections(): ServerFormSectionContribution[] {
+  return serverFormSectionsSnapshot;
+}
+export function listGroupFormSections(): GroupFormSectionContribution[] {
+  return groupFormSectionsSnapshot;
+}
+export function listManageViews(): ManageViewContribution[] {
+  return manageViewsSnapshot;
+}
+
 /** Nur für Tests: setzt die Registry zwischen Testfällen zurück, damit
  * Registrierungen aus einem Test nicht in den nächsten durchsickern. */
 export function resetRegistryForTests(): void {
@@ -223,4 +318,8 @@ export function resetRegistryForTests(): void {
   notifySettingsSectionsChanged();
   registry.documentActions.clear();
   registry.firstRunNoticeExtensions.clear();
+  registry.serverFormSections.clear();
+  registry.groupFormSections.clear();
+  registry.manageViews.clear();
+  notifyFormSlotsChanged();
 }

@@ -144,6 +144,19 @@ function parseAllowList(licensesFilePath) {
   return entries;
 }
 
+// Per-Crate-Ausnahmen aus `[licenses] exceptions = [{ crate, allow }]`
+// (ADR 0135). cargo-about kennt sie als `[<crate>] accepted = [...]`.
+function parseExceptions(licensesFilePath) {
+  const content = fs.readFileSync(licensesFilePath, "utf8");
+  const block = content.match(/^exceptions\s*=\s*\[([\s\S]*?)^\]/m);
+  if (!block) return [];
+  const out = [];
+  for (const m of block[1].matchAll(/\{\s*crate\s*=\s*"([^"]+)"\s*,\s*allow\s*=\s*\[([^\]]*)\]\s*\}/g)) {
+    out.push({ crate: m[1], allow: [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1]) });
+  }
+  return out;
+}
+
 // Einfache SPDX-"OR"/"AND"-Auswertung für npm-Lizenzfelder. Die
 // Rust-Seite prüft cargo-about selbst (vollständiger SPDX-Ausdrucks-
 // Parser über das generierte about.toml); diese Funktion deckt nur die in
@@ -161,14 +174,16 @@ function isLicenseAllowed(expr, allowList) {
   });
 }
 
-function writeGeneratedAboutToml(allowList, tmpDir) {
+function writeGeneratedAboutToml(allowList, tmpDir, exceptions = []) {
   const aboutTomlPath = path.join(tmpDir, "about.toml");
   const accepted = allowList.map((l) => `    "${l.replace(/"/g, '\\"')}"`).join(",\n");
   fs.writeFileSync(
     aboutTomlPath,
     `# Erzeugt von scripts/generate-third-party-notices.mjs aus ${path.basename(
       "deny.toml",
-    )} — nicht von Hand pflegen (A1.5).\naccepted = [\n${accepted}\n]\nprivate = { ignore = true }\n`,
+    )} — nicht von Hand pflegen (A1.5).\naccepted = [\n${accepted}\n]\nprivate = { ignore = true }\n${exceptions
+      .map((e) => `\n[${e.crate}]\naccepted = [${e.allow.map((l) => `"${l}"`).join(", ")}]\n`)
+      .join("")}`,
   );
   return aboutTomlPath;
 }
@@ -628,7 +643,7 @@ function generate(args) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "smart-ssh-about-"));
   let aboutJson;
   try {
-    const aboutTomlPath = writeGeneratedAboutToml(allowList, tmpDir);
+    const aboutTomlPath = writeGeneratedAboutToml(allowList, tmpDir, parseExceptions(args.licenses));
     aboutJson = runCargoAbout(args.workspace, aboutTomlPath, tmpDir);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -713,6 +728,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 export {
   parseArgs,
   parseAllowList,
+  parseExceptions,
   isLicenseAllowed,
   collectProdPackages,
   localPackagePredicate,

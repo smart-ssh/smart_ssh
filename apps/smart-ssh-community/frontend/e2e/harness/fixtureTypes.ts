@@ -63,6 +63,8 @@ export interface E2eBridge {
   setCommand(cmd: string, response: CannedResponse): void;
   /** Settles every held call of `cmd`; returns how many were held. */
   release(cmd: string, response: { result: unknown } | { error: unknown }): number;
+  /** Resolves once no command is in flight and none was issued for two frames. */
+  settle(): Promise<void>;
   /** How many calls of `cmd` are currently held. */
   heldCount(cmd: string): number;
   /** A snapshot of the in-memory model. */

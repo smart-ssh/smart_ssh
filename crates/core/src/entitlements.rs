@@ -35,6 +35,9 @@ pub enum Feature {
     AuditExport,
     Sso,
     SelfHosted,
+    /// Per-server environment data contributed by an extension (session
+    /// context section and known secrets). Local, not service-bound.
+    ServerEnvironment,
 }
 
 impl Feature {
@@ -73,7 +76,8 @@ impl Feature {
             | Feature::DocumentExport
             | Feature::AuditExport
             | Feature::Sso
-            | Feature::SelfHosted => false,
+            | Feature::SelfHosted
+            | Feature::ServerEnvironment => false,
         }
     }
 }
@@ -215,6 +219,7 @@ mod tests {
         assert!(!Feature::AuditExport.is_service_bound());
         assert!(!Feature::Sso.is_service_bound());
         assert!(!Feature::SelfHosted.is_service_bound());
+        assert!(!Feature::ServerEnvironment.is_service_bound());
     }
 
     #[test]

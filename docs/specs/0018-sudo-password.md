@@ -90,6 +90,9 @@ Nach Filter-Engine und Bestätigung gilt für das freigegebene Kommando:
   oder gültigem Sudo-Zeitstempel erhält das **ausgeführte Programm** die
   Zeile (etwa `sudo cat` oder `sudo tee`) und könnte sie ausgeben. Das
   Passwort erreicht deshalb weder KI-Kontext noch Log im Klartext.
+  Eine Edition kann über die Sitzungs-Erweiterung (Spec 0038) weitere
+  serverbezogene Secret-Werte beisteuern; sie werden zusätzlich zum
+  Sudo-Passwort, wörtlich und nur für diesen Server, maskiert.
 - Das Passwort liegt wie alle Secrets nur in der verschlüsselten Datenbank
   (Spec 0096, Spec 0101).
 - Das Passwort ist kein Teil von Kommandotext, Ledger, Chatverlauf oder

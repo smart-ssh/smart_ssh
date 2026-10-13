@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Wird von Tauri beim macOS-Bundle in die Info.plist der App gemischt. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Smart SSH uses the microphone only when you start voice input. Speech is recognised on this computer and the audio never leaves it.</string>
+</dict>
+</plist>

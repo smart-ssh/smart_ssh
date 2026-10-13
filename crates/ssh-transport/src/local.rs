@@ -933,14 +933,28 @@ mod tests {
         let canceller = async {
             wait_for_marker(&marker).await;
             let at = std::time::Instant::now();
-            tx.send(())
-                .expect("command already finished before the cancel");
-            at
+            // Do not panic here: the outcome of the finished command is
+            // needed for the diagnostic below.
+            (at, tx.send(()).is_ok())
         };
-        let ((outcome, finished_at), cancelled_at) =
+        let ((outcome, finished_at), (cancelled_at, cancel_sent)) =
             tokio::time::timeout(NO_HANG_TIMEOUT, async { tokio::join!(exec, canceller) })
                 .await
                 .expect("execute_cancellable ignored the cancel and kept running");
+        if !cancel_sent {
+            // Issue #466: make a CI failure diagnosable from the log alone.
+            let detail = match &outcome {
+                Ok(o) => format!(
+                    "cancelled={} exit_code={:?} stdout={:?} stderr={:?}",
+                    o.cancelled,
+                    o.output.exit_code,
+                    String::from_utf8_lossy(&o.output.stdout),
+                    String::from_utf8_lossy(&o.output.stderr)
+                ),
+                Err(e) => format!("error: {e:?}"),
+            };
+            panic!("command {command:?} already finished before the cancel: {detail}");
+        }
         (
             outcome.expect("a cancelled command is Ok, not an error"),
             finished_at.saturating_duration_since(cancelled_at),
@@ -1067,13 +1081,20 @@ mod tests {
         let mut transport = LocalTransport::with_home(Some(home.path().to_path_buf()));
         #[cfg(unix)]
         let command = "echo ready; touch marker; sleep 600";
-        // Windows: the marker is written by the long-running PowerShell
-        // process itself (right before it sleeps), so it can only appear once
-        // the command is really in its long-running phase. No inner double
-        // quotes and no `|`, which `cmd /C` would treat differently.
+        // Windows: pure `cmd` builtins, no second interpreter. The old variant
+        // started PowerShell for the marker; its start-up is slow and variable
+        // on CI runners and the `;`-joined statements passed through `cmd /C`
+        // quoting were fragile, so the marker sometimes did not appear within
+        // the timeout. Here `echo x> marker` runs in the `cmd` process (cwd =
+        // the injected home) right before the long-running part, which
+        // `taskkill /T` ends together with `cmd`. Issue #466: external
+        // programs are not reliable here. CI diagnostics showed the child
+        // `cmd` could not find `powershell` ("not recognized", exit code 1),
+        // and `ping -n 600` most likely ended early for the same reason. So the long-running part
+        // is a `cmd` builtin: an endless `for /L` loop (step 0, as in the
+        // streaming-cap test) that needs no other executable.
         #[cfg(windows)]
-        let command =
-            "echo ready& powershell -NoProfile -NonInteractive -Command Set-Content -Path marker -Value x; Start-Sleep -Seconds 600";
+        let command = "echo ready& echo x> marker& for /L %i in (1,0,2) do @rem";
 
         let (outcome, after_cancel) =
             run_and_cancel_at_marker(&mut transport, home.path(), command).await;

@@ -1,10 +1,23 @@
 //! Local speech-to-text model management (Spec 0108): download a whisper.cpp
 //! GGML model on explicit request, verify it against a pinned SHA-256, store
-//! it, report its state, delete it. No audio handling lives here.
+//! it, report its state, delete it; plus voice recording and local
+//! transcription behind traits (`AudioSource`, `Transcriber`).
 //!
 //! Integrity rule: a model file only ever appears under its final name after
 //! its hash was verified (download to `<name>.part`, verify, rename).
 //! Logs carry at most the model id, a byte count and the outcome.
+
+mod audio;
+mod recorder;
+mod transcribe;
+
+pub use audio::{
+    resample_mono, to_mono_16k, AudioCapture, AudioSource, CaptureError, CpalSource, TARGET_RATE,
+};
+pub use recorder::{RecordError, Recorder, RecorderState, StateCallback, MAX_RECORDING};
+pub use transcribe::{
+    parse_language, InvalidLanguage, TranscribeError, Transcriber, WhisperTranscriber,
+};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

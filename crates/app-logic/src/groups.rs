@@ -124,6 +124,44 @@ pub async fn compute_delete_group_result(
     })
 }
 
+/// The full two-step `delete_group` flow, apart from `tauri::State`: with
+/// `confirm_cascade: false` only the preview, with `true` the group and its
+/// descendants are deleted. Afterwards the session extension is told about
+/// every deleted group (the group itself and each cascaded descendant,
+/// Spec 0038, section 2a).
+pub async fn delete_group(
+    store: &dyn ProfileStore,
+    credential_store: &(dyn CredentialStore + Send + Sync),
+    id: GroupId,
+    confirm_cascade: bool,
+    extension: Option<&dyn crate::session_extension::SessionExtension>,
+) -> CommandResult<DeleteGroupResult> {
+    let result = compute_delete_group_result(store, credential_store, id, confirm_cascade).await?;
+    if confirm_cascade {
+        // Descendants are collected before the delete: afterwards the rows
+        // are gone.
+        let all_groups = store.list_groups().await?;
+        let mut removed = vec![id];
+        let mut index = 0;
+        while index < removed.len() {
+            let current = removed[index];
+            index += 1;
+            for group in &all_groups {
+                if group.parent_id == Some(current) && !removed.contains(&group.id) {
+                    removed.push(group.id);
+                }
+            }
+        }
+        store.delete_group(&id).await?;
+        if let Some(extension) = extension {
+            for group_id in removed {
+                extension.group_removed(group_id);
+            }
+        }
+    }
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
@@ -325,6 +363,41 @@ mod tests {
         assert!(result.servers_to_unassign.is_empty());
         // Vorschau ändert nichts.
         assert_eq!(store.unusable.lock().unwrap().len(), 4);
+    }
+
+    /// Spec 0038, section 2a: the extension hears about the group and every
+    /// cascaded descendant after the delete — and not on a preview.
+    #[tokio::test]
+    async fn test_delete_group_notifies_extension_for_cascade() {
+        use crate::session_extension::RecordingExtension;
+
+        let root = group("root", None);
+        let child = group("child", Some(root.id));
+        let grandchild = group("grandchild", Some(child.id));
+        let other = group("other", None);
+        let store = InMemoryProfileStore::new()
+            .with_group(root.clone())
+            .with_group(child.clone())
+            .with_group(grandchild.clone())
+            .with_group(other.clone());
+        let credentials = InMemoryCredentialStore::new();
+        let ext = RecordingExtension::default();
+
+        delete_group(&store, &credentials, root.id, false, Some(&ext))
+            .await
+            .unwrap();
+        assert!(ext.groups.lock().unwrap().is_empty());
+
+        delete_group(&store, &credentials, root.id, true, Some(&ext))
+            .await
+            .unwrap();
+        let mut seen = ext.groups.lock().unwrap().clone();
+        seen.sort_by_key(|g| g.0);
+        let mut expected = vec![root.id, child.id, grandchild.id];
+        expected.sort_by_key(|g| g.0);
+        assert_eq!(seen, expected);
+        assert!(store.get_group(&root.id).await.is_err());
+        assert!(store.get_group(&other.id).await.is_ok());
     }
 
     /// Simuliert den vollen Zweischritt aus `commands::delete_group`:

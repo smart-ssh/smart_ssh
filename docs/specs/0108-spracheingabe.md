@@ -1,8 +1,9 @@
 # Spec 0108 — Spracheingabe im KI-Chat
 
-Status: teilweise umgesetzt (Abschnitte 1–4 und 6 sind umgesetzt; die
-Aufnahme, der Mikrofon-Knopf und die Einstellungen in den Abschnitten 5 und 7
-folgen in eigenen Issues, Issue #416 liefert die Modellverwaltung)
+Status: teilweise umgesetzt (Abschnitte 1–4, 5.3,
+5.6, 5.7 und 6 sind umgesetzt; der Mikrofon-Knopf, die Tastenkürzel und der
+Zustimmungsdialog folgen in einem eigenen Issue; #416 lieferte die
+Modellverwaltung, #417 die Aufnahme und Erkennung)
 Zweck: Der Nutzer diktiert Text in das Eingabefeld des KI-Chats. Die
 Erkennung läuft vollständig auf dem eigenen Rechner mit einem lokalen
 Whisper-Modell; Audio verlässt den Rechner nie.
@@ -94,7 +95,32 @@ Zustimmungsdialog mit Modellgröße und Quelle. Erst nach Zustimmung beginnt
 der Download.
 
 **5.6** Audio liegt nur im Arbeitsspeicher, wird nie auf die Platte
-geschrieben und nie protokolliert.
+geschrieben und nie protokolliert. Auch der erkannte Text steht in keinem Log;
+Logs nennen höchstens Dauer und Ergebnis.
+
+**5.7** Aufnahme und Erkennung (Befehle für die Oberfläche):
+- *Start* öffnet das Mikrofon, und nur dieser Befehl öffnet es. Ist das
+  gewählte Modell nicht bereit, endet er mit `speech_no_model`, ohne das
+  Gerät zu öffnen. Läuft schon eine Aufnahme, endet er mit
+  `speech_already_recording`; die laufende Aufnahme bleibt unberührt.
+- *Stop* beendet die Aufnahme, erkennt lokal und liefert den Text. Ohne
+  laufende Aufnahme: `speech_not_recording`.
+- *Abbrechen* verwirft die Aufnahme; es wird nichts erkannt und nichts
+  geliefert.
+- Die Aufnahme ist auf 120 Sekunden begrenzt. Danach endet sie von selbst und
+  die Erkennung läuft; die Oberfläche erhält den Zustand `finished`, und der
+  nächste *Stop* liefert den Text.
+- Zustandsänderungen kommen als Ereignis: `recording`, `transcribing`,
+  `idle`, `finished`. Die Erkennung läuft nicht im Oberflächen-Thread.
+- Die Aufnahme ist mono, 16 kHz. Eine Aufnahme unter etwa 0,1 Sekunde ergibt
+  leeren Text.
+- Sprache: `auto` (Vorgabe) erkennt die Sprache selbst, ein ISO-Code (z. B.
+  `de`) legt sie fest. Ein unbekannter Code wird beim Setzen abgelehnt
+  (`speech_language_invalid`).
+- Fehlerschlüssel: `speech_no_model`, `speech_no_device`,
+  `speech_permission_denied`, `speech_transcription_failed`.
+- macOS: Der Systemdialog für den Mikrofonzugriff erscheint erst beim ersten
+  Start; der Hinweistext erklärt, dass die Erkennung lokal läuft.
 
 ## 6. Sicherheitszusagen
 

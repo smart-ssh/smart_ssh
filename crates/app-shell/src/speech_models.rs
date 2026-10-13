@@ -21,7 +21,7 @@ pub(crate) const STATUS_EVENT: &str = "speech-model-status";
 #[derive(Default)]
 pub struct SpeechModels(OnceLock<Arc<ModelManager>>);
 
-fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<ModelManager>> {
+pub(crate) fn manager<R: Runtime>(app: &AppHandle<R>) -> CommandResult<Arc<ModelManager>> {
     let state = app.state::<SpeechModels>();
     if let Some(m) = state.0.get() {
         return Ok(Arc::clone(m));

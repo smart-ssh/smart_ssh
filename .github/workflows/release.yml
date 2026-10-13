@@ -65,7 +65,10 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libssl-dev
+            libssl-dev \
+            libasound2-dev \
+            cmake \
+            libclang-dev
 
       - name: Install frontend dependencies
         working-directory: apps/smart-ssh-community/frontend

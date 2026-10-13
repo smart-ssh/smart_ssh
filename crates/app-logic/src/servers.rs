@@ -290,6 +290,7 @@ pub async fn delete_server(
     credential_store: &(dyn CredentialStore + Send + Sync),
     id: ServerId,
     confirm: bool,
+    extension: Option<&dyn crate::session_extension::SessionExtension>,
 ) -> CommandResult<DeleteServerResult> {
     let server = store.get_server(&id).await?;
     let mut result =
@@ -305,6 +306,10 @@ pub async fn delete_server(
         let mut left_behind = delete_auth_method_secrets(credential_store, &server.auth);
         left_behind.extend(delete_sudo_password_on_server_delete(credential_store, id));
         store.delete_server(&id).await?;
+        // Spec 0038, section 2a: after the core deleted the server.
+        if let Some(extension) = extension {
+            extension.server_removed(id);
+        }
         result.secrets_left_behind = left_behind
             .into_iter()
             .map(|r| r.as_str().to_string())
@@ -347,6 +352,7 @@ pub async fn delete_unusable_server(
     credential_store: &(dyn CredentialStore + Send + Sync),
     id: ServerId,
     confirm: bool,
+    extension: Option<&dyn crate::session_extension::SessionExtension>,
 ) -> CommandResult<DeleteUnusableServerResult> {
     let listing = store.list_server_entries().await?;
     let Some(unusable) = listing.unusable.iter().find(|s| s.id == id) else {
@@ -374,6 +380,9 @@ pub async fn delete_unusable_server(
         // die Zeile — und durchlaufen, auch wenn ein Secret stehen bleibt.
         let left_behind = delete_all_server_secrets_on_unusable_delete(credential_store, id);
         store.delete_server(&id).await?;
+        if let Some(extension) = extension {
+            extension.server_removed(id);
+        }
         result.secrets_left_behind = left_behind
             .into_iter()
             .map(|r| r.as_str().to_string())
@@ -518,7 +527,7 @@ mod tests {
         let store = InMemoryProfileStore::new().with_server(target.clone());
         let credentials = InMemoryCredentialStore::new().with_secret(&credential_ref, "hunter2");
 
-        let preview = delete_server(&store, &credentials, target.id, false)
+        let preview = delete_server(&store, &credentials, target.id, false, None)
             .await
             .unwrap();
 
@@ -531,6 +540,30 @@ mod tests {
             credentials.get(&credential_ref).is_ok(),
             "confirm: false darf das Keychain-Secret nicht löschen"
         );
+    }
+
+    /// Spec 0038, section 2a: `server_removed` runs after the delete, for
+    /// the deleted server only, and not on a preview.
+    #[tokio::test]
+    async fn test_delete_server_notifies_extension_after_delete() {
+        use crate::session_extension::RecordingExtension;
+
+        let credential_ref = CredentialRef::new("test:server-password");
+        let target = server_with_password("target", None, &credential_ref);
+        let store = InMemoryProfileStore::new().with_server(target.clone());
+        let credentials = InMemoryCredentialStore::new().with_secret(&credential_ref, "x");
+        let ext = RecordingExtension::default();
+
+        delete_server(&store, &credentials, target.id, false, Some(&ext))
+            .await
+            .unwrap();
+        assert!(ext.servers.lock().unwrap().is_empty());
+
+        delete_server(&store, &credentials, target.id, true, Some(&ext))
+            .await
+            .unwrap();
+        assert_eq!(*ext.servers.lock().unwrap(), vec![target.id]);
+        assert!(store.get_server(&target.id).await.is_err());
     }
 
     /// Gegenstück: `confirm: true` löscht tatsächlich — Keychain-Secret,
@@ -546,7 +579,7 @@ mod tests {
             .with_server(dependent.clone());
         let credentials = InMemoryCredentialStore::new().with_secret(&credential_ref, "hunter2");
 
-        let result = delete_server(&store, &credentials, target.id, true)
+        let result = delete_server(&store, &credentials, target.id, true, None)
             .await
             .unwrap();
 
@@ -588,7 +621,7 @@ mod tests {
             .with_secret(&credential_ref, "hunter2")
             .with_failing_delete();
 
-        let result = delete_server(&store, &credentials, target.id, true)
+        let result = delete_server(&store, &credentials, target.id, true, None)
             .await
             .expect("das Löschen darf am Schlüsselbund nicht scheitern");
 
@@ -621,7 +654,7 @@ mod tests {
             .with_secret(&credential_ref, "hunter2")
             .with_failing_delete();
 
-        let preview = delete_server(&store, &credentials, target.id, false)
+        let preview = delete_server(&store, &credentials, target.id, false, None)
             .await
             .unwrap();
 
@@ -673,7 +706,7 @@ mod tests {
             credentials = credentials.with_secret(&r, "s3cret");
         }
 
-        let preview = delete_unusable_server(&store, &credentials, broken.id, false)
+        let preview = delete_unusable_server(&store, &credentials, broken.id, false, None)
             .await
             .unwrap();
 
@@ -702,7 +735,7 @@ mod tests {
             credentials = credentials.with_secret(&r, "s3cret");
         }
 
-        let result = delete_unusable_server(&store, &credentials, broken.id, true)
+        let result = delete_unusable_server(&store, &credentials, broken.id, true, None)
             .await
             .unwrap();
 
@@ -732,7 +765,7 @@ mod tests {
             .with_secret(&password_ref, "s3cret")
             .with_failing_delete();
 
-        let result = delete_unusable_server(&store, &credentials, broken.id, true)
+        let result = delete_unusable_server(&store, &credentials, broken.id, true, None)
             .await
             .expect("a stuck secret store must not block the delete");
 
@@ -761,7 +794,7 @@ mod tests {
         let credentials = InMemoryCredentialStore::new().with_secret(&sudo, "s3cret");
 
         assert!(
-            delete_unusable_server(&store, &credentials, readable.id, true)
+            delete_unusable_server(&store, &credentials, readable.id, true, None)
                 .await
                 .is_err()
         );
@@ -784,7 +817,7 @@ mod tests {
             credentials = credentials.with_secret(&r, "s3cret");
         }
 
-        let result = delete_unusable_server(&store, &credentials, broken.id, true)
+        let result = delete_unusable_server(&store, &credentials, broken.id, true, None)
             .await
             .unwrap();
 
@@ -829,7 +862,7 @@ mod tests {
         assert_eq!(listed[0].id, newer.id);
         assert_eq!(listed[0].name, "newer");
 
-        let result = delete_unusable_server(&store, &credentials, newer.id, true)
+        let result = delete_unusable_server(&store, &credentials, newer.id, true, None)
             .await
             .unwrap();
         assert!(result.secrets_left_behind.is_empty());

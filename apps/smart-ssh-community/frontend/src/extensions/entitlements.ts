@@ -19,7 +19,8 @@ export type Feature =
   | "document_export"
   | "audit_export"
   | "sso"
-  | "self_hosted";
+  | "self_hosted"
+  | "server_environment";
 
 export interface Entitlements {
   tier: Tier;
