@@ -7,9 +7,10 @@ name: Mutants
 # tautological tests become visible.
 #
 # Why many small shards: one mutant costs about 15 s build plus the whole
-# ssh-manager-core test suite (about 80 s alone, dominated by the risk
-# property tests). With about 900 mutants that is far more than one runner
-# can do within its 6 h limit, and the long single-module runs died with
+# ssh-manager-core test suite (80-150 s alone on a hosted runner with the
+# default proptest case count, dominated by the risk property tests). With
+# about 900 mutants that is far more than one runner can do within its 6 h
+# limit, and the long single-module runs died with
 # "runner received a shutdown signal" once a few mutants looped and
 # allocated memory without bound. So the `plan` job lists the mutants once
 # and splits them with cargo-mutants' own `--shard k/n` into shards of
@@ -24,10 +25,11 @@ on:
     inputs:
       mutants_per_shard:
         description: >-
-          Mutants per shard. About 75 s each on a hosted runner, so 24 is
-          roughly 30 min per shard. Lower it if shards report incomplete.
+          Mutants per shard. About 60-75 s each on a hosted runner, so 20
+          is roughly 20-25 min per shard. Lower it if shards report
+          incomplete.
         required: false
-        default: "24"
+        default: "20"
 
 permissions:
   contents: read
@@ -78,7 +80,7 @@ jobs:
       - name: Split mutants into shards
         id: plan
         env:
-          PER_SHARD: ${{ inputs.mutants_per_shard || '24' }}
+          PER_SHARD: ${{ inputs.mutants_per_shard || '20' }}
         run: |
           set -f -o pipefail
           # shellcheck disable=SC2086 # word splitting of MUTANTS_SCOPE is intended
@@ -99,7 +101,7 @@ jobs:
     name: cargo-mutants (shard ${{ matrix.shard }}/${{ needs.plan.outputs.count }})
     needs: plan
     runs-on: ubuntu-latest
-    # Expected: about 3 min setup and baseline plus about 30 min of
+    # Expected: about 3 min setup and baseline plus 20-25 min of
     # mutants. The cargo-mutants budget below (45 min) ends well before
     # this, so the shard upload always runs.
     timeout-minutes: 60
@@ -159,8 +161,25 @@ jobs:
       # so the extra parallelism bought little throughput but starved the
       # runner agent; -j 2 keeps nearly the same throughput with headroom.
       # `nice` keeps the runner agent responsive on top of that.
-      # --timeout 240: about three times the unmutated test time; a normal
-      # run under -j 2 stays well below it, endless loops stop after 4 min.
+      #
+      # PROPTEST_CASES=64 (default 256), for this run only: the property
+      # test chaining_never_lowers_risk_for_arbitrary_text alone took about
+      # 60 s of every test run, and with a fixed 240 s timeout most mutants
+      # that merely slowed it down ended as "timeout" instead of caught or
+      # missed. 64 cases cut the suite to about a third. Trade-off: a
+      # mutant that only a rare generated input exposes may now survive;
+      # the stored seeds in proptest-regressions/ still run, the fixed and
+      # adversarial tests are unchanged, and the normal CI keeps 256 cases.
+      # PROPTEST_MAX_SHRINK_ITERS=0: once a property fails the mutant is
+      # caught; shrinking the counterexample only costs time (in the last
+      # run it kept 180 already caught mutants running into the timeout).
+      #
+      # --timeout-multiplier 3: the timeout follows this shard's own
+      # unmutated baseline, which varied from 80 to 150 s between runners
+      # of the same run, instead of a fixed value. Three times leaves room
+      # for the slowdown under -j 2; a genuine endless loop still stops
+      # after a few minutes. --minimum-test-timeout 60 guards a baseline
+      # that happens to run very fast.
       # --sharding round-robin: mutants of one function sit next to each
       # other, and the endless-loop ones cluster in the parser; spreading
       # them evenly keeps the shards at a similar duration.
@@ -168,6 +187,8 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
           SHARDS: ${{ needs.plan.outputs.count }}
+          PROPTEST_CASES: "64"
+          PROPTEST_MAX_SHRINK_ITERS: "0"
         run: |
           set +e
           set -f
@@ -175,7 +196,8 @@ jobs:
           timeout --signal=INT --kill-after=2m 45m \
             nice -n 10 cargo mutants $MUTANTS_SCOPE \
               --shard "${SHARD}/${SHARDS}" --sharding round-robin \
-              --no-shuffle -j 2 --timeout 240
+              --no-shuffle -j 2 \
+              --timeout-multiplier 3 --minimum-test-timeout 60
           rc=$?
           mkdir -p mutants.out
           # 0 = no survivors, 2 = survivors found, 3 = some mutants timed
