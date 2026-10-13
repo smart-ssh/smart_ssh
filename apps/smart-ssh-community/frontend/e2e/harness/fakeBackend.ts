@@ -272,6 +272,17 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     // Issue #355: the status events are up to the test.
     reconnect_session: () => null,
     stop_auto_reconnect: () => null,
+    get_selected_speech_model: () => "base",
+    get_speech_language: () => "auto",
+    get_speech_model_status: (args) => ({ model: (args as { model: string }).model, state: "not_downloaded" }),
+    set_selected_speech_model: () => null,
+    set_speech_language: () => null,
+    start_speech_model_download: () => null,
+    cancel_speech_model_download: () => null,
+    delete_speech_model: () => null,
+    start_voice_recording: () => null,
+    stop_voice_recording: () => "",
+    cancel_voice_recording: () => null,
     disconnect: ({ sessionId }) => {
       model.sessions = model.sessions.filter((s) => s.sessionId !== sessionId);
       persist();

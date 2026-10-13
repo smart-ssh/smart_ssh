@@ -43,7 +43,8 @@
       "fileTypes": "ファイル",
       "chatRetention": "セッションとデータ",
       "mcpServer": "MCPサーバー",
-      "masterPassword": "マスターパスワード"
+      "masterPassword": "マスターパスワード",
+      "voiceInput": "音声入力"
     }
   },
   "about": {
@@ -1132,5 +1133,43 @@
     "seconds30": "30 秒",
     "seconds60": "60 秒",
     "minutes5": "5 分"
+  },
+  "voice": {
+    "start": "音声入力を開始",
+    "stop": "録音を停止して文字起こし ({{time}})",
+    "transcribing": "文字起こし中…",
+    "recordingStatus": "録音中",
+    "dismiss": "閉じる",
+    "consent": {
+      "title": "音声モデルをダウンロードしますか？",
+      "body": "音声モデル（{{model}}、約 {{size}} MiB）を {{source}} から一度だけダウンロードします。以後、音声認識はこのコンピューター上だけで動作し、音声とテキストが外部に送られることはありません。",
+      "download": "ダウンロード",
+      "cancel": "キャンセル",
+      "progress": "ダウンロードの進行状況"
+    },
+    "errors": {
+      "noDevice": "マイクが見つかりません。マイクを接続し、システム設定で入力デバイスを確認してください。",
+      "permissionDenied": "マイクへのアクセスが拒否されました。システム設定で Smart SSH のマイク使用を許可してから、もう一度お試しください。",
+      "transcriptionFailed": "音声を認識できませんでした。もう一度試すか、設定で別のモデルを選んでください。",
+      "hashMismatch": "ダウンロードした音声モデルが整合性チェックに失敗したため破棄しました。もう一度ダウンロードしてください。",
+      "downloadFailed": "音声モデルをダウンロードできませんでした。インターネット接続を確認して、もう一度お試しください。",
+      "generic": "音声入力に失敗しました。もう一度お試しください。"
+    },
+    "settings": {
+      "description": "AI へのメッセージを音声で入力します。認識はこのコンピューター上で行われ、ネットワーク接続は {{source}} からのモデルの一度きりのダウンロードだけです。",
+      "enabled": "チャットにマイクボタンを表示する",
+      "model": "音声モデル",
+      "models": {
+        "base": "Base（約 {{size}} MiB、既定）",
+        "small": "Small（約 {{size}} MiB、高精度・低速）"
+      },
+      "statusReady": "ダウンロード済み",
+      "statusNotDownloaded": "未ダウンロード",
+      "statusDownloading": "ダウンロード中… {{percent}} %",
+      "download": "ダウンロード",
+      "delete": "モデルを削除",
+      "language": "認識言語",
+      "languageAuto": "自動"
+    }
   }
 }

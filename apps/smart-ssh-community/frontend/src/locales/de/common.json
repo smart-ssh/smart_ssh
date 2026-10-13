@@ -43,7 +43,8 @@
       "fileTypes": "Dateien",
       "chatRetention": "Sitzungen & Daten",
       "mcpServer": "MCP-Server",
-      "masterPassword": "Master-Passwort"
+      "masterPassword": "Master-Passwort",
+      "voiceInput": "Spracheingabe"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 Sekunden",
     "seconds60": "60 Sekunden",
     "minutes5": "5 Minuten"
+  },
+  "voice": {
+    "start": "Spracheingabe starten",
+    "stop": "Aufnahme beenden und umwandeln ({{time}})",
+    "transcribing": "Wird umgewandelt…",
+    "recordingStatus": "Aufnahme läuft",
+    "dismiss": "Ausblenden",
+    "consent": {
+      "title": "Sprachmodell herunterladen?",
+      "body": "Ein Sprachmodell ({{model}}, rund {{size}} MiB) wird einmalig von {{source}} heruntergeladen. Danach läuft die Spracherkennung vollständig auf diesem Computer; Audio und Text verlassen ihn nie.",
+      "download": "Herunterladen",
+      "cancel": "Abbrechen",
+      "progress": "Fortschritt des Downloads"
+    },
+    "errors": {
+      "noDevice": "Kein Mikrofon gefunden. Schließe ein Mikrofon an und prüfe das Eingabegerät in den Systemeinstellungen.",
+      "permissionDenied": "Der Zugriff auf das Mikrofon wurde verweigert. Erlaube Smart SSH den Mikrofonzugriff in den Systemeinstellungen und versuche es erneut.",
+      "transcriptionFailed": "Die Sprache konnte nicht erkannt werden. Versuche es erneut oder wähle in den Einstellungen ein anderes Modell.",
+      "hashMismatch": "Das heruntergeladene Sprachmodell hat die Integritätsprüfung nicht bestanden und wurde verworfen. Lade es erneut herunter.",
+      "downloadFailed": "Das Sprachmodell konnte nicht heruntergeladen werden. Prüfe die Internetverbindung und versuche es erneut.",
+      "generic": "Die Spracheingabe ist fehlgeschlagen. Bitte versuche es erneut."
+    },
+    "settings": {
+      "description": "Diktiere Nachrichten an die KI. Die Erkennung läuft auf diesem Computer; die einzige Netzwerkverbindung ist der einmalige Modell-Download von {{source}}.",
+      "enabled": "Mikrofon-Knopf im Chat anzeigen",
+      "model": "Sprachmodell",
+      "models": {
+        "base": "Base (rund {{size}} MiB, Vorgabe)",
+        "small": "Small (rund {{size}} MiB, genauer, langsamer)"
+      },
+      "statusReady": "Heruntergeladen",
+      "statusNotDownloaded": "Nicht heruntergeladen",
+      "statusDownloading": "Wird geladen… {{percent}} %",
+      "download": "Herunterladen",
+      "delete": "Modell löschen",
+      "language": "Erkennungssprache",
+      "languageAuto": "Automatisch"
+    }
   }
 }

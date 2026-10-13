@@ -43,7 +43,8 @@
       "fileTypes": "Archivos",
       "chatRetention": "Sesiones y datos",
       "mcpServer": "Servidor MCP",
-      "masterPassword": "Contraseña maestra"
+      "masterPassword": "Contraseña maestra",
+      "voiceInput": "Entrada de voz"
     }
   },
   "about": {
@@ -1148,5 +1149,43 @@
     "seconds30": "30 segundos",
     "seconds60": "60 segundos",
     "minutes5": "5 minutos"
+  },
+  "voice": {
+    "start": "Iniciar entrada de voz",
+    "stop": "Detener la grabación y transcribir ({{time}})",
+    "transcribing": "Transcribiendo…",
+    "recordingStatus": "Grabando",
+    "dismiss": "Cerrar",
+    "consent": {
+      "title": "¿Descargar el modelo de voz?",
+      "body": "Se descargará una sola vez un modelo de voz ({{model}}, unos {{size}} MiB) desde {{source}}. Después, el reconocimiento de voz se ejecuta por completo en este equipo; el audio y el texto nunca salen de él.",
+      "download": "Descargar",
+      "cancel": "Cancelar",
+      "progress": "Progreso de la descarga"
+    },
+    "errors": {
+      "noDevice": "No se encontró ningún micrófono. Conecta uno y revisa el dispositivo de entrada en los ajustes del sistema.",
+      "permissionDenied": "Se denegó el acceso al micrófono. Permite que Smart SSH use el micrófono en los ajustes del sistema e inténtalo de nuevo.",
+      "transcriptionFailed": "No se pudo reconocer la voz. Inténtalo de nuevo o elige otro modelo en los ajustes.",
+      "hashMismatch": "El modelo de voz descargado no superó la comprobación de integridad y se descartó. Descárgalo de nuevo.",
+      "downloadFailed": "No se pudo descargar el modelo de voz. Comprueba tu conexión a internet e inténtalo de nuevo.",
+      "generic": "Falló la entrada de voz. Inténtalo de nuevo."
+    },
+    "settings": {
+      "description": "Dicta mensajes a la IA. El reconocimiento se ejecuta en este equipo; la única conexión de red es la descarga única del modelo desde {{source}}.",
+      "enabled": "Mostrar el botón de micrófono en el chat",
+      "model": "Modelo de voz",
+      "models": {
+        "base": "Base (unos {{size}} MiB, predeterminado)",
+        "small": "Small (unos {{size}} MiB, más preciso, más lento)"
+      },
+      "statusReady": "Descargado",
+      "statusNotDownloaded": "No descargado",
+      "statusDownloading": "Descargando… {{percent}} %",
+      "download": "Descargar",
+      "delete": "Eliminar modelo",
+      "language": "Idioma de reconocimiento",
+      "languageAuto": "Automático"
+    }
   }
 }

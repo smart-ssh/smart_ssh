@@ -43,7 +43,8 @@
       "fileTypes": "Tiedostot",
       "chatRetention": "Istunnot ja tiedot",
       "mcpServer": "MCP-palvelin",
-      "masterPassword": "Pääsalasana"
+      "masterPassword": "Pääsalasana",
+      "voiceInput": "Puhesyöte"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 sekuntia",
     "seconds60": "60 sekuntia",
     "minutes5": "5 minuuttia"
+  },
+  "voice": {
+    "start": "Aloita puhesyöte",
+    "stop": "Lopeta nauhoitus ja muunna tekstiksi ({{time}})",
+    "transcribing": "Muunnetaan tekstiksi…",
+    "recordingStatus": "Nauhoitetaan",
+    "dismiss": "Sulje",
+    "consent": {
+      "title": "Ladataanko puhemalli?",
+      "body": "Puhemalli ({{model}}, noin {{size}} MiB) ladataan kerran osoitteesta {{source}}. Sen jälkeen puheentunnistus toimii kokonaan tällä tietokoneella; ääni ja teksti eivät koskaan poistu siitä.",
+      "download": "Lataa",
+      "cancel": "Peruuta",
+      "progress": "Latauksen edistyminen"
+    },
+    "errors": {
+      "noDevice": "Mikrofonia ei löytynyt. Liitä mikrofoni ja tarkista syöttölaite järjestelmäasetuksista.",
+      "permissionDenied": "Mikrofonin käyttö estettiin. Salli Smart SSH:lle mikrofonin käyttö järjestelmäasetuksissa ja yritä uudelleen.",
+      "transcriptionFailed": "Puhetta ei voitu tunnistaa. Yritä uudelleen tai valitse asetuksissa toinen malli.",
+      "hashMismatch": "Ladattu puhemalli ei läpäissyt eheystarkistusta, ja se hylättiin. Lataa se uudelleen.",
+      "downloadFailed": "Puhemallia ei voitu ladata. Tarkista internetyhteytesi ja yritä uudelleen.",
+      "generic": "Puhesyöte epäonnistui. Yritä uudelleen."
+    },
+    "settings": {
+      "description": "Sanele viestit tekoälylle. Tunnistus toimii tällä tietokoneella; ainoa verkkoyhteys on mallin kertalataus osoitteesta {{source}}.",
+      "enabled": "Näytä mikrofonipainike chatissa",
+      "model": "Puhemalli",
+      "models": {
+        "base": "Base (noin {{size}} MiB, oletus)",
+        "small": "Small (noin {{size}} MiB, tarkempi, hitaampi)"
+      },
+      "statusReady": "Ladattu",
+      "statusNotDownloaded": "Ei ladattu",
+      "statusDownloading": "Ladataan… {{percent}} %",
+      "download": "Lataa",
+      "delete": "Poista malli",
+      "language": "Tunnistuskieli",
+      "languageAuto": "Automaattinen"
+    }
   }
 }

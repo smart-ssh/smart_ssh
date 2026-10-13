@@ -43,7 +43,8 @@
       "fileTypes": "Filer",
       "chatRetention": "Sessioner og data",
       "mcpServer": "MCP-server",
-      "masterPassword": "Hovedadgangskode"
+      "masterPassword": "Hovedadgangskode",
+      "voiceInput": "Stemmeinput"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 sekunder",
     "seconds60": "60 sekunder",
     "minutes5": "5 min."
+  },
+  "voice": {
+    "start": "Start stemmeinput",
+    "stop": "Stop optagelsen og transskribér ({{time}})",
+    "transcribing": "Transskriberer…",
+    "recordingStatus": "Optager",
+    "dismiss": "Luk",
+    "consent": {
+      "title": "Hent sprogmodel?",
+      "body": "En sprogmodel ({{model}}, ca. {{size}} MiB) hentes én gang fra {{source}}. Derefter kører talegenkendelsen helt på denne computer; lyd og tekst forlader den aldrig.",
+      "download": "Hent",
+      "cancel": "Annullér",
+      "progress": "Hentningens fremdrift"
+    },
+    "errors": {
+      "noDevice": "Ingen mikrofon fundet. Tilslut en mikrofon, og kontrollér inputenheden i systemindstillingerne.",
+      "permissionDenied": "Adgang til mikrofonen blev afvist. Giv Smart SSH adgang til mikrofonen i systemindstillingerne, og prøv igen.",
+      "transcriptionFailed": "Talen kunne ikke genkendes. Prøv igen, eller vælg en anden model i indstillingerne.",
+      "hashMismatch": "Den hentede sprogmodel bestod ikke integritetskontrollen og blev kasseret. Hent den igen.",
+      "downloadFailed": "Sprogmodellen kunne ikke hentes. Kontrollér din internetforbindelse, og prøv igen.",
+      "generic": "Stemmeinput mislykkedes. Prøv igen."
+    },
+    "settings": {
+      "description": "Dikter beskeder til AI'en. Genkendelsen kører på denne computer; den eneste netværksforbindelse er den engangs modelhentning fra {{source}}.",
+      "enabled": "Vis mikrofonknappen i chatten",
+      "model": "Sprogmodel",
+      "models": {
+        "base": "Base (ca. {{size}} MiB, standard)",
+        "small": "Small (ca. {{size}} MiB, mere præcis, langsommere)"
+      },
+      "statusReady": "Hentet",
+      "statusNotDownloaded": "Ikke hentet",
+      "statusDownloading": "Henter… {{percent}} %",
+      "download": "Hent",
+      "delete": "Slet model",
+      "language": "Genkendelsessprog",
+      "languageAuto": "Automatisk"
+    }
   }
 }

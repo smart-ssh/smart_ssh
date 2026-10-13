@@ -43,7 +43,8 @@
       "fileTypes": "文件",
       "chatRetention": "会话与数据",
       "mcpServer": "MCP 服务器",
-      "masterPassword": "主密码"
+      "masterPassword": "主密码",
+      "voiceInput": "语音输入"
     }
   },
   "about": {
@@ -1132,5 +1133,43 @@
     "seconds30": "30 秒",
     "seconds60": "60 秒",
     "minutes5": "5 分钟"
+  },
+  "voice": {
+    "start": "开始语音输入",
+    "stop": "停止录音并转写 ({{time}})",
+    "transcribing": "正在转写…",
+    "recordingStatus": "正在录音",
+    "dismiss": "关闭",
+    "consent": {
+      "title": "下载语音模型？",
+      "body": "将从 {{source}} 一次性下载语音模型（{{model}}，约 {{size}} MiB）。之后语音识别完全在本机运行，音频和文本绝不会离开本机。",
+      "download": "下载",
+      "cancel": "取消",
+      "progress": "下载进度"
+    },
+    "errors": {
+      "noDevice": "未找到麦克风。请连接麦克风，并在系统设置中检查输入设备。",
+      "permissionDenied": "麦克风访问被拒绝。请在系统设置中允许 Smart SSH 使用麦克风，然后重试。",
+      "transcriptionFailed": "无法识别语音。请重试，或在设置中选择其他模型。",
+      "hashMismatch": "已下载的语音模型未通过完整性检查，已被丢弃。请重新下载。",
+      "downloadFailed": "无法下载语音模型。请检查网络连接后重试。",
+      "generic": "语音输入失败。请重试。"
+    },
+    "settings": {
+      "description": "用语音向 AI 口述消息。识别在本机运行；唯一的网络连接是从 {{source}} 一次性下载模型。",
+      "enabled": "在聊天中显示麦克风按钮",
+      "model": "语音模型",
+      "models": {
+        "base": "Base（约 {{size}} MiB，默认）",
+        "small": "Small（约 {{size}} MiB，更准确，更慢）"
+      },
+      "statusReady": "已下载",
+      "statusNotDownloaded": "未下载",
+      "statusDownloading": "正在下载… {{percent}} %",
+      "download": "下载",
+      "delete": "删除模型",
+      "language": "识别语言",
+      "languageAuto": "自动"
+    }
   }
 }

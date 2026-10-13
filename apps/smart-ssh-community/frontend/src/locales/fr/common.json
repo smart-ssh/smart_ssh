@@ -43,7 +43,8 @@
       "fileTypes": "Fichiers",
       "chatRetention": "Sessions et données",
       "mcpServer": "Serveur MCP",
-      "masterPassword": "Mot de passe principal"
+      "masterPassword": "Mot de passe principal",
+      "voiceInput": "Saisie vocale"
     }
   },
   "about": {
@@ -1148,5 +1149,43 @@
     "seconds30": "30 secondes",
     "seconds60": "60 secondes",
     "minutes5": "5 min"
+  },
+  "voice": {
+    "start": "Démarrer la saisie vocale",
+    "stop": "Arrêter l'enregistrement et transcrire ({{time}})",
+    "transcribing": "Transcription en cours…",
+    "recordingStatus": "Enregistrement",
+    "dismiss": "Fermer",
+    "consent": {
+      "title": "Télécharger le modèle vocal ?",
+      "body": "Un modèle vocal ({{model}}, environ {{size}} Mio) sera téléchargé une seule fois depuis {{source}}. Ensuite, la reconnaissance vocale fonctionne entièrement sur cet ordinateur ; l'audio et le texte ne le quittent jamais.",
+      "download": "Télécharger",
+      "cancel": "Annuler",
+      "progress": "Progression du téléchargement"
+    },
+    "errors": {
+      "noDevice": "Aucun microphone trouvé. Branchez un microphone et vérifiez le périphérique d'entrée dans les réglages système.",
+      "permissionDenied": "L'accès au microphone a été refusé. Autorisez Smart SSH à utiliser le microphone dans les réglages système, puis réessayez.",
+      "transcriptionFailed": "La parole n'a pas pu être reconnue. Réessayez ou choisissez un autre modèle dans les réglages.",
+      "hashMismatch": "Le modèle vocal téléchargé a échoué à la vérification d'intégrité et a été supprimé. Téléchargez-le à nouveau.",
+      "downloadFailed": "Le modèle vocal n'a pas pu être téléchargé. Vérifiez votre connexion Internet et réessayez.",
+      "generic": "La saisie vocale a échoué. Veuillez réessayer."
+    },
+    "settings": {
+      "description": "Dictez vos messages à l'IA. La reconnaissance fonctionne sur cet ordinateur ; la seule connexion réseau est le téléchargement unique du modèle depuis {{source}}.",
+      "enabled": "Afficher le bouton microphone dans le chat",
+      "model": "Modèle vocal",
+      "models": {
+        "base": "Base (environ {{size}} Mio, par défaut)",
+        "small": "Small (environ {{size}} Mio, plus précis, plus lent)"
+      },
+      "statusReady": "Téléchargé",
+      "statusNotDownloaded": "Non téléchargé",
+      "statusDownloading": "Téléchargement… {{percent}} %",
+      "download": "Télécharger",
+      "delete": "Supprimer le modèle",
+      "language": "Langue de reconnaissance",
+      "languageAuto": "Automatique"
+    }
   }
 }

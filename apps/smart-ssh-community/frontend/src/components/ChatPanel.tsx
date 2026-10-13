@@ -48,6 +48,12 @@ import {
   onRiskAssessmentUpdated,
 } from "../events";
 import { translateErrorCode } from "../errorCodes";
+import {
+  appendToDraft,
+  loadVoiceInputEnabled,
+  subscribeVoiceInputEnabled,
+} from "../voiceInputSettings";
+import { VoiceInputControl } from "./VoiceInputControl";
 import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { LiveCommandOutput } from "./LiveCommandOutput";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -409,6 +415,16 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
   // Historien-Navigationslogik unten bleibt unverändert.
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Spec 0108: Spracheingabe an/aus (Standard an); der erkannte Text geht
+  // über `handleDraftChange` in den Entwurf, nie direkt an die KI.
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  useEffect(() => {
+    loadVoiceInputEnabled()
+      .then(setVoiceEnabled)
+      .catch(() => {});
+    return subscribeVoiceInputEnabled(setVoiceEnabled);
+  }, []);
+  const draftRef = useRef("");
 
   // Spec 0015, Abschnitt 5: einmalig pro Server geladen, kein
   // wiederholtes Nachladen bei jeder Pfeiltaste. `historyNav` verfolgt den
@@ -1103,6 +1119,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     }
   };
 
+  draftRef.current = draft;
+  const handleVoiceText = (text: string) => {
+    handleDraftChange(appendToDraft(draftRef.current, text));
+    inputRef.current?.focus();
+  };
+
   return (
     <div ref={chatAreaRef} className="flex h-full flex-col">
       {readOnlyHint === undefined && (
@@ -1205,7 +1227,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               ))}
             </ul>
           )}
-        <form onSubmit={handleSubmit} className="flex items-end gap-2 p-3">
+        <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3">
           <span className="self-start pt-1 font-mono text-sm text-indigo-500">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
               Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
@@ -1239,6 +1261,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               {action.icon}
             </button>
           ))}
+          {voiceEnabled && <VoiceInputControl onText={handleVoiceText} panelRef={chatAreaRef} />}
           <Button type="submit" variant="primary" disabled={draft.trim().length === 0}>
             {t("chat.send")}
           </Button>

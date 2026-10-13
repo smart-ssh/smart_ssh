@@ -43,7 +43,8 @@
       "fileTypes": "Bestanden",
       "chatRetention": "Sessies en gegevens",
       "mcpServer": "MCP Server",
-      "masterPassword": "Hoofdwachtwoord"
+      "masterPassword": "Hoofdwachtwoord",
+      "voiceInput": "Spraakinvoer"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 seconden",
     "seconds60": "60 seconden",
     "minutes5": "5 minuten"
+  },
+  "voice": {
+    "start": "Spraakinvoer starten",
+    "stop": "Opname stoppen en omzetten ({{time}})",
+    "transcribing": "Bezig met omzetten…",
+    "recordingStatus": "Opname bezig",
+    "dismiss": "Sluiten",
+    "consent": {
+      "title": "Spraakmodel downloaden?",
+      "body": "Een spraakmodel ({{model}}, ongeveer {{size}} MiB) wordt eenmalig gedownload van {{source}}. Daarna draait de spraakherkenning volledig op deze computer; audio en tekst verlaten hem nooit.",
+      "download": "Downloaden",
+      "cancel": "Annuleren",
+      "progress": "Voortgang van de download"
+    },
+    "errors": {
+      "noDevice": "Geen microfoon gevonden. Sluit een microfoon aan en controleer het invoerapparaat in de systeeminstellingen.",
+      "permissionDenied": "Toegang tot de microfoon is geweigerd. Sta Smart SSH toe de microfoon te gebruiken in de systeeminstellingen en probeer het opnieuw.",
+      "transcriptionFailed": "De spraak kon niet worden herkend. Probeer het opnieuw of kies een ander model in de instellingen.",
+      "hashMismatch": "Het gedownloade spraakmodel haalde de integriteitscontrole niet en is verwijderd. Download het opnieuw.",
+      "downloadFailed": "Het spraakmodel kon niet worden gedownload. Controleer je internetverbinding en probeer het opnieuw.",
+      "generic": "Spraakinvoer is mislukt. Probeer het opnieuw."
+    },
+    "settings": {
+      "description": "Dicteer berichten aan de AI. De herkenning draait op deze computer; de enige netwerkverbinding is de eenmalige modeldownload van {{source}}.",
+      "enabled": "Microfoonknop in de chat tonen",
+      "model": "Spraakmodel",
+      "models": {
+        "base": "Base (ongeveer {{size}} MiB, standaard)",
+        "small": "Small (ongeveer {{size}} MiB, nauwkeuriger, trager)"
+      },
+      "statusReady": "Gedownload",
+      "statusNotDownloaded": "Niet gedownload",
+      "statusDownloading": "Downloaden… {{percent}} %",
+      "download": "Downloaden",
+      "delete": "Model verwijderen",
+      "language": "Herkenningstaal",
+      "languageAuto": "Automatisch"
+    }
   }
 }

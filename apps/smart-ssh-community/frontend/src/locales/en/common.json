@@ -43,7 +43,8 @@
       "fileTypes": "Files",
       "chatRetention": "Sessions & Data",
       "mcpServer": "MCP Server",
-      "masterPassword": "Master password"
+      "masterPassword": "Master password",
+      "voiceInput": "Voice input"
     }
   },
   "about": {
@@ -1140,5 +1141,43 @@
     "seconds30": "30 seconds",
     "seconds60": "60 seconds",
     "minutes5": "5 minutes"
+  },
+  "voice": {
+    "start": "Start voice input",
+    "stop": "Stop recording and transcribe ({{time}})",
+    "transcribing": "Transcribing…",
+    "recordingStatus": "Recording",
+    "dismiss": "Dismiss",
+    "consent": {
+      "title": "Download speech model?",
+      "body": "A speech model ({{model}}, about {{size}} MiB) will be downloaded once from {{source}}. After that, speech recognition runs entirely on this computer; audio and text never leave it.",
+      "download": "Download",
+      "cancel": "Cancel",
+      "progress": "Download progress"
+    },
+    "errors": {
+      "noDevice": "No microphone found. Connect a microphone and check the input device in your system settings.",
+      "permissionDenied": "Microphone access was denied. Allow microphone access for Smart SSH in your system settings and try again.",
+      "transcriptionFailed": "The speech could not be recognized. Try again, or choose a different model in the settings.",
+      "hashMismatch": "The downloaded speech model failed its integrity check and was discarded. Download it again.",
+      "downloadFailed": "The speech model could not be downloaded. Check your internet connection and try again.",
+      "generic": "Voice input failed. Please try again."
+    },
+    "settings": {
+      "description": "Dictate messages to the AI. Speech recognition runs on this computer; the only network connection is the one-time model download from {{source}}.",
+      "enabled": "Show the microphone button in the chat",
+      "model": "Speech model",
+      "models": {
+        "base": "Base (about {{size}} MiB, default)",
+        "small": "Small (about {{size}} MiB, more accurate, slower)"
+      },
+      "statusReady": "Downloaded",
+      "statusNotDownloaded": "Not downloaded",
+      "statusDownloading": "Downloading… {{percent}} %",
+      "download": "Download",
+      "delete": "Delete model",
+      "language": "Recognition language",
+      "languageAuto": "Automatic"
+    }
   }
 }
