@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ServerFormSections } from "../extensions/FormSlots";
 import { ConnectStepLog } from "./ConnectStepLog";
 import {
   clearServerSudoPassword,
@@ -255,6 +256,9 @@ export function ServerForm({
   const isCreate = serverId === null;
 
   const [loaded, setLoaded] = useState<ServerDto | null>(null);
+  // Spec 0038, Abschnitt 4: ungespeicherte Änderungen — für Abschnitte, die
+  // Erweiterungen im Formular registrieren.
+  const [dirty, setDirty] = useState(false);
   // Spec 0032, Abschnitt 3: nur bekannt, sobald `loaded` geladen ist (der
   // lokale Pseudo-Server ist nie `serverId === null`, also nie `isCreate`).
   const isLocal = loaded?.isLocal ?? false;
@@ -429,6 +433,7 @@ export function ServerForm({
     getServer(serverId)
       .then((server) => {
         setLoaded(server);
+        setDirty(false);
         setName(server.name);
         setHost(server.host);
         setPort(String(server.port));
@@ -599,6 +604,7 @@ export function ServerForm({
       } else if (serverId) {
         await updateServer(serverId, buildInput());
       }
+      setDirty(false);
       onSaved();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -741,6 +747,7 @@ export function ServerForm({
     setError(null);
     try {
       await updateLocalServerTags(tags);
+      setDirty(false);
       onSaved();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -754,6 +761,7 @@ export function ServerForm({
     setError(null);
     try {
       await updateLocalServerNotes(localNotes);
+      setDirty(false);
       onSaved();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -784,7 +792,7 @@ export function ServerForm({
   // testen).
   if (loaded && isLocal) {
     return (
-      <div className="max-w-2xl space-y-6 p-4">
+      <div className="max-w-2xl space-y-6 p-4" onChange={() => setDirty(true)}>
         <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">{loaded.name}</h2>
         <p className="text-sm text-slate-400">{t("serverForm.localHint")}</p>
 
@@ -801,7 +809,10 @@ export function ServerForm({
                 {tag}
                 <button
                   type="button"
-                  onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
+                  onClick={() => {
+                    setDirty(true);
+                    setTags(tags.filter((tagValue) => tagValue !== tag));
+                  }}
                   className="rounded text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
@@ -865,6 +876,7 @@ export function ServerForm({
             {savingLocalNotes ? t("common.saving") : t("common.save")}
           </Button>
         </div>
+        <ServerFormSections serverId={loaded.id} dirty={dirty} />
       </div>
     );
   }
@@ -875,7 +887,7 @@ export function ServerForm({
         {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
       </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} onChange={() => setDirty(true)} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("common.name")}>
             {(control) => (
@@ -1441,6 +1453,7 @@ export function ServerForm({
 
       {!isCreate && serverId && loaded && (
         <>
+            <ServerFormSections serverId={serverId} dirty={dirty} />
             <NotesPanel
               target={{ Server: serverId }}
               currentNotes={loaded.notes}

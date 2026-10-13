@@ -83,10 +83,26 @@ registrieren kann. Jeder Typ hat einen tatsächlichen Renderer:
 
 - **Einstellungs-Abschnitte** (in den Einstellungen gerendert),
 - **Dokument-Aktionen** (an der Dokument-Karte im Chat, Spec 0045),
-- **Erweiterungen der Erststart-Seite** (Spec 0031 §6).
+- **Erweiterungen der Erststart-Seite** (Spec 0031 §6),
+- **Abschnitte im Server-Formular**: unter dem Formular eines bestehenden
+  Servers, auch beim lokalen Pseudo-Server. Der Abschnitt erfährt die
+  Server-ID und ob das Formular ungespeicherte Änderungen hat. Bei einem
+  neuen, noch nicht gespeicherten Server erscheint kein Abschnitt,
+- **Abschnitte im Gruppen-Formular**: wie beim Server, nur für bestehende
+  Gruppen,
+- **Ansichten im Verwalten-Tab**: ein Eintrag mit Beschriftung und Symbol
+  als zusätzliche Zeile unter dem Server-Baum der Seitenleiste; ausgewählt
+  zeigt er seine Komponente im Hauptbereich. Der Eintrag ist wie die
+  Baumzeilen per Tastatur erreichbar.
+
+Ob ein Beitrag gesperrt ist, entscheidet der Registrierende anhand der
+Berechtigungen; die Registry kennt sie nicht. Ohne Registrierungen sehen
+Formulare und Seitenleiste aus und verhalten sich wie zuvor.
 
 Die Beiträge werden registriert, bevor die erste Komponente rendert; eine
-spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig.
+spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig. Bei
+Einstellungs-Abschnitten, Formular-Abschnitten und Verwalten-Ansichten
+erscheint sie in einer bereits geöffneten Ansicht ohne Neuladen.
 
 **Berechtigungen im Frontend:** Ein Hook liest den Stand der
 Berechtigungen per Befehl und abonniert das Ereignis `entitlements:changed`,

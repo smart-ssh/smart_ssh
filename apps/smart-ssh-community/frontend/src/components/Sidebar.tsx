@@ -11,6 +11,7 @@ import {
 } from "../treeDrag";
 import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { useTreeDrag } from "../useTreeDrag";
+import { useManageViews } from "../extensions/FormSlots";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../unusableServer";
 import { Button } from "./ui";
@@ -21,7 +22,9 @@ export type Selection =
   /** Issue #100: ein nicht nutzbarer Server (Anmeldeart unlesbar). */
   | { kind: "unusableServer"; id: string }
   | { kind: "newGroup"; parentId: string | null }
-  | { kind: "newServer"; groupId: string | null };
+  | { kind: "newServer"; groupId: string | null }
+  /** Spec 0038, Abschnitt 4: eine von einer Erweiterung registrierte Ansicht. */
+  | { kind: "extensionView"; id: string };
 
 interface SidebarProps {
   groups: GroupDto[];
@@ -81,7 +84,8 @@ export function Sidebar({
   onExportSshConfig,
   onMove,
 }: SidebarProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const manageViews = useManageViews();
   const tree = buildGroupTree(groups, servers, unusableServers);
   const localServer = servers.find((s) => s.isLocal);
   const { drag, handlersFor } = useTreeDrag((item, target) => {
@@ -103,7 +107,10 @@ export function Sidebar({
   // zuletzt fokussierte Zeile verschwunden, gilt die Auswahl, sonst die erste.
   const treeRef = useRef<HTMLDivElement>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
-  const keys = visibleKeys(tree, localServer);
+  const keys = [
+    ...visibleKeys(tree, localServer),
+    ...manageViews.map((v) => `extensionView:${v.id}`),
+  ];
   const selectionKey = selection ? `${selection.kind}:${"id" in selection ? selection.id : ""}` : null;
   const tabStopKey =
     [focusedKey, selectionKey].find((k) => k !== null && keys.includes(k)) ?? keys[0] ?? null;
@@ -268,6 +275,34 @@ export function Sidebar({
         {tree.roots.map((node) => renderNode(node, 0))}
         {tree.ungroupedServers.map((s) => renderServer(s, 0))}
         {tree.ungroupedUnusableServers.map((s) => renderUnusableServer(s, 0))}
+            {manageViews.length > 0 && (
+              <div role="none" data-drop-target="none" className="mt-2 border-t border-slate-800 pt-2">
+                {manageViews.map((view) => {
+                  const key = `extensionView:${view.id}`;
+                  const selected = selection?.kind === "extensionView" && selection.id === view.id;
+                  const label = i18n.exists(view.label) ? t(view.label) : view.label;
+                  return (
+                    <div
+                      key={view.id}
+                      role="treeitem"
+                      onKeyDown={onTreeKeyDown}
+                      tabIndex={tabIndexFor(key)}
+                      {...rowProps(key, 0, selected)}
+                      data-testid="extension-view-entry"
+                      onClick={() => onSelect({ kind: "extensionView", id: view.id })}
+                      title={label}
+                      style={{ paddingLeft: "8px" }}
+                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                        selected ? "bg-slate-800 text-white" : "text-slate-300"
+                      }`}
+                    >
+                      {view.icon && <span aria-hidden="true">{view.icon} </span>}
+                      {label}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
         {groups.length === 0 &&
