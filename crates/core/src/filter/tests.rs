@@ -2677,3 +2677,108 @@ mod segmentation_pins {
         assert_eq!(out.last().map(String::as_str), Some("x"));
     }
 }
+
+// Issue #484: tests that pin the redirection detection of the parser
+// (surviving cargo-mutants mutants). Behaviour-level, through the
+// `pub(super)`/`pub(crate)` entry points.
+mod redirection_detection_mutants {
+    use super::super::parser::{
+        contains_unquoted_output_redirection as has_out, extract_here_string_codes as here,
+    };
+
+    fn code(cmd: &str) -> Vec<String> {
+        here(cmd)
+    }
+
+    #[test]
+    fn output_redirection_single_quotes_hide_and_close() {
+        // delete arm '\'' / `==` -> `!=` in the single-quote state
+        assert!(!has_out("echo '>' x"));
+        assert!(!has_out("echo '>>' x"));
+        assert!(has_out("echo '>' > f"));
+        assert!(has_out("echo 'a' > f"));
+    }
+
+    #[test]
+    fn output_redirection_double_quotes_close_and_escape() {
+        // escape handling in the double-quote state
+        assert!(has_out("echo \"a\" > f"));
+        assert!(has_out("echo \"\\\"\" > f"));
+        assert!(!has_out("echo \"\\\">\" x"));
+        assert!(!has_out("echo \"a>b\" x"));
+        // backslash as the last char of an unterminated quote
+        assert!(!has_out("echo \"\\"));
+        // stepping back/forward by the wrong amount after an escape
+        assert!(!has_out("echo \"x\\\\\\\">\" y"));
+        assert!(has_out("echo \"\\\\\" > f"));
+    }
+
+    #[test]
+    fn output_redirection_process_substitution_is_not_redirection() {
+        assert!(!has_out("tee >(cat)"));
+        assert!(!has_out("cat >(x)"));
+        assert!(has_out("tee >x"));
+        assert!(has_out("tee > (x)"));
+        // the character before `(` matters, not the one before `>`
+        assert!(has_out("cat (>x"));
+        assert!(has_out("cat >>(x) >(y) > z"));
+    }
+
+    #[test]
+    fn here_string_backslash_in_double_quotes_after_it() {
+        // `i += 2` after an escape inside double quotes, far from the start
+        assert_eq!(
+            code("bash <<< 'echo hi'; echo \"a\\\"b\""),
+            vec!["echo hi".to_string()]
+        );
+    }
+
+    #[test]
+    fn here_string_unquoted_backslash_escapes_quote() {
+        assert_eq!(
+            code("bash <<< 'echo hi'; echo \\<x"),
+            vec!["echo hi".to_string()]
+        );
+    }
+
+    #[test]
+    fn here_string_marker_in_single_quotes_is_not_a_second_run() {
+        assert_eq!(
+            code("bash <<< 'echo hi'; echo '<'"),
+            vec!["echo hi".to_string()]
+        );
+        assert_eq!(
+            code("echo '<<<' ; bash <<< 'echo hi'"),
+            vec!["echo hi".to_string()]
+        );
+        // an unquoted second `<` run leaves the command alone
+        assert!(code("bash <<< 'echo hi'; cat <x").is_empty());
+    }
+
+    #[test]
+    fn here_string_unbalanced_quote_after_escape_is_rejected() {
+        // `\'` is an escaped quote, the final `'` is left open: no code
+        assert!(code("bash <<<b;\\''").is_empty());
+    }
+
+    #[test]
+    fn here_string_word_with_escaped_quotes_in_double_quotes() {
+        assert_eq!(
+            code("bash <<< \"echo \\\"hi\\\"\""),
+            vec!["echo \"hi\"".to_string()]
+        );
+    }
+
+    #[test]
+    fn here_string_stdin_path_arguments() {
+        assert_eq!(
+            code("bash /proc/self/fd/0 <<< 'echo hi'"),
+            vec!["echo hi".to_string()]
+        );
+        // `/proc/` path without `/fd/` and a path that only contains `/fd/`
+        // name a script file, not stdin
+        assert!(code("bash /proc/1/cmdline <<< 'echo hi'").is_empty());
+        assert!(code("bash foo/fd/3 <<< 'echo hi'").is_empty());
+        assert!(code("bash /dev/fd/0 <<< 'echo hi'").len() == 1);
+    }
+}
