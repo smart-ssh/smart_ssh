@@ -1,4 +1,12 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -42,7 +50,15 @@ import {
 import { translateErrorCode } from "../errorCodes";
 import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { LiveCommandOutput } from "./LiveCommandOutput";
-import { listDocumentActions } from "../extensions/registry";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import {
+  type ComposerAttachment,
+  type ComposerContext,
+  listComposerActions,
+  listComposerDropHandlers,
+  listDocumentActions,
+  subscribeComposer,
+} from "../extensions/registry";
 import { formatBytes } from "../format";
 import {
   initialHistoryNavState,
@@ -73,6 +89,8 @@ export type ChatItem =
       type: "user";
       id: string;
       text: string;
+      /** Issue #471: mitgesendete Anhänge (Name, Art). */
+      attachments?: { name: string; kind: ComposerAttachment["kind"] }[];
       /** Spec 0066, §2: während einer laufenden Antwort gesendet — geht mit
        * der nächsten Anfrage an die KI mit (bis `chat-queued-messages-sent`). */
       queued?: boolean;
@@ -182,7 +200,13 @@ export type ChatItem =
   // Spec 0105: serverseitige Web-Recherche des Providers — live
   // (`chat-web-activity`) und aus einer fortgesetzten Historie gleich
   // dargestellt.
-  | { type: "webActivity"; id: string; activity: WebActivityDto };
+  | { type: "webActivity"; id: string; activity: WebActivityDto }
+  // Issue #471 (Spec 0110, §5): Anhänge einer fortgesetzten Nutzer-Nachricht.
+  | {
+      type: "historyAttachments";
+      id: string;
+      items: { name: string; kind: ComposerAttachment["kind"] }[];
+    };
 
 /** Spec 0023, Abschnitt 3/4: `targetName` wird für `ProposeNoteUpdate`
  * *immer* im Label gezeigt — auch wenn es der aktuell offene Server der
@@ -292,6 +316,59 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const { t } = useTranslation();
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
+  // Issue #471: Composer-Erweiterungspunkt, ausstehende Anhänge, Fehler am Eingabefeld.
+  const composerActions = useSyncExternalStore(subscribeComposer, listComposerActions);
+  const dropHandlers = useSyncExternalStore(subscribeComposer, listComposerDropHandlers);
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [composerError, setComposerError] = useState<string | null>(null);
+  const chatAreaRef = useRef<HTMLDivElement>(null);
+  const composerCtx = useMemo<ComposerContext>(
+    () => ({
+      sessionId,
+      addAttachment: (a) =>
+        setAttachments((prev) => (prev.some((p) => p.id === a.id) ? prev : [...prev, a])),
+      removeAttachment: (id) => setAttachments((prev) => prev.filter((p) => p.id !== id)),
+    }),
+    [sessionId],
+  );
+  const composerCtxRef = useRef(composerCtx);
+  composerCtxRef.current = composerCtx;
+  const dropHandlersRef = useRef(dropHandlers);
+  dropHandlersRef.current = dropHandlers;
+  const hasDropHandler = dropHandlers.length > 0;
+  // Native Drops auf den Chat gehen an die registrierten Handler; ohne
+  // Handler bleibt der Listener aus und das Ablegen tut im Chat nichts.
+  // Pfade verlassen das Backend nicht (ADR 0113): der Handler holt sie dort.
+  useEffect(() => {
+    if (!hasDropHandler) return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type !== "drop") return;
+        const el = chatAreaRef.current;
+        // Nur das sichtbare Chat-Feld (ein ausgeblendeter Tab hat keinen offsetParent).
+        if (!el || el.offsetParent === null) return;
+        const rect = el.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const x = event.payload.position.x / ratio;
+        const y = event.payload.position.y / ratio;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+        for (const handler of dropHandlersRef.current) {
+          void Promise.resolve(handler(composerCtxRef.current)).catch((err) =>
+            setComposerError(commandErrorMessage(err)),
+          );
+        }
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [hasDropHandler]);
   const [sending, setSending] = useState(false);
   /** Spec 0066, §2: Anzahl noch nicht aufgelöster `sendChatMessage`/
    * `continueTruncatedResponse`-Aufrufe. Eingereihte Aufrufe lösen sofort
@@ -399,6 +476,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 };
               case "webActivity":
                 return { type: "webActivity", id: freshId(), activity: entry.activity };
+              case "attachments":
+                return { type: "historyAttachments", id: freshId(), items: entry.items };
             }
           }),
           ...prev,
@@ -821,6 +900,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     event.preventDefault();
     const text = draft.trim();
     if (!text) return;
+    const sentAttachments = attachments;
+    setComposerError(null);
     // Spec 0066, §2: läuft schon eine Antwort, reiht das Backend die
     // Nachricht ein (kehrt sofort zurück) und schickt sie mit der nächsten
     // Anfrage an die KI — die laufende Antwort läuft weiter.
@@ -828,13 +909,30 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     const itemId = freshId();
     setItems((prev) => [
       ...prev,
-      queued ? { type: "user", id: itemId, text, queued: true } : { type: "user", id: itemId, text },
+      {
+        type: "user",
+        id: itemId,
+        text,
+        ...(queued ? { queued: true } : {}),
+        ...(sentAttachments.length > 0
+          ? { attachments: sentAttachments.map((a) => ({ name: a.name, kind: a.kind })) }
+          : {}),
+      },
     ]);
     setDraft("");
+    setAttachments([]);
     setHistoryNav(initialHistoryNavState);
     await runSend(async () => {
       try {
-        await sendChatMessage(sessionId, text);
+        if (sentAttachments.length > 0) {
+          await sendChatMessage(
+            sessionId,
+            text,
+            sentAttachments.map((a) => a.id),
+          );
+        } else {
+          await sendChatMessage(sessionId, text);
+        }
         // Spec 0015, Abschnitt 5: das Backend hat den Prompt gespeichert (samt
         // Dedup und 200er-Grenze) — Liste neu laden, damit er sofort per
         // Pfeiltaste erreichbar ist. Beim lokalen Pseudo-Server bleibt sie leer.
@@ -848,6 +946,16 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         if (commandErrorCode(err) === "CHAT_SWITCHING") {
           setItems((prev) => prev.filter((it) => it.id !== itemId));
           setDraft((current) => (current === "" ? text : current));
+        }
+        // Issue #471: lehnt das Backend eine Nachricht mit Anhängen ab
+        // (Grenze, Modell, gesperrte Funktion), wurde nichts gesendet: Text
+        // und Chips bleiben zum Korrigieren, der Fehler steht am Eingabefeld.
+        if (sentAttachments.length > 0) {
+          setItems((prev) => prev.filter((it) => it.id !== itemId));
+          setDraft((current) => (current === "" ? text : current));
+          setAttachments((current) => (current.length === 0 ? sentAttachments : current));
+          setComposerError(commandErrorMessage(err));
+          return;
         }
         throw err;
       }
@@ -996,7 +1104,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={chatAreaRef} className="flex h-full flex-col">
       {readOnlyHint === undefined && (
         <div className="flex items-center justify-end gap-2 border-b border-slate-700 px-3 py-1.5">
           {newChatError !== null && (
@@ -1066,10 +1174,38 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           {t("chat.noActiveProvider")}
         </div>
       ) : (
-        <form
-          onSubmit={handleSubmit}
-          className="flex items-end gap-2 border-t border-slate-700 bg-slate-800 p-3"
-        >
+        <div className="border-t border-slate-700 bg-slate-800">
+          {composerError !== null && (
+            <p role="alert" className="px-3 pt-2 text-xs text-red-400">
+              {composerError}
+            </p>
+          )}
+          {attachments.length > 0 && (
+            <ul aria-label={t("chat.attachmentsLabel")} className="flex flex-wrap gap-2 px-3 pt-2">
+              {attachments.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-center gap-2 rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-100"
+                >
+                  <span>
+                    {a.name} · {formatBytes(a.size)}
+                  </span>
+                  {a.unredactedHint && (
+                    <span className="text-amber-300">{t("chat.attachmentUnredacted")}</span>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={t("chat.attachmentRemove", { name: a.name })}
+                    onClick={() => composerCtx.removeAttachment(a.id)}
+                    className="text-slate-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        <form onSubmit={handleSubmit} className="flex items-end gap-2 p-3">
           <span className="self-start pt-1 font-mono text-sm text-indigo-500">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
               Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
@@ -1085,10 +1221,29 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             placeholder={t("chat.inputPlaceholder")}
             className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           />
+          {composerActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              aria-label={action.label}
+              title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
+              disabled={action.disabled}
+              onClick={() => {
+                setComposerError(null);
+                void Promise.resolve(action.onInvoke(composerCtx)).catch((err) =>
+                  setComposerError(commandErrorMessage(err)),
+                );
+              }}
+              className="rounded p-1.5 text-slate-300 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+            >
+              {action.icon}
+            </button>
+          ))}
           <Button type="submit" variant="primary" disabled={draft.trim().length === 0}>
             {t("chat.send")}
           </Button>
         </form>
+        </div>
       )}
     </div>
   );
@@ -1222,6 +1377,11 @@ export function ChatItemView({
     return (
       <div className="ml-auto max-w-[80%] border border-indigo-500/60 bg-indigo-700 px-3 py-2 text-sm text-indigo-50">
         {item.text}
+        {item.attachments && item.attachments.length > 0 && (
+          <p className="mt-1 text-xs text-indigo-200/80">
+            {t("chat.historyAttached", { files: attachmentLine(t, item.attachments) })}
+          </p>
+        )}
         {item.queued && (
           <p className="mt-1 text-xs text-indigo-200/80">⏳ {t("chat.queued")}</p>
         )}
@@ -1311,6 +1471,13 @@ export function ChatItemView({
         {!item.cancelled && (
           <p className="mt-1 text-slate-400">exit code: {item.exitCode ?? "—"}</p>
         )}
+      </div>
+    );
+  }
+  if (item.type === "historyAttachments") {
+    return (
+      <div className="ml-auto max-w-[80%] border border-indigo-500/40 bg-indigo-800/60 px-3 py-1 text-xs text-indigo-100">
+        {t("chat.historyAttached", { files: attachmentLine(t, item.items) })}
       </div>
     );
   }
@@ -2121,4 +2288,18 @@ function AssistantMessageView({
       ) : null}
     </div>
   );
+}
+
+/** "name (Art), …" — nur Namen und Art, nie Inhalt (Spec 0110, §5). */
+function attachmentLine(
+  t: (key: string) => string,
+  items: { name: string; kind: ComposerAttachment["kind"] }[],
+): string {
+  const kindLabel = (k: ComposerAttachment["kind"]) =>
+    k === "text"
+      ? t("chat.attachmentKindText")
+      : k === "image"
+        ? t("chat.attachmentKindImage")
+        : "PDF";
+  return items.map((a) => `${a.name} (${kindLabel(a.kind)})`).join(", ");
 }
