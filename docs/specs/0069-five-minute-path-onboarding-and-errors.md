@@ -2,7 +2,7 @@
 
 Status: umgesetzt
 Zweck: Ein Erstnutzer kommt von „Provider einrichten" über „Server anlegen" und „Verbindung testen" bis „verbinden und Frage stellen"; jeder Fehler auf diesem Weg nennt Ursache und nächsten Schritt, ein lokales Ollama wird gefunden und angeboten, und eine leere Installation führt in den Pfad.
-Bezüge: Spec 0024 (Fehlercodes, i18n), Spec 0025 (Provider-Discovery), Spec 0031 (Erststart-Hinweis), Spec 0032 (lokaler Pseudo-Server), Spec 0033 (Server-Übersicht), Spec 0047 Fund D2 und ADR 0039 (kurze Meldung statt Rohtext), Spec 0050/0056 (Provider-Einstellungen, „Zugangsdaten testen"), Spec 0051 (Rate-Limit), Spec 0068 Teil 5a/5b (Discovery-Timeouts, Host-Key-Timeout), Spec 0072 (Erkennung „Modell nicht gefunden"), ADR 0062, ADR 0110 (Verbindungsschritte, Auflösung des ersten Hops), ADR 0115 (Zeitgrenzen je Phase und Hop), ADR 0123 „SFTP-Sitzungsabbruch erkennen".
+Bezüge: Spec 0024 (Fehlercodes, i18n), Spec 0025 (Provider-Discovery), Spec 0031 (Erststart-Hinweis), Spec 0032 (lokaler Pseudo-Server), Spec 0033 (Server-Übersicht), Spec 0047 Fund D2 und ADR 0039 (kurze Meldung statt Rohtext), Spec 0050/0056 (Provider-Einstellungen, „Zugangsdaten testen"), Spec 0051 (Rate-Limit), Spec 0068 Teil 5a/5b (Discovery-Timeouts, Host-Key-Timeout), Spec 0072 (Erkennung „Modell nicht gefunden"), ADR 0062, ADR 0110 (Verbindungsschritte, Auflösung des ersten Hops), ADR 0115 (Zeitgrenzen je Phase und Hop), ADR 0143 „SFTP-Sitzungsabbruch erkennen".
 Review-Priorität: NORMAL, für den Verbindungsaufbau (Abschnitt 3.A, A3) ERHÖHT
 
 ## Entscheidungen
@@ -113,7 +113,7 @@ gilt (Tabelle 4.2):
   „keine Verbindung" oder „Verbindung verloren" meldet oder der SFTP-Kanal
   endet und zugleich die SSH-Sitzung beendet ist; endet nur der Kanal
   (z. B. weil sudo den erhöhten Start ablehnt), bleibt es `SSH_CHANNEL_ERROR`
-  (ADR 0123 „SFTP-Sitzungsabbruch erkennen").
+  (ADR 0143 „SFTP-Sitzungsabbruch erkennen").
 - **Zeitgrenzen je Phase und je Hop** (ADR 0115). Jeder Hop (Zielserver und
   jeder Jump-Host davor) hat eigene Grenzen:
 
