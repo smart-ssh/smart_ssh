@@ -7,94 +7,86 @@
 
 use serde_json::{json, Value};
 use ssh_manager_core::ai::{
-    AiError, AttachmentKind, ChatMessage, MessageContent, Role, SessionContext,
+    AiError, AttachmentKind, ChatMessage, MediaClass, MessageContent, Role, SealedPart,
+    SessionContext,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ContentPart {
     Text(String),
-    Image { media_type: String, base64: String },
-    Pdf { name: String, base64: String },
+    /// A binary block by media type (Issue #506, ADR 0141 decision 5): the
+    /// wire format follows from the media class, not from where the bytes
+    /// came from.
+    Binary {
+        mime: String,
+        filename: String,
+        base64: String,
+    },
 }
 
-/// Splits one message into parts. Everything but attachments is a single
-/// text part (`text_of`). Attachments become the fenced text of each file
-/// followed by its binary block (images/PDFs); adjacent text parts are joined
-/// by a blank line so text-only attachments keep their single-string form.
-pub(crate) fn message_parts(
-    content: &MessageContent,
-    text_of: fn(&MessageContent) -> String,
-) -> Vec<ContentPart> {
-    if let MessageContent::Sealed(sealed) = content {
-        return sealed_parts(sealed);
+impl ContentPart {
+    /// Class of a binary part. Core guarantees an image or PDF type; any
+    /// other type is sent as an image, as before.
+    fn class(mime: &str) -> MediaClass {
+        MediaClass::of_mime(mime).unwrap_or(MediaClass::Image)
     }
-    let MessageContent::Attachments(attachments) = content else {
-        return vec![ContentPart::Text(text_of(content))];
-    };
-    let mut parts: Vec<ContentPart> = Vec::new();
-    for a in attachments {
-        let text = a.to_model_text(None);
-        match parts.last_mut() {
-            Some(ContentPart::Text(prev)) => {
-                prev.push_str("\n\n");
-                prev.push_str(&text);
-            }
-            _ => parts.push(ContentPart::Text(text)),
-        }
-        match a.kind {
-            AttachmentKind::Text => {}
-            AttachmentKind::Image => parts.push(ContentPart::Image {
-                media_type: a.media_type.clone(),
-                base64: a.data_base64(),
-            }),
-            AttachmentKind::Pdf => parts.push(ContentPart::Pdf {
-                name: a.name.clone(),
-                base64: a.data_base64(),
-            }),
-        }
-    }
-    parts
 }
 
-/// Issue #505: sealed extension content. Text is already redacted and fenced
-/// by the core; binaries follow as image/document blocks (the core allowlist
-/// guarantees the mime type).
-fn sealed_parts(sealed: &ssh_manager_core::ai::SealedContent) -> Vec<ContentPart> {
-    use ssh_manager_core::ai::SealedPart;
-    let mut parts: Vec<ContentPart> = Vec::new();
-    let push_text = |parts: &mut Vec<ContentPart>, text: String| match parts.last_mut() {
+/// Appends text; adjacent text parts are joined by a blank line.
+fn push_text(parts: &mut Vec<ContentPart>, text: String) {
+    match parts.last_mut() {
         Some(ContentPart::Text(prev)) => {
             prev.push_str("\n\n");
             prev.push_str(&text);
         }
         _ => parts.push(ContentPart::Text(text)),
-    };
-    for part in sealed.parts() {
-        match part {
-            SealedPart::Text(t) => {
-                push_text(&mut parts, t.to_string());
+    }
+}
+
+/// Splits one message into parts. Everything but attachments and sealed
+/// content is a single text part (`text_of`). Both of the latter become
+/// fenced text followed by their binary blocks through the same path;
+/// adjacent text parts are joined by a blank line.
+pub(crate) fn message_parts(
+    content: &MessageContent,
+    text_of: fn(&MessageContent) -> String,
+) -> Vec<ContentPart> {
+    let mut parts: Vec<ContentPart> = Vec::new();
+    match content {
+        MessageContent::Sealed(sealed) => {
+            for part in sealed.parts() {
+                match part {
+                    SealedPart::Text(t) => push_text(&mut parts, t.to_string()),
+                    SealedPart::Binary {
+                        mime,
+                        filename,
+                        marker,
+                        base64,
+                        ..
+                    } => {
+                        push_text(&mut parts, marker.to_string());
+                        parts.push(ContentPart::Binary {
+                            mime: mime.to_string(),
+                            filename: filename.to_string(),
+                            base64,
+                        });
+                    }
+                }
             }
-            SealedPart::Binary {
-                mime,
-                filename,
-                marker,
-                base64,
-                ..
-            } => {
-                push_text(&mut parts, marker.to_string());
-                if mime == "application/pdf" {
-                    parts.push(ContentPart::Pdf {
-                        name: filename.to_string(),
-                        base64,
-                    });
-                } else {
-                    parts.push(ContentPart::Image {
-                        media_type: mime.to_string(),
-                        base64,
+        }
+        MessageContent::Attachments(attachments) => {
+            for a in attachments {
+                push_text(&mut parts, a.to_model_text(None));
+                if a.kind != AttachmentKind::Text {
+                    parts.push(ContentPart::Binary {
+                        mime: a.media_type.clone(),
+                        filename: a.name.clone(),
+                        base64: a.data_base64(),
                     });
                 }
             }
         }
+        _ => parts.push(ContentPart::Text(text_of(content))),
     }
     parts
 }
@@ -127,14 +119,16 @@ fn data_url(media_type: &str, base64: &str) -> String {
 pub(crate) fn anthropic_block(part: &ContentPart) -> Value {
     match part {
         ContentPart::Text(text) => json!({"type": "text", "text": text}),
-        ContentPart::Image { media_type, base64 } => json!({
-            "type": "image",
-            "source": {"type": "base64", "media_type": media_type, "data": base64},
-        }),
-        ContentPart::Pdf { base64, .. } => json!({
-            "type": "document",
-            "source": {"type": "base64", "media_type": "application/pdf", "data": base64},
-        }),
+        ContentPart::Binary { mime, base64, .. } => {
+            let kind = match ContentPart::class(mime) {
+                MediaClass::Image => "image",
+                MediaClass::Pdf => "document",
+            };
+            json!({
+                "type": kind,
+                "source": {"type": "base64", "media_type": mime, "data": base64},
+            })
+        }
     }
 }
 
@@ -142,17 +136,23 @@ pub(crate) fn anthropic_block(part: &ContentPart) -> Value {
 pub(crate) fn chat_completions_block(part: &ContentPart) -> Value {
     match part {
         ContentPart::Text(text) => json!({"type": "text", "text": text}),
-        ContentPart::Image { media_type, base64 } => json!({
-            "type": "image_url",
-            "image_url": {"url": data_url(media_type, base64)},
-        }),
-        ContentPart::Pdf { name, base64 } => json!({
-            "type": "file",
-            "file": {
-                "filename": name,
-                "file_data": data_url("application/pdf", base64),
-            },
-        }),
+        ContentPart::Binary {
+            mime,
+            filename,
+            base64,
+        } => match ContentPart::class(mime) {
+            MediaClass::Image => json!({
+                "type": "image_url",
+                "image_url": {"url": data_url(mime, base64)},
+            }),
+            MediaClass::Pdf => json!({
+                "type": "file",
+                "file": {
+                    "filename": filename,
+                    "file_data": data_url(mime, base64),
+                },
+            }),
+        },
     }
 }
 
@@ -160,60 +160,71 @@ pub(crate) fn chat_completions_block(part: &ContentPart) -> Value {
 pub(crate) fn responses_block(part: &ContentPart) -> Value {
     match part {
         ContentPart::Text(text) => json!({"type": "input_text", "text": text}),
-        ContentPart::Image { media_type, base64 } => json!({
-            "type": "input_image",
-            "image_url": data_url(media_type, base64),
-        }),
-        ContentPart::Pdf { name, base64 } => json!({
-            "type": "input_file",
-            "filename": name,
-            "file_data": data_url("application/pdf", base64),
-        }),
+        ContentPart::Binary {
+            mime,
+            filename,
+            base64,
+        } => match ContentPart::class(mime) {
+            MediaClass::Image => json!({
+                "type": "input_image",
+                "image_url": data_url(mime, base64),
+            }),
+            MediaClass::Pdf => json!({
+                "type": "input_file",
+                "filename": filename,
+                "file_data": data_url(mime, base64),
+            }),
+        },
     }
 }
 
-/// What a provider/model combination can read natively.
+/// What a provider/model combination can read natively, keyed by media
+/// class (Issue #506).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct AttachmentSupport {
+pub(crate) struct InputSupport {
     pub images: bool,
     pub pdf: bool,
 }
 
-/// Rejects the request when the history carries an image or PDF the model
-/// cannot read. Runs before any request is built or sent; text attachments
-/// never fail here.
+impl InputSupport {
+    pub(crate) fn accepts(self, class: MediaClass) -> bool {
+        match class {
+            MediaClass::Image => self.images,
+            MediaClass::Pdf => self.pdf,
+        }
+    }
+}
+
+/// Rejects the request when the history carries a binary block the model
+/// cannot read. Runs over the whole history before any request is built or
+/// sent; text never fails here.
 pub(crate) fn check_attachments(
     context: &SessionContext,
-    support: AttachmentSupport,
+    support: InputSupport,
 ) -> Result<(), AiError> {
+    let check = |mime: &str| {
+        let class = ContentPart::class(mime);
+        if support.accepts(class) {
+            Ok(())
+        } else {
+            Err(AiError::InputUnsupported(class))
+        }
+    };
     for message in &context.history {
-        if let MessageContent::Sealed(sealed) = &message.content {
-            for part in sealed.parts() {
-                if let ssh_manager_core::ai::SealedPart::Binary { mime, .. } = part {
-                    if mime == "application/pdf" {
-                        if !support.pdf {
-                            return Err(AiError::AttachmentUnsupported(AttachmentKind::Pdf));
-                        }
-                    } else if !support.images {
-                        return Err(AiError::AttachmentUnsupported(AttachmentKind::Image));
+        match &message.content {
+            MessageContent::Sealed(sealed) => {
+                for part in sealed.parts() {
+                    if let SealedPart::Binary { mime, .. } = part {
+                        check(mime)?;
                     }
                 }
             }
-            continue;
-        }
-        let MessageContent::Attachments(items) = &message.content else {
-            continue;
-        };
-        for a in items {
-            match a.kind {
-                AttachmentKind::Image if !support.images => {
-                    return Err(AiError::AttachmentUnsupported(AttachmentKind::Image))
+            MessageContent::Attachments(items) => {
+                for a in items.iter().filter(|a| a.kind != AttachmentKind::Text) {
+                    check(&a.media_type)?;
                 }
-                AttachmentKind::Pdf if !support.pdf => {
-                    return Err(AiError::AttachmentUnsupported(AttachmentKind::Pdf))
-                }
-                _ => {}
             }
+            _ => {}
         }
     }
     Ok(())
@@ -221,8 +232,8 @@ pub(crate) fn check_attachments(
 
 /// Every Claude model reads images and PDFs, including models this table
 /// does not know yet.
-pub(crate) fn anthropic_support(_model: &str) -> AttachmentSupport {
-    AttachmentSupport {
+pub(crate) fn anthropic_support(_model: &str) -> InputSupport {
+    InputSupport {
         images: true,
         pdf: true,
     }
@@ -283,9 +294,9 @@ fn openai_official_model_reads_files(model: &str) -> bool {
 
 /// OpenAI Responses: official endpoint only (unknown models there are
 /// allowed); any other endpoint has no known support.
-pub(crate) fn openai_responses_support(base_url: &str, model: &str) -> AttachmentSupport {
+pub(crate) fn openai_responses_support(base_url: &str, model: &str) -> InputSupport {
     let ok = is_official_openai(base_url) && openai_official_model_reads_files(model);
-    AttachmentSupport {
+    InputSupport {
         images: ok,
         pdf: ok,
     }
@@ -294,16 +305,16 @@ pub(crate) fn openai_responses_support(base_url: &str, model: &str) -> Attachmen
 /// OpenAI-compatible chat completions: the official endpoint reads images
 /// and PDFs (file part); other endpoints read images only for models whose
 /// name marks them as vision models, and PDFs never (no known file input).
-pub(crate) fn openai_compatible_support(base_url: &str, model: &str) -> AttachmentSupport {
+pub(crate) fn openai_compatible_support(base_url: &str, model: &str) -> InputSupport {
     if is_official_openai(base_url) {
         let ok = openai_official_model_reads_files(model);
-        return AttachmentSupport {
+        return InputSupport {
             images: ok,
             pdf: ok,
         };
     }
     let m = model.to_ascii_lowercase();
-    AttachmentSupport {
+    InputSupport {
         images: VISION_HINTS.iter().any(|h| m.contains(h)),
         pdf: false,
     }
@@ -366,16 +377,18 @@ mod tests {
         );
         assert_eq!(
             parts[1],
-            ContentPart::Image {
-                media_type: "image/png".into(),
+            ContentPart::Binary {
+                mime: "image/png".into(),
+                filename: "p.png".into(),
                 base64: "AQID".into()
             }
         );
         assert!(matches!(&parts[2], ContentPart::Text(t) if t.contains("d.pdf")));
         assert_eq!(
             parts[3],
-            ContentPart::Pdf {
-                name: "d.pdf".into(),
+            ContentPart::Binary {
+                mime: "application/pdf".into(),
+                filename: "d.pdf".into(),
                 base64: "BAU=".into()
             }
         );
@@ -383,12 +396,14 @@ mod tests {
 
     #[test]
     fn test_block_structures_per_provider() {
-        let img = ContentPart::Image {
-            media_type: "image/png".into(),
+        let img = ContentPart::Binary {
+            mime: "image/png".into(),
+            filename: "p.png".into(),
             base64: "AQID".into(),
         };
-        let pdf = ContentPart::Pdf {
-            name: "d.pdf".into(),
+        let pdf = ContentPart::Binary {
+            mime: "application/pdf".into(),
+            filename: "d.pdf".into(),
             base64: "BAU=".into(),
         };
         assert_eq!(
@@ -419,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_check_rejects_unsupported_kinds_but_never_text() {
-        let none = AttachmentSupport {
+        let none = InputSupport {
             images: false,
             pdf: false,
         };
@@ -433,14 +448,14 @@ mod tests {
         let text = ctx(vec![att(AttachmentKind::Text, "a.txt", "text/plain", b"x")]);
         assert_eq!(
             check_attachments(&image, none),
-            Err(AiError::AttachmentUnsupported(AttachmentKind::Image))
+            Err(AiError::InputUnsupported(MediaClass::Image))
         );
         assert_eq!(
             check_attachments(&pdf, none),
-            Err(AiError::AttachmentUnsupported(AttachmentKind::Pdf))
+            Err(AiError::InputUnsupported(MediaClass::Pdf))
         );
         assert_eq!(check_attachments(&text, none), Ok(()));
-        let all = AttachmentSupport {
+        let all = InputSupport {
             images: true,
             pdf: true,
         };
@@ -448,11 +463,137 @@ mod tests {
         assert_eq!(check_attachments(&pdf, all), Ok(()));
     }
 
+    const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    const PDF: &[u8] = b"%PDF-1";
+
+    fn sealed_ctx(blocks: Vec<ssh_manager_core::ai::ResolvedBlock>) -> SessionContext {
+        use ssh_manager_core::ai::{
+            DefaultOutputRedactor, ExtensionMedia, ExtensionPart, ExtensionSource, SealedContent,
+        };
+        let part = ExtensionPart {
+            extension: "files".into(),
+            kind: "doc".into(),
+            id: "p1".into(),
+            label: "SECRETLABEL.pdf".into(),
+            media: ExtensionMedia::Pdf,
+            estimated_tokens: 1,
+        };
+        let sealed = SealedContent::seal(
+            &part,
+            ExtensionSource::LocalFile,
+            Some(blocks),
+            &DefaultOutputRedactor::new(),
+        )
+        .unwrap();
+        SessionContext {
+            system_context: String::new(),
+            history: vec![ChatMessage {
+                role: Role::User,
+                content: MessageContent::Sealed(sealed),
+            }],
+            available_actions: vec![],
+            max_tokens_hint: None,
+        }
+    }
+
+    fn binary_block(mime: &str, name: &str, bytes: &[u8]) -> ssh_manager_core::ai::ResolvedBlock {
+        ssh_manager_core::ai::ResolvedBlock::Binary {
+            mime: mime.into(),
+            bytes: bytes.to_vec(),
+            filename: name.into(),
+        }
+    }
+
+    fn binaries(ctx: &SessionContext) -> Vec<ContentPart> {
+        message_parts(&ctx.history[0].content, text_of)
+            .into_iter()
+            .filter(|p| matches!(p, ContentPart::Binary { .. }))
+            .collect()
+    }
+
+    #[test]
+    fn test_sealed_and_legacy_attachments_give_identical_binary_blocks() {
+        let sealed = sealed_ctx(vec![
+            binary_block("image/png", "p.png", PNG),
+            binary_block("application/pdf", "d.pdf", PDF),
+        ]);
+        let legacy = ctx(vec![
+            att(AttachmentKind::Image, "p.png", "image/png", PNG),
+            att(AttachmentKind::Pdf, "d.pdf", "application/pdf", PDF),
+        ]);
+        let (a, b) = (binaries(&sealed), binaries(&legacy));
+        assert_eq!(a.len(), 2);
+        assert_eq!(a, b);
+        for (x, y) in a.iter().zip(&b) {
+            assert_eq!(anthropic_block(x), anthropic_block(y));
+            assert_eq!(chat_completions_block(x), chat_completions_block(y));
+            assert_eq!(responses_block(x), responses_block(y));
+        }
+    }
+
+    #[test]
+    fn test_check_rejects_sealed_binaries_by_media_class() {
+        let image = sealed_ctx(vec![binary_block("image/png", "p.png", PNG)]);
+        let pdf = sealed_ctx(vec![binary_block("application/pdf", "d.pdf", PDF)]);
+        let none = InputSupport {
+            images: false,
+            pdf: false,
+        };
+        assert_eq!(
+            check_attachments(&image, none),
+            Err(AiError::InputUnsupported(MediaClass::Image))
+        );
+        assert_eq!(
+            check_attachments(&pdf, none),
+            Err(AiError::InputUnsupported(MediaClass::Pdf))
+        );
+        let images_only = InputSupport {
+            images: true,
+            pdf: false,
+        };
+        assert_eq!(check_attachments(&image, images_only), Ok(()));
+        assert_eq!(
+            check_attachments(&pdf, images_only),
+            Err(AiError::InputUnsupported(MediaClass::Pdf))
+        );
+    }
+
+    #[test]
+    fn test_accepts_is_keyed_by_media_class() {
+        let s = InputSupport {
+            images: true,
+            pdf: false,
+        };
+        assert!(s.accepts(MediaClass::Image));
+        assert!(!s.accepts(MediaClass::Pdf));
+    }
+
+    #[test]
+    fn test_sealed_request_logs_hold_neither_label_nor_content() {
+        let ctx = sealed_ctx(vec![binary_block(
+            "application/pdf",
+            "SECRETLABEL.pdf",
+            PDF,
+        )]);
+        let lines: Vec<String> = crate::request_logging::history_shapes(&ctx)
+            .into_iter()
+            .chain(crate::request_logging::history_contents(&ctx))
+            .collect();
+        for line in &lines {
+            assert!(!line.contains("SECRETLABEL"), "{line}");
+            assert!(!line.contains("JVBERi0x"), "{line}");
+        }
+        assert!(
+            lines.iter().any(|l| l.contains("binary_bytes=6")),
+            "{lines:?}"
+        );
+    }
+
     #[test]
     fn test_capability_table() {
         assert_eq!(
             anthropic_support("claude-future-9"),
-            AttachmentSupport {
+            InputSupport {
                 images: true,
                 pdf: true
             }
@@ -460,35 +601,35 @@ mod tests {
         let official = "https://api.openai.com/v1";
         assert_eq!(
             openai_responses_support(official, "gpt-future"),
-            AttachmentSupport {
+            InputSupport {
                 images: true,
                 pdf: true
             }
         );
         assert_eq!(
             openai_responses_support(official, "o3-mini"),
-            AttachmentSupport {
+            InputSupport {
                 images: false,
                 pdf: false
             }
         );
         assert_eq!(
             openai_responses_support("http://localhost:11434/v1", "gpt-4o"),
-            AttachmentSupport {
+            InputSupport {
                 images: false,
                 pdf: false
             }
         );
         assert_eq!(
             openai_compatible_support(official, "gpt-4o"),
-            AttachmentSupport {
+            InputSupport {
                 images: true,
                 pdf: true
             }
         );
         assert_eq!(
             openai_compatible_support(official, "gpt-3.5-turbo"),
-            AttachmentSupport {
+            InputSupport {
                 images: false,
                 pdf: false
             }
@@ -497,14 +638,14 @@ mod tests {
         let ollama = "http://localhost:11434/v1";
         assert_eq!(
             openai_compatible_support(ollama, "llama3.1"),
-            AttachmentSupport {
+            InputSupport {
                 images: false,
                 pdf: false
             }
         );
         assert_eq!(
             openai_compatible_support(ollama, "llava:13b"),
-            AttachmentSupport {
+            InputSupport {
                 images: true,
                 pdf: false
             }
@@ -512,7 +653,7 @@ mod tests {
         // A look-alike host is not the official endpoint.
         assert_eq!(
             openai_compatible_support("https://api.openai.com.evil.test/v1", "llama3.1"),
-            AttachmentSupport {
+            InputSupport {
                 images: false,
                 pdf: false
             }

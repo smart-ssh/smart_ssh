@@ -53,8 +53,8 @@ Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037
   neutralisiert. Das geschieht bei jedem Senden erneut, auch nach dem
   Fortsetzen.
 - Bilder und PDFs werden nie als Anweisung interpretiert. Sie gehen
-  unverändert (nicht redigiert) als eigene Bild- bzw. Dokumentblöcke des
-  Anbieters an die KI (Spec 0006, Abschnitt 8). Direkt davor steht ein
+  unverändert (nicht redigiert) als eigene Blöcke nach Medientyp (Bild bzw.
+  Dokument) des Anbieters an die KI (Spec 0006, Abschnitt 8). Direkt davor steht ein
   gefencter `local_file`-Text mit dem Dateinamen, der sie als nicht
   vertrauenswürdige lokale Datei kennzeichnet.
 - Kann das gewählte Modell Bilder bzw. PDFs nicht lesen, wird die Nachricht
