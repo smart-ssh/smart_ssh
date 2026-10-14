@@ -634,6 +634,22 @@ mod attachment_tests {
         std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
     }
 
+    /// Issue #504: an unsealed extension part is the fixed fenced placeholder.
+    #[test]
+    fn test_responses_extension_part_renders_fixed_placeholder() {
+        let p = OpenAiResponsesProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            "k",
+            true,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
+        crate::content::test_fixtures::assert_extension_placeholder(&p.build_request_body(&ctx));
+    }
+
     #[test]
     fn test_responses_image_and_pdf_input_parts() {
         let p = OpenAiResponsesProvider::new(

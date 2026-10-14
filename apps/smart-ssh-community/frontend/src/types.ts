@@ -865,6 +865,12 @@ export type ChatHistoryEntryDto =
       type: "attachments";
       role: ChatHistoryRole;
       items: { name: string; kind: "text" | "image" | "pdf" }[];
+    }
+  /** Issue #504, Spec 0110 §5: Erweiterungsteile — nur Label und Art, nie Inhalt. */
+  | {
+      type: "extensionParts";
+      role: ChatHistoryRole;
+      items: { label: string; media: "text" | "image" | "pdf" }[];
     };
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------

@@ -589,6 +589,13 @@ pub(crate) fn reapply_redaction_for_send(
                 MessageContent::Attachments(items) => {
                     MessageContent::Attachments(redact_attachments(items, redactor))
                 }
+                // Issue #504: the label goes into the fence, so it is
+                // redacted again on every send. The core never stores
+                // content here; the placeholder is built by the provider.
+                MessageContent::Extension(mut part) => {
+                    part.label = redactor.redact_text(&part.label);
+                    MessageContent::Extension(part)
+                }
             },
         })
         .collect()

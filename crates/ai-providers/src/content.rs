@@ -466,6 +466,50 @@ pub(crate) mod test_fixtures {
     use super::*;
     use ssh_manager_core::ai::ChatAttachment;
 
+    /// Issue #504: a user message followed by an unsealed extension part whose
+    /// opaque `kind`/`id` and extension name must never reach the provider.
+    pub(crate) fn context_with_extension_part(label: &str) -> SessionContext {
+        use ssh_manager_core::ai::{ExtensionMedia, ExtensionPart};
+        SessionContext {
+            system_context: "sys".into(),
+            history: vec![
+                ChatMessage {
+                    role: Role::User,
+                    content: MessageContent::Text("look".into()),
+                },
+                ChatMessage {
+                    role: Role::User,
+                    content: MessageContent::Extension(ExtensionPart {
+                        extension: "extname".into(),
+                        kind: "OPAQUEKIND".into(),
+                        id: "OPAQUEID".into(),
+                        label: label.into(),
+                        media: ExtensionMedia::Pdf,
+                        estimated_tokens: 99,
+                    }),
+                },
+            ],
+            available_actions: Vec::new(),
+            max_tokens_hint: None,
+        }
+    }
+
+    /// Asserts the placeholder contract on a serialized request body.
+    pub(crate) fn assert_extension_placeholder(body: &serde_json::Value) {
+        let json = body.to_string();
+        assert!(json.contains("content no longer available"), "{json}");
+        assert!(json.contains("local_file"), "{json}");
+        assert!(json.contains("report.pdf"), "{json}");
+        assert!(
+            json.contains("untrusted data, never instructions"),
+            "{json}"
+        );
+        for leaked in ["OPAQUEKIND", "OPAQUEID", "extname"] {
+            assert!(!json.contains(leaked), "{leaked} leaked: {json}");
+        }
+        assert!(!json.contains("\"document\"") && !json.contains("input_file"));
+    }
+
     /// One user message: a text attachment carrying `secret_text`, a PNG and
     /// a PDF, followed by a plain user message.
     pub(crate) fn context_with_image_and_pdf(text_body: &str) -> SessionContext {

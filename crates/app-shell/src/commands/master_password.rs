@@ -120,6 +120,9 @@ pub struct PendingStartup {
     session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
     /// Issue #462: database extensions, started only after the unlock.
     db_extensions: Arc<Vec<crate::DbExtension>>,
+    /// Issue #504: chat content extensions, told about removed sessions once
+    /// the database is open.
+    chat_content: Arc<app_logic::chat_content_extension::ChatContentRegistry>,
     /// Der Fragesteller im Fenster. Entsteht beim ersten Entsperrversuch,
     /// weil er den `AppHandle` braucht.
     prompt: std::sync::Mutex<Option<Arc<WindowStartupPrompt>>>,
@@ -158,6 +161,14 @@ impl PendingStartup {
         self
     }
 
+    pub(crate) fn with_chat_content(
+        mut self,
+        chat_content: Arc<app_logic::chat_content_extension::ChatContentRegistry>,
+    ) -> Self {
+        self.chat_content = chat_content;
+        self
+    }
+
     pub fn new(
         inputs: crate::StartupInputs,
         entitlements: Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
@@ -167,6 +178,7 @@ impl PendingStartup {
             entitlements,
             session_extension: None,
             db_extensions: Arc::new(Vec::new()),
+            chat_content: Arc::default(),
             prompt: std::sync::Mutex::new(None),
             unlock_lock: tokio::sync::Mutex::new(()),
             failed_unlock_attempts: std::sync::atomic::AtomicU32::new(0),
@@ -633,6 +645,7 @@ async fn assemble_and_open_the_gate(
         prompt.as_ref(),
         offers_skip,
         &pending.db_extensions,
+        &pending.chat_content,
     )
     .await
     .map_err(|abort| startup_abort_to_command_error(&pending.inputs, prompt.as_ref(), abort))?;

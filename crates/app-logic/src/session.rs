@@ -1358,6 +1358,9 @@ pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
         MessageContent::WebActivity(_) => true,
         // Issue #469 (Spec 0039 §5): Anhänge sind lokale Fremdinhalte.
         MessageContent::Attachments(_) => true,
+        // Issue #504 (ADR 0141, decision 4): every extension part, also
+        // after resume and whatever its source.
+        MessageContent::Extension(_) => true,
     })
 }
 
@@ -1948,6 +1951,31 @@ mod tests {
             ),
         }];
         assert!(history_contains_untrusted_content(&history));
+    }
+
+    /// Issue #504 (ADR 0141, decision 4): a resumed history with an extension
+    /// part sets the untrusted-content escalation, with no other untrusted
+    /// content around.
+    #[test]
+    fn test_history_contains_untrusted_content_true_for_extension_part() {
+        use ssh_manager_core::ai::{ExtensionMedia, ExtensionPart};
+        let text = ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("hello".to_string()),
+        };
+        assert!(!history_contains_untrusted_content(&[text.clone()]));
+        let part = ChatMessage {
+            role: Role::User,
+            content: MessageContent::Extension(ExtensionPart {
+                extension: "files".into(),
+                kind: "k".into(),
+                id: "i".into(),
+                label: "a.txt".into(),
+                media: ExtensionMedia::Text,
+                estimated_tokens: 3,
+            }),
+        };
+        assert!(history_contains_untrusted_content(&[text, part]));
     }
 
     /// Spec 0064 Nachtrag: eine Regression dieses Schritts selbst gefangen

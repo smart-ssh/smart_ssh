@@ -125,6 +125,8 @@ fn estimate_message_tokens(message: &ChatMessage) -> usize {
         MessageContent::Attachments(items) => {
             items.iter().map(|a| a.estimated_tokens()).sum::<usize>()
         }
+        // Issue #504: the core's own estimate stored with the reference.
+        MessageContent::Extension(part) => part.estimated_tokens,
         MessageContent::ActionRejected { command, reason } => {
             let reason_text = match reason {
                 RejectionReason::User => "",
