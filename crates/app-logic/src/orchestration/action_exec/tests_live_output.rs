@@ -67,6 +67,7 @@ async fn test_live_output_precedes_an_unchanged_final_result() {
         action_id,
         "count".to_string(),
         &emitter,
+        empty_store(),
         true,
         LedgerSource::Ai,
     )
@@ -127,6 +128,7 @@ async fn test_cancel_during_streaming_keeps_partial_output_for_the_ai() {
         action_id,
         "journalctl -f".to_string(),
         &emitter,
+        empty_store(),
         true,
         LedgerSource::Ai,
     );
@@ -195,6 +197,7 @@ async fn test_two_sessions_stream_only_their_own_output() {
             action_a,
             "run".to_string(),
             &emitter,
+            empty_store(),
             true,
             LedgerSource::Ai,
         ),
@@ -204,6 +207,7 @@ async fn test_two_sessions_stream_only_their_own_output() {
             action_b,
             "run".to_string(),
             &emitter,
+            empty_store(),
             true,
             LedgerSource::Ai,
         ),
@@ -252,6 +256,7 @@ async fn stop_after(command: &str, chunk: &str, wait_for_hint: bool) -> (bool, b
         action_id,
         command.to_string(),
         &emitter,
+        empty_store(),
         true,
         LedgerSource::Ai,
     );

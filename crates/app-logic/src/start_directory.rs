@@ -387,7 +387,7 @@ mod tests {
     #[tokio::test]
     async fn terminal_path_never_calls_the_outgoing_transform() {
         use ssh_manager_core::outgoing::{
-            OutgoingKind, OutgoingScope, OutgoingTransform, Prepared, Rejection,
+            OutgoingKind, OutgoingTransform, Prepared, Rejection, ServerScope,
         };
 
         struct Counting(StdMutex<u32>);
@@ -395,7 +395,7 @@ mod tests {
         impl OutgoingTransform for Counting {
             async fn prepare_outgoing(
                 &self,
-                _: &OutgoingScope,
+                _: &ServerScope,
                 _: OutgoingKind,
                 text: &str,
             ) -> Result<Prepared, Rejection> {

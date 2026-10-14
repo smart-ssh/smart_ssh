@@ -6,7 +6,7 @@
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{fence_untrusted, ChatMessage, MessageContent, Role, UntrustedKind};
-use ssh_manager_core::profiles::AiAction;
+use ssh_manager_core::profiles::{AiAction, ProfileStore};
 use ssh_manager_core::ssh::{CommandOutput, SshError};
 
 use crate::events::{emit_chat_action_result, ActionResultPayload, EventEmitter};
@@ -409,6 +409,7 @@ pub(crate) async fn execute_write_remote_file(
     path: String,
     content: String,
     emitter: &dyn EventEmitter,
+    profile_store: &dyn ProfileStore,
     persist: bool,
     sudo_fallback_announced: bool,
 ) -> bool {
@@ -417,6 +418,7 @@ pub(crate) async fn execute_write_remote_file(
     // errors below never see `wire_content`.
     let prepared = match super::outgoing::prepare_for_send(
         session,
+        profile_store,
         ssh_manager_core::outgoing::OutgoingKind::FileContent,
         &content,
     )

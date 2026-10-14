@@ -93,7 +93,7 @@ async fn test_ai_command_is_unchanged_by_start_directory() {
             &session,
             Uuid::new_v4(),
             &TestEmitter::default(),
-            &InMemoryProfileStore::default(),
+            empty_store(),
             &ConfirmationRegistry::new(),
         )
         .await;
@@ -495,6 +495,7 @@ async fn test_execute_suggested_command_cancellation_returns_partial_output() {
         action_id,
         "journalctl -f".to_string(),
         &emitter,
+        empty_store(),
         true,
         LedgerSource::Ai,
     );
@@ -572,6 +573,7 @@ async fn test_running_command_does_not_hold_transport_and_commands_stay_serial()
             id,
             cmd.to_string(),
             &emitter,
+            empty_store(),
             true,
             LedgerSource::Ai,
         )
@@ -640,6 +642,7 @@ async fn test_execute_suggested_command_without_cancellation_leaves_no_registry_
         action_id,
         "ls -la".to_string(),
         &emitter,
+        empty_store(),
         true,
         LedgerSource::Ai,
     )
