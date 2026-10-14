@@ -25,11 +25,18 @@ pub use ssh_manager_core::outgoing::ServerScope;
 
 /// Registered through `Wiring`. All methods have no-op defaults so an
 /// extension only implements what it needs.
+#[async_trait::async_trait]
 pub trait SessionExtension: Send + Sync {
     /// Text appended to the session system context of this server. The core
     /// redacts it and places it in its own fenced section after the core
-    /// paragraphs; it is asked again on every turn.
-    fn context_section(&self, _scope: &ServerScope) -> Option<String> {
+    /// paragraphs; it is asked again on every turn. `language` is the prompt
+    /// language of the session (the one the section heading uses). Async, so
+    /// the extension can await reads from its own data store.
+    async fn context_section(
+        &self,
+        _scope: &ServerScope,
+        _language: crate::system_prompt::PromptLanguage,
+    ) -> Option<String> {
         None
     }
 
@@ -137,7 +144,7 @@ pub fn extension_heading(language: crate::system_prompt::PromptLanguage) -> &'st
 /// fence). Returns whether a section was added — the caller treats that like
 /// notes: untrusted content has entered the context (Spec 0039, section 5).
 /// Without an extension, or with an empty section, `parts` stays untouched.
-pub fn append_extension_section(
+pub async fn append_extension_section(
     parts: &mut SystemContextParts,
     extension: Option<&dyn SessionExtension>,
     scope: Option<&ServerScope>,
@@ -146,7 +153,7 @@ pub fn append_extension_section(
     let (Some(ext), Some(scope)) = (extension, scope) else {
         return false;
     };
-    let Some(text) = ext.context_section(scope) else {
+    let Some(text) = ext.context_section(scope, parts.language).await else {
         return false;
     };
     if text.trim().is_empty() {
@@ -245,8 +252,13 @@ mod tests {
         secrets: Vec<String>,
     }
 
+    #[async_trait::async_trait]
     impl SessionExtension for TestExtension {
-        fn context_section(&self, scope: &ServerScope) -> Option<String> {
+        async fn context_section(
+            &self,
+            scope: &ServerScope,
+            _language: PromptLanguage,
+        ) -> Option<String> {
             (scope.server_id == self.server)
                 .then(|| self.section.clone())
                 .flatten()
@@ -278,8 +290,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_section_is_fenced_after_core_text_in_both_languages() {
+    #[tokio::test]
+    async fn test_section_is_fenced_after_core_text_in_both_languages() {
         let id = ServerId::new();
         let ext = TestExtension {
             server: id,
@@ -292,7 +304,8 @@ mod tests {
         ] {
             let mut p = parts(language);
             let redactor = DefaultOutputRedactor::new();
-            let added = append_extension_section(&mut p, Some(&ext), Some(&scope(id)), &redactor);
+            let added =
+                append_extension_section(&mut p, Some(&ext), Some(&scope(id)), &redactor).await;
             assert!(added);
             let text = p.assemble();
             assert!(text.starts_with("BASE"));
@@ -303,19 +316,14 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_without_extension_or_section_the_context_is_unchanged() {
+    #[tokio::test]
+    async fn test_without_extension_or_section_the_context_is_unchanged() {
         let id = ServerId::new();
         let redactor = DefaultOutputRedactor::new();
         let before = parts(PromptLanguage::En).assemble();
 
         let mut none = parts(PromptLanguage::En);
-        assert!(!append_extension_section(
-            &mut none,
-            None,
-            Some(&scope(id)),
-            &redactor
-        ));
+        assert!(!append_extension_section(&mut none, None, Some(&scope(id)), &redactor).await);
         assert_eq!(none.assemble(), before);
 
         // another server: the extension returns no section
@@ -325,12 +333,15 @@ mod tests {
             secrets: Vec::new(),
         };
         let mut other = parts(PromptLanguage::En);
-        assert!(!append_extension_section(
-            &mut other,
-            Some(&ext),
-            Some(&scope(ServerId::new())),
-            &redactor
-        ));
+        assert!(
+            !append_extension_section(
+                &mut other,
+                Some(&ext),
+                Some(&scope(ServerId::new())),
+                &redactor
+            )
+            .await
+        );
         assert_eq!(other.assemble(), before);
 
         // whitespace-only section: no empty section either
@@ -341,17 +352,53 @@ mod tests {
         };
         let mut p = parts(PromptLanguage::De);
         let before_de = p.assemble();
-        assert!(!append_extension_section(
-            &mut p,
-            Some(&blank),
-            Some(&scope(id)),
-            &redactor
-        ));
+        assert!(!append_extension_section(&mut p, Some(&blank), Some(&scope(id)), &redactor).await);
         assert_eq!(p.assemble(), before_de);
     }
 
-    #[test]
-    fn test_section_is_redacted_before_it_is_fenced() {
+    /// Answers per language and only after an actual `.await` point.
+    struct LangExtension {
+        gate: tokio::sync::RwLock<()>,
+    }
+
+    #[async_trait::async_trait]
+    impl SessionExtension for LangExtension {
+        async fn context_section(
+            &self,
+            _scope: &ServerScope,
+            language: PromptLanguage,
+        ) -> Option<String> {
+            let _guard = self.gate.read().await;
+            match language {
+                PromptLanguage::De => Some("deutscher Text".to_string()),
+                _ => Some("english text".to_string()),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_section_receives_the_prompt_language_and_may_await() {
+        let ext = LangExtension {
+            gate: tokio::sync::RwLock::new(()),
+        };
+        let id = ServerId::new();
+        let redactor = DefaultOutputRedactor::new();
+        for (language, present, absent) in [
+            (PromptLanguage::De, "deutscher Text", "english text"),
+            (PromptLanguage::En, "english text", "deutscher Text"),
+        ] {
+            let mut p = parts(language);
+            assert!(
+                append_extension_section(&mut p, Some(&ext), Some(&scope(id)), &redactor).await
+            );
+            let text = p.assemble();
+            assert!(text.contains(present), "{text}");
+            assert!(!text.contains(absent), "{text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_section_is_redacted_before_it_is_fenced() {
         let id = ServerId::new();
         let ext = TestExtension {
             server: id,
@@ -361,12 +408,9 @@ mod tests {
         let secrets = known_secrets(Some(&ext), Some(&scope(id)));
         let redactor = redactor_with_secrets(None, &secrets);
         let mut p = parts(PromptLanguage::En);
-        assert!(append_extension_section(
-            &mut p,
-            Some(&ext),
-            Some(&scope(id)),
-            redactor.as_ref()
-        ));
+        assert!(
+            append_extension_section(&mut p, Some(&ext), Some(&scope(id)), redactor.as_ref()).await
+        );
         let text = p.assemble();
         assert!(!text.contains(SECRET));
         assert!(text.contains(REDACTED_PLACEHOLDER));

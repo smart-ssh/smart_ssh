@@ -502,7 +502,8 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
         state.session_extension.as_deref(),
         extension_scope.as_ref(),
         redactor.as_ref(),
-    );
+    )
+    .await;
     let notes_present = notes_present || extension_present;
     let system_context = system_context_parts.assemble();
     // Issue #323: die `suggest_command`-Beschreibung folgt derselben Sprache
