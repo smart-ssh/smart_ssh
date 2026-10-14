@@ -1,0 +1,37 @@
+{
+  "version": "0.6.0",
+  "highlights": {
+    "en": [
+      "The local database is now fully encrypted, and all credentials move from the OS keychain into it.",
+      "Optional master password with an unlock screen, as an alternative to the OS keychain.",
+      "MCP requests run in their own session and tab per server and tool, with at most one pending confirmation.",
+      "The AI can search the web and read pages, showing every search and the cited sources in the chat.",
+      "Step-by-step connection log for connection tests and failed connections, per hop for jump hosts.",
+      "Servers get an optional start directory and can be moved between groups by drag and drop."
+    ],
+    "de": [
+      "Die lokale Datenbank ist jetzt vollständig verschlüsselt, und alle Zugangsdaten wandern aus dem Schlüsselbund des Betriebssystems in sie.",
+      "Optionales Master-Passwort mit Entsperr-Bildschirm, als Alternative zum Schlüsselbund des Betriebssystems.",
+      "MCP-Anfragen laufen je Server und Werkzeug in einer eigenen Sitzung und einem eigenen Tab, mit höchstens einer offenen Bestätigung.",
+      "Die KI kann im Web suchen und Seiten lesen; jede Suche und die zitierten Quellen erscheinen im Chat.",
+      "Schritt-für-Schritt-Verbindungsprotokoll für Verbindungstests und fehlgeschlagene Verbindungen, bei Jump-Hosts je Hop.",
+      "Server erhalten ein optionales Startverzeichnis und lassen sich per Drag and Drop zwischen Gruppen verschieben."
+    ],
+    "fr": [
+      "La base de données locale est désormais entièrement chiffrée, et tous les identifiants quittent le trousseau du système pour y être stockés.",
+      "Mot de passe principal facultatif avec écran de déverrouillage, comme alternative au trousseau du système.",
+      "Les requêtes MCP s’exécutent dans leur propre session et leur propre onglet par serveur et par outil, avec au plus une confirmation en attente.",
+      "L’IA peut effectuer des recherches sur le web et lire des pages ; chaque recherche et les sources citées s’affichent dans le chat.",
+      "Journal de connexion étape par étape pour les tests de connexion et les connexions échouées, par saut pour les hôtes de rebond.",
+      "Les serveurs disposent d’un répertoire de départ facultatif et peuvent être déplacés d’un groupe à l’autre par glisser-déposer."
+    ],
+    "es": [
+      "La base de datos local está ahora totalmente cifrada, y todas las credenciales pasan del llavero del sistema a ella.",
+      "Contraseña maestra opcional con pantalla de desbloqueo, como alternativa al llavero del sistema.",
+      "Las solicitudes MCP se ejecutan en su propia sesión y pestaña por servidor y herramienta, con como máximo una confirmación pendiente.",
+      "La IA puede buscar en la web y leer páginas; cada búsqueda y las fuentes citadas se muestran en el chat.",
+      "Registro de conexión paso a paso para las pruebas de conexión y las conexiones fallidas, por salto en los hosts de salto.",
+      "Los servidores tienen un directorio de inicio opcional y se pueden mover entre grupos arrastrando y soltando."
+    ]
+  }
+}
