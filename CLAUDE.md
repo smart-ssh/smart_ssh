@@ -235,6 +235,11 @@ not by hand-editing, so the lockfile stays consistent).
   exactly one line each, user-facing, no internals; it feeds the
   download page and release notes; `[Unreleased]` has none), open a fresh empty `[Unreleased]` above
   it, tag the release.
+- **Release notes file at a bump:** also write
+  `release-notes/X.Y.Z.json` with the Highlights in English, German,
+  French and Spanish (format in Spec 0048 §2; `en` identical to the
+  changelog Highlights). `scripts/check-release-notes.mjs` (run by
+  `npm run lint`) enforces it for every version after 0.5.2.
 - **The changelog and the fragments are written in English.**
 - **Fragment rules** (details in `changelog.d/README.md`): at most two
   lines per item; describe the user-visible effect, not the mechanism;

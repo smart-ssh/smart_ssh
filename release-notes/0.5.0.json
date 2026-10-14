@@ -1,0 +1,29 @@
+{
+  "version": "0.5.0",
+  "highlights": {
+    "en": [
+      "The chat input accepts multi-line messages: Enter sends, Shift+Enter inserts a line break.",
+      "Chat answers offer \"Add to note\" and \"Export as Markdown\" on hover or keyboard focus.",
+      "The AI provider settings are reorganised into clearly grouped cards.",
+      "Command output containing password hashes, database connection strings and provider tokens is now redacted before it reaches the AI or an MCP client."
+    ],
+    "de": [
+      "Das Chat-Eingabefeld erlaubt mehrzeilige Nachrichten: Enter sendet, Umschalt+Enter fügt einen Zeilenumbruch ein.",
+      "Chat-Antworten bieten „In Notiz übernehmen“ und „Als Markdown exportieren“ bei Hover oder Tastaturfokus an.",
+      "Die Einstellungen der KI-Provider sind in klar gruppierte Karten gegliedert.",
+      "Kommando-Ausgaben mit Passwort-Hashes, Datenbank-Verbindungszeichenfolgen und Provider-Tokens werden geschwärzt, bevor sie an die KI oder einen MCP-Client gehen."
+    ],
+    "fr": [
+      "Le champ de saisie du chat accepte les messages multilignes : Entrée envoie, Maj+Entrée insère un saut de ligne.",
+      "Les réponses du chat proposent « Ajouter à la note » et « Exporter en Markdown » au survol ou au focus clavier.",
+      "Les réglages des fournisseurs d’IA sont réorganisés en cartes clairement regroupées.",
+      "Les sorties de commandes contenant des hachages de mots de passe, des chaînes de connexion de bases de données et des jetons de fournisseurs sont désormais masquées avant d’atteindre l’IA ou un client MCP."
+    ],
+    "es": [
+      "El campo de entrada del chat admite mensajes de varias líneas: Intro envía, Mayús+Intro inserta un salto de línea.",
+      "Las respuestas del chat ofrecen «Añadir a la nota» y «Exportar como Markdown» al pasar el ratón o con el foco del teclado.",
+      "Los ajustes de los proveedores de IA se reorganizan en tarjetas claramente agrupadas.",
+      "La salida de comandos con hashes de contraseñas, cadenas de conexión de bases de datos y tokens de proveedores se oculta ahora antes de llegar a la IA o a un cliente MCP."
+    ]
+  }
+}
