@@ -347,381 +347,333 @@ sind mit **(Pro)** markiert.
 ## [0.5.1] — 2026-09-25
 
 ### Added
-- Dateibrowser mit erhöhten Rechten: Ein Umschalter „Erhöhte Rechte“ öffnet
-  den Dateibrowser als root (oder einen anderen Nutzer), indem der
-  SFTP-Server per `sudo -n` gestartet wird — wie bei WinSCP. Voraussetzung
-  ist eine sudo-Regel ohne Passwort für `sftp-server` auf dem Server; die
-  App fragt nie nach einem sudo-Passwort. Fehlt die Regel, zeigt die App
-  die passende sudoers-Zeile zum Kopieren samt Hinweis, was sie bedeutet.
-  Der Modus ist nie standardmäßig an, wird nicht gespeichert, ist durch
-  Rahmen und Banner unübersehbar, und Bestätigungen nennen ihn („…als root
-  löschen?“). KI und MCP-Clients haben auf diesen Kanal keinen Zugriff.
-  Den Pfad zu `sftp-server` erkennt die App automatisch; im Server-Profil
-  lässt er sich unter „Erweitert“ überschreiben.
-- Jede Dateibrowser-Aktion meldet jetzt ihr Ergebnis: Erfolg kurz
-  eingeblendet („„datei.conf“ heruntergeladen nach ~/Downloads“, mit „Im
-  Finder zeigen“), Fehler bleiben mit Grund stehen. Ordner-, rekursive und
-  Mehrfach-Aktionen fassen das Ergebnis in einer Meldung mit Anzahl
-  zusammen.
-- Der Über-Dialog zeigt jetzt auch, ob ein Dev- oder Release-Build läuft
-  (z. B. „0.5.0 (d887019) · Community · Dev-Build“); die Titelzeile
-  markiert Dev-Builds mit „· Dev“. Beide nutzen getrennte
-  Datenverzeichnisse — so ist sofort klar, welche Daten man gerade sieht.
-  „Kopieren“ übernimmt die ganze Zeile für Fehlerberichte.
-- Der Chat ist jetzt jederzeit bedienbar, auch während die KI arbeitet:
-  Eine währenddessen geschriebene Nachricht unterbricht nichts, sondern
-  wird eingereiht und mit der nächsten Anfrage an die KI mitgeschickt
-  (bzw. direkt danach, falls keine weitere Runde folgt) — gut zum
-  Korrigieren, ohne auf das Ende der Antwort warten zu müssen. Der
-  „Stopp"-Knopf erscheint bei jeder laufenden Antwort und bricht die
-  laufende Anfrage an den KI-Anbieter sofort ab, statt nur weitere
-  automatische Runden zu verhindern. Ein gerade laufendes Kommando auf dem
-  Server läuft dabei zu Ende; ein offener Bestätigungsdialog bleibt stehen.
-- Die KI wird jetzt angewiesen, Passwörter, private Schlüssel, Tokens und
-  ähnliche Geheimnisse möglichst nicht zu lesen: Existenz wird über
-  Metadaten (z. B. Dateigröße) geprüft, und solche Dateien werden direkt
-  auf dem Server kopiert (`cp`, Pipe) statt gelesen und neu geschrieben —
-  so landen Geheimnisse gar nicht erst im Chat-Verlauf.
-- App nutzt jetzt Anthropics Prompt-Caching für System-Prompt,
-  Werkzeug-Definitionen und Server-Notiz — diese ändern sich innerhalb
-  einer Sitzung kaum, werden bislang aber bei **jedem** Request neu
-  gesendet und voll gegen das Input-Token-Rate-Limit gezählt. Gecachte
-  Tokens zählen bei den meisten Claude-Modellen **nicht** gegen das
-  Rate-Limit, senkt also Kosten und **Rate-Limit-Last** spürbar (Anthropic
-  nennt als Beispiel 80% Cache-Trefferquote = effektiv 5× mehr
-  Input-Durchsatz pro Minute). Der bisher direkt im System-Prompt
-  eingebettete `uname`-Systembanner des verbundenen Servers wandert dabei
-  in eine eigene, wie Kommando-Ausgaben gekennzeichnete Nachricht (hätte
-  sonst bei jeder Sitzung den Cache ungültig machen können).
-- Neuer "Diagnosepaket erzeugen"-Knopf in den Einstellungen (Diagnose)
-  neben "Logpfad öffnen": erzeugt ein einzelnes, redigiertes Text-Paket
-  (Version + Build-Hash, Betriebssystem/Architektur, Datenpfade,
-  konfigurierte KI-Provider-**Typen**, Server-**Anzahl**, die letzten bis
-  zu 500 Log-Zeilen) zur Weitergabe an den Support oder zum Anhängen an
-  ein GitHub-Issue. Enthält **keine** Zugangsdaten, Passwörter, Host-Keys,
-  Server-Adressen oder Notiz-/Chat-Inhalte; eingebettete Log-Zeilen laufen
-  zusätzlich durch dieselbe Redaction wie sonst in der App. Wird vor dem
-  Speichern erst als Vorschau angezeigt — nichts wird automatisch
-  gespeichert oder versendet.
-- App liest jetzt die Rate-Limit-Header des KI-Providers (Anthropic:
+- File browser with elevated rights: an “Elevated rights” switch opens the
+  file browser as root (or another user) by starting the SFTP server through
+  `sudo -n` — like WinSCP. This requires a passwordless sudo rule for
+  `sftp-server` on the server; the app never asks for a sudo password. If the
+  rule is missing, the app shows the matching sudoers line to copy, along with
+  a note on what it means. The mode is never on by default, is not saved, is
+  impossible to miss thanks to a frame and a banner, and confirmations name it
+  (“Delete … as root?”). The AI and MCP clients have no access to this
+  channel. The app detects the path to `sftp-server` automatically; it can be
+  overridden in the server profile under “Advanced”.
+- Every file browser action now reports its result: success is shown briefly
+  (“datei.conf” downloaded to ~/Downloads”, with “Show in Finder”), errors
+  stay visible with the reason. Folder, recursive and multi-item actions
+  summarize the result in a single message with a count.
+- The About dialog now also shows whether a dev or a release build is running
+  (e.g. “0.5.0 (d887019) · Community · Dev build”); the title bar marks dev
+  builds with “· Dev”. Both use separate data directories — so it is
+  immediately clear which data you are looking at. “Copy” takes the whole line
+  for bug reports.
+- The chat can now be used at any time, even while the AI is working: a message
+  written in the meantime interrupts nothing, but is queued and sent to the AI
+  with the next request (or right afterwards, if no further round follows) —
+  handy for making corrections without waiting for the answer to finish. The
+  “Stop” button appears for every running answer and immediately aborts the
+  running request to the AI provider, instead of only preventing further
+  automatic rounds. A command that is currently running on the server runs to
+  completion; an open confirmation dialog stays open.
+- The AI is now instructed to avoid reading passwords, private keys, tokens and
+  similar secrets where possible: existence is checked via metadata (e.g. file
+  size), and such files are copied directly on the server (`cp`, pipe) instead
+  of being read and rewritten — so secrets never end up in the chat history in
+  the first place.
+- The app now uses Anthropic's prompt caching for the system prompt, tool
+  definitions and server note — these barely change within a session, but so
+  far were re-sent with **every** request and counted fully against the
+  input-token rate limit. For most Claude models, cached tokens do **not**
+  count against the rate limit, so this noticeably reduces costs and
+  **rate-limit load** (Anthropic gives 80% cache hit rate = effectively 5× more
+  input throughput per minute as an example). The `uname` system banner of the
+  connected server, previously embedded directly in the system prompt, moves
+  into a separate message marked like command output (it could otherwise have
+  invalidated the cache in every session).
+- New “Create diagnostics package” button in Settings (Diagnostics) next to
+  “Open log path”: creates a single, redacted text package (version + build
+  hash, operating system/architecture, data paths, configured AI provider
+  **types**, server **count**, the last up to 500 log lines) to pass on to
+  support or attach to a GitHub issue. Contains **no** credentials, passwords,
+  host keys, server addresses or note/chat contents; embedded log lines
+  additionally go through the same redaction as elsewhere in the app. It is
+  shown as a preview before saving — nothing is saved or sent automatically.
+- The app now reads the AI provider's rate-limit headers (Anthropic:
   `anthropic-ratelimit-{requests,input-tokens,output-tokens,tokens}-
-  {remaining,reset}`) und drosselt proaktiv, statt blind ins Limit zu
-  laufen: sinkt das bekannte Restbudget unter ~15% (oder würde eine
-  geschätzte Anfrage das verbleibende Token-Budget überschreiten), wartet
-  die App bis zum bekannten Reset-Zeitpunkt, bevor sie die Anfrage
-  abschickt — der Chat zeigt dabei "Warte auf KI-Budget — nächster
-  Versuch in Xs…" an, der Versand erfolgt danach automatisch. Alle
-  KI-Aufrufe (Haupt-Chat, optionale Zweitmeinung/Einschleusungs-Check,
-  Zusammenfassung, Auto-Titel, Notiz-Vorschlag/-Kürzung), die denselben
-  API-Key/Endpunkt/Modell nutzen, teilen sich dabei ein gemeinsames
-  Budget. Provider ohne diese Header (z. B. ein lokaler Ollama-Endpunkt)
-  bleiben unverändert — kein proaktives Warten, nur das bestehende
-  reaktive Wiederholen nach einem 429.
-- App zeigt jetzt bei Startfehlern eine verständliche Meldung statt
-  stillem Absturz: kann die Datenbank nicht geöffnet werden (z. B. von
-  einer neueren Programmversion angelegt, beschädigt, oder das
-  Datenverzeichnis nicht beschreibbar) oder der Host-Key-Speicher nicht
-  geladen werden, erscheint jetzt ein Dialog mit der Fehlerursache statt
-  eines unerklärten Absturzes vor dem ersten Fenster. Ist der
-  Systemschlüsselbund beim Start gesperrt oder nicht verfügbar, startet
-  die App wie bisher trotzdem (Chat-Verlauf und Notiz-Zusammenfassungen
-  sind dann für diesen Programmlauf deaktiviert), zeigt das aber jetzt
-  ebenfalls sichtbar an statt es nur stillschweigend zu protokollieren.
-- Ist die gespeicherte Notiz eines Servers sehr groß, bietet die App beim
-  Trennen der Verbindung jetzt an, sie per KI zusammenzufassen (oder
-  selbst zu kürzen) — wie bei jedem KI-Notiz-Vorschlag wird die
-  Zusammenfassung erst nach Bestätigung im Diff-Vergleich (alt/neu)
-  tatsächlich gespeichert, nie automatisch. Dieser Vorschlag erscheint
-  jetzt auch für den lokalen Pseudo-Server (Localhost).
-- Der Notiz-Editor zeigt jetzt beim Bearbeiten einer sehr großen Notiz
-  einen dezenten Hinweis mit direktem Link, sie sofort per KI
-  zusammenfassen zu lassen (derselbe Bestätigungs-Ablauf wie beim
-  Trennen-Vorschlag).
+  {remaining,reset}`) and throttles proactively instead of running blindly into
+  the limit: if the known remaining budget drops below ~15% (or an estimated
+  request would exceed the remaining token budget), the app waits until the
+  known reset time before sending the request — the chat shows “Waiting for AI
+  budget — next attempt in Xs…” in the meantime, and the request is sent
+  automatically afterwards. All AI calls (main chat, optional second
+  opinion/injection check, summary, auto-title, note suggestion/shortening)
+  that use the same API key/endpoint/model share one common budget. Providers
+  without these headers (e.g. a local Ollama endpoint) remain unchanged — no
+  proactive waiting, only the existing reactive retry after a 429.
+- The app now shows an understandable message on startup errors instead of a
+  silent crash: if the database cannot be opened (e.g. created by a newer
+  program version, corrupted, or the data directory is not writable) or the
+  host key store cannot be loaded, a dialog with the cause now appears instead
+  of an unexplained crash before the first window. If the system keychain is
+  locked or unavailable at startup, the app still starts as before (chat
+  history and note summaries are then disabled for this program run), but now
+  also shows this visibly instead of only logging it silently.
+- If a server's saved note is very large, the app now offers to summarize it
+  with the AI (or shorten it yourself) when you disconnect — as with every AI
+  note suggestion, the summary is only actually saved after confirmation in the
+  diff comparison (old/new), never automatically. This suggestion now also
+  appears for the local pseudo-server (localhost).
+- When editing a very large note, the note editor now shows an unobtrusive
+  hint with a direct link to have it summarized by the AI right away (same
+  confirmation flow as the suggestion on disconnect).
 
-- Die maximale Antwortlänge der KI ist jetzt modellabhängig statt fest
-  auf ~4000 Tokens begrenzt (bei aktuellen Claude-Modellen bis zu 128K)
-  — ein zu knappes Limit führte bislang gelegentlich dazu, dass die
-  Antwort mitten im Satz/Kommando abbrach. Bricht eine Antwort trotzdem
-  am Längenlimit ab, bleibt der bisherige Text sichtbar und ein
-  "Weiter"-Knopf setzt die Antwort exakt dort fort, wo sie endete.
-  Zusätzlich im KI-Provider-Formular unter "Erweitert" ein optionales
-  Feld "Max. Antwortlänge (Tokens)" für Provider mit unbekanntem
-  Output-Maximum (z. B. ein selbstgehostetes Modell) — Standard weiterhin
-  "Automatisch".
-- Öffnest du die KI-Provider-Einstellungen ohne konfigurierten
-  Ollama-Provider, sucht die App einmalig ein lokal laufendes Ollama
-  (`127.0.0.1:11434`) und bietet an, es zu übernehmen — inklusive
-  Modellauswahl. Ohne gefundenes Ollama zeigt eine kompakte Anleitung, wie
-  man es installiert. Kein Netzwerkaufruf ohne diese Aktion oder einen
-  Klick auf „Erneut suchen".
-- Ist noch kein eigener Server angelegt, führt die Serverliste jetzt aktiv
-  mit „Ersten Server anlegen" in den Anlage-Dialog, statt nur einen
-  Entwicklertext zu zeigen.
-- Beim Anlegen eines Servers mit Schlüssel-Anmeldung empfiehlt ein Hinweis
-  Ed25519-Schlüssel (`ssh-keygen -t ed25519`) — RSA bleibt unterstützt.
-- Bei Ollama ist der API-Key im Formular nicht mehr erforderlich.
-- Die Diagnose-Ansicht zeigt eine Zeile „Systemschlüsselbund: verfügbar /
-  nicht verfügbar (Grund)" samt nächstem Schritt — nachschlagbar auch dann,
-  wenn der Startdialog bereits weggeklickt wurde.
-- Der Button „Modelle laden" ist jetzt auch für Anthropic-Provider
-  verfügbar — bisher fehlte er dort ganz.
-- Beim Anlegen und Bearbeiten eines Servers steht neben Passwort, Private
-  Key, SSH-Agent und Zertifikat jetzt eine fünfte Anmeldeart zur Wahl:
-  „Schlüsseldatei“ — ein Pfad statt eines im Schlüsselbund gespeicherten
-  Inhalts, wie `IdentityFile` in `ssh_config`. Vor dem Speichern zeigt die
-  Oberfläche, ob die Datei existiert, ob die Rechte passen, ob sie wie ein
-  OpenSSH-Schlüssel aussieht und ob sie verschlüsselt ist. Server-Liste und
-  -Details zeigen den Pfad, an dem die Anmeldung hängt.
-- Ein Knopf „In den Schlüsselbund übernehmen“ legt den Inhalt einer solchen
-  Schlüsseldatei einmalig in den Systemschlüsselbund und stellt die
-  Anmeldeart auf „Private Key“ um — die Ursprungsdatei bleibt dabei
-  unverändert liegen. Vorher zeigt ein Dialog, welche Datei gelesen wird
-  und was sich ändert.
+- The AI's maximum response length now depends on the model instead of being
+  fixed at ~4000 tokens (up to 128K for current Claude models) — a limit that
+  was too tight occasionally caused the response to break off in the middle of
+  a sentence/command. If a response still breaks off at the length limit, the
+  text so far stays visible and a “Continue” button resumes the response
+  exactly where it ended. In addition, the AI provider form has an optional
+  “Max. response length (tokens)” field under “Advanced” for providers with an
+  unknown output maximum (e.g. a self-hosted model) — the default is still
+  “Automatic”.
+- If you open the AI provider settings without a configured Ollama provider,
+  the app searches once for a locally running Ollama (`127.0.0.1:11434`) and
+  offers to adopt it — including model selection. If no Ollama is found, a
+  compact guide shows how to install it. No network call without this action or
+  a click on “Search again”.
+- If no server of your own has been created yet, the server list now actively
+  leads to the creation dialog with “Create first server”, instead of only
+  showing a developer text.
+- When creating a server with key login, a hint recommends Ed25519 keys
+  (`ssh-keygen -t ed25519`) — RSA remains supported.
+- For Ollama, the API key is no longer required in the form.
+- The diagnostics view shows a line “System keychain: available / unavailable
+  (reason)” along with the next step — available for lookup even after the
+  startup dialog has already been dismissed.
+- The “Load models” button is now also available for Anthropic providers — it
+  was missing there entirely before.
+- When creating and editing a server, a fifth login method is now available
+  alongside password, private key, SSH agent and certificate: “Key file” — a
+  path instead of content stored in the keychain, like `IdentityFile` in
+  `ssh_config`. Before saving, the interface shows whether the file exists,
+  whether the permissions are right, whether it looks like an OpenSSH key and
+  whether it is encrypted. The server list and details show the path the login
+  depends on.
+- A button “Move to keychain” stores the content of such a key file in the
+  system keychain once and switches the login method to “Private key” — the
+  original file is left unchanged. Beforehand, a dialog shows which file will
+  be read and what changes.
 
 ### Changed
-- Smart SSH ist jetzt Open Source unter der **Apache License 2.0**
-  (bisher Functional Source License 1.1, FSL-1.1-MIT). Das gilt
-  rückwirkend: Auch alle bereits veröffentlichten Versionen dürfen unter
-  der Apache License 2.0 genutzt werden.
-- Der System-Prompt weist die KI jetzt ausdrücklich an, ein angekündigtes
-  Kommando auch tatsächlich über `suggest_command` vorzuschlagen, statt es
-  nur im Fließtext anzukündigen und dort aufzuhören — beobachtetes Muster,
-  bei dem die automatische Fortsetzung dadurch ohne erkennbaren Grund
-  stehen blieb. Kurze Erklärungen vor einem Kommando bleiben ausdrücklich
-  erwünscht.
-- Fehlermeldungen auf dem Weg „Provider einrichten → Server anlegen →
-  Verbindung testen → verbinden" nennen jetzt durchgängig Ursache **und**
-  nächsten Schritt, auf Deutsch und Englisch — u. a. für falschen API-Key,
-  unbekanntes Modell, nicht erreichbaren lokalen KI-Dienst, abgelehnte
-  SSH-Verbindung, unbekannten Host, nicht erreichbaren Host und
-  abgelehnten/nicht rechtzeitig bestätigten Host-Key.
-- Der SSH-Verbindungsaufbau bricht jetzt nach 10 Sekunden ohne Antwort mit
-  einer klaren Meldung ab, statt minutenlang auf das Betriebssystem zu
-  warten.
-- Die Startdialoge (Datenbank-, Host-Key- und Schlüsselbund-Fehler) sprechen
-  jetzt Deutsch oder Englisch, abhängig von `LC_ALL`/`LC_MESSAGES`/`LANG`.
-  Vorgabe bleibt Deutsch, wenn keine brauchbare Spracheinstellung gesetzt
-  ist.
-- Ein vertippter Modellname zeigt bei Anthropic jetzt korrekt „Modell nicht
-  gefunden" statt „Provider nicht erreichbar".
-- Der Platzhaltertext in der Verwalten-Ansicht ohne ausgewählte
-  Gruppe/Server ist jetzt auch auf Englisch übersetzt (erschien zuvor auch
-  in der englischen Oberfläche auf Deutsch).
-- API-Key, Server-Passwort, Passphrase und Sudo-Passwort werden an den
-  Rändern nach derselben Regel bereinigt. Nur die Ränder: Was innerhalb
-  eines Wertes steht, bleibt unangetastet — auch ein ungewöhnliches
-  Zeichen, das dort hingehören könnte.
-- Beim selbst gesetzten Pfad zum `sftp-server` (erhöhter Dateibrowser)
-  gilt dieselbe Regel: Ein unsichtbares Zeichen am Rand wird entfernt,
-  statt den Pfad als ungültig abzulehnen. Ein solches Zeichen
-  **innerhalb** des Pfades führt unverändert zur Ablehnung.
-- Als Folge davon kann die Prüfung auf eingeschleuste Anweisungen jetzt
-  häufiger anschlagen — etwa wenn das Modell in seiner Begründung eine
-  gewöhnliche Konfigurationszeile wie `PermitRootLogin yes` zitiert. Die
-  nächste Aktion verlangt dann eine Bestätigung, statt automatisch zu
-  laufen. Das ist die sichere Richtung: Eine Nachfrage zu viel ist sichtbar
-  und mit einem Klick erledigt, eine verschluckte Warnung nicht.
-- Eine bereits gespeicherte Regel mit einem solchen Muster — etwa aus einer
-  älteren Programmfassung — wird in der Regelliste sichtbar markiert, mit
-  dem Hinweis, dass das Muster ungültig ist, und der Fundstelle darin.
-  Bearbeiten und Löschen bleiben möglich; Speichern verlangt dann ein
-  gültiges Muster. Zusätzlich wird eine solche Regel bei jeder Auswertung
-  im Protokoll vermerkt (mit Regel-Kennung, nie mit dem Kommando).
-- Meldet das Regel-Formular ein ungültiges Muster, steht dort jetzt ein
-  verständlicher Satz in der eingestellten Sprache und darunter die genaue
-  Fundstelle im Muster — bisher nur der englische Text der zugrunde
-  liegenden Bibliothek.
-- An einer so markierten Regel lässt sich die Priorität nicht mehr über die
-  Pfeiltasten verschieben; die Pfeile sind deaktiviert und nennen den Grund.
-- Der Vorschlag, eine sehr große Notiz per KI zusammenzufassen, hat jetzt
-  einen ✕-Knopf zum Schließen sowie einen Knopf „Später“, nach dem er für
-  diesen Server bis zum nächsten Start der App nicht wieder erscheint.
-- Dieser Vorschlag sowie der Hinweis beim Bearbeiten einer großen Notiz im
-  Notiz-Editor erscheinen jetzt erst ab 10 000 Zeichen statt bisher 8 000
-  Byte.
-- KI-Antworten ohne Text verschwinden nicht mehr still. Bricht die
-  Antwort eines Reasoning-Modells wegen des Ausgabe-Limits leer ab, wird
-  sie einmal automatisch mit mehr Budget wiederholt; bleibt eine Antwort
-  auf eine Nachricht trotzdem ganz ohne Text und ohne Vorschlag, zeigt der
-  Chat jetzt einen Hinweis mit dem Tipp, das Ausgabe-Limit in den
-  Provider-Einstellungen zu erhöhen.
+- Smart SSH is now open source under the **Apache License 2.0** (previously
+  Functional Source License 1.1, FSL-1.1-MIT). This applies retroactively: all
+  already published versions may also be used under the Apache License 2.0.
+- The system prompt now explicitly instructs the AI to actually propose an
+  announced command via `suggest_command`, instead of only announcing it in
+  running text and stopping there — an observed pattern in which automatic
+  continuation stalled for no apparent reason. Short explanations before a
+  command remain explicitly welcome.
+- Error messages on the path “set up provider → create server → test
+  connection → connect” now consistently name the cause **and** the next step,
+  in German and English — among others for a wrong API key, unknown model,
+  unreachable local AI service, rejected SSH connection, unknown host,
+  unreachable host and rejected/not confirmed in time host key.
+- Establishing the SSH connection now aborts after 10 seconds without a
+  response with a clear message, instead of waiting for the operating system
+  for minutes.
+- The startup dialogs (database, host key and keychain errors) now speak German
+  or English, depending on `LC_ALL`/`LC_MESSAGES`/`LANG`. The default remains
+  German if no usable language setting is set.
+- A mistyped model name for Anthropic now correctly shows “Model not found”
+  instead of “Provider unreachable”.
+- The placeholder text in the Manage view without a selected group/server is
+  now also translated into English (previously it appeared in German in the
+  English interface as well).
+- API key, server password, passphrase and sudo password are now trimmed at
+  the edges by the same rule. Only the edges: what is inside a value stays
+  untouched — even an unusual character that might belong there.
+- The same rule applies to a self-set path to `sftp-server` (elevated file
+  browser): an invisible character at the edge is removed instead of rejecting
+  the path as invalid. Such a character **inside** the path still leads to
+  rejection, unchanged.
+- As a consequence, the check for injected instructions can now trigger more
+  often — for example when the model quotes an ordinary configuration line
+  such as `PermitRootLogin yes` in its reasoning. The next action then
+  requires a confirmation instead of running automatically. This is the safe
+  direction: one question too many is visible and settled with a click, a
+  swallowed warning is not.
+- An already saved rule with such a pattern — for example from an older
+  program version — is visibly marked in the rule list, with a note that the
+  pattern is invalid and the location within it. Editing and deleting remain
+  possible; saving then requires a valid pattern. In addition, such a rule is
+  noted in the log on every evaluation (with the rule ID, never with the
+  command).
+- If the rule form reports an invalid pattern, it now shows an understandable
+  sentence in the selected language and, below it, the exact location in the
+  pattern — previously only the English text of the underlying library.
+- The priority of a rule marked this way can no longer be moved with the arrow
+  keys; the arrows are disabled and state the reason.
+- The suggestion to summarize a very large note with the AI now has a ✕ button
+  to close it and a “Later” button, after which it does not appear again for
+  this server until the app is next started.
+- This suggestion and the hint when editing a large note in the note editor
+  now only appear from 10,000 characters instead of the previous 8,000 bytes.
+- AI responses without text no longer disappear silently. If a reasoning
+  model's response breaks off empty because of the output limit, it is
+  automatically retried once with more budget; if a response to a message
+  still ends up with no text and no suggestion at all, the chat now shows a
+  hint with the tip to raise the output limit in the provider settings.
 
 ### Fixed
-- "Mache ich selbst" im Kürzungs-Vorschlag scrollt jetzt direkt zum
-  Notizfeld und fokussiert es, statt nur das Server-Formular zu öffnen.
-- Ein KI-Provider (oder ein zwischengeschalteter Proxy), der einen
-  Fehlerstatus zwar sofort beantwortete, den Antworttext danach aber
-  hängen ließ, konnte einen Chat-Turn unbegrenzt und ohne jede
-  Fehlermeldung blockieren (Chat antwortet nicht mehr, kein Log-Eintrag).
-  Der Aufruf bricht jetzt spätestens nach 90 Sekunden mit einer
-  sichtbaren Fehlermeldung ab.
-- Eine sehr lange Chat-Sitzung oder eine sehr große Server-Notiz konnte
-  eine KI-Anfrage so groß werden lassen, dass sie das Kontextfenster des
-  Modells sprengte — der Chat blieb dann ohne Antwort/Fehlermeldung
-  hängen. Die App schätzt jetzt vor jeder Anfrage die tatsächliche Größe
-  und kürzt bei Bedarf automatisch: ältere Gesprächsrunden werden durch
-  eine von der KI erstellte, laufend aktualisierte Zusammenfassung
-  ersetzt (schlägt dieser Zusammenfassungs-Aufruf fehl, schneidet die App
-  stattdessen wie gehabt ab — der Chat bleibt in jedem Fall funktionsfähig),
-  danach ggf. überlange einzelne Kommando-Ausgaben und zuletzt die Notiz
-  gekürzt — die gespeicherte Notiz und der vollständige Sitzungsverlauf
-  bleiben dabei unangetastet.
-- Ein KI-Provider-Aufruf konnte nach einem kurzen Netzwerk-Aussetzer ohne
-  jede Fehlermeldung unbegrenzt hängen bleiben (der Chat antwortete dann
-  einfach nicht mehr). Die Verbindung zum KI-Provider nutzt jetzt aktives
-  TCP-Keepalive, damit eine durch den Aussetzer "leise gestorbene"
-  Verbindung schneller erkannt wird.
-- Linux ohne Systemschlüsselbund: Statt des englischen Bibliothekstexts
-  „No default store has been set, so cannot search or create entries" nennt
-  Smart SSH jetzt den tatsächlichen Zustand, die dadurch blockierten
-  Funktionen und das Paket, das ihn behebt — je nachdem, ob kein
-  Secret-Service-Anbieter läuft (`sudo apt install gnome-keyring`, auch
-  unter KDE), kein D-Bus-Session-Bus erreichbar ist
-  (`sudo apt install dbus-user-session`) oder der Schlüsselbund nur
-  gesperrt ist. Ein gesperrter Schlüsselbund führt dabei nie zu einem
-  Installationsvorschlag. Wer KWallet oder KeePassXC ohnehin nutzt, wird
-  darauf hingewiesen, dass deren Secret-Service-Integration laufen bzw.
-  eingeschaltet sein muss — Nachinstallieren allein genügt dort nicht.
-- Der Startdialog behauptete bisher, ohne Schlüsselbund funktioniere alles
-  außer dem Chat-Verlauf normal. Das stimmte nicht: Ohne Schlüsselbund
-  lassen sich weder KI-Provider noch Server-Passwörter, Passphrasen oder
-  Sudo-Passwörter speichern oder lesen. Der Dialog zählt jetzt auf, was
-  wirklich blockiert ist — und was weiterhin geht (SSH-Agent, Schlüssel
-  ohne Passphrase).
-- Das Server-Formular meldete „kein Sudo-Passwort hinterlegt", wenn der
-  Schlüsselbund gar nicht antworten konnte. Es zeigt jetzt einen neutralen
-  Zustand, statt etwas zu behaupten, das es nicht wissen kann.
-- „Hinterlegtes Sudo-Passwort entfernen" meldete Erfolg, auch wenn der
-  Schlüsselbund den Eintrag gar nicht löschen konnte — das Passwort wäre
-  beim nächsten `sudo` weiter eingespeist worden. Der Vorgang schlägt jetzt
-  sichtbar fehl.
-- Einen Server zu löschen funktioniert weiterhin auch dann, wenn der
-  Schlüsselbund klemmt. Neu ist: Smart SSH sagt danach ausdrücklich, welche
-  Einträge im Schlüsselbund zurückgeblieben sind, dass sie dort jetzt
-  verwaist sind und wie sie sich von Hand entfernen lassen.
-- „Verbindung testen" bewertet leere und eingefügte Zugangsdaten jetzt
-  genau wie „Speichern". Legt man einen neuen Server an und lässt das
-  Passwort-, Schlüssel- oder Zertifikatsfeld leer, meldet der Test die
-  Fehlermeldung, statt sich mit einem leeren Wert anzumelden — auf einem
-  Server, der leere Passwörter erlaubt, konnte er dafür bisher Erfolg
-  melden, obwohl sich derselbe Server anschließend nicht speichern ließ.
-  Beim Bearbeiten bedeutet ein leeres Feld weiterhin „das hinterlegte
-  Zugangsdatum verwenden".
-  Die Meldung ist dieselbe (und in der eingestellten Sprache) wie beim
-  Speichern, etwa „Passwort ist erforderlich".
-- „Verbindung testen" behandelt die Passphrase einer Schlüsseldatei oder
-  eines privaten Schlüssels jetzt genauso wie „Speichern". Bisher konnte
-  derselbe eingefügte Wert den Verbindungstest scheitern lassen und
-  danach trotzdem richtig gespeichert werden — der Test sagte damit
-  etwas anderes aus als der Server, der daraus entstand.
-- Ein eingefügter API-Key oder ein eingefügtes Passwort funktioniert jetzt
-  auch dann, wenn beim Kopieren ein unsichtbares Zeichen an den Rand
-  geraten ist — etwa ein BOM aus einer Textdatei oder ein Zero-Width-Space
-  aus einer Webseite. Bisher wurde ein solcher Wert unverändert
-  gespeichert, die Anmeldung schlug fehl, und der Key sah in der
-  Oberfläche trotzdem richtig aus.
-- Eine Filterregel, deren Muster sich nicht übersetzen lässt, wird beim
-  Anlegen und beim Ändern jetzt abgewiesen, statt gespeichert zu werden und
-  anschließend wirkungslos in der Liste zu stehen. Das galt bisher für jede
-  Aktion — auch für eine Deny- oder Bestätigen-Regel, die dadurch stillschweigend
-  nichts tat. Das gilt für das Regel-Formular und für die Schnellregel aus
-  dem Bestätigungsdialog.
-- Der Bestätigungsdialog schlägt keine Schnellregel mehr vor, deren Muster
-  sich nicht übersetzen lässt. Bisher entstand ein solcher Vorschlag aus
-  einem Kommando mit einer Klammer im Argument und ließ sich anwählen,
-  führte aber zu keiner wirksamen Regel.
-- Zugangsdaten in einer Verbindungs-URL werden jetzt auch dann vollständig
-  geschwärzt, wenn Passwort oder Benutzername ein unkodiertes `@` enthalten
-  (etwa `postgres://app:Xy9@kLm2@db/prod` oder die bei mehreren gehosteten
-  Datenbanken vorgeschriebene Schreibweise `benutzer@mandant`). Das gilt für
-  alles, was an das KI-Modell geht, und für alles, was in der
-  Gesprächshistorie gespeichert wird.
-- Ein Passwort-Parameter im Query-String einer Verbindungs-URL ohne Pfad
-  (`redis://cache:6379?password=…`) wird ebenfalls vollständig geschwärzt.
-- „Zugangsdaten testen“ für einen Anthropic-Provider schlug fälschlich mit
-  „Provider nicht erreichbar“ fehl, obwohl der Schlüssel gültig war — die
-  Probe schickte keinen System-Prompt, und Anthropic lehnt einen leeren
-  System-Textblock mit Caching-Markierung ab.
+- “I'll do it myself” in the shortening suggestion now scrolls straight to the
+  note field and focuses it, instead of only opening the server form.
+- An AI provider (or an intermediate proxy) that answered an error status
+  immediately but then left the response body hanging could block a chat turn
+  indefinitely and without any error message (chat no longer responds, no log
+  entry). The call now aborts after 90 seconds at the latest with a visible
+  error message.
+- A very long chat session or a very large server note could make an AI request
+  so large that it exceeded the model's context window — the chat then hung
+  without a response/error message. Before every request, the app now
+  estimates the actual size and shortens automatically if needed: older
+  conversation rounds are replaced by a continuously updated summary created
+  by the AI (if this summarization call fails, the app truncates instead as
+  before — the chat remains functional in any case), then, if necessary,
+  overly long individual command outputs and finally the note are shortened —
+  the saved note and the complete session history remain untouched.
+- An AI provider call could hang indefinitely without any error message after
+  a brief network dropout (the chat then simply stopped responding). The
+  connection to the AI provider now uses active TCP keepalive, so that a
+  connection that “silently died” through the dropout is detected faster.
+- Linux without a system keychain: instead of the English library text “No
+  default store has been set, so cannot search or create entries”, Smart SSH
+  now names the actual state, the features blocked by it and the package that
+  fixes it — depending on whether no Secret Service provider is running
+  (`sudo apt install gnome-keyring`, also under KDE), no D-Bus session bus is
+  reachable (`sudo apt install dbus-user-session`) or the keychain is merely
+  locked. A locked keychain never leads to an installation suggestion. Users
+  who use KWallet or KeePassXC anyway are told that their Secret Service
+  integration must be running or enabled — installing additional packages
+  alone is not enough there.
+- The startup dialog used to claim that without a keychain everything except
+  the chat history works normally. That was not true: without a keychain, AI
+  providers, server passwords, passphrases and sudo passwords can neither be
+  saved nor read. The dialog now lists what is actually blocked — and what
+  still works (SSH agent, keys without a passphrase).
+- The server form reported “no sudo password stored” when the keychain could
+  not respond at all. It now shows a neutral state instead of claiming
+  something it cannot know.
+- “Remove stored sudo password” reported success even if the keychain could not
+  delete the entry — the password would have continued to be fed in at the
+  next `sudo`. The operation now visibly fails.
+- Deleting a server still works even when the keychain is stuck. New: Smart SSH
+  then states explicitly which entries were left behind in the keychain, that
+  they are now orphaned there and how to remove them by hand.
+- “Test connection” now evaluates empty and pasted credentials exactly like
+  “Save”. When creating a new server and leaving the password, key or
+  certificate field empty, the test reports the error message instead of
+  logging in with an empty value — on a server that allows empty passwords, it
+  could previously report success even though the same server could not be
+  saved afterwards. When editing, an empty field still means “use the stored
+  credential”. The message is the same as when saving (and in the selected
+  language), such as “Password is required”.
+- “Test connection” now treats the passphrase of a key file or private key
+  exactly like “Save”. Previously, the same pasted value could make the
+  connection test fail and then still be saved correctly — so the test said
+  something different from the server that resulted from it.
+- A pasted API key or password now also works when an invisible character
+  ended up at the edge while copying — such as a BOM from a text file or a
+  zero-width space from a web page. Previously, such a value was saved
+  unchanged, the login failed, and the key still looked correct in the
+  interface.
+- A filter rule whose pattern cannot be compiled is now rejected on creation
+  and on change, instead of being saved and then sitting uselessly in the
+  list. Previously this applied to every action — including a deny or confirm
+  rule that silently did nothing as a result. This applies to the rule form and
+  to the quick rule from the confirmation dialog.
+- The confirmation dialog no longer suggests a quick rule whose pattern cannot
+  be compiled. Previously, such a suggestion arose from a command with a
+  bracket in an argument and could be selected, but did not result in an
+  effective rule.
+- Credentials in a connection URL are now fully redacted even if the password
+  or user name contains an unencoded `@` (such as
+  `postgres://app:Xy9@kLm2@db/prod` or the `user@tenant` notation required by
+  several hosted databases). This applies to everything sent to the AI model
+  and to everything stored in the conversation history.
+- A password parameter in the query string of a connection URL without a path
+  (`redis://cache:6379?password=…`) is likewise fully redacted.
+- “Test credentials” for an Anthropic provider wrongly failed with “Provider
+  unreachable” although the key was valid — the probe sent no system prompt,
+  and Anthropic rejects an empty system text block with a caching marker.
 
 ### Security
-- Glob-`*` in pfadförmigen Allow-/Deny-Regeln (Muster mit einem
-  Dateipfad-artigen Argument, z. B. `Allow: cat /var/log/*`) überquert
-  keine Verzeichnisgrenzen mehr, auch nicht über Shell-Quoting/-Escaping
-  (`\..`, `".."`, `'..'`, Brace-/Bracket-Tricks) versteckt. Bisher konnte
-  eine harmlos erteilte Allow-Regel wie `cat /var/log/*` auch
-  `cat /var/log/../../../etc/shadow` automatisch erlauben, weil der
-  Glob-`*` über `/`-Grenzen hinwegging — die Filter-Engine "erlaubte"
-  damit etwas, das nie freigegeben werden sollte. **Verhaltensänderung**:
-  eine bestehende pfadförmige Regel mit einem einzelnen `*` deckt jetzt
-  nur noch eine Verzeichnisebene ab (z. B. matcht `/etc/*` weiterhin
-  `/etc/passwd`, aber nicht mehr `/etc/nginx/nginx.conf`). Für
-  **Deny/Confirm**-Regeln mit mehrstufigem Schutzbedarf `**` verwenden
-  (`/etc/**`) — bestehende Deny-Regeln verlieren dabei ohnehin nie
-  Schutzumfang (altes und neues Matching gelten zusätzlich). Für
-  **Allow**-Regeln wird `**` NICHT empfohlen: `**` kann in einer
-  Allow-Regel auch über das eigentlich gemeinte Argument hinweg
-  zusätzliche, unbeabsichtigte Kommando-Teile mit erlauben — für
-  mehrstufigen Allow-Bedarf stattdessen mehrere spezifische,
-  einstufige Allow-Regeln anlegen. Kommando-Argument-Globs ohne
-  Pfad-Charakter (z. B. über eine URL) sind unverändert.
-- Ein von der KI vorgeschlagenes Kommando, dessen Antwort mitten im
-  Vorschlag durch das Längenlimit abgeschnitten wurde, konnte in einem
-  seltenen Fall trotzdem — mit zufällig vollständig aussehendem, aber
-  in Wahrheit gekürztem Inhalt — bis zum Bestätigungsdialog durchkommen.
-  Ein solcher abgeschnittener Vorschlag wird jetzt nie mehr angezeigt
-  oder ausgeführt; die App versucht stattdessen einmalig automatisch
-  erneut mit mehr Platz, bevor sie im Ausnahmefall einen sichtbaren
-  Fehler statt eines unvollständigen Kommandos zeigt.
-- API-Schlüssel von KI-Anbietern und Code-Hostern werden jetzt auch ohne
-  erkennbares Stichwort davor geschwärzt, bevor Text an die KI geht oder
-  gespeichert wird: Anthropic (`sk-ant-…`), OpenAI (`sk-proj-…` u. a.),
-  OpenRouter (`sk-or-v1-…`), GitLab (`glpat-…`, `glrt-…`, `gldt-…`),
-  Hugging Face (`hf_…`), Groq (`gsk_…`) und xAI (`xai-…`). Ebenso Header
-  wie `x-api-key`, `api-key`, `x-goog-api-key`, `Authorization: Basic …`
-  und `Authorization: Token …`, Passwörter in beliebigen Adressen der Form
-  `schema://nutzer:passwort@host` (der Nutzername bleibt lesbar) sowie die
-  Zugangsdaten aus `.netrc`, `.pgpass`, Docker- und kubeconfig-Dateien.
-- Liest ein KI-Vorschlag eine typische Geheimnis-Datei (private SSH- und
-  Host-Schlüssel, `*.pem`, `*.key`, `*.p12`/`*.pfx`/`*.jks`, `.env`/`.envrc`,
-  `/etc/shadow`, `~/.aws/credentials`, `~/.docker/config.json`,
-  `~/.kube/config`, `.netrc`, `.pgpass`, `.git-credentials`, `~/.gnupg`,
-  `/etc/ssl/private`, `~/.npmrc`, `~/.pypirc`, `~/.my.cnf`, Shell-Historien,
-  Prozess-Umgebungen, `wp-config.php`, Kubernetes-Admin-Konfigurationen
-  u. a.), fragt die
-  App jetzt immer nach — auch wenn eine Allow-Regel das Kommando sonst
-  automatisch freigeben würde. Das gilt auch für Anfragen externer
-  MCP-Clients und für das direkte Lesen einer Datei, und es lässt sich
-  nicht über Pfad-Tricks, Verzeichniswechsel, Platzhalter oder
-  vorangestellte Befehle umgehen. **Verhaltensänderung:** rekursives
-  Durchsuchen (`grep -r`, `rg`) und Lesen per `find -exec`/`xargs` fragt
-  ebenfalls immer nach, weil der Inhalt vorab nicht prüfbar ist.
-- Schlägt die KI einen Aufruf von `sftp-server` vor (etwa per `sudo -n`),
-  zeigt die Risikoeinschätzung jetzt Rot und die App fragt immer nach —
-  auch wenn eine Allow-Regel das Kommando sonst freigeben würde: Mit der
-  sudo-Regel für den erhöhten Dateibrowser bedeutet das Dateizugriff mit
-  Root-Rechten.
-- Lehnt man eine von mehreren Aktionen einer KI-Antwort ab (oder blockiert
-  eine Regel sie), laufen die übrigen Aktionen derselben Antwort nicht mehr
-  automatisch, sondern fragen ebenfalls nach — sie könnten auf der
-  abgelehnten aufbauen.
-- Der Bestätigungsdialog für das Schreiben einer Datei sagt jetzt vorab,
-  wenn die App bei fehlenden Rechten mit dem hinterlegten Sudo-Passwort
-  schreiben würde. Bisher war das erst im Ergebnis zu sehen.
-- Ein Host-Key-Dialog, der nie beantwortet wird (z. B. weil das Fenster
-  neu geladen wurde), lässt den Verbindungsaufbau nicht mehr ewig warten.
-  Nach einer Stunde bricht die App ab und gilt die Abfrage als abgelehnt;
-  ein Host-Key wird durch Zeitablauf nie vertraut. Auch „Modelle laden“
-  und die Attestierungsabfrage hängen bei einem nicht antwortenden
-  Anbieter nicht mehr, sondern melden nach 90 Sekunden einen Fehler.
-- Die KI-Zweitmeinung zum Datenrisiko und die Prüfung auf eingeschleuste
-  Anweisungen lesen ihr Urteil jetzt zuverlässig aus der Antwort: Enthält
-  eine Antwort mehrere Urteilswörter, zählt das warnende. Bisher zählte das
-  zuerst genannte — eine Antwort, die den geprüften Text zitierte und darin
-  ein „nein"/„none" enthielt, konnte so eine danach ausgesprochene Warnung
-  verschlucken. Bei der Prüfung auf eingeschleuste Anweisungen ließ sich das
-  gezielt ausnutzen, weil der geprüfte Text dort aus einer nicht
-  vertrauenswürdigen Quelle stammt. Eine Warnung kann jetzt nicht mehr durch
-  die Wortstellung verlorengehen.
+- Glob `*` in path-shaped allow/deny rules (patterns with a file-path-like
+  argument, e.g. `Allow: cat /var/log/*`) no longer crosses directory
+  boundaries, not even when hidden via shell quoting/escaping (`\..`, `".."`,
+  `'..'`, brace/bracket tricks). Previously, a harmlessly granted allow rule
+  such as `cat /var/log/*` could also automatically allow
+  `cat /var/log/../../../etc/shadow`, because the glob `*` went across `/`
+  boundaries — the filter engine thereby “allowed” something that was never
+  meant to be approved. **Behavior change**: an existing path-shaped rule with
+  a single `*` now covers only one directory level (e.g. `/etc/*` still
+  matches `/etc/passwd`, but no longer `/etc/nginx/nginx.conf`). For
+  **deny/confirm** rules needing multi-level protection, use `**`
+  (`/etc/**`) — existing deny rules never lose protection scope in the process
+  (old and new matching both apply). For **allow** rules, `**` is NOT
+  recommended: in an allow rule, `**` can also allow additional, unintended
+  command parts beyond the argument actually meant — for multi-level allow
+  needs, create several specific, single-level allow rules instead. Command
+  argument globs without path character (e.g. via a URL) are unchanged.
+- A command proposed by the AI whose response was cut off mid-proposal by the
+  length limit could, in a rare case, still get through to the confirmation
+  dialog — with content that by chance looked complete but was in fact
+  truncated. Such a truncated proposal is now never shown or executed again;
+  the app instead retries once automatically with more room before, in the
+  exceptional case, showing a visible error instead of an incomplete command.
+- API keys of AI providers and code hosts are now redacted even without a
+  recognizable keyword in front of them, before text goes to the AI or is
+  stored: Anthropic (`sk-ant-…`), OpenAI (`sk-proj-…` and others), OpenRouter
+  (`sk-or-v1-…`), GitLab (`glpat-…`, `glrt-…`, `gldt-…`), Hugging Face
+  (`hf_…`), Groq (`gsk_…`) and xAI (`xai-…`). The same applies to headers such
+  as `x-api-key`, `api-key`, `x-goog-api-key`, `Authorization: Basic …` and
+  `Authorization: Token …`, passwords in arbitrary addresses of the form
+  `scheme://user:password@host` (the user name stays readable) and the
+  credentials from `.netrc`, `.pgpass`, Docker and kubeconfig files.
+- If an AI suggestion reads a typical secrets file (private SSH and host keys,
+  `*.pem`, `*.key`, `*.p12`/`*.pfx`/`*.jks`, `.env`/`.envrc`, `/etc/shadow`,
+  `~/.aws/credentials`, `~/.docker/config.json`, `~/.kube/config`, `.netrc`,
+  `.pgpass`, `.git-credentials`, `~/.gnupg`, `/etc/ssl/private`, `~/.npmrc`,
+  `~/.pypirc`, `~/.my.cnf`, shell histories, process environments,
+  `wp-config.php`, Kubernetes admin configurations and others), the app now
+  always asks — even if an allow rule would otherwise approve the command
+  automatically. This also applies to requests from external MCP clients and
+  to reading a file directly, and it cannot be bypassed via path tricks,
+  directory changes, wildcards or prepended commands. **Behavior change:**
+  recursive searching (`grep -r`, `rg`) and reading via `find -exec`/`xargs`
+  also always asks, because the content cannot be checked beforehand.
+- If the AI proposes a call to `sftp-server` (for example via `sudo -n`), the
+  risk assessment now shows red and the app always asks — even if an allow
+  rule would otherwise approve the command: with the sudo rule for the
+  elevated file browser, this means file access with root rights.
+- If you reject one of several actions of an AI response (or a rule blocks it),
+  the remaining actions of the same response no longer run automatically but
+  ask as well — they could build on the rejected one.
+- The confirmation dialog for writing a file now says up front if the app would
+  write with the stored sudo password when permissions are missing. Previously
+  this was only visible in the result.
+- A host key dialog that is never answered (e.g. because the window was
+  reloaded) no longer makes the connection setup wait forever. After one hour
+  the app aborts and the prompt counts as rejected; a host key is never trusted
+  through the passage of time. “Load models” and the attestation query also
+  no longer hang on a provider that does not respond, but report an error
+  after 90 seconds.
+- The AI second opinion on data risk and the check for injected instructions
+  now read their verdict reliably from the response: if a response contains
+  several verdict words, the warning one counts. Previously the one named first
+  counted — a response that quoted the checked text and contained a “no”/
+  “none” in it could thereby swallow a warning given afterwards. For the check
+  for injected instructions, this could be exploited deliberately, because the
+  checked text there comes from an untrusted source. A warning can no longer
+  get lost through word order.
 
 ## [0.5.0] — 2026-09-11
 
