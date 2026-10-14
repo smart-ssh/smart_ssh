@@ -1,7 +1,7 @@
 use crate::filter::{
     ambiguous_text_fragments, exceeds_command_length_limit, extract_shell_c_style_codes,
-    program_source, resolve_effective_command, segment_command, Pattern, ProgramSource,
-    DEFAULT_MAX_COMMAND_LENGTH, MAX_SUBSTITUTION_DEPTH,
+    program_source, resolve_effective_command, segment_command, CompiledPattern, Pattern,
+    ProgramSource, DEFAULT_MAX_COMMAND_LENGTH, MAX_SUBSTITUTION_DEPTH,
 };
 
 use super::patterns::{
@@ -206,11 +206,32 @@ fn best_match(
     patterns: &[(Pattern, RiskLevel, &'static str)],
     lower_segment: &str,
 ) -> Option<(RiskLevel, &'static str)> {
-    patterns
+    compiled_for(patterns)
         .iter()
         .filter(|(pattern, _, _)| pattern.matches(lower_segment))
         .map(|(_, level, reason)| (*level, *reason))
         .max_by_key(|(level, _)| *level)
+}
+
+type CompiledList = Vec<(CompiledPattern, RiskLevel, &'static str)>;
+
+/// Die eingebauten Listen einmal kompilieren statt je Aufruf (reine
+/// Performance-Maßnahme, gleiche Semantik wie `Pattern::matches`). Die
+/// Listen sind `'static`; die Zuordnung läuft über die Slice-Adresse.
+fn compiled_for(patterns: &[(Pattern, RiskLevel, &'static str)]) -> &'static CompiledList {
+    static SERVER: std::sync::OnceLock<CompiledList> = std::sync::OnceLock::new();
+    static DATA: std::sync::OnceLock<CompiledList> = std::sync::OnceLock::new();
+    let compile = |list: &[(Pattern, RiskLevel, &'static str)]| -> CompiledList {
+        list.iter()
+            .map(|(p, l, r)| (CompiledPattern::new(p), *l, *r))
+            .collect()
+    };
+    if std::ptr::eq(patterns, server_risk_patterns()) {
+        SERVER.get_or_init(|| compile(patterns))
+    } else {
+        debug_assert!(std::ptr::eq(patterns, data_risk_patterns()));
+        DATA.get_or_init(|| compile(patterns))
+    }
 }
 
 /// Ergebnis der Secret-Pfad- bzw. `sftp-server`-Prüfung (Issue #109).
@@ -391,12 +412,18 @@ fn first_version_secret_read_reason(command: &str) -> Option<CommandCheckFinding
         .collect();
     segments.extend(resolved);
 
-    let read_start = regex::Regex::new(&format!(r"^\s*{SECRET_READ_COMMANDS}\b"))
-        .expect("eingebautes Lesebefehl-Muster ist gültig");
-    let exec_read = regex::Regex::new(&format!(
-        r"(?:-exec|-execdir|xargs)(?:\s+-\S+)*\s+(?:sudo\s+)?{SECRET_READ_COMMANDS}\b"
-    ))
-    .expect("eingebautes exec-/xargs-Muster ist gültig");
+    static READ_START: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static EXEC_READ: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let read_start = READ_START.get_or_init(|| {
+        regex::Regex::new(&format!(r"^\s*{SECRET_READ_COMMANDS}\b"))
+            .expect("eingebautes Lesebefehl-Muster ist gültig")
+    });
+    let exec_read = EXEC_READ.get_or_init(|| {
+        regex::Regex::new(&format!(
+            r"(?:-exec|-execdir|xargs)(?:\s+-\S+)*\s+(?:sudo\s+)?{SECRET_READ_COMMANDS}\b"
+        ))
+        .expect("eingebautes exec-/xargs-Muster ist gültig")
+    });
 
     let normalize = |text: &str| -> String {
         text.to_lowercase()

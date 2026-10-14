@@ -628,3 +628,37 @@ mod compile_failure_parity_tests {
         }
     }
 }
+
+/// A [`Pattern`] compiled once, with exactly the semantics of
+/// [`Pattern::matches`]: an invalid glob/regex never matches (no panic).
+/// Used for the fixed built-in risk patterns, which would otherwise be
+/// recompiled on every call.
+#[derive(Debug)]
+pub(crate) enum CompiledPattern {
+    Exact(String),
+    Glob(globset::GlobMatcher),
+    Regex(Regex),
+    /// The pattern failed to compile: never matches.
+    Invalid,
+}
+
+impl CompiledPattern {
+    pub(crate) fn new(pattern: &Pattern) -> Self {
+        match pattern {
+            Pattern::Exact(expected) => Self::Exact(expected.clone()),
+            Pattern::Glob(p) => Glob::new(p)
+                .map(|g| Self::Glob(g.compile_matcher()))
+                .unwrap_or(Self::Invalid),
+            Pattern::Regex(p) => Regex::new(p).map(Self::Regex).unwrap_or(Self::Invalid),
+        }
+    }
+
+    pub(crate) fn matches(&self, cmd: &str) -> bool {
+        match self {
+            Self::Exact(expected) => expected == cmd,
+            Self::Glob(m) => m.is_match(cmd),
+            Self::Regex(re) => re.is_match(cmd),
+            Self::Invalid => false,
+        }
+    }
+}

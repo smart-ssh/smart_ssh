@@ -42,6 +42,7 @@ pub use types::{
 // ein internes Detail zwischen den beiden Modulen dieser Crate, keine
 // Garantie für Aufrufer außerhalb.
 pub(crate) use parser::{ambiguous_text_fragments, segment_command};
+pub(crate) use pattern::CompiledPattern;
 // Unabhängiger Review-Pass, Spec 0026: ebenfalls von `crate::risk` wieder-
 // verwendet — ohne diese Normalisierung sind die Risiko-Muster durch ein
 // vorangestelltes `sudo`/`env`/`bash -c` wirkungslos, weil fast alle Muster
