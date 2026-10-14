@@ -80,7 +80,7 @@ fn redact_for_debug(text: &str, secrets: &[&str]) -> String {
 /// das gleichnamige Feld der Filter-Entscheidungszeile. `[text] len=` und
 /// die Längen von `[web_activity]` zählen weiterhin Zeichen (ADR 0086,
 /// Konsequenz 3).
-fn history_shapes(context: &SessionContext) -> Vec<String> {
+pub(crate) fn history_shapes(context: &SessionContext) -> Vec<String> {
     context
         .history
         .iter()
@@ -144,7 +144,7 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
 /// Der volle Inhalt je History-Eintrag — nur für die `debug`-Zeile (A2),
 /// dort durch den Redactor gelaufen. Entspricht dem, was bis Spec 0094 auf
 /// `info` stand.
-fn history_contents(context: &SessionContext) -> Vec<String> {
+pub(crate) fn history_contents(context: &SessionContext) -> Vec<String> {
     let redactor = default_log_redactor();
     context
         .history

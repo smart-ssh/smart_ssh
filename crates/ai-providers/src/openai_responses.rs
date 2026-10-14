@@ -628,7 +628,7 @@ fn process_frame_stream(
 mod attachment_tests {
     use super::*;
     use crate::content::test_fixtures::{context_with_image_and_pdf, first_events};
-    use ssh_manager_core::ai::{AiEvent, AttachmentKind};
+    use ssh_manager_core::ai::{AiEvent, MediaClass};
 
     fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
         std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
@@ -693,9 +693,7 @@ mod attachment_tests {
         assert!(
             matches!(
                 events[..],
-                [AiEvent::Error(AiError::AttachmentUnsupported(
-                    AttachmentKind::Image
-                ))]
+                [AiEvent::Error(AiError::InputUnsupported(MediaClass::Image))]
             ),
             "{events:?}"
         );

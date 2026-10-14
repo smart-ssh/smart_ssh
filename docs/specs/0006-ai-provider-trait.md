@@ -105,15 +105,17 @@ bevor erneut gesendet wird (Spec 0057, Spec 0087).
 
 ### Anhänge als Inhaltsblöcke
 
-Bild- und PDF-Anhänge (Spec 0110) gehen als echte Inhaltsblöcke an den
-Anbieter, nicht als Text: bei Anthropic als Bild- bzw. Dokumentblock (Base64),
+Binärinhalte einer Nachricht (Bild- und PDF-Anhänge, Spec 0110) gehen als
+echte Inhaltsblöcke an den Anbieter, nicht als Text. Der Block richtet sich
+nach dem Medientyp der Bytes (Bild oder PDF), nicht danach, woher sie
+stammen: bei Anthropic als Bild- bzw. Dokumentblock (Base64),
 bei OpenAI Responses als Bild- bzw. Dateieingabe, bei OpenAI-kompatiblen
 Chat-Completions als Bild-URL (Data-URL) bzw. Dateiteil. Die Bytes gehen
 unverändert; jeder Text derselben Nachricht wird weiter redigiert und
 gefencet.
 
-Ob ein Modell Bilder oder PDFs lesen kann, sagt eine feste Tabelle je
-Anbieter:
+Ob ein Modell Bilder oder PDFs lesen kann (Medienklasse), sagt eine feste
+Tabelle je Anbieter:
 
 - Anthropic: alle Modelle lesen beides, auch unbekannte.
 - OpenAI (offizieller Endpunkt, Responses wie Chat-Completions): beides, außer
