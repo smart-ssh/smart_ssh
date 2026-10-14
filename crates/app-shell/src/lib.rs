@@ -459,8 +459,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // `State`.
     let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
     // Issue #469: ebenso — `send_chat_message` liest die Resolver als `State`.
-    let chat_attachment_resolvers =
-        commands::ChatAttachmentResolvers(wiring.chat_attachment_resolvers);
 
     // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
@@ -742,7 +740,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         .manage(crate::voice_input::VoiceRecorder::default())
         .manage(edition)
         .manage(edition_data_paths)
-        .manage(chat_attachment_resolvers)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
         // (gemessen, M4). Die Begründung, warum es nicht genügt, sich auf
         // den fehlenden `AppState` zu verlassen, steht im Modulkommentar

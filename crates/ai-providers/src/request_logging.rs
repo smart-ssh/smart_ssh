@@ -124,12 +124,6 @@ pub(crate) fn history_shapes(context: &SessionContext) -> Vec<String> {
                 activity.results.len(),
                 activity.content.as_ref().map_or(0, |c| c.chars().count())
             ),
-            // Issue #469: nur Anzahl und Bytes, nie Name oder Inhalt.
-            MessageContent::Attachments(items) => format!(
-                "[attachments] count={} bytes={}",
-                items.len(),
-                items.iter().map(|a| a.data.len()).sum::<usize>()
-            ),
             // Issue #504: counts only, never label, id or content.
             MessageContent::Extension(_) => "[extension_part] count=1".to_string(),
             // Issue #505: count and binary bytes only, never label or content.
@@ -175,11 +169,6 @@ pub(crate) fn history_contents(context: &SessionContext) -> Vec<String> {
                 redactor.redact_text(&activity.input),
                 activity.results.len(),
                 activity.content.as_ref().map_or(0, |c| c.chars().count())
-            ),
-            MessageContent::Attachments(items) => format!(
-                "[attachments] count={} bytes={}",
-                items.len(),
-                items.iter().map(|a| a.data.len()).sum::<usize>()
             ),
             // Issue #504: counts only, never label, id or content.
             MessageContent::Extension(_) => "[extension_part] count=1".to_string(),

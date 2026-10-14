@@ -230,27 +230,6 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     expect(input).toHaveValue("look");
   });
 
-  it("lists the attachments of a resumed message in the history (names and kinds only)", async () => {
-    vi.mocked(getChatHistory).mockResolvedValueOnce([
-      { type: "text", role: "user", text: "see files" },
-      {
-        type: "attachments",
-        role: "user",
-        items: [
-          { name: "a.txt", kind: "text" },
-          { name: "b.png", kind: "image" },
-          { name: "c.pdf", kind: "pdf" },
-        ],
-      },
-    ]);
-    renderChatPanel();
-    expect(
-      await screen.findByText(
-        "Angehängt: a.txt (Text), b.png (Bild), c.pdf (PDF)",
-      ),
-    ).toBeInTheDocument();
-  });
-
   it("lists extension parts of a resumed message by label and kind, never content", async () => {
     vi.mocked(getChatHistory).mockResolvedValueOnce([
       { type: "text", role: "user", text: "see parts" },

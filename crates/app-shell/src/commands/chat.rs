@@ -21,12 +21,6 @@ use super::connect::build_session_system_context;
 use super::servers::resolve_server_for_note_shrink;
 use super::sftp::edit_session_dir;
 
-/// Issue #469: die von einer Edition registrierten Anhang-Resolver
-/// (`Wiring::chat_attachment_resolvers`), als Tauri-`State`.
-pub(crate) struct ChatAttachmentResolvers(
-    pub Vec<std::sync::Arc<dyn ssh_manager_core::ai::ChatAttachmentResolver>>,
-);
-
 #[tauri::command]
 pub async fn send_chat_message(
     app: AppHandle,
@@ -36,7 +30,6 @@ pub async fn send_chat_message(
     // Issue #469: opake Anhang-IDs einer Edition (nie Pfade aus dem
     // Webview). `None`/leer verhält sich exakt wie bisher.
     attachment_ids: Option<Vec<String>>,
-    resolvers: State<'_, ChatAttachmentResolvers>,
 ) -> CommandResult<()> {
     // Spec 0104, §4: Der Nutzer-Chat kommt nie in eine MCP-Sitzung.
     state.mcp.sessions.ensure_user_session(session_id)?;
@@ -44,34 +37,21 @@ pub async fn send_chat_message(
         .sessions
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
-    // Vor allem anderen aufgelöst und geprüft: ein Fehler sendet nichts.
-    // Issue #505: registered chat content extensions take the ids first; the
-    // older resolver path stays for editions that only register resolvers.
+    // Resolved and checked before anything else: an error sends nothing.
+    // Registered chat content extensions take the ids (Issue #505, ADR 0141).
     let ids = attachment_ids.as_deref().unwrap_or(&[]);
-    let (attachments, extension_parts) = if state.chat_content.is_empty() {
-        (
-            app_logic::orchestration::resolve_chat_attachments(&resolvers.0, session_id, ids)
-                .await?,
-            app_logic::orchestration::PreparedExtensionParts::default(),
-        )
-    } else {
-        (
-            Vec::new(),
-            app_logic::orchestration::accept_extension_content(
-                &state.chat_content,
-                session.redactor.as_ref(),
-                session_id,
-                ids,
-            )?,
-        )
-    };
+    let extension_parts = app_logic::orchestration::accept_extension_content(
+        &state.chat_content,
+        session.redactor.as_ref(),
+        session_id,
+        ids,
+    )?;
     send_chat_message_with_attachments_impl(
         &app,
         &TauriEventEmitter(app.clone()),
         &session,
         session_id,
         text,
-        attachments,
         extension_parts,
         Some(&state.prompt_history_store),
         state.profile_store.as_ref(),
@@ -146,7 +126,6 @@ pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
         session,
         session_id,
         text,
-        Vec::new(),
         Default::default(),
         prompt_history_store,
         profile_store,
@@ -166,16 +145,12 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     session: &Session,
     session_id: SessionId,
     text: String,
-    attachments: Vec<ssh_manager_core::ai::ChatAttachment>,
     extension_parts: app_logic::orchestration::PreparedExtensionParts,
     prompt_history_store: Option<&persistence_sqlite::SqlitePromptHistoryStore>,
     profile_store: &dyn ProfileStore,
     policy_store: &persistence_sqlite::SqlitePolicyStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> CommandResult<()> {
-    ssh_manager_core::ai::validate_attachments(&attachments)
-        .map_err(app_logic::orchestration::attachment_error)?;
-    let mut pending_attachments = attachments;
     // Spec 0066, §2: läuft für diese Sitzung schon ein Turn, wird die
     // Nachricht nur eingereiht — sie geht mit der nächsten Anfrage an die KI
     // mit (s. `run_chat_turn`) bzw. nach Turn-Ende als neuer Turn (unten).
@@ -194,7 +169,7 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
         }
         if turn.running {
             // Eingereiht werden nur Texte; Anhänge gehen nie still verloren.
-            if !pending_attachments.is_empty() || !extension_parts.is_empty() {
+            if !extension_parts.is_empty() {
                 return Err(CommandError::with_code(
                     "Die Nachricht wurde nicht gesendet: Anhänge können nicht an einen \
                      laufenden Turn angehängt werden. Bitte nach der Antwort erneut senden.",
@@ -323,12 +298,6 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
             )
             .await;
         }
-        // Issue #469: Anhänge direkt NACH dem Text derselben Nachricht.
-        app_logic::orchestration::push_user_attachments(
-            session,
-            std::mem::take(&mut pending_attachments),
-        )
-        .await?;
         if let Some(parts) = extension_parts.take() {
             app_logic::orchestration::push_extension_parts(session, parts).await;
         }
@@ -1083,7 +1052,6 @@ mod send_chat_message_persistence_tests {
             &session,
             uuid::Uuid::new_v4(),
             "hi".to_string(),
-            Vec::new(),
             parts,
             None,
             &InMemoryProfileStore::default(),

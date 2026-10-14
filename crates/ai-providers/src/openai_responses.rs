@@ -671,9 +671,15 @@ mod attachment_tests {
             types,
             ["input_text", "input_image", "input_text", "input_file"]
         );
-        assert_eq!(content[1]["image_url"], "data:image/png;base64,AQID");
+        assert_eq!(
+            content[1]["image_url"],
+            "data:image/png;base64,iVBORw0KGgo="
+        );
         assert_eq!(content[3]["filename"], "d.pdf");
-        assert_eq!(content[3]["file_data"], "data:application/pdf;base64,BAU=");
+        assert_eq!(
+            content[3]["file_data"],
+            "data:application/pdf;base64,JVBERi0x"
+        );
         // A plain text message keeps the string form.
         assert_eq!(body["input"][1]["content"], "what is this?");
     }

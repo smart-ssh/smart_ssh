@@ -1218,12 +1218,6 @@ pub enum ChatHistoryEntryDto {
         role: ChatHistoryRoleDto,
         activity: WebActivityDto,
     },
-    /// Issue #471 (Spec 0110, §5): Anhänge einer Nutzer-Nachricht — nur
-    /// Name und Art, nie der Inhalt.
-    Attachments {
-        role: ChatHistoryRoleDto,
-        items: Vec<ChatHistoryAttachmentDto>,
-    },
     /// Issue #504 (ADR 0141, Spec 0110 §5): extension parts of a user
     /// message — label and media class only, never content, and without
     /// asking any extension.
@@ -1239,14 +1233,6 @@ pub enum ChatHistoryEntryDto {
 pub struct ChatHistoryExtensionPartDto {
     pub label: String,
     pub media: ssh_manager_core::ai::ExtensionMedia,
-}
-
-/// Issue #471: ein Anhang in der Historie (Name und Art, kein Inhalt).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatHistoryAttachmentDto {
-    pub name: String,
-    pub kind: ssh_manager_core::ai::AttachmentKind,
 }
 
 /// Issue #162: Anzeige einer Web-Recherche im Chat (Live-Event
@@ -1367,19 +1353,6 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                 ChatHistoryEntryDto::WebActivity {
                     role,
                     activity: WebActivityDto::from(&activity),
-                }
-            }
-            // Issue #471: names and kinds only, never content.
-            ssh_manager_core::ai::MessageContent::Attachments(items) => {
-                ChatHistoryEntryDto::Attachments {
-                    role,
-                    items: items
-                        .into_iter()
-                        .map(|a| ChatHistoryAttachmentDto {
-                            name: a.name,
-                            kind: a.kind,
-                        })
-                        .collect(),
                 }
             }
             // Issue #504: label and media only, one entry per stored part.
@@ -1711,35 +1684,6 @@ mod tests {
                 "exit_code darf nicht im snake_case vorkommen: {json}"
             );
         }
-    }
-
-    /// Issue #471: a resumed attachment message lists name and kind, never
-    /// the content (Spec 0110, §5).
-    #[test]
-    fn test_chat_history_attachments_list_name_and_kind_without_content() {
-        let content = ssh_manager_core::ai::MessageContent::Attachments(vec![
-            ssh_manager_core::ai::ChatAttachment {
-                name: "notes.txt".to_string(),
-                media_type: "text/plain".to_string(),
-                kind: ssh_manager_core::ai::AttachmentKind::Text,
-                data: b"SECRET-CONTENT".to_vec(),
-                byte_len: 14,
-            },
-        ]);
-        let message = ssh_manager_core::ai::ChatMessage {
-            role: ssh_manager_core::ai::Role::User,
-            content,
-        };
-        let json = serde_json::to_value(ChatHistoryEntryDto::from(message)).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "type": "attachments",
-                "role": "user",
-                "items": [{ "name": "notes.txt", "kind": "text" }]
-            })
-        );
-        assert!(!json.to_string().contains("SECRET-CONTENT"));
     }
 
     /// Issue #504: an extension part lists label and media only, never the
