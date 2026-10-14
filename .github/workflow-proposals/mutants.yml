@@ -1,0 +1,366 @@
+name: Mutants
+
+# Manually triggered mutation test run over the security-critical modules
+# (filter engine, risk classifier). Too heavy for developer machines and
+# for every PR, so it only runs on demand. Surviving mutants do not fail
+# the job; they are published in the `mutants-out` artifact so weak or
+# tautological tests become visible.
+#
+# Why many small shards: one mutant costs about 15 s build plus the whole
+# ssh-manager-core test suite (80-150 s alone on a hosted runner with the
+# default proptest case count, dominated by the risk property tests). With
+# about 900 mutants that is far more than one runner can do within its 6 h
+# limit, and the long single-module runs died with
+# "runner received a shutdown signal" once a few mutants looped and
+# allocated memory without bound. So the `plan` job lists the mutants once
+# and splits them with cargo-mutants' own `--shard k/n` into shards of
+# about 30 min each; every shard runs on its own runner. The final `merge`
+# job always produces ONE artifact `mutants-out` with:
+#   missed.txt         union of the missed mutants of all shards
+#   timeout.txt        union of the timed-out mutants of all shards
+#   shards.txt         one line per shard: complete / incomplete (reason)
+#   shard-<k>/         raw mutants.out of each shard (caught.txt, ...)
+on:
+  workflow_dispatch:
+    inputs:
+      mutants_per_shard:
+        description: >-
+          Mutants per shard. About 60-75 s each on a hosted runner, so 20
+          is roughly 20-25 min per shard. Lower it if shards report
+          incomplete.
+        required: false
+        default: "20"
+      files:
+        description: >-
+          Space-separated --file globs to mutate. Empty = the default scope
+          (crates/core/src/filter/** and crates/core/src/risk/**).
+        required: false
+        default: ""
+      re:
+        description: >-
+          Regex passed to cargo-mutants as --re (only mutants whose name
+          matches are run). Empty = no filter.
+        required: false
+        default: ""
+      list_diff:
+        description: >-
+          Also write list-with-config.txt, list-without-config.txt
+          (--no-config) and list-diff.txt (unified diff) into the artifact.
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Dispatch inputs are untrusted strings. They are only ever read through
+  # these environment variables and turned into cargo-mutants arguments
+  # with a bash array (see "Build scope" in `plan` and the shards); they are
+  # never interpolated into a script. `plan` and the shards build the
+  # identical argument list, because `--shard k/n` only works if every
+  # shard enumerates the same mutants in the same order.
+  INPUT_FILES: ${{ inputs.files }}
+  INPUT_RE: ${{ inputs.re }}
+  DEFAULT_FILES: "crates/core/src/filter/** crates/core/src/risk/**"
+
+jobs:
+  plan:
+    name: Plan shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+
+      # One shared cache for all jobs of this workflow. This job writes it
+      # (dependencies built for the test profile plus the cargo-mutants
+      # binary), the shards only restore it, so they neither build the
+      # dependencies cold nor compile cargo-mutants each.
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          shared-key: mutants
+
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --version 27.1.0 --locked
+
+      - name: Build test dependencies
+        run: cargo test -p ssh-manager-core --no-run
+
+      - name: Split mutants into shards
+        id: plan
+        env:
+          PER_SHARD: ${{ inputs.mutants_per_shard || '20' }}
+          LIST_DIFF: ${{ inputs.list_diff }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -f -o pipefail
+          # Build scope: fixed arguments plus the validated inputs, as one
+          # array element per argument (globbing is off, so `**` stays).
+          files="${INPUT_FILES//[[:space:]]/ }"
+          [ -n "${files// /}" ] || files="$DEFAULT_FILES"
+          scope=(-p ssh-manager-core)
+          read -r -a file_globs <<< "$files"
+          for g in "${file_globs[@]}"; do
+            case "$g" in
+              -*) echo "::error::a files entry must not start with '-'"; exit 1 ;;
+            esac
+            scope+=("--file=$g")
+          done
+          scope+=("--exclude=**/*tests*.rs")
+          case "$INPUT_RE" in
+            *$'\n'*) echo "::error::re must be a single line"; exit 1 ;;
+          esac
+          if [ -n "$INPUT_RE" ]; then scope+=("--re=$INPUT_RE"); fi
+          mkdir -p plan-out
+          {
+            printf 'commit: %s\n' "$COMMIT"
+            printf 'args:'
+            printf ' [%s]' "${scope[@]}"
+            printf '\n'
+          } > plan-out/scope.txt
+          cat plan-out/scope.txt
+          cargo mutants "${scope[@]}" --list > plan-out/list-with-config.txt
+          total=$(wc -l < plan-out/list-with-config.txt)
+          echo "mutants: $total" >> plan-out/scope.txt
+          if [ "$LIST_DIFF" = "true" ]; then
+            cargo mutants "${scope[@]}" --no-config --list > plan-out/list-without-config.txt
+            diff_rc=0
+            diff -u plan-out/list-without-config.txt plan-out/list-with-config.txt > plan-out/list-diff.txt || diff_rc=$?
+            if [ "$diff_rc" -gt 1 ]; then
+              exit "$diff_rc"
+            fi
+          fi
+          case "$PER_SHARD" in
+            ''|*[!0-9]*|0) echo "::error::mutants_per_shard must be a positive number"; exit 1 ;;
+          esac
+          count=$(( (total + PER_SHARD - 1) / PER_SHARD ))
+          if [ "$total" -eq 0 ]; then echo "::error::no mutants found"; exit 1; fi
+          # GitHub allows at most 256 jobs per matrix.
+          if [ "$count" -gt 256 ]; then echo "::error::$count shards exceed the matrix limit of 256"; exit 1; fi
+          shards=$(seq 0 $((count - 1)) | paste -sd, -)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "shards=[$shards]" >> "$GITHUB_OUTPUT"
+          echo "$total mutants in $count shards of up to $PER_SHARD"
+          echo "shards: $count" >> plan-out/scope.txt
+
+      - name: Upload plan
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutants-plan
+          path: plan-out/
+          retention-days: 14
+          if-no-files-found: warn
+
+  mutants:
+    name: cargo-mutants (shard ${{ matrix.shard }}/${{ needs.plan.outputs.count }})
+    needs: plan
+    runs-on: ubuntu-latest
+    # Expected: about 3 min setup and baseline plus 20-25 min of
+    # mutants. The cargo-mutants budget below (45 min) ends well before
+    # this, so the shard upload always runs.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+
+      - name: Restore cargo registry & build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          shared-key: mutants
+          save-if: false
+
+      # Restored from the cache in the normal case; compiles only if the
+      # plan job's cache could not be saved.
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --version 27.1.0 --locked
+
+      # Some mutants turn a loop in the parser into an endless one that
+      # keeps allocating. Without a cap such a test process eats the
+      # runner's memory until the runner agent loses its connection and
+      # the whole shard is lost. The cap must hit only the test binaries:
+      # a global `ulimit -v` would also hit rustc and the linker. Cargo
+      # starts test binaries through the target runner, so a small wrapper
+      # sets the limit there. 4 GiB of address space is far above what the
+      # suite needs (well below 1 GiB resident) but keeps two parallel test
+      # processes plus a build inside the 16 GB of the runner. A capped
+      # mutant aborts on allocation failure and counts as caught, which it
+      # is: the tests notice the changed behaviour. Should the cap ever be
+      # too tight, the unmutated baseline fails and the shard reports it.
+      - name: Cap memory of test processes
+        run: |
+          wrapper="$RUNNER_TEMP/memcap-test-runner"
+          cat > "$wrapper" <<'EOF'
+          #!/bin/sh
+          ulimit -v 4194304
+          exec "$@"
+          EOF
+          chmod +x "$wrapper"
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=$wrapper" >> "$GITHUB_ENV"
+
+      # Surviving mutants are the expected result, not a failure. The time
+      # budget (45 min) ends before the job timeout (60 min); SIGINT lets
+      # cargo-mutants stop cleanly, SIGKILL follows after 2 minutes.
+      # cargo-mutants appends to missed.txt as it goes, so a timed-out
+      # shard still yields the mutants tested so far.
+      #
+      # -j 2: a hosted runner has 4 cores and every test run uses several
+      # of them. With -j 4 each test run took about 250 s instead of 80 s,
+      # so the extra parallelism bought little throughput but starved the
+      # runner agent; -j 2 keeps nearly the same throughput with headroom.
+      # `nice` keeps the runner agent responsive on top of that.
+      #
+      # PROPTEST_CASES=64 (default 256), for this run only: the property
+      # test chaining_never_lowers_risk_for_arbitrary_text alone took about
+      # 60 s of every test run, and with a fixed 240 s timeout most mutants
+      # that merely slowed it down ended as "timeout" instead of caught or
+      # missed. 64 cases cut the suite to about a third. Trade-off: a
+      # mutant that only a rare generated input exposes may now survive;
+      # the stored seeds in proptest-regressions/ still run, the fixed and
+      # adversarial tests are unchanged, and the normal CI keeps 256 cases.
+      # PROPTEST_MAX_SHRINK_ITERS=0: once a property fails the mutant is
+      # caught; shrinking the counterexample only costs time (in the last
+      # run it kept 180 already caught mutants running into the timeout).
+      #
+      # --timeout-multiplier 3: the timeout follows this shard's own
+      # unmutated baseline, which varied from 80 to 150 s between runners
+      # of the same run, instead of a fixed value. Three times leaves room
+      # for the slowdown under -j 2; a genuine endless loop still stops
+      # after a few minutes. --minimum-test-timeout 60 guards a baseline
+      # that happens to run very fast.
+      # --sharding round-robin: mutants of one function sit next to each
+      # other, and the endless-loop ones cluster in the parser; spreading
+      # them evenly keeps the shards at a similar duration.
+      - name: Run cargo-mutants
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ needs.plan.outputs.count }}
+          PROPTEST_CASES: "64"
+          PROPTEST_MAX_SHRINK_ITERS: "0"
+        run: |
+          set +e
+          set -f
+          # Same scope construction as in `plan` (must stay identical).
+          files="${INPUT_FILES//[[:space:]]/ }"
+          [ -n "${files// /}" ] || files="$DEFAULT_FILES"
+          scope=(-p ssh-manager-core)
+          read -r -a file_globs <<< "$files"
+          for g in "${file_globs[@]}"; do scope+=("--file=$g"); done
+          scope+=("--exclude=**/*tests*.rs")
+          if [ -n "$INPUT_RE" ]; then scope+=("--re=$INPUT_RE"); fi
+          timeout --signal=INT --kill-after=2m 45m \
+            nice -n 10 cargo mutants "${scope[@]}" \
+              --shard "${SHARD}/${SHARDS}" --sharding round-robin \
+              --no-shuffle -j 2 \
+              --timeout-multiplier 3 --minimum-test-timeout 60
+          rc=$?
+          mkdir -p mutants.out
+          # 0 = no survivors, 2 = survivors found, 3 = some mutants timed
+          # out: all mean the run finished. 4 = the unmutated tree failed
+          # its tests. 124/137 = time budget hit.
+          case "$rc" in
+            0|2|3) echo "complete (cargo-mutants exit $rc)" > mutants.out/shard-status.txt ;;
+            4) echo "incomplete (baseline tests failed; memory cap too tight?)" > mutants.out/shard-status.txt ;;
+            124|137) echo "incomplete (time budget of 45 min reached)" > mutants.out/shard-status.txt ;;
+            *) echo "incomplete (cargo-mutants exit $rc)" > mutants.out/shard-status.txt ;;
+          esac
+          cat mutants.out/shard-status.txt
+          exit 0
+
+      - name: Upload shard result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutants-shard-${{ matrix.shard }}
+          path: mutants.out/
+          retention-days: 3
+          if-no-files-found: warn
+
+  merge:
+    name: Merge shards into mutants-out
+    needs: [plan, mutants]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download shard results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: true
+        with:
+          pattern: mutants-shard-*
+          path: shards
+
+      - name: Download plan
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: false
+        with:
+          name: mutants-plan
+          path: plan
+
+      # Walks the shard list from `plan`, not the downloaded folders, so a
+      # shard that uploaded nothing still shows up as incomplete.
+      - name: Merge
+        env:
+          SHARDS: ${{ needs.plan.outputs.count }}
+        run: |
+          mkdir -p shards plan mutants-out
+          # scope.txt, list-*.txt: the effective request, from `plan`.
+          cp plan/* mutants-out/ 2>/dev/null || true
+          : > mutants-out/shards.txt
+          complete=0
+          for shard in $(seq 0 $((SHARDS - 1))); do
+            src="shards/mutants-shard-${shard}"
+            if [ -d "$src" ]; then
+              cp -R "$src" "mutants-out/shard-${shard}"
+              if [ -f "$src/shard-status.txt" ]; then
+                status=$(cat "$src/shard-status.txt")
+              else
+                status="incomplete (job ended before the run finished)"
+              fi
+            else
+              status="incomplete (no shard result uploaded)"
+            fi
+            case "$status" in complete*) complete=$((complete + 1)) ;; esac
+            echo "shard ${shard}/${SHARDS}: ${status}" >> mutants-out/shards.txt
+          done
+          for kind in missed timeout caught unviable; do
+            find mutants-out -mindepth 2 -name "${kind}.txt" -exec cat {} + \
+              | sort -u > "mutants-out/${kind}.txt"
+          done
+          {
+            echo "## cargo-mutants"
+            echo
+            echo "Shards complete: ${complete} of ${SHARDS}"
+            echo
+            echo "| missed | timeout | caught | unviable |"
+            echo "|---|---|---|---|"
+            echo "| $(wc -l < mutants-out/missed.txt) | $(wc -l < mutants-out/timeout.txt) | $(wc -l < mutants-out/caught.txt) | $(wc -l < mutants-out/unviable.txt) |"
+            echo
+            grep -v ': complete' mutants-out/shards.txt | sed 's/^/- /' || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat mutants-out/shards.txt
+
+      - name: Upload mutants-out
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutants-out
+          path: mutants-out/
+          retention-days: 14
+          if-no-files-found: warn
