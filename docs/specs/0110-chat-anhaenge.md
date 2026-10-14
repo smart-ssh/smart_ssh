@@ -70,6 +70,27 @@ Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037
 - Nach dem Fortsetzen zeigt der Verlauf Name und Art (Text, Bild, PDF) der
   Anhänge als Zeile; Inhalte erscheinen dort nie.
 
+### Erweiterungsinhalte (Verweis statt Inhalt)
+
+Eine Edition kann eigenen Inhalt an eine Nutzer-Nachricht hängen, ohne dass
+der Kern dessen Datenmodell kennt (Spec 0038, Abschnitt 2a).
+
+- Im Chatverlauf steht nur ein **Verweis**: Name der Erweiterung (vom Kern
+  gesetzt), eine für den Kern undurchsichtige Art und ID, ein redigierter
+  Anzeigename, die Medienklasse (Text, Bild, PDF) und die Token-Schätzung.
+  Der Inhalt selbst liegt nie im Chatverlauf. Je Verweis gibt es einen
+  eigenen Eintrag direkt nach dem Text der Nachricht.
+- Nach dem Fortsetzen zeigt der Verlauf Anzeigename und Art als Zeile, wie
+  bei Anhängen, nie Inhalt, und ohne die Erweiterung zu fragen.
+- Ein Verweis, dessen Inhalt nicht versiegelt zum Anbieter geht, erscheint
+  dort nur als feste, als nicht vertrauenswürdig gekennzeichnete Zeile
+  „Inhalt nicht mehr verfügbar" mit dem redigierten Anzeigenamen; die
+  Anfrageprotokolle zeigen nur Anzahlen.
+- Ein Verweis zählt als nicht vertrauenswürdiger Inhalt (Spec 0039,
+  Abschnitt 5), auch nach dem Fortsetzen.
+- Sitzungen ohne Verweise laden unverändert, auch Sitzungen mit Anhängen aus
+  früheren Entwicklungsständen.
+
 ## 6. Kontextbegrenzung
 
 - Die Token-Schätzung zählt Textanhänge nach Länge, Bilder und PDFs mit
