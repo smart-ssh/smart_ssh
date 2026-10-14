@@ -18,7 +18,9 @@ gesperrte Funktion freigeschaltet ist.
   CuratedRulePacks, OrgPolicy, MultiServerActions, ManagedAi, OrgAiPolicy,
   TeamAgents, SessionHistory, ActivityReport, SessionHandover, CloudSync,
   DocumentExport, AuditExport, Sso, SelfHosted, ChatAttachments (Dateianhänge
-  im Chat, lokal, nicht dienst-gebunden, Spec 0110). Die Namen werden als
+  im Chat, lokal, nicht dienst-gebunden, Spec 0110), ServerEnvironment
+  (Server-Umgebungsdaten einer Erweiterung: Kontextabschnitt der Sitzung und
+  bekannte Geheimnisse, lokal, nicht dienst-gebunden, Spec 0038). Die Namen werden als
   `snake_case` serialisiert.
 - **Stufen** (`Tier`): Free, Personal, Pro, Team, Business, Enterprise.
 - **Berechtigungen** (`Entitlements`): Stufe, Menge der freigeschalteten
