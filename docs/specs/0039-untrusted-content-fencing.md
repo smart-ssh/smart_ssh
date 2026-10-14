@@ -17,6 +17,12 @@ Als nicht vertrauenswürdig gelten:
 - Dateianhänge des Nutzers (lokale Dateien, Spec 0110): Text wird als
   `local_file` gefencet, Bild und PDF erscheinen nur als gefencete
   Platzhalterzeile.
+- Inhalt, den eine Erweiterung an eine Nachricht hängt (Spec 0110,
+  „Erweiterungsinhalte"): wird vom Kern redigiert und als `local_file`
+  gefencet, unabhängig davon, was die Erweiterung liefert; die Erweiterung
+  kann weder Fence-Art noch Sicherheitshinweis noch ungefencten Text
+  beisteuern. Jeder solche Teil löst die Eskalation nach Abschnitt 5 aus,
+  auch nach dem Fortsetzen.
 
 Gemeinsame Wurzel der Risiken: Würde ein Weg weniger streng behandelt als
 die anderen, wählte ein Angreifer den schwächsten. Notizen sind besonders

@@ -799,6 +799,9 @@ pub struct SessionParts {
     /// before it is sent (`AppState.outgoing_transform`). `None`: text is sent
     /// unchanged.
     pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+    /// Issue #505: chat content extensions (`AppState.chat_content`); the
+    /// send path seals extension parts through it.
+    pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,
     /// Spec 0039, Abschnitt 5: `true`, sobald in dieser Sitzung
     /// **irgendein** durch `ai::fence_untrusted` gelaufener Inhalt in den
     /// KI-Kontext gelangt ist (Kommando-Ausgabe, SFTP-Dateiinhalt oder
@@ -1105,6 +1108,14 @@ impl Session {
     // `set_sudo_password_for_tests` sind die sicherheitsrelevanten.
 
     #[cfg(any(test, feature = "test-support"))]
+    pub fn set_chat_content_for_tests(
+        &mut self,
+        value: Arc<crate::chat_content_extension::ChatContentRegistry>,
+    ) {
+        self.parts.chat_content = value;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
     pub fn set_outgoing_transform_for_tests(
         &mut self,
         value: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
@@ -1361,6 +1372,7 @@ pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
         // Issue #504 (ADR 0141, decision 4): every extension part, also
         // after resume and whatever its source.
         MessageContent::Extension(_) => true,
+        MessageContent::Sealed(_) => true,
     })
 }
 
@@ -1832,6 +1844,7 @@ mod tests {
             red_risk_always_confirm: true,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             outgoing_transform: None,
+            chat_content: Arc::default(),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,

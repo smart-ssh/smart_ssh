@@ -6,8 +6,7 @@
 //! trait an edition implements, the registry that validates names, and the
 //! removal callbacks: [`ChatContentExtension::session_removed`] after every
 //! removed chat session and [`ChatContentExtension::reconcile`] once per
-//! start. The send path that calls `take_pending`/`persist`/`resolve` is a
-//! follow-up.
+//! start.
 //!
 //! Security: nothing an extension supplies reaches a provider unfenced. The
 //! core redacts and fences extension content itself; an extension picks only a
@@ -19,36 +18,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use persistence_sqlite::ChatSessionRemovalObserver;
-use ssh_manager_core::ai::{ExtensionPart, ExtensionSource};
+use ssh_manager_core::ai::{
+    ChatMessage, ContentLimitError, ExtensionPart, ExtensionSource, MessageContent, OutputRedactor,
+    SealedContent, MAX_EXTENSION_PARTS_PER_MESSAGE, MAX_REQUEST_BINARY_BYTES,
+};
 
-/// One block of extension content. There is no third form.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ResolvedBlock {
-    Text {
-        text: String,
-    },
-    Binary {
-        mime: String,
-        bytes: Vec<u8>,
-        filename: String,
-    },
-}
-
-/// A block the core checked (text already redacted, binary validated). Only
-/// the core can build one.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RedactedBlock(ResolvedBlock);
-
-impl RedactedBlock {
-    #[allow(dead_code)] // used by the send path (follow-up issue)
-    pub(crate) fn new(block: ResolvedBlock) -> Self {
-        Self(block)
-    }
-
-    pub fn block(&self) -> &ResolvedBlock {
-        &self.0
-    }
-}
+pub use ssh_manager_core::ai::{RedactedBlock, ResolvedBlock};
 
 /// Content behind an opaque id from the composer, before it is stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,8 +57,15 @@ pub trait ChatContentExtension: Send + Sync {
     }
 
     /// Stores what the core hands back: text already redacted, binary
-    /// checked.
-    fn persist(&self, _session_id: Uuid, _part_id: &str, _blocks: Vec<RedactedBlock>) {}
+    /// checked. An error means nothing is sent.
+    fn persist(
+        &self,
+        _session_id: Uuid,
+        _part_id: &str,
+        _blocks: Vec<RedactedBlock>,
+    ) -> Result<(), ChatContentError> {
+        Ok(())
+    }
 
     /// Content for a send. `Ok(None)` means the content no longer exists.
     fn resolve(
@@ -145,6 +127,11 @@ impl ChatContentRegistry {
         &self.extensions
     }
 
+    /// The registered extension with this name.
+    pub fn find(&self, name: &str) -> Option<&Arc<dyn ChatContentExtension>> {
+        self.extensions.iter().find(|e| e.name() == name)
+    }
+
     /// Calls `reconcile` once per extension.
     pub fn reconcile(&self, live_session_ids: &[Uuid]) {
         for ext in &self.extensions {
@@ -161,6 +148,91 @@ impl ChatSessionRemovalObserver for ChatContentRegistry {
             }
         }
     }
+}
+
+/// Stable error code of a violated core limit.
+pub fn limit_error_code(err: &ContentLimitError) -> &'static str {
+    use crate::orchestration::{
+        ATTACHMENTS_REQUEST_TOO_LARGE, ATTACHMENTS_TOO_MANY, ATTACHMENT_INVALID,
+        ATTACHMENT_TOO_LARGE,
+    };
+    match err {
+        ContentLimitError::TooManyParts { .. } | ContentLimitError::TooManyBlocks { .. } => {
+            ATTACHMENTS_TOO_MANY
+        }
+        ContentLimitError::BlockTooLarge { .. } => ATTACHMENT_TOO_LARGE,
+        ContentLimitError::MimeNotAllowed { .. } | ContentLimitError::MimeMismatch { .. } => {
+            ATTACHMENT_INVALID
+        }
+        ContentLimitError::RequestTooLarge { .. } => ATTACHMENTS_REQUEST_TOO_LARGE,
+    }
+}
+
+/// Why a send was stopped while sealing extension content. Nothing is sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SealError {
+    pub code: &'static str,
+    pub message: String,
+}
+
+impl From<ContentLimitError> for SealError {
+    fn from(err: ContentLimitError) -> Self {
+        Self {
+            code: limit_error_code(&err),
+            message: format!("The message was not sent: {err}"),
+        }
+    }
+}
+
+/// Replaces every `Extension` part of the send copy by a [`SealedContent`]
+/// (ADR 0141, decision 3). The single place where extension content enters a
+/// request: limits are re-checked on every send, `resolve` runs per part, text
+/// is redacted again and fenced. `resolve` -> `None`, or an extension that is
+/// not registered, yields the core placeholder; a `resolve` error stops the
+/// send.
+pub fn seal_extension_parts(
+    history: Vec<ChatMessage>,
+    registry: &ChatContentRegistry,
+    session_id: Uuid,
+    redactor: &dyn OutputRedactor,
+) -> Result<Vec<ChatMessage>, SealError> {
+    let mut run = 0usize;
+    let mut binary_total = 0usize;
+    let mut out = Vec::with_capacity(history.len());
+    for message in history {
+        let MessageContent::Extension(part) = message.content else {
+            run = 0;
+            out.push(message);
+            continue;
+        };
+        run += 1;
+        if run > MAX_EXTENSION_PARTS_PER_MESSAGE {
+            return Err(ContentLimitError::TooManyParts { count: run }.into());
+        }
+        let sealed = match registry.find(&part.extension) {
+            Some(ext) => {
+                let content = ext.resolve(session_id, &part).map_err(|_| SealError {
+                    code: crate::orchestration::ATTACHMENT_UNRESOLVED,
+                    message: "The message was not sent: attached content could not be read."
+                        .to_string(),
+                })?;
+                SealedContent::seal(&part, ext.source(), content, redactor)?
+            }
+            None => SealedContent::seal(&part, ExtensionSource::LocalFile, None, redactor)?,
+        };
+        binary_total += sealed.binary_bytes();
+        if binary_total > MAX_REQUEST_BINARY_BYTES {
+            return Err(ContentLimitError::RequestTooLarge {
+                bytes: binary_total,
+            }
+            .into());
+        }
+        out.push(ChatMessage {
+            role: message.role,
+            content: MessageContent::Sealed(sealed),
+        });
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

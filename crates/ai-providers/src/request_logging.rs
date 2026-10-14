@@ -132,6 +132,11 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
             ),
             // Issue #504: counts only, never label, id or content.
             MessageContent::Extension(_) => "[extension_part] count=1".to_string(),
+            // Issue #505: count and binary bytes only, never label or content.
+            MessageContent::Sealed(sealed) => format!(
+                "[sealed_extension_part] count=1 binary_bytes={}",
+                sealed.binary_bytes()
+            ),
         })
         .collect()
 }
@@ -178,6 +183,11 @@ fn history_contents(context: &SessionContext) -> Vec<String> {
             ),
             // Issue #504: counts only, never label, id or content.
             MessageContent::Extension(_) => "[extension_part] count=1".to_string(),
+            // Issue #505: count and binary bytes only, never label or content.
+            MessageContent::Sealed(sealed) => format!(
+                "[sealed_extension_part] count=1 binary_bytes={}",
+                sealed.binary_bytes()
+            ),
         })
         .collect()
 }

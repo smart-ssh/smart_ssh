@@ -313,6 +313,11 @@ pub enum MessageContent {
     /// the content stays with the extension. Untrusted (Spec 0039/0110).
     /// Triggers no follow-up round by itself.
     Extension(super::ExtensionPart),
+    /// Issue #505 (ADR 0141): extension content the core sealed for ONE
+    /// send. Exists only in the send copy; never serialized and rejected by
+    /// the chat store (`#[serde(skip)]`).
+    #[serde(skip)]
+    Sealed(super::SealedContent),
 }
 
 /// Warum eine Aktion nicht ausgeführt wurde (Spec 0021, Abschnitt 3).

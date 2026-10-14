@@ -1392,6 +1392,17 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                     }],
                 }
             }
+            // Issue #505: sealed content exists only in a send copy and
+            // never reaches the history view; show label only if it does.
+            ssh_manager_core::ai::MessageContent::Sealed(sealed) => {
+                ChatHistoryEntryDto::ExtensionParts {
+                    role,
+                    items: vec![ChatHistoryExtensionPartDto {
+                        label: sealed.label().to_string(),
+                        media: ssh_manager_core::ai::ExtensionMedia::Text,
+                    }],
+                }
+            }
         }
     }
 }

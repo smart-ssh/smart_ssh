@@ -45,12 +45,26 @@ pub async fn send_chat_message(
         .get(session_id)
         .ok_or("Session nicht gefunden")?;
     // Vor allem anderen aufgelöst und geprüft: ein Fehler sendet nichts.
-    let attachments = app_logic::orchestration::resolve_chat_attachments(
-        &resolvers.0,
-        session_id,
-        attachment_ids.as_deref().unwrap_or(&[]),
-    )
-    .await?;
+    // Issue #505: registered chat content extensions take the ids first; the
+    // older resolver path stays for editions that only register resolvers.
+    let ids = attachment_ids.as_deref().unwrap_or(&[]);
+    let (attachments, extension_parts) = if state.chat_content.is_empty() {
+        (
+            app_logic::orchestration::resolve_chat_attachments(&resolvers.0, session_id, ids)
+                .await?,
+            app_logic::orchestration::PreparedExtensionParts::default(),
+        )
+    } else {
+        (
+            Vec::new(),
+            app_logic::orchestration::accept_extension_content(
+                &state.chat_content,
+                session.redactor.as_ref(),
+                session_id,
+                ids,
+            )?,
+        )
+    };
     send_chat_message_with_attachments_impl(
         &app,
         &TauriEventEmitter(app.clone()),
@@ -58,6 +72,7 @@ pub async fn send_chat_message(
         session_id,
         text,
         attachments,
+        extension_parts,
         Some(&state.prompt_history_store),
         state.profile_store.as_ref(),
         &state.policy_store,
@@ -132,6 +147,7 @@ pub(crate) async fn send_chat_message_impl<R: tauri::Runtime>(
         session_id,
         text,
         Vec::new(),
+        Default::default(),
         prompt_history_store,
         profile_store,
         policy_store,
@@ -151,6 +167,7 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     session_id: SessionId,
     text: String,
     attachments: Vec<ssh_manager_core::ai::ChatAttachment>,
+    extension_parts: app_logic::orchestration::PreparedExtensionParts,
     prompt_history_store: Option<&persistence_sqlite::SqlitePromptHistoryStore>,
     profile_store: &dyn ProfileStore,
     policy_store: &persistence_sqlite::SqlitePolicyStore,
@@ -177,7 +194,7 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
         }
         if turn.running {
             // Eingereiht werden nur Texte; Anhänge gehen nie still verloren.
-            if !pending_attachments.is_empty() {
+            if !pending_attachments.is_empty() || !extension_parts.is_empty() {
                 return Err(CommandError::with_code(
                     "Die Nachricht wurde nicht gesendet: Anhänge können nicht an einen \
                      laufenden Turn angehängt werden. Bitte nach der Antwort erneut senden.",
@@ -198,6 +215,12 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
         session,
         armed: !queued_only,
     };
+    // Issue #505: hand the checked blocks to their extension only now, after
+    // the busy check; an error sends nothing (the guard resets the turn).
+    if !queued_only {
+        extension_parts.persist(session_id)?;
+    }
+    let mut extension_parts = Some(extension_parts);
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
     // die Pfeiltasten-Navigation im Eingabefeld — ein Fehlschlag beim
     // Persistieren (z. B. kurzzeitig gesperrte DB) soll den eigentlichen
@@ -305,6 +328,9 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
             std::mem::take(&mut pending_attachments),
         )
         .await?;
+        if let Some(parts) = extension_parts.take() {
+            app_logic::orchestration::push_extension_parts(session, parts).await;
+        }
 
         let unanswered_injected_messages = run_chat_turn(
             session,
@@ -817,6 +843,7 @@ mod send_chat_message_persistence_tests {
             red_risk_always_confirm: true,
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             outgoing_transform: None,
+            chat_content: Default::default(),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
             post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
             injection_check_provider: None,
@@ -998,6 +1025,78 @@ mod send_chat_message_persistence_tests {
         let turn = session.chat_turn.lock().unwrap();
         assert!(turn.queued.is_empty(), "nothing may leak into the new chat");
         assert!(turn.running, "the swap's claim stays untouched");
+    }
+
+    /// Issue #505: extension content while a turn runs is rejected with
+    /// `ATTACHMENTS_WHILE_BUSY`, nothing is queued and nothing is persisted.
+    #[tokio::test]
+    async fn test_extension_content_while_turn_running_is_rejected() {
+        use app_logic::chat_content_extension::{
+            ChatContentExtension, ChatContentRegistry, PendingContent,
+        };
+        use std::sync::atomic::{AtomicBool, Ordering};
+        struct Ext(std::sync::Arc<AtomicBool>);
+        impl ChatContentExtension for Ext {
+            fn name(&self) -> &str {
+                "files"
+            }
+            fn take_pending(&self, _s: uuid::Uuid, _id: &str) -> Option<PendingContent> {
+                Some(PendingContent {
+                    label: "a.txt".into(),
+                    kind: "doc".into(),
+                    blocks: vec![ssh_manager_core::ai::ResolvedBlock::Text { text: "x".into() }],
+                })
+            }
+            fn persist(
+                &self,
+                _s: uuid::Uuid,
+                _p: &str,
+                _b: Vec<ssh_manager_core::ai::RedactedBlock>,
+            ) -> Result<(), app_logic::chat_content_extension::ChatContentError> {
+                self.0.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+        let _guard = lock_async().await;
+        let session = test_session(ServerId::new());
+        session.chat_turn.lock().unwrap().running = true;
+        let persisted = std::sync::Arc::new(AtomicBool::new(false));
+        let registry = ChatContentRegistry::new(vec![std::sync::Arc::new(Ext(persisted.clone()))]);
+        let parts = app_logic::orchestration::accept_extension_content(
+            &registry,
+            session.redactor.as_ref(),
+            uuid::Uuid::new_v4(),
+            &["id".to_string()],
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        let err = send_chat_message_with_attachments_impl(
+            app.handle(),
+            &TestEmitter::default(),
+            &session,
+            uuid::Uuid::new_v4(),
+            "hi".to_string(),
+            Vec::new(),
+            parts,
+            None,
+            &InMemoryProfileStore::default(),
+            &policy_store,
+            &ConfirmationRegistry::new(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            err.code,
+            Some(app_logic::orchestration::ATTACHMENTS_WHILE_BUSY)
+        );
+        assert!(session.chat_turn.lock().unwrap().queued.is_empty());
+        assert!(!persisted.load(Ordering::SeqCst));
     }
 
     /// Spec 0066, §2: eine Nachricht, die während eines laufenden Turns

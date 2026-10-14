@@ -553,6 +553,7 @@ pub fn session_with_ai_and_transport(
         red_risk_always_confirm: true,
         running_command_cancellations: Arc::new(crate::confirmation::ConfirmationRegistry::new()),
         outgoing_transform: None,
+        chat_content: Default::default(),
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         injection_check_provider: None,

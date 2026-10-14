@@ -95,6 +95,9 @@ fn content_type_for(content: &MessageContent) -> &'static str {
         MessageContent::Attachments(_) => "attachments",
         // Issue #504, Migration `0022_...sql`.
         MessageContent::Extension(_) => "extension",
+        // Issue #505: sealed content exists only in a send copy and is
+        // rejected before this point (`append_message`).
+        MessageContent::Sealed(_) => "sealed",
     }
 }
 
@@ -180,6 +183,13 @@ impl SqliteChatSessionStore {
         session_id: Uuid,
         message: &ChatMessage,
     ) -> Result<Uuid, ChatSessionStoreError> {
+        // Issue #505: sealed extension content is never stored, only the
+        // opaque `Extension` reference is.
+        if matches!(message.content, MessageContent::Sealed(_)) {
+            return Err(ChatSessionStoreError::Backend(
+                "sealed extension content cannot be persisted".to_string(),
+            ));
+        }
         let session_id_str = session_id.to_string();
 
         let next_sequence: i64 = sqlx::query(
@@ -1051,6 +1061,46 @@ mod tests {
             media: ExtensionMedia::Text,
             estimated_tokens: 12,
         })
+    }
+
+    /// Issue #505: sealed content is never stored.
+    #[tokio::test]
+    async fn test_sealed_content_is_rejected_by_the_store() {
+        use ssh_manager_core::ai::{
+            DefaultOutputRedactor, ExtensionMedia, ExtensionPart, ExtensionSource, SealedContent,
+        };
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let part = ExtensionPart {
+            extension: "files".into(),
+            kind: "doc".into(),
+            id: "r".into(),
+            label: "a.txt".into(),
+            media: ExtensionMedia::Text,
+            estimated_tokens: 1,
+        };
+        let sealed = SealedContent::seal(
+            &part,
+            ExtensionSource::LocalFile,
+            None,
+            &DefaultOutputRedactor::new(),
+        )
+        .unwrap();
+        let message = ChatMessage {
+            role: Role::User,
+            content: MessageContent::Sealed(sealed),
+        };
+        assert!(chat_store
+            .append_message(session_id, &message)
+            .await
+            .is_err());
+        assert!(chat_store
+            .load_session(session_id)
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(serde_json::to_string(&message.content).is_err());
     }
 
     /// An `extension` row survives migrate + reload, in order, next to the
