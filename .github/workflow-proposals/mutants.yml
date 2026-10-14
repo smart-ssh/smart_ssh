@@ -133,7 +133,11 @@ jobs:
           echo "mutants: $total" >> plan-out/scope.txt
           if [ "$LIST_DIFF" = "true" ]; then
             cargo mutants "${scope[@]}" --no-config --list > plan-out/list-without-config.txt
-            diff -u plan-out/list-without-config.txt plan-out/list-with-config.txt > plan-out/list-diff.txt || true
+            diff_rc=0
+            diff -u plan-out/list-without-config.txt plan-out/list-with-config.txt > plan-out/list-diff.txt || diff_rc=$?
+            if [ "$diff_rc" -gt 1 ]; then
+              exit "$diff_rc"
+            fi
           fi
           case "$PER_SHARD" in
             ''|*[!0-9]*|0) echo "::error::mutants_per_shard must be a positive number"; exit 1 ;;
