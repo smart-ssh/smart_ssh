@@ -6,7 +6,7 @@
 //! run_extension_migrations`] runs them after the core migrations, with a
 //! migration history of the extension's own (`<prefix>schema_migrations`),
 //! and hands back an [`ExtensionDb`]. Why a runner of its own instead of a
-//! second `sqlx::migrate::Migrator`: see ADR 0136.
+//! second `sqlx::migrate::Migrator`: see ADR 0139.
 //!
 //! **What is enforced.** While an extension migration runs, a SQLite
 //! authorizer is installed on the connection. It refuses everything that
