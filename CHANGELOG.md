@@ -20,355 +20,329 @@ sind mit **(Pro)** markiert.
 - Servers get an optional start directory and can be moved between groups by drag and drop.
 
 ### Added
-- Die lokale Datenbank ist jetzt **vollständig verschlüsselt** (SQLCipher) —
-  auch Server-, Host- und Benutzernamen, Filterregeln und Provider-Header.
-- Eine bestehende Datenbank wird beim ersten Start automatisch und geprüft
-  umgewandelt; scheitert ein Schritt, bleibt die bisherige Datei unverändert.
-- **Alle Zugangsdaten** (Passwörter, Schlüssel, Passphrasen, Zertifikate,
-  Sudo-Passwörter, API-Keys, Provider-Header) ziehen beim ersten Start aus dem
-  Schlüsselbund in die verschlüsselte Datenbank um. Ein alter
-  Schlüsselbund-Eintrag wird erst gelöscht, wenn das Secret in der Datenbank
-  nachweislich gleich ist.
-- **Master-Passwort** als Alternative zum Schlüsselbund, z. B. für Linux ohne
-  Secret Service: In den Einstellungen lässt es sich einrichten, ändern und
-  wieder abschaffen; die Sektion zeigt, wo der Datenbank-Schlüssel liegt.
-- **Entsperrmaske beim Start:** Mit Master-Passwort ist bis zur Entsperrung
-  nichts erreichbar — kein Server, keine Einstellung, kein MCP-Server.
-- Nach drei vergeblichen Versuchen bietet die Entsperrmaske „Neu anfangen“
-  an. Die bisherigen Daten gehen dabei verloren (die Dateien werden nur
-  umbenannt), vorher wird noch einmal gefragt.
-- Server können ein optionales Startverzeichnis haben; Terminal und
-  Dateibrowser starten dort. Fehlt es, starten beide im Home-Verzeichnis mit
-  einem Hinweis. KI-Befehle laufen weiterhin im Home-Verzeichnis.
-- Server und Gruppen lassen sich in der Server-Liste und in „Verwalten“ per
-  Drag-and-drop in eine andere Gruppe oder auf die oberste Ebene verschieben.
-- „+ Server“ und „+ Gruppe“ legen das neue Element in der ausgewählten Gruppe
-  an; in der Server-Liste hat jede Gruppenzeile ein „+“ für einen neuen Server.
-- Die Gruppenauswahl in den Formularen zeigt die Hierarchie als eingerückten
-  Pfad (z. B. „Prod / Web“).
-- Die KI kann beim Antworten im Web suchen und Webseiten lesen (nur Text, über
-  die Web-Werkzeuge des Providers, heute Anthropic). Der Chat zeigt jede Suche
-  und Seite samt Quellen; die Einstellung „Web-Recherche“ ist je Provider
-  standardmäßig an. Dein Rechner öffnet dafür keine zusätzliche Verbindung.
-- „Verbindung testen“ und Verbindungsfehler in der Serverliste bieten ein
-  aufklappbares Schritt-für-Schritt-Protokoll (DNS, TCP, Handshake,
-  Host-Key, Anmeldung, je Jump-Host-Hop) mit markiertem Fehlschritt und
-  „Kopieren“. Es wird nirgends gespeichert.
-- Einstellungen → Diagnose zeigt, wo Smart SSH seine Daten ablegt (Datenbank,
-  Logs, Host-Keys, Schlüsseldatei, MCP-Einstellungen), kopierbar und mit
-  „Ordner öffnen“.
-- Die MCP-Beispiel-Konfiguration in den Einstellungen hat eine Schaltfläche
-  „Konfiguration kopieren“ und wird vollständig angezeigt.
+- The local database is now **fully encrypted** (SQLCipher) — including server,
+  host and user names, filter rules and provider headers.
+- An existing database is converted automatically, with verification, on first
+  start; if a step fails, the previous file is left unchanged.
+- **All credentials** (passwords, keys, passphrases, certificates, sudo
+  passwords, API keys, provider headers) move from the keychain into the
+  encrypted database on first start. An old keychain entry is only deleted once
+  the secret in the database is verifiably identical.
+- **Master password** as an alternative to the keychain, e.g. for Linux without
+  a Secret Service: it can be set up, changed and removed again in Settings;
+  the section shows where the database key is stored.
+- **Unlock screen at startup:** with a master password, nothing is reachable
+  until you unlock — no server, no setting, no MCP server.
+- After three failed attempts, the unlock screen offers “Start over”. Your
+  existing data is lost in the process (the files are only renamed), and you
+  are asked once more beforehand.
+- Servers can have an optional start directory; the terminal and the file
+  browser start there. If it is missing, both start in the home directory with
+  a notice. AI commands still run in the home directory.
+- Servers and groups can be moved to another group or to the top level by
+  drag and drop, in the server list and in “Manage”.
+- “+ Server” and “+ Group” create the new item in the selected group; in the
+  server list, every group row has a “+” for a new server.
+- The group picker in the forms shows the hierarchy as an indented path (e.g.
+  “Prod / Web”).
+- When answering, the AI can search the web and read web pages (text only, via
+  the provider's web tools, currently Anthropic). The chat shows every search
+  and page along with its sources; the “Web research” setting is on by default
+  for each provider. Your computer opens no additional connection for this.
+- “Test Connection” and connection errors in the server list offer an
+  expandable step-by-step log (DNS, TCP, handshake, host key, login, per
+  jump-host hop) with the failed step highlighted and a “Copy” button. It is
+  not stored anywhere.
+- Settings → Diagnostics shows where Smart SSH keeps its data (database, logs,
+  host keys, key file, MCP settings), copyable and with “Open folder”.
+- The MCP example configuration in Settings has a “Copy configuration” button
+  and is now displayed in full.
 
 ### Changed
-- **Wichtig:** Ältere Versionen können die Datenbank nach dem Umstieg nicht
-  mehr öffnen und melden sie als „möglicherweise beschädigt“ — das stimmt
-  nicht. Kein Backup einspielen, sondern die neue Version nutzen.
-- **Wichtig:** Ohne den Datenbank-Schlüssel (bzw. ein vergessenes
-  Master-Passwort) sind die Daten nicht wiederherstellbar, auch nicht aus
-  einem Backup. Beim Einrichten eines Master-Passworts wird das bestätigt.
-- **Wichtig:** Die alte, unverschlüsselte Datei wird entfernt; ältere
-  Fassungen können aber in Backups, Schnappschüssen oder einem früheren
-  Schlüsselbund-Backup weiter liegen.
-- Der Datenbank-Schlüssel wird aus dem vorhandenen Schlüssel im Schlüsselbund
-  abgeleitet; es kommt kein zweiter Eintrag dazu.
-- Ohne diesen Schlüssel startet Smart SSH nicht mehr eingeschränkt, sondern
-  fragt „Erneut versuchen“ oder „Beenden“; an den Daten ändert sich nichts.
-- Fehlt der Schlüssel oder passt er nicht, entsteht **nie** stillschweigend ein
-  neuer. Wer bewusst neu anfängt, behält die alte Datei unter neuem Namen.
-- Chat-Verlauf, Ausführungsprotokoll, Eingabe-Historie und Zusammenfassungen
-  sind nun allein durch die verschlüsselte Datei geschützt. Nicht mehr lesbare
-  alte Einträge werden beim Umstellen entfernt; ein Hinweis nennt ihre Anzahl.
-- Das MCP-Token liegt jetzt in der verschlüsselten Datenbank statt im
-  Klartext in `settings.json`; bestehende MCP-Clients funktionieren weiter.
-- Aktionen eines externen Tools über MCP laufen in einer eigenen Sitzung mit
-  eigener Verbindung und eigenem Tab je Server und Tool („Claude Code @
-  web-01“). Eigener Tab, Terminal und Chat bleiben unberührt; der MCP-Tab
-  übernimmt nicht den Fokus und zeigt eine wartende Bestätigung als Abzeichen.
-- Hat das Provider-Konto die Websuche abgeschaltet, zeigt der Chat einen
-  Hinweis und fragt für den Rest der Sitzung ohne Web-Recherche an, statt an
-  jeder Nachricht zu scheitern.
-- Den System-Prompt der KI gibt es auf Deutsch und Englisch; er folgt der
-  UI-Sprache, ebenso die Hinweise beim Kürzen langer Sitzungen.
-- Die KI-Zweitmeinung und die Prüfung auf eingeschleuste Anweisungen lösen
-  durch zitierte Konfigurationszeilen (z. B. `PermitRootLogin yes`) keine
-  unnötige Rückfrage mehr aus.
-- Ist noch kein KI-Provider aktiv, wird ein neu angelegter Provider gleich
-  aktiv gesetzt. Ein bereits aktiver Provider wird nie ersetzt, auch wenn die
-  Provider-Liste beim Speichern nicht geladen war.
-- Der SSH-Verbindungsaufbau hat je Server in der Kette eigene Zeitgrenzen:
-  10 s für Verbindung und Handshake, 60 s für die Anmeldung — genug für
-  Hardware-Schlüssel mit Berührung oder Agent-Bestätigung.
-- Läuft eine Host-Key-Abfrage im Hintergrund ab (etwa bei einer über MCP
-  gestarteten Verbindung), schließt sie sich, und ein Hinweis meldet, dass
-  die Verbindung nicht aufgebaut und dem Schlüssel nicht vertraut wurde.
-- Kann das Sudo-Passwort eines Servers nicht aus dem Credential-Speicher
-  gelesen werden, steht eine Warnung im Log (ohne Secret).
-- Gruppen und Server in der Verwalten-Seitenleiste lassen sich per Tastatur
-  auswählen; leere Spaltenköpfe und das Kommandofeld im Bestätigungsdialog
-  haben jetzt Namen für Screenreader.
+- **Important:** Older versions can no longer open the database after the
+  switch and report it as “possibly corrupted” — this is not true. Do not
+  restore a backup; use the new version instead.
+- **Important:** Without the database key (or with a forgotten master
+  password), the data cannot be recovered, not even from a backup. This is
+  confirmed when you set up a master password.
+- **Important:** The old, unencrypted file is removed; however, older copies
+  may still exist in backups, snapshots or an earlier keychain backup.
+- The database key is derived from the existing key in the keychain; no second
+  entry is added.
+- Without this key, Smart SSH no longer starts in a restricted mode but asks
+  “Try again” or “Quit”; your data is not changed.
+- If the key is missing or does not match, a new one is **never** created
+  silently. If you deliberately start over, the old file is kept under a new
+  name.
+- Chat history, execution log, input history and summaries are now protected
+  solely by the encrypted file. Old entries that can no longer be read are
+  removed during the conversion; a notice states how many.
+- The MCP token is now stored in the encrypted database instead of in plain
+  text in `settings.json`; existing MCP clients keep working.
+- Actions of an external tool via MCP run in their own session, with their own
+  connection and their own tab per server and tool (“Claude Code @ web-01”).
+  Your own tab, terminal and chat are left untouched; the MCP tab does not take
+  focus and shows a pending confirmation as a badge.
+- If the provider account has web search disabled, the chat shows a notice and
+  sends requests without web research for the rest of the session, instead of
+  failing on every message.
+- The AI system prompt exists in German and English; it follows the UI
+  language, as do the notices when long sessions are shortened.
+- The AI second opinion and the check for injected instructions no longer
+  trigger an unnecessary prompt because of quoted configuration lines (e.g.
+  `PermitRootLogin yes`).
+- If no AI provider is active yet, a newly created provider is set active
+  right away. An already active provider is never replaced, even if the
+  provider list was not loaded when saving.
+- The SSH connection setup has its own time limits for each server in the
+  chain: 10 s for connection and handshake, 60 s for login — enough for
+  hardware keys requiring a touch or agent confirmation.
+- If a host-key prompt times out in the background (e.g. for a connection
+  started via MCP), it closes, and a notice says that the connection was not
+  established and the key was not trusted.
+- If a server's sudo password cannot be read from the credential store, a
+  warning appears in the log (without the secret).
+- Groups and servers in the Manage sidebar can be selected with the keyboard;
+  empty column headers and the command field in the confirmation dialog now
+  have names for screen readers.
 
 ### Fixed
-- Die Host-Key-Abfrage erscheint jetzt auch, wenn gerade „Verwalten“ oder
-  „Filter-Regeln“ offen ist; bisher lief die Verbindung dort ungefragt in die
-  Ablehnung.
-- Eine beschädigte oder fremde Schlüsseldatei sperrt nicht mehr dauerhaft aus:
-  „Neu anfangen“ gibt es dann vor der Entsperrung, aber nur, wenn wirklich
-  kein Passwort mehr passen kann.
-- Lässt sich die Schlüsseldatei gerade nicht lesen (Rechte, Lesefehler,
-  geöffnet), wird nichts verändert und kein „Neu anfangen“ angeboten.
-- Beim Ändern des Master-Passworts gilt bei einem Fehler weiter das alte
-  Passwort; der Wechsel zurück auf den Schlüsselbund überschreibt keinen
-  fremden Schlüssel ohne Bestätigung.
-- Solange die App gesperrt ist, sind auch Einstellungsdateien und
-  Systemdienste nicht erreichbar.
-- Fehlermeldungen beim Start benennen den Zustand und die betroffene Datei
-  richtig; eine unsichtbare Rückfrage endet mit einer Meldung statt zu hängen.
-- Smart SSH lässt sich nicht mehr zweimal mit demselben Datenverzeichnis
-  starten; ein zweiter Start holt das offene Fenster nach vorn. Instanzen mit
-  verschiedenen Datenverzeichnissen laufen nebeneinander.
-- Scheitert der Start an einer Datenbank aus einer neueren Version, bleiben
-  keine `-wal`/`-shm`-Dateien zurück, und unter Windows lässt sich die Datei
-  sofort umbenennen.
-- Ein Server, dessen Anmeldeart diese Version nicht lesen kann (z. B. nach
-  einem Downgrade), leert nicht mehr die Serverliste: Er erscheint als „nicht
-  nutzbar“ mit Grund und lässt sich löschen.
-- Bricht eine laufende SSH-Sitzung ab (Kommando, Shell oder Dateibrowser),
-  meldet die App „Die Verbindung zum Server wurde unterbrochen“ statt eines
-  irreführenden Aufbau- oder SFTP-Kanalfehlers.
-- Der Dateibrowser des lokalen Pseudo-Servers und lokale Befehle starten im
-  Home-Verzeichnis statt im Arbeitsverzeichnis der App.
-- Ein Upload per Drag-and-drop nutzt immer den Kanal und das Verzeichnis, die
-  beim Ablegen angezeigt werden, auch direkt nach dem erhöhten Modus.
-- Beim Verschieben per Drag-and-drop gehen ungespeicherte Eingaben im
-  geöffneten Server- oder Gruppenformular nicht mehr verloren.
-- Wird der aktive Tab geschlossen, wird als Nächstes ein eigener Tab (sonst
-  die Übersicht) aktiv — nie mehr automatisch ein MCP-Tab.
-- Mit englischer Oberfläche zeigen Dateibrowser, Chat-Hinweise, Notizfeld und
-  -Vorschläge, Sitzungs-Kopfzeile und weitere Dialoge keine deutschen Texte mehr.
-- Das Fenster lässt sich auch bei geöffnetem Dialog und auf der Entsperrmaske
-  an der Titelleiste verschieben und per Doppelklick zoomen bzw. maximieren.
-- Technische Eingabefelder (Host, Benutzername, Pfade, Muster …) schalten
-  Autokorrektur und automatische Großschreibung ab; `root` bleibt `root`.
-- Ein fortgesetzter Chat zeigt bei Kommandoergebnissen wieder den echten
-  Exit-Code statt „—“.
-- Wird die KI-Zusammenfassung einer großen Notiz abgeschnitten, warnt der
-  Notiz-Vorschlag deutlich, dass sie unvollständig ist.
-- Ein Fehler in einer Erweiterung des Hinweises vor der ersten Verbindung
-  blendet nur deren Bereich aus statt die ganze Oberfläche.
-- Ist ein Kommando zu lang oder zu tief verschachtelt für die Prüfung, sagt
-  der Bestätigungsdialog genau das, statt einen Secret-Pfad zu behaupten.
+- The host-key prompt now also appears while “Manage” or “Filter Rules” is
+  open; previously, the connection there ran into a rejection without asking.
+- A damaged or foreign key file no longer locks you out permanently: “Start
+  over” is then offered before unlocking, but only if no password can possibly
+  match anymore.
+- If the key file cannot be read at the moment (permissions, read error, in
+  use), nothing is changed and no “Start over” is offered.
+- When changing the master password, the old password stays in effect if an
+  error occurs; switching back to the keychain does not overwrite a foreign key
+  without confirmation.
+- While the app is locked, settings files and system services are also
+  unreachable.
+- Startup error messages name the state and the affected file correctly; an
+  invisible prompt ends with a message instead of hanging.
+- Smart SSH can no longer be started twice with the same data directory; a
+  second start brings the open window to the front. Instances with different
+  data directories run side by side.
+- If startup fails because of a database from a newer version, no `-wal`/`-shm`
+  files are left behind, and on Windows the file can be renamed immediately.
+- A server whose login method this version cannot read (e.g. after a
+  downgrade) no longer empties the server list: it appears as “unusable” with a
+  reason and can be deleted.
+- If a running SSH session breaks (command, shell or file browser), the app
+  reports “The connection to the server was interrupted” instead of a
+  misleading setup or SFTP channel error.
+- The file browser of the local pseudo-server and local commands start in the
+  home directory instead of the app's working directory.
+- A drag-and-drop upload always uses the channel and the directory shown at the
+  time of the drop, even right after elevated mode.
+- Moving by drag and drop no longer discards unsaved input in an open server or
+  group form.
+- When the active tab is closed, one of your own tabs (otherwise the overview)
+  becomes active next — never an MCP tab automatically.
+- With the English UI, the file browser, chat notices, the note field and its
+  suggestions, the session header and other dialogs no longer show German text.
+- The window can be dragged by the title bar and zoomed or maximized by
+  double-click even while a dialog is open and on the unlock screen.
+- Technical input fields (host, user name, paths, patterns …) turn off
+  autocorrect and automatic capitalization; `root` stays `root`.
+- A resumed chat shows the real exit code again for command results instead of
+  “—”.
+- If the AI summary of a large note is truncated, the note suggestion clearly
+  warns that it is incomplete.
+- An error in an extension of the notice shown before the first connection only
+  hides that part instead of the whole interface.
+- If a command is too long or too deeply nested for the check, the confirmation
+  dialog says exactly that instead of claiming a secret path.
 
 ### Security
-- Die Filter-Engine erkennt weitere Umgehungsversuche und verlangt dafür eine
-  Bestätigung trotz Allow-Regel: unsichtbare und Sonder-Unicode-Zeichen,
-  Homoglyphen, `$'\x..'`-Quoting, Variablen oder Globs als Kommandoname,
-  Subshells und Shell-Konstrukte, Shells, die von der Standardeingabe lesen,
-  und `eval`.
-- Deny-Regeln greifen jetzt auch hinter `eval`, Here-Strings (`bash <<<`),
-  `-c` weiterer Shells und Shell-Varianten (`ksh`, `fish`, `bash5`, `zsh-5.9`
-  …), `-c` nach anderen Optionen, in späteren Kettengliedern, hinter Wrappern
-  mit Pfad oder anderer Schreibweise sowie hinter `exec`/`builtin`.
-- Unbekannte Programme auf `sh`, die mit `-c`/`-s` aufgerufen werden (z. B.
-  `pwsh -c …`), verlangen mindestens eine Bestätigung.
-- Die Risiko-Anzeige bewertet den Code hinter `-c` jeder erkannten Shell (auch
-  hinter `sudo`/`env`): `bash -c 'shutdown -h now'` zeigt jetzt Rot.
-- `trap`-Handler und Alias-Definitionen verlangen immer eine Bestätigung,
-  auch mit Allow-Regel; trifft der hinterlegte Code eine Deny-Regel, wird
-  blockiert.
-- Das Längenlimit für Kommandos wird überall in Bytes gemessen; lange
-  Kommandos mit Mehrbyte-Zeichen laufen nicht mehr über eine Allow-Regel durch.
-- MCP-Ausgaben gelangen nicht in den KI-Verlauf der eigenen Sitzung und der
-  eigene Chat nicht in die MCP-Sitzung.
-- In einer MCP-Sitzung wartet höchstens eine Aktion auf Bestätigung; weitere
-  werden sofort mit Verweis auf die offene Bestätigung abgewiesen.
-- Externe Tools (MCP) können je Server höchstens 4 eigene Sitzungen öffnen;
-  Tool-Namen werden in Tab und Benachrichtigung auf 64 Zeichen gekürzt.
-- Wird ein Tab mit wartender Bestätigung geschlossen — auch ein MCP-Tab oder
-  nach einem Neuladen —, wird die Aktion sofort abgelehnt.
-- Kommandoausgaben, gelesene Dateien und Server-Notizen, die ein MCP-Client
-  bekommt, sind redigiert bzw. als nicht vertrauenswürdig eingezäunt wie bei
-  der eingebauten KI. Clients, die den Text wörtlich auswerten, sehen ein
-  geändertes Format.
-- Ein leeres MCP-Token wird nicht mehr akzeptiert und beim Start ersetzt;
-  damit eingerichtete Tools brauchen das neue Token aus den Einstellungen.
-- Linux: Die MCP-Einstellungsdatei `settings.json` bekommt jetzt tatsächlich
-  die Rechte `0600` (bestehende beim nächsten Speichern einer MCP-Einstellung).
-- Webinhalt aus der Web-Recherche gilt als nicht vertrauenswürdig: Er wird
-  redigiert, eingezäunt und schaltet die Eskalation nach dem Einlesen ein.
-- `ssh_config`-Import: Importierte Schlagworte, die eine Tag-Allow-Regel
-  treffen (auch per Muster), sind in der Vorschau standardmäßig abgewählt —
-  außer sie treffen zugleich eine Deny-Regel.
-- Der Dateibrowser liest lokal nur Dateien, die für die Sitzung gewählt oder
-  ins Fenster gezogen wurden; andere Pfade (auch über `..` oder Symlinks)
-  werden abgelehnt.
-- Von „Lokal öffnen“ liegengebliebene Kopien von Server-Dateien werden beim
-  nächsten Start entfernt, statt im Klartext im Cache zu bleiben.
+- The filter engine detects more evasion attempts and requires confirmation for
+  them despite an allow rule: invisible and special Unicode characters,
+  homoglyphs, `$'\x..'` quoting, variables or globs as the command name,
+  subshells and shell constructs, shells reading from standard input, and
+  `eval`.
+- Deny rules now also apply behind `eval`, here-strings (`bash <<<`), `-c` of
+  further shells and shell variants (`ksh`, `fish`, `bash5`, `zsh-5.9` …), `-c`
+  after other options, in later chain elements, behind wrappers with a path or
+  different spelling, and behind `exec`/`builtin`.
+- Unknown programs on `sh` that are invoked with `-c`/`-s` (e.g. `pwsh -c …`)
+  require at least a confirmation.
+- The risk indicator rates the code behind `-c` of every recognized shell (also
+  behind `sudo`/`env`): `bash -c 'shutdown -h now'` now shows red.
+- `trap` handlers and alias definitions always require confirmation, even with
+  an allow rule; if the stored code matches a deny rule, it is blocked.
+- The command length limit is now measured in bytes everywhere; long commands
+  with multibyte characters no longer pass through an allow rule.
+- MCP output does not reach the AI history of your own session, and your own
+  chat does not reach the MCP session.
+- In an MCP session, at most one action waits for confirmation; further ones
+  are rejected immediately with a reference to the open confirmation.
+- External tools (MCP) can open at most 4 sessions of their own per server;
+  tool names are shortened to 64 characters in the tab and notification.
+- If a tab with a pending confirmation is closed — also an MCP tab or after a
+  reload — the action is rejected immediately.
+- Command output, files read and server notes that an MCP client receives are
+  redacted or fenced as untrusted, as with the built-in AI. Clients that parse
+  the text literally will see a changed format.
+- An empty MCP token is no longer accepted and is replaced at startup; tools
+  set up with it need the new token from Settings.
+- Linux: the MCP settings file `settings.json` now actually gets the
+  permissions `0600` (existing ones on the next save of an MCP setting).
+- Web content from web research is treated as untrusted: it is redacted,
+  fenced, and turns on escalation after being read.
+- `ssh_config` import: imported tags that match a tag allow rule (also via
+  pattern) are deselected by default in the preview — unless they also match a
+  deny rule.
+- The file browser only reads local files that were chosen for the session or
+  dragged into the window; other paths (also via `..` or symlinks) are
+  rejected.
+- Copies of server files left behind by “Open locally” are removed on the next
+  start instead of remaining in the cache in plain text.
 
 ## [0.5.2] — 2026-10-01
 
 ### Added
-- Server-Profile lassen sich nach OpenSSH-`ssh_config` exportieren — für den
-  Umstieg auf ein anderes Werkzeug oder einfach als lesbares Backup. Die
-  erzeugte Datei wird von `ssh` selbst akzeptiert (geprüft mit `ssh -G`).
-  Nach dem Export zeigt eine Meldung den Pfad, umbenannte Servernamen (falls
-  ein Name keinen gültigen `Host`-Alias ergab) und die Zeile, mit der sich
-  die Datei in die eigene `~/.ssh/config` einbinden lässt.
-- Was sich nicht abbilden lässt — Gruppen, Schlagworte, Notizen,
-  Filterregeln, Sicherheitseinstellungen und die Art der Anmeldung —
-  verschwindet nicht stillschweigend: Für jeden betroffenen Server steht ein
-  Kommentar direkt über seinem Eintrag in der Datei.
-- Server-Profile lassen sich aus einer OpenSSH-`ssh_config` einlesen. Eine
-  Vorschau zeigt vorher vollständig, was entstehen würde — Felder samt
-  Herkunft, die gelesenen Dateien mit vollem Pfad, die entstehende
-  Ordnerstruktur, Namenskonflikte und jede Zeile, die **nicht** übernommen
-  wird. Einzelne Einträge lassen sich abwählen; wer abbricht, legt nichts
-  an. Ein zweiter Import derselben Datei erzeugt nichts doppelt.
-- `Include` wird mitgelesen, und jede eingebundene Datei wird ein
-  Unterordner. `ProxyJump` wird auf die Jump-Host-Verkettung abgebildet;
-  eine Kette, die sich im Kreis dreht, wird beim Import abgelehnt statt
-  erst beim Verbinden aufzufallen.
-- Bei einer `IdentityFile`-Zeile entscheidet der Nutzer, was geschehen
-  soll: den Pfad als Schlüsseldatei übernehmen (Vorgabe — die Datei wird
-  dabei nicht geöffnet), den Schlüssel einlesen und im Schlüsselbund
-  ablegen, oder die Zeile weglassen. Zeigt ein Pfad ins Leere, fällt nur
-  dieser eine Eintrag zurück; der Import läuft weiter und sagt, warum.
-- Neue Einstellung „Bei rotem Risiko immer nachfragen“ im
-  Risiko-Klassifizierer-Bereich, **standardmäßig an**. Ist sie an, verlangt
-  jeder KI-Vorschlag, den der Risiko-Indikator auf der Server- oder der
-  Daten-Achse als rot einstuft, immer eine Bestätigung — auch gegen eine
-  Allow-Regel. Wirkt erst ab der nächsten Verbindung.
-- Der Über-Bereich der Einstellungen hat jetzt einen Eintrag
-  „Drittanbieter-Lizenzen", der die Lizenztexte aller Rust- und
-  npm-Abhängigkeiten, der Build-Werkzeuge mit ausgeliefertem Code und der
-  mitgelieferten Schriften in einer scrollbaren Ansicht zeigt. Die Liste
-  wird bei jedem Release-Build neu erzeugt und ist offline lesbar; ein
-  Entwicklungs-Build zeigt stattdessen einen Hinweis, dass sie nur in
-  Release-Builds enthalten ist.
+- Server profiles can be exported to an OpenSSH `ssh_config` — for switching to
+  another tool or simply as a readable backup. The generated file is accepted
+  by `ssh` itself (verified with `ssh -G`). After the export, a message shows
+  the path, any renamed server names (if a name did not yield a valid `Host`
+  alias) and the line to include the file in your own `~/.ssh/config`.
+- What cannot be mapped — groups, tags, notes, filter rules, security settings
+  and the login method — does not disappear silently: for every affected
+  server, a comment sits directly above its entry in the file.
+- Server profiles can be imported from an OpenSSH `ssh_config`. A preview first
+  shows in full what would be created — fields with their origin, the files
+  read with their full path, the resulting folder structure, name conflicts and
+  every line that is **not** imported. Individual entries can be deselected;
+  if you cancel, nothing is created. A second import of the same file creates
+  no duplicates.
+- `Include` is read as well, and every included file becomes a subfolder.
+  `ProxyJump` is mapped to the jump-host chain; a chain that loops back on
+  itself is rejected at import time instead of only being noticed when
+  connecting.
+- For an `IdentityFile` line, the user decides what should happen: adopt the
+  path as a key file (the default — the file is not opened in the process),
+  read the key and store it in the keychain, or skip the line. If a path points
+  to nothing, only that one entry falls back; the import continues and says
+  why.
+- New setting “Always ask on red risk” in the risk classifier section, **on by
+  default**. When on, every AI suggestion that the risk indicator rates red on
+  the server or the data axis always requires a confirmation — even against an
+  allow rule. Takes effect from the next connection.
+- The About section of Settings now has a “Third-party licenses” entry that
+  shows the license texts of all Rust and npm dependencies, of build tools with
+  shipped code and of the bundled fonts in a scrollable view. The list is
+  regenerated with every release build and readable offline; a development
+  build shows a notice instead that it is only included in release builds.
 
 ### Changed
-- „Lokal öffnen" im Dateibrowser lehnt Dateien über 50 MB ab und weist auf
-  „Herunterladen" hin. Es entsteht dabei keine lokale Kopie.
-- Der automatisch erzeugte Titel einer Chat-Sitzung wird geschwärzt, bevor er
-  gespeichert wird. Der Titel steht als Einziges der Sitzung im Klartext in
-  der Datenbank — hatte die KI ein Passwort aus dem Gespräch in den Titel
-  übernommen, stand es dort bisher lesbar. Besteht der Titel danach nur noch
-  aus Platzhaltern, wird gar kein Titel gespeichert.
-- Schlägt die KI eine Notiz vor, wird ihr Vorschlag geschwärzt, **bevor** er
-  im Vergleichsdialog erscheint — im Chat, beim Trennen der Verbindung und
-  bei einem Vorschlag über MCP. Angezeigt, bestätigt und gespeichert wird
-  dieselbe Fassung. Bestand der Vorschlag ausschließlich aus erkannten
-  Zugangsdaten, entsteht kein Vorschlag, und die App sagt das.
-- Unverändert bleibt „In Notiz übernehmen": Was Sie selbst aus dem Chat in
-  eine Notiz übernehmen, wird nicht angetastet.
+- “Open locally” in the file browser rejects files over 50 MB and points to
+  “Download”. No local copy is created in the process.
+- The automatically generated title of a chat session is redacted before it is
+  stored. The title is the only part of a session stored in plain text in the
+  database — if the AI had taken a password from the conversation into the
+  title, it was previously readable there. If the title then consists only of
+  placeholders, no title is stored at all.
+- When the AI proposes a note, its proposal is redacted **before** it appears
+  in the comparison dialog — in the chat, when disconnecting, and for a
+  proposal via MCP. The same version is displayed, confirmed and stored. If the
+  proposal consisted exclusively of detected credentials, no proposal is
+  created, and the app says so.
+- “Add to note” is unchanged: what you yourself take from the chat into a note
+  is not touched.
 
 ### Fixed
-- Beim Wechsel der Anmeldeart gingen die bisherigen Zugangsdaten verloren,
-  wenn das Speichern scheiterte. Wer einen Server mit Passwort auf
-  „Zertifikat" umstellte und die Felder leer ließ, bekam zwar richtig eine
-  Fehlermeldung — das Passwort war danach aber aus dem Schlüsselbund
-  entfernt, während der Server weiter als Passwort-Anmeldung gespeichert
-  war. Er ließ sich nicht mehr verbinden, und nichts deutete darauf hin,
-  warum. Dasselbe galt, wenn der Schlüsselbund, das Sudo-Passwort oder das
-  Speichern selbst scheiterte. Zugangsdaten der bisherigen Anmeldeart
-  werden jetzt erst entfernt, nachdem die neue erfolgreich gespeichert ist.
-- Ein selbstgehosteter KI-Server mit kleinem Kontextfenster lieferte bei zu
-  großem Antwortbudget bisher einen Fehler statt einer Antwort. Die App
-  erkennt diesen Fall jetzt an der Fehlermeldung des Servers und wiederholt
-  die Anfrage einmal mit einem kleineren Budget.
-- Die Fehlermeldung „Kontext zu groß für den KI-Provider“ nennt jetzt die
-  Abhilfe: die Einstellung „Max. Antwortlänge (Tokens)“ niedriger setzen
-  oder einen neuen Chat beginnen.
-- Bei Anthropic unterschreitet der automatische Wiederholungsversuch nach
-  einer abgeschnittenen Antwort nicht mehr eine selbst eingestellte „Max.
-  Antwortlänge“.
-- Der `ssh_config`-Import folgt unter Windows jetzt jedem `Include`. Vorher
-  wurde jede eingebundene Datei stillschweigend übersprungen, weil das
-  Präfix, das Windows kanonischen Pfaden voranstellt, mit einem
-  Platzhalterzeichen verwechselt wurde.
-- Schlägt ein Zugriff auf den Systemschlüsselbund fehl, obwohl er beim Start
-  erreichbar war — weil er gesperrt ist oder der Zugriff abgelehnt wurde —,
-  dann erscheint jetzt eine erklärende Meldung in der Sprache der App statt
-  des rohen englischen Texts der Schlüsselbund-Bibliothek („No default store
-  has been set …"). Das betrifft das Speichern und Lesen von API-Keys,
-  Server-Passwörtern, Passphrasen und Sudo-Passwörtern.
-- Beim Verbindungsaufbau und beim Verbindungstest wird ein solcher Fehler
-  nicht mehr als „Netzwerkfehler" oder „Zugangsdaten konnten nicht aufgelöst
-  werden" angezeigt, sondern nennt den Schlüsselbund als Ursache. Das gilt
-  auch für eine Kette über Jump-Hosts.
-- Ein einzelner fehlgeschlagener Zugriff gilt nicht länger als „Schlüsselbund
-  nicht verfügbar". Die Meldung behauptet das nicht mehr, und der nächste
-  Zugriff gelingt wieder, sobald der Schlüsselbund antwortet. Fehlt der
-  Eintrag im Schlüsselbund schlicht, bleibt es weiterhin bei der bisherigen
-  Meldung „kein Eintrag gefunden" — das ist kein Fehler des Schlüsselbunds.
+- When switching the login method, the previous credentials were lost if saving
+  failed. If you switched a server from password to “Certificate” and left the
+  fields empty, you correctly got an error message — but the password had been
+  removed from the keychain afterwards, while the server was still stored as a
+  password login. It could no longer connect, and nothing indicated why. The
+  same applied if the keychain, the sudo password or the saving itself failed.
+  Credentials of the previous login method are now only removed after the new
+  ones have been saved successfully.
+- A self-hosted AI server with a small context window previously returned an
+  error instead of an answer when the response budget was too large. The app
+  now recognizes this case from the server's error message and repeats the
+  request once with a smaller budget.
+- The error message “Context too large for the AI provider” now names the
+  remedy: lower the “Max. response length (tokens)” setting or start a new
+  chat.
+- With Anthropic, the automatic retry after a truncated response no longer
+  goes below a “Max. response length” you set yourself.
+- The `ssh_config` import on Windows now follows every `Include`. Previously,
+  every included file was silently skipped because the prefix that Windows
+  prepends to canonical paths was mistaken for a wildcard character.
+- If access to the system keychain fails although it was reachable at startup
+  — because it is locked or access was denied — an explanatory message now
+  appears in the app's language instead of the raw English text of the keychain
+  library (“No default store has been set …”). This affects saving and reading
+  API keys, server passwords, passphrases and sudo passwords.
+- When connecting and when testing a connection, such an error is no longer
+  shown as “Network error” or “Credentials could not be resolved” but names the
+  keychain as the cause. This also applies to a chain via jump hosts.
+- A single failed access no longer counts as “keychain unavailable”. The
+  message no longer claims that, and the next access succeeds again as soon as
+  the keychain responds. If the entry is simply missing from the keychain, the
+  previous message “no entry found” remains — that is not a keychain failure.
 
 ### Security
-- Kein Export schreibt je ein Passwort, eine Passphrase oder Schlüsselinhalt
-  — nur, bei entsprechender Anmeldeart, den Pfad zu einer Schlüsseldatei.
-  Ein Server, dessen Schlüssel im Schlüsselbund liegt, verliert dabei keine
-  Information stillschweigend: Der Kommentar über seinem Eintrag sagt, dass
-  der Schlüssel fehlt und warum.
-- Der Export lehnt die eigene `~/.ssh/config` als Ziel ab — auch wenn sie im
-  Speichern-Dialog ausdrücklich gewählt und ein Überschreiben bestätigt
-  wird. Diese Datei wird nie angerührt.
-- Der lokale Pseudo-Server erscheint nie in der exportierten Datei.
-- Der Import öffnet von sich aus ausschließlich `ssh_config`-Dateien. Eine
-  Schlüsseldatei wird nur gelesen, wenn man das ausdrücklich verlangt, erst
-  beim Bestätigen, und nur die Dateien, die die Vorschau vorher namentlich
-  genannt hat.
-- Aus einer eingelesenen Datei gelangt kein Inhalt auf den Bildschirm: Eine
-  eingebundene Datei, die keine `ssh_config` ist, wird mit ihrem Pfad
-  gemeldet und übersprungen; von einer nicht übernommenen Zeile erscheint
-  nur der Name der Direktive mit Zeilennummer, nie ihr Wert.
-- Eine importierte Datei kann keine Sicherheitseinstellung eines Profils
-  setzen — Eskalation nach Serverinhalt und KI-Prüfung stehen immer auf den
-  Vorgaben des Produkts.
-- Übermäßig große, tief verschachtelte oder sich selbst einbindende
-  Konfigurationen führen zu einer verständlichen Meldung statt zu einem
-  hängenden oder abstürzenden Programm.
-- Schaltet man den erhöhten Dateibrowser-Modus während einer laufenden
-  Aktion (z. B. rekursives Löschen oder Rechte-Ändern) aus, bricht diese
-  Aktion jetzt sofort ab.
-- Die 256-KB-Grenze von „Dateiinhalt kopieren" im Dateibrowser hält jetzt
-  auch, wenn die Datei zwischen Größenprüfung und Lesen wächst oder sich ihre
-  Größe nicht ermitteln lässt.
-- Die TLS-Bibliothek für die Verbindungen zu KI-Anbietern (`rustls`) ist auf
-  0.23.45 aktualisiert und behebt damit RUSTSEC-2026-0285 (TLS-1.3-Handshake-
-  Nachrichten wurden über Verschlüsselungsebenen hinweg akzeptiert).
-- Hebt die optionale KI-Zweitmeinung das Daten-Risiko nachträglich auf Rot —
-  also erst, nachdem ein Vorschlag bereits als „läuft automatisch“
-  angekündigt war —, läuft die Aktion nicht mehr automatisch, sondern
-  verlangt wie jede andere Bestätigung einen Klick.
-- Die Logdatei enthält auf dem Standard-Level keine Inhalte mehr: kein
-  Kommando, keine Kommando-Ausgabe, keinen Chat-, Notiz- oder Prompt-Text,
-  keine Werkzeug-Argumente und keine Fehlermeldung einer KI- oder
-  SSH-Verbindung. Dort stehen nur noch inhaltsfreie Angaben — IDs,
-  Entscheidung, gegriffene Regel, Längen, Exit-Code, Fehlercodes. Das gilt
-  unabhängig davon, ob ein Passwort in einer Form geschrieben ist, die die
-  automatische Unterdrückung erkennt. Wer die Inhalte zur Fehlersuche
-  braucht, startet die App mit `RUST_LOG=debug`; dort laufen sie weiter
-  durch die Unterdrückung. Einzige Ausnahme bleibt die Antwort eines
-  KI-Anbieters auf einen Fehler — sie wird gebraucht, um eine
-  Fehlkonfiguration zu erkennen, und steht unterdrückt und auf 512 Zeichen
-  gekürzt im Log.
-- Passwörter, die als Argument eines Kommandozeilenprogramms übergeben
-  werden, werden jetzt geschwärzt, bevor ein Kommando oder seine Ausgabe in
-  den KI-Kontext, ins Protokoll, in den Chat oder zu einem MCP-Client geht:
-  `mysql`/`mariadb`/`mysqldump`/`mysqladmin` mit angehängtem `-p`, `sshpass -p`,
-  `curl -u benutzer:passwort`, `htpasswd -b`, `redis-cli -a`,
-  `smbclient -U benutzer%passwort` sowie `openssl -pass pass:…` und
-  `openssl -k`. Programm, Schalter und Benutzername bleiben lesbar — nur der
-  Wert verschwindet.
-- Zusätzlich erkannt: Twilio-API-Schlüssel, SendGrid-Schlüssel, die
-  Schlüssel in Azure-Verbindungszeichenketten (`AccountKey=`,
-  `SharedAccessKey=`), Argon2- und phpass-Passwort-Hashes sowie JSON-Web-Token
-  ohne `Bearer`-Präfix.
-- Die Abfrage bei einem unbekannten oder geänderten Host-Schlüssel lässt sich
-  jetzt vollständig mit der Tastatur bedienen: Beim Öffnen liegt der Fokus
-  auf der ablehnenden Schaltfläche, Tab verlässt den Dialog nicht mehr, und
-  Escape lehnt die Verbindung ab (nie „vertrauen“). Eine aus einem vorherigen
-  Dialog gehaltene Eingabetaste entscheidet nichts mehr automatisch.
-  Screenreader sagen den Dialog jetzt als modal an.
+- No export ever writes a password, a passphrase or key contents — only, for
+  the matching login method, the path to a key file. A server whose key is in
+  the keychain does not silently lose any information: the comment above its
+  entry says that the key is missing and why.
+- The export rejects your own `~/.ssh/config` as a target — even if it is
+  explicitly chosen in the save dialog and an overwrite is confirmed. That file
+  is never touched.
+- The local pseudo-server never appears in the exported file.
+- The import by itself opens only `ssh_config` files. A key file is only read
+  if you explicitly ask for it, only when confirming, and only the files that
+  the preview named beforehand.
+- No content from a file that was read reaches the screen: an included file
+  that is not an `ssh_config` is reported with its path and skipped; for a line
+  that was not imported, only the name of the directive with its line number
+  appears, never its value.
+- An imported file cannot set any security setting of a profile — escalation
+  based on server content and the AI check always stay at the product
+  defaults.
+- Excessively large, deeply nested or self-including configurations lead to an
+  understandable message instead of a hanging or crashing program.
+- If you turn off the elevated file browser mode during a running action (e.g.
+  recursive delete or changing permissions), that action now aborts
+  immediately.
+- The 256 KB limit of “Copy file content” in the file browser now also holds
+  if the file grows between the size check and reading, or if its size cannot
+  be determined.
+- The TLS library for connections to AI providers (`rustls`) is updated to
+  0.23.45, fixing RUSTSEC-2026-0285 (TLS 1.3 handshake messages were accepted
+  across encryption levels).
+- If the optional AI second opinion raises the data risk to red afterwards —
+  that is, only after a suggestion was already announced as “runs
+  automatically” —, the action no longer runs automatically but requires a
+  click like any other confirmation.
+- At the default level, the log file no longer contains any content: no
+  command, no command output, no chat, note or prompt text, no tool arguments
+  and no error message from an AI or SSH connection. Only content-free details
+  remain — IDs, decision, rule that applied, lengths, exit code, error codes.
+  This holds regardless of whether a password is written in a form that the
+  automatic suppression recognizes. If you need the contents for
+  troubleshooting, start the app with `RUST_LOG=debug`; there, they still pass
+  through the suppression. The only exception remains an AI provider's response
+  to an error — it is needed to detect a misconfiguration, and appears in the
+  log suppressed and truncated to 512 characters.
+- Passwords passed as an argument to a command-line program are now redacted
+  before a command or its output goes into the AI context, the log, the chat or
+  to an MCP client: `mysql`/`mariadb`/`mysqldump`/`mysqladmin` with an attached
+  `-p`, `sshpass -p`, `curl -u user:password`, `htpasswd -b`, `redis-cli -a`,
+  `smbclient -U user%password`, and `openssl -pass pass:…` and `openssl -k`.
+  Program, switch and user name remain readable — only the value disappears.
+- Additionally detected: Twilio API keys, SendGrid keys, the keys in Azure
+  connection strings (`AccountKey=`, `SharedAccessKey=`), Argon2 and phpass
+  password hashes, and JSON Web Tokens without a `Bearer` prefix.
+- The prompt for an unknown or changed host key can now be operated entirely
+  with the keyboard: on opening, focus is on the reject button, Tab no longer
+  leaves the dialog, and Escape rejects the connection (never “trust”). An
+  Enter key held down from a previous dialog no longer decides anything
+  automatically. Screen readers now announce the dialog as modal.
 
 ## [0.5.1] — 2026-09-25
 
