@@ -91,8 +91,6 @@ fn content_type_for(content: &MessageContent) -> &'static str {
         MessageContent::ActionRejected { .. } => "action_rejected",
         // Issue #162, Migration `0020_...sql`.
         MessageContent::WebActivity(_) => "web_activity",
-        // Issue #469, Migration `0021_...sql`.
-        MessageContent::Attachments(_) => "attachments",
         // Issue #504, Migration `0022_...sql`.
         MessageContent::Extension(_) => "extension",
         // Issue #505: sealed content exists only in a send copy and is
@@ -645,45 +643,6 @@ mod tests {
         assert_eq!(activity.content, None);
     }
 
-    fn sample_attachments() -> MessageContent {
-        use ssh_manager_core::ai::{AttachmentKind, ChatAttachment};
-        MessageContent::Attachments(vec![
-            ChatAttachment {
-                name: "notes.txt".to_string(),
-                media_type: "text/plain".to_string(),
-                kind: AttachmentKind::Text,
-                data: "hello".as_bytes().to_vec(),
-                byte_len: 5,
-            },
-            ChatAttachment {
-                name: "pic.png".to_string(),
-                media_type: "image/png".to_string(),
-                kind: AttachmentKind::Image,
-                data: vec![0, 1, 2, 255],
-                byte_len: 4,
-            },
-        ])
-    }
-
-    /// Issue #469: Anhänge überleben Speichern und Laden (Resume).
-    #[tokio::test]
-    async fn test_attachments_message_round_trips_through_store() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        let messages = vec![
-            text_message(Role::User, "see attached"),
-            ChatMessage {
-                role: Role::User,
-                content: sample_attachments(),
-            },
-        ];
-        for m in &messages {
-            chat_store.append_message(session_id, m).await.unwrap();
-        }
-        assert_eq!(chat_store.load_session(session_id).await.unwrap(), messages);
-    }
-
     /// Issue #469: eine vor dieser Änderung gespeicherte Sitzung (nur die
     /// alten JSON-Formen, keine Anhänge) lädt unverändert.
     #[tokio::test]
@@ -720,37 +679,6 @@ mod tests {
         let loaded = chat_store.load_session(session_id).await.unwrap();
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0], text_message(Role::User, "old question"));
-    }
-
-    /// Issue #469: Löschen der Sitzung entfernt auch die Anhänge.
-    #[tokio::test]
-    async fn test_delete_session_removes_its_attachments() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        chat_store
-            .append_message(
-                session_id,
-                &ChatMessage {
-                    role: Role::User,
-                    content: sample_attachments(),
-                },
-            )
-            .await
-            .unwrap();
-        let count = |pool: sqlx::SqlitePool| async move {
-            let n: i64 = sqlx::query(
-                "SELECT COUNT(*) AS n FROM chat_messages WHERE content_type = 'attachments'",
-            )
-            .fetch_one(&pool)
-            .await
-            .unwrap()
-            .get("n");
-            n
-        };
-        assert_eq!(count(profile_store.pool.clone()).await, 1);
-        chat_store.delete_session(session_id).await.unwrap();
-        assert_eq!(count(profile_store.pool.clone()).await, 0);
     }
 
     /// Spec 0034, Abschnitt 4, letzter Punkt: "`sequence` läuft weiter
@@ -1050,6 +978,7 @@ mod tests {
     // --- Issue #504: extension parts and removal callbacks ------------------
 
     const FNV_0021: u64 = 0xa4055fd604df3520;
+    const FNV_0022: u64 = 0xdb144d71f71e935d;
 
     fn sample_extension_part() -> MessageContent {
         use ssh_manager_core::ai::{ExtensionMedia, ExtensionPart};
@@ -1130,22 +1059,51 @@ mod tests {
         assert_eq!(ctype, "extension");
     }
 
-    /// A session stored before this change (all old JSON forms including
-    /// `attachments`) loads unchanged.
-    #[tokio::test]
-    async fn test_session_stored_before_extension_parts_loads_unchanged() {
-        let (profile_store, chat_store) = in_memory_chat_session_store().await;
-        let server_id = create_test_server(&profile_store).await;
-        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
-        let attachments = serde_json::to_string(&sample_attachments()).unwrap();
+    /// Setup for the 0023 tests: a file database migrated only up to 0022
+    /// (the state of a development database that applied 0021/0022), holding
+    /// a text row, an `attachments` row and an `extension` row.
+    async fn database_at_0022(path: &std::path::Path, session_id: Uuid) {
+        use sqlx::migrate::Migrator;
+        use sqlx::ConnectOptions as _;
+        let options = SqliteConnectOptions::new()
+            .filename(path)
+            .create_if_missing(true)
+            .foreign_keys(false);
+        let mut conn = options.connect().await.unwrap();
+        let old = Migrator {
+            migrations: std::borrow::Cow::Owned(
+                sqlx::migrate!()
+                    .iter()
+                    .filter(|m| m.version <= 22)
+                    .cloned()
+                    .collect(),
+            ),
+            ..Migrator::DEFAULT
+        };
+        old.run(&mut conn).await.unwrap();
+        let server_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO servers (id, name, host, port, username, auth_method, notes, \
+             post_ingest_policy, ai_injection_check_enabled, created_at, updated_at) \
+             VALUES (?, 'n', 'h', 22, 'u', '\"Agent\"', '', 'Strict', 1, '2026-01-01', '2026-01-01')",
+        )
+        .bind(&server_id)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO chat_sessions (id, server_id, started_at) VALUES (?, ?, '2026-01-01')",
+        )
+        .bind(session_id.to_string())
+        .bind(&server_id)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+        let ext = serde_json::to_string(&sample_extension_part()).unwrap();
         let rows = [
             ("user", "text", r#"{"Text":"old question"}"#.to_string()),
-            (
-                "action_result",
-                "action_rejected",
-                r#"{"ActionRejected":{"command":"ls","reason":"User"}}"#.to_string(),
-            ),
-            ("user", "attachments", attachments),
+            ("user", "attachments", r#"{"Attachments":[]}"#.to_string()),
+            ("user", "extension", ext),
         ];
         for (i, (role, ctype, json)) in rows.iter().enumerate() {
             sqlx::query(
@@ -1159,37 +1117,83 @@ mod tests {
             .bind(json)
             .bind(i as i64)
             .bind(Utc::now().to_rfc3339())
-            .execute(&profile_store.pool)
+            .execute(&mut conn)
             .await
             .unwrap();
         }
-        let loaded = chat_store.load_session(session_id).await.unwrap();
-        assert_eq!(loaded.len(), 3);
-        assert_eq!(loaded[0], text_message(Role::User, "old question"));
-        assert_eq!(loaded[2].content, sample_attachments());
     }
 
-    /// Migration 0021 must stay byte-identical (sqlx checks checksums of
-    /// applied migrations); 0022 is the one that allows `extension`.
+    /// A database that applied 0021 and holds an `attachments` row migrates
+    /// through 0023 and opens; the row is gone, the other messages load, and
+    /// the constraint no longer allows the type.
+    #[tokio::test]
+    async fn test_migration_0023_deletes_attachments_rows_and_keeps_the_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dev.db");
+        let session_id = Uuid::new_v4();
+        database_at_0022(&path, session_id).await;
+
+        let store = SqliteProfileStore::connect_plaintext(&path).await.unwrap();
+        let chat_store = store.chat_session_store();
+        let loaded = chat_store.load_session(session_id).await.unwrap();
+        assert_eq!(
+            loaded,
+            vec![
+                text_message(Role::User, "old question"),
+                ChatMessage {
+                    role: Role::User,
+                    content: sample_extension_part(),
+                },
+            ]
+        );
+        let attachments: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM chat_messages WHERE content_type = 'attachments'",
+        )
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert_eq!(attachments, 0);
+        let insert = sqlx::query(
+            "INSERT INTO chat_messages (id, session_id, role, content_type, content, sequence, created_at) \
+             VALUES (?, ?, 'user', 'attachments', '{}', 9, '2026-01-01')",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(session_id.to_string())
+        .execute(&store.pool)
+        .await;
+        assert!(insert.is_err(), "constraint must reject 'attachments'");
+    }
+
+    /// Migrations 0021 and 0022 must stay byte-identical (sqlx checks
+    /// checksums of applied migrations); 0023 is the one that drops
+    /// `attachments`. A fresh database runs 0001–0023.
     #[test]
-    fn test_migration_0021_is_unchanged_and_0022_allows_extension() {
+    fn test_migrations_0021_0022_are_unchanged_and_0023_drops_attachments() {
         fn fnv1a(bytes: &[u8]) -> u64 {
             bytes.iter().fold(0xcbf29ce484222325, |h, b| {
                 (h ^ u64::from(*b)).wrapping_mul(0x100000001b3)
             })
         }
-        let m0021 = include_bytes!("../migrations/0021_chat_messages_attachments.sql");
         // Windows checkouts may convert line endings; the hash is over LF.
-        let lf: Vec<u8> = m0021.iter().copied().filter(|b| *b != b'\r').collect();
-        assert_eq!(fnv1a(&lf), FNV_0021, "migration 0021 must not change");
-        let m0022 = include_str!("../migrations/0022_chat_messages_extension.sql");
-        assert!(m0022.contains("'extension'") && m0022.contains("'attachments'"));
-        let applied: Vec<i64> = sqlx::migrate!()
-            .iter()
-            .filter(|m| m.version >= 21)
-            .map(|m| m.version)
-            .collect();
-        assert_eq!(applied, vec![21, 22]);
+        fn lf(bytes: &[u8]) -> Vec<u8> {
+            bytes.iter().copied().filter(|b| *b != b'\r').collect()
+        }
+        let m0021 = include_bytes!("../migrations/0021_chat_messages_attachments.sql");
+        assert_eq!(
+            fnv1a(&lf(m0021)),
+            FNV_0021,
+            "migration 0021 must not change"
+        );
+        let m0022 = include_bytes!("../migrations/0022_chat_messages_extension.sql");
+        assert_eq!(
+            fnv1a(&lf(m0022)),
+            FNV_0022,
+            "migration 0022 must not change"
+        );
+        let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
+        assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
+        let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
+        assert_eq!(versions, (1..=23).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.

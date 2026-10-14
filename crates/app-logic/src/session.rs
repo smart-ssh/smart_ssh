@@ -1367,8 +1367,6 @@ pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
         MessageContent::ActionRejected { .. } => false,
         // Issue #162: Inhalt aus dem offenen Web (Spec 0039).
         MessageContent::WebActivity(_) => true,
-        // Issue #469 (Spec 0039 §5): Anhänge sind lokale Fremdinhalte.
-        MessageContent::Attachments(_) => true,
         // Issue #504 (ADR 0141, decision 4): every extension part, also
         // after resume and whatever its source.
         MessageContent::Extension(_) => true,

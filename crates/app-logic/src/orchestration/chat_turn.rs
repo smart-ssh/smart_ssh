@@ -43,9 +43,6 @@ mod tests_rounds;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
-mod tests_attachments;
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_extension_content;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
@@ -586,12 +583,6 @@ pub(crate) fn reapply_redaction_for_send(
                 MessageContent::WebActivity(activity) => {
                     MessageContent::WebActivity(redact_web_activity(activity, redactor))
                 }
-                // Issue #469: Textanhänge werden bei JEDEM Versand erneut
-                // redigiert (auch nach Resume); gefencet wird erst beim
-                // Request-Aufbau (`ChatAttachment::to_model_text`).
-                MessageContent::Attachments(items) => {
-                    MessageContent::Attachments(redact_attachments(items, redactor))
-                }
                 // Issue #504: the label goes into the fence, so it is
                 // redacted again on every send. The core never stores
                 // content here; the placeholder is built by the provider.
@@ -621,25 +612,6 @@ pub(crate) fn reapply_redaction_and_seal_for_send(
         session_id,
         redactor,
     )
-}
-
-/// Issue #469: redigiert den Inhalt von Textanhängen (roh, vor dem Fencing);
-/// Bild/PDF-Bytes werden nie als Anweisung interpretiert und bleiben
-/// unverändert. Der Dateiname wird ebenfalls redigiert, er geht in den Fence.
-pub(crate) fn redact_attachments(
-    items: Vec<ssh_manager_core::ai::ChatAttachment>,
-    redactor: &dyn OutputRedactor,
-) -> Vec<ssh_manager_core::ai::ChatAttachment> {
-    items
-        .into_iter()
-        .map(|mut a| {
-            a.name = redactor.redact_text(&a.name);
-            if a.kind == ssh_manager_core::ai::AttachmentKind::Text {
-                a.data = redactor.redact_text(&a.text()).into_bytes();
-            }
-            a
-        })
-        .collect()
 }
 
 /// Issue #162: redigiert jedes Textfeld einer Web-Recherche — Anfrage und

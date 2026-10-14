@@ -7,8 +7,7 @@
 
 use serde_json::{json, Value};
 use ssh_manager_core::ai::{
-    AiError, AttachmentKind, ChatMessage, MediaClass, MessageContent, Role, SealedPart,
-    SessionContext,
+    AiError, ChatMessage, MediaClass, MessageContent, Role, SealedPart, SessionContext,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,18 +70,6 @@ pub(crate) fn message_parts(
                             base64,
                         });
                     }
-                }
-            }
-        }
-        MessageContent::Attachments(attachments) => {
-            for a in attachments {
-                push_text(&mut parts, a.to_model_text(None));
-                if a.kind != AttachmentKind::Text {
-                    parts.push(ContentPart::Binary {
-                        mime: a.media_type.clone(),
-                        filename: a.name.clone(),
-                        base64: a.data_base64(),
-                    });
                 }
             }
         }
@@ -211,20 +198,12 @@ pub(crate) fn check_attachments(
         }
     };
     for message in &context.history {
-        match &message.content {
-            MessageContent::Sealed(sealed) => {
-                for part in sealed.parts() {
-                    if let SealedPart::Binary { mime, .. } = part {
-                        check(mime)?;
-                    }
+        if let MessageContent::Sealed(sealed) = &message.content {
+            for part in sealed.parts() {
+                if let SealedPart::Binary { mime, .. } = part {
+                    check(mime)?;
                 }
             }
-            MessageContent::Attachments(items) => {
-                for a in items.iter().filter(|a| a.kind != AttachmentKind::Text) {
-                    check(&a.media_type)?;
-                }
-            }
-            _ => {}
         }
     }
     Ok(())
@@ -323,75 +302,39 @@ pub(crate) fn openai_compatible_support(base_url: &str, model: &str) -> InputSup
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ssh_manager_core::ai::ChatAttachment;
-
-    fn att(kind: AttachmentKind, name: &str, media: &str, data: &[u8]) -> ChatAttachment {
-        ChatAttachment {
-            name: name.into(),
-            media_type: media.into(),
-            kind,
-            data: data.to_vec(),
-            byte_len: data.len() as u64,
-        }
-    }
-
     fn text_of(_: &MessageContent) -> String {
         "plain".into()
     }
 
-    fn ctx(items: Vec<ChatAttachment>) -> SessionContext {
-        SessionContext {
-            system_context: String::new(),
-            history: vec![ChatMessage {
-                role: Role::User,
-                content: MessageContent::Attachments(items),
-            }],
-            available_actions: vec![],
-            max_tokens_hint: None,
-        }
-    }
-
     #[test]
     fn test_parts_text_only_stays_one_text_part() {
-        let parts = message_parts(
-            &MessageContent::Attachments(vec![
-                att(AttachmentKind::Text, "a.txt", "text/plain", b"one"),
-                att(AttachmentKind::Text, "b.txt", "text/plain", b"two"),
-            ]),
-            text_of,
-        );
+        let ctx = sealed_ctx(vec![
+            ssh_manager_core::ai::ResolvedBlock::Text { text: "one".into() },
+            ssh_manager_core::ai::ResolvedBlock::Text { text: "two".into() },
+        ]);
+        let parts = message_parts(&ctx.history[0].content, text_of);
         assert_eq!(parts.len(), 1);
     }
 
     #[test]
     fn test_parts_image_and_pdf_follow_their_fenced_text() {
-        let parts = message_parts(
-            &MessageContent::Attachments(vec![
-                att(AttachmentKind::Image, "p.png", "image/png", &[1, 2, 3]),
-                att(AttachmentKind::Pdf, "d.pdf", "application/pdf", &[4, 5]),
-            ]),
-            text_of,
-        );
+        let ctx = sealed_ctx(vec![
+            binary_block("image/png", "p.png", PNG),
+            binary_block("application/pdf", "d.pdf", PDF),
+        ]);
+        let parts = message_parts(&ctx.history[0].content, text_of);
         assert!(
-            matches!(&parts[0], ContentPart::Text(t) if t.contains("<local_file>") && t.contains("p.png"))
+            matches!(&parts[0], ContentPart::Text(t) if t.contains("<local_file") && t.contains("p.png"))
         );
-        assert_eq!(
-            parts[1],
-            ContentPart::Binary {
-                mime: "image/png".into(),
-                filename: "p.png".into(),
-                base64: "AQID".into()
-            }
-        );
+        assert!(matches!(
+            &parts[1],
+            ContentPart::Binary { mime, filename, .. } if mime == "image/png" && filename == "p.png"
+        ));
         assert!(matches!(&parts[2], ContentPart::Text(t) if t.contains("d.pdf")));
-        assert_eq!(
-            parts[3],
-            ContentPart::Binary {
-                mime: "application/pdf".into(),
-                filename: "d.pdf".into(),
-                base64: "BAU=".into()
-            }
-        );
+        assert!(matches!(
+            &parts[3],
+            ContentPart::Binary { mime, filename, .. } if mime == "application/pdf" && filename == "d.pdf"
+        ));
     }
 
     #[test]
@@ -433,34 +376,15 @@ mod tests {
     }
 
     #[test]
-    fn test_check_rejects_unsupported_kinds_but_never_text() {
+    fn test_check_never_rejects_sealed_text() {
         let none = InputSupport {
             images: false,
             pdf: false,
         };
-        let image = ctx(vec![att(AttachmentKind::Image, "p.png", "image/png", &[1])]);
-        let pdf = ctx(vec![att(
-            AttachmentKind::Pdf,
-            "d.pdf",
-            "application/pdf",
-            &[1],
-        )]);
-        let text = ctx(vec![att(AttachmentKind::Text, "a.txt", "text/plain", b"x")]);
-        assert_eq!(
-            check_attachments(&image, none),
-            Err(AiError::InputUnsupported(MediaClass::Image))
-        );
-        assert_eq!(
-            check_attachments(&pdf, none),
-            Err(AiError::InputUnsupported(MediaClass::Pdf))
-        );
+        let text = sealed_ctx(vec![ssh_manager_core::ai::ResolvedBlock::Text {
+            text: "x".into(),
+        }]);
         assert_eq!(check_attachments(&text, none), Ok(()));
-        let all = InputSupport {
-            images: true,
-            pdf: true,
-        };
-        assert_eq!(check_attachments(&image, all), Ok(()));
-        assert_eq!(check_attachments(&pdf, all), Ok(()));
     }
 
     const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
@@ -501,33 +425,6 @@ mod tests {
             mime: mime.into(),
             bytes: bytes.to_vec(),
             filename: name.into(),
-        }
-    }
-
-    fn binaries(ctx: &SessionContext) -> Vec<ContentPart> {
-        message_parts(&ctx.history[0].content, text_of)
-            .into_iter()
-            .filter(|p| matches!(p, ContentPart::Binary { .. }))
-            .collect()
-    }
-
-    #[test]
-    fn test_sealed_and_legacy_attachments_give_identical_binary_blocks() {
-        let sealed = sealed_ctx(vec![
-            binary_block("image/png", "p.png", PNG),
-            binary_block("application/pdf", "d.pdf", PDF),
-        ]);
-        let legacy = ctx(vec![
-            att(AttachmentKind::Image, "p.png", "image/png", PNG),
-            att(AttachmentKind::Pdf, "d.pdf", "application/pdf", PDF),
-        ]);
-        let (a, b) = (binaries(&sealed), binaries(&legacy));
-        assert_eq!(a.len(), 2);
-        assert_eq!(a, b);
-        for (x, y) in a.iter().zip(&b) {
-            assert_eq!(anthropic_block(x), anthropic_block(y));
-            assert_eq!(chat_completions_block(x), chat_completions_block(y));
-            assert_eq!(responses_block(x), responses_block(y));
         }
     }
 
@@ -665,7 +562,6 @@ mod tests {
 #[cfg(test)]
 pub(crate) mod test_fixtures {
     use super::*;
-    use ssh_manager_core::ai::ChatAttachment;
 
     /// Issue #504: a user message followed by an unsealed extension part whose
     /// opaque `kind`/`id` and extension name must never reach the provider.
@@ -711,31 +607,35 @@ pub(crate) mod test_fixtures {
         assert!(!json.contains("\"document\"") && !json.contains("input_file"));
     }
 
-    /// One user message: a text attachment carrying `secret_text`, a PNG and
-    /// a PDF, followed by a plain user message.
-    pub(crate) fn context_with_image_and_pdf(text_body: &str) -> SessionContext {
-        let mk = |kind, name: &str, media: &str, data: &[u8]| ChatAttachment {
-            name: name.into(),
-            media_type: media.into(),
-            kind,
-            data: data.to_vec(),
-            byte_len: data.len() as u64,
+    /// A sealed extension part with the given blocks followed by a plain
+    /// user message.
+    pub(crate) fn context_with_blocks(
+        blocks: Vec<ssh_manager_core::ai::ResolvedBlock>,
+    ) -> SessionContext {
+        use ssh_manager_core::ai::{
+            DefaultOutputRedactor, ExtensionMedia, ExtensionPart, ExtensionSource, SealedContent,
         };
+        let part = ExtensionPart {
+            extension: "files".into(),
+            kind: "doc".into(),
+            id: "p1".into(),
+            label: "n.txt".into(),
+            media: ExtensionMedia::Pdf,
+            estimated_tokens: 1,
+        };
+        let sealed = SealedContent::seal(
+            &part,
+            ExtensionSource::LocalFile,
+            Some(blocks),
+            &DefaultOutputRedactor::new(),
+        )
+        .unwrap();
         SessionContext {
             system_context: "sys".into(),
             history: vec![
                 ChatMessage {
                     role: Role::User,
-                    content: MessageContent::Attachments(vec![
-                        mk(
-                            AttachmentKind::Text,
-                            "n.txt",
-                            "text/plain",
-                            text_body.as_bytes(),
-                        ),
-                        mk(AttachmentKind::Image, "p.png", "image/png", &[1, 2, 3]),
-                        mk(AttachmentKind::Pdf, "d.pdf", "application/pdf", &[4, 5]),
-                    ]),
+                    content: MessageContent::Sealed(sealed),
                 },
                 ChatMessage {
                     role: Role::User,
@@ -745,6 +645,34 @@ pub(crate) mod test_fixtures {
             available_actions: vec![],
             max_tokens_hint: None,
         }
+    }
+
+    pub(crate) fn png_block() -> ssh_manager_core::ai::ResolvedBlock {
+        ssh_manager_core::ai::ResolvedBlock::Binary {
+            mime: "image/png".into(),
+            bytes: vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A],
+            filename: "p.png".into(),
+        }
+    }
+
+    pub(crate) fn pdf_block() -> ssh_manager_core::ai::ResolvedBlock {
+        ssh_manager_core::ai::ResolvedBlock::Binary {
+            mime: "application/pdf".into(),
+            bytes: b"%PDF-1".to_vec(),
+            filename: "d.pdf".into(),
+        }
+    }
+
+    /// One sealed part: a text block carrying `text_body`, a PNG and a PDF,
+    /// followed by a plain user message.
+    pub(crate) fn context_with_image_and_pdf(text_body: &str) -> SessionContext {
+        context_with_blocks(vec![
+            ssh_manager_core::ai::ResolvedBlock::Text {
+                text: text_body.into(),
+            },
+            png_block(),
+            pdf_block(),
+        ])
     }
 
     /// `send()` against a closed local port: an attachment rejection arrives

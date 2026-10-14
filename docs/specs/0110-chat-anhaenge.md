@@ -1,101 +1,43 @@
-# Spec 0110 — Dateianhänge im KI-Chat
+# Spec 0110 — Erweiterungsinhalte in Chat-Nachrichten
 
-Status: Kern umgesetzt (Nachrichtenmodell, Grenzen, Fencing, Redaction,
-Speicherung, Auflöser-Erweiterungspunkt) und der Erweiterungspunkt im
-Eingabefeld (Anhang-Chips, Ablegen). Die Auswahl von Dateien liefert eine
-Edition (eigene Issues); die Community Edition registriert weder Auflöser
-noch Eingabefeld-Aktion und verhält sich unverändert. Das Anhangsmodell im Kern (Nachrichtenvariante,
-Grenzen, Fencing, Redaction, Speicherung, Auflöser- und Eingabefeld-
-Erweiterungspunkt) ist generische Infrastruktur, die jede Edition nutzen
-kann; der Kern wählt selbst keine Dateien aus.
-Zweck: Eine Nutzer-Nachricht kann Dateien (Text, Bild, PDF) mitführen. Sie
-werden mit der Sitzung gespeichert und sicher an die KI gesendet.
+Status: umgesetzt (Verweis, Grenzen, Versiegeln, Speicherung) und der
+Erweiterungspunkt im Eingabefeld (Chips, Ablegen). Der Kern hat kein eigenes
+Anhangsmodell: Inhalt an Chat-Nachrichten gibt es nur über Erweiterungen
+(Spec 0038, Abschnitt 2a; ADR 0141). Der Kern wählt selbst keine Dateien aus.
+Die Community Edition registriert keine Erweiterung und keine
+Eingabefeld-Aktion und verhält sich unverändert.
+Zweck: Eine Nutzer-Nachricht kann Inhalt (Text, Bild, PDF) einer Erweiterung
+mitführen. Er wird sicher an die KI gesendet; im Chatverlauf steht nur ein
+Verweis.
 Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037
-(Berechtigungen), Spec 0039 (nicht vertrauenswürdige Inhalte).
+(Berechtigungen), Spec 0038 (Erweiterungen), Spec 0039 (nicht
+vertrauenswürdige Inhalte).
 
-## 1. Anhänge
-
-- Ein Anhang hat Name, Medientyp, Art (Text, Bild, PDF), Inhalt und Größe.
-  Text ist UTF-8; ein „Text"-Anhang mit ungültigem UTF-8 wird abgelehnt.
-- Anhänge gehören zu einer Nutzer-Nachricht und stehen im Verlauf direkt
-  nach deren Text.
-- Der Kern wählt selbst keine Dateien aus. Eine Edition liefert sie über
-  einen **Auflöser**, der eine undurchsichtige Anhang-ID einer Sitzung in
-  einen Anhang übersetzt. Pfade aus dem Webview werden nie angenommen.
-- Die Community Edition registriert keinen Auflöser.
-
-## 2. Grenzen
-
-- Höchstens 5 Anhänge je Nachricht, höchstens 1 MiB je Anhang (gemessen an
-  den tatsächlichen Bytes, nicht an einer mitgelieferten Größenangabe).
-- Die Grenzen gelten im Kern, unabhängig davon, woher die Anhänge stammen.
-  Eine Verletzung schlägt geschlossen fehl: Die Nachricht wird nicht
-  gesendet, es erfolgt kein Aufruf an die KI, der Nutzer erhält einen
-  Fehler mit stabilem Code.
-
-## 3. Senden einer Nachricht mit Anhängen
-
-- `send_chat_message` nimmt optional eine Liste von Anhang-IDs.
-  Ohne IDs verhält sich das Senden exakt wie ohne dieses Feature.
-- Mit IDs und ohne registrierten Auflöser: Fehler, die Nachricht wird nicht
-  gesendet. Eine unbekannte ID führt ebenfalls zu einem Fehler.
-- Läuft gerade ein KI-Turn der Sitzung, wird eine Nachricht mit Anhängen
-  abgelehnt (nur Text wird eingereiht); Anhänge gehen nie still verloren.
-
-## 4. Nicht vertrauenswürdig, redigiert, gefencet
-
-- Anhänge zählen als nicht vertrauenswürdige Quelle (Spec 0039, Abschnitt
-  1, „lokale Datei"). Nach einer Nachricht mit Anhang gilt die Eskalation
-  aus Spec 0039, Abschnitt 5 wie nach Remote-Dateiinhalt, auch nach dem
-  Fortsetzen einer gespeicherten Sitzung.
-- Textanhänge werden redigiert und danach als `local_file` gefencet, mit dem
-  Dateinamen als Quelle; Fence-Marker im Inhalt oder Namen werden
-  neutralisiert. Das geschieht bei jedem Senden erneut, auch nach dem
-  Fortsetzen.
-- Bilder und PDFs werden nie als Anweisung interpretiert. Sie gehen
-  unverändert (nicht redigiert) als eigene Blöcke nach Medientyp (Bild bzw.
-  Dokument) des Anbieters an die KI (Spec 0006, Abschnitt 8). Direkt davor steht ein
-  gefencter `local_file`-Text mit dem Dateinamen, der sie als nicht
-  vertrauenswürdige lokale Datei kennzeichnet.
-- Kann das gewählte Modell Bilder bzw. PDFs nicht lesen, wird die Nachricht
-  mit einem Fehler abgelehnt („Dieses Modell kann das angehängte Bild oder
-  PDF nicht lesen"), bevor eine Anfrage an den Anbieter geht. Bilder und
-  PDFs werden nie stillschweigend weggelassen; Textanhänge funktionieren
-  immer. Der Fehler gilt, solange ein solcher Anhang im Verlauf steht;
-  Abhilfe ist ein anderes Modell oder ein neuer Chat.
-
-## 5. Speicherung
-
-- Anhänge werden mit der Nachricht gespeichert (redigiert, wie Spec 0034,
-  Abschnitt 3) und beim Fortsetzen geladen. Sitzungen ohne Anhänge laden
-  unverändert.
-- Löscht man eine Sitzung (oder den Server), verschwinden ihre Anhänge mit.
-- Nach dem Fortsetzen zeigt der Verlauf Name und Art (Text, Bild, PDF) der
-  Anhänge als Zeile; Inhalte erscheinen dort nie.
-
-### Erweiterungsinhalte (Verweis statt Inhalt)
+## 1. Erweiterungsinhalt (Verweis statt Inhalt)
 
 Eine Edition kann eigenen Inhalt an eine Nutzer-Nachricht hängen, ohne dass
-der Kern dessen Datenmodell kennt (Spec 0038, Abschnitt 2a).
+der Kern dessen Datenmodell kennt.
 
 - Im Chatverlauf steht nur ein **Verweis**: Name der Erweiterung (vom Kern
   gesetzt), eine für den Kern undurchsichtige Art und ID, ein redigierter
   Anzeigename, die Medienklasse (Text, Bild, PDF) und die Token-Schätzung.
   Der Inhalt selbst liegt nie im Chatverlauf. Je Verweis gibt es einen
   eigenen Eintrag direkt nach dem Text der Nachricht.
-- Nach dem Fortsetzen zeigt der Verlauf Anzeigename und Art als Zeile, wie
-  bei Anhängen, nie Inhalt, und ohne die Erweiterung zu fragen.
+- Der Kern wählt keine Dateien aus. Eine Erweiterung übersetzt eine
+  undurchsichtige ID einer Sitzung in Inhalt. Pfade aus dem Webview werden
+  nie angenommen.
 - Ein Verweis, dessen Inhalt nicht versiegelt zum Anbieter geht, erscheint
   dort nur als feste, als nicht vertrauenswürdig gekennzeichnete Zeile
-  „Inhalt nicht mehr verfügbar" mit dem redigierten Anzeigenamen; die
+  „Inhalt nicht mehr verfügbar“ mit dem redigierten Anzeigenamen; die
   Anfrageprotokolle zeigen nur Anzahlen.
 - Ein Verweis zählt als nicht vertrauenswürdiger Inhalt (Spec 0039,
-  Abschnitt 5), auch nach dem Fortsetzen.
-- Sitzungen ohne Verweise laden unverändert, auch Sitzungen mit Anhängen aus
-  früheren Entwicklungsständen.
+  Abschnitt 1 „lokale Datei“ und Abschnitt 5), auch nach dem Fortsetzen
+  einer gespeicherten Sitzung.
 
-#### Annehmen (Senden mit IDs)
+## 2. Senden einer Nachricht mit IDs
 
+- `send_chat_message` nimmt optional eine Liste von IDs. Ohne IDs verhält
+  sich das Senden exakt wie ohne dieses Feature.
 - Bei einer Nachricht mit IDs fragt der Kern die registrierten Erweiterungen
   der Reihe nach, bis eine die ID übersetzt. Eine unbekannte ID führt zum
   Fehler `ATTACHMENT_UNRESOLVED`; IDs ohne registrierte Erweiterung zum
@@ -104,86 +46,111 @@ der Kern dessen Datenmodell kennt (Spec 0038, Abschnitt 2a).
   Medienklasse ab, prüft Binärtypen, redigiert Text und Anzeigenamen und
   berechnet die Token-Schätzung. Erst dann übergibt er die geprüften Blöcke
   der Erweiterung zum Speichern. Scheitert das Speichern, wird nichts
-  gesendet. Läuft ein KI-Turn, wird die Nachricht mit IDs abgelehnt
-  (`ATTACHMENTS_WHILE_BUSY`) und nichts gespeichert.
-- Ohne IDs ist Senden und Verlauf unverändert.
+  gesendet.
+- Läuft gerade ein KI-Turn der Sitzung, wird eine Nachricht mit IDs
+  abgelehnt (`ATTACHMENTS_WHILE_BUSY`) und nichts gespeichert; nur Text wird
+  eingereiht. Inhalt geht nie still verloren.
 
-#### Allgemeine harte Grenzen für Erweiterungsinhalt
+## 3. Allgemeine harte Grenzen
 
 - Höchstens 5 Teile je Nachricht, höchstens 4 Blöcke je Teil, höchstens
   1 MiB je Block (tatsächliche Bytes), Text ist gültiges UTF-8, und
   höchstens 20 MiB Binärbytes je Anfrage über den ganzen Verlauf.
-- Geprüft wird beim Annehmen und bei jedem Senden. Ein Verstoß sendet nichts
-  und liefert einen stabilen Code: `ATTACHMENTS_TOO_MANY` (Teile oder
-  Blöcke), `ATTACHMENT_TOO_LARGE`, `ATTACHMENT_INVALID`,
+- Geprüft wird beim Annehmen und bei jedem Senden, unabhängig davon, woher
+  der Inhalt stammt. Ein Verstoß schlägt geschlossen fehl: Es wird nichts
+  gesendet, es erfolgt kein Aufruf an die KI, der Nutzer erhält einen
+  Fehler mit stabilem Code: `ATTACHMENTS_TOO_MANY` (Teile oder Blöcke),
+  `ATTACHMENT_TOO_LARGE`, `ATTACHMENT_INVALID`,
   `ATTACHMENTS_REQUEST_TOO_LARGE` (20 MiB je Anfrage).
 - Erlaubte Binärtypen: `image/png`, `image/jpeg`, `image/gif`, `image/webp`,
   `application/pdf`; die ersten Bytes müssen zum gemeldeten Typ passen.
   Alles andere wird vor jedem Anbieteraufruf abgelehnt. Binärbytes werden nie
   als Text gelesen, redigiert oder protokolliert.
 
-#### Versiegeln beim Senden
+## 4. Versiegeln beim Senden
 
 - Bei jedem Senden an einen Anbieter (Chat-Turn und Kompaktierung) löst der
   Kern jeden Verweis über seine Erweiterung auf und macht daraus einen
   versiegelten Inhalt: Text wird erneut redigiert (auch wenn die Erweiterung
   unredigierten Text liefert), als `local_file` mit dem Anzeigenamen als
   Quelle gefencet (Fence-Marker werden neutralisiert) und von einer festen
-  Sicherheitszeile gefolgt; Binärblöcke gehen als Bild- bzw. Dokumentblock,
-  davor eine gefencte Kennzeile. Text einer Erweiterung steht nie außerhalb
-  des Fence.
-- Liefert die Erweiterung „Inhalt existiert nicht mehr" oder ist sie nicht
-  registriert, geht die feste Zeile „Inhalt nicht mehr verfügbar" mit dem
+  Sicherheitszeile gefolgt; Binärblöcke gehen unverändert als Bild- bzw.
+  Dokumentblock des Anbieters (Spec 0006, Abschnitt 8), davor eine gefencte
+  Kennzeile mit dem Dateinamen. Text einer Erweiterung steht nie außerhalb
+  des Fence. Bilder und PDFs werden nie als Anweisung interpretiert.
+- Liefert die Erweiterung „Inhalt existiert nicht mehr“ oder ist sie nicht
+  registriert, geht die feste Zeile „Inhalt nicht mehr verfügbar“ mit dem
   Anzeigenamen. Liefert sie einen Fehler, wird nichts gesendet.
 - Versiegelter Inhalt wird nie gespeichert.
+- Kann das gewählte Modell Bilder bzw. PDFs nicht lesen, wird die Nachricht
+  mit einem Fehler abgelehnt („Dieses Modell kann das angehängte Bild oder
+  PDF nicht lesen“), bevor eine Anfrage an den Anbieter geht. Bilder und
+  PDFs werden nie stillschweigend weggelassen; Text funktioniert immer. Der
+  Fehler gilt, solange ein solcher Inhalt im Verlauf steht; Abhilfe ist ein
+  anderes Modell oder ein neuer Chat.
+
+## 5. Speicherung und Verlauf
+
+- Gespeichert wird nur der Verweis mit der Nachricht (wie Spec 0034,
+  Abschnitt 3) und beim Fortsetzen geladen. Sitzungen ohne Verweise laden
+  unverändert.
+- Löscht man eine Sitzung (oder den Server), verschwinden ihre Verweise mit;
+  die Erweiterung wird darüber informiert und räumt ihren Inhalt auf.
+- Nach dem Fortsetzen zeigt der Verlauf Anzeigename und Art (Text, Bild, PDF)
+  als Zeile, nie Inhalt, und ohne die Erweiterung zu fragen.
+- Ein früherer Entwicklungsstand speicherte Anhänge als eigene Nachrichtenart
+  im Chatverlauf. Diese Einträge wurden entfernt; alle übrigen Nachrichten
+  einer solchen Sitzung laden unverändert.
 
 ## 6. Kontextbegrenzung
 
-- Die Token-Schätzung zählt Textanhänge nach Länge, Bilder und PDFs mit
-  einem festen, konservativen Wert je Anhang. Dieselbe Schätzung gilt für
-  die Ratenbegrenzung (Spec 0051, Spec 0061) und die Kompaktierung.
-- Die Kompaktierung darf einen Anhang wie andere Inhalte durch eine
+- Die Token-Schätzung des Verweises (vom Kern beim Annehmen berechnet) und
+  der versiegelte Inhalt zählen für die Ratenbegrenzung (Spec 0051,
+  Spec 0061) und die Kompaktierung; Binärblöcke mit einem festen,
+  konservativen Wert.
+- Die Kompaktierung darf einen Verweis wie andere Inhalte durch eine
   Zusammenfassung ersetzen.
 
 ## 7. Berechtigung
 
 Die Funktion hat den Namen `chat_attachments` (Spec 0037, Abschnitt 2), ist
-nicht dienst-gebunden und in der Ausgangsberechtigung „Free" gesperrt.
+nicht dienst-gebunden und in der Ausgangsberechtigung „Free“ gesperrt.
 
 ## 8. Sicherheitszusagen
 
-- Ein Geheimnis in einem Textanhang erreicht den Anbieter nie im Klartext.
-- Ein Anhang kann seinen Fence nicht schließen.
-- Es gibt keinen Weg, einen Anhang an der Redaction oder am Fencing
-  vorbei zu senden.
+- Ein Geheimnis in Erweiterungsinhalt oder Anzeigename erreicht den Anbieter
+  nie im Klartext.
+- Erweiterungsinhalt kann seinen Fence nicht schließen.
+- Es gibt keinen Weg, Erweiterungsinhalt an der Redaction oder am Fencing
+  vorbei zu senden: Eine Erweiterung kann keinen versiegelten Inhalt selbst
+  bauen.
 
 ## 9. Akzeptanzfälle
 
-1. Textanhang mit bekanntem Geheimnismuster: das Muster fehlt in der
-   Anfrage an den Anbieter, auch wenn der Anhang unredigiert aus der
-   Speicherung kam.
-2. Sechs Anhänge oder einer über 1 MiB: Fehler, kein Anbieteraufruf.
-3. IDs ohne Auflöser: Fehler; ohne IDs: unverändert.
-4. Vor dieser Änderung gespeicherte Sitzung: lädt und setzt unverändert fort.
-5. Sitzung löschen entfernt die Anhänge aus der Datenbank.
-6. Nach einem Anhang wird ein von der KI vorgeschlagenes Kommando gemäß
+1. Geheimnis in Text und Anzeigename fehlt in der Anfrage, auch wenn die
+   Erweiterung unredigiert liefert und auch nach dem Fortsetzen; ein
+   Fence-Marker im Text oder Namen schließt den Fence nicht.
+2. Sechs Teile, fünf Blöcke, ein Block über 1 MiB, ein Binärblock, dessen
+   Bytes nicht zum Typ passen, ein Typ außerhalb der Liste, oder mehr als
+   20 MiB Binärbytes in einer Anfrage: Fehler mit stabilem Code, kein
+   Anbieteraufruf; die genauen Grenzen gehen durch.
+3. IDs ohne Erweiterung: Fehler; ohne IDs: unverändert.
+4. Fehlender Inhalt oder fehlende Erweiterung: feste Platzhalterzeile; Fehler
+   beim Auflösen: nichts wird gesendet.
+5. Vor dieser Änderung gespeicherte Sitzung: lädt und setzt unverändert fort;
+   eine Entwicklungsdatenbank mit alten Anhang-Einträgen öffnet, die Einträge
+   sind weg, die übrigen Nachrichten laden.
+6. Sitzung löschen entfernt die Verweise aus der Datenbank und informiert die
+   Erweiterung.
+7. Nach einem Verweis wird ein von der KI vorgeschlagenes Kommando gemäß
    Spec 0039, Abschnitt 5 eskaliert.
-7. Bild und PDF an Claude, OpenAI (Responses) und einen OpenAI-kompatiblen
+8. Bild und PDF an Claude, OpenAI (Responses) und einen OpenAI-kompatiblen
    Anbieter: die Anfrage enthält je einen Bild- und einen Dokumentblock im
    jeweiligen Anbieterformat.
-8. Bild an ein reines Textmodell (z. B. lokales Ollama-Modell): Fehler, kein
-   Anbieteraufruf; derselbe Chat mit nur einem Textanhang geht durch.
-10. Erweiterungsinhalt: Geheimnis in Text und Anzeigename fehlt in der
-    Anfrage, auch wenn die Erweiterung unredigiert liefert und auch nach dem
-    Fortsetzen; ein Fence-Marker im Text oder Namen schließt den Fence nicht.
-11. Sechs Teile, fünf Blöcke, ein Block über 1 MiB, ein Binärblock, dessen
-    Bytes nicht zum Typ passen, ein Typ außerhalb der Liste, oder mehr als
-    20 MiB Binärbytes in einer Anfrage: Fehler mit stabilem Code, kein
-    Anbieteraufruf; die genauen Grenzen gehen durch.
-12. Fehlender Inhalt oder fehlende Erweiterung: feste Platzhalterzeile; Fehler
-    beim Auflösen: nichts wird gesendet.
-9. Geheimnismuster in einem Textanhang derselben Nachricht wie ein Bild: das
-   Muster fehlt in der Anfrage, die Bildbytes sind unverändert.
+9. Bild an ein reines Textmodell (z. B. lokales Ollama-Modell): Fehler, kein
+   Anbieteraufruf; derselbe Chat mit nur Text geht durch.
+10. Geheimnis in Text derselben Nachricht wie ein Bild: das Muster fehlt in
+    der Anfrage, die Bildbytes sind unverändert.
 
 ## 10. Eingabefeld
 

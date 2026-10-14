@@ -12,7 +12,6 @@
 //! frei von I/O-Abhängigkeiten (kein HTTP-Client hier) und schnell über
 //! Mock-Implementierungen testbar.
 
-mod attachments;
 mod extension_content;
 mod extension_part;
 mod fencing;
@@ -32,10 +31,6 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use attachments::{
-    validate_attachments, AttachmentError, AttachmentKind, ChatAttachment, ChatAttachmentResolver,
-    BINARY_ATTACHMENT_TOKEN_ESTIMATE, MAX_ATTACHMENTS_PER_MESSAGE, MAX_ATTACHMENT_BYTES,
-};
 pub use extension_content::{
     seal_pending, ContentLimitError, RedactedBlock, ResolvedBlock, SealedContent, SealedPart,
     BINARY_BLOCK_TOKEN_ESTIMATE, CONTENT_UNAVAILABLE, EXTENSION_SECURITY_LINE, MAX_BLOCKS_PER_PART,

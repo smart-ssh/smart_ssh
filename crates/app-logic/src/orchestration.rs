@@ -82,10 +82,9 @@ mod remote_files;
 pub(crate) mod test_support;
 
 pub use attachments::{
-    accept_extension_content, attachment_error, push_extension_parts, push_user_attachments,
-    resolve_chat_attachments, PreparedExtensionParts, ATTACHMENTS_REQUEST_TOO_LARGE,
-    ATTACHMENTS_TOO_MANY, ATTACHMENTS_UNAVAILABLE, ATTACHMENTS_WHILE_BUSY, ATTACHMENT_INVALID,
-    ATTACHMENT_TOO_LARGE, ATTACHMENT_UNRESOLVED,
+    accept_extension_content, push_extension_parts, PreparedExtensionParts,
+    ATTACHMENTS_REQUEST_TOO_LARGE, ATTACHMENTS_TOO_MANY, ATTACHMENTS_UNAVAILABLE,
+    ATTACHMENTS_WHILE_BUSY, ATTACHMENT_INVALID, ATTACHMENT_TOO_LARGE, ATTACHMENT_UNRESOLVED,
 };
 pub use chat_turn::run_chat_turn;
 pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHAT_BUSY};

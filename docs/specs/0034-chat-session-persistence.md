@@ -20,7 +20,7 @@ Verlauf selbst.
 Je Chat-Sitzung: Server, Titel (leer bis automatisch erzeugt), Start- und
 Endzeit (leer, solange aktiv) und der Anbieter, mit dem sie begann.
 Je Nachricht: Rolle (Nutzer, Assistent, Aktionsergebnis), Inhaltsart (Text,
-Kommando-Ergebnis, abgelehnte Aktion, Dateianhänge nach Spec 0110), Inhalt, Reihenfolge, Zeitpunkt.
+Kommando-Ergebnis, abgelehnte Aktion, Verweise auf Erweiterungsinhalt nach Spec 0110), Inhalt, Reihenfolge, Zeitpunkt.
 Löscht man den Server, verschwinden seine Sitzungen und Nachrichten mit.
 
 Der Anbieter einer Sitzung ist rein informativ: Beim Fortsetzen ist

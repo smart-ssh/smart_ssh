@@ -22,10 +22,10 @@ Jede Nutzer-Nachricht wird vor dem KI-Aufruf auf demselben Weg wie alle
 anderen Verlaufseinträge gespeichert (redigiert, wo zutreffend), wie in
 Spec 0034, Abschnitt 4 als eine der fortlaufend zu speichernden
 Nachrichtenarten vorgeschrieben. Der Test dafür setzt am Senden einer
-Chat-Nachricht an, nicht erst tiefer in der Schleife. Dateianhänge der
-Nachricht (Spec 0110) werden als eigener Eintrag direkt nach dem Text
-gespeichert; Textanhänge werden dabei redigiert und bei jedem Senden erneut
-redigiert (Abschnitt 5).
+Chat-Nachricht an, nicht erst tiefer in der Schleife. Erweiterungsinhalt der
+Nachricht (Spec 0110) wird als Verweis in einem eigenen Eintrag direkt nach
+dem Text gespeichert; der Inhalt selbst wird bei jedem Senden redigiert
+(Spec 0110, Abschnitt 4).
 
 ## 3. Eingabe-Historie
 
