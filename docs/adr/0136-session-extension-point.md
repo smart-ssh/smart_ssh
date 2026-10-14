@@ -29,3 +29,11 @@ Status: accepted (issue #463, Spec 0038)
   delete. A group delete reports the group and each descendant group (they
   are removed by `ON DELETE CASCADE`); servers in the group are only
   unassigned, not deleted, so they get no callback.
+- **Async context hook with the prompt language** (#526): `context_section`
+  is an `#[async_trait]` method (like `OutgoingTransform::prepare_outgoing`)
+  and receives the session's `PromptLanguage`, the value that picks the
+  heading. Extension tables sit behind an async database handle, so a
+  synchronous hook would need `block_in_place` or a duplicate cache.
+  `append_extension_section` is async and both callers await it; order and
+  redact-then-fence are unchanged. `known_secrets` and the removal callbacks
+  stay synchronous.

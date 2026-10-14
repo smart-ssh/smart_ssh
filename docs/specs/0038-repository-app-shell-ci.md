@@ -46,7 +46,10 @@ des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
   Englisch) und in einem eigenen Fence (Spec 0039). Der Text gilt wie eine
   Notiz als nicht vertrauenswürdig: er wird erst redigiert, dann gefenct,
   und setzt wie Notizen das Merkmal „nicht vertrauenswürdiger Inhalt
-  eingelesen“. Der Abschnitt wird bei jeder Nutzernachricht neu erfragt.
+  eingelesen“. Der Abschnitt wird bei jeder Nutzernachricht neu erfragt. Die Erweiterung
+  erhält dabei die Prompt-Sprache der Sitzung (dieselbe, die die Überschrift
+  bestimmt) und darf asynchron antworten, etwa nach dem Lesen aus ihrem
+  eigenen Datenspeicher.
   Liefert die Erweiterung nichts (oder nur Leerraum) oder gibt es keine
   Erweiterung, ist der Kontext unverändert, ohne leeren Abschnitt.
 - **Bekannte Secrets:** Zeichenfolgen, die der Redactor dieses Servers

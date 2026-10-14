@@ -278,7 +278,8 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
                 Some(extension),
                 scope.as_ref(),
                 &session.redactor,
-            );
+            )
+            .await;
             notes_present || present
         } else {
             notes_present
