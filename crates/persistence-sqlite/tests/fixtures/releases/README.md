@@ -7,7 +7,7 @@ Schritt, dass keine Tabelle, Spalte oder Zeile fehlt oder sich verändert
 hat; am Ende öffnet es die Datei über
 `SqliteProfileStore::connect_encrypted` und liest die Daten über die Stores
 zurück. `app-logic` nimmt die neueste Fixture für den Test des
-wiederholten Starts (`database_startup/tests_release_upgrade.rs`). ADR 0105
+wiederholten Starts (`database_startup/tests_release_upgrade.rs`). ADR 0141
 begründet das Vorgehen.
 
 | Datei | Release | Schema (höchste Migration) | Verschlüsselung |

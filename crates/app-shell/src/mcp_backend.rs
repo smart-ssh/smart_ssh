@@ -293,7 +293,7 @@ impl EventEmitter for CaptureEmitter<'_> {
 /// (`ActionResultPayload`, intern per `kind` getaggt — s.
 /// `app_logic::events`-Moduldoc) in einen für den MCP-Client lesbaren Text um.
 ///
-/// Issue #34 / ADR 0120: stdout, stderr und gelesener Dateiinhalt stammen vom
+/// Issue #34 / ADR 0142: stdout, stderr und gelesener Dateiinhalt stammen vom
 /// Server und gehen — wie im KI-Kontext (Spec 0039) und wie
 /// `get_server_notes` (ADR 0103) — über `fence_untrusted` an den Client.
 /// Der Payload ist bereits redigiert (Kommando-Ausgabe und Dateiinhalt laufen

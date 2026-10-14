@@ -1,4 +1,4 @@
-# ADR 0120 — MCP-Aktionsergebnisse gefenct wie im KI-Kontext
+# ADR 0142 — MCP-Aktionsergebnisse gefenct wie im KI-Kontext
 
 Status: akzeptiert
 Betrifft: Spec 0039, Spec 0028, ADR 0025, ADR 0034, ADR 0103, Issue #34
