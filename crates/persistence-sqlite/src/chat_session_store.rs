@@ -1129,7 +1129,9 @@ mod tests {
             })
         }
         let m0021 = include_bytes!("../migrations/0021_chat_messages_attachments.sql");
-        assert_eq!(fnv1a(m0021), FNV_0021, "migration 0021 must not change");
+        // Windows checkouts may convert line endings; the hash is over LF.
+        let lf: Vec<u8> = m0021.iter().copied().filter(|b| *b != b'\r').collect();
+        assert_eq!(fnv1a(&lf), FNV_0021, "migration 0021 must not change");
         let m0022 = include_str!("../migrations/0022_chat_messages_extension.sql");
         assert!(m0022.contains("'extension'") && m0022.contains("'attachments'"));
         let applied: Vec<i64> = sqlx::migrate!()
