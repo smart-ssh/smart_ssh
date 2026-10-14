@@ -21,16 +21,7 @@ use ssh_manager_core::shared::ServerId;
 use crate::compaction::SystemContextParts;
 use crate::state::AppState;
 
-/// What the extension is told about the server it is asked for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServerScope {
-    /// The server id; the local pseudo-server carries `LOCAL_SERVER_ID`.
-    pub server_id: ServerId,
-    /// The group chain of the server, root first. Empty for servers
-    /// without a group and for the local pseudo-server.
-    pub group_chain: Vec<GroupId>,
-    pub tags: Vec<String>,
-}
+pub use ssh_manager_core::outgoing::ServerScope;
 
 /// Registered through `Wiring`. All methods have no-op defaults so an
 /// extension only implements what it needs.

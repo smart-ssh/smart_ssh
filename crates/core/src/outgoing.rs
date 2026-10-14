@@ -11,6 +11,7 @@
 use async_trait::async_trait;
 use secrecy::SecretString;
 
+use crate::profiles::GroupId;
 use crate::shared::ServerId;
 
 /// What kind of text is about to be sent.
@@ -22,10 +23,16 @@ pub enum OutgoingKind {
     FileContent,
 }
 
-/// The server a text is about to be sent to.
+/// The server an extension point is asked about. Shared by the session
+/// extension and the outgoing transform so both describe the same target
+/// server the same way.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OutgoingScope {
+pub struct ServerScope {
+    /// The server id; the local pseudo-server carries the nil id.
     pub server_id: ServerId,
+    /// The group chain of the server, root first. Empty for servers
+    /// without a group and for the local pseudo-server.
+    pub group_chain: Vec<GroupId>,
     pub tags: Vec<String>,
 }
 
@@ -78,7 +85,7 @@ pub struct Rejection {
 pub trait OutgoingTransform: Send + Sync {
     async fn prepare_outgoing(
         &self,
-        scope: &OutgoingScope,
+        scope: &ServerScope,
         kind: OutgoingKind,
         text: &str,
     ) -> Result<Prepared, Rejection>;

@@ -71,11 +71,17 @@ nicht.
 
 Die Verdrahtung kann eine **Umwandlung ausgehender Texte** enthalten. Sie
 ist vertrauenswürdiger Code der Edition und wird mit dem Ziel-Server
-(Kennung und Tags), der Art des Textes (Kommando oder Dateiinhalt) und dem
+(Server-Kennung inklusive des lokalen Pseudo-Servers, Gruppenkette von der
+Wurzel her, Tags; dieselben Angaben und dieselbe Bedeutung wie bei der
+Sitzungs-Erweiterung: die Kette ist leer für einen Server ohne Gruppe und für
+den lokalen Pseudo-Server), der Art des Textes (Kommando oder Dateiinhalt) und dem
 Text selbst gefragt. Sie liefert entweder den zu sendenden Text samt der
 Liste der Geheimnisse, die sie eingesetzt hat, oder eine Ablehnung mit einer
-Meldung. Ohne registrierte Umwandlung (Community) wird der Text unverändert
-gesendet.
+Meldung. Die Gruppenkette wird beim Senden ermittelt, nicht beim Start der Sitzung;
+ein inzwischen verschobener Server liefert also seine aktuelle Kette. Schlägt
+die Ermittlung fehl, ist die Kette leer (mit Warnung im Log), und der Text
+wird trotzdem vorbereitet. Ohne registrierte Umwandlung (Community) wird der
+Text unverändert gesendet, ohne dass die Gruppenkette ermittelt wird.
 
 **Wann sie läuft.** Genau auf diesen Wegen: von der KI vorgeschlagene
 Kommandos, von der KI vorgeschlagener Inhalt einer `WriteRemoteFile`-Aktion

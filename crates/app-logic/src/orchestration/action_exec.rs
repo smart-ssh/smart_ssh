@@ -1524,6 +1524,7 @@ async fn execute_action(
                 action_id,
                 command,
                 emitter,
+                profile_store,
                 persist,
                 ledger_source,
             )
@@ -1559,6 +1560,7 @@ async fn execute_action(
                 path,
                 content,
                 emitter,
+                profile_store,
                 persist,
                 sudo_fallback_announced,
             )
@@ -1642,12 +1644,14 @@ pub(crate) async fn emit_action_error(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_suggested_command(
     session: &Session,
     session_id: SessionId,
     action_id: ActionId,
     command: String,
     emitter: &dyn EventEmitter,
+    profile_store: &dyn ProfileStore,
     persist: bool,
     ledger_source: LedgerSource,
 ) -> bool {
@@ -1661,6 +1665,7 @@ async fn execute_suggested_command(
     // for the transport call.
     let wire_command = match super::outgoing::prepare_for_send(
         session,
+        profile_store,
         ssh_manager_core::outgoing::OutgoingKind::Command,
         &command,
     )
@@ -2127,4 +2132,10 @@ pub(crate) fn announce_second_opinion_setup_failure(
             Some("AI_INJECTION_CHECK_INACTIVE"),
         );
     }
+}
+
+/// Test helper: a store with nothing in it that outlives the call expression.
+#[cfg(test)]
+fn empty_store() -> &'static crate::test_support::InMemoryProfileStore {
+    Box::leak(Box::default())
 }
