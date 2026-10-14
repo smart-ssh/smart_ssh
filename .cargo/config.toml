@@ -1,0 +1,5 @@
+[env]
+# whisper.cpp defaults to GGML_NATIVE=ON (-mcpu/-march=native): breaks
+# cross-target builds (universal macOS) and ties release binaries to the
+# build machine's CPU. whisper-rs-sys forwards GGML_* env vars to CMake.
+GGML_NATIVE = "OFF"
