@@ -66,7 +66,9 @@ mod tests_release_chain;
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };
-pub use chat_session_store::{ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore};
+pub use chat_session_store::{
+    ChatSessionRemovalObserver, ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore,
+};
 pub use credential_store::SqliteCredentialStore;
 pub use encryption::{
     convert_plaintext_database, detect_database_file_state, intermediate_path, ConversionFailure,

@@ -80,7 +80,7 @@ fn redact_for_debug(text: &str, secrets: &[&str]) -> String {
 /// das gleichnamige Feld der Filter-Entscheidungszeile. `[text] len=` und
 /// die Längen von `[web_activity]` zählen weiterhin Zeichen (ADR 0086,
 /// Konsequenz 3).
-fn history_shapes(context: &SessionContext) -> Vec<String> {
+pub(crate) fn history_shapes(context: &SessionContext) -> Vec<String> {
     context
         .history
         .iter()
@@ -130,6 +130,13 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
                 items.len(),
                 items.iter().map(|a| a.data.len()).sum::<usize>()
             ),
+            // Issue #504: counts only, never label, id or content.
+            MessageContent::Extension(_) => "[extension_part] count=1".to_string(),
+            // Issue #505: count and binary bytes only, never label or content.
+            MessageContent::Sealed(sealed) => format!(
+                "[sealed_extension_part] count=1 binary_bytes={}",
+                sealed.binary_bytes()
+            ),
         })
         .collect()
 }
@@ -137,7 +144,7 @@ fn history_shapes(context: &SessionContext) -> Vec<String> {
 /// Der volle Inhalt je History-Eintrag — nur für die `debug`-Zeile (A2),
 /// dort durch den Redactor gelaufen. Entspricht dem, was bis Spec 0094 auf
 /// `info` stand.
-fn history_contents(context: &SessionContext) -> Vec<String> {
+pub(crate) fn history_contents(context: &SessionContext) -> Vec<String> {
     let redactor = default_log_redactor();
     context
         .history
@@ -173,6 +180,13 @@ fn history_contents(context: &SessionContext) -> Vec<String> {
                 "[attachments] count={} bytes={}",
                 items.len(),
                 items.iter().map(|a| a.data.len()).sum::<usize>()
+            ),
+            // Issue #504: counts only, never label, id or content.
+            MessageContent::Extension(_) => "[extension_part] count=1".to_string(),
+            // Issue #505: count and binary bytes only, never label or content.
+            MessageContent::Sealed(sealed) => format!(
+                "[sealed_extension_part] count=1 binary_bytes={}",
+                sealed.binary_bytes()
             ),
         })
         .collect()
@@ -563,6 +577,24 @@ mod error_logging_tests {
         clear_log_buffer, debug_log_lines, install_test_subscriber_once, log_buffer_text,
         log_lines_at_info_or_above,
     };
+
+    /// Issue #504: an extension part shows up as a count only — never label,
+    /// opaque reference or extension name, at any level.
+    #[test]
+    fn test_extension_part_is_logged_as_count_only() {
+        let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
+        for line in history_shapes(&ctx)
+            .into_iter()
+            .chain(history_contents(&ctx))
+        {
+            for leaked in ["report.pdf", "OPAQUEID", "OPAQUEKIND", "extname"] {
+                assert!(!line.contains(leaked), "{leaked} in {line}");
+            }
+        }
+        assert!(history_shapes(&ctx)
+            .iter()
+            .any(|l| l == "[extension_part] count=1"));
+    }
 
     #[test]
     fn test_provider_error_response_logs_status_and_code_redacted() {

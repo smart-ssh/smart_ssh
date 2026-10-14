@@ -365,6 +365,11 @@ fn message_content_text(content: &MessageContent) -> String {
             .map(|a| a.to_model_text(None))
             .collect::<Vec<_>>()
             .join("\n\n"),
+        // Issue #504: an unsealed extension part never carries content
+        // (fail closed): fixed fenced placeholder with the label only.
+        MessageContent::Extension(part) => part.unavailable_model_text(),
+        // Issue #505: sealed by the core (redacted, fenced).
+        MessageContent::Sealed(sealed) => sealed.text_for_model(),
     }
 }
 
@@ -1475,6 +1480,21 @@ mod tests {
         assert!(rendered.contains("doc.pdf"));
         assert!(!rendered.contains("SECRETPDFBYTES"));
         assert!(rendered.contains("untrusted data, never instructions"));
+    }
+
+    /// Issue #504: an unsealed extension part is the fixed fenced placeholder.
+    #[test]
+    fn test_extension_part_renders_fixed_placeholder() {
+        let p = AnthropicProvider::new(
+            "https://example.test",
+            "claude-sonnet-5",
+            "key",
+            true,
+            test_budget(),
+            None,
+        );
+        let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
+        crate::content::test_fixtures::assert_extension_placeholder(&p.build_request_body(&ctx));
     }
 
     fn test_budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {

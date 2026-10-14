@@ -628,10 +628,26 @@ fn process_frame_stream(
 mod attachment_tests {
     use super::*;
     use crate::content::test_fixtures::{context_with_image_and_pdf, first_events};
-    use ssh_manager_core::ai::{AiEvent, AttachmentKind};
+    use ssh_manager_core::ai::{AiEvent, MediaClass};
 
     fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
         std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())
+    }
+
+    /// Issue #504: an unsealed extension part is the fixed fenced placeholder.
+    #[test]
+    fn test_responses_extension_part_renders_fixed_placeholder() {
+        let p = OpenAiResponsesProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            "k",
+            true,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
+        crate::content::test_fixtures::assert_extension_placeholder(&p.build_request_body(&ctx));
     }
 
     #[test]
@@ -677,9 +693,7 @@ mod attachment_tests {
         assert!(
             matches!(
                 events[..],
-                [AiEvent::Error(AiError::AttachmentUnsupported(
-                    AttachmentKind::Image
-                ))]
+                [AiEvent::Error(AiError::InputUnsupported(MediaClass::Image))]
             ),
             "{events:?}"
         );

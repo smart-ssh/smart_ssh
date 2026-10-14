@@ -13,6 +13,8 @@
 //! Mock-Implementierungen testbar.
 
 mod attachments;
+mod extension_content;
+mod extension_part;
 mod fencing;
 pub mod keywords;
 mod live_redaction;
@@ -34,6 +36,12 @@ pub use attachments::{
     validate_attachments, AttachmentError, AttachmentKind, ChatAttachment, ChatAttachmentResolver,
     BINARY_ATTACHMENT_TOKEN_ESTIMATE, MAX_ATTACHMENTS_PER_MESSAGE, MAX_ATTACHMENT_BYTES,
 };
+pub use extension_content::{
+    seal_pending, ContentLimitError, RedactedBlock, ResolvedBlock, SealedContent, SealedPart,
+    BINARY_BLOCK_TOKEN_ESTIMATE, CONTENT_UNAVAILABLE, EXTENSION_SECURITY_LINE, MAX_BLOCKS_PER_PART,
+    MAX_BLOCK_BYTES, MAX_EXTENSION_PARTS_PER_MESSAGE, MAX_REQUEST_BINARY_BYTES,
+};
+pub use extension_part::{ExtensionMedia, ExtensionPart, ExtensionSource};
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
 pub use live_redaction::LiveOutputRedactor;
 pub use provider::AiProvider;
@@ -43,7 +51,7 @@ pub use redactor::{
 pub use second_opinion::{truncate_for_second_opinion, DEFAULT_SECOND_OPINION_MAX_LEN};
 pub use types::{
     default_action_schemas, english_action_schemas, ActionParameter, ActionParameterKind,
-    ActionSchema, AiError, AiEvent, ChatMessage, MessageContent, ProviderId, ProviderType,
-    RejectionReason, Role, SessionContext, WebActivity, WebActivityKind, WebSource,
+    ActionSchema, AiError, AiEvent, ChatMessage, MediaClass, MessageContent, ProviderId,
+    ProviderType, RejectionReason, Role, SessionContext, WebActivity, WebActivityKind, WebSource,
     WEB_CONTENT_MAX_CHARS,
 };

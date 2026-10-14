@@ -502,7 +502,8 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
         state.session_extension.as_deref(),
         extension_scope.as_ref(),
         redactor.as_ref(),
-    );
+    )
+    .await;
     let notes_present = notes_present || extension_present;
     let system_context = system_context_parts.assemble();
     // Issue #323: die `suggest_command`-Beschreibung folgt derselben Sprache
@@ -755,6 +756,7 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             red_risk_always_confirm,
             running_command_cancellations: state.running_command_cancellations.clone(),
             outgoing_transform: state.outgoing_transform.clone(),
+            chat_content: state.chat_content.clone(),
             untrusted_content_ingested: std::sync::atomic::AtomicBool::new(
                 starts_with_untrusted_content,
             ),
@@ -1901,6 +1903,7 @@ mod connect_flow_tests {
             rate_limit_registry: ai_providers::RateLimitRegistry::new(),
             pending_ssh_config_import: std::sync::Mutex::new(None),
             outgoing_transform: None,
+            chat_content: Default::default(),
         };
         Fixture {
             state,

@@ -1224,6 +1224,21 @@ pub enum ChatHistoryEntryDto {
         role: ChatHistoryRoleDto,
         items: Vec<ChatHistoryAttachmentDto>,
     },
+    /// Issue #504 (ADR 0141, Spec 0110 §5): extension parts of a user
+    /// message — label and media class only, never content, and without
+    /// asking any extension.
+    ExtensionParts {
+        role: ChatHistoryRoleDto,
+        items: Vec<ChatHistoryExtensionPartDto>,
+    },
+}
+
+/// Issue #504: one extension part in the history (label and media class).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatHistoryExtensionPartDto {
+    pub label: String,
+    pub media: ssh_manager_core::ai::ExtensionMedia,
 }
 
 /// Issue #471: ein Anhang in der Historie (Name und Art, kein Inhalt).
@@ -1365,6 +1380,27 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                             kind: a.kind,
                         })
                         .collect(),
+                }
+            }
+            // Issue #504: label and media only, one entry per stored part.
+            ssh_manager_core::ai::MessageContent::Extension(part) => {
+                ChatHistoryEntryDto::ExtensionParts {
+                    role,
+                    items: vec![ChatHistoryExtensionPartDto {
+                        label: part.label,
+                        media: part.media,
+                    }],
+                }
+            }
+            // Issue #505: sealed content exists only in a send copy and
+            // never reaches the history view; show label only if it does.
+            ssh_manager_core::ai::MessageContent::Sealed(sealed) => {
+                ChatHistoryEntryDto::ExtensionParts {
+                    role,
+                    items: vec![ChatHistoryExtensionPartDto {
+                        label: sealed.label().to_string(),
+                        media: ssh_manager_core::ai::ExtensionMedia::Text,
+                    }],
                 }
             }
         }
@@ -1704,6 +1740,34 @@ mod tests {
             })
         );
         assert!(!json.to_string().contains("SECRET-CONTENT"));
+    }
+
+    /// Issue #504: an extension part lists label and media only, never the
+    /// opaque reference or the extension name (Spec 0110, §5).
+    #[test]
+    fn test_chat_history_extension_parts_list_label_and_media_without_reference() {
+        let message = ssh_manager_core::ai::ChatMessage {
+            role: ssh_manager_core::ai::Role::User,
+            content: ssh_manager_core::ai::MessageContent::Extension(
+                ssh_manager_core::ai::ExtensionPart {
+                    extension: "extname".to_string(),
+                    kind: "OPAQUEKIND".to_string(),
+                    id: "OPAQUEID".to_string(),
+                    label: "report.pdf".to_string(),
+                    media: ssh_manager_core::ai::ExtensionMedia::Pdf,
+                    estimated_tokens: 42,
+                },
+            ),
+        };
+        let json = serde_json::to_value(ChatHistoryEntryDto::from(message)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "extensionParts",
+                "role": "user",
+                "items": [{ "label": "report.pdf", "media": "pdf" }]
+            })
+        );
     }
 
     /// Issue #167: die volle JSON-Form aller Varianten, inklusive der

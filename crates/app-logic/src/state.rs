@@ -189,6 +189,9 @@ pub struct AppState {
     /// Issue #464 (Spec 0038): the edition's transform for approved text right
     /// before it is sent; handed to every new session. `None` in Community.
     pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+    /// Issue #505 (ADR 0141): chat content extensions an edition registered;
+    /// empty in Community. Handed to every new session.
+    pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,
 }
 
 pub struct McpState {

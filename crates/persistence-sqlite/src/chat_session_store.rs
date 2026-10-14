@@ -93,6 +93,33 @@ fn content_type_for(content: &MessageContent) -> &'static str {
         MessageContent::WebActivity(_) => "web_activity",
         // Issue #469, Migration `0021_...sql`.
         MessageContent::Attachments(_) => "attachments",
+        // Issue #504, Migration `0022_...sql`.
+        MessageContent::Extension(_) => "extension",
+        // Issue #505: sealed content exists only in a send copy and is
+        // rejected before this point (`append_message`).
+        MessageContent::Sealed(_) => "sealed",
+    }
+}
+
+/// Issue #504 (ADR 0141): told after chat sessions were removed — single
+/// delete, retention delete and (via the profile store) server delete. Called
+/// only after the delete succeeded; a crash in between is covered by the
+/// extension's `reconcile` at the next start.
+pub trait ChatSessionRemovalObserver: Send + Sync {
+    fn sessions_removed(&self, session_ids: &[Uuid]);
+}
+
+/// Slot shared between the profile store and every chat store made from it,
+/// so the observer set once at startup reaches all delete paths.
+pub(crate) type RemovalHook =
+    std::sync::Arc<std::sync::OnceLock<std::sync::Arc<dyn ChatSessionRemovalObserver>>>;
+
+pub(crate) fn notify_removed(hook: &RemovalHook, ids: &[Uuid]) {
+    if ids.is_empty() {
+        return;
+    }
+    if let Some(observer) = hook.get() {
+        observer.sessions_removed(ids);
     }
 }
 
@@ -100,11 +127,19 @@ fn content_type_for(content: &MessageContent) -> &'static str {
 #[derive(Clone)]
 pub struct SqliteChatSessionStore {
     pool: SqlitePool,
+    removal: RemovalHook,
 }
 
 impl SqliteChatSessionStore {
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            removal: RemovalHook::default(),
+        }
+    }
+
+    pub(crate) fn with_removal_hook(pool: SqlitePool, removal: RemovalHook) -> Self {
+        Self { pool, removal }
     }
 
     /// Spec 0034, Abschnitt 4: "Eine Sitzung beginnt bei `connect()`" —
@@ -148,6 +183,13 @@ impl SqliteChatSessionStore {
         session_id: Uuid,
         message: &ChatMessage,
     ) -> Result<Uuid, ChatSessionStoreError> {
+        // Issue #505: sealed extension content is never stored, only the
+        // opaque `Extension` reference is.
+        if matches!(message.content, MessageContent::Sealed(_)) {
+            return Err(ChatSessionStoreError::Backend(
+                "sealed extension content cannot be persisted".to_string(),
+            ));
+        }
         let session_id_str = session_id.to_string();
 
         let next_sequence: i64 = sqlx::query(
@@ -386,11 +428,15 @@ impl SqliteChatSessionStore {
     /// zugehörige Nachrichten verschwinden automatisch über
     /// `ON DELETE CASCADE` (Migration).
     pub async fn delete_session(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
-        sqlx::query("DELETE FROM chat_sessions WHERE id = ?")
+        let result = sqlx::query("DELETE FROM chat_sessions WHERE id = ?")
             .bind(session_id.to_string())
             .execute(&self.pool)
             .await
             .map_err(backend_err)?;
+        // Issue #504: only after a successful delete, once per removed session.
+        if result.rows_affected() > 0 {
+            notify_removed(&self.removal, &[session_id]);
+        }
         Ok(())
     }
 
@@ -404,13 +450,22 @@ impl SqliteChatSessionStore {
         &self,
         cutoff: chrono::DateTime<Utc>,
     ) -> Result<u64, ChatSessionStoreError> {
-        let result =
-            sqlx::query("DELETE FROM chat_sessions WHERE ended_at IS NOT NULL AND ended_at < ?")
-                .bind(cutoff.to_rfc3339())
-                .execute(&self.pool)
-                .await
-                .map_err(backend_err)?;
-        Ok(result.rows_affected())
+        // `RETURNING` (SQLite >= 3.35) hands back exactly the removed ids in
+        // the same statement (Issue #504).
+        let rows = sqlx::query(
+            "DELETE FROM chat_sessions WHERE ended_at IS NOT NULL AND ended_at < ? RETURNING id",
+        )
+        .bind(cutoff.to_rfc3339())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        let ids: Vec<Uuid> = rows
+            .iter()
+            .filter_map(|r| r.try_get::<String, _>("id").ok())
+            .filter_map(|raw| Uuid::parse_str(&raw).ok())
+            .collect();
+        notify_removed(&self.removal, &ids);
+        Ok(rows.len() as u64)
     }
 }
 
@@ -990,6 +1045,246 @@ mod tests {
         assert!(!remaining_ids.contains(&old_ended));
         assert!(remaining_ids.contains(&still_active));
         assert!(remaining_ids.contains(&recently_ended));
+    }
+
+    // --- Issue #504: extension parts and removal callbacks ------------------
+
+    const FNV_0021: u64 = 0xa4055fd604df3520;
+
+    fn sample_extension_part() -> MessageContent {
+        use ssh_manager_core::ai::{ExtensionMedia, ExtensionPart};
+        MessageContent::Extension(ExtensionPart {
+            extension: "files".to_string(),
+            kind: "doc".to_string(),
+            id: "ref-1".to_string(),
+            label: "notes.txt".to_string(),
+            media: ExtensionMedia::Text,
+            estimated_tokens: 12,
+        })
+    }
+
+    /// Issue #505: sealed content is never stored.
+    #[tokio::test]
+    async fn test_sealed_content_is_rejected_by_the_store() {
+        use ssh_manager_core::ai::{
+            DefaultOutputRedactor, ExtensionMedia, ExtensionPart, ExtensionSource, SealedContent,
+        };
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let part = ExtensionPart {
+            extension: "files".into(),
+            kind: "doc".into(),
+            id: "r".into(),
+            label: "a.txt".into(),
+            media: ExtensionMedia::Text,
+            estimated_tokens: 1,
+        };
+        let sealed = SealedContent::seal(
+            &part,
+            ExtensionSource::LocalFile,
+            None,
+            &DefaultOutputRedactor::new(),
+        )
+        .unwrap();
+        let message = ChatMessage {
+            role: Role::User,
+            content: MessageContent::Sealed(sealed),
+        };
+        assert!(chat_store
+            .append_message(session_id, &message)
+            .await
+            .is_err());
+        assert!(chat_store
+            .load_session(session_id)
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(serde_json::to_string(&message.content).is_err());
+    }
+
+    /// An `extension` row survives migrate + reload, in order, next to the
+    /// message text.
+    #[tokio::test]
+    async fn test_extension_part_round_trips_through_store() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let messages = vec![
+            text_message(Role::User, "look at this"),
+            ChatMessage {
+                role: Role::User,
+                content: sample_extension_part(),
+            },
+        ];
+        for m in &messages {
+            chat_store.append_message(session_id, m).await.unwrap();
+        }
+        assert_eq!(chat_store.load_session(session_id).await.unwrap(), messages);
+        let ctype: String = sqlx::query_scalar(
+            "SELECT content_type FROM chat_messages WHERE content_type != 'text'",
+        )
+        .fetch_one(&profile_store.pool)
+        .await
+        .unwrap();
+        assert_eq!(ctype, "extension");
+    }
+
+    /// A session stored before this change (all old JSON forms including
+    /// `attachments`) loads unchanged.
+    #[tokio::test]
+    async fn test_session_stored_before_extension_parts_loads_unchanged() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let attachments = serde_json::to_string(&sample_attachments()).unwrap();
+        let rows = [
+            ("user", "text", r#"{"Text":"old question"}"#.to_string()),
+            (
+                "action_result",
+                "action_rejected",
+                r#"{"ActionRejected":{"command":"ls","reason":"User"}}"#.to_string(),
+            ),
+            ("user", "attachments", attachments),
+        ];
+        for (i, (role, ctype, json)) in rows.iter().enumerate() {
+            sqlx::query(
+                "INSERT INTO chat_messages (id, session_id, role, content_type, content, sequence, created_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(session_id.to_string())
+            .bind(role)
+            .bind(ctype)
+            .bind(json)
+            .bind(i as i64)
+            .bind(Utc::now().to_rfc3339())
+            .execute(&profile_store.pool)
+            .await
+            .unwrap();
+        }
+        let loaded = chat_store.load_session(session_id).await.unwrap();
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded[0], text_message(Role::User, "old question"));
+        assert_eq!(loaded[2].content, sample_attachments());
+    }
+
+    /// Migration 0021 must stay byte-identical (sqlx checks checksums of
+    /// applied migrations); 0022 is the one that allows `extension`.
+    #[test]
+    fn test_migration_0021_is_unchanged_and_0022_allows_extension() {
+        fn fnv1a(bytes: &[u8]) -> u64 {
+            bytes.iter().fold(0xcbf29ce484222325, |h, b| {
+                (h ^ u64::from(*b)).wrapping_mul(0x100000001b3)
+            })
+        }
+        let m0021 = include_bytes!("../migrations/0021_chat_messages_attachments.sql");
+        // Windows checkouts may convert line endings; the hash is over LF.
+        let lf: Vec<u8> = m0021.iter().copied().filter(|b| *b != b'\r').collect();
+        assert_eq!(fnv1a(&lf), FNV_0021, "migration 0021 must not change");
+        let m0022 = include_str!("../migrations/0022_chat_messages_extension.sql");
+        assert!(m0022.contains("'extension'") && m0022.contains("'attachments'"));
+        let applied: Vec<i64> = sqlx::migrate!()
+            .iter()
+            .filter(|m| m.version >= 21)
+            .map(|m| m.version)
+            .collect();
+        assert_eq!(applied, vec![21, 22]);
+    }
+
+    /// Observer recording the removed ids.
+    #[derive(Default)]
+    struct Recording(std::sync::Mutex<Vec<Vec<Uuid>>>);
+    impl ChatSessionRemovalObserver for Recording {
+        fn sessions_removed(&self, ids: &[Uuid]) {
+            self.0.lock().unwrap().push(ids.to_vec());
+        }
+    }
+
+    async fn observed_store() -> (
+        SqliteProfileStore,
+        SqliteChatSessionStore,
+        std::sync::Arc<Recording>,
+    ) {
+        let (profile_store, _) = in_memory_chat_session_store().await;
+        let rec = std::sync::Arc::new(Recording::default());
+        profile_store.set_chat_removal_observer(rec.clone());
+        let chat_store = profile_store.chat_session_store();
+        (profile_store, chat_store, rec)
+    }
+
+    fn flat(rec: &Recording) -> Vec<Uuid> {
+        rec.0.lock().unwrap().iter().flatten().copied().collect()
+    }
+
+    #[tokio::test]
+    async fn test_single_delete_reports_the_session_once_after_success() {
+        let (profile_store, chat_store, rec) = observed_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store.delete_session(id).await.unwrap();
+        assert_eq!(flat(&rec), vec![id]);
+        // Deleting again removes nothing and reports nothing.
+        chat_store.delete_session(id).await.unwrap();
+        assert_eq!(flat(&rec), vec![id]);
+    }
+
+    #[tokio::test]
+    async fn test_retention_delete_reports_exactly_the_removed_sessions() {
+        let (profile_store, chat_store, rec) = observed_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let old = chat_store.create_session(&server_id, None).await.unwrap();
+        let active = chat_store.create_session(&server_id, None).await.unwrap();
+        sqlx::query("UPDATE chat_sessions SET ended_at = ? WHERE id = ?")
+            .bind("2020-01-01T00:00:00Z")
+            .bind(old.to_string())
+            .execute(&profile_store.pool)
+            .await
+            .unwrap();
+        let cutoff = chrono::DateTime::parse_from_rfc3339("2021-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(
+            chat_store
+                .delete_ended_sessions_before(cutoff)
+                .await
+                .unwrap(),
+            1
+        );
+        assert_eq!(flat(&rec), vec![old]);
+        assert!(!flat(&rec).contains(&active));
+    }
+
+    #[tokio::test]
+    async fn test_server_delete_reports_all_cascaded_sessions_only_after_success() {
+        let (profile_store, chat_store, rec) = observed_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let other = create_test_server(&profile_store).await;
+        let a = chat_store.create_session(&server_id, None).await.unwrap();
+        let b = chat_store.create_session(&server_id, None).await.unwrap();
+        let _kept = chat_store.create_session(&other, None).await.unwrap();
+
+        // A failing delete (unknown server) reports nothing.
+        let missing = ServerId(Uuid::new_v4());
+        assert!(profile_store.delete_server(&missing).await.is_err());
+        assert!(flat(&rec).is_empty());
+
+        profile_store.delete_server(&server_id).await.unwrap();
+        let mut reported = flat(&rec);
+        reported.sort();
+        let mut expected = vec![a, b];
+        expected.sort();
+        assert_eq!(reported, expected);
+    }
+
+    #[tokio::test]
+    async fn test_chat_session_ids_lists_exactly_the_existing_sessions() {
+        let (profile_store, chat_store, _rec) = observed_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let a = chat_store.create_session(&server_id, None).await.unwrap();
+        let b = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store.delete_session(a).await.unwrap();
+        assert_eq!(profile_store.chat_session_ids().await.unwrap(), vec![b]);
     }
 
     // --- Issue #113: Klartext in der verschlüsselten Datei -----------------

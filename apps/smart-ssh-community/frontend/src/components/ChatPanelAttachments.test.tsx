@@ -251,6 +251,27 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     ).toBeInTheDocument();
   });
 
+  it("lists extension parts of a resumed message by label and kind, never content", async () => {
+    vi.mocked(getChatHistory).mockResolvedValueOnce([
+      { type: "text", role: "user", text: "see parts" },
+      {
+        type: "extensionParts",
+        role: "user",
+        items: [{ label: "report.pdf", media: "pdf" }],
+      },
+      {
+        type: "extensionParts",
+        role: "user",
+        items: [{ label: "log.txt", media: "text" }],
+      },
+    ]);
+    renderChatPanel();
+    expect(
+      await screen.findByText("Angehängt: report.pdf (PDF)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Angehängt: log.txt (Text)")).toBeInTheDocument();
+  });
+
   it("routes a native drop on the chat area to the registered handler", async () => {
     const handler = vi.fn();
     registerComposerDropHandler("test-drop", handler);

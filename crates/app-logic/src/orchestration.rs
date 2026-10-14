@@ -82,9 +82,10 @@ mod remote_files;
 pub(crate) mod test_support;
 
 pub use attachments::{
-    attachment_error, push_user_attachments, resolve_chat_attachments, ATTACHMENTS_TOO_MANY,
-    ATTACHMENTS_UNAVAILABLE, ATTACHMENTS_WHILE_BUSY, ATTACHMENT_INVALID, ATTACHMENT_TOO_LARGE,
-    ATTACHMENT_UNRESOLVED,
+    accept_extension_content, attachment_error, push_extension_parts, push_user_attachments,
+    resolve_chat_attachments, PreparedExtensionParts, ATTACHMENTS_REQUEST_TOO_LARGE,
+    ATTACHMENTS_TOO_MANY, ATTACHMENTS_UNAVAILABLE, ATTACHMENTS_WHILE_BUSY, ATTACHMENT_INVALID,
+    ATTACHMENT_TOO_LARGE, ATTACHMENT_UNRESOLVED,
 };
 pub use chat_turn::run_chat_turn;
 pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHAT_BUSY};
@@ -93,7 +94,7 @@ pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHA
 // `pub(crate)` (Spec 0084, A6.4).
 pub use chat_turn::{push_history, PENDING_ACTION_CONFIRM_TIMEOUT};
 pub(crate) use chat_turn::{
-    reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+    reapply_redaction_and_seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
     SIDE_CALL_MAX_TOKENS,
 };
 

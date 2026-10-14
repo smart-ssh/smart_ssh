@@ -46,7 +46,10 @@ des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
   Englisch) und in einem eigenen Fence (Spec 0039). Der Text gilt wie eine
   Notiz als nicht vertrauenswürdig: er wird erst redigiert, dann gefenct,
   und setzt wie Notizen das Merkmal „nicht vertrauenswürdiger Inhalt
-  eingelesen“. Der Abschnitt wird bei jeder Nutzernachricht neu erfragt.
+  eingelesen“. Der Abschnitt wird bei jeder Nutzernachricht neu erfragt. Die Erweiterung
+  erhält dabei die Prompt-Sprache der Sitzung (dieselbe, die die Überschrift
+  bestimmt) und darf asynchron antworten, etwa nach dem Lesen aus ihrem
+  eigenen Datenspeicher.
   Liefert die Erweiterung nichts (oder nur Leerraum) oder gibt es keine
   Erweiterung, ist der Kontext unverändert, ohne leeren Abschnitt.
 - **Bekannte Secrets:** Zeichenfolgen, die der Redactor dieses Servers
@@ -160,6 +163,27 @@ Regeln:
 - Der Kern liefert weder eine Erweiterungstabelle noch ein Datenmodell. Ohne
   registrierte Erweiterung ist die Datenbank identisch zu vorher.
 - Erweiterungstabellen sind **nicht Teil des Voll-Backups** (Spec 0109, C2).
+
+### Chat-Inhalte von Erweiterungen
+
+Eine Erweiterung kann sich über die Verdrahtung als Quelle für Inhalte
+registrieren, die an eine Nutzer-Nachricht gehängt werden (Spec 0110,
+Abschnitt 5). Regeln:
+
+- Der Name besteht aus Kleinbuchstaben und Ziffern und ist eindeutig. Eine
+  Registrierung mit ungültigem oder doppeltem Namen wird übersprungen und
+  ohne Werte protokolliert. Community registriert keine; dann bleiben
+  Datenbank, Prompt und Verlauf unverändert.
+- Die Erweiterung wählt ihre Quelle aus einer geschlossenen Liste des Kerns
+  (zunächst: lokale Datei); eigene Fence-Marker oder ungefencten Text kann
+  sie nicht liefern.
+- Weil Fremdschlüssel in Kerntabellen verboten sind, meldet der Kern jede
+  gelöschte Chat-Sitzung: beim einzelnen Löschen, bei der Aufbewahrungsfrist
+  und beim Löschen eines Servers. Der Aufruf kommt erst, nachdem das Löschen
+  gelungen ist, genau einmal je entfernter Sitzung.
+- Nach den Erweiterungsmigrationen übergibt der Kern jeder Erweiterung einmal
+  je Start die Menge der vorhandenen Chat-Sitzungen, damit Reste nach einem
+  Absturz zwischen Löschen und Aufruf verschwinden.
 
 ## 3. Ein Binary je Edition
 

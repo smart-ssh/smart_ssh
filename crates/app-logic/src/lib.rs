@@ -21,6 +21,7 @@
 
 pub mod ai_provider_factory;
 pub mod auto_reconnect;
+pub mod chat_content_extension;
 pub mod compaction;
 pub mod confirmation;
 /// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.

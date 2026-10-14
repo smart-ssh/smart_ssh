@@ -1775,6 +1775,34 @@ fn test_reapply_redaction_for_send_redacts_with_retroactively_added_pattern() {
     }
 }
 
+/// Issue #504: the label of an extension part goes into the fence, so it is
+/// redacted again on every send; the opaque reference stays untouched.
+#[test]
+fn test_reapply_redaction_for_send_redacts_extension_part_label() {
+    use ssh_manager_core::ai::{ExtensionMedia, ExtensionPart};
+    let redactor = DefaultOutputRedactor::with_extra_patterns(vec![regex::Regex::new(
+        r"sudo_geheim_[a-z0-9]+",
+    )
+    .unwrap()]);
+    let history = vec![ChatMessage {
+        role: Role::User,
+        content: MessageContent::Extension(ExtensionPart {
+            extension: "files".into(),
+            kind: "doc".into(),
+            id: "ref-1".into(),
+            label: "sudo_geheim_abc123.txt".into(),
+            media: ExtensionMedia::Text,
+            estimated_tokens: 5,
+        }),
+    }];
+    let redacted = reapply_redaction_for_send(history, &redactor);
+    let MessageContent::Extension(part) = &redacted[0].content else {
+        panic!("extension part expected");
+    };
+    assert!(!part.label.contains("sudo_geheim_abc123"), "{}", part.label);
+    assert_eq!((part.id.as_str(), part.kind.as_str()), ("ref-1", "doc"));
+}
+
 /// Kritischer Gegentest zur "nur additiv"-Anforderung: Inhalt, der
 /// bereits redigiert ist (enthält schon den `[REDACTED]`-Platzhalter),
 /// darf durch einen erneuten Redaction-Durchlauf niemals wieder

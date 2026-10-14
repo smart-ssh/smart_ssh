@@ -307,6 +307,17 @@ pub enum MessageContent {
     /// redigiert und als `LocalFile` gefencet. Löst für sich keine
     /// Folgerunde aus. Alte Sitzungen ohne Anhänge enthalten die Variante nie.
     Attachments(Vec<super::ChatAttachment>),
+    /// Issue #504 (ADR 0141): opaque reference to extension-owned content
+    /// attached to a user message (role [`Role::User`], right after the
+    /// message text, one row per part). The core stores only the reference;
+    /// the content stays with the extension. Untrusted (Spec 0039/0110).
+    /// Triggers no follow-up round by itself.
+    Extension(super::ExtensionPart),
+    /// Issue #505 (ADR 0141): extension content the core sealed for ONE
+    /// send. Exists only in the send copy; never serialized and rejected by
+    /// the chat store (`#[serde(skip)]`).
+    #[serde(skip)]
+    Sealed(super::SealedContent),
 }
 
 /// Warum eine Aktion nicht ausgeführt wurde (Spec 0021, Abschnitt 3).
@@ -830,7 +841,30 @@ pub enum AiError {
     /// Issue #470 (Spec 0110): the selected model cannot read this kind of
     /// attachment (`Image` or `Pdf`; text attachments never fail). Raised
     /// before any request is made; nothing is sent.
-    AttachmentUnsupported(super::attachments::AttachmentKind),
+    InputUnsupported(MediaClass),
+}
+
+/// Issue #506 (ADR 0141, decision 5): media class of a binary content block.
+/// The capability check of a model is keyed by this class; the wire format
+/// of a block follows from it. Text never fails a capability check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaClass {
+    Image,
+    Pdf,
+}
+
+impl MediaClass {
+    /// Class of a media type; `None` for anything that is not sent as a
+    /// binary block (the core allowlist only lets images and PDFs through).
+    pub fn of_mime(mime: &str) -> Option<MediaClass> {
+        if mime == "application/pdf" {
+            Some(MediaClass::Pdf)
+        } else if mime.starts_with("image/") {
+            Some(MediaClass::Image)
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for AiError {
@@ -878,11 +912,11 @@ impl fmt::Display for AiError {
                 f,
                 "Der KI-Provider lehnt die Web-Recherche für dieses Konto ab: {msg}"
             ),
-            AiError::AttachmentUnsupported(kind) => match kind {
-                super::attachments::AttachmentKind::Pdf => {
+            AiError::InputUnsupported(class) => match class {
+                MediaClass::Pdf => {
                     write!(f, "Dieses Modell kann keine PDFs lesen.")
                 }
-                _ => write!(f, "Dieses Modell kann keine Bilder lesen."),
+                MediaClass::Image => write!(f, "Dieses Modell kann keine Bilder lesen."),
             },
         }
     }
@@ -908,7 +942,7 @@ impl AiError {
             AiError::LocalProviderUnreachable(_) => "AI_LOCAL_PROVIDER_UNREACHABLE",
             AiError::Timeout { .. } => "AI_TIMEOUT",
             AiError::WebResearchRejected(_) => "AI_WEB_RESEARCH_REJECTED",
-            AiError::AttachmentUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
+            AiError::InputUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
         }
     }
 }
@@ -936,7 +970,7 @@ mod ai_error_code_tests {
             AiError::LocalProviderUnreachable("x".to_string()),
             AiError::Timeout { secs: 90 },
             AiError::WebResearchRejected("x".to_string()),
-            AiError::AttachmentUnsupported(crate::ai::AttachmentKind::Image),
+            AiError::InputUnsupported(MediaClass::Image),
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
         let mut unique = codes.clone();

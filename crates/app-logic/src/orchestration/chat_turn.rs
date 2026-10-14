@@ -44,6 +44,9 @@ mod tests_rounds;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_attachments;
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_extension_content;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
@@ -589,9 +592,35 @@ pub(crate) fn reapply_redaction_for_send(
                 MessageContent::Attachments(items) => {
                     MessageContent::Attachments(redact_attachments(items, redactor))
                 }
+                // Issue #504: the label goes into the fence, so it is
+                // redacted again on every send. The core never stores
+                // content here; the placeholder is built by the provider.
+                MessageContent::Extension(mut part) => {
+                    part.label = redactor.redact_text(&part.label);
+                    MessageContent::Extension(part)
+                }
+                // Issue #505: already sealed by the core.
+                sealed @ MessageContent::Sealed(_) => sealed,
             },
         })
         .collect()
+}
+
+/// [`reapply_redaction_for_send`] plus the sealing of extension parts (Issue
+/// #505, ADR 0141, decision 3). The one entry point every provider request
+/// (chat turn and compaction) goes through.
+pub(crate) fn reapply_redaction_and_seal_for_send(
+    history: Vec<ChatMessage>,
+    redactor: &dyn OutputRedactor,
+    registry: &crate::chat_content_extension::ChatContentRegistry,
+    session_id: SessionId,
+) -> Result<Vec<ChatMessage>, crate::chat_content_extension::SealError> {
+    crate::chat_content_extension::seal_extension_parts(
+        reapply_redaction_for_send(history, redactor),
+        registry,
+        session_id,
+        redactor,
+    )
 }
 
 /// Issue #469: redigiert den Inhalt von Textanhängen (roh, vor dem Fencing);
@@ -719,8 +748,20 @@ async fn run_one_round(
     .await;
     // Spec 0040, Abschnitt 5: nur-additive Re-Redaction unmittelbar vor dem
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
-    request_context.history =
-        reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
+    // Issue #505: extension parts are sealed here (limits, redaction,
+    // fencing); a failure sends nothing.
+    request_context.history = match reapply_redaction_and_seal_for_send(
+        request_context.history,
+        session.redactor.as_ref(),
+        &session.chat_content,
+        session_id,
+    ) {
+        Ok(history) => history,
+        Err(err) => {
+            emit_chat_error(emitter, session_id, err.message, Some(err.code));
+            return RoundOutcome::Finished;
+        }
+    };
     let estimated_tokens = crate::compaction::estimate_request_tokens(&request_context);
     if wait_before_main_send(session, session_id, emitter, estimated_tokens).await {
         emit_chat_response_cancelled(emitter, session_id);
