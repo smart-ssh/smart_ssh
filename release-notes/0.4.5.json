@@ -1,0 +1,25 @@
+{
+  "version": "0.4.5",
+  "highlights": {
+    "en": [
+      "Fixes a startup crash on Windows that made 0.4.4 unusable.",
+      "Existing Windows installations and their data work again without any manual step.",
+      "No changes to features or settings."
+    ],
+    "de": [
+      "Behebt einen Absturz beim Start unter Windows, der 0.4.4 unbenutzbar machte.",
+      "Bestehende Windows-Installationen und ihre Daten funktionieren ohne manuelle Schritte wieder.",
+      "Keine Änderungen an Funktionen oder Einstellungen."
+    ],
+    "fr": [
+      "Corrige un plantage au démarrage sous Windows qui rendait la version 0.4.4 inutilisable.",
+      "Les installations Windows existantes et leurs données refonctionnent sans aucune action manuelle.",
+      "Aucune modification des fonctionnalités ni des réglages."
+    ],
+    "es": [
+      "Corrige un fallo al iniciar en Windows que hacía inutilizable la versión 0.4.4.",
+      "Las instalaciones existentes de Windows y sus datos vuelven a funcionar sin ningún paso manual.",
+      "Sin cambios en funciones ni ajustes."
+    ]
+  }
+}

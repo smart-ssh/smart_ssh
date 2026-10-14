@@ -15,3 +15,7 @@
 # ein echter Panic). Deshalb jetzt gezielt nur `*.rs` — lässt `.sql` (und
 # alles andere) beim historischen, unveränderten Checkout-Verhalten.
 *.rs text eol=lf
+
+# release-notes/*.json are byte-compared against a canonical pretty-print
+# (scripts/check-release-notes.mjs); CRLF checkouts on Windows would fail it.
+release-notes/*.json text eol=lf

@@ -36,6 +36,20 @@ Bezüge: Spec 0052 (Anzeige von Version und Build in der App), Spec 0090
   Versionsabschnitts. Ältere Abschnitte sind ausgenommen. Eine
   automatische Prüfung schlägt fehl, wenn ein Abschnitt ab 0.5.3 die
   Highlights nicht oder nicht in dieser Form hat.
+- Zu jeder Version ab 0.5.3 (und rückwirkend zu 0.4.5 bis 0.5.2) gibt es
+  eine Datei `release-notes/X.Y.Z.json` im
+  Wurzelverzeichnis mit den Highlights in Englisch, Deutsch, Französisch
+  und Spanisch. Sie enthält genau die Schlüssel `version` und `highlights`;
+  `highlights` hat genau die Schlüssel `en`, `de`, `fr` und `es`. Jede Liste
+  hat 3 bis 6 Einträge, alle Listen gleich viele, und Eintrag *n* bedeutet
+  in jeder Sprache dasselbe. Die Einträge sind einzeilige Klartexte ohne
+  Markdown. `en` ist Eintrag für Eintrag identisch mit den
+  `### Highlights` der Version im Changelog. Die Download-Seite und der
+  Update-Dialog ausgelieferter Builds holen die Datei einer Version über
+  ihren Namen und zeigen die Highlights in der Sprache des Lesers. Die
+  automatische Prüfung schlägt fehl, wenn eine Datei diesem Format nicht
+  entspricht, `en` abweicht, die Version keinen Changelog-Abschnitt hat oder
+  die Datei für eine Version ab 0.5.3 fehlt.
 - Der Changelog und die Fragmente sind englisch.
 - Ein Eintrag (Fragment) hat höchstens zwei Zeilen, beschreibt die sichtbare
   Wirkung statt des Mechanismus und enthält nichts Internes.

@@ -1,0 +1,33 @@
+{
+  "version": "0.5.2",
+  "highlights": {
+    "en": [
+      "Export server profiles to an OpenSSH ssh_config file; anything that cannot be represented is noted as a comment.",
+      "Import server profiles from an OpenSSH ssh_config after a full preview, including Include files and ProxyJump chains.",
+      "New setting \"Always ask on red risk\", on by default: red-rated AI suggestions always need confirmation.",
+      "Chat session titles and AI-suggested notes are redacted before they are stored or shown.",
+      "New \"Third-party licenses\" entry in the About settings, readable offline."
+    ],
+    "de": [
+      "Server-Profile lassen sich in eine OpenSSH-ssh_config exportieren; nicht Abbildbares steht als Kommentar in der Datei.",
+      "Server-Profile lassen sich nach einer vollständigen Vorschau aus einer OpenSSH-ssh_config importieren, inklusive Include-Dateien und ProxyJump-Ketten.",
+      "Neue Einstellung „Bei rotem Risiko immer nachfragen“, standardmäßig an: rot eingestufte KI-Vorschläge verlangen immer eine Bestätigung.",
+      "Titel von Chat-Sitzungen und von der KI vorgeschlagene Notizen werden geschwärzt, bevor sie gespeichert oder angezeigt werden.",
+      "Neuer Eintrag „Drittanbieter-Lizenzen“ im Über-Bereich der Einstellungen, offline lesbar."
+    ],
+    "fr": [
+      "Exportez les profils de serveurs vers un fichier ssh_config OpenSSH ; ce qui ne peut pas être représenté figure en commentaire.",
+      "Importez des profils de serveurs depuis un ssh_config OpenSSH après un aperçu complet, y compris les fichiers Include et les chaînes ProxyJump.",
+      "Nouveau réglage « Toujours demander en cas de risque rouge », activé par défaut : les suggestions de l’IA évaluées en rouge exigent toujours une confirmation.",
+      "Les titres des sessions de chat et les notes suggérées par l’IA sont masqués avant d’être enregistrés ou affichés.",
+      "Nouvelle entrée « Licences tierces » dans la section À propos des réglages, lisible hors ligne."
+    ],
+    "es": [
+      "Exporte los perfiles de servidor a un archivo ssh_config de OpenSSH; lo que no se puede representar queda anotado como comentario.",
+      "Importe perfiles de servidor desde un ssh_config de OpenSSH tras una vista previa completa, incluidos los archivos Include y las cadenas ProxyJump.",
+      "Nuevo ajuste «Preguntar siempre con riesgo rojo», activado por defecto: las sugerencias de la IA con riesgo rojo siempre requieren confirmación.",
+      "Los títulos de las sesiones de chat y las notas sugeridas por la IA se ocultan antes de guardarse o mostrarse.",
+      "Nueva entrada «Licencias de terceros» en el apartado Acerca de los ajustes, legible sin conexión."
+    ]
+  }
+}
