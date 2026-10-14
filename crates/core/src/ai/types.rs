@@ -307,6 +307,12 @@ pub enum MessageContent {
     /// redigiert und als `LocalFile` gefencet. Löst für sich keine
     /// Folgerunde aus. Alte Sitzungen ohne Anhänge enthalten die Variante nie.
     Attachments(Vec<super::ChatAttachment>),
+    /// Issue #504 (ADR 0141): opaque reference to extension-owned content
+    /// attached to a user message (role [`Role::User`], right after the
+    /// message text, one row per part). The core stores only the reference;
+    /// the content stays with the extension. Untrusted (Spec 0039/0110).
+    /// Triggers no follow-up round by itself.
+    Extension(super::ExtensionPart),
 }
 
 /// Warum eine Aktion nicht ausgeführt wurde (Spec 0021, Abschnitt 3).

@@ -11,9 +11,10 @@
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
 mod auto_reconnect;
+/// Issue #462: extension-owned database tables.
+mod chat_content;
 mod chat_retention;
 mod commands;
-/// Issue #462: extension-owned database tables.
 mod db_extensions;
 /// Issue #93: Ort der „Lokal öffnen"-Kopien je Datenverzeichnis und das
 /// Aufräumen von Überbleibseln beim Start.
@@ -195,6 +196,7 @@ fn startup_inputs(
 /// [`run`] ruft sie außerhalb der Laufzeit über ein `block_on` auf.
 ///
 /// `offers_skip` ist A11.1 und gilt nur im Passwort-Modus.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn open_and_assemble(
     entitlements: &Arc<dyn ssh_manager_core::entitlements::EntitlementProvider>,
     session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
@@ -203,6 +205,7 @@ pub(crate) async fn open_and_assemble(
     prompt: &dyn app_logic::database_startup::StartupPrompt,
     offers_skip: bool,
     db_extensions: &[DbExtension],
+    chat_content: &Arc<app_logic::chat_content_extension::ChatContentRegistry>,
 ) -> Result<AppState, app_logic::database_startup::StartupAbort> {
     let db_path = inputs.db_path.clone();
     let keychain = inputs.keychain;
@@ -295,6 +298,9 @@ pub(crate) async fn open_and_assemble(
     // database is open (after the unlock in master-password mode). A failing
     // extension is skipped; the core starts without it.
     db_extensions::start_db_extensions(&profile_store, db_extensions).await;
+
+    // Issue #504 (ADR 0141): removal callbacks and the one-time reconcile.
+    chat_content::attach_chat_content(&profile_store, chat_content).await;
 
     let (prompt_history_store, chat_session_store, ledger_store) = (
         profile_store.prompt_history_store(),
@@ -525,6 +531,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");
 
     let db_extensions: Arc<Vec<DbExtension>> = Arc::new(wiring.db_extensions);
+    let chat_content = Arc::new(app_logic::chat_content_extension::ChatContentRegistry::new(
+        std::mem::take(&mut wiring.chat_content_extensions),
+    ));
     let app_state = match mode {
         app_logic::master_password::KeyMode::Password => None,
         app_logic::master_password::KeyMode::Keychain => {
@@ -545,6 +554,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 // A11.1 gilt nur im Passwort-Modus.
                 false,
                 &db_extensions,
+                &chat_content,
             )) {
                 Ok(state) => Some(state),
                 // Der Nutzer hat „Beenden" gewählt. Es ist bereits alles
@@ -593,7 +603,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let pending =
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
             .with_session_extension(wiring.session_extension.clone())
-            .with_db_extensions(db_extensions);
+            .with_db_extensions(db_extensions)
+            .with_chat_content(chat_content);
     let plugins = wiring.plugins;
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.

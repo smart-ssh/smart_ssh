@@ -66,6 +66,9 @@ pub struct SqliteProfileStore {
     // exponiert (z. B. Zeilenzahl in `server_tags`/`note_revisions`) — kein
     // Teil der öffentlichen Crate-API.
     pub(crate) pool: SqlitePool,
+    /// Issue #504: observer for removed chat sessions (shared with every
+    /// chat store made from this store).
+    pub(crate) chat_removal: crate::chat_session_store::RemovalHook,
 }
 
 impl SqliteProfileStore {
@@ -314,7 +317,10 @@ impl SqliteProfileStore {
         close_on_error(&pool, sqlx::migrate!().run(&pool).await).await?;
         tracing::info!("database migrations complete");
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            chat_removal: Default::default(),
+        })
     }
 
     /// Spec 0059 (fataler Startfehler-Dialog), Fall 1: die höchste
@@ -428,7 +434,32 @@ impl SqliteProfileStore {
     /// Wie [`Self::ai_provider_store`], für persistente Chat-Sitzungen
     /// (Spec 0034).
     pub fn chat_session_store(&self) -> crate::SqliteChatSessionStore {
-        crate::SqliteChatSessionStore::new(self.pool.clone())
+        crate::SqliteChatSessionStore::with_removal_hook(
+            self.pool.clone(),
+            self.chat_removal.clone(),
+        )
+    }
+
+    /// Issue #504 (ADR 0141): registers the observer told about every removed
+    /// chat session (single delete, retention, server delete). Set once; a
+    /// second call is ignored.
+    pub fn set_chat_removal_observer(
+        &self,
+        observer: std::sync::Arc<dyn crate::ChatSessionRemovalObserver>,
+    ) {
+        let _ = self.chat_removal.set(observer);
+    }
+
+    /// Ids of the chat sessions that exist now (Issue #504, `reconcile`).
+    pub async fn chat_session_ids(&self) -> Result<Vec<uuid::Uuid>, String> {
+        let rows: Vec<String> = sqlx::query_scalar("SELECT id FROM chat_sessions")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(rows
+            .iter()
+            .filter_map(|raw| uuid::Uuid::parse_str(raw).ok())
+            .collect())
     }
 
     /// Wie [`Self::chat_session_store`], für das Session-Ledger (Spec
@@ -793,6 +824,17 @@ impl ProfileStore for SqliteProfileStore {
     }
 
     async fn delete_server(&self, id: &ServerId) -> ProfileResult<()> {
+        // Issue #504: the chat sessions of this server go with it (`ON DELETE
+        // CASCADE`); collect their ids first, tell the observer afterwards.
+        let session_ids: Vec<uuid::Uuid> =
+            sqlx::query_scalar::<_, String>("SELECT id FROM chat_sessions WHERE server_id = ?")
+                .bind(id.0.to_string())
+                .fetch_all(&self.pool)
+                .await
+                .map_err(backend_err)?
+                .iter()
+                .filter_map(|raw| uuid::Uuid::parse_str(raw).ok())
+                .collect();
         // `server_tags` wird per `ON DELETE CASCADE` automatisch entfernt.
         let result = sqlx::query("DELETE FROM servers WHERE id = ?")
             .bind(id.0.to_string())
@@ -803,6 +845,7 @@ impl ProfileStore for SqliteProfileStore {
         if result.rows_affected() == 0 {
             return Err(ProfileError::ServerNotFound(*id));
         }
+        crate::chat_session_store::notify_removed(&self.chat_removal, &session_ids);
         Ok(())
     }
 

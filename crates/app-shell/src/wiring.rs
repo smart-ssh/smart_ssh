@@ -56,6 +56,13 @@ pub struct Wiring {
     /// Dateien auswählen; eine Edition registriert hier, wie eine opake
     /// Anhang-ID in einen Anhang aufgelöst wird. Community liefert keine.
     pub chat_attachment_resolvers: Vec<Arc<dyn ssh_manager_core::ai::ChatAttachmentResolver>>,
+    /// Issue #504 (ADR 0141, Spec 0038 §2a): content extensions that attach
+    /// their own content to user chat messages. The core stores only an
+    /// opaque reference and tells them when chat sessions are removed.
+    /// Names must match `[a-z0-9]+` and be unique; others are skipped.
+    /// Community registers none.
+    pub chat_content_extensions:
+        Vec<Arc<dyn app_logic::chat_content_extension::ChatContentExtension>>,
 
     /// Issue #464 (Spec 0038, section 2): transforms approved commands and
     /// file content right before they are sent to the server. Community
@@ -93,6 +100,7 @@ impl Wiring {
             extra_data_paths: Vec::new(),
             session_extension: None,
             chat_attachment_resolvers: Vec::new(),
+            chat_content_extensions: Vec::new(),
 
             outgoing_transform: None,
         }
@@ -107,5 +115,11 @@ mod tests {
     #[test]
     fn test_community_registers_no_chat_attachment_resolvers() {
         assert!(Wiring::community().chat_attachment_resolvers.is_empty());
+    }
+
+    /// Issue #504: Community registers no chat content extension.
+    #[test]
+    fn test_community_registers_no_chat_content_extensions() {
+        assert!(Wiring::community().chat_content_extensions.is_empty());
     }
 }

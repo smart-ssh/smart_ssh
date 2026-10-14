@@ -494,6 +494,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 return { type: "webActivity", id: freshId(), activity: entry.activity };
               case "attachments":
                 return { type: "historyAttachments", id: freshId(), items: entry.items };
+              case "extensionParts":
+                // Issue #504: shown like attachments — label and kind only,
+                // never content, without asking any extension.
+                return {
+                  type: "historyAttachments",
+                  id: freshId(),
+                  items: entry.items.map((p) => ({ name: p.label, kind: p.media })),
+                };
             }
           }),
           ...prev,

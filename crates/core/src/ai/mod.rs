@@ -13,6 +13,7 @@
 //! Mock-Implementierungen testbar.
 
 mod attachments;
+mod extension_part;
 mod fencing;
 pub mod keywords;
 mod live_redaction;
@@ -34,6 +35,7 @@ pub use attachments::{
     validate_attachments, AttachmentError, AttachmentKind, ChatAttachment, ChatAttachmentResolver,
     BINARY_ATTACHMENT_TOKEN_ESTIMATE, MAX_ATTACHMENTS_PER_MESSAGE, MAX_ATTACHMENT_BYTES,
 };
+pub use extension_part::{ExtensionMedia, ExtensionPart, ExtensionSource};
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};
 pub use live_redaction::LiveOutputRedactor;
 pub use provider::AiProvider;

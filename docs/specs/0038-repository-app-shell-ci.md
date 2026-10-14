@@ -161,6 +161,27 @@ Regeln:
   registrierte Erweiterung ist die Datenbank identisch zu vorher.
 - Erweiterungstabellen sind **nicht Teil des Voll-Backups** (Spec 0109, C2).
 
+### Chat-Inhalte von Erweiterungen
+
+Eine Erweiterung kann sich über die Verdrahtung als Quelle für Inhalte
+registrieren, die an eine Nutzer-Nachricht gehängt werden (Spec 0110,
+Abschnitt 5). Regeln:
+
+- Der Name besteht aus Kleinbuchstaben und Ziffern und ist eindeutig. Eine
+  Registrierung mit ungültigem oder doppeltem Namen wird übersprungen und
+  ohne Werte protokolliert. Community registriert keine; dann bleiben
+  Datenbank, Prompt und Verlauf unverändert.
+- Die Erweiterung wählt ihre Quelle aus einer geschlossenen Liste des Kerns
+  (zunächst: lokale Datei); eigene Fence-Marker oder ungefencten Text kann
+  sie nicht liefern.
+- Weil Fremdschlüssel in Kerntabellen verboten sind, meldet der Kern jede
+  gelöschte Chat-Sitzung: beim einzelnen Löschen, bei der Aufbewahrungsfrist
+  und beim Löschen eines Servers. Der Aufruf kommt erst, nachdem das Löschen
+  gelungen ist, genau einmal je entfernter Sitzung.
+- Nach den Erweiterungsmigrationen übergibt der Kern jeder Erweiterung einmal
+  je Start die Menge der vorhandenen Chat-Sitzungen, damit Reste nach einem
+  Absturz zwischen Löschen und Aufruf verschwinden.
+
 ## 3. Ein Binary je Edition
 
 Das Community-Binary ist ein dünnes Programm, das nur die Verdrahtung der
