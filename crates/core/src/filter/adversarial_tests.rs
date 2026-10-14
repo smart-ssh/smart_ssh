@@ -1425,3 +1425,176 @@ fn test_adv_deferred_code_extraction() {
         assert_eq!(deferred_code(cmd), None, "{cmd}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Issue #485: mutation-killing tests for the parser's option analysis and
+// wrapper/assignment stripping. Each assertion names the behaviour it pins.
+// ---------------------------------------------------------------------------
+
+mod mutants_485 {
+    use super::super::parser::{
+        is_elevation_or_passthrough_wrapper, program_source, resolve_effective_command,
+        ProgramSource,
+    };
+
+    fn code(c: &str) -> Option<ProgramSource> {
+        Some(ProgramSource::Code(vec![c.to_string()]))
+    }
+
+    #[test]
+    fn variable_assignment_prefix_needs_a_posix_identifier() {
+        // Stripped: letter or `_` first, alnum/`_` after.
+        assert_eq!(resolve_effective_command("FOO=1 rm -rf /"), "rm -rf /");
+        assert_eq!(resolve_effective_command("_FOO=1 rm -rf /"), "rm -rf /");
+        assert_eq!(resolve_effective_command("a_1=x rm -rf /"), "rm -rf /");
+        // Look-alikes are not assignments and stay the command word.
+        for word in ["=x", "1A=b", "A-B=c", "A.B=c", "-A=b"] {
+            let cmd = format!("{word} rm -rf /");
+            assert_eq!(resolve_effective_command(&cmd), cmd, "{word}");
+        }
+    }
+
+    #[test]
+    fn wrapper_detection_is_exact() {
+        for w in [
+            "sudo", "doas", "env", "nice", "nohup", "time", "command", "timeout", "xargs",
+            "setsid", "stdbuf", "ionice", "chroot", "flock", "busybox", "script", "exec",
+            "builtin",
+        ] {
+            assert!(is_elevation_or_passthrough_wrapper(w), "{w}");
+        }
+        for w in [
+            "",
+            "rm",
+            "sudoedit",
+            "su",
+            "SUDO",
+            "/usr/bin/sudo",
+            "envx",
+            "ls",
+        ] {
+            assert!(!is_elevation_or_passthrough_wrapper(w), "{w}");
+        }
+    }
+
+    #[test]
+    fn wrapper_flags_and_values_are_stripped_precisely() {
+        // `sudo -n` is a plain flag: it must not swallow the command.
+        assert_eq!(resolve_effective_command("sudo -n rm -rf /"), "rm -rf /");
+        assert_eq!(resolve_effective_command("nice -5 rm -rf /"), "rm -rf /");
+        // `-u`/`-g` take a value for sudo, `-n` for nice.
+        assert_eq!(
+            resolve_effective_command("sudo -u root rm -rf /"),
+            "rm -rf /"
+        );
+        assert_eq!(
+            resolve_effective_command("sudo --group wheel rm -rf /"),
+            "rm -rf /"
+        );
+        assert_eq!(resolve_effective_command("nice -n 5 rm -rf /"), "rm -rf /");
+        // Look-alikes of the wrapper names are left alone.
+        assert_eq!(
+            resolve_effective_command("sudoedit /etc/x"),
+            "sudoedit /etc/x"
+        );
+        // One positional argument for timeout/chroot/flock.
+        assert_eq!(resolve_effective_command("timeout 5 rm -rf /"), "rm -rf /");
+        // Missing operands: nothing to index past the end.
+        assert_eq!(resolve_effective_command("sudo -u"), "");
+        assert_eq!(resolve_effective_command("sudo -n"), "");
+        assert_eq!(resolve_effective_command("timeout"), "");
+        assert_eq!(resolve_effective_command("nice -n"), "");
+    }
+
+    #[test]
+    fn flag_n_is_only_a_value_option_for_nice() {
+        assert_eq!(resolve_effective_command("time -n rm -rf /"), "rm -rf /");
+    }
+
+    // Bug found while pinning `strip_one_elevation_wrapper_or_assignment`
+    // (issue #485): `env -u NAME` takes a value, but only sudo/doas flags are
+    // treated as value-taking, so `NAME` becomes the command word and
+    // `rm -rf /` is hidden from a `Deny "rm *"` rule (AutoExec under
+    // `Allow "*"`). Not fixed here (test-only scope).
+    #[tokio::test]
+    #[ignore = "bug: `env -u NAME rm -rf /` is not recognised as rm (issue #485 follow-up)"]
+    async fn env_unset_option_value_does_not_hide_the_command() {
+        super::assert_denied_by_rm_rule("env -u FOO rm -rf /").await;
+    }
+
+    #[test]
+    fn lone_dash_means_stdin_for_interpreters_only() {
+        assert_eq!(program_source("python3 - arg"), Some(ProgramSource::Stdin));
+        assert_eq!(
+            program_source("sh - script.sh"),
+            Some(ProgramSource::Operand)
+        );
+    }
+
+    #[test]
+    fn plus_prefix_is_an_option_only_for_shells_with_plus_options() {
+        // A lone `+` is the first operand.
+        assert_eq!(program_source("sh +"), Some(ProgramSource::Operand));
+        // `+x` is not an option for python: it is the script operand.
+        assert_eq!(program_source("python3 +x"), Some(ProgramSource::Operand));
+        // For sh it is an option cluster.
+        assert_eq!(program_source("sh +x"), Some(ProgramSource::Stdin));
+    }
+
+    #[test]
+    fn digit_values_skip_their_digits() {
+        // The second `0` is part of the digit value, not an option that
+        // sees a following `x`.
+        assert_eq!(program_source("perl -00x"), Some(ProgramSource::Stdin));
+        assert_eq!(program_source("perl -0x1"), Some(ProgramSource::Opaque));
+    }
+
+    #[test]
+    fn script_and_stdin_flags_are_accumulated() {
+        // python -m consumes `mod` as the script.
+        assert_eq!(
+            program_source("python3 -m mod"),
+            Some(ProgramSource::Operand)
+        );
+        // next-word value naming stdin.
+        assert_eq!(
+            program_source("bash -o /dev/stdin script.sh"),
+            Some(ProgramSource::Stdin)
+        );
+        // attached value naming stdin.
+        assert_eq!(
+            program_source("perl -M- script.pl"),
+            Some(ProgramSource::Stdin)
+        );
+        // attached value that contains a code/stdin option letter.
+        assert_eq!(
+            program_source("perl -Mexample"),
+            Some(ProgramSource::Opaque)
+        );
+        assert_eq!(
+            program_source("perl -Mstrict script.pl"),
+            Some(ProgramSource::Operand)
+        );
+    }
+
+    #[test]
+    fn ksh_option_name_letters_map_to_code_and_stdin() {
+        assert_eq!(program_source("zsh -o c 'rm -rf /'"), code("rm -rf /"));
+        assert_eq!(
+            program_source("zsh -o s script"),
+            Some(ProgramSource::Stdin)
+        );
+        assert_eq!(program_source("zsh -o o x"), Some(ProgramSource::Opaque));
+        // `+o c` is negated: fail closed.
+        assert_eq!(program_source("zsh +o c x"), Some(ProgramSource::Opaque));
+        // Harmless single letter and known name.
+        assert_eq!(
+            program_source("zsh -o x script"),
+            Some(ProgramSource::Operand)
+        );
+        assert_eq!(
+            program_source("zsh -o errexit script"),
+            Some(ProgramSource::Operand)
+        );
+    }
+}

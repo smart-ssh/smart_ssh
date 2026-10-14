@@ -1,6 +1,6 @@
-### Neu
-- Die Oberfläche gibt es jetzt auch auf Polnisch, Tschechisch, Ukrainisch und Russisch.
-  Die Sprache lässt sich in den Einstellungen wählen oder folgt dem System.
+### Added
+- The interface is now also available in Polish, Czech, Ukrainian and Russian.
+  The language can be chosen in the settings or follows the system.
 
-### Sicherheit
-- Die Schwärzung erkennt Passwort-Stichwörter jetzt auch auf Polnisch, Tschechisch, Ukrainisch und Russisch.
+### Security
+- Redaction now also recognizes password keywords in Polish, Czech, Ukrainian and Russian.

@@ -1,5 +1,5 @@
-### Behoben
-- Das Verschieben einer Filterregel in der Priorität ist jetzt atomar und kann
-  nicht mehr zwei Regeln mit gleicher Priorität hinterlassen.
-- Pfeile neben einer Regel mit ungültigem Muster sind deaktiviert und nennen
-  den Grund; die Testansicht markiert solche Regeln ebenfalls.
+### Fixed
+- Moving a filter rule in priority is now atomic and can no longer leave two
+  rules with the same priority.
+- Arrows next to a rule with an invalid pattern are disabled and give the
+  reason; the test view also marks such rules.

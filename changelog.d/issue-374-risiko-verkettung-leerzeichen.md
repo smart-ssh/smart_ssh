@@ -1,3 +1,3 @@
-### Behoben
-- Die Risikoeinstufung bewertet ein Kommando mit nachgestellten Leerzeichen
-  in einer Verkettung (`;`, `&&`, `|`) jetzt genauso streng wie allein.
+### Fixed
+- Risk classification now rates a command with trailing spaces inside a
+  chain (`;`, `&&`, `|`) as strictly as the command on its own.

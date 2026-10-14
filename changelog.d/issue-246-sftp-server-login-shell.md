@@ -1,3 +1,3 @@
-### Behoben
-- Der Dateibrowser mit erhöhten Rechten findet `sftp-server` jetzt auch auf
-  Servern mit csh, tcsh oder fish als Login-Shell.
+### Fixed
+- The elevated file browser now also finds `sftp-server` on servers whose
+  login shell is csh, tcsh or fish.

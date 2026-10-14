@@ -1,4 +1,4 @@
-### Behoben
-- Passwort-Stichwörter mit zerlegten Akzenten (z. B. `contraseña` aus der
-  Zwischenablage) und mit typografischem Apostroph (`clé d’accès`) werden
-  jetzt ebenfalls maskiert.
+### Fixed
+- Password keywords with decomposed accents (e.g. `contraseña` from the
+  clipboard) and with a typographic apostrophe (`clé d’accès`) are now
+  masked as well.

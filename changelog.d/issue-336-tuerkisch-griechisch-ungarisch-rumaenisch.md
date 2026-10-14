@@ -1,3 +1,3 @@
-### Neu
-- Die App gibt es jetzt auch auf Türkisch, Griechisch, Ungarisch und Rumänisch. Die Sprache lässt sich in den Einstellungen wählen und wird bei passender Systemsprache automatisch gewählt.
-- Passwörter und Schlüssel werden jetzt auch nach den Stichwörtern dieser vier Sprachen (z. B. „şifre“, „κωδικός“, „jelszó“, „parolă“) in Ausgaben unkenntlich gemacht.
+### Added
+- The app is now also available in Turkish, Greek, Hungarian and Romanian. The language can be chosen in the settings and is selected automatically when it matches the system language.
+- Passwords and keys are now also masked in output based on the keywords of these four languages (e.g. "şifre", "κωδικός", "jelszó", "parolă").

@@ -1,4 +1,4 @@
-### Sicherheit
-- Ist die KI-Prüfung auf eingeschleuste Anweisungen für einen Server
-  eingeschaltet, aber die KI-Zweitmeinung aus oder nicht einrichtbar, zeigt
-  die Sitzung jetzt einen Hinweis, dass die Prüfung nicht aktiv ist.
+### Security
+- If the AI check for injected instructions is enabled for a server but the
+  AI second opinion is off or cannot be set up, the session now shows a
+  notice that the check is not active.

@@ -1,4 +1,4 @@
-### Sicherheit
-- Der Dateibrowser mit erhöhten Rechten schlägt keine sudo-Regel mehr vor, wenn
-  sftp-server oder ein übergeordnetes Verzeichnis nicht root gehört oder für
-  andere beschreibbar ist; stattdessen erscheint eine Warnung.
+### Security
+- The elevated file browser no longer suggests a sudo rule if `sftp-server`
+  or a parent directory is not owned by root or is writable by others; a
+  warning is shown instead.

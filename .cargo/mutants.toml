@@ -1,0 +1,101 @@
+# cargo-mutants configuration. Every entry excludes exactly one provably
+# equivalent mutant (no input changes the observable result); add a reason
+# and the issue number for each.
+
+# --- parser.rs: top-level segmentation (issue #483) -------------------------
+exclude_re = [
+    # Backslash inside double quotes: `i + 1 < chars.len()` only differs from
+    # its mutants when the backslash is the LAST char. Then the escape skip
+    # (`i += 2`) and the plain advance (`i += 1`) both end the loop with the
+    # double quote still open, so the result is `None` either way. (#483)
+    "parser\\.rs:764:31: replace \\+ with \\* in scan_top_level_segments",
+    "parser\\.rs:764:31: replace \\+ with - in scan_top_level_segments",
+    "parser\\.rs:764:35: replace < with <= in scan_top_level_segments",
+    # CRLF handling: not swallowing the `\n` after a `\r` only yields an
+    # empty segment on the next iteration, which `push_segment` drops; and
+    # swallowing a `\n` that follows a `\n` skips just an empty segment. (#483)
+    "parser\\.rs:816:26: replace == with != in scan_top_level_segments",
+    "parser\\.rs:816:49: replace \\+ with \\* in scan_top_level_segments",
+    "parser\\.rs:817:27: replace \\+= with \\*= in scan_top_level_segments",
+    # `&&` / `||` treated as two single operators: the second one pushes an
+    # empty range, which `push_segment` drops, so the segments are identical. (#483)
+    "parser\\.rs:823:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'&'\\) with false in scan_top_level_segments",
+    "parser\\.rs:835:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'\\|'\\) with false in scan_top_level_segments",
+
+    # --- Issue #484: redirection detection in filter/parser.rs ---
+    # contains_unquoted_output_redirection: `i + 1 < chars.len()` guards the
+    # two-char skip after a backslash in double quotes. Inside the loop
+    # i < len always holds, so `i * 1 < len`, `i - 1 < len` (i >= 1 in the
+    # double-quote state) and `i + 1 <= len` are always true as well; the
+    # only input where the original is false is a trailing backslash, and
+    # skipping 1 or 2 chars both end the loop with the same result (#484).
+    "parser\\.rs:717:31: replace \\+ with \\* in contains_unquoted_output_redirection",
+    "parser\\.rs:717:31: replace \\+ with - in contains_unquoted_output_redirection",
+    "parser\\.rs:717:35: replace < with <= in contains_unquoted_output_redirection",
+    # unquoted_word_len: the word starts at a non-whitespace char of text that
+    # unquoted_input_redirection_runs already scanned with the same quoting
+    # rules and found balanced, so the "quote left open" result is
+    # unreachable (the `&&` -> `||` mutants only differ there), and the
+    # length is always >= 1 (`len > 0` vs `len >= 0` cannot differ).
+    # Verified by exhaustive enumeration of 7.8M short inputs (#484).
+    "parser\\.rs:450:17: replace && with \\|\\| in unquoted_word_len",
+    "parser\\.rs:450:31: replace && with \\|\\| in unquoted_word_len",
+    "parser\\.rs:450:38: replace > with >= in unquoted_word_len",
+
+    # --- parser.rs: substitutions, ANSI-C escapes, shell -c (issue #486) ---
+    # `name.len() > 2` in unclassified_shell_source: the only 2-char name
+    # ending in `sh` is `sh`, which `program_kind` always classifies, so
+    # the fallback is never called with it. (#486)
+    "parser\\.rs:1496:39: replace > with >= in unclassified_shell_source",
+    # `i = j + 1` in contains_ansi_c_escape: with `j * 1` the scan resumes at
+    # the closing quote, which is not a `$`, so it only costs one extra
+    # step; when the quote is missing (`j == len`) the loop ends either way. (#486)
+    "parser\\.rs:940:19: replace \\+ with \\* in contains_ansi_c_escape",
+
+    # --- Issue #485: filter parser, option analysis ---
+    # `letter_option` is only called for specs with a non-empty
+    # `letter_name_value`, which is KSH_LIKE_SHELL_OPTIONS alone. In that spec
+    # code_value, script_value, next_word_value, attached_value and
+    # digit_value are all empty, so `a || b` and `a && b` of any two of them
+    # are both false. Issue #485.
+    'parser\.rs:1827:13: replace \|\| with && in letter_option',
+    'parser\.rs:1830:13: replace \|\| with && in letter_option',
+    'parser\.rs:1831:13: replace \|\| with && in letter_option',
+    # No OptionSpec has a non-empty `long_script`, so `in_list(long_script)`
+    # is always false and `script |= false` equals `script &= false`.
+    # Issue #485.
+    'parser\.rs:1895:24: replace \|= with &= in analyse_options',
+    # The `attached_value` branch only exists in PERL_OPTIONS and
+    # RUBY_OPTIONS, whose stdin_flag and script_value are empty, so
+    # `stdin_flag && script_value` equals `stdin_flag || script_value` (both
+    # false). Issue #485.
+    'parser\.rs:1962:25: replace \|\| with && in analyse_options',
+    # `code_operand` is only set by specs (bash, ksh, csh) whose code_value and
+    # long_code are empty, so `codes` is always empty there and the guard
+    # `codes.is_empty()` is always true. Issue #485.
+    'parser\.rs:1977:21: replace match guard codes\.is_empty\(\) with true in analyse_options',
+
+    # --- classifier.rs: glob handling and secret paths (issue #488) ---
+    # `brace_depth > 0` after the glob scan in glob_to_regex: `brace_depth` is
+    # a usize, so `< 0` is never true and the early `None` is skipped. But
+    # `brace_depth > 0` means an unclosed `(?:` is left in the pattern, which
+    # `Regex::new` rejects, so `.ok()` yields `None` all the same. (#488)
+    "classifier\\.rs:1063:20: replace > with < in glob_to_regex",
+
+    # --- Issue #489: risk classifier (classifier.rs) ---
+    # classify_into, padded segments: `&&` -> `||` only adds the candidates
+    # " " (from an empty segment) and `<segment>  ` (two trailing blanks).
+    # No risk pattern matches a lone blank or needs two consecutive blanks
+    # (globs use `*`, the regexes use `\s*`/`\s`/`\b`; checked against all
+    # patterns), so any pattern that accepts `x  ` already accepts `x `. (#489)
+    'classifier\.rs:147:47: replace && with \|\| in classify_into',
+    # cd_prefixes, `~` arm: without it `~` takes the generic arm, where
+    # normalize_path("~") is "~" (it is not changed by any rule), it starts
+    # with `~` (no chaining) and "~/" is pushed - the same prefix. (#489)
+    'classifier\.rs:1089:27: replace match guard word\.text == "~" with false in cd_prefixes',
+
+    # --- engine.rs: NoRules (issue #487) -------------------------------------
+    # `Vec::new()` and `vec![]` are the same empty vector; no input can tell
+    # the original body from the mutant. (#487)
+    "engine\\.rs:\\d+:\\d+: replace <impl PolicyStore for NoRules>::rules_for -> Vec<Rule> with vec!\\[\\]",
+]

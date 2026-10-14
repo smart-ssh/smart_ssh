@@ -9,7 +9,7 @@ description = "Starts the real desktop app through tauri-driver (WebDriver) and 
 # Test-only package: nothing in the shipped application depends on it. The
 # tests in `tests/` are `#[ignore]`d because they need a built app,
 # `tauri-driver`, a display and a Secret Service session; the CI job runs
-# them with `--ignored` (ADR 0130).
+# them with `--ignored` (ADR 0140).
 # Everything is a dev-dependency on purpose: the production dependency graph
 # (`cargo tree --edges normal,build`, which `network_boundary.rs` inspects for
 # HTTP clients) must not see WebDriver's HTTP client. This package has no

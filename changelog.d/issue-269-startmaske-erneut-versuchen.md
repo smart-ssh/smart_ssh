@@ -1,2 +1,2 @@
-### Behoben
-- „Erneut versuchen“ auf der Startmaske funktioniert jetzt auch, wenn das Anmelden der Start-Ereignisse gescheitert ist; ein Neustart der App ist nicht mehr nötig.
+### Fixed
+- "Try again" on the startup screen now also works when registering the startup events failed; restarting the app is no longer necessary.

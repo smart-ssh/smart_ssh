@@ -1,2 +1,2 @@
-### Behoben
-- Während eines Verbindungsaufbaus bleiben Server-Einträge per Tastatur erreichbar; nach dem Schließen des Host-Key-Dialogs steht der Fokus wieder auf dem Server.
+### Fixed
+- While a connection is being established, server entries stay reachable by keyboard; after closing the host key dialog, focus returns to the server.

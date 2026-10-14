@@ -1,3 +1,3 @@
-### Behoben
-- Der automatische Notiz-Vorschlag nach dem Trennen der Verbindung betrifft
-  nur noch die Notiz des Servers, nie die der Gruppe.
+### Fixed
+- The automatic note suggestion after disconnecting now affects only the
+  server's note, never the group's.

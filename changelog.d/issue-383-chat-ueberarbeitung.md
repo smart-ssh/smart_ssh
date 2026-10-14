@@ -1,2 +1,2 @@
-### Geändert
-- Chat und Befehlsbestätigung: einheitliche Schaltflächen, sichtbarer Tastaturfokus (auch im Eingabefeld), besser lesbare kleine Texte und lange Befehle brechen um. Das Regel-Menü schließt mit Escape.
+### Changed
+- Chat and command confirmation: consistent buttons, visible keyboard focus (also in the input field), more readable small texts, and long commands wrap. The rule menu closes with Escape.

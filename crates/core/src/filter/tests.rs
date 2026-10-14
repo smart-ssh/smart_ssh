@@ -2511,3 +2511,503 @@ async fn test_issue_260_invalid_pattern_is_logged_once_per_rule_and_pattern() {
     let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
     assert_eq!(count_pattern_error_events("deny-broken-260"), 2);
 }
+
+// --- Top-level segmentation: pinned mutation survivors (issue #483) --------
+//
+// `scan_top_level_segments` is private, so these go through `split_command`
+// / `segment_command`. Each test pins the exact segment output for one
+// aspect of the character loop (quotes, escapes, `$( )` depth, separators).
+mod segmentation_pins {
+    use crate::filter::parser::{
+        segment_command, split_command, ParseResult, MAX_SUBSTITUTION_DEPTH,
+    };
+
+    fn segs(cmd: &str) -> Vec<String> {
+        match split_command(cmd) {
+            ParseResult::Segments(s) => s,
+            other => panic!("expected Segments for {cmd:?}, got {other:?}"),
+        }
+    }
+
+    fn assert_ambiguous(cmd: &str) {
+        assert!(
+            matches!(split_command(cmd), ParseResult::Ambiguous { .. }),
+            "expected Ambiguous for {cmd:?}, got {:?}",
+            split_command(cmd)
+        );
+    }
+
+    #[test]
+    fn only_separators_is_ambiguous_not_empty_segments() {
+        // scan returns Some(vec![]) here; the guard must turn it into Ambiguous.
+        for cmd in [";", "&&", "||", "&", "|", ";;", "\n;\n"] {
+            assert_ambiguous(cmd);
+        }
+    }
+
+    #[test]
+    fn separators_inside_single_quotes_do_not_split() {
+        assert_eq!(segs("echo 'a;b' ; ls"), vec!["echo 'a;b'", "ls"]);
+        assert_eq!(segs("echo 'a&&b||c|d'"), vec!["echo 'a&&b||c|d'"]);
+    }
+
+    #[test]
+    fn separators_inside_double_quotes_do_not_split() {
+        assert_eq!(segs("echo \"a;b\" ; ls"), vec!["echo \"a;b\"", "ls"]);
+        assert_eq!(segs("echo \"a&&b||c|d\""), vec!["echo \"a&&b||c|d\""]);
+    }
+
+    #[test]
+    fn separators_inside_backticks_do_not_split() {
+        assert_eq!(segs("echo `a;b` ; ls"), vec!["echo `a;b`", "ls"]);
+        assert_eq!(segs("echo `a&&b|c`"), vec!["echo `a&&b|c`"]);
+    }
+
+    #[test]
+    fn escaped_quote_inside_double_quotes_keeps_quote_open() {
+        assert_eq!(
+            segs(r#"echo "a\"; rm x" ; ls"#),
+            vec![r#"echo "a\"; rm x""#, "ls"]
+        );
+        assert_eq!(segs(r#"echo "\"" ; ls"#), vec![r#"echo "\"""#, "ls"]);
+        assert_eq!(
+            segs(r#"echo "x\\" ; ls"#),
+            vec![r#"echo "x\\""#, "ls"],
+            "an escaped backslash must not escape the closing quote"
+        );
+        assert_eq!(
+            segs(r#"echo "\a\"b;c" ; ls"#),
+            vec![r#"echo "\a\"b;c""#, "ls"]
+        );
+    }
+
+    #[test]
+    fn dollar_paren_substitution_hides_separators() {
+        assert_eq!(segs("echo $(a; b) ; ls"), vec!["echo $(a; b)", "ls"]);
+        assert_eq!(
+            segs("echo $(a && b | c) & ls"),
+            vec!["echo $(a && b | c)", "ls"]
+        );
+    }
+
+    #[test]
+    fn process_substitution_hides_separators() {
+        assert_eq!(segs("cat <(a; b) ; ls"), vec!["cat <(a; b)", "ls"]);
+        assert_eq!(segs("tee >(a | b) ; ls"), vec!["tee >(a | b)", "ls"]);
+    }
+
+    #[test]
+    fn paren_without_substitution_prefix_is_not_a_substitution() {
+        assert_eq!(segs("echo a(b; c)"), vec!["echo a(b", "c)"]);
+        assert_eq!(segs("echo x(a | b"), vec!["echo x(a", "b"]);
+    }
+
+    #[test]
+    fn nested_substitution_closes_only_at_matching_paren() {
+        assert_eq!(
+            segs("echo $(a $(b) ; c) ; ls"),
+            vec!["echo $(a $(b) ; c)", "ls"]
+        );
+        assert_eq!(
+            segs("echo $(a $(b $(c) ; d) ; e) ; ls"),
+            vec!["echo $(a $(b $(c) ; d) ; e)", "ls"]
+        );
+    }
+
+    #[test]
+    fn stray_closing_paren_is_ignored_at_depth_zero() {
+        assert_eq!(segs("echo a) ; ls"), vec!["echo a)", "ls"]);
+    }
+
+    #[test]
+    fn unbalanced_constructs_are_ambiguous() {
+        // A backslash outside quotes is invisible to the scanner but not to
+        // shell-words, so these pass the quote pre-check and reach the
+        // final balance check — each state alone must be enough.
+        assert_ambiguous(r"echo \'abc");
+        assert_ambiguous(r#"echo \"abc"#);
+        assert_ambiguous("echo `abc");
+        assert_ambiguous("echo $(abc");
+        assert_ambiguous("echo <(abc");
+        assert_ambiguous("echo a $(b $(c) ; d");
+    }
+
+    #[test]
+    fn newline_variants_split() {
+        assert_eq!(segs("a\nb"), vec!["a", "b"]);
+        assert_eq!(segs("a\rb"), vec!["a", "b"]);
+        assert_eq!(segs("a\r\nb"), vec!["a", "b"]);
+        // A `\r` preceded by `\n` must not swallow the next character.
+        assert_eq!(segs("ls\n\rpwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("ls\r\n\r\npwd"), vec!["ls", "pwd"]);
+    }
+
+    #[test]
+    fn single_ampersand_does_not_swallow_next_char() {
+        assert_eq!(segs("ls &pwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("ls&pwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("ls &&pwd"), vec!["ls", "pwd"]);
+        assert_eq!(segs("a & b && c"), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn single_pipe_does_not_swallow_next_char() {
+        assert_eq!(segs("ls |wc"), vec!["ls", "wc"]);
+        assert_eq!(segs("ls||wc"), vec!["ls", "wc"]);
+        assert_eq!(segs("ls |wc ||x ;y"), vec!["ls", "wc", "x", "y"]);
+    }
+
+    #[test]
+    fn substitution_recursion_stops_at_depth_cap() {
+        // MAX+10 nested `$( )` levels: depth 0..=MAX each contribute exactly
+        // one literal fragment, deeper levels are not descended into.
+        let mut cmd = String::from("x");
+        for _ in 0..MAX_SUBSTITUTION_DEPTH + 10 {
+            cmd = format!("echo $({cmd})");
+        }
+        assert_eq!(segment_command(&cmd).len(), MAX_SUBSTITUTION_DEPTH + 1);
+
+        // Exactly at the cap everything is descended into, incl. the core.
+        let mut cmd = String::from("x");
+        for _ in 0..MAX_SUBSTITUTION_DEPTH {
+            cmd = format!("echo $({cmd})");
+        }
+        let out = segment_command(&cmd);
+        assert_eq!(out.len(), MAX_SUBSTITUTION_DEPTH + 1);
+        assert_eq!(out.last().map(String::as_str), Some("x"));
+    }
+}
+
+// Issue #484: tests that pin the redirection detection of the parser
+// (surviving cargo-mutants mutants). Behaviour-level, through the
+// `pub(super)`/`pub(crate)` entry points.
+mod redirection_detection_mutants {
+    use super::super::parser::{
+        contains_unquoted_output_redirection as has_out, extract_here_string_codes as here,
+    };
+
+    fn code(cmd: &str) -> Vec<String> {
+        here(cmd)
+    }
+
+    #[test]
+    fn output_redirection_single_quotes_hide_and_close() {
+        // delete arm '\'' / `==` -> `!=` in the single-quote state
+        assert!(!has_out("echo '>' x"));
+        assert!(!has_out("echo '>>' x"));
+        assert!(has_out("echo '>' > f"));
+        assert!(has_out("echo 'a' > f"));
+    }
+
+    #[test]
+    fn output_redirection_double_quotes_close_and_escape() {
+        // escape handling in the double-quote state
+        assert!(has_out("echo \"a\" > f"));
+        assert!(has_out("echo \"\\\"\" > f"));
+        assert!(!has_out("echo \"\\\">\" x"));
+        assert!(!has_out("echo \"a>b\" x"));
+        // backslash as the last char of an unterminated quote
+        assert!(!has_out("echo \"\\"));
+        // stepping back/forward by the wrong amount after an escape
+        assert!(!has_out("echo \"x\\\\\\\">\" y"));
+        assert!(has_out("echo \"\\\\\" > f"));
+    }
+
+    #[test]
+    fn output_redirection_process_substitution_is_not_redirection() {
+        assert!(!has_out("tee >(cat)"));
+        assert!(!has_out("cat >(x)"));
+        assert!(has_out("tee >x"));
+        assert!(has_out("tee > (x)"));
+        // the character before `(` matters, not the one before `>`
+        assert!(has_out("cat (>x"));
+        assert!(has_out("cat >>(x) >(y) > z"));
+    }
+
+    #[test]
+    fn here_string_backslash_in_double_quotes_after_it() {
+        // `i += 2` after an escape inside double quotes, far from the start
+        assert_eq!(
+            code("bash <<< 'echo hi'; echo \"a\\\"b\""),
+            vec!["echo hi".to_string()]
+        );
+    }
+
+    #[test]
+    fn here_string_unquoted_backslash_escapes_quote() {
+        assert_eq!(
+            code("bash <<< 'echo hi'; echo \\<x"),
+            vec!["echo hi".to_string()]
+        );
+    }
+
+    #[test]
+    fn here_string_marker_in_single_quotes_is_not_a_second_run() {
+        assert_eq!(
+            code("bash <<< 'echo hi'; echo '<'"),
+            vec!["echo hi".to_string()]
+        );
+        assert_eq!(
+            code("echo '<<<' ; bash <<< 'echo hi'"),
+            vec!["echo hi".to_string()]
+        );
+        // an unquoted second `<` run leaves the command alone
+        assert!(code("bash <<< 'echo hi'; cat <x").is_empty());
+    }
+
+    #[test]
+    fn here_string_unbalanced_quote_after_escape_is_rejected() {
+        // `\'` is an escaped quote, the final `'` is left open: no code
+        assert!(code("bash <<<b;\\''").is_empty());
+    }
+
+    #[test]
+    fn here_string_word_with_escaped_quotes_in_double_quotes() {
+        assert_eq!(
+            code("bash <<< \"echo \\\"hi\\\"\""),
+            vec!["echo \"hi\"".to_string()]
+        );
+    }
+
+    #[test]
+    fn here_string_stdin_path_arguments() {
+        assert_eq!(
+            code("bash /proc/self/fd/0 <<< 'echo hi'"),
+            vec!["echo hi".to_string()]
+        );
+        // `/proc/` path without `/fd/` and a path that only contains `/fd/`
+        // name a script file, not stdin
+        assert!(code("bash /proc/1/cmdline <<< 'echo hi'").is_empty());
+        assert!(code("bash foo/fd/3 <<< 'echo hi'").is_empty());
+        assert!(code("bash /dev/fd/0 <<< 'echo hi'").len() == 1);
+    }
+}
+
+// --- Substitutions, ANSI-C escapes and shell -c code: pinned mutation survivors (issue #486) ---
+//
+// Each test pins the concrete result of one parser helper (directly where it
+// is `pub(super)`/`pub(crate)`, through a public path otherwise) for the
+// input that distinguishes the cargo-mutants survivors.
+mod substitution_and_shell_c_pins {
+    use crate::filter::parser::{
+        deferred_code, extract_here_string_codes, extract_shell_c_style_codes,
+        opaque_encoding_reason, split_command, strip_substitutions, DeferredCode, DeferredCodeKind,
+        ParseResult,
+    };
+
+    fn strip(text: &str) -> (String, Vec<String>) {
+        strip_substitutions(text)
+    }
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    // strip_substitutions
+
+    #[test]
+    fn dollar_paren_stops_at_matching_paren_and_keeps_the_tail() {
+        assert_eq!(
+            strip("$(echo a) tail"),
+            ("  tail".to_string(), v(&["echo a"]))
+        );
+        assert_eq!(
+            strip("x $(a) y $(b) z"),
+            ("x   y   z".to_string(), v(&["a", "b"]))
+        );
+    }
+
+    #[test]
+    fn backtick_substitution_is_extracted_with_exact_bounds() {
+        assert_eq!(
+            strip("echo `id` done"),
+            ("echo   done".to_string(), v(&["id"]))
+        );
+        assert_eq!(strip("`a``b`"), ("  ".to_string(), v(&["a", "b"])));
+    }
+
+    #[test]
+    fn plain_text_without_backtick_is_unchanged() {
+        assert_eq!(strip("echo hi"), ("echo hi".to_string(), v(&[])));
+        // A lone backtick without a closing one stays literal.
+        assert_eq!(strip("a`b"), ("a`b".to_string(), v(&[])));
+    }
+
+    // opaque_encoding_reason / contains_ansi_c_escape
+
+    #[test]
+    fn ansi_c_escape_detection_is_exact() {
+        assert!(opaque_encoding_reason("echo $'\\x72m'").is_some());
+        assert!(opaque_encoding_reason("echo $'ab\\n'").is_some());
+        // Plain ANSI-C literal without a backslash.
+        assert_eq!(opaque_encoding_reason("echo $'abc'"), None);
+        // Trailing `$`, unterminated `$'`, `$'` as the last two chars.
+        assert_eq!(opaque_encoding_reason("echo $"), None);
+        assert_eq!(opaque_encoding_reason("echo $'abc"), None);
+        assert_eq!(opaque_encoding_reason("echo $'"), None);
+        // A quote that is not preceded by `$` must not start an ANSI-C string.
+        assert_eq!(opaque_encoding_reason("echo 'a\\b'"), None);
+        // `$'$'` is a complete ANSI-C string; the backslash after it is outside.
+        assert_eq!(opaque_encoding_reason("echo $'$'abc\\x"), None);
+        // An escape in a later ANSI-C string is still found.
+        assert!(opaque_encoding_reason("echo $'a' $'\\x41'").is_some());
+    }
+
+    // extract_shell_c_style_codes / is_complex_shell_c_invocation
+
+    #[test]
+    fn shell_c_code_is_extracted() {
+        assert_eq!(
+            extract_shell_c_style_codes("bash -c 'rm -rf /'"),
+            v(&["rm -rf /"])
+        );
+        assert_eq!(
+            extract_shell_c_style_codes("bash -xc 'rm -rf /'"),
+            v(&["rm -rf /"])
+        );
+        assert_eq!(
+            extract_shell_c_style_codes("sudo bash -lc 'ls'"),
+            v(&["ls"])
+        );
+        assert_eq!(
+            extract_shell_c_style_codes("python3 -c 'print(1)'"),
+            v(&["print(1)"])
+        );
+    }
+
+    #[test]
+    fn wrapped_non_shell_command_yields_no_code() {
+        assert!(extract_shell_c_style_codes("sudo ls -la /tmp").is_empty());
+        assert!(extract_shell_c_style_codes("env FOO=1 ls -la /tmp").is_empty());
+        assert!(extract_shell_c_style_codes("ls -la /tmp").is_empty());
+    }
+
+    #[test]
+    fn wrapped_shell_c_is_a_single_block() {
+        for cmd in ["sudo bash -c 'ls; id'", "env bash -c 'ls; id'"] {
+            assert!(
+                matches!(split_command(cmd), ParseResult::Ambiguous { .. }),
+                "{cmd}"
+            );
+        }
+    }
+
+    // extract_here_string_codes
+
+    #[test]
+    fn here_string_code_is_extracted_only_without_expansion() {
+        assert_eq!(
+            extract_here_string_codes("bash <<< 'echo hi'"),
+            v(&["echo hi"])
+        );
+        assert!(extract_here_string_codes("bash <<< '$(rm -rf /)'").is_empty());
+        assert!(extract_here_string_codes("bash <<< \"`id`\"").is_empty());
+        assert!(extract_here_string_codes("bash <<< ~/script").is_empty());
+    }
+
+    // deferred_code
+
+    #[test]
+    fn untokenisable_trap_with_operand_is_floored() {
+        assert_eq!(
+            deferred_code("trap 'unterminated EXIT"),
+            Some(DeferredCode {
+                kind: DeferredCodeKind::Trap,
+                codes: Vec::new()
+            })
+        );
+    }
+}
+
+// --- Issue #487: pinned mutation survivors ----------------------------------
+
+#[test]
+fn test_pattern_display_text_and_kind_str_per_variant() {
+    let cases = [
+        (Pattern::Glob("ls *".to_string()), "ls *", "glob"),
+        (Pattern::Regex("^ls .*$".to_string()), "^ls .*$", "regex"),
+        (Pattern::Exact("ls -la".to_string()), "ls -la", "exact"),
+    ];
+    for (pattern, text, kind) in cases {
+        assert_eq!(pattern.display_text(), text);
+        assert_eq!(pattern.kind_str(), kind);
+    }
+}
+
+/// Several distinct invalid rules in one rule set are each reported once,
+/// however often the set is evaluated: reporting rule B must not forget rule A.
+#[tokio::test]
+async fn test_issue_487_distinct_invalid_rules_are_each_reported_once() {
+    log_capture::start_recording();
+    let eng = engine(vec![
+        regex_rule("broken-a-487", "^a(", RuleAction::Deny, 100),
+        regex_rule("broken-b-487", "^b(", RuleAction::Deny, 100),
+    ]);
+    for _ in 0..3 {
+        let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    }
+    assert_eq!(count_pattern_error_events("broken-a-487"), 1);
+    assert_eq!(count_pattern_error_events("broken-b-487"), 1);
+}
+
+/// Once the dedup set is full (1024 entries), a further new rule clears it
+/// instead of growing without bound: the rule that triggered the clear is
+/// remembered, every earlier one is reported again.
+#[tokio::test]
+async fn test_issue_487_dedup_set_is_cleared_when_full() {
+    struct Shared(Arc<SwappableStore>);
+    #[async_trait]
+    impl PolicyStore for Shared {
+        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+            self.0.rules_for(scope).await
+        }
+    }
+    let rule = |i: usize| regex_rule(&format!("cap-{i}-487"), "^a(", RuleAction::Deny, 100);
+    log_capture::start_recording();
+    let store = Arc::new(SwappableStore(std::sync::Mutex::new(
+        (0..1025).map(rule).collect(),
+    )));
+    let eng = FilterEngine::new(Shared(store.clone()));
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("cap-0-487"), 1);
+    assert_eq!(count_pattern_error_events("cap-1024-487"), 1);
+
+    // The 1025th rule cleared the set and was remembered afterwards: it stays
+    // quiet, while rule 0 (forgotten by the clear) is reported again.
+    *store.0.lock().unwrap() = vec![rule(1024)];
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("cap-1024-487"), 1);
+    *store.0.lock().unwrap() = vec![rule(0)];
+    let _ = eng.evaluate("ls", &ctx("srv", &[])).await;
+    assert_eq!(count_pattern_error_events("cap-0-487"), 2);
+}
+
+/// Issue #487: with several inner shell codes the reported rule comes from
+/// the trace that decided the outcome, not from the first inner trace.
+#[tokio::test]
+async fn test_issue_487_inner_trace_reports_deciding_rule() {
+    let eng = engine(vec![
+        glob_rule(
+            "confirm-ls",
+            "ls *",
+            RuleAction::Confirm,
+            Scope::Global,
+            100,
+        ),
+        glob_rule(
+            "deny-docker",
+            "docker *",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        ),
+    ]);
+    let trace = eng
+        .evaluate_explained("perl -e 'ls -la' -e 'docker rm -f prod'", &ctx("srv1", &[]))
+        .await;
+    assert_deny(&trace.decision);
+    assert_eq!(
+        trace.matched_rule.as_ref().map(|r| r.0.as_str()),
+        Some("deny-docker")
+    );
+}

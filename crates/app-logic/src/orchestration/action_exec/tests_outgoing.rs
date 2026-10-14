@@ -8,7 +8,7 @@ use secrecy::SecretString;
 use ssh_manager_core::ai::AiEvent;
 use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
 use ssh_manager_core::outgoing::{
-    OutgoingKind, OutgoingScope, OutgoingTransform, Prepared, Rejection,
+    OutgoingKind, OutgoingTransform, Prepared, Rejection, ServerScope,
 };
 use ssh_manager_core::ssh::mock::MockSftpSession;
 
@@ -47,7 +47,7 @@ impl ReplaceX {
 impl OutgoingTransform for ReplaceX {
     async fn prepare_outgoing(
         &self,
-        _scope: &OutgoingScope,
+        _scope: &ServerScope,
         kind: OutgoingKind,
         text: &str,
     ) -> Result<Prepared, Rejection> {
@@ -65,7 +65,7 @@ struct Reject;
 impl OutgoingTransform for Reject {
     async fn prepare_outgoing(
         &self,
-        _scope: &OutgoingScope,
+        _scope: &ServerScope,
         _kind: OutgoingKind,
         _text: &str,
     ) -> Result<Prepared, Rejection> {
@@ -82,7 +82,7 @@ struct TurnsIntoBlacklisted;
 impl OutgoingTransform for TurnsIntoBlacklisted {
     async fn prepare_outgoing(
         &self,
-        _scope: &OutgoingScope,
+        _scope: &ServerScope,
         _kind: OutgoingKind,
         _text: &str,
     ) -> Result<Prepared, Rejection> {
@@ -433,4 +433,170 @@ async fn test_without_a_transform_the_text_is_sent_unchanged() {
     run_approved_turn(&session, &emitter).await;
 
     assert_eq!(*executed.lock().unwrap(), vec!["echo X".to_string()]);
+}
+
+// --- Issue #501: the transform gets the group chain of the target server ---
+
+mod group_chain_scope {
+    use chrono::Utc;
+    use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+    use ssh_manager_core::shared::ServerId;
+
+    use super::*;
+    use crate::dto::LOCAL_SERVER_ID;
+    use crate::orchestration::outgoing::prepare_for_send;
+    use crate::session_extension::{scope_for_id, ServerScope};
+    use crate::test_support::InMemoryProfileStore;
+
+    /// Records the scope of every call.
+    struct ScopeRecorder(Mutex<Vec<ServerScope>>);
+
+    #[async_trait]
+    impl OutgoingTransform for ScopeRecorder {
+        async fn prepare_outgoing(
+            &self,
+            scope: &ServerScope,
+            _kind: OutgoingKind,
+            text: &str,
+        ) -> Result<Prepared, Rejection> {
+            self.0.lock().unwrap().push(scope.clone());
+            Ok(Prepared::new(text.to_string(), Vec::new()))
+        }
+    }
+
+    fn group(parent: Option<GroupId>) -> Group {
+        let now = Utc::now();
+        Group {
+            id: GroupId::new(),
+            name: "g".to_string(),
+            parent_id: parent,
+            notes: String::new(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn server(group_id: Option<GroupId>) -> Server {
+        let now = Utc::now();
+        Server {
+            id: ServerId::new(),
+            name: "web".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id,
+            tags: vec!["prod".to_string()],
+            auth: AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            start_directory: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn session_for(server_id: ServerId, recorder: Arc<ScopeRecorder>) -> Session {
+        let mut session = test_session_allowing_everything(vec![], MockSshTransport::default());
+        session.set_server_id_for_tests(server_id);
+        session.set_outgoing_transform_for_tests(Some(recorder));
+        session
+    }
+
+    #[tokio::test]
+    async fn test_nested_groups_give_root_first_chain_equal_to_session_extension() {
+        let root = group(None);
+        let mid = group(Some(root.id));
+        let leaf = group(Some(mid.id));
+        let srv = server(Some(leaf.id));
+        let store = InMemoryProfileStore::new()
+            .with_group(root.clone())
+            .with_group(mid.clone())
+            .with_group(leaf.clone())
+            .with_server(srv.clone());
+        let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
+        let session = session_for(srv.id, recorder.clone());
+
+        prepare_for_send(&session, &store, OutgoingKind::Command, "echo")
+            .await
+            .unwrap();
+
+        let seen = recorder.0.lock().unwrap().clone();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].group_chain, vec![root.id, mid.id, leaf.id]);
+        assert_eq!(seen[0].tags, vec!["prod".to_string()]);
+        let extension_scope = scope_for_id(&store, srv.id, None).await.unwrap();
+        assert_eq!(seen[0], extension_scope);
+    }
+
+    #[tokio::test]
+    async fn test_server_without_group_has_empty_chain() {
+        let srv = server(None);
+        let store = InMemoryProfileStore::new().with_server(srv.clone());
+        let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
+        let session = session_for(srv.id, recorder.clone());
+
+        prepare_for_send(&session, &store, OutgoingKind::Command, "echo")
+            .await
+            .unwrap();
+
+        assert!(recorder.0.lock().unwrap()[0].group_chain.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_local_pseudo_server_has_empty_chain() {
+        let store = InMemoryProfileStore::new();
+        let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
+        let session = session_for(LOCAL_SERVER_ID, recorder.clone());
+
+        prepare_for_send(&session, &store, OutgoingKind::Command, "echo")
+            .await
+            .unwrap();
+
+        let seen = recorder.0.lock().unwrap().clone();
+        assert_eq!(seen[0].server_id, LOCAL_SERVER_ID);
+        assert!(seen[0].group_chain.is_empty());
+    }
+
+    /// The group does not exist in the store, so the lookup fails: the chain
+    /// is empty and the text is still prepared.
+    #[tokio::test]
+    async fn test_failing_group_lookup_gives_empty_chain_and_text_is_prepared() {
+        let srv = server(Some(GroupId::new()));
+        let store = InMemoryProfileStore::new().with_server(srv.clone());
+        let recorder = Arc::new(ScopeRecorder(Mutex::new(Vec::new())));
+        let session = session_for(srv.id, recorder.clone());
+
+        let prepared = prepare_for_send(&session, &store, OutgoingKind::Command, "echo")
+            .await
+            .unwrap();
+
+        assert!(prepared.is_some());
+        assert!(recorder.0.lock().unwrap()[0].group_chain.is_empty());
+    }
+
+    /// Without a transform nothing is looked up: the failing lookup of the
+    /// test above would log a warning, which must not appear here.
+    #[test]
+    fn test_without_transform_no_group_lookup_happens() {
+        log_capture::start_recording();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let srv = server(Some(GroupId::new()));
+            let store = InMemoryProfileStore::new().with_server(srv.clone());
+            let mut session = test_session_allowing_everything(vec![], MockSshTransport::default());
+            session.set_server_id_for_tests(srv.id);
+            let out = prepare_for_send(&session, &store, OutgoingKind::Command, "echo")
+                .await
+                .unwrap();
+            assert!(out.is_none());
+        });
+        let log = log_capture::recorded_text();
+        assert!(!log.contains("group_chain failed"), "{log}");
+    }
 }

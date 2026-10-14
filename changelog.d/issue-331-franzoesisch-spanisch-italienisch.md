@@ -1,6 +1,6 @@
-### Neu
-- Die Oberfläche gibt es jetzt auch auf Französisch, Spanisch und Italienisch.
-  Die Sprache lässt sich in den Einstellungen wählen oder folgt dem System.
+### Added
+- The interface is now also available in French, Spanish and Italian.
+  The language can be chosen in the settings or follows the system.
 
-### Sicherheit
-- Die Schwärzung erkennt Passwort-Stichwörter jetzt auch auf Französisch, Spanisch und Italienisch.
+### Security
+- Redaction now also recognizes password keywords in French, Spanish and Italian.

@@ -1,3 +1,3 @@
-### Geändert
-- Einstellungen: Escape schließt das Fenster, die Tab-Reihenfolge bleibt im Fenster und der Fokus kehrt danach zurück.
-- Einstellungen und Notizen: einheitliche Schaltflächen und Felder, sichtbare Fokusrahmen, beschriftete Eingabefelder.
+### Changed
+- Settings: Escape closes the window, the Tab order stays within the window and focus returns afterwards.
+- Settings and notes: consistent buttons and fields, visible focus rings, labeled input fields.

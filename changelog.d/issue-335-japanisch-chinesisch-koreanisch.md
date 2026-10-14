@@ -1,6 +1,6 @@
-### Neu
-- Die Oberfläche gibt es jetzt auch auf Japanisch, vereinfachtem Chinesisch und Koreanisch.
-  Die Sprache lässt sich in den Einstellungen wählen oder folgt dem System.
+### Added
+- The interface is now also available in Japanese, Simplified Chinese and Korean.
+  The language can be chosen in the settings or follows the system.
 
-### Sicherheit
-- Die Schwärzung erkennt Passwort-Stichwörter jetzt auch auf Japanisch, Chinesisch und Koreanisch.
+### Security
+- Redaction now also recognizes password keywords in Japanese, Chinese and Korean.

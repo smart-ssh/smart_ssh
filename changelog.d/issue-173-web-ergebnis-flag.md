@@ -1,4 +1,4 @@
-### Sicherheit
-- Wird eine Antwort nach einer Web-Recherche gestoppt oder bricht mit einem
-  Fehler ab, gilt die Sitzung trotzdem als „nicht vertrauenswürdigen Inhalt
-  gelesen"; folgende Aktionen werden entsprechend eskaliert.
+### Security
+- If a reply is stopped or aborted by an error after a web research, the
+  session still counts as "has read untrusted content"; following actions
+  are escalated accordingly.

@@ -1,4 +1,4 @@
-### Geändert
-- Datum und Uhrzeit (Chat-Sitzungen, Dateibrowser, Notizen) folgen jetzt der
-  gewählten Sprache der App statt der Systemeinstellung.
-- Die Sprachauswahl zeigt jede Sprache unter ihrem eigenen Namen.
+### Changed
+- Date and time (chat sessions, file browser, notes) now follow the
+  language selected in the app instead of the system setting.
+- The language picker shows each language under its own name.

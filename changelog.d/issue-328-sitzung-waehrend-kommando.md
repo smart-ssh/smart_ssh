@@ -1,3 +1,3 @@
-### Geändert
-- Während ein KI-Kommando läuft, bleiben Dateibrowser, Terminal und Trennen
-  derselben Sitzung benutzbar; Trennen bricht das Kommando ab.
+### Changed
+- While an AI command is running, the file browser, terminal and disconnect
+  of the same session remain usable; disconnecting cancels the command.

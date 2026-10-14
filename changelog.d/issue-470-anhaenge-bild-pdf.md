@@ -1,3 +1,3 @@
-### Neu
-- Bilder und PDFs als Chat-Anhang gehen jetzt direkt an Modelle, die sie lesen
-  können; andere Modelle lehnen sie mit einer klaren Meldung ab.
+### Added
+- Chat attachments: images and PDFs go directly to models that can read them;
+  other models reject them with a clear message. **(Pro)**

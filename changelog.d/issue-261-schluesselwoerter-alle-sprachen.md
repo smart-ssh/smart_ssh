@@ -1,3 +1,3 @@
-### Sicherheit
-- Zugangsdaten werden jetzt auch mit deutschen Schlüsselwörtern wie
-  `Passwort:` oder `Schlüssel=` geschwärzt, unabhängig von der Oberflächensprache.
+### Security
+- Credentials are now also redacted for German keywords such as `Passwort:`
+  or `Schlüssel=`, regardless of the interface language.
