@@ -1,4 +1,4 @@
-# ADR 0123 — SFTP: Abbruch der Sitzung über den Zustand der SSH-Sitzung erkennen
+# ADR 0143 — SFTP: Abbruch der Sitzung über den Zustand der SSH-Sitzung erkennen
 
 Status: akzeptiert
 Betrifft: Issue #155, Spec 0069 (Teil A3, „Abbruch einer laufenden Sitzung"), Spec 0020 (§4.3), Spec 0067

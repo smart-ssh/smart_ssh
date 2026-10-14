@@ -35,7 +35,7 @@ aus dem hinterlegten Schlüssel gebaut, der lokale Regelspeicher erst nach dem
 Die Edition darf in Filter, Risiko-Einstufung und Bestätigung nie eine
 eigene Verzweigung auslösen.
 
-### Sitzungs-Erweiterung (Server-Umgebung)
+### Sitzungs-Erweiterung
 
 Die Verdrahtung kann **eine** Sitzungs-Erweiterung enthalten; die Community
 Edition hat keine. Sie liefert dem Kern je Server (Server-Kennung inklusive

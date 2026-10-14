@@ -2,7 +2,7 @@
 
 Status: umgesetzt
 Zweck: Welche Aktionen der Dateibrowser dem Nutzer anbietet, wie er sie bestätigt und welche Schutzmechanismen für manuelle, server-verändernde Aktionen gelten, darunter der Ablauf „Lokal öffnen, bearbeiten, Upload anbieten“.
-Bezüge: Spec 0020 (Dateibrowser, Freigabe lokaler Pfade), Spec 0053 (Layout), Spec 0058 (Meldungen), Spec 0067 (erhöhter Modus, Erfolgsmeldungen), Spec 0086 (Größengrenzen), ADR 0126 (Ordner-Upload).
+Bezüge: Spec 0020 (Dateibrowser, Freigabe lokaler Pfade), Spec 0053 (Layout), Spec 0058 (Meldungen), Spec 0067 (erhöhter Modus, Erfolgsmeldungen), Spec 0086 (Größengrenzen), ADR 0144 (Ordner-Upload).
 
 ## Sicherheitsmodell
 

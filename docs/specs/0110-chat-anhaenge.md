@@ -4,7 +4,10 @@ Status: Kern umgesetzt (Nachrichtenmodell, Grenzen, Fencing, Redaction,
 Speicherung, Auflöser-Erweiterungspunkt) und der Erweiterungspunkt im
 Eingabefeld (Anhang-Chips, Ablegen). Die Auswahl von Dateien liefert eine
 Edition (eigene Issues); die Community Edition registriert weder Auflöser
-noch Eingabefeld-Aktion und verhält sich unverändert.
+noch Eingabefeld-Aktion und verhält sich unverändert. Das Anhangsmodell im Kern (Nachrichtenvariante,
+Grenzen, Fencing, Redaction, Speicherung, Auflöser- und Eingabefeld-
+Erweiterungspunkt) ist generische Infrastruktur, die jede Edition nutzen
+kann; der Kern wählt selbst keine Dateien aus.
 Zweck: Eine Nutzer-Nachricht kann Dateien (Text, Bild, PDF) mitführen. Sie
 werden mit der Sitzung gespeichert und sicher an die KI gesendet.
 Bezüge: Spec 0006 (Redaction), Spec 0034/0040 (Speicherung), Spec 0037

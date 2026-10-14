@@ -81,8 +81,8 @@ export interface DocumentContext {
 /** Andockpunkt für Aktionen an einem KI-generierten Dokument (Spec 0045),
  * gerendert neben dem bestehenden Markdown-Export-Button in `ChatPanel`s
  * Dokument-Karte. Bewusst entitlement-agnostisch — die Registry kennt kein
- * `Feature`/`Entitlements` (das wäre Pro-Wissen im öffentlichen Repo); ob
- * eine Aktion gesperrt ist, entscheidet der Registrierende über `disabled`/
+ * `Feature`/`Entitlements`, damit sie reiner Andockpunkt bleibt; ob eine
+ * Aktion gesperrt ist, entscheidet der Registrierende über `disabled`/
  * `disabledReason`. */
 export interface DocumentAction {
   id: string;
