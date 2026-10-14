@@ -10,20 +10,20 @@ name = "app_shell"
 path = "src/lib.rs"
 
 [dependencies]
-ai-providers = { version = "0.6.0", path = "../ai-providers" }
+ai-providers = { version = "0.7.0", path = "../ai-providers" }
 # Spec 0084: die Tauri-freie Anwendungslogik — `app-shell` hängt von ihr ab,
 # nie umgekehrt (A3, s. `docs/architecture.md`).
-app-logic = { version = "0.6.0", path = "../app-logic" }
+app-logic = { version = "0.7.0", path = "../app-logic" }
 async-trait = "0.1.92"
 base64 = "0.23.1"
 # Issue #358: file references on the system clipboard (macOS/Windows/X11/Wayland).
 clipboard-rs = { version = "0.3.5", default-features = false }
 chrono = { version = "0.4.45", features = ["serde"] }
-credentials-keyring = { version = "0.6.0", path = "../credentials-keyring" }
+credentials-keyring = { version = "0.7.0", path = "../credentials-keyring" }
 directories = "6.0.0"
 futures = "0.3.34"
-mcp-server = { version = "0.6.0", path = "../mcp-server" }
-persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite" }
+mcp-server = { version = "0.7.0", path = "../mcp-server" }
+persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite" }
 regex = "1.13.1"
 # Spec 0059 (fataler Startfehler-Dialog): war bereits transitiv über
 # `tauri-plugin-dialog` im Baum (s. `Cargo.lock`) — hier direkt gepinnt,
@@ -48,9 +48,9 @@ rfd = { version = "0.16.0", default-features = false, features = [
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
-speech = { version = "0.6.0", path = "../speech" }
-ssh-manager-core = { version = "0.6.0", path = "../core" }
-ssh-transport = { version = "0.6.0", path = "../ssh-transport" }
+speech = { version = "0.7.0", path = "../speech" }
+ssh-manager-core = { version = "0.7.0", path = "../core" }
+ssh-transport = { version = "0.7.0", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
 tauri-plugin-decoration = "3.0"
 tauri-plugin-dialog = "2.7.2"
@@ -75,7 +75,7 @@ uuid = { version = "1.26.0", features = ["v4", "serde"] }
 # Klartext-Datenbanken an (Ausgangszustand einer bestehenden
 # Installation) und brauchen dafuer `connect_plaintext`. Nur hier, nie
 # unter `[dependencies]`.
-persistence-sqlite = { version = "0.6.0", path = "../persistence-sqlite", features = ["test-support"] }
+persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite", features = ["test-support"] }
 tempfile = "3.27.0"
 # ADR 0065 §3 (Nachtrag): `libc::mkfifo` im Testaufbau von
 # `ssh_config_apply/tests.rs` — nach Spec 0084 der einzige verbliebene

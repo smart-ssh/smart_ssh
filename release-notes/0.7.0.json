@@ -1,0 +1,37 @@
+{
+  "version": "0.7.0",
+  "highlights": {
+    "en": [
+      "Voice input in the AI chat with local speech recognition; audio stays on your computer.",
+      "The interface is now available in many more languages, from French and Spanish to Japanese and Hindi.",
+      "Automatic reconnect after a connection loss, with chat history and AI context kept.",
+      "Whole-folder upload in the file browser, plus copying remote files to the clipboard.",
+      "Commands now show their output live in the chat, and a hung command can be stopped.",
+      "Keyboard use and focus handling were improved across the whole interface."
+    ],
+    "de": [
+      "Spracheingabe im KI-Chat mit lokaler Erkennung; das Audio bleibt auf deinem Rechner.",
+      "Die Oberfläche gibt es jetzt in vielen weiteren Sprachen, von Französisch und Spanisch bis Japanisch und Hindi.",
+      "Automatisches Neuverbinden nach einem Verbindungsabbruch, Chatverlauf und KI-Kontext bleiben erhalten.",
+      "Ganze Ordner im Dateibrowser hochladen und Remote-Dateien in die Zwischenablage kopieren.",
+      "Befehle zeigen ihre Ausgabe live im Chat, und ein hängender Befehl lässt sich stoppen.",
+      "Tastaturbedienung und Fokusführung wurden in der gesamten Oberfläche verbessert."
+    ],
+    "fr": [
+      "Saisie vocale dans le chat IA avec reconnaissance locale ; l'audio reste sur votre ordinateur.",
+      "L'interface est désormais disponible dans de nombreuses autres langues, du français et de l'espagnol au japonais et à l'hindi.",
+      "Reconnexion automatique après une perte de connexion, avec conservation de l'historique du chat et du contexte IA.",
+      "Envoi de dossiers entiers dans l'explorateur de fichiers et copie de fichiers distants dans le presse-papiers.",
+      "Les commandes affichent leur sortie en direct dans le chat, et une commande bloquée peut être arrêtée.",
+      "Meilleure utilisation au clavier et meilleure gestion du focus dans toute l'interface."
+    ],
+    "es": [
+      "Entrada de voz en el chat de IA con reconocimiento local; el audio permanece en tu equipo.",
+      "La interfaz está disponible en muchos más idiomas, del francés y el español al japonés y el hindi.",
+      "Reconexión automática tras perder la conexión, conservando el historial del chat y el contexto de la IA.",
+      "Subida de carpetas completas en el explorador de archivos y copia de archivos remotos al portapapeles.",
+      "Los comandos muestran su salida en directo en el chat, y un comando bloqueado puede detenerse.",
+      "Mejor uso con el teclado y mejor gestión del foco en toda la interfaz."
+    ]
+  }
+}
