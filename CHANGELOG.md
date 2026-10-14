@@ -1,11 +1,11 @@
 # Changelog
 
-Alle nennenswerten Änderungen an Smart SSH werden hier dokumentiert. Das
-Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
-dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
+All notable changes to Smart SSH are documented here. The format is based
+on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
+project adheres to [Semantic Versioning](https://semver.org/).
 
-Funktionen, die nur in einer kostenpflichtigen Edition verfügbar sind,
-sind mit **(Pro)** markiert.
+Features that are only available in a paid edition are marked with
+**(Pro)**.
 
 ## [Unreleased]
 
@@ -678,206 +678,193 @@ sind mit **(Pro)** markiert.
 ## [0.5.0] — 2026-09-11
 
 ### Added
-- Chat-Eingabefeld erlaubt jetzt mehrzeilige Eingaben: Enter sendet,
-  Shift+Enter fügt einen Zeilenumbruch ein, das Feld wächst mit dem Inhalt
-  bis zu einer Maximalhöhe und scrollt danach intern.
-- Chat: "In Notiz übernehmen"/"Als Markdown exportieren" sind bei jeder
-  Antwort weiterhin vorhanden (auch per Tastatur erreichbar), blenden aber
-  erst bei Hover/Tastaturfokus ein statt dauerhaft sichtbar zu sein — ein
-  laufender/fehlgeschlagener/gerade erfolgreicher Export bzw. eine
-  Notiz-Übernahme bleibt dabei immer sichtbar, unabhängig von Hover/Fokus.
-- Einstellungen: der KI-Provider-Bereich ist überarbeitet — konfigurierte
-  Provider, die optionale Risiko-Zweitmeinung und das Formular für einen
-  neuen Provider stehen jetzt in klar umrandeten, gruppierten Karten statt
-  einer kontrastarmen, ungegliederten Liste; alle Formularfelder haben
-  einen sichtbaren Fokus-Rahmen, der Format-Hinweis für den API-Key und
-  das Testen-Ergebnis erscheinen als eigene, klar erkennbare Hinweisboxen.
+- The chat input field now allows multi-line input: Enter sends, Shift+Enter
+  inserts a line break, and the field grows with its content up to a maximum
+  height and then scrolls internally.
+- Chat: "Add to note"/"Export as Markdown" are still available on every
+  answer (also reachable by keyboard), but now appear only on hover/keyboard
+  focus instead of being permanently visible — an export or note transfer that
+  is running, has failed or has just succeeded always stays visible,
+  regardless of hover/focus.
+- Settings: the AI provider section has been reworked — configured providers,
+  the optional risk second opinion and the form for a new provider now sit in
+  clearly outlined, grouped cards instead of a low-contrast, unstructured
+  list; all form fields have a visible focus outline, and the format hint for
+  the API key and the test result appear as separate, clearly recognizable
+  notice boxes.
 
 ### Fixed
-- Chat-Eingabefeld: Enter während einer laufenden IME-Komposition (z. B.
-  Kandidatenauswahl bei ostasiatischer Eingabe, Akzent-Eingabe über
-  Tottasten) sendet nicht mehr vorzeitig eine noch unfertige Eingabe.
-- Einstellungen: einige Kategorien ("Anzeige & Sprache", "Sitzungen &
-  Daten", "MCP-Server") zeigten ihren Titel doppelt (einmal von der
-  Einstellungen-Navigation, einmal als eigene Überschrift im Inhalt).
-- Einstellungen: die Navigationseinträge "Sitzungen & Daten" und
-  "MCP-Server" standen unabhängig von der UI-Sprache immer auf Deutsch da
-  — erscheinen jetzt in Englisch übersetzt, wenn die UI-Sprache Englisch
-  ist.
+- Chat input field: pressing Enter during an ongoing IME composition (e.g.
+  candidate selection with East Asian input, accent input via dead keys) no
+  longer sends an unfinished input prematurely.
+- Settings: some categories ("Display & Language", "Sessions & Data", "MCP
+  Server") showed their title twice (once from the settings navigation, once
+  as a heading in the content).
+- Settings: the navigation entries "Sessions & Data" and "MCP Server" were
+  always shown in German regardless of the UI language — they now appear
+  translated into English when the UI language is English.
 
 ### Security
-- Kommando-Ausgaben mit Unix-Passwort-Hashes (z. B. `/etc/shadow`,
-  Apache-`.htpasswd`) gingen bislang unredigiert an den KI-Anbieter bzw.
-  einen verbundenen MCP-Client weiter, wenn der Nutzer das zugrunde
-  liegende Kommando (nach dem üblichen Bestätigungsdialog) ausführen
-  ließ — die Redaction kannte deren Hash-Format schlicht nicht. Erkennt
-  jetzt gängige Crypt-Hash-Formate (MD5-, SHA-256-, SHA-512-, yescrypt-,
-  scrypt- und bcrypt-Hashes) und ersetzt nur den Hash-Anteil, Nutzername
-  und übrige Felder bleiben lesbar.
-- Aus demselben Grund gingen bislang auch DB-Connection-Strings
-  (Postgres/MySQL/MariaDB/MongoDB/Redis/AMQP, Passwort zwischen `:` und
-  `@`) sowie Provider-Tokens mit eindeutigem Präfix (Slack, Stripe,
-  Google-API, npm) unredigiert weiter. Erkennt jetzt auch diese — bei
-  Connection-Strings bleibt nur das Passwort-Segment ersetzt, Schema/
-  Nutzername/Host/Datenbank bleiben lesbar.
+- Command output containing Unix password hashes (e.g. `/etc/shadow`, Apache
+  `.htpasswd`) was previously passed on unredacted to the AI provider or a
+  connected MCP client if the user let the underlying command run (after the
+  usual confirmation dialog) — the redaction simply did not know their hash
+  format. It now detects common crypt hash formats (MD5, SHA-256, SHA-512,
+  yescrypt, scrypt and bcrypt hashes) and replaces only the hash part; the
+  user name and other fields remain readable.
+- For the same reason, DB connection strings (Postgres/MySQL/MariaDB/MongoDB/
+  Redis/AMQP, password between `:` and `@`) as well as provider tokens with a
+  distinctive prefix (Slack, Stripe, Google API, npm) were previously passed
+  on unredacted. These are now detected as well — for connection strings only
+  the password segment is replaced; scheme/user name/host/database remain
+  readable.
 
 ## [0.4.6] — 2026-09-10
 
 ### Added
-- Dateimanager: Spaltenbreiten (Name, Größe, Rechte, Geändert) lassen sich
-  jetzt per Ziehen anpassen (Mindestbreiten, Name bleibt der flexible
-  Rest).
-- Die Aufteilung zwischen KI-Bereich und SSH-/SFTP-Bereich (Terminal/
-  Dateimanager) lässt sich per Ziehen am Trenner anpassen (Mindestgrößen
-  für beide Bereiche, Fallback auf die Standardaufteilung bei sehr kleinen
-  Fenstern). Beide Einstellungen überleben einen Neustart.
-- Dateimanager: Rechtsklick öffnet jetzt dasselbe Kontextmenü wie das
-  Drei-Punkte-Symbol, mit neuen Aktionen — Herunterladen direkt ins
-  Standard-Downloadverzeichnis oder per Dialog an einen gewählten Ort
-  (auch für Ordner, rekursiv), Dateiinhalt kopieren, Pfad kopieren,
-  Eigenschaften (Größe, Rechte numerisch + symbolisch, Besitzer/Gruppe,
-  Änderungsdatum) und Aktualisieren.
-- Dateimanager: server-verändernde Aktionen — Rechte bearbeiten (chmod,
-  Checkbox-Matrix + numerisch, optional rekursiv für Ordner), Löschen jetzt
-  auch für Ordner (rekursiv, mit Datei-/Ordner-Anzahl in der Bestätigung),
-  Umbenennen mit Kollisionswarnung, Verschieben per Ausschneiden/Einfügen
-  (ebenfalls mit Kollisionswarnung) und Hochladen mit Diff-Vorschau beim
-  Überschreiben einer bestehenden Datei. Keine Bestätigung außer bei
-  irreversiblen/überschreibenden Aktionen — manuelle Dateibrowser-Aktionen
-  laufen (wie das Terminal) nicht durch die Filter-Engine.
-- Einstellungen: neue Kategorie "Dateien" — pro Dateiendung ein lokales
-  Standardprogramm festlegen (Fallback: Betriebssystem-Standard). Rein
-  lokal, ohne Server-Bezug.
-- Dateimanager: "Lokal öffnen…" lädt eine Datei in ein kontrolliertes
-  Temp-Verzeichnis herunter, öffnet sie mit dem festgelegten (oder dem
-  Betriebssystem-Standard-)Programm, und bietet nach einer erkannten
-  lokalen Änderung automatisch den Upload an — inklusive Diff-Vorschau und
-  einer Warnung, falls sich die Datei auf dem Server seit dem Download
-  ebenfalls geändert hat. Die Bearbeitungskopie wird beim Beenden der
-  Bearbeitung bzw. spätestens beim Trennen der Verbindung aufgeräumt.
-- Datei-Diff-Vorschauen (Notiz-/Dateischreibvorgänge, Datei-Überschreiben
-  beim Hochladen) zeigen jetzt die Zeilennummer vor jeder hinzugefügten
-  oder entfernten Zeile.
+- File manager: column widths (Name, Size, Permissions, Modified) can now be
+  adjusted by dragging (minimum widths; Name remains the flexible remainder).
+- The split between the AI area and the SSH/SFTP area (terminal/file manager)
+  can be adjusted by dragging the divider (minimum sizes for both areas,
+  fallback to the default split in very small windows). Both settings survive
+  a restart.
+- File manager: right-click now opens the same context menu as the three-dot
+  icon, with new actions — download directly to the default download
+  directory or via dialog to a chosen location (also for folders,
+  recursively), copy file content, copy path, properties (size, permissions
+  numeric + symbolic, owner/group, modification date) and refresh.
+- File manager: actions that modify the server — edit permissions (chmod,
+  checkbox matrix + numeric, optionally recursive for folders), delete now
+  also for folders (recursive, with the file/folder count in the
+  confirmation), rename with collision warning, move via cut/paste (also with
+  collision warning) and upload with a diff preview when overwriting an
+  existing file. No confirmation except for irreversible/overwriting actions
+  — manual file browser actions (like the terminal) do not pass through the
+  filter engine.
+- Settings: new category "Files" — set a local default program per file
+  extension (fallback: operating system default). Purely local, with no
+  server involvement.
+- File manager: "Open locally…" downloads a file to a controlled temp
+  directory, opens it with the configured (or the operating system default)
+  program, and automatically offers the upload after a local change is
+  detected — including a diff preview and a warning if the file on the server
+  has also changed since the download. The editing copy is cleaned up when
+  editing ends or, at the latest, when the connection is closed.
+- File diff previews (note/file write operations, file overwrite on upload)
+  now show the line number before each added or removed line.
 
 ### Fixed
-- Dateimanager: das Drei-Punkte-Menü an einem Eintrag ließ sich oft nicht
-  öffnen bzw. schloss ein gerade erst geöffnetes Menü eines anderen
-  Eintrags sofort wieder — verursacht durch einen mit jedem weiteren Klick
-  kollidierenden internen "Klick-außerhalb-schließt"-Mechanismus.
+- File manager: the three-dot menu on an entry often could not be opened, or
+  immediately closed a menu of another entry that had just been opened —
+  caused by an internal "click outside closes" mechanism that collided with
+  every further click.
 
 ## [0.4.5] — 2026-09-09
 
 ### Fixed
-- **Kritische Regression aus 0.4.4 behoben**: 0.4.4 startete auf Windows
-  überhaupt nicht mehr (`Migrate(VersionMismatch(1))`-Absturz bei jedem
-  Start, per Tester-Log bestätigt). Ursache war ein Seiteneffekt des
-  CI-Fixes aus 0.4.4 selbst (`.gitattributes`) — die Windows-CI checkte
-  dadurch die SQL-Migrationsdateien mit anderen Zeilenenden aus als bei
-  0.4.1–0.4.3, was die zur Compile-Zeit eingebettete Prüfsumme der ersten
-  Migration änderte und sie gegen bestehende Datenbanken bestehender
-  Windows-Installationen ungültig machte. Eingegrenzt auf das, was
-  tatsächlich betroffen war (Rust-Quelldateien) — SQL-Migrationen
-  behalten ihr ursprüngliches Checkout-Verhalten.
+- **Critical regression from 0.4.4 fixed**: 0.4.4 no longer started at all on
+  Windows (`Migrate(VersionMismatch(1))` crash on every start, confirmed by a
+  tester log). The cause was a side effect of the CI fix in 0.4.4 itself
+  (`.gitattributes`) — as a result, the Windows CI checked out the SQL
+  migration files with different line endings than in 0.4.1–0.4.3, which
+  changed the checksum of the first migration embedded at compile time and
+  made it invalid against the existing databases of existing Windows
+  installations. Narrowed down to what was actually affected (Rust source
+  files) — SQL migrations keep their original checkout behavior.
 
 ## [0.4.4] — 2026-09-09
 
 ### Fixed
-- Titelleisten-Buttons auf Windows/Linux waren die ganze Zeit sichtbar,
-  aber mit sehr schlechtem Kontrast (kaum sichtbare graue Icons, nur
-  "Schließen" reagierte erkennbar auf Hover): `tauri-plugin-decoration`
-  färbt seine Controls standardmäßig für eine **helle** Titelleiste ein
-  und wechselt nur bei einem im Betriebssystem eingestellten dunklen
-  Modus auf helle Icons — unsere App ist aber immer dunkel, unabhängig
-  vom Windows-Theme. Erzwingt das dunkle Farbschema jetzt bedingungslos
-  — auf Windows 11 bestätigt behoben.
+- Title bar buttons on Windows/Linux were visible the whole time, but with
+  very poor contrast (barely visible gray icons, only "Close" visibly reacted
+  to hover): `tauri-plugin-decoration` by default tints its controls for a
+  **light** title bar and only switches to light icons when the operating
+  system is set to dark mode — but our app is always dark, regardless of the
+  Windows theme. Now enforces the dark color scheme unconditionally —
+  confirmed fixed on Windows 11.
 
 ## [0.4.3] — 2026-09-09
 
 ### Fixed
-- Zwei von `tauri-plugin-decoration` laut eigener Doku verlangte
-  CSS-Variablen (`--tauri-plugin-decoration-titlebar-height`/`-z-index`)
-  waren nie gesetzt — jetzt gesetzt. War letztlich nicht die Ursache der
-  gemeldeten Sichtbarkeitsprobleme (s. 0.4.4), aber eine für sich
-  genommen korrekte Ergänzung laut Plugin-Dokumentation.
+- Two CSS variables required by `tauri-plugin-decoration` according to its own
+  documentation (`--tauri-plugin-decoration-titlebar-height`/`-z-index`) were
+  never set — now set. Ultimately this was not the cause of the reported
+  visibility problems (see 0.4.4), but a correct addition in its own right
+  according to the plugin documentation.
 
 ## [0.4.2] — 2026-09-09
 
 ### Added
-- Version + Commit-Hash (`0.4.2 (a5b3e01)`) sind jetzt auf einen Blick
-  sichtbar: in der ersten Log-Zeile, kopierbar in einer neuen "Über"-
-  Kategorie der Einstellungen, und (nur während der 0.x-Testphase, leicht
-  abschaltbar) zusätzlich in der Titelzeile — identifiziert einen Bug-
-  Report/ein Log jetzt eindeutig, auch wenn mehrere Builds dieselbe
-  Version tragen.
+- Version + commit hash (`0.4.2 (a5b3e01)`) are now visible at a glance: in
+  the first log line, copyable in a new "About" category of the settings, and
+  (only during the 0.x test phase, easy to switch off) additionally in the
+  title bar — identifies a bug report/log unambiguously, even when several
+  builds carry the same version.
 
 ## [0.4.1] — 2026-09-09
 
 ### Added
-- Einstellungen neu strukturiert: Navigation links, Inhalt rechts (statt
-  einer langen, ungegliederten Liste) — Kategorien für KI-Provider, Anzeige
-  & Sprache, Diagnose, Sitzungen & Daten und MCP-Server.
-- KI-Provider-Formular: sofortiger, rein lokaler Hinweis, falls ein
-  eingegebener API-Key nicht zum erwarteten Format des gewählten Providers
-  passt (nur ein Hinweis, blockiert nie das Speichern).
-- KI-Provider-Formular: "Zugangsdaten testen"-Button prüft die gerade
-  eingegebenen, noch nicht gespeicherten Zugangsdaten mit einem echten
-  Mini-Request und zeigt, ob sie gültig sind, die Authentifizierung
-  fehlschlägt, oder der Provider nicht erreichbar ist.
+- Settings restructured: navigation on the left, content on the right
+  (instead of one long, unstructured list) — categories for AI providers,
+  Display & Language, Diagnostics, Sessions & Data and MCP Server.
+- AI provider form: immediate, purely local hint if an entered API key does
+  not match the expected format of the selected provider (only a hint, never
+  blocks saving).
+- AI provider form: "Test credentials" button checks the credentials just
+  entered, not yet saved, with a real mini request and shows whether they are
+  valid, authentication fails, or the provider is unreachable.
 
 ### Fixed
-- Ein eingefügter API-Key, ein Server-Passwort/Sudo-Passwort oder eine
-  Key-Passphrase mit einem angehängten Zeilenumbruch/Leerzeichen (z. B. von
-  einem Copy-Paste unter Windows) wird jetzt beim Speichern getrimmt, statt
-  die Authentifizierung mit "Credentials ungültig" scheitern zu lassen.
-- Windows: die Titelleiste fällt bei einem Aktivierungsfehler jetzt sauber
-  auf die volle native Titelleiste zurück (inkl. funktionierender
-  Minimieren-/Maximieren-/Schließen-Controls und Fenster-Ziehen), statt in
-  einem kaputten Zwischenzustand hängen zu bleiben.
-- Ein vom KI-Provider zurückgemeldetes Rate-Limit (HTTP 429) — bislang der
-  häufigste Grund, warum die KI mitten in einer Sitzung ohne jede Meldung
-  aufhörte zu antworten — wird jetzt automatisch mit Backoff und
-  `Retry-After`-Berücksichtigung wiederholt; die mehreren KI-Anfragen pro
-  Nachricht (Hauptantwort, Risiko-Zweitmeinung, Einschleusungs-Check) werden
-  zeitlich entzerrt statt als Burst abgeschickt. Scheitert es trotzdem, zeigt
-  der Chat jetzt eine eigene, handlungsanleitende Meldung ("bitte kurz warten
-  und erneut senden") statt der generischen "Provider-Konfiguration prüfen"-
-  Meldung.
+- A pasted API key, server password/sudo password or key passphrase with a
+  trailing line break/space (e.g. from a copy-paste on Windows) is now trimmed
+  on saving, instead of letting authentication fail with "Invalid
+  credentials".
+- Windows: the title bar now falls back cleanly to the full native title bar
+  (including working minimize/maximize/close controls and window dragging) on
+  an activation error, instead of getting stuck in a broken intermediate
+  state.
+- A rate limit (HTTP 429) reported by the AI provider — previously the most
+  common reason why the AI stopped answering in the middle of a session
+  without any message — is now retried automatically with backoff and
+  `Retry-After` handling; the multiple AI requests per message (main answer,
+  risk second opinion, injection check) are spread out over time instead of
+  being sent as a burst. If it still fails, the chat now shows a dedicated,
+  actionable message ("please wait a moment and send again") instead of the
+  generic "Check provider configuration" message.
 
 ### Security
-- Bei einem Fehler eines KI-Providers (falscher API-Key, Rate-Limit,
-  Netzwerkfehler, Modell nicht gefunden) landet die Fehlerantwort des
-  Providers jetzt redigiert im Log, ergänzend zur bestehenden
-  UI-Meldung — erleichtert die Diagnose, ohne je ein Secret preiszugeben.
+- When an AI provider fails (wrong API key, rate limit, network error, model
+  not found), the provider's error response is now written to the log in
+  redacted form, in addition to the existing UI message — makes diagnosis
+  easier without ever revealing a secret.
 
 ## [0.4.0] — 2026-09-07
 
-Erste öffentliche Testversion.
+First public test version.
 
 ### Added
-- Word-Export als erstes Pro-Modul **(Pro)**.
-- Lizenz-Eingabe-UI mit Live-Aktivierung **(Pro)**.
+- Word export as the first Pro module **(Pro)**.
+- License entry UI with live activation **(Pro)**.
 
 ### Security
-- Ressourcen-Caps gegen feindliche/fehlerhafte Server: ein Output-Cap, der
-  vorher erst nach vollständigem Puffern griff, begrenzt jetzt bereits
-  während des Streamings; ein expliziter Rekursions-Cap gegen
-  verschachtelte Command-Substitution.
-- Integrität der Fencing-Markierungen für nicht vertrauenswürdigen Inhalt
-  im KI-Kontext abgesichert.
+- Resource caps against hostile/faulty servers: an output cap that previously
+  only took effect after complete buffering now limits already during
+  streaming; an explicit recursion cap against nested command substitution.
+- Integrity of the fencing markers for untrusted content in the AI context
+  secured.
 
 ### Fixed
-- Härtungsrunde für die Testphase: verwaiste Keychain-Einträge nach einem
-  fehlgeschlagenen Server-Anlegen werden jetzt zuverlässig zurückgerollt,
-  Fehlermeldungen (falscher API-Key, Host nicht erreichbar, Provider nicht
-  gestartet, …) nennen jetzt den nächsten Schritt statt roher Technik, und
-  ein Absturz beim Start landet jetzt garantiert in der Logdatei statt
-  spurlos zu verschwinden.
+- Hardening round for the test phase: orphaned keychain entries after a failed
+  server creation are now reliably rolled back, error messages (wrong API key,
+  host unreachable, provider not started, …) now name the next step instead
+  of raw technical details, and a crash at startup is now guaranteed to end up
+  in the log file instead of disappearing without a trace.
 
 ## [0.3.0] — Initial Early Access
 
-Erste zusammenhängende Version: SSH-Client mit KI-Copilot und
-Filter-/Policy-Engine mit Bestätigungs-Workflow für jedes vorgeschlagene
-Kommando, Server-/Gruppen-/Regel-/Notizverwaltung, MCP-Server-Anbindung,
-persistente Chat-Sessions, Risiko-Indikatoren, Multi-Provider-KI-Anbindung
-(Anthropic, OpenAI, Ollama, generisch OpenAI-kompatibel) mit Redaction
-sensibler Inhalte, macOS-Build signiert und notarisiert.
+First coherent version: SSH client with AI copilot and filter/policy engine
+with a confirmation workflow for every suggested command, server/group/rule/
+note management, MCP server integration, persistent chat sessions, risk
+indicators, multi-provider AI integration (Anthropic, OpenAI, Ollama, generic
+OpenAI-compatible) with redaction of sensitive content, macOS build signed
+and notarized.
