@@ -1,0 +1,33 @@
+{
+  "version": "0.5.1",
+  "highlights": {
+    "en": [
+      "File browser with elevated rights: open it as root (or another user) via a passwordless sudo rule for sftp-server.",
+      "Every file browser action reports its result, with a summary for folder and multi-file actions.",
+      "The chat stays usable while the AI is working: messages are queued, and Stop cancels the running request immediately.",
+      "The AI is instructed to avoid reading passwords, private keys and tokens, so secrets stay out of the chat history.",
+      "The About dialog shows whether a development or release build is running."
+    ],
+    "de": [
+      "Dateibrowser mit erhöhten Rechten: als root (oder anderer Nutzer) öffnen, über eine sudo-Regel ohne Passwort für sftp-server.",
+      "Jede Dateibrowser-Aktion meldet ihr Ergebnis, bei Ordner- und Mehrfach-Aktionen als Zusammenfassung.",
+      "Der Chat bleibt bedienbar, während die KI arbeitet: Nachrichten werden eingereiht, und Stopp bricht die laufende Anfrage sofort ab.",
+      "Die KI wird angewiesen, Passwörter, private Schlüssel und Tokens nicht zu lesen, damit Geheimnisse nicht im Chat-Verlauf landen.",
+      "Der Über-Dialog zeigt, ob ein Entwicklungs- oder ein Release-Build läuft."
+    ],
+    "fr": [
+      "Explorateur de fichiers avec droits élevés : ouvrez-le en tant que root (ou un autre utilisateur) grâce à une règle sudo sans mot de passe pour sftp-server.",
+      "Chaque action de l’explorateur de fichiers indique son résultat, avec un récapitulatif pour les actions sur des dossiers ou plusieurs fichiers.",
+      "Le chat reste utilisable pendant que l’IA travaille : les messages sont mis en file d’attente et Stop annule immédiatement la requête en cours.",
+      "L’IA reçoit pour consigne d’éviter de lire les mots de passe, clés privées et jetons, afin que les secrets n’apparaissent pas dans l’historique du chat.",
+      "La boîte de dialogue À propos indique s’il s’agit d’une version de développement ou d’une version finale."
+    ],
+    "es": [
+      "Explorador de archivos con derechos elevados: ábralo como root (u otro usuario) mediante una regla de sudo sin contraseña para sftp-server.",
+      "Cada acción del explorador de archivos informa de su resultado, con un resumen para acciones sobre carpetas o varios archivos.",
+      "El chat sigue siendo utilizable mientras la IA trabaja: los mensajes se ponen en cola y Detener cancela de inmediato la solicitud en curso.",
+      "Se indica a la IA que evite leer contraseñas, claves privadas y tokens, para que los secretos no acaben en el historial del chat.",
+      "El cuadro Acerca de muestra si se ejecuta una compilación de desarrollo o de lanzamiento."
+    ]
+  }
+}

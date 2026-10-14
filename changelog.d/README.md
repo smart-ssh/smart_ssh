@@ -73,3 +73,10 @@ erscheinen als Kurzfassung auf der Download-Seite. Sie werden beim Release gesch
 übrigen Kategorien folgen danach unverändert. Ein CI-Check
 (`scripts/check-changelog-highlights.mjs`, Teil von `npm run lint`) prüft
 das für alle Versionen nach 0.5.2.
+
+The release PR also writes `release-notes/X.Y.Z.json` with the same
+Highlights in English, German, French and Spanish (exactly the keys
+`version` and `highlights`; `en` identical to the changelog Highlights;
+the same number of single-line plain-text items in every language). The
+check `scripts/check-release-notes.mjs`, part of `npm run lint`, enforces
+the format and that every version after 0.5.2 has a file.
