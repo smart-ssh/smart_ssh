@@ -378,6 +378,7 @@ pub(crate) async fn open_and_assemble(
         // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
+        chat_content: chat_content.clone(),
     };
     Ok(app_state)
 }

@@ -442,6 +442,7 @@ pub(crate) fn session_with_ai_provider(
         red_risk_always_confirm: true,
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         outgoing_transform: None,
+        chat_content: Default::default(),
         untrusted_content_ingested: std::sync::atomic::AtomicBool::new(false),
         post_ingest_policy: ssh_manager_core::profiles::PostIngestPolicy::default(),
         injection_check_provider: None,

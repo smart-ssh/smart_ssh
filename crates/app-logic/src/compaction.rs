@@ -36,7 +36,7 @@ use ssh_manager_core::ai::{
 
 use crate::events::EventEmitter;
 use crate::orchestration::{
-    reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+    reapply_redaction_and_seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
 };
 use crate::session::Session;
 use crate::state::SessionId;
@@ -127,6 +127,15 @@ fn estimate_message_tokens(message: &ChatMessage) -> usize {
         }
         // Issue #504: the core's own estimate stored with the reference.
         MessageContent::Extension(part) => part.estimated_tokens,
+        // Issue #505: the sealed (fenced) form is what is sent.
+        MessageContent::Sealed(sealed) => {
+            estimate_tokens(&sealed.text_for_model())
+                + if sealed.binary_bytes() > 0 {
+                    ssh_manager_core::ai::BINARY_BLOCK_TOKEN_ESTIMATE
+                } else {
+                    0
+                }
+        }
         MessageContent::ActionRejected { command, reason } => {
             let reason_text = match reason {
                 RejectionReason::User => "",
@@ -722,6 +731,25 @@ async fn persist_rolling_summary(session: &Session, summary: &RollingSummary) {
 /// Runden + der Instruktion, schickt sie über den Haupt-Provider dieser
 /// Session (Spec 0057, §2.1: "über den bestehenden Provider" — kein
 /// eigener/kleinerer Zweitmeinungs-Provider für Etappe 3) und liefert
+/// Test entry point for [`generate_rolling_summary`] (Issue #505).
+#[cfg(test)]
+pub(crate) async fn generate_rolling_summary_for_tests(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+    new_rounds: &[ChatMessage],
+) -> Option<String> {
+    generate_rolling_summary(
+        session,
+        session_id,
+        emitter,
+        None,
+        new_rounds,
+        PromptLanguage::En,
+    )
+    .await
+}
+
 /// `None` bei JEDER Art von Fehlschlag (Timeout, `AiEvent::Error`, leere/
 /// nur-Whitespace-Antwort) — der Aufrufer fällt dann auf das reine
 /// Abschneiden zurück (Spec 0057, §2.2).
@@ -763,10 +791,16 @@ async fn generate_rolling_summary(
             }),
         });
     }
-    history.extend(reapply_redaction_for_send(
+    // Issue #505: compaction requests go through the same sealing.
+    match reapply_redaction_and_seal_for_send(
         new_rounds.to_vec(),
         session.redactor.as_ref(),
-    ));
+        &session.chat_content,
+        session_id,
+    ) {
+        Ok(sealed) => history.extend(sealed),
+        Err(_) => return None,
+    }
     history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(summary_instruction(language)),

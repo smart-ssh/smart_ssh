@@ -25,6 +25,9 @@ pub(crate) fn message_parts(
     content: &MessageContent,
     text_of: fn(&MessageContent) -> String,
 ) -> Vec<ContentPart> {
+    if let MessageContent::Sealed(sealed) = content {
+        return sealed_parts(sealed);
+    }
     let MessageContent::Attachments(attachments) = content else {
         return vec![ContentPart::Text(text_of(content))];
     };
@@ -48,6 +51,49 @@ pub(crate) fn message_parts(
                 name: a.name.clone(),
                 base64: a.data_base64(),
             }),
+        }
+    }
+    parts
+}
+
+/// Issue #505: sealed extension content. Text is already redacted and fenced
+/// by the core; binaries follow as image/document blocks (the core allowlist
+/// guarantees the mime type).
+fn sealed_parts(sealed: &ssh_manager_core::ai::SealedContent) -> Vec<ContentPart> {
+    use ssh_manager_core::ai::SealedPart;
+    let mut parts: Vec<ContentPart> = Vec::new();
+    let push_text = |parts: &mut Vec<ContentPart>, text: String| match parts.last_mut() {
+        Some(ContentPart::Text(prev)) => {
+            prev.push_str("\n\n");
+            prev.push_str(&text);
+        }
+        _ => parts.push(ContentPart::Text(text)),
+    };
+    for part in sealed.parts() {
+        match part {
+            SealedPart::Text(t) => {
+                push_text(&mut parts, t.to_string());
+            }
+            SealedPart::Binary {
+                mime,
+                filename,
+                marker,
+                base64,
+                ..
+            } => {
+                push_text(&mut parts, marker.to_string());
+                if mime == "application/pdf" {
+                    parts.push(ContentPart::Pdf {
+                        name: filename.to_string(),
+                        base64,
+                    });
+                } else {
+                    parts.push(ContentPart::Image {
+                        media_type: mime.to_string(),
+                        base64,
+                    });
+                }
+            }
         }
     }
     parts
@@ -141,6 +187,20 @@ pub(crate) fn check_attachments(
     support: AttachmentSupport,
 ) -> Result<(), AiError> {
     for message in &context.history {
+        if let MessageContent::Sealed(sealed) = &message.content {
+            for part in sealed.parts() {
+                if let ssh_manager_core::ai::SealedPart::Binary { mime, .. } = part {
+                    if mime == "application/pdf" {
+                        if !support.pdf {
+                            return Err(AiError::AttachmentUnsupported(AttachmentKind::Pdf));
+                        }
+                    } else if !support.images {
+                        return Err(AiError::AttachmentUnsupported(AttachmentKind::Image));
+                    }
+                }
+            }
+            continue;
+        }
         let MessageContent::Attachments(items) = &message.content else {
             continue;
         };

@@ -13,6 +13,7 @@
 //! Mock-Implementierungen testbar.
 
 mod attachments;
+mod extension_content;
 mod extension_part;
 mod fencing;
 pub mod keywords;
@@ -34,6 +35,11 @@ mod tests;
 pub use attachments::{
     validate_attachments, AttachmentError, AttachmentKind, ChatAttachment, ChatAttachmentResolver,
     BINARY_ATTACHMENT_TOKEN_ESTIMATE, MAX_ATTACHMENTS_PER_MESSAGE, MAX_ATTACHMENT_BYTES,
+};
+pub use extension_content::{
+    seal_pending, ContentLimitError, RedactedBlock, ResolvedBlock, SealedContent, SealedPart,
+    BINARY_BLOCK_TOKEN_ESTIMATE, CONTENT_UNAVAILABLE, EXTENSION_SECURITY_LINE, MAX_BLOCKS_PER_PART,
+    MAX_BLOCK_BYTES, MAX_EXTENSION_PARTS_PER_MESSAGE, MAX_REQUEST_BINARY_BYTES,
 };
 pub use extension_part::{ExtensionMedia, ExtensionPart, ExtensionSource};
 pub use fencing::{fence_markers, fence_untrusted, UntrustedKind};

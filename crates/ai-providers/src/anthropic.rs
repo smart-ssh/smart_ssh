@@ -368,6 +368,8 @@ fn message_content_text(content: &MessageContent) -> String {
         // Issue #504: an unsealed extension part never carries content
         // (fail closed): fixed fenced placeholder with the label only.
         MessageContent::Extension(part) => part.unavailable_model_text(),
+        // Issue #505: sealed by the core (redacted, fenced).
+        MessageContent::Sealed(sealed) => sealed.text_for_model(),
     }
 }
 

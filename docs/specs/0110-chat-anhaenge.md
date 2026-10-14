@@ -94,6 +94,49 @@ der Kern dessen Datenmodell kennt (Spec 0038, Abschnitt 2a).
 - Sitzungen ohne Verweise laden unverändert, auch Sitzungen mit Anhängen aus
   früheren Entwicklungsständen.
 
+#### Annehmen (Senden mit IDs)
+
+- Bei einer Nachricht mit IDs fragt der Kern die registrierten Erweiterungen
+  der Reihe nach, bis eine die ID übersetzt. Eine unbekannte ID führt zum
+  Fehler `ATTACHMENT_UNRESOLVED`; IDs ohne registrierte Erweiterung zum
+  Fehler `ATTACHMENTS_UNAVAILABLE`. In beiden Fällen wird nichts gesendet.
+- Vor dem Speichern prüft der Kern die allgemeinen Grenzen, leitet die
+  Medienklasse ab, prüft Binärtypen, redigiert Text und Anzeigenamen und
+  berechnet die Token-Schätzung. Erst dann übergibt er die geprüften Blöcke
+  der Erweiterung zum Speichern. Scheitert das Speichern, wird nichts
+  gesendet. Läuft ein KI-Turn, wird die Nachricht mit IDs abgelehnt
+  (`ATTACHMENTS_WHILE_BUSY`) und nichts gespeichert.
+- Ohne IDs ist Senden und Verlauf unverändert.
+
+#### Allgemeine harte Grenzen für Erweiterungsinhalt
+
+- Höchstens 5 Teile je Nachricht, höchstens 4 Blöcke je Teil, höchstens
+  1 MiB je Block (tatsächliche Bytes), Text ist gültiges UTF-8, und
+  höchstens 20 MiB Binärbytes je Anfrage über den ganzen Verlauf.
+- Geprüft wird beim Annehmen und bei jedem Senden. Ein Verstoß sendet nichts
+  und liefert einen stabilen Code: `ATTACHMENTS_TOO_MANY` (Teile oder
+  Blöcke), `ATTACHMENT_TOO_LARGE`, `ATTACHMENT_INVALID`,
+  `ATTACHMENTS_REQUEST_TOO_LARGE` (20 MiB je Anfrage).
+- Erlaubte Binärtypen: `image/png`, `image/jpeg`, `image/gif`, `image/webp`,
+  `application/pdf`; die ersten Bytes müssen zum gemeldeten Typ passen.
+  Alles andere wird vor jedem Anbieteraufruf abgelehnt. Binärbytes werden nie
+  als Text gelesen, redigiert oder protokolliert.
+
+#### Versiegeln beim Senden
+
+- Bei jedem Senden an einen Anbieter (Chat-Turn und Kompaktierung) löst der
+  Kern jeden Verweis über seine Erweiterung auf und macht daraus einen
+  versiegelten Inhalt: Text wird erneut redigiert (auch wenn die Erweiterung
+  unredigierten Text liefert), als `local_file` mit dem Anzeigenamen als
+  Quelle gefencet (Fence-Marker werden neutralisiert) und von einer festen
+  Sicherheitszeile gefolgt; Binärblöcke gehen als Bild- bzw. Dokumentblock,
+  davor eine gefencte Kennzeile. Text einer Erweiterung steht nie außerhalb
+  des Fence.
+- Liefert die Erweiterung „Inhalt existiert nicht mehr" oder ist sie nicht
+  registriert, geht die feste Zeile „Inhalt nicht mehr verfügbar" mit dem
+  Anzeigenamen. Liefert sie einen Fehler, wird nichts gesendet.
+- Versiegelter Inhalt wird nie gespeichert.
+
 ## 6. Kontextbegrenzung
 
 - Die Token-Schätzung zählt Textanhänge nach Länge, Bilder und PDFs mit
@@ -130,6 +173,15 @@ nicht dienst-gebunden und in der Ausgangsberechtigung „Free" gesperrt.
    jeweiligen Anbieterformat.
 8. Bild an ein reines Textmodell (z. B. lokales Ollama-Modell): Fehler, kein
    Anbieteraufruf; derselbe Chat mit nur einem Textanhang geht durch.
+10. Erweiterungsinhalt: Geheimnis in Text und Anzeigename fehlt in der
+    Anfrage, auch wenn die Erweiterung unredigiert liefert und auch nach dem
+    Fortsetzen; ein Fence-Marker im Text oder Namen schließt den Fence nicht.
+11. Sechs Teile, fünf Blöcke, ein Block über 1 MiB, ein Binärblock, dessen
+    Bytes nicht zum Typ passen, ein Typ außerhalb der Liste, oder mehr als
+    20 MiB Binärbytes in einer Anfrage: Fehler mit stabilem Code, kein
+    Anbieteraufruf; die genauen Grenzen gehen durch.
+12. Fehlender Inhalt oder fehlende Erweiterung: feste Platzhalterzeile; Fehler
+    beim Auflösen: nichts wird gesendet.
 9. Geheimnismuster in einem Textanhang derselben Nachricht wie ein Bild: das
    Muster fehlt in der Anfrage, die Bildbytes sind unverändert.
 
