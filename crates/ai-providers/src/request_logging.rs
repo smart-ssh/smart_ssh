@@ -573,7 +573,10 @@ mod error_logging_tests {
     #[test]
     fn test_extension_part_is_logged_as_count_only() {
         let ctx = crate::content::test_fixtures::context_with_extension_part("report.pdf");
-        for line in history_shapes(&ctx).into_iter().chain(history_contents(&ctx)) {
+        for line in history_shapes(&ctx)
+            .into_iter()
+            .chain(history_contents(&ctx))
+        {
             for leaked in ["report.pdf", "OPAQUEID", "OPAQUEKIND", "extname"] {
                 assert!(!line.contains(leaked), "{leaked} in {line}");
             }

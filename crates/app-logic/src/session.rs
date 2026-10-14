@@ -1963,7 +1963,9 @@ mod tests {
             role: Role::User,
             content: MessageContent::Text("hello".to_string()),
         };
-        assert!(!history_contains_untrusted_content(&[text.clone()]));
+        assert!(!history_contains_untrusted_content(std::slice::from_ref(
+            &text
+        )));
         let part = ChatMessage {
             role: Role::User,
             content: MessageContent::Extension(ExtensionPart {
