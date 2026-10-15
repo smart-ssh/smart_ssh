@@ -73,7 +73,7 @@ smart_ssh/
 
 Fertige Installer und Binaries für alle Plattformen stehen unter [Releases](https://github.com/brokoskokoli/smart_ssh/releases) bereit:
 
-- **macOS:** `.dmg`-Installer *(Universal Binary für Apple Silicon & Intel)*
+- **macOS:** `.dmg`-Installer *(Universal Binary für Apple Silicon & Intel, ab macOS 10.15 Catalina)*
 - **Windows:** `.msi` / `.exe`-Installer *(x64)*
 - **Linux:** `.AppImage` *(direkt startbar)* oder `.deb`-Paket
 

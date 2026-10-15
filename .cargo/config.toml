@@ -3,3 +3,7 @@
 # cross-target builds (universal macOS) and ties release binaries to the
 # build machine's CPU. whisper-rs-sys forwards GGML_* env vars to CMake.
 GGML_NATIVE = "OFF"
+# whisper.cpp uses std::filesystem, available from macOS 10.15. Keeps plain
+# cargo builds and the whisper-rs-sys CMake build on the same target as the
+# bundle (ignored outside Apple targets).
+MACOSX_DEPLOYMENT_TARGET = "10.15"
