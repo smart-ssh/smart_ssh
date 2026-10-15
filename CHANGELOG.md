@@ -51,6 +51,7 @@ Features that are only available in a paid edition are marked with
   so they can be compared against a second source.
 
 ### Changed
+- macOS 10.15 (Catalina) or later is now required.
 - The AI answers in the interface language by default; session titles,
   closing notes and summaries follow it. Date and time follow the selected
   language instead of the system setting, and the language picker shows each
