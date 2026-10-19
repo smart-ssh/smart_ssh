@@ -19,6 +19,7 @@ import type {
   ChatWebResearchUnavailableEvent,
   AutoReconnectChangedEvent,
   ConnectionStatusChangedEvent,
+  ConnectProgressEvent,
   HostKeyVerificationEndedEvent,
   HostKeyVerificationNeededEvent,
   McpActionTabRequestedEvent,
@@ -63,6 +64,12 @@ export const onHostKeyVerificationEnded = (
   listen<HostKeyVerificationEndedEvent>("host-key-verification-ended", (e) =>
     handler(e.payload),
   );
+
+/** Issue #546: live step list of a running `connect`. */
+export const onConnectProgress = (
+  handler: (event: ConnectProgressEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ConnectProgressEvent>("connect-progress", (e) => handler(e.payload));
 
 export const onTerminalOutput = (
   handler: (event: TerminalOutputEvent) => void,

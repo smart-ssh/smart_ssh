@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Connexion annulée car la clé d’hôte n’a pas été confirmée. Si vous faites confiance au serveur, reconnectez-vous et vérifiez l’empreinte.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "La demande de clé d’hôte est restée sans réponse à temps ; la clé n’a pas été approuvée. Reconnectez-vous.",
     "SSH_CONNECTION_ABANDONED": "Tentative de connexion annulée (p. ex. l’application a été rechargée pendant que la demande de clé d’hôte était ouverte). Reconnectez-vous.",
+    "SSH_CONNECT_CANCELLED": "Connexion annulée.",
     "AI_AUTH_FAILED": "Échec de l’authentification auprès du fournisseur d’IA – vérifiez la clé d’API",
     "AI_RATE_LIMITED": "Le fournisseur d’IA limite actuellement les requêtes (limite de débit) – l’application a déjà réessayé automatiquement plusieurs fois. Patientez un moment et renvoyez le message.",
     "AI_NETWORK_ERROR": "Impossible de joindre le fournisseur d’IA. Vérifiez votre connexion Internet et, pour un point de terminaison personnalisé, l’URL de base, puis renvoyez.",

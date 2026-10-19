@@ -371,6 +371,7 @@ pub(crate) async fn open_and_assemble(
         // Scope dieses Refactorings).
         entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: app_logic::state::McpState::default(),
@@ -756,6 +757,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::test_ai_provider_credentials,
             commands::fetch_attestation_info,
             commands::connect,
+            commands::cancel_connect,
             commands::confirm_host_key,
             commands::open_terminal,
             commands::terminal_input,

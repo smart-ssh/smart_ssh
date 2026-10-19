@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "A kapcsolat megszakítva, mert a gazdakulcsot nem erősítették meg. Ha megbízik a szerverben, csatlakozzon újra, és ellenőrizze az ujjlenyomatot.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "A gazdakulcs-kérdésre nem válaszoltak időben; a kulcsban nem bíztak meg. Csatlakozzon újra.",
     "SSH_CONNECTION_ABANDONED": "A csatlakozási kísérlet megszakítva (pl. az alkalmazás újratöltött a gazdakulcs-kérdés megnyitása közben). Csatlakozzon újra.",
+    "SSH_CONNECT_CANCELLED": "A kapcsolat megszakítva.",
     "AI_AUTH_FAILED": "Az AI-szolgáltatóval végzett hitelesítés sikertelen – ellenőrizze az API-kulcsot",
     "AI_RATE_LIMITED": "Az AI-szolgáltató jelenleg korlátozza a kéréseket (kérési korlát) – az alkalmazás már néhányszor automatikusan újrapróbálta. Várjon egy kicsit, és küldje el újra az üzenetet.",
     "AI_NETWORK_ERROR": "Az AI-szolgáltató nem érhető el. Ellenőrizze az internetkapcsolatot és egyéni végpontnál az alap-URL-t, majd küldje újra.",

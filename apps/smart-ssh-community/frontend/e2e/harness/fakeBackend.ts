@@ -270,6 +270,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     // Approve/deny of a pending action; the result event is up to the test.
     respond_to_action: () => null,
     // Issue #355: the status events are up to the test.
+    cancel_connect: () => null,
     reconnect_session: () => null,
     stop_auto_reconnect: () => null,
     get_selected_speech_model: () => "base",

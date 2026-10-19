@@ -261,6 +261,43 @@ export interface HostKeyVerificationEndedEvent {
   reason: HostKeyPromptEndReason;
 }
 
+/** Issue #546: detail of a connect step — a stable code plus parameters, to
+ * be translated by the frontend. Never carries secrets. */
+export type ConnectStepDetail =
+  | { code: "contacting"; target: string }
+  | { code: "tunnel"; hop: string }
+  | { code: "waitingForResponse" }
+  | { code: "waitingForDecision" }
+  | { code: "authMethod"; method: string };
+
+/** Issue #546: one step in a `connect-progress` event. */
+export interface ConnectStepSnapshot {
+  kind:
+    | "dnsResolution"
+    | "tcpConnect"
+    | "tunnelOpen"
+    | "handshake"
+    | "hostKeyCheck"
+    | "authentication"
+    | "sessionReady";
+  hopIndex: number;
+  /** `user@host:port` of the hop (Spec 0076 naming). */
+  hop: string;
+  status: "running" | "ok" | "failed";
+  errorCode: string | null;
+  detail: ConnectStepDetail | null;
+}
+
+/** Issue #546: `connect-progress` — the full current step list of a running
+ * connect. `attempt` is 1-based and counts retries (e.g. after Trust); a new
+ * attempt starts a fresh list. */
+export interface ConnectProgressEvent {
+  attemptId: string;
+  serverId: string;
+  attempt: number;
+  steps: ConnectStepSnapshot[];
+}
+
 export interface TerminalOutputEvent {
   sessionId: string;
   /** Base64-kodiert (s. `crate::events`-Modul-Kommentar). */

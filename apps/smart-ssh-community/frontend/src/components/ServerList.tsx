@@ -200,7 +200,7 @@ export function ServerList({
     setError(null);
     setConnectingId(server.id);
     try {
-      const sessionId = await connect(server.id);
+      const sessionId = await connect(server.id, crypto.randomUUID());
       onConnected(sessionId, server.name, server.id);
     } catch (err) {
       showConnectFailure(err);

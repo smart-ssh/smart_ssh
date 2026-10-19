@@ -329,7 +329,7 @@ describe("App host key prompt in every tab state (Issue #12)", () => {
     );
     renderApp();
     fireEvent.click(await screen.findByText("prod-1"));
-    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1", expect.any(String)));
 
     emitHostKey(events[1]);
     await screen.findByRole("alertdialog");

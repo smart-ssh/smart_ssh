@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Conexión cancelada porque no se confirmó la clave de host. Si confía en el servidor, vuelva a conectar y verifique la huella digital.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "La solicitud de clave de host no se respondió a tiempo; no se confió en la clave. Vuelva a conectar.",
     "SSH_CONNECTION_ABANDONED": "Intento de conexión cancelado (p. ej. la aplicación se recargó con la solicitud de clave de host abierta). Vuelva a conectar.",
+    "SSH_CONNECT_CANCELLED": "Conexión cancelada.",
     "AI_AUTH_FAILED": "Error de autenticación con el proveedor de IA: compruebe la clave de API",
     "AI_RATE_LIMITED": "El proveedor de IA está limitando las solicitudes (límite de frecuencia); la aplicación ya reintentó automáticamente varias veces. Espere un momento y vuelva a enviar el mensaje.",
     "AI_NETWORK_ERROR": "No se puede acceder al proveedor de IA. Compruebe su conexión a internet y, si usa un punto final propio, la URL base; después vuelva a enviar.",

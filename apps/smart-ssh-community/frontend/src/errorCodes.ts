@@ -78,6 +78,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Spec 0069, Teil A5 (spec-reviewer-Fund): dritter Host-Key-Wartestellen-
   // Ausgang (Frontend-Reload während offener Abfrage), bisher ohne Code.
   "SSH_CONNECTION_ABANDONED",
+  // Issue #546: the user cancelled a running connect.
+  "SSH_CONNECT_CANCELLED",
   // AiError (crates/core/src/ai/types.rs)
   "AI_AUTH_FAILED",
   "AI_RATE_LIMITED",

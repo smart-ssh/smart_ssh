@@ -171,7 +171,14 @@ struct Entry {
 #[derive(Clone, Default)]
 pub struct ConnectLog {
     entries: Arc<Mutex<Vec<Entry>>>,
+    /// Issue #546: optional live sink, called synchronously with the full
+    /// snapshot after every change. Shared by clones like `entries`.
+    sink: Option<ProgressSink>,
 }
+
+/// Receives the full progress snapshot of an attempt whenever a step starts,
+/// changes its detail, succeeds or fails (Issue #546).
+pub type ProgressSink = Arc<dyn Fn(Vec<ConnectStepSnapshot>) + Send + Sync>;
 
 impl std::fmt::Debug for ConnectLog {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -186,6 +193,29 @@ impl ConnectLog {
         Self::default()
     }
 
+    /// A log that reports every change to `sink` (Issue #546). The sink runs
+    /// synchronously on the thread that changed the log and must not block
+    /// or call back into this log.
+    pub fn with_sink(sink: ProgressSink) -> Self {
+        Self {
+            entries: Arc::default(),
+            sink: Some(sink),
+        }
+    }
+
+    /// Reports the current state to the sink, if any. Called after the lock
+    /// is released.
+    fn notify(&self) {
+        if let Some(sink) = &self.sink {
+            sink(self.progress_snapshot());
+        }
+    }
+
+    /// Snapshot in the shape of the `connect-progress` event.
+    pub fn progress_snapshot(&self) -> Vec<ConnectStepSnapshot> {
+        ConnectStepSnapshot::from_records(&self.snapshot(), false)
+    }
+
     /// Eine vergiftete Sperre ist hier kein Schutzproblem — das Protokoll
     /// ist reine Anzeige. Weiterarbeiten mit dem Inhalt statt eines Panics
     /// mitten im Verbindungsaufbau.
@@ -195,6 +225,12 @@ impl ConnectLog {
 
     /// Beginnt einen Schritt.
     pub fn start(&self, hop_index: usize, hop: &str, step: ConnectStep) -> StepId {
+        let id = self.start_silent(hop_index, hop, step);
+        self.notify();
+        id
+    }
+
+    fn start_silent(&self, hop_index: usize, hop: &str, step: ConnectStep) -> StepId {
         let mut entries = self.lock();
         entries.push(Entry {
             record: ConnectStepRecord {
@@ -214,6 +250,7 @@ impl ConnectLog {
         if let Some(entry) = self.lock().get_mut(id.0) {
             f(&mut entry.record.step);
         }
+        self.notify();
     }
 
     /// Beendet einen Schritt erfolgreich.
@@ -238,6 +275,7 @@ impl ConnectLog {
                 entry.record.duration_ms = Some(millis(entry.started));
             }
         }
+        self.notify();
     }
 
     /// Markiert jeden noch laufenden Schritt als gescheitert — für Fehler,
@@ -252,11 +290,145 @@ impl ConnectLog {
                 entry.record.duration_ms = Some(millis(entry.started));
             }
         }
+        self.notify();
     }
 
     /// Momentaufnahme aller Schritte in Reihenfolge.
     pub fn snapshot(&self) -> Vec<ConnectStepRecord> {
         self.lock().iter().map(|e| e.record.clone()).collect()
+    }
+}
+
+/// Short, untranslated detail of a step for the live view (Issue #546): a
+/// stable `code` plus parameters, so the frontend can translate it. Never
+/// carries a key path, passphrase, password or key material — the
+/// authentication detail is the method name only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(
+    tag = "code",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum StepDetail {
+    /// DNS / TCP: `host:port` being contacted.
+    Contacting { target: String },
+    /// Jump hop tunnel: the hop name.
+    Tunnel { hop: String },
+    /// Handshake while running.
+    WaitingForResponse,
+    /// Host key check while the host key dialog is open.
+    WaitingForDecision,
+    /// Authentication: the method currently tried
+    /// (`publickey (agent)`, `publickey (key file)`, `password`).
+    AuthMethod { method: String },
+}
+
+/// One step as sent in the `connect-progress` event (Issue #546).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectStepSnapshot {
+    /// Step kind, camelCase (`dnsResolution`, `tcpConnect`, `tunnelOpen`,
+    /// `handshake`, `hostKeyCheck`, `authentication`, `sessionReady`).
+    pub kind: String,
+    pub hop_index: usize,
+    /// Hop label (`user@host:port`, Spec 0076 naming).
+    pub hop: String,
+    /// `running` | `ok` | `failed`.
+    pub status: String,
+    /// Error code when `failed`.
+    pub error_code: Option<String>,
+    pub detail: Option<StepDetail>,
+}
+
+impl ConnectStepSnapshot {
+    /// `awaiting_host_key`: the host key dialog is open — the host key check
+    /// of the last hop (which the transport closed as `HOST_KEY_UNKNOWN` /
+    /// `HOST_KEY_CHANGED`) is shown as running and waiting for the decision.
+    pub fn from_records(records: &[ConnectStepRecord], awaiting_host_key: bool) -> Vec<Self> {
+        let waiting_idx = if awaiting_host_key {
+            records.iter().rposition(|r| {
+                matches!(
+                    (&r.step, &r.status),
+                    (ConnectStep::HostKeyCheck { .. }, StepStatus::Failed { code })
+                        if code == HOST_KEY_UNKNOWN || code == HOST_KEY_CHANGED
+                )
+            })
+        } else {
+            None
+        };
+        records
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let waiting = waiting_idx == Some(i);
+                let (status, error_code) = match (&r.status, waiting) {
+                    (_, true) | (StepStatus::Running, _) => ("running", None),
+                    (StepStatus::Ok, _) => ("ok", None),
+                    (StepStatus::Failed { code }, _) => ("failed", Some(code.clone())),
+                };
+                let running = status == "running";
+                let detail = match &r.step {
+                    ConnectStep::DnsResolution { host, port, .. } => Some(StepDetail::Contacting {
+                        target: format!("{host}:{port}"),
+                    }),
+                    ConnectStep::TcpConnect { address, port } => Some(StepDetail::Contacting {
+                        target: match address {
+                            Some(a) => a.clone(),
+                            None => format!("{}:{port}", host_of(&r.hop)),
+                        },
+                    }),
+                    ConnectStep::TunnelOpen { .. } => {
+                        Some(StepDetail::Tunnel { hop: r.hop.clone() })
+                    }
+                    ConnectStep::Handshake { .. } if running => {
+                        Some(StepDetail::WaitingForResponse)
+                    }
+                    ConnectStep::HostKeyCheck { .. } if waiting => {
+                        Some(StepDetail::WaitingForDecision)
+                    }
+                    ConnectStep::Authentication { method, .. } => Some(StepDetail::AuthMethod {
+                        method: auth_method_label(*method).to_string(),
+                    }),
+                    _ => None,
+                };
+                Self {
+                    kind: step_kind(&r.step).to_string(),
+                    hop_index: r.hop_index,
+                    hop: r.hop.clone(),
+                    status: status.to_string(),
+                    error_code,
+                    detail,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Host part of a `user@host:port` hop label.
+fn host_of(hop: &str) -> &str {
+    let after_user = hop.rsplit_once('@').map_or(hop, |(_, h)| h);
+    after_user.rsplit_once(':').map_or(after_user, |(h, _)| h)
+}
+
+fn step_kind(step: &ConnectStep) -> &'static str {
+    match step {
+        ConnectStep::DnsResolution { .. } => "dnsResolution",
+        ConnectStep::TcpConnect { .. } => "tcpConnect",
+        ConnectStep::TunnelOpen { .. } => "tunnelOpen",
+        ConnectStep::Handshake { .. } => "handshake",
+        ConnectStep::HostKeyCheck { .. } => "hostKeyCheck",
+        ConnectStep::Authentication { .. } => "authentication",
+        ConnectStep::SessionReady => "sessionReady",
+    }
+}
+
+fn auth_method_label(kind: AuthMethodKind) -> &'static str {
+    match kind {
+        AuthMethodKind::Password => "password",
+        AuthMethodKind::Agent => "publickey (agent)",
+        AuthMethodKind::PrivateKey | AuthMethodKind::Certificate | AuthMethodKind::IdentityFile => {
+            "publickey (key file)"
+        }
     }
 }
 
@@ -417,5 +589,66 @@ mod tests {
             "SSH-2.0-x[31mred"
         );
         assert_eq!(sanitize_server_version(&[b'a'; 1000]).len(), 255);
+    }
+
+    #[test]
+    fn sink_receives_full_snapshot_on_every_change() {
+        let seen: Arc<Mutex<Vec<Vec<ConnectStepSnapshot>>>> = Arc::default();
+        let sink_seen = seen.clone();
+        let log = ConnectLog::with_sink(Arc::new(move |s| sink_seen.lock().unwrap().push(s)));
+        let hs = log.start(
+            0,
+            "u@h:22",
+            ConnectStep::Handshake {
+                server_version: None,
+                kex: None,
+                host_key_algorithm: None,
+                cipher: None,
+                mac: None,
+            },
+        );
+        log.update(hs, |_| {});
+        log.fail(hs, "SSH_TIMEOUT");
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 3);
+        assert_eq!(seen[0][0].status, "running");
+        assert_eq!(seen[0][0].detail, Some(StepDetail::WaitingForResponse));
+        assert_eq!(seen[2][0].status, "failed");
+        assert_eq!(seen[2][0].error_code.as_deref(), Some("SSH_TIMEOUT"));
+        assert_eq!(seen[2][0].detail, None);
+    }
+
+    #[test]
+    fn auth_detail_names_only_the_method_and_host_key_wait_overlays() {
+        let log = ConnectLog::new();
+        let a = log.start(
+            0,
+            "u@h:22",
+            ConnectStep::Authentication {
+                method: AuthMethodKind::IdentityFile,
+                remaining_methods: vec![],
+                partial_success: false,
+            },
+        );
+        log.succeed(a);
+        let h = log.start(
+            0,
+            "u@h:22",
+            ConnectStep::HostKeyCheck {
+                key_type: Some("ssh-ed25519".into()),
+                fingerprint: Some("SHA256:abc".into()),
+                result: Some(HostKeyCheckResult::Unknown),
+            },
+        );
+        log.fail(h, HOST_KEY_UNKNOWN);
+        let plain = ConnectStepSnapshot::from_records(&log.snapshot(), false);
+        assert_eq!(plain[1].status, "failed");
+        let waiting = ConnectStepSnapshot::from_records(&log.snapshot(), true);
+        assert_eq!(waiting[1].status, "running");
+        assert_eq!(waiting[1].error_code, None);
+        assert_eq!(waiting[1].detail, Some(StepDetail::WaitingForDecision));
+        let json = serde_json::to_string(&waiting).unwrap();
+        assert!(json.contains("publickey (key file)"));
+        assert!(!json.contains("SHA256"), "no fingerprint/key data: {json}");
     }
 }
