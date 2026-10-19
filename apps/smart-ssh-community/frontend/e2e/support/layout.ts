@@ -262,3 +262,25 @@ export async function walkTabOrder(
   }
   return result;
 }
+
+/**
+ * The vertical centres of both elements are the same within `tolerance` px
+ * (default 2). Retries until it holds or times out.
+ */
+export async function expectVerticallyCentredWith(
+  a: Locator,
+  b: Locator,
+  tolerance = 2,
+): Promise<void> {
+  await expect(async () => {
+    const [boxA, boxB] = await Promise.all([a.boundingBox(), b.boundingBox()]);
+    expect(boxA, "first element has no layout box").not.toBeNull();
+    expect(boxB, "second element has no layout box").not.toBeNull();
+    const centreA = boxA!.y + boxA!.height / 2;
+    const centreB = boxB!.y + boxB!.height / 2;
+    expect(
+      Math.abs(centreA - centreB),
+      `vertical centres differ: ${centreA} vs ${centreB}`,
+    ).toBeLessThanOrEqual(tolerance);
+  }).toPass({ timeout: 5_000 });
+}
