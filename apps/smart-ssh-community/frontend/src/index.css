@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* No elastic "rubber-band" overscroll (WKWebView on macOS) on the document or
+   on any scroll container, and no scroll chaining to the surrounding layout.
+   Global on purpose: every scrollable element inherits the rule without a
+   per-element class; normal and momentum scrolling are unaffected. */
+html,
+body,
+* {
+  overscroll-behavior: none;
+}
+
 /* Design-Import (Claude Design, "Smart SSH — visueller Neuentwurf",
    fc0ced02-936d-40c7-a332-94159466621f/Smart SSH.dc.html): lokal gehostete
    Web-Fonts statt eines Google-Fonts-`<link>` — die CSP in `tauri.conf.json`
