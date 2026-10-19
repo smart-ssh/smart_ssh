@@ -1261,7 +1261,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             </ul>
           )}
         <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3">
-          <span className="self-start pt-1 font-mono text-sm text-indigo-500">&gt;</span>
+          <span className="self-start py-1.5 font-mono text-sm leading-5 text-indigo-500">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
               Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
               `resize-none` + die Höhen-Effekt oben ergeben das
@@ -1274,7 +1274,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           />
           {composerActions.map((action) => (
             <button
