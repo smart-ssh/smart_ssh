@@ -1,0 +1,293 @@
+# smart_ssh — AGENTS.md
+
+Cross-platform SSH client (Tauri 2 + Rust core + React frontend) with an
+AI copilot that suggests commands, which run through a policy/filter
+engine before anything touches a real server. The project's core promise
+is **full transparency and control over every command that reaches a
+server** — the AI is a copilot, never an autonomous actor. Code quality
+rules here exist to protect that promise, not as bureaucracy.
+
+This file holds the project facts and conventions that apply to every
+contributor and every coding agent. Role-specific workflows — how an
+implementation run is carried out and reviewed — live in the agent and
+skill definitions under `.claude/`.
+
+## Before every commit
+
+Run the full gate and make sure it's green — this mirrors CI
+(`.github/workflows/community.yml`). The `test` job (matrix: Ubuntu,
+Windows, macOS) runs `cargo fmt --check`/clippy/test/build plus, in the
+frontend, `npm run lint`, `npm test`, and `npm run build` (Spec 0090, A5) —
+a lint or test failure there fails the job. The separate `dependency-audit`
+job (`ubuntu-latest` only) runs `cargo deny check licenses sources bans`
+and `cargo audit` as blocking steps (Spec 0090, A2): a license/origin/ban
+violation or a non-exempted vulnerability fails the job; unmaintained/
+unsound advisories and yanked crates stay visible warnings. A third step
+there checks that every exemption in `.cargo/audit.toml` still matches a
+current finding (Spec 0090, A4) — a stale exemption (e.g. for a withdrawn
+advisory) fails the job too.
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo build --workspace
+```
+
+The last step builds without the `test-support` feature, which `cargo
+test`/`clippy --all-targets` both enable — it's the only one of the four
+that catches a production-code call into a test-only access point (e.g.
+`parts_mut_for_tests`, gated on `cfg(any(test, feature = "test-support"))`),
+since that call compiles fine as long as `test-support` is on.
+
+```bash
+cd apps/smart-ssh-community/frontend
+npx tsc -b
+npm run lint      # Tauri command check (scripts/check-tauri-commands.mjs), then oxlint
+npx vitest run
+```
+
+Browser tests (issue #166, ADR 0120) run the real frontend in Chromium and
+WebKit, at 1280×800 and 800×560, against a fake backend that replaces the
+Tauri IPC layer (`e2e/harness/`). Unknown commands fail the test, so a new
+screen or command needs a handler in `e2e/harness/fakeBackend.ts` or a
+per-test override. Layout checks (inside the viewport, not covered, reachable
+by Tab, only the content scrolls) live in `e2e/support/layout.ts`; known axe
+findings are listed with a reason in `e2e/support/axe.ts`. CI runs the
+suite in the separate `browser-tests` job (`ubuntu-latest` only); on
+failure it uploads traces and the HTML report as the `playwright-traces`
+artifact.
+
+```bash
+cd apps/smart-ssh-community/frontend
+npx playwright install chromium webkit   # once, downloads the browsers
+npm run test:e2e      # whole suite, headless
+npm run test:e2e:ui   # Playwright UI mode, for local debugging
+```
+
+`npm run lint` first runs `npm run check-commands`: it fails when a
+`#[tauri::command]` is not in `generate_handler!`, a `generate_handler!`
+entry has no definition, a non-test frontend file `invoke`s an
+unregistered name, or a name in the startup gate's allow list is not
+registered (issue #101). Then it runs `npm run check-a11y-rules`
+(`scripts/check-a11y-lint-rules.mjs`, issue #146): it fails when a
+`jsx-a11y` rule that the installed oxlint enables is not listed with
+`error` in `.oxlintrc.json` (Spec 0100 A6.1, ADR 0116) — after an oxlint
+upgrade that adds a rule, add it there. CI runs both through the same
+`npm run lint` step.
+
+Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
+if formatting is off, clippy and test never even execute, so a red CI run
+that only shows a `fmt` failure tells you nothing about whether the actual
+code is correct. Run `cargo fmt --all` locally before committing, not just
+`--check`.
+
+For UI-affecting changes, also start the dev app and click through the
+golden path once — type-checking and unit tests verify code correctness,
+not feature correctness. On macOS use `./scripts/tauri-dev.sh`, not plain
+`cargo tauri dev` (a code-signing/keychain quirk, see
+`docs/adr/0022-stable-dev-code-signature.md`). Don't relaunch it
+repeatedly while iterating — build/test/lint don't need a running window;
+start it once, when a change is actually ready to look at.
+
+## Git staging — never blanket-add
+
+**Never `git add -A` or `git add .`.** Several files are deliberately
+untracked (local `.claude/` caches, signing credentials outside the repo,
+in-progress work), and a blanket add has already once swept untracked
+files into a commit whose message claimed otherwise. Always stage the
+exact paths that belong in the commit, and run `git status` before
+committing to confirm nothing unintended is staged (no secrets, no local
+caches, no unrelated in-progress edits).
+
+## Architecture rules
+
+```
+crates/
+├── core/               # pure logic — NO Tauri, NO UI framework dependency
+│   ├── ssh/              # connection handling, trait-based
+│   ├── filter/            # policy/filter engine (security-critical)
+│   ├── risk/               # command risk classification
+│   ├── ai/                  # AI provider abstraction + output redaction
+│   └── profiles/              # server/group/credential domain types
+├── ssh-transport/       # concrete SshTransport impl (russh + local pseudo-server)
+├── persistence-sqlite/  # concrete ProfileStore/PolicyStore impl
+├── credentials-keyring/ # concrete CredentialStore impl (OS keychain)
+├── ai-providers/        # concrete AiProvider impls (Anthropic, OpenAI-compatible, ...)
+├── mcp-server/           # MCP server exposing sessions to external clients
+├── app-logic/            # Tauri-free application logic: chat-turn orchestration,
+│                         # compaction, confirmation registry, connection test,
+│                         # server/group/credential management, DTOs, AppState
+│                         # (Spec 0084; see docs/architecture.md for the app-logic/
+│                         # app-shell boundary and its one deliberate exception)
+└── app-shell/            # thin wrapper: Tauri commands/events <-> app-logic/core APIs,
+                           # edition-parametrized via `Wiring` (Spec 0038)
+apps/
+└── smart-ssh-community/  # thin binary: app_shell::run(Wiring::community())
+    └── frontend/           # React, talks only to app-shell via invoke()
+```
+
+**`core` never depends on Tauri or a UI framework.** All domain logic
+belongs there; `app-shell` only translates between Tauri commands/events
+and `core` APIs. This is what lets a future TUI reuse the same logic
+without duplication — don't put business logic in `app-shell` because it
+was faster to reach `AppHandle`/`State` from there.
+
+**Every external boundary is a trait, defined before its concrete
+implementation.** `SshTransport`, `SftpSession`, `InteractiveShell`,
+`AiProvider`, `PolicyStore`, `ProfileStore`, `CredentialStore` — each has
+an in-memory/mock implementation used in tests, so `core`'s logic (above
+all the filter engine) is fully testable without a real SSH connection or
+API call. When adding a new external dependency, add the trait first.
+
+**No special-casing the local pseudo-server (or any other server) in the
+core loop.** The local pseudo-server (`ssh-transport::LocalTransport`,
+`app_shell::local_server`) exists specifically to prove this: it
+implements the same traits as a real server, so the filter engine, risk
+classifier, and confirmation flow apply to it identically, with zero
+branching on server identity anywhere in that path. If you find yourself
+writing `if server_id == LOCAL_SERVER_ID` inside filter/risk/confirmation
+code, that's a sign something is architecturally wrong — the special
+casing belongs at the transport/session-construction boundary, never
+inside the security logic itself.
+
+## Security-critical modules — extra care
+
+`crates/core/src/filter/` (policy engine), `crates/core/src/risk/` (risk
+classifier), `crates/core/src/ai/` output redaction, and credential
+handling (`credentials-keyring`, `crates/core/src/profiles/credentials.rs`)
+are the modules standing between an AI suggestion and something
+irreversible happening on a real server. For changes here:
+
+- Never loosen an existing check to make a test pass or a feature work —
+  find out *why* the check exists (usually a numbered spec test case, see
+  `crates/core/src/filter/tests.rs`'s `test_t*`/named cases) before
+  touching it.
+- Escalation only goes one direction: a rule-based `Deny`/risk-`Red` must
+  never be downgraded by an AI opinion or a new code path (see
+  `docs/adr/0024-risk-indicator-second-opinion-design.md` for the pattern:
+  "only escalation, never softening").
+- Add adversarial test cases, not just happy-path ones — evasion via
+  command chaining, substitution, encoding, or a sufficiently long input
+  are the standard categories already covered in
+  `crates/core/src/filter/tests.rs`; extend from there rather than
+  starting over.
+- Redaction (`crates/core/src/ai/`) must run before content is persisted
+  or sent anywhere — verify with a test that plants a redaction-worthy
+  secret and asserts it never appears in plaintext in the output/DB.
+
+## Spec workflow
+
+**A spec describes behaviour.** Each numbered spec in `docs/specs/`
+(`NNNN-slug.md`) describes what a user sees and can do in one area of the
+product: rules, edge cases, error behaviour, security guarantees. It does
+not reference code locations, function names or file paths, and it is not
+a task list. Rationale for implementation choices belongs in an ADR, not
+in the spec. Before changing an area, read its spec and at least the specs
+it explicitly references.
+
+**Every change has a spec impact** — one of:
+
+- `new` — behaviour in an area no spec covers yet; the new spec takes the
+  next free number in `docs/specs/`.
+- `update NNNN` — behaviour of an existing spec changes or is added.
+  Preferred over a new spec whenever an existing one covers the area.
+- `none` — a fix of already specified behaviour, refactoring, tests, CI.
+
+The issue forms carry an optional "Spec impact" field for this. If a
+change alters visible behaviour that no spec describes, or that a spec
+describes differently, the spec change belongs to it even if the issue
+said `none`.
+
+**The spec change ships in the same pull request as the code** and is
+reviewed with it. After merge, the spec describes the state of `main`,
+not a plan.
+
+**A bug fix touches a spec only when the spec was wrong or incomplete**,
+and then only the affected statement.
+
+**ADRs.** `docs/adr/` holds architecture decisions that cut across a
+single spec, or non-obvious implementation choices (numbered
+independently, see `docs/adr/README.md`); write one whenever you make a
+call the spec or issue left open, especially a scope reduction (e.g. "X
+works but without history/feature Y, because Z") — say so explicitly
+rather than silently narrowing what was asked for. An ADR ships in the
+same pull request as the change it documents.
+
+## Versioning & changelog (Spec 0048)
+
+This repo is the single source of truth for the product version — the
+places Tauri and the build actually read it: `apps/smart-ssh-community/
+tauri.conf.json` (`version`), the workspace `Cargo.toml`
+(`[workspace.package].version`, inherited by every crate via
+`version.workspace = true`), the internal path-dependency version pins in
+each crate's `Cargo.toml` (e.g. `ssh-manager-core = { version = "0.4.0",
+path = "../core" }` — these must match the workspace version or the
+workspace fails to build, since Cargo's default caret requirement on a
+0.x version only matches that patch range), and the frontend
+`package.json`/`package-lock.json` (bump both together via `npm version
+X.Y.Z --no-git-tag-version` from `apps/smart-ssh-community/frontend/`,
+not by hand-editing, so the lockfile stays consistent).
+
+- **The version is bumped deliberately, never automatically by the coder
+  and never per-feature.** SemVer: a feature bump is minor, a fix bump is
+  patch.
+- **At a bump:** change the version everywhere it's pinned (see above),
+  move `CHANGELOG.md`'s `[Unreleased]` section to `[X.Y.Z] — <date>`,
+  merge all fragments from `changelog.d/` into that new version section
+  and delete the fragment files, write a `### Highlights` section as the
+  first heading of the new version section (required: 3–6 bullet items,
+  exactly one line each, user-facing, no internals; it feeds the
+  download page and release notes; `[Unreleased]` has none), open a fresh empty `[Unreleased]` above
+  it, tag the release.
+- **Release notes file at a bump:** also write
+  `release-notes/X.Y.Z.json` with the Highlights in English, German,
+  French and Spanish (format in Spec 0048 §2; `en` identical to the
+  changelog Highlights). `scripts/check-release-notes.mjs` (run by
+  `npm run lint`) enforces it for every version after 0.5.2.
+- **The changelog and the fragments are written in English.**
+- **Fragment rules** (details in `changelog.d/README.md`): at most two
+  lines per item; describe the user-visible effect, not the mechanism;
+  nothing internal. `scripts/check-changelog-highlights.mjs` (run by
+  `npm run lint`) fails a released section after 0.5.2 without valid
+  Highlights.
+- `CHANGELOG.md` (repo root, Keep a Changelog format) holds user-relevant
+  changes only — internal refactors, tests, CI and documentation-only
+  changes stay out of it (that's what git history is for).
+- **Normal work never edits `CHANGELOG.md` directly.** Every user-relevant
+  change (new or changed behaviour, fix, security) adds one fragment in
+  `changelog.d/` in the same pull request, whatever its spec impact — a bug
+  fix with spec impact `none` gets one too. Naming, language, categories
+  and the `**(Pro)**` marking for paid-edition-only entries are defined in
+  `changelog.d/README.md`.
+
+## Testing conventions
+
+- Rust: tests live in `#[cfg(test)] mod tests` next to the code, using
+  trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
+  in-memory `ProfileStore`/`CredentialStore` in
+  `crates/app-logic/src/test_support.rs`) — no real network/SSH/keychain
+  access in unit tests. `crates/ssh-transport/tests/integration.rs` is the
+  one place real (test-fixture) SSH connections are exercised.
+- Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
+  gets its own `*.test.ts` via Vitest; component tests exist for the
+  trickier interactive pieces, not for every component.
+- When a bug is fixed, add the regression test that would have caught it,
+  not just the fix — see `crates/app-logic/src/dto.rs`'s
+  `rename_all_fields` regression tests for the pattern.
+- **Prove a regression test is real: it must fail against the un-fixed
+  code.** Before accepting a regression test as green, verify it actually
+  catches the bug — revert the fix locally (or run the test against the
+  pre-fix state) and confirm the test fails, then restore the fix. A test
+  that passes both before and after the fix tests nothing; this is the
+  single most effective guard against the tautological tests that a past
+  audit found across the codebase.
+
+## Commits
+
+Conventional Commits, scoped to the crate/area, referencing the spec if any:
+`feat(app-shell): add X per spec 0032`, `fix(ci): ...`,
+`docs(adr): propose design decisions for X (spec 0032)`. Keep the ADR as
+a separate commit after the feature commit it documents. Only commit when
+asked; run the full gate above first. Stage exact paths, never
+`git add -A` (see "Git staging" above).
