@@ -195,7 +195,7 @@ fn flag_set(session: &Session) -> bool {
 
 /// Provider, dessen Stream nach den Events nie endet (simuliert eine
 /// laufende Antwort, die der Nutzer stoppt).
-struct HangingProvider(Vec<AiEvent>);
+pub(super) struct HangingProvider(pub(super) Vec<AiEvent>);
 
 impl ssh_manager_core::ai::AiProvider for HangingProvider {
     fn send(

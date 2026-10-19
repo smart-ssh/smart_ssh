@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::profiles::AiAction;
+use crate::profiles::{AiAction, AskUserOption};
 use crate::ssh::CommandOutput;
 
 /// Eindeutige Kennung einer gespeicherten AI-Provider-Konfiguration (Spec
@@ -307,6 +307,16 @@ pub enum MessageContent {
     /// the content stays with the extension. Untrusted (Spec 0039/0110).
     /// Triggers no follow-up round by itself.
     Extension(super::ExtensionPart),
+    /// Issue #545: a clarifying question the AI asked with answer options
+    /// (always stored with [`Role::Assistant`]). Texts are already redacted.
+    /// Triggers no follow-up round; the answer arrives as a normal user
+    /// message.
+    Question {
+        question_id: Uuid,
+        question: String,
+        options: Vec<AskUserOption>,
+        multi_select: bool,
+    },
     /// Issue #505 (ADR 0141): extension content the core sealed for ONE
     /// send. Exists only in the send copy; never serialized and rejected by
     /// the chat store (`#[serde(skip)]`).
@@ -368,6 +378,11 @@ pub enum ActionParameterKind {
     /// Feste Werteliste, z. B. für `ProposeNoteUpdate`s `target`
     /// (`"current_server"`/`"current_server_group"`).
     Enum(Vec<String>),
+    /// Issue #545: boolean flag.
+    Boolean,
+    /// Issue #545: list of 2 to 4 answer options, each an object with a
+    /// required `label` and an optional `description` (for `ask_user`).
+    OptionList,
 }
 
 impl ActionSchema {
@@ -560,6 +575,59 @@ impl ActionSchema {
         }
     }
 
+    /// Issue #545: asks the user one question with 2–4 answer options.
+    pub fn ask_user() -> Self {
+        Self {
+            name: "ask_user".to_string(),
+            description: "Stellt dem Nutzer EINE Rückfrage mit 2 bis 4 Antwortoptionen, wenn \
+                eine Entscheidung des Nutzers zwischen konkreten Alternativen nötig ist. Nicht \
+                für offene Fragen. Danach anhalten und auf die Antwort warten. Führt nichts \
+                aus."
+                .to_string(),
+            parameters: vec![
+                ActionParameter {
+                    name: "question".to_string(),
+                    description: "Die Frage an den Nutzer (höchstens 500 Zeichen).".to_string(),
+                    kind: ActionParameterKind::String,
+                    required: true,
+                },
+                ActionParameter {
+                    name: "options".to_string(),
+                    description: "2 bis 4 Antwortoptionen; je ein kurzes `label` (höchstens 80 \
+                        Zeichen) und optional eine `description` (ein kurzer Satz)."
+                        .to_string(),
+                    kind: ActionParameterKind::OptionList,
+                    required: true,
+                },
+                ActionParameter {
+                    name: "multi_select".to_string(),
+                    description: "true, wenn mehrere Optionen gewählt werden dürfen. Optional, \
+                        Standard: false."
+                        .to_string(),
+                    kind: ActionParameterKind::Boolean,
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    /// English version of [`Self::ask_user`].
+    pub fn ask_user_en() -> Self {
+        let mut schema = Self::ask_user();
+        schema.description = "Asks the user ONE question with 2 to 4 answer options when a \
+            decision by the user between concrete alternatives is needed. Not for open-ended \
+            questions. Afterwards stop and wait for the answer. Executes nothing."
+            .to_string();
+        schema.parameters[0].description =
+            "The question for the user (at most 500 characters).".to_string();
+        schema.parameters[1].description = "2 to 4 answer options; each a short `label` (at \
+            most 80 characters) and optionally a `description` (one short sentence)."
+            .to_string();
+        schema.parameters[2].description =
+            "true if several options may be chosen. Optional, default: false.".to_string();
+        schema
+    }
+
     /// English version of [`Self::propose_note_update`] (issue #339): same
     /// name, parameters, order and `required` flags; only the descriptions
     /// differ.
@@ -658,6 +726,7 @@ pub fn default_action_schemas() -> Vec<ActionSchema> {
         ActionSchema::generate_document(),
         ActionSchema::read_remote_file(),
         ActionSchema::write_remote_file(),
+        ActionSchema::ask_user(),
     ]
 }
 
@@ -670,6 +739,7 @@ pub fn english_action_schemas() -> Vec<ActionSchema> {
         ActionSchema::generate_document_en(),
         ActionSchema::read_remote_file_en(),
         ActionSchema::write_remote_file_en(),
+        ActionSchema::ask_user_en(),
     ]
 }
 

@@ -278,6 +278,78 @@ pub enum AiAction {
         /// 0020, Abschnitt 4.2, Punkt 3).
         content: String,
     },
+    /// Issue #545 (Spec 0111): a clarifying question with answer
+    /// options. Never executable: no filter, no confirmation, no
+    /// execution. The fields are the raw model output; check them with
+    /// [`validate_ask_user`] before showing a question card.
+    AskUser {
+        question: String,
+        options: Vec<AskUserOption>,
+        multi_select: bool,
+    },
+}
+
+/// One answer option of an [`AiAction::AskUser`] question.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AskUserOption {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+pub const ASK_USER_MIN_OPTIONS: usize = 2;
+pub const ASK_USER_MAX_OPTIONS: usize = 4;
+pub const ASK_USER_QUESTION_MAX_CHARS: usize = 500;
+pub const ASK_USER_LABEL_MAX_CHARS: usize = 80;
+pub const ASK_USER_DESCRIPTION_MAX_CHARS: usize = 200;
+
+/// `true` when the question may be shown as a question card: non-empty
+/// question of at most 500 chars, 2 to 4 options, each with a non-empty
+/// label of at most 80 chars and an optional description of at most 200.
+pub fn validate_ask_user(question: &str, options: &[AskUserOption]) -> bool {
+    let q = question.trim();
+    if q.is_empty() || q.chars().count() > ASK_USER_QUESTION_MAX_CHARS {
+        return false;
+    }
+    if !(ASK_USER_MIN_OPTIONS..=ASK_USER_MAX_OPTIONS).contains(&options.len()) {
+        return false;
+    }
+    options.iter().all(|o| {
+        let l = o.label.trim();
+        !l.is_empty()
+            && l.chars().count() <= ASK_USER_LABEL_MAX_CHARS
+            && o.description
+                .as_ref()
+                .is_none_or(|d| d.chars().count() <= ASK_USER_DESCRIPTION_MAX_CHARS)
+    })
+}
+
+/// Plain-text rendering of a question (used when the call is invalid):
+/// the question followed by a bulleted list of the option labels.
+pub fn ask_user_fallback_text(question: &str, options: &[AskUserOption]) -> String {
+    let mut text = question.trim().to_string();
+    for o in options {
+        let label = o.label.trim();
+        if label.is_empty() {
+            continue;
+        }
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str("- ");
+        text.push_str(label);
+    }
+    text
+}
+
+/// How a stored question is shown to the model in later requests: the
+/// question and the numbered option labels, as assistant text.
+pub fn ask_user_model_text(question: &str, options: &[AskUserOption]) -> String {
+    let mut text = question.trim().to_string();
+    for (i, o) in options.iter().enumerate() {
+        text.push_str(&format!("\n{}. {}", i + 1, o.label.trim()));
+    }
+    text
 }
 
 impl AiAction {
@@ -301,6 +373,7 @@ impl AiAction {
             AiAction::GenerateDocument { .. } => "generate_document",
             AiAction::ReadRemoteFile { .. } => "read_remote_file",
             AiAction::WriteRemoteFile { .. } => "write_remote_file",
+            AiAction::AskUser { .. } => "ask_user",
         }
     }
 }

@@ -629,6 +629,40 @@ pub fn emit_chat_document_generated(
     );
 }
 
+/// Issue #545: payload of `chat-question-asked`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatQuestionAskedPayload {
+    session_id: SessionId,
+    question_id: uuid::Uuid,
+    question: String,
+    options: Vec<crate::dto::QuestionOptionDto>,
+    multi_select: bool,
+}
+
+/// Issue #545: a clarifying question with answer options (already redacted
+/// and validated by the caller). Emitted at most once per tool call.
+pub fn emit_chat_question_asked(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    question_id: uuid::Uuid,
+    question: String,
+    options: Vec<crate::dto::QuestionOptionDto>,
+    multi_select: bool,
+) {
+    emit(
+        emitter,
+        "chat-question-asked",
+        &ChatQuestionAskedPayload {
+            session_id,
+            question_id,
+            question,
+            options,
+            multi_select,
+        },
+    );
+}
+
 /// Ergebnis einer ausgeführten Aktion. Erweitert die Spec-Skizze aus
 /// Abschnitt 5 (dort nur `{ session_id, action_id, output: CommandOutput }`)
 /// um eine zweite Variante: `AiAction::ProposeNoteUpdate` (Abschnitt 6,
