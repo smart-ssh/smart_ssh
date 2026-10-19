@@ -272,6 +272,31 @@ impl SqliteChatSessionStore {
         Ok(())
     }
 
+    /// Issue #543 / Spec 0034, Abschnitt 4: deletes the session iff it has
+    /// no `chat_messages` and no `ledger_entries`. Check and delete are one
+    /// statement, so a message arriving concurrently either lands first (row
+    /// kept) or hits a missing session. Returns whether a row was deleted.
+    pub async fn delete_if_empty(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
+        let res = sqlx::query(
+            "DELETE FROM chat_sessions WHERE id = ? \
+             AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id) \
+             AND NOT EXISTS (SELECT 1 FROM ledger_entries WHERE session_id = chat_sessions.id)",
+        )
+        .bind(session_id.to_string())
+        .execute(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    /// Ends a session: an empty one is discarded, any other is marked ended.
+    pub async fn end_or_discard(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
+        if self.delete_if_empty(session_id).await? {
+            return Ok(());
+        }
+        self.mark_ended(session_id).await
+    }
+
     /// Spec 0034, Abschnitt 4: "Beim Fortsetzen ... wird dieselbe
     /// `chat_sessions`-Zeile weiterverwendet (`ended_at` wird auf `NULL`
     /// zurückgesetzt, `sequence` läuft weiter hoch)" — Letzteres ergibt
@@ -710,6 +735,65 @@ mod tests {
             })
             .collect();
         assert_eq!(texts, vec!["vor dem Trennen", "nach dem Fortsetzen"]);
+    }
+
+    async fn session_count(profile_store: &SqliteProfileStore, id: Uuid) -> i64 {
+        sqlx::query("SELECT COUNT(*) AS n FROM chat_sessions WHERE id = ?")
+            .bind(id.to_string())
+            .fetch_one(&profile_store.pool)
+            .await
+            .unwrap()
+            .get("n")
+    }
+
+    #[tokio::test]
+    async fn test_delete_if_empty_removes_empty_session() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        assert!(chat_store.delete_if_empty(id).await.unwrap());
+        assert_eq!(session_count(&profile_store, id).await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_if_empty_keeps_session_with_message() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        // Message arrives before the delete (concurrent case).
+        chat_store
+            .append_message(id, &text_message(Role::User, "hi"))
+            .await
+            .unwrap();
+        assert!(!chat_store.delete_if_empty(id).await.unwrap());
+        chat_store.end_or_discard(id).await.unwrap();
+        assert_eq!(session_count(&profile_store, id).await, 1);
+        let ended: Option<String> = sqlx::query("SELECT ended_at FROM chat_sessions WHERE id = ?")
+            .bind(id.to_string())
+            .fetch_one(&profile_store.pool)
+            .await
+            .unwrap()
+            .get("ended_at");
+        assert!(ended.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_delete_if_empty_keeps_session_with_ledger_entry() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        sqlx::query(
+            "INSERT INTO ledger_entries (id, session_id, sequence, source, entry_type, content, created_at) \
+             VALUES (?, ?, 1, 'mcp-agent', 'command_executed', x'00', ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(id.to_string())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&profile_store.pool)
+        .await
+        .unwrap();
+        assert!(!chat_store.delete_if_empty(id).await.unwrap());
+        assert_eq!(session_count(&profile_store, id).await, 1);
     }
 
     #[tokio::test]
