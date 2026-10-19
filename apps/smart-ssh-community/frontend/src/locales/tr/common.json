@@ -1035,6 +1035,7 @@
     "copyProgressUnknownTotal": "Kopyalanıyor… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "En son iletiye git",
     "newChat": "Yeni sohbet",
     "newChatDisabledHint": "Yapay zeka yanıt verirken veya bir onay açıkken kullanılamaz.",
     "autoContinuing": "Otomatik mod çalışıyor — yapay zeka son sonuca kendi başına yanıt veriyor…",

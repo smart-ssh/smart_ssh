@@ -1049,6 +1049,7 @@
     "copyProgressUnknownTotal": "Kopíruji… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Přejít na nejnovější zprávu",
     "newChat": "Nový chat",
     "newChatDisabledHint": "Není dostupné, dokud AI odpovídá nebo je otevřeno potvrzení.",
     "autoContinuing": "Běží automatický režim — AI na poslední výsledek odpovídá sama…",

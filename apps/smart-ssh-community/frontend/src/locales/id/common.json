@@ -1028,6 +1028,7 @@
     "copyProgressUnknownTotal": "Menyalin… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Ke pesan terbaru",
     "newChat": "Obrolan baru",
     "newChatDisabledHint": "Tidak tersedia saat AI sedang merespons atau konfirmasi sedang terbuka.",
     "autoContinuing": "Mode otomatis berjalan — AI merespons hasil terakhir dengan sendirinya…",

@@ -1042,6 +1042,7 @@
     "copyProgressUnknownTotal": "Se copiază… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Mergi la cel mai recent mesaj",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",
     "autoContinuing": "Modul automat rulează — IA răspunde singură la ultimul rezultat…",

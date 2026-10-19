@@ -1035,6 +1035,7 @@
     "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt"
   },
   "chat": {
+    "jumpToLatest": "Siirry uusimpaan viestiin",
     "newChat": "Uusi keskustelu",
     "newChatDisabledHint": "Ei käytettävissä, kun tekoäly vastaa tai vahvistus on auki.",
     "autoContinuing": "Automaattitila käynnissä – tekoäly vastaa viimeiseen tulokseen itse…",

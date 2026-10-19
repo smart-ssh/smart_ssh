@@ -1042,6 +1042,7 @@
     "copyProgressUnknownTotal": "Copiando… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Ir al mensaje más reciente",
     "newChat": "Nuevo chat",
     "newChatDisabledHint": "No disponible mientras la IA responde o hay una confirmación abierta.",
     "autoContinuing": "Modo automático en marcha: la IA responde por sí sola al último resultado…",

@@ -1028,6 +1028,7 @@
     "copyProgressUnknownTotal": "コピー中… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "最新のメッセージへ",
     "newChat": "新しいチャット",
     "newChatDisabledHint": "AIが応答中、または確認が開いている間は利用できません。",
     "autoContinuing": "自動モードで実行中 — AIが最後の結果に自動で応答します…",

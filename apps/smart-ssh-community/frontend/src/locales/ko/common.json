@@ -1028,6 +1028,7 @@
     "copyProgressUnknownTotal": "복사 중… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "최신 메시지로 이동",
     "newChat": "새 채팅",
     "newChatDisabledHint": "AI가 응답하는 중이거나 확인 창이 열려 있는 동안에는 사용할 수 없습니다.",
     "autoContinuing": "자동 모드 실행 중 — AI가 마지막 결과에 스스로 응답합니다…",

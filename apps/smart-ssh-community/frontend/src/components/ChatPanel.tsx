@@ -53,6 +53,7 @@ import {
   loadVoiceInputEnabled,
   subscribeVoiceInputEnabled,
 } from "../voiceInputSettings";
+import { useStickToBottom } from "../hooks/useStickToBottom";
 import { VoiceInputControl } from "./VoiceInputControl";
 import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { LiveCommandOutput } from "./LiveCommandOutput";
@@ -404,6 +405,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * akzeptierter kleiner Randfall, kein Korrektheitsproblem. */
   const [riskSecondOpinionEnabled, setRiskSecondOpinionEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const {
+    atBottom,
+    onScroll: handleChatScroll,
+    scrollToBottom,
+  } = useStickToBottom(scrollRef, contentRef, items);
   /** Issue #325: live output per running action, kept outside `items` so
    * that its updates (up to ten per second) do not trigger the chat's
    * jump-to-the-end effect below. Removed when the result arrives. */
@@ -761,10 +768,6 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     };
   }, [sessionId, riskSecondOpinionEnabled]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [items]);
-
   const respond = (actionId: string, decision: ActionUserDecision) => {
     // Spec 0027: die tatsächliche Ausführung beginnt jetzt (nicht bei
     // "deny", das führt nie etwas aus) — Startzeitpunkt für den
@@ -929,6 +932,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     // Anfrage an die KI — die laufende Antwort läuft weiter.
     const queued = sending;
     const itemId = freshId();
+    // Issue #540: an own message always jumps to the bottom and follows again.
+    scrollToBottom();
     setItems((prev) => [
       ...prev,
       {
@@ -1150,7 +1155,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           </Button>
         </div>
       )}
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scrollRef}
+        onScroll={handleChatScroll}
+        className="flex-1 overflow-y-auto p-4"
+      >
+      <div ref={contentRef} className="space-y-3">
         {items.map((item) => (
           <ChatItemView
             key={item.id}
@@ -1191,6 +1202,22 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             </div>
           )
         )}
+      </div>
+      </div>
+      {!atBottom && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          aria-label={t("chat.jumpToLatest")}
+          title={t("chat.jumpToLatest")}
+          data-testid="chat-jump-to-latest"
+          className="absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-100 shadow-lg hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 4v12M5 11l5 5 5-5" />
+          </svg>
+        </button>
+      )}
       </div>
 
       {readOnlyHint !== undefined ? (

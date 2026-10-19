@@ -1028,6 +1028,7 @@
     "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Đến tin nhắn mới nhất",
     "newChat": "Cuộc trò chuyện mới",
     "newChatDisabledHint": "Không khả dụng khi AI đang phản hồi hoặc có yêu cầu xác nhận đang mở.",
     "autoContinuing": "Chế độ tự động đang chạy — AI tự phản hồi kết quả cuối cùng…",
