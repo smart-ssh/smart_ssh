@@ -288,6 +288,6 @@ not by hand-editing, so the lockfile stays consistent).
 Conventional Commits, scoped to the crate/area, referencing the spec if any:
 `feat(app-shell): add X per spec 0032`, `fix(ci): ...`,
 `docs(adr): propose design decisions for X (spec 0032)`. Keep the ADR as
-a separate commit after the feature commit it documents. Only commit when
-asked; run the full gate above first. Stage exact paths, never
-`git add -A` (see "Git staging" above).
+a separate commit after the feature commit it documents. Commit on your
+own once a step is done; run the full gate above first. Stage exact paths,
+never `git add -A` (see "Git staging" above).
