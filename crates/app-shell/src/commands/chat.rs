@@ -597,7 +597,7 @@ pub async fn disconnect(
         &session.chat_session_store,
         *session.chat_session_id.lock().await,
     ) {
-        if let Err(err) = store.mark_ended(chat_session_id).await {
+        if let Err(err) = store.end_or_discard(chat_session_id).await {
             tracing::warn!(error = %err, "chat session mark_ended failed");
         }
     }
