@@ -125,6 +125,27 @@ antwortet, läuft ab und gilt als abgelehnt (ADR 0038).
   zwei klare Schaltflächen, Ausführen und Ablehnen.
 - Die **Einstellungen** mit der Verwaltung der KI-Anbieter (Abschnitt 8).
 
+**Mitlaufen des Chats.** Der Chat verhält sich beim Scrollen so:
+
+- Solange der Nutzer am Ende des Chats ist, läuft die Ansicht mit neuem und
+  wachsendem Inhalt mit: gestreamter Antworttext, Aktionskarten,
+  Live-Ausgabe laufender Kommandos, Dokumente und Fehlermeldungen. „Am Ende"
+  gilt mit derselben kleinen Toleranz wie beim Mitlaufen der Live-Ausgabe
+  (Spec 0106, Abschnitt 2.3).
+- Scrollt der Nutzer vom Ende weg, hört das Mitlaufen auf: Neuer Inhalt
+  verschiebt die Ansicht nicht. Scrollt er zurück ans Ende, läuft der Chat
+  wieder mit.
+- Solange der Chat nicht am Ende ist, zeigt er über der Eingabe eine runde
+  Schaltfläche „Zur neuesten Nachricht springen". Sie hat eine zugängliche
+  Beschriftung und einen Tooltip. Ihre Aktivierung (Klick, Enter,
+  Leertaste) springt ans Ende und setzt das Mitlaufen fort; am Ende ist die
+  Schaltfläche nicht sichtbar.
+- Sendet der Nutzer eine eigene Nachricht, springt der Chat immer ans Ende
+  und läuft wieder mit.
+- Beim Öffnen einer Chat-Sitzung mit Verlauf zeigt der Chat dessen Ende.
+- Das automatische Mitlaufen geschieht ohne sichtbaren Sprung und ohne
+  Animation.
+
 Mehrere gleichzeitige Sitzungen und ihre Tab-Leiste beschreibt Spec 0017.
 
 ## 8. KI-Anbieter-Verwaltung
