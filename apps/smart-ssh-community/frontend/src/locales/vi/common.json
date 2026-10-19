@@ -687,8 +687,12 @@
       "startFailed": "Không thể khởi động sftp-server qua sudo (nguyên nhân có thể: “requiretty” trong sudoers)."
     },
     "channelLost": "Quyền nâng cao đã kết thúc — kênh nâng cao không còn hoạt động.",
-    "targetUserLabel": "Người dùng đích cho quyền nâng cao (mặc định: root)",
-    "group": "Quyền nâng cao"
+    "group": "Quyền nâng cao",
+    "moreOptions": "Thêm tùy chọn nâng quyền",
+    "otherUser": "Với tư cách người dùng khác…",
+    "targetUser": "Người dùng đích",
+    "targetUserHelp": "Chạy trình duyệt tệp với tư cách người dùng này qua sudo. Mặc định: root.",
+    "confirm": "Nâng quyền"
   },
   "sshConfigImport": {
     "dialogTitle": "Nhập ssh_config",

@@ -702,8 +702,12 @@
       "startFailed": "Nie udało się uruchomić sftp-server przez sudo (możliwa przyczyna: „requiretty” w sudoers)."
     },
     "channelLost": "Podwyższone uprawnienia zakończone — kanał podwyższony nie jest już aktywny.",
-    "targetUserLabel": "Użytkownik docelowy dla podwyższonych uprawnień (domyślnie: root)",
-    "group": "Podwyższone uprawnienia"
+    "group": "Podwyższone uprawnienia",
+    "moreOptions": "Więcej opcji podniesienia uprawnień",
+    "otherUser": "Jako inny użytkownik…",
+    "targetUser": "Użytkownik docelowy",
+    "targetUserHelp": "Uruchamia przeglądarkę plików jako ten użytkownik przez sudo. Domyślnie: root.",
+    "confirm": "Podnieś"
   },
   "sshConfigImport": {
     "dialogTitle": "Importuj ssh_config",

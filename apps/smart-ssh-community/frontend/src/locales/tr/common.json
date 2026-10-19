@@ -692,8 +692,12 @@
       "startFailed": "sftp-server sudo ile başlatılamadı (olası neden: sudoers'ta “requiretty”)."
     },
     "channelLost": "Yükseltilmiş haklar sona erdi — yükseltilmiş kanal artık etkin değil.",
-    "targetUserLabel": "Yükseltilmiş haklar için hedef kullanıcı (varsayılan: root)",
-    "group": "Yükseltilmiş haklar"
+    "group": "Yükseltilmiş haklar",
+    "moreOptions": "Daha fazla yetki yükseltme seçeneği",
+    "otherUser": "Başka bir kullanıcı olarak…",
+    "targetUser": "Hedef kullanıcı",
+    "targetUserHelp": "Dosya tarayıcısını sudo ile bu kullanıcı olarak çalıştırır. Varsayılan: root.",
+    "confirm": "Yükselt"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config içe aktar",

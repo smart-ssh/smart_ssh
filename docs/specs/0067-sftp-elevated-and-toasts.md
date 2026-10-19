@@ -87,10 +87,27 @@ wurde. Ist alles sicher, ändert sich nichts.
 
 ### A4. Anderer Nutzer
 
-`sudo -n -u <nutzer> <sftp-server>`: Der Zielnutzer ist ein optionales Feld
-im Umschalter (Standard `root`). Gültig sind übliche POSIX-Nutzernamen
-(Kleinbuchstaben, Ziffern, `_`, `-`; höchstens 32 Zeichen, Beginn mit
-Buchstabe oder `_`). Die sudoers-Zeile aus A3 nennt dann diesen Zielnutzer.
+`sudo -n -u <nutzer> <sftp-server>`: Der Umschalter „Erhöhte Rechte“ erhöht
+auf `root`. Daneben sitzt ein kleiner Pfeil-Knopf („Weitere Optionen zur
+Rechteerhöhung“) mit dem Menüpunkt „Als anderer Nutzer …“. Er öffnet ein
+kleines Feld „Ziel-Nutzer“ mit der Erklärung „Führt den Dateibrowser über sudo
+als dieser Nutzer aus. Standard: root.“ und einem Bestätigen-Knopf („Erhöhen“).
+Das Menü ist per Tastatur bedienbar (Enter/Leertaste öffnet, Escape schließt
+und gibt den Fokus an den Pfeil-Knopf zurück). Der zuletzt bestätigte Nutzer
+ist im Feld für den Rest der Sitzung vorbelegt (nicht gespeichert). In der
+Werkzeugleiste steht kein unbeschriftetes Textfeld. Gültig sind übliche
+POSIX-Nutzernamen (Kleinbuchstaben, Ziffern, `_`, `-`; höchstens 32 Zeichen,
+Beginn mit Buchstabe oder `_`). Die sudoers-Zeile aus A3 nennt dann diesen
+Zielnutzer.
+
+**Root-Sitzungen.** Beim Verbinden mit einem echten SSH-Server wird einmalig
+`id -u` ausgeführt. Ist die Nutzer-ID `0`, blendet der Dateibrowser den
+Umschalter samt Pfeil-Knopf und Nutzerauswahl komplett aus. Schlägt die
+Prüfung fehl, läuft in die Zeitüberschreitung oder liefert keine Zahl, gilt
+der Zustand als unbekannt und die Bedienelemente erscheinen wie bei jedem
+anderen Nutzer; das Verbinden scheitert daran nie. Der lokale Pseudo-Server
+führt die Prüfung nicht aus. Das Ausblenden betrifft nur die Oberfläche; die
+Prüfungen aus A1–A3 bleiben unverändert.
 
 ### A5. Sicherheits-Leitplanken (nicht verhandelbar)
 

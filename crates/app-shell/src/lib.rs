@@ -850,6 +850,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::open_data_path_folder,
             commands::sftp_list,
             commands::sftp_start_directory,
+            commands::session_is_root,
             commands::sftp_download,
             commands::sftp_download_default,
             commands::sftp_download_dir,
