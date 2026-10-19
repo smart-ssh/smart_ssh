@@ -131,7 +131,7 @@ pub async fn start_new_chat(
                 tracing::warn!(error = %err, "new chat session creation failed");
                 CommandError::from(format!("Neuer Chat konnte nicht angelegt werden: {err}"))
             })?;
-        if let Err(err) = store.mark_ended(*old_id).await {
+        if let Err(err) = store.end_or_discard(*old_id).await {
             tracing::warn!(error = %err, "chat session mark_ended failed");
         }
         Some(new_id)
@@ -212,6 +212,10 @@ mod tests {
     #[tokio::test]
     async fn test_new_chat_ends_old_row_titles_it_and_switches_to_a_new_row() {
         let (session, store, old_id, _tmp) = persisted_session().await;
+        store
+            .append_message(old_id, &user("erste Frage"))
+            .await
+            .unwrap();
 
         let new_id = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
             .await
@@ -237,6 +241,24 @@ mod tests {
         assert_eq!(session.mcp_origin_flags.lock().unwrap().len(), 1);
         assert!(session.summary.lock().await.is_none());
         assert!(!session.chat_turn.lock().unwrap().running);
+    }
+
+    #[tokio::test]
+    async fn test_new_chat_discards_old_row_without_messages() {
+        let (session, store, old_id, _tmp) = persisted_session().await;
+
+        let new_id = start_new_chat(&session, Uuid::new_v4(), &TestEmitter::default(), None)
+            .await
+            .unwrap()
+            .expect("persisted tab gets a new row");
+
+        let rows = store
+            .list_sessions_for_server(&session.server_id)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, new_id);
+        assert!(rows.iter().all(|r| r.id != old_id));
     }
 
     #[tokio::test]

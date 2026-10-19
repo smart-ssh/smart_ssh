@@ -46,6 +46,15 @@ pro Arbeitsblock, keine endlose Historie pro Server.
 - Beim Fortsetzen wird **dieselbe** Sitzung weiterverwendet (Endzeit wird
   geleert, die Reihenfolge läuft weiter) — kein Kopieren. Der Verlauf bleibt
   ein durchgehender Thread über mehrere Verbinden/Trennen-Zyklen.
+- **Leere Sitzungen werden verworfen.** Endet eine Sitzung (Trennen,
+  Tab schließen, „Neuer Chat"), ohne dass sie eine Nachricht oder einen
+  Ledger-Eintrag (z. B. MCP-Aktivität im Tab) enthält, wird sie gelöscht
+  statt als beendet markiert; sie erscheint nie in der Auswahlliste. Eine
+  Sitzung mit mindestens einer Nachricht oder einem Ledger-Eintrag bleibt
+  unverändert erhalten. Bereits vor dieser Regel entstandene leere Sitzungen
+  werden nicht aufgeräumt. Beim Beenden der App werden offene Sitzungen
+  nicht beendet; ein App-Absturz oder -Ende mit offenem leerem Chat kann
+  daher eine leere Sitzung zurücklassen.
 
 ## 5. „Fortsetzbar" — ohne Ablaufdatum
 
@@ -114,7 +123,8 @@ Chat". Sie beginnt einen frischen Chat, ohne die SSH-Verbindung zu trennen:
 Terminal, Verbindung, Tab, Dateibrowser, gespeichertes Sudo-Passwort und ein
 bereits erhöhter Kanal bleiben unverändert.
 
-1. **Wirkung.** Der bisherige Chat wird beendet (Endzeit gesetzt) und
+1. **Wirkung.** Der bisherige Chat wird beendet (Endzeit gesetzt; war er
+   leer, wird er stattdessen gelöscht, Abschnitt 4) und
    bekommt seinen automatischen Titel aus dem bisherigen Verlauf — genau wie
    beim Trennen (Abschnitt 4 und 7). Für denselben Server und den aktiven
    KI-Anbieter entsteht eine neue Sitzung, auf die der Tab umschaltet.
