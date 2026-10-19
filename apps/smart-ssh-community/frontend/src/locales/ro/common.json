@@ -697,8 +697,12 @@
       "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers)."
     },
     "channelLost": "Drepturile ridicate s-au încheiat — canalul cu drepturi ridicate nu mai este activ.",
-    "targetUserLabel": "Utilizator țintă pentru drepturi ridicate (implicit: root)",
-    "group": "Drepturi ridicate"
+    "group": "Drepturi ridicate",
+    "moreOptions": "Mai multe opțiuni de ridicare a drepturilor",
+    "otherUser": "Ca alt utilizator…",
+    "targetUser": "Utilizator țintă",
+    "targetUserHelp": "Rulează browserul de fișiere ca acest utilizator prin sudo. Implicit: root.",
+    "confirm": "Ridică"
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",

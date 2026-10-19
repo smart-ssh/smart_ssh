@@ -702,8 +702,12 @@
       "startFailed": "sftp-server se nepodařilo spustit přes sudo (možná příčina: „requiretty“ v sudoers)."
     },
     "channelLost": "Zvýšená práva skončila — zvýšený kanál již není aktivní.",
-    "targetUserLabel": "Cílový uživatel pro zvýšená práva (výchozí: root)",
-    "group": "Zvýšená oprávnění"
+    "group": "Zvýšená oprávnění",
+    "moreOptions": "Další možnosti zvýšení oprávnění",
+    "otherUser": "Jako jiný uživatel…",
+    "targetUser": "Cílový uživatel",
+    "targetUserHelp": "Spustí správce souborů jako tento uživatel přes sudo. Výchozí: root.",
+    "confirm": "Zvýšit"
   },
   "sshConfigImport": {
     "dialogTitle": "Importovat ssh_config",

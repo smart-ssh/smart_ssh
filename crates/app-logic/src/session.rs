@@ -596,6 +596,9 @@ pub struct Session {
     /// wie `sftp`: gesetzt nur über [`Session::with_start_directory`] beim
     /// Bau, danach nur lesbar.
     start_directory: crate::start_directory::SessionStartDirectory,
+    /// Issue #544: result of the connect-time `id -u` probe. `Some(true)` =
+    /// uid 0, `None` = unknown (probe failed or not run). UI hint only.
+    is_root: Option<bool>,
 }
 
 impl std::ops::Deref for Session {
@@ -919,7 +922,19 @@ impl Session {
             parts,
             sftp: NormalSftpChannel::default(),
             start_directory: Default::default(),
+            is_root: None,
         }
+    }
+
+    /// Issue #544: records the `id -u` probe result; only at construction.
+    pub fn with_is_root(mut self, is_root: Option<bool>) -> Self {
+        self.is_root = is_root;
+        self
+    }
+
+    /// Issue #544: `Some(true)` if the login user is root, `None` if unknown.
+    pub fn is_root(&self) -> Option<bool> {
+        self.is_root
     }
 
     /// Spec 0102: setzt das Startverzeichnis für Terminal und Dateibrowser
