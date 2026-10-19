@@ -122,34 +122,6 @@ pub fn parse_id_u_output(raw: &str) -> Option<bool> {
     trimmed.parse::<u32>().ok().map(|uid| uid == 0)
 }
 
-#[cfg(test)]
-mod id_u_tests {
-    use super::parse_id_u_output;
-
-    #[test]
-    fn parses_uid() {
-        assert_eq!(parse_id_u_output("0\n"), Some(true));
-        assert_eq!(parse_id_u_output("1000\n"), Some(false));
-        assert_eq!(parse_id_u_output("00"), Some(true));
-    }
-
-    #[test]
-    fn unknown_for_garbage() {
-        for raw in [
-            "",
-            "  \n",
-            "root",
-            "0 1",
-            "-1",
-            "uid=0(root)",
-            "0x0",
-            "99999999999",
-        ] {
-            assert_eq!(parse_id_u_output(raw), None, "{raw:?}");
-        }
-    }
-}
-
 /// Spec 0084, §4 (Schnitt `orchestration` → `commands::sanitize_uname_output`):
 /// hierher verschoben, weil `orchestration` (Tauri-frei, zieht nach
 /// `app-logic`) diese Funktion in Tests braucht (Spec 0013, SEC-02, T5) und
@@ -179,5 +151,33 @@ pub fn sanitize_uname_output(raw: &str) -> Option<String> {
         Some(trimmed.to_string())
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod id_u_tests {
+    use super::parse_id_u_output;
+
+    #[test]
+    fn parses_uid() {
+        assert_eq!(parse_id_u_output("0\n"), Some(true));
+        assert_eq!(parse_id_u_output("1000\n"), Some(false));
+        assert_eq!(parse_id_u_output("00"), Some(true));
+    }
+
+    #[test]
+    fn unknown_for_garbage() {
+        for raw in [
+            "",
+            "  \n",
+            "root",
+            "0 1",
+            "-1",
+            "uid=0(root)",
+            "0x0",
+            "99999999999",
+        ] {
+            assert_eq!(parse_id_u_output(raw), None, "{raw:?}");
+        }
     }
 }
