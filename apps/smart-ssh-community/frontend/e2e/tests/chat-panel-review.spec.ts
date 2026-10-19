@@ -4,7 +4,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "../support/app";
 import { openChatWithConfirmation, openChatWithMessages } from "../support/chatScreens";
-import { expectFullyInViewport } from "../support/layout";
+import { expectFullyInViewport, expectVerticallyCentredWith } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 import { chatInput, redCommandProposal } from "../support/session";
 
@@ -84,6 +84,36 @@ test.describe("chat panel review", () => {
     );
     expectVisualOrder(stops);
     for (const s of stops) expect(s.ring, `no focus indicator on "${s.name}"`).toBe(true);
+  });
+
+  test("composer: one-line text, prompt and buttons share a vertical centre; multi-line keeps bottom/top alignment", async ({ app }) => {
+    await openChatWithMessages(app);
+    const input = chatInput(app.page);
+    const form = app.page.locator("form:has(textarea)").locator("visible=true");
+    const prompt = form.locator("span", { hasText: ">" }).first();
+    const send = form.getByRole("button", { name: "Send", exact: true });
+    const voice = form.getByRole("button", { name: "Start voice input" });
+    // Empty (placeholder) and one line of text.
+    // In the narrow layout the placeholder itself wraps onto two lines; that
+    // is a multi-line state and is covered below, so only check it when the
+    // placeholder fits on one line.
+    if ((await input.boundingBox())!.height < 36) {
+      await expectVerticallyCentredWith(input, send);
+      await expectVerticallyCentredWith(prompt, send);
+      await expectVerticallyCentredWith(input, voice);
+    }
+    await input.fill("one line");
+    await expectVerticallyCentredWith(input, voice);
+    await expectVerticallyCentredWith(input, send);
+    await expectVerticallyCentredWith(prompt, send);
+    // Five lines: send stays on the bottom line, prompt on the first.
+    await input.fill("1\n2\n3\n4\n5");
+    await expect(async () => {
+      const [i, p, s] = await Promise.all([input.boundingBox(), prompt.boundingBox(), send.boundingBox()]);
+      expect(i!.height).toBeGreaterThan(80);
+      expect(Math.abs(s!.y + s!.height - (i!.y + i!.height))).toBeLessThanOrEqual(2);
+      expect(Math.abs(p!.y - i!.y)).toBeLessThanOrEqual(2);
+    }).toPass({ timeout: 5_000 });
   });
 
   test("Tab order of the message area and the input", async ({ app }) => {
