@@ -1035,6 +1035,7 @@
     "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Gå til nyeste melding",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgjengelig mens AI svarer eller en bekreftelse er åpen.",
     "autoContinuing": "Automatisk modus kjører – AI-en svarer selv på det siste resultatet…",

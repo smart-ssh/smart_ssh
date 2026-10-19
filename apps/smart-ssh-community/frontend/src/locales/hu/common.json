@@ -1035,6 +1035,7 @@
     "copyProgressUnknownTotal": "Másolás… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Ugrás a legújabb üzenethez",
     "newChat": "Új csevegés",
     "newChatDisabledHint": "Nem érhető el, amíg az AI válaszol vagy megerősítés nyitva van.",
     "autoContinuing": "Automatikus mód fut – az AI magától válaszol az utolsó eredményre…",

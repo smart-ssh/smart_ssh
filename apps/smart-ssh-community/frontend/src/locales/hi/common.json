@@ -1035,6 +1035,7 @@
     "copyProgressUnknownTotal": "कॉपी हो रहा है… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "नवीनतम संदेश पर जाएँ",
     "newChat": "नई चैट",
     "newChatDisabledHint": "AI के उत्तर देते समय या पुष्टि खुली होने पर उपलब्ध नहीं।",
     "autoContinuing": "स्वचालित मोड चल रहा है — AI अंतिम परिणाम पर अपने-आप उत्तर दे रहा है…",
