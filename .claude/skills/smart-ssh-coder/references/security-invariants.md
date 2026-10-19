@@ -10,7 +10,7 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
    `evaluate_action` (`crates/app-logic/src/orchestration/action_exec.rs`).
 2. **Eskalation nur in eine Richtung.** Regelbasiertes `Deny`/Risiko-`Red`
    wird nie durch KI-Meinung oder neuen Code aufgeweicht
-   (ADR 0024, CLAUDE.md).
+   (ADR 0024, AGENTS.md).
 3. **MCP-Aktionen verlangen immer Bestätigung** (AutoExec → Confirm,
    `FILTER_MCP_ORIGIN_REQUIRES_CONFIRM`). Tests mit MCP-Herkunft brauchen
    deshalb einen Responder, der den Dialog auflöst.
