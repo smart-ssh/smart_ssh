@@ -10,9 +10,11 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::watch;
 
+type Registry = Arc<Mutex<HashMap<String, (u64, watch::Sender<bool>)>>>;
+
 #[derive(Default)]
 pub struct ConnectAttempts {
-    inner: Arc<Mutex<HashMap<String, (u64, watch::Sender<bool>)>>>,
+    inner: Registry,
 }
 
 /// Held by the running connect; unregisters the attempt on drop.
@@ -20,7 +22,7 @@ pub struct ConnectAttemptGuard {
     id: String,
     token: u64,
     rx: watch::Receiver<bool>,
-    registry: Arc<Mutex<HashMap<String, (u64, watch::Sender<bool>)>>>,
+    registry: Registry,
 }
 
 impl ConnectAttempts {

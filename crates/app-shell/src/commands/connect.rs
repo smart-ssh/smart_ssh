@@ -3035,13 +3035,12 @@ mod connect_flow_tests {
     // --- Issue #546: live connect progress and cancel -----------------------
 
     type StepScript = Box<dyn FnOnce(&ConnectLog) + Send>;
+    type ScriptItem = (StepScript, Option<Result<ConnectOutcome, SshError>>);
 
     /// Writes the scripted steps into the attempt log, then returns the result
     /// (`None`: never returns, like a server that does not answer).
     struct StepConnector {
-        queue: Mutex<
-            std::collections::VecDeque<(StepScript, Option<Result<ConnectOutcome, SshError>>)>,
-        >,
+        queue: Mutex<std::collections::VecDeque<ScriptItem>>,
     }
 
     impl StepConnector {
