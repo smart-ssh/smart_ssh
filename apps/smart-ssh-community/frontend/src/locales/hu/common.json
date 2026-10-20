@@ -1090,6 +1090,11 @@
       "request_too_large": "A webes kérés túl nagy volt.",
       "unavailable": "A webes kutatás átmenetileg nem érhető el a szolgáltatónál.",
       "other": "A webes kutatás sikertelen ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Kérdés: {{question}}",
+      "send": "Küldés",
+      "answeredOwnWords": "Saját szavaiddal megválaszolva"
     }
   },
   "notes": {

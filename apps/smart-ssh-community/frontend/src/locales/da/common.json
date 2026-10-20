@@ -1090,6 +1090,11 @@
       "request_too_large": "Webanmodningen var for stor.",
       "unavailable": "Webresearch er midlertidigt utilgængelig hos udbyderen.",
       "other": "Webresearch mislykkedes ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Spørgsmål: {{question}}",
+      "send": "Send afsted",
+      "answeredOwnWords": "Besvaret med egne ord"
     }
   },
   "notes": {

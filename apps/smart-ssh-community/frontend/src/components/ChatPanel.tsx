@@ -37,6 +37,7 @@ import {
   onChatAutoContinuationLimitReached,
   onChatAutoContinuationStarted,
   onChatDocumentGenerated,
+  onChatQuestionAsked,
   onChatError,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
@@ -85,10 +86,12 @@ import type {
   RiskAssessment,
   Scope,
   WebActivityDto,
+  QuestionOption,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button } from "./ui";
 import { WebActivityCard } from "./WebActivityCard";
+import { QuestionCard, deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 export type ChatItem =
@@ -189,6 +192,15 @@ export type ChatItem =
   // "autoContinuationLimitReached" oben.
   | { type: "aiBudgetWaiting"; id: string; waitSeconds: number }
   | { type: "document"; id: string; title: string; contentMarkdown: string }
+  // Issue #547 (Spec 0111): the AI's question with answer options.
+  | {
+      type: "question";
+      id: string;
+      questionId: string;
+      question: string;
+      options: QuestionOption[];
+      multiSelect: boolean;
+    }
   // Spec 0034, Abschnitt 6/8: read-only Darstellung eines Kommandoergebnis-
   // /Ablehnungs-Eintrags aus einer bereits geladenen (fortgesetzten)
   // Historie — anders als "action" kein Bestätigungsdialog/Live-Zustand,
@@ -508,15 +520,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                   items: entry.items.map((p) => ({ name: p.label, kind: p.media })),
                 };
               case "question":
-                // Issue #545: the question card is a separate change; until
-                // then a reloaded question shows as plain assistant text.
                 return {
-                  type: "assistant",
+                  type: "question",
                   id: freshId(),
-                  text: [
-                    entry.question,
-                    ...entry.options.map((o) => `- ${o.label}`),
-                  ].join("\n"),
+                  questionId: entry.questionId,
+                  question: entry.question,
+                  options: entry.options,
+                  multiSelect: entry.multiSelect,
                 };
             }
           }),
@@ -759,6 +769,20 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           ),
         );
       }),
+      onChatQuestionAsked((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [
+          ...prev,
+          {
+            type: "question",
+            id: freshId(),
+            questionId: event.questionId,
+            question: event.question,
+            options: event.options,
+            multiSelect: event.multiSelect,
+          },
+        ]);
+      }),
       onChatDocumentGenerated((event) => {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [
@@ -931,6 +955,20 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       }
     }
   };
+
+  /** Issue #547: an option click is a normal user message through the
+   * existing send path — never an action response. */
+  const handleQuestionAnswer = async (text: string) => {
+    const queued = sending;
+    scrollToBottom();
+    setItems((prev) => [
+      ...prev,
+      { type: "user", id: freshId(), text, ...(queued ? { queued: true } : {}) },
+    ]);
+    await runSend(() => sendChatMessage(sessionId, text));
+  };
+
+  const questionStates = deriveQuestionStates(items);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -1183,6 +1221,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
             onContinueTruncated={handleContinueTruncated}
+            questionState={questionStates.get(item.id)}
+            onQuestionAnswer={handleQuestionAnswer}
             serverId={serverId}
             sessionId={sessionId}
           />
@@ -1410,6 +1450,8 @@ export function ChatItemView({
   onAcceptWithRule,
   onExport,
   onContinueTruncated,
+  questionState,
+  onQuestionAnswer,
   serverId,
   sessionId,
 }: {
@@ -1431,10 +1473,24 @@ export function ChatItemView({
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
   onContinueTruncated: (itemId: string) => void;
+  /** Issue #547: derived lock state / answer handler of a question card. */
+  questionState?: QuestionState;
+  onQuestionAnswer?: (text: string) => void;
   serverId: string;
   sessionId: string;
 }) {
   const { t } = useTranslation();
+  if (item.type === "question") {
+    return (
+      <QuestionCard
+        question={item.question}
+        options={item.options}
+        multiSelect={item.multiSelect}
+        state={questionState ?? { locked: true, selected: [], ownWords: false }}
+        onAnswer={onQuestionAnswer ?? (() => {})}
+      />
+    );
+  }
   if (item.type === "document") {
     return (
       <DocumentCard title={item.title} contentMarkdown={item.contentMarkdown} onExport={onExport} />
