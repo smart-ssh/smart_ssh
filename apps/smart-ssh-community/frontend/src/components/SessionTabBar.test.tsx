@@ -23,6 +23,13 @@ import { testI18n } from "../testI18n";
 import type { SessionTab } from "../useSessionTabs";
 import { SessionTabBar } from "./SessionTabBar";
 
+const CONNECTED: Pick<SessionTab, "phase" | "attemptId" | "progress" | "failure"> = {
+  phase: "connected",
+  attemptId: null,
+  progress: [],
+  failure: null,
+};
+
 const tabs: SessionTab[] = [
   {
     sessionId: "s1",
@@ -32,6 +39,7 @@ const tabs: SessionTab[] = [
     hasPendingAction: false,
     pendingActionId: null,
     mcp: null,
+    ...CONNECTED,
   },
   {
     sessionId: "s2",
@@ -41,6 +49,7 @@ const tabs: SessionTab[] = [
     hasPendingAction: false,
     pendingActionId: null,
     mcp: null,
+    ...CONNECTED,
   },
 ];
 
@@ -91,6 +100,7 @@ describe("SessionTabBar MCP tabs", () => {
         hasPendingAction: true,
         pendingActionId: "a1",
         mcp: { clientName: "Claude Code" },
+        ...CONNECTED,
       },
     ];
     render(

@@ -1190,5 +1190,23 @@
       "language": "Felismerés nyelve",
       "languageAuto": "Automatikus"
     }
+  },
+  "connectTab": {
+    "connecting": "Csatlakozás ide: {{name}} …",
+    "failed": "A csatlakozás ide sikertelen: {{name}}",
+    "retry": "Újra",
+    "close": "Bezárás",
+    "cancel": "Mégse",
+    "stepsLabel": "Kapcsolódási lépések",
+    "stepsRunning": "Csatlakozás…",
+    "detail": {
+      "tunnel": "ezen keresztül: {{hop}}",
+      "waitingForResponse": "válaszra vár",
+      "waitingForDecision": "a döntésére vár",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "kész",
+    "resultFailed": "sikertelen"
   }
 }

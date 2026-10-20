@@ -1,5 +1,6 @@
 import { useState, type FocusEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Spinner } from "./ui";
 import { sessionTabLabel, type SessionTab } from "../useSessionTabs";
 
 const FOCUS_RING =
@@ -105,7 +106,12 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
         // MCP-Abzeichen und zeigen eine wartende Bestätigung als
         // beschriftetes Abzeichen statt nur als Punkt — sie werden nie von
         // selbst aktiv, der Hinweis muss also aus dem Hintergrund auffallen.
-        const label = sessionTabLabel(tab, t("sessionTabs.mcp.unnamedClient"));
+        const label =
+          tab.phase === "connecting"
+            ? t("connectTab.connecting", { name: tab.serverName })
+            : tab.phase === "failed"
+              ? t("connectTab.failed", { name: tab.serverName })
+              : sessionTabLabel(tab, t("sessionTabs.mcp.unnamedClient"));
         return (
           <div
             key={tab.sessionId}
@@ -122,9 +128,23 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
               aria-current={active ? "page" : undefined}
               onClick={() => onSwitch(tab.sessionId)}
               className={`${FOCUS_RING} font-heading flex items-center gap-1.5 font-semibold tracking-wide`}
-              title={tab.mcp ? `${label} — ${t("sessionTabs.mcp.tabHint")}` : tab.serverName}
+              title={
+                tab.mcp
+                  ? `${label} — ${t("sessionTabs.mcp.tabHint")}`
+                  : tab.phase === "connected"
+                    ? tab.serverName
+                    : label
+              }
             >
-              <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
+              {tab.phase === "connecting" ? (
+                <Spinner className="h-2.5 w-2.5 shrink-0" />
+              ) : tab.phase === "failed" ? (
+                <span aria-hidden="true" className="shrink-0 text-red-400">
+                  ✗
+                </span>
+              ) : (
+                <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
+              )}
               {tab.mcp && (
                 <span className="shrink-0 border border-fuchsia-500/60 px-1 text-[10px] leading-tight text-fuchsia-300">
                   {t("sessionTabs.mcp.badge")}
@@ -132,7 +152,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
               )}
               <span
                 title={label}
-                className={tab.mcp ? "max-w-[24ch] truncate" : "max-w-[12ch] truncate"}
+                className={tab.mcp ? "max-w-[24ch] truncate" : tab.phase !== "connected" ? "max-w-[28ch] truncate" : "max-w-[12ch] truncate"}
               >
                 {label}
               </span>

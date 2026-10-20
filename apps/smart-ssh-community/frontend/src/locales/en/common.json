@@ -1190,5 +1190,23 @@
       "language": "Recognition language",
       "languageAuto": "Automatic"
     }
+  },
+  "connectTab": {
+    "connecting": "Connecting to {{name}} …",
+    "failed": "Connection to {{name}} failed",
+    "retry": "Retry",
+    "close": "Close",
+    "cancel": "Cancel",
+    "stepsLabel": "Connection steps",
+    "stepsRunning": "Connecting…",
+    "detail": {
+      "tunnel": "via {{hop}}",
+      "waitingForResponse": "waiting for response",
+      "waitingForDecision": "waiting for your decision",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "done",
+    "resultFailed": "failed"
   }
 }

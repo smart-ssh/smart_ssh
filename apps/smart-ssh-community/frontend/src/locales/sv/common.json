@@ -1190,5 +1190,23 @@
       "language": "Igenkänningsspråk",
       "languageAuto": "Automatiskt"
     }
+  },
+  "connectTab": {
+    "connecting": "Ansluter till {{name}} …",
+    "failed": "Anslutningen till {{name}} misslyckades",
+    "retry": "Försök igen",
+    "close": "Stäng",
+    "cancel": "Avbryt",
+    "stepsLabel": "Anslutningssteg",
+    "stepsRunning": "Ansluter…",
+    "detail": {
+      "tunnel": "genom {{hop}}",
+      "waitingForResponse": "väntar på svar",
+      "waitingForDecision": "väntar på ditt beslut",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "klart",
+    "resultFailed": "misslyckades"
   }
 }

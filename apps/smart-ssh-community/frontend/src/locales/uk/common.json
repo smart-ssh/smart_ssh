@@ -1206,5 +1206,23 @@
       "language": "Мова розпізнавання",
       "languageAuto": "Автоматично"
     }
+  },
+  "connectTab": {
+    "connecting": "Підключення до {{name}} …",
+    "failed": "Не вдалося підключитися до {{name}}",
+    "retry": "Повторити",
+    "close": "Закрити",
+    "cancel": "Скасувати",
+    "stepsLabel": "Кроки підключення",
+    "stepsRunning": "Підключення…",
+    "detail": {
+      "tunnel": "через {{hop}}",
+      "waitingForResponse": "очікування відповіді",
+      "waitingForDecision": "очікування вашого рішення",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "готово",
+    "resultFailed": "не вдалося"
   }
 }

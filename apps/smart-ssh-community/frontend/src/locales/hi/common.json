@@ -1190,5 +1190,23 @@
       "language": "पहचान की भाषा",
       "languageAuto": "स्वचालित"
     }
+  },
+  "connectTab": {
+    "connecting": "{{name}} से कनेक्ट हो रहा है …",
+    "failed": "{{name}} से कनेक्शन विफल रहा",
+    "retry": "पुनः प्रयास करें",
+    "close": "बंद करें",
+    "cancel": "रद्द करें",
+    "stepsLabel": "कनेक्शन के चरण",
+    "stepsRunning": "कनेक्ट हो रहा है…",
+    "detail": {
+      "tunnel": "{{hop}} के माध्यम से",
+      "waitingForResponse": "प्रतिक्रिया की प्रतीक्षा",
+      "waitingForDecision": "आपके निर्णय की प्रतीक्षा",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "पूर्ण",
+    "resultFailed": "विफल"
   }
 }

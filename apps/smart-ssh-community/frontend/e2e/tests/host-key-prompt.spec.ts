@@ -17,9 +17,8 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
   await entry.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  // Issue #407: while the attempt is pending the entry stays a focusable
-  // button (aria-disabled, not disabled), so focus can return to it.
-  await expect(entry).toHaveAttribute("aria-disabled", "true");
+  // Issue #548: the attempt runs in its own connecting tab.
+  await expect(page.getByRole("heading", { name: "Connecting to fresh-host …" })).toBeVisible();
   await expect(dialog).toContainText("fresh.example.test:2222");
   await expect(dialog).toContainText(FINGERPRINT);
   await expect(dialog).toContainText("ssh-ed25519");
@@ -37,14 +36,13 @@ test("host key prompt: shows the key, accepts nothing without a click, Reject le
 
   await reject.click();
   await expect(dialog).toBeHidden();
-  await expect(entry).toBeFocused();
-  await expect(entry).not.toHaveAttribute("aria-disabled", "true");
   const decisions = await app.calls("confirm_host_key");
   expect(decisions).toHaveLength(1);
   expect(decisions[0].args.decision).toEqual({ decision: "reject" });
 
-  // The connection is not established: an error, no session, no tab.
+  // The connection is not established: the tab shows the error, no session.
   await expect(page.getByText("Host key was rejected")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connection to fresh-host failed" })).toBeVisible();
   const snapshot = (await page.evaluate(() => window.__e2e!.snapshot())) as { sessions: unknown[] };
   expect(snapshot.sessions).toEqual([]);
   await expect(page.locator("form textarea")).toHaveCount(0);

@@ -33,6 +33,7 @@ vi.mock("./events", () => ({
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
+  onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onMcpActionTabRequested: vi.fn(() => Promise.resolve(() => {})),
 }));

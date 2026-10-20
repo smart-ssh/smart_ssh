@@ -1190,5 +1190,23 @@
       "language": "Erkennungssprache",
       "languageAuto": "Automatisch"
     }
+  },
+  "connectTab": {
+    "connecting": "Verbinde mit {{name}} …",
+    "failed": "Verbindung zu {{name}} fehlgeschlagen",
+    "retry": "Erneut versuchen",
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "stepsLabel": "Verbindungsschritte",
+    "stepsRunning": "Verbindung wird aufgebaut…",
+    "detail": {
+      "tunnel": "über {{hop}}",
+      "waitingForResponse": "wartet auf Antwort",
+      "waitingForDecision": "wartet auf Ihre Entscheidung",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "erledigt",
+    "resultFailed": "fehlgeschlagen"
   }
 }

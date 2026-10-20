@@ -1190,5 +1190,23 @@
       "language": "Tunnistuskieli",
       "languageAuto": "Automaattinen"
     }
+  },
+  "connectTab": {
+    "connecting": "Yhdistetään kohteeseen {{name}} …",
+    "failed": "Yhteys kohteeseen {{name}} epäonnistui",
+    "retry": "Yritä uudelleen",
+    "close": "Sulje",
+    "cancel": "Peruuta",
+    "stepsLabel": "Yhteyden vaiheet",
+    "stepsRunning": "Yhdistetään…",
+    "detail": {
+      "tunnel": "kautta {{hop}}",
+      "waitingForResponse": "odottaa vastausta",
+      "waitingForDecision": "odottaa päätöstäsi",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "valmis",
+    "resultFailed": "epäonnistui"
   }
 }

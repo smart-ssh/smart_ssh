@@ -1206,5 +1206,23 @@
       "language": "Jazyk rozpoznávání",
       "languageAuto": "Automaticky"
     }
+  },
+  "connectTab": {
+    "connecting": "Připojování k {{name}} …",
+    "failed": "Připojení k {{name}} selhalo",
+    "retry": "Zkusit znovu",
+    "close": "Zavřít",
+    "cancel": "Zrušit",
+    "stepsLabel": "Kroky připojení",
+    "stepsRunning": "Připojování…",
+    "detail": {
+      "tunnel": "přes {{hop}}",
+      "waitingForResponse": "čeká na odpověď",
+      "waitingForDecision": "čeká na vaše rozhodnutí",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "hotovo",
+    "resultFailed": "selhalo"
   }
 }

@@ -6,6 +6,7 @@ import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, populated, server } from "../support/data";
 import { NOTE_COMMANDS, openNotes } from "../support/notes";
 import { openChatWithConfirmation, openChatWithMessages } from "../support/chatScreens";
+import { emitProgress, snapshotStep } from "../support/connecting";
 import { openSession, redCommandProposal } from "../support/session";
 
 // New screens: add one line here. `open` brings the app into the state
@@ -56,6 +57,27 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     });
     await app.page.getByRole("button", { name: /^alpha\b/ }).click();
     await expect(app.page.getByRole("alertdialog")).toBeVisible();
+  },
+  "connecting tab": async (app) => {
+    await app.launch({
+      settings: { ...ACKNOWLEDGED },
+      servers: [server({ id: "s-1", name: "alpha" })],
+      commands: { connect: { hold: true } },
+    });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await emitProgress(app, [snapshotStep("tcpConnect", "ok"), snapshotStep("handshake", "running", { code: "waitingForResponse" })]);
+    await expect(app.page.getByTestId("connect-progress-list")).toBeVisible();
+  },
+  "failed connect tab": async (app) => {
+    await app.launch({
+      settings: { ...ACKNOWLEDGED },
+      servers: [server({ id: "s-1", name: "alpha" })],
+      commands: { connect: { hold: true } },
+    });
+    await app.page.getByRole("button", { name: /^alpha\b/ }).click();
+    await emitProgress(app, [snapshotStep("authentication", "failed", { code: "authMethod", method: "password" }, "SSH_AUTH_FAILED")]);
+    await app.release("connect", { error: { message: "Authentication failed", code: "SSH_AUTH_FAILED" } });
+    await expect(app.page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
   },
   main: async (app) => {
     await app.launch(populated());

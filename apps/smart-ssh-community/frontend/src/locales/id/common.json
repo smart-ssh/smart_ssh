@@ -1182,5 +1182,23 @@
       "language": "Bahasa pengenalan",
       "languageAuto": "Otomatis"
     }
+  },
+  "connectTab": {
+    "connecting": "Menyambung ke {{name}} …",
+    "failed": "Koneksi ke {{name}} gagal",
+    "retry": "Coba lagi",
+    "close": "Tutup",
+    "cancel": "Batal",
+    "stepsLabel": "Langkah koneksi",
+    "stepsRunning": "Menyambung…",
+    "detail": {
+      "tunnel": "melalui {{hop}}",
+      "waitingForResponse": "menunggu respons",
+      "waitingForDecision": "menunggu keputusan Anda",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "selesai",
+    "resultFailed": "gagal"
   }
 }

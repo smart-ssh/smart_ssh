@@ -1206,5 +1206,23 @@
       "language": "Język rozpoznawania",
       "languageAuto": "Automatycznie"
     }
+  },
+  "connectTab": {
+    "connecting": "Łączenie z {{name}} …",
+    "failed": "Połączenie z {{name}} nie powiodło się",
+    "retry": "Spróbuj ponownie",
+    "close": "Zamknij",
+    "cancel": "Anuluj",
+    "stepsLabel": "Etapy połączenia",
+    "stepsRunning": "Łączenie…",
+    "detail": {
+      "tunnel": "przez {{hop}}",
+      "waitingForResponse": "oczekiwanie na odpowiedź",
+      "waitingForDecision": "oczekiwanie na Twoją decyzję",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "gotowe",
+    "resultFailed": "niepowodzenie"
   }
 }

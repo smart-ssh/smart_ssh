@@ -1190,5 +1190,23 @@
       "language": "Gjenkjenningsspråk",
       "languageAuto": "Automatisk"
     }
+  },
+  "connectTab": {
+    "connecting": "Kobler til {{name}} …",
+    "failed": "Tilkoblingen til {{name}} mislyktes",
+    "retry": "Prøv igjen",
+    "close": "Lukk",
+    "cancel": "Avbryt",
+    "stepsLabel": "Tilkoblingstrinn",
+    "stepsRunning": "Kobler til…",
+    "detail": {
+      "tunnel": "gjennom {{hop}}",
+      "waitingForResponse": "venter på svar",
+      "waitingForDecision": "venter på avgjørelsen din",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "ferdig",
+    "resultFailed": "mislyktes"
   }
 }

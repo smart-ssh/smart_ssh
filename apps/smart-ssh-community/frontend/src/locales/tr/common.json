@@ -1190,5 +1190,23 @@
       "language": "Tanıma dili",
       "languageAuto": "Otomatik"
     }
+  },
+  "connectTab": {
+    "connecting": "{{name}} sunucusuna bağlanılıyor …",
+    "failed": "{{name}} bağlantısı başarısız oldu",
+    "retry": "Yeniden dene",
+    "close": "Kapat",
+    "cancel": "İptal",
+    "stepsLabel": "Bağlantı adımları",
+    "stepsRunning": "Bağlanılıyor…",
+    "detail": {
+      "tunnel": "{{hop}} üzerinden",
+      "waitingForResponse": "yanıt bekleniyor",
+      "waitingForDecision": "kararınız bekleniyor",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "tamam",
+    "resultFailed": "başarısız"
   }
 }

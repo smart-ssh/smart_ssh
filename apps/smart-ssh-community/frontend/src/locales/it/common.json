@@ -1198,5 +1198,23 @@
       "language": "Lingua di riconoscimento",
       "languageAuto": "Automatica"
     }
+  },
+  "connectTab": {
+    "connecting": "Connessione a {{name}} …",
+    "failed": "Connessione a {{name}} non riuscita",
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "stepsLabel": "Passaggi della connessione",
+    "stepsRunning": "Connessione in corso…",
+    "detail": {
+      "tunnel": "tramite {{hop}}",
+      "waitingForResponse": "in attesa di risposta",
+      "waitingForDecision": "in attesa della tua decisione",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "completato",
+    "resultFailed": "non riuscito"
   }
 }
