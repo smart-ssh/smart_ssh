@@ -3,7 +3,7 @@
 // retries in place and cancels on close.
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cancelConnect, connect, disconnect } from "./api";
+import { cancelConnect, connect, disconnect, resumeChatSession } from "./api";
 import { onConnectProgress } from "./events";
 import "./testI18n";
 import type { ConnectProgressEvent } from "./types";
@@ -21,6 +21,7 @@ vi.mock("./api", async () => {
     getServer: vi.fn(),
     listSessions: vi.fn(() => Promise.resolve([])),
     respondToAction: vi.fn(() => Promise.resolve()),
+    resumeChatSession: vi.fn(),
   };
 });
 
@@ -159,5 +160,38 @@ describe("connecting tab (issue #548)", () => {
     });
     expect(result.current.tabs).toHaveLength(0);
     expect(cancelConnect).not.toHaveBeenCalled();
+  });
+});
+
+describe("resuming a saved chat session in the connecting tab (issue #568)", () => {
+  it("opens a connecting tab, resumes the chosen session and turns into the session tab", async () => {
+    let resolve!: (id: string) => void;
+    vi.mocked(resumeChatSession).mockImplementationOnce(
+      () => new Promise<string>((r) => (resolve = r)),
+    );
+    const { result } = renderHook(() => useSessionTabs());
+    act(() => result.current.startConnect(server, "chat-1"));
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.tabs[0]).toMatchObject({ phase: "connecting", serverName: "prod-db" });
+    expect(resumeChatSession).toHaveBeenCalledWith("srv-1", "chat-1", result.current.tabs[0].attemptId);
+    expect(connect).not.toHaveBeenCalled();
+    await act(async () => resolve("session-r"));
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.tabs[0]).toMatchObject({ sessionId: "session-r", phase: "connected" });
+  });
+
+  it("retries resuming the same chat session after a failure", async () => {
+    vi.mocked(resumeChatSession).mockReset();
+    vi.mocked(resumeChatSession).mockRejectedValueOnce({ code: "SSH_AUTH_FAILED", message: "raw" });
+    const { result } = renderHook(() => useSessionTabs());
+    await act(async () => result.current.startConnect(server, "chat-1"));
+    const key = result.current.tabs[0].sessionId;
+    expect(result.current.tabs[0].phase).toBe("failed");
+    vi.mocked(resumeChatSession).mockResolvedValueOnce("session-r2");
+    await act(async () => result.current.retryConnect(key));
+    expect(resumeChatSession).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(resumeChatSession).mock.calls[1].slice(0, 2)).toEqual(["srv-1", "chat-1"]);
+    expect(connect).not.toHaveBeenCalled();
+    expect(result.current.tabs[0]).toMatchObject({ sessionId: "session-r2", phase: "connected" });
   });
 });

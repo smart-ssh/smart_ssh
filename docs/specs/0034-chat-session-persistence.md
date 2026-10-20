@@ -76,8 +76,9 @@ Auswahl-Screen statt direkten Verbindens:
 - **„Neue Unterhaltung"** — prominent, Standardaktion (Enter), beginnt
   eine neue Sitzung.
 - **Liste vergangener Sitzungen**, neueste zuerst: Titel (Abschnitt 7),
-  Zeitpunkt, Nachrichtenanzahl. Ein Klick lädt die Historie und setzt die
-  Sitzung fort (Abschnitt 8).
+  Zeitpunkt, Nachrichtenanzahl. Ein Klick öffnet sofort den
+  Verbindungs-Tab (Spec 0112); nach erfolgreichem Aufbau lädt er die
+  Historie und setzt die Sitzung fort (Abschnitt 8).
 - Ohne gespeicherte Sitzung: kein Auswahl-Screen, direkt verbinden.
 
 ## 7. Automatische Kurztitel

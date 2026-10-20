@@ -1146,15 +1146,23 @@ pub async fn resume_chat_session(
     state: State<'_, AppState>,
     server_id: ServerId,
     session_id: uuid::Uuid,
+    attempt_id: String,
 ) -> CommandResult<SessionId> {
     let tab_session_id: SessionId = uuid::Uuid::new_v4();
-    connect_session(
+    // Issue #568: same live progress / cancel as `connect`.
+    let progress = ConnectProgress::new(
+        &state,
+        attempt_id,
+        Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+    );
+    connect_session_with_progress(
         &app,
         &state,
         server_id,
         tab_session_id,
         Some(session_id),
         true,
+        Some(&progress),
     )
     .await
 }
@@ -3418,6 +3426,63 @@ mod connect_flow_tests {
         let last = events.last().unwrap()["steps"][0].clone();
         assert_eq!(last["status"], "failed");
         assert_eq!(last["errorCode"], "SSH_CONNECT_CANCELLED");
+        reset(app.handle());
+    }
+
+    /// Issue #568: a resume carries an attempt id like a plain connect —
+    /// progress events use it, `cancel_connect` aborts it, and the saved chat
+    /// session stays untouched.
+    #[tokio::test]
+    async fn test_resume_emits_progress_and_cancel_leaves_saved_session_unchanged() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let script: StepScript = Box::new(|log| {
+            step(log, "root@example.invalid:22", handshake_step(), false);
+        });
+        let connector = StepConnector::new(vec![(script, None)]);
+        let fx = fixture(connector).await;
+        let store = &fx.state.chat_session_store;
+        let existing = store.create_session(&fx.server_id, None).await.unwrap();
+        store.mark_ended(existing).await.unwrap();
+        let before = store.list_sessions_for_server(&fx.server_id).await.unwrap();
+        let emitter = Arc::new(RecordingEmitter::default());
+        let progress = ConnectProgress::new(&fx.state, "resume-1".into(), emitter.clone());
+        let tab = uuid::Uuid::new_v4();
+
+        let cancel = async {
+            wait_until(|| !emitter.0.lock().unwrap().is_empty()).await;
+            fx.state.connect_attempts.cancel("resume-1");
+        };
+        let (result, ()) = tokio::join!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                connect_session_with_progress(
+                    app.handle(),
+                    &fx.state,
+                    fx.server_id,
+                    tab,
+                    Some(existing),
+                    true,
+                    Some(&progress)
+                )
+            ),
+            cancel
+        );
+
+        let err = result
+            .expect("cancel must end the resume within 1 s")
+            .unwrap_err();
+        assert_eq!(err.code, Some("SSH_CONNECT_CANCELLED"));
+        assert!(fx.state.sessions.get(tab).is_none());
+        assert!(emitter
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|e| e["attemptId"] == "resume-1"));
+        let after = store.list_sessions_for_server(&fx.server_id).await.unwrap();
+        assert_eq!(after.len(), before.len());
+        assert_eq!(after[0].ended_at, before[0].ended_at);
         reset(app.handle());
     }
 
