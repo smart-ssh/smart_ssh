@@ -449,6 +449,72 @@ impl SqliteChatSessionStore {
         Ok(result.rows_affected() > 0)
     }
 
+    /// Issue #551: whether the session already has a title (automatic or
+    /// manual). A missing row counts as "no title".
+    pub async fn has_title(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
+        let row = sqlx::query("SELECT title FROM chat_sessions WHERE id = ?")
+            .bind(session_id.to_string())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(backend_err)?;
+        Ok(row.is_some_and(|r| r.get::<Option<String>, _>("title").is_some()))
+    }
+
+    /// Issue #551: text of the first stored user message of a session
+    /// (`None` if there is none). Only plain text messages count.
+    pub async fn first_user_message_text(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Option<String>, ChatSessionStoreError> {
+        let row = sqlx::query(
+            "SELECT content FROM chat_messages \
+             WHERE session_id = ? AND role = 'user' AND content_type = 'text' \
+             ORDER BY sequence ASC LIMIT 1",
+        )
+        .bind(session_id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let raw: String = row.try_get("content").map_err(backend_err)?;
+        match serde_json::from_str::<MessageContent>(&raw) {
+            Ok(MessageContent::Text(text)) => Ok(Some(text)),
+            Ok(_) => Ok(None),
+            Err(e) => Err(ChatSessionStoreError::Backend(format!(
+                "ungültiger Nachrichteninhalt: {e}"
+            ))),
+        }
+    }
+
+    /// Issue #551 (backfill): every untitled session together with the text
+    /// of its first stored user message. Sessions without a user text
+    /// message are not returned.
+    pub async fn untitled_sessions_with_first_user_message(
+        &self,
+    ) -> Result<Vec<(Uuid, String)>, ChatSessionStoreError> {
+        let rows = sqlx::query(
+            "SELECT id FROM chat_sessions s WHERE title IS NULL AND EXISTS \
+             (SELECT 1 FROM chat_messages m WHERE m.session_id = s.id \
+              AND m.role = 'user' AND m.content_type = 'text')",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        let mut out = Vec::new();
+        for row in rows {
+            let id_raw: String = row.get("id");
+            let id = Uuid::parse_str(&id_raw).map_err(|e| {
+                ChatSessionStoreError::Backend(format!("ungültige UUID in Spalte id: {e}"))
+            })?;
+            if let Some(text) = self.first_user_message_text(id).await? {
+                out.push((id, text));
+            }
+        }
+        Ok(out)
+    }
+
     /// Spec 0034, Abschnitt 8: `delete_chat_session(session_id)` —
     /// zugehörige Nachrichten verschwinden automatisch über
     /// `ON DELETE CASCADE` (Migration).
@@ -969,6 +1035,46 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(listed[0].title.as_deref(), Some("Manuell umbenannt"));
+    }
+
+    /// Issue #551: backfill query — untitled sessions with a user message
+    /// only; titled and message-less sessions are not returned.
+    #[tokio::test]
+    async fn test_untitled_sessions_with_first_user_message() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let untitled = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .append_message(untitled, &text_message(Role::Assistant, "hi"))
+            .await
+            .unwrap();
+        chat_store
+            .append_message(untitled, &text_message(Role::User, "erste"))
+            .await
+            .unwrap();
+        chat_store
+            .append_message(untitled, &text_message(Role::User, "zweite"))
+            .await
+            .unwrap();
+        let titled = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .append_message(titled, &text_message(Role::User, "x"))
+            .await
+            .unwrap();
+        chat_store.set_title_if_absent(titled, "T").await.unwrap();
+        let empty = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .append_message(empty, &text_message(Role::Assistant, "nur ich"))
+            .await
+            .unwrap();
+
+        let found = chat_store
+            .untitled_sessions_with_first_user_message()
+            .await
+            .unwrap();
+        assert_eq!(found, vec![(untitled, "erste".to_string())]);
+        assert!(chat_store.has_title(titled).await.unwrap());
+        assert!(!chat_store.has_title(empty).await.unwrap());
     }
 
     /// Spec 0034, Abschnitt 7: "Ein einmal automatisch gesetzter Titel wird

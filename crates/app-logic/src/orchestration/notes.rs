@@ -402,15 +402,15 @@ pub(crate) async fn handle_question_asked(
 /// Chat-Eintrag".
 /// Spec 0034, Abschnitt 7, letzter Satz vor den Punkten: reine Textanfrage,
 /// kein Tool-Schema — die KI kann in diesem Aufruf keine Aktion vorschlagen.
-const TITLE_GENERATION_INSTRUCTION_DE: &str = "Die Sitzung wird jetzt beendet. Fasse den Zweck \
-     dieser Unterhaltung in 2-4 Worten zusammen, als kurzer Titel zum Wiedererkennen. \
+const TITLE_GENERATION_INSTRUCTION_DE: &str = "Fasse den Zweck dieser Unterhaltung bisher \
+     in 2-4 Worten zusammen, als kurzer Titel zum Wiedererkennen. \
      Antworte NUR mit dem Titel selbst — keine Anführungszeichen, keine Erklärung, kein \
      Satzzeichen am Ende.";
 
 /// Issue #330: englische Fassung (für `en` und, mit Antwortsprach-Anweisung,
 /// jede andere UI-Sprache).
-const TITLE_GENERATION_INSTRUCTION_EN: &str = "The session is ending now. Summarize the \
-     purpose of this conversation in 2-4 words, as a short title for recognition. Reply \
+const TITLE_GENERATION_INSTRUCTION_EN: &str = "Summarize the purpose of this conversation \
+     so far in 2-4 words, as a short title for recognition. Reply \
      ONLY with the title itself — no quotation marks, no explanation, no punctuation at \
      the end.";
 
@@ -428,17 +428,79 @@ fn title_generation_instruction(language: PromptLanguage) -> String {
 /// zurückgibt, darf keinen unbrauchbar langen "Titel" erzeugen.
 const MAX_GENERATED_TITLE_LENGTH: usize = 60;
 
-/// Spec 0034, Abschnitt 7: automatische Kurztitel-Generierung beim
-/// Verbindungsende. Wie `suggest_note_update_on_disconnect` (s. dortiger
-/// Doc-Kommentar zu `session`s Gültigkeit nach dem Entfernen aus
-/// `AppState.sessions`) — dieselbe "beim Trennen"-Grundvoraussetzung, aber
-/// unabhängige Auslösebedingung: "mindestens eine Nutzer-Nachricht ... und
-/// noch keinen Titel". Kein-op, wenn diese Sitzung gar nicht persistiert
-/// ist (`chat_session_store`/`chat_session_id` beide `Some` nötig, s.
-/// `Session`-Doc-Kommentar) — ohne `chat_sessions`-Zeile gibt es nichts,
-/// dem ein Titel zugeordnet werden könnte.
+/// Issue #551: why the AI title attempt produced no usable title. Only the
+/// kind is logged, never content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TitleFailure {
+    Error,
+    Truncated,
+    Empty,
+    RedactedOnly,
+}
+
+impl TitleFailure {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Truncated => "truncated",
+            Self::Empty => "empty",
+            Self::RedactedOnly => "redacted-only",
+        }
+    }
+}
+
+/// Issue #551: chat sessions whose first-answer title attempt was already
+/// started in this process — the request runs at most once per session.
+static TITLE_ATTEMPTED: std::sync::Mutex<Vec<uuid::Uuid>> = std::sync::Mutex::new(Vec::new());
+
+fn claim_title_attempt(id: uuid::Uuid) -> bool {
+    let mut attempted = TITLE_ATTEMPTED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if attempted.contains(&id) {
+        return false;
+    }
+    attempted.push(id);
+    true
+}
+
+/// Issue #551: title generation right after the first finished AI answer of
+/// a persisted session (Spec 0034, section 7). One attempt per session;
+/// no-op if the session already has a title. Runs inside the chat turn
+/// after the answer was emitted, so it never overlaps a chat request on the
+/// same provider.
+#[tracing::instrument(skip_all)]
+pub async fn generate_session_title_after_first_answer(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+) {
+    let Some(chat_session_id) = *session.chat_session_id.lock().await else {
+        return;
+    };
+    if session.chat_session_store.is_none() || !claim_title_attempt(chat_session_id) {
+        return;
+    }
+    ensure_session_title(session, session_id, emitter).await;
+}
+
+/// Spec 0034, Abschnitt 7: Sicherheitsnetz beim Verbindungsende bzw. bei
+/// „Neuer Chat" — hat die Sitzung dann noch keinen Titel (z. B. erster Turn
+/// nie beendet), läuft dieselbe Logik „KI-Titel, sonst Ersatztitel" einmal.
+/// Kein-op, wenn diese Sitzung gar nicht persistiert ist (`chat_session_store`/
+/// `chat_session_id` beide `Some` nötig, s. `Session`-Doc-Kommentar).
 #[tracing::instrument(skip_all)]
 pub async fn generate_session_title_on_disconnect(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+) {
+    ensure_session_title(session, session_id, emitter).await;
+}
+
+/// "AI title, else fallback from the first user message" — see Issue #551.
+/// Every write goes through `set_title_if_absent`, so a manual title wins.
+async fn ensure_session_title(
     session: &Session,
     session_id: SessionId,
     emitter: &dyn EventEmitter,
@@ -450,17 +512,85 @@ pub async fn generate_session_title_on_disconnect(
         return;
     };
 
-    let has_user_message = session
-        .context
-        .lock()
-        .await
-        .history
-        .iter()
-        .any(|m| matches!(m.role, Role::User));
-    if !has_user_message {
+    let first_in_memory = first_user_text(&session.context.lock().await.history);
+    let first_stored = match store.first_user_message_text(chat_session_id).await {
+        Ok(text) => text,
+        Err(err) => {
+            tracing::warn!(error = %err, "chat session auto-titling: reading first message failed");
+            None
+        }
+    };
+    let Some(first_message) = first_stored.or(first_in_memory) else {
         return;
+    };
+
+    match store.has_title(chat_session_id).await {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(err) => {
+            tracing::warn!(error = %err, "chat session auto-titling: title check failed");
+            return;
+        }
     }
 
+    let title = match request_ai_title(session, session_id, emitter).await {
+        Ok(title) => title,
+        Err(reason) => {
+            tracing::warn!(
+                reason = reason.as_str(),
+                "AI session title unavailable; using the first user message as fallback"
+            );
+            let Some(title) =
+                fallback_title_from_message(&first_message, session.redactor.as_ref())
+            else {
+                return;
+            };
+            title
+        }
+    };
+    if let Err(err) = store.set_title_if_absent(chat_session_id, &title).await {
+        tracing::warn!(error = %err, "chat session auto-titling failed");
+    }
+}
+
+/// Issue #551 (Spec 0034, section 7): once at app start, every untitled
+/// session with a stored user message gets a title from that message
+/// (redact, collapse whitespace, truncate; no AI call). Idempotent: titled
+/// sessions are never touched (`set_title_if_absent`). Best-effort: errors
+/// are logged without content.
+pub async fn backfill_missing_chat_titles(store: &persistence_sqlite::SqliteChatSessionStore) {
+    let sessions = match store.untitled_sessions_with_first_user_message().await {
+        Ok(sessions) => sessions,
+        Err(err) => {
+            tracing::warn!(error = %err, "chat title backfill: listing untitled sessions failed");
+            return;
+        }
+    };
+    let redactor = ssh_manager_core::ai::DefaultOutputRedactor::new();
+    for (id, text) in sessions {
+        let Some(title) = fallback_title_from_message(&text, &redactor) else {
+            continue;
+        };
+        if let Err(err) = store.set_title_if_absent(id, &title).await {
+            tracing::warn!(error = %err, "chat title backfill: writing a title failed");
+        }
+    }
+}
+
+fn first_user_text(history: &[ChatMessage]) -> Option<String> {
+    history.iter().find_map(|m| match (&m.role, &m.content) {
+        (Role::User, MessageContent::Text(t)) => Some(t.clone()),
+        _ => None,
+    })
+}
+
+/// One side call asking the AI for a short title; the result is already
+/// redacted and truncated (`sanitize_generated_title`).
+async fn request_ai_title(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+) -> Result<String, TitleFailure> {
     let mut request_context = session.context.lock().await.clone();
     // s. identischer Kommentar in `run_one_round` — geklont, um den
     // `MutexGuard` nicht über den potenziell langen `compact_for_send`-
@@ -484,15 +614,11 @@ pub async fn generate_session_title_on_disconnect(
         content: MessageContent::Text(title_generation_instruction(system_context_parts.language)),
     });
     // Kein Tool-Schema anbieten (Spec 0034, Abschnitt 7: "hier aber ohne
-    // Tool-Schema, reine Textanfrage") — analog zu `available_actions:
-    // vec![ActionSchema::propose_note_update()]` beim Notiz-Vorschlag
-    // unten, hier aber gar keine Aktion, nur Text.
+    // Tool-Schema, reine Textanfrage").
     request_context.available_actions = Vec::new();
-    // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar.
-    // `request_context` ist ein Klon von `session.context`, das selbst
-    // schon `max_tokens_hint: None` trägt (Haupt-Chat-Default) — hier
-    // ausdrücklich überschrieben, sonst würde diese Kurztitel-Anfrage den
-    // vollen Haupt-Chat-Default erben.
+    // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar;
+    // ausdrücklich überschrieben, sonst würde die Anfrage den vollen
+    // Haupt-Chat-Default erben.
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
 
     wait_for_ai_request_slot(session).await;
@@ -505,30 +631,57 @@ pub async fn generate_session_title_on_disconnect(
     .await;
     let mut stream = session.ai_provider.send(request_context);
     let mut text_buffer = String::new();
+    let mut failure = None;
     while let Some(event) = stream.next().await {
         match event {
             AiEvent::TextDelta(delta) => text_buffer.push_str(&delta),
             // Kein `ActionProposed` erwartet (keine Schemas angeboten),
-            // aber defensiv wie beim Notiz-Vorschlag: einfach ignorieren
-            // statt eine Aktion auszuführen, die niemand angefordert hat.
+            // aber defensiv: ignorieren statt eine Aktion auszuführen.
             AiEvent::ActionProposed(_) => {}
-            // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
-            // ignoriert.
+            // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv ignoriert.
             AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
-            // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
-            // Nebenaufruf — ein abgeschnittener Titel wird einfach genau
-            // wie ein sonst leerer/fehlerhafter Titel behandelt (s.
-            // `sanitize_generated_title` unten).
-            AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
+            AiEvent::Done => break,
+            AiEvent::Error(_) => {
+                failure = Some(TitleFailure::Error);
+                break;
+            }
+            // Spec 0065, Teil 2: ein abgeschnittener Titel gilt als
+            // fehlgeschlagen.
+            AiEvent::TextTruncated => {
+                failure = Some(TitleFailure::Truncated);
+                break;
+            }
         }
     }
-
-    let Some(title) = sanitize_generated_title(&text_buffer, session.redactor.as_ref()) else {
-        return;
-    };
-    if let Err(err) = store.set_title_if_absent(chat_session_id, &title).await {
-        tracing::warn!(error = %err, "chat session auto-titling failed");
+    if let Some(failure) = failure {
+        return Err(failure);
     }
+    let redacted = session.redactor.redact_text(&text_buffer);
+    let trimmed = redacted.trim().trim_matches('"').trim();
+    if trimmed.is_empty() {
+        return Err(TitleFailure::Empty);
+    }
+    sanitize_generated_title(&text_buffer, session.redactor.as_ref())
+        .ok_or(TitleFailure::RedactedOnly)
+}
+
+/// Issue #551: fallback title from the first user message — redact first,
+/// then collapse whitespace, then truncate to [`MAX_GENERATED_TITLE_LENGTH`]
+/// characters (same order and placeholder-only rule as
+/// [`sanitize_generated_title`], Spec 0096, A1). `None` if nothing usable
+/// remains.
+pub fn fallback_title_from_message(raw: &str, redactor: &dyn OutputRedactor) -> Option<String> {
+    let redacted = redactor.redact_text(raw);
+    let collapsed = redacted.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty()
+        || collapsed
+            .replace(REDACTED_PLACEHOLDER, "")
+            .trim()
+            .is_empty()
+    {
+        return None;
+    }
+    Some(collapsed.chars().take(MAX_GENERATED_TITLE_LENGTH).collect())
 }
 
 /// Schwärzt den von der KI gelieferten Text, trimmt Whitespace und ein ggf.

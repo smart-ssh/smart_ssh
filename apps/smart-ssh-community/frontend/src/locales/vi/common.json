@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Kết nối đã bị hủy vì khóa máy chủ chưa được xác nhận. Nếu tin cậy máy chủ, hãy kết nối lại và kiểm tra vân tay khóa.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Yêu cầu khóa máy chủ không được trả lời kịp thời; khóa chưa được tin cậy. Hãy kết nối lại.",
     "SSH_CONNECTION_ABANDONED": "Lần thử kết nối đã bị hủy (ví dụ ứng dụng tải lại khi hộp thoại khóa máy chủ đang mở). Hãy kết nối lại.",
+    "SSH_CONNECT_CANCELLED": "Đã hủy kết nối.",
     "AI_AUTH_FAILED": "Xác thực với nhà cung cấp AI thất bại – hãy kiểm tra khóa API",
     "AI_RATE_LIMITED": "Nhà cung cấp AI hiện đang hạn chế yêu cầu (giới hạn tần suất) – ứng dụng đã tự thử lại vài lần. Vui lòng chờ một lúc rồi gửi lại tin nhắn.",
     "AI_NETWORK_ERROR": "Không kết nối được tới nhà cung cấp AI. Kiểm tra kết nối internet và, với endpoint tùy chỉnh, kiểm tra URL cơ sở, rồi gửi lại.",

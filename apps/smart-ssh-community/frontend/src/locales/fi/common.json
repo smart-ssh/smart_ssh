@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Yhteys peruttiin, koska isäntäavainta ei vahvistettu. Jos luotat palvelimeen, yhdistä uudelleen ja tarkista sormenjälki.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Isäntäavainkyselyyn ei vastattu ajoissa; avaimeen ei luotettu. Yhdistä uudelleen.",
     "SSH_CONNECTION_ABANDONED": "Yhteysyritys peruttiin (esim. sovellus latautui uudelleen isäntäavainkyselyn ollessa auki). Yhdistä uudelleen.",
+    "SSH_CONNECT_CANCELLED": "Yhteys peruutettiin.",
     "AI_AUTH_FAILED": "Todennus tekoälyn palveluntarjoajalle epäonnistui – tarkista API-avain",
     "AI_RATE_LIMITED": "Tekoälyn palveluntarjoaja rajoittaa pyyntöjä (pyyntöraja) – sovellus yritti jo automaattisesti muutaman kerran. Odota hetki ja lähetä viesti uudelleen.",
     "AI_NETWORK_ERROR": "Tekoälyn palveluntarjoajaa ei tavoiteta. Tarkista internet-yhteys ja mukautetussa päätepisteessä perus-URL ja lähetä sitten uudelleen.",

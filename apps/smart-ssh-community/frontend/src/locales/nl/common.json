@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Verbinding geannuleerd omdat de hostsleutel niet is bevestigd. Als u de server vertrouwt, verbind dan opnieuw en controleer de vingerafdruk.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "De vraag over de hostsleutel is niet op tijd beantwoord; de sleutel is niet vertrouwd. Verbind opnieuw.",
     "SSH_CONNECTION_ABANDONED": "Verbindingspoging geannuleerd (bijv. omdat de app opnieuw werd geladen terwijl de hostsleutelvraag openstond). Verbind opnieuw.",
+    "SSH_CONNECT_CANCELLED": "Verbinding geannuleerd.",
     "AI_AUTH_FAILED": "Authenticatie bij de AI-provider mislukt – controleer de API-sleutel",
     "AI_RATE_LIMITED": "De AI-provider beperkt momenteel verzoeken (rate limit) – de app heeft het al enkele keren automatisch opnieuw geprobeerd. Wacht even en verstuur het bericht opnieuw.",
     "AI_NETWORK_ERROR": "De AI-provider is niet bereikbaar. Controleer uw internetverbinding en, bij een eigen endpoint, de basis-URL, en verstuur daarna opnieuw.",

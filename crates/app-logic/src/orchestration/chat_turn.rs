@@ -446,7 +446,18 @@ pub async fn run_chat_turn(
         .await
         {
             RoundOutcome::Continue => {}
-            RoundOutcome::Finished => return false,
+            RoundOutcome::Finished => {
+                // Issue #551: title after the first finished answer (one
+                // attempt per session; no-op once a title exists).
+                if !session
+                    .auto_continue_stop
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                {
+                    super::generate_session_title_after_first_answer(session, session_id, emitter)
+                        .await;
+                }
+                return false;
+            }
             // spec-reviewer-Fund (Spec 0066): wurde in dieser Runde eine
             // eingereihte Nachricht in den Verlauf gelegt, der Request aber
             // vor dem Versand gestoppt, hat die KI sie nie gesehen — der

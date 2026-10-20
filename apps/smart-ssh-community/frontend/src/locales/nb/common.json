@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Tilkoblingen ble avbrutt fordi vertsnøkkelen ikke ble bekreftet. Stoler du på serveren, koble til igjen og kontroller fingeravtrykket.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Forespørselen om vertsnøkkel ble ikke besvart i tide; nøkkelen ble ikke godkjent. Koble til på nytt.",
     "SSH_CONNECTION_ABANDONED": "Tilkoblingsforsøket ble avbrutt (f.eks. fordi appen ble lastet på nytt mens vertsnøkkelforespørselen var åpen). Koble til på nytt.",
+    "SSH_CONNECT_CANCELLED": "Tilkoblingen ble avbrutt.",
     "AI_AUTH_FAILED": "Autentisering hos AI-leverandøren mislyktes – sjekk API-nøkkelen",
     "AI_RATE_LIMITED": "AI-leverandøren begrenser forespørsler for øyeblikket (rate limit) – appen har allerede prøvd på nytt automatisk noen ganger. Vent litt og send meldingen igjen.",
     "AI_NETWORK_ERROR": "Får ikke kontakt med AI-leverandøren. Sjekk internettforbindelsen og, for et eget endepunkt, basis-URL-en, og send på nytt.",

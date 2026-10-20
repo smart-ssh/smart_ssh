@@ -313,7 +313,7 @@ describe("ServerList host key prompt ownership (Issue #12)", () => {
     try {
       renderList();
       fireEvent.click(await screen.findByText("prod-1"));
-      await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+      await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1", expect.any(String)));
       expect(cleared).not.toHaveBeenCalled();
 
       await act(async () => {
@@ -489,7 +489,7 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     await acknowledgeNotice();
 
     await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
-    expect(connect).toHaveBeenCalledWith("remote-1");
+    expect(connect).toHaveBeenCalledWith("remote-1", expect.any(String));
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(noticeTitle())).toBeNull();
   });
@@ -506,7 +506,7 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     fireEvent.click(screen.getByText("Localhost"));
 
     await waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
-    expect(connect).toHaveBeenLastCalledWith("local");
+    expect(connect).toHaveBeenLastCalledWith("local", expect.any(String));
     expect(screen.queryByText(noticeTitle())).toBeNull();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
   });
@@ -569,7 +569,7 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
 
-    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1", expect.any(String)));
     expect(screen.queryByText(noticeTitle())).toBeNull();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
     expect(other).toHaveBeenCalledTimes(1);

@@ -18,7 +18,7 @@ use app_logic::confirmation::{ConfirmationRegistry, RegistrationGeneration};
 use app_logic::dto::HostKeyUserDecision;
 use app_logic::error::{secret_store_error, ssh_command_error, CommandError, CommandResult};
 use app_logic::events::{
-    emit_connection_status_changed, emit_host_key_verification_ended,
+    emit_connect_progress, emit_connection_status_changed, emit_host_key_verification_ended,
     emit_host_key_verification_needed, ConnectionStatus, EventEmitter, HostKeyKind,
     HostKeyPromptEndReason,
 };
@@ -58,9 +58,102 @@ pub async fn connect(
     app: AppHandle,
     state: State<'_, AppState>,
     server_id: ServerId,
+    attempt_id: String,
 ) -> CommandResult<SessionId> {
     let session_id: SessionId = uuid::Uuid::new_v4();
-    connect_session(&app, &state, server_id, session_id, None, true).await
+    // Issue #546: live `connect-progress` events and `cancel_connect` for
+    // this attempt id.
+    let progress = ConnectProgress::new(
+        &state,
+        attempt_id,
+        Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+    );
+    connect_session_with_progress(
+        &app,
+        &state,
+        server_id,
+        session_id,
+        None,
+        true,
+        Some(&progress),
+    )
+    .await
+}
+
+/// Issue #546: aborts the running `connect` with this attempt id (also while
+/// it waits for the host key decision). It then returns
+/// `SSH_CONNECT_CANCELLED` without retrying. An unknown or finished attempt
+/// is a no-op.
+#[tauri::command]
+pub fn cancel_connect(state: State<'_, AppState>, attempt_id: String) {
+    state.connect_attempts.cancel(&attempt_id);
+}
+
+/// Issue #546: what a running `connect` needs to report its progress and to
+/// notice a cancel.
+pub(crate) struct ConnectProgress {
+    attempt_id: String,
+    emitter: Arc<dyn EventEmitter>,
+    guard: app_logic::connect_attempts::ConnectAttemptGuard,
+}
+
+impl ConnectProgress {
+    pub(crate) fn new(
+        state: &AppState,
+        attempt_id: String,
+        emitter: Arc<dyn EventEmitter>,
+    ) -> Self {
+        let guard = state.connect_attempts.register(&attempt_id);
+        Self {
+            attempt_id,
+            emitter,
+            guard,
+        }
+    }
+
+    fn emit(
+        &self,
+        server_id: ServerId,
+        attempt: u32,
+        steps: Vec<ssh_manager_core::ssh::ConnectStepSnapshot>,
+    ) {
+        emit_connect_progress(
+            self.emitter.as_ref(),
+            &self.attempt_id,
+            server_id,
+            attempt,
+            steps,
+        );
+    }
+
+    /// A step log that reports every change as a `connect-progress` event.
+    fn log(&self, server_id: ServerId, attempt: u32) -> ConnectLog {
+        let emitter = self.emitter.clone();
+        let attempt_id = self.attempt_id.clone();
+        ConnectLog::with_sink(Arc::new(move |steps| {
+            emit_connect_progress(emitter.as_ref(), &attempt_id, server_id, attempt, steps);
+        }))
+    }
+}
+
+fn cancelled_error() -> CommandError {
+    CommandError::with_code("Verbindungsaufbau abgebrochen", "SSH_CONNECT_CANCELLED")
+}
+
+/// Runs `fut` unless the attempt is cancelled first (`None`). Without a
+/// progress handle there is nothing to cancel. `fut` is dropped on cancel,
+/// which releases its sockets and tunnel channels.
+async fn or_cancelled<F: std::future::Future>(
+    progress: Option<&ConnectProgress>,
+    fut: F,
+) -> Option<F::Output> {
+    match progress {
+        Some(p) => tokio::select! {
+            out = fut => Some(out),
+            () = p.guard.cancelled() => None,
+        },
+        None => Some(fut.await),
+    }
 }
 
 /// Kern von `connect()` (s. dessen Doc-Kommentar zur Host-Key-Logik),
@@ -135,6 +228,7 @@ async fn establish_transport<R: tauri::Runtime>(
     session_id: SessionId,
     server: &ssh_manager_core::profiles::Server,
     interactive: bool,
+    progress: Option<&ConnectProgress>,
 ) -> CommandResult<Box<dyn ssh_manager_core::ssh::SshTransport>> {
     let is_local = app_logic::dto::is_local(server_id);
     Ok(if is_local {
@@ -189,12 +283,18 @@ async fn establish_transport<R: tauri::Runtime>(
                 return Err(ssh_command_error(&err));
             }
         };
+        let mut attempt_no: u32 = 0;
         loop {
+            attempt_no += 1;
             // Issue #51: je Versuch ein frisches Schritt-Protokoll. Es geht
             // nur ans Frontend (angehängt an den `CommandError`), nie ins
             // Log — die `tracing`-Aufrufe unten nennen weiter nur Code und
-            // Meldung.
-            let attempt_log = ConnectLog::new();
+            // Meldung. Issue #546: mit `progress` zusätzlich live als
+            // `connect-progress`-Ereignis.
+            let attempt_log = match progress {
+                Some(p) => p.log(server_id, attempt_no),
+                None => ConnectLog::new(),
+            };
             // Spec 0069, Teil A3 (Issue #97): jeder Verbindungsversuch
             // (auch nach `Trust` erneut, s. Schleife) läuft unter den
             // Phasengrenzen `SSH_CONNECT_LIMITS` — je Hop eine für
@@ -203,23 +303,32 @@ async fn establish_transport<R: tauri::Runtime>(
             // und im normalen Ablauf nicht erreichbar ist. Beides
             // umschließt bewusst NUR diesen Aufruf, nicht das Warten auf
             // eine Host-Key-Entscheidung weiter unten.
-            let attempt = ssh_transport::connect_with_timeout(
-                // Issue #259: über den `Connector` im `AppState` —
-                // Produktion verdrahtet `RealConnector` (derselbe Aufruf
-                // `connect_with_limits` wie zuvor), Tests einen Mock.
-                state.connector.connect(
-                    &target,
-                    state.credential_store.as_ref(),
-                    // Spec 0076, §4.2: derselbe Leser wie auf jedem
-                    // Verbindungspfad.
-                    state.key_file_reader.as_ref(),
-                    state.host_key_store.clone(),
-                    &attempt_log,
-                    SSH_CONNECT_LIMITS,
+            let attempt = or_cancelled(
+                progress,
+                ssh_transport::connect_with_timeout(
+                    // Issue #259: über den `Connector` im `AppState` —
+                    // Produktion verdrahtet `RealConnector` (derselbe Aufruf
+                    // `connect_with_limits` wie zuvor), Tests einen Mock.
+                    state.connector.connect(
+                        &target,
+                        state.credential_store.as_ref(),
+                        // Spec 0076, §4.2: derselbe Leser wie auf jedem
+                        // Verbindungspfad.
+                        state.key_file_reader.as_ref(),
+                        state.host_key_store.clone(),
+                        &attempt_log,
+                        SSH_CONNECT_LIMITS,
+                    ),
+                    SSH_CONNECT_LIMITS.overall(target.hops.len()),
                 ),
-                SSH_CONNECT_LIMITS.overall(target.hops.len()),
             )
             .await;
+            let Some(attempt) = attempt else {
+                // Issue #546: cancelled mid-attempt; the dropped future
+                // released sockets and tunnel channels.
+                attempt_log.fail_running("SSH_CONNECT_CANCELLED");
+                return Err(cancelled_error().with_connect_log(attempt_log.snapshot()));
+            };
             // Greift das äußere Sicherheitsnetz, bricht es den Versuch
             // mitten im Schritt ab; den schließt hier niemand sonst.
             if let Err(err) = &attempt {
@@ -321,6 +430,17 @@ async fn establish_transport<R: tauri::Runtime>(
                     state
                         .sessions
                         .register_pending_connection(session_id, server_id);
+                    // Issue #546: the host key step waits for the decision.
+                    if let Some(p) = progress {
+                        p.emit(
+                            server_id,
+                            attempt_no,
+                            ssh_manager_core::ssh::ConnectStepSnapshot::from_records(
+                                &attempt_log.snapshot(),
+                                true,
+                            ),
+                        );
+                    }
                     emit_host_key_verification_needed(
                         &crate::event_emitter::TauriEventEmitter(app.clone()),
                         session_id,
@@ -333,15 +453,39 @@ async fn establish_transport<R: tauri::Runtime>(
                         key_type,
                     );
 
-                    let wait = wait_for_host_key_decision(
-                        &state.pending_host_key_confirmations,
-                        session_id,
-                        generation,
-                        rx,
-                        app_logic::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT,
+                    let wait = or_cancelled(
+                        progress,
+                        wait_for_host_key_decision(
+                            &state.pending_host_key_confirmations,
+                            session_id,
+                            generation,
+                            rx,
+                            app_logic::orchestration::PENDING_ACTION_CONFIRM_TIMEOUT,
+                        ),
                     )
                     .await;
                     state.sessions.clear_pending_connection(session_id);
+                    let Some(wait) = wait else {
+                        // Issue #546: cancelled while the dialog is open.
+                        // Release the registration and tell the frontend the
+                        // prompt is over; the key is not trusted.
+                        state
+                            .pending_host_key_confirmations
+                            .cancel_if_current(&session_id, generation);
+                        let _ = finish_host_key_wait(
+                            &crate::event_emitter::TauriEventEmitter(app.clone()),
+                            session_id,
+                            generation,
+                            HostKeyWait::Abandoned,
+                            &host,
+                            port,
+                        );
+                        attempt_log.fail_running("SSH_CONNECT_CANCELLED");
+                        if let Some(p) = progress {
+                            p.emit(server_id, attempt_no, attempt_log.progress_snapshot());
+                        }
+                        return Err(cancelled_error().with_connect_log(attempt_log.snapshot()));
+                    };
                     // Issue #37: jeder Ausgang des Wartens meldet dem
                     // Frontend das Ende genau dieser Abfrage (`generation`),
                     // damit ein offener Dialog nach Timeout/Abbruch von
@@ -354,7 +498,19 @@ async fn establish_transport<R: tauri::Runtime>(
                         &host,
                         port,
                     )
-                    .map_err(|err| err.with_connect_log(attempt_log.snapshot()))?;
+                    .map_err(|err| err.with_connect_log(attempt_log.snapshot()));
+                    // Issue #546: the dialog is over — a final, plain
+                    // snapshot (the host key step shows its real result)
+                    // unless the attempt is retried after Trust.
+                    let user_decision = match user_decision {
+                        Ok(d) => d,
+                        Err(err) => {
+                            if let Some(p) = progress {
+                                p.emit(server_id, attempt_no, attempt_log.progress_snapshot());
+                            }
+                            return Err(err);
+                        }
+                    };
                     match user_decision {
                         HostKeyUserDecision::Trust => {
                             tracing::info!(session_id = %session_id, host = %host, port, "host key trusted");
@@ -369,6 +525,9 @@ async fn establish_transport<R: tauri::Runtime>(
                                 port,
                                 "host key rejected, connection aborted",
                             );
+                            if let Some(p) = progress {
+                                p.emit(server_id, attempt_no, attempt_log.progress_snapshot());
+                            }
                             // Spec 0069, Teil A4: Code zusätzlich zur
                             // bisherigen, host:port-tragenden Meldung
                             // (Text unverändert).
@@ -394,6 +553,27 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
     session_id: SessionId,
     resume: Option<uuid::Uuid>,
     persist_chat_session: bool,
+) -> CommandResult<SessionId> {
+    connect_session_with_progress(
+        app,
+        state,
+        server_id,
+        session_id,
+        resume,
+        persist_chat_session,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    server_id: ServerId,
+    session_id: SessionId,
+    resume: Option<uuid::Uuid>,
+    persist_chat_session: bool,
+    progress: Option<&ConnectProgress>,
 ) -> CommandResult<SessionId> {
     // Spec 0031, Abschnitt 4, letzter Punkt: serverseitige Durchsetzung
     // zusätzlich zur Frontend-Sperre in `ServerList.tsx` — eine reine
@@ -446,7 +626,7 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
     // ist hier nur die Konstruktion eines `LocalTransport`, ohne die
     // `russh`/Host-Key-Schleife unten zu durchlaufen.
     let mut transport =
-        establish_transport(app, state, server_id, session_id, &server, true).await?;
+        establish_transport(app, state, server_id, session_id, &server, true, progress).await?;
 
     let sanitized_os = if let Ok(uname_output) = transport.execute("uname -a").await {
         let uname_text = String::from_utf8_lossy(&uname_output.stdout);
@@ -889,8 +1069,16 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         } else {
             state.profile_store.get_server(&server_id).await?
         };
-        let transport =
-            establish_transport(app, state, server_id, session_id, &server, interactive).await?;
+        let transport = establish_transport(
+            app,
+            state,
+            server_id,
+            session_id,
+            &server,
+            interactive,
+            None,
+        )
+        .await?;
         // The sudo password is read again, so the redactor knows the
         // current value.
         let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
@@ -1914,6 +2102,7 @@ mod connect_flow_tests {
                 ssh_manager_core::entitlements::Entitlements::free(),
             )),
             pending_host_key_confirmations: ConfirmationRegistry::new(),
+            connect_attempts: Default::default(),
             pending_action_confirmations: ConfirmationRegistry::new(),
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             mcp: app_logic::state::McpState::default(),
@@ -2857,6 +3046,459 @@ mod connect_flow_tests {
             "no command may run on a failed reconnect"
         );
         assert_eq!(hop.proxy.accepted(), 1, "no connection was accepted");
+        reset(app.handle());
+    }
+
+    // --- Issue #546: live connect progress and cancel -----------------------
+
+    type StepScript = Box<dyn FnOnce(&ConnectLog) + Send>;
+    type ScriptItem = (StepScript, Option<Result<ConnectOutcome, SshError>>);
+
+    /// Writes the scripted steps into the attempt log, then returns the result
+    /// (`None`: never returns, like a server that does not answer).
+    struct StepConnector {
+        queue: Mutex<std::collections::VecDeque<ScriptItem>>,
+    }
+
+    impl StepConnector {
+        fn new(items: Vec<(StepScript, Option<Result<ConnectOutcome, SshError>>)>) -> Arc<Self> {
+            Arc::new(Self {
+                queue: Mutex::new(items.into()),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl Connector for StepConnector {
+        async fn connect(
+            &self,
+            _target: &ConnectionTarget,
+            _credentials: &(dyn CredentialStore + Send + Sync),
+            _key_files: &(dyn KeyFileReader + Send + Sync),
+            _host_keys: Arc<dyn HostKeyStore>,
+            log: &ConnectLog,
+            _limits: ssh_transport::ConnectLimits,
+        ) -> Result<ConnectOutcome, SshError> {
+            let (script, result) = self
+                .queue
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("connector called too often");
+            script(log);
+            match result {
+                Some(r) => r,
+                None => std::future::pending().await,
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingEmitter(Mutex<Vec<serde_json::Value>>);
+    impl EventEmitter for RecordingEmitter {
+        fn emit_event(&self, event: &str, payload: serde_json::Value) {
+            if event == "connect-progress" {
+                self.0.lock().unwrap().push(payload);
+            }
+        }
+    }
+
+    fn step(log: &ConnectLog, hop: &str, step: ssh_manager_core::ssh::ConnectStep, ok: bool) {
+        let id = log.start(0, hop, step);
+        if ok {
+            log.succeed(id);
+        }
+    }
+
+    fn tcp(log: &ConnectLog) {
+        step(
+            log,
+            "root@example.invalid:22",
+            ssh_manager_core::ssh::ConnectStep::TcpConnect {
+                address: None,
+                port: 22,
+            },
+            true,
+        );
+    }
+
+    fn handshake_step() -> ssh_manager_core::ssh::ConnectStep {
+        ssh_manager_core::ssh::ConnectStep::Handshake {
+            server_version: None,
+            kex: None,
+            host_key_algorithm: None,
+            cipher: None,
+            mac: None,
+        }
+    }
+
+    fn pending_unknown() -> ConnectOutcome {
+        ConnectOutcome::PendingHostKeyConfirmation {
+            host: "example.invalid".to_string(),
+            port: 22,
+            raw_key: vec![1, 2, 3],
+            decision: HostKeyDecision::Unknown {
+                fingerprint: "SHA256:x".to_string(),
+            },
+        }
+    }
+
+    fn host_key_unknown_steps(log: &ConnectLog) {
+        tcp(log);
+        let id = log.start(
+            0,
+            "root@example.invalid:22",
+            ssh_manager_core::ssh::ConnectStep::HostKeyCheck {
+                key_type: None,
+                fingerprint: None,
+                result: Some(ssh_manager_core::ssh::HostKeyCheckResult::Unknown),
+            },
+        );
+        log.fail(id, ssh_manager_core::ssh::HOST_KEY_UNKNOWN);
+    }
+
+    async fn wait_until(mut cond: impl FnMut() -> bool) {
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while !cond() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("condition not reached in time");
+    }
+
+    #[tokio::test]
+    async fn test_progress_events_carry_attempt_id_and_end_with_all_steps_ok() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let disconnected = Arc::new(AtomicBool::new(false));
+        let script: StepScript = Box::new(|log| {
+            tcp(log);
+            step(log, "root@example.invalid:22", handshake_step(), true);
+            step(
+                log,
+                "root@example.invalid:22",
+                ssh_manager_core::ssh::ConnectStep::SessionReady,
+                true,
+            );
+        });
+        let connector = StepConnector::new(vec![(script, Some(connected(&disconnected)))]);
+        let fx = fixture(connector).await;
+        let emitter = Arc::new(RecordingEmitter::default());
+        let progress = ConnectProgress::new(&fx.state, "attempt-1".into(), emitter.clone());
+
+        connect_session_with_progress(
+            app.handle(),
+            &fx.state,
+            fx.server_id,
+            uuid::Uuid::new_v4(),
+            None,
+            true,
+            Some(&progress),
+        )
+        .await
+        .unwrap();
+
+        let events = emitter.0.lock().unwrap();
+        assert!(!events.is_empty());
+        assert!(events.iter().all(|e| e["attemptId"] == "attempt-1"
+            && e["attempt"] == 1
+            && e["serverId"] == serde_json::json!(fx.server_id)));
+        let last = events.last().unwrap()["steps"].as_array().unwrap().clone();
+        assert_eq!(last.last().unwrap()["kind"], "sessionReady");
+        assert!(last.iter().all(|s| s["status"] == "ok"));
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_auth_failure_emits_failed_auth_step_and_keeps_the_error_log() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let script: StepScript = Box::new(|log| {
+            tcp(log);
+            step(
+                log,
+                "root@example.invalid:22",
+                ssh_manager_core::ssh::ConnectStep::Authentication {
+                    method: ssh_manager_core::ssh::AuthMethodKind::IdentityFile,
+                    remaining_methods: vec![],
+                    partial_success: false,
+                },
+                false,
+            );
+            log.fail_running("SSH_AUTH_FAILED");
+        });
+        let connector =
+            StepConnector::new(vec![(script, Some(Err(SshError::AuthenticationFailed)))]);
+        let fx = fixture(connector).await;
+        let emitter = Arc::new(RecordingEmitter::default());
+        let progress = ConnectProgress::new(&fx.state, "a".into(), emitter.clone());
+
+        let err = connect_session_with_progress(
+            app.handle(),
+            &fx.state,
+            fx.server_id,
+            uuid::Uuid::new_v4(),
+            None,
+            true,
+            Some(&progress),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(err.code, Some("SSH_AUTH_FAILED"));
+        assert!(err.connect_log.is_some());
+        let events = emitter.0.lock().unwrap();
+        let last = events.last().unwrap()["steps"].as_array().unwrap().clone();
+        let auth = last.last().unwrap();
+        assert_eq!(auth["kind"], "authentication");
+        assert_eq!(auth["status"], "failed");
+        assert_eq!(auth["errorCode"], "SSH_AUTH_FAILED");
+        assert_eq!(auth["detail"]["method"], "publickey (key file)");
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_handshake_timeout_emits_failed_step_with_timeout_code() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let script: StepScript = Box::new(|log| {
+            step(log, "root@example.invalid:22", handshake_step(), false);
+            log.fail_running("SSH_TIMEOUT");
+        });
+        let connector = StepConnector::new(vec![(script, Some(Err(SshError::Timeout)))]);
+        let fx = fixture(connector).await;
+        let emitter = Arc::new(RecordingEmitter::default());
+        let progress = ConnectProgress::new(&fx.state, "a".into(), emitter.clone());
+
+        let err = connect_session_with_progress(
+            app.handle(),
+            &fx.state,
+            fx.server_id,
+            uuid::Uuid::new_v4(),
+            None,
+            true,
+            Some(&progress),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(err.code, Some("SSH_TIMEOUT"));
+        let events = emitter.0.lock().unwrap();
+        let first = events.first().unwrap()["steps"][0].clone();
+        assert_eq!(first["status"], "running");
+        assert_eq!(first["detail"]["code"], "waitingForResponse");
+        let last = events.last().unwrap()["steps"][0].clone();
+        assert_eq!(last["status"], "failed");
+        assert_eq!(last["errorCode"], "SSH_TIMEOUT");
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_host_key_prompt_waits_for_decision_and_retry_is_attempt_two() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let disconnected = Arc::new(AtomicBool::new(false));
+        let second: StepScript = Box::new(|log| {
+            tcp(log);
+        });
+        let connector = StepConnector::new(vec![
+            (
+                Box::new(host_key_unknown_steps),
+                Some(Ok(pending_unknown())),
+            ),
+            (second, Some(connected(&disconnected))),
+        ]);
+        let fx = fixture(connector).await;
+        let emitter = Arc::new(RecordingEmitter::default());
+        let progress = ConnectProgress::new(&fx.state, "a".into(), emitter.clone());
+        let tab = uuid::Uuid::new_v4();
+
+        let decide = async {
+            wait_until(|| {
+                emitter.0.lock().unwrap().iter().any(|e| {
+                    e["steps"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|s| s["detail"]["code"] == "waitingForDecision")
+                })
+            })
+            .await;
+            let waiting = emitter
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .find_map(|e| {
+                    e["steps"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|s| s["detail"]["code"] == "waitingForDecision")
+                        .cloned()
+                })
+                .unwrap();
+            assert_eq!(waiting["status"], "running");
+            assert_eq!(waiting["kind"], "hostKeyCheck");
+            wait_until(|| {
+                fx.state
+                    .pending_host_key_confirmations
+                    .resolve(&tab, HostKeyUserDecision::Trust)
+                    .is_ok()
+            })
+            .await;
+        };
+        let (result, ()) = tokio::join!(
+            connect_session_with_progress(
+                app.handle(),
+                &fx.state,
+                fx.server_id,
+                tab,
+                None,
+                true,
+                Some(&progress)
+            ),
+            decide
+        );
+        result.unwrap();
+
+        let events = emitter.0.lock().unwrap();
+        assert_eq!(events.last().unwrap()["attempt"], 2);
+        assert_eq!(events.last().unwrap()["steps"].as_array().unwrap().len(), 1);
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_cancel_during_handshake_ends_connect_without_session() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let script: StepScript = Box::new(|log| {
+            step(log, "root@example.invalid:22", handshake_step(), false);
+        });
+        let connector = StepConnector::new(vec![(script, None)]);
+        let fx = fixture(connector).await;
+        let emitter = Arc::new(RecordingEmitter::default());
+        let progress = ConnectProgress::new(&fx.state, "cancel-me".into(), emitter.clone());
+        let tab = uuid::Uuid::new_v4();
+
+        let cancel = async {
+            wait_until(|| !emitter.0.lock().unwrap().is_empty()).await;
+            fx.state.connect_attempts.cancel("cancel-me");
+        };
+        let (result, ()) = tokio::join!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                connect_session_with_progress(
+                    app.handle(),
+                    &fx.state,
+                    fx.server_id,
+                    tab,
+                    None,
+                    true,
+                    Some(&progress)
+                )
+            ),
+            cancel
+        );
+
+        let err = result
+            .expect("cancel must end connect within 1 s")
+            .unwrap_err();
+        assert_eq!(err.code, Some("SSH_CONNECT_CANCELLED"));
+        assert!(fx.state.sessions.get(tab).is_none());
+        assert!(fx
+            .state
+            .chat_session_store
+            .list_sessions_for_server(&fx.server_id)
+            .await
+            .unwrap()
+            .is_empty());
+        let events = emitter.0.lock().unwrap();
+        let last = events.last().unwrap()["steps"][0].clone();
+        assert_eq!(last["status"], "failed");
+        assert_eq!(last["errorCode"], "SSH_CONNECT_CANCELLED");
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_cancel_during_host_key_wait_releases_registration_and_ends_prompt() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let connector = StepConnector::new(vec![(
+            Box::new(host_key_unknown_steps),
+            Some(Ok(pending_unknown())),
+        )]);
+        let fx = fixture(connector).await;
+        let ended = Arc::new(Mutex::new(Vec::new()));
+        let sink = ended.clone();
+        app.handle()
+            .listen("host-key-verification-ended", move |event| {
+                sink.lock().unwrap().push(event.payload().to_string());
+            });
+        let emitter = Arc::new(RecordingEmitter::default());
+        let progress = ConnectProgress::new(&fx.state, "hk".into(), emitter.clone());
+        let tab = uuid::Uuid::new_v4();
+
+        let cancel = async {
+            wait_until(|| {
+                emitter.0.lock().unwrap().iter().any(|e| {
+                    e["steps"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|s| s["detail"]["code"] == "waitingForDecision")
+                })
+            })
+            .await;
+            fx.state.connect_attempts.cancel("hk");
+        };
+        let (result, ()) = tokio::join!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                connect_session_with_progress(
+                    app.handle(),
+                    &fx.state,
+                    fx.server_id,
+                    tab,
+                    None,
+                    true,
+                    Some(&progress)
+                )
+            ),
+            cancel
+        );
+
+        let err = result
+            .expect("cancel must end connect within 1 s")
+            .unwrap_err();
+        assert_eq!(err.code, Some("SSH_CONNECT_CANCELLED"));
+        assert!(fx.state.sessions.get(tab).is_none());
+        assert!(
+            fx.state
+                .pending_host_key_confirmations
+                .resolve(&tab, HostKeyUserDecision::Trust)
+                .is_err(),
+            "the host key registration was released"
+        );
+        assert_eq!(ended.lock().unwrap().len(), 1, "prompt end event emitted");
+        assert!(fx
+            .state
+            .chat_session_store
+            .list_sessions_for_server(&fx.server_id)
+            .await
+            .unwrap()
+            .is_empty());
+        reset(app.handle());
+    }
+
+    #[tokio::test]
+    async fn test_cancel_of_unknown_attempt_is_a_noop() {
+        let _guard = lock_async().await;
+        let app = acknowledged_app();
+        let connector = StepConnector::new(vec![]);
+        let fx = fixture(connector).await;
+        assert!(!fx.state.connect_attempts.cancel("does-not-exist"));
         reset(app.handle());
     }
 }
