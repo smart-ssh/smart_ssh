@@ -3,6 +3,9 @@
 //! vollständigen Kontext (Spec 0083: reine Verschiebung aus
 //! `orchestration.rs`, keine Verhaltensänderung).
 
+use crate::dto::QuestionOptionDto;
+use crate::events::emit_chat_question_asked;
+use ssh_manager_core::profiles::{ask_user_fallback_text, validate_ask_user, AskUserOption};
 use uuid::Uuid;
 
 use futures::StreamExt;
@@ -323,6 +326,72 @@ pub(crate) async fn handle_document_generated(
         },
     )
     .await;
+}
+
+/// Issue #545: an `ask_user` call. Never executes anything and never goes
+/// through filter or confirmation. Texts are redacted first (invariant 11),
+/// then validated: a valid question is emitted as `chat-question-asked` and
+/// stored as `MessageContent::Question`; an invalid one is returned as plain
+/// text (`Some`) for the caller to show and store as ordinary assistant
+/// text. The answer arrives later as a normal user message; the backend
+/// never injects one.
+pub(crate) async fn handle_question_asked(
+    session: &Session,
+    session_id: SessionId,
+    action: AiAction,
+    emitter: &dyn EventEmitter,
+) -> Option<String> {
+    let AiAction::AskUser {
+        question,
+        options,
+        multi_select,
+    } = action
+    else {
+        return None;
+    };
+    let redactor = session.redactor.as_ref();
+    let question = redactor.redact_text(&question);
+    let options: Vec<AskUserOption> = options
+        .into_iter()
+        .map(|o| AskUserOption {
+            label: redactor.redact_text(&o.label),
+            description: o.description.map(|d| redactor.redact_text(&d)),
+        })
+        .collect();
+    if !validate_ask_user(&question, &options) {
+        return Some(ask_user_fallback_text(&question, &options));
+    }
+    let question_id = Uuid::new_v4();
+    emit_chat_question_asked(
+        emitter,
+        session_id,
+        question_id,
+        question.clone(),
+        options.iter().map(QuestionOptionDto::from).collect(),
+        multi_select,
+    );
+    write_ledger_entry(
+        session,
+        LedgerSource::Ai,
+        LedgerEntryContent::AiMessage {
+            text: ask_user_fallback_text(&question, &options),
+        },
+    )
+    .await;
+    push_history(
+        session,
+        ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Question {
+                question_id,
+                question,
+                options,
+                multi_select,
+            },
+        },
+    )
+    .await;
+    None
 }
 
 /// Spec 0010, Abschnitt 2, Punkt 2 — nahezu wörtlich aus der Spec-Skizze

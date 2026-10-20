@@ -132,6 +132,12 @@ fn estimate_message_tokens(message: &ChatMessage) -> usize {
                     0
                 }
         }
+        // Issue #545: the question and numbered labels are what is sent.
+        MessageContent::Question {
+            question, options, ..
+        } => estimate_tokens(&ssh_manager_core::profiles::ask_user_model_text(
+            question, options,
+        )),
         MessageContent::ActionRejected { command, reason } => {
             let reason_text = match reason {
                 RejectionReason::User => "",

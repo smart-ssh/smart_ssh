@@ -507,6 +507,17 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                   id: freshId(),
                   items: entry.items.map((p) => ({ name: p.label, kind: p.media })),
                 };
+              case "question":
+                // Issue #545: the question card is a separate change; until
+                // then a reloaded question shows as plain assistant text.
+                return {
+                  type: "assistant",
+                  id: freshId(),
+                  text: [
+                    entry.question,
+                    ...entry.options.map((o) => `- ${o.label}`),
+                  ].join("\n"),
+                };
             }
           }),
           ...prev,

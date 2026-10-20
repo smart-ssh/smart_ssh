@@ -916,7 +916,9 @@ fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
         AiAction::SuggestCommand { command } => Some(command.clone()),
         AiAction::ReadRemoteFile { path } => Some(sftp_read_pseudo_command(path)),
         AiAction::WriteRemoteFile { path, .. } => Some(sftp_write_pseudo_command(path)),
-        AiAction::ProposeNoteUpdate { .. } | AiAction::GenerateDocument { .. } => None,
+        AiAction::ProposeNoteUpdate { .. }
+        | AiAction::GenerateDocument { .. }
+        | AiAction::AskUser { .. } => None,
     }
 }
 
@@ -1122,6 +1124,9 @@ fn describe_rejected_action(action: &AiAction) -> String {
         AiAction::GenerateDocument { .. } => unreachable!(
             "GenerateDocument durchläuft nie evaluate_action/einen Bestätigungsdialog, s. dort"
         ),
+        AiAction::AskUser { .. } => unreachable!(
+            "AskUser is intercepted in run_one_round and never reaches a confirmation dialog"
+        ),
     }
 }
 
@@ -1165,6 +1170,10 @@ async fn evaluate_action(
             "GenerateDocument wird bereits in run_one_round abgefangen \
              (Spec 0012: kein Filter-Engine-/Bestätigungspfad) und erreicht \
              evaluate_action nie"
+        ),
+        AiAction::AskUser { .. } => unreachable!(
+            "AskUser is intercepted in run_one_round (issue #545: no filter/confirmation path) \
+             and never reaches evaluate_action"
         ),
         AiAction::ReadRemoteFile { path } => {
             let tags = tags_for_session(session, profile_store).await;
@@ -1469,6 +1478,9 @@ async fn handle_user_decision(
                 AiAction::ProposeNoteUpdate { .. }
                 | AiAction::ReadRemoteFile { .. }
                 | AiAction::WriteRemoteFile { .. } => action,
+                AiAction::AskUser { .. } => unreachable!(
+                    "AskUser needs no confirmation and never reaches execution, see run_one_round"
+                ),
                 AiAction::GenerateDocument { .. } => unreachable!(
                     "GenerateDocument braucht nie eine Bestätigung, s. evaluate_action"
                 ),
@@ -1548,6 +1560,9 @@ async fn execute_action(
         }
         AiAction::GenerateDocument { .. } => {
             unreachable!("GenerateDocument braucht nie eine Bestätigung, s. evaluate_action")
+        }
+        AiAction::AskUser { .. } => {
+            unreachable!("AskUser is never executed, see run_one_round")
         }
         AiAction::ReadRemoteFile { path } => {
             execute_read_remote_file(session, session_id, action_id, path, emitter, persist).await

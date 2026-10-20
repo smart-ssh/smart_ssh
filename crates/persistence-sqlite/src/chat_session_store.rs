@@ -96,6 +96,8 @@ fn content_type_for(content: &MessageContent) -> &'static str {
         // Issue #505: sealed content exists only in a send copy and is
         // rejected before this point (`append_message`).
         MessageContent::Sealed(_) => "sealed",
+        // Issue #545, Migration `0024_...sql`.
+        MessageContent::Question { .. } => "question",
     }
 }
 
@@ -1249,6 +1251,58 @@ mod tests {
         assert_eq!(ctype, "extension");
     }
 
+    /// Issue #545: a question round-trips through the store (same id, options
+    /// and flag) and is stored with its own `content_type`; a database from
+    /// before migration 0024 keeps its rows and accepts the new type.
+    #[tokio::test]
+    async fn test_question_round_trips_and_migration_0024_keeps_old_rows() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let question = ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Question {
+                question_id: Uuid::new_v4(),
+                question: "Which fix?".to_string(),
+                options: vec![
+                    ssh_manager_core::profiles::AskUserOption {
+                        label: "A".to_string(),
+                        description: Some("first".to_string()),
+                    },
+                    ssh_manager_core::profiles::AskUserOption {
+                        label: "B".to_string(),
+                        description: None,
+                    },
+                ],
+                multi_select: true,
+            },
+        };
+        chat_store
+            .append_message(session_id, &question)
+            .await
+            .unwrap();
+        assert_eq!(
+            chat_store.load_session(session_id).await.unwrap(),
+            vec![question.clone()]
+        );
+        let ctype: String = sqlx::query_scalar("SELECT content_type FROM chat_messages")
+            .fetch_one(&profile_store.pool)
+            .await
+            .unwrap();
+        assert_eq!(ctype, "question");
+
+        // Old database (up to 0022) migrates through 0024 and keeps its rows.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dev.db");
+        let old_session = Uuid::new_v4();
+        database_at_0022(&path, old_session).await;
+        let store = SqliteProfileStore::connect_plaintext(&path).await.unwrap();
+        let chat = store.chat_session_store();
+        assert_eq!(chat.load_session(old_session).await.unwrap().len(), 2);
+        chat.append_message(old_session, &question).await.unwrap();
+        assert_eq!(chat.load_session(old_session).await.unwrap().len(), 3);
+    }
+
     /// Setup for the 0023 tests: a file database migrated only up to 0022
     /// (the state of a development database that applied 0021/0022), holding
     /// a text row, an `attachments` row and an `extension` row.
@@ -1383,7 +1437,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=23).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=24).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.

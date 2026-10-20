@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value};
 use ssh_manager_core::ai::{ActionParameterKind, ActionSchema, AiError};
-use ssh_manager_core::profiles::{AiAction, NoteTargetSelector};
+use ssh_manager_core::profiles::{AiAction, AskUserOption, NoteTargetSelector};
 
 /// Erzeugt das `{"type":"object","properties":{...},"required":[...]}`-
 /// JSON-Schema-Objekt für eine [`ActionSchema`]. Von OpenAI (`function.parameters`)
@@ -25,6 +25,25 @@ pub(crate) fn parameters_json_schema(schema: &ActionSchema) -> Value {
                 property.insert(
                     "enum".to_string(),
                     Value::Array(values.iter().cloned().map(Value::String).collect()),
+                );
+            }
+            ActionParameterKind::Boolean => {
+                property.insert("type".to_string(), Value::String("boolean".to_string()));
+            }
+            ActionParameterKind::OptionList => {
+                property.insert("type".to_string(), Value::String("array".to_string()));
+                property.insert("minItems".to_string(), Value::from(2));
+                property.insert("maxItems".to_string(), Value::from(4));
+                property.insert(
+                    "items".to_string(),
+                    serde_json::json!({
+                        "type": "object",
+                        "properties": {
+                            "label": {"type": "string"},
+                            "description": {"type": "string"}
+                        },
+                        "required": ["label"]
+                    }),
                 );
             }
         }
@@ -122,6 +141,47 @@ pub(crate) fn action_from_tool_arguments(
             path: get_str_aliases(&["path", "file", "filename", "remote_path"])?,
             content: get_str_aliases(&["content", "new_content", "text", "body"])?,
         }),
+        "ask_user" => {
+            let question = get_str_aliases(&["question", "text", "prompt"])?;
+            // Lenient on purpose: an invalid option list is not an error
+            // here, the caller shows such a call as plain text.
+            let options = arguments
+                .get("options")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .map(|item| match item {
+                            Value::String(s) => AskUserOption {
+                                label: s.clone(),
+                                description: None,
+                            },
+                            other => AskUserOption {
+                                label: other
+                                    .get("label")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                description: other
+                                    .get("description")
+                                    .and_then(Value::as_str)
+                                    .filter(|d| !d.is_empty())
+                                    .map(str::to_string),
+                            },
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let multi_select = arguments
+                .get("multi_select")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            Ok(AiAction::AskUser {
+                question,
+                options,
+                multi_select,
+            })
+        }
         other => Err(AiError::InvalidResponse(format!(
             "unbekannte Aktion '{other}'"
         ))),
@@ -132,6 +192,44 @@ pub(crate) fn action_from_tool_arguments(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Issue #545: schema for `ask_user` (shared by all providers).
+    #[test]
+    fn test_ask_user_json_schema_has_option_array_and_boolean() {
+        for schema in [ActionSchema::ask_user(), ActionSchema::ask_user_en()] {
+            let json = parameters_json_schema(&schema);
+            let options = &json["properties"]["options"];
+            assert_eq!(options["type"], "array");
+            assert_eq!(options["minItems"], 2);
+            assert_eq!(options["maxItems"], 4);
+            assert_eq!(options["items"]["type"], "object");
+            assert_eq!(options["items"]["required"], serde_json::json!(["label"]));
+            assert_eq!(json["properties"]["multi_select"]["type"], "boolean");
+            assert_eq!(json["required"], serde_json::json!(["question", "options"]));
+        }
+    }
+
+    #[test]
+    fn test_action_from_tool_arguments_parses_ask_user_leniently() {
+        let action = action_from_tool_arguments(
+            "ask_user",
+            &json!({"question": "Q?", "options": [{"label": "A"}]}),
+        )
+        .unwrap();
+        // Too few options is not a parse error; the caller shows it as text.
+        assert_eq!(
+            action,
+            AiAction::AskUser {
+                question: "Q?".to_string(),
+                options: vec![AskUserOption {
+                    label: "A".to_string(),
+                    description: None
+                }],
+                multi_select: false,
+            }
+        );
+        assert!(action_from_tool_arguments("ask_user", &json!({"options": []})).is_err());
+    }
 
     #[test]
     fn test_parameters_json_schema_marks_required_fields() {
