@@ -1416,6 +1416,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     renderPanel();
     const arrow = await screen.findByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" });
+    await waitFor(() => expect(arrow).toBeEnabled());
     fireEvent.click(arrow);
     expect(screen.getByRole("menu")).toBeVisible();
     fireEvent.keyDown(screen.getByRole("menuitem"), { key: "Escape" });
