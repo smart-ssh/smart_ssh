@@ -1225,6 +1225,31 @@ pub enum ChatHistoryEntryDto {
         role: ChatHistoryRoleDto,
         items: Vec<ChatHistoryExtensionPartDto>,
     },
+    /// Issue #545: a clarifying question the AI asked with answer options.
+    Question {
+        role: ChatHistoryRoleDto,
+        question_id: String,
+        question: String,
+        options: Vec<QuestionOptionDto>,
+        multi_select: bool,
+    },
+}
+
+/// Issue #545: one answer option of a question (event and history).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionOptionDto {
+    pub label: String,
+    pub description: Option<String>,
+}
+
+impl From<&ssh_manager_core::profiles::AskUserOption> for QuestionOptionDto {
+    fn from(option: &ssh_manager_core::profiles::AskUserOption) -> Self {
+        Self {
+            label: option.label.clone(),
+            description: option.description.clone(),
+        }
+    }
 }
 
 /// Issue #504: one extension part in the history (label and media class).
@@ -1365,6 +1390,18 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                     }],
                 }
             }
+            ssh_manager_core::ai::MessageContent::Question {
+                question_id,
+                question,
+                options,
+                multi_select,
+            } => ChatHistoryEntryDto::Question {
+                role,
+                question_id: question_id.to_string(),
+                question,
+                options: options.iter().map(QuestionOptionDto::from).collect(),
+                multi_select,
+            },
             // Issue #505: sealed content exists only in a send copy and
             // never reaches the history view; show label only if it does.
             ssh_manager_core::ai::MessageContent::Sealed(sealed) => {
@@ -1659,6 +1696,31 @@ mod tests {
             json["unusableServersToUnassign"][0]["groupId"],
             serde_json::Value::Null
         );
+    }
+
+    /// Issue #545: a stored question reaches the frontend as a `question`
+    /// entry with camelCase fields and the stored id.
+    #[test]
+    fn test_chat_history_question_entry_shape() {
+        let id = uuid::Uuid::new_v4();
+        let entry = ChatHistoryEntryDto::from(ssh_manager_core::ai::ChatMessage {
+            role: ssh_manager_core::ai::Role::Assistant,
+            content: ssh_manager_core::ai::MessageContent::Question {
+                question_id: id,
+                question: "Which?".to_string(),
+                options: vec![ssh_manager_core::profiles::AskUserOption {
+                    label: "A".to_string(),
+                    description: None,
+                }],
+                multi_select: true,
+            },
+        });
+        let json = serde_json::to_value(entry).unwrap();
+        assert_eq!(json["type"], "question");
+        assert_eq!(json["questionId"], id.to_string());
+        assert_eq!(json["multiSelect"], true);
+        assert_eq!(json["options"][0]["label"], "A");
+        assert!(json["options"][0]["description"].is_null());
     }
 
     /// Issue #167: ohne `rename_all_fields` kam `exit_code` beim Frontend

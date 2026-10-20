@@ -139,6 +139,35 @@ mod tests {
         assert!(!result.text.contains(ACTION_START));
     }
 
+    /// Issue #545: `ask_user` with its array argument parses in marker mode.
+    #[test]
+    fn test_parse_fallback_response_extracts_ask_user_action() {
+        use ssh_manager_core::profiles::AskUserOption;
+        let full_text = "<!--ACTION-->{\"action\": \"ask_user\", \"parameters\": \
+             {\"question\": \"Which?\", \"options\": [{\"label\": \"A\", \"description\": \"first\"}, \
+             {\"label\": \"B\"}], \"multi_select\": true}}<!--/ACTION-->";
+
+        let result = parse_fallback_response(full_text);
+
+        assert_eq!(
+            result.action,
+            Some(AiAction::AskUser {
+                question: "Which?".to_string(),
+                options: vec![
+                    AskUserOption {
+                        label: "A".to_string(),
+                        description: Some("first".to_string()),
+                    },
+                    AskUserOption {
+                        label: "B".to_string(),
+                        description: None,
+                    },
+                ],
+                multi_select: true,
+            })
+        );
+    }
+
     #[test]
     fn test_parse_fallback_response_returns_full_text_on_malformed_json() {
         let full_text = "Text davor <!--ACTION-->{invalid json<!--/ACTION--> Text danach";

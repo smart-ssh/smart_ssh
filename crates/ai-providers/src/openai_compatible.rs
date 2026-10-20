@@ -403,6 +403,10 @@ pub(crate) fn message_content_text(content: &MessageContent) -> String {
         MessageContent::Extension(part) => part.unavailable_model_text(),
         // Issue #505: sealed by the core (redacted, fenced).
         MessageContent::Sealed(sealed) => sealed.text_for_model(),
+        // Issue #545: question and numbered labels as assistant text.
+        MessageContent::Question {
+            question, options, ..
+        } => ssh_manager_core::profiles::ask_user_model_text(question, options),
     }
 }
 
@@ -1244,6 +1248,32 @@ mod tests {
     //! für den OpenAI-kompatiblen Provider gespiegelt.
 
     use super::*;
+
+    /// Issue #545: a stored question is sent as assistant text with the
+    /// question and numbered option labels.
+    #[test]
+    fn test_question_history_entry_is_rendered_with_numbered_labels() {
+        let content = MessageContent::Question {
+            question_id: Uuid::new_v4(),
+            question: "Which fix?".to_string(),
+            options: vec![
+                ssh_manager_core::profiles::AskUserOption {
+                    label: "Restart".to_string(),
+                    description: None,
+                },
+                ssh_manager_core::profiles::AskUserOption {
+                    label: "Reload".to_string(),
+                    description: Some("softer".to_string()),
+                },
+            ],
+            multi_select: false,
+        };
+        assert_eq!(
+            message_content_text(&content),
+            "Which fix?\n1. Restart\n2. Reload"
+        );
+    }
+
     use ssh_manager_core::ai::default_action_schemas;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, Request, ResponseTemplate};

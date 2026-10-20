@@ -1386,6 +1386,8 @@ pub fn history_contains_untrusted_content(history: &[ChatMessage]) -> bool {
         // after resume and whatever its source.
         MessageContent::Extension(_) => true,
         MessageContent::Sealed(_) => true,
+        // Issue #545: AI-originated text, like an assistant `Text`.
+        MessageContent::Question { .. } => false,
     })
 }
 
