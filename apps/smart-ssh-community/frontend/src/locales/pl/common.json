@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Połączenie anulowane, ponieważ klucz hosta nie został potwierdzony. Jeśli ufasz serwerowi, połącz się ponownie i zweryfikuj odcisk klucza.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Na pytanie o klucz hosta nie odpowiedziano na czas; klucz nie został uznany za zaufany. Połącz się ponownie.",
     "SSH_CONNECTION_ABANDONED": "Próba połączenia anulowana (np. aplikacja przeładowała się przy otwartym pytaniu o klucz hosta). Połącz się ponownie.",
+    "SSH_CONNECT_CANCELLED": "Połączenie anulowane.",
     "AI_AUTH_FAILED": "Uwierzytelnianie u dostawcy AI nie powiodło się – sprawdź klucz API",
     "AI_RATE_LIMITED": "Dostawca AI chwilowo ogranicza żądania (limit) – aplikacja ponowiła już próbę kilka razy automatycznie. Poczekaj chwilę i wyślij wiadomość ponownie.",
     "AI_NETWORK_ERROR": "Nie można połączyć się z dostawcą AI. Sprawdź połączenie z internetem, a przy własnym punkcie końcowym bazowy URL, i wyślij ponownie.",

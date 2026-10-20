@@ -304,6 +304,8 @@ mod code_tests {
             "SSH_HOST_KEY_CONFIRM_TIMEOUT",
             // Spec 0069, Teil A5 (spec-reviewer-Fund):
             "SSH_CONNECTION_ABANDONED",
+            // Issue #546: the user cancelled a running connect.
+            "SSH_CONNECT_CANCELLED",
             // Spec 0071, A13.
             super::KEYCHAIN_UNAVAILABLE,
             // Spec 0098, A1/A6 (BL-0244/BL-0205/BL-0206).

@@ -188,6 +188,39 @@ pub fn emit_host_key_verification_ended(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ConnectProgressPayload {
+    attempt_id: String,
+    server_id: ServerId,
+    /// 1-based retry counter; a new attempt starts a fresh step list.
+    attempt: u32,
+    steps: Vec<ssh_manager_core::ssh::ConnectStepSnapshot>,
+}
+
+/// Issue #546: live progress of a running `connect` — the full current step
+/// snapshot, emitted whenever a step starts, changes, succeeds or fails.
+/// UI only: observing, never deciding. Steps carry no secrets (see
+/// `ConnectStepSnapshot`).
+pub fn emit_connect_progress(
+    emitter: &dyn EventEmitter,
+    attempt_id: &str,
+    server_id: ServerId,
+    attempt: u32,
+    steps: Vec<ssh_manager_core::ssh::ConnectStepSnapshot>,
+) {
+    emit(
+        emitter,
+        "connect-progress",
+        &ConnectProgressPayload {
+            attempt_id: attempt_id.to_string(),
+            server_id,
+            attempt,
+            steps,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TerminalOutputPayload {
     session_id: SessionId,
     /// Base64-kodiert statt als JSON-Zahlenarray: Terminal-Output kann

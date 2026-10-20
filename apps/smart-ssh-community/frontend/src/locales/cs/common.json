@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Připojení zrušeno, protože klíč hostitele nebyl potvrzen. Pokud serveru důvěřujete, připojte se znovu a ověřte otisk.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Na výzvu k klíči hostitele nebylo včas odpovězeno; klíči nebylo důvěřováno. Připojte se znovu.",
     "SSH_CONNECTION_ABANDONED": "Pokus o připojení zrušen (např. aplikace se znovu načetla, když byla otevřena výzva k klíči hostitele). Připojte se znovu.",
+    "SSH_CONNECT_CANCELLED": "Připojení zrušeno.",
     "AI_AUTH_FAILED": "Ověření u poskytovatele AI selhalo – zkontrolujte klíč API",
     "AI_RATE_LIMITED": "Poskytovatel AI momentálně omezuje požadavky (limit) – aplikace to již několikrát automaticky zopakovala. Chvíli počkejte a odešlete zprávu znovu.",
     "AI_NETWORK_ERROR": "Poskytovatel AI není dosažitelný. Zkontrolujte připojení k internetu a u vlastního koncového bodu základní URL, poté odešlete znovu.",

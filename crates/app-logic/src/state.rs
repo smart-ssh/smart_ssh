@@ -147,6 +147,9 @@ pub struct AppState {
     /// höchstens ein `connect()`-Versuch aktiv sein, ein flacher Schlüssel
     /// reicht daher.
     pub pending_host_key_confirmations: ConfirmationRegistry<SessionId, HostKeyUserDecision>,
+    /// Issue #546: running `connect` attempts by frontend-generated attempt
+    /// id, so `cancel_connect` can abort them.
+    pub connect_attempts: crate::connect_attempts::ConnectAttempts,
     /// Wartende `respond_to_action`-Aufrufe (Confirm-Pfad der Kernschleife,
     /// Spec 0007 Abschnitt 6).
     pub pending_action_confirmations: ConfirmationRegistry<ActionId, ActionUserDecision>,
