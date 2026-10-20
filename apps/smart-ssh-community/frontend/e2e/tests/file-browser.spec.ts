@@ -152,6 +152,20 @@ test.describe("file browser", () => {
     await expect(arrow).toBeFocused();
   });
 
+  test("elevation menu closes on an outside click (issue #569)", async ({ app }) => {
+    await openFileBrowser(app);
+    const page = app.page;
+    const arrow = page.getByRole("button", { name: "More elevation options" });
+    await arrow.click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.getByText("notes.txt").first().click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await arrow.click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await arrow.click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  });
+
   test("long names are truncated inside the panel and carry a tooltip", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;

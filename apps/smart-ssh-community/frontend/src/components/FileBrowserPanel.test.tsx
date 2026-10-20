@@ -1609,6 +1609,78 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     await waitFor(() => expect(onElevationChange).toHaveBeenLastCalledWith(null));
   });
 
+  // Issue #569
+  describe("elevation menu closing", () => {
+    const ARROW = "Weitere Optionen zur Rechteerhöhung";
+    const openMenu = async () => {
+      await screen.findByText(/a\.txt/);
+      fireEvent.click(await screen.findByRole("button", { name: ARROW }));
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+    };
+    const openForm = async () => {
+      await openMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: /Als anderer Nutzer/ }));
+      expect(screen.getByLabelText("Ziel-Nutzer")).toBeInTheDocument();
+    };
+
+    it("closes the menu on an outside click, but not on the arrow toggle or inside", async () => {
+      renderPanel();
+      await openMenu();
+      fireEvent.click(screen.getByRole("menu"));
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: ARROW }));
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: ARROW }));
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      fireEvent.click(screen.getByText(/a\.txt/));
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("closes the target user form on an outside click without elevating", async () => {
+      renderPanel();
+      await openForm();
+      fireEvent.click(screen.getByLabelText("Ziel-Nutzer"));
+      expect(screen.getByLabelText("Ziel-Nutzer")).toBeInTheDocument();
+      fireEvent.click(screen.getByText(/a\.txt/));
+      expect(screen.queryByLabelText("Ziel-Nutzer")).not.toBeInTheDocument();
+      expect(sftpElevationEnable).not.toHaveBeenCalled();
+    });
+
+    it("does not show the menu again after elevating and returning to normal rights", async () => {
+      vi.mocked(sftpElevationEnable).mockResolvedValue({
+        active: true,
+        targetUser: "root",
+        sftpServerPath: "/usr/lib/openssh/sftp-server",
+        failure: null,
+      });
+      renderPanel();
+      await openMenu();
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+      fireEvent.click(await screen.findByRole("button", { name: "Erhöhte Rechte beenden" }));
+      await screen.findByRole("button", { name: ARROW });
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Ziel-Nutzer")).not.toBeInTheDocument();
+    });
+
+    it("closes menu and form when the panel becomes hidden", async () => {
+      const ui = (visible: boolean) => (
+        <I18nextProvider i18n={testI18n}>
+          <FileBrowserPanel sessionId="session-1" isVisible={visible} />
+        </I18nextProvider>
+      );
+      const { rerender } = render(ui(true));
+      await openMenu();
+      rerender(ui(false));
+      rerender(ui(true));
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: ARROW }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /Als anderer Nutzer/ }));
+      rerender(ui(false));
+      rerender(ui(true));
+      expect(screen.queryByLabelText("Ziel-Nutzer")).not.toBeInTheDocument();
+    });
+  });
+
   it("drops the elevated mode when the connection goes away", async () => {
     let statusHandler: ((event: { sessionId: string; status: string; reason: null }) => void) | null =
       null;
