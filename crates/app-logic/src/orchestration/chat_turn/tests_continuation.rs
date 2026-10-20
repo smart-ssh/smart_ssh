@@ -2814,7 +2814,7 @@ async fn test_issue_562_title_request_plain_session_and_secret_absent() {
     session.set_ai_provider_for_tests(Box::new(provider));
     run_first_turn(&session, &format!("prüfe password={SECRET_0096} bitte")).await;
 
-    let contexts = contexts.lock().unwrap();
+    let contexts = contexts.lock().unwrap().clone();
     assert_eq!(contexts.len(), 2);
     let title_request = &contexts[1];
     let texts: Vec<String> = title_request
