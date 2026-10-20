@@ -80,6 +80,7 @@ vi.mock("../events", () => ({
   onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
+  onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),

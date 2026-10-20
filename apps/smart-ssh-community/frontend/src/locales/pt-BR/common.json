@@ -1097,6 +1097,11 @@
       "request_too_large": "A requisição web era grande demais.",
       "unavailable": "A pesquisa na web está temporariamente indisponível no provedor.",
       "other": "A pesquisa na web falhou ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Pergunta: {{question}}",
+      "send": "Enviar",
+      "answeredOwnWords": "Respondida com suas próprias palavras"
     }
   },
   "notes": {

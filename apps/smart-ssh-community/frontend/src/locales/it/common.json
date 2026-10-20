@@ -1097,6 +1097,11 @@
       "request_too_large": "La richiesta web era troppo grande.",
       "unavailable": "La ricerca web è temporaneamente non disponibile presso il provider.",
       "other": "Ricerca web non riuscita ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Domanda: {{question}}",
+      "send": "Invia",
+      "answeredOwnWords": "Risposta con parole tue"
     }
   },
   "notes": {

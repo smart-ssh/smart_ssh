@@ -1105,6 +1105,11 @@
       "request_too_large": "Żądanie sieciowe było zbyt duże.",
       "unavailable": "Wyszukiwanie w sieci jest chwilowo niedostępne u dostawcy.",
       "other": "Wyszukiwanie w sieci nie powiodło się ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Pytanie: {{question}}",
+      "send": "Wyślij",
+      "answeredOwnWords": "Odpowiedź własnymi słowami"
     }
   },
   "notes": {

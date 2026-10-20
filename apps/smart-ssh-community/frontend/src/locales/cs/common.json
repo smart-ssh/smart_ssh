@@ -1105,6 +1105,11 @@
       "request_too_large": "Webový požadavek byl příliš velký.",
       "unavailable": "Webový průzkum je u poskytovatele dočasně nedostupný.",
       "other": "Webový průzkum selhal ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Otázka: {{question}}",
+      "send": "Odeslat",
+      "answeredOwnWords": "Odpovězeno vlastními slovy"
     }
   },
   "notes": {

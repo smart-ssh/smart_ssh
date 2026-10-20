@@ -1089,6 +1089,11 @@
       "request_too_large": "Nettforespørselen var for stor.",
       "unavailable": "Nettsøk er midlertidig utilgjengelig hos leverandøren.",
       "other": "Nettsøk mislyktes ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Spørsmål: {{question}}",
+      "send": "Send inn",
+      "answeredOwnWords": "Besvart med egne ord"
     }
   },
   "notes": {

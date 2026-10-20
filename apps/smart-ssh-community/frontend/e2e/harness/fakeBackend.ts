@@ -256,6 +256,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     },
     // An open session: empty history, a terminal that echoes nothing, an
     // empty home directory in the file browser.
+    send_chat_message: () => null,
     get_chat_history: () => [],
     list_prompt_history: () => [],
     open_terminal: () => ({ missingDirectory: null }),

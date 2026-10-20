@@ -1097,6 +1097,11 @@
       "request_too_large": "La solicitud web era demasiado grande.",
       "unavailable": "La investigación web no está disponible temporalmente en el proveedor.",
       "other": "Error en la investigación web ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Pregunta: {{question}}",
+      "send": "Enviar",
+      "answeredOwnWords": "Respondida con tus propias palabras"
     }
   },
   "notes": {

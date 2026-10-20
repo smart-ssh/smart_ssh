@@ -1081,6 +1081,11 @@
       "request_too_large": "网络请求过大。",
       "unavailable": "提供商处的联网调研暂时不可用。",
       "other": "联网调研失败（{{code}}）。"
+    },
+    "question": {
+      "cardLabel": "问题：{{question}}",
+      "send": "发送",
+      "answeredOwnWords": "已用自己的话回答"
     }
   },
   "notes": {

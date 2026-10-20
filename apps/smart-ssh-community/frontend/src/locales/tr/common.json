@@ -1089,6 +1089,11 @@
       "request_too_large": "Web isteği çok büyüktü.",
       "unavailable": "Web araştırması sağlayıcıda geçici olarak kullanılamıyor.",
       "other": "Web araştırması başarısız ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Soru: {{question}}",
+      "send": "Gönder",
+      "answeredOwnWords": "Kendi sözlerinizle yanıtlandı"
     }
   },
   "notes": {

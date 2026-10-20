@@ -1097,6 +1097,11 @@
       "request_too_large": "La requête web était trop volumineuse.",
       "unavailable": "La recherche web est temporairement indisponible chez le fournisseur.",
       "other": "Échec de la recherche web ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Question : {{question}}",
+      "send": "Envoyer",
+      "answeredOwnWords": "Répondu avec vos propres mots"
     }
   },
   "notes": {

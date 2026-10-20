@@ -1089,6 +1089,11 @@
       "request_too_large": "Het webverzoek was te groot.",
       "unavailable": "Webonderzoek is bij de provider tijdelijk niet beschikbaar.",
       "other": "Webonderzoek mislukt ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Vraag: {{question}}",
+      "send": "Verzenden",
+      "answeredOwnWords": "In eigen woorden beantwoord"
     }
   },
   "notes": {

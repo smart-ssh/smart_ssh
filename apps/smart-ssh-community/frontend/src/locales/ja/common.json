@@ -1081,6 +1081,11 @@
       "request_too_large": "Webリクエストが大きすぎました。",
       "unavailable": "プロバイダー側でWebリサーチが一時的に利用できません。",
       "other": "Webリサーチに失敗しました（{{code}}）。"
+    },
+    "question": {
+      "cardLabel": "質問: {{question}}",
+      "send": "送信",
+      "answeredOwnWords": "自分の言葉で回答済み"
     }
   },
   "notes": {

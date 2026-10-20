@@ -1089,6 +1089,11 @@
       "request_too_large": "Webbförfrågan var för stor.",
       "unavailable": "Webbsökning är tillfälligt otillgänglig hos leverantören.",
       "other": "Webbsökningen misslyckades ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Fråga: {{question}}",
+      "send": "Skicka",
+      "answeredOwnWords": "Besvarad med egna ord"
     }
   },
   "notes": {

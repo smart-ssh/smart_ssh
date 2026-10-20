@@ -1081,6 +1081,11 @@
       "request_too_large": "Yêu cầu web quá lớn.",
       "unavailable": "Tra cứu web tạm thời không khả dụng ở nhà cung cấp.",
       "other": "Tra cứu web thất bại ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Câu hỏi: {{question}}",
+      "send": "Gửi",
+      "answeredOwnWords": "Đã trả lời bằng lời của bạn"
     }
   },
   "notes": {

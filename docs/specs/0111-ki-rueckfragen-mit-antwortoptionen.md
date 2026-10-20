@@ -1,7 +1,7 @@
 # Spec 0111 — KI-Rückfragen mit Antwortoptionen
 
-Status: Backend umgesetzt (Werkzeug, Ereignis, Speicherung, Verlauf). Die
-Anzeige als Fragekarte im Chat ist eine eigene Änderung.
+Status: umgesetzt (Werkzeug, Ereignis, Speicherung, Verlauf, Fragekarte im
+Chat).
 Zweck: Braucht die KI eine Entscheidung des Nutzers zwischen konkreten
 Alternativen, kann sie genau eine Frage mit 2 bis 4 Antwortoptionen stellen,
 statt im Fließtext zu raten oder nachzufragen.
@@ -49,8 +49,40 @@ von Chats), Spec 0080 (leere KI-Antwort).
 - Beim Senden des Verlaufs an die KI steht die Frage als Assistenten-Text mit
   der Frage und den nummerierten Labels, damit die KI die nächste
   Nutzer-Nachricht als Antwort versteht.
-- Bis die Fragekarte im Chat angezeigt wird, erscheint eine wieder geladene
-  Frage als Assistenten-Text mit Frage und Labels.
+- Eine wieder geladene Frage erscheint als Fragekarte (Abschnitt 5), mit dem
+  Zustand, der sich aus dem Verlauf ergibt.
+
+## 5. Fragekarte im Chat
+
+- Die Karte zeigt die Frage und 2 bis 4 Optionen, je mit Label und, falls
+  vorhanden, der Beschreibung darunter. Alle Texte erscheinen als reiner Text,
+  nie als HTML oder Markdown.
+- Einfachauswahl: Ein Klick auf eine Option sendet deren Label sofort als
+  normale Nutzer-Nachricht. Mehrfachauswahl: Die Optionen sind Kästchen; der
+  Knopf „Senden“ (deaktiviert, solange nichts angehakt ist) sendet die
+  angehakten Labels in einer Nachricht, ein Label je Zeile, in der
+  Reihenfolge der Optionen.
+- Tastatur: Hat die Karte (oder ein Element darin) den Fokus, wählen die
+  Tasten 1 bis 4 die entsprechende Option (Einfachauswahl: sendet;
+  Mehrfachauswahl: schaltet um). Alle Optionen sind mit Tab erreichbar und
+  zeigen einen sichtbaren Fokus. Im Eingabefeld haben die Tasten ihre normale
+  Wirkung. Die Karte ist eine Gruppe, deren Name die Frage ist.
+- Der Nutzer kann die Karte ignorieren und wie gewohnt tippen. Läuft gerade
+  eine Antwort, wird ein Klick wie eine getippte Nachricht eingereiht
+  (Spec 0066).
+- Sperre: Sobald nach der Frage eine Nutzer-Nachricht gesendet wurde (Option,
+  Mehrfachauswahl oder getippt), ist die Karte gesperrt: Optionen
+  deaktiviert, gewählte Optionen mit Häkchen und Hervorhebung markiert, oder
+  der Hinweis „In eigenen Worten beantwortet“, wenn die Nachricht zu keiner
+  Option passt. Nur die neueste unbeantwortete Karte ist bedienbar; ältere
+  sind gesperrt.
+- Nach dem Wiederöffnen eines Chats gilt dieselbe Regel, abgeleitet aus dem
+  Verlauf: Die erste Nutzer-Nachricht nach der Frage entscheidet. Passt sie
+  genau zu einem Label (bei Mehrfachauswahl: jede Zeile genau zu einem Label),
+  sind diese Optionen markiert, sonst gilt „In eigenen Worten beantwortet“.
+  Eine Frage ohne spätere Nutzer-Nachricht ist bedienbar.
+- Ein Klick ist nie mehr als eine Nutzer-Nachricht: Er beantwortet oder
+  bestätigt kein Kommando und führt nichts aus.
 
 ## 4. Grenzen
 

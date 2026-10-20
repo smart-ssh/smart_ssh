@@ -1089,6 +1089,11 @@
       "request_too_large": "Die Webanfrage war zu groß.",
       "unavailable": "Die Web-Recherche ist beim Provider gerade nicht verfügbar.",
       "other": "Web-Recherche fehlgeschlagen ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Frage: {{question}}",
+      "send": "Senden",
+      "answeredOwnWords": "In eigenen Worten beantwortet"
     }
   },
   "notes": {
