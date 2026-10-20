@@ -1201,5 +1201,23 @@
       "language": "Язык распознавания",
       "languageAuto": "Автоматически"
     }
+  },
+  "connectTab": {
+    "connecting": "Подключение к {{name}} …",
+    "failed": "Не удалось подключиться к {{name}}",
+    "retry": "Повторить",
+    "close": "Закрыть",
+    "cancel": "Отмена",
+    "stepsLabel": "Шаги подключения",
+    "stepsRunning": "Подключение…",
+    "detail": {
+      "tunnel": "через {{hop}}",
+      "waitingForResponse": "ожидание ответа",
+      "waitingForDecision": "ожидание вашего решения",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "готово",
+    "resultFailed": "сбой"
   }
 }

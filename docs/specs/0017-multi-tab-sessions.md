@@ -47,6 +47,10 @@ ein Warten hinweg gehalten.
 - Ein Tab zeigt den Servernamen (bei langen Namen gekürzt, der volle Name steht
   im Tooltip), einen Statuspunkt (grün verbunden, grau getrennt, gelb wartet
   auf Host-Key) und eine Schließen-Schaltfläche.
+- Ein Tab, dessen Verbindung gerade aufgebaut wird oder gescheitert ist, trägt
+  statt des Statuspunkts ein Lade- bzw. Fehlersymbol und den Titel „Verbinde
+  mit …“ bzw. „Verbindung zu … fehlgeschlagen“ (Spec 0112, Abschnitt 4). Er
+  zählt als der Tab dieses Servers: ein Klick auf den Server wechselt zu ihm.
 - Ein Klick auf einen Server in der Serverliste öffnet einen **neuen** Tab. Ist
   für diesen Server schon ein Nutzer-Tab offen, wird stattdessen zu ihm
   gewechselt, bevor irgendeine Verbindung aufgebaut wird. Das gilt auch für

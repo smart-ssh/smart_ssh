@@ -26,6 +26,7 @@ vi.mock("./api", async () => {
   return {
     commandErrorMessage: actual.commandErrorMessage,
     commandErrorCode: actual.commandErrorCode,
+    commandErrorConnectLog: actual.commandErrorConnectLog,
     listAiProviders: vi.fn(() => Promise.resolve([])),
     listServers: vi.fn(() => Promise.resolve([])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),

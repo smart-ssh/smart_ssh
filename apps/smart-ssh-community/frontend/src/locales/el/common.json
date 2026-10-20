@@ -1185,5 +1185,23 @@
       "language": "Γλώσσα αναγνώρισης",
       "languageAuto": "Αυτόματα"
     }
+  },
+  "connectTab": {
+    "connecting": "Σύνδεση με {{name}} …",
+    "failed": "Η σύνδεση με {{name}} απέτυχε",
+    "retry": "Επανάληψη",
+    "close": "Κλείσιμο",
+    "cancel": "Ακύρωση",
+    "stepsLabel": "Βήματα σύνδεσης",
+    "stepsRunning": "Σύνδεση…",
+    "detail": {
+      "tunnel": "μέσω {{hop}}",
+      "waitingForResponse": "αναμονή απάντησης",
+      "waitingForDecision": "αναμονή για την απόφασή σας",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "ολοκληρώθηκε",
+    "resultFailed": "απέτυχε"
   }
 }

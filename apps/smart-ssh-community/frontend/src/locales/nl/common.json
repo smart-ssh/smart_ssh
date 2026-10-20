@@ -1185,5 +1185,23 @@
       "language": "Herkenningstaal",
       "languageAuto": "Automatisch"
     }
+  },
+  "connectTab": {
+    "connecting": "Verbinden met {{name}} …",
+    "failed": "Verbinden met {{name}} mislukt",
+    "retry": "Opnieuw proberen",
+    "close": "Sluiten",
+    "cancel": "Annuleren",
+    "stepsLabel": "Verbindingsstappen",
+    "stepsRunning": "Verbinden…",
+    "detail": {
+      "tunnel": "langs {{hop}}",
+      "waitingForResponse": "wacht op antwoord",
+      "waitingForDecision": "wacht op uw beslissing",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "klaar",
+    "resultFailed": "mislukt"
   }
 }

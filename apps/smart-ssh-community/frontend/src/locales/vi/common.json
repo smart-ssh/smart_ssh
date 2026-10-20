@@ -1177,5 +1177,23 @@
       "language": "Ngôn ngữ nhận dạng",
       "languageAuto": "Tự động"
     }
+  },
+  "connectTab": {
+    "connecting": "Đang kết nối tới {{name}} …",
+    "failed": "Kết nối tới {{name}} thất bại",
+    "retry": "Thử lại",
+    "close": "Đóng",
+    "cancel": "Hủy",
+    "stepsLabel": "Các bước kết nối",
+    "stepsRunning": "Đang kết nối…",
+    "detail": {
+      "tunnel": "qua {{hop}}",
+      "waitingForResponse": "đang chờ phản hồi",
+      "waitingForDecision": "đang chờ quyết định của bạn",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "xong",
+    "resultFailed": "thất bại"
   }
 }

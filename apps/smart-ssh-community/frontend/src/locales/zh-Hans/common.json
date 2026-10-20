@@ -1177,5 +1177,23 @@
       "language": "识别语言",
       "languageAuto": "自动"
     }
+  },
+  "connectTab": {
+    "connecting": "正在连接 {{name}} …",
+    "failed": "连接 {{name}} 失败",
+    "retry": "重试",
+    "close": "关闭",
+    "cancel": "取消",
+    "stepsLabel": "连接步骤",
+    "stepsRunning": "正在连接…",
+    "detail": {
+      "tunnel": "经由 {{hop}}",
+      "waitingForResponse": "等待响应",
+      "waitingForDecision": "等待您的决定",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "完成",
+    "resultFailed": "失败"
   }
 }

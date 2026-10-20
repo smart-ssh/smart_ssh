@@ -148,16 +148,16 @@ test("connection step log: a long log scrolls with the page, the navigation stay
   const failedStep = log.locator("li[data-failed=true]");
   await expect(failedStep).toBeVisible();
 
-  const manage = page.getByRole("button", { name: "Manage", exact: true });
-  const settings = page.getByRole("button", { name: "Settings", exact: true });
-  const scroller = page.locator("main");
-  await expectUsable(manage);
-  await expectUsable(settings);
-  await expectOnlyContentScrolls(scroller, [manage, settings]);
+  // Issue #548: the failure now lives in the connection tab, so the stable
+  // chrome is the tab strip's Overview button.
+  const overview = page.getByRole("button", { name: "Overview", exact: true });
+  const scroller = page.locator("main:visible");
+  await expectUsable(overview);
+  await expectOnlyContentScrolls(scroller, [overview]);
 
   // The end of the log, with its Copy button, is reachable by scrolling.
   const copy = log.getByRole("button", { name: "Copy", exact: true });
   await copy.scrollIntoViewIfNeeded();
   await expectUsable(copy);
-  await expectUsable(settings);
+  await expectUsable(overview);
 });

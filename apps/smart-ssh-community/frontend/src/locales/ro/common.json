@@ -1193,5 +1193,23 @@
       "language": "Limba de recunoaștere",
       "languageAuto": "Automat"
     }
+  },
+  "connectTab": {
+    "connecting": "Se conectează la {{name}} …",
+    "failed": "Conectarea la {{name}} a eșuat",
+    "retry": "Reîncearcă",
+    "close": "Închide",
+    "cancel": "Anulează",
+    "stepsLabel": "Pașii conexiunii",
+    "stepsRunning": "Se conectează…",
+    "detail": {
+      "tunnel": "prin {{hop}}",
+      "waitingForResponse": "se așteaptă răspunsul",
+      "waitingForDecision": "se așteaptă decizia dvs.",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "gata",
+    "resultFailed": "eșuat"
   }
 }

@@ -1185,5 +1185,23 @@
       "language": "Genkendelsessprog",
       "languageAuto": "Automatisk"
     }
+  },
+  "connectTab": {
+    "connecting": "Forbinder til {{name}} …",
+    "failed": "Forbindelsen til {{name}} mislykkedes",
+    "retry": "Prøv igen",
+    "close": "Luk",
+    "cancel": "Annuller",
+    "stepsLabel": "Forbindelsestrin",
+    "stepsRunning": "Forbinder…",
+    "detail": {
+      "tunnel": "gennem {{hop}}",
+      "waitingForResponse": "venter på svar",
+      "waitingForDecision": "venter på din beslutning",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "færdig",
+    "resultFailed": "mislykkedes"
   }
 }

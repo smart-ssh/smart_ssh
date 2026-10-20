@@ -1177,5 +1177,23 @@
       "language": "認識言語",
       "languageAuto": "自動"
     }
+  },
+  "connectTab": {
+    "connecting": "{{name}} に接続中 …",
+    "failed": "{{name}} への接続に失敗しました",
+    "retry": "再試行",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "stepsLabel": "接続の手順",
+    "stepsRunning": "接続中…",
+    "detail": {
+      "tunnel": "{{hop}} 経由",
+      "waitingForResponse": "応答を待機中",
+      "waitingForDecision": "あなたの判断を待機中",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "完了",
+    "resultFailed": "失敗"
   }
 }

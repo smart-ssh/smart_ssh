@@ -1177,5 +1177,23 @@
       "language": "인식 언어",
       "languageAuto": "자동"
     }
+  },
+  "connectTab": {
+    "connecting": "{{name}}에 연결하는 중 …",
+    "failed": "{{name}} 연결 실패",
+    "retry": "다시 시도",
+    "close": "닫기",
+    "cancel": "취소",
+    "stepsLabel": "연결 단계",
+    "stepsRunning": "연결 중…",
+    "detail": {
+      "tunnel": "{{hop}} 경유",
+      "waitingForResponse": "응답 대기 중",
+      "waitingForDecision": "사용자 결정 대기 중",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "완료",
+    "resultFailed": "실패"
   }
 }
