@@ -2689,3 +2689,148 @@ async fn test_spec_0096_discarded_note_proposal_escalates_allowed_later_action()
         "nichts darf automatisch gelaufen sein: {history:?}"
     );
 }
+
+/// Issue #562: extension that resolves the first `ok_calls` requests and
+/// fails afterwards, so sealing succeeds for the answer and fails for the
+/// title request that follows.
+struct FlakyExt {
+    calls: std::sync::atomic::AtomicUsize,
+    ok_calls: usize,
+}
+
+impl crate::chat_content_extension::ChatContentExtension for FlakyExt {
+    fn name(&self) -> &str {
+        "files"
+    }
+    fn take_pending(
+        &self,
+        _s: Uuid,
+        _id: &str,
+    ) -> Option<crate::chat_content_extension::PendingContent> {
+        None
+    }
+    fn persist(
+        &self,
+        _s: Uuid,
+        _part_id: &str,
+        _b: Vec<ssh_manager_core::ai::RedactedBlock>,
+    ) -> Result<(), crate::chat_content_extension::ChatContentError> {
+        Ok(())
+    }
+    fn resolve(
+        &self,
+        _s: Uuid,
+        _part: &ssh_manager_core::ai::ExtensionPart,
+    ) -> Result<
+        Option<Vec<ssh_manager_core::ai::ResolvedBlock>>,
+        crate::chat_content_extension::ChatContentError,
+    > {
+        let n = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if n < self.ok_calls {
+            Ok(Some(vec![ssh_manager_core::ai::ResolvedBlock::Text {
+                text: "attachment".into(),
+            }]))
+        } else {
+            Err(crate::chat_content_extension::ChatContentError(
+                "gone".into(),
+            ))
+        }
+    }
+}
+
+/// Issue #562: when sealing fails for the title request, no title request is
+/// made and the redacted first-message title is used.
+#[tokio::test]
+async fn test_issue_562_title_request_not_sent_when_sealing_fails() {
+    let (mut session, chat_store, _id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    let provider = MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![
+            AiEvent::TextDelta("Should not be used".to_string()),
+            AiEvent::Done,
+        ],
+    ]);
+    let contexts = provider.received_contexts_handle();
+    session.set_ai_provider_for_tests(Box::new(provider));
+    session.set_chat_content_for_tests(Arc::new(
+        crate::chat_content_extension::ChatContentRegistry::new(vec![Arc::new(FlakyExt {
+            calls: std::sync::atomic::AtomicUsize::new(0),
+            ok_calls: 1,
+        })]),
+    ));
+    push_history(
+        &session,
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("Platte prüfen".to_string()),
+        },
+    )
+    .await;
+    push_history(
+        &session,
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Extension(ssh_manager_core::ai::ExtensionPart {
+                extension: "files".into(),
+                kind: "doc".into(),
+                id: Uuid::new_v4().to_string(),
+                label: "a.txt".into(),
+                media: ssh_manager_core::ai::ExtensionMedia::Text,
+                estimated_tokens: 1,
+            }),
+        },
+    )
+    .await;
+    run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+    assert_eq!(contexts.lock().unwrap().len(), 1, "answer only, no title");
+    assert_eq!(
+        title_of(&chat_store, &session).await.as_deref(),
+        Some("Platte prüfen")
+    );
+}
+
+/// Issue #562: for a plain session the title request is unchanged, and a
+/// planted secret reaches neither the request nor the stored title.
+#[tokio::test]
+async fn test_issue_562_title_request_plain_session_and_secret_absent() {
+    let (mut session, chat_store, _id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    let provider = MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![
+            AiEvent::TextDelta(format!("Titel password={SECRET_0096}")),
+            AiEvent::Done,
+        ],
+    ]);
+    let contexts = provider.received_contexts_handle();
+    session.set_ai_provider_for_tests(Box::new(provider));
+    run_first_turn(&session, &format!("prüfe password={SECRET_0096} bitte")).await;
+
+    let contexts = contexts.lock().unwrap();
+    assert_eq!(contexts.len(), 2);
+    let title_request = &contexts[1];
+    let texts: Vec<String> = title_request
+        .history
+        .iter()
+        .map(|m| match &m.content {
+            MessageContent::Text(t) => t.clone(),
+            other => panic!("plain session must only carry text: {other:?}"),
+        })
+        .collect();
+    assert_eq!(texts.len(), 3, "user, answer, instruction");
+    assert!(texts[0].starts_with("prüfe"));
+    assert_eq!(texts[1], "Antwort");
+    for t in &texts {
+        assert_no_fragment_of_secret(t);
+    }
+    let title = title_of(&chat_store, &session).await.expect("title");
+    assert_no_fragment_of_secret(&title);
+}

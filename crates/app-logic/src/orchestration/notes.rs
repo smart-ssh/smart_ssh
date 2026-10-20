@@ -33,9 +33,9 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
-    push_history, push_history_scoped, reapply_redaction_for_send, wait_for_ai_request_slot,
-    wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
-    SIDE_CALL_MAX_TOKENS,
+    push_history, push_history_scoped, reapply_redaction_and_seal_for_send,
+    reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+    write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
 
@@ -436,6 +436,8 @@ enum TitleFailure {
     Truncated,
     Empty,
     RedactedOnly,
+    /// Issue #562: sealing of extension parts failed; no request was made.
+    SealFailed,
 }
 
 impl TitleFailure {
@@ -445,6 +447,7 @@ impl TitleFailure {
             Self::Truncated => "truncated",
             Self::Empty => "empty",
             Self::RedactedOnly => "redacted-only",
+            Self::SealFailed => "seal-failed",
         }
     }
 }
@@ -607,8 +610,15 @@ async fn request_ai_title(
     .await;
     // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in
     // `run_one_round`.
-    request_context.history =
-        reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
+    // Issue #562: same redaction-and-sealing entry point as chat turns and
+    // compaction; a sealing failure means no title request at all.
+    request_context.history = reapply_redaction_and_seal_for_send(
+        request_context.history,
+        session.redactor.as_ref(),
+        &session.chat_content,
+        session_id,
+    )
+    .map_err(|_| TitleFailure::SealFailed)?;
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(title_generation_instruction(system_context_parts.language)),
