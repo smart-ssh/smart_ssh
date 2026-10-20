@@ -261,6 +261,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     open_terminal: () => ({ missingDirectory: null }),
     terminal_resize: () => null,
     terminal_input: () => null,
+    session_is_root: () => false,
     sftp_start_directory: () => ({ path: ".", missingDirectory: null }),
     sftp_list: () => [],
     sftp_local_paths_are_folders: (args) =>

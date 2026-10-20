@@ -845,6 +845,24 @@ export interface ChatDocumentGeneratedEvent {
  * nur noch Markdown. */
 export type DocumentFormat = "markdown";
 
+// --- Issue #545: KI-Rückfragen mit Antwortoptionen ------------------------
+
+/** One answer option of an AI question. */
+export interface QuestionOption {
+  label: string;
+  description: string | null;
+}
+
+/** Issue #545: payload of `chat-question-asked`. The question is never
+ * executable; the answer is sent as a normal user message. */
+export interface ChatQuestionAskedEvent {
+  sessionId: string;
+  questionId: string;
+  question: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
 // --- Spec 0017: Multi-Tab-Sessions --------------------------------------
 
 /** Sicht auf eine laufende (oder auf Host-Key-Bestätigung wartende) Session
@@ -902,6 +920,15 @@ export type ChatHistoryEntryDto =
       type: "extensionParts";
       role: ChatHistoryRole;
       items: { label: string; media: "text" | "image" | "pdf" }[];
+    }
+  /** Issue #545: a question the AI asked with answer options. */
+  | {
+      type: "question";
+      role: ChatHistoryRole;
+      questionId: string;
+      question: string;
+      options: QuestionOption[];
+      multiSelect: boolean;
     };
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------

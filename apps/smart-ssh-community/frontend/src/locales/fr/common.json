@@ -698,8 +698,12 @@
       "startFailed": "sftp-server n’a pas pu être démarré via sudo (cause possible : « requiretty » dans sudoers)."
     },
     "channelLost": "Droits élevés terminés — le canal élevé n’est plus actif.",
-    "targetUserLabel": "Utilisateur cible pour les droits élevés (par défaut : root)",
-    "group": "Droits élevés"
+    "group": "Droits élevés",
+    "moreOptions": "Plus d’options d’élévation",
+    "otherUser": "En tant qu’autre utilisateur…",
+    "targetUser": "Utilisateur cible",
+    "targetUserHelp": "Exécute le navigateur de fichiers sous cet utilisateur via sudo. Par défaut : root.",
+    "confirm": "Élever"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",

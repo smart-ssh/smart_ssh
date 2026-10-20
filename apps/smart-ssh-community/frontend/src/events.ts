@@ -9,6 +9,7 @@ import type {
   ChatAutoContinuationLimitReachedEvent,
   ChatAutoContinuationStartedEvent,
   ChatDocumentGeneratedEvent,
+  ChatQuestionAskedEvent,
   ChatErrorEvent,
   ChatQueuedMessagesSentEvent,
   ChatResponseCancelledEvent,
@@ -218,6 +219,12 @@ export const onChatDocumentGenerated = (
   handler: (event: ChatDocumentGeneratedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatDocumentGeneratedEvent>("chat-document-generated", (e) => handler(e.payload));
+
+/** Issue #545: the AI asked a question with answer options (no UI yet). */
+export const onChatQuestionAsked = (
+  handler: (event: ChatQuestionAskedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatQuestionAskedEvent>("chat-question-asked", (e) => handler(e.payload));
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 

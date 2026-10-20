@@ -852,6 +852,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::open_data_path_folder,
             commands::sftp_list,
             commands::sftp_start_directory,
+            commands::session_is_root,
             commands::sftp_download,
             commands::sftp_download_default,
             commands::sftp_download_dir,
@@ -936,6 +937,13 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
         let state = handle_for_retention.state::<AppState>();
         crate::chat_retention::cleanup_old_chat_sessions_on_startup(&handle_for_retention, &state)
             .await;
+    });
+
+    // Issue #551: titles for old untitled sessions, once per start.
+    let handle_for_titles = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = handle_for_titles.state::<AppState>();
+        app_logic::orchestration::backfill_missing_chat_titles(&state.chat_session_store).await;
     });
 
     // Spec 0038, Abschnitt 4: hält das Frontend über

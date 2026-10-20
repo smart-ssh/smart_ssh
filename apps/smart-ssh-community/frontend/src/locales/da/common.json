@@ -693,8 +693,12 @@
       "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsag: “requiretty” i sudoers)."
     },
     "channelLost": "Forhøjede rettigheder er afsluttet – den forhøjede kanal er ikke længere aktiv.",
-    "targetUserLabel": "Målbruger for forhøjede rettigheder (standard: root)",
-    "group": "Forhøjede rettigheder"
+    "group": "Forhøjede rettigheder",
+    "moreOptions": "Flere indstillinger for udvidede rettigheder",
+    "otherUser": "Som en anden bruger …",
+    "targetUser": "Målbruger",
+    "targetUserHelp": "Kører filbrowseren som denne bruger via sudo. Standard: root.",
+    "confirm": "Udvid"
   },
   "sshConfigImport": {
     "dialogTitle": "Importér ssh_config",

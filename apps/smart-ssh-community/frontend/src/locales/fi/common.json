@@ -693,8 +693,12 @@
       "startFailed": "sftp-serveriä ei voitu käynnistää sudolla (mahdollinen syy: “requiretty” sudoersissa)."
     },
     "channelLost": "Korotetut oikeudet päättyivät – korotettu kanava ei ole enää aktiivinen.",
-    "targetUserLabel": "Korotettujen oikeuksien kohdekäyttäjä (oletus: root)",
-    "group": "Korotetut oikeudet"
+    "group": "Korotetut oikeudet",
+    "moreOptions": "Lisää oikeuksien korotuksen asetuksia",
+    "otherUser": "Toisena käyttäjänä…",
+    "targetUser": "Kohdekäyttäjä",
+    "targetUserHelp": "Suorittaa tiedostoselaimen tänä käyttäjänä sudon kautta. Oletus: root.",
+    "confirm": "Korota"
   },
   "sshConfigImport": {
     "dialogTitle": "Tuo ssh_config",

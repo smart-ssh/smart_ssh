@@ -42,6 +42,7 @@ import {
   sftpRename,
   sftpStat,
   sftpUpload,
+  sessionIsRoot,
 } from "../api";
 import { onConnectionStatusChanged, onSftpTransferStarted } from "../events";
 import {
@@ -95,6 +96,7 @@ vi.mock("../api", () => ({
   sftpOpenForEditing: vi.fn(),
   localFileMtime: vi.fn(),
   closeEditSession: vi.fn(),
+  sessionIsRoot: vi.fn(() => Promise.resolve(false)),
 }));
 
 vi.mock("../events", () => ({
@@ -1268,7 +1270,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
     await screen.findByRole("alert");
   };
 
@@ -1316,7 +1318,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
 
     expect(
       await screen.findByText("deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server"),
@@ -1334,7 +1336,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
 
     expect(await screen.findByText(/Nicht sicher: „\/usr\/lib\/openssh“ muss root gehören/)).toBeVisible();
     expect(screen.queryByText(/NOPASSWD/)).not.toBeInTheDocument();
@@ -1351,7 +1353,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
 
     expect(await screen.findByText(/Nicht sicher: „\/usr\/lib\/openssh\/sftp-server“/)).toBeVisible();
     expect(screen.getAllByRole("alert").length).toBe(2);
@@ -1366,11 +1368,69 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     });
     renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.change(screen.getByLabelText(/Ziel-Nutzer/), { target: { value: "www-data" } });
-    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Als anderer Nutzer/ }));
+    fireEvent.change(screen.getByLabelText("Ziel-Nutzer"), { target: { value: "www-data" } });
+    fireEvent.click(screen.getByRole("button", { name: "Erhöhen" }));
 
     await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "www-data"));
     expect(await screen.findByRole("alert")).toHaveTextContent("www-data");
+  });
+
+  // Issue #544
+  it("shows no text field in the toolbar and keeps root as the button's target", async () => {
+    renderPanel();
+    await screen.findByRole("button", { name: /Erhöhte Rechte/ });
+    expect(screen.queryByLabelText("Ziel-Nutzer")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" })).toBeVisible();
+  });
+
+  it("hides the whole elevation group for a root session", async () => {
+    vi.mocked(sessionIsRoot).mockResolvedValueOnce(true);
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(sessionIsRoot).toHaveBeenCalledWith("session-1"));
+    expect(screen.queryByRole("button", { name: /Erhöhte Rechte/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Ziel-Nutzer")).not.toBeInTheDocument();
+  });
+
+  it("shows the group when the root state is unknown (null or probe error)", async () => {
+    vi.mocked(sessionIsRoot).mockResolvedValueOnce(null);
+    const first = renderPanel();
+    expect(await screen.findByRole("button", { name: /Erhöhte Rechte/ })).toBeVisible();
+    first.unmount();
+    vi.mocked(sessionIsRoot).mockRejectedValueOnce("boom");
+    renderPanel();
+    expect(await screen.findByRole("button", { name: /Erhöhte Rechte/ })).toBeVisible();
+  });
+
+  it("closes the menu with Escape and returns focus to the arrow button; remembers the user", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: false,
+      targetUser: "postgres",
+      sftpServerPath: null,
+      failure: { kind: "passwordRequired", sudoersLine: null, detail: null },
+    });
+    renderPanel();
+    const arrow = await screen.findByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" });
+    fireEvent.click(arrow);
+    expect(screen.getByRole("menu")).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("menuitem"), { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(arrow).toHaveFocus();
+
+    fireEvent.click(arrow);
+    fireEvent.click(screen.getByRole("menuitem"));
+    fireEvent.change(screen.getByLabelText("Ziel-Nutzer"), { target: { value: "postgres" } });
+    fireEvent.click(screen.getByRole("button", { name: "Erhöhen" }));
+    await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "postgres"));
+
+    fireEvent.click(arrow);
+    fireEvent.click(screen.getByRole("menuitem"));
+    expect(screen.getByLabelText("Ziel-Nutzer")).toHaveValue("postgres");
   });
 
   it("uses root when no target user is given", async () => {
@@ -1542,7 +1602,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
       </I18nextProvider>,
     );
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
 
     await waitFor(() => expect(onElevationChange).toHaveBeenLastCalledWith("root"));
     fireEvent.click(screen.getByRole("button", { name: "Erhöhte Rechte beenden" }));

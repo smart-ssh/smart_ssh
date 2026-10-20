@@ -693,8 +693,12 @@
       "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsak: “requiretty” i sudoers)."
     },
     "channelLost": "Utvidede rettigheter er avsluttet – den utvidede kanalen er ikke lenger aktiv.",
-    "targetUserLabel": "Målbruker for utvidede rettigheter (standard: root)",
-    "group": "Utvidede rettigheter"
+    "group": "Utvidede rettigheter",
+    "moreOptions": "Flere alternativer for utvidede rettigheter",
+    "otherUser": "Som en annen bruker …",
+    "targetUser": "Målbruker",
+    "targetUserHelp": "Kjører filleseren som denne brukeren via sudo. Standard: root.",
+    "confirm": "Utvid"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",

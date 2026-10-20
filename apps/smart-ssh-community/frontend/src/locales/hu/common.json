@@ -693,8 +693,12 @@
       "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben)."
     },
     "channelLost": "Az emelt jogok véget értek – az emelt csatorna már nem aktív.",
-    "targetUserLabel": "Célfelhasználó az emelt jogokhoz (alapért.: root)",
-    "group": "Emelt jogosultságok"
+    "group": "Emelt jogosultságok",
+    "moreOptions": "További jogosultság-emelési lehetőségek",
+    "otherUser": "Másik felhasználóként…",
+    "targetUser": "Cél felhasználó",
+    "targetUserHelp": "A fájlböngészőt ezen felhasználóként futtatja sudo-val. Alapértelmezés: root.",
+    "confirm": "Emelés"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",

@@ -47,6 +47,10 @@ mod tests_extension_content;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_question;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_web;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
@@ -442,7 +446,18 @@ pub async fn run_chat_turn(
         .await
         {
             RoundOutcome::Continue => {}
-            RoundOutcome::Finished => return false,
+            RoundOutcome::Finished => {
+                // Issue #551: title after the first finished answer (one
+                // attempt per session; no-op once a title exists).
+                if !session
+                    .auto_continue_stop
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                {
+                    super::generate_session_title_after_first_answer(session, session_id, emitter)
+                        .await;
+                }
+                return false;
+            }
             // spec-reviewer-Fund (Spec 0066): wurde in dieser Runde eine
             // eingereihte Nachricht in den Verlauf gelegt, der Request aber
             // vor dem Versand gestoppt, hat die KI sie nie gesehen — der
@@ -592,6 +607,26 @@ pub(crate) fn reapply_redaction_for_send(
                 }
                 // Issue #505: already sealed by the core.
                 sealed @ MessageContent::Sealed(_) => sealed,
+                // Issue #545: redacted again on every send (invariant 11).
+                MessageContent::Question {
+                    question_id,
+                    question,
+                    options,
+                    multi_select,
+                } => MessageContent::Question {
+                    question_id,
+                    question: redact_text_preserving_fence_markers(&question, redactor),
+                    options: options
+                        .into_iter()
+                        .map(|o| ssh_manager_core::profiles::AskUserOption {
+                            label: redact_text_preserving_fence_markers(&o.label, redactor),
+                            description: o
+                                .description
+                                .map(|d| redact_text_preserving_fence_markers(&d, redactor)),
+                        })
+                        .collect(),
+                    multi_select,
+                },
             },
         })
         .collect()
@@ -749,6 +784,8 @@ async fn run_one_round(
 
     let mut text_buffer = String::new();
     let mut executed_action = false;
+    // Issue #545: a question ends the turn, even if another action ran.
+    let mut question_asked = false;
     // Spec 0080, A2: unabhängig von `text_buffer` (das ein `ActionProposed`
     // schon vorher per `flush_text_buffer` leert) und von `executed_action`
     // (die nur eine tatsächlich AUSGEFÜHRTE Aktion zählt) — A2 verlangt
@@ -813,6 +850,23 @@ async fn run_one_round(
                 flush_text_buffer(session, &mut text_buffer).await;
                 handle_document_generated(session, session_id, title, content_markdown, emitter)
                     .await;
+            }
+            AiEvent::ActionProposed(action @ AiAction::AskUser { .. }) => {
+                // Issue #545: a question never executes anything: no filter,
+                // no confirmation, no follow-up round (`executed_action`
+                // stays untouched), the turn ends after this round. The
+                // round is not empty (Spec 0080).
+                round_had_content = true;
+                question_asked = true;
+                flush_text_buffer(session, &mut text_buffer).await;
+                if let Some(text) =
+                    super::notes::handle_question_asked(session, session_id, action, emitter).await
+                {
+                    // Invalid call: shown and stored as ordinary text.
+                    emit_chat_text_delta(emitter, session_id, text.clone());
+                    text_buffer.push_str(&text);
+                    flush_text_buffer(session, &mut text_buffer).await;
+                }
             }
             AiEvent::ActionProposed(action) => {
                 // Spec 0080, A2: gilt schon bei der Vorschlags-Absicht,
@@ -948,7 +1002,7 @@ async fn run_one_round(
         }
     }
 
-    if executed_action {
+    if executed_action && !question_asked {
         RoundOutcome::Continue
     } else {
         RoundOutcome::Finished

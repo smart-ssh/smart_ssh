@@ -688,8 +688,12 @@
       "startFailed": "sudo를 통해 sftp-server를 시작할 수 없습니다(가능한 원인: sudoers의 “requiretty”)."
     },
     "channelLost": "상승된 권한이 종료되었습니다 — 상승된 채널이 더 이상 활성 상태가 아닙니다.",
-    "targetUserLabel": "상승된 권한의 대상 사용자(기본값: root)",
-    "group": "상승된 권한"
+    "group": "상승된 권한",
+    "moreOptions": "더 많은 권한 상승 옵션",
+    "otherUser": "다른 사용자로…",
+    "targetUser": "대상 사용자",
+    "targetUserHelp": "sudo를 통해 이 사용자로 파일 브라우저를 실행합니다. 기본값: root.",
+    "confirm": "상승"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config 가져오기",

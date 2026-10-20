@@ -698,8 +698,12 @@
       "startFailed": "Impossibile avviare sftp-server tramite sudo (possibile causa: “requiretty” in sudoers)."
     },
     "channelLost": "Diritti elevati terminati: il canale elevato non è più attivo.",
-    "targetUserLabel": "Utente di destinazione per i diritti elevati (predefinito: root)",
-    "group": "Diritti elevati"
+    "group": "Diritti elevati",
+    "moreOptions": "Altre opzioni di elevazione",
+    "otherUser": "Come altro utente…",
+    "targetUser": "Utente di destinazione",
+    "targetUserHelp": "Esegue il browser di file come questo utente tramite sudo. Predefinito: root.",
+    "confirm": "Eleva"
   },
   "sshConfigImport": {
     "dialogTitle": "Importa ssh_config",
