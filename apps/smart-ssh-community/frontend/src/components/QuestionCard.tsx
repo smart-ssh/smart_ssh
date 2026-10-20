@@ -152,7 +152,7 @@ export function deriveQuestionStates(
   qs.forEach((item, idx) => {
     if (item.type !== "question") return;
     let answer: string | null = null;
-    let superseded = true;
+    let superseded = false;
     for (let j = idx + 1; j < qs.length; j++) {
       if (qs[j].type === "user") {
         answer = qs[j].text ?? "";
