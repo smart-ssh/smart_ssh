@@ -937,6 +937,13 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
             .await;
     });
 
+    // Issue #551: titles for old untitled sessions, once per start.
+    let handle_for_titles = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = handle_for_titles.state::<AppState>();
+        app_logic::orchestration::backfill_missing_chat_titles(&state.chat_session_store).await;
+    });
+
     // Spec 0038, Abschnitt 4: hält das Frontend über
     // `entitlements:changed` aktuell, sobald `EntitlementProvider::
     // watch()` einen neuen Stand liefert. Unabhängiger Review-Pass:

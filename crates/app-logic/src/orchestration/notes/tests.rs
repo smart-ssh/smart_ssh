@@ -2709,9 +2709,11 @@ fn test_title_and_disconnect_instructions_follow_the_prompt_language() {
     use crate::system_prompt::{prompt_language, PromptLanguage};
     let lang = |c: &str| prompt_language(Some(&serde_json::json!(c)), None);
     let de_title = super::title_generation_instruction(PromptLanguage::De);
-    assert!(de_title.starts_with("Die Sitzung wird jetzt beendet"));
+    assert!(!de_title.contains("beendet"));
+    assert!(de_title.starts_with("Fasse den Zweck"));
     let en_title = super::title_generation_instruction(PromptLanguage::En);
-    assert!(en_title.starts_with("The session is ending now"));
+    assert!(!en_title.contains("ending now"));
+    assert!(en_title.starts_with("Summarize the purpose"));
     assert!(!en_title.contains("Always respond in"));
     assert_eq!(
         super::title_generation_instruction(lang("fr")),

@@ -101,9 +101,10 @@ pub(crate) use chat_turn::{
 pub use action_exec::handle_mcp_action_proposed;
 
 pub use notes::{
-    execute_note_shrink_request, generate_session_title_on_disconnect, should_suggest_note_shrink,
-    suggest_note_shrink_on_disconnect, suggest_note_update_on_disconnect, NoteShrinkTarget,
-    ProfileStoreNoteShrinkTarget,
+    backfill_missing_chat_titles, execute_note_shrink_request, fallback_title_from_message,
+    generate_session_title_after_first_answer, generate_session_title_on_disconnect,
+    should_suggest_note_shrink, suggest_note_shrink_on_disconnect,
+    suggest_note_update_on_disconnect, NoteShrinkTarget, ProfileStoreNoteShrinkTarget,
 };
 // `app-shell::commands::{chat, notes}` brauchen beide direkt.
 pub use notes::{propose_note_from_chat_content, LARGE_NOTE_DIALOG_THRESHOLD_CHARS};
