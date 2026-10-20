@@ -1082,6 +1082,11 @@
       "request_too_large": "웹 요청이 너무 큽니다.",
       "unavailable": "제공자에서 웹 조사를 일시적으로 사용할 수 없습니다.",
       "other": "웹 조사에 실패했습니다 ({{code}})."
+    },
+    "question": {
+      "cardLabel": "질문: {{question}}",
+      "send": "보내기",
+      "answeredOwnWords": "직접 답변함"
     }
   },
   "notes": {

@@ -1082,6 +1082,11 @@
       "request_too_large": "Permintaan web terlalu besar.",
       "unavailable": "Riset web sementara tidak tersedia di penyedia.",
       "other": "Riset web gagal ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Pertanyaan: {{question}}",
+      "send": "Kirim",
+      "answeredOwnWords": "Dijawab dengan kata-kata sendiri"
     }
   },
   "notes": {

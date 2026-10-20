@@ -1098,6 +1098,11 @@
       "request_too_large": "Cererea web a fost prea mare.",
       "unavailable": "Cercetarea web este temporar indisponibilă la furnizor.",
       "other": "Cercetarea web a eșuat ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Întrebare: {{question}}",
+      "send": "Trimite",
+      "answeredOwnWords": "Răspuns cu propriile cuvinte"
     }
   },
   "notes": {

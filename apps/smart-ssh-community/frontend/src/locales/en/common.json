@@ -1090,6 +1090,11 @@
       "request_too_large": "The web request was too large.",
       "unavailable": "Web research is temporarily unavailable at the provider.",
       "other": "Web research failed ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Question: {{question}}",
+      "send": "Send",
+      "answeredOwnWords": "Answered in your own words"
     }
   },
   "notes": {

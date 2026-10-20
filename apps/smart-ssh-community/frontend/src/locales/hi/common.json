@@ -1090,6 +1090,11 @@
       "request_too_large": "वेब अनुरोध बहुत बड़ा था।",
       "unavailable": "प्रदाता पर वेब शोध अस्थायी रूप से अनुपलब्ध है।",
       "other": "वेब शोध विफल रहा ({{code}})।"
+    },
+    "question": {
+      "cardLabel": "प्रश्न: {{question}}",
+      "send": "भेजें",
+      "answeredOwnWords": "अपने शब्दों में उत्तर दिया"
     }
   },
   "notes": {

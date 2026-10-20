@@ -1090,6 +1090,11 @@
       "request_too_large": "Verkkopyyntö oli liian suuri.",
       "unavailable": "Verkkotutkimus ei ole tilapäisesti käytettävissä palveluntarjoajalla.",
       "other": "Verkkotutkimus epäonnistui ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Kysymys: {{question}}",
+      "send": "Lähetä",
+      "answeredOwnWords": "Vastattu omin sanoin"
     }
   },
   "notes": {
