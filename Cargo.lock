@@ -77,7 +77,7 @@ dependencies = [
 
 [[package]]
 name = "ai-providers"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -153,7 +153,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app-logic"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ai-providers",
  "async-trait",
@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "app-shell"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ai-providers",
  "app-logic",
@@ -1216,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "credentials-keyring"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "keyring",
  "secrecy",
@@ -3502,7 +3502,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcp-server"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -4363,7 +4363,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "persistence-sqlite"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4950,7 +4950,7 @@ checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
 name = "real-app-tests"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "app-logic",
  "base64 0.23.1",
@@ -6000,7 +6000,7 @@ dependencies = [
 
 [[package]]
 name = "smart-ssh-community"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "app-shell",
  "serde_json",
@@ -6074,7 +6074,7 @@ dependencies = [
 
 [[package]]
 name = "speech"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cpal",
  "futures",
@@ -6367,7 +6367,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-manager-core"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -6395,7 +6395,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-transport"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "bytes",
