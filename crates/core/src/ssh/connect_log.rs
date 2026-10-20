@@ -651,4 +651,32 @@ mod tests {
         assert!(json.contains("publickey (key file)"));
         assert!(!json.contains("SHA256"), "no fingerprint/key data: {json}");
     }
+
+    #[test]
+    fn tunnel_step_snapshot_carries_kind_hop_label_and_hop_detail() {
+        let log = ConnectLog::new();
+        let t = log.start(
+            1,
+            "jump@bastion:22",
+            ConnectStep::TunnelOpen {
+                host: "target".into(),
+                port: 22,
+            },
+        );
+        log.succeed(t);
+        let snap = ConnectStepSnapshot::from_records(&log.snapshot(), false);
+        assert_eq!(snap.len(), 1);
+        assert_eq!(snap[0].kind, "tunnelOpen");
+        assert_eq!(snap[0].hop, "jump@bastion:22");
+        assert_eq!(snap[0].hop_index, 1);
+        assert_eq!(snap[0].status, "ok");
+        assert_eq!(
+            snap[0].detail,
+            Some(StepDetail::Tunnel {
+                hop: "jump@bastion:22".into()
+            })
+        );
+        let json = serde_json::to_string(&snap).unwrap();
+        assert!(json.contains(r#""code":"tunnel""#) && json.contains(r#""hop":"jump@bastion:22""#));
+    }
 }

@@ -1,4 +1,4 @@
-# Spec 0111 — Verbindungsfortschritt und Abbruch
+# Spec 0112 — Verbindungsfortschritt und Abbruch
 
 Status: umgesetzt
 Zweck: Während eine Verbindung zu einem Server aufgebaut wird, meldet die App jeden Verbindungsschritt live und lässt den laufenden Aufbau abbrechen.
