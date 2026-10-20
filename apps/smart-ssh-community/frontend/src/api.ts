@@ -489,6 +489,11 @@ export const saveDiagnosticsBundle = (content: string) =>
 export const sftpStartDirectory = (sessionId: string) =>
   invoke<StartDirectoryDto>("sftp_start_directory", { sessionId });
 
+/** Issue #544: `true` if the session's login user is root (`id -u` probe),
+ * `null` if unknown. */
+export const sessionIsRoot = (sessionId: string) =>
+  invoke<boolean | null>("session_is_root", { sessionId });
+
 export const sftpList = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<RemoteEntryDto[]>("sftp_list", { sessionId, path, elevatedUser });
 

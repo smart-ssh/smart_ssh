@@ -702,8 +702,12 @@
       "startFailed": "Не вдалося запустити sftp-server через sudo (можлива причина: «requiretty» у sudoers)."
     },
     "channelLost": "Підвищені права завершено — підвищений канал більше не активний.",
-    "targetUserLabel": "Цільовий користувач для підвищених прав (типово: root)",
-    "group": "Підвищені права"
+    "group": "Підвищені права",
+    "moreOptions": "Більше опцій підвищення прав",
+    "otherUser": "Як інший користувач…",
+    "targetUser": "Цільовий користувач",
+    "targetUserHelp": "Запускає файловий браузер від імені цього користувача через sudo. Типово: root.",
+    "confirm": "Підвищити"
   },
   "sshConfigImport": {
     "dialogTitle": "Імпорт ssh_config",

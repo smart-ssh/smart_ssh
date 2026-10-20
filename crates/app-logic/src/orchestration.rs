@@ -111,6 +111,17 @@ pub use notes::{propose_note_from_chat_content, LARGE_NOTE_DIALOG_THRESHOLD_CHAR
 // `app-shell::commands::elevation` ruft dies direkt auf.
 pub use remote_files::ensure_sftp_open;
 
+/// Issue #544: parses the output of the connect-time `id -u` probe. `Some(true)`
+/// only for uid 0, `Some(false)` for another numeric uid, `None` (unknown) for
+/// empty, non-numeric or otherwise odd output. Unknown never counts as root.
+pub fn parse_id_u_output(raw: &str) -> Option<bool> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.len() > 10 || !trimmed.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    trimmed.parse::<u32>().ok().map(|uid| uid == 0)
+}
+
 /// Spec 0084, §4 (Schnitt `orchestration` → `commands::sanitize_uname_output`):
 /// hierher verschoben, weil `orchestration` (Tauri-frei, zieht nach
 /// `app-logic`) diese Funktion in Tests braucht (Spec 0013, SEC-02, T5) und
@@ -140,5 +151,33 @@ pub fn sanitize_uname_output(raw: &str) -> Option<String> {
         Some(trimmed.to_string())
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod id_u_tests {
+    use super::parse_id_u_output;
+
+    #[test]
+    fn parses_uid() {
+        assert_eq!(parse_id_u_output("0\n"), Some(true));
+        assert_eq!(parse_id_u_output("1000\n"), Some(false));
+        assert_eq!(parse_id_u_output("00"), Some(true));
+    }
+
+    #[test]
+    fn unknown_for_garbage() {
+        for raw in [
+            "",
+            "  \n",
+            "root",
+            "0 1",
+            "-1",
+            "uid=0(root)",
+            "0x0",
+            "99999999999",
+        ] {
+            assert_eq!(parse_id_u_output(raw), None, "{raw:?}");
+        }
     }
 }

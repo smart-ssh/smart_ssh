@@ -692,8 +692,12 @@
       "startFailed": "sftp-server ließ sich über sudo nicht starten (mögliche Ursache: „requiretty“ in sudoers)."
     },
     "channelLost": "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv.",
-    "targetUserLabel": "Ziel-Nutzer der Rechteerhöhung (Standard: root)",
-    "group": "Erhöhte Rechte"
+    "group": "Erhöhte Rechte",
+    "moreOptions": "Weitere Optionen zur Rechteerhöhung",
+    "otherUser": "Als anderer Nutzer …",
+    "targetUser": "Ziel-Nutzer",
+    "targetUserHelp": "Führt den Dateibrowser über sudo als dieser Nutzer aus. Standard: root.",
+    "confirm": "Erhöhen"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importieren",

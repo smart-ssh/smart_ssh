@@ -455,6 +455,22 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
         None
     };
 
+    // Issue #544: root probe for the file browser's elevation controls. Real
+    // SSH sessions only; any failure means "unknown" (never fails connect).
+    let is_root = if is_local {
+        None
+    } else {
+        match transport.execute("id -u").await {
+            Ok(out) => {
+                app_logic::orchestration::parse_id_u_output(&String::from_utf8_lossy(&out.stdout))
+            }
+            Err(err) => {
+                tracing::debug!(error = %err, "id -u probe failed");
+                None
+            }
+        }
+    };
+
     // Spec 0018, Abschnitt 6: einmalig bei `connect()` gelesen, wie
     // `ai_provider_label`/`ai_model` — ein fehlender Eintrag (kein Sudo-
     // Passwort hinterlegt) wird zu `None`, kein harter Verbindungsfehler.
@@ -780,7 +796,8 @@ pub(crate) async fn connect_session<R: tauri::Runtime>(
             ai_request_paced_at: tokio::sync::Mutex::new(None),
             auto_reconnect: Default::default(),
         })
-        .with_start_directory(start_directory),
+        .with_start_directory(start_directory)
+        .with_is_root(is_root),
     );
     state.sessions.insert(session_id, Arc::clone(&session));
     crate::auto_reconnect::install_hook(app, &session);
