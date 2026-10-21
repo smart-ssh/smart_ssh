@@ -663,6 +663,7 @@
     "uploadedFolder": "Folderul „{{name}}” încărcat — fișiere: {{count}}",
     "uploadFolderFailed": "Încărcarea folderului „{{name}}” a eșuat: {{reason}}",
     "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}",
+    "nothingToPaste": "Nimic de lipit: clipboardul nu conține fișiere",
     "createFileDone": "Fișierul „{{name}}” a fost creat",
     "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}"
   },
@@ -1052,7 +1053,16 @@
     },
     "copyProgress": "Se copiază… {{done}} din {{total}} MB",
     "copyProgressUnknownTotal": "Se copiază… {{done}} MB",
-    "directoryMenuLabel": "Acțiuni pentru dosar"
+    "directoryMenuLabel": "Acțiuni pentru dosar",
+    "clipboardPaste": {
+      "title": "Încarcă fișierele din clipboard",
+      "intro": "Încarci aceste fișiere din clipboard?",
+      "target": "Dosar țintă",
+      "more": "… și încă {{count}}",
+      "confirm": "Încarcă",
+      "cancel": "Anulează",
+      "menuTitle": "Încarcă fișierele din clipboard"
+    }
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",

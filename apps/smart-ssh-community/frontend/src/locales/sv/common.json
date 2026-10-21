@@ -658,6 +658,7 @@
     "uploadedFolder": "Mappen “{{name}}” uppladdad — {{count}} filer",
     "uploadFolderFailed": "Uppladdningen av mappen “{{name}}” misslyckades: {{reason}}",
     "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}",
+    "nothingToPaste": "Inget att klistra in: urklipp innehåller inga filer",
     "createFileDone": "Filen ”{{name}}” skapades",
     "createFileFailed": "Filen ”{{name}}” kunde inte skapas: {{reason}}"
   },
@@ -1045,7 +1046,16 @@
     },
     "copyProgress": "Kopierar… {{done}} MB av {{total}} MB",
     "copyProgressUnknownTotal": "Kopierar… {{done}} MB",
-    "directoryMenuLabel": "Mappåtgärder"
+    "directoryMenuLabel": "Mappåtgärder",
+    "clipboardPaste": {
+      "title": "Ladda upp filer från urklipp",
+      "intro": "Ladda upp dessa filer från urklipp?",
+      "target": "Målmapp",
+      "more": "… och {{count}} till",
+      "confirm": "Ladda upp",
+      "cancel": "Avbryt",
+      "menuTitle": "Ladda upp filerna från urklipp"
+    }
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",

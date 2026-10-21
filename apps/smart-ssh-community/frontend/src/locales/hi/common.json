@@ -658,6 +658,7 @@
     "uploadedFolder": "फ़ोल्डर “{{name}}” अपलोड हुआ — {{count}} फ़ाइलें",
     "uploadFolderFailed": "फ़ोल्डर “{{name}}” अपलोड करना विफल रहा: {{reason}}",
     "uploadFailedMany": "{{name}} फ़ाइलें अपलोड नहीं हो सकीं, जैसे: {{reason}}",
+    "nothingToPaste": "चिपकाने के लिए कुछ नहीं: क्लिपबोर्ड में कोई फ़ाइल नहीं है",
     "createFileDone": "फ़ाइल “{{name}}” बनाई गई",
     "createFileFailed": "फ़ाइल “{{name}}” नहीं बनाई जा सकी: {{reason}}"
   },
@@ -1045,7 +1046,16 @@
     },
     "copyProgress": "कॉपी हो रहा है… {{total}} MB में से {{done}} MB",
     "copyProgressUnknownTotal": "कॉपी हो रहा है… {{done}} MB",
-    "directoryMenuLabel": "फ़ोल्डर क्रियाएँ"
+    "directoryMenuLabel": "फ़ोल्डर क्रियाएँ",
+    "clipboardPaste": {
+      "title": "क्लिपबोर्ड की फ़ाइलें अपलोड करें",
+      "intro": "क्लिपबोर्ड की ये फ़ाइलें अपलोड करें?",
+      "target": "लक्ष्य फ़ोल्डर",
+      "more": "… और {{count}} अन्य",
+      "confirm": "अपलोड करें",
+      "cancel": "रद्द करें",
+      "menuTitle": "क्लिपबोर्ड की फ़ाइलें अपलोड करें"
+    }
   },
   "chat": {
     "jumpToLatest": "नवीनतम संदेश पर जाएँ",

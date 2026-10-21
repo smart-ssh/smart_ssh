@@ -668,6 +668,7 @@
     "uploadedFolder": "Složka „{{name}}“ nahrána — souborů: {{count}}",
     "uploadFolderFailed": "Nahrání složky „{{name}}“ selhalo: {{reason}}",
     "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}",
+    "nothingToPaste": "Není co vložit: schránka neobsahuje žádné soubory",
     "createFileDone": "Soubor „{{name}}“ vytvořen",
     "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}"
   },
@@ -1059,7 +1060,16 @@
     },
     "copyProgress": "Kopíruji… {{done}} MB z {{total}} MB",
     "copyProgressUnknownTotal": "Kopíruji… {{done}} MB",
-    "directoryMenuLabel": "Akce složky"
+    "directoryMenuLabel": "Akce složky",
+    "clipboardPaste": {
+      "title": "Nahrát soubory ze schránky",
+      "intro": "Nahrát tyto soubory ze schránky?",
+      "target": "Cílová složka",
+      "more": "… a dalších {{count}}",
+      "confirm": "Nahrát",
+      "cancel": "Zrušit",
+      "menuTitle": "Nahrát soubory ze schránky"
+    }
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",

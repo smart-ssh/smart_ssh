@@ -668,6 +668,7 @@
     "uploadedFolder": "Папка «{{name}}» загружена — файлов: {{count}}",
     "uploadFolderFailed": "Не удалось загрузить папку «{{name}}»: {{reason}}",
     "uploadFailedMany": "Не удалось загрузить файлов: {{name}}, например: {{reason}}",
+    "nothingToPaste": "Нечего вставлять: в буфере обмена нет файлов",
     "createFileDone": "Файл «{{name}}» создан",
     "createFileFailed": "Не удалось создать файл «{{name}}»: {{reason}}"
   },
@@ -1059,7 +1060,16 @@
     },
     "copyProgress": "Копирование… {{done}} МБ из {{total}} МБ",
     "copyProgressUnknownTotal": "Копирование… {{done}} МБ",
-    "directoryMenuLabel": "Действия с папкой"
+    "directoryMenuLabel": "Действия с папкой",
+    "clipboardPaste": {
+      "title": "Загрузить файлы из буфера обмена",
+      "intro": "Загрузить эти файлы из буфера обмена?",
+      "target": "Целевая папка",
+      "more": "… и ещё {{count}}",
+      "confirm": "Загрузить",
+      "cancel": "Отмена",
+      "menuTitle": "Загрузить файлы из буфера обмена"
+    }
   },
   "chat": {
     "jumpToLatest": "К последнему сообщению",

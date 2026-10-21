@@ -653,6 +653,7 @@
     "uploadedFolder": "Folder “{{name}}” diunggah — {{count}} berkas",
     "uploadFolderFailed": "Gagal mengunggah folder “{{name}}”: {{reason}}",
     "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}",
+    "nothingToPaste": "Tidak ada yang ditempel: papan klip tidak berisi berkas",
     "createFileDone": "File “{{name}}” dibuat",
     "createFileFailed": "File “{{name}}” tidak dapat dibuat: {{reason}}"
   },
@@ -1038,7 +1039,16 @@
     },
     "copyProgress": "Menyalin… {{done}} MB dari {{total}} MB",
     "copyProgressUnknownTotal": "Menyalin… {{done}} MB",
-    "directoryMenuLabel": "Tindakan folder"
+    "directoryMenuLabel": "Tindakan folder",
+    "clipboardPaste": {
+      "title": "Unggah berkas dari papan klip",
+      "intro": "Unggah berkas-berkas ini dari papan klip?",
+      "target": "Folder tujuan",
+      "more": "… dan {{count}} lainnya",
+      "confirm": "Unggah",
+      "cancel": "Batal",
+      "menuTitle": "Unggah berkas dari papan klip"
+    }
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",

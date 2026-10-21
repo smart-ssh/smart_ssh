@@ -4,7 +4,9 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
 import { formatDateTime } from "../formatDateTime";
 import {
+  claimClipboardFiles,
   claimDroppedPaths,
+  clipboardHasFiles,
   commandErrorCode,
   commandErrorMessage,
   pickUploadFiles,
@@ -179,6 +181,9 @@ export function FileBrowserPanel({
    * Fläche (Position, `null` = zu). `nameError` gilt für beide Abfragen. */
   const [newFileOpen, setNewFileOpen] = useState<string | null>(null);
   const [dirMenu, setDirMenu] = useState<{ x: number; y: number } | null>(null);
+  // Issue #571: whether the OS clipboard holds local files, checked each time
+  // the empty-space menu opens (no paths, only a flag).
+  const [clipboardFiles, setClipboardFiles] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [chmodTarget, setChmodTarget] = useState<RemoteEntryDto | null>(null);
   // Spec 0054, Teil 3: "Verschieben" per Ausschneiden/Einfügen (die Spec
@@ -1144,6 +1149,30 @@ export function FileBrowserPanel({
     performMove(cutEntry.path, target, "move");
   };
 
+  /** Issue #571: "Paste" of local files from the OS clipboard. The backend
+   * reads the clipboard and asks in a native dialog; the paths arrive here
+   * only after the user confirmed and go through the normal upload flow. */
+  const handlePasteClipboardFiles = async () => {
+    try {
+      const claimed = await claimClipboardFiles(sessionId, path, {
+        title: t("fileBrowser.clipboardPaste.title"),
+        intro: t("fileBrowser.clipboardPaste.intro"),
+        targetLabel: t("fileBrowser.clipboardPaste.target"),
+        moreLabel: t("fileBrowser.clipboardPaste.more", { count: "{count}", interpolation: { escapeValue: false } }),
+        confirmLabel: t("fileBrowser.clipboardPaste.confirm"),
+        cancelLabel: t("fileBrowser.clipboardPaste.cancel"),
+      });
+      if (claimed === null) {
+        showToast({ kind: "info", message: t("fileToasts.nothingToPaste") + modeSuffix });
+        return;
+      }
+      if (claimed.length === 0) return; // cancelled
+      await uploadMany(claimed);
+    } catch (err) {
+      notifyFailed("fileToasts.uploadFailed", path, err);
+    }
+  };
+
   const handleChmod = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     setChmodTarget(entry);
@@ -1421,7 +1450,13 @@ export function FileBrowserPanel({
         onContextMenu={(e) => {
           e.preventDefault();
           setOpenMenu(null);
+          setClipboardFiles(false);
           setDirMenu({ x: e.clientX, y: e.clientY });
+          if (!cutEntry) {
+            clipboardHasFiles()
+              .then(setClipboardFiles)
+              .catch(() => setClipboardFiles(false));
+          }
         }}
       >
         {loading && <p className="p-3 text-xs text-slate-400">{t("fileBrowser.loading")}</p>}
@@ -1655,6 +1690,7 @@ export function FileBrowserPanel({
           x={dirMenu.x}
           y={dirMenu.y}
           pasteName={cutEntry?.name ?? null}
+          clipboardFiles={!cutEntry && clipboardFiles}
           onNewFolder={() => {
             setDirMenu(null);
             setNameError(null);
@@ -1667,7 +1703,8 @@ export function FileBrowserPanel({
           }}
           onPaste={() => {
             setDirMenu(null);
-            handlePaste();
+            if (cutEntry) handlePaste();
+            else void handlePasteClipboardFiles();
           }}
         />
       )}
@@ -2389,6 +2426,7 @@ function DirectoryMenu({
   x,
   y,
   pasteName,
+  clipboardFiles,
   onNewFolder,
   onNewFile,
   onPaste,
@@ -2396,6 +2434,7 @@ function DirectoryMenu({
   x: number;
   y: number;
   pasteName: string | null;
+  clipboardFiles: boolean;
   onNewFolder: () => void;
   onNewFile: () => void;
   onPaste: () => void;
@@ -2424,6 +2463,16 @@ function DirectoryMenu({
           type="button"
           onClick={onPaste}
           title={t("fileBrowser.pasteTitle", { name: pasteName })}
+          className={itemClass}
+        >
+          {t("fileBrowser.paste")}
+        </button>
+      )}
+      {pasteName === null && clipboardFiles && (
+        <button
+          type="button"
+          onClick={onPaste}
+          title={t("fileBrowser.clipboardPaste.menuTitle")}
           className={itemClass}
         >
           {t("fileBrowser.paste")}

@@ -663,6 +663,7 @@
     "uploadedFolder": "Dossier « {{name}} » téléversé — {{count}} fichiers",
     "uploadFolderFailed": "Échec du téléversement du dossier « {{name}} » : {{reason}}",
     "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}",
+    "nothingToPaste": "Rien à coller : le presse-papiers ne contient aucun fichier",
     "createFileDone": "Fichier « {{name}} » créé",
     "createFileFailed": "Impossible de créer le fichier « {{name}} » : {{reason}}"
   },
@@ -1052,7 +1053,16 @@
     },
     "copyProgress": "Copie… {{done}} Mo sur {{total}} Mo",
     "copyProgressUnknownTotal": "Copie… {{done}} Mo",
-    "directoryMenuLabel": "Actions du dossier"
+    "directoryMenuLabel": "Actions du dossier",
+    "clipboardPaste": {
+      "title": "Téléverser les fichiers du presse-papiers",
+      "intro": "Téléverser ces fichiers du presse-papiers ?",
+      "target": "Dossier cible",
+      "more": "… et {{count}} autres",
+      "confirm": "Téléverser",
+      "cancel": "Annuler",
+      "menuTitle": "Téléverser les fichiers du presse-papiers"
+    }
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",

@@ -658,6 +658,7 @@
     "uploadedFolder": "Map “{{name}}” geüpload — {{count}} bestanden",
     "uploadFolderFailed": "Uploaden van map “{{name}}” mislukt: {{reason}}",
     "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}",
+    "nothingToPaste": "Niets om te plakken: het klembord bevat geen bestanden",
     "createFileDone": "Bestand “{{name}}” aangemaakt",
     "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}"
   },
@@ -1045,7 +1046,16 @@
     },
     "copyProgress": "Kopiëren… {{done}} MB van {{total}} MB",
     "copyProgressUnknownTotal": "Kopiëren… {{done}} MB",
-    "directoryMenuLabel": "Mapacties"
+    "directoryMenuLabel": "Mapacties",
+    "clipboardPaste": {
+      "title": "Bestanden van het klembord uploaden",
+      "intro": "Deze bestanden van het klembord uploaden?",
+      "target": "Doelmap",
+      "more": "… en nog {{count}}",
+      "confirm": "Uploaden",
+      "cancel": "Annuleren",
+      "menuTitle": "Bestanden van het klembord uploaden"
+    }
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",

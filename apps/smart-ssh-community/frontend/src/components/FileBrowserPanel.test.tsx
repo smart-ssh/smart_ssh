@@ -16,7 +16,9 @@ if (!Element.prototype.setPointerCapture) {
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
+  claimClipboardFiles,
   claimDroppedPaths,
+  clipboardHasFiles,
   closeEditSession,
   localFileMtime,
   pickUploadFiles,
@@ -89,6 +91,8 @@ vi.mock("../api", () => ({
   // captured — here the paths of the last simulated drop event.
   claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
   pickUploadFiles: vi.fn(),
+  clipboardHasFiles: vi.fn(() => Promise.resolve(false)),
+  claimClipboardFiles: vi.fn(),
   pickUploadFolder: vi.fn(),
   sftpLocalPathsAreFolders: vi.fn((_s: string, paths: string[]) =>
     Promise.resolve(paths.map(() => false)),
@@ -2363,5 +2367,87 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
         expect.objectContaining({ message: expect.stringMatching(/existiert bereits/) }),
       ),
     );
+  });
+
+  describe("paste of local clipboard files (issue #571)", () => {
+    beforeEach(() => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(false);
+      vi.mocked(sftpExists).mockResolvedValue(false);
+      vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    });
+
+    it("offers Paste only when the clipboard holds files", async () => {
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      await act(async () => {});
+      expect(screen.queryByRole("button", { name: "Einfügen" })).toBeNull();
+
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      fireEvent.keyDown(document, { key: "Escape" });
+      fireEvent.contextMenu(emptySpace(container));
+      expect(await screen.findByRole("button", { name: "Einfügen" })).toBeVisible();
+    });
+
+    it("hands the confirmed paths to the normal upload flow", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(claimClipboardFiles).mockResolvedValue(["/home/u/new.txt"]);
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+
+      await waitFor(() =>
+        expect(sftpUpload).toHaveBeenCalledWith("session-1", "/home/u/new.txt", "new.txt", null),
+      );
+      // Only the target directory goes to the backend, never a local path.
+      expect(claimClipboardFiles).toHaveBeenCalledWith("session-1", ".", expect.any(Object));
+    });
+
+    it("uploads nothing when the dialog was cancelled", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(claimClipboardFiles).mockResolvedValue([]);
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+      await waitFor(() => expect(claimClipboardFiles).toHaveBeenCalled());
+      await act(async () => {});
+      expect(sftpExists).not.toHaveBeenCalled();
+      expect(sftpUpload).not.toHaveBeenCalled();
+      expect(showToast).not.toHaveBeenCalled();
+    });
+
+    it("shows an info toast when the clipboard emptied in between", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(claimClipboardFiles).mockResolvedValue(null);
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+      await waitFor(() =>
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "info" })),
+      );
+      expect(sftpUpload).not.toHaveBeenCalled();
+    });
+
+    it("a pending cut keeps Paste as a move and does not read the clipboard", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(sftpRename).mockResolvedValue(undefined);
+      const { container } = renderPanel();
+      const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+      fireEvent.contextMenu(row);
+      fireEvent.click(screen.getByText("Ausschneiden"));
+      vi.mocked(clipboardHasFiles).mockClear();
+
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(
+        within(await screen.findByRole("group", { name: "Ordneraktionen" })).getByRole("button", {
+          name: "Einfügen",
+        }),
+      );
+      expect(clipboardHasFiles).not.toHaveBeenCalled();
+      expect(claimClipboardFiles).not.toHaveBeenCalled();
+    });
   });
 });

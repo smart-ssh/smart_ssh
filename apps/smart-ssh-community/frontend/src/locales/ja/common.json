@@ -653,6 +653,7 @@
     "uploadedFolder": "フォルダー「{{name}}」をアップロードしました — {{count}}個のファイル",
     "uploadFolderFailed": "フォルダー「{{name}}」のアップロードに失敗しました: {{reason}}",
     "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}",
+    "nothingToPaste": "貼り付けるものがありません：クリップボードにファイルがありません",
     "createFileDone": "ファイル「{{name}}」を作成しました",
     "createFileFailed": "ファイル「{{name}}」を作成できませんでした: {{reason}}"
   },
@@ -1038,7 +1039,16 @@
     },
     "copyProgress": "コピー中… {{done}} MB / {{total}} MB",
     "copyProgressUnknownTotal": "コピー中… {{done}} MB",
-    "directoryMenuLabel": "フォルダー操作"
+    "directoryMenuLabel": "フォルダー操作",
+    "clipboardPaste": {
+      "title": "クリップボードのファイルをアップロード",
+      "intro": "クリップボードのこれらのファイルをアップロードしますか？",
+      "target": "アップロード先フォルダー",
+      "more": "…ほか {{count}} 件",
+      "confirm": "アップロード",
+      "cancel": "キャンセル",
+      "menuTitle": "クリップボードのファイルをアップロード"
+    }
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",

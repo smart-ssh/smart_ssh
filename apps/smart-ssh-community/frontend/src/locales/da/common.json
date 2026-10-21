@@ -658,6 +658,7 @@
     "uploadedFolder": "Mappen “{{name}}” uploadet – {{count}} filer",
     "uploadFolderFailed": "Upload af mappen “{{name}}” mislykkedes: {{reason}}",
     "uploadFailedMany": "{{name}} filer kunne ikke uploades, f.eks.: {{reason}}",
+    "nothingToPaste": "Intet at indsætte: udklipsholderen indeholder ingen filer",
     "createFileDone": "Filen “{{name}}” er oprettet",
     "createFileFailed": "Filen “{{name}}” kunne ikke oprettes: {{reason}}"
   },
@@ -1045,7 +1046,16 @@
     },
     "copyProgress": "Kopierer… {{done}} MB af {{total}} MB",
     "copyProgressUnknownTotal": "Kopierer… {{done}} MB",
-    "directoryMenuLabel": "Mappehandlinger"
+    "directoryMenuLabel": "Mappehandlinger",
+    "clipboardPaste": {
+      "title": "Upload filer fra udklipsholderen",
+      "intro": "Upload disse filer fra udklipsholderen?",
+      "target": "Målmappe",
+      "more": "… og {{count}} mere",
+      "confirm": "Overfør",
+      "cancel": "Annuller",
+      "menuTitle": "Upload filerne fra udklipsholderen"
+    }
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",
