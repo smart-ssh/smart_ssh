@@ -313,6 +313,8 @@
     "overallDecision": "Overall Decision",
     "subCommands": "Sub-commands",
     "matchedRuleLabel": "Rule:",
+    "segmentLabel": "Segment {{index}}",
+    "checksLabel": "Checks:",
     "hardBlacklistLabel": "Hard blacklist:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Exact: {{patterns}}",
       "exactPerSegment": "Exact per part: {{patterns}}",
+      "pathScoped": "Same directory: {{patterns}}",
+      "lastArgOpen": "Any last argument: {{patterns}}",
       "subcommand": "All `{{names}}` calls: {{patterns}}",
       "tool": "All `{{names}}` calls: {{patterns}}"
     }
@@ -1088,6 +1092,9 @@
     "historyAttached": "Attached: {{files}}",
     "queued": "Will be sent with the next request",
     "responseCancelled": "Response cancelled.",
+    "contextCompactedNotice": "Older parts of this chat were summarized to fit the model's context.",
+    "contextUsage": "Context {{used}} / {{window}}",
+    "contextUsageTooltip": "Older parts of this chat are summarized automatically when the context gets full.",
     "webResearchUnavailable": "Web research is not available for this provider account (web search is disabled there). This session answers without web research. To turn it off permanently: Settings → AI Provider → “Web research”.",
     "emptyResponse": "The model returned no response. For models with a thinking phase, a higher output limit in the provider settings helps.",
     "outputTruncated": "(truncated)",

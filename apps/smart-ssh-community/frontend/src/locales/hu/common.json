@@ -313,6 +313,8 @@
     "overallDecision": "Összesített döntés",
     "subCommands": "Részparancsok",
     "matchedRuleLabel": "Szabály:",
+    "segmentLabel": "{{index}}. szakasz",
+    "checksLabel": "Ellenőrzések:",
     "hardBlacklistLabel": "Szigorú feketelista:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Pontos: {{patterns}}",
       "exactPerSegment": "Pontos részenként: {{patterns}}",
+      "pathScoped": "Ugyanaz a könyvtár: {{patterns}}",
+      "lastArgOpen": "Bármely utolsó argumentum: {{patterns}}",
       "subcommand": "Az összes `{{names}}` hívás: {{patterns}}",
       "tool": "Az összes `{{names}}` hívás: {{patterns}}"
     }
@@ -1088,6 +1092,9 @@
     "historyAttached": "Csatolva: {{files}}",
     "queued": "A következő kéréssel lesz elküldve",
     "responseCancelled": "A válasz megszakítva.",
+    "contextCompactedNotice": "A csevegés régebbi részeit összefoglaltuk, hogy beleférjenek a modell kontextusába.",
+    "contextUsage": "Kontextus {{used}} / {{window}}",
+    "contextUsageTooltip": "A csevegés régebbi részeit a rendszer automatikusan összefoglalja, ha betelik a kontextus.",
     "webResearchUnavailable": "A webes kutatás ennél a szolgáltatói fióknál nem érhető el (a webkeresés ott le van tiltva). Ez a munkamenet webes kutatás nélkül válaszol. Végleges kikapcsolás: Beállítások → AI-szolgáltató → „Webes kutatás”.",
     "emptyResponse": "A modell nem adott választ. Gondolkodási fázisú modelleknél segít a szolgáltató beállításaiban magasabb kimeneti korlátot megadni.",
     "outputTruncated": "(csonkolva)",

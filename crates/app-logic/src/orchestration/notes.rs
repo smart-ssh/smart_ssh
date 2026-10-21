@@ -649,7 +649,10 @@ async fn request_ai_title(
             // aber defensiv: ignorieren statt eine Aktion auszuführen.
             AiEvent::ActionProposed(_) => {}
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv ignoriert.
-            AiEvent::WebActivity(_) | AiEvent::WebContentIngested | AiEvent::Retrying { .. } => {}
+            AiEvent::WebActivity(_)
+            | AiEvent::WebContentIngested
+            | AiEvent::Usage { .. }
+            | AiEvent::Retrying { .. } => {}
             AiEvent::Done => break,
             AiEvent::Error(_) => {
                 failure = Some(TitleFailure::Error);
@@ -915,6 +918,7 @@ pub async fn suggest_note_update_on_disconnect(
             AiEvent::TextDelta(_)
             | AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
+            | AiEvent::Usage { .. }
             | AiEvent::Retrying { .. } => {}
         }
     }
@@ -1244,6 +1248,7 @@ async fn summarize_note_for_shrink(
                 // (s. `ai_providers::anthropic`); defensiv ignoriert.
                 AiEvent::WebActivity(_)
                 | AiEvent::WebContentIngested
+                | AiEvent::Usage { .. }
                 | AiEvent::Retrying { .. } => {}
                 AiEvent::Done => return Some((text, false)),
                 // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen

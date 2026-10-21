@@ -528,6 +528,18 @@ export interface ChatResponseTruncatedEvent {
   sessionId: string;
 }
 
+/** Issue #601: real input size of the last request vs. the model window. */
+export interface ChatContextUsageEvent {
+  sessionId: string;
+  inputTokens: number;
+  windowTokens: number;
+}
+
+/** Issue #601: older chat parts were summarized/cut for a request. */
+export interface ChatContextCompactedEvent {
+  sessionId: string;
+}
+
 /** Spec 0105: eine Quelle einer Web-Recherche. */
 export interface WebSourceDto {
   title: string;
@@ -834,11 +846,17 @@ export interface EvaluationTraceDto {
   matchedRule: string | null;
   matchedHardBlacklistEntry: string | null;
   subCommandTraces: EvaluationTraceDto[];
+  /** What the trace describes: a pipeline/chain segment, a `$(...)` substitution or embedded code. */
+  kind: "Segment" | "Substitution" | "EmbeddedCode";
+  /** Position within the split command; only for `Segment` traces. */
+  segmentIndex: number | null;
+  /** Rule-independent checks that forced at least Confirm, as reason codes. */
+  checks: string[];
 }
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------
 
-export type SuggestionKind = "exact" | "exactPerSegment" | "subcommand" | "tool";
+export type SuggestionKind = "exact" | "exactPerSegment" | "pathScoped" | "lastArgOpen" | "subcommand" | "tool";
 
 export interface SuggestionPatternDto {
   patternType: PatternType;

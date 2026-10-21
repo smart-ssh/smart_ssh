@@ -313,6 +313,8 @@
     "overallDecision": "Decisão geral",
     "subCommands": "Subcomandos",
     "matchedRuleLabel": "Regra:",
+    "segmentLabel": "Segmento {{index}}",
+    "checksLabel": "Verificações:",
     "hardBlacklistLabel": "Lista de bloqueio fixa:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Exato: {{patterns}}",
       "exactPerSegment": "Exato por parte: {{patterns}}",
+      "pathScoped": "Mesmo diretório: {{patterns}}",
+      "lastArgOpen": "Qualquer último argumento: {{patterns}}",
       "subcommand": "Todas as chamadas de `{{names}}`: {{patterns}}",
       "tool": "Todas as chamadas de `{{names}}`: {{patterns}}"
     }
@@ -1095,6 +1099,9 @@
     "historyAttached": "Anexado: {{files}}",
     "queued": "Será enviado com a próxima solicitação",
     "responseCancelled": "Resposta cancelada.",
+    "contextCompactedNotice": "Partes mais antigas deste chat foram resumidas para caber no contexto do modelo.",
+    "contextUsage": "Contexto {{used}} / {{window}}",
+    "contextUsageTooltip": "Partes mais antigas do chat são resumidas automaticamente quando o contexto fica cheio.",
     "webResearchUnavailable": "A pesquisa na web não está disponível para a conta deste provedor (a busca na web está desativada lá). Esta sessão responde sem pesquisa na web. Para desativá-la de vez: Configurações → Provedor de IA → “Pesquisa na web”.",
     "emptyResponse": "O modelo não retornou nenhuma resposta. Em modelos com fase de raciocínio, um limite de saída maior nas configurações do provedor ajuda.",
     "outputTruncated": "(truncado)",

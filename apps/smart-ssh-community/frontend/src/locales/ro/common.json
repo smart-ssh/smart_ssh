@@ -313,6 +313,8 @@
     "overallDecision": "Decizie generală",
     "subCommands": "Subcomenzi",
     "matchedRuleLabel": "Regulă:",
+    "segmentLabel": "Segmentul {{index}}",
+    "checksLabel": "Verificări:",
     "hardBlacklistLabel": "Listă neagră fixă:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Identic: {{patterns}}",
       "exactPerSegment": "Identic pe părți: {{patterns}}",
+      "pathScoped": "Același director: {{patterns}}",
+      "lastArgOpen": "Orice ultim argument: {{patterns}}",
       "subcommand": "Toate apelurile `{{names}}`: {{patterns}}",
       "tool": "Toate apelurile `{{names}}`: {{patterns}}"
     }
@@ -1095,6 +1099,9 @@
     "historyAttached": "Atașat: {{files}}",
     "queued": "Va fi trimis cu următoarea cerere",
     "responseCancelled": "Răspuns anulat.",
+    "contextCompactedNotice": "Părțile mai vechi ale acestei conversații au fost rezumate pentru a încăpea în contextul modelului.",
+    "contextUsage": "Context utilizat {{used}} / {{window}}",
+    "contextUsageTooltip": "Părțile mai vechi ale conversației sunt rezumate automat când contextul se umple.",
     "webResearchUnavailable": "Cercetarea web nu este disponibilă pentru acest cont de furnizor (căutarea web este dezactivată acolo). Această sesiune răspunde fără cercetare web. Pentru a o dezactiva permanent: Setări → Furnizor IA → „Cercetare web”.",
     "emptyResponse": "Modelul nu a returnat niciun răspuns. Pentru modelele cu fază de gândire ajută o limită de ieșire mai mare în setările furnizorului.",
     "outputTruncated": "(trunchiat)",

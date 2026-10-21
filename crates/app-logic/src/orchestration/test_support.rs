@@ -424,6 +424,7 @@ pub(crate) fn session_with_ai_provider(
         system_context_parts: AsyncMutex::new(crate::compaction::SystemContextParts::default()),
         model_context_window_tokens: usize::MAX / 1_000,
         summary: AsyncMutex::new(None),
+        context_usage: Default::default(),
         mcp_origin_flags: StdMutex::new(Vec::new()),
         sudo_password: crate::session::SwappableSudoPassword::new(None),
         status: StdMutex::new(crate::events::ConnectionStatus::Connected),

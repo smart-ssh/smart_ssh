@@ -907,6 +907,7 @@ mod send_chat_message_persistence_tests {
             ),
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
+            context_usage: Default::default(),
             mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
             sudo_password: app_logic::session::SwappableSudoPassword::new(None),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),

@@ -8,7 +8,7 @@ use super::blacklist;
 use super::parser::{self, ParseResult};
 use super::types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Rule, RuleAction, RuleId, RuleOrigin,
-    Scope,
+    Scope, TraceKind,
 };
 
 /// Ab dieser Länge in **Bytes** (UTF-8) wird ein Kommando ungeprüft auf
@@ -147,7 +147,7 @@ pub async fn matches_hard_blacklist(command: &str) -> bool {
         server_id: crate::shared::ServerId(uuid::Uuid::nil()),
         tags: Vec::new(),
     };
-    hit(&engine.evaluate_explained_inner(command, &ctx).await)
+    hit(&engine.evaluate_explained_inner(command, &ctx, &[]).await)
 }
 
 /// Wertet Kommandos gegen die Hard-Blacklist und die vom [`PolicyStore`]
@@ -271,7 +271,23 @@ impl<S: PolicyStore> FilterEngine<S> {
     /// Regel/Hard-Blacklist-Eintrag), nicht nur der expliziten
     /// "Testen"-Ansicht.
     pub async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
-        let trace = self.evaluate_explained_inner(command, ctx).await;
+        self.evaluate_explained_with_candidates(command, ctx, &[])
+            .await
+    }
+
+    /// Like [`Self::evaluate_explained`], but evaluates as if `candidates`
+    /// were added to the stored rules (same scope handling, same priority
+    /// ordering). Read-only: nothing is stored, the stored rules are
+    /// untouched. Candidates whose scope does not apply to `ctx` are ignored.
+    pub async fn evaluate_explained_with_candidates(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[Rule],
+    ) -> EvaluationTrace {
+        let trace = self
+            .evaluate_explained_inner(command, ctx, candidates)
+            .await;
         // Spec 0094, A1.1: `command` stand hier bis dahin **roh** auf `info`
         // — die schwerste der von BL-0029 gemeldeten Stellen, denn diese
         // Zeile entsteht für jedes Kommando, das überhaupt ausgewertet wird
@@ -298,6 +314,7 @@ impl<S: PolicyStore> FilterEngine<S> {
             decision = ?trace.decision,
             matched_rule = ?trace.matched_rule,
             matched_hard_blacklist_entry = ?trace.matched_hard_blacklist_entry,
+            segments = %segment_summary(&trace),
             "filter engine decision",
         );
         // Spec 0094, A2: derselbe Inhalt wie vorher, aber auf `debug` und
@@ -315,7 +332,12 @@ impl<S: PolicyStore> FilterEngine<S> {
         trace
     }
 
-    async fn evaluate_explained_inner(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
+    async fn evaluate_explained_inner(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[Rule],
+    ) -> EvaluationTrace {
         if command.trim().is_empty() {
             // Testfall 10: leerer/reiner Whitespace-String -> Deny, nicht nur
             // Confirm, da es schlicht kein Kommando gibt, das ausgeführt
@@ -329,6 +351,9 @@ impl<S: PolicyStore> FilterEngine<S> {
                 matched_rule_origin: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
+                kind: TraceKind::Segment,
+                segment_index: None,
+                checks: Vec::new(),
             };
         }
         if exceeds_command_length_limit(command, self.max_command_length) {
@@ -347,12 +372,21 @@ impl<S: PolicyStore> FilterEngine<S> {
                 matched_rule_origin: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
+                kind: TraceKind::Segment,
+                segment_index: None,
+                checks: Vec::new(),
             };
         }
 
         let scope = EffectiveScope::from(ctx);
-        let rules = self.store.rules_for(&scope).await;
+        let mut rules = self.store.rules_for(&scope).await;
         self.report_invalid_patterns(&rules);
+        rules.extend(
+            candidates
+                .iter()
+                .filter(|rule| scope_applies(&rule.scope, &scope))
+                .cloned(),
+        );
         let mut trace = self.evaluate_parsed_explained(command, &rules, 0);
         // Issue #13: input whose encoding the engine cannot see through
         // (Unicode tricks, ANSI-C escapes) is escalated to at least
@@ -366,6 +400,7 @@ impl<S: PolicyStore> FilterEngine<S> {
                     code: FILTER_PARSE_AMBIGUOUS.to_string(),
                 },
             );
+            push_check(&mut trace.checks, FILTER_PARSE_AMBIGUOUS);
         }
         trace
     }
@@ -421,6 +456,9 @@ impl<S: PolicyStore> FilterEngine<S> {
                 matched_rule_origin: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
+                kind: TraceKind::Segment,
+                segment_index: None,
+                checks: Vec::new(),
             };
         }
         match parser::split_command(command) {
@@ -433,6 +471,9 @@ impl<S: PolicyStore> FilterEngine<S> {
                 matched_rule_origin: None,
                 matched_hard_blacklist_entry: None,
                 sub_command_traces: Vec::new(),
+                kind: TraceKind::Segment,
+                segment_index: None,
+                checks: Vec::new(),
             },
             ParseResult::Ambiguous { reason } => {
                 let baseline = Decision::Confirm {
@@ -461,7 +502,12 @@ impl<S: PolicyStore> FilterEngine<S> {
                                 .into_iter()
                                 .filter(|code| !code.trim().is_empty()),
                         )
-                        .map(|code| self.evaluate_parsed_explained(&code, rules, depth + 1))
+                        .map(|code| {
+                            as_kind(
+                                self.evaluate_parsed_explained(&code, rules, depth + 1),
+                                TraceKind::EmbeddedCode,
+                            )
+                        })
                         .collect();
                 let decision = inner_traces
                     .iter()
@@ -482,6 +528,9 @@ impl<S: PolicyStore> FilterEngine<S> {
                             .matched_hard_blacklist_entry
                             .clone(),
                         sub_command_traces: inner_traces.to_vec(),
+                        kind: TraceKind::Segment,
+                        segment_index: None,
+                        checks: vec![FILTER_PARSE_AMBIGUOUS.to_string()],
                     },
                     None => EvaluationTrace {
                         decision: baseline,
@@ -489,16 +538,26 @@ impl<S: PolicyStore> FilterEngine<S> {
                         matched_rule_origin: None,
                         matched_hard_blacklist_entry: None,
                         sub_command_traces: Vec::new(),
+                        kind: TraceKind::Segment,
+                        segment_index: None,
+                        checks: vec![FILTER_PARSE_AMBIGUOUS.to_string()],
                     },
                 }
             }
             ParseResult::Segments(segments) if segments.len() == 1 => {
-                self.evaluate_segment_explained(&segments[0], rules, depth)
+                let mut trace = self.evaluate_segment_explained(&segments[0], rules, depth);
+                trace.segment_index = Some(0);
+                trace
             }
             ParseResult::Segments(segments) => {
                 let sub_command_traces: Vec<EvaluationTrace> = segments
                     .iter()
-                    .map(|segment| self.evaluate_segment_explained(segment, rules, depth))
+                    .enumerate()
+                    .map(|(index, segment)| {
+                        let mut trace = self.evaluate_segment_explained(segment, rules, depth);
+                        trace.segment_index = Some(index);
+                        trace
+                    })
                     .collect();
                 let decision = sub_command_traces
                     .iter()
@@ -510,6 +569,9 @@ impl<S: PolicyStore> FilterEngine<S> {
                     matched_rule_origin: None,
                     matched_hard_blacklist_entry: None,
                     sub_command_traces,
+                    kind: TraceKind::Segment,
+                    segment_index: None,
+                    checks: Vec::new(),
                 }
             }
         }
@@ -582,7 +644,12 @@ impl<S: PolicyStore> FilterEngine<S> {
 
         let mut sub_command_traces: Vec<EvaluationTrace> = inner_contents
             .into_iter()
-            .map(|inner| self.evaluate_parsed_explained(&inner, rules, depth + 1))
+            .map(|inner| {
+                as_kind(
+                    self.evaluate_parsed_explained(&inner, rules, depth + 1),
+                    TraceKind::Substitution,
+                )
+            })
             .collect();
 
         // Issue #13: fail closed on segments whose real command the engine
@@ -617,12 +684,14 @@ impl<S: PolicyStore> FilterEngine<S> {
                 // `evaluate_parsed_explained`: the code is evaluated as a
                 // command of its own, so a `Deny` rule still bites behind
                 // `ls; ksh -c "..."` or `bash -e -c "..."`.
-                code_traces.extend(
-                    codes
-                        .iter()
-                        .filter(|code| !code.trim().is_empty())
-                        .map(|code| self.evaluate_parsed_explained(code, rules, depth + 1)),
-                );
+                code_traces.extend(codes.iter().filter(|code| !code.trim().is_empty()).map(
+                    |code| {
+                        as_kind(
+                            self.evaluate_parsed_explained(code, rules, depth + 1),
+                            TraceKind::EmbeddedCode,
+                        )
+                    },
+                ));
             }
             Some(parser::ProgramSource::Operand) | None => {}
         }
@@ -632,7 +701,10 @@ impl<S: PolicyStore> FilterEngine<S> {
             // command of its own, so a `Deny` rule or the hard blacklist
             // still bites behind it.
             if !code.trim().is_empty() {
-                eval_trace = Some(self.evaluate_parsed_explained(&code, rules, depth + 1));
+                eval_trace = Some(as_kind(
+                    self.evaluate_parsed_explained(&code, rules, depth + 1),
+                    TraceKind::EmbeddedCode,
+                ));
             }
         }
         // Issue #55: `trap` handlers and `alias` values are code that runs
@@ -656,11 +728,33 @@ impl<S: PolicyStore> FilterEngine<S> {
                     .codes
                     .iter()
                     .filter(|code| !code.trim().is_empty())
-                    .map(|code| self.evaluate_parsed_explained(code, rules, depth + 1)),
+                    .map(|code| {
+                        as_kind(
+                            self.evaluate_parsed_explained(code, rules, depth + 1),
+                            TraceKind::EmbeddedCode,
+                        )
+                    }),
             );
         }
+        // Reporting only (Spec 0002, §4.8): which rule-independent checks
+        // forced at least Confirm. Computed from the same facts as the
+        // decisions below, never read back by `combine`.
+        let mut checks: Vec<String> = Vec::new();
+        if matched_hard_blacklist_entry.is_some() {
+            push_check(&mut checks, FILTER_HARD_BLACKLIST);
+        }
+        if redirection_decision != Decision::AutoExec {
+            push_check(&mut checks, FILTER_OUTPUT_REDIRECTION);
+        }
+        if !sub_command_traces.is_empty() {
+            push_check(&mut checks, FILTER_COMMAND_SUBSTITUTION);
+        }
+        if !opaque_reasons.is_empty() {
+            push_check(&mut checks, FILTER_PARSE_AMBIGUOUS);
+        }
         let opaque_decision = opaque_reasons
-            .into_iter()
+            .iter()
+            .copied()
             .map(|reason| Decision::Confirm {
                 reason: reason.to_string(),
                 code: FILTER_PARSE_AMBIGUOUS.to_string(),
@@ -703,8 +797,66 @@ impl<S: PolicyStore> FilterEngine<S> {
             matched_rule_origin,
             matched_hard_blacklist_entry,
             sub_command_traces,
+            kind: TraceKind::Segment,
+            segment_index: None,
+            checks,
         }
     }
+}
+
+/// Re-labels a nested trace (substitution / embedded code); such traces
+/// carry no segment index.
+fn as_kind(mut trace: EvaluationTrace, kind: TraceKind) -> EvaluationTrace {
+    trace.kind = kind;
+    trace.segment_index = None;
+    trace
+}
+
+fn push_check(checks: &mut Vec<String>, code: &str) {
+    if !checks.iter().any(|c| c == code) {
+        checks.push(code.to_string());
+    }
+}
+
+/// One-line per-segment summary for the info log: index, decision kind and
+/// code, matched rule id, checks. Never contains command text: reasons are
+/// not included, only fixed codes and rule ids.
+fn segment_summary(trace: &EvaluationTrace) -> String {
+    fn one(t: &EvaluationTrace) -> String {
+        let (kind, code) = match &t.decision {
+            Decision::AutoExec => ("AutoExec", None),
+            Decision::Confirm { code, .. } => ("Confirm", Some(code.as_str())),
+            Decision::Deny { code, .. } => ("Deny", Some(code.as_str())),
+        };
+        let mut out = kind.to_string();
+        if let Some(code) = code {
+            out.push_str(&format!("({code})"));
+        }
+        match &t.matched_rule {
+            Some(id) => out.push_str(&format!(" rule={id}")),
+            None => out.push_str(" rule=none"),
+        }
+        if !t.checks.is_empty() {
+            out.push_str(&format!(" checks=[{}]", t.checks.join(",")));
+        }
+        out
+    }
+    let segments: Vec<&EvaluationTrace> =
+        if trace.segment_index.is_some() || trace.sub_command_traces.is_empty() {
+            vec![trace]
+        } else {
+            trace
+                .sub_command_traces
+                .iter()
+                .filter(|t| t.kind == TraceKind::Segment)
+                .collect()
+        };
+    let items: Vec<String> = segments
+        .iter()
+        .enumerate()
+        .map(|(i, t)| format!("{}: {}", t.segment_index.unwrap_or(i), one(t)))
+        .collect();
+    format!("[{}]", items.join(", "))
 }
 
 /// Ob eine **Allow**-Regel mit `pattern` das Teilkommando `segment` in der
@@ -920,10 +1072,10 @@ fn combine(a: Decision, b: Decision) -> Decision {
 // auf Übersetzungs-Keys (s. `Decision`-Doc-Kommentar in `types.rs`).
 const FILTER_EMPTY_COMMAND: &str = "FILTER_EMPTY_COMMAND";
 const FILTER_COMMAND_TOO_LONG: &str = "FILTER_COMMAND_TOO_LONG";
-const FILTER_PARSE_AMBIGUOUS: &str = "FILTER_PARSE_AMBIGUOUS";
-const FILTER_HARD_BLACKLIST: &str = "FILTER_HARD_BLACKLIST";
-const FILTER_OUTPUT_REDIRECTION: &str = "FILTER_OUTPUT_REDIRECTION";
-const FILTER_COMMAND_SUBSTITUTION: &str = "FILTER_COMMAND_SUBSTITUTION";
+pub(super) const FILTER_PARSE_AMBIGUOUS: &str = "FILTER_PARSE_AMBIGUOUS";
+pub(super) const FILTER_HARD_BLACKLIST: &str = "FILTER_HARD_BLACKLIST";
+pub(super) const FILTER_OUTPUT_REDIRECTION: &str = "FILTER_OUTPUT_REDIRECTION";
+pub(super) const FILTER_COMMAND_SUBSTITUTION: &str = "FILTER_COMMAND_SUBSTITUTION";
 // Spec 0043, Fund B: Tiefen-Cap für verschachtelte Command-Substitution.
 const FILTER_SUBSTITUTION_TOO_DEEP: &str = "FILTER_SUBSTITUTION_TOO_DEEP";
 const FILTER_RULE_DENY: &str = "FILTER_RULE_DENY";

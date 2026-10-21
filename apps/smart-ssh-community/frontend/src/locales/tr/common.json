@@ -313,6 +313,8 @@
     "overallDecision": "Genel karar",
     "subCommands": "Alt komutlar",
     "matchedRuleLabel": "Kural:",
+    "segmentLabel": "Bölüm {{index}}",
+    "checksLabel": "Denetimler:",
     "hardBlacklistLabel": "Katı kara liste:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Tam: {{patterns}}",
       "exactPerSegment": "Parça başına tam: {{patterns}}",
+      "pathScoped": "Aynı dizin: {{patterns}}",
+      "lastArgOpen": "Herhangi bir son argüman: {{patterns}}",
       "subcommand": "Tüm `{{names}}` çağrıları: {{patterns}}",
       "tool": "Tüm `{{names}}` çağrıları: {{patterns}}"
     }
@@ -1088,6 +1092,9 @@
     "historyAttached": "Ekli: {{files}}",
     "queued": "Bir sonraki istekle gönderilecek",
     "responseCancelled": "Yanıt iptal edildi.",
+    "contextCompactedNotice": "Bu sohbetin eski bölümleri, modelin bağlamına sığması için özetlendi.",
+    "contextUsage": "Bağlam {{used}} / {{window}}",
+    "contextUsageTooltip": "Bağlam dolduğunda sohbetin eski bölümleri otomatik olarak özetlenir.",
     "webResearchUnavailable": "Web araştırması bu sağlayıcı hesabı için kullanılamıyor (orada web araması devre dışı). Bu oturum web araştırması olmadan yanıt verir. Kalıcı olarak kapatmak için: Ayarlar → Yapay zeka sağlayıcısı → “Web araştırması”.",
     "emptyResponse": "Model yanıt döndürmedi. Düşünme aşamalı modellerde sağlayıcı ayarlarında daha yüksek bir çıktı sınırı yardımcı olur.",
     "outputTruncated": "(kesildi)",

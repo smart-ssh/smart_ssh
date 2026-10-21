@@ -313,6 +313,8 @@
     "overallDecision": "Kokonaispäätös",
     "subCommands": "Alikomennot",
     "matchedRuleLabel": "Sääntö:",
+    "segmentLabel": "Osa {{index}}",
+    "checksLabel": "Tarkistukset:",
     "hardBlacklistLabel": "Kiinteä estolista:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Täsmälleen: {{patterns}}",
       "exactPerSegment": "Täsmälleen osittain: {{patterns}}",
+      "pathScoped": "Sama hakemisto: {{patterns}}",
+      "lastArgOpen": "Mikä tahansa viimeinen argumentti: {{patterns}}",
       "subcommand": "Kaikki `{{names}}`-kutsut: {{patterns}}",
       "tool": "Kaikki `{{names}}`-kutsut: {{patterns}}"
     }
@@ -1088,6 +1092,9 @@
     "historyAttached": "Liitteenä: {{files}}",
     "queued": "Lähetetään seuraavan pyynnön mukana",
     "responseCancelled": "Vastaus peruttu.",
+    "contextCompactedNotice": "Tämän keskustelun vanhempia osia tiivistettiin, jotta ne mahtuvat mallin kontekstiin.",
+    "contextUsage": "Konteksti {{used}} / {{window}}",
+    "contextUsageTooltip": "Keskustelun vanhemmat osat tiivistetään automaattisesti, kun konteksti täyttyy.",
     "webResearchUnavailable": "Verkkotutkimus ei ole käytettävissä tälle palveluntarjoajatilille (verkkohaku on siellä poistettu käytöstä). Tämä istunto vastaa ilman verkkotutkimusta. Poistaaksesi sen pysyvästi käytöstä: Asetukset → Tekoälyn palveluntarjoaja → “Verkkotutkimus”.",
     "emptyResponse": "Malli ei palauttanut vastausta. Ajattelujaksolla varustetuilla malleilla auttaa korkeampi tulostusraja palveluntarjoajan asetuksissa.",
     "outputTruncated": "(katkaistu)",

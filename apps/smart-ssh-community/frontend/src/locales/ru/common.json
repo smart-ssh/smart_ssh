@@ -313,6 +313,8 @@
     "overallDecision": "Общее решение",
     "subCommands": "Подкоманды",
     "matchedRuleLabel": "Правило:",
+    "segmentLabel": "Часть {{index}}",
+    "checksLabel": "Проверки:",
     "hardBlacklistLabel": "Жёсткий чёрный список:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Точно: {{patterns}}",
       "exactPerSegment": "Точно по частям: {{patterns}}",
+      "pathScoped": "Тот же каталог: {{patterns}}",
+      "lastArgOpen": "Любой последний аргумент: {{patterns}}",
       "subcommand": "Все вызовы `{{names}}`: {{patterns}}",
       "tool": "Все вызовы `{{names}}`: {{patterns}}"
     }
@@ -1102,6 +1106,9 @@
     "historyAttached": "Вложено: {{files}}",
     "queued": "Будет отправлено со следующим запросом",
     "responseCancelled": "Ответ отменён.",
+    "contextCompactedNotice": "Более ранние части этого чата были сжаты в краткое изложение, чтобы уместиться в контекст модели.",
+    "contextUsage": "Контекст {{used}} / {{window}}",
+    "contextUsageTooltip": "Более ранние части чата автоматически сжимаются, когда контекст заполняется.",
     "webResearchUnavailable": "Веб-поиск недоступен для учётной записи этого провайдера (веб-поиск там отключён). Этот сеанс отвечает без веб-поиска. Чтобы отключить его навсегда: Настройки → ИИ-провайдер → «Веб-поиск».",
     "emptyResponse": "Модель не вернула ответа. Для моделей с этапом рассуждения поможет больший предел вывода в настройках провайдера.",
     "outputTruncated": "(обрезано)",

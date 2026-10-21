@@ -313,6 +313,8 @@
     "overallDecision": "Samlet afgørelse",
     "subCommands": "Underkommandoer",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Del {{index}}",
+    "checksLabel": "Kontroller:",
     "hardBlacklistLabel": "Hård sortliste:"
   },
   "actionCard": {
@@ -371,6 +373,8 @@
     "quickRuleLabel": {
       "exact": "Nøjagtig: {{patterns}}",
       "exactPerSegment": "Nøjagtig pr. del: {{patterns}}",
+      "pathScoped": "Samme mappe: {{patterns}}",
+      "lastArgOpen": "Vilkårligt sidste argument: {{patterns}}",
       "subcommand": "Alle `{{names}}`-kald: {{patterns}}",
       "tool": "Alle `{{names}}`-kald: {{patterns}}"
     }
@@ -1088,6 +1092,9 @@
     "historyAttached": "Vedhæftet: {{files}}",
     "queued": "Sendes med næste anmodning",
     "responseCancelled": "Svaret blev annulleret.",
+    "contextCompactedNotice": "Ældre dele af denne chat er blevet opsummeret, så de passer ind i modellens kontekst.",
+    "contextUsage": "Kontekst {{used}} / {{window}}",
+    "contextUsageTooltip": "Ældre dele af chatten opsummeres automatisk, når konteksten er ved at være fyldt.",
     "webResearchUnavailable": "Webresearch er ikke tilgængelig for denne udbyderkonto (websøgning er slået fra dér). Denne session svarer uden webresearch. Sådan slår du det fra permanent: Indstillinger → AI-udbyder → “Webresearch”.",
     "emptyResponse": "Modellen returnerede intet svar. For modeller med en tænkefase hjælper en højere outputgrænse i udbyderindstillingerne.",
     "outputTruncated": "(afkortet)",

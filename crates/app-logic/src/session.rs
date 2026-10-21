@@ -685,6 +685,9 @@ pub struct SessionParts {
     /// der Datenbankdatei (Spec 0036, Spec 0057 §2.3),
     /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
     pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
+    /// Issue #601: real input sizes reported by the provider, used to
+    /// correct the compaction estimate (in memory, per session).
+    pub context_usage: StdMutex<crate::compaction::ContextUsageTracker>,
     /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
     /// §2.1, Entscheidung: die Summary bildet Chat-Kontinuität ab,
     /// MCP-Verkehr ist kein Chat — Audit bleibt vollständig im Ledger,
@@ -1857,6 +1860,7 @@ mod tests {
             // für die dedizierten Kompaktierungs-Tests).
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
+            context_usage: Default::default(),
             mcp_origin_flags: StdMutex::new(Vec::new()),
             sudo_password: SwappableSudoPassword::new(None),
             status: StdMutex::new(ConnectionStatus::Connected),

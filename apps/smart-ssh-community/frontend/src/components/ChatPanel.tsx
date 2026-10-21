@@ -1,3 +1,4 @@
+import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -46,6 +47,8 @@ import {
   onChatResponseEmpty,
   onChatWebResearchUnavailable,
   onChatResponseTruncated,
+  onChatContextUsage,
+  onChatContextCompacted,
   onChatTextDelta,
   onChatWebActivity,
   onRiskAssessmentUpdated,
@@ -188,6 +191,7 @@ export type ChatItem =
       details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null };
       retryable?: boolean;
     }
+  | { type: "contextCompacted"; id: string }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
   // Spec 0080, A3: eine Runde ohne Text und ohne vorgeschlagene Aktion
   // (`chat-response-empty`) — reines UI-Element aus dem Event, kein
@@ -347,6 +351,11 @@ interface ChatPanelProps {
 export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }: ChatPanelProps) {
   const { t } = useTranslation();
   const [items, setItems] = useState<ChatItem[]>([]);
+  // Issue #601: last real input size reported by the provider (numbers only).
+  const [contextUsage, setContextUsage] = useState<{
+    inputTokens: number;
+    windowTokens: number;
+  } | null>(null);
   const [draft, setDraft] = useState("");
   // Issue #471: Composer-Erweiterungspunkt, ausstehende Anhänge, Fehler am Eingabefeld.
   const composerActions = useSyncExternalStore(subscribeComposer, listComposerActions);
@@ -804,6 +813,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         setItems((prev) =>
           prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
         );
+      }),
+      onChatContextUsage((event) => {
+        if (event.sessionId !== sessionId) return;
+        setContextUsage({ inputTokens: event.inputTokens, windowTokens: event.windowTokens });
+      }),
+      onChatContextCompacted((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [...prev, { type: "contextCompacted", id: freshId() }]);
       }),
       onChatResponseCancelled((event) => {
         if (event.sessionId !== sessionId) return;
@@ -1446,6 +1463,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               ))}
             </ul>
           )}
+        {contextUsage && (
+          <ContextUsageIndicator
+            inputTokens={contextUsage.inputTokens}
+            windowTokens={contextUsage.windowTokens}
+          />
+        )}
         <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3">
           <span className="self-start py-1.5 font-mono text-sm leading-5 text-indigo-500">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
@@ -1737,6 +1760,9 @@ export function ChatItemView({
         {t("actionCard.autoContinuationLimitReached", { limit: item.limit })}
       </div>
     );
+  }
+  if (item.type === "contextCompacted") {
+    return <div className="px-1 text-xs text-slate-400">{t("chat.contextCompactedNotice")}</div>;
   }
   if (item.type === "responseCancelled") {
     return <div className="px-1 text-xs text-slate-400">⏹ {t("chat.responseCancelled")}</div>;
