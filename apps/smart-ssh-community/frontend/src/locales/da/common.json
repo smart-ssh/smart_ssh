@@ -313,6 +313,8 @@
     "overallDecision": "Samlet afgørelse",
     "subCommands": "Underkommandoer",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Del {{index}}",
+    "checksLabel": "Kontroller:",
     "hardBlacklistLabel": "Hård sortliste:"
   },
   "actionCard": {

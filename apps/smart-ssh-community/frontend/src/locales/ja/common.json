@@ -313,6 +313,8 @@
     "overallDecision": "総合判定",
     "subCommands": "サブコマンド",
     "matchedRuleLabel": "ルール:",
+    "segmentLabel": "セグメント {{index}}",
+    "checksLabel": "チェック:",
     "hardBlacklistLabel": "ハードブラックリスト:"
   },
   "actionCard": {

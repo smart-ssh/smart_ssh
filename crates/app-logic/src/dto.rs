@@ -1077,6 +1077,9 @@ pub struct EvaluationTraceDto {
     pub matched_rule: Option<RuleId>,
     pub matched_hard_blacklist_entry: Option<String>,
     pub sub_command_traces: Vec<EvaluationTraceDto>,
+    pub kind: ssh_manager_core::filter::TraceKind,
+    pub segment_index: Option<usize>,
+    pub checks: Vec<String>,
 }
 
 impl From<EvaluationTrace> for EvaluationTraceDto {
@@ -1085,6 +1088,9 @@ impl From<EvaluationTrace> for EvaluationTraceDto {
             decision: trace.decision,
             matched_rule: trace.matched_rule,
             matched_hard_blacklist_entry: trace.matched_hard_blacklist_entry,
+            kind: trace.kind,
+            segment_index: trace.segment_index,
+            checks: trace.checks,
             sub_command_traces: trace
                 .sub_command_traces
                 .into_iter()

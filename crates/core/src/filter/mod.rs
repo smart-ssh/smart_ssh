@@ -35,7 +35,7 @@ pub use parser::{split_top_level_segments, MAX_SUBSTITUTION_DEPTH};
 pub use pattern::PatternError;
 pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
-    RuleOrigin, Scope,
+    RuleOrigin, Scope, TraceKind,
 };
 // Spec 0026, Abschnitt 2: von `crate::risk` wiederverwendet, s.
 // `parser::segment_command`-Doc-Kommentar. `pub(crate)` statt `pub` — bleibt

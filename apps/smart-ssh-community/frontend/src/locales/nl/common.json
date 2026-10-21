@@ -313,6 +313,8 @@
     "overallDecision": "Eindbeslissing",
     "subCommands": "Subopdrachten",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Deel {{index}}",
+    "checksLabel": "Controles:",
     "hardBlacklistLabel": "Vaste blokkeerlijst:"
   },
   "actionCard": {

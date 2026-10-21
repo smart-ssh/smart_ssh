@@ -46,6 +46,9 @@ const autoExecTrace: EvaluationTraceDto = {
   matchedRule: "rule-1",
   matchedHardBlacklistEntry: null,
   subCommandTraces: [],
+  kind: "Segment",
+  segmentIndex: 0,
+  checks: [],
 };
 
 const noRuleTrace: EvaluationTraceDto = {
@@ -53,6 +56,9 @@ const noRuleTrace: EvaluationTraceDto = {
   matchedRule: null,
   matchedHardBlacklistEntry: null,
   subCommandTraces: [],
+  kind: "Segment",
+  segmentIndex: 0,
+  checks: [],
 };
 
 function renderPanel(servers: ServerDto[]) {
@@ -114,5 +120,57 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
       serverId: null,
       tags: [],
     });
+  });
+
+  it("shows the matched rule and the checks per segment (issue #594)", async () => {
+    const seg = (
+      i: number,
+      matchedRule: string | null,
+      checks: string[],
+      decision: EvaluationTraceDto["decision"],
+    ): EvaluationTraceDto => ({
+      decision,
+      matchedRule,
+      matchedHardBlacklistEntry: null,
+      subCommandTraces: [],
+      kind: "Segment",
+      segmentIndex: i,
+      checks,
+    });
+    evaluateExplainedMock.mockResolvedValue({
+      decision: { Confirm: { reason: "x", code: "FILTER_OUTPUT_REDIRECTION" } },
+      matchedRule: null,
+      matchedHardBlacklistEntry: null,
+      kind: "Segment",
+      segmentIndex: null,
+      checks: [],
+      subCommandTraces: [
+        seg(0, "rule-1", [], "AutoExec"),
+        seg(1, "rule-2", ["FILTER_OUTPUT_REDIRECTION"], {
+          Confirm: { reason: "r", code: "FILTER_OUTPUT_REDIRECTION" },
+        }),
+      ],
+    });
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <TestPanel
+          servers={[]}
+          rules={[
+            { id: "rule-1", patternValue: "ps *", action: "Allow" },
+            { id: "rule-2", patternValue: "grep *", action: "Allow" },
+          ] as unknown as RuleDto[]}
+        />
+      </I18nextProvider>,
+    );
+    fireEvent.change(screen.getByPlaceholderText("ls -la && rm -rf /tmp/x"), {
+      target: { value: "ps | grep x 2>/e" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^(Testen|Test)$/ }));
+
+    await waitFor(() => expect(screen.getByText("ps *")).toBeInTheDocument());
+    expect(screen.getByText("grep *")).toBeInTheDocument();
+    expect(screen.getAllByTestId("trace-checks")).toHaveLength(1);
+    expect(screen.getByTestId("trace-checks").textContent).toMatch(/redirection|Umleitung/i);
+    expect(screen.getByText(/(Segment|Teilkommando) 2/)).toBeInTheDocument();
   });
 });
