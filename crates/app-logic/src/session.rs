@@ -343,6 +343,11 @@ pub struct SessionTransport {
     /// Issue #328: set by [`SessionTransport::mark_closed`] on disconnect;
     /// no new command starts and no follow-up AI round follows afterwards.
     closed: std::sync::atomic::AtomicBool,
+    /// Issue #565: counts the connections this session has held; bumped by
+    /// [`SessionTransport::replace`]. A connection-loss watch only reports
+    /// for the epoch it was started in, so a signal of a replaced transport
+    /// never marks the new connection as lost.
+    epoch: std::sync::atomic::AtomicU64,
     /// Issue #328: action currently running as an AI command, so a
     /// disconnect can cancel it (Spec 0027).
     running_action: std::sync::Mutex<Option<ActionId>>,
@@ -370,6 +375,7 @@ impl SessionTransport {
             inner: AsyncMutex::new(transport),
             command_guard: AsyncMutex::new(()),
             closed: std::sync::atomic::AtomicBool::new(false),
+            epoch: std::sync::atomic::AtomicU64::new(0),
             running_action: std::sync::Mutex::new(None),
         }
     }
@@ -398,6 +404,10 @@ impl SessionTransport {
         self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
+    fn epoch(&self) -> u64 {
+        self.epoch.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     pub fn is_closed(&self) -> bool {
         self.closed.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -408,6 +418,7 @@ impl SessionTransport {
     /// normal SFTP channel are always replaced together.
     async fn replace(&self, transport: Box<dyn SshTransport>) {
         *self.inner.lock().await = transport;
+        self.epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.closed
             .store(false, std::sync::atomic::Ordering::SeqCst);
     }
@@ -1497,6 +1508,7 @@ pub fn spawn_connection_watch(
     mut watch: ssh_manager_core::ssh::ConnectionLossWatch,
     emitter: Arc<dyn EventEmitter>,
 ) {
+    let epoch = session.transport.epoch();
     let session = Arc::downgrade(session);
     tokio::spawn(async move {
         let loss = loop {
@@ -1510,7 +1522,8 @@ pub fn spawn_connection_watch(
         let Some(session) = session.upgrade() else {
             return;
         };
-        if session.transport.is_closed() {
+        // Issue #565: a replaced transport's signal is not this connection's.
+        if session.transport.is_closed() || session.transport.epoch() != epoch {
             return;
         }
         report_connection_lost(session_id, &session, emitter.as_ref(), loss.reason);
@@ -2137,6 +2150,46 @@ mod tests {
 
         assert!(status_events(&emitter).is_empty());
         assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
+    }
+
+    /// Issue #565: after a reconnect the old transport's watch stays
+    /// silent, and a watch started for the new transport reports its loss.
+    #[tokio::test]
+    async fn test_connection_watch_after_reconnect_covers_new_transport_only() {
+        let session = Arc::new(dummy_session(ServerId::new()));
+        let emitter = Arc::new(crate::events::TestEmitter::default());
+        let id = Uuid::new_v4();
+        let (old_tx, old_rx) = tokio::sync::watch::channel(None);
+        spawn_connection_watch(id, &session, old_rx, emitter.clone());
+
+        *session.status.lock().unwrap() = ConnectionStatus::Disconnected;
+        let claim = session.begin_reconnect().expect("claim");
+        claim
+            .succeed(
+                Box::new(UnusedTransport),
+                Box::new(DefaultOutputRedactor::new()),
+                None,
+            )
+            .await;
+        let (new_tx, new_rx) = tokio::sync::watch::channel(None);
+        spawn_connection_watch(id, &session, new_rx, emitter.clone());
+
+        old_tx
+            .send(Some(ssh_manager_core::ssh::ConnectionLoss { reason: None }))
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(status_events(&emitter).is_empty());
+        assert_eq!(*session.status.lock().unwrap(), ConnectionStatus::Connected);
+
+        new_tx
+            .send(Some(ssh_manager_core::ssh::ConnectionLoss { reason: None }))
+            .unwrap();
+        wait_for_status_events(&emitter, 1).await;
+        assert_eq!(status_events(&emitter).len(), 1);
+        assert_eq!(
+            *session.status.lock().unwrap(),
+            ConnectionStatus::Disconnected
+        );
     }
 
     #[test]
