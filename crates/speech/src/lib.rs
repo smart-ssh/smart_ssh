@@ -14,9 +14,13 @@ mod transcribe;
 pub use audio::{
     resample_mono, to_mono_16k, AudioCapture, AudioSource, CaptureError, CpalSource, TARGET_RATE,
 };
-pub use recorder::{RecordError, Recorder, RecorderState, StateCallback, MAX_RECORDING};
+pub use recorder::{
+    LiveConfig, PartialCallback, RecordError, Recorder, RecorderState, StateCallback,
+    LIVE_INTERVAL, LIVE_WINDOW, MAX_RECORDING,
+};
 pub use transcribe::{
-    parse_language, InvalidLanguage, TranscribeError, Transcriber, WhisperTranscriber,
+    parse_language, InvalidLanguage, TranscribeError, TranscribeSession, Transcriber,
+    WhisperTranscriber,
 };
 
 use std::collections::HashMap;
