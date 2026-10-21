@@ -1155,14 +1155,35 @@ pub async fn resume_chat_session(
         attempt_id,
         Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
     );
-    connect_session_with_progress(
+    resume_with_progress(
         &app,
         &state,
         server_id,
         tab_session_id,
+        session_id,
+        &progress,
+    )
+    .await
+}
+
+/// Issue #568: the body of `resume_chat_session`, separate so a test drives
+/// exactly the path the command takes.
+pub(crate) async fn resume_with_progress<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    server_id: ServerId,
+    tab_session_id: SessionId,
+    session_id: uuid::Uuid,
+    progress: &ConnectProgress,
+) -> CommandResult<SessionId> {
+    connect_session_with_progress(
+        app,
+        state,
+        server_id,
+        tab_session_id,
         Some(session_id),
         true,
-        Some(&progress),
+        Some(progress),
     )
     .await
 }
@@ -3456,14 +3477,13 @@ mod connect_flow_tests {
         let (result, ()) = tokio::join!(
             tokio::time::timeout(
                 std::time::Duration::from_secs(1),
-                connect_session_with_progress(
+                resume_with_progress(
                     app.handle(),
                     &fx.state,
                     fx.server_id,
                     tab,
-                    Some(existing),
-                    true,
-                    Some(&progress)
+                    existing,
+                    &progress
                 )
             ),
             cancel
