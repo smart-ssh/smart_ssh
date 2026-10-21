@@ -820,6 +820,12 @@ export interface EvaluationTraceDto {
   matchedRule: string | null;
   matchedHardBlacklistEntry: string | null;
   subCommandTraces: EvaluationTraceDto[];
+  /** What the trace describes: a pipeline/chain segment, a `$(...)` substitution or embedded code. */
+  kind: "Segment" | "Substitution" | "EmbeddedCode";
+  /** Position within the split command; only for `Segment` traces. */
+  segmentIndex: number | null;
+  /** Rule-independent checks that forced at least Confirm, as reason codes. */
+  checks: string[];
 }
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------

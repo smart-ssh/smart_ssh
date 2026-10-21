@@ -313,6 +313,8 @@
     "overallDecision": "Общее решение",
     "subCommands": "Подкоманды",
     "matchedRuleLabel": "Правило:",
+    "segmentLabel": "Часть {{index}}",
+    "checksLabel": "Проверки:",
     "hardBlacklistLabel": "Жёсткий чёрный список:"
   },
   "actionCard": {

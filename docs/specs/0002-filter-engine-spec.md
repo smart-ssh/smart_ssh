@@ -170,6 +170,33 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    Die Grenzen gelten für **jeden** Konsumenten der Zerlegung gleichermaßen,
    für die Filter-Engine wie für die Risiko-Einstufung.
 
+8. **Nachvollziehbarkeit je Teilkommando.** Die Auswertung kann erklärt
+   werden (Testansicht, Protokoll). Reine Berichterstattung: die
+   Entscheidung ändert sich dadurch nie.
+   - Jeder Teil hat eine Art: Teilkommando einer Verkettung/Pipeline
+     (mit laufendem Index ab 0), Inhalt einer Command-Substitution oder
+     eingebetteter Code (`bash -c`, `eval`, Here-String, `trap`, `alias`).
+     Substitutionen und eingebetteter Code haben keinen Index.
+   - Je Teil: Entscheidung, gegriffene Regel (falls vorhanden) und die
+     regelunabhängigen Prüfungen, die mindestens `Confirm` erzwungen haben:
+     Hard-Blacklist, Ausgabe-Umleitung, Command-Substitution,
+     nicht sicher analysierbare Eingabe (jeweils als Grundcode).
+     Beispiel `ps aux | grep java 2>/tmp/e | wc -l` mit `Allow: ps *` und
+     `Allow: grep *`: Teil 0 `AutoExec` (Regel `ps *`), Teil 1 `Confirm`
+     (Regel `grep *`, Prüfung Ausgabe-Umleitung), Teil 2 `Confirm` ohne Regel.
+   - Der Kommandotext eines Teils steht nicht in der Auswertung; wer ihn
+     braucht, zerlegt das Kommando selbst.
+   - Die Protokollzeile der Entscheidung (Stufe `info`) nennt je Teilkommando
+     Index, Entscheidung samt Grundcode, Regelkennung oder „none“ und die
+     Prüfungen — nie Kommandotext.
+   - **Auswertung mit Kandidatenregeln.** Die Engine kann ein Kommando so
+     auswerten, als wären zusätzliche, nicht gespeicherte Regeln vorhanden
+     (gleiche Scope-Behandlung und Rangfolge; eine Regel, deren Scope nicht
+     zum Kontext passt, hat keine Wirkung). Es wird nichts gespeichert und
+     keine bestehende Regel verändert. So lässt sich zeigen, ob eine neue
+     Regel das Kommando automatisch ausführbar machen würde (im Beispiel
+     oben bleibt es mit `Allow: wc *` wegen der Umleitung bei `Confirm`).
+
 ## 5. Auswertungskontext und Auswertung
 
 Eine Auswertung bekommt das Kommando und einen Kontext: den Server, auf dem
