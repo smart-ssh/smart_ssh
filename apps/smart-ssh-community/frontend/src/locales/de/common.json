@@ -664,6 +664,7 @@
     "uploadedFolder": "Ordner „{{name}}“ hochgeladen — {{count}} Dateien",
     "uploadFolderFailed": "Ordner „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
     "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}",
+    "nothingToPaste": "Nichts einzufügen: Die Zwischenablage enthält keine Dateien",
     "createFileDone": "Datei „{{name}}“ angelegt",
     "createFileFailed": "Datei „{{name}}“ konnte nicht angelegt werden: {{reason}}"
   },
@@ -1051,7 +1052,16 @@
     },
     "copyProgress": "Kopiere… {{done}} MB von {{total}} MB",
     "copyProgressUnknownTotal": "Kopiere… {{done}} MB",
-    "directoryMenuLabel": "Ordneraktionen"
+    "directoryMenuLabel": "Ordneraktionen",
+    "clipboardPaste": {
+      "title": "Dateien aus der Zwischenablage hochladen",
+      "intro": "Diese Dateien aus der Zwischenablage hochladen?",
+      "target": "Zielordner",
+      "more": "… und {{count}} weitere",
+      "confirm": "Hochladen",
+      "cancel": "Abbrechen",
+      "menuTitle": "Dateien aus der Zwischenablage hochladen"
+    }
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",

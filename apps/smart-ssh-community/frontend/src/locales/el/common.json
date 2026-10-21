@@ -664,6 +664,7 @@
     "uploadedFolder": "Ο φάκελος «{{name}}» μεταφορτώθηκε — {{count}} αρχεία",
     "uploadFolderFailed": "Η μεταφόρτωση του φακέλου «{{name}}» απέτυχε: {{reason}}",
     "uploadFailedMany": "{{name}} αρχεία δεν ήταν δυνατό να μεταφορτωθούν, π.χ.: {{reason}}",
+    "nothingToPaste": "Δεν υπάρχει τίποτα για επικόλληση: το πρόχειρο δεν περιέχει αρχεία",
     "createFileDone": "Το αρχείο «{{name}}» δημιουργήθηκε",
     "createFileFailed": "Δεν ήταν δυνατή η δημιουργία του αρχείου «{{name}}»: {{reason}}"
   },
@@ -1051,7 +1052,16 @@
     },
     "copyProgress": "Αντιγραφή… {{done}} από {{total}} MB",
     "copyProgressUnknownTotal": "Αντιγραφή… {{done}} MB",
-    "directoryMenuLabel": "Ενέργειες φακέλου"
+    "directoryMenuLabel": "Ενέργειες φακέλου",
+    "clipboardPaste": {
+      "title": "Μεταφόρτωση αρχείων από το πρόχειρο",
+      "intro": "Μεταφόρτωση αυτών των αρχείων από το πρόχειρο;",
+      "target": "Φάκελος προορισμού",
+      "more": "… και άλλα {{count}}",
+      "confirm": "Μεταφόρτωση",
+      "cancel": "Ακύρωση",
+      "menuTitle": "Μεταφόρτωση των αρχείων του πρόχειρου"
+    }
   },
   "chat": {
     "jumpToLatest": "Μετάβαση στο πιο πρόσφατο μήνυμα",

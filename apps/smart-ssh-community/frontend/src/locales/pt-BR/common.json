@@ -669,6 +669,7 @@
     "uploadedFolder": "Pasta “{{name}}” enviada — {{count}} arquivos",
     "uploadFolderFailed": "Falha ao enviar a pasta “{{name}}”: {{reason}}",
     "uploadFailedMany": "{{name}} arquivos não puderam ser enviados, p. ex.: {{reason}}",
+    "nothingToPaste": "Nada para colar: a área de transferência não contém arquivos",
     "createFileDone": "Arquivo “{{name}}” criado",
     "createFileFailed": "Não foi possível criar o arquivo “{{name}}”: {{reason}}"
   },
@@ -1058,7 +1059,16 @@
     },
     "copyProgress": "Copiando… {{done}} MB de {{total}} MB",
     "copyProgressUnknownTotal": "Copiando… {{done}} MB",
-    "directoryMenuLabel": "Ações da pasta"
+    "directoryMenuLabel": "Ações da pasta",
+    "clipboardPaste": {
+      "title": "Enviar arquivos da área de transferência",
+      "intro": "Enviar estes arquivos da área de transferência?",
+      "target": "Pasta de destino",
+      "more": "… e mais {{count}}",
+      "confirm": "Enviar",
+      "cancel": "Cancelar",
+      "menuTitle": "Enviar os arquivos da área de transferência"
+    }
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",

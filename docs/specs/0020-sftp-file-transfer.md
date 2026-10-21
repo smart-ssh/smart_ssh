@@ -191,6 +191,11 @@ Nutzer in dieser Sitzung freigegeben hat:
   ein von der Oberfläche genannter Pfad. Ein Ablegen gilt für die Sitzung, deren
   Dateibrowser es entgegennimmt, und verfällt nach kurzer Zeit, wenn es
   niemand entgegennimmt.
+- **Eingefügt:** „Einfügen“ im Kontextmenü der leeren Fläche. Die App liest
+  die Dateiverweise selbst aus der Zwischenablage und zeigt einen nativen
+  Dialog mit den Dateien und dem Zielordner; nur nach „Hochladen“ werden die
+  Pfade freigegeben, bei „Abbrechen“ nichts. Die Oberfläche kann keinen Pfad
+  vorgeben und erfährt die Pfade erst nach der Bestätigung.
 - **Eigene Bearbeitungskopie:** Dateien in der Bearbeitungskopie dieser
   Sitzung („Lokal öffnen“). Die Bearbeitungskopie einer anderen Sitzung zählt
   nicht.

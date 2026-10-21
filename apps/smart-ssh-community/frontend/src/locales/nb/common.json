@@ -664,6 +664,7 @@
     "uploadedFolder": "Mappen “{{name}}” lastet opp – {{count}} filer",
     "uploadFolderFailed": "Opplasting av mappen “{{name}}” mislyktes: {{reason}}",
     "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}",
+    "nothingToPaste": "Ingenting å lime inn: utklippstavlen inneholder ingen filer",
     "createFileDone": "Filen «{{name}}» er opprettet",
     "createFileFailed": "Filen «{{name}}» kunne ikke opprettes: {{reason}}"
   },
@@ -1051,7 +1052,16 @@
     },
     "copyProgress": "Kopierer… {{done}} MB av {{total}} MB",
     "copyProgressUnknownTotal": "Kopierer… {{done}} MB",
-    "directoryMenuLabel": "Mappehandlinger"
+    "directoryMenuLabel": "Mappehandlinger",
+    "clipboardPaste": {
+      "title": "Last opp filer fra utklippstavlen",
+      "intro": "Laste opp disse filene fra utklippstavlen?",
+      "target": "Målmappe",
+      "more": "… og {{count}} til",
+      "confirm": "Last opp",
+      "cancel": "Avbryt",
+      "menuTitle": "Last opp filene fra utklippstavlen"
+    }
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",
