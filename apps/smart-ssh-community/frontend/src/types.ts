@@ -514,6 +514,18 @@ export interface ChatResponseTruncatedEvent {
   sessionId: string;
 }
 
+/** Issue #601: real input size of the last request vs. the model window. */
+export interface ChatContextUsageEvent {
+  sessionId: string;
+  inputTokens: number;
+  windowTokens: number;
+}
+
+/** Issue #601: older chat parts were summarized/cut for a request. */
+export interface ChatContextCompactedEvent {
+  sessionId: string;
+}
+
 /** Spec 0105: eine Quelle einer Web-Recherche. */
 export interface WebSourceDto {
   title: string;

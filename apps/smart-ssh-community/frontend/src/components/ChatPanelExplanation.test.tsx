@@ -38,6 +38,8 @@ vi.mock("../events", () => ({
   onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
+  onChatContextUsage: vi.fn(() => Promise.resolve(() => {})),
+  onChatContextCompacted: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),

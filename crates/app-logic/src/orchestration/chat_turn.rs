@@ -924,6 +924,21 @@ async fn run_one_round(
                     executed_action = true;
                 }
             }
+            AiEvent::Usage { input_tokens } => {
+                // Issue #601: feed the real size back into compaction and
+                // show it in the chat (numbers only).
+                session
+                    .context_usage
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .record(input_tokens, estimated_tokens);
+                crate::events::emit_chat_context_usage(
+                    emitter,
+                    session_id,
+                    input_tokens,
+                    session.model_context_window_tokens as u64,
+                );
+            }
             AiEvent::Retrying {
                 attempt,
                 max_attempts,
