@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Startmappen skal være en absolut sti (/…) eller starte med ~/.",
       "controlCharacter": "Startmappen må ikke indeholde kontroltegn."
+    },
+    "tabs": {
+      "label": "Serverindstillinger",
+      "general": "Generelt",
+      "connection": "Forbindelse",
+      "security": "Sikkerhed",
+      "invalid": "Indeholder fejl"
     }
   },
   "filterRules": {

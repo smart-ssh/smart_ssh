@@ -46,7 +46,8 @@
     "connectLog.status.ok": "same word in this language",
     "connectLog.detail.mac": "same word in this language",
     "session.terminalTab": "same word in this language",
-    "unusableServer.host": "same word in this language"
+    "unusableServer.host": "same word in this language",
+    "serverForm.tabs.general": "same word in this language"
   },
   "it": {
     "common.ok": "same word in this language",
@@ -372,6 +373,7 @@
     "fileBrowser.properties.typeFolder": "same word in this language",
     "fileBrowser.chmod.numeric": "same word in this language",
     "session.terminalTab": "same word in this language",
-    "unusableServer.host": "same word in this language"
+    "unusableServer.host": "same word in this language",
+    "serverForm.tabs.general": "same word in this language"
   }
 }

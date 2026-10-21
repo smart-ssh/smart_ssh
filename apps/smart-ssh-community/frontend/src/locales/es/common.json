@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "El directorio de inicio debe ser una ruta absoluta (/…) o empezar por ~/.",
       "controlCharacter": "El directorio de inicio no debe contener caracteres de control."
+    },
+    "tabs": {
+      "label": "Ajustes del servidor",
+      "general": "General",
+      "connection": "Conexión",
+      "security": "Seguridad",
+      "invalid": "Contiene errores"
     }
   },
   "filterRules": {

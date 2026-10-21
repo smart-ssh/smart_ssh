@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "The start directory must be an absolute path (/…) or start with ~/.",
       "controlCharacter": "The start directory must not contain control characters."
+    },
+    "tabs": {
+      "label": "Server settings",
+      "general": "General",
+      "connection": "Connection",
+      "security": "Security",
+      "invalid": "Contains errors"
     }
   },
   "filterRules": {

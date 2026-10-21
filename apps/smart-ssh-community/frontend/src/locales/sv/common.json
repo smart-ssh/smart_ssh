@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Startkatalogen måste vara en absolut sökväg (/…) eller börja med ~/.",
       "controlCharacter": "Startkatalogen får inte innehålla styrtecken."
+    },
+    "tabs": {
+      "label": "Serverinställningar",
+      "general": "Allmänt",
+      "connection": "Anslutning",
+      "security": "Säkerhet",
+      "invalid": "Innehåller fel"
     }
   },
   "filterRules": {

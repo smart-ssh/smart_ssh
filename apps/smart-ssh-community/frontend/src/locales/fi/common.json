@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Aloitushakemiston on oltava absoluuttinen polku (/…) tai alettava merkinnällä ~/.",
       "controlCharacter": "Aloitushakemisto ei saa sisältää ohjausmerkkejä."
+    },
+    "tabs": {
+      "label": "Palvelimen asetukset",
+      "general": "Yleiset",
+      "connection": "Yhteys",
+      "security": "Suojaus",
+      "invalid": "Sisältää virheitä"
     }
   },
   "filterRules": {

@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "시작 디렉터리는 절대 경로(/…)이거나 ~/로 시작해야 합니다.",
       "controlCharacter": "시작 디렉터리에는 제어 문자를 포함할 수 없습니다."
+    },
+    "tabs": {
+      "label": "서버 설정",
+      "general": "일반",
+      "connection": "연결",
+      "security": "보안",
+      "invalid": "오류 있음"
     }
   },
   "filterRules": {
