@@ -261,6 +261,43 @@ export interface HostKeyVerificationEndedEvent {
   reason: HostKeyPromptEndReason;
 }
 
+/** Issue #546: detail of a connect step — a stable code plus parameters, to
+ * be translated by the frontend. Never carries secrets. */
+export type ConnectStepDetail =
+  | { code: "contacting"; target: string }
+  | { code: "tunnel"; hop: string }
+  | { code: "waitingForResponse" }
+  | { code: "waitingForDecision" }
+  | { code: "authMethod"; method: string };
+
+/** Issue #546: one step in a `connect-progress` event. */
+export interface ConnectStepSnapshot {
+  kind:
+    | "dnsResolution"
+    | "tcpConnect"
+    | "tunnelOpen"
+    | "handshake"
+    | "hostKeyCheck"
+    | "authentication"
+    | "sessionReady";
+  hopIndex: number;
+  /** `user@host:port` of the hop (Spec 0076 naming). */
+  hop: string;
+  status: "running" | "ok" | "failed";
+  errorCode: string | null;
+  detail: ConnectStepDetail | null;
+}
+
+/** Issue #546: `connect-progress` — the full current step list of a running
+ * connect. `attempt` is 1-based and counts retries (e.g. after Trust); a new
+ * attempt starts a fresh list. */
+export interface ConnectProgressEvent {
+  attemptId: string;
+  serverId: string;
+  attempt: number;
+  steps: ConnectStepSnapshot[];
+}
+
 export interface TerminalOutputEvent {
   sessionId: string;
   /** Base64-kodiert (s. `crate::events`-Modul-Kommentar). */
@@ -808,6 +845,24 @@ export interface ChatDocumentGeneratedEvent {
  * nur noch Markdown. */
 export type DocumentFormat = "markdown";
 
+// --- Issue #545: KI-Rückfragen mit Antwortoptionen ------------------------
+
+/** One answer option of an AI question. */
+export interface QuestionOption {
+  label: string;
+  description: string | null;
+}
+
+/** Issue #545: payload of `chat-question-asked`. The question is never
+ * executable; the answer is sent as a normal user message. */
+export interface ChatQuestionAskedEvent {
+  sessionId: string;
+  questionId: string;
+  question: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
 // --- Spec 0017: Multi-Tab-Sessions --------------------------------------
 
 /** Sicht auf eine laufende (oder auf Host-Key-Bestätigung wartende) Session
@@ -865,6 +920,15 @@ export type ChatHistoryEntryDto =
       type: "extensionParts";
       role: ChatHistoryRole;
       items: { label: string; media: "text" | "image" | "pdf" }[];
+    }
+  /** Issue #545: a question the AI asked with answer options. */
+  | {
+      type: "question";
+      role: ChatHistoryRole;
+      questionId: string;
+      question: string;
+      options: QuestionOption[];
+      multiSelect: boolean;
     };
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------

@@ -10,14 +10,12 @@ import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
 import {
-  connect,
   listGroups,
   listServers,
   listUnusableServers,
   moveGroup,
   moveServerToGroup,
 } from "../api";
-import { subscribeHostKeyPromptClear } from "../hostKeyPromptBus";
 import { onHostKeyVerificationNeeded } from "../events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import {
@@ -81,7 +79,6 @@ vi.mock("../api", async () => {
     listUnusableServers: vi.fn(() => Promise.resolve([])),
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
     listChatSessions: vi.fn(() => Promise.resolve([])),
-    connect: vi.fn(),
     resumeChatSession: vi.fn(),
     moveServerToGroup: vi.fn(() => Promise.resolve()),
     moveGroup: vi.fn(() => Promise.resolve()),
@@ -100,6 +97,8 @@ vi.mock("../firstRunNotice", () => ({
   saveFirstRunNoticeAcknowledged: vi.fn(() => Promise.resolve()),
 }));
 
+const startConnectMock = vi.fn();
+
 function renderList(
   onCreateFirstServer: () => void = vi.fn(),
   onCreateServerInGroup: (groupId: string) => void = vi.fn(),
@@ -109,6 +108,8 @@ function renderList(
     <I18nextProvider i18n={testI18n}>
       <ServerList
         onConnected={vi.fn()}
+        onStartConnect={startConnectMock}
+        connectingServerIds={new Set()}
         findExistingSessionId={() => undefined}
         onSwitchToExistingTab={vi.fn()}
         collapsedGroupIds={new Set()}
@@ -147,92 +148,6 @@ describe("ServerList port display (Spec 0046, Fund 5)", () => {
     await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
 
     expect(screen.getByText("deploy@prod-1.internal:2222")).toBeInTheDocument();
-  });
-});
-
-describe("ServerList connect-error translation (Spec 0047, Fund D2)", () => {
-  afterEach(() => {
-    void testI18n.changeLanguage("de");
-  });
-
-  it("translates a coded backend connect error instead of showing the raw Display text", async () => {
-    // Vor dem Fix hing an `connect_session`s `SshError` kein `code` (der
-    // blanket `?` in `commands.rs` verwarf ihn) — das Frontend zeigte den
-    // rohen, hart-deutschen `Display`-Text inkl. eingebettetem OS-
-    // Fehlertext, UNABHÄNGIG von der UI-Sprache. `lng: "en"` beweist genau
-    // das: ohne den Fix stünde hier der deutsche Rohtext in einer
-    // englischen UI. Jetzt trägt der Fehler `code: "SSH_CONNECTION_FAILED"`,
-    // und `describeError` (s. `ServerList.tsx`) übersetzt darüber — inkl.
-    // der von Spec 0047, Fund D2 verlangten Handlungsanleitung ("ist der
-    // Host erreichbar?" / "is the host reachable?"), nicht nur einer
-    // reinen Zustandsbeschreibung.
-    await testI18n.changeLanguage("en");
-    vi.mocked(connect).mockRejectedValue({
-      message: "Verbindung fehlgeschlagen: Connection refused (os error 61)",
-      code: "SSH_CONNECTION_FAILED",
-    });
-
-    renderList();
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText("prod-1"));
-
-    await waitFor(() =>
-      expect(
-        screen.getByText("Connection failed – is the host reachable (address, port, network)?"),
-      ).toBeInTheDocument(),
-    );
-    expect(screen.queryByText(/os error 61/)).toBeNull();
-    expect(screen.queryByText(/Verbindung fehlgeschlagen/)).toBeNull();
-  });
-});
-
-// Issue #51: ein gescheiterter Verbindungsaufbau zeigt unter der Meldung
-// das zugeklappte Schritt-Protokoll mit dem markierten Schritt.
-describe("ServerList connect step log (issue #51)", () => {
-  it("shows collapsed details with the failing step under a failed connect", async () => {
-    vi.mocked(connect).mockRejectedValue({
-      message: "Verbindung abgelehnt: Connection refused",
-      code: "SSH_CONNECTION_REFUSED",
-      connect_log: [
-        {
-          hopIndex: 0,
-          hop: "deploy@prod-1.example:22",
-          step: { kind: "dnsResolution", host: "prod-1.example", port: 22, addresses: ["192.0.2.10"] },
-          status: { state: "ok" },
-          durationMs: 4,
-        },
-        {
-          hopIndex: 0,
-          hop: "deploy@prod-1.example:22",
-          step: { kind: "tcpConnect", address: null, port: 22 },
-          status: { state: "failed", code: "SSH_CONNECTION_REFUSED" },
-          durationMs: 1,
-        },
-      ],
-    });
-
-    renderList();
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("prod-1"));
-
-    const details = await screen.findByTestId("connect-step-log");
-    expect(details).not.toHaveAttribute("open");
-    const failed = details.querySelectorAll("[data-failed='true']");
-    expect(failed).toHaveLength(1);
-    expect(failed[0].textContent).toContain("TCP-Verbindung");
-    expect(failed[0].textContent).toContain("SSH_CONNECTION_REFUSED");
-  });
-
-  it("shows no details when the error carries no step log", async () => {
-    vi.mocked(connect).mockRejectedValue({ message: "x", code: "SSH_CONNECTION_FAILED" });
-    renderList();
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("prod-1"));
-    await waitFor(() =>
-      expect(screen.getByText(/Verbindung fehlgeschlagen|Connection failed/)).toBeInTheDocument(),
-    );
-    expect(screen.queryByTestId("connect-step-log")).toBeNull();
   });
 });
 
@@ -296,36 +211,6 @@ describe("ServerList host key prompt ownership (Issue #12)", () => {
     await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
     expect(onHostKeyVerificationNeeded).not.toHaveBeenCalled();
   });
-
-  it.each([
-    ["succeeds", () => Promise.resolve("55555555-5555-4555-8555-555555555555")],
-    ["fails", () => Promise.reject({ code: null, message: "kaputt" })],
-  ])("clears the host key prompt when its connect() %s", async (_label, outcome) => {
-    let finish: (() => void) | null = null;
-    vi.mocked(connect).mockImplementation(
-      () =>
-        new Promise<string>((resolve, reject) => {
-          finish = () => outcome().then(resolve, reject);
-        }),
-    );
-    const cleared = vi.fn();
-    const unsubscribe = subscribeHostKeyPromptClear(cleared);
-    try {
-      renderList();
-      fireEvent.click(await screen.findByText("prod-1"));
-      await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
-      expect(cleared).not.toHaveBeenCalled();
-
-      await act(async () => {
-        finish?.();
-      });
-
-      await waitFor(() => expect(cleared).toHaveBeenCalledTimes(1));
-    } finally {
-      unsubscribe();
-      vi.mocked(connect).mockReset();
-    }
-  });
 });
 
 describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
@@ -355,12 +240,12 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
     await waitFor(() =>
       expect(vi.mocked(listServers).mock.calls.length).toBeGreaterThan(loadsBefore),
     );
-    expect(connect).not.toHaveBeenCalled();
+    expect(startConnectMock).not.toHaveBeenCalled();
   });
 
   it("does not let the local pseudo-server be dragged", async () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
-    vi.mocked(connect).mockClear();
+    startConnectMock.mockClear();
     vi.mocked(moveServerToGroup).mockClear();
     renderList();
     await waitFor(() => expect(screen.getByText("Localhost")).toBeInTheDocument());
@@ -398,7 +283,7 @@ describe("ServerList new server in a group (issue #49)", () => {
     vi.mocked(listGroups).mockImplementation(() =>
       Promise.resolve([group(), group({ id: "group-2", name: "Web", parentId: "group-1" })]),
     );
-    vi.mocked(connect).mockClear();
+    startConnectMock.mockClear();
     const onCreateServerInGroup = vi.fn();
     const onToggleGroup = vi.fn();
     renderList(vi.fn(), onCreateServerInGroup, onToggleGroup);
@@ -409,7 +294,7 @@ describe("ServerList new server in a group (issue #49)", () => {
 
     expect(onCreateServerInGroup).toHaveBeenCalledWith("group-2");
     expect(onToggleGroup).not.toHaveBeenCalled();
-    expect(connect).not.toHaveBeenCalled();
+    expect(startConnectMock).not.toHaveBeenCalled();
   });
 });
 
@@ -422,14 +307,13 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     vi.mocked(loadFirstRunNoticeAcknowledged).mockResolvedValue(false);
     vi.mocked(saveFirstRunNoticeAcknowledged).mockReset();
     vi.mocked(saveFirstRunNoticeAcknowledged).mockResolvedValue(undefined);
-    vi.mocked(connect).mockReset();
-    vi.mocked(connect).mockResolvedValue("11111111-1111-4111-8111-111111111111");
+    startConnectMock.mockReset();
   });
 
   afterEach(() => {
     vi.mocked(loadFirstRunNoticeAcknowledged).mockImplementation(() => Promise.resolve(true));
     vi.mocked(saveFirstRunNoticeAcknowledged).mockImplementation(() => Promise.resolve());
-    vi.mocked(connect).mockReset();
+    startConnectMock.mockReset();
     resetRegistryForTests();
     vi.restoreAllMocks();
   });
@@ -477,7 +361,7 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
 
     expect(await screen.findByText(noticeTitle())).toBeInTheDocument();
     await act(async () => {});
-    expect(connect).not.toHaveBeenCalled();
+    expect(startConnectMock).not.toHaveBeenCalled();
     expect(saveFirstRunNoticeAcknowledged).not.toHaveBeenCalled();
   });
 
@@ -488,8 +372,8 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
 
-    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
-    expect(connect).toHaveBeenCalledWith("remote-1");
+    await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(1));
+    expect(startConnectMock).toHaveBeenCalledWith(expect.objectContaining({ id: "remote-1" }));
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(noticeTitle())).toBeNull();
   });
@@ -500,13 +384,13 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     fireEvent.click(screen.getByText("prod-1"));
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
-    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText("prod-1").closest("button")).toBeEnabled());
 
     fireEvent.click(screen.getByText("Localhost"));
 
-    await waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
-    expect(connect).toHaveBeenLastCalledWith("local");
+    await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(2));
+    expect(startConnectMock).toHaveBeenLastCalledWith(expect.objectContaining({ id: "local" }));
     expect(screen.queryByText(noticeTitle())).toBeNull();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
   });
@@ -524,14 +408,14 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
 
     expect(await screen.findByText("settings store write failed")).toBeInTheDocument();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
-    expect(connect).not.toHaveBeenCalled();
+    expect(startConnectMock).not.toHaveBeenCalled();
     expect(screen.queryByText(noticeTitle())).toBeNull();
 
     fireEvent.click(screen.getByText("prod-1"));
 
     expect(await screen.findByText(noticeTitle())).toBeInTheDocument();
     await act(async () => {});
-    expect(connect).not.toHaveBeenCalled();
+    expect(startConnectMock).not.toHaveBeenCalled();
   });
 
   // Spec 0031, section 6 (issue #157).
@@ -551,7 +435,7 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     expect(screen.getByText("ext")).toBeInTheDocument();
     await acknowledgeNotice();
 
-    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(1));
     expect(handler).toHaveBeenCalledTimes(1);
     expect(order).toEqual(["save", "handler"]);
   });
@@ -569,7 +453,7 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
 
-    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+    await waitFor(() => expect(startConnectMock).toHaveBeenCalledWith(expect.objectContaining({ id: "remote-1" })));
     expect(screen.queryByText(noticeTitle())).toBeNull();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
     expect(other).toHaveBeenCalledTimes(1);
@@ -591,7 +475,7 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
 
     expect(await screen.findByText("settings store write failed")).toBeInTheDocument();
     expect(handler).not.toHaveBeenCalled();
-    expect(connect).not.toHaveBeenCalled();
+    expect(startConnectMock).not.toHaveBeenCalled();
   });
 });
 
@@ -607,7 +491,7 @@ describe("ServerList not-usable servers (issue #100)", () => {
         reason: "unknown_auth_method",
       },
     ]);
-    vi.mocked(connect).mockClear();
+    startConnectMock.mockClear();
 
     renderList();
 
@@ -624,6 +508,6 @@ describe("ServerList not-usable servers (issue #100)", () => {
     await act(async () => {
       fireEvent.click(screen.getByText("newer-box"));
     });
-    expect(connect).not.toHaveBeenCalled();
+    expect(startConnectMock).not.toHaveBeenCalled();
   });
 });

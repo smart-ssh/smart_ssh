@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Forbindelsen blev annulleret, fordi værtsnøglen ikke blev bekræftet. Stoler du på serveren, så opret forbindelse igen og kontrollér fingeraftrykket.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Forespørgslen om værtsnøglen blev ikke besvaret i tide; nøglen blev ikke betroet. Opret forbindelse igen.",
     "SSH_CONNECTION_ABANDONED": "Forbindelsesforsøget blev annulleret (f.eks. fordi appen blev genindlæst, mens forespørgslen om værtsnøglen var åben). Opret forbindelse igen.",
+    "SSH_CONNECT_CANCELLED": "Forbindelsen blev annulleret.",
     "AI_AUTH_FAILED": "Godkendelse hos AI-udbyderen mislykkedes – kontrollér API-nøglen",
     "AI_RATE_LIMITED": "AI-udbyderen begrænser i øjeblikket anmodninger (rate limit) – appen har allerede forsøgt automatisk et par gange. Vent lidt, og send beskeden igen.",
     "AI_NETWORK_ERROR": "AI-udbyderen kan ikke nås. Kontrollér din internetforbindelse og, ved et brugerdefineret endpoint, basis-URL'en, og send derefter igen.",
@@ -692,8 +693,12 @@
       "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsag: “requiretty” i sudoers)."
     },
     "channelLost": "Forhøjede rettigheder er afsluttet – den forhøjede kanal er ikke længere aktiv.",
-    "targetUserLabel": "Målbruger for forhøjede rettigheder (standard: root)",
-    "group": "Forhøjede rettigheder"
+    "group": "Forhøjede rettigheder",
+    "moreOptions": "Flere indstillinger for udvidede rettigheder",
+    "otherUser": "Som en anden bruger …",
+    "targetUser": "Målbruger",
+    "targetUserHelp": "Kører filbrowseren som denne bruger via sudo. Standard: root.",
+    "confirm": "Udvid"
   },
   "sshConfigImport": {
     "dialogTitle": "Importér ssh_config",
@@ -1035,6 +1040,7 @@
     "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Gå til seneste besked",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgængelig, mens AI svarer, eller en bekræftelse er åben.",
     "autoContinuing": "Automatisk tilstand kører – AI svarer selv på det seneste resultat…",
@@ -1084,6 +1090,11 @@
       "request_too_large": "Webanmodningen var for stor.",
       "unavailable": "Webresearch er midlertidigt utilgængelig hos udbyderen.",
       "other": "Webresearch mislykkedes ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Spørgsmål: {{question}}",
+      "send": "Send afsted",
+      "answeredOwnWords": "Besvaret med egne ord"
     }
   },
   "notes": {
@@ -1179,5 +1190,23 @@
       "language": "Genkendelsessprog",
       "languageAuto": "Automatisk"
     }
+  },
+  "connectTab": {
+    "connecting": "Forbinder til {{name}} …",
+    "failed": "Forbindelsen til {{name}} mislykkedes",
+    "retry": "Prøv igen",
+    "close": "Luk",
+    "cancel": "Annuller",
+    "stepsLabel": "Forbindelsestrin",
+    "stepsRunning": "Forbinder…",
+    "detail": {
+      "tunnel": "gennem {{hop}}",
+      "waitingForResponse": "venter på svar",
+      "waitingForDecision": "venter på din beslutning",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "færdig",
+    "resultFailed": "mislykkedes"
   }
 }

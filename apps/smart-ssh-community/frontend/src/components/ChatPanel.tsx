@@ -37,6 +37,7 @@ import {
   onChatAutoContinuationLimitReached,
   onChatAutoContinuationStarted,
   onChatDocumentGenerated,
+  onChatQuestionAsked,
   onChatError,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
@@ -53,6 +54,7 @@ import {
   loadVoiceInputEnabled,
   subscribeVoiceInputEnabled,
 } from "../voiceInputSettings";
+import { useStickToBottom } from "../hooks/useStickToBottom";
 import { VoiceInputControl } from "./VoiceInputControl";
 import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { LiveCommandOutput } from "./LiveCommandOutput";
@@ -84,10 +86,12 @@ import type {
   RiskAssessment,
   Scope,
   WebActivityDto,
+  QuestionOption,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button } from "./ui";
 import { WebActivityCard } from "./WebActivityCard";
+import { QuestionCard, deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 export type ChatItem =
@@ -188,6 +192,15 @@ export type ChatItem =
   // "autoContinuationLimitReached" oben.
   | { type: "aiBudgetWaiting"; id: string; waitSeconds: number }
   | { type: "document"; id: string; title: string; contentMarkdown: string }
+  // Issue #547 (Spec 0111): the AI's question with answer options.
+  | {
+      type: "question";
+      id: string;
+      questionId: string;
+      question: string;
+      options: QuestionOption[];
+      multiSelect: boolean;
+    }
   // Spec 0034, Abschnitt 6/8: read-only Darstellung eines Kommandoergebnis-
   // /Ablehnungs-Eintrags aus einer bereits geladenen (fortgesetzten)
   // Historie — anders als "action" kein Bestätigungsdialog/Live-Zustand,
@@ -404,6 +417,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * akzeptierter kleiner Randfall, kein Korrektheitsproblem. */
   const [riskSecondOpinionEnabled, setRiskSecondOpinionEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const {
+    atBottom,
+    onScroll: handleChatScroll,
+    scrollToBottom,
+  } = useStickToBottom(scrollRef, contentRef, items);
   /** Issue #325: live output per running action, kept outside `items` so
    * that its updates (up to ten per second) do not trigger the chat's
    * jump-to-the-end effect below. Removed when the result arrives. */
@@ -499,6 +518,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                   type: "historyAttachments",
                   id: freshId(),
                   items: entry.items.map((p) => ({ name: p.label, kind: p.media })),
+                };
+              case "question":
+                return {
+                  type: "question",
+                  id: freshId(),
+                  questionId: entry.questionId,
+                  question: entry.question,
+                  options: entry.options,
+                  multiSelect: entry.multiSelect,
                 };
             }
           }),
@@ -741,6 +769,20 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           ),
         );
       }),
+      onChatQuestionAsked((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [
+          ...prev,
+          {
+            type: "question",
+            id: freshId(),
+            questionId: event.questionId,
+            question: event.question,
+            options: event.options,
+            multiSelect: event.multiSelect,
+          },
+        ]);
+      }),
       onChatDocumentGenerated((event) => {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [
@@ -760,10 +802,6 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       pendingBudgetTimers.forEach((id) => window.clearTimeout(id));
     };
   }, [sessionId, riskSecondOpinionEnabled]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [items]);
 
   const respond = (actionId: string, decision: ActionUserDecision) => {
     // Spec 0027: die tatsächliche Ausführung beginnt jetzt (nicht bei
@@ -918,6 +956,20 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     }
   };
 
+  /** Issue #547: an option click is a normal user message through the
+   * existing send path — never an action response. */
+  const handleQuestionAnswer = async (text: string) => {
+    const queued = sending;
+    scrollToBottom();
+    setItems((prev) => [
+      ...prev,
+      { type: "user", id: freshId(), text, ...(queued ? { queued: true } : {}) },
+    ]);
+    await runSend(() => sendChatMessage(sessionId, text));
+  };
+
+  const questionStates = deriveQuestionStates(items);
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
@@ -929,6 +981,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     // Anfrage an die KI — die laufende Antwort läuft weiter.
     const queued = sending;
     const itemId = freshId();
+    // Issue #540: an own message always jumps to the bottom and follows again.
+    scrollToBottom();
     setItems((prev) => [
       ...prev,
       {
@@ -1150,7 +1204,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           </Button>
         </div>
       )}
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scrollRef}
+        onScroll={handleChatScroll}
+        className="flex-1 overflow-y-auto p-4"
+      >
+      <div ref={contentRef} className="space-y-3">
         {items.map((item) => (
           <ChatItemView
             key={item.id}
@@ -1161,6 +1221,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
             onContinueTruncated={handleContinueTruncated}
+            questionState={questionStates.get(item.id)}
+            onQuestionAnswer={handleQuestionAnswer}
             serverId={serverId}
             sessionId={sessionId}
           />
@@ -1191,6 +1253,22 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             </div>
           )
         )}
+      </div>
+      </div>
+      {!atBottom && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          aria-label={t("chat.jumpToLatest")}
+          title={t("chat.jumpToLatest")}
+          data-testid="chat-jump-to-latest"
+          className="absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-100 shadow-lg hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 4v12M5 11l5 5 5-5" />
+          </svg>
+        </button>
+      )}
       </div>
 
       {readOnlyHint !== undefined ? (
@@ -1234,7 +1312,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             </ul>
           )}
         <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3">
-          <span className="self-start pt-1 font-mono text-sm text-indigo-500">&gt;</span>
+          <span className="self-start py-1.5 font-mono text-sm leading-5 text-indigo-500">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
               Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
               `resize-none` + die Höhen-Effekt oben ergeben das
@@ -1247,7 +1325,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent text-sm text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           />
           {composerActions.map((action) => (
             <button
@@ -1372,6 +1450,8 @@ export function ChatItemView({
   onAcceptWithRule,
   onExport,
   onContinueTruncated,
+  questionState,
+  onQuestionAnswer,
   serverId,
   sessionId,
 }: {
@@ -1393,10 +1473,24 @@ export function ChatItemView({
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
   onContinueTruncated: (itemId: string) => void;
+  /** Issue #547: derived lock state / answer handler of a question card. */
+  questionState?: QuestionState;
+  onQuestionAnswer?: (text: string) => void;
   serverId: string;
   sessionId: string;
 }) {
   const { t } = useTranslation();
+  if (item.type === "question") {
+    return (
+      <QuestionCard
+        question={item.question}
+        options={item.options}
+        multiSelect={item.multiSelect}
+        state={questionState ?? { locked: true, selected: [], ownWords: false }}
+        onAnswer={onQuestionAnswer ?? (() => {})}
+      />
+    );
+  }
   if (item.type === "document") {
     return (
       <DocumentCard title={item.title} contentMarkdown={item.contentMarkdown} onExport={onExport} />

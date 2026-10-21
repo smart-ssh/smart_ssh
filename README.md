@@ -113,8 +113,9 @@ cd ../../..
 
 # 3. Desktop-App im Dev-Modus starten
 cargo tauri dev --manifest-path apps/smart-ssh-community/Cargo.toml
-# oder aus apps/smart-ssh-community/frontend:
-npm run tauri dev
+# oder aus apps/smart-ssh-community (dort liegt tauri.conf.json):
+cd apps/smart-ssh-community
+./frontend/node_modules/.bin/tauri dev
 ```
 
 ### Tests & Linting

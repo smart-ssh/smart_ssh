@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Ana makine anahtarı onaylanmadığı için bağlantı iptal edildi. Sunucuya güveniyorsanız yeniden bağlanın ve parmak izini doğrulayın.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Ana makine anahtarı istemi zamanında yanıtlanmadı; anahtara güvenilmedi. Yeniden bağlanın.",
     "SSH_CONNECTION_ABANDONED": "Bağlantı denemesi iptal edildi (örn. ana makine anahtarı istemi açıkken uygulama yeniden yüklendi). Yeniden bağlanın.",
+    "SSH_CONNECT_CANCELLED": "Bağlantı iptal edildi.",
     "AI_AUTH_FAILED": "Yapay zeka sağlayıcısıyla kimlik doğrulama başarısız – API anahtarını denetleyin",
     "AI_RATE_LIMITED": "Yapay zeka sağlayıcısı şu an istekleri kısıtlıyor (hız sınırı) – uygulama zaten birkaç kez otomatik yeniden denedi. Lütfen biraz bekleyin ve mesajı yeniden gönderin.",
     "AI_NETWORK_ERROR": "Yapay zeka sağlayıcısına ulaşılamıyor. İnternet bağlantınızı ve özel uç noktada temel URL'yi denetleyin, sonra yeniden gönderin.",
@@ -692,8 +693,12 @@
       "startFailed": "sftp-server sudo ile başlatılamadı (olası neden: sudoers'ta “requiretty”)."
     },
     "channelLost": "Yükseltilmiş haklar sona erdi — yükseltilmiş kanal artık etkin değil.",
-    "targetUserLabel": "Yükseltilmiş haklar için hedef kullanıcı (varsayılan: root)",
-    "group": "Yükseltilmiş haklar"
+    "group": "Yükseltilmiş haklar",
+    "moreOptions": "Daha fazla yetki yükseltme seçeneği",
+    "otherUser": "Başka bir kullanıcı olarak…",
+    "targetUser": "Hedef kullanıcı",
+    "targetUserHelp": "Dosya tarayıcısını sudo ile bu kullanıcı olarak çalıştırır. Varsayılan: root.",
+    "confirm": "Yükselt"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config içe aktar",
@@ -1035,6 +1040,7 @@
     "copyProgressUnknownTotal": "Kopyalanıyor… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "En son iletiye git",
     "newChat": "Yeni sohbet",
     "newChatDisabledHint": "Yapay zeka yanıt verirken veya bir onay açıkken kullanılamaz.",
     "autoContinuing": "Otomatik mod çalışıyor — yapay zeka son sonuca kendi başına yanıt veriyor…",
@@ -1084,6 +1090,11 @@
       "request_too_large": "Web isteği çok büyüktü.",
       "unavailable": "Web araştırması sağlayıcıda geçici olarak kullanılamıyor.",
       "other": "Web araştırması başarısız ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Soru: {{question}}",
+      "send": "Gönder",
+      "answeredOwnWords": "Kendi sözlerinizle yanıtlandı"
     }
   },
   "notes": {
@@ -1179,5 +1190,23 @@
       "language": "Tanıma dili",
       "languageAuto": "Otomatik"
     }
+  },
+  "connectTab": {
+    "connecting": "{{name}} sunucusuna bağlanılıyor …",
+    "failed": "{{name}} bağlantısı başarısız oldu",
+    "retry": "Yeniden dene",
+    "close": "Kapat",
+    "cancel": "İptal",
+    "stepsLabel": "Bağlantı adımları",
+    "stepsRunning": "Bağlanılıyor…",
+    "detail": {
+      "tunnel": "{{hop}} üzerinden",
+      "waitingForResponse": "yanıt bekleniyor",
+      "waitingForDecision": "kararınız bekleniyor",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "tamam",
+    "resultFailed": "başarısız"
   }
 }

@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Connexion annulée car la clé d’hôte n’a pas été confirmée. Si vous faites confiance au serveur, reconnectez-vous et vérifiez l’empreinte.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "La demande de clé d’hôte est restée sans réponse à temps ; la clé n’a pas été approuvée. Reconnectez-vous.",
     "SSH_CONNECTION_ABANDONED": "Tentative de connexion annulée (p. ex. l’application a été rechargée pendant que la demande de clé d’hôte était ouverte). Reconnectez-vous.",
+    "SSH_CONNECT_CANCELLED": "Connexion annulée.",
     "AI_AUTH_FAILED": "Échec de l’authentification auprès du fournisseur d’IA – vérifiez la clé d’API",
     "AI_RATE_LIMITED": "Le fournisseur d’IA limite actuellement les requêtes (limite de débit) – l’application a déjà réessayé automatiquement plusieurs fois. Patientez un moment et renvoyez le message.",
     "AI_NETWORK_ERROR": "Impossible de joindre le fournisseur d’IA. Vérifiez votre connexion Internet et, pour un point de terminaison personnalisé, l’URL de base, puis renvoyez.",
@@ -697,8 +698,12 @@
       "startFailed": "sftp-server n’a pas pu être démarré via sudo (cause possible : « requiretty » dans sudoers)."
     },
     "channelLost": "Droits élevés terminés — le canal élevé n’est plus actif.",
-    "targetUserLabel": "Utilisateur cible pour les droits élevés (par défaut : root)",
-    "group": "Droits élevés"
+    "group": "Droits élevés",
+    "moreOptions": "Plus d’options d’élévation",
+    "otherUser": "En tant qu’autre utilisateur…",
+    "targetUser": "Utilisateur cible",
+    "targetUserHelp": "Exécute le navigateur de fichiers sous cet utilisateur via sudo. Par défaut : root.",
+    "confirm": "Élever"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -1042,6 +1047,7 @@
     "copyProgressUnknownTotal": "Copie… {{done}} Mo"
   },
   "chat": {
+    "jumpToLatest": "Aller au dernier message",
     "newChat": "Nouveau chat",
     "newChatDisabledHint": "Indisponible pendant que l’IA répond ou qu’une confirmation est ouverte.",
     "autoContinuing": "Mode automatique en cours — l’IA répond d’elle-même au dernier résultat…",
@@ -1092,6 +1098,11 @@
       "request_too_large": "La requête web était trop volumineuse.",
       "unavailable": "La recherche web est temporairement indisponible chez le fournisseur.",
       "other": "Échec de la recherche web ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Question : {{question}}",
+      "send": "Envoyer",
+      "answeredOwnWords": "Répondu avec vos propres mots"
     }
   },
   "notes": {
@@ -1187,5 +1198,23 @@
       "language": "Langue de reconnaissance",
       "languageAuto": "Automatique"
     }
+  },
+  "connectTab": {
+    "connecting": "Connexion à {{name}} …",
+    "failed": "Échec de la connexion à {{name}}",
+    "retry": "Réessayer",
+    "close": "Fermer",
+    "cancel": "Annuler",
+    "stepsLabel": "Étapes de connexion",
+    "stepsRunning": "Connexion en cours…",
+    "detail": {
+      "tunnel": "en passant par {{hop}}",
+      "waitingForResponse": "en attente de réponse",
+      "waitingForDecision": "en attente de votre décision",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "terminé",
+    "resultFailed": "échec"
   }
 }

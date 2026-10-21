@@ -817,6 +817,7 @@ mod local_server_tests {
         for needle in [
             "`suggest_command`",
             "`generate_document`",
+            "`ask_user`",
             "`propose_note_update`",
             "`<stdout>`",
             "`<stderr>`",

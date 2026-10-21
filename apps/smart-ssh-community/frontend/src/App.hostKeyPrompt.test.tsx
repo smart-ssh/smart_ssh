@@ -26,6 +26,7 @@ vi.mock("./api", async () => {
   return {
     commandErrorMessage: actual.commandErrorMessage,
     commandErrorCode: actual.commandErrorCode,
+    commandErrorConnectLog: actual.commandErrorConnectLog,
     listAiProviders: vi.fn(() => Promise.resolve([])),
     listServers: vi.fn(() => Promise.resolve([])),
     listUnusableServers: vi.fn(() => Promise.resolve([])),
@@ -329,7 +330,7 @@ describe("App host key prompt in every tab state (Issue #12)", () => {
     );
     renderApp();
     fireEvent.click(await screen.findByText("prod-1"));
-    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1"));
+    await waitFor(() => expect(connect).toHaveBeenCalledWith("remote-1", expect.any(String)));
 
     emitHostKey(events[1]);
     await screen.findByRole("alertdialog");

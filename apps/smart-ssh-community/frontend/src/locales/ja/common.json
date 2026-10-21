@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "ホストキーが確認されなかったため、接続をキャンセルしました。サーバーを信頼できる場合は、もう一度接続してフィンガープリントを確認してください。",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "ホストキーの確認に時間内に応答がなかったため、鍵は信頼されませんでした。もう一度接続してください。",
     "SSH_CONNECTION_ABANDONED": "接続の試行をキャンセルしました（例: ホストキーの確認を開いている間にアプリが再読み込みされた場合）。もう一度接続してください。",
+    "SSH_CONNECT_CANCELLED": "接続をキャンセルしました。",
     "AI_AUTH_FAILED": "AIプロバイダーでの認証に失敗しました – APIキーを確認してください",
     "AI_RATE_LIMITED": "AIプロバイダーが現在リクエストを制限しています（レート制限）。アプリはすでに数回自動で再試行しました。しばらく待ってから、メッセージをもう一度送信してください。",
     "AI_NETWORK_ERROR": "AIプロバイダーに到達できません。インターネット接続を確認し、カスタムエンドポイントの場合はベースURLも確認してから、もう一度送信してください。",
@@ -687,8 +688,12 @@
       "startFailed": "sudo経由でsftp-serverを起動できませんでした（考えられる原因: sudoersの「requiretty」）。"
     },
     "channelLost": "昇格した権限が終了しました — 昇格したチャネルはもう有効ではありません。",
-    "targetUserLabel": "昇格した権限の対象ユーザー（既定: root）",
-    "group": "昇格された権限"
+    "group": "昇格された権限",
+    "moreOptions": "その他の権限昇格オプション",
+    "otherUser": "別のユーザーとして…",
+    "targetUser": "対象ユーザー",
+    "targetUserHelp": "sudo を使って、このユーザーとしてファイルブラウザを実行します。既定値: root。",
+    "confirm": "昇格"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",
@@ -1028,6 +1033,7 @@
     "copyProgressUnknownTotal": "コピー中… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "最新のメッセージへ",
     "newChat": "新しいチャット",
     "newChatDisabledHint": "AIが応答中、または確認が開いている間は利用できません。",
     "autoContinuing": "自動モードで実行中 — AIが最後の結果に自動で応答します…",
@@ -1076,6 +1082,11 @@
       "request_too_large": "Webリクエストが大きすぎました。",
       "unavailable": "プロバイダー側でWebリサーチが一時的に利用できません。",
       "other": "Webリサーチに失敗しました（{{code}}）。"
+    },
+    "question": {
+      "cardLabel": "質問: {{question}}",
+      "send": "送信",
+      "answeredOwnWords": "自分の言葉で回答済み"
     }
   },
   "notes": {
@@ -1171,5 +1182,23 @@
       "language": "認識言語",
       "languageAuto": "自動"
     }
+  },
+  "connectTab": {
+    "connecting": "{{name}} に接続中 …",
+    "failed": "{{name}} への接続に失敗しました",
+    "retry": "再試行",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "stepsLabel": "接続の手順",
+    "stepsRunning": "接続中…",
+    "detail": {
+      "tunnel": "{{hop}} 経由",
+      "waitingForResponse": "応答を待機中",
+      "waitingForDecision": "あなたの判断を待機中",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "完了",
+    "resultFailed": "失敗"
   }
 }

@@ -31,6 +31,7 @@ import {
   sftpReadText,
   sftpRename,
   sftpStartDirectory,
+  sessionIsRoot,
   sftpUpload,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
@@ -222,6 +223,62 @@ export function FileBrowserPanel({
   const [enablingElevation, setEnablingElevation] = useState(false);
   // Spec 0067, A4: Ziel-Nutzer der Rechteerhöhung, Default root.
   const [elevationTargetUser, setElevationTargetUser] = useState("root");
+  // Issue #544: `id -u` probe result of the session. `undefined` = not yet
+  // answered; `null`/failure = unknown (controls shown); `true` = root (hidden).
+  const [sessionRoot, setSessionRoot] = useState<boolean | null | undefined>(undefined);
+  const [elevationMenuOpen, setElevationMenuOpen] = useState(false);
+  const [otherUserOpen, setOtherUserOpen] = useState(false);
+  const [otherUserDraft, setOtherUserDraft] = useState("root");
+  const elevationMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const otherUserInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    let cancelled = false;
+    sessionIsRoot(sessionId)
+      .then((value) => {
+        if (!cancelled) setSessionRoot(value);
+      })
+      .catch(() => {
+        if (!cancelled) setSessionRoot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+  const otherUserItemRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!elevationMenuOpen && !otherUserOpen) return;
+    if (elevationMenuOpen) otherUserItemRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setElevationMenuOpen(false);
+      setOtherUserOpen(false);
+      elevationMenuButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [elevationMenuOpen, otherUserOpen]);
+  const elevationGroupRef = useRef<HTMLFieldSetElement>(null);
+  // Issue #569: a click outside the elevation group closes the menu and the
+  // target user form. Clicks inside (arrow button, menu, form) are ignored, so
+  // the arrow button's own toggle is not undone.
+  useEffect(() => {
+    if (!elevationMenuOpen && !otherUserOpen) return;
+    const onClick = (e: MouseEvent) => {
+      // composedPath, not target: a clicked menu item may already be detached.
+      const group = elevationGroupRef.current;
+      if (group && e.composedPath().includes(group)) return;
+      setElevationMenuOpen(false);
+      setOtherUserOpen(false);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, [elevationMenuOpen, otherUserOpen]);
+  // Hiding the panel or switching the elevation closes both.
+  useEffect(() => {
+    setElevationMenuOpen(false);
+    setOtherUserOpen(false);
+  }, [isVisible, elevation]);
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
   const [elevationWarning, setElevationWarning] = useState<string | null>(null);
   const elevated = elevation !== null;
@@ -326,7 +383,9 @@ export function FileBrowserPanel({
     }
   };
 
-  const handleToggleElevation = async () => {
+  const handleToggleElevation = async (targetUser: string = "root") => {
+    setElevationMenuOpen(false);
+    setOtherUserOpen(false);
     if (elevated) {
       updateElevation(null);
       load(path, null);
@@ -335,7 +394,7 @@ export function FileBrowserPanel({
     setEnablingElevation(true);
     const generation = elevationGenerationRef.current;
     try {
-      const result = await sftpElevationEnable(sessionId, elevationTargetUser.trim() || null);
+      const result = await sftpElevationEnable(sessionId, targetUser.trim() || null);
       if (generation !== elevationGenerationRef.current) {
         // Inzwischen ausgeschaltet/Verbindung weg — nicht wieder "erhöht"
         // anzeigen, Backend-Kanal schließen.
@@ -1065,7 +1124,7 @@ export function FileBrowserPanel({
           <span className="flex-1">⚠ {t("fileElevation.banner", { user: elevatedUser })}</span>
           <button
             type="button"
-            onClick={handleToggleElevation}
+            onClick={() => handleToggleElevation()}
             className="rounded border border-slate-950/40 px-2 py-0.5 hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
           >
             {t("fileElevation.toggleOff")}
@@ -1127,27 +1186,88 @@ export function FileBrowserPanel({
           {t("fileBrowser.uploadFolder")}
         </Button>
         </fieldset>
-        {!elevated && (
+        {!elevated && sessionRoot !== undefined && sessionRoot !== true && (
           <fieldset
+            ref={elevationGroupRef}
             aria-label={t("fileElevation.group")}
-            className="m-0 flex min-w-0 items-center gap-1.5 border-0 border-l border-slate-700 p-0 pl-2"
+            className="relative m-0 flex min-w-0 items-center gap-0.5 border-0 border-l border-slate-700 p-0 pl-2"
           >
-          <input
-            {...TECHNICAL_INPUT_PROPS}
-            value={elevationTargetUser}
-            onChange={(e) => setElevationTargetUser(e.target.value)}
-            aria-label={t("fileElevation.targetUserLabel")}
-            title={t("fileElevation.targetUserLabel")}
-            className={`${FIELD_CONTROL_CLASS} w-20 px-1.5 py-1 font-mono text-xs`}
-          />
-          <Button
-            size="sm"
-            onClick={handleToggleElevation}
-            disabled={enablingElevation}
-            title={t("fileElevation.toggleTitle")}
-          >
-            {enablingElevation ? t("fileElevation.enabling") : `🔓 ${t("fileElevation.toggle")}`}
-          </Button>
+            <Button
+              size="sm"
+              onClick={() => handleToggleElevation("root")}
+              disabled={enablingElevation}
+              title={t("fileElevation.toggleTitle")}
+            >
+              {enablingElevation ? t("fileElevation.enabling") : `🔓 ${t("fileElevation.toggle")}`}
+            </Button>
+            <Button
+              size="sm"
+              ref={elevationMenuButtonRef}
+              onClick={() => {
+                setOtherUserOpen(false);
+                setElevationMenuOpen((open) => !open);
+              }}
+              disabled={enablingElevation}
+              aria-haspopup="menu"
+              aria-expanded={elevationMenuOpen || otherUserOpen}
+              aria-label={t("fileElevation.moreOptions")}
+              title={t("fileElevation.moreOptions")}
+            >
+              ▾
+            </Button>
+            {elevationMenuOpen && (
+              <div
+                role="menu"
+                className="absolute left-2 top-full z-20 mt-1 rounded border border-slate-600 bg-slate-800 p-1 shadow-lg"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  ref={otherUserItemRef}
+                  className="w-full whitespace-nowrap rounded px-2 py-1 text-left text-xs hover:bg-slate-700 focus-visible:bg-slate-700"
+                  onClick={() => {
+                    setElevationMenuOpen(false);
+                    setOtherUserDraft(elevationTargetUser);
+                    setOtherUserOpen(true);
+                    setTimeout(() => otherUserInputRef.current?.focus(), 0);
+                  }}
+                >
+                  {t("fileElevation.otherUser")}
+                </button>
+              </div>
+            )}
+            {otherUserOpen && (
+              <form
+                className="absolute left-2 top-full z-20 mt-1 flex w-64 flex-col gap-1.5 rounded border border-slate-600 bg-slate-800 p-2 shadow-lg"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const user = otherUserDraft.trim();
+                  if (!user) return;
+                  setElevationTargetUser(user);
+                  setOtherUserOpen(false);
+                  handleToggleElevation(user);
+                }}
+              >
+                <label className="text-xs" htmlFor="file-elevation-target-user">
+                  {t("fileElevation.targetUser")}
+                </label>
+                <input
+                  {...TECHNICAL_INPUT_PROPS}
+                  id="file-elevation-target-user"
+                  ref={otherUserInputRef}
+                  value={otherUserDraft}
+                  onChange={(e) => setOtherUserDraft(e.target.value)}
+                  aria-describedby="file-elevation-target-user-help"
+                  className={`${FIELD_CONTROL_CLASS} px-1.5 py-1 font-mono text-xs`}
+                />
+                <p id="file-elevation-target-user-help" className="m-0 text-xs text-slate-300">
+                  {t("fileElevation.targetUserHelp")}
+                </p>
+                <Button size="sm" type="submit" disabled={enablingElevation || !otherUserDraft.trim()}>
+                  {t("fileElevation.confirm")}
+                </Button>
+              </form>
+            )}
           </fieldset>
         )}
         {cutEntry && (

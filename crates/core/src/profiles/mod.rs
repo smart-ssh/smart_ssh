@@ -29,6 +29,7 @@ pub use start_directory::{
 };
 pub use store::{ProfileError, ProfileResult, ProfileStore};
 pub use types::{
-    AiAction, AuthMethod, CredentialRef, Group, GroupId, NoteEditor, NoteRevision, NoteTarget,
+    ask_user_fallback_text, ask_user_model_text, validate_ask_user, AiAction, AskUserOption,
+    AuthMethod, CredentialRef, Group, GroupId, NoteEditor, NoteRevision, NoteTarget,
     NoteTargetSelector, PostIngestPolicy, Server, ServerListing, UnusableReason, UnusableServer,
 };

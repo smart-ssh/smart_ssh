@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Connection cancelled because the host key wasn't confirmed. If you trust the server, connect again and verify the fingerprint.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "The host key prompt wasn't answered in time; the key was not trusted. Connect again.",
     "SSH_CONNECTION_ABANDONED": "Connection attempt cancelled (e.g. the app reloaded while the host key prompt was open). Connect again.",
+    "SSH_CONNECT_CANCELLED": "Connection cancelled.",
     "AI_AUTH_FAILED": "Authentication with the AI provider failed – check the API key",
     "AI_RATE_LIMITED": "The AI provider is currently throttling requests (rate limit) – the app already retried automatically a few times. Please wait a moment and send the message again.",
     "AI_NETWORK_ERROR": "Can't reach the AI provider. Check your internet connection and, for a custom endpoint, the base URL, then send again.",
@@ -692,8 +693,12 @@
       "startFailed": "sftp-server could not be started via sudo (possible cause: “requiretty” in sudoers)."
     },
     "channelLost": "Elevated rights ended — the elevated channel is no longer active.",
-    "targetUserLabel": "Target user for elevated rights (default: root)",
-    "group": "Elevated rights"
+    "group": "Elevated rights",
+    "moreOptions": "More elevation options",
+    "otherUser": "As another user…",
+    "targetUser": "Target user",
+    "targetUserHelp": "Runs the file browser as this user via sudo. Default: root.",
+    "confirm": "Elevate"
   },
   "sshConfigImport": {
     "dialogTitle": "Import ssh_config",
@@ -1035,6 +1040,7 @@
     "copyProgressUnknownTotal": "Copying… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Jump to latest message",
     "newChat": "New chat",
     "newChatDisabledHint": "Not available while the AI is responding or a confirmation is open.",
     "autoContinuing": "Automatic mode running — the AI responds to the last result on its own…",
@@ -1084,6 +1090,11 @@
       "request_too_large": "The web request was too large.",
       "unavailable": "Web research is temporarily unavailable at the provider.",
       "other": "Web research failed ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Question: {{question}}",
+      "send": "Send",
+      "answeredOwnWords": "Answered in your own words"
     }
   },
   "notes": {
@@ -1179,5 +1190,23 @@
       "language": "Recognition language",
       "languageAuto": "Automatic"
     }
+  },
+  "connectTab": {
+    "connecting": "Connecting to {{name}} …",
+    "failed": "Connection to {{name}} failed",
+    "retry": "Retry",
+    "close": "Close",
+    "cancel": "Cancel",
+    "stepsLabel": "Connection steps",
+    "stepsRunning": "Connecting…",
+    "detail": {
+      "tunnel": "via {{hop}}",
+      "waitingForResponse": "waiting for response",
+      "waitingForDecision": "waiting for your decision",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "done",
+    "resultFailed": "failed"
   }
 }

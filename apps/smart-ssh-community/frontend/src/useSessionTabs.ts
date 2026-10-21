@@ -11,15 +11,47 @@
 // Fehlerfall bei dieser Umstellung").
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, disconnect, getServer, listSessions, respondToAction } from "./api";
+import {
+  cancelConnect,
+  commandErrorCode,
+  commandErrorConnectLog,
+  commandErrorMessage,
+  connect,
+  disconnect,
+  getServer,
+  listSessions,
+  respondToAction,
+} from "./api";
+import { translateErrorCode } from "./errorCodes";
 import {
   onActionDecisionEscalated,
   onChatActionProposed,
   onChatActionResult,
+  onConnectProgress,
   onConnectionStatusChanged,
   onMcpActionTabRequested,
 } from "./events";
-import type { ConnectionStatus, McpSessionInfo } from "./types";
+import { clearHostKeyPrompt } from "./hostKeyPromptBus";
+import type {
+  ConnectStepRecord,
+  ConnectStepSnapshot,
+  ConnectionStatus,
+  McpSessionInfo,
+} from "./types";
+
+/** Issue #548: lifecycle of a tab. `connecting`/`failed` tabs are created
+ * right when a connect starts and turn into the `connected` session tab in
+ * place; only then is `sessionId` a real session id. */
+export type TabPhase = "connecting" | "failed" | "connected";
+
+export interface ConnectFailure {
+  message: string;
+  /** Detailed step log of the failed attempt (Issue #51), if any. */
+  steps: ConnectStepRecord[];
+}
+
+/** Backend code of an attempt the user cancelled — never shown as an error. */
+export const CONNECT_CANCELLED_CODE = "SSH_CONNECT_CANCELLED";
 
 export interface SessionTab {
   sessionId: string;
@@ -44,6 +76,14 @@ export interface SessionTab {
    * externen Clients — eigener Tab je Server und Client, ohne Chat-Eingabe
    * und Terminal, nie Ziel von `findExistingSessionId`. */
   mcp: McpSessionInfo | null;
+  /** Issue #548. */
+  phase: TabPhase;
+  /** Issue #548: id of the running connect attempt (`connecting` only). */
+  attemptId: string | null;
+  /** Issue #548: live step list from `connect-progress`. */
+  progress: ConnectStepSnapshot[];
+  /** Issue #548: set in phase `failed`. */
+  failure: ConnectFailure | null;
 }
 
 /** Spec 0104: Beschriftung "<Client> @ <Server>" für MCP-Tabs. */
@@ -66,6 +106,13 @@ export function nextActiveAfterClose(
   const userTabs = tabs.filter((t) => t.sessionId !== closedSessionId && !t.mcp);
   return userTabs.length > 0 ? userTabs[userTabs.length - 1].sessionId : null;
 }
+
+const CONNECTED_FIELDS: Pick<SessionTab, "phase" | "attemptId" | "progress" | "failure"> = {
+  phase: "connected",
+  attemptId: null,
+  progress: [],
+  failure: null,
+};
 
 export function useSessionTabs() {
   const { t: translate } = useTranslation();
@@ -101,6 +148,7 @@ export function useSessionTabs() {
             // — nach einem Reload ist sie verloren, s. `SessionTab`-Doc.
             pendingActionId: null,
             mcp: s.mcp ?? null,
+            ...CONNECTED_FIELDS,
           })),
         );
         // Spec 0104, §3: ein MCP-Tab wird nie von selbst aktiv — gibt es
@@ -117,6 +165,15 @@ export function useSessionTabs() {
       onConnectionStatusChanged((event) => {
         setTabs((prev) =>
           prev.map((t) => (t.sessionId === event.sessionId ? { ...t, status: event.status } : t)),
+        );
+      }),
+      onConnectProgress((event) => {
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.phase === "connecting" && t.attemptId === event.attemptId
+              ? { ...t, progress: event.steps }
+              : t,
+          ),
         );
       }),
       onChatActionProposed((event) => {
@@ -173,6 +230,7 @@ export function useSessionTabs() {
               hasPendingAction: false,
               pendingActionId: null,
               mcp: { clientName: event.clientName ?? null },
+              ...CONNECTED_FIELDS,
             },
           ];
         });
@@ -212,10 +270,111 @@ export function useSessionTabs() {
           hasPendingAction: false,
           pendingActionId: null,
           mcp: null,
+          ...CONNECTED_FIELDS,
         },
       ];
     });
     setActiveSessionId(sessionId);
+  };
+
+  /** Issue #548: runs one connect attempt for the tab `key`. The tab turns
+   * into the session tab in place on success, shows the failure on error and
+   * is left alone if the attempt was cancelled / the tab closed meanwhile. */
+  const runAttempt = async (key: string, serverId: string, attemptId: string) => {
+    const stillOwnsTab = () =>
+      tabsRef.current.some((t) => t.sessionId === key && t.attemptId === attemptId);
+    try {
+      const sessionId = await connect(serverId, attemptId);
+      if (!stillOwnsTab()) {
+        // Closed while the connect was finishing: do not leak the session.
+        disconnect(sessionId).catch((err) => console.error(commandErrorMessage(err)));
+        return;
+      }
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.sessionId === key && t.attemptId === attemptId
+            ? {
+                ...t,
+                sessionId,
+                status: "connected",
+                phase: "connected",
+                attemptId: null,
+                progress: [],
+                failure: null,
+              }
+            : t,
+        ),
+      );
+      setActiveSessionId((prev) => (prev === key ? sessionId : prev));
+    } catch (err) {
+      if (!stillOwnsTab()) return;
+      if (commandErrorCode(err) === CONNECT_CANCELLED_CODE) {
+        removeTabAndPickNextActive(key);
+        return;
+      }
+      const failure: ConnectFailure = {
+        message: translateErrorCode(
+          translate,
+          commandErrorCode(err),
+          commandErrorMessage(err),
+        ),
+        steps: commandErrorConnectLog(err) ?? [],
+      };
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.sessionId === key && t.attemptId === attemptId
+            ? { ...t, phase: "failed", attemptId: null, failure }
+            : t,
+        ),
+      );
+    } finally {
+      clearHostKeyPrompt();
+    }
+  };
+
+  /** Issue #548: opens and focuses a "Connecting to …" tab and starts the
+   * attempt. */
+  const startConnect = (server: { id: string; name: string }) => {
+    const attemptId = crypto.randomUUID();
+    const key = `connecting:${attemptId}`;
+    const tab: SessionTab = {
+      sessionId: key,
+      serverId: server.id,
+      serverName: server.name,
+      status: "disconnected",
+      hasPendingAction: false,
+      pendingActionId: null,
+      mcp: null,
+      phase: "connecting",
+      attemptId,
+      progress: [],
+      failure: null,
+    };
+    setTabs((prev) => [...prev, tab]);
+    // `tabsRef` is otherwise refreshed only after a render; `runAttempt`
+    // may be resumed before that.
+    tabsRef.current = [...tabsRef.current, tab];
+    setActiveSessionId(key);
+    void runAttempt(key, server.id, attemptId);
+  };
+
+  /** Issue #548: "Retry" in a failed tab — new attempt, same tab. */
+  const retryConnect = (key: string) => {
+    const tab = tabsRef.current.find((t) => t.sessionId === key);
+    if (!tab || tab.phase !== "failed") return;
+    const attemptId = crypto.randomUUID();
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.sessionId === key
+          ? { ...t, phase: "connecting", attemptId, progress: [], failure: null }
+          : t,
+      ),
+    );
+    // Make the ref current right away so the attempt owns the tab.
+    tabsRef.current = tabsRef.current.map((t) =>
+      t.sessionId === key ? { ...t, phase: "connecting", attemptId } : t,
+    );
+    void runAttempt(key, tab.serverId, attemptId);
   };
 
   /** Spec 0104: nur Nutzer-Tabs — ein MCP-Tab desselben Servers ist nie
@@ -255,6 +414,20 @@ export function useSessionTabs() {
    * gilt die wartende Aktion als **abgelehnt**, nicht als genehmigt. */
   const requestCloseTab = async (sessionId: string) => {
     const tab = tabs.find((t) => t.sessionId === sessionId);
+    if (tab && tab.phase !== "connected") {
+      // Issue #548: a connecting tab cancels its attempt (no error shown);
+      // a failed tab has nothing to tear down.
+      const attemptId = tab.attemptId;
+      removeTabAndPickNextActive(sessionId);
+      if (attemptId) {
+        try {
+          await cancelConnect(attemptId);
+        } catch (err) {
+          console.error(commandErrorMessage(err));
+        }
+      }
+      return;
+    }
     if (tab?.hasPendingAction) {
       const proceed = window.confirm(
         translate("sessionTabs.confirmClosePending", { name: tab.serverName }),
@@ -283,6 +456,8 @@ export function useSessionTabs() {
     tabs,
     activeSessionId,
     openTab,
+    startConnect,
+    retryConnect,
     findExistingSessionId,
     switchTo,
     markActionSettled,

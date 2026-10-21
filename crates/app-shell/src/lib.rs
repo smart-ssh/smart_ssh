@@ -371,6 +371,7 @@ pub(crate) async fn open_and_assemble(
         // Scope dieses Refactorings).
         entitlements: entitlements.clone(),
         pending_host_key_confirmations: ConfirmationRegistry::new(),
+        connect_attempts: Default::default(),
         pending_action_confirmations: ConfirmationRegistry::new(),
         running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
         mcp: app_logic::state::McpState::default(),
@@ -756,6 +757,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::test_ai_provider_credentials,
             commands::fetch_attestation_info,
             commands::connect,
+            commands::cancel_connect,
             commands::confirm_host_key,
             commands::open_terminal,
             commands::terminal_input,
@@ -850,6 +852,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::open_data_path_folder,
             commands::sftp_list,
             commands::sftp_start_directory,
+            commands::session_is_root,
             commands::sftp_download,
             commands::sftp_download_default,
             commands::sftp_download_dir,
@@ -934,6 +937,13 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
         let state = handle_for_retention.state::<AppState>();
         crate::chat_retention::cleanup_old_chat_sessions_on_startup(&handle_for_retention, &state)
             .await;
+    });
+
+    // Issue #551: titles for old untitled sessions, once per start.
+    let handle_for_titles = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = handle_for_titles.state::<AppState>();
+        app_logic::orchestration::backfill_missing_chat_titles(&state.chat_session_store).await;
     });
 
     // Spec 0038, Abschnitt 4: hält das Frontend über

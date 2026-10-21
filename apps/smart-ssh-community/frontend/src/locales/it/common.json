@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Connessione annullata perché la chiave host non è stata confermata. Se si fida del server, si connetta di nuovo e verifichi l'impronta digitale.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "La richiesta della chiave host non ha ricevuto risposta in tempo; la chiave non è stata considerata attendibile. Si connetta di nuovo.",
     "SSH_CONNECTION_ABANDONED": "Tentativo di connessione annullato (ad es. l'app è stata ricaricata mentre la richiesta della chiave host era aperta). Si connetta di nuovo.",
+    "SSH_CONNECT_CANCELLED": "Connessione annullata.",
     "AI_AUTH_FAILED": "Autenticazione con il provider IA non riuscita: verifichi la chiave API",
     "AI_RATE_LIMITED": "Il provider IA sta attualmente limitando le richieste (rate limit): l'app ha già riprovato automaticamente alcune volte. Attenda un momento e invii di nuovo il messaggio.",
     "AI_NETWORK_ERROR": "Impossibile raggiungere il provider IA. Verifichi la connessione a Internet e, per un endpoint personalizzato, l'URL di base, poi invii di nuovo.",
@@ -697,8 +698,12 @@
       "startFailed": "Impossibile avviare sftp-server tramite sudo (possibile causa: “requiretty” in sudoers)."
     },
     "channelLost": "Diritti elevati terminati: il canale elevato non è più attivo.",
-    "targetUserLabel": "Utente di destinazione per i diritti elevati (predefinito: root)",
-    "group": "Diritti elevati"
+    "group": "Diritti elevati",
+    "moreOptions": "Altre opzioni di elevazione",
+    "otherUser": "Come altro utente…",
+    "targetUser": "Utente di destinazione",
+    "targetUserHelp": "Esegue il browser di file come questo utente tramite sudo. Predefinito: root.",
+    "confirm": "Eleva"
   },
   "sshConfigImport": {
     "dialogTitle": "Importa ssh_config",
@@ -1042,6 +1047,7 @@
     "copyProgressUnknownTotal": "Copia in corso… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Vai al messaggio più recente",
     "newChat": "Nuova chat",
     "newChatDisabledHint": "Non disponibile mentre l'IA risponde o è aperta una conferma.",
     "autoContinuing": "Modalità automatica in corso: l'IA risponde da sola all'ultimo risultato…",
@@ -1092,6 +1098,11 @@
       "request_too_large": "La richiesta web era troppo grande.",
       "unavailable": "La ricerca web è temporaneamente non disponibile presso il provider.",
       "other": "Ricerca web non riuscita ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Domanda: {{question}}",
+      "send": "Invia",
+      "answeredOwnWords": "Risposta con parole tue"
     }
   },
   "notes": {
@@ -1187,5 +1198,23 @@
       "language": "Lingua di riconoscimento",
       "languageAuto": "Automatica"
     }
+  },
+  "connectTab": {
+    "connecting": "Connessione a {{name}} …",
+    "failed": "Connessione a {{name}} non riuscita",
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "stepsLabel": "Passaggi della connessione",
+    "stepsRunning": "Connessione in corso…",
+    "detail": {
+      "tunnel": "tramite {{hop}}",
+      "waitingForResponse": "in attesa di risposta",
+      "waitingForDecision": "in attesa della tua decisione",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "completato",
+    "resultFailed": "non riuscito"
   }
 }

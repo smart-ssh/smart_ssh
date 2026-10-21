@@ -91,6 +91,238 @@ async fn test_auto_title_generation_skipped_without_user_message() {
     assert_eq!(listed[0].title, None);
 }
 
+// --- Issue #551: Titel nach der ersten Antwort, Ersatztitel ----------------
+
+async fn title_of(
+    chat_store: &persistence_sqlite::SqliteChatSessionStore,
+    session: &Session,
+) -> Option<String> {
+    chat_store
+        .list_sessions_for_server(&session.server_id)
+        .await
+        .unwrap()[0]
+        .title
+        .clone()
+}
+
+async fn run_first_turn(session: &Session, user_text: &str) {
+    push_history(
+        session,
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text(user_text.to_string()),
+        },
+    )
+    .await;
+    run_chat_turn(
+        session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+}
+
+/// Issue #551: der Titel steht nach der ersten fertigen Antwort, ohne
+/// Trennen — und wird nur einmal angefragt.
+#[tokio::test]
+async fn test_issue_551_title_is_generated_after_first_answer_once() {
+    let (mut session, chat_store, _id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    let provider = MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![
+            AiEvent::TextDelta("Plattenplatz prüfen".to_string()),
+            AiEvent::Done,
+        ],
+        vec![AiEvent::TextDelta("Antwort 2".to_string()), AiEvent::Done],
+        vec![
+            AiEvent::TextDelta("Anderer Titel".to_string()),
+            AiEvent::Done,
+        ],
+    ]);
+    let contexts = provider.received_contexts_handle();
+    session.set_ai_provider_for_tests(Box::new(provider));
+
+    run_first_turn(&session, "wie voll ist die Platte?").await;
+    assert_eq!(
+        title_of(&chat_store, &session).await.as_deref(),
+        Some("Plattenplatz prüfen")
+    );
+    assert_eq!(contexts.lock().unwrap().len(), 2, "Antwort + Titel");
+
+    run_first_turn(&session, "und jetzt?").await;
+    assert_eq!(
+        title_of(&chat_store, &session).await.as_deref(),
+        Some("Plattenplatz prüfen")
+    );
+    assert_eq!(
+        contexts.lock().unwrap().len(),
+        3,
+        "spätere Turns fragen keinen neuen Titel an"
+    );
+}
+
+/// Issue #551: Fehler / abgeschnitten / leer / nur Platzhalter -> Ersatztitel
+/// aus der geschwärzten, zusammengezogenen, gekürzten ersten Nachricht.
+#[tokio::test]
+async fn test_issue_551_failed_ai_title_falls_back_to_first_user_message() {
+    let failures: Vec<Vec<AiEvent>> = vec![
+        vec![AiEvent::Error(ssh_manager_core::ai::AiError::RateLimited)],
+        vec![
+            AiEvent::TextDelta("halb".to_string()),
+            AiEvent::TextTruncated,
+        ],
+        vec![AiEvent::Done],
+        vec![
+            AiEvent::TextDelta("password=Geheim-0096".to_string()),
+            AiEvent::Done,
+        ],
+    ];
+    for failure in failures {
+        let (mut session, chat_store, _id, _tmp) =
+            session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default())
+                .await;
+        session.set_ai_provider_for_tests(Box::new(MockAiProvider::with_rounds(vec![
+            vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+            failure,
+        ])));
+        run_first_turn(&session, "  bitte\n  die   Platte\tprüfen ").await;
+        assert_eq!(
+            title_of(&chat_store, &session).await.as_deref(),
+            Some("bitte die Platte prüfen")
+        );
+    }
+}
+
+/// Issue #551: ein Geheimnis, das über die 60-Zeichen-Grenze reicht, landet
+/// nicht im Ersatztitel (erst schwärzen, dann kürzen).
+#[tokio::test]
+async fn test_issue_551_fallback_title_redacts_before_truncating() {
+    let (mut session, chat_store, _id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    session.set_ai_provider_for_tests(Box::new(MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![AiEvent::Done],
+    ])));
+    let filler = "a".repeat(45);
+    run_first_turn(
+        &session,
+        &format!("{filler} password={SECRET_0096} bitte prüfen"),
+    )
+    .await;
+    let title = title_of(&chat_store, &session).await.expect("Ersatztitel");
+    assert_no_fragment_of_secret(&title);
+    assert!(title.chars().count() <= 60);
+    assert!(title.starts_with(&filler));
+
+    // nur Platzhalter -> bleibt ohne Titel
+    let (mut session, chat_store, _id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    session.set_ai_provider_for_tests(Box::new(MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![AiEvent::Done],
+    ])));
+    run_first_turn(&session, &format!("password={SECRET_0096}")).await;
+    assert_eq!(title_of(&chat_store, &session).await, None);
+}
+
+/// Issue #551: ein vorher manuell vergebener Titel bleibt.
+#[tokio::test]
+async fn test_issue_551_manual_title_wins() {
+    let (mut session, chat_store, id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    session.set_ai_provider_for_tests(Box::new(MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![AiEvent::TextDelta("KI-Titel".to_string()), AiEvent::Done],
+    ])));
+    chat_store.rename_session(id, "Mein Titel").await.unwrap();
+    run_first_turn(&session, "hallo").await;
+    assert_eq!(
+        title_of(&chat_store, &session).await.as_deref(),
+        Some("Mein Titel")
+    );
+}
+
+/// Issue #551: Sicherheitsnetz — Ende einer Sitzung ohne Titel, deren
+/// erster Turn nie fertig wurde: Titel über dieselbe Logik.
+#[tokio::test]
+async fn test_issue_551_session_end_titles_untitled_session_with_user_message() {
+    let (session, chat_store, _id, _tmp) = session_with_real_chat_persistence(
+        vec![AiEvent::Error(ssh_manager_core::ai::AiError::RateLimited)],
+        MockSshTransport::default(),
+    )
+    .await;
+    push_history(
+        &session,
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("Nginx neu starten".to_string()),
+        },
+    )
+    .await;
+    generate_session_title_on_disconnect(&session, Uuid::new_v4(), &TestEmitter::default()).await;
+    assert_eq!(
+        title_of(&chat_store, &session).await.as_deref(),
+        Some("Nginx neu starten")
+    );
+}
+
+/// Issue #551: backfill titles untitled sessions with a user message only,
+/// redacted, and a second run changes nothing.
+#[tokio::test]
+async fn test_issue_551_backfill_titles_untitled_sessions_idempotently() {
+    let (session, chat_store, id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    chat_store
+        .append_message(
+            id,
+            &ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text(format!("pruefe password={SECRET_0096}   bitte")),
+            },
+        )
+        .await
+        .unwrap();
+    let empty = chat_store
+        .create_session(&session.server_id, None)
+        .await
+        .unwrap();
+    let titled = chat_store
+        .create_session(&session.server_id, None)
+        .await
+        .unwrap();
+    chat_store
+        .append_message(
+            titled,
+            &ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("egal".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+    chat_store.rename_session(titled, "Manuell").await.unwrap();
+
+    for _ in 0..2 {
+        crate::orchestration::backfill_missing_chat_titles(&chat_store).await;
+        let listed = chat_store
+            .list_sessions_for_server(&session.server_id)
+            .await
+            .unwrap();
+        let title = |sid| listed.iter().find(|s| s.id == sid).unwrap().title.clone();
+        let backfilled = title(id).expect("backfilled");
+        assert_no_fragment_of_secret(&backfilled);
+        assert!(
+            backfilled.starts_with("pruefe [REDACTED] bitte"),
+            "{backfilled}"
+        );
+        assert_eq!(title(empty), None);
+        assert_eq!(title(titled).as_deref(), Some("Manuell"));
+    }
+}
+
 // --- Spec 0021: Turn-Fortsetzung nach Aktionsergebnis -------------------
 
 /// Fall 1 (Spec 0021, Abschnitt 3): nach `AutoExec` folgt automatisch
@@ -2324,13 +2556,15 @@ async fn test_t1_spec_0096_generated_title_is_redacted_before_storing() {
 /// ein Titel `[REDACTED]` wäre für den Nutzer wertlos.
 #[tokio::test]
 async fn test_t2_spec_0096_title_of_only_placeholders_is_not_stored() {
-    assert_eq!(generated_title_for("password=Geheim-0096").await, None);
-    // Auch mit Leerraum und den von der KI trotz Instruktion gern
-    // hinzugefügten Anführungszeichen drumherum.
-    assert_eq!(
-        generated_title_for("  \"password=Geheim-0096\"  ").await,
-        None
-    );
+    // Issue #551: statt gar keinem Titel greift jetzt der Ersatztitel aus
+    // der ersten Nutzer-Nachricht ("was war hier los?") — nie der
+    // Platzhalter und nie das Geheimnis.
+    for ai_title in ["password=Geheim-0096", "  \"password=Geheim-0096\"  "] {
+        assert_eq!(
+            generated_title_for(ai_title).await.as_deref(),
+            Some("was war hier los?")
+        );
+    }
 }
 
 /// T6 (Spec 0096, A1, Angriffsrichtung „Titel wird vor dem Redactor gekürzt
@@ -2454,4 +2688,149 @@ async fn test_spec_0096_discarded_note_proposal_escalates_allowed_later_action()
         executed_commands(&history).is_empty(),
         "nichts darf automatisch gelaufen sein: {history:?}"
     );
+}
+
+/// Issue #562: extension that resolves the first `ok_calls` requests and
+/// fails afterwards, so sealing succeeds for the answer and fails for the
+/// title request that follows.
+struct FlakyExt {
+    calls: std::sync::atomic::AtomicUsize,
+    ok_calls: usize,
+}
+
+impl crate::chat_content_extension::ChatContentExtension for FlakyExt {
+    fn name(&self) -> &str {
+        "files"
+    }
+    fn take_pending(
+        &self,
+        _s: Uuid,
+        _id: &str,
+    ) -> Option<crate::chat_content_extension::PendingContent> {
+        None
+    }
+    fn persist(
+        &self,
+        _s: Uuid,
+        _part_id: &str,
+        _b: Vec<ssh_manager_core::ai::RedactedBlock>,
+    ) -> Result<(), crate::chat_content_extension::ChatContentError> {
+        Ok(())
+    }
+    fn resolve(
+        &self,
+        _s: Uuid,
+        _part: &ssh_manager_core::ai::ExtensionPart,
+    ) -> Result<
+        Option<Vec<ssh_manager_core::ai::ResolvedBlock>>,
+        crate::chat_content_extension::ChatContentError,
+    > {
+        let n = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if n < self.ok_calls {
+            Ok(Some(vec![ssh_manager_core::ai::ResolvedBlock::Text {
+                text: "attachment".into(),
+            }]))
+        } else {
+            Err(crate::chat_content_extension::ChatContentError(
+                "gone".into(),
+            ))
+        }
+    }
+}
+
+/// Issue #562: when sealing fails for the title request, no title request is
+/// made and the redacted first-message title is used.
+#[tokio::test]
+async fn test_issue_562_title_request_not_sent_when_sealing_fails() {
+    let (mut session, chat_store, _id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    let provider = MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![
+            AiEvent::TextDelta("Should not be used".to_string()),
+            AiEvent::Done,
+        ],
+    ]);
+    let contexts = provider.received_contexts_handle();
+    session.set_ai_provider_for_tests(Box::new(provider));
+    session.set_chat_content_for_tests(Arc::new(
+        crate::chat_content_extension::ChatContentRegistry::new(vec![Arc::new(FlakyExt {
+            calls: std::sync::atomic::AtomicUsize::new(0),
+            ok_calls: 1,
+        })]),
+    ));
+    push_history(
+        &session,
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("Platte prüfen".to_string()),
+        },
+    )
+    .await;
+    push_history(
+        &session,
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Extension(ssh_manager_core::ai::ExtensionPart {
+                extension: "files".into(),
+                kind: "doc".into(),
+                id: Uuid::new_v4().to_string(),
+                label: "a.txt".into(),
+                media: ssh_manager_core::ai::ExtensionMedia::Text,
+                estimated_tokens: 1,
+            }),
+        },
+    )
+    .await;
+    run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+    assert_eq!(contexts.lock().unwrap().len(), 1, "answer only, no title");
+    assert_eq!(
+        title_of(&chat_store, &session).await.as_deref(),
+        Some("Platte prüfen")
+    );
+}
+
+/// Issue #562: for a plain session the title request is unchanged, and a
+/// planted secret reaches neither the request nor the stored title.
+#[tokio::test]
+async fn test_issue_562_title_request_plain_session_and_secret_absent() {
+    let (mut session, chat_store, _id, _tmp) =
+        session_with_real_chat_persistence(vec![AiEvent::Done], MockSshTransport::default()).await;
+    let provider = MockAiProvider::with_rounds(vec![
+        vec![AiEvent::TextDelta("Antwort".to_string()), AiEvent::Done],
+        vec![
+            AiEvent::TextDelta(format!("Titel password={SECRET_0096}")),
+            AiEvent::Done,
+        ],
+    ]);
+    let contexts = provider.received_contexts_handle();
+    session.set_ai_provider_for_tests(Box::new(provider));
+    run_first_turn(&session, &format!("prüfe password={SECRET_0096} bitte")).await;
+
+    let contexts = contexts.lock().unwrap().clone();
+    assert_eq!(contexts.len(), 2);
+    let title_request = &contexts[1];
+    let texts: Vec<String> = title_request
+        .history
+        .iter()
+        .map(|m| match &m.content {
+            MessageContent::Text(t) => t.clone(),
+            other => panic!("plain session must only carry text: {other:?}"),
+        })
+        .collect();
+    assert_eq!(texts.len(), 3, "user, answer, instruction");
+    assert!(texts[0].starts_with("prüfe"));
+    assert_eq!(texts[1], "Antwort");
+    for t in &texts {
+        assert_no_fragment_of_secret(t);
+    }
+    let title = title_of(&chat_store, &session).await.expect("title");
+    assert_no_fragment_of_secret(&title);
 }

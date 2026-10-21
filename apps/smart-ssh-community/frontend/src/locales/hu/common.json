@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "A kapcsolat megszakítva, mert a gazdakulcsot nem erősítették meg. Ha megbízik a szerverben, csatlakozzon újra, és ellenőrizze az ujjlenyomatot.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "A gazdakulcs-kérdésre nem válaszoltak időben; a kulcsban nem bíztak meg. Csatlakozzon újra.",
     "SSH_CONNECTION_ABANDONED": "A csatlakozási kísérlet megszakítva (pl. az alkalmazás újratöltött a gazdakulcs-kérdés megnyitása közben). Csatlakozzon újra.",
+    "SSH_CONNECT_CANCELLED": "A kapcsolat megszakítva.",
     "AI_AUTH_FAILED": "Az AI-szolgáltatóval végzett hitelesítés sikertelen – ellenőrizze az API-kulcsot",
     "AI_RATE_LIMITED": "Az AI-szolgáltató jelenleg korlátozza a kéréseket (kérési korlát) – az alkalmazás már néhányszor automatikusan újrapróbálta. Várjon egy kicsit, és küldje el újra az üzenetet.",
     "AI_NETWORK_ERROR": "Az AI-szolgáltató nem érhető el. Ellenőrizze az internetkapcsolatot és egyéni végpontnál az alap-URL-t, majd küldje újra.",
@@ -692,8 +693,12 @@
       "startFailed": "Az sftp-server nem indítható sudón keresztül (lehetséges ok: „requiretty” a sudoersben)."
     },
     "channelLost": "Az emelt jogok véget értek – az emelt csatorna már nem aktív.",
-    "targetUserLabel": "Célfelhasználó az emelt jogokhoz (alapért.: root)",
-    "group": "Emelt jogosultságok"
+    "group": "Emelt jogosultságok",
+    "moreOptions": "További jogosultság-emelési lehetőségek",
+    "otherUser": "Másik felhasználóként…",
+    "targetUser": "Cél felhasználó",
+    "targetUserHelp": "A fájlböngészőt ezen felhasználóként futtatja sudo-val. Alapértelmezés: root.",
+    "confirm": "Emelés"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",
@@ -1035,6 +1040,7 @@
     "copyProgressUnknownTotal": "Másolás… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Ugrás a legújabb üzenethez",
     "newChat": "Új csevegés",
     "newChatDisabledHint": "Nem érhető el, amíg az AI válaszol vagy megerősítés nyitva van.",
     "autoContinuing": "Automatikus mód fut – az AI magától válaszol az utolsó eredményre…",
@@ -1084,6 +1090,11 @@
       "request_too_large": "A webes kérés túl nagy volt.",
       "unavailable": "A webes kutatás átmenetileg nem érhető el a szolgáltatónál.",
       "other": "A webes kutatás sikertelen ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Kérdés: {{question}}",
+      "send": "Küldés",
+      "answeredOwnWords": "Saját szavaiddal megválaszolva"
     }
   },
   "notes": {
@@ -1179,5 +1190,23 @@
       "language": "Felismerés nyelve",
       "languageAuto": "Automatikus"
     }
+  },
+  "connectTab": {
+    "connecting": "Csatlakozás ide: {{name}} …",
+    "failed": "A csatlakozás ide sikertelen: {{name}}",
+    "retry": "Újra",
+    "close": "Bezárás",
+    "cancel": "Mégse",
+    "stepsLabel": "Kapcsolódási lépések",
+    "stepsRunning": "Csatlakozás…",
+    "detail": {
+      "tunnel": "ezen keresztül: {{hop}}",
+      "waitingForResponse": "válaszra vár",
+      "waitingForDecision": "a döntésére vár",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "kész",
+    "resultFailed": "sikertelen"
   }
 }

@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Połączenie anulowane, ponieważ klucz hosta nie został potwierdzony. Jeśli ufasz serwerowi, połącz się ponownie i zweryfikuj odcisk klucza.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Na pytanie o klucz hosta nie odpowiedziano na czas; klucz nie został uznany za zaufany. Połącz się ponownie.",
     "SSH_CONNECTION_ABANDONED": "Próba połączenia anulowana (np. aplikacja przeładowała się przy otwartym pytaniu o klucz hosta). Połącz się ponownie.",
+    "SSH_CONNECT_CANCELLED": "Połączenie anulowane.",
     "AI_AUTH_FAILED": "Uwierzytelnianie u dostawcy AI nie powiodło się – sprawdź klucz API",
     "AI_RATE_LIMITED": "Dostawca AI chwilowo ogranicza żądania (limit) – aplikacja ponowiła już próbę kilka razy automatycznie. Poczekaj chwilę i wyślij wiadomość ponownie.",
     "AI_NETWORK_ERROR": "Nie można połączyć się z dostawcą AI. Sprawdź połączenie z internetem, a przy własnym punkcie końcowym bazowy URL, i wyślij ponownie.",
@@ -702,8 +703,12 @@
       "startFailed": "Nie udało się uruchomić sftp-server przez sudo (możliwa przyczyna: „requiretty” w sudoers)."
     },
     "channelLost": "Podwyższone uprawnienia zakończone — kanał podwyższony nie jest już aktywny.",
-    "targetUserLabel": "Użytkownik docelowy dla podwyższonych uprawnień (domyślnie: root)",
-    "group": "Podwyższone uprawnienia"
+    "group": "Podwyższone uprawnienia",
+    "moreOptions": "Więcej opcji podniesienia uprawnień",
+    "otherUser": "Jako inny użytkownik…",
+    "targetUser": "Użytkownik docelowy",
+    "targetUserHelp": "Uruchamia przeglądarkę plików jako ten użytkownik przez sudo. Domyślnie: root.",
+    "confirm": "Podnieś"
   },
   "sshConfigImport": {
     "dialogTitle": "Importuj ssh_config",
@@ -1049,6 +1054,7 @@
     "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Przejdź do najnowszej wiadomości",
     "newChat": "Nowy czat",
     "newChatDisabledHint": "Niedostępne, gdy AI odpowiada lub otwarte jest potwierdzenie.",
     "autoContinuing": "Tryb automatyczny działa — AI samodzielnie odpowiada na ostatni wynik…",
@@ -1100,6 +1106,11 @@
       "request_too_large": "Żądanie sieciowe było zbyt duże.",
       "unavailable": "Wyszukiwanie w sieci jest chwilowo niedostępne u dostawcy.",
       "other": "Wyszukiwanie w sieci nie powiodło się ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Pytanie: {{question}}",
+      "send": "Wyślij",
+      "answeredOwnWords": "Odpowiedź własnymi słowami"
     }
   },
   "notes": {
@@ -1195,5 +1206,23 @@
       "language": "Język rozpoznawania",
       "languageAuto": "Automatycznie"
     }
+  },
+  "connectTab": {
+    "connecting": "Łączenie z {{name}} …",
+    "failed": "Połączenie z {{name}} nie powiodło się",
+    "retry": "Spróbuj ponownie",
+    "close": "Zamknij",
+    "cancel": "Anuluj",
+    "stepsLabel": "Etapy połączenia",
+    "stepsRunning": "Łączenie…",
+    "detail": {
+      "tunnel": "przez {{hop}}",
+      "waitingForResponse": "oczekiwanie na odpowiedź",
+      "waitingForDecision": "oczekiwanie na Twoją decyzję",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "gotowe",
+    "resultFailed": "niepowodzenie"
   }
 }

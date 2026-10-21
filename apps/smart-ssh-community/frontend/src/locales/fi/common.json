@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Yhteys peruttiin, koska isäntäavainta ei vahvistettu. Jos luotat palvelimeen, yhdistä uudelleen ja tarkista sormenjälki.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Isäntäavainkyselyyn ei vastattu ajoissa; avaimeen ei luotettu. Yhdistä uudelleen.",
     "SSH_CONNECTION_ABANDONED": "Yhteysyritys peruttiin (esim. sovellus latautui uudelleen isäntäavainkyselyn ollessa auki). Yhdistä uudelleen.",
+    "SSH_CONNECT_CANCELLED": "Yhteys peruutettiin.",
     "AI_AUTH_FAILED": "Todennus tekoälyn palveluntarjoajalle epäonnistui – tarkista API-avain",
     "AI_RATE_LIMITED": "Tekoälyn palveluntarjoaja rajoittaa pyyntöjä (pyyntöraja) – sovellus yritti jo automaattisesti muutaman kerran. Odota hetki ja lähetä viesti uudelleen.",
     "AI_NETWORK_ERROR": "Tekoälyn palveluntarjoajaa ei tavoiteta. Tarkista internet-yhteys ja mukautetussa päätepisteessä perus-URL ja lähetä sitten uudelleen.",
@@ -692,8 +693,12 @@
       "startFailed": "sftp-serveriä ei voitu käynnistää sudolla (mahdollinen syy: “requiretty” sudoersissa)."
     },
     "channelLost": "Korotetut oikeudet päättyivät – korotettu kanava ei ole enää aktiivinen.",
-    "targetUserLabel": "Korotettujen oikeuksien kohdekäyttäjä (oletus: root)",
-    "group": "Korotetut oikeudet"
+    "group": "Korotetut oikeudet",
+    "moreOptions": "Lisää oikeuksien korotuksen asetuksia",
+    "otherUser": "Toisena käyttäjänä…",
+    "targetUser": "Kohdekäyttäjä",
+    "targetUserHelp": "Suorittaa tiedostoselaimen tänä käyttäjänä sudon kautta. Oletus: root.",
+    "confirm": "Korota"
   },
   "sshConfigImport": {
     "dialogTitle": "Tuo ssh_config",
@@ -1035,6 +1040,7 @@
     "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt"
   },
   "chat": {
+    "jumpToLatest": "Siirry uusimpaan viestiin",
     "newChat": "Uusi keskustelu",
     "newChatDisabledHint": "Ei käytettävissä, kun tekoäly vastaa tai vahvistus on auki.",
     "autoContinuing": "Automaattitila käynnissä – tekoäly vastaa viimeiseen tulokseen itse…",
@@ -1084,6 +1090,11 @@
       "request_too_large": "Verkkopyyntö oli liian suuri.",
       "unavailable": "Verkkotutkimus ei ole tilapäisesti käytettävissä palveluntarjoajalla.",
       "other": "Verkkotutkimus epäonnistui ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Kysymys: {{question}}",
+      "send": "Lähetä",
+      "answeredOwnWords": "Vastattu omin sanoin"
     }
   },
   "notes": {
@@ -1179,5 +1190,23 @@
       "language": "Tunnistuskieli",
       "languageAuto": "Automaattinen"
     }
+  },
+  "connectTab": {
+    "connecting": "Yhdistetään kohteeseen {{name}} …",
+    "failed": "Yhteys kohteeseen {{name}} epäonnistui",
+    "retry": "Yritä uudelleen",
+    "close": "Sulje",
+    "cancel": "Peruuta",
+    "stepsLabel": "Yhteyden vaiheet",
+    "stepsRunning": "Yhdistetään…",
+    "detail": {
+      "tunnel": "kautta {{hop}}",
+      "waitingForResponse": "odottaa vastausta",
+      "waitingForDecision": "odottaa päätöstäsi",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "valmis",
+    "resultFailed": "epäonnistui"
   }
 }

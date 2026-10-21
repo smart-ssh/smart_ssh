@@ -131,6 +131,14 @@ pub(crate) fn history_shapes(context: &SessionContext) -> Vec<String> {
                 "[sealed_extension_part] count=1 binary_bytes={}",
                 sealed.binary_bytes()
             ),
+            // Issue #545: lengths only.
+            MessageContent::Question {
+                question, options, ..
+            } => format!(
+                "[question] len={} options={}",
+                question.chars().count(),
+                options.len()
+            ),
         })
         .collect()
 }
@@ -176,6 +184,14 @@ pub(crate) fn history_contents(context: &SessionContext) -> Vec<String> {
             MessageContent::Sealed(sealed) => format!(
                 "[sealed_extension_part] count=1 binary_bytes={}",
                 sealed.binary_bytes()
+            ),
+            // Issue #545: redacted text (debug line only).
+            MessageContent::Question {
+                question, options, ..
+            } => format!(
+                "[question] {} (options={})",
+                redactor.redact_text(question),
+                options.len()
             ),
         })
         .collect()

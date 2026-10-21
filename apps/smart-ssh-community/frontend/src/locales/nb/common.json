@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Tilkoblingen ble avbrutt fordi vertsnøkkelen ikke ble bekreftet. Stoler du på serveren, koble til igjen og kontroller fingeravtrykket.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Forespørselen om vertsnøkkel ble ikke besvart i tide; nøkkelen ble ikke godkjent. Koble til på nytt.",
     "SSH_CONNECTION_ABANDONED": "Tilkoblingsforsøket ble avbrutt (f.eks. fordi appen ble lastet på nytt mens vertsnøkkelforespørselen var åpen). Koble til på nytt.",
+    "SSH_CONNECT_CANCELLED": "Tilkoblingen ble avbrutt.",
     "AI_AUTH_FAILED": "Autentisering hos AI-leverandøren mislyktes – sjekk API-nøkkelen",
     "AI_RATE_LIMITED": "AI-leverandøren begrenser forespørsler for øyeblikket (rate limit) – appen har allerede prøvd på nytt automatisk noen ganger. Vent litt og send meldingen igjen.",
     "AI_NETWORK_ERROR": "Får ikke kontakt med AI-leverandøren. Sjekk internettforbindelsen og, for et eget endepunkt, basis-URL-en, og send på nytt.",
@@ -692,8 +693,12 @@
       "startFailed": "sftp-server kunne ikke startes via sudo (mulig årsak: “requiretty” i sudoers)."
     },
     "channelLost": "Utvidede rettigheter er avsluttet – den utvidede kanalen er ikke lenger aktiv.",
-    "targetUserLabel": "Målbruker for utvidede rettigheter (standard: root)",
-    "group": "Utvidede rettigheter"
+    "group": "Utvidede rettigheter",
+    "moreOptions": "Flere alternativer for utvidede rettigheter",
+    "otherUser": "Som en annen bruker …",
+    "targetUser": "Målbruker",
+    "targetUserHelp": "Kjører filleseren som denne brukeren via sudo. Standard: root.",
+    "confirm": "Utvid"
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -1035,6 +1040,7 @@
     "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Gå til nyeste melding",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgjengelig mens AI svarer eller en bekreftelse er åpen.",
     "autoContinuing": "Automatisk modus kjører – AI-en svarer selv på det siste resultatet…",
@@ -1084,6 +1090,11 @@
       "request_too_large": "Nettforespørselen var for stor.",
       "unavailable": "Nettsøk er midlertidig utilgjengelig hos leverandøren.",
       "other": "Nettsøk mislyktes ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Spørsmål: {{question}}",
+      "send": "Send inn",
+      "answeredOwnWords": "Besvart med egne ord"
     }
   },
   "notes": {
@@ -1179,5 +1190,23 @@
       "language": "Gjenkjenningsspråk",
       "languageAuto": "Automatisk"
     }
+  },
+  "connectTab": {
+    "connecting": "Kobler til {{name}} …",
+    "failed": "Tilkoblingen til {{name}} mislyktes",
+    "retry": "Prøv igjen",
+    "close": "Lukk",
+    "cancel": "Avbryt",
+    "stepsLabel": "Tilkoblingstrinn",
+    "stepsRunning": "Kobler til…",
+    "detail": {
+      "tunnel": "gjennom {{hop}}",
+      "waitingForResponse": "venter på svar",
+      "waitingForDecision": "venter på avgjørelsen din",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "ferdig",
+    "resultFailed": "mislyktes"
   }
 }

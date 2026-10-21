@@ -10,8 +10,11 @@ description: >
 
 # smart_ssh — Coder-Arbeitsweise
 
-Ergänzt `CLAUDE.md` (Gate, Architektur, Spec-first, Review-Pflicht gelten
-dort vollständig und werden hier nicht wiederholt).
+Ergänzt `AGENTS.md` (Gate, Architektur, Spec-Workflow, Changelog- und
+Testkonventionen gelten dort vollständig und werden hier nicht wiederholt).
+Die Review-Pflicht gehört zum Ablauf des Coders: Sie steht hier im
+Abschnitt „Review" und im Agenten `smart-ssh-coder` (Schritt 6), nicht in
+`AGENTS.md`.
 
 Vor Änderungen an Orchestrierung, Providern, Filter-Engine, Redaction oder
 SFTP: `references/security-invariants.md` lesen. Für das Finden von
@@ -92,11 +95,21 @@ etwas anderes tun.
 
 ## Review
 
-`spec-reviewer`-Agent mit der Priorität aus dem Auftrag, bei ERHÖHT mit
-ausformulierten Angriffswegen. Jeden Fund triagieren:
-- **beheben** — eigener Commit, mit Test und Gegenbeweis, oder
-- **bewusst nicht beheben** — mit Begründung in der ADR und im Bericht.
-Nichts stillschweigend fallen lassen. Hat eine Nachbesserung selbst etwas
+**Verpflichtend nach jedem Implementierungsschritt mit eigenem Commit** —
+nicht nur bei offensichtlich riskanten Änderungen und unabhängig vom
+Spec-Impact. Du rufst den `spec-reviewer`-Agenten selbst und ausdrücklich
+auf, bevor du den Abschluss meldest; was der Aufruf nennen muss (Spec bzw.
+Issue mit „spec impact none", Commit-Range, Priorität `NORMAL`/`ELEVATED`,
+bei `ELEVATED` ausformulierte Angriffswege), steht im Agenten, Schritt 6.
+
+Den Bericht vollständig lesen, dann jeden Fund triagieren:
+- **beheben** — Gate wieder grün, eigener Commit mit Bezug auf den Fund,
+  mit Test und Gegenbeweis, oder
+- **bewusst nicht beheben** (Fehlalarm, außerhalb dieses Schritts,
+  bewusste Designentscheidung) — mit Begründung in der ADR und im Bericht.
+Nichts stillschweigend fallen lassen. Die Abschlussmeldung enthält immer
+beide Teile: was gefunden und behoben wurde, und was gefunden, aber bewusst
+nicht behoben wurde (mit Grund). Hat eine Nachbesserung selbst etwas
 gelockert, eine weitere Runde.
 
 **Runde 2 prüft nur das Delta.** Die zweite Runde bekommt nicht noch
@@ -139,10 +152,10 @@ einmal. Damit ein Unterschied **diagnostizierbar** wird statt nur
 
 ```bash
 { date -u +%FT%TZ; echo "HEAD=$(git rev-parse HEAD)"; } > .agent/<BL-ID>/gate.txt
-( cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings     && cargo test --workspace ) >> .agent/<BL-ID>/gate.txt 2>&1
+( cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings     && cargo test --workspace && cargo build --workspace ) >> .agent/<BL-ID>/gate.txt 2>&1
 echo "RUST_EXIT=$?" >> .agent/<BL-ID>/gate.txt
 fe="$(ls -d apps/*/frontend | head -n1)"
-( cd "$fe" && npx tsc -b && npx oxlint && npx vitest run && npx vite build )     >> .agent/<BL-ID>/gate.txt 2>&1
+( cd "$fe" && npx tsc -b && npm run lint && npx vitest run && npx vite build )     >> .agent/<BL-ID>/gate.txt 2>&1
 echo "FE_EXIT=$?" >> .agent/<BL-ID>/gate.txt
 ```
 
@@ -176,8 +189,9 @@ Lizenz- oder Copyright-Text, der wörtlich zitiert wird.
   **Lies die Nummer nach dem Anlegen zurück** und prüfe, dass sie genau
   einmal vorkommt.
 - **Changelog**: nicht `CHANGELOG.md` direkt ändern, sondern ein Fragment
-  `changelog.d/<spec-nummer>-<thema>.md` (deutsch, nutzerrelevant). Grund:
-  parallele Coder würden sonst dieselben Zeilen ändern.
+  in `changelog.d/` (englisch, nutzerrelevant; Dateiname und Regeln in
+  `changelog.d/README.md`). Grund: parallele Coder würden sonst dieselben
+  Zeilen ändern.
 - **Version nie selbst erhöhen.**
 - **Bericht**: `.agent/<BL-ID>/report.md` — was umgesetzt ist (in Nutzersprache),
   Teil-0-Befund, Review-Funde behoben / bewusst nicht behoben mit Grund,

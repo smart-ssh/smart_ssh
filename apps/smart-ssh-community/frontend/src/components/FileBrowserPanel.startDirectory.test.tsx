@@ -15,6 +15,7 @@ vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
   sftpList: vi.fn(),
   sftpStartDirectory: vi.fn(),
+  sessionIsRoot: vi.fn(() => Promise.resolve(false)),
   sftpDelete: vi.fn(),
   sftpDeletePreview: vi.fn(),
   sftpDownload: vi.fn(),

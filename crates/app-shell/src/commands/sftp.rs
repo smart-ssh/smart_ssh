@@ -97,6 +97,21 @@ pub async fn sftp_start_directory(
     Ok(app_logic::start_directory::file_browser_start(&session).await)
 }
 
+/// Issue #544: whether the login user of this session is root (`id -u` probe
+/// at connect). `None` = unknown. The file browser hides its elevation
+/// controls only for `Some(true)`; the backend's elevation checks are unchanged.
+#[tauri::command]
+pub async fn session_is_root(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<Option<bool>> {
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    Ok(session.is_root())
+}
+
 async fn list_impl(
     session: &Session,
     channel: &BrowserChannel,

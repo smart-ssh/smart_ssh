@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Conexiune anulată deoarece cheia de host nu a fost confirmată. Dacă aveți încredere în server, conectați-vă din nou și verificați amprenta.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Solicitarea pentru cheia de host nu a primit răspuns la timp; cheia nu a fost acceptată. Conectați-vă din nou.",
     "SSH_CONNECTION_ABANDONED": "Încercarea de conectare a fost anulată (de ex. aplicația s-a reîncărcat cât timp solicitarea cheii de host era deschisă). Conectați-vă din nou.",
+    "SSH_CONNECT_CANCELLED": "Conexiune anulată.",
     "AI_AUTH_FAILED": "Autentificarea la furnizorul de IA a eșuat – verificați cheia API",
     "AI_RATE_LIMITED": "Furnizorul de IA limitează în prezent cererile (rate limit) – aplicația a reîncercat deja automat de câteva ori. Așteptați puțin și trimiteți din nou mesajul.",
     "AI_NETWORK_ERROR": "Furnizorul de IA nu poate fi atins. Verificați conexiunea la internet și, pentru un endpoint personalizat, URL-ul de bază, apoi trimiteți din nou.",
@@ -697,8 +698,12 @@
       "startFailed": "sftp-server nu a putut fi pornit prin sudo (cauză posibilă: „requiretty” în sudoers)."
     },
     "channelLost": "Drepturile ridicate s-au încheiat — canalul cu drepturi ridicate nu mai este activ.",
-    "targetUserLabel": "Utilizator țintă pentru drepturi ridicate (implicit: root)",
-    "group": "Drepturi ridicate"
+    "group": "Drepturi ridicate",
+    "moreOptions": "Mai multe opțiuni de ridicare a drepturilor",
+    "otherUser": "Ca alt utilizator…",
+    "targetUser": "Utilizator țintă",
+    "targetUserHelp": "Rulează browserul de fișiere ca acest utilizator prin sudo. Implicit: root.",
+    "confirm": "Ridică"
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",
@@ -1042,6 +1047,7 @@
     "copyProgressUnknownTotal": "Se copiază… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Mergi la cel mai recent mesaj",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",
     "autoContinuing": "Modul automat rulează — IA răspunde singură la ultimul rezultat…",
@@ -1092,6 +1098,11 @@
       "request_too_large": "Cererea web a fost prea mare.",
       "unavailable": "Cercetarea web este temporar indisponibilă la furnizor.",
       "other": "Cercetarea web a eșuat ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Întrebare: {{question}}",
+      "send": "Trimite",
+      "answeredOwnWords": "Răspuns cu propriile cuvinte"
     }
   },
   "notes": {
@@ -1187,5 +1198,23 @@
       "language": "Limba de recunoaștere",
       "languageAuto": "Automat"
     }
+  },
+  "connectTab": {
+    "connecting": "Se conectează la {{name}} …",
+    "failed": "Conectarea la {{name}} a eșuat",
+    "retry": "Reîncearcă",
+    "close": "Închide",
+    "cancel": "Anulează",
+    "stepsLabel": "Pașii conexiunii",
+    "stepsRunning": "Se conectează…",
+    "detail": {
+      "tunnel": "prin {{hop}}",
+      "waitingForResponse": "se așteaptă răspunsul",
+      "waitingForDecision": "se așteaptă decizia dvs.",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "gata",
+    "resultFailed": "eșuat"
   }
 }

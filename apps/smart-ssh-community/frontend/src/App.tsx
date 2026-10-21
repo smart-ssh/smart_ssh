@@ -11,6 +11,7 @@ import { ToastHost } from "./components/ToastHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
 import { ServerList } from "./components/ServerList";
 import { SessionTabBar } from "./components/SessionTabBar";
+import { ConnectingTabView } from "./components/ConnectingTabView";
 import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
@@ -39,6 +40,8 @@ function App() {
     tabs: sessionTabs,
     activeSessionId,
     openTab,
+    startConnect,
+    retryConnect,
     findExistingSessionId,
     switchTo,
     markActionSettled,
@@ -118,6 +121,10 @@ function App() {
     return () => window.removeEventListener("keydown", handler);
   }, [sessionTabs, activeSessionId, requestCloseTab, switchTo]);
 
+  const connectingServerIds = new Set(
+    sessionTabs.filter((t) => t.phase === "connecting").map((t) => t.serverId),
+  );
+
   return (
     // Spec 0010, Abschnitt 2, Punkt 6: die Benachrichtigung muss auch dann
     // noch ankommen, wenn der Nutzer den Session-Screen bereits verlassen
@@ -163,6 +170,14 @@ function App() {
             sessionTab.sessionId === activeSessionId ? "flex flex-1 min-h-0 flex-col" : "hidden"
           }
         >
+          {sessionTab.phase !== "connected" ? (
+            <ConnectingTabView
+              tab={sessionTab}
+              isActiveTab={sessionTab.sessionId === activeSessionId}
+              onRetry={() => retryConnect(sessionTab.sessionId)}
+              onClose={() => requestCloseTab(sessionTab.sessionId)}
+            />
+          ) : (
           <SessionView
             sessionId={sessionTab.sessionId}
             serverName={sessionTab.serverName}
@@ -172,6 +187,7 @@ function App() {
             onActionSettled={markActionSettled}
             isActiveTab={sessionTab.sessionId === activeSessionId}
           />
+          )}
         </div>
       ))}
 
@@ -186,6 +202,8 @@ function App() {
           findExistingSessionId={findExistingSessionId}
           onSwitchToExistingTab={switchTo}
           onConnected={(sessionId, serverName, serverId) => openTab(sessionId, serverId, serverName)}
+          onStartConnect={startConnect}
+          connectingServerIds={connectingServerIds}
           pendingNoteEditSelection={pendingNoteEditSelection}
           onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
@@ -208,6 +226,9 @@ interface MainScreenProps {
   onNoteEditSelectionConsumed: () => void;
   refreshProviderStatus: () => void;
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
+  /** Issue #548. */
+  onStartConnect: (server: { id: string; name: string }) => void;
+  connectingServerIds: ReadonlySet<string>;
   findExistingSessionId: (serverId: string) => string | undefined;
   onSwitchToExistingTab: (sessionId: string) => void;
   /** Spec 0069, Teil C1 (BL-0082). */
@@ -224,6 +245,8 @@ function MainScreen({
   hasActiveProvider,
   refreshProviderStatus,
   onConnected,
+  onStartConnect,
+  connectingServerIds,
   findExistingSessionId,
   onSwitchToExistingTab,
   pendingNoteEditSelection,
@@ -324,6 +347,8 @@ function MainScreen({
             </h2>
             <ServerList
               onConnected={onConnected}
+              onStartConnect={onStartConnect}
+              connectingServerIds={connectingServerIds}
               findExistingSessionId={findExistingSessionId}
               onSwitchToExistingTab={onSwitchToExistingTab}
               collapsedGroupIds={collapsedGroupIds}

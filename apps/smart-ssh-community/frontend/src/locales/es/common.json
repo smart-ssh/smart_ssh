@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Conexión cancelada porque no se confirmó la clave de host. Si confía en el servidor, vuelva a conectar y verifique la huella digital.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "La solicitud de clave de host no se respondió a tiempo; no se confió en la clave. Vuelva a conectar.",
     "SSH_CONNECTION_ABANDONED": "Intento de conexión cancelado (p. ej. la aplicación se recargó con la solicitud de clave de host abierta). Vuelva a conectar.",
+    "SSH_CONNECT_CANCELLED": "Conexión cancelada.",
     "AI_AUTH_FAILED": "Error de autenticación con el proveedor de IA: compruebe la clave de API",
     "AI_RATE_LIMITED": "El proveedor de IA está limitando las solicitudes (límite de frecuencia); la aplicación ya reintentó automáticamente varias veces. Espere un momento y vuelva a enviar el mensaje.",
     "AI_NETWORK_ERROR": "No se puede acceder al proveedor de IA. Compruebe su conexión a internet y, si usa un punto final propio, la URL base; después vuelva a enviar.",
@@ -697,8 +698,12 @@
       "startFailed": "No se pudo iniciar sftp-server mediante sudo (posible causa: “requiretty” en sudoers)."
     },
     "channelLost": "Derechos elevados finalizados: el canal elevado ya no está activo.",
-    "targetUserLabel": "Usuario de destino para derechos elevados (predeterminado: root)",
-    "group": "Derechos elevados"
+    "group": "Derechos elevados",
+    "moreOptions": "Más opciones de elevación",
+    "otherUser": "Como otro usuario…",
+    "targetUser": "Usuario de destino",
+    "targetUserHelp": "Ejecuta el explorador de archivos como este usuario mediante sudo. Predeterminado: root.",
+    "confirm": "Elevar"
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -1042,6 +1047,7 @@
     "copyProgressUnknownTotal": "Copiando… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Ir al mensaje más reciente",
     "newChat": "Nuevo chat",
     "newChatDisabledHint": "No disponible mientras la IA responde o hay una confirmación abierta.",
     "autoContinuing": "Modo automático en marcha: la IA responde por sí sola al último resultado…",
@@ -1092,6 +1098,11 @@
       "request_too_large": "La solicitud web era demasiado grande.",
       "unavailable": "La investigación web no está disponible temporalmente en el proveedor.",
       "other": "Error en la investigación web ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Pregunta: {{question}}",
+      "send": "Enviar",
+      "answeredOwnWords": "Respondida con tus propias palabras"
     }
   },
   "notes": {
@@ -1187,5 +1198,23 @@
       "language": "Idioma de reconocimiento",
       "languageAuto": "Automático"
     }
+  },
+  "connectTab": {
+    "connecting": "Conectando con {{name}} …",
+    "failed": "Error al conectar con {{name}}",
+    "retry": "Reintentar",
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "stepsLabel": "Pasos de conexión",
+    "stepsRunning": "Conectando…",
+    "detail": {
+      "tunnel": "a través de {{hop}}",
+      "waitingForResponse": "esperando respuesta",
+      "waitingForDecision": "esperando su decisión",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "hecho",
+    "resultFailed": "fallido"
   }
 }

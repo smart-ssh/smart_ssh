@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Verbindung abgebrochen, weil der Host-Key nicht bestätigt wurde. Wenn du dem Server vertraust: erneut verbinden und den Fingerprint prüfen.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Die Host-Key-Abfrage wurde nicht rechtzeitig beantwortet; der Key wurde nicht übernommen. Erneut verbinden.",
     "SSH_CONNECTION_ABANDONED": "Verbindungsaufbau abgebrochen (z. B. durch ein Neuladen der App, während die Host-Key-Abfrage offen war). Erneut verbinden.",
+    "SSH_CONNECT_CANCELLED": "Verbindung abgebrochen.",
     "AI_AUTH_FAILED": "Authentifizierung beim KI-Provider fehlgeschlagen – API-Key prüfen",
     "AI_RATE_LIMITED": "Der KI-Anbieter drosselt gerade die Anfragen (Rate-Limit) – die App hat es automatisch mehrfach erneut versucht. Bitte kurz warten und die Nachricht erneut senden.",
     "AI_NETWORK_ERROR": "Keine Verbindung zum KI-Provider. Internetverbindung und – bei eigenem Endpunkt – die Base-URL prüfen, dann erneut senden.",
@@ -692,8 +693,12 @@
       "startFailed": "sftp-server ließ sich über sudo nicht starten (mögliche Ursache: „requiretty“ in sudoers)."
     },
     "channelLost": "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv.",
-    "targetUserLabel": "Ziel-Nutzer der Rechteerhöhung (Standard: root)",
-    "group": "Erhöhte Rechte"
+    "group": "Erhöhte Rechte",
+    "moreOptions": "Weitere Optionen zur Rechteerhöhung",
+    "otherUser": "Als anderer Nutzer …",
+    "targetUser": "Ziel-Nutzer",
+    "targetUserHelp": "Führt den Dateibrowser über sudo als dieser Nutzer aus. Standard: root.",
+    "confirm": "Erhöhen"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importieren",
@@ -1035,6 +1040,7 @@
     "copyProgressUnknownTotal": "Kopiere… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Zur neuesten Nachricht",
     "newChat": "Neuer Chat",
     "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",
     "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",
@@ -1084,6 +1090,11 @@
       "request_too_large": "Die Webanfrage war zu groß.",
       "unavailable": "Die Web-Recherche ist beim Provider gerade nicht verfügbar.",
       "other": "Web-Recherche fehlgeschlagen ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Frage: {{question}}",
+      "send": "Senden",
+      "answeredOwnWords": "In eigenen Worten beantwortet"
     }
   },
   "notes": {
@@ -1179,5 +1190,23 @@
       "language": "Erkennungssprache",
       "languageAuto": "Automatisch"
     }
+  },
+  "connectTab": {
+    "connecting": "Verbinde mit {{name}} …",
+    "failed": "Verbindung zu {{name}} fehlgeschlagen",
+    "retry": "Erneut versuchen",
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "stepsLabel": "Verbindungsschritte",
+    "stepsRunning": "Verbindung wird aufgebaut…",
+    "detail": {
+      "tunnel": "über {{hop}}",
+      "waitingForResponse": "wartet auf Antwort",
+      "waitingForDecision": "wartet auf Ihre Entscheidung",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "erledigt",
+    "resultFailed": "fehlgeschlagen"
   }
 }

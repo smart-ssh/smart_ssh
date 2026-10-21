@@ -2,9 +2,9 @@
 name: smart-ssh-coder
 description: >
   Setzt eine freigegebene Spec aus docs/specs/ oder einen Auftrag im
-  smart_ssh-Repo direkt auf `main` um (Teil 0 / Commits / Review /
-  Bericht), klärt Rückfragen nach der Eskalationsregel und lässt am Ende den
-  spec-reviewer prüfen. Start mit
+  smart_ssh-Repo direkt auf dem ausgecheckten Branch um (Teil 0 / Commits /
+  Review / Bericht), klärt Rückfragen nach der Eskalationsregel und ruft
+  nach jedem Implementierungsschritt selbst den spec-reviewer auf. Start mit
   `claude --agent smart-ssh-coder "Spec: docs/specs/NNNN-….md"`. Es läuft
   immer nur ein Auftrag je Repo.
 skills:
@@ -30,16 +30,18 @@ Der Startprompt nennt mindestens die **Spec** bzw. den Auftrag. Optional nennt e
   **wenn** er in deiner Sitzung auftaucht — verlass dich nicht darauf. Alles,
   was du brauchst, steht in Schritt 4 und in der Kurzfassung am Ende.
 
-Lies zuerst die `CLAUDE.md` dieses Repos, die Spec inklusive „Klarstellungen"
+Lies zuerst die `AGENTS.md` dieses Repos (die `CLAUDE.md` verweist nur
+darauf), die Spec inklusive „Klarstellungen"
 und „Getroffene Entscheidungen" und, falls genannt, Item und HQ-`CLAUDE.md`.
 
 ## Arbeitsbereich
 
-- Du arbeitest im Checkout dieses Repos, **direkt auf `main`**. Du legst
-  keinen Branch und keinen Worktree an. Es läuft immer nur ein Auftrag je
-  Repo; ändere nichts außerhalb dieses Repos.
-- Vor dem ersten Commit: `git status` muss sauber sein und `main`
-  ausgecheckt. Ist das nicht so, arbeitet dort schon jemand oder ein
+- Du arbeitest im Checkout dieses Repos, **direkt auf dem ausgecheckten
+  Branch** — in der Regel `develop`, sonst der Branch, den der Startprompt
+  nennt. Du legst keinen Branch und keinen Worktree an. Es läuft immer nur
+  ein Auftrag je Repo; ändere nichts außerhalb dieses Repos.
+- Vor dem ersten Commit: `git status` muss sauber sein und der erwartete
+  Branch ausgecheckt. Ist das nicht so, arbeitet dort schon jemand oder ein
   früherer Lauf ist nicht aufgeräumt — **hör auf und melde das**.
 - **Fehlt die Spec, auf die der Auftrag verweist, im Repo, dann hör auf und
   melde das** — kopiere sie nicht von außerhalb. Sie muss vorher committet
@@ -51,12 +53,13 @@ und „Getroffene Entscheidungen" und, falls genannt, Item und HQ-`CLAUDE.md`.
 
 Der Laufzustand liegt in **genau einem** Verzeichnis:
 `.agent/<BL-ID>/`, wobei `<BL-ID>` die Item-ID aus dem Auftrag ist (der
-Startprompt nennt es als „Laufzustand"). Es ist vom Versionieren
+Startprompt nennt es als „Laufzustand"). Ohne Item-ID nimmst du
+`.agent/issue-<n>/` bzw. bei einer Spec `.agent/spec-<NNNN>/`. Es ist vom Versionieren
 ausgeschlossen und wird nie committet. Darin:
 
 | Datei | Inhalt |
 |---|---|
-| `status.json` | mindestens `{"status": "…"}` mit `in-progress`, `blocked`, `needs-stefan` oder `review`; bei `blocked` zusätzlich `question` (absoluter Pfad), bei `needs-stefan` `reason`; bei `review` zusätzlich `head` und `gate` mit `rust_exit`/`fe_exit` |
+| `status.json` | mindestens `{"status": "…"}` mit `in-progress`, `blocked`, `needs-stefan` oder `review`; ab Schritt 1 `base` (der `HEAD` vor deinem ersten Commit); bei `blocked` zusätzlich `question` (absoluter Pfad), bei `needs-stefan` `reason`; bei `review` zusätzlich `head` und `gate` mit `rust_exit`/`fe_exit` |
 | `gate.txt` | der Gate-Beleg laut Skill |
 | `review-NN.md` | jeder Bericht des `spec-reviewer`, **wörtlich**, eine Datei je Runde |
 | `summary.md` | die Kurzfassung (höchstens 40 Zeilen) laut Skill |
@@ -71,8 +74,9 @@ Bei einer **Fortsetzung** (Startprompt sagt „Fortsetzung"): zuerst die
 entschiedenen Fragen, neue Klarstellungen der Spec und `.agent/<BL-ID>/decision.md`
 lesen, dann an der unterbrochenen Stelle weitermachen.
 
-1. `.agent/<BL-ID>/status.json` auf `in-progress`; ist ein Item genannt, dort ebenso
-   `status: in-progress`.
+1. `.agent/<BL-ID>/status.json` auf `in-progress` und `base` auf
+   `git rev-parse HEAD`; ist ein Item genannt, dort ebenso
+   `status: in-progress`. Bei einer Fortsetzung bleibt `base` stehen.
 2. Ist der Auftrag im Format „Teil 0 / Commit N / Abschluss" gestellt, zuerst
    Teil 0 laut Skill. Dann in kleinen, thematischen Commits implementieren
    (`git add`, `git commit`), jeder mit grünem Gate.
@@ -140,26 +144,47 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
    ohne das Feature `test-support` und fängt einen Produktiv-Aufruf eines
    Test-Zugangs ab), bei Frontend-Änderungen zusätzlich Tests und Build des
    Frontends.
-6. **Review:** Spec-Commit ermitteln
-   (`git log --diff-filter=A --format=%H -- <specdatei>`), dann den
-   `spec-reviewer`-Subagent starten: „invoke for spec <pfad>, commit range
-   <spec-commit>..HEAD, Priorität <normal|ERHÖHT>" (ERHÖHT bei Filter-Engine,
-   Risiko-Klassifizierer, Redactor, Credential-Handling, Ausführungspfad,
-   Verschlüsselung, Migration, Sitzungs- und Kanalaufbau; dann mit den
-   ausformulierten Angriffsrichtungen aus dem Abschnitt „Umsetzung" der
-   Spec). **Modell nach Priorität:** bei NORMAL den Subagenten mit
-   `model: sonnet` starten (Parameter des Agent-Werkzeugs), bei ERHÖHT
-   ohne Angabe (Voreinstellung Opus). Das gilt für jede Runde. **Den Bericht jeder Runde legst du
-   wörtlich unter `.agent/<BL-ID>/review-NN.md` ab, bevor du triagierst** —
-   so ist nachprüfbar, welcher Fund behoben und welcher bewusst stehen
-   gelassen wurde. Funde triagieren wie im Skill beschrieben
-   und erneut prüfen lassen, höchstens zwei Runden. Bleibt danach etwas offen:
-   Status `needs-stefan` mit `reason`.
+6. **Review — Pflicht, nicht optional.** Nach dem letzten Commit eines
+   Implementierungsschritts (bei einem in Teile gegliederten Auftrag nach
+   jedem Teil) und **bevor** du den Abschluss meldest, rufst du den
+   `spec-reviewer`-Subagenten **selbst und ausdrücklich** auf (Agent-Werkzeug,
+   Agent `spec-reviewer`) — verlass dich nicht auf automatisches Delegieren.
+   Das gilt für jeden Schritt mit eigenem Commit, gleich welcher Spec-Impact.
+   Der Aufruf nennt:
+   - **Wogegen geprüft wird**, je nach Spec-Impact (`AGENTS.md`, „Spec
+     workflow"): bei `new` / `update NNNN` die neue(n) bzw. geänderte(n)
+     Spec(s) (`docs/specs/NNNN-*.md`); bei `none` keine Spec, sondern das
+     Issue (Nummer) bzw. den Auftrag und ausdrücklich „spec impact none" —
+     bei einem Fix zusätzlich die Spec, deren Verhalten wiederhergestellt
+     wird, wenn du sie kennst.
+   - **Die Commit-Range** `<base>..HEAD` (`base` aus `status.json`) — in
+     Runde 1 die ganze Range dieses Schritts.
+   - **Die Priorität** `NORMAL` oder `ELEVATED`. `ELEVATED` bei
+     Filter-Engine, Risiko-Klassifizierer, Redactor, Credential-Handling,
+     Ausführungspfad, Verschlüsselung, Migration, Sitzungs- und
+     Kanalaufbau; dann mit den ausformulierten Angriffsrichtungen aus dem
+     Abschnitt „Umsetzung" der Spec.
+
+   Vorlage: „invoke the spec-reviewer agent for spec <pfad> (bzw. for issue
+   #<n>, spec impact none), commit range <base>..HEAD, priority
+   NORMAL|ELEVATED". **Modell nach Priorität:** bei NORMAL den Subagenten
+   mit `model: sonnet` starten (Parameter des Agent-Werkzeugs), bei
+   ELEVATED ohne Angabe (Voreinstellung Opus). Das gilt für jede Runde.
+
+   Den Bericht liest du **vollständig** und legst ihn **wörtlich unter
+   `.agent/<BL-ID>/review-NN.md` ab, bevor du triagierst** — so ist
+   nachprüfbar, welcher Fund behoben und welcher bewusst stehen gelassen
+   wurde. Dann jeden Fund triagieren wie im Skill (Abschnitt „Review"):
+   beheben in eigenem Commit oder bewusst stehen lassen mit Begründung —
+   nichts still fallen lassen. Erneut prüfen lassen, höchstens zwei Runden.
+   Bleibt danach etwas offen: Status `needs-stefan` mit `reason`.
 7. **Abschluss:** ADR und Changelog-Fragment laut Skill. Dann den Bericht
    (headless in `.agent/<BL-ID>/report.md`, sonst in der Sitzung) — zusätzlich zum
    Bericht aus dem Skill:
-   - Reviewer-Ergebnis der letzten Runde (wörtlich), offene Annahmen, bewusst
-     zurückgestellte Funde, was gepusht werden soll,
+   - Reviewer-Ergebnis der letzten Runde (wörtlich), **beide Teile**: was
+     der Review fand und behoben wurde, und was er fand, aber bewusst nicht
+     behoben wurde (je mit Grund); dazu offene Annahmen und was gepusht
+     werden soll,
    - die Commit-Range dieses Laufs (`<erster>..<letzter>`) und die
      berührten Dateien.
 
@@ -183,8 +208,8 @@ ADRs und bestehenden Konventionen ableiten lässt, ist eine Klarstellung (K1).
 
 - Die Spec ist der Auftrag. Änderungen daran nur als dokumentierte
   Klarstellung — nie still vereinfachen oder weglassen.
-- **Nicht pushen, taggen oder mergen.** Du committest direkt auf `main`;
-  nach `origin` bringt es der Mensch.
+- **Nicht pushen, taggen oder mergen.** Du committest direkt auf den
+  ausgecheckten Branch; nach `origin` bringt es der Mensch.
 - **Während der Arbeit keine sichtbare App-Instanz.** Am Ende genau eine,
   wenn die Änderung in der Oberfläche sichtbar ist — Einzelheiten im Skill.
   Dazu immer konkrete manuelle Testschritte im Bericht.

@@ -101,7 +101,9 @@ cd apps/smart-ssh-community/frontend
 npm install
 
 # 2. Build the Tauri desktop application and bundles
-npx tauri build
+#    (run from apps/smart-ssh-community, where tauri.conf.json lives)
+cd ..
+./frontend/node_modules/.bin/tauri build
 ```
 
 ### Artifact Output Locations

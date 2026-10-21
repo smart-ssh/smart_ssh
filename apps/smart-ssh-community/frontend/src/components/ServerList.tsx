@@ -4,7 +4,6 @@ import {
   commandErrorCode,
   commandErrorConnectLog,
   commandErrorMessage,
-  connect,
   listChatSessions,
   listGroups,
   listServers,
@@ -14,7 +13,6 @@ import {
 import { translateErrorCode } from "../errorCodes";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
-import { clearHostKeyPrompt } from "../hostKeyPromptBus";
 import {
   classifyDrop,
   dropHighlightClass,
@@ -39,7 +37,14 @@ import { unusableReasonText } from "../unusableServer";
 import { Button } from "./ui";
 
 interface ServerListProps {
+  /** Only used by the "resume chat session" path (Issue #548: a plain
+   * connect opens a connecting tab through `onStartConnect`). */
   onConnected: (sessionId: string, serverName: string, serverId: string) => void;
+  /** Issue #548: opens a "Connecting to …" tab and runs the attempt there. */
+  onStartConnect: (server: { id: string; name: string }) => void;
+  /** Issue #548: servers with a running connect attempt (keeps the
+   * "Connecting…" state of the row). */
+  connectingServerIds: ReadonlySet<string>;
   /** Spec 0017, Abschnitt 3: "existiert bereits ein Tab für diesen Server,
    * wird stattdessen zu diesem gewechselt (kein zweiter Tab zum selben
    * Server)" — die Prüfung muss **vor** `connect()` passieren, sonst würde
@@ -91,6 +96,8 @@ function describeError(
  */
 export function ServerList({
   onConnected,
+  onStartConnect,
+  connectingServerIds,
   findExistingSessionId,
   onSwitchToExistingTab,
   collapsedGroupIds,
@@ -198,16 +205,8 @@ export function ServerList({
 
   const performConnect = async (server: ServerDto) => {
     setError(null);
-    setConnectingId(server.id);
-    try {
-      const sessionId = await connect(server.id);
-      onConnected(sessionId, server.name, server.id);
-    } catch (err) {
-      showConnectFailure(err);
-    } finally {
-      setConnectingId(null);
-      clearHostKeyPrompt();
-    }
+    setConnectFailure(null);
+    onStartConnect({ id: server.id, name: server.name });
   };
 
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
@@ -223,14 +222,16 @@ export function ServerList({
    * immer eine leere Liste; kein gesonderter Fall hier nötig.
    */
   const handleConnect = async (server: ServerDto) => {
-    // Issue #407: the buttons stay focusable (aria-disabled instead of
-    // disabled) while an attempt is pending, so the guard lives here.
-    if (connectingId !== null) return;
+    // Issue #548: also covers a running connect attempt (its tab is
+    // focused instead of starting a second attempt).
     const existingSessionId = findExistingSessionId(server.id);
     if (existingSessionId) {
       onSwitchToExistingTab(existingSessionId);
       return;
     }
+    // Issue #407: the buttons stay focusable (aria-disabled instead of
+    // disabled) while an attempt is pending, so the guard lives here.
+    if (connectingId !== null) return;
     if (firstRunAcknowledged === false) {
       setPendingConnectServer(server);
       return;
@@ -346,7 +347,7 @@ export function ServerList({
               {tag}
             </span>
           ))}
-          {connectingId === server.id && (
+          {(connectingId === server.id || connectingServerIds.has(server.id)) && (
             <span className="text-xs text-indigo-300">{t("mainScreen.connecting")}</span>
           )}
         </div>

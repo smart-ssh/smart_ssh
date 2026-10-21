@@ -96,6 +96,8 @@ fn content_type_for(content: &MessageContent) -> &'static str {
         // Issue #505: sealed content exists only in a send copy and is
         // rejected before this point (`append_message`).
         MessageContent::Sealed(_) => "sealed",
+        // Issue #545, Migration `0024_...sql`.
+        MessageContent::Question { .. } => "question",
     }
 }
 
@@ -272,6 +274,31 @@ impl SqliteChatSessionStore {
         Ok(())
     }
 
+    /// Issue #543 / Spec 0034, Abschnitt 4: deletes the session iff it has
+    /// no `chat_messages` and no `ledger_entries`. Check and delete are one
+    /// statement, so a message arriving concurrently either lands first (row
+    /// kept) or hits a missing session. Returns whether a row was deleted.
+    pub async fn delete_if_empty(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
+        let res = sqlx::query(
+            "DELETE FROM chat_sessions WHERE id = ? \
+             AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id) \
+             AND NOT EXISTS (SELECT 1 FROM ledger_entries WHERE session_id = chat_sessions.id)",
+        )
+        .bind(session_id.to_string())
+        .execute(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    /// Ends a session: an empty one is discarded, any other is marked ended.
+    pub async fn end_or_discard(&self, session_id: Uuid) -> Result<(), ChatSessionStoreError> {
+        if self.delete_if_empty(session_id).await? {
+            return Ok(());
+        }
+        self.mark_ended(session_id).await
+    }
+
     /// Spec 0034, Abschnitt 4: "Beim Fortsetzen ... wird dieselbe
     /// `chat_sessions`-Zeile weiterverwendet (`ended_at` wird auf `NULL`
     /// zurückgesetzt, `sequence` läuft weiter hoch)" — Letzteres ergibt
@@ -420,6 +447,72 @@ impl SqliteChatSessionStore {
                 .await
                 .map_err(backend_err)?;
         Ok(result.rows_affected() > 0)
+    }
+
+    /// Issue #551: whether the session already has a title (automatic or
+    /// manual). A missing row counts as "no title".
+    pub async fn has_title(&self, session_id: Uuid) -> Result<bool, ChatSessionStoreError> {
+        let row = sqlx::query("SELECT title FROM chat_sessions WHERE id = ?")
+            .bind(session_id.to_string())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(backend_err)?;
+        Ok(row.is_some_and(|r| r.get::<Option<String>, _>("title").is_some()))
+    }
+
+    /// Issue #551: text of the first stored user message of a session
+    /// (`None` if there is none). Only plain text messages count.
+    pub async fn first_user_message_text(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Option<String>, ChatSessionStoreError> {
+        let row = sqlx::query(
+            "SELECT content FROM chat_messages \
+             WHERE session_id = ? AND role = 'user' AND content_type = 'text' \
+             ORDER BY sequence ASC LIMIT 1",
+        )
+        .bind(session_id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let raw: String = row.try_get("content").map_err(backend_err)?;
+        match serde_json::from_str::<MessageContent>(&raw) {
+            Ok(MessageContent::Text(text)) => Ok(Some(text)),
+            Ok(_) => Ok(None),
+            Err(e) => Err(ChatSessionStoreError::Backend(format!(
+                "ungültiger Nachrichteninhalt: {e}"
+            ))),
+        }
+    }
+
+    /// Issue #551 (backfill): every untitled session together with the text
+    /// of its first stored user message. Sessions without a user text
+    /// message are not returned.
+    pub async fn untitled_sessions_with_first_user_message(
+        &self,
+    ) -> Result<Vec<(Uuid, String)>, ChatSessionStoreError> {
+        let rows = sqlx::query(
+            "SELECT id FROM chat_sessions s WHERE title IS NULL AND EXISTS \
+             (SELECT 1 FROM chat_messages m WHERE m.session_id = s.id \
+              AND m.role = 'user' AND m.content_type = 'text')",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(backend_err)?;
+        let mut out = Vec::new();
+        for row in rows {
+            let id_raw: String = row.get("id");
+            let id = Uuid::parse_str(&id_raw).map_err(|e| {
+                ChatSessionStoreError::Backend(format!("ungültige UUID in Spalte id: {e}"))
+            })?;
+            if let Some(text) = self.first_user_message_text(id).await? {
+                out.push((id, text));
+            }
+        }
+        Ok(out)
     }
 
     /// Spec 0034, Abschnitt 8: `delete_chat_session(session_id)` —
@@ -712,6 +805,65 @@ mod tests {
         assert_eq!(texts, vec!["vor dem Trennen", "nach dem Fortsetzen"]);
     }
 
+    async fn session_count(profile_store: &SqliteProfileStore, id: Uuid) -> i64 {
+        sqlx::query("SELECT COUNT(*) AS n FROM chat_sessions WHERE id = ?")
+            .bind(id.to_string())
+            .fetch_one(&profile_store.pool)
+            .await
+            .unwrap()
+            .get("n")
+    }
+
+    #[tokio::test]
+    async fn test_delete_if_empty_removes_empty_session() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        assert!(chat_store.delete_if_empty(id).await.unwrap());
+        assert_eq!(session_count(&profile_store, id).await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_if_empty_keeps_session_with_message() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        // Message arrives before the delete (concurrent case).
+        chat_store
+            .append_message(id, &text_message(Role::User, "hi"))
+            .await
+            .unwrap();
+        assert!(!chat_store.delete_if_empty(id).await.unwrap());
+        chat_store.end_or_discard(id).await.unwrap();
+        assert_eq!(session_count(&profile_store, id).await, 1);
+        let ended: Option<String> = sqlx::query("SELECT ended_at FROM chat_sessions WHERE id = ?")
+            .bind(id.to_string())
+            .fetch_one(&profile_store.pool)
+            .await
+            .unwrap()
+            .get("ended_at");
+        assert!(ended.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_delete_if_empty_keeps_session_with_ledger_entry() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let id = chat_store.create_session(&server_id, None).await.unwrap();
+        sqlx::query(
+            "INSERT INTO ledger_entries (id, session_id, sequence, source, entry_type, content, created_at) \
+             VALUES (?, ?, 1, 'mcp-agent', 'command_executed', x'00', ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(id.to_string())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&profile_store.pool)
+        .await
+        .unwrap();
+        assert!(!chat_store.delete_if_empty(id).await.unwrap());
+        assert_eq!(session_count(&profile_store, id).await, 1);
+    }
+
     #[tokio::test]
     async fn test_mark_ended_sets_ended_at() {
         let (profile_store, chat_store) = in_memory_chat_session_store().await;
@@ -883,6 +1035,46 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(listed[0].title.as_deref(), Some("Manuell umbenannt"));
+    }
+
+    /// Issue #551: backfill query — untitled sessions with a user message
+    /// only; titled and message-less sessions are not returned.
+    #[tokio::test]
+    async fn test_untitled_sessions_with_first_user_message() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let untitled = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .append_message(untitled, &text_message(Role::Assistant, "hi"))
+            .await
+            .unwrap();
+        chat_store
+            .append_message(untitled, &text_message(Role::User, "erste"))
+            .await
+            .unwrap();
+        chat_store
+            .append_message(untitled, &text_message(Role::User, "zweite"))
+            .await
+            .unwrap();
+        let titled = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .append_message(titled, &text_message(Role::User, "x"))
+            .await
+            .unwrap();
+        chat_store.set_title_if_absent(titled, "T").await.unwrap();
+        let empty = chat_store.create_session(&server_id, None).await.unwrap();
+        chat_store
+            .append_message(empty, &text_message(Role::Assistant, "nur ich"))
+            .await
+            .unwrap();
+
+        let found = chat_store
+            .untitled_sessions_with_first_user_message()
+            .await
+            .unwrap();
+        assert_eq!(found, vec![(untitled, "erste".to_string())]);
+        assert!(chat_store.has_title(titled).await.unwrap());
+        assert!(!chat_store.has_title(empty).await.unwrap());
     }
 
     /// Spec 0034, Abschnitt 7: "Ein einmal automatisch gesetzter Titel wird
@@ -1059,6 +1251,58 @@ mod tests {
         assert_eq!(ctype, "extension");
     }
 
+    /// Issue #545: a question round-trips through the store (same id, options
+    /// and flag) and is stored with its own `content_type`; a database from
+    /// before migration 0024 keeps its rows and accepts the new type.
+    #[tokio::test]
+    async fn test_question_round_trips_and_migration_0024_keeps_old_rows() {
+        let (profile_store, chat_store) = in_memory_chat_session_store().await;
+        let server_id = create_test_server(&profile_store).await;
+        let session_id = chat_store.create_session(&server_id, None).await.unwrap();
+        let question = ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Question {
+                question_id: Uuid::new_v4(),
+                question: "Which fix?".to_string(),
+                options: vec![
+                    ssh_manager_core::profiles::AskUserOption {
+                        label: "A".to_string(),
+                        description: Some("first".to_string()),
+                    },
+                    ssh_manager_core::profiles::AskUserOption {
+                        label: "B".to_string(),
+                        description: None,
+                    },
+                ],
+                multi_select: true,
+            },
+        };
+        chat_store
+            .append_message(session_id, &question)
+            .await
+            .unwrap();
+        assert_eq!(
+            chat_store.load_session(session_id).await.unwrap(),
+            vec![question.clone()]
+        );
+        let ctype: String = sqlx::query_scalar("SELECT content_type FROM chat_messages")
+            .fetch_one(&profile_store.pool)
+            .await
+            .unwrap();
+        assert_eq!(ctype, "question");
+
+        // Old database (up to 0022) migrates through 0024 and keeps its rows.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dev.db");
+        let old_session = Uuid::new_v4();
+        database_at_0022(&path, old_session).await;
+        let store = SqliteProfileStore::connect_plaintext(&path).await.unwrap();
+        let chat = store.chat_session_store();
+        assert_eq!(chat.load_session(old_session).await.unwrap().len(), 2);
+        chat.append_message(old_session, &question).await.unwrap();
+        assert_eq!(chat.load_session(old_session).await.unwrap().len(), 3);
+    }
+
     /// Setup for the 0023 tests: a file database migrated only up to 0022
     /// (the state of a development database that applied 0021/0022), holding
     /// a text row, an `attachments` row and an `extension` row.
@@ -1193,7 +1437,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=23).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=24).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.

@@ -46,6 +46,15 @@ pro Arbeitsblock, keine endlose Historie pro Server.
 - Beim Fortsetzen wird **dieselbe** Sitzung weiterverwendet (Endzeit wird
   geleert, die Reihenfolge läuft weiter) — kein Kopieren. Der Verlauf bleibt
   ein durchgehender Thread über mehrere Verbinden/Trennen-Zyklen.
+- **Leere Sitzungen werden verworfen.** Endet eine Sitzung (Trennen,
+  Tab schließen, „Neuer Chat"), ohne dass sie eine Nachricht oder einen
+  Ledger-Eintrag (z. B. MCP-Aktivität im Tab) enthält, wird sie gelöscht
+  statt als beendet markiert; sie erscheint nie in der Auswahlliste. Eine
+  Sitzung mit mindestens einer Nachricht oder einem Ledger-Eintrag bleibt
+  unverändert erhalten. Bereits vor dieser Regel entstandene leere Sitzungen
+  werden nicht aufgeräumt. Beim Beenden der App werden offene Sitzungen
+  nicht beendet; ein App-Absturz oder -Ende mit offenem leerem Chat kann
+  daher eine leere Sitzung zurücklassen.
 
 ## 5. „Fortsetzbar" — ohne Ablaufdatum
 
@@ -73,14 +82,28 @@ Auswahl-Screen statt direkten Verbindens:
 
 ## 7. Automatische Kurztitel
 
-Beim Trennen — sofern die Sitzung mindestens eine Nutzer-Nachricht hat und
-noch keinen Titel — wird ein kurzer Titel (2–4 Wörter) erzeugt: ein
-minimaler KI-Aufruf ohne Tool-Schema, dessen Antworttext (defensiv auf
-sinnvolle Länge begrenzt) der Titel wird. Der Aufruf nutzt denselben
-Auslöser wie der Notiz-Vorschlag beim Beenden (Spec 0010, Abschnitt 2).
+Eine gespeicherte Sitzung bekommt ihren Titel im Hintergrund, sobald die
+erste KI-Antwort fertig ist (ohne dass getrennt werden muss): ein minimaler
+KI-Aufruf ohne Tool-Schema („Fasse den Zweck dieser Unterhaltung bisher in
+2–4 Wörtern zusammen“), dessen Antworttext (defensiv auf sinnvolle Länge
+begrenzt) der Titel wird. Es gibt genau einen Versuch je Sitzung; der
+Aufruf läuft nie parallel zu einer Chat-Anfrage am selben Anbieter.
 
-- Ein gesetzter Titel wird nicht bei jedem weiteren Trennen überschrieben,
-  er bleibt stabil.
+- **Ersatztitel:** Liefert der Versuch keinen brauchbaren Titel (Fehler,
+  abgeschnitten, leer, nur Platzhalter), wird die erste Nutzer-Nachricht der
+  Sitzung verwendet: erst geschwärzt, dann Leerraum zu einzelnen Leerzeichen
+  zusammengezogen, dann auf 60 Zeichen gekürzt. Bleibt danach nichts oder nur
+  ein Platzhalter übrig, bleibt die Sitzung ohne Titel.
+- **Sicherheitsnetz:** Hat eine Sitzung beim Trennen oder bei „Neuer Chat“
+  noch keinen Titel (z. B. weil der erste Durchlauf nie fertig wurde) und
+  mindestens eine Nutzer-Nachricht, läuft dieselbe Logik („KI-Titel, sonst
+  Ersatztitel“) einmal.
+- **Nachtrag beim App-Start:** Einmal je Start erhält jede Sitzung ohne
+  Titel, die mindestens eine Nutzer-Nachricht hat, den Ersatztitel aus ihrer
+  ersten Nutzer-Nachricht (ohne KI-Aufruf, gleiche Schwärzung). Sitzungen mit
+  Titel oder ohne Nutzer-Nachricht bleiben unverändert; ein zweiter Lauf ändert
+  nichts.
+- Ein gesetzter Titel wird nie automatisch überschrieben, er bleibt stabil.
 - Manuelles Umbenennen überschreibt den automatischen Titel dauerhaft.
 
 ## 8. Operationen
@@ -114,7 +137,8 @@ Chat". Sie beginnt einen frischen Chat, ohne die SSH-Verbindung zu trennen:
 Terminal, Verbindung, Tab, Dateibrowser, gespeichertes Sudo-Passwort und ein
 bereits erhöhter Kanal bleiben unverändert.
 
-1. **Wirkung.** Der bisherige Chat wird beendet (Endzeit gesetzt) und
+1. **Wirkung.** Der bisherige Chat wird beendet (Endzeit gesetzt; war er
+   leer, wird er stattdessen gelöscht, Abschnitt 4) und
    bekommt seinen automatischen Titel aus dem bisherigen Verlauf — genau wie
    beim Trennen (Abschnitt 4 und 7). Für denselben Server und den aktiven
    KI-Anbieter entsteht eine neue Sitzung, auf die der Tab umschaltet.

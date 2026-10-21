@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "由于主机密钥未被确认，连接已取消。如果您信任该服务器，请重新连接并核对指纹。",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "主机密钥提示未在规定时间内回应；该密钥未被信任。请重新连接。",
     "SSH_CONNECTION_ABANDONED": "连接尝试已取消（例如主机密钥提示打开期间应用重新加载了）。请重新连接。",
+    "SSH_CONNECT_CANCELLED": "连接已取消。",
     "AI_AUTH_FAILED": "与 AI 提供商的验证失败——请检查 API 密钥",
     "AI_RATE_LIMITED": "AI 提供商目前正在限制请求（速率限制）——应用已自动重试数次。请稍候片刻，再重新发送消息。",
     "AI_NETWORK_ERROR": "无法连接 AI 提供商。请检查您的网络连接，若使用自定义端点，还需检查基础 URL，然后重新发送。",
@@ -687,8 +688,12 @@
       "startFailed": "无法通过 sudo 启动 sftp-server（可能原因：sudoers 中的“requiretty”）。"
     },
     "channelLost": "提权已结束——提权通道已不再有效。",
-    "targetUserLabel": "提权的目标用户（默认：root）",
-    "group": "提升的权限"
+    "group": "提升的权限",
+    "moreOptions": "更多提权选项",
+    "otherUser": "以其他用户身份…",
+    "targetUser": "目标用户",
+    "targetUserHelp": "通过 sudo 以该用户身份运行文件浏览器。默认：root。",
+    "confirm": "提权"
   },
   "sshConfigImport": {
     "dialogTitle": "导入 ssh_config",
@@ -1028,6 +1033,7 @@
     "copyProgressUnknownTotal": "正在复制… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "跳转到最新消息",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",
     "autoContinuing": "自动模式运行中——AI 正在自行对上一个结果作出回应…",
@@ -1076,6 +1082,11 @@
       "request_too_large": "网络请求过大。",
       "unavailable": "提供商处的联网调研暂时不可用。",
       "other": "联网调研失败（{{code}}）。"
+    },
+    "question": {
+      "cardLabel": "问题：{{question}}",
+      "send": "发送",
+      "answeredOwnWords": "已用自己的话回答"
     }
   },
   "notes": {
@@ -1171,5 +1182,23 @@
       "language": "识别语言",
       "languageAuto": "自动"
     }
+  },
+  "connectTab": {
+    "connecting": "正在连接 {{name}} …",
+    "failed": "连接 {{name}} 失败",
+    "retry": "重试",
+    "close": "关闭",
+    "cancel": "取消",
+    "stepsLabel": "连接步骤",
+    "stepsRunning": "正在连接…",
+    "detail": {
+      "tunnel": "经由 {{hop}}",
+      "waitingForResponse": "等待响应",
+      "waitingForDecision": "等待您的决定",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "完成",
+    "resultFailed": "失败"
   }
 }

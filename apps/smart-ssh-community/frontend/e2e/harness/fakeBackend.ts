@@ -256,11 +256,13 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     },
     // An open session: empty history, a terminal that echoes nothing, an
     // empty home directory in the file browser.
+    send_chat_message: () => null,
     get_chat_history: () => [],
     list_prompt_history: () => [],
     open_terminal: () => ({ missingDirectory: null }),
     terminal_resize: () => null,
     terminal_input: () => null,
+    session_is_root: () => false,
     sftp_start_directory: () => ({ path: ".", missingDirectory: null }),
     sftp_list: () => [],
     sftp_local_paths_are_folders: (args) =>
@@ -270,6 +272,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     // Approve/deny of a pending action; the result event is up to the test.
     respond_to_action: () => null,
     // Issue #355: the status events are up to the test.
+    cancel_connect: () => null,
     reconnect_session: () => null,
     stop_auto_reconnect: () => null,
     get_selected_speech_model: () => "base",

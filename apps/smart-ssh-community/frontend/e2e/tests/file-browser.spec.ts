@@ -130,6 +130,42 @@ test.describe("file browser", () => {
     await expect(trigger).toBeFocused();
   });
 
+  test("elevation menu: labelled target user field, keyboard operable, axe clean (issue #544)", async ({ app }) => {
+    test.setTimeout(90_000);
+    await openFileBrowser(app);
+    const page = app.page;
+    const arrow = page.getByRole("button", { name: "More elevation options" });
+    await expect(page.getByRole("button", { name: /Elevated rights/ })).toBeVisible();
+    await expect(page.getByLabel("Target user")).toHaveCount(0);
+    await arrow.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("menuitem", { name: /As another user/ })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(arrow).toBeFocused();
+    await page.keyboard.press("Space");
+    await page.getByRole("menuitem", { name: /As another user/ }).click();
+    await expect(page.getByLabel("Target user")).toBeFocused();
+    await expectNoSeriousA11yViolations(page, "file browser: elevation target user");
+    await page.keyboard.press("Escape");
+    await expect(page.getByLabel("Target user")).toHaveCount(0);
+    await expect(arrow).toBeFocused();
+  });
+
+  test("elevation menu closes on an outside click (issue #569)", async ({ app }) => {
+    await openFileBrowser(app);
+    const page = app.page;
+    const arrow = page.getByRole("button", { name: "More elevation options" });
+    await arrow.click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.getByText("notes.txt").first().click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await arrow.click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await arrow.click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  });
+
   test("long names are truncated inside the panel and carry a tooltip", async ({ app }) => {
     await openFileBrowser(app);
     const page = app.page;

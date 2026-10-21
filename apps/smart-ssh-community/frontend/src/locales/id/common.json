@@ -496,6 +496,7 @@
     "SSH_HOST_KEY_NOT_TRUSTED": "Koneksi dibatalkan karena kunci host tidak dikonfirmasi. Jika Anda memercayai server, hubungkan lagi dan verifikasi sidik jarinya.",
     "SSH_HOST_KEY_CONFIRM_TIMEOUT": "Permintaan kunci host tidak dijawab tepat waktu; kunci tidak dipercaya. Hubungkan lagi.",
     "SSH_CONNECTION_ABANDONED": "Percobaan koneksi dibatalkan (mis. aplikasi dimuat ulang saat permintaan kunci host terbuka). Hubungkan lagi.",
+    "SSH_CONNECT_CANCELLED": "Koneksi dibatalkan.",
     "AI_AUTH_FAILED": "Autentikasi dengan penyedia AI gagal – periksa kunci API",
     "AI_RATE_LIMITED": "Penyedia AI sedang membatasi permintaan (batas laju) – aplikasi sudah mencoba ulang secara otomatis beberapa kali. Mohon tunggu sebentar dan kirim pesan lagi.",
     "AI_NETWORK_ERROR": "Tidak dapat menjangkau penyedia AI. Periksa koneksi internet Anda dan, untuk endpoint kustom, URL dasarnya, lalu kirim lagi.",
@@ -687,8 +688,12 @@
       "startFailed": "sftp-server tidak dapat dimulai melalui sudo (kemungkinan penyebab: “requiretty” di sudoers)."
     },
     "channelLost": "Hak tinggi berakhir — kanal dengan hak tinggi tidak lagi aktif.",
-    "targetUserLabel": "Pengguna target untuk hak tinggi (default: root)",
-    "group": "Hak istimewa tinggi"
+    "group": "Hak istimewa tinggi",
+    "moreOptions": "Opsi hak akses tinggi lainnya",
+    "otherUser": "Sebagai pengguna lain…",
+    "targetUser": "Pengguna target",
+    "targetUserHelp": "Menjalankan peramban berkas sebagai pengguna ini melalui sudo. Bawaan: root.",
+    "confirm": "Tingkatkan"
   },
   "sshConfigImport": {
     "dialogTitle": "Impor ssh_config",
@@ -1028,6 +1033,7 @@
     "copyProgressUnknownTotal": "Menyalin… {{done}} MB"
   },
   "chat": {
+    "jumpToLatest": "Ke pesan terbaru",
     "newChat": "Obrolan baru",
     "newChatDisabledHint": "Tidak tersedia saat AI sedang merespons atau konfirmasi sedang terbuka.",
     "autoContinuing": "Mode otomatis berjalan — AI merespons hasil terakhir dengan sendirinya…",
@@ -1076,6 +1082,11 @@
       "request_too_large": "Permintaan web terlalu besar.",
       "unavailable": "Riset web sementara tidak tersedia di penyedia.",
       "other": "Riset web gagal ({{code}})."
+    },
+    "question": {
+      "cardLabel": "Pertanyaan: {{question}}",
+      "send": "Kirim",
+      "answeredOwnWords": "Dijawab dengan kata-kata sendiri"
     }
   },
   "notes": {
@@ -1171,5 +1182,23 @@
       "language": "Bahasa pengenalan",
       "languageAuto": "Otomatis"
     }
+  },
+  "connectTab": {
+    "connecting": "Menyambung ke {{name}} …",
+    "failed": "Koneksi ke {{name}} gagal",
+    "retry": "Coba lagi",
+    "close": "Tutup",
+    "cancel": "Batal",
+    "stepsLabel": "Langkah koneksi",
+    "stepsRunning": "Menyambung…",
+    "detail": {
+      "tunnel": "melalui {{hop}}",
+      "waitingForResponse": "menunggu respons",
+      "waitingForDecision": "menunggu keputusan Anda",
+      "authMethod": "{{method}}"
+    },
+    "announce": "{{step}}: {{result}}",
+    "resultOk": "selesai",
+    "resultFailed": "gagal"
   }
 }
