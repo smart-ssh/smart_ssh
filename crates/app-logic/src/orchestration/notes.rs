@@ -616,7 +616,7 @@ async fn request_ai_title(
         request_context.history,
         session.redactor.as_ref(),
         &session.chat_content,
-        session_id,
+        session.extension_content_key(session_id).await,
     )
     .map_err(|_| TitleFailure::SealFailed)?;
     request_context.history.push(ChatMessage {

@@ -59,6 +59,11 @@ v0.6.0). Es gibt also keine Nutzerdaten in der Form `attachments`.
      den Inhalt für einen Versand. `None` heißt „Inhalt existiert nicht mehr“.
    - `session_removed(session)` und `reconcile(live_sessions)`: Aufräumen
      (Entscheidung 7).
+   Das `session` aller Methoden ist die **gespeicherte Chat-Sitzungs-ID**
+   (dieselbe wie bei `session_removed` und `reconcile`), nicht die ID des
+   offenen Tabs: Sie bleibt nach dem Fortsetzen unter neuer Tab-ID gleich und
+   wechselt bei „Neuer Chat“. Nur ohne gespeicherten Chat (Chat-Speicherung
+   aus) wird die Tab-ID übergeben (Issue #620).
    `ResolvedBlock` ist entweder `Text { text }` oder
    `Binary { mime, bytes, filename }`. Es gibt keinen dritten Weg.
 

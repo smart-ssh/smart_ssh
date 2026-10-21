@@ -798,7 +798,7 @@ async fn generate_rolling_summary(
         new_rounds.to_vec(),
         session.redactor.as_ref(),
         &session.chat_content,
-        session_id,
+        session.extension_content_key(session_id).await,
     ) {
         Ok(sealed) => history.extend(sealed),
         Err(_) => return None,

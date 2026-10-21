@@ -807,7 +807,7 @@ async fn run_one_round(
         request_context.history,
         session.redactor.as_ref(),
         &session.chat_content,
-        session_id,
+        session.extension_content_key(session_id).await,
     ) {
         Ok(history) => history,
         Err(err) => {
