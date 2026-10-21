@@ -74,8 +74,23 @@ Modellen: Konsistenz ist wichtiger als die Annahme, ein lokales Modell sei
 
 Anbieterfehler werden auf feste Arten abgebildet und nie still verschluckt:
 Authentifizierung fehlgeschlagen, Rate-Limit, Netzwerkfehler, ungültige
-Antwort, Kontext zu groß, Anbieter nicht erreichbar. Ein ungültiger API-Key
-erscheint als Authentifizierungsfehler, nicht als leere Antwort.
+Antwort, Kontext zu groß, Anbieter nicht erreichbar, Anbieter überlastet,
+Guthaben/Abrechnung erschöpft, Anfrage vom Anbieter abgelehnt. Ein ungültiger
+API-Key erscheint als Authentifizierungsfehler, nicht als leere Antwort.
+
+- **Überlastet:** Anbieter meldet Überlastung oder Wartung (z. B. HTTP 529
+  oder 503, ein Überlastungsfehler mitten im Stream). Wird vor der ersten
+  Ausgabe automatisch wiederholt (Spec 0051); bleibt es dabei, erscheint eine
+  eigene Meldung.
+- **Guthaben/Abrechnung:** Guthaben aufgebraucht oder Kontingent erschöpft
+  (z. B. „credit balance is too low", `insufficient_quota`, HTTP 402). Wird nie
+  wiederholt; die Meldung verweist auf die Abrechnung beim Anbieter.
+- **Anfrage abgelehnt:** Der Anbieter lehnt die Anfrage selbst als ungültig ab
+  (HTTP 400 `invalid_request_error`, soweit nicht Guthaben oder Kontextgröße).
+  Wird nie wiederholt und nicht als „Wartung oder Überlastung" dargestellt.
+
+Fehler, die der Anbieter mitten im Stream meldet, werden genauso eingeordnet
+wie HTTP-Fehler.
 
 Kann das Modell ein angehängtes Bild oder PDF nicht lesen (Abschnitt 8),
 ist das eine eigene Fehlerart; sie tritt vor jeder Anfrage auf.

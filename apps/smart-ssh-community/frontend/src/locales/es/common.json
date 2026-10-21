@@ -511,6 +511,9 @@
     "AI_INVALID_RESPONSE": "Respuesta inesperada del proveedor de IA",
     "AI_CONTEXT_TOO_LARGE": "Contexto demasiado grande para el proveedor de IA. Reduzca “Longitud máx. de respuesta (tokens)” o inicie un chat nuevo.",
     "AI_PROVIDER_UNAVAILABLE": "El proveedor de IA notificó un error (p. ej. mantenimiento o sobrecarga). Inténtelo de nuevo más tarde; si persiste, revise los ajustes del proveedor.",
+    "AI_PROVIDER_OVERLOADED": "El proveedor de IA está sobrecargado en este momento. Inténtalo de nuevo en un instante.",
+    "AI_PROVIDER_BILLING": "La cuenta del proveedor de IA no tiene crédito. Revisa la facturación en la consola del proveedor.",
+    "AI_PROVIDER_REJECTED_REQUEST": "El proveedor de IA rechazó la solicitud.",
     "AI_RESPONSE_TRUNCATED": "La respuesta de la IA era demasiado larga para un comando completo",
     "AI_MODEL_NOT_FOUND": "El proveedor de IA no conoce este modelo. Compruebe el nombre del modelo en Ajustes (“Cargar modelos” muestra los disponibles); para Ollama, descárguelo antes con `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Este modelo no admite llamadas a herramientas. En los ajustes del proveedor, desmarque “Admite llamadas nativas a herramientas” (se usará entonces la alternativa basada en prompt) o elija un modelo compatible.",
@@ -671,6 +674,7 @@
     "uploadedFolder": "Carpeta “{{name}}” subida: {{count}} archivos",
     "uploadFolderFailed": "Error al subir la carpeta “{{name}}”: {{reason}}",
     "uploadFailedMany": "No se pudieron subir {{name}} archivos, p. ej.: {{reason}}",
+    "nothingToPaste": "Nada que pegar: el portapapeles no contiene archivos",
     "createFileDone": "Archivo «{{name}}» creado",
     "createFileFailed": "No se pudo crear el archivo «{{name}}»: {{reason}}"
   },
@@ -1060,7 +1064,16 @@
     },
     "copyProgress": "Copiando… {{done}} MB de {{total}} MB",
     "copyProgressUnknownTotal": "Copiando… {{done}} MB",
-    "directoryMenuLabel": "Acciones de la carpeta"
+    "directoryMenuLabel": "Acciones de la carpeta",
+    "clipboardPaste": {
+      "title": "Subir archivos del portapapeles",
+      "intro": "¿Subir estos archivos del portapapeles?",
+      "target": "Carpeta de destino",
+      "more": "… y {{count}} más",
+      "confirm": "Subir",
+      "cancel": "Cancelar",
+      "menuTitle": "Subir los archivos del portapapeles"
+    }
   },
   "chat": {
     "jumpToLatest": "Ir al mensaje más reciente",

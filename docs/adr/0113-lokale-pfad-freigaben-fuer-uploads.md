@@ -129,3 +129,7 @@ die Freigabeprüfung und scheitert beim Lesen mit der bisherigen Meldung.
   abgelegt wurde, könnte sonst auf Server B hochgeladen werden.
 - **Pfad-Präfixvergleich auf Zeichenketten:** `/a/project` würde
   `/a/project-secrets` einschließen; deshalb komponentenweise.
+
+## Nachtrag (Issue #571)
+
+Die Zwischenablage ist eine dritte Freigabequelle; die native Bestätigung gilt als Nutzergeste, siehe ADR 0145.

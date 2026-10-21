@@ -511,6 +511,9 @@
     "AI_INVALID_RESPONSE": "Réponse inattendue du fournisseur d’IA",
     "AI_CONTEXT_TOO_LARGE": "Contexte trop volumineux pour le fournisseur d’IA. Réduisez « Longueur max. de réponse (jetons) » ou démarrez un nouveau chat.",
     "AI_PROVIDER_UNAVAILABLE": "Le fournisseur d’IA a signalé une erreur (p. ex. maintenance ou surcharge). Réessayez plus tard ; si cela persiste, vérifiez les paramètres du fournisseur.",
+    "AI_PROVIDER_OVERLOADED": "Le fournisseur d'IA est surchargé en ce moment. Réessayez dans un instant.",
+    "AI_PROVIDER_BILLING": "Le compte du fournisseur d'IA n'a plus de crédit. Vérifiez la facturation dans la console du fournisseur.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Le fournisseur d'IA a rejeté la requête.",
     "AI_RESPONSE_TRUNCATED": "La réponse de l’IA était trop longue pour une commande complète",
     "AI_MODEL_NOT_FOUND": "Le fournisseur d’IA ne connaît pas ce modèle. Vérifiez le nom du modèle dans les paramètres (« Charger les modèles » liste ceux disponibles) ; pour Ollama, téléchargez-le d’abord avec `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Ce modèle ne prend pas en charge l’appel d’outils. Dans les paramètres du fournisseur, décochez « Prend en charge l’appel d’outils natif » (la solution de repli par prompt est alors utilisée) ou choisissez un modèle compatible.",
@@ -671,6 +674,7 @@
     "uploadedFolder": "Dossier « {{name}} » téléversé — {{count}} fichiers",
     "uploadFolderFailed": "Échec du téléversement du dossier « {{name}} » : {{reason}}",
     "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}",
+    "nothingToPaste": "Rien à coller : le presse-papiers ne contient aucun fichier",
     "createFileDone": "Fichier « {{name}} » créé",
     "createFileFailed": "Impossible de créer le fichier « {{name}} » : {{reason}}"
   },
@@ -1060,7 +1064,16 @@
     },
     "copyProgress": "Copie… {{done}} Mo sur {{total}} Mo",
     "copyProgressUnknownTotal": "Copie… {{done}} Mo",
-    "directoryMenuLabel": "Actions du dossier"
+    "directoryMenuLabel": "Actions du dossier",
+    "clipboardPaste": {
+      "title": "Téléverser les fichiers du presse-papiers",
+      "intro": "Téléverser ces fichiers du presse-papiers ?",
+      "target": "Dossier cible",
+      "more": "… et {{count}} autres",
+      "confirm": "Téléverser",
+      "cancel": "Annuler",
+      "menuTitle": "Téléverser les fichiers du presse-papiers"
+    }
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",

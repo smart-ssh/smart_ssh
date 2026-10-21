@@ -12,6 +12,7 @@ mod error;
 mod fallback;
 mod openai_compatible;
 mod openai_responses;
+mod overload;
 mod rate_limit_budget;
 mod request_logging;
 mod retry;

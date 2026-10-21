@@ -3183,3 +3183,112 @@ async fn test_594_info_log_has_per_segment_summary_without_command_text() {
         "{line}"
     );
 }
+
+mod non_writing_redirections {
+    use super::super::parser::contains_unquoted_output_redirection as has_out;
+    use super::*;
+
+    const ALLOWED: &[&str] = &[
+        "ls 2>/dev/null",
+        "ls >/dev/null",
+        "ls 1>/dev/null",
+        "ls &>/dev/null",
+        "ls 2>&1",
+        "ls >&2",
+        "ls 1>&2",
+        "ls 2> /dev/null",
+        "ls >/dev/null 2>&1",
+        "ls 2>/dev/null | wc -l",
+        "ls 2>&1;",
+    ];
+
+    const COUNTER: &[&str] = &[
+        "ls >/dev/null2",
+        "ls >/dev/nullx",
+        "ls >/dev/null/../etc/passwd",
+        "ls >/dev/zero",
+        "ls >/dev/sda",
+        "ls >/dev/tcp/1.2.3.4/80",
+        "ls >\"/dev/null\"",
+        "ls >$OUT",
+        "ls >${X}",
+        "ls >~/x",
+        "ls >>/dev/null",
+        "ls >|/dev/null",
+        "ls <>/dev/null",
+        "ls >&3",
+        "ls 3>&1",
+        "ls 3>/dev/null",
+        "ls >&2foo",
+        "ls 2>&1foo",
+        "ls >&file",
+        "ls >&-",
+        "ls 2>&-",
+        "ls >&1",
+        "ls 2>&2",
+        "ls &>>/dev/null",
+        "ls 2>/dev/null >/etc/x",
+        "ls >/etc/x 2>/dev/null",
+        "ls >",
+        "ls >/dev/",
+    ];
+
+    #[test]
+    fn allowed_forms_are_not_redirections() {
+        for c in ALLOWED {
+            assert!(!has_out(c), "{c:?}");
+        }
+    }
+
+    #[test]
+    fn counterexamples_stay_redirections() {
+        for c in COUNTER {
+            assert!(has_out(c), "{c:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn engine_auto_execs_allowed_and_confirms_counterexamples() {
+        let eng = engine(vec![
+            glob_rule("a", "ls *", RuleAction::Allow, Scope::Global, 100),
+            glob_rule("b", "grep *", RuleAction::Allow, Scope::Global, 100),
+            glob_rule("c", "wc *", RuleAction::Allow, Scope::Global, 100),
+        ]);
+        for c in ALLOWED.iter().filter(|c| !c.contains(';')) {
+            let d = eng.evaluate(c, &ctx("s", &[])).await;
+            assert!(matches!(d, Decision::AutoExec), "{c:?}: {d:?}");
+        }
+        for c in COUNTER {
+            match eng.evaluate(c, &ctx("s", &[])).await {
+                Decision::Confirm { code, .. } => {
+                    assert_eq!(code, "FILTER_OUTPUT_REDIRECTION", "{c:?}")
+                }
+                other => panic!("{c:?}: expected Confirm, got {other:?}"),
+            }
+        }
+        assert_auto_exec(
+            &eng.evaluate(
+                "grep \"34:94:54:87:e8:b7\" /var/log/messages.old /var/log/messages 2>/dev/null",
+                &ctx("s", &[]),
+            )
+            .await,
+        );
+        assert_auto_exec(
+            &eng.evaluate("grep x f 2>/dev/null | wc -l", &ctx("s", &[]))
+                .await,
+        );
+    }
+
+    #[tokio::test]
+    async fn no_rule_and_deny_unchanged() {
+        let eng = engine(vec![glob_rule(
+            "d",
+            "rm *",
+            RuleAction::Deny,
+            Scope::Global,
+            100,
+        )]);
+        assert_confirm(&eng.evaluate("grep x f 2>/dev/null", &ctx("s", &[])).await);
+        assert_deny(&eng.evaluate("rm -rf / 2>/dev/null", &ctx("s", &[])).await);
+    }
+}

@@ -511,6 +511,9 @@
     "AI_INVALID_RESPONSE": "Onverwacht antwoord van de AI-provider",
     "AI_CONTEXT_TOO_LARGE": "Context te groot voor de AI-provider. Verlaag \"Max. antwoordlengte (tokens)\" of begin een nieuwe chat.",
     "AI_PROVIDER_UNAVAILABLE": "De AI-provider meldde een fout (bijv. onderhoud of overbelasting). Probeer het later opnieuw; blijft het probleem bestaan, controleer dan de provider-instellingen.",
+    "AI_PROVIDER_OVERLOADED": "De AI-provider is op dit moment overbelast. Probeer het zo meteen opnieuw.",
+    "AI_PROVIDER_BILLING": "Het account bij de AI-provider heeft geen tegoed meer. Controleer de facturering in de console van de provider.",
+    "AI_PROVIDER_REJECTED_REQUEST": "De AI-provider heeft het verzoek geweigerd.",
     "AI_RESPONSE_TRUNCATED": "Het AI-antwoord was te lang voor een volledige opdracht",
     "AI_MODEL_NOT_FOUND": "De AI-provider kent dit model niet. Controleer de modelnaam in Instellingen (\"Modellen laden\" toont de beschikbare); haal bij Ollama het model eerst op met `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Dit model ondersteunt geen toolaanroepen. Schakel in de provider-instellingen \"Ondersteunt native toolaanroepen\" uit (dan wordt de promptgebaseerde terugval gebruikt) of kies een model met toolondersteuning.",
@@ -666,6 +669,7 @@
     "uploadedFolder": "Map “{{name}}” geüpload — {{count}} bestanden",
     "uploadFolderFailed": "Uploaden van map “{{name}}” mislukt: {{reason}}",
     "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}",
+    "nothingToPaste": "Niets om te plakken: het klembord bevat geen bestanden",
     "createFileDone": "Bestand “{{name}}” aangemaakt",
     "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}"
   },
@@ -1053,7 +1057,16 @@
     },
     "copyProgress": "Kopiëren… {{done}} MB van {{total}} MB",
     "copyProgressUnknownTotal": "Kopiëren… {{done}} MB",
-    "directoryMenuLabel": "Mapacties"
+    "directoryMenuLabel": "Mapacties",
+    "clipboardPaste": {
+      "title": "Bestanden van het klembord uploaden",
+      "intro": "Deze bestanden van het klembord uploaden?",
+      "target": "Doelmap",
+      "more": "… en nog {{count}}",
+      "confirm": "Uploaden",
+      "cancel": "Annuleren",
+      "menuTitle": "Bestanden van het klembord uploaden"
+    }
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",

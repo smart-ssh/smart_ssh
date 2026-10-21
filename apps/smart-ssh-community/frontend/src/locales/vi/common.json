@@ -511,6 +511,9 @@
     "AI_INVALID_RESPONSE": "Phản hồi bất ngờ từ nhà cung cấp AI",
     "AI_CONTEXT_TOO_LARGE": "Ngữ cảnh quá lớn đối với nhà cung cấp AI. Hãy giảm \"Độ dài phản hồi tối đa (token)\" hoặc bắt đầu cuộc trò chuyện mới.",
     "AI_PROVIDER_UNAVAILABLE": "Nhà cung cấp AI báo lỗi (ví dụ đang bảo trì hoặc quá tải). Hãy thử lại sau; nếu vẫn lỗi, hãy kiểm tra cài đặt nhà cung cấp.",
+    "AI_PROVIDER_OVERLOADED": "Nhà cung cấp AI hiện đang quá tải. Hãy thử lại sau giây lát.",
+    "AI_PROVIDER_BILLING": "Tài khoản nhà cung cấp AI đã hết tín dụng. Hãy kiểm tra thanh toán trong bảng điều khiển của nhà cung cấp.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Nhà cung cấp AI đã từ chối yêu cầu.",
     "AI_RESPONSE_TRUNCATED": "Phản hồi của AI quá dài để tạo thành một lệnh hoàn chỉnh",
     "AI_MODEL_NOT_FOUND": "Nhà cung cấp AI không biết mô hình này. Kiểm tra tên mô hình trong Cài đặt (\"Tải danh sách mô hình\" liệt kê các mô hình có sẵn); với Ollama, hãy tải trước bằng `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Mô hình này không hỗ trợ gọi công cụ. Trong cài đặt nhà cung cấp, hãy bỏ chọn \"Hỗ trợ gọi công cụ gốc\" (khi đó sẽ dùng phương án dự phòng dựa trên prompt) hoặc chọn mô hình có hỗ trợ công cụ.",
@@ -661,6 +664,7 @@
     "uploadedFolder": "Đã tải lên thư mục “{{name}}” — {{count}} tệp",
     "uploadFolderFailed": "Tải thư mục “{{name}}” lên thất bại: {{reason}}",
     "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}",
+    "nothingToPaste": "Không có gì để dán: bộ nhớ tạm không chứa tệp",
     "createFileDone": "Đã tạo tệp “{{name}}”",
     "createFileFailed": "Không thể tạo tệp “{{name}}”: {{reason}}"
   },
@@ -1046,7 +1050,16 @@
     },
     "copyProgress": "Đang sao chép… {{done}} MB trên {{total}} MB",
     "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB",
-    "directoryMenuLabel": "Thao tác thư mục"
+    "directoryMenuLabel": "Thao tác thư mục",
+    "clipboardPaste": {
+      "title": "Tải lên tệp từ bộ nhớ tạm",
+      "intro": "Tải lên các tệp này từ bộ nhớ tạm?",
+      "target": "Thư mục đích",
+      "more": "… và {{count}} tệp khác",
+      "confirm": "Tải lên",
+      "cancel": "Hủy",
+      "menuTitle": "Tải lên các tệp từ bộ nhớ tạm"
+    }
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",

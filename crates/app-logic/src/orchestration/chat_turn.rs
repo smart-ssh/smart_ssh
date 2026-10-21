@@ -924,6 +924,19 @@ async fn run_one_round(
                     executed_action = true;
                 }
             }
+            AiEvent::Retrying {
+                attempt,
+                max_attempts,
+                delay_secs,
+            } => {
+                crate::events::emit_chat_ai_retrying(
+                    emitter,
+                    session_id,
+                    attempt,
+                    max_attempts,
+                    delay_secs,
+                );
+            }
             AiEvent::WebContentIngested => {
                 // Issue #173: Flag sofort setzen (monoton), unabhängig
                 // davon, wie diese Antwort endet. Kein Inhalt, keine
@@ -991,6 +1004,15 @@ async fn run_one_round(
             }
             AiEvent::Error(err) => {
                 flush_text_buffer(session, &mut text_buffer).await;
+                // Issue #599: the final error code of the turn at WARN, with
+                // the session and the provider-call id for correlation. No
+                // message text (the provider line already carries it).
+                tracing::warn!(
+                    session_id = %session_id,
+                    request_id = ?session.ai_provider.last_request_id(),
+                    code = err.code(),
+                    "AI turn ended with an error",
+                );
                 emit_chat_error(
                     emitter,
                     session_id,

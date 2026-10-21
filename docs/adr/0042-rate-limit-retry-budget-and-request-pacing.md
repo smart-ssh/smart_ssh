@@ -117,3 +117,15 @@ abzubrechen — bewusste Scope-Reduktion, dokumentiert in `retry.rs`.
   nicht über `translateErrorCode`. Kleine, vorbestehende Inkonsistenz,
   nicht behoben (außerhalb des Wortlauts von Spec 0051, eigener kleiner
   Nachzieher).
+
+## Amendment (issue #599): overload retry budget
+
+Provider overload (HTTP 529/503, in-stream overload error) gets its own
+retry budget, separate from 429: 3 retries at ~2/5/10 s plus jitter, honouring
+`Retry-After`, 30 s total cap, and only before any output has reached the
+user. The retry lives in a provider-level wrapper, so side calls (second
+opinion, compaction, notes) retry too and ignore the `Retrying` event.
+Exhausted credit (including a 429 with `insufficient_quota`) is classified as
+`Billing` and never retried. HTTP 400 `invalid_request_error`, previously
+mapped to `ProviderUnavailable`, is now `RejectedRequest`; the context-length
+retry of Spec 0087 accepts both.

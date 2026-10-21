@@ -92,6 +92,17 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    beginnt. Das Ziel ist ein eigener Prüfbestandteil mit mindestens
    `Confirm`, kein bloßes Argument von `ls`.
 
+   Ausgenommen sind genau diese nicht schreibenden Umleitungen:
+   `>/dev/null` (auch `1>/dev/null`), `2>/dev/null`, `&>/dev/null`, `2>&1`
+   und `>&2` (auch `1>&2`). Zwischen Operator und `/dev/null` darf Leerraum
+   stehen; `/dev/null` bzw. die Ziffer muss das ganze Zielwort sein. Sie
+   lösen die Umleitungs-Bestätigung nicht aus; Blacklist, Regeln,
+   Substitution und Risikoeinstufung entscheiden unverändert. Jede andere
+   Umleitung bleibt mindestens `Confirm`, z. B. `>/dev/null2`,
+   `>/dev/zero`, `>"/dev/null"`, `>$OUT`, `>>/dev/null`, `>|/dev/null`,
+   `<>/dev/null`, `>&3`, `3>&1`, `>&file`, `>&-` sowie ein Kommando, das
+   neben einer erlaubten Form eine weitere Umleitung enthält.
+
    Eingabe-Umleitung (`<`) wird bewusst nicht gesondert behandelt. Ein
    Lesezugriff wie `cat < /etc/shadow` bekommt dieselbe Entscheidung wie
    `cat /etc/shadow`, weil das Kommando selbst schon auf die Datei zugreift.
