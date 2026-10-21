@@ -41,6 +41,7 @@ import {
   onSftpTransferFinished,
   onSftpTransferStarted,
 } from "../events";
+import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
 import {
   loadFileManagerColumnWidths,
@@ -218,6 +219,7 @@ export function FileBrowserPanel({
   const [dragOver, setDragOver] = useState(false);
   const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
   const localEdit = useLocalEditSession(sessionId);
@@ -640,12 +642,16 @@ export function FileBrowserPanel({
     let cancelled = false;
     getCurrentWebview()
       .onDragDropEvent((event) => {
-        if (event.payload.type === "over") {
-          setDragOver(true);
-        } else if (event.payload.type === "leave") {
+        // Position-based routing: only events over this panel count; a drop
+        // elsewhere is left to the other zone (or ignored).
+        const payload = event.payload;
+        if (payload.type === "over" || payload.type === "enter") {
+          setDragOver(isPointerInside(panelRef.current, payload.position));
+        } else if (payload.type === "leave") {
           setDragOver(false);
-        } else if (event.payload.type === "drop") {
+        } else if (payload.type === "drop") {
           setDragOver(false);
+          if (!isPointerInside(panelRef.current, payload.position)) return;
           // Issue #29: always the `uploadMany` of the latest render — and
           // with it the current `channelUser` and `path` — never the one of
           // the render that registered this listener. Taken now, at the
@@ -1168,6 +1174,7 @@ export function FileBrowserPanel({
 
   return (
     <div
+      ref={panelRef}
       className={`flex h-full flex-col border-2 ${elevated ? "border-amber-500" : "border-transparent"}`}
       data-elevated={elevated ? "true" : "false"}
     >
