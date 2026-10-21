@@ -313,6 +313,8 @@
     "overallDecision": "Samlat beslut",
     "subCommands": "Underkommandon",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Segment {{index}}",
+    "checksLabel": "Checks:",
     "hardBlacklistLabel": "Hård svartlista:"
   },
   "actionCard": {

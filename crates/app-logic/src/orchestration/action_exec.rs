@@ -1165,6 +1165,9 @@ async fn evaluate_action(
             matched_rule_origin: None,
             matched_hard_blacklist_entry: None,
             sub_command_traces: Vec::new(),
+            kind: Default::default(),
+            segment_index: None,
+            checks: Vec::new(),
         },
         AiAction::GenerateDocument { .. } => unreachable!(
             "GenerateDocument wird bereits in run_one_round abgefangen \

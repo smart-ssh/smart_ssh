@@ -313,6 +313,8 @@
     "overallDecision": "Kokonaispäätös",
     "subCommands": "Alikomennot",
     "matchedRuleLabel": "Sääntö:",
+    "segmentLabel": "Segment {{index}}",
+    "checksLabel": "Checks:",
     "hardBlacklistLabel": "Kiinteä estolista:"
   },
   "actionCard": {

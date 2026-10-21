@@ -185,4 +185,33 @@ pub struct EvaluationTrace {
     /// hier ist ein eigenständig ausgewerteter Teil, der zur
     /// Gesamt-Entscheidung beigetragen hat".
     pub sub_command_traces: Vec<EvaluationTrace>,
+    /// What this trace describes (Spec 0002, §4.8). Top-level traces and
+    /// the single-segment case are `Segment`.
+    #[serde(default)]
+    pub kind: TraceKind,
+    /// Position of the segment within the command that was split; `Some`
+    /// only for `Segment` traces of a split command (also for a command
+    /// with one segment: `Some(0)`). Nested commands (substitution,
+    /// embedded code) are indexed within their own text.
+    #[serde(default)]
+    pub segment_index: Option<usize>,
+    /// Rule-independent checks that forced at least `Confirm` on this
+    /// trace, as reason codes (`FILTER_HARD_BLACKLIST`,
+    /// `FILTER_OUTPUT_REDIRECTION`, `FILTER_COMMAND_SUBSTITUTION`,
+    /// `FILTER_PARSE_AMBIGUOUS`). Reporting only: it never feeds back into
+    /// the decision. The segment text is deliberately not part of the trace.
+    #[serde(default)]
+    pub checks: Vec<String>,
+}
+
+/// Kind of an [`EvaluationTrace`] inside `sub_command_traces`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TraceKind {
+    /// A pipeline/chain segment (or the command as a whole).
+    #[default]
+    Segment,
+    /// The content of a `$(...)` / backtick substitution.
+    Substitution,
+    /// Code run by `bash -c`, `eval`, here-strings, `trap`, `alias`, ….
+    EmbeddedCode,
 }

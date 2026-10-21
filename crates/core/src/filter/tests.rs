@@ -10,6 +10,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use super::engine::{
+    FILTER_COMMAND_SUBSTITUTION, FILTER_HARD_BLACKLIST, FILTER_OUTPUT_REDIRECTION,
+};
 use super::*;
 
 struct InMemoryPolicyStore {
@@ -3009,5 +3012,174 @@ async fn test_issue_487_inner_trace_reports_deciding_rule() {
     assert_eq!(
         trace.matched_rule.as_ref().map(|r| r.0.as_str()),
         Some("deny-docker")
+    );
+}
+
+// --- Issue #594: per-segment trace, per-segment log, candidate rules ------
+
+const PIPE_594: &str = "ps aux | grep java 2>/tmp/e | wc -l";
+
+fn rules_594() -> Vec<Rule> {
+    vec![
+        glob_rule("ps", "ps *", RuleAction::Allow, Scope::Global, 0),
+        glob_rule("grep", "grep *", RuleAction::Allow, Scope::Global, 0),
+    ]
+}
+
+#[tokio::test]
+async fn test_594_per_segment_trace_reports_rule_and_checks() {
+    let eng = engine(rules_594());
+    let trace = eng.evaluate_explained(PIPE_594, &ctx("s", &[])).await;
+    let segs = &trace.sub_command_traces;
+    assert_eq!(segs.len(), 3);
+    for (i, s) in segs.iter().enumerate() {
+        assert_eq!(s.kind, TraceKind::Segment);
+        assert_eq!(s.segment_index, Some(i));
+    }
+    assert_eq!(segs[0].matched_rule, Some(RuleId("ps".into())));
+    assert_eq!(segs[0].decision, Decision::AutoExec);
+    assert_eq!(segs[1].matched_rule, Some(RuleId("grep".into())));
+    assert!(matches!(segs[1].decision, Decision::Confirm { .. }));
+    assert_eq!(segs[1].checks, vec![FILTER_OUTPUT_REDIRECTION.to_string()]);
+    assert_eq!(segs[2].matched_rule, None);
+    assert!(matches!(segs[2].decision, Decision::Confirm { .. }));
+    assert!(segs[2].checks.is_empty());
+}
+
+#[tokio::test]
+async fn test_594_substitution_and_embedded_code_traces_have_kind_and_no_index() {
+    let eng = engine(rules_594());
+    let trace = eng
+        .evaluate_explained("ps $(grep x) ; bash -c 'ps a'", &ctx("s", &[]))
+        .await;
+    let nested: Vec<&EvaluationTrace> = trace
+        .sub_command_traces
+        .iter()
+        .flat_map(|s| s.sub_command_traces.iter())
+        .collect();
+    assert!(nested.iter().any(|t| t.kind == TraceKind::Substitution));
+    assert!(nested.iter().any(|t| t.kind == TraceKind::EmbeddedCode));
+    assert!(nested.iter().all(|t| t.segment_index.is_none()));
+    let first = &trace.sub_command_traces[0];
+    assert!(first
+        .checks
+        .contains(&FILTER_COMMAND_SUBSTITUTION.to_string()));
+}
+
+#[tokio::test]
+async fn test_594_hard_blacklist_check_is_reported() {
+    let eng = engine(vec![glob_rule(
+        "all",
+        "*",
+        RuleAction::Allow,
+        Scope::Global,
+        0,
+    )]);
+    let trace = eng.evaluate_explained("rm -rf /", &ctx("s", &[])).await;
+    assert!(trace.checks.contains(&FILTER_HARD_BLACKLIST.to_string()));
+}
+
+#[tokio::test]
+async fn test_594_checks_never_change_the_decision_over_the_corpus() {
+    let eng = engine(vec![
+        glob_rule("all", "*", RuleAction::Allow, Scope::Global, 0),
+        glob_rule("deny-rm", "rm *", RuleAction::Deny, Scope::Global, 0),
+    ]);
+    let corpus = [
+        "ls",
+        "ls > /tmp/x",
+        "ls | wc -l",
+        "echo $(rm -rf /tmp/x)",
+        "bash -c 'rm x'",
+        "eval \"ls\"",
+        "ls; rm a; ls",
+        "echo `id`",
+        "sh <<< 'ls'",
+        "cat f | sh",
+        "ls &&  ls > a || rm b",
+        "trap 'rm x' EXIT",
+        "alias a='ls'",
+        "",
+    ];
+    for cmd in corpus {
+        let c = ctx("s", &[]);
+        let trace = eng.evaluate_explained(cmd, &c).await;
+        assert_eq!(trace.decision, eng.evaluate(cmd, &c).await, "{cmd}");
+        let with = eng.evaluate_explained_with_candidates(cmd, &c, &[]).await;
+        assert_eq!(trace, with, "{cmd}");
+        // A check that forces Confirm means the segment is never AutoExec.
+        fn walk(t: &EvaluationTrace) {
+            if !t.checks.is_empty() {
+                assert_ne!(t.decision, Decision::AutoExec);
+            }
+            t.sub_command_traces.iter().for_each(walk);
+        }
+        walk(&trace);
+    }
+}
+
+#[tokio::test]
+async fn test_594_candidate_rule_changes_only_that_segment() {
+    let eng = engine(rules_594());
+    let c = ctx("s", &[]);
+    let cand = [glob_rule("wc", "wc *", RuleAction::Allow, Scope::Global, 0)];
+    let trace = eng
+        .evaluate_explained_with_candidates(PIPE_594, &c, &cand)
+        .await;
+    assert!(matches!(
+        trace.decision,
+        Decision::Confirm { ref code, .. } if code == FILTER_OUTPUT_REDIRECTION
+    ));
+    assert_eq!(trace.sub_command_traces[2].decision, Decision::AutoExec);
+    let ok = eng
+        .evaluate_explained_with_candidates("ps aux | grep java | wc -l", &c, &cand)
+        .await;
+    assert_eq!(ok.decision, Decision::AutoExec);
+    // Nothing was stored.
+    assert!(matches!(
+        eng.evaluate("ps aux | grep java | wc -l", &c).await,
+        Decision::Confirm { .. }
+    ));
+}
+
+#[tokio::test]
+async fn test_594_candidate_for_another_server_is_ignored() {
+    let eng = engine(rules_594());
+    let c = ctx("s", &[]);
+    let cand = [glob_rule(
+        "wc",
+        "wc *",
+        RuleAction::Allow,
+        Scope::Server(ServerId::new()),
+        0,
+    )];
+    let trace = eng
+        .evaluate_explained_with_candidates("ps aux | grep java | wc -l", &c, &cand)
+        .await;
+    assert!(matches!(trace.decision, Decision::Confirm { .. }));
+}
+
+#[tokio::test]
+async fn test_594_info_log_has_per_segment_summary_without_command_text() {
+    let command = format!("ps aux | grep {SECRET_0094} 2>/tmp/e | wc -l");
+    log_capture::start_recording();
+    let eng = engine(rules_594());
+    let _ = eng.evaluate_explained(&command, &ctx("s", &[])).await;
+    let lines = log_capture::lines_at_info_or_above();
+    let line = lines
+        .iter()
+        .find(|l| l.contains("filter engine decision"))
+        .expect("decision line");
+    assert!(!line.contains(SECRET_0094), "{line}");
+    assert!(!line.contains("java"), "{line}");
+    assert!(line.contains("0: AutoExec rule=ps"), "{line}");
+    assert!(line.contains("rule=grep"), "{line}");
+    assert!(
+        line.contains("checks=[FILTER_OUTPUT_REDIRECTION]"),
+        "{line}"
+    );
+    assert!(
+        line.contains("2: Confirm(FILTER_NO_RULE_MATCHED) rule=none"),
+        "{line}"
     );
 }

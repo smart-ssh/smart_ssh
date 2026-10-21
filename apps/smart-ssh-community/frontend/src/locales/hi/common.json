@@ -313,6 +313,8 @@
     "overallDecision": "कुल निर्णय",
     "subCommands": "उप-कमांड",
     "matchedRuleLabel": "नियम:",
+    "segmentLabel": "Segment {{index}}",
+    "checksLabel": "Checks:",
     "hardBlacklistLabel": "कठोर ब्लैकलिस्ट:"
   },
   "actionCard": {

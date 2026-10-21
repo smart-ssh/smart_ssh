@@ -313,6 +313,8 @@
     "overallDecision": "总体决定",
     "subCommands": "子命令",
     "matchedRuleLabel": "规则：",
+    "segmentLabel": "Segment {{index}}",
+    "checksLabel": "Checks:",
     "hardBlacklistLabel": "硬性黑名单："
   },
   "actionCard": {

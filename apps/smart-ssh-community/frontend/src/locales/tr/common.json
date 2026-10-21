@@ -313,6 +313,8 @@
     "overallDecision": "Genel karar",
     "subCommands": "Alt komutlar",
     "matchedRuleLabel": "Kural:",
+    "segmentLabel": "Segment {{index}}",
+    "checksLabel": "Checks:",
     "hardBlacklistLabel": "Katı kara liste:"
   },
   "actionCard": {
