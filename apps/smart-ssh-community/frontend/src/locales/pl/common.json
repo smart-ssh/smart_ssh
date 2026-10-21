@@ -674,6 +674,7 @@
     "uploadedFolder": "Folder „{{name}}” wysłany — plików: {{count}}",
     "uploadFolderFailed": "Wysyłanie folderu „{{name}}” nie powiodło się: {{reason}}",
     "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}",
+    "nothingToPaste": "Nic do wklejenia: schowek nie zawiera plików",
     "createFileDone": "Utworzono plik „{{name}}”",
     "createFileFailed": "Nie można utworzyć pliku „{{name}}”: {{reason}}"
   },
@@ -1065,7 +1066,16 @@
     },
     "copyProgress": "Kopiowanie… {{done}} MB z {{total}} MB",
     "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB",
-    "directoryMenuLabel": "Akcje folderu"
+    "directoryMenuLabel": "Akcje folderu",
+    "clipboardPaste": {
+      "title": "Prześlij pliki ze schowka",
+      "intro": "Przesłać te pliki ze schowka?",
+      "target": "Folder docelowy",
+      "more": "… i {{count}} więcej",
+      "confirm": "Prześlij",
+      "cancel": "Anuluj",
+      "menuTitle": "Prześlij pliki ze schowka"
+    }
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",

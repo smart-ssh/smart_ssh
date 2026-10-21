@@ -669,6 +669,7 @@
     "uploadedFolder": "Cartella “{{name}}” caricata — {{count}} file",
     "uploadFolderFailed": "Caricamento della cartella “{{name}}” non riuscito: {{reason}}",
     "uploadFailedMany": "Impossibile caricare {{name}} file, ad es.: {{reason}}",
+    "nothingToPaste": "Niente da incollare: gli appunti non contengono file",
     "createFileDone": "File «{{name}}» creato",
     "createFileFailed": "Impossibile creare il file «{{name}}»: {{reason}}"
   },
@@ -1058,7 +1059,16 @@
     },
     "copyProgress": "Copia in corso… {{done}} MB di {{total}} MB",
     "copyProgressUnknownTotal": "Copia in corso… {{done}} MB",
-    "directoryMenuLabel": "Azioni della cartella"
+    "directoryMenuLabel": "Azioni della cartella",
+    "clipboardPaste": {
+      "title": "Carica i file dagli appunti",
+      "intro": "Caricare questi file dagli appunti?",
+      "target": "Cartella di destinazione",
+      "more": "… e altri {{count}}",
+      "confirm": "Carica",
+      "cancel": "Annulla",
+      "menuTitle": "Carica i file dagli appunti"
+    }
   },
   "chat": {
     "jumpToLatest": "Vai al messaggio più recente",

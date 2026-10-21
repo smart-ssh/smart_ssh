@@ -588,6 +588,28 @@ export const sftpUploadFolder = (
 export const claimDroppedPaths = (sessionId: string) =>
   invoke<string[]>("claim_dropped_paths", { sessionId });
 
+/** Issue #571: whether the OS clipboard holds local files. Returns no
+ * paths; only decides if "Paste" is offered. */
+export const clipboardHasFiles = () => invoke<boolean>("clipboard_has_files");
+
+/** Wording of the native paste confirmation (the backend adds the file list
+ * and the target directory; `{count}` in `moreLabel` is replaced). */
+export interface ClipboardPasteDialogTexts {
+  title: string;
+  intro: string;
+  targetLabel: string;
+  moreLabel: string;
+  confirmLabel: string;
+  cancelLabel: string;
+}
+
+/** Issue #571: reads the clipboard files in the backend, asks the user in a
+ * native dialog and — only after confirmation — grants them to this session
+ * and returns the paths. `null` = nothing on the clipboard, `[]` = cancelled.
+ * `targetDir` is display text only. */
+export const claimClipboardFiles = (sessionId: string, targetDir: string, texts: ClipboardPasteDialogTexts) =>
+  invoke<string[] | null>("claim_clipboard_files", { sessionId, targetDir, texts });
+
 /** Löscht Datei ODER Ordner (rekursiv, Spec 0054, Teil 3) — die
  * Bestätigung (inkl. `sftpDeletePreview` bei Ordnern) läuft im Frontend. */
 export const sftpDelete = (sessionId: string, path: string, elevatedUser: string | null = null) =>

@@ -669,6 +669,7 @@
     "uploadedFolder": "Carpeta “{{name}}” subida: {{count}} archivos",
     "uploadFolderFailed": "Error al subir la carpeta “{{name}}”: {{reason}}",
     "uploadFailedMany": "No se pudieron subir {{name}} archivos, p. ej.: {{reason}}",
+    "nothingToPaste": "Nada que pegar: el portapapeles no contiene archivos",
     "createFileDone": "Archivo «{{name}}» creado",
     "createFileFailed": "No se pudo crear el archivo «{{name}}»: {{reason}}"
   },
@@ -1058,7 +1059,16 @@
     },
     "copyProgress": "Copiando… {{done}} MB de {{total}} MB",
     "copyProgressUnknownTotal": "Copiando… {{done}} MB",
-    "directoryMenuLabel": "Acciones de la carpeta"
+    "directoryMenuLabel": "Acciones de la carpeta",
+    "clipboardPaste": {
+      "title": "Subir archivos del portapapeles",
+      "intro": "¿Subir estos archivos del portapapeles?",
+      "target": "Carpeta de destino",
+      "more": "… y {{count}} más",
+      "confirm": "Subir",
+      "cancel": "Cancelar",
+      "menuTitle": "Subir los archivos del portapapeles"
+    }
   },
   "chat": {
     "jumpToLatest": "Ir al mensaje más reciente",

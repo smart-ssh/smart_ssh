@@ -664,6 +664,7 @@
     "uploadedFolder": "Folder “{{name}}” uploaded — {{count}} files",
     "uploadFolderFailed": "Uploading folder “{{name}}” failed: {{reason}}",
     "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}",
+    "nothingToPaste": "Nothing to paste: the clipboard holds no files",
     "createFileDone": "File “{{name}}” created",
     "createFileFailed": "File “{{name}}” could not be created: {{reason}}"
   },
@@ -1051,7 +1052,16 @@
     },
     "copyProgress": "Copying… {{done}} MB of {{total}} MB",
     "copyProgressUnknownTotal": "Copying… {{done}} MB",
-    "directoryMenuLabel": "Folder actions"
+    "directoryMenuLabel": "Folder actions",
+    "clipboardPaste": {
+      "title": "Upload files from the clipboard",
+      "intro": "Upload these files from the clipboard?",
+      "target": "Target folder",
+      "more": "… and {{count}} more",
+      "confirm": "Upload",
+      "cancel": "Cancel",
+      "menuTitle": "Upload the files from the clipboard"
+    }
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",

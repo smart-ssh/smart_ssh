@@ -659,6 +659,7 @@
     "uploadedFolder": "Đã tải lên thư mục “{{name}}” — {{count}} tệp",
     "uploadFolderFailed": "Tải thư mục “{{name}}” lên thất bại: {{reason}}",
     "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}",
+    "nothingToPaste": "Không có gì để dán: bộ nhớ tạm không chứa tệp",
     "createFileDone": "Đã tạo tệp “{{name}}”",
     "createFileFailed": "Không thể tạo tệp “{{name}}”: {{reason}}"
   },
@@ -1044,7 +1045,16 @@
     },
     "copyProgress": "Đang sao chép… {{done}} MB trên {{total}} MB",
     "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB",
-    "directoryMenuLabel": "Thao tác thư mục"
+    "directoryMenuLabel": "Thao tác thư mục",
+    "clipboardPaste": {
+      "title": "Tải lên tệp từ bộ nhớ tạm",
+      "intro": "Tải lên các tệp này từ bộ nhớ tạm?",
+      "target": "Thư mục đích",
+      "more": "… và {{count}} tệp khác",
+      "confirm": "Tải lên",
+      "cancel": "Hủy",
+      "menuTitle": "Tải lên các tệp từ bộ nhớ tạm"
+    }
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",

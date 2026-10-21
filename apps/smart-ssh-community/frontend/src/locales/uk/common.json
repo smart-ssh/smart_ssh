@@ -674,6 +674,7 @@
     "uploadedFolder": "Теку «{{name}}» вивантажено — файлів: {{count}}",
     "uploadFolderFailed": "Не вдалося вивантажити теку «{{name}}»: {{reason}}",
     "uploadFailedMany": "Не вдалося вивантажити файлів: {{name}}, напр.: {{reason}}",
+    "nothingToPaste": "Нічого вставляти: у буфері обміну немає файлів",
     "createFileDone": "Файл «{{name}}» створено",
     "createFileFailed": "Не вдалося створити файл «{{name}}»: {{reason}}"
   },
@@ -1065,7 +1066,16 @@
     },
     "copyProgress": "Копіювання… {{done}} МБ із {{total}} МБ",
     "copyProgressUnknownTotal": "Копіювання… {{done}} МБ",
-    "directoryMenuLabel": "Дії з текою"
+    "directoryMenuLabel": "Дії з текою",
+    "clipboardPaste": {
+      "title": "Завантажити файли з буфера обміну",
+      "intro": "Завантажити ці файли з буфера обміну?",
+      "target": "Цільова тека",
+      "more": "… і ще {{count}}",
+      "confirm": "Завантажити",
+      "cancel": "Скасувати",
+      "menuTitle": "Завантажити файли з буфера обміну"
+    }
   },
   "chat": {
     "jumpToLatest": "До останнього повідомлення",

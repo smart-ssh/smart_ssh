@@ -659,6 +659,7 @@
     "uploadedFolder": "文件夹“{{name}}”已上传——{{count}} 个文件",
     "uploadFolderFailed": "上传文件夹“{{name}}”失败：{{reason}}",
     "uploadFailedMany": "有 {{name}} 个文件无法上传，例如：{{reason}}",
+    "nothingToPaste": "没有可粘贴的内容：剪贴板中没有文件",
     "createFileDone": "已创建文件“{{name}}”",
     "createFileFailed": "无法创建文件“{{name}}”：{{reason}}"
   },
@@ -1044,7 +1045,16 @@
     },
     "copyProgress": "正在复制… {{done}} MB / {{total}} MB",
     "copyProgressUnknownTotal": "正在复制… {{done}} MB",
-    "directoryMenuLabel": "文件夹操作"
+    "directoryMenuLabel": "文件夹操作",
+    "clipboardPaste": {
+      "title": "上传剪贴板中的文件",
+      "intro": "要上传剪贴板中的这些文件吗？",
+      "target": "目标文件夹",
+      "more": "…另有 {{count}} 个",
+      "confirm": "上传",
+      "cancel": "取消",
+      "menuTitle": "上传剪贴板中的文件"
+    }
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",

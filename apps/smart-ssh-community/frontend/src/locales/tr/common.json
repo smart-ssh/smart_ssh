@@ -664,6 +664,7 @@
     "uploadedFolder": "“{{name}}” klasörü yüklendi — {{count}} dosya",
     "uploadFolderFailed": "“{{name}}” klasörü yüklenemedi: {{reason}}",
     "uploadFailedMany": "{{name}} dosya yüklenemedi, örn.: {{reason}}",
+    "nothingToPaste": "Yapıştırılacak bir şey yok: panoda dosya yok",
     "createFileDone": "“{{name}}” dosyası oluşturuldu",
     "createFileFailed": "“{{name}}” dosyası oluşturulamadı: {{reason}}"
   },
@@ -1051,7 +1052,16 @@
     },
     "copyProgress": "Kopyalanıyor… {{done}} / {{total}} MB",
     "copyProgressUnknownTotal": "Kopyalanıyor… {{done}} MB",
-    "directoryMenuLabel": "Klasör eylemleri"
+    "directoryMenuLabel": "Klasör eylemleri",
+    "clipboardPaste": {
+      "title": "Panodaki dosyaları yükle",
+      "intro": "Panodaki bu dosyalar yüklensin mi?",
+      "target": "Hedef klasör",
+      "more": "… ve {{count}} tane daha",
+      "confirm": "Yükle",
+      "cancel": "İptal",
+      "menuTitle": "Panodaki dosyaları yükle"
+    }
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",

@@ -121,15 +121,69 @@ impl FileClipboard {
             .map_err(|e| e.to_string())
     }
 
-    /// Reads the file references back through the same clipboard API.
-    #[cfg(test)]
-    pub(crate) fn get_files(&self) -> Result<Vec<String>, String> {
-        let guard = self.context.lock().unwrap_or_else(|e| e.into_inner());
-        guard
+    /// Reads the file references currently on the system clipboard (issue
+    /// #571). Creates the clipboard context on first use. Only absolute
+    /// paths of entries that exist come back; `file://` URIs (X11/Wayland)
+    /// are turned into plain paths. An unreadable clipboard is an `Err`.
+    pub(crate) fn get_files(&self) -> Result<Vec<PathBuf>, String> {
+        let mut guard = self.context.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.is_none() {
+            *guard = Some(ClipboardContext::new().map_err(|e| e.to_string())?);
+        }
+        let raw = guard
             .as_ref()
-            .ok_or_else(|| "no clipboard context".to_string())?
+            .expect("context was just created")
             .get_files()
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        Ok(raw
+            .iter()
+            .filter_map(|r| clipboard_ref_to_path(r))
+            .filter(|p| p.is_absolute() && p.exists())
+            .collect())
+    }
+}
+
+/// `file:///a%20b` -> `/a b`; a plain path stays as it is.
+fn clipboard_ref_to_path(raw: &str) -> Option<PathBuf> {
+    let Some(rest) = raw.strip_prefix("file://") else {
+        return (!raw.is_empty()).then(|| PathBuf::from(raw));
+    };
+    // Drop an authority such as `localhost`; the path starts at the next `/`.
+    let rest = if rest.starts_with('/') {
+        rest
+    } else {
+        &rest[rest.find('/')?..]
+    };
+    let bytes = rest.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = |b: u8| (b as char).to_digit(16);
+            if let (Some(hi), Some(lo)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push((hi * 16 + lo) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        Some(PathBuf::from(std::ffi::OsString::from_vec(out)))
+    }
+    #[cfg(not(unix))]
+    {
+        let text = String::from_utf8(out).ok()?;
+        // `/C:/dir/file` -> `C:/dir/file`
+        let text = if text.as_bytes().get(2) == Some(&b':') {
+            text[1..].to_string()
+        } else {
+            text
+        };
+        Some(PathBuf::from(text))
     }
 }
 
@@ -141,6 +195,31 @@ mod tests {
     fn mode(path: &Path) -> u32 {
         use std::os::unix::fs::PermissionsExt;
         std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn test_clipboard_references_become_plain_paths() {
+        assert_eq!(
+            clipboard_ref_to_path("file:///tmp/a%20b/c%C3%A4.txt"),
+            Some(PathBuf::from("/tmp/a b/cä.txt"))
+        );
+        #[cfg(unix)]
+        {
+            assert_eq!(
+                clipboard_ref_to_path("file://localhost/tmp/x"),
+                Some(PathBuf::from("/tmp/x"))
+            );
+            assert_eq!(
+                clipboard_ref_to_path("/tmp/plain"),
+                Some(PathBuf::from("/tmp/plain"))
+            );
+        }
+        assert_eq!(clipboard_ref_to_path(""), None);
+        // A stray `%` stays literal.
+        assert_eq!(
+            clipboard_ref_to_path("file:///tmp/100%"),
+            Some(PathBuf::from("/tmp/100%"))
+        );
     }
 
     #[test]
@@ -221,8 +300,7 @@ mod tests {
         }
         let files = clipboard.get_files().expect("read back");
         assert_eq!(files.len(), 1, "exactly one file reference: {files:?}");
-        let got = files[0].strip_prefix("file://").unwrap_or(&files[0]);
-        let got = PathBuf::from(got);
+        let got = files[0].clone();
         assert_eq!(
             std::fs::canonicalize(&got).unwrap(),
             std::fs::canonicalize(&file).unwrap()

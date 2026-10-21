@@ -664,6 +664,7 @@
     "uploadedFolder": "Kansio “{{name}}” lähetetty – {{count}} tiedostoa",
     "uploadFolderFailed": "Kansion “{{name}}” lähetys epäonnistui: {{reason}}",
     "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}",
+    "nothingToPaste": "Ei liitettävää: leikepöydällä ei ole tiedostoja",
     "createFileDone": "Tiedosto ”{{name}}” luotu",
     "createFileFailed": "Tiedostoa ”{{name}}” ei voitu luoda: {{reason}}"
   },
@@ -1051,7 +1052,16 @@
     },
     "copyProgress": "Kopioidaan… {{done}} Mt / {{total}} Mt",
     "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt",
-    "directoryMenuLabel": "Kansion toiminnot"
+    "directoryMenuLabel": "Kansion toiminnot",
+    "clipboardPaste": {
+      "title": "Lähetä tiedostot leikepöydältä",
+      "intro": "Lähetetäänkö nämä tiedostot leikepöydältä?",
+      "target": "Kohdekansio",
+      "more": "… ja {{count}} muuta",
+      "confirm": "Lähetä",
+      "cancel": "Peruuta",
+      "menuTitle": "Lähetä leikepöydän tiedostot"
+    }
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
