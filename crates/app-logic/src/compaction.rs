@@ -845,7 +845,8 @@ async fn generate_rolling_summary(
                 AiEvent::WebActivity(_)
                 | AiEvent::WebContentIngested
                 | AiEvent::Usage { .. }
-                | AiEvent::Retrying { .. } => {} // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
+                | AiEvent::Retrying { .. }
+                | AiEvent::InvalidToolCall { .. } => {} // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — eine unvollständige Zusammenfassung ist
                 // immer noch besser als gar keine.
                 AiEvent::Done | AiEvent::TextTruncated => return Some(text),

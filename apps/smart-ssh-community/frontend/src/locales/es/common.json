@@ -511,6 +511,7 @@
     "AI_RATE_LIMITED": "El proveedor de IA está limitando las solicitudes (límite de frecuencia); la aplicación ya reintentó automáticamente varias veces. Espere un momento y vuelva a enviar el mensaje.",
     "AI_NETWORK_ERROR": "No se puede acceder al proveedor de IA. Compruebe su conexión a internet y, si usa un punto final propio, la URL base; después vuelva a enviar.",
     "AI_INVALID_RESPONSE": "Respuesta inesperada del proveedor de IA",
+    "AI_INVALID_TOOL_CALL": "La IA siguió llamando a una herramienta que no existe. Prueba a reformular la petición.",
     "AI_CONTEXT_TOO_LARGE": "Contexto demasiado grande para el proveedor de IA. Reduzca “Longitud máx. de respuesta (tokens)” o inicie un chat nuevo.",
     "AI_PROVIDER_UNAVAILABLE": "El proveedor de IA notificó un error (p. ej. mantenimiento o sobrecarga). Inténtelo de nuevo más tarde; si persiste, revise los ajustes del proveedor.",
     "AI_PROVIDER_OVERLOADED": "El proveedor de IA está sobrecargado en este momento. Inténtalo de nuevo en un instante.",

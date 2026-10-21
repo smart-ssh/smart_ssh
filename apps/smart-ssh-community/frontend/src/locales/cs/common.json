@@ -511,6 +511,7 @@
     "AI_RATE_LIMITED": "Poskytovatel AI momentálně omezuje požadavky (limit) – aplikace to již několikrát automaticky zopakovala. Chvíli počkejte a odešlete zprávu znovu.",
     "AI_NETWORK_ERROR": "Poskytovatel AI není dosažitelný. Zkontrolujte připojení k internetu a u vlastního koncového bodu základní URL, poté odešlete znovu.",
     "AI_INVALID_RESPONSE": "Neočekávaná odpověď od poskytovatele AI",
+    "AI_INVALID_TOOL_CALL": "AI opakovaně volala neexistující nástroj. Zkuste požadavek přeformulovat.",
     "AI_CONTEXT_TOO_LARGE": "Kontext je pro poskytovatele AI příliš velký. Snižte „Max. délku odpovědi (tokeny)“ nebo začněte nový chat.",
     "AI_PROVIDER_UNAVAILABLE": "Poskytovatel AI ohlásil chybu (např. údržbu nebo přetížení). Zkuste to později; pokud přetrvává, zkontrolujte nastavení poskytovatele.",
     "AI_PROVIDER_OVERLOADED": "Poskytovatel AI je právě přetížený. Zkuste to za chvíli znovu.",

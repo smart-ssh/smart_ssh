@@ -511,6 +511,7 @@
     "AI_RATE_LIMITED": "Nhà cung cấp AI hiện đang hạn chế yêu cầu (giới hạn tần suất) – ứng dụng đã tự thử lại vài lần. Vui lòng chờ một lúc rồi gửi lại tin nhắn.",
     "AI_NETWORK_ERROR": "Không kết nối được tới nhà cung cấp AI. Kiểm tra kết nối internet và, với endpoint tùy chỉnh, kiểm tra URL cơ sở, rồi gửi lại.",
     "AI_INVALID_RESPONSE": "Phản hồi bất ngờ từ nhà cung cấp AI",
+    "AI_INVALID_TOOL_CALL": "AI liên tục gọi một công cụ không tồn tại. Hãy thử diễn đạt lại yêu cầu.",
     "AI_CONTEXT_TOO_LARGE": "Ngữ cảnh quá lớn đối với nhà cung cấp AI. Hãy giảm \"Độ dài phản hồi tối đa (token)\" hoặc bắt đầu cuộc trò chuyện mới.",
     "AI_PROVIDER_UNAVAILABLE": "Nhà cung cấp AI báo lỗi (ví dụ đang bảo trì hoặc quá tải). Hãy thử lại sau; nếu vẫn lỗi, hãy kiểm tra cài đặt nhà cung cấp.",
     "AI_PROVIDER_OVERLOADED": "Nhà cung cấp AI hiện đang quá tải. Hãy thử lại sau giây lát.",

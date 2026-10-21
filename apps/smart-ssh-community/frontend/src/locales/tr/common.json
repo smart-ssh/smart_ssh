@@ -511,6 +511,7 @@
     "AI_RATE_LIMITED": "Yapay zeka sağlayıcısı şu an istekleri kısıtlıyor (hız sınırı) – uygulama zaten birkaç kez otomatik yeniden denedi. Lütfen biraz bekleyin ve mesajı yeniden gönderin.",
     "AI_NETWORK_ERROR": "Yapay zeka sağlayıcısına ulaşılamıyor. İnternet bağlantınızı ve özel uç noktada temel URL'yi denetleyin, sonra yeniden gönderin.",
     "AI_INVALID_RESPONSE": "Yapay zeka sağlayıcısından beklenmeyen yanıt",
+    "AI_INVALID_TOOL_CALL": "Yapay zeka var olmayan bir aracı çağırmaya devam etti. İsteği farklı ifade etmeyi deneyin.",
     "AI_CONTEXT_TOO_LARGE": "Bağlam yapay zeka sağlayıcısı için çok büyük. \"Maks. yanıt uzunluğu (token)\" değerini düşürün veya yeni bir sohbet başlatın.",
     "AI_PROVIDER_UNAVAILABLE": "Yapay zeka sağlayıcısı bir hata bildirdi (örn. bakım veya aşırı yük). Daha sonra yeniden deneyin; sürerse sağlayıcı ayarlarını denetleyin.",
     "AI_PROVIDER_OVERLOADED": "Yapay zekâ sağlayıcısı şu anda aşırı yüklü. Biraz sonra tekrar deneyin.",

@@ -652,7 +652,8 @@ async fn request_ai_title(
             AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
             | AiEvent::Usage { .. }
-            | AiEvent::Retrying { .. } => {}
+            | AiEvent::Retrying { .. }
+            | AiEvent::InvalidToolCall { .. } => {}
             AiEvent::Done => break,
             AiEvent::Error(_) => {
                 failure = Some(TitleFailure::Error);
@@ -919,7 +920,8 @@ pub async fn suggest_note_update_on_disconnect(
             | AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
             | AiEvent::Usage { .. }
-            | AiEvent::Retrying { .. } => {}
+            | AiEvent::Retrying { .. }
+            | AiEvent::InvalidToolCall { .. } => {}
         }
     }
 
@@ -1249,7 +1251,8 @@ async fn summarize_note_for_shrink(
                 AiEvent::WebActivity(_)
                 | AiEvent::WebContentIngested
                 | AiEvent::Usage { .. }
-                | AiEvent::Retrying { .. } => {}
+                | AiEvent::Retrying { .. }
+                | AiEvent::InvalidToolCall { .. } => {}
                 AiEvent::Done => return Some((text, false)),
                 // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — die gekürzte Notiz gilt trotzdem als

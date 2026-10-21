@@ -87,6 +87,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "AI_RATE_LIMITED",
   "AI_NETWORK_ERROR",
   "AI_INVALID_RESPONSE",
+  // Issue #604: repeated unknown/invalid tool calls ended the turn.
+  "AI_INVALID_TOOL_CALL",
   "AI_CONTEXT_TOO_LARGE",
   "AI_PROVIDER_UNAVAILABLE",
   // Issue #599: overload, exhausted credit, rejected request.

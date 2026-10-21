@@ -57,6 +57,22 @@ abweichenden Tool-Formats eine eigene.
 - Welche Kategorie gilt, stellt der Nutzer je Anbieter-Konfiguration ein
   (Schalter „unterstützt natives Tool-Calling"); sie wird nicht automatisch
   erkannt, weil eine Erkennung still das falsche Verhalten wählen könnte.
+- **Ungültige Tool-Calls sind kein Fehler der Antwort.** Ruft das Modell ein
+  Werkzeug auf, das nicht angeboten wurde, liefert es keine gültigen
+  JSON-Argumente oder fehlt einem bekannten Werkzeug ein Pflichtfeld (bzw. hat
+  es einen unzulässigen Wert), wird dieser eine Aufruf verworfen, geloggt und
+  nie ausgeführt oder „repariert" — er erreicht weder Filter-Engine noch
+  Server. Die übrigen, gültigen Aufrufe derselben Antwort laufen unverändert
+  weiter, der Chat zeigt keinen Fehler. Die KI erfährt in der nächsten Anfrage
+  desselben Zuges knapp, was falsch war (festes Vokabular, Werkzeugname,
+  Grund, die angebotenen Werkzeuge — nie die Argumente). Besteht eine Antwort
+  nur aus ungültigen Aufrufen, geht genau eine weitere Anfrage mit dieser
+  Rückmeldung raus, damit sich die KI korrigieren kann. Folgen zwei Antworten
+  desselben Zuges hintereinander, die nur ungültige Aufrufe enthalten, endet
+  der Zug mit dem Fehlercode `AI_INVALID_TOOL_CALL` („Die KI hat wiederholt ein
+  nicht vorhandenes Werkzeug aufgerufen …"); eine Antwort mit gültigem Aufruf
+  setzt die Zählung zurück. `AI_INVALID_RESPONSE` bleibt Protokollfehlern
+  (kaputte Stream-Frames) vorbehalten.
 
 ## 5. Redaction vor dem Versand
 
@@ -102,6 +118,10 @@ bevor erneut gesendet wird (Spec 0057, Spec 0087).
 
 - Tool-Call-Antwort eines nativen Anbieters wird korrekt zu einem
   Vorschlag.
+- Unbekanntes Werkzeug neben einem gültigen Vorschlag: der Vorschlag läuft
+  durch die Filter-Engine, kein Fehler im Chat, die KI bekommt die Rückmeldung.
+- Zwei Antworten in Folge nur mit ungültigen Aufrufen beenden den Zug mit
+  `AI_INVALID_TOOL_CALL`; es geht keine dritte Anfrage raus.
 - Wohlgeformter Fallback-JSON-Block wird korrekt geparst.
 - Fehlerhafter Fallback-JSON-Block wird zu Text statt zu einem Absturz.
 - Redaction maskiert bekannte Secret-Muster in Kommando-Ergebnissen und
