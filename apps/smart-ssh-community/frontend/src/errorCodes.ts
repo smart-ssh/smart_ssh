@@ -65,6 +65,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SSH_JUMP_HOST_CYCLE",
   "SSH_CREDENTIAL_RESOLUTION_FAILED",
   "SSH_SFTP_PERMISSION_DENIED",
+  // Issue #570: name already exists in the file browser.
+  "SSH_SFTP_ALREADY_EXISTS",
   // Spec 0069, Teil A3:
   "SSH_CONNECTION_REFUSED",
   "SSH_HOST_NOT_FOUND",

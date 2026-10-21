@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Ostrzeżenie o haśle głównym nie zostało potwierdzone. Bez tego hasła wszystkie dane przepadają, a odzyskanie nie jest możliwe — zaznacz pole i skonfiguruj ponownie. Nic nie zmieniono.",
     "KEYCHAIN_KEY_MISMATCH": "Klucz w magazynie kluczy nie należy do tej bazy danych. Nic nie zmieniono — zapisanie go uniemożliwiłoby odczyt bazy przy następnym uruchomieniu.",
     "SFTP_CONTENT_TOO_LARGE": "Plik jest większy niż 50 MB i nie można go skopiować do schowka.",
-    "CLIPBOARD_FILE_FAILED": "Nie udało się umieścić pliku w schowku w tym systemie."
+    "CLIPBOARD_FILE_FAILED": "Nie udało się umieścić pliku w schowku w tym systemie.",
+    "SSH_SFTP_ALREADY_EXISTS": "Plik lub folder o tej nazwie już istnieje"
   },
   "mcpServer": {
     "hint": "Zewnętrzni klienci MCP mogą przez niego proponować polecenia, odczyty/zapisy plików i aktualizacje notatek na serwerach z listy dozwolonych — każde żądanie zawsze wymaga potwierdzenia w aplikacji, niezależnie od istniejących reguł zezwalających.",
@@ -666,7 +667,9 @@
     "editUploadFailed": "Nie udało się wysłać zmiany w „{{name}}”: {{reason}}",
     "uploadedFolder": "Folder „{{name}}” wysłany — plików: {{count}}",
     "uploadFolderFailed": "Wysyłanie folderu „{{name}}” nie powiodło się: {{reason}}",
-    "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}"
+    "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}",
+    "createFileDone": "Utworzono plik „{{name}}”",
+    "createFileFailed": "Nie można utworzyć pliku „{{name}}”: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Podwyższone uprawnienia",
@@ -1017,7 +1020,9 @@
       "chmod": "Edytuj uprawnienia…",
       "rename": "Zmień nazwę",
       "cut": "Wytnij",
-      "delete": "Usuń"
+      "delete": "Usuń",
+      "newFolder": "Nowy folder",
+      "newFile": "Nowy plik"
     },
     "properties": {
       "title": "Właściwości",
@@ -1048,10 +1053,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Zmień nazwę",
-      "newFolderTitle": "Nowy folder"
+      "newFolderTitle": "Nowy folder",
+      "newFileTitle": "Nowy plik",
+      "invalidName": "Wpisz nazwę bez „/”. „.” i „..” są niedozwolone."
     },
     "copyProgress": "Kopiowanie… {{done}} MB z {{total}} MB",
-    "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB",
+    "directoryMenuLabel": "Akcje folderu"
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",

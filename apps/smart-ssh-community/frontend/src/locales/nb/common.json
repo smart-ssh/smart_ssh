@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Advarselen om hovedpassordet er ikke bekreftet. Uten dette passordet går alle data tapt og det finnes ingen gjenoppretting – kryss av i boksen og sett det opp på nytt. Ingenting ble endret.",
     "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større enn 50 MB og kan ikke kopieres til utklippstavlen.",
-    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet."
+    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede"
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruke dette til å foreslå kommandoer, fillesing/-skriving og notatoppdateringer på tillatte servere – hver forespørsel krever alltid bekreftelse i appen, uavhengig av eksisterende tillat-regler.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "Endringen i “{{name}}” kunne ikke lastes opp: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” lastet opp – {{count}} filer",
     "uploadFolderFailed": "Opplasting av mappen “{{name}}” mislyktes: {{reason}}",
-    "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}"
+    "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}",
+    "createFileDone": "Filen «{{name}}» er opprettet",
+    "createFileFailed": "Filen «{{name}}» kunne ikke opprettes: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Utvidede rettigheter",
@@ -1003,7 +1006,9 @@
       "chmod": "Rediger tillatelser…",
       "rename": "Gi nytt navn",
       "cut": "Klipp ut",
-      "delete": "Slett"
+      "delete": "Slett",
+      "newFolder": "Ny mappe",
+      "newFile": "Ny fil"
     },
     "properties": {
       "title": "Egenskaper",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Gi nytt navn",
-      "newFolderTitle": "Ny mappe"
+      "newFolderTitle": "Ny mappe",
+      "newFileTitle": "Ny fil",
+      "invalidName": "Skriv inn et navn uten «/». «.» og «..» er ikke tillatt."
     },
     "copyProgress": "Kopierer… {{done}} MB av {{total}} MB",
-    "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopierer… {{done}} MB",
+    "directoryMenuLabel": "Mappehandlinger"
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",

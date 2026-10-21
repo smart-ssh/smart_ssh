@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L’avertissement sur le mot de passe principal n’a pas été confirmé. Sans ce mot de passe, toutes les données sont perdues et il n’existe aucune récupération — cochez la case et recommencez la configuration. Rien n’a été modifié.",
     "KEYCHAIN_KEY_MISMATCH": "La clé du trousseau n’appartient pas à cette base de données. Rien n’a été modifié — l’enregistrer rendrait la base illisible au prochain démarrage.",
     "SFTP_CONTENT_TOO_LARGE": "Le fichier dépasse 50 Mo et ne peut pas être copié dans le presse-papiers.",
-    "CLIPBOARD_FILE_FAILED": "Le fichier n’a pas pu être placé dans le presse-papiers sur ce système."
+    "CLIPBOARD_FILE_FAILED": "Le fichier n’a pas pu être placé dans le presse-papiers sur ce système.",
+    "SSH_SFTP_ALREADY_EXISTS": "Un fichier ou un dossier portant ce nom existe déjà"
   },
   "mcpServer": {
     "hint": "Des clients MCP externes peuvent l’utiliser pour proposer des commandes, des lectures/écritures de fichiers et des mises à jour de notes sur les serveurs autorisés — chaque demande exige toujours une confirmation dans l’application, indépendamment des règles d’autorisation existantes.",
@@ -661,7 +662,9 @@
     "editUploadFailed": "La modification de « {{name}} » n’a pas pu être téléversée : {{reason}}",
     "uploadedFolder": "Dossier « {{name}} » téléversé — {{count}} fichiers",
     "uploadFolderFailed": "Échec du téléversement du dossier « {{name}} » : {{reason}}",
-    "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}"
+    "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}",
+    "createFileDone": "Fichier « {{name}} » créé",
+    "createFileFailed": "Impossible de créer le fichier « {{name}} » : {{reason}}"
   },
   "fileElevation": {
     "toggle": "Droits élevés",
@@ -1010,7 +1013,9 @@
       "chmod": "Modifier les permissions…",
       "rename": "Renommer",
       "cut": "Couper",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "newFolder": "Nouveau dossier",
+      "newFile": "Nouveau fichier"
     },
     "properties": {
       "title": "Propriétés",
@@ -1041,10 +1046,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Renommer",
-      "newFolderTitle": "Nouveau dossier"
+      "newFolderTitle": "Nouveau dossier",
+      "newFileTitle": "Nouveau fichier",
+      "invalidName": "Saisissez un nom sans « / ». « . » et « .. » ne sont pas autorisés."
     },
     "copyProgress": "Copie… {{done}} Mo sur {{total}} Mo",
-    "copyProgressUnknownTotal": "Copie… {{done}} Mo"
+    "copyProgressUnknownTotal": "Copie… {{done}} Mo",
+    "directoryMenuLabel": "Actions du dossier"
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",

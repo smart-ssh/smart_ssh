@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "O aviso sobre a senha mestra não foi confirmado. Sem essa senha, todos os dados são perdidos e não há recuperação — marque a caixa e configure novamente. Nada foi alterado.",
     "KEYCHAIN_KEY_MISMATCH": "A chave no chaveiro não pertence a este banco de dados. Nada foi alterado — armazená-la tornaria o banco de dados ilegível na próxima inicialização.",
     "SFTP_CONTENT_TOO_LARGE": "O arquivo é maior que 50 MB e não pode ser copiado para a área de transferência.",
-    "CLIPBOARD_FILE_FAILED": "Não foi possível colocar o arquivo na área de transferência neste sistema."
+    "CLIPBOARD_FILE_FAILED": "Não foi possível colocar o arquivo na área de transferência neste sistema.",
+    "SSH_SFTP_ALREADY_EXISTS": "Já existe um arquivo ou pasta com este nome"
   },
   "mcpServer": {
     "hint": "Clientes MCP externos podem usá-lo para propor comandos, leituras/gravações de arquivos e atualizações de anotações em servidores da lista de permitidos — toda solicitação sempre exige confirmação no app, independentemente das regras de permissão existentes.",
@@ -661,7 +662,9 @@
     "editUploadFailed": "Não foi possível enviar a alteração em “{{name}}”: {{reason}}",
     "uploadedFolder": "Pasta “{{name}}” enviada — {{count}} arquivos",
     "uploadFolderFailed": "Falha ao enviar a pasta “{{name}}”: {{reason}}",
-    "uploadFailedMany": "{{name}} arquivos não puderam ser enviados, p. ex.: {{reason}}"
+    "uploadFailedMany": "{{name}} arquivos não puderam ser enviados, p. ex.: {{reason}}",
+    "createFileDone": "Arquivo “{{name}}” criado",
+    "createFileFailed": "Não foi possível criar o arquivo “{{name}}”: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Direitos elevados",
@@ -1010,7 +1013,9 @@
       "chmod": "Editar permissões…",
       "rename": "Renomear",
       "cut": "Recortar",
-      "delete": "Excluir"
+      "delete": "Excluir",
+      "newFolder": "Nova pasta",
+      "newFile": "Novo arquivo"
     },
     "properties": {
       "title": "Propriedades",
@@ -1041,10 +1046,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Renomear",
-      "newFolderTitle": "Nova pasta"
+      "newFolderTitle": "Nova pasta",
+      "newFileTitle": "Novo arquivo",
+      "invalidName": "Digite um nome sem “/”. “.” e “..” não são permitidos."
     },
     "copyProgress": "Copiando… {{done}} MB de {{total}} MB",
-    "copyProgressUnknownTotal": "Copiando… {{done}} MB"
+    "copyProgressUnknownTotal": "Copiando… {{done}} MB",
+    "directoryMenuLabel": "Ações da pasta"
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",

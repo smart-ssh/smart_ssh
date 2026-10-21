@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "A mesterjelszó-figyelmeztetést nem erősítették meg. E jelszó nélkül minden adat elvész, és nincs helyreállítás – jelölje be a négyzetet, és állítsa be újra. Semmi nem változott.",
     "KEYCHAIN_KEY_MISMATCH": "A kulcstartóban lévő kulcs nem ehhez az adatbázishoz tartozik. Semmi nem változott – a tárolása olvashatatlanná tenné az adatbázist a következő indításkor.",
     "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra.",
-    "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren."
+    "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren.",
+    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa"
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "A(z) „{{name}}” módosítása nem tölthető fel: {{reason}}",
     "uploadedFolder": "A(z) „{{name}}” mappa feltöltve – {{count}} fájl",
     "uploadFolderFailed": "A(z) „{{name}}” mappa feltöltése sikertelen: {{reason}}",
-    "uploadFailedMany": "{{name}} fájl nem tölthető fel, pl.: {{reason}}"
+    "uploadFailedMany": "{{name}} fájl nem tölthető fel, pl.: {{reason}}",
+    "createFileDone": "A(z) „{{name}}” fájl létrehozva",
+    "createFileFailed": "A(z) „{{name}}” fájl nem hozható létre: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Emelt jogok",
@@ -1003,7 +1006,9 @@
       "chmod": "Jogosultságok szerkesztése…",
       "rename": "Átnevezés",
       "cut": "Kivágás",
-      "delete": "Törlés"
+      "delete": "Törlés",
+      "newFolder": "Új mappa",
+      "newFile": "Új fájl"
     },
     "properties": {
       "title": "Tulajdonságok",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Átnevezés",
-      "newFolderTitle": "Új mappa"
+      "newFolderTitle": "Új mappa",
+      "newFileTitle": "Új fájl",
+      "invalidName": "Adjon meg „/” nélküli nevet. A „.” és a „..” nem engedélyezett."
     },
     "copyProgress": "Másolás… {{done}} / {{total}} MB",
-    "copyProgressUnknownTotal": "Másolás… {{done}} MB"
+    "copyProgressUnknownTotal": "Másolás… {{done}} MB",
+    "directoryMenuLabel": "Mappa műveletei"
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",

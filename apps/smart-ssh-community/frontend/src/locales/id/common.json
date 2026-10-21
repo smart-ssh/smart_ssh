@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Peringatan kata sandi utama belum dikonfirmasi. Tanpa kata sandi itu semua data hilang dan tidak ada pemulihan — centang kotaknya dan atur lagi. Tidak ada yang diubah.",
     "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya.",
     "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip.",
-    "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini."
+    "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini.",
+    "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada"
   },
   "mcpServer": {
     "hint": "Klien MCP eksternal dapat menggunakan ini untuk mengusulkan perintah, pembacaan/penulisan berkas, dan pembaruan catatan pada server yang masuk daftar izin — setiap permintaan selalu memerlukan konfirmasi di aplikasi, terlepas dari aturan izin yang ada.",
@@ -651,7 +652,9 @@
     "editUploadFailed": "Perubahan pada “{{name}}” tidak dapat diunggah: {{reason}}",
     "uploadedFolder": "Folder “{{name}}” diunggah — {{count}} berkas",
     "uploadFolderFailed": "Gagal mengunggah folder “{{name}}”: {{reason}}",
-    "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}"
+    "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}",
+    "createFileDone": "File “{{name}}” dibuat",
+    "createFileFailed": "File “{{name}}” tidak dapat dibuat: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Hak tinggi",
@@ -996,7 +999,9 @@
       "chmod": "Ubah izin…",
       "rename": "Ubah nama",
       "cut": "Potong",
-      "delete": "Hapus"
+      "delete": "Hapus",
+      "newFolder": "Folder baru",
+      "newFile": "File baru"
     },
     "properties": {
       "title": "Properti",
@@ -1027,10 +1032,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Ubah nama",
-      "newFolderTitle": "Folder baru"
+      "newFolderTitle": "Folder baru",
+      "newFileTitle": "File baru",
+      "invalidName": "Masukkan nama tanpa “/”. “.” dan “..” tidak diizinkan."
     },
     "copyProgress": "Menyalin… {{done}} MB dari {{total}} MB",
-    "copyProgressUnknownTotal": "Menyalin… {{done}} MB"
+    "copyProgressUnknownTotal": "Menyalin… {{done}} MB",
+    "directoryMenuLabel": "Tindakan folder"
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",

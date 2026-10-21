@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Advarslen om hovedadgangskoden er ikke bekræftet. Uden den adgangskode går alle data tabt, og der er ingen gendannelse – markér feltet, og opsæt den igen. Intet blev ændret.",
     "KEYCHAIN_KEY_MISMATCH": "Nøglen i nøgleringen hører ikke til denne database. Intet blev ændret – at gemme den ville gøre databasen ulæselig ved næste opstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større end 50 MB og kan ikke kopieres til udklipsholderen.",
-    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system."
+    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system.",
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede"
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruge dette til at foreslå kommandoer, fillæsninger/-skrivninger og noteopdateringer på servere på tilladelseslisten – hver anmodning kræver altid bekræftelse i appen, uanset eksisterende tillad-regler.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "Ændring af “{{name}}” kunne ikke uploades: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” uploadet – {{count}} filer",
     "uploadFolderFailed": "Upload af mappen “{{name}}” mislykkedes: {{reason}}",
-    "uploadFailedMany": "{{name}} filer kunne ikke uploades, f.eks.: {{reason}}"
+    "uploadFailedMany": "{{name}} filer kunne ikke uploades, f.eks.: {{reason}}",
+    "createFileDone": "Filen “{{name}}” er oprettet",
+    "createFileFailed": "Filen “{{name}}” kunne ikke oprettes: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Forhøjede rettigheder",
@@ -1003,7 +1006,9 @@
       "chmod": "Rediger rettigheder…",
       "rename": "Omdøb",
       "cut": "Klip",
-      "delete": "Slet"
+      "delete": "Slet",
+      "newFolder": "Ny mappe",
+      "newFile": "Ny fil"
     },
     "properties": {
       "title": "Egenskaber",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Omdøb",
-      "newFolderTitle": "Ny mappe"
+      "newFolderTitle": "Ny mappe",
+      "newFileTitle": "Ny fil",
+      "invalidName": "Angiv et navn uden “/”. “.” og “..” er ikke tilladt."
     },
     "copyProgress": "Kopierer… {{done}} MB af {{total}} MB",
-    "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopierer… {{done}} MB",
+    "directoryMenuLabel": "Mappehandlinger"
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",
