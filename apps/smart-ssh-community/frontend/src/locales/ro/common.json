@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Identic: {{patterns}}",
       "exactPerSegment": "Identic pe părți: {{patterns}}",
+      "pathScoped": "Același director: {{patterns}}",
+      "lastArgOpen": "Orice ultim argument: {{patterns}}",
       "subcommand": "Toate apelurile `{{names}}`: {{patterns}}",
       "tool": "Toate apelurile `{{names}}`: {{patterns}}"
     }

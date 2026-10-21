@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Exakt: {{patterns}}",
       "exactPerSegment": "Exakt per del: {{patterns}}",
+      "pathScoped": "Samma katalog: {{patterns}}",
+      "lastArgOpen": "Valfritt sista argument: {{patterns}}",
       "subcommand": "Alla `{{names}}`-anrop: {{patterns}}",
       "tool": "Alla `{{names}}`-anrop: {{patterns}}"
     }

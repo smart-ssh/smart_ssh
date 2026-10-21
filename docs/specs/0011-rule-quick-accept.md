@@ -25,6 +25,28 @@ nicht sicher zerlegen, gibt es nur den Exakt-Vorschlag.
 
 - **Exakt:** das Kommando selbst; bei mehreren Teilkommandos „exakt je
   Teilkommando" (ein Muster je Teilkommando, nie die ganze Zeile).
+- **Pfad-begrenzt:** Enthält ein Teilkommando genau ein Pfadargument
+  (absolut, oder relativ mit `/`), bleiben Programm, Unterkommando und
+  Optionen wörtlich; der Pfad wird durch sein Elternverzeichnis plus `*`
+  ersetzt, Zahlen direkt hinter einer Option durch `*`. `tail -n 100
+  /var/log/syslog` → `tail -n * /var/log/*` (trifft `tail -n 50
+  /var/log/auth.log`, nicht `/var/log/nginx/access.log` und nicht
+  `/etc/shadow`; `*` überschreitet kein `/`, Spec 0060). Bei Programmen, die
+  Verzeichnisse auflisten (`ls`, `tree`), kommt das Verzeichnis selbst
+  hinzu: `ls -la /etc/nginx` → `ls -la /etc/*` und `ls -la /etc/nginx/*`.
+  Kein Vorschlag, wenn das Elternverzeichnis `/` ist, der Pfad `.`/`..`/
+  leere Segmente, einen Endschrägstrich, `://` oder Shell-Sonderzeichen
+  enthält, es mehrere Pfadargumente gibt oder eine Option einen Pfad trägt.
+  Es gibt keine Abfrage auf dem Server; ob ein Pfad ein Verzeichnis ist,
+  folgt allein aus dem Programm.
+- **Letztes Argument offen:** Ist das letzte Wort ein Argument ohne `-` und
+  kein Pfad, wird nur dieses durch `*` ersetzt: `systemctl restart nginx` →
+  `systemctl restart *`; `docker logs -f web` → `docker logs -f *`. Kein
+  Vorschlag bei Pfaden (der pfad-begrenzte deckt sie ab) und wenn zwischen
+  Programm und letztem Wort nichts steht (das wäre der Programm-Vorschlag).
+
+Beide entstehen je Teilkommando (Teilkommandos ohne eigenes Muster bleiben
+exakt) und stehen zwischen „Exakt" und „Unterkommando".
 - **Unterkommando:** das Unterkommando mit beliebigen Argumenten und ohne
   Argumente, z. B. `systemctl status nginx` → `systemctl status` und
   `systemctl status *` (zwei Muster, ein Vorschlag). Das Unterkommando ist

@@ -68,6 +68,10 @@ fn glob(value: impl Into<String>) -> SuggestionPatternDto {
 /// Was sich für ein Teilkommando vorschlagen lässt.
 struct SegmentPatterns {
     exact: SuggestionPatternDto,
+    /// Pfad auf sein Elternverzeichnis begrenzt (Spec 0011, Abschnitt 2).
+    path_scoped: Vec<SuggestionPatternDto>,
+    /// Nur das letzte Argument offen.
+    last_arg_open: Option<SuggestionPatternDto>,
     /// `(Name, Muster)`: Unterkommando (mit Argumenten und ohne).
     sub: Option<(String, Vec<SuggestionPatternDto>)>,
     /// `(Name, Muster)`: alle Aufrufe des Programms.
@@ -79,6 +83,8 @@ fn analyze_segment(segment: &str) -> SegmentPatterns {
     let exact_pattern = exact(tokens.join(" "));
     let none = || SegmentPatterns {
         exact: exact_pattern.clone(),
+        path_scoped: Vec::new(),
+        last_arg_open: None,
         sub: None,
         tool: None,
     };
@@ -153,9 +159,116 @@ fn analyze_segment(segment: &str) -> SegmentPatterns {
 
     SegmentPatterns {
         exact: exact_pattern,
+        path_scoped: path_scoped_patterns(&tokens[start..]),
+        last_arg_open: last_arg_open_pattern(&tokens[start..]),
         sub,
         tool: Some((tool.to_string(), tool_pattern)),
     }
+}
+
+/// Programme, deren Pfadargument ein Verzeichnis sein kann, das gelistet
+/// wird: Dann kommt zusätzlich `<Verzeichnis>/*` hinzu.
+const LISTING_TOOLS: &[&str] = &["ls", "tree"];
+
+/// Zerlegt einen einfachen Pfad (`/a/b/c`, `a/b`) in Elternverzeichnis und
+/// Name. `None` bei `.`/`..`/leeren Segmenten (keine Normalisierung hier:
+/// im Zweifel kein Vorschlag), bei `/` als Elternverzeichnis, URLs und
+/// Endschrägstrich.
+fn split_plain_path(word: &str) -> Option<(&str, &str)> {
+    if word.contains("://") || word.ends_with('/') {
+        return None;
+    }
+    let absolute = word.starts_with('/');
+    let body = word.strip_prefix('/').unwrap_or(word);
+    if body
+        .split('/')
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
+        return None;
+    }
+    let (parent, name) = word.rsplit_once('/')?;
+    if parent.is_empty() && absolute {
+        return None; // Elternverzeichnis `/`: `/*` wäre zu breit.
+    }
+    Some((parent, name))
+}
+
+/// Pfad-begrenzter Vorschlag: Werkzeug, Unterkommando und Optionen bleiben,
+/// der Pfad wird `<Elternverzeichnis>/*`, Zahlen nach einer Option `*`.
+fn path_scoped_patterns(tokens: &[&str]) -> Vec<SuggestionPatternDto> {
+    let Some(&tool) = tokens.first() else {
+        return Vec::new();
+    };
+    if tokens.len() < 2
+        || !tokens.iter().all(|t| is_plain_word(t))
+        || tool.contains('/')
+        || tool.starts_with('-')
+        || tool.contains('=')
+        || is_elevation_or_passthrough_wrapper(tool)
+    {
+        return Vec::new();
+    }
+    // Genau ein Pfadargument; Optionen mit `/` (`--file=/x`) → kein Vorschlag.
+    let mut path_index = None;
+    for (i, t) in tokens.iter().enumerate().skip(1) {
+        if t.contains('/') {
+            if t.starts_with('-') || path_index.is_some() {
+                return Vec::new();
+            }
+            path_index = Some(i);
+        }
+    }
+    let Some(pi) = path_index else {
+        return Vec::new();
+    };
+    let Some((parent, name)) = split_plain_path(tokens[pi]) else {
+        return Vec::new();
+    };
+    let build = |replacement: String| {
+        let words: Vec<String> = tokens
+            .iter()
+            .enumerate()
+            .map(|(i, &t)| {
+                if i == pi {
+                    replacement.clone()
+                } else if i > 1
+                    && tokens[i - 1].starts_with('-')
+                    && !t.is_empty()
+                    && t.chars().all(|c| c.is_ascii_digit())
+                {
+                    "*".to_string()
+                } else {
+                    t.to_string()
+                }
+            })
+            .collect();
+        glob(words.join(" "))
+    };
+    let mut patterns = vec![build(format!("{parent}/*"))];
+    if LISTING_TOOLS.contains(&tool) {
+        patterns.push(build(format!("{parent}/{name}/*")));
+    }
+    patterns
+}
+
+/// Nur das letzte Wort (Nicht-Option, kein Pfad) wird `*`; Optionen und
+/// Unterkommandos bleiben. Mindestens zwei Wörter hinter dem Programm
+/// (sonst wäre es das Programm-Muster).
+fn last_arg_open_pattern(tokens: &[&str]) -> Option<SuggestionPatternDto> {
+    let (&tool, rest) = tokens.split_first()?;
+    let (&last, middle) = rest.split_last()?;
+    if middle.is_empty()
+        || !tokens.iter().all(|t| is_plain_word(t))
+        || tool.starts_with('-')
+        || tool.contains('=')
+        || tool.contains('/')
+        || is_elevation_or_passthrough_wrapper(tool)
+        || last.starts_with('-')
+        || tokens.iter().any(|t| t.contains('/'))
+    {
+        return None;
+    }
+    Some(glob(format!("{tool} {} *", middle.join(" "))))
 }
 
 fn push_unique<T: PartialEq>(list: &mut Vec<T>, item: T) {
@@ -228,7 +341,40 @@ pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
         patterns,
     });
 
-    // 2. Unterkommando (Teilkommandos ohne Unterkommando: Programm bzw. exakt).
+    // 2. Pfad-begrenzt und 3. letztes Argument offen (je Teilkommando,
+    //    sonst Exakt-Muster).
+    if analyzed.iter().any(|a| !a.path_scoped.is_empty()) {
+        let mut patterns = Vec::new();
+        for a in &analyzed {
+            if a.path_scoped.is_empty() {
+                push_unique(&mut patterns, a.exact.clone());
+            }
+            for p in &a.path_scoped {
+                push_unique(&mut patterns, p.clone());
+            }
+        }
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::PathScoped,
+            names: Vec::new(),
+            patterns,
+        });
+    }
+    if analyzed.iter().any(|a| a.last_arg_open.is_some()) {
+        let mut patterns = Vec::new();
+        for a in &analyzed {
+            push_unique(
+                &mut patterns,
+                a.last_arg_open.clone().unwrap_or_else(|| a.exact.clone()),
+            );
+        }
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::LastArgOpen,
+            names: Vec::new(),
+            patterns,
+        });
+    }
+
+    // 4. Unterkommando (Teilkommandos ohne Unterkommando: Programm bzw. exakt).
     if analyzed.iter().any(|a| a.sub.is_some()) {
         let (mut names, mut patterns) = (Vec::new(), Vec::new());
         for a in &analyzed {
@@ -251,7 +397,7 @@ pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
         });
     }
 
-    // 3. Alle Aufrufe des Programms.
+    // 5. Alle Aufrufe des Programms.
     if analyzed.iter().any(|a| a.tool.is_some()) {
         let (mut names, mut patterns) = (Vec::new(), Vec::new());
         for a in &analyzed {
@@ -579,6 +725,7 @@ mod tests {
             kinds,
             [
                 SuggestionKind::Exact,
+                SuggestionKind::LastArgOpen,
                 SuggestionKind::Subcommand,
                 SuggestionKind::Tool
             ]
@@ -749,5 +896,156 @@ mod tests {
         assert_eq!(stored.action, RuleAction::Allow);
         assert_eq!(stored.priority, 0);
         assert_eq!(stored.scope, Scope::Global);
+    }
+    // --- #588: pfad-begrenzt und letztes Argument offen -------------------
+
+    async fn auto(s: &PatternSuggestionDto, cmd: &str) -> bool {
+        decision_with(s, cmd).await == Decision::AutoExec
+    }
+
+    #[tokio::test]
+    async fn test_path_scoped_tail_matches_siblings_only() {
+        let s = by_kind("tail -n 100 /var/log/syslog", SuggestionKind::PathScoped);
+        assert_eq!(values(&s), ["tail -n * /var/log/*"]);
+        assert!(auto(&s, "tail -n 100 /var/log/syslog").await);
+        assert!(auto(&s, "tail -n 50 /var/log/auth.log").await);
+        assert!(!auto(&s, "tail -n 50 /var/log/nginx/access.log").await);
+        assert!(!auto(&s, "tail -n 50 /etc/shadow").await);
+        assert!(!auto(&s, "tail -n 50 /var/log/../../etc/shadow").await);
+        assert!(!auto(&s, "tail -n 50 /var/log/..").await);
+    }
+
+    #[tokio::test]
+    async fn test_path_scoped_ls_lists_directory_too() {
+        let s = by_kind("ls -la /etc/nginx", SuggestionKind::PathScoped);
+        assert_eq!(values(&s), ["ls -la /etc/*", "ls -la /etc/nginx/*"]);
+        assert!(auto(&s, "ls -la /etc/nginx").await);
+        assert!(auto(&s, "ls -la /etc/nginx/nginx.conf").await);
+        // Traversal wird normalisiert: nur was wirklich im Elternverzeichnis
+        // liegt, trifft; ein Ausbruch daraus nicht.
+        assert!(!auto(&s, "ls -la /etc/nginx/../../root").await);
+        assert!(!auto(&s, "ls -la /etc/nginx/../../etc/nginx/../../root").await);
+        assert!(!auto(&s, "ls -la /etc/$(id)").await);
+        assert!(!auto(&s, "ls -la /etc/`id`").await);
+        assert!(!auto(&s, "ls -la /etc/nginx/sites/x").await);
+    }
+
+    #[test]
+    fn test_path_scoped_skipped_for_root_parent_and_unsafe_paths() {
+        for cmd in [
+            "cat /etc",
+            "cat /etc/",
+            "cat /etc/../x",
+            "cat /etc/./x",
+            "cat /etc//x",
+            "cat /a/b /c/d",
+            "cat --file=/a/b",
+            "cat /etc/$(id)",
+            "cat 'a b'/x",
+            "curl http://host/x",
+        ] {
+            assert!(
+                !suggest_rule_patterns(cmd)
+                    .iter()
+                    .any(|s| s.kind == SuggestionKind::PathScoped),
+                "{cmd}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_last_arg_open_systemctl_and_docker() {
+        let s = by_kind("systemctl restart nginx", SuggestionKind::LastArgOpen);
+        assert_eq!(values(&s), ["systemctl restart *"]);
+        assert!(auto(&s, "systemctl restart apache2").await);
+        assert!(!auto(&s, "systemctl stop nginx").await);
+        let s = by_kind("docker logs -f web", SuggestionKind::LastArgOpen);
+        assert_eq!(values(&s), ["docker logs -f *"]);
+        assert!(auto(&s, "docker logs -f db").await);
+        assert!(!auto(&s, "docker rm -f web").await);
+    }
+
+    #[test]
+    fn test_last_arg_open_skipped_for_paths_options_and_short_commands() {
+        for cmd in [
+            "cat /var/log/x",
+            "ls foo",
+            "ls -la",
+            "ls",
+            "tail -n 100 /a/b",
+        ] {
+            assert!(
+                !suggest_rule_patterns(cmd)
+                    .iter()
+                    .any(|s| s.kind == SuggestionKind::LastArgOpen),
+                "{cmd}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_new_suggestions_sit_between_exact_and_tool() {
+        let kinds: Vec<_> = suggest_rule_patterns("systemctl restart nginx")
+            .iter()
+            .map(|s| s.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                SuggestionKind::Exact,
+                SuggestionKind::LastArgOpen,
+                SuggestionKind::Subcommand,
+                SuggestionKind::Tool
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_path_scoped_per_segment_in_pipeline() {
+        let command = "cat /var/log/syslog | grep error";
+        let s = by_kind(command, SuggestionKind::PathScoped);
+        assert_eq!(values(&s), ["cat /var/log/*", "grep error"]);
+        assert!(auto(&s, command).await);
+    }
+
+    /// Property: jeder neue Vorschlag lässt das bestätigte Kommando
+    /// automatisch zu, trifft nie ein anderes Programm/Unterkommando und
+    /// lässt Umleitung/Substitution/Wrapper/kodierte Pfade nicht durch.
+    #[tokio::test]
+    async fn test_new_suggestions_property_and_adversarial() {
+        let commands = [
+            "tail -n 100 /var/log/syslog",
+            "ls -la /etc/nginx",
+            "systemctl restart nginx",
+            "docker logs -f web",
+            "cat /var/log/syslog | grep error",
+            "journalctl -u nginx -n 50",
+        ];
+        for cmd in commands {
+            for s in suggest_rule_patterns(cmd).into_iter().filter(|s| {
+                matches!(
+                    s.kind,
+                    SuggestionKind::PathScoped | SuggestionKind::LastArgOpen
+                )
+            }) {
+                assert!(auto(&s, cmd).await, "{cmd} / {:?}", values(&s));
+                let tool = cmd.split_whitespace().next().unwrap();
+                let other = format!("other{tool} x");
+                assert!(!auto(&s, &other).await);
+                for evil in [
+                    format!("{cmd} > /etc/passwd"),
+                    format!("{cmd} $(id)"),
+                    format!("{cmd} `id`"),
+                    format!("env X=1 {cmd}"),
+                    format!("{cmd}; rm -rf /"),
+                ] {
+                    assert!(!auto(&s, &evil).await, "{evil} via {:?}", values(&s));
+                }
+                if s.kind == SuggestionKind::PathScoped {
+                    let evil = format!("{cmd}/%2e%2e/x");
+                    assert!(!auto(&s, &evil).await, "{evil}");
+                }
+            }
+        }
     }
 }

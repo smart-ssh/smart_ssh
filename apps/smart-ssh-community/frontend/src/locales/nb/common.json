@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Nøyaktig: {{patterns}}",
       "exactPerSegment": "Nøyaktig per del: {{patterns}}",
+      "pathScoped": "Samme katalog: {{patterns}}",
+      "lastArgOpen": "Vilkårlig siste argument: {{patterns}}",
       "subcommand": "Alle `{{names}}`-kall: {{patterns}}",
       "tool": "Alle `{{names}}`-kall: {{patterns}}"
     }

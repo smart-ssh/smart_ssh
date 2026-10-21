@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "精确：{{patterns}}",
       "exactPerSegment": "按部分精确：{{patterns}}",
+      "pathScoped": "同一目录：{{patterns}}",
+      "lastArgOpen": "任意最后一个参数：{{patterns}}",
       "subcommand": "`{{names}}` 的所有调用：{{patterns}}",
       "tool": "`{{names}}` 的所有调用：{{patterns}}"
     }

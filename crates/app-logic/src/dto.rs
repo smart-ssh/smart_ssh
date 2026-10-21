@@ -1106,6 +1106,11 @@ pub enum SuggestionKind {
     Exact,
     /// Je Teilkommando einer Verkettung/Pipeline das Kommando selbst.
     ExactPerSegment,
+    /// Wie das Kommando, aber der Pfad durch sein Elternverzeichnis plus `*`
+    /// ersetzt (Zahlen nach Optionen werden `*`).
+    PathScoped,
+    /// Wie das Kommando, aber nur das letzte Argument ist frei (`*`).
+    LastArgOpen,
     /// Unterkommando mit beliebigen Argumenten (`names`: `tool sub`).
     Subcommand,
     /// Alle Aufrufe eines Programms (`names`: das Programm).
