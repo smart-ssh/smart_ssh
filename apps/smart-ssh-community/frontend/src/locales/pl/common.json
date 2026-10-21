@@ -367,7 +367,13 @@
     "noSuggestions": "Brak propozycji.",
     "binaryFileHint": "⚠ Plik binarny — porównanie tekstowe niemożliwe. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
     "diffTooLargeHint": "⚠ Zawartość zbyt duża na porównanie wierszy. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
-    "noContentChange": "(brak zmiany zawartości)"
+    "noContentChange": "(brak zmiany zawartości)",
+    "quickRuleLabel": {
+      "exact": "Dokładnie: {{patterns}}",
+      "exactPerSegment": "Dokładnie dla każdej części: {{patterns}}",
+      "subcommand": "Wszystkie wywołania `{{names}}`: {{patterns}}",
+      "tool": "Wszystkie wywołania `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Ostrzeżenie bezpieczeństwa · Zmieniony klucz hosta",

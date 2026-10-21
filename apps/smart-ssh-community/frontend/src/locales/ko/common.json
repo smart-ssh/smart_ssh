@@ -367,7 +367,13 @@
     "noSuggestions": "제안이 없습니다.",
     "binaryFileHint": "⚠ 바이너리 파일 — 텍스트 비교를 할 수 없습니다. 이전 크기: {{oldSize}}, 새 크기: {{newSize}}.",
     "diffTooLargeHint": "⚠ 줄 단위 비교에는 내용이 너무 큽니다. 이전 크기: {{oldSize}}, 새 크기: {{newSize}}.",
-    "noContentChange": "(내용 변경 없음)"
+    "noContentChange": "(내용 변경 없음)",
+    "quickRuleLabel": {
+      "exact": "정확히: {{patterns}}",
+      "exactPerSegment": "부분별 정확히: {{patterns}}",
+      "subcommand": "`{{names}}` 호출 전체: {{patterns}}",
+      "tool": "`{{names}}` 호출 전체: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "보안 경고 · 호스트 키 변경됨",

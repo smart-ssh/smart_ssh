@@ -367,7 +367,13 @@
     "noSuggestions": "Καμία πρόταση.",
     "binaryFileHint": "⚠ Δυαδικό αρχείο — δεν είναι δυνατή η σύγκριση κειμένου. Προηγούμενο μέγεθος: {{oldSize}}, νέο μέγεθος: {{newSize}}.",
     "diffTooLargeHint": "⚠ Το περιεχόμενο είναι πολύ μεγάλο για σύγκριση γραμμών. Προηγούμενο μέγεθος: {{oldSize}}, νέο μέγεθος: {{newSize}}.",
-    "noContentChange": "(καμία αλλαγή περιεχομένου)"
+    "noContentChange": "(καμία αλλαγή περιεχομένου)",
+    "quickRuleLabel": {
+      "exact": "Ακριβές: {{patterns}}",
+      "exactPerSegment": "Ακριβές ανά τμήμα: {{patterns}}",
+      "subcommand": "Όλες οι κλήσεις `{{names}}`: {{patterns}}",
+      "tool": "Όλες οι κλήσεις `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Προειδοποίηση ασφαλείας · Το κλειδί κεντρικού υπολογιστή άλλαξε",

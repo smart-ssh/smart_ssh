@@ -367,7 +367,13 @@
     "noSuggestions": "Không có đề xuất.",
     "binaryFileHint": "⚠ Tệp nhị phân — không thể so sánh văn bản. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
     "diffTooLargeHint": "⚠ Nội dung quá lớn để so sánh theo dòng. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
-    "noContentChange": "(nội dung không thay đổi)"
+    "noContentChange": "(nội dung không thay đổi)",
+    "quickRuleLabel": {
+      "exact": "Chính xác: {{patterns}}",
+      "exactPerSegment": "Chính xác theo từng phần: {{patterns}}",
+      "subcommand": "Mọi lệnh gọi `{{names}}`: {{patterns}}",
+      "tool": "Mọi lệnh gọi `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Cảnh báo bảo mật · Khóa máy chủ đã thay đổi",

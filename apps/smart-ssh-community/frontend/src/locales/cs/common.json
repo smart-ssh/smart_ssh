@@ -367,7 +367,13 @@
     "noSuggestions": "Žádné návrhy.",
     "binaryFileHint": "⚠ Binární soubor — textové porovnání není možné. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
     "diffTooLargeHint": "⚠ Obsah je příliš velký pro řádkový rozdíl. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
-    "noContentChange": "(žádná změna obsahu)"
+    "noContentChange": "(žádná změna obsahu)",
+    "quickRuleLabel": {
+      "exact": "Přesně: {{patterns}}",
+      "exactPerSegment": "Přesně po částech: {{patterns}}",
+      "subcommand": "Všechna volání `{{names}}`: {{patterns}}",
+      "tool": "Všechna volání `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Bezpečnostní varování · Klíč hostitele se změnil",

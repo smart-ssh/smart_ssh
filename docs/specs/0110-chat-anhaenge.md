@@ -169,3 +169,14 @@ nicht dienst-gebunden und in der Ausgangsberechtigung „Free“ gesperrt.
 - Dateien, die auf den Chat gezogen werden, gehen an den registrierten
   Ablege-Handler; die Pfade verlassen das Backend nicht (ADR 0113). Ohne
   Handler passiert beim Ablegen im Chat nichts.
+- Ein Ablegen geht nur an den Chat, wenn der Zeiger beim Ablegen über dem
+  sichtbaren Chat-Bereich liegt; ein Ablegen über dem Dateibrowser oder einer
+  anderen Fläche erreicht die Handler nicht. Solange mindestens ein Handler
+  registriert ist und eine Datei über den Chat gezogen wird, zeigt der Chat
+  eine Ablege-Markierung. Sie verschwindet, wenn der Zeiger den Chat
+  verlässt, beim Abbruch und beim Ablegen. Ohne Handler gibt es keine
+  Markierung.
+- Ein Handler lässt sich über `unregisterComposerDropHandler(id)` wieder
+  entfernen; Abonnenten werden benachrichtigt. Ist der letzte entfernt,
+  nimmt der Chat keine Drops mehr an und zeigt keine Markierung. Eine
+  unbekannte `id` bewirkt nichts.
