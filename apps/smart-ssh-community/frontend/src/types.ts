@@ -824,7 +824,7 @@ export interface EvaluationTraceDto {
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------
 
-export type SuggestionKind = "exact" | "exactPerSegment" | "subcommand" | "tool";
+export type SuggestionKind = "exact" | "exactPerSegment" | "pathScoped" | "lastArgOpen" | "subcommand" | "tool";
 
 export interface SuggestionPatternDto {
   patternType: PatternType;

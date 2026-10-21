@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "정확히: {{patterns}}",
       "exactPerSegment": "부분별 정확히: {{patterns}}",
+      "pathScoped": "같은 디렉터리: {{patterns}}",
+      "lastArgOpen": "마지막 인수는 무엇이든: {{patterns}}",
       "subcommand": "`{{names}}` 호출 전체: {{patterns}}",
       "tool": "`{{names}}` 호출 전체: {{patterns}}"
     }
