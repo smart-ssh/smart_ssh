@@ -960,6 +960,8 @@
     "cancelCut": "Kivágás megszakítása",
     "transferUpload": "Feltöltés: {{name}}",
     "transferDownload": "Letöltés: {{name}}",
+    "transferDone": "Kész: {{name}}",
+    "transferElevationEnded": "A megemelt mód az átvitel közben ki lett kapcsolva.",
     "loading": "Betöltés…",
     "emptyDirectory": "(üres könyvtár)",
     "dropHint": "Ejtse ide a feltöltéshez ide: {{path}}",

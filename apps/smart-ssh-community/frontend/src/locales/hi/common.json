@@ -960,6 +960,8 @@
     "cancelCut": "कट रद्द करें",
     "transferUpload": "अपलोड हो रहा है: {{name}}",
     "transferDownload": "डाउनलोड हो रहा है: {{name}}",
+    "transferDone": "पूरा हुआ: {{name}}",
+    "transferElevationEnded": "स्थानांतरण के दौरान उन्नत मोड बंद कर दिया गया।",
     "loading": "लोड हो रहा है…",
     "emptyDirectory": "(खाली डायरेक्टरी)",
     "dropHint": "{{path}} में अपलोड करने के लिए यहाँ छोड़ें",

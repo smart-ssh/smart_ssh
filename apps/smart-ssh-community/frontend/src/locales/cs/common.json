@@ -970,6 +970,8 @@
     "cancelCut": "Zrušit vyjmutí",
     "transferUpload": "Nahrávání: {{name}}",
     "transferDownload": "Stahování: {{name}}",
+    "transferDone": "Hotovo: {{name}}",
+    "transferElevationEnded": "Zvýšený režim byl během přenosu vypnut.",
     "loading": "Načítání…",
     "emptyDirectory": "(prázdný adresář)",
     "dropHint": "Pusťte sem pro nahrání do {{path}}",

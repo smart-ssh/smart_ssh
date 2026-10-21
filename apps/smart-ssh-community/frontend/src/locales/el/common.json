@@ -960,6 +960,8 @@
     "cancelCut": "Ακύρωση αποκοπής",
     "transferUpload": "Μεταφόρτωση: {{name}}",
     "transferDownload": "Λήψη: {{name}}",
+    "transferDone": "Ολοκληρώθηκε: {{name}}",
+    "transferElevationEnded": "Η ανυψωμένη λειτουργία απενεργοποιήθηκε κατά τη μεταφορά.",
     "loading": "Φόρτωση…",
     "emptyDirectory": "(κενός φάκελος)",
     "dropHint": "Αφήστε εδώ για μεταφόρτωση στο {{path}}",

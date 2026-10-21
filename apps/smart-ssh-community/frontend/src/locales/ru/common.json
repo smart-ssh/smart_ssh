@@ -970,6 +970,8 @@
     "cancelCut": "Отменить вырезание",
     "transferUpload": "Загрузка: {{name}}",
     "transferDownload": "Скачивание: {{name}}",
+    "transferDone": "Готово: {{name}}",
+    "transferElevationEnded": "Режим повышенных прав был выключен во время передачи.",
     "loading": "Загрузка…",
     "emptyDirectory": "(пустой каталог)",
     "dropHint": "Отпустите здесь, чтобы загрузить в {{path}}",

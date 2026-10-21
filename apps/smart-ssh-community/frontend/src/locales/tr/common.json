@@ -960,6 +960,8 @@
     "cancelCut": "Kesmeyi iptal et",
     "transferUpload": "Yükleniyor: {{name}}",
     "transferDownload": "İndiriliyor: {{name}}",
+    "transferDone": "Tamamlandı: {{name}}",
+    "transferElevationEnded": "Aktarım sırasında yükseltilmiş mod kapatıldı.",
     "loading": "Yükleniyor…",
     "emptyDirectory": "(boş dizin)",
     "dropHint": "{{path}} konumuna yüklemek için buraya bırakın",
