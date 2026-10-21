@@ -109,8 +109,8 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
   Änderungen protokolliert. Nach Erfolg wird die Liste aktualisiert und ein
   Erfolgs-Hinweis erscheint.
 - **Verschieben:** innerhalb des Servers per Ausschneiden und Einfügen.
-  erscheint nur ein Hinweis.
   Existiert das Ziel schon, warnt die App. Umbenennen und Verschieben sind
+  für den Server dieselbe Operation.
 - **Dateien aus der Zwischenablage hochladen:** Liegen Dateien oder Ordner des
   Betriebssystems in der Zwischenablage (kopiert im Finder, Explorer oder
   Linux-Dateimanager, auch die Zwischendatei aus „Datei kopieren“ unter
@@ -126,7 +126,7 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
   Übertragungsliste, im erhöhten Kanal als gewählter Nutzer. Fehlt die
   Schreibberechtigung, erscheint einmal die Meldung „Zugriff verweigert“, ohne
   Wiederholung. Hat sich die Zwischenablage zwischen Menü und Klick geleert,
-  für den Server dieselbe Operation.
+  erscheint nur ein Hinweis.
 - **Hochladen:** lokale Dateien in den aktuellen Remote-Ordner, per Dialog
   oder Drag-and-Drop. Überschreibt der Upload eine bestehende Datei, zeigt
   die App eine **Diff-Vorschau** (Spec 0020, Abschnitt 4.2); ist eine Seite
