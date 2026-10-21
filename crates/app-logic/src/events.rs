@@ -1291,3 +1291,46 @@ mod tests {
         assert!(json.get("exit_code").is_none());
     }
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatContextUsagePayload {
+    session_id: SessionId,
+    input_tokens: u64,
+    window_tokens: u64,
+}
+
+/// Issue #601: real input size of the last request vs. the model window.
+/// Numbers only, never content.
+pub fn emit_chat_context_usage(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    input_tokens: u64,
+    window_tokens: u64,
+) {
+    emit(
+        emitter,
+        "chat-context-usage",
+        &ChatContextUsagePayload {
+            session_id,
+            input_tokens,
+            window_tokens,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatContextCompactedPayload {
+    session_id: SessionId,
+}
+
+/// Issue #601: older parts of the chat were summarized or cut to fit the
+/// model's context for a request (once per compaction step).
+pub fn emit_chat_context_compacted(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-context-compacted",
+        &ChatContextCompactedPayload { session_id },
+    );
+}
