@@ -256,6 +256,19 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "CLIPBOARD_FILE_FAILED",
 ]);
 
+/** Issue #600: errors for which the error card offers "Try again". */
+const RETRYABLE_AI_CODES = new Set<string>([
+  "AI_PROVIDER_OVERLOADED",
+  "AI_PROVIDER_UNAVAILABLE",
+  "AI_RATE_LIMITED",
+  "AI_TIMEOUT",
+  "AI_NETWORK_ERROR",
+]);
+
+export function isRetryableAiError(code: string | null | undefined): boolean {
+  return !!code && RETRYABLE_AI_CODES.has(code);
+}
+
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/
  * `undefined`/unbekanntem Code auf `fallback` zurück (den bestehenden
  * `Display`-Text des Backend-Fehlers) — nie eine leere Anzeige (Spec 0024,
