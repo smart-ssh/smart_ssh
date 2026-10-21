@@ -55,6 +55,7 @@ import {
   subscribeVoiceInputEnabled,
 } from "../voiceInputSettings";
 import { useStickToBottom } from "../hooks/useStickToBottom";
+import type { VoiceHandlers, VoicePhase } from "../useVoiceInput";
 import { VoiceInputControl } from "./VoiceInputControl";
 import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { LiveCommandOutput } from "./LiveCommandOutput";
@@ -444,6 +445,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // Spec 0108: Spracheingabe an/aus (Standard an); der erkannte Text geht
   // über `handleDraftChange` in den Entwurf, nie direkt an die KI.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>("idle");
+  const [voiceFocusPending, setVoiceFocusPending] = useState(false);
+  const voiceBaseRef = useRef<string | null>(null);
   useEffect(() => {
     loadVoiceInputEnabled()
       .then(setVoiceEnabled)
@@ -978,7 +982,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || voicePhase !== "idle") return;
     const sentAttachments = attachments;
     setComposerError(null);
     // Spec 0066, §2: läuft schon eine Antwort, reiht das Backend die
@@ -1185,10 +1189,45 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   };
 
   draftRef.current = draft;
-  const handleVoiceText = (text: string) => {
-    handleDraftChange(appendToDraft(draftRef.current, text));
-    inputRef.current?.focus();
-  };
+  // Spec 0108 §5.2: live text. The draft before Start is kept; provisional
+  // text replaces everything after it, so no merging with edits is needed
+  // (the input is read-only meanwhile).
+  const voiceHandlers = useMemo<VoiceHandlers>(() => {
+    const showAfterBase = (text: string) => {
+      const base = voiceBaseRef.current;
+      if (base === null) return;
+      setDraft(appendToDraft(base, text));
+    };
+    return {
+      onStart: () => {
+        voiceBaseRef.current = draftRef.current;
+      },
+      onPartial: showAfterBase,
+      onFinal: (text) => {
+        showAfterBase(text);
+        voiceBaseRef.current = null;
+        setVoiceFocusPending(true);
+      },
+      onFailed: () => {
+        voiceBaseRef.current = null;
+        setVoiceFocusPending(true);
+      },
+      onCancel: () => {
+        if (voiceBaseRef.current !== null) setDraft(voiceBaseRef.current);
+        voiceBaseRef.current = null;
+      },
+    };
+  }, []);
+  const voiceLocked = voicePhase !== "idle";
+  // Once the input is editable again: focus it, caret at the end.
+  useEffect(() => {
+    if (!voiceFocusPending || voiceLocked) return;
+    setVoiceFocusPending(false);
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [voiceFocusPending, voiceLocked]);
 
   return (
     <div ref={chatAreaRef} className="relative flex h-full flex-col">
@@ -1333,10 +1372,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             ref={inputRef}
             rows={1}
             value={draft}
+            readOnly={voiceLocked}
+            data-provisional={voiceLocked ? "true" : undefined}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className={`max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-slate-400" : "text-slate-100"} placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
           />
           {composerActions.map((action) => (
             <button
@@ -1356,8 +1397,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               {action.icon}
             </button>
           ))}
-          {voiceEnabled && <VoiceInputControl onText={handleVoiceText} panelRef={chatAreaRef} />}
-          <Button type="submit" variant="primary" disabled={draft.trim().length === 0}>
+          {voiceEnabled && (
+            <VoiceInputControl
+              handlers={voiceHandlers}
+              onPhaseChange={setVoicePhase}
+              panelRef={chatAreaRef}
+            />
+          )}
+          <Button type="submit" variant="primary" disabled={draft.trim().length === 0 || voiceLocked}>
             {t("chat.send")}
           </Button>
         </form>

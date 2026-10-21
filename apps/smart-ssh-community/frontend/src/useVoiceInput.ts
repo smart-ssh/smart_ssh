@@ -6,6 +6,7 @@ import {
   getSelectedSpeechModel,
   getSpeechModelStatus,
   onSpeechModelStatus,
+  onSpeechPartialText,
   onSpeechRecordingState,
   startSpeechModelDownload,
   startVoiceRecording,
@@ -22,18 +23,33 @@ export interface ConsentState {
   progress: { done: number; total: number } | null;
 }
 
-/** Spec 0108 §5: records, transcribes and hands the text to `onText`. The
- * microphone and the model download are only ever started by `toggle` /
- * `confirmDownload`, i.e. by a user action. */
-export function useVoiceInput(onText: (text: string) => void) {
+/** Spec 0108 §5.2: the caller shows provisional text while recording. */
+export interface VoiceHandlers {
+  /** A recording started. */
+  onStart: () => void;
+  /** Provisional text so far (replaces the previous provisional text). */
+  onPartial: (text: string) => void;
+  /** The final text; empty when nothing was recognised. */
+  onFinal: (text: string) => void;
+  /** The final pass failed: the provisional text stays, the input unlocks. */
+  onFailed: () => void;
+  /** Discarded (Esc, leaving the chat): remove all provisional text. */
+  onCancel: () => void;
+}
+
+/** Spec 0108 §5: records, shows live text and hands the final text to
+ * `onFinal`. The microphone and the model download are only ever started by
+ * `toggle` / `confirmDownload`, i.e. by a user action. */
+export function useVoiceInput(handlers: VoiceHandlers) {
   const [phase, setPhase] = useState<VoicePhase>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const phaseRef = useRef<VoicePhase>("idle");
   const consentRef = useRef<ConsentState | null>(null);
-  const onTextRef = useRef(onText);
-  onTextRef.current = onText;
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+  const lastRevisionRef = useRef(0);
 
   const updatePhase = (p: VoicePhase) => {
     phaseRef.current = p;
@@ -50,6 +66,7 @@ export function useVoiceInput(onText: (text: string) => void) {
       await startVoiceRecording();
       setElapsed(0);
       updatePhase("recording");
+      handlersRef.current.onStart();
     } catch (err) {
       updatePhase("idle");
       if (commandErrorCode(err) === "speech_no_model") {
@@ -75,9 +92,12 @@ export function useVoiceInput(onText: (text: string) => void) {
     updatePhase("transcribing");
     try {
       const text = await stopVoiceRecording();
-      if (text.trim()) onTextRef.current(text);
+      handlersRef.current.onFinal(text);
     } catch (err) {
       setErrorKey(voiceErrorKey(commandErrorCode(err)));
+      // `NotRecording` after a cancel elsewhere also lands here; the
+      // handler keeps whatever provisional text is there.
+      handlersRef.current.onFailed();
     } finally {
       updatePhase("idle");
     }
@@ -86,6 +106,7 @@ export function useVoiceInput(onText: (text: string) => void) {
   const cancel = useCallback(() => {
     if (phaseRef.current !== "recording") return;
     updatePhase("idle");
+    handlersRef.current.onCancel();
     void cancelVoiceRecording().catch(() => {});
   }, []);
 
@@ -171,6 +192,24 @@ export function useVoiceInput(onText: (text: string) => void) {
     };
   }, [finish]);
 
+  // Provisional text: only while recording, only newer revisions.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    onSpeechPartialText((ev) => {
+      if (phaseRef.current !== "recording") return;
+      if (ev.revision <= lastRevisionRef.current) return;
+      lastRevisionRef.current = ev.revision;
+      handlersRef.current.onPartial(ev.text);
+    })
+      .then((u) => (disposed ? u() : (unlisten = u)))
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   // Elapsed time while recording.
   useEffect(() => {
     if (phase !== "recording") return;
@@ -194,7 +233,10 @@ export function useVoiceInput(onText: (text: string) => void) {
   // Leaving the chat while recording discards the recording.
   useEffect(
     () => () => {
-      if (phaseRef.current === "recording") void cancelVoiceRecording().catch(() => {});
+      if (phaseRef.current === "recording") {
+        handlersRef.current.onCancel();
+        void cancelVoiceRecording().catch(() => {});
+      }
     },
     [],
   );

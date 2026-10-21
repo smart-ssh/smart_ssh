@@ -9,7 +9,7 @@ use tauri_plugin_store::StoreExt;
 
 use app_logic::error::{CommandError, CommandResult};
 use speech::{
-    CpalSource, ModelStatus, RecordError, Recorder, RecorderState, WhisperTranscriber,
+    CpalSource, LiveConfig, ModelStatus, RecordError, Recorder, RecorderState, WhisperTranscriber,
     MAX_RECORDING,
 };
 
@@ -21,6 +21,10 @@ const LANGUAGE_KEY: &str = "speechLanguage";
 /// `finished` follows an automatic stop at the maximum length; the text is
 /// collected with `stop_voice_recording`.
 pub(crate) const STATE_EVENT: &str = "speech-recording-state";
+/// Event with `{ text, revision }`: the provisional text of the running
+/// recording so far, while recording only (Spec 0108, 5.7). It stays on the
+/// machine; the final text is still only returned by `stop_voice_recording`.
+pub(crate) const PARTIAL_EVENT: &str = "speech-partial-text";
 
 #[derive(Default)]
 pub struct VoiceRecorder(OnceLock<Recorder>);
@@ -31,13 +35,21 @@ fn recorder<R: Runtime>(app: &AppHandle<R>) -> Recorder {
         .0
         .get_or_init(|| {
             let emit_app = app.clone();
-            Recorder::new(
+            let partial_app = app.clone();
+            Recorder::with_live(
                 Arc::new(CpalSource),
                 Arc::new(WhisperTranscriber),
                 MAX_RECORDING,
                 Arc::new(move |s: RecorderState| {
                     let _ = emit_app.emit(STATE_EVENT, serde_json::json!({ "state": s }));
                 }),
+                Arc::new(move |revision: u64, text: String| {
+                    let _ = partial_app.emit(
+                        PARTIAL_EVENT,
+                        serde_json::json!({ "text": text, "revision": revision }),
+                    );
+                }),
+                LiveConfig::default(),
                 tauri::async_runtime::handle().inner().clone(),
             )
         })
