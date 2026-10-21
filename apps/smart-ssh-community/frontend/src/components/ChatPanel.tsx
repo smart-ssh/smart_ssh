@@ -24,7 +24,7 @@ import {
   sendChatMessage,
   stopAutoContinuation,
   startNewChat,
-  suggestRulePatterns,
+  explainConfirmation,
   takeChatContentIntoNote,
 } from "../api";
 import {
@@ -83,7 +83,9 @@ import type {
   AiAction,
   Decision,
   DocumentFormat,
-  PatternSuggestionDto,
+  ExplainedSuggestionDto,
+  ConfirmationExplanationDto,
+  SuggestionVerdictDto,
   SuggestionPatternDto,
   RiskAssessment,
   Scope,
@@ -177,6 +179,9 @@ export type ChatItem =
       origin: ActionOrigin;
     }
   | { type: "error"; id: string; message: string; code: string | null }
+  // Issue #596: a rule was created from the confirmation card but the
+  // command will still ask next time; `reasons` are backend reason codes.
+  | { type: "ruleNotice"; id: string; reasons: string[] }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
   // Spec 0080, A3: eine Runde ohne Text und ohne vorgeschlagene Aktion
   // (`chat-response-empty`) — reines UI-Element aus dem Event, kein
@@ -876,6 +881,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -892,7 +898,21 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       scope,
       undefined,
       editedCommand,
-    ).catch((err) =>
+    )
+      .then(() => {
+        // Issue #596: no silent failure — repeat why the command still asks.
+        if (verdict && !verdict.autoExec) {
+          setItems((prev) => [
+            ...prev,
+            {
+              type: "ruleNotice",
+              id: freshId(),
+              reasons: verdict.reasons.map((r) => r.code),
+            },
+          ]);
+        }
+      })
+      .catch((err) =>
       setItems((prev) => [
         ...prev,
         // Spec 0077, 3.1.4: Code weiterreichen statt `null`, damit ein
@@ -1526,6 +1546,7 @@ export function ChatItemView({
     patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => void;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
@@ -1584,6 +1605,13 @@ export function ChatItemView({
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
         ⚠ {translateErrorCode(t, item.code, item.message)}
       </div>
+    );
+  }
+  if (item.type === "ruleNotice") {
+    return (
+      <output className="block border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+        {t("confirmDialog.explain.notice", { reasons: reasonList(t, item.reasons) })}
+      </output>
     );
   }
   if (item.type === "autoContinuationLimitReached") {
@@ -1816,6 +1844,7 @@ export function ChatItemView({
           onRespond={onRespond}
           onAcceptWithRule={onAcceptWithRule}
           serverId={serverId}
+          sessionId={sessionId}
         />
       )}
 
@@ -1894,8 +1923,10 @@ function ConfirmActionForm({
   onRespond,
   onAcceptWithRule,
   serverId,
+  sessionId,
 }: {
   actionId: string;
+  sessionId: string;
   initialCommand?: string;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
@@ -1903,6 +1934,7 @@ function ConfirmActionForm({
     patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => void;
   serverId: string;
 }) {
@@ -1940,6 +1972,9 @@ function ConfirmActionForm({
        * Bestätigungsdialog): primäre Aktion (Ausführen) links, Ablehnen
        * daneben, der Regel-Schnellvorschlag als eigene, deutlich
        * abgesetzte Aktionsgruppe rechts. */}
+      {initialCommand !== undefined && (
+        <CoverageList sessionId={sessionId} command={edited} />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
          * look stays hand-written; the focus ring is the shared one. */}
@@ -1962,6 +1997,7 @@ function ConfirmActionForm({
          * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
         {initialCommand !== undefined && (
           <QuickRuleButton
+            sessionId={sessionId}
             actionId={actionId}
             command={edited}
             wasEdited={edited !== initialCommand}
@@ -1974,6 +2010,69 @@ function ConfirmActionForm({
   );
 }
 
+/** Issue #596: backend reason codes as a translated, de-duplicated list. */
+function reasonList(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  codes: string[],
+): string {
+  return [...new Set(codes)]
+    .map((code) => translateErrorCode(t, code, t("confirmDialog.explain.reasonOther")))
+    .join("; ");
+}
+
+/** Issue #596, Spec 0011: which segments of the pending command existing
+ * rules already cover, which need a rule and which ask regardless of rules.
+ * Renders nothing while loading, on failure, or when the backend returns no
+ * segments (single segment without a rule-independent reason). */
+function CoverageList({ sessionId, command }: { sessionId: string; command: string }) {
+  const { t } = useTranslation();
+  const [explanation, setExplanation] = useState<ConfirmationExplanationDto | null>(null);
+  useEffect(() => {
+    let stale = false;
+    explainConfirmation(sessionId, command, "Global")
+      .then((r) => {
+        if (!stale) setExplanation(r);
+      })
+      .catch(() => {
+        if (!stale) setExplanation(null);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [sessionId, command]);
+  if (!explanation || explanation.segments.length === 0) return null;
+  return (
+    <div className="space-y-1 text-xs">
+      <div className="font-heading font-semibold tracking-wide text-slate-400 uppercase">
+        {t("confirmDialog.explain.heading")}
+      </div>
+      <ul className="space-y-0.5">
+        {explanation.segments.map((segment) => (
+          <li key={segment.index} className="flex flex-wrap gap-x-2">
+            <code className="font-mono break-all text-slate-200">{segment.text}</code>
+            {segment.state === "covered" && (
+              <span className="text-emerald-300">
+                ✓{" "}
+                {segment.rule
+                  ? t("confirmDialog.explain.covered", { rule: segment.rule.patternValue })
+                  : t("confirmDialog.explain.coveredUnknown")}
+              </span>
+            )}
+            {segment.state === "needsRule" && (
+              <span className="text-amber-300">{t("confirmDialog.explain.needsRule")}</span>
+            )}
+            {segment.state === "blocked" && (
+              <span className="text-amber-300">
+                {t("confirmDialog.explain.blocked", { reasons: reasonList(t, segment.reasons) })}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Spec 0011, Abschnitt 4: zusätzlicher Button neben Ausführen/Ablehnen,
  * öffnet ein kompaktes Dropdown mit Muster-Vorschlägen + Scope-Auswahl
  * (Default: aktueller Server). Klick auf einen Vorschlag ruft
@@ -1982,12 +2081,14 @@ function ConfirmActionForm({
  * optimistisches `responded: true` (s. `ChatPanel.acceptWithRule`), genau
  * wie bei Ausführen/Ablehnen. */
 export function QuickRuleButton({
+  sessionId,
   actionId,
   command,
   wasEdited,
   serverId,
   onAccept,
 }: {
+  sessionId: string;
   actionId: string;
   command: string;
   /** Unabhängiger Review-Pass (Spec 0007/0008/0011): `true`, wenn `command`
@@ -2001,23 +2102,16 @@ export function QuickRuleButton({
     patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState<PatternSuggestionDto[]>([]);
+  const [suggestions, setSuggestions] = useState<ExplainedSuggestionDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scopeKind, setScopeKind] = useState<"server" | "global" | "tag">("server");
   const [tag, setTag] = useState("");
-
-  // Unabhängiger Review-Pass: Vorschläge wurden bislang nur beim ERSTEN
-  // Öffnen geladen und danach nie neu geholt — bearbeitet der Nutzer den
-  // Text nach dem ersten Öffnen weiter, blieben die veralteten
-  // Vorschläge (aus dem alten Text) stehen und ausgewählt.
-  useEffect(() => {
-    setSuggestions([]);
-  }, [command]);
 
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -2034,18 +2128,7 @@ export function QuickRuleButton({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  const toggleOpen = () => {
-    const next = !open;
-    setOpen(next);
-    if (next && suggestions.length === 0 && !loading) {
-      setLoading(true);
-      setError(null);
-      suggestRulePatterns(command)
-        .then(setSuggestions)
-        .catch((err) => setError(commandErrorMessage(err)))
-        .finally(() => setLoading(false));
-    }
-  };
+  const toggleOpen = () => setOpen((o) => !o);
 
   const buildScope = (): Scope | null => {
     if (scopeKind === "global") return "Global";
@@ -2054,7 +2137,35 @@ export function QuickRuleButton({
     return trimmed ? { Tag: trimmed } : null;
   };
 
-  const handlePick = (suggestion: PatternSuggestionDto) => {
+  // Issue #596: suggestions and their verdicts come from the backend and
+  // depend on the command text and the chosen scope — reload on every change
+  // (also covers a command edited after the first opening). A stale answer
+  // is dropped.
+  const scopeKey = JSON.stringify(buildScope());
+  useEffect(() => {
+    setSuggestions([]);
+    const scope = buildScope();
+    if (!open || !scope) return;
+    let stale = false;
+    setLoading(true);
+    setError(null);
+    explainConfirmation(sessionId, command, scope)
+      .then((r) => {
+        if (!stale) setSuggestions(r.suggestions);
+      })
+      .catch((err) => {
+        if (!stale) setError(commandErrorMessage(err));
+      })
+      .finally(() => {
+        if (!stale) setLoading(false);
+      });
+    return () => {
+      stale = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, command, scopeKey, sessionId]);
+
+  const handlePick = (suggestion: ExplainedSuggestionDto) => {
     const scope = buildScope();
     if (!scope) return;
     onAccept(
@@ -2062,6 +2173,7 @@ export function QuickRuleButton({
       suggestion.patterns,
       scope,
       wasEdited ? command : null,
+      suggestion.verdict,
     );
     setOpen(false);
   };
@@ -2142,6 +2254,18 @@ export function QuickRuleButton({
                     patterns: suggestion.patterns.map((p) => p.patternValue).join(", "),
                   })}
                 </Button>
+                <p
+                  className={`px-3 pb-1 text-xs ${suggestion.verdict.autoExec ? "text-emerald-300" : "text-amber-300"}`}
+                >
+                  {suggestion.verdict.autoExec
+                    ? t("confirmDialog.explain.verdictAuto")
+                    : t("confirmDialog.explain.verdictAsk", {
+                        reasons: reasonList(
+                          t,
+                          suggestion.verdict.reasons.map((r) => r.code),
+                        ),
+                      })}
+                </p>
               </li>
             ))}
           </ul>

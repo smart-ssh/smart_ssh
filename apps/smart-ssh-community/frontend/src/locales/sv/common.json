@@ -377,6 +377,17 @@
       "lastArgOpen": "Valfritt sista argument: {{patterns}}",
       "subcommand": "Alla `{{names}}`-anrop: {{patterns}}",
       "tool": "Alla `{{names}}`-anrop: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Delar av det här kommandot",
+      "covered": "täcks av regeln {{rule}}",
+      "coveredUnknown": "täcks av en befintlig regel",
+      "needsRule": "behöver en regel",
+      "blocked": "frågar alltid, oavsett regler: {{reasons}}",
+      "verdictAuto": "körs automatiskt nästa gång",
+      "verdictAsk": "frågar fortfarande: {{reasons}}",
+      "notice": "Regel skapad. Det här kommandot frågar fortfarande nästa gång: {{reasons}}",
+      "reasonOther": "en annan säkerhetskontroll"
     }
   },
   "hostKeyDialog": {

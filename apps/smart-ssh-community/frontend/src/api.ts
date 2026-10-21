@@ -31,6 +31,7 @@ import type {
   NoteTarget,
   PatternDto,
   PatternSuggestionDto,
+  ConfirmationExplanationDto,
   SuggestionPatternDto,
   RemoteEntryDto,
   RuleDto,
@@ -426,6 +427,11 @@ export const evaluateExplained = (command: string, ctx: EvalContextInput) =>
 
 export const suggestRulePatterns = (command: string) =>
   invoke<PatternSuggestionDto[]>("suggest_rule_patterns", { command });
+
+/** Issue #596: coverage per segment, suggestions for uncovered segments and a
+ * verdict per suggestion, evaluated by the backend for the session's server. */
+export const explainConfirmation = (sessionId: string, command: string, scope: Scope) =>
+  invoke<ConfirmationExplanationDto>("explain_confirmation", { sessionId, command, scope });
 
 /** `editedCommand`: unabhängiger Review-Pass (Spec 0007/0008/0011) —
  * `undefined`/gleich dem ursprünglichen Kommando löst wie zuvor über

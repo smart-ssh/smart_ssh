@@ -100,6 +100,33 @@ pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<Pattern
     Ok(app_logic::rule_suggestions::suggest_rule_patterns(&command))
 }
 
+/// Issue #596, Spec 0011: coverage per segment, suggestions for the
+/// uncovered segments and a verdict per suggestion for the pending command
+/// of `session_id`, with the suggestions' patterns as candidate rules in
+/// `scope`. Read-only: nothing is stored. Server and tags come from the
+/// session, not from the frontend.
+#[tauri::command]
+pub async fn explain_confirmation(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    command: String,
+    scope: Scope,
+) -> CommandResult<app_logic::dto::ConfirmationExplanationDto> {
+    let session = state.sessions.get(session_id).ok_or_else(|| {
+        app_logic::error::CommandError::from(format!("unknown session {session_id:?}"))
+    })?;
+    let stored = app_logic::filter_rules::list_rules(&state.policy_store, None).await?;
+    Ok(app_logic::confirmation_explain::explain_confirmation(
+        &session,
+        state.profile_store.as_ref(),
+        &stored,
+        &command,
+        scope,
+        None,
+    )
+    .await)
+}
+
 /// Spec 0011, Abschnitt 3: versucht zuerst, die Regel anzulegen (Schritt 1,
 /// delegiert an [`app_logic::filter_rules::create_rule`] über
 /// [`app_logic::rule_suggestions::create_quick_rule`]), löst **danach** die

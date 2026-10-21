@@ -377,6 +377,17 @@
       "lastArgOpen": "Mikä tahansa viimeinen argumentti: {{patterns}}",
       "subcommand": "Kaikki `{{names}}`-kutsut: {{patterns}}",
       "tool": "Kaikki `{{names}}`-kutsut: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Tämän komennon osat",
+      "covered": "kattaa sääntö {{rule}}",
+      "coveredUnknown": "kattaa olemassa oleva sääntö",
+      "needsRule": "tarvitsee säännön",
+      "blocked": "kysyy aina säännöistä riippumatta: {{reasons}}",
+      "verdictAuto": "suoritetaan ensi kerralla automaattisesti",
+      "verdictAsk": "kysyy edelleen: {{reasons}}",
+      "notice": "Sääntö luotu. Tämä komento kysyy ensi kerrallakin: {{reasons}}",
+      "reasonOther": "toinen turvatarkistus"
     }
   },
   "hostKeyDialog": {

@@ -377,6 +377,17 @@
       "lastArgOpen": "任意最后一个参数：{{patterns}}",
       "subcommand": "`{{names}}` 的所有调用：{{patterns}}",
       "tool": "`{{names}}` 的所有调用：{{patterns}}"
+    },
+    "explain": {
+      "heading": "此命令的各部分",
+      "covered": "已被规则 {{rule}} 覆盖",
+      "coveredUnknown": "已被现有规则覆盖",
+      "needsRule": "需要规则",
+      "blocked": "无论规则如何都会询问：{{reasons}}",
+      "verdictAuto": "下次将自动运行",
+      "verdictAsk": "仍会询问：{{reasons}}",
+      "notice": "规则已创建。此命令下次仍会询问：{{reasons}}",
+      "reasonOther": "另一项安全检查"
     }
   },
   "hostKeyDialog": {

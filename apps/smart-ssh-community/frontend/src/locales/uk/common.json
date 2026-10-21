@@ -377,6 +377,17 @@
       "lastArgOpen": "Будь-який останній аргумент: {{patterns}}",
       "subcommand": "Усі виклики `{{names}}`: {{patterns}}",
       "tool": "Усі виклики `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Частини цієї команди",
+      "covered": "охоплено правилом {{rule}}",
+      "coveredUnknown": "охоплено наявним правилом",
+      "needsRule": "потребує правила",
+      "blocked": "завжди питає, незалежно від правил: {{reasons}}",
+      "verdictAuto": "наступного разу виконається автоматично",
+      "verdictAsk": "і далі питатиме: {{reasons}}",
+      "notice": "Правило створено. Ця команда й наступного разу питатиме: {{reasons}}",
+      "reasonOther": "інша перевірка безпеки"
     }
   },
   "hostKeyDialog": {

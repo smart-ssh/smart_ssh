@@ -377,6 +377,17 @@
       "lastArgOpen": "Elk laatste argument: {{patterns}}",
       "subcommand": "Alle `{{names}}`-aanroepen: {{patterns}}",
       "tool": "Alle `{{names}}`-aanroepen: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Onderdelen van dit commando",
+      "covered": "gedekt door regel {{rule}}",
+      "coveredUnknown": "gedekt door een bestaande regel",
+      "needsRule": "heeft een regel nodig",
+      "blocked": "vraagt altijd, welke regels er ook zijn: {{reasons}}",
+      "verdictAuto": "wordt de volgende keer automatisch uitgevoerd",
+      "verdictAsk": "vraagt nog steeds: {{reasons}}",
+      "notice": "Regel aangemaakt. Dit commando vraagt de volgende keer nog steeds: {{reasons}}",
+      "reasonOther": "een andere veiligheidscontrole"
     }
   },
   "hostKeyDialog": {

@@ -302,6 +302,16 @@ fn suggestion_covers(suggestion: &PatternSuggestionDto, segments: &[String]) -> 
 /// bestätigte Kommando treffen). Kann das Kommando nicht sicher zerlegt
 /// werden, gibt es nur den Exakt-Vorschlag.
 pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
+    suggest_rule_patterns_excluding(command, &[])
+}
+
+/// Like [`suggest_rule_patterns`], but segments whose text is in `covered`
+/// (already allowed by an existing rule, issue #596) get no pattern. No
+/// suggestion at all if every segment is covered.
+pub fn suggest_rule_patterns_excluding(
+    command: &str,
+    covered: &[String],
+) -> Vec<PatternSuggestionDto> {
     let trimmed = command.trim();
     if trimmed.is_empty() {
         return Vec::new();
@@ -320,7 +330,12 @@ pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
     };
     let mut segments: Vec<String> = Vec::new();
     for segment in raw_segments {
-        push_unique(&mut segments, segment);
+        if !covered.contains(&segment) {
+            push_unique(&mut segments, segment);
+        }
+    }
+    if segments.is_empty() {
+        return Vec::new();
     }
     let analyzed: Vec<SegmentPatterns> = segments.iter().map(|s| analyze_segment(s)).collect();
 

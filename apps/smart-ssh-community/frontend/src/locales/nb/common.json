@@ -377,6 +377,17 @@
       "lastArgOpen": "Vilkårlig siste argument: {{patterns}}",
       "subcommand": "Alle `{{names}}`-kall: {{patterns}}",
       "tool": "Alle `{{names}}`-kall: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Deler av denne kommandoen",
+      "covered": "dekket av regelen {{rule}}",
+      "coveredUnknown": "dekket av en eksisterende regel",
+      "needsRule": "trenger en regel",
+      "blocked": "spør alltid, uansett regler: {{reasons}}",
+      "verdictAuto": "kjører automatisk neste gang",
+      "verdictAsk": "spør fortsatt: {{reasons}}",
+      "notice": "Regel opprettet. Denne kommandoen spør fortsatt neste gang: {{reasons}}",
+      "reasonOther": "en annen sikkerhetskontroll"
     }
   },
   "hostKeyDialog": {

@@ -377,6 +377,17 @@
       "lastArgOpen": "마지막 인수는 무엇이든: {{patterns}}",
       "subcommand": "`{{names}}` 호출 전체: {{patterns}}",
       "tool": "`{{names}}` 호출 전체: {{patterns}}"
+    },
+    "explain": {
+      "heading": "이 명령의 각 부분",
+      "covered": "규칙 {{rule}}이(가) 적용됨",
+      "coveredUnknown": "기존 규칙이 적용됨",
+      "needsRule": "규칙 필요",
+      "blocked": "규칙과 관계없이 항상 확인합니다: {{reasons}}",
+      "verdictAuto": "다음부터 자동으로 실행됩니다",
+      "verdictAsk": "계속 확인합니다: {{reasons}}",
+      "notice": "규칙을 만들었습니다. 이 명령은 다음에도 확인이 필요합니다: {{reasons}}",
+      "reasonOther": "다른 보안 검사"
     }
   },
   "hostKeyDialog": {

@@ -377,6 +377,17 @@
       "lastArgOpen": "Cualquier último argumento: {{patterns}}",
       "subcommand": "Todas las llamadas a `{{names}}`: {{patterns}}",
       "tool": "Todas las llamadas a `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Partes de este comando",
+      "covered": "cubierto por la regla {{rule}}",
+      "coveredUnknown": "cubierto por una regla existente",
+      "needsRule": "necesita una regla",
+      "blocked": "siempre pregunta, sean cuales sean las reglas: {{reasons}}",
+      "verdictAuto": "se ejecutará automáticamente la próxima vez",
+      "verdictAsk": "seguirá preguntando: {{reasons}}",
+      "notice": "Regla creada. Este comando seguirá preguntando la próxima vez: {{reasons}}",
+      "reasonOther": "otra comprobación de seguridad"
     }
   },
   "hostKeyDialog": {

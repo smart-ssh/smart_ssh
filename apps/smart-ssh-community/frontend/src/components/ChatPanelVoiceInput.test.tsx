@@ -55,7 +55,7 @@ vi.mock("../api", () => ({
   respondToAction: vi.fn(() => Promise.resolve()),
   sendChatMessage: vi.fn(() => Promise.resolve()),
   stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  suggestRulePatterns: vi.fn(),
+  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
   takeChatContentIntoNote: vi.fn(),
 }));
 
