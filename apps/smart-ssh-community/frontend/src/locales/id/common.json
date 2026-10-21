@@ -955,6 +955,8 @@
     "cancelCut": "Batalkan potong",
     "transferUpload": "Mengunggah: {{name}}",
     "transferDownload": "Mengunduh: {{name}}",
+    "transferDone": "Selesai: {{name}}",
+    "transferElevationEnded": "Mode tinggi dimatikan selama transfer.",
     "loading": "Memuat…",
     "emptyDirectory": "(direktori kosong)",
     "dropHint": "Lepas di sini untuk mengunggah ke {{path}}",

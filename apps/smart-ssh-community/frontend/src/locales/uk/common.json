@@ -970,6 +970,8 @@
     "cancelCut": "Скасувати вирізання",
     "transferUpload": "Вивантаження: {{name}}",
     "transferDownload": "Завантаження: {{name}}",
+    "transferDone": "Готово: {{name}}",
+    "transferElevationEnded": "Режим підвищених прав вимкнено під час передавання.",
     "loading": "Завантаження…",
     "emptyDirectory": "(порожня тека)",
     "dropHint": "Скиньте сюди, щоб вивантажити до {{path}}",

@@ -965,6 +965,8 @@
     "cancelCut": "Annuler la coupe",
     "transferUpload": "Téléversement : {{name}}",
     "transferDownload": "Téléchargement : {{name}}",
+    "transferDone": "Terminé : {{name}}",
+    "transferElevationEnded": "Le mode élevé a été désactivé pendant le transfert.",
     "loading": "Chargement…",
     "emptyDirectory": "(répertoire vide)",
     "dropHint": "Déposer ici pour téléverser vers {{path}}",

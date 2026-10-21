@@ -960,6 +960,8 @@
     "cancelCut": "Cancel cut",
     "transferUpload": "Uploading: {{name}}",
     "transferDownload": "Downloading: {{name}}",
+    "transferDone": "Done: {{name}}",
+    "transferElevationEnded": "Elevated mode was switched off during the transfer.",
     "loading": "Loading…",
     "emptyDirectory": "(empty directory)",
     "dropHint": "Drop here to upload to {{path}}",

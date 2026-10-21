@@ -119,6 +119,11 @@ interface Transfer {
   fileName: string;
   totalBytes: number | null;
   error: string | null;
+  /** Issue #621: the transfer started while elevated mode was on. */
+  startedElevated?: boolean;
+  /** Issue #621: finished successfully, but elevated mode ended meanwhile —
+   * the row stays (as done) with a note. */
+  doneElevationEnded?: boolean;
 }
 
 interface FileBrowserPanelProps {
@@ -595,6 +600,13 @@ export function FileBrowserPanel({
     };
   }, [dirMenu]);
 
+  // Issue #621: subscribe once per session. The handlers read the current
+  // channel user / path / load through refs, so toggling elevated mode never
+  // unsubscribes (an event in the re-subscription gap would be lost).
+  const channelUserRef = useRef(channelUser);
+  channelUserRef.current = channelUser;
+  const loadRef = useRef(load);
+  loadRef.current = load;
   useEffect(() => {
     const unlisten = [
       onSftpTransferStarted((event) => {
@@ -607,6 +619,7 @@ export function FileBrowserPanel({
             fileName: event.fileName,
             totalBytes: event.totalBytes,
             error: null,
+            startedElevated: channelUserRef.current !== null,
           },
         ]);
       }),
@@ -617,23 +630,29 @@ export function FileBrowserPanel({
             prev.map((t) => (t.id === event.transferId ? { ...t, error: event.error } : t)),
           );
         } else {
-          setTransfers((prev) => prev.filter((t) => t.id !== event.transferId));
+          const elevationEnded = channelUserRef.current === null;
+          setTransfers((prev) =>
+            prev.flatMap((t) => {
+              if (t.id !== event.transferId) return [t];
+              // Issue #621 / Spec 0085: completed although elevated mode was
+              // switched off meanwhile — keep the row as done, with a note.
+              return t.startedElevated && elevationEnded ? [{ ...t, doneElevationEnded: true }] : [];
+            }),
+          );
           // Erfolgreicher Transfer kann den Inhalt des aktuell offenen
           // Verzeichnisses geändert haben (Upload/Download berührt aber nur
           // die Ziel-/Quelldatei — ein Refresh ist trotzdem billig genug,
           // um nicht auf mögliche Rennbedingungen zwischen Event und
           // Nutzer-Navigation Rücksicht nehmen zu müssen).
-          load(path);
+          loadRef.current(pathRef.current);
         }
       }),
     ];
     return () => {
       unlisten.forEach((p) => p.then((fn) => fn()));
     };
-    // `channelUser`: das Neuladen nach einem Transfer muss den aktuellen
-    // Kanal nutzen (spec-reviewer-Fund, Spec 0067: veraltete Closure).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, path, channelUser]);
+    // Spec 0067: reload after a transfer uses the current channel (via refs).
+  }, [sessionId]);
 
   // Spec 0020, Abschnitt 5.1: Upload per Drag-and-Drop aus dem Betriebssystem.
   // Nur aktiv, während dieser Tab UND die Dateien-Ansicht sichtbar sind (s.
@@ -1392,7 +1411,24 @@ export function FileBrowserPanel({
         <div className="space-y-1 border-b border-slate-800 bg-slate-950/60 px-2 py-1.5">
           {transfers.map((transfer) => (
             <div key={transfer.id} className="flex items-center gap-2 text-xs">
-              {transfer.error ? (
+              {transfer.doneElevationEnded ? (
+                <>
+                  <span className="text-emerald-400">✓</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-300">
+                    {t("fileBrowser.transferDone", { name: transfer.fileName })}{" "}
+                    <span className="text-slate-400">{t("fileBrowser.transferElevationEnded")}</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
+                    aria-label={t("common.close")}
+                    title={t("common.close")}
+                  >
+                    ✕
+                  </Button>
+                </>
+              ) : transfer.error ? (
                 <>
                   <span className="text-red-400">✗</span>
                   <span className="min-w-0 flex-1 truncate text-red-300">
