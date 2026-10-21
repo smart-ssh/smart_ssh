@@ -15,6 +15,8 @@ import type {
   ChatResponseCancelledEvent,
   ChatResponseEmptyEvent,
   ChatResponseTruncatedEvent,
+  ChatContextUsageEvent,
+  ChatContextCompactedEvent,
   ChatTextDeltaEvent,
   ChatWebActivityEvent,
   ChatWebResearchUnavailableEvent,
@@ -124,6 +126,18 @@ export const onChatResponseTruncated = (
   handler: (event: ChatResponseTruncatedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatResponseTruncatedEvent>("chat-response-truncated", (e) => handler(e.payload));
+
+/** Issue #601 — real context size after a response. */
+export const onChatContextUsage = (
+  handler: (event: ChatContextUsageEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatContextUsageEvent>("chat-context-usage", (e) => handler(e.payload));
+
+/** Issue #601 — one event per compaction step. */
+export const onChatContextCompacted = (
+  handler: (event: ChatContextCompactedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatContextCompactedEvent>("chat-context-compacted", (e) => handler(e.payload));
 
 /** Spec 0105 — eine serverseitige Web-Recherche des Providers. */
 export const onChatWebActivity = (
