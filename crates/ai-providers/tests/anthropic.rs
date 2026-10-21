@@ -623,7 +623,7 @@ event: message_stop\ndata: {}\n\n";
 /// `ProviderUnavailable`. *Scheitert, wenn die Erkennung in der geteilten
 /// Abbildungsfunktion liegt statt nur in `openai_compatible.rs`.*
 #[tokio::test]
-async fn test_context_length_wording_at_anthropic_provider_stays_provider_unavailable() {
+async fn test_context_length_wording_at_anthropic_provider_is_a_rejected_request() {
     let server = MockServer::start().await;
     let error_body = r#"{"error":{"message":"This model's maximum context length is 4096 tokens. However, you requested 8192 tokens.","type":"invalid_request_error"}}"#;
     Mock::given(method("POST"))
@@ -645,7 +645,7 @@ async fn test_context_length_wording_at_anthropic_provider_stays_provider_unavai
 
     assert!(matches!(
         events.as_slice(),
-        [AiEvent::Error(AiError::ProviderUnavailable(_))]
+        [AiEvent::Error(AiError::RejectedRequest(_))]
     ));
 }
 
@@ -717,10 +717,7 @@ async fn test_after_disable_the_request_has_no_web_tools_and_cannot_be_rejected_
     assert!(!bodies[1].contains("web_fetch"), "{}", bodies[1]);
     assert!(bodies[1].contains("suggest_command"));
     assert!(
-        matches!(
-            &events[..],
-            [AiEvent::Error(AiError::ProviderUnavailable(_))]
-        ),
+        matches!(&events[..], [AiEvent::Error(AiError::RejectedRequest(_))]),
         "{events:?}"
     );
 }
@@ -735,10 +732,7 @@ async fn test_rejection_body_without_web_tools_in_request_is_a_plain_error() {
     let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
 
     assert!(
-        matches!(
-            &events[..],
-            [AiEvent::Error(AiError::ProviderUnavailable(_))]
-        ),
+        matches!(&events[..], [AiEvent::Error(AiError::RejectedRequest(_))]),
         "{events:?}"
     );
 }
@@ -752,7 +746,7 @@ async fn test_other_errors_with_web_tools_keep_their_usual_mapping() {
     let generic_400 = r#"{"type":"error","error":{"type":"invalid_request_error","message":"messages: at least one message is required"}}"#;
     let cases: [(u16, &str, ErrorCheck); 4] = [
         (400, generic_400, |e| {
-            matches!(e, AiError::ProviderUnavailable(_))
+            matches!(e, AiError::RejectedRequest(_))
         }),
         (401, WEB_SEARCH_DISABLED_BODY, |e| {
             matches!(e, AiError::AuthenticationFailed)
@@ -760,8 +754,8 @@ async fn test_other_errors_with_web_tools_keep_their_usual_mapping() {
         (403, WEB_SEARCH_DISABLED_BODY, |e| {
             matches!(e, AiError::AuthenticationFailed)
         }),
-        (529, WEB_SEARCH_DISABLED_BODY, |e| {
-            matches!(e, AiError::ProviderUnavailable(_))
+        (500, WEB_SEARCH_DISABLED_BODY, |e| {
+            matches!(e, AiError::RejectedRequest(_))
         }),
     ];
     for (status, body, expected) in cases {
@@ -780,4 +774,207 @@ async fn test_other_errors_with_web_tools_keep_their_usual_mapping() {
             "{status}"
         );
     }
+}
+
+const OK_SSE: &str = "event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n\
+event: content_block_stop\ndata: {\"index\":0}\n\n\
+event: message_stop\ndata: {}\n\n";
+
+fn overload_provider(uri: String) -> AnthropicProvider {
+    AnthropicProvider::new(uri, "claude-test", "test-key", true, test_budget(), None)
+}
+
+/// Issue #599: HTTP 529/503 are retried (here with `Retry-After: 0` to keep
+/// the test fast); a success on the 2nd or 3rd attempt delivers normally,
+/// after one `Retrying` event per retry.
+#[tokio::test]
+async fn test_issue_599_http_overload_is_retried_until_success() {
+    for (status, failures) in [(529u16, 1u64), (503, 2)] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .insert_header("retry-after", "0")
+                    .set_body_string(
+                        r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#,
+                    ),
+            )
+            .up_to_n_times(failures)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(OK_SSE),
+            )
+            .with_priority(2)
+            .mount(&server)
+            .await;
+
+        let events: Vec<AiEvent> = overload_provider(server.uri())
+            .send(empty_context())
+            .collect()
+            .await;
+
+        let retrying = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    AiEvent::Retrying {
+                        max_attempts: 3,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert_eq!(retrying as u64, failures, "{status}: {events:?}");
+        assert_eq!(
+            &events[events.len() - 2..],
+            [AiEvent::TextDelta("ok".to_string()), AiEvent::Done],
+            "{status}"
+        );
+    }
+}
+
+/// Issue #599: after 3 retries (4 requests) the turn ends with
+/// `AI_PROVIDER_OVERLOADED`.
+#[tokio::test]
+async fn test_issue_599_http_529_exhausts_retries_with_overloaded() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(529).insert_header("retry-after", "0"))
+        .mount(&server)
+        .await;
+
+    let events: Vec<AiEvent> = overload_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+
+    assert_eq!(server.received_requests().await.unwrap().len(), 4);
+    match events.last() {
+        Some(AiEvent::Error(err)) => assert_eq!(err.code(), "AI_PROVIDER_OVERLOADED"),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// Issue #599: an in-stream `overloaded_error` before any content is retried
+/// (first backoff step ≈ 2 s); the second attempt succeeds.
+#[tokio::test]
+async fn test_issue_599_in_stream_overload_before_content_is_retried() {
+    let server = MockServer::start().await;
+    let overloaded = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(overloaded),
+        )
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(OK_SSE),
+        )
+        .with_priority(2)
+        .mount(&server)
+        .await;
+
+    let events: Vec<AiEvent> = overload_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+
+    assert!(matches!(
+        events[0],
+        AiEvent::Retrying {
+            attempt: 1,
+            max_attempts: 3,
+            ..
+        }
+    ));
+    assert_eq!(
+        &events[1..],
+        [AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
+    );
+}
+
+/// Issue #599: the same error after content was emitted ends at once with
+/// `AI_PROVIDER_OVERLOADED`, without a second request.
+#[tokio::test]
+async fn test_issue_599_in_stream_overload_after_content_is_not_retried() {
+    let body = "event: content_block_start\ndata: {\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\
+event: content_block_delta\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"par\"}}\n\n\
+event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n";
+    let server = mock_server_with_sse_body(body).await;
+
+    let events: Vec<AiEvent> = overload_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    assert!(!events.iter().any(|e| matches!(e, AiEvent::Retrying { .. })));
+    assert!(matches!(
+        events.last(),
+        Some(AiEvent::Error(AiError::Overloaded { .. }))
+    ));
+}
+
+/// Issue #599: Anthropic's exhausted credit (HTTP 400) is a billing error and
+/// is not retried.
+#[tokio::test]
+async fn test_issue_599_credit_balance_400_is_billing_and_not_retried() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing."}}"#,
+        ))
+        .mount(&server)
+        .await;
+
+    let events: Vec<AiEvent> = overload_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    match events.as_slice() {
+        [AiEvent::Error(err)] => assert_eq!(err.code(), "AI_PROVIDER_BILLING"),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// Issue #599: HTTP 400 "prompt is too long" is a too-large context.
+#[tokio::test]
+async fn test_issue_599_prompt_too_long_400_is_context_too_large() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 210000 tokens > 200000 maximum"}}"#,
+        ))
+        .mount(&server)
+        .await;
+
+    let events: Vec<AiEvent> = overload_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+
+    assert_eq!(events, vec![AiEvent::Error(AiError::ContextTooLarge)]);
 }

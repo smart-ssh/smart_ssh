@@ -34,10 +34,13 @@ use ssh_manager_core::ssh::CommandOutput;
 
 use crate::action::{action_from_tool_arguments, parameters_json_schema};
 use crate::content::{check_attachments, ContentPart};
-use crate::error::{error_stream, map_http_status, map_transport_error, timeout_error};
+use crate::error::{
+    error_stream, map_http_response, map_stream_error_object, map_transport_error,
+    provider_request_id, timeout_error,
+};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
-    log_cache_usage, log_outgoing_context, log_provider_error_response,
+    log_cache_usage, log_outgoing_context, log_provider_error_response_with_id,
     log_provider_transport_error, log_stop_reason, log_text_delta_summary, log_tool_call_fragment,
     log_tool_call_parse_error, log_tool_call_parsed,
 };
@@ -171,6 +174,9 @@ pub struct AnthropicProvider {
     /// keine Web-Werkzeuge mehr an. Nur im Speicher, die gespeicherte
     /// Einstellung bleibt unverändert.
     web_research_rejected: std::sync::atomic::AtomicBool,
+    /// Issue #599: id of the most recent request, see
+    /// `AiProvider::last_request_id`.
+    last_request: std::sync::Mutex<Option<Uuid>>,
 }
 
 impl AnthropicProvider {
@@ -192,6 +198,7 @@ impl AnthropicProvider {
             max_tokens_override,
             web_research: false,
             web_research_rejected: std::sync::atomic::AtomicBool::new(false),
+            last_request: std::sync::Mutex::new(None),
         }
     }
 
@@ -578,6 +585,9 @@ async fn connect_and_stream(
         // statt sofort als terminaler Fehler zurückzugehen (s.
         // `crate::retry`-Moduldoc zur Redaction-Invariante: derselbe `body`
         // wird unverändert erneut gesendet).
+        let status = response.status();
+        let headers = response.headers().clone();
+        let provider_rid = provider_request_id(&headers);
         if response.status().as_u16() == 429 {
             let elapsed = retry_start.elapsed();
             let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
@@ -605,6 +615,20 @@ async fn connect_and_stream(
                 let text =
                     crate::sse::read_error_body_with_timeout_capped(response.text(), remaining)
                         .await;
+                // Issue #599: a 429 that is really an exhausted quota is a
+                // billing problem — never retried.
+                if crate::error::ProviderErrorInfo::from_body(&text).is_billing() {
+                    let mapped = map_http_response(status, &headers, &text);
+                    log_provider_error_response_with_id(
+                        request_id,
+                        provider_rid.as_deref(),
+                        status.as_u16(),
+                        &text,
+                        &mapped,
+                        &[&api_key],
+                    );
+                    return to_raw_stream(error_stream(mapped));
+                }
                 crate::request_logging::log_provider_rate_limited_retry(
                     request_id,
                     attempt,
@@ -618,7 +642,6 @@ async fn connect_and_stream(
         }
 
         if !response.status().is_success() {
-            let status = response.status();
             // s. Kommentar beim 429-Retry-Zweig oben — dasselbe
             // Hänger-Risiko, hier zusätzlich zwischen dem noch ausstehenden
             // Log-Aufruf unten und dem Nutzer.
@@ -633,16 +656,29 @@ async fn connect_and_stream(
             {
                 AiError::WebResearchRejected(format!("HTTP {status}: {text}"))
             } else {
-                map_http_status(status, &text)
+                map_http_response(status, &headers, &text)
             };
             // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
             // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
             // Varianten) verlieren Status/Body ab hier unwiederbringlich.
-            log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &[&api_key]);
+            log_provider_error_response_with_id(
+                request_id,
+                provider_rid.as_deref(),
+                status.as_u16(),
+                &text,
+                &mapped,
+                &[&api_key],
+            );
             return to_raw_stream(error_stream(mapped));
         }
 
-        return event_stream_from_response(response, native_tool_calling, request_id, api_key);
+        return event_stream_from_response(
+            response,
+            native_tool_calling,
+            request_id,
+            api_key,
+            provider_rid,
+        );
     }
 }
 
@@ -769,95 +805,121 @@ impl AiProvider for AnthropicProvider {
         // das an sich schon gültige Maximum hinaus verdoppeln.
         let model_max_tokens = anthropic_model_max_output_tokens(&self.model);
 
-        let state = RetryState {
-            client,
-            url,
-            api_key,
-            native_tool_calling,
-            request_id,
-            budget,
-            body,
-            max_tokens,
-            model_max_tokens,
-            retried: false,
-            inner: None,
-            finished: false,
+        // Issue #599: the whole attempt is repeated on a pre-output overload
+        // (`crate::overload`); provider/model/request id ride on the span so
+        // that every log line of this request carries them.
+        *self
+            .last_request
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request_id);
+        let span = tracing::info_span!(
+            "ai_request",
+            provider = "anthropic",
+            model = %self.model,
+        );
+        let make = move || {
+            anthropic_attempt_stream(RetryState {
+                client: client.clone(),
+                url: url.clone(),
+                api_key: api_key.clone(),
+                native_tool_calling,
+                request_id,
+                budget: budget.clone(),
+                body: body.clone(),
+                max_tokens,
+                model_max_tokens,
+                retried: false,
+                inner: None,
+                finished: false,
+            })
         };
-
-        // Spec 0065, Teil 3: dieser äußere Stream verbindet erst lazy (beim
-        // ersten Poll, wie zuvor `request.flatten_stream()`), hält aber
-        // zusätzlich Zustand über MEHRERE Verbindungsversuche hinweg — nötig,
-        // damit ein abgeschnittener Tool-Call (`RawEvent::
-        // RetryWithHigherMaxTokens`, erst nach vollständigem Konsum des
-        // ersten Streams bekannt) zu einem zweiten `connect_and_stream`-
-        // Aufruf mit verdoppeltem `max_tokens` führen kann, statt — wie beim
-        // alten `async move { ... }.flatten_stream()` — nur EINMAL verbinden
-        // zu können.
-        Box::pin(futures::stream::unfold(state, |mut state| async move {
-            loop {
-                if state.finished {
-                    return None;
-                }
-                if state.inner.is_none() {
-                    let stream = connect_and_stream(
-                        state.client.clone(),
-                        state.url.clone(),
-                        state.api_key.clone(),
-                        state.native_tool_calling,
-                        state.request_id,
-                        state.budget.clone(),
-                        state.body.clone(),
-                    )
-                    .await;
-                    state.inner = Some(stream);
-                }
-                match state.inner.as_mut().expect("gerade gesetzt").next().await {
-                    Some(RawEvent::Public(event)) => return Some((event, state)),
-                    Some(RawEvent::RetryWithHigherMaxTokens) => {
-                        if state.retried {
-                            // Spec 0065, Invariante "Retry ist einmalig":
-                            // kein zweiter Versuch, kein Ausführen/Vorlegen
-                            // des abgeschnittenen Tool-Calls — stattdessen
-                            // ein sichtbarer, terminaler Fehler. Die
-                            // Zuweisung wird erst beim NÄCHSTEN Aufruf
-                            // dieses `unfold`-Closures gelesen (ganz oben:
-                            // `if state.finished { return None; }`) — dem
-                            // Compiler nicht sichtbar, daher `allow` statt
-                            // die Zeile fälschlich als toten Code zu
-                            // entfernen.
-                            #[allow(unused_assignments)]
-                            {
-                                state.finished = true;
-                            }
-                            return Some((AiEvent::Error(AiError::ResponseTruncated), state));
-                        }
-                        state.retried = true;
-                        // Spec 0087, A2.1 (BL-0265): identisches Muster zu
-                        // `openai_compatible::send`s `doubled_and_capped.max(...)`
-                        // — ohne dieses `.max(...)` konnte `min(verdoppelt,
-                        // Modell-Maximum)` unter einen expliziten, über dem
-                        // Modell-Maximum liegenden `max_tokens_override` fallen
-                        // (Ist-Befund vor diesem Fix, s. Spec Abschnitt 1: Override
-                        // 32 000, Modell-Maximum 16 384 → der Retry sendete 16 384,
-                        // WENIGER als eingestellt). Der Retry wird für diesen Fall
-                        // wirkungslos (derselbe Wert nochmal), statt die explizite
-                        // Nutzereinstellung zu unterlaufen.
-                        let doubled_and_capped = state
-                            .max_tokens
-                            .saturating_mul(2)
-                            .min(state.model_max_tokens);
-                        state.max_tokens = doubled_and_capped.max(state.max_tokens);
-                        state.body["max_tokens"] = json!(state.max_tokens);
-                        state.inner = None;
-                        // Schleife läuft weiter, verbindet oben neu.
-                    }
-                    // `unfold` ruft das Closure nach `None` nicht erneut
-                    // auf — `state.finished` hier zu setzen wäre toter Code.
-                    None => return None,
-                }
-            }
-        }))
+        crate::overload::with_overload_retry(span, request_id, make)
     }
+
+    fn last_request_id(&self) -> Option<Uuid> {
+        *self
+            .last_request
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// One attempt of a `send()` call, including the single higher-`max_tokens`
+/// retry (Spec 0065, Teil 3).
+fn anthropic_attempt_stream(state: RetryState) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    // Spec 0065, Teil 3: dieser äußere Stream verbindet erst lazy (beim
+    // ersten Poll, wie zuvor `request.flatten_stream()`), hält aber
+    // zusätzlich Zustand über MEHRERE Verbindungsversuche hinweg — nötig,
+    // damit ein abgeschnittener Tool-Call (`RawEvent::
+    // RetryWithHigherMaxTokens`, erst nach vollständigem Konsum des
+    // ersten Streams bekannt) zu einem zweiten `connect_and_stream`-
+    // Aufruf mit verdoppeltem `max_tokens` führen kann, statt — wie beim
+    // alten `async move { ... }.flatten_stream()` — nur EINMAL verbinden
+    // zu können.
+    Box::pin(futures::stream::unfold(state, |mut state| async move {
+        loop {
+            if state.finished {
+                return None;
+            }
+            if state.inner.is_none() {
+                let stream = connect_and_stream(
+                    state.client.clone(),
+                    state.url.clone(),
+                    state.api_key.clone(),
+                    state.native_tool_calling,
+                    state.request_id,
+                    state.budget.clone(),
+                    state.body.clone(),
+                )
+                .await;
+                state.inner = Some(stream);
+            }
+            match state.inner.as_mut().expect("gerade gesetzt").next().await {
+                Some(RawEvent::Public(event)) => return Some((event, state)),
+                Some(RawEvent::RetryWithHigherMaxTokens) => {
+                    if state.retried {
+                        // Spec 0065, Invariante "Retry ist einmalig":
+                        // kein zweiter Versuch, kein Ausführen/Vorlegen
+                        // des abgeschnittenen Tool-Calls — stattdessen
+                        // ein sichtbarer, terminaler Fehler. Die
+                        // Zuweisung wird erst beim NÄCHSTEN Aufruf
+                        // dieses `unfold`-Closures gelesen (ganz oben:
+                        // `if state.finished { return None; }`) — dem
+                        // Compiler nicht sichtbar, daher `allow` statt
+                        // die Zeile fälschlich als toten Code zu
+                        // entfernen.
+                        #[allow(unused_assignments)]
+                        {
+                            state.finished = true;
+                        }
+                        return Some((AiEvent::Error(AiError::ResponseTruncated), state));
+                    }
+                    state.retried = true;
+                    // Spec 0087, A2.1 (BL-0265): identisches Muster zu
+                    // `openai_compatible::send`s `doubled_and_capped.max(...)`
+                    // — ohne dieses `.max(...)` konnte `min(verdoppelt,
+                    // Modell-Maximum)` unter einen expliziten, über dem
+                    // Modell-Maximum liegenden `max_tokens_override` fallen
+                    // (Ist-Befund vor diesem Fix, s. Spec Abschnitt 1: Override
+                    // 32 000, Modell-Maximum 16 384 → der Retry sendete 16 384,
+                    // WENIGER als eingestellt). Der Retry wird für diesen Fall
+                    // wirkungslos (derselbe Wert nochmal), statt die explizite
+                    // Nutzereinstellung zu unterlaufen.
+                    let doubled_and_capped = state
+                        .max_tokens
+                        .saturating_mul(2)
+                        .min(state.model_max_tokens);
+                    state.max_tokens = doubled_and_capped.max(state.max_tokens);
+                    state.body["max_tokens"] = json!(state.max_tokens);
+                    state.inner = None;
+                    // Schleife läuft weiter, verbindet oben neu.
+                }
+                // `unfold` ruft das Closure nach `None` nicht erneut
+                // auf — `state.finished` hier zu setzen wäre toter Code.
+                None => return None,
+            }
+        }
+    }))
 }
 
 enum BlockKind {
@@ -902,6 +964,9 @@ struct AnthropicStreamState {
     pending: VecDeque<RawEvent>,
     finished: bool,
     request_id: Uuid,
+    /// Issue #599: the provider's own request id (response header), for the
+    /// in-stream error log line.
+    provider_request_id: Option<String>,
     /// Spec 0065, Teil 3: fertig geparste (aber noch nicht freigegebene)
     /// Tool-Call-Ereignisse — gehalten, bis `finalize()` den `stop_reason`
     /// kennt (s. `content_block_stop`-Kommentar).
@@ -1078,15 +1143,24 @@ impl AnthropicStreamState {
                 self.pending.extend(events);
             }
             "error" => {
-                let message = data
-                    .get("error")
-                    .and_then(|e| e.get("message"))
-                    .and_then(Value::as_str)
-                    .unwrap_or("unbekannter Fehler")
-                    .to_string();
-                self.pending.push_back(RawEvent::Public(AiEvent::Error(
-                    AiError::ProviderUnavailable(message),
-                )));
+                // Issue #599: classify by the provider's error type
+                // (`overloaded_error`, `rate_limit_error`,
+                // `invalid_request_error`, `api_error`, …) and log it.
+                let (mapped, info) = match data.get("error") {
+                    Some(error) => map_stream_error_object(error),
+                    None => map_stream_error_object(&Value::Null),
+                };
+                crate::request_logging::log_provider_error(
+                    self.request_id,
+                    self.provider_request_id.as_deref(),
+                    None,
+                    info.error_type.as_deref().or(info.code.as_deref()),
+                    &mapped,
+                    info.message.as_deref().unwrap_or("unbekannter Fehler"),
+                    &[&self.api_key],
+                );
+                self.pending
+                    .push_back(RawEvent::Public(AiEvent::Error(mapped)));
                 self.finished = true;
             }
             _ => {}
@@ -1335,12 +1409,14 @@ fn event_stream_from_response(
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
+    provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     process_frame_stream(
         Box::pin(sse_frame_stream(response)),
         native_tool_calling,
         request_id,
         api_key,
+        provider_request_id,
     )
 }
 
@@ -1353,6 +1429,7 @@ fn process_frame_stream(
     native_tool_calling: bool,
     request_id: Uuid,
     api_key: String,
+    provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     let state = AnthropicStreamState {
         frames,
@@ -1364,6 +1441,7 @@ fn process_frame_stream(
         pending: VecDeque::new(),
         finished: false,
         request_id,
+        provider_request_id,
         held_tool_events: Vec::new(),
         stop_reason: None,
         server_tool_inputs: BTreeMap::new(),
@@ -1690,7 +1768,8 @@ mod tests {
         let never_yields: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
             Box::pin(futures::stream::pending());
 
-        let mut events = process_frame_stream(never_yields, true, Uuid::new_v4(), String::new());
+        let mut events =
+            process_frame_stream(never_yields, true, Uuid::new_v4(), String::new(), None);
         let event = events.next().await;
 
         assert!(
@@ -1728,9 +1807,10 @@ mod tests {
             ]),
         );
         let request_id = Uuid::new_v4();
-        let events: Vec<RawEvent> = process_frame_stream(frames, true, request_id, String::new())
-            .collect()
-            .await;
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, request_id, String::new(), None)
+                .collect()
+                .await;
 
         assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
         let log_text = crate::test_support::log_buffer_text();
@@ -1759,7 +1839,7 @@ mod tests {
             ]),
         );
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -1786,9 +1866,10 @@ mod tests {
                 frame("message_stop", "{}"),
             ]));
         let request_id = Uuid::new_v4();
-        let events: Vec<RawEvent> = process_frame_stream(frames, true, request_id, String::new())
-            .collect()
-            .await;
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, request_id, String::new(), None)
+                .collect()
+                .await;
 
         assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
         let log_text = crate::test_support::log_buffer_text();
@@ -1816,7 +1897,7 @@ mod tests {
                 frame("message_stop", "{}"),
             ]));
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -1865,7 +1946,7 @@ mod tests {
         );
 
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -1904,7 +1985,7 @@ mod tests {
         );
 
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -1943,7 +2024,7 @@ mod tests {
         );
 
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -1978,7 +2059,7 @@ mod tests {
         );
 
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -2018,7 +2099,7 @@ mod tests {
         );
 
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -2060,7 +2141,7 @@ mod tests {
         );
 
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
@@ -2337,7 +2418,7 @@ mod tests {
     async fn collect_frames(frames: Vec<Result<SseFrame, reqwest::Error>>) -> Vec<RawEvent> {
         let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
             Box::pin(futures::stream::iter(frames));
-        process_frame_stream(frames, true, Uuid::new_v4(), String::new())
+        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
             .collect()
             .await
     }
@@ -2520,6 +2601,56 @@ mod tests {
         assert_eq!(events.last(), Some(&RawEvent::Public(AiEvent::Done)));
     }
 
+    /// Issue #599: in-stream `error` events are classified by the
+    /// provider's error type.
+    #[tokio::test]
+    async fn test_issue_599_in_stream_errors_are_classified_by_type() {
+        let cases: [(&str, &str, AiError); 5] = [
+            (
+                "overloaded_error",
+                "Overloaded",
+                AiError::Overloaded { retry_after: None },
+            ),
+            ("rate_limit_error", "slow", AiError::RateLimited),
+            (
+                "invalid_request_error",
+                "prompt is too long: 210000 tokens > 200000 maximum",
+                AiError::ContextTooLarge,
+            ),
+            (
+                "invalid_request_error",
+                "messages: bad",
+                AiError::RejectedRequest("invalid_request_error: messages: bad".to_string()),
+            ),
+            (
+                "api_error",
+                "Internal server error",
+                AiError::ProviderUnavailable("Internal server error".to_string()),
+            ),
+        ];
+        for (kind, message, expected) in cases {
+            let data =
+                format!(r#"{{"type":"error","error":{{"type":"{kind}","message":"{message}"}}}}"#);
+            let events = collect_frames(vec![frame("error", &data)]).await;
+            assert_eq!(
+                events,
+                vec![RawEvent::Public(AiEvent::Error(expected))],
+                "{kind}"
+            );
+        }
+    }
+
+    /// Issue #599: an in-stream credit error is a billing error.
+    #[tokio::test]
+    async fn test_issue_599_in_stream_credit_balance_error_is_billing() {
+        let data = r#"{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}"#;
+        let events = collect_frames(vec![frame("error", data)]).await;
+        assert!(matches!(
+            events.as_slice(),
+            [RawEvent::Public(AiEvent::Error(AiError::Billing(_)))]
+        ));
+    }
+
     /// Issue #173: das Web-Ergebnis wird sofort gemeldet — auch wenn die
     /// Antwort danach mit einem `error`-Event (kein `message_stop`) endet,
     /// und nur dann, wenn tatsächlich ein Web-Ergebnis eingetroffen ist.
@@ -2678,7 +2809,7 @@ mod tests {
         let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
             Box::pin(futures::stream::iter(frames));
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, false, Uuid::new_v4(), String::new())
+            process_frame_stream(frames, false, Uuid::new_v4(), String::new(), None)
                 .collect()
                 .await;
 
