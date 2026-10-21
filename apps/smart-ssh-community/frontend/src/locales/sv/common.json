@@ -367,7 +367,13 @@
     "noSuggestions": "Inga förslag.",
     "binaryFileHint": "⚠ Binärfil — textjämförelse är inte möjlig. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
     "diffTooLargeHint": "⚠ Innehållet är för stort för en raddiff. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
-    "noContentChange": "(ingen innehållsändring)"
+    "noContentChange": "(ingen innehållsändring)",
+    "quickRuleLabel": {
+      "exact": "Exakt: {{patterns}}",
+      "exactPerSegment": "Exakt per del: {{patterns}}",
+      "subcommand": "Alla `{{names}}`-anrop: {{patterns}}",
+      "tool": "Alla `{{names}}`-anrop: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Säkerhetsvarning · Värdnyckeln har ändrats",

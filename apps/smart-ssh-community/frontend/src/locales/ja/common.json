@@ -367,7 +367,13 @@
     "noSuggestions": "候補はありません。",
     "binaryFileHint": "⚠ バイナリファイルのため、テキストの比較はできません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
     "diffTooLargeHint": "⚠ 内容が大きすぎて行単位の差分を表示できません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
-    "noContentChange": "（内容の変更なし）"
+    "noContentChange": "（内容の変更なし）",
+    "quickRuleLabel": {
+      "exact": "完全一致: {{patterns}}",
+      "exactPerSegment": "パートごとに完全一致: {{patterns}}",
+      "subcommand": "`{{names}}` のすべての呼び出し: {{patterns}}",
+      "tool": "`{{names}}` のすべての呼び出し: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "セキュリティ警告 · ホストキーが変更されました",
