@@ -1054,6 +1054,16 @@ impl AnthropicStreamState {
             "message_start" => {
                 if let Some(usage) = data.get("message").and_then(|m| m.get("usage")) {
                     log_cache_usage(self.request_id, "anthropic", usage);
+                    // Issue #601: reale Eingabegröße für die Kompaktierung.
+                    let field = |n: &str| usage.get(n).and_then(Value::as_u64).unwrap_or(0);
+                    let total = field("input_tokens")
+                        .saturating_add(field("cache_read_input_tokens"))
+                        .saturating_add(field("cache_creation_input_tokens"));
+                    if total > 0 {
+                        self.pending.push_back(RawEvent::Public(AiEvent::Usage {
+                            input_tokens: total,
+                        }));
+                    }
                 }
             }
             // `message_delta`-Event (Feld `delta.stop_reason`), nicht in
@@ -1732,7 +1742,14 @@ mod tests {
             .collect()
             .await;
 
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+        // Issue #601: real input size = input + cache creation + cache read.
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::Usage { input_tokens: 5170 }),
+                RawEvent::Public(AiEvent::Done)
+            ]
+        );
         let log_text = crate::test_support::log_buffer_text();
         assert!(log_text.contains("cache_creation_input_tokens"));
         assert!(log_text.contains("5120"));
@@ -1763,7 +1780,13 @@ mod tests {
                 .collect()
                 .await;
 
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::Usage { input_tokens: 5170 }),
+                RawEvent::Public(AiEvent::Done)
+            ]
+        );
         let log_text = crate::test_support::log_buffer_text();
         assert!(log_text.contains("\"cache_read_input_tokens\":5120"));
     }

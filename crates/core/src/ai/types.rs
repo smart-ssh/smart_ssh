@@ -110,6 +110,12 @@ pub enum AiEvent {
     /// keinen Inhalt (nichts zu schwärzen/zu fencen), wird nie angezeigt
     /// oder gespeichert und kann das Flag nur setzen, nie löschen.
     WebContentIngested,
+    /// Issue #601: die vom Provider gemeldete Eingabegröße dieser Anfrage
+    /// (Eingabe-Token inkl. Cache-Lese-/Schreib-Anteil). Rein zählend, kein
+    /// Inhalt; Provider ohne Usage-Angabe senden es nicht.
+    Usage {
+        input_tokens: u64,
+    },
     Error(AiError),
 }
 
