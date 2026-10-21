@@ -87,6 +87,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "AI_RATE_LIMITED",
   "AI_NETWORK_ERROR",
   "AI_INVALID_RESPONSE",
+  // Issue #604: repeated unknown/invalid tool calls ended the turn.
+  "AI_INVALID_TOOL_CALL",
   "AI_CONTEXT_TOO_LARGE",
   "AI_PROVIDER_UNAVAILABLE",
   // Issue #599: overload, exhausted credit, rejected request.
@@ -253,6 +255,19 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Issue #358: „Datei kopieren" konnte die Zwischenablage nicht belegen.
   "CLIPBOARD_FILE_FAILED",
 ]);
+
+/** Issue #600: errors for which the error card offers "Try again". */
+const RETRYABLE_AI_CODES = new Set<string>([
+  "AI_PROVIDER_OVERLOADED",
+  "AI_PROVIDER_UNAVAILABLE",
+  "AI_RATE_LIMITED",
+  "AI_TIMEOUT",
+  "AI_NETWORK_ERROR",
+]);
+
+export function isRetryableAiError(code: string | null | undefined): boolean {
+  return !!code && RETRYABLE_AI_CODES.has(code);
+}
 
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/
  * `undefined`/unbekanntem Code auf `fallback` zurück (den bestehenden

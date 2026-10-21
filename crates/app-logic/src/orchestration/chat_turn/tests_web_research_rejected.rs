@@ -333,3 +333,26 @@ async fn test_issue_599_retrying_notice_is_emitted_and_overload_is_shown() {
     let (_, error) = run.events.iter().find(|(n, _)| n == "chat-error").unwrap();
     assert_eq!(error["code"], "AI_PROVIDER_OVERLOADED");
 }
+
+/// Issue #600: the provider message in `chat-error` is redacted before it is
+/// emitted; type and status are carried along.
+#[tokio::test]
+async fn test_issue_600_chat_error_details_are_redacted() {
+    let run = run_turn(vec![vec![AiEvent::Error(AiError::RejectedRequest(
+        "invalid_request_error: bad value password=Geheim-0600 in messages".to_string(),
+    ))]])
+    .await;
+    let (_, error) = run.events.iter().find(|(n, _)| n == "chat-error").unwrap();
+    assert_eq!(error["code"], "AI_PROVIDER_REJECTED_REQUEST");
+    assert_eq!(error["providerErrorType"], "invalid_request_error");
+    let message = error["providerMessage"].as_str().unwrap();
+    assert!(message.contains("bad value"), "{message}");
+    assert!(!message.contains("Geheim-0600"), "{message}");
+
+    let run = run_turn(vec![vec![AiEvent::Error(AiError::ProviderUnavailable(
+        "HTTP 503 Service Unavailable: busy".to_string(),
+    ))]])
+    .await;
+    let (_, error) = run.events.iter().find(|(n, _)| n == "chat-error").unwrap();
+    assert_eq!(error["httpStatus"], 503);
+}

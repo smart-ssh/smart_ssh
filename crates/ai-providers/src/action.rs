@@ -5,7 +5,9 @@
 //! [`AiAction`] (Spec 0003, Abschnitt 5.2).
 
 use serde_json::{Map, Value};
-use ssh_manager_core::ai::{ActionParameterKind, ActionSchema, AiError};
+use ssh_manager_core::ai::{
+    sanitize_tool_name, ActionParameterKind, ActionSchema, AiError, AiEvent, InvalidToolCallReason,
+};
 use ssh_manager_core::profiles::{AiAction, AskUserOption, NoteTargetSelector};
 
 /// Erzeugt das `{"type":"object","properties":{...},"required":[...]}`-
@@ -75,7 +77,54 @@ pub(crate) fn action_from_tool_arguments(
     name: &str,
     arguments: &Value,
 ) -> Result<AiAction, AiError> {
-    let get_str_aliases = |keys: &[&str]| -> Result<String, AiError> {
+    parse_tool_action(name, arguments).map_err(|reason| match reason {
+        InvalidToolCallReason::UnknownTool => {
+            AiError::InvalidResponse(format!("unbekannte Aktion '{name}'"))
+        }
+        InvalidToolCallReason::MissingField(field) => {
+            AiError::InvalidResponse(format!("Feld '{field}' fehlt oder ist kein String"))
+        }
+        InvalidToolCallReason::InvalidValue(field) => {
+            AiError::InvalidResponse(format!("unbekannter {field}-Wert"))
+        }
+        InvalidToolCallReason::InvalidJson => {
+            AiError::InvalidResponse("Tool-Argumente sind kein gültiges JSON".to_string())
+        }
+    })
+}
+
+/// Issue #604: a finished native tool call (name + raw JSON arguments) as
+/// an event: a valid call is proposed; an unknown tool, broken JSON or
+/// invalid fields become the non-fatal [`AiEvent::InvalidToolCall`] (logged,
+/// never repaired into an action, never carrying the arguments).
+pub(crate) fn tool_call_event(request_id: uuid::Uuid, name: &str, raw_arguments: &str) -> AiEvent {
+    use crate::request_logging::{log_tool_call_parse_error, log_tool_call_parsed};
+    let parsed = match serde_json::from_str::<Value>(raw_arguments) {
+        Ok(args) => parse_tool_action(name, &args),
+        // An unknown tool is reported as such even with empty arguments.
+        Err(_) => Err(match parse_tool_action(name, &Value::Null) {
+            Err(InvalidToolCallReason::UnknownTool) => InvalidToolCallReason::UnknownTool,
+            _ => InvalidToolCallReason::InvalidJson,
+        }),
+    };
+    match parsed {
+        Ok(action) => {
+            log_tool_call_parsed(request_id, &action);
+            AiEvent::ActionProposed(action)
+        }
+        Err(reason) => {
+            let err = AiError::InvalidResponse(reason.describe());
+            log_tool_call_parse_error(request_id, name, raw_arguments, err.code(), &err);
+            AiEvent::InvalidToolCall {
+                tool_name: sanitize_tool_name(name),
+                reason,
+            }
+        }
+    }
+}
+
+fn parse_tool_action(name: &str, arguments: &Value) -> Result<AiAction, InvalidToolCallReason> {
+    let get_str_aliases = |keys: &[&str]| -> Result<String, InvalidToolCallReason> {
         for &key in keys {
             if let Some(val) = arguments.get(key) {
                 if let Some(s) = val.as_str() {
@@ -86,10 +135,7 @@ pub(crate) fn action_from_tool_arguments(
                 }
             }
         }
-        Err(AiError::InvalidResponse(format!(
-            "Feld '{}' fehlt oder ist kein String",
-            keys[0]
-        )))
+        Err(InvalidToolCallReason::MissingField(keys[0].to_string()))
     };
 
     match name {
@@ -106,11 +152,7 @@ pub(crate) fn action_from_tool_arguments(
             let target = match arguments.get("target").and_then(Value::as_str) {
                 None | Some("current_server") => NoteTargetSelector::CurrentServer,
                 Some("current_server_group") => NoteTargetSelector::CurrentServerGroup,
-                Some(other) => {
-                    return Err(AiError::InvalidResponse(format!(
-                        "unbekannter target-Wert '{other}'"
-                    )))
-                }
+                Some(_) => return Err(InvalidToolCallReason::InvalidValue("target".to_string())),
             };
             Ok(AiAction::ProposeNoteUpdate {
                 target,
@@ -182,9 +224,7 @@ pub(crate) fn action_from_tool_arguments(
                 multi_select,
             })
         }
-        other => Err(AiError::InvalidResponse(format!(
-            "unbekannte Aktion '{other}'"
-        ))),
+        _ => Err(InvalidToolCallReason::UnknownTool),
     }
 }
 
@@ -360,5 +400,35 @@ mod tests {
             action_from_tool_arguments("propose_note_update", &json!({"target": "current_server"}));
 
         assert!(matches!(result, Err(AiError::InvalidResponse(_))));
+    }
+
+    /// Issue #604: an invalid call is never repaired into an action and
+    /// never carries its arguments, even when they hold a command string.
+    #[test]
+    fn test_invalid_tool_calls_never_become_actions_or_echo_arguments() {
+        let id = uuid::Uuid::new_v4();
+        let cases = [
+            ("date", r#"{"command":"rm -rf /"}"#),
+            ("suggest_command", r#"{"cmd_typo":"rm -rf /"}"#),
+            ("suggest_command", r#"{"command":"rm -rf /""#),
+            (
+                "propose_note_update",
+                r#"{"content":"x","target":"rm -rf /"}"#,
+            ),
+            ("da\u{0}te\n", "{}"),
+        ];
+        for (name, args) in cases {
+            match tool_call_event(id, name, args) {
+                AiEvent::InvalidToolCall { tool_name, reason } => {
+                    assert!(!tool_name.chars().any(char::is_control));
+                    assert!(!reason.describe().contains("rm -rf"), "{reason:?}");
+                }
+                other => panic!("{name} {args}: {other:?}"),
+            }
+        }
+        assert!(matches!(
+            tool_call_event(id, "suggest_command", r#"{"command":"ls"}"#),
+            AiEvent::ActionProposed(_)
+        ));
     }
 }

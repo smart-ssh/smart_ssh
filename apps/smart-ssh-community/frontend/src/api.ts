@@ -235,6 +235,11 @@ export const sendChatMessage = (sessionId: string, text: string, attachmentIds?:
 export const continueTruncatedResponse = (sessionId: string) =>
   invoke<void>("continue_truncated_response", { sessionId });
 
+/** Issue #600: "Try again" on an AI error card — resends the last user turn
+ * without adding the message again. */
+export const retryChatTurn = (sessionId: string) =>
+  invoke<void>("retry_chat_turn", { sessionId });
+
 /** Spec 0040, Abschnitt 6: "In Notiz übernehmen" — startet denselben
  * `ProposeNoteUpdate`-Bestätigungsablauf wie ein KI-Vorschlag (inkl.
  * `chat-action-proposed`-Event und Diff-Vorschau), nur mit `content`

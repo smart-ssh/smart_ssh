@@ -17,6 +17,7 @@ import {
   commandErrorCode,
   commandErrorMessage,
   continueTruncatedResponse,
+  retryChatTurn,
   exportDocument,
   getChatHistory,
   listAiProviders,
@@ -40,6 +41,7 @@ import {
   onChatDocumentGenerated,
   onChatQuestionAsked,
   onChatError,
+  onChatAiRetrying,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseEmpty,
@@ -51,7 +53,7 @@ import {
   onChatWebActivity,
   onRiskAssessmentUpdated,
 } from "../events";
-import { translateErrorCode } from "../errorCodes";
+import { isRetryableAiError, translateErrorCode } from "../errorCodes";
 import {
   appendToDraft,
   loadVoiceInputEnabled,
@@ -181,11 +183,19 @@ export type ChatItem =
        * oder generischer Text>" statt des internen Chat-Flows. */
       origin: ActionOrigin;
     }
-  | { type: "error"; id: string; message: string; code: string | null }
+  | {
+      type: "error";
+      id: string;
+      message: string;
+      code: string | null;
+      /** Issue #600 — provider details (backend-redacted) and whether
+       * "Try again" is offered. */
+      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null };
+      retryable?: boolean;
+    }
   // Issue #596: a rule was created from the confirmation card but the
   // command will still ask next time; `reasons` are backend reason codes.
   | { type: "ruleNotice"; id: string; reasons: string[] }
-  // Issue #601: UI-only note, one per compaction step.
   | { type: "contextCompacted"; id: string }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
   // Spec 0080, A3: eine Runde ohne Text und ohne vorgeschlagene Aktion
@@ -426,6 +436,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * zuverlässige "die ganze Kette ist zu Ende"-Signal, unabhängig davon, ob
    * sie regulär endete, am Sicherheits-Cap oder durch "Automatik stoppen". */
   const [autoContinuing, setAutoContinuing] = useState(false);
+  // Issue #600: provider overloaded, automatic retry pending.
+  const [retrying, setRetrying] = useState<{ attempt: number; max: number; deadline: number } | null>(null);
+  const [retryNow, setRetryNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!retrying) return;
+    const id = window.setInterval(() => setRetryNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [retrying]);
   /** Issue #271: „Neuer Chat" läuft (Doppelklick-Schutz) bzw. ist gescheitert. */
   const [startingNewChat, setStartingNewChat] = useState(false);
   const [newChatError, setNewChatError] = useState<string | null>(null);
@@ -575,6 +593,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     const unlisten = [
       onChatTextDelta((event) => {
         if (event.sessionId !== sessionId) return;
+        setRetrying(null);
         setItems((prev) => {
           const last = prev[prev.length - 1];
           if (last?.type === "assistant") {
@@ -585,6 +604,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       }),
       onChatActionProposed((event) => {
         if (event.sessionId !== sessionId) return;
+        setRetrying(null);
         // Spec 0026, Abschnitt 3/4: eine Zweitmeinung ist nur zu erwarten,
         // wenn sie aktiviert ist UND die Regel-Einschätzung überhaupt noch
         // Raum nach oben hat (ein bereits regelbasiertes "red" kann nicht
@@ -710,10 +730,47 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       }),
       onChatError((event) => {
         if (event.sessionId !== sessionId) return;
-        setItems((prev) => [
-          ...prev,
-          { type: "error", id: freshId(), message: event.message, code: event.code ?? null },
-        ]);
+        setRetrying(null);
+        setItems((prev) => {
+          // Issue #600: "Try again" only when nothing but the user's own
+          // message came since the last user turn (no reply, command or
+          // proposal that a resend would repeat or contradict).
+          let retryable = isRetryableAiError(event.code);
+          let sawUser = false;
+          for (let i = prev.length - 1; retryable && i >= 0; i--) {
+            const it = prev[i];
+            if (it.type === "user") {
+              sawUser = true;
+              break;
+            }
+            if (it.type === "assistant" || it.type === "action" || it.type === "error") retryable = false;
+          }
+          if (!sawUser) retryable = false;
+          return [
+            ...prev,
+            {
+              type: "error",
+              id: freshId(),
+              message: event.message,
+              code: event.code ?? null,
+              details: {
+                providerErrorType: event.providerErrorType,
+                httpStatus: event.httpStatus,
+                providerMessage: event.providerMessage,
+              },
+              retryable,
+            },
+          ];
+        });
+      }),
+      onChatAiRetrying((event) => {
+        if (event.sessionId !== sessionId) return;
+        setRetryNow(Date.now());
+        setRetrying({
+          attempt: event.attempt,
+          max: event.maxAttempts,
+          deadline: Date.now() + event.delaySecs * 1000,
+        });
       }),
       onChatResponseTruncated((event) => {
         if (event.sessionId !== sessionId) return;
@@ -772,6 +829,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       }),
       onChatResponseCancelled((event) => {
         if (event.sessionId !== sessionId) return;
+        setRetrying(null);
         setItems((prev) => [...prev, { type: "responseCancelled", id: freshId() }]);
       }),
       onChatAutoContinuationLimitReached((event) => {
@@ -974,6 +1032,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     await runSend(() => continueTruncatedResponse(sessionId));
   };
 
+  /** Issue #600: "Try again" on a retryable error card. */
+  const handleRetryTurn = async (itemId: string) => {
+    if (sending) return;
+    setItems((prev) => prev.filter((it) => it.id !== itemId));
+    await runSend(() => retryChatTurn(sessionId));
+  };
+
   const runSend = async (call: () => Promise<void>) => {
     pendingSendsRef.current += 1;
     setSending(true);
@@ -995,6 +1060,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       if (pendingSendsRef.current === 0) {
         setSending(false);
         setAutoContinuing(false);
+        setRetrying(null);
         // Läuft im Backend nichts mehr, wartet auch keine Nachricht mehr.
         setItems((prev) =>
           prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
@@ -1309,6 +1375,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
             onContinueTruncated={handleContinueTruncated}
+            onRetryTurn={handleRetryTurn}
+            retryDisabled={sending}
             questionState={questionStates.get(item.id)}
             onQuestionAnswer={handleQuestionAnswer}
             serverId={serverId}
@@ -1319,7 +1387,23 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
          * Stopp-Möglichkeit hat Vorrang vor dem generischen
          * "generiert Antwort"-Hinweis — sobald eine automatische Folgerunde
          * läuft, ist das die genauere, handlungsfähigere Information. */}
-        {autoContinuing ? (
+        {retrying ? (
+          <output
+            data-testid="chat-ai-retrying"
+            className="flex items-center gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200"
+          >
+            <span className="flex-1">
+              {t("chat.aiRetrying", {
+                seconds: Math.max(0, Math.ceil((retrying.deadline - retryNow) / 1000)),
+                attempt: retrying.attempt + 1,
+                max: retrying.max + 1,
+              })}
+            </span>
+            <Button size="sm" onClick={handleStopAutoContinuation}>
+              {t("chat.stop")}
+            </Button>
+          </output>
+        ) : autoContinuing ? (
           <div className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
             <span className="flex-1">
@@ -1544,6 +1628,56 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
 // Exportiert für Komponententests (Spec 0029, Abschnitt 4: strukturelle
 // DOM-Prüfung der Badge-Position) — sonst rein intern von `ChatPanel`
 // genutzt.
+/** Issue #600: "Details" (collapsed, copyable) and "Try again" below the
+ * translated text of an AI error card. */
+function ErrorCardExtras({
+  item,
+  onRetryTurn,
+  retryDisabled,
+}: {
+  item: Extract<ChatItem, { type: "error" }>;
+  onRetryTurn?: (itemId: string) => void;
+  retryDisabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState<"ok" | "failed" | null>(null);
+  const d = item.details;
+  const lines: string[] = [];
+  if (item.code) lines.push(`code: ${item.code}`);
+  if (d?.providerErrorType) lines.push(`type: ${d.providerErrorType}`);
+  if (item.code) lines.push(`status: ${d?.httpStatus ?? "stream"}`);
+  if (d?.providerMessage) lines.push(`message: ${d.providerMessage}`);
+  const text = lines.join("\n");
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied("ok");
+    } catch {
+      setCopied("failed");
+    }
+  };
+  return (
+    <div className="mt-2 space-y-2 text-xs">
+      {lines.length > 0 && (
+        <details data-testid="chat-error-details">
+          <summary className="cursor-pointer select-none text-red-200">{t("chat.errorDetails")}</summary>
+          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-red-950/60 p-2 text-red-200">{text}</pre>
+          <Button size="sm" onClick={copy}>
+            {t("about.copyButton")}
+          </Button>
+          {copied === "ok" && <span className="ml-2">{t("about.copied")}</span>}
+          {copied === "failed" && <span className="ml-2">{t("about.copyFailed")}</span>}
+        </details>
+      )}
+      {item.retryable && onRetryTurn && (
+        <Button size="sm" disabled={retryDisabled} onClick={() => onRetryTurn(item.id)}>
+          {t("chat.tryAgain")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function ChatItemView({
   item,
   liveOutput,
@@ -1552,6 +1686,8 @@ export function ChatItemView({
   onAcceptWithRule,
   onExport,
   onContinueTruncated,
+  onRetryTurn,
+  retryDisabled = false,
   questionState,
   onQuestionAnswer,
   serverId,
@@ -1575,6 +1711,9 @@ export function ChatItemView({
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
   onContinueTruncated: (itemId: string) => void;
+  /** Issue #600 — "Try again" on a retryable error card. */
+  onRetryTurn?: (itemId: string) => void;
+  retryDisabled?: boolean;
   /** Issue #547: derived lock state / answer handler of a question card. */
   questionState?: QuestionState;
   onQuestionAnswer?: (text: string) => void;
@@ -1628,6 +1767,9 @@ export function ChatItemView({
     return (
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
         ⚠ {translateErrorCode(t, item.code, item.message)}
+        {(item.details || item.retryable) && (
+          <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
+        )}
       </div>
     );
   }
