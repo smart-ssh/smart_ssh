@@ -1020,6 +1020,9 @@ async fn run_one_round(
                     session.model_context_window_tokens as u64,
                 );
             }
+            // Issue #609: full usage is not consumed yet (no persistence in
+            // this issue); the chat flow is unchanged.
+            AiEvent::RequestUsage(_) => {}
             AiEvent::Retrying {
                 attempt,
                 max_attempts,

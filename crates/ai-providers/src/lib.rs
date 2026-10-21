@@ -19,6 +19,7 @@ mod retry;
 mod sse;
 #[cfg(test)]
 mod test_support;
+mod usage;
 
 pub use anthropic::AnthropicProvider;
 pub use discovery::{discover_models, fetch_attestation_info};

@@ -71,6 +71,34 @@ impl ProviderType {
     }
 }
 
+/// Issue #609 (Spec 0006): token usage of one completed AI request, as
+/// reported by the provider. Nothing is estimated: what the endpoint does
+/// not send stays `None`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AiUsage {
+    /// Prompt tokens as the provider counts them. Anthropic: excludes cache
+    /// reads/writes (they are reported separately); OpenAI-style APIs:
+    /// includes cached tokens.
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub reasoning_tokens: Option<u64>,
+    pub web_search_requests: Option<u32>,
+    pub service_tier: Option<String>,
+    /// The model that actually answered.
+    pub response_model: Option<String>,
+    /// Cost the endpoint reports itself (e.g. OpenRouter `usage.cost`), USD.
+    pub provider_reported_cost_usd: Option<f64>,
+}
+
+impl AiUsage {
+    /// `true` when the provider reported nothing at all.
+    pub fn is_empty(&self) -> bool {
+        *self == AiUsage::default()
+    }
+}
+
 /// Ereignis, das ein [`super::AiProvider`] während einer Konversation streamt
 /// (Spec 0006, Abschnitt 3).
 #[derive(Debug, Clone, PartialEq)]
@@ -116,6 +144,12 @@ pub enum AiEvent {
     Usage {
         input_tokens: u64,
     },
+    /// Issue #609: the complete token usage of this request, delivered at
+    /// most once per request, just before `Done` / `TextTruncated`. Numbers
+    /// and metadata only, never content; fields the endpoint did not report
+    /// stay `None`. Distinct from [`Self::Usage`], which is the early
+    /// input-size signal for context compaction (issue #601).
+    RequestUsage(AiUsage),
     /// Issue #599: the provider is overloaded and the request is repeated
     /// automatically after `delay_secs`. Emitted before each wait, and only
     /// while nothing of the response has been emitted yet. Purely
