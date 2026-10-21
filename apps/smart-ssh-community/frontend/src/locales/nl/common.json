@@ -314,7 +314,7 @@
     "subCommands": "Subopdrachten",
     "matchedRuleLabel": "Regel:",
     "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "checksLabel": "Controles:",
     "hardBlacklistLabel": "Vaste blokkeerlijst:"
   },
   "actionCard": {

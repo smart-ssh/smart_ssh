@@ -314,7 +314,7 @@
     "subCommands": "Sous-commandes",
     "matchedRuleLabel": "Règle :",
     "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "checksLabel": "Vérifications :",
     "hardBlacklistLabel": "Liste noire stricte :"
   },
   "actionCard": {

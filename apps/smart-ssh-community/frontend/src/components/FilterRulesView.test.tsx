@@ -171,6 +171,6 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
     expect(screen.getByText("grep *")).toBeInTheDocument();
     expect(screen.getAllByTestId("trace-checks")).toHaveLength(1);
     expect(screen.getByTestId("trace-checks").textContent).toMatch(/redirection|Umleitung/i);
-    expect(screen.getByText(/Segment 2/)).toBeInTheDocument();
+    expect(screen.getByText(/(Segment|Teilkommando) 2/)).toBeInTheDocument();
   });
 });

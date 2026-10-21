@@ -313,8 +313,8 @@
     "overallDecision": "Keputusan Keseluruhan",
     "subCommands": "Sub-perintah",
     "matchedRuleLabel": "Aturan:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "Segmen {{index}}",
+    "checksLabel": "Pemeriksaan:",
     "hardBlacklistLabel": "Daftar hitam keras:"
   },
   "actionCard": {

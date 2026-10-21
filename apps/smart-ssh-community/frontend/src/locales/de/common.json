@@ -313,8 +313,8 @@
     "overallDecision": "Gesamt-Entscheidung",
     "subCommands": "Teilkommandos",
     "matchedRuleLabel": "Regel:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "Teilkommando {{index}}",
+    "checksLabel": "Prüfungen:",
     "hardBlacklistLabel": "Hard-Blacklist:"
   },
   "actionCard": {

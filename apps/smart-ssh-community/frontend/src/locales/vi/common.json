@@ -313,8 +313,8 @@
     "overallDecision": "Quyết định chung",
     "subCommands": "Lệnh con",
     "matchedRuleLabel": "Quy tắc:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "Đoạn {{index}}",
+    "checksLabel": "Kiểm tra:",
     "hardBlacklistLabel": "Danh sách chặn cứng:"
   },
   "actionCard": {
