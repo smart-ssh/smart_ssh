@@ -32,7 +32,7 @@ use ssh_manager_core::ai::{
 };
 use ssh_manager_core::ssh::CommandOutput;
 
-use crate::action::{action_from_tool_arguments, parameters_json_schema};
+use crate::action::{parameters_json_schema, tool_call_event};
 use crate::content::{check_attachments, ContentPart};
 use crate::error::{
     error_stream, map_http_response, map_stream_error_object, map_transport_error,
@@ -42,7 +42,6 @@ use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_cache_usage, log_outgoing_context, log_provider_error_response_with_id,
     log_provider_transport_error, log_stop_reason, log_text_delta_summary, log_tool_call_fragment,
-    log_tool_call_parse_error, log_tool_call_parsed,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
@@ -1389,29 +1388,8 @@ fn str_field<'a>(value: Option<&'a Value>, field: &str) -> Option<&'a str> {
 }
 
 fn finalize_tool_use(request_id: Uuid, name: &str, json_acc: &str) -> AiEvent {
-    match serde_json::from_str::<Value>(json_acc) {
-        Ok(args_json) => match action_from_tool_arguments(name, &args_json) {
-            Ok(action) => {
-                log_tool_call_parsed(request_id, &action);
-                AiEvent::ActionProposed(action)
-            }
-            Err(err) => {
-                log_tool_call_parse_error(request_id, name, json_acc, err.code(), &err);
-                AiEvent::Error(err)
-            }
-        },
-        Err(err) => {
-            // Spec 0094, A1.3: Der `error_code` ist der des `AiError`, der
-            // aus diesem Fehlschlag entsteht — er wird deshalb hier gebaut,
-            // bevor geloggt wird, statt einen zweiten, nur fürs Log
-            // erfundenen Code zu vergeben. `serde_json::Error` selbst hat
-            // keinen.
-            let ai_error =
-                AiError::InvalidResponse(format!("Tool-Use-Input ist kein gültiges JSON: {err}"));
-            log_tool_call_parse_error(request_id, name, json_acc, ai_error.code(), &err);
-            AiEvent::Error(ai_error)
-        }
-    }
+    // Issue #604: invalid calls are non-fatal (`AiEvent::InvalidToolCall`).
+    tool_call_event(request_id, name, json_acc)
 }
 
 fn event_stream_from_response(
@@ -2022,6 +2000,54 @@ mod tests {
             RawEvent::Public(AiEvent::ActionProposed(_))
         ));
         assert_eq!(events[1], RawEvent::Public(AiEvent::Done));
+    }
+
+    /// Issue #604: an unknown tool (`date`, empty input) does not end the
+    /// stream; the valid call of the same response is still forwarded.
+    #[tokio::test]
+    async fn test_unknown_tool_is_non_fatal_and_valid_call_still_forwarded() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    "content_block_start",
+                    r#"{"index":0,"content_block":{"type":"tool_use","name":"date"}}"#,
+                ),
+                frame("content_block_stop", r#"{"index":0}"#),
+                frame(
+                    "content_block_start",
+                    r#"{"index":1,"content_block":{"type":"tool_use","name":"suggest_command"}}"#,
+                ),
+                frame(
+                    "content_block_delta",
+                    r#"{"index":1,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"ls\"}"}}"#,
+                ),
+                frame("content_block_stop", r#"{"index":1}"#),
+                frame(
+                    "message_delta",
+                    r#"{"delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":42}}"#,
+                ),
+                frame("message_stop", "{}"),
+            ]),
+        );
+        let events: Vec<RawEvent> =
+            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+                .collect()
+                .await;
+        assert!(
+            matches!(
+                &events[0],
+                RawEvent::Public(AiEvent::InvalidToolCall { tool_name, reason })
+                    if tool_name == "date" && *reason == ssh_manager_core::ai::InvalidToolCallReason::UnknownTool
+            ),
+            "{events:?}"
+        );
+        assert!(matches!(
+            events[1],
+            RawEvent::Public(AiEvent::ActionProposed(_))
+        ));
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, RawEvent::Public(AiEvent::Error(_)))));
     }
 
     /// Spec 0065 §3: ein `tool_use`-Block, der NIE sein eigenes

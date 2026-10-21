@@ -748,4 +748,52 @@ mod attachment_tests {
             "{events:?}"
         );
     }
+
+    /// Issue #604: an unknown function call on the Responses path is
+    /// non-fatal; the valid call of the same response is kept.
+    #[tokio::test]
+    async fn test_responses_unknown_tool_is_non_fatal() {
+        use futures::StreamExt;
+        let frame = |data: &str| -> Result<crate::sse::SseFrame, reqwest::Error> {
+            Ok(crate::sse::SseFrame {
+                event: None,
+                data: data.to_string(),
+            })
+        };
+        let frames: Pin<
+            Box<dyn Stream<Item = Result<crate::sse::SseFrame, reqwest::Error>> + Send>,
+        > = Box::pin(futures::stream::iter(vec![
+            frame(
+                r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","name":"date","arguments":""}}"#,
+            ),
+            frame(
+                r#"{"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","name":"suggest_command","arguments":"{\"command\":\"ls\"}"}}"#,
+            ),
+            frame(r#"{"type":"response.completed"}"#),
+        ]));
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
+        assert!(
+            matches!(
+                &events[0],
+                RawEvent::Public(AiEvent::InvalidToolCall { tool_name, .. }) if tool_name == "date"
+            ),
+            "{events:?}"
+        );
+        assert!(matches!(
+            events[1],
+            RawEvent::Public(AiEvent::ActionProposed(_))
+        ));
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, RawEvent::Public(AiEvent::Error(_)))));
+    }
 }

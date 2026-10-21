@@ -5,7 +5,8 @@
 use futures::StreamExt;
 
 use ssh_manager_core::ai::{
-    AiError, AiEvent, ChatMessage, MessageContent, OutputRedactor, Role, WebActivity, WebSource,
+    AiError, AiEvent, ChatMessage, InvalidToolCallReason, MessageContent, OutputRedactor,
+    RejectionReason, Role, WebActivity, WebSource,
 };
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
@@ -48,6 +49,10 @@ mod tests_extension_content;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_question;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_invalid_tool_call;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
@@ -382,6 +387,8 @@ pub async fn run_chat_turn(
     // `app_shell::commands::send_chat_message_impl` atomar mit dem Start des
     // Turns (Spec 0066, spec-reviewer-Fund: ein Reset erst hier, nach
     // mehreren DB-Zugriffen, verschluckte einen früh gedrückten Stopp).
+    // Issue #604: consecutive responses with only invalid tool calls.
+    let mut invalid_only_streak = 0u32;
     for round in 1..=MAX_AUTO_FOLLOWUP_ROUNDS {
         let mut injected_queued_messages = false;
         if round > 1 {
@@ -445,7 +452,24 @@ pub async fn run_chat_turn(
         )
         .await
         {
-            RoundOutcome::Continue => {}
+            RoundOutcome::Continue => invalid_only_streak = 0,
+            RoundOutcome::InvalidOnly => {
+                invalid_only_streak += 1;
+                if invalid_only_streak >= MAX_CONSECUTIVE_INVALID_TOOL_ROUNDS {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        rounds = invalid_only_streak,
+                        "AI turn ended: repeated responses with only invalid tool calls",
+                    );
+                    emit_chat_error(
+                        emitter,
+                        session_id,
+                        INVALID_TOOL_CALL_MESSAGE.to_string(),
+                        Some(INVALID_TOOL_CALL_CODE),
+                    );
+                    return false;
+                }
+            }
             RoundOutcome::Finished => {
                 // Issue #551: title after the first finished answer (one
                 // attempt per session; no-op once a title exists).
@@ -470,11 +494,33 @@ pub async fn run_chat_turn(
     false
 }
 
+/// Issue #604: after this many consecutive responses with only invalid tool
+/// calls the turn ends with [`INVALID_TOOL_CALL_CODE`].
+const MAX_CONSECUTIVE_INVALID_TOOL_ROUNDS: u32 = 2;
+const INVALID_TOOL_CALL_CODE: &str = "AI_INVALID_TOOL_CALL";
+const INVALID_TOOL_CALL_MESSAGE: &str =
+    "The AI kept calling a tool that does not exist. Try rephrasing the request.";
+
+/// Issue #604: model-facing feedback for one invalid tool call. Fixed text
+/// plus the sanitized tool name and the offered tool names; never the
+/// arguments.
+fn invalid_tool_call_feedback(reason: &InvalidToolCallReason, available: &[String]) -> String {
+    format!(
+        "The tool call was invalid and was NOT executed ({}). Available tools: {}. \
+         Call one of these with valid arguments, or answer in text.",
+        reason.describe(),
+        available.join(", ")
+    )
+}
+
 /// Ausgang von [`run_one_round`].
 #[derive(Debug, PartialEq, Eq)]
 enum RoundOutcome {
     /// Mindestens eine Aktion wurde ausgeführt — eine Folgerunde folgt.
     Continue,
+    /// Issue #604: the response held only invalid tool calls (feedback is in
+    /// the history). One follow-up round lets the model correct itself.
+    InvalidOnly,
     /// Runde regulär beendet (oder während des Streams gestoppt).
     Finished,
     /// Stopp, bevor der Request überhaupt rausging (Spec 0066, §1).
@@ -794,6 +840,15 @@ async fn run_one_round(
     // es für den Rest dieser Runde `true`. Nur relevant, wenn
     // `check_for_empty_response` überhaupt gilt (s. Funktions-Doc-Kommentar).
     let mut round_had_content = false;
+    // Issue #604: invalid tool calls of this response, and whether any
+    // valid action was proposed next to them.
+    let mut invalid_calls = 0u32;
+    let mut valid_call_seen = false;
+    let available_tool_names: Vec<String> = request_context
+        .available_actions
+        .iter()
+        .map(|a| a.name.clone())
+        .collect();
     // Spec 0068, Teil 4 (Review-Fund): wurde eine Aktion DIESER Antwort
     // abgelehnt/blockiert, läuft keine weitere Aktion derselben Antwort mehr
     // ohne Rückfrage (s. `handle_action_proposed`).
@@ -835,10 +890,34 @@ async fn run_one_round(
                 emit_chat_text_delta(emitter, session_id, delta.clone());
                 text_buffer.push_str(&delta);
             }
+            AiEvent::InvalidToolCall { tool_name, reason } => {
+                // Issue #604: non-fatal. Nothing reaches the filter engine
+                // or SSH; the model is told in the next request (a
+                // rejection entry, persisted like any other). The round is
+                // not "empty" for Spec 0080.
+                round_had_content = true;
+                invalid_calls += 1;
+                flush_text_buffer(session, &mut text_buffer).await;
+                push_history(
+                    session,
+                    ChatMessage {
+                        role: Role::ActionResult,
+                        content: MessageContent::ActionRejected {
+                            command: tool_name,
+                            reason: RejectionReason::Blocked(invalid_tool_call_feedback(
+                                &reason,
+                                &available_tool_names,
+                            )),
+                        },
+                    },
+                )
+                .await;
+            }
             AiEvent::ActionProposed(AiAction::GenerateDocument {
                 title,
                 content_markdown,
             }) => {
+                valid_call_seen = true;
                 // Spec 0080, A2: "eine Aktion vorgeschlagen" gilt auch hier
                 // — der Nutzer sieht sofort ein Dokument, diese Runde ist
                 // alles andere als leer.
@@ -852,6 +931,7 @@ async fn run_one_round(
                     .await;
             }
             AiEvent::ActionProposed(action @ AiAction::AskUser { .. }) => {
+                valid_call_seen = true;
                 // Issue #545: a question never executes anything: no filter,
                 // no confirmation, no follow-up round (`executed_action`
                 // stays untouched), the turn ends after this round. The
@@ -869,6 +949,7 @@ async fn run_one_round(
                 }
             }
             AiEvent::ActionProposed(action) => {
+                valid_call_seen = true;
                 // Spec 0080, A2: gilt schon bei der Vorschlags-Absicht,
                 // unabhängig vom späteren Ausgang (abgelehnt/blockiert
                 // zählt genauso wie ausgeführt — anders als
@@ -1041,6 +1122,8 @@ async fn run_one_round(
 
     if executed_action && !question_asked {
         RoundOutcome::Continue
+    } else if invalid_calls > 0 && !valid_call_seen {
+        RoundOutcome::InvalidOnly
     } else {
         RoundOutcome::Finished
     }
