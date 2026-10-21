@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Directorul de pornire trebuie să fie o cale absolută (/…) sau să înceapă cu ~/.",
       "controlCharacter": "Directorul de pornire nu trebuie să conțină caractere de control."
+    },
+    "tabs": {
+      "label": "Setările serverului",
+      "general": "General",
+      "connection": "Conexiune",
+      "security": "Securitate",
+      "invalid": "Conține erori"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Decizie generală",
     "subCommands": "Subcomenzi",
     "matchedRuleLabel": "Regulă:",
+    "segmentLabel": "Segmentul {{index}}",
+    "checksLabel": "Verificări:",
     "hardBlacklistLabel": "Listă neagră fixă:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Nicio sugestie.",
     "binaryFileHint": "⚠ Fișier binar — comparația de text nu este posibilă. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
     "diffTooLargeHint": "⚠ Conținut prea mare pentru o comparație pe linii. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
-    "noContentChange": "(conținut nemodificat)"
+    "noContentChange": "(conținut nemodificat)",
+    "quickRuleLabel": {
+      "exact": "Identic: {{patterns}}",
+      "exactPerSegment": "Identic pe părți: {{patterns}}",
+      "pathScoped": "Același director: {{patterns}}",
+      "lastArgOpen": "Orice ultim argument: {{patterns}}",
+      "subcommand": "Toate apelurile `{{names}}`: {{patterns}}",
+      "tool": "Toate apelurile `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Părți ale acestei comenzi",
+      "covered": "acoperită de regula {{rule}}",
+      "coveredUnknown": "acoperită de o regulă existentă",
+      "needsRule": "necesită o regulă",
+      "blocked": "întreabă mereu, indiferent de reguli: {{reasons}}",
+      "verdictAuto": "data viitoare rulează automat",
+      "verdictAsk": "va întreba în continuare: {{reasons}}",
+      "notice": "Regulă creată. Această comandă va întreba și data viitoare: {{reasons}}",
+      "reasonOther": "altă verificare de securitate"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Avertisment de securitate · Cheia de host s-a schimbat",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Furnizorul de IA limitează în prezent cererile (rate limit) – aplicația a reîncercat deja automat de câteva ori. Așteptați puțin și trimiteți din nou mesajul.",
     "AI_NETWORK_ERROR": "Furnizorul de IA nu poate fi atins. Verificați conexiunea la internet și, pentru un endpoint personalizat, URL-ul de bază, apoi trimiteți din nou.",
     "AI_INVALID_RESPONSE": "Răspuns neașteptat de la furnizorul de IA",
+    "AI_INVALID_TOOL_CALL": "IA a continuat să apeleze un instrument care nu există. Încearcă să reformulezi cererea.",
     "AI_CONTEXT_TOO_LARGE": "Context prea mare pentru furnizorul de IA. Reduceți „Lungime max. a răspunsului (tokeni)” sau începeți un chat nou.",
     "AI_PROVIDER_UNAVAILABLE": "Furnizorul de IA a raportat o eroare (de ex. mentenanță sau suprasarcină). Încercați mai târziu; dacă persistă, verificați setările furnizorului.",
+    "AI_PROVIDER_OVERLOADED": "Furnizorul de IA este supraîncărcat chiar acum. Încercați din nou într-un moment.",
+    "AI_PROVIDER_BILLING": "Contul furnizorului de IA nu mai are credit. Verificați facturarea în consola furnizorului.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Furnizorul de IA a respins cererea.",
     "AI_RESPONSE_TRUNCATED": "Răspunsul IA a fost prea lung pentru o comandă completă",
     "AI_MODEL_NOT_FOUND": "Furnizorul de IA nu cunoaște acest model. Verificați numele modelului în Setări („Încarcă modelele” le listează pe cele disponibile); pentru Ollama, descărcați-l mai întâi cu `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Acest model nu acceptă apelarea instrumentelor. În setările furnizorului, debifați „Acceptă apelarea nativă a instrumentelor” (se folosește apoi soluția alternativă bazată pe prompt) sau alegeți un model cu suport pentru instrumente.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Avertismentul privind parola principală nu a fost confirmat. Fără această parolă toate datele se pierd și nu există recuperare — bifați caseta și configurați din nou. Nimic nu a fost modificat.",
     "KEYCHAIN_KEY_MISMATCH": "Cheia din portchei nu aparține acestei baze de date. Nimic nu a fost modificat — stocarea ei ar face baza de date ilizibilă la următoarea pornire.",
     "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard.",
-    "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem."
+    "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem.",
+    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume"
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
@@ -661,7 +694,10 @@
     "editUploadFailed": "Modificarea „{{name}}” nu a putut fi încărcată: {{reason}}",
     "uploadedFolder": "Folderul „{{name}}” încărcat — fișiere: {{count}}",
     "uploadFolderFailed": "Încărcarea folderului „{{name}}” a eșuat: {{reason}}",
-    "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}"
+    "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}",
+    "nothingToPaste": "Nimic de lipit: clipboardul nu conține fișiere",
+    "createFileDone": "Fișierul „{{name}}” a fost creat",
+    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Drepturi ridicate",
@@ -936,6 +972,8 @@
     "cancelCut": "Anulează tăierea",
     "transferUpload": "Se încarcă: {{name}}",
     "transferDownload": "Se descarcă: {{name}}",
+    "transferDone": "Terminat: {{name}}",
+    "transferElevationEnded": "Modul cu drepturi ridicate a fost dezactivat în timpul transferului.",
     "loading": "Se încarcă…",
     "emptyDirectory": "(director gol)",
     "dropHint": "Plasați aici pentru a încărca în {{path}}",
@@ -1010,7 +1048,9 @@
       "chmod": "Editează permisiunile…",
       "rename": "Redenumește",
       "cut": "Taie",
-      "delete": "Șterge"
+      "delete": "Șterge",
+      "newFolder": "Dosar nou",
+      "newFile": "Fișier nou"
     },
     "properties": {
       "title": "Proprietăți",
@@ -1041,10 +1081,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Redenumește",
-      "newFolderTitle": "Folder nou"
+      "newFolderTitle": "Folder nou",
+      "newFileTitle": "Fișier nou",
+      "invalidName": "Introduceți un nume fără „/”. „.” și „..” nu sunt permise."
     },
     "copyProgress": "Se copiază… {{done}} din {{total}} MB",
-    "copyProgressUnknownTotal": "Se copiază… {{done}} MB"
+    "copyProgressUnknownTotal": "Se copiază… {{done}} MB",
+    "directoryMenuLabel": "Acțiuni pentru dosar",
+    "clipboardPaste": {
+      "title": "Încarcă fișierele din clipboard",
+      "intro": "Încarci aceste fișiere din clipboard?",
+      "target": "Dosar țintă",
+      "more": "… și încă {{count}}",
+      "confirm": "Încarcă",
+      "cancel": "Anulează",
+      "menuTitle": "Încarcă fișierele din clipboard"
+    }
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
@@ -1054,6 +1106,9 @@
     "stopAutoContinuation": "Oprește modul automat",
     "generating": "IA generează un răspuns / document…",
     "stop": "Oprește",
+    "tryAgain": "Încearcă din nou",
+    "errorDetails": "Detalii",
+    "aiRetrying": "Furnizorul de IA este suprasolicitat – se reîncearcă în {{seconds}} s (încercarea {{attempt}} din {{max}})",
     "noActiveProvider": "Niciun furnizor de IA activ configurat. Configurați mai întâi unul în setări.",
     "inputPlaceholder": "Puneți o întrebare sau descrieți o comandă …",
     "send": "Trimite",
@@ -1065,6 +1120,9 @@
     "historyAttached": "Atașat: {{files}}",
     "queued": "Va fi trimis cu următoarea cerere",
     "responseCancelled": "Răspuns anulat.",
+    "contextCompactedNotice": "Părțile mai vechi ale acestei conversații au fost rezumate pentru a încăpea în contextul modelului.",
+    "contextUsage": "Context utilizat {{used}} / {{window}}",
+    "contextUsageTooltip": "Părțile mai vechi ale conversației sunt rezumate automat când contextul se umple.",
     "webResearchUnavailable": "Cercetarea web nu este disponibilă pentru acest cont de furnizor (căutarea web este dezactivată acolo). Această sesiune răspunde fără cercetare web. Pentru a o dezactiva permanent: Setări → Furnizor IA → „Cercetare web”.",
     "emptyResponse": "Modelul nu a returnat niciun răspuns. Pentru modelele cu fază de gândire ajută o limită de ieșire mai mare în setările furnizorului.",
     "outputTruncated": "(trunchiat)",

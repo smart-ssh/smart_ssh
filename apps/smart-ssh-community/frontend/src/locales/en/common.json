@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "The start directory must be an absolute path (/…) or start with ~/.",
       "controlCharacter": "The start directory must not contain control characters."
+    },
+    "tabs": {
+      "label": "Server settings",
+      "general": "General",
+      "connection": "Connection",
+      "security": "Security",
+      "invalid": "Contains errors"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Overall Decision",
     "subCommands": "Sub-commands",
     "matchedRuleLabel": "Rule:",
+    "segmentLabel": "Segment {{index}}",
+    "checksLabel": "Checks:",
     "hardBlacklistLabel": "Hard blacklist:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "No suggestions.",
     "binaryFileHint": "⚠ Binary file — text comparison not possible. Previous size: {{oldSize}}, new size: {{newSize}}.",
     "diffTooLargeHint": "⚠ Content too large for a line diff. Previous size: {{oldSize}}, new size: {{newSize}}.",
-    "noContentChange": "(no content change)"
+    "noContentChange": "(no content change)",
+    "quickRuleLabel": {
+      "exact": "Exact: {{patterns}}",
+      "exactPerSegment": "Exact per part: {{patterns}}",
+      "pathScoped": "Same directory: {{patterns}}",
+      "lastArgOpen": "Any last argument: {{patterns}}",
+      "subcommand": "All `{{names}}` calls: {{patterns}}",
+      "tool": "All `{{names}}` calls: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Parts of this command",
+      "covered": "covered by rule {{rule}}",
+      "coveredUnknown": "covered by an existing rule",
+      "needsRule": "needs a rule",
+      "blocked": "always asks, whatever the rules: {{reasons}}",
+      "verdictAuto": "runs automatically next time",
+      "verdictAsk": "will still ask: {{reasons}}",
+      "notice": "Rule created. This command will still ask next time: {{reasons}}",
+      "reasonOther": "another safety check"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Security Warning · Host Key Changed",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "The AI provider is currently throttling requests (rate limit) – the app already retried automatically a few times. Please wait a moment and send the message again.",
     "AI_NETWORK_ERROR": "Can't reach the AI provider. Check your internet connection and, for a custom endpoint, the base URL, then send again.",
     "AI_INVALID_RESPONSE": "Unexpected response from the AI provider",
+    "AI_INVALID_TOOL_CALL": "The AI kept calling a tool that does not exist. Try rephrasing the request.",
     "AI_CONTEXT_TOO_LARGE": "Context too large for the AI provider. Lower \"Max. response length (tokens)\" or start a new chat.",
     "AI_PROVIDER_UNAVAILABLE": "The AI provider reported an error (e.g. maintenance or overload). Try again later; if it persists, check the provider settings.",
+    "AI_PROVIDER_OVERLOADED": "The AI provider is overloaded right now. Try again in a moment.",
+    "AI_PROVIDER_BILLING": "The AI provider account has no credit left. Check billing in the provider's console.",
+    "AI_PROVIDER_REJECTED_REQUEST": "The AI provider rejected the request.",
     "AI_RESPONSE_TRUNCATED": "The AI response was too long for a complete command",
     "AI_MODEL_NOT_FOUND": "The AI provider doesn't know this model. Check the model name in Settings (\"Load models\" lists the available ones); for Ollama, pull it first with `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "This model does not support tool calling. In the provider settings, untick \"Supports native tool calling\" (the prompt-based fallback is used then) or pick a model with tool support.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "The master password warning has not been confirmed. Without that password all data is lost and there is no recovery — tick the box and set it up again. Nothing was changed.",
     "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup.",
     "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard.",
-    "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system."
+    "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system.",
+    "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists"
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -656,7 +689,10 @@
     "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}",
     "uploadedFolder": "Folder “{{name}}” uploaded — {{count}} files",
     "uploadFolderFailed": "Uploading folder “{{name}}” failed: {{reason}}",
-    "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}"
+    "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}",
+    "nothingToPaste": "Nothing to paste: the clipboard holds no files",
+    "createFileDone": "File “{{name}}” created",
+    "createFileFailed": "File “{{name}}” could not be created: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Elevated rights",
@@ -931,6 +967,8 @@
     "cancelCut": "Cancel cut",
     "transferUpload": "Uploading: {{name}}",
     "transferDownload": "Downloading: {{name}}",
+    "transferDone": "Done: {{name}}",
+    "transferElevationEnded": "Elevated mode was switched off during the transfer.",
     "loading": "Loading…",
     "emptyDirectory": "(empty directory)",
     "dropHint": "Drop here to upload to {{path}}",
@@ -1003,7 +1041,9 @@
       "chmod": "Edit permissions…",
       "rename": "Rename",
       "cut": "Cut",
-      "delete": "Delete"
+      "delete": "Delete",
+      "newFolder": "New folder",
+      "newFile": "New file"
     },
     "properties": {
       "title": "Properties",
@@ -1034,10 +1074,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Rename",
-      "newFolderTitle": "New folder"
+      "newFolderTitle": "New folder",
+      "newFileTitle": "New file",
+      "invalidName": "Enter a name without “/”. “.” and “..” are not allowed."
     },
     "copyProgress": "Copying… {{done}} MB of {{total}} MB",
-    "copyProgressUnknownTotal": "Copying… {{done}} MB"
+    "copyProgressUnknownTotal": "Copying… {{done}} MB",
+    "directoryMenuLabel": "Folder actions",
+    "clipboardPaste": {
+      "title": "Upload files from the clipboard",
+      "intro": "Upload these files from the clipboard?",
+      "target": "Target folder",
+      "more": "… and {{count}} more",
+      "confirm": "Upload",
+      "cancel": "Cancel",
+      "menuTitle": "Upload the files from the clipboard"
+    }
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",
@@ -1047,6 +1099,9 @@
     "stopAutoContinuation": "Stop automatic mode",
     "generating": "AI is generating a response / document…",
     "stop": "Stop",
+    "tryAgain": "Try again",
+    "errorDetails": "Details",
+    "aiRetrying": "The AI provider is overloaded – retrying in {{seconds}} s (attempt {{attempt}} of {{max}})",
     "noActiveProvider": "No active AI provider configured. Please set one up in the settings first.",
     "inputPlaceholder": "Ask a question or describe a command …",
     "send": "Send",
@@ -1058,6 +1113,9 @@
     "historyAttached": "Attached: {{files}}",
     "queued": "Will be sent with the next request",
     "responseCancelled": "Response cancelled.",
+    "contextCompactedNotice": "Older parts of this chat were summarized to fit the model's context.",
+    "contextUsage": "Context {{used}} / {{window}}",
+    "contextUsageTooltip": "Older parts of this chat are summarized automatically when the context gets full.",
     "webResearchUnavailable": "Web research is not available for this provider account (web search is disabled there). This session answers without web research. To turn it off permanently: Settings → AI Provider → “Web research”.",
     "emptyResponse": "The model returned no response. For models with a thinking phase, a higher output limit in the provider settings helps.",
     "outputTruncated": "(truncated)",

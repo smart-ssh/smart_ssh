@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Thư mục khởi đầu phải là đường dẫn tuyệt đối (/…) hoặc bắt đầu bằng ~/.",
       "controlCharacter": "Thư mục khởi đầu không được chứa ký tự điều khiển."
+    },
+    "tabs": {
+      "label": "Cài đặt máy chủ",
+      "general": "Chung",
+      "connection": "Kết nối",
+      "security": "Bảo mật",
+      "invalid": "Có lỗi"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Quyết định chung",
     "subCommands": "Lệnh con",
     "matchedRuleLabel": "Quy tắc:",
+    "segmentLabel": "Đoạn {{index}}",
+    "checksLabel": "Kiểm tra:",
     "hardBlacklistLabel": "Danh sách chặn cứng:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Không có đề xuất.",
     "binaryFileHint": "⚠ Tệp nhị phân — không thể so sánh văn bản. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
     "diffTooLargeHint": "⚠ Nội dung quá lớn để so sánh theo dòng. Kích thước trước đó: {{oldSize}}, kích thước mới: {{newSize}}.",
-    "noContentChange": "(nội dung không thay đổi)"
+    "noContentChange": "(nội dung không thay đổi)",
+    "quickRuleLabel": {
+      "exact": "Chính xác: {{patterns}}",
+      "exactPerSegment": "Chính xác theo từng phần: {{patterns}}",
+      "pathScoped": "Cùng thư mục: {{patterns}}",
+      "lastArgOpen": "Bất kỳ đối số cuối nào: {{patterns}}",
+      "subcommand": "Mọi lệnh gọi `{{names}}`: {{patterns}}",
+      "tool": "Mọi lệnh gọi `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Các phần của lệnh này",
+      "covered": "được quy tắc {{rule}} bao phủ",
+      "coveredUnknown": "được một quy tắc hiện có bao phủ",
+      "needsRule": "cần một quy tắc",
+      "blocked": "luôn hỏi, bất kể quy tắc nào: {{reasons}}",
+      "verdictAuto": "lần sau sẽ tự động chạy",
+      "verdictAsk": "vẫn sẽ hỏi: {{reasons}}",
+      "notice": "Đã tạo quy tắc. Lệnh này lần sau vẫn sẽ hỏi: {{reasons}}",
+      "reasonOther": "một kiểm tra an toàn khác"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Cảnh báo bảo mật · Khóa máy chủ đã thay đổi",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Nhà cung cấp AI hiện đang hạn chế yêu cầu (giới hạn tần suất) – ứng dụng đã tự thử lại vài lần. Vui lòng chờ một lúc rồi gửi lại tin nhắn.",
     "AI_NETWORK_ERROR": "Không kết nối được tới nhà cung cấp AI. Kiểm tra kết nối internet và, với endpoint tùy chỉnh, kiểm tra URL cơ sở, rồi gửi lại.",
     "AI_INVALID_RESPONSE": "Phản hồi bất ngờ từ nhà cung cấp AI",
+    "AI_INVALID_TOOL_CALL": "AI liên tục gọi một công cụ không tồn tại. Hãy thử diễn đạt lại yêu cầu.",
     "AI_CONTEXT_TOO_LARGE": "Ngữ cảnh quá lớn đối với nhà cung cấp AI. Hãy giảm \"Độ dài phản hồi tối đa (token)\" hoặc bắt đầu cuộc trò chuyện mới.",
     "AI_PROVIDER_UNAVAILABLE": "Nhà cung cấp AI báo lỗi (ví dụ đang bảo trì hoặc quá tải). Hãy thử lại sau; nếu vẫn lỗi, hãy kiểm tra cài đặt nhà cung cấp.",
+    "AI_PROVIDER_OVERLOADED": "Nhà cung cấp AI hiện đang quá tải. Hãy thử lại sau giây lát.",
+    "AI_PROVIDER_BILLING": "Tài khoản nhà cung cấp AI đã hết tín dụng. Hãy kiểm tra thanh toán trong bảng điều khiển của nhà cung cấp.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Nhà cung cấp AI đã từ chối yêu cầu.",
     "AI_RESPONSE_TRUNCATED": "Phản hồi của AI quá dài để tạo thành một lệnh hoàn chỉnh",
     "AI_MODEL_NOT_FOUND": "Nhà cung cấp AI không biết mô hình này. Kiểm tra tên mô hình trong Cài đặt (\"Tải danh sách mô hình\" liệt kê các mô hình có sẵn); với Ollama, hãy tải trước bằng `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Mô hình này không hỗ trợ gọi công cụ. Trong cài đặt nhà cung cấp, hãy bỏ chọn \"Hỗ trợ gọi công cụ gốc\" (khi đó sẽ dùng phương án dự phòng dựa trên prompt) hoặc chọn mô hình có hỗ trợ công cụ.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Cảnh báo về mật khẩu chính chưa được xác nhận. Không có mật khẩu đó thì toàn bộ dữ liệu sẽ mất và không thể khôi phục — hãy đánh dấu ô và thiết lập lại. Không có gì bị thay đổi.",
     "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo.",
     "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm.",
-    "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này."
+    "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này.",
+    "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này"
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",
@@ -651,7 +684,10 @@
     "editUploadFailed": "Không thể tải lên thay đổi của “{{name}}”: {{reason}}",
     "uploadedFolder": "Đã tải lên thư mục “{{name}}” — {{count}} tệp",
     "uploadFolderFailed": "Tải thư mục “{{name}}” lên thất bại: {{reason}}",
-    "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}"
+    "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}",
+    "nothingToPaste": "Không có gì để dán: bộ nhớ tạm không chứa tệp",
+    "createFileDone": "Đã tạo tệp “{{name}}”",
+    "createFileFailed": "Không thể tạo tệp “{{name}}”: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Quyền nâng cao",
@@ -926,6 +962,8 @@
     "cancelCut": "Hủy cắt",
     "transferUpload": "Đang tải lên: {{name}}",
     "transferDownload": "Đang tải xuống: {{name}}",
+    "transferDone": "Hoàn tất: {{name}}",
+    "transferElevationEnded": "Chế độ nâng quyền đã bị tắt trong khi truyền.",
     "loading": "Đang tải…",
     "emptyDirectory": "(thư mục trống)",
     "dropHint": "Thả vào đây để tải lên {{path}}",
@@ -996,7 +1034,9 @@
       "chmod": "Sửa quyền…",
       "rename": "Đổi tên",
       "cut": "Cắt",
-      "delete": "Xóa"
+      "delete": "Xóa",
+      "newFolder": "Thư mục mới",
+      "newFile": "Tệp mới"
     },
     "properties": {
       "title": "Thuộc tính",
@@ -1027,10 +1067,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Đổi tên",
-      "newFolderTitle": "Thư mục mới"
+      "newFolderTitle": "Thư mục mới",
+      "newFileTitle": "Tệp mới",
+      "invalidName": "Nhập tên không chứa “/”. Không cho phép “.” và “..”."
     },
     "copyProgress": "Đang sao chép… {{done}} MB trên {{total}} MB",
-    "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB"
+    "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB",
+    "directoryMenuLabel": "Thao tác thư mục",
+    "clipboardPaste": {
+      "title": "Tải lên tệp từ bộ nhớ tạm",
+      "intro": "Tải lên các tệp này từ bộ nhớ tạm?",
+      "target": "Thư mục đích",
+      "more": "… và {{count}} tệp khác",
+      "confirm": "Tải lên",
+      "cancel": "Hủy",
+      "menuTitle": "Tải lên các tệp từ bộ nhớ tạm"
+    }
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",
@@ -1040,6 +1092,9 @@
     "stopAutoContinuation": "Dừng chế độ tự động",
     "generating": "AI đang tạo phản hồi / tài liệu…",
     "stop": "Dừng",
+    "tryAgain": "Thử lại",
+    "errorDetails": "Chi tiết",
+    "aiRetrying": "Nhà cung cấp AI đang quá tải – thử lại sau {{seconds}} giây (lần {{attempt}}/{{max}})",
     "noActiveProvider": "Chưa cấu hình nhà cung cấp AI đang hoạt động. Vui lòng thiết lập trong cài đặt trước.",
     "inputPlaceholder": "Đặt câu hỏi hoặc mô tả một lệnh …",
     "send": "Gửi",
@@ -1051,6 +1106,9 @@
     "historyAttached": "Đính kèm: {{files}}",
     "queued": "Sẽ được gửi cùng yêu cầu tiếp theo",
     "responseCancelled": "Đã hủy phản hồi.",
+    "contextCompactedNotice": "Các phần cũ hơn của cuộc trò chuyện này đã được tóm tắt để vừa với ngữ cảnh của mô hình.",
+    "contextUsage": "Ngữ cảnh {{used}} / {{window}}",
+    "contextUsageTooltip": "Các phần cũ hơn của cuộc trò chuyện được tự động tóm tắt khi ngữ cảnh đầy.",
     "webResearchUnavailable": "Tra cứu web không khả dụng cho tài khoản nhà cung cấp này (tìm kiếm web bị tắt ở đó). Phiên này trả lời mà không tra cứu web. Để tắt vĩnh viễn: Cài đặt → Nhà cung cấp AI → “Tra cứu web”.",
     "emptyResponse": "Mô hình không trả về phản hồi nào. Với các mô hình có giai đoạn suy nghĩ, nên tăng giới hạn đầu ra trong cài đặt nhà cung cấp.",
     "outputTruncated": "(đã cắt bớt)",

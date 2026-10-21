@@ -94,6 +94,9 @@ der Kern dessen Datenmodell kennt.
 - Gespeichert wird nur der Verweis mit der Nachricht (wie Spec 0034,
   Abschnitt 3) und beim Fortsetzen geladen. Sitzungen ohne Verweise laden
   unverändert.
+- Die Erweiterung verwaltet den Inhalt unter der ID der gespeicherten
+  Chat-Sitzung. Deshalb bleibt er nach einem Neustart und dem Fortsetzen
+  der Sitzung verfügbar; nach „Neuer Chat“ gehört neuer Inhalt zum neuen Chat.
 - Löscht man eine Sitzung (oder den Server), verschwinden ihre Verweise mit;
   die Erweiterung wird darüber informiert und räumt ihren Inhalt auf.
 - Nach dem Fortsetzen zeigt der Verlauf Anzeigename und Art (Text, Bild, PDF)
@@ -169,3 +172,14 @@ nicht dienst-gebunden und in der Ausgangsberechtigung „Free“ gesperrt.
 - Dateien, die auf den Chat gezogen werden, gehen an den registrierten
   Ablege-Handler; die Pfade verlassen das Backend nicht (ADR 0113). Ohne
   Handler passiert beim Ablegen im Chat nichts.
+- Ein Ablegen geht nur an den Chat, wenn der Zeiger beim Ablegen über dem
+  sichtbaren Chat-Bereich liegt; ein Ablegen über dem Dateibrowser oder einer
+  anderen Fläche erreicht die Handler nicht. Solange mindestens ein Handler
+  registriert ist und eine Datei über den Chat gezogen wird, zeigt der Chat
+  eine Ablege-Markierung. Sie verschwindet, wenn der Zeiger den Chat
+  verlässt, beim Abbruch und beim Ablegen. Ohne Handler gibt es keine
+  Markierung.
+- Ein Handler lässt sich über `unregisterComposerDropHandler(id)` wieder
+  entfernen; Abonnenten werden benachrichtigt. Ist der letzte entfernt,
+  nimmt der Chat keine Drops mehr an und zeigt keine Markierung. Eine
+  unbekannte `id` bewirkt nichts.

@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "De startmap moet een absoluut pad (/…) zijn of met ~/ beginnen.",
       "controlCharacter": "De startmap mag geen stuurtekens bevatten."
+    },
+    "tabs": {
+      "label": "Serverinstellingen",
+      "general": "Algemeen",
+      "connection": "Verbinding",
+      "security": "Beveiliging",
+      "invalid": "Bevat fouten"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Eindbeslissing",
     "subCommands": "Subopdrachten",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Deel {{index}}",
+    "checksLabel": "Controles:",
     "hardBlacklistLabel": "Vaste blokkeerlijst:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Geen suggesties.",
     "binaryFileHint": "⚠ Binair bestand — tekstvergelijking niet mogelijk. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
     "diffTooLargeHint": "⚠ Inhoud te groot voor een regelvergelijking. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
-    "noContentChange": "(geen inhoudswijziging)"
+    "noContentChange": "(geen inhoudswijziging)",
+    "quickRuleLabel": {
+      "exact": "Precies: {{patterns}}",
+      "exactPerSegment": "Precies per onderdeel: {{patterns}}",
+      "pathScoped": "Zelfde map: {{patterns}}",
+      "lastArgOpen": "Elk laatste argument: {{patterns}}",
+      "subcommand": "Alle `{{names}}`-aanroepen: {{patterns}}",
+      "tool": "Alle `{{names}}`-aanroepen: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Onderdelen van dit commando",
+      "covered": "gedekt door regel {{rule}}",
+      "coveredUnknown": "gedekt door een bestaande regel",
+      "needsRule": "heeft een regel nodig",
+      "blocked": "vraagt altijd, welke regels er ook zijn: {{reasons}}",
+      "verdictAuto": "wordt de volgende keer automatisch uitgevoerd",
+      "verdictAsk": "vraagt nog steeds: {{reasons}}",
+      "notice": "Regel aangemaakt. Dit commando vraagt de volgende keer nog steeds: {{reasons}}",
+      "reasonOther": "een andere veiligheidscontrole"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Beveiligingswaarschuwing · Hostsleutel gewijzigd",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "De AI-provider beperkt momenteel verzoeken (rate limit) – de app heeft het al enkele keren automatisch opnieuw geprobeerd. Wacht even en verstuur het bericht opnieuw.",
     "AI_NETWORK_ERROR": "De AI-provider is niet bereikbaar. Controleer uw internetverbinding en, bij een eigen endpoint, de basis-URL, en verstuur daarna opnieuw.",
     "AI_INVALID_RESPONSE": "Onverwacht antwoord van de AI-provider",
+    "AI_INVALID_TOOL_CALL": "De AI bleef een tool aanroepen die niet bestaat. Probeer het verzoek anders te formuleren.",
     "AI_CONTEXT_TOO_LARGE": "Context te groot voor de AI-provider. Verlaag \"Max. antwoordlengte (tokens)\" of begin een nieuwe chat.",
     "AI_PROVIDER_UNAVAILABLE": "De AI-provider meldde een fout (bijv. onderhoud of overbelasting). Probeer het later opnieuw; blijft het probleem bestaan, controleer dan de provider-instellingen.",
+    "AI_PROVIDER_OVERLOADED": "De AI-provider is op dit moment overbelast. Probeer het zo meteen opnieuw.",
+    "AI_PROVIDER_BILLING": "Het account bij de AI-provider heeft geen tegoed meer. Controleer de facturering in de console van de provider.",
+    "AI_PROVIDER_REJECTED_REQUEST": "De AI-provider heeft het verzoek geweigerd.",
     "AI_RESPONSE_TRUNCATED": "Het AI-antwoord was te lang voor een volledige opdracht",
     "AI_MODEL_NOT_FOUND": "De AI-provider kent dit model niet. Controleer de modelnaam in Instellingen (\"Modellen laden\" toont de beschikbare); haal bij Ollama het model eerst op met `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Dit model ondersteunt geen toolaanroepen. Schakel in de provider-instellingen \"Ondersteunt native toolaanroepen\" uit (dan wordt de promptgebaseerde terugval gebruikt) of kies een model met toolondersteuning.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "De waarschuwing over het hoofdwachtwoord is niet bevestigd. Zonder dat wachtwoord gaan alle gegevens verloren en is herstel onmogelijk — vink het vakje aan en stel het opnieuw in. Er is niets gewijzigd.",
     "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken.",
     "SFTP_CONTENT_TOO_LARGE": "Het bestand is groter dan 50 MB en kan niet naar het klembord worden gekopieerd.",
-    "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst."
+    "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst.",
+    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam"
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",
@@ -656,7 +689,10 @@
     "editUploadFailed": "Wijziging in “{{name}}” kon niet worden geüpload: {{reason}}",
     "uploadedFolder": "Map “{{name}}” geüpload — {{count}} bestanden",
     "uploadFolderFailed": "Uploaden van map “{{name}}” mislukt: {{reason}}",
-    "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}"
+    "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}",
+    "nothingToPaste": "Niets om te plakken: het klembord bevat geen bestanden",
+    "createFileDone": "Bestand “{{name}}” aangemaakt",
+    "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Verhoogde rechten",
@@ -931,6 +967,8 @@
     "cancelCut": "Knippen annuleren",
     "transferUpload": "Uploaden: {{name}}",
     "transferDownload": "Downloaden: {{name}}",
+    "transferDone": "Klaar: {{name}}",
+    "transferElevationEnded": "De verhoogde modus is tijdens de overdracht uitgeschakeld.",
     "loading": "Laden…",
     "emptyDirectory": "(lege map)",
     "dropHint": "Hier neerzetten om te uploaden naar {{path}}",
@@ -1003,7 +1041,9 @@
       "chmod": "Rechten bewerken…",
       "rename": "Hernoemen",
       "cut": "Knippen",
-      "delete": "Verwijderen"
+      "delete": "Verwijderen",
+      "newFolder": "Nieuwe map",
+      "newFile": "Nieuw bestand"
     },
     "properties": {
       "title": "Eigenschappen",
@@ -1034,10 +1074,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Hernoemen",
-      "newFolderTitle": "Nieuwe map"
+      "newFolderTitle": "Nieuwe map",
+      "newFileTitle": "Nieuw bestand",
+      "invalidName": "Voer een naam in zonder “/”. “.” en “..” zijn niet toegestaan."
     },
     "copyProgress": "Kopiëren… {{done}} MB van {{total}} MB",
-    "copyProgressUnknownTotal": "Kopiëren… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopiëren… {{done}} MB",
+    "directoryMenuLabel": "Mapacties",
+    "clipboardPaste": {
+      "title": "Bestanden van het klembord uploaden",
+      "intro": "Deze bestanden van het klembord uploaden?",
+      "target": "Doelmap",
+      "more": "… en nog {{count}}",
+      "confirm": "Uploaden",
+      "cancel": "Annuleren",
+      "menuTitle": "Bestanden van het klembord uploaden"
+    }
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",
@@ -1047,6 +1099,9 @@
     "stopAutoContinuation": "Automatische modus stoppen",
     "generating": "AI genereert een antwoord / document…",
     "stop": "Stoppen",
+    "tryAgain": "Opnieuw proberen",
+    "errorDetails": "Details",
+    "aiRetrying": "De AI-provider is overbelast – nieuwe poging over {{seconds}} s (poging {{attempt}} van {{max}})",
     "noActiveProvider": "Geen actieve AI-provider ingesteld. Stel er eerst een in bij de instellingen.",
     "inputPlaceholder": "Stel een vraag of beschrijf een opdracht …",
     "send": "Verzenden",
@@ -1058,6 +1113,9 @@
     "historyAttached": "Bijgevoegd: {{files}}",
     "queued": "Wordt met het volgende verzoek verzonden",
     "responseCancelled": "Antwoord geannuleerd.",
+    "contextCompactedNotice": "Oudere delen van deze chat zijn samengevat zodat ze in de context van het model passen.",
+    "contextUsage": "Contextgrootte {{used}} / {{window}}",
+    "contextUsageTooltip": "Oudere delen van de chat worden automatisch samengevat als de context vol raakt.",
     "webResearchUnavailable": "Webonderzoek is voor dit provideraccount niet beschikbaar (webzoeken is daar uitgeschakeld). Deze sessie antwoordt zonder webonderzoek. Om het permanent uit te schakelen: Instellingen → AI-provider → “Webonderzoek”.",
     "emptyResponse": "Het model gaf geen antwoord. Bij modellen met een denkfase helpt een hogere uitvoerlimiet in de provider-instellingen.",
     "outputTruncated": "(afgekapt)",

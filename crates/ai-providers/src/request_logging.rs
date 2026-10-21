@@ -450,6 +450,21 @@ pub(crate) fn log_provider_error_response(
     error: &AiError,
     secrets: &[&str],
 ) {
+    log_provider_error_response_with_id(request_id, None, status, body, error, secrets);
+}
+
+/// Issue #599: as [`log_provider_error_response`], plus the provider's own
+/// request id (response header, when present) and the provider's error type
+/// (parsed from the body) on the same WARN line.
+pub(crate) fn log_provider_error_response_with_id(
+    request_id: Uuid,
+    provider_request_id: Option<&str>,
+    status: u16,
+    body: &str,
+    error: &AiError,
+    secrets: &[&str],
+) {
+    let info = crate::error::ProviderErrorInfo::from_body(body);
     // Spec 0094, A1.5 — die **einzige** Ausnahme von A1: `body` bleibt auf
     // `warn`, weil eine Fehlkonfiguration (falsches Modell, falscher
     // Gateway-Pfad, abgelehnter Key) sich ohne die Antwort des Providers
@@ -460,7 +475,9 @@ pub(crate) fn log_provider_error_response(
     let redacted = redact_for_debug(body, secrets);
     tracing::warn!(
         request_id = %request_id,
+        provider_request_id = provider_request_id.unwrap_or("-"),
         status,
+        error_type = info.error_type.as_deref().or(info.code.as_deref()).unwrap_or("-"),
         code = error.code(),
         body = %truncate_logged_body(&redacted),
         "AI provider returned an error response",
@@ -475,6 +492,45 @@ pub(crate) fn log_provider_error_response(
             code = error.code(),
             body = %redacted,
             "AI provider returned an error response (full body)",
+        );
+    }
+}
+
+/// Issue #599: one WARN line for every AI error that ends a request, with
+/// the local `request_id`, the provider's own request id (when it sent one),
+/// the HTTP status or `"stream"`, the provider's error type, the error code
+/// and the provider message. Provider and model come from the request span
+/// (see `crate::overload::with_overload_retry`).
+///
+/// The message is the ADR 0086 exception: redacted first (literal secrets and
+/// patterns), cut to 512 bytes afterwards, never the other way round. No
+/// prompt or command content is logged here.
+pub(crate) fn log_provider_error(
+    request_id: Uuid,
+    provider_request_id: Option<&str>,
+    status: Option<u16>,
+    error_type: Option<&str>,
+    error: &AiError,
+    message: &str,
+    secrets: &[&str],
+) {
+    let redacted = redact_for_debug(message, secrets);
+    let status_text = status.map_or_else(|| "stream".to_string(), |s| s.to_string());
+    tracing::warn!(
+        request_id = %request_id,
+        provider_request_id = provider_request_id.unwrap_or("-"),
+        status = %status_text,
+        error_type = error_type.unwrap_or("-"),
+        code = error.code(),
+        message = %truncate_logged_body(&redacted),
+        "AI provider error ended the request",
+    );
+    if redacted.chars().count() > MAX_LOGGED_BODY_LEN {
+        tracing::debug!(
+            request_id = %request_id,
+            code = error.code(),
+            message = %redacted,
+            "AI provider error ended the request (full message)",
         );
     }
 }
@@ -1096,6 +1152,100 @@ mod error_logging_tests {
     /// bewusst nicht den Fall ab, dass der Provider-Text ein Secret enthält,
     /// das nicht in `secrets` steht — dafür gibt es auf diesem Pfad (Spec
     /// 0072 §5) keinen Muster-basierten Redactor.
+    /// Issue #599: one WARN line per failed request with request id, the
+    /// provider's request id, status or "stream", error type, code and the
+    /// redacted message — a secret in the provider message never appears.
+    #[test]
+    fn test_issue_599_stream_error_line_has_all_fields_and_redacts_message() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+        let request_id = Uuid::new_v4();
+        let error = AiError::Overloaded { retry_after: None };
+
+        log_provider_error(
+            request_id,
+            Some("req_provider_123"),
+            None,
+            Some("overloaded_error"),
+            &error,
+            "Overloaded, key sk-live-hunter2 echoed",
+            &["sk-live-hunter2"],
+        );
+
+        let lines = log_lines_at_info_or_above();
+        let line = lines
+            .iter()
+            .find(|l| l.contains("AI provider error ended the request"))
+            .unwrap_or_else(|| panic!("WARN line missing: {lines:?}"));
+        assert!(line.contains("WARN"), "{line}");
+        for needle in [
+            request_id.to_string().as_str(),
+            "req_provider_123",
+            "stream",
+            "overloaded_error",
+            "AI_PROVIDER_OVERLOADED",
+            "Overloaded",
+        ] {
+            assert!(line.contains(needle), "{needle} missing in {line}");
+        }
+        assert!(!line.contains("sk-live-hunter2"), "{line}");
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|l| l.contains("AI provider error ended the request"))
+                .count(),
+            1
+        );
+    }
+
+    /// Issue #599: the message is cut to 512 characters after redaction.
+    #[test]
+    fn test_issue_599_error_line_message_is_truncated() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+        log_provider_error(
+            Uuid::new_v4(),
+            None,
+            Some(529),
+            None,
+            &AiError::Overloaded { retry_after: None },
+            &"B".repeat(2000),
+            &[],
+        );
+        let lines = log_lines_at_info_or_above();
+        let line = lines
+            .iter()
+            .find(|l| l.contains("AI provider error ended the request"))
+            .unwrap();
+        assert!(line.matches('B').count() <= MAX_LOGGED_BODY_LEN, "{line}");
+    }
+
+    /// Issue #599: HTTP error line carries the provider request id and error
+    /// type from the body; no prompt text appears (the log function never
+    /// sees the request).
+    #[test]
+    fn test_issue_599_http_error_line_has_provider_request_id_and_type_but_no_prompt() {
+        install_test_subscriber_once();
+        clear_log_buffer();
+        let body = r#"{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low"}}"#;
+        let error = AiError::Billing("invalid_request_error: credit".to_string());
+
+        log_provider_error_response_with_id(
+            Uuid::new_v4(),
+            Some("req_http_9"),
+            400,
+            body,
+            &error,
+            &[],
+        );
+
+        let text = log_buffer_text();
+        assert!(text.contains("req_http_9"), "{text}");
+        assert!(text.contains("invalid_request_error"), "{text}");
+        assert!(text.contains("AI_PROVIDER_BILLING"), "{text}");
+        assert!(!text.contains("PROMPT-TEXT-599"), "{text}");
+    }
+
     #[test]
     fn test_model_not_found_error_response_redacts_a_placeholder_secret_in_the_body() {
         install_test_subscriber_once();

@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "A kezdőkönyvtárnak abszolút útvonalnak (/…) kell lennie, vagy ~/-lel kell kezdődnie.",
       "controlCharacter": "A kezdőkönyvtár nem tartalmazhat vezérlőkaraktert."
+    },
+    "tabs": {
+      "label": "Szerverbeállítások",
+      "general": "Általános",
+      "connection": "Kapcsolat",
+      "security": "Biztonság",
+      "invalid": "Hibákat tartalmaz"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Összesített döntés",
     "subCommands": "Részparancsok",
     "matchedRuleLabel": "Szabály:",
+    "segmentLabel": "{{index}}. szakasz",
+    "checksLabel": "Ellenőrzések:",
     "hardBlacklistLabel": "Szigorú feketelista:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Nincs javaslat.",
     "binaryFileHint": "⚠ Bináris fájl – szöveges összehasonlítás nem lehetséges. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
     "diffTooLargeHint": "⚠ A tartalom túl nagy a soronkénti összehasonlításhoz. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
-    "noContentChange": "(nincs tartalmi változás)"
+    "noContentChange": "(nincs tartalmi változás)",
+    "quickRuleLabel": {
+      "exact": "Pontos: {{patterns}}",
+      "exactPerSegment": "Pontos részenként: {{patterns}}",
+      "pathScoped": "Ugyanaz a könyvtár: {{patterns}}",
+      "lastArgOpen": "Bármely utolsó argumentum: {{patterns}}",
+      "subcommand": "Az összes `{{names}}` hívás: {{patterns}}",
+      "tool": "Az összes `{{names}}` hívás: {{patterns}}"
+    },
+    "explain": {
+      "heading": "A parancs részei",
+      "covered": "a(z) {{rule}} szabály lefedi",
+      "coveredUnknown": "meglévő szabály lefedi",
+      "needsRule": "szabályra van szükség",
+      "blocked": "a szabályoktól függetlenül mindig rákérdez: {{reasons}}",
+      "verdictAuto": "legközelebb automatikusan lefut",
+      "verdictAsk": "továbbra is rákérdez: {{reasons}}",
+      "notice": "Szabály létrehozva. Ez a parancs legközelebb is rákérdez: {{reasons}}",
+      "reasonOther": "másik biztonsági ellenőrzés"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Biztonsági figyelmeztetés · A gazdakulcs megváltozott",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Az AI-szolgáltató jelenleg korlátozza a kéréseket (kérési korlát) – az alkalmazás már néhányszor automatikusan újrapróbálta. Várjon egy kicsit, és küldje el újra az üzenetet.",
     "AI_NETWORK_ERROR": "Az AI-szolgáltató nem érhető el. Ellenőrizze az internetkapcsolatot és egyéni végpontnál az alap-URL-t, majd küldje újra.",
     "AI_INVALID_RESPONSE": "Váratlan válasz az AI-szolgáltatótól",
+    "AI_INVALID_TOOL_CALL": "Az MI ismételten egy nem létező eszközt hívott meg. Próbálja meg másképp megfogalmazni a kérést.",
     "AI_CONTEXT_TOO_LARGE": "A kontextus túl nagy az AI-szolgáltatónak. Csökkentse a \"Max. válaszhossz (token)\" értékét, vagy kezdjen új csevegést.",
     "AI_PROVIDER_UNAVAILABLE": "Az AI-szolgáltató hibát jelzett (pl. karbantartás vagy túlterhelés). Próbálja újra később; ha tartós, ellenőrizze a szolgáltató beállításait.",
+    "AI_PROVIDER_OVERLOADED": "Az AI-szolgáltató jelenleg túlterhelt. Próbálja újra egy pillanat múlva.",
+    "AI_PROVIDER_BILLING": "Az AI-szolgáltatói fiókon nincs több kredit. Ellenőrizze a számlázást a szolgáltató konzolján.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Az AI-szolgáltató elutasította a kérést.",
     "AI_RESPONSE_TRUNCATED": "Az AI válasza túl hosszú volt egy teljes parancshoz",
     "AI_MODEL_NOT_FOUND": "Az AI-szolgáltató nem ismeri ezt a modellt. Ellenőrizze a modell nevét a Beállításokban (a \"Modellek betöltése\" listázza az elérhetőket); Ollamánál előbb töltse le az `ollama pull <name>` paranccsal.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Ez a modell nem támogatja az eszközhívást. A szolgáltató beállításaiban törölje a \"Támogatja a natív eszközhívást\" jelölését (ekkor a promptalapú tartalék működik), vagy válasszon eszköztámogatással rendelkező modellt.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "A mesterjelszó-figyelmeztetést nem erősítették meg. E jelszó nélkül minden adat elvész, és nincs helyreállítás – jelölje be a négyzetet, és állítsa be újra. Semmi nem változott.",
     "KEYCHAIN_KEY_MISMATCH": "A kulcstartóban lévő kulcs nem ehhez az adatbázishoz tartozik. Semmi nem változott – a tárolása olvashatatlanná tenné az adatbázist a következő indításkor.",
     "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra.",
-    "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren."
+    "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren.",
+    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa"
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
@@ -656,7 +689,10 @@
     "editUploadFailed": "A(z) „{{name}}” módosítása nem tölthető fel: {{reason}}",
     "uploadedFolder": "A(z) „{{name}}” mappa feltöltve – {{count}} fájl",
     "uploadFolderFailed": "A(z) „{{name}}” mappa feltöltése sikertelen: {{reason}}",
-    "uploadFailedMany": "{{name}} fájl nem tölthető fel, pl.: {{reason}}"
+    "uploadFailedMany": "{{name}} fájl nem tölthető fel, pl.: {{reason}}",
+    "nothingToPaste": "Nincs mit beilleszteni: a vágólapon nincsenek fájlok",
+    "createFileDone": "A(z) „{{name}}” fájl létrehozva",
+    "createFileFailed": "A(z) „{{name}}” fájl nem hozható létre: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Emelt jogok",
@@ -931,6 +967,8 @@
     "cancelCut": "Kivágás megszakítása",
     "transferUpload": "Feltöltés: {{name}}",
     "transferDownload": "Letöltés: {{name}}",
+    "transferDone": "Kész: {{name}}",
+    "transferElevationEnded": "A megemelt mód az átvitel közben ki lett kapcsolva.",
     "loading": "Betöltés…",
     "emptyDirectory": "(üres könyvtár)",
     "dropHint": "Ejtse ide a feltöltéshez ide: {{path}}",
@@ -1003,7 +1041,9 @@
       "chmod": "Jogosultságok szerkesztése…",
       "rename": "Átnevezés",
       "cut": "Kivágás",
-      "delete": "Törlés"
+      "delete": "Törlés",
+      "newFolder": "Új mappa",
+      "newFile": "Új fájl"
     },
     "properties": {
       "title": "Tulajdonságok",
@@ -1034,10 +1074,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Átnevezés",
-      "newFolderTitle": "Új mappa"
+      "newFolderTitle": "Új mappa",
+      "newFileTitle": "Új fájl",
+      "invalidName": "Adjon meg „/” nélküli nevet. A „.” és a „..” nem engedélyezett."
     },
     "copyProgress": "Másolás… {{done}} / {{total}} MB",
-    "copyProgressUnknownTotal": "Másolás… {{done}} MB"
+    "copyProgressUnknownTotal": "Másolás… {{done}} MB",
+    "directoryMenuLabel": "Mappa műveletei",
+    "clipboardPaste": {
+      "title": "Fájlok feltöltése a vágólapról",
+      "intro": "Feltölti ezeket a fájlokat a vágólapról?",
+      "target": "Célmappa",
+      "more": "… és még {{count}}",
+      "confirm": "Feltöltés",
+      "cancel": "Mégse",
+      "menuTitle": "A vágólapon lévő fájlok feltöltése"
+    }
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",
@@ -1047,6 +1099,9 @@
     "stopAutoContinuation": "Automatikus mód leállítása",
     "generating": "Az AI választ / dokumentumot generál…",
     "stop": "Leállítás",
+    "tryAgain": "Újrapróbálás",
+    "errorDetails": "Részletek",
+    "aiRetrying": "Az AI-szolgáltató túlterhelt – újrapróbálkozás {{seconds}} mp múlva ({{attempt}}. kísérlet / {{max}})",
     "noActiveProvider": "Nincs beállított aktív AI-szolgáltató. Először állítson be egyet a beállításokban.",
     "inputPlaceholder": "Tegyen fel kérdést, vagy írjon le egy parancsot …",
     "send": "Küldés",
@@ -1058,6 +1113,9 @@
     "historyAttached": "Csatolva: {{files}}",
     "queued": "A következő kéréssel lesz elküldve",
     "responseCancelled": "A válasz megszakítva.",
+    "contextCompactedNotice": "A csevegés régebbi részeit összefoglaltuk, hogy beleférjenek a modell kontextusába.",
+    "contextUsage": "Kontextus {{used}} / {{window}}",
+    "contextUsageTooltip": "A csevegés régebbi részeit a rendszer automatikusan összefoglalja, ha betelik a kontextus.",
     "webResearchUnavailable": "A webes kutatás ennél a szolgáltatói fióknál nem érhető el (a webkeresés ott le van tiltva). Ez a munkamenet webes kutatás nélkül válaszol. Végleges kikapcsolás: Beállítások → AI-szolgáltató → „Webes kutatás”.",
     "emptyResponse": "A modell nem adott választ. Gondolkodási fázisú modelleknél segít a szolgáltató beállításaiban magasabb kimeneti korlátot megadni.",
     "outputTruncated": "(csonkolva)",

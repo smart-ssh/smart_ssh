@@ -30,4 +30,11 @@ pub trait AiProvider: Send + Sync {
     /// abgelehnt hat. Ändert keine gespeicherte Einstellung. Default: nichts
     /// (Provider ohne Web-Werkzeuge).
     fn disable_web_research(&self) {}
+
+    /// Issue #599: id of the most recent request this provider started, the
+    /// same value that its own log lines carry as `request_id`. Lets the chat
+    /// turn log its final error with a correlatable id. Default: none.
+    fn last_request_id(&self) -> Option<uuid::Uuid> {
+        None
+    }
 }

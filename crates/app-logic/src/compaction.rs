@@ -798,7 +798,7 @@ async fn generate_rolling_summary(
         new_rounds.to_vec(),
         session.redactor.as_ref(),
         &session.chat_content,
-        session_id,
+        session.extension_content_key(session_id).await,
     ) {
         Ok(sealed) => history.extend(sealed),
         Err(_) => return None,
@@ -842,8 +842,11 @@ async fn generate_rolling_summary(
                 AiEvent::ActionProposed(_) => {}
                 // Issue #162: Nebenaufrufe bekommen keine Web-Werkzeuge
                 // (s. `ai_providers::anthropic`); defensiv ignoriert.
-                AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
-                // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
+                AiEvent::WebActivity(_)
+                | AiEvent::WebContentIngested
+                | AiEvent::Usage { .. }
+                | AiEvent::Retrying { .. }
+                | AiEvent::InvalidToolCall { .. } => {} // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — eine unvollständige Zusammenfassung ist
                 // immer noch besser als gar keine.
                 AiEvent::Done | AiEvent::TextTruncated => return Some(text),
@@ -1146,6 +1149,68 @@ pub(crate) fn truncate_to_char_boundary(text: &str, max_bytes: usize) -> &str {
     &text[..end]
 }
 
+/* ------------- Echte Token-Zählung des Providers (Issue #601) ------------- */
+
+/// Smoothing weight of a new observation after the first one.
+const USAGE_RATIO_SMOOTHING: f64 = 0.5;
+
+/// Per-session record of the provider-reported input size (Issue #601).
+/// In memory only; never stored.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContextUsageTracker {
+    /// Last real input size (input + cache read + cache creation).
+    pub last_input_tokens: Option<u64>,
+    /// Smoothed real/estimated ratio, never below 1.0.
+    ratio: f64,
+    /// Rolling-summary coverage already announced to the user
+    /// (`None` = no compaction announced yet).
+    notified_rounds: Option<usize>,
+}
+
+impl Default for ContextUsageTracker {
+    fn default() -> Self {
+        Self {
+            last_input_tokens: None,
+            ratio: 1.0,
+            notified_rounds: None,
+        }
+    }
+}
+
+impl ContextUsageTracker {
+    /// Records a provider usage report for a request whose own estimate was
+    /// `estimated_tokens`.
+    pub fn record(&mut self, real_input_tokens: u64, estimated_tokens: usize) {
+        let first = self.last_input_tokens.is_none();
+        self.last_input_tokens = Some(real_input_tokens);
+        if estimated_tokens == 0 {
+            return;
+        }
+        let observed = (real_input_tokens as f64 / estimated_tokens as f64).max(1.0);
+        self.ratio = if first {
+            observed
+        } else {
+            (USAGE_RATIO_SMOOTHING * observed + (1.0 - USAGE_RATIO_SMOOTHING) * self.ratio).max(1.0)
+        };
+    }
+
+    /// Correction factor for the 4-bytes-per-token estimate (>= 1.0).
+    pub fn ratio(&self) -> f64 {
+        self.ratio.max(1.0)
+    }
+
+    /// True when a compaction with this key was not yet announced.
+    fn should_announce(&mut self, rounds_covered: usize) -> bool {
+        match self.notified_rounds {
+            Some(n) if n >= rounds_covered => false,
+            _ => {
+                self.notified_rounds = Some(rounds_covered);
+                true
+            }
+        }
+    }
+}
+
 /* --------------------- Die Kürzungs-Reihenfolge (Spec 0057, §3.2) --------- */
 
 /// Zentrale Kompaktierungs-Funktion (Spec 0057, §3) — wird unmittelbar vor
@@ -1180,14 +1245,70 @@ pub(crate) async fn compact_for_send(
     session: &Session,
     session_id: SessionId,
     emitter: &dyn EventEmitter,
-    mut context: SessionContext,
+    context: SessionContext,
     system_context_parts: &SystemContextParts,
     model_context_window_tokens: usize,
 ) -> SessionContext {
-    let budget_tokens = (model_context_window_tokens as f64 * COMPACTION_TRIGGER_RATIO) as usize;
+    let (context, compacted) = compact_for_send_inner(
+        session,
+        session_id,
+        emitter,
+        context,
+        system_context_parts,
+        model_context_window_tokens,
+    )
+    .await;
+    if compacted {
+        // Issue #601: announce each compaction step once, not each request —
+        // a step is a rolling summary that covers more rounds than before.
+        let covered = session
+            .summary
+            .lock()
+            .await
+            .as_ref()
+            .map_or(0, |summary| summary.rounds_covered);
+        let announce = session
+            .context_usage
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .should_announce(covered);
+        if announce {
+            crate::events::emit_chat_context_compacted(emitter, session_id);
+        }
+    }
+    context
+}
 
-    if estimate_request_tokens(&context) <= budget_tokens {
-        return context;
+async fn compact_for_send_inner(
+    session: &Session,
+    session_id: SessionId,
+    emitter: &dyn EventEmitter,
+    mut context: SessionContext,
+    system_context_parts: &SystemContextParts,
+    model_context_window_tokens: usize,
+) -> (SessionContext, bool) {
+    let trigger_tokens = (model_context_window_tokens as f64 * COMPACTION_TRIGGER_RATIO) as usize;
+    // Issue #601: the estimate is corrected by the observed real/estimated
+    // ratio (never below 1.0), so the comparison is done in estimate units:
+    // `budget_tokens` is the largest uncorrected estimate that still fits.
+    let (ratio, last_input) = {
+        let tracker = session
+            .context_usage
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        (tracker.ratio(), tracker.last_input_tokens)
+    };
+    let mut budget_tokens = (trigger_tokens as f64 / ratio) as usize;
+    let initial_estimate = estimate_request_tokens(&context);
+    let last_over_trigger = last_input.is_some_and(|real| real > trigger_tokens as u64);
+    if last_over_trigger {
+        // The last real request was already over the trigger: compact,
+        // whatever the estimate says, down to the trigger relative to it.
+        let real = last_input.unwrap_or(0).max(1) as f64;
+        let scaled = (initial_estimate as f64 * trigger_tokens as f64 / real) as usize;
+        budget_tokens = budget_tokens.min(scaled);
+    } else if initial_estimate <= budget_tokens {
+        return (context, false);
     }
     tracing::info!(
         budget_tokens,
@@ -1208,12 +1329,12 @@ pub(crate) async fn compact_for_send(
     )
     .await;
     if estimate_request_tokens(&context) <= budget_tokens {
-        return context;
+        return (context, true);
     }
 
     compact_oversized_outputs_for_budget(&mut context, budget_tokens);
     if estimate_request_tokens(&context) <= budget_tokens {
-        return context;
+        return (context, true);
     }
 
     compact_notes_for_budget(&mut context, system_context_parts, budget_tokens);
@@ -1239,7 +1360,7 @@ pub(crate) async fn compact_for_send(
              min note size) but the request is still over budget — sending anyway"
         );
     }
-    context
+    (context, true)
 }
 
 #[cfg(test)]

@@ -575,3 +575,23 @@ describe("web research unavailable notice (issue #169)", () => {
     expect(container.textContent).not.toMatch(/invalid_request_error|not enabled|HTTP 400/);
   });
 });
+
+// Issue #601: one note per compaction step.
+describe("context compaction note (Issue #601)", () => {
+  it("renders the summarized-history note", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={{ type: "contextCompacted", id: "c1" }}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+    expect(screen.getByText(/zusammengefasst/)).toBeInTheDocument();
+  });
+});

@@ -388,6 +388,13 @@ export function registerComposerDropHandler(id: string, handler: ComposerDropHan
   notifyComposerChanged();
 }
 
+/** Entfernt einen Drop-Handler und benachrichtigt Abonnenten. Eine unbekannte
+ * `id` ist ein No-op. */
+export function unregisterComposerDropHandler(id: string): void {
+  if (!registry.composerDropHandlers.delete(id)) return;
+  notifyComposerChanged();
+}
+
 /** Composer-Aktionen in Registrierungsreihenfolge; zwischen zwei Änderungen
  * dieselbe Array-Referenz (taugt als `getSnapshot`). */
 export function listComposerActions(): ComposerAction[] {

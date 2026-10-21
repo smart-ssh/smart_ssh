@@ -30,6 +30,9 @@ pub trait AudioSource: Send + Sync {
 pub trait AudioCapture: Send {
     /// Stops the device and returns the audio as 16 kHz mono.
     fn finish(self: Box<Self>) -> Vec<f32>;
+
+    /// The audio captured so far as 16 kHz mono, without stopping.
+    fn snapshot(&self) -> Vec<f32>;
 }
 
 /// Mixes interleaved frames down to mono and resamples to 16 kHz.
@@ -185,6 +188,11 @@ fn build_stream(
 }
 
 impl AudioCapture for CpalCapture {
+    fn snapshot(&self) -> Vec<f32> {
+        let samples = self.buf.lock().map(|b| b.clone()).unwrap_or_default();
+        resample_mono(&samples, self.rate)
+    }
+
     fn finish(mut self: Box<Self>) -> Vec<f32> {
         let _ = self.stop.send(());
         if let Some(t) = self.thread.take() {

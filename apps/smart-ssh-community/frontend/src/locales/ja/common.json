@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "開始ディレクトリは絶対パス（/…）か、~/ で始まるパスである必要があります。",
       "controlCharacter": "開始ディレクトリに制御文字を含めることはできません。"
+    },
+    "tabs": {
+      "label": "サーバー設定",
+      "general": "一般",
+      "connection": "接続",
+      "security": "セキュリティ",
+      "invalid": "エラーがあります"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "総合判定",
     "subCommands": "サブコマンド",
     "matchedRuleLabel": "ルール:",
+    "segmentLabel": "セグメント {{index}}",
+    "checksLabel": "チェック:",
     "hardBlacklistLabel": "ハードブラックリスト:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "候補はありません。",
     "binaryFileHint": "⚠ バイナリファイルのため、テキストの比較はできません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
     "diffTooLargeHint": "⚠ 内容が大きすぎて行単位の差分を表示できません。変更前のサイズ: {{oldSize}}、新しいサイズ: {{newSize}}。",
-    "noContentChange": "（内容の変更なし）"
+    "noContentChange": "（内容の変更なし）",
+    "quickRuleLabel": {
+      "exact": "完全一致: {{patterns}}",
+      "exactPerSegment": "パートごとに完全一致: {{patterns}}",
+      "pathScoped": "同じディレクトリ: {{patterns}}",
+      "lastArgOpen": "最後の引数は任意: {{patterns}}",
+      "subcommand": "`{{names}}` のすべての呼び出し: {{patterns}}",
+      "tool": "`{{names}}` のすべての呼び出し: {{patterns}}"
+    },
+    "explain": {
+      "heading": "このコマンドの各部分",
+      "covered": "ルール {{rule}} が適用済み",
+      "coveredUnknown": "既存のルールが適用済み",
+      "needsRule": "ルールが必要",
+      "blocked": "ルールに関係なく常に確認します: {{reasons}}",
+      "verdictAuto": "次回から自動的に実行されます",
+      "verdictAsk": "引き続き確認します: {{reasons}}",
+      "notice": "ルールを作成しました。このコマンドは次回も確認が必要です: {{reasons}}",
+      "reasonOther": "別の安全チェック"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "セキュリティ警告 · ホストキーが変更されました",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "AIプロバイダーが現在リクエストを制限しています（レート制限）。アプリはすでに数回自動で再試行しました。しばらく待ってから、メッセージをもう一度送信してください。",
     "AI_NETWORK_ERROR": "AIプロバイダーに到達できません。インターネット接続を確認し、カスタムエンドポイントの場合はベースURLも確認してから、もう一度送信してください。",
     "AI_INVALID_RESPONSE": "AIプロバイダーから想定外の応答がありました",
+    "AI_INVALID_TOOL_CALL": "AIが存在しないツールを呼び出し続けました。リクエストの言い方を変えてお試しください。",
     "AI_CONTEXT_TOO_LARGE": "AIプロバイダーに対してコンテキストが大きすぎます。「最大応答長（トークン）」を下げるか、新しいチャットを開始してください。",
     "AI_PROVIDER_UNAVAILABLE": "AIプロバイダーがエラーを報告しました（例: メンテナンスや過負荷）。しばらくしてからもう一度お試しください。解消しない場合は、プロバイダーの設定を確認してください。",
+    "AI_PROVIDER_OVERLOADED": "AIプロバイダーは現在過負荷です。しばらくしてからもう一度お試しください。",
+    "AI_PROVIDER_BILLING": "AIプロバイダーのアカウントに残高がありません。プロバイダーのコンソールで請求を確認してください。",
+    "AI_PROVIDER_REJECTED_REQUEST": "AIプロバイダーがリクエストを拒否しました。",
     "AI_RESPONSE_TRUNCATED": "AIの応答が長すぎて、コマンドを完全な形で受け取れませんでした",
     "AI_MODEL_NOT_FOUND": "AIプロバイダーがこのモデルを認識していません。設定でモデル名を確認してください（「モデルを読み込む」で利用可能なモデルが一覧表示されます）。Ollamaの場合は、先に `ollama pull <name>` で取得してください。",
     "AI_MODEL_NO_TOOL_SUPPORT": "このモデルはツール呼び出しに対応していません。プロバイダー設定で「ネイティブのツール呼び出しに対応」のチェックを外す（その場合はプロンプトベースの代替手段が使われます）か、ツールに対応したモデルを選んでください。",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "マスターパスワードに関する警告が確認されていません。このパスワードがないとすべてのデータが失われ、復旧はできません。チェックボックスをオンにして、もう一度設定してください。何も変更されていません。",
     "KEYCHAIN_KEY_MISMATCH": "キーチェーンの鍵は、このデータベースのものではありません。何も変更されていません。保存すると、次回の起動時にデータベースを読み取れなくなります。",
     "SFTP_CONTENT_TOO_LARGE": "ファイルが 50 MB を超えているため、クリップボードにコピーできません。",
-    "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。"
+    "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
+    "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します"
   },
   "mcpServer": {
     "hint": "外部のMCPクライアントは、許可リストに登録されたサーバーに対して、コマンド、ファイルの読み書き、メモの更新を提案できます。既存の許可ルールにかかわらず、すべてのリクエストでアプリ内の確認が常に必要です。",
@@ -651,7 +684,10 @@
     "editUploadFailed": "「{{name}}」の変更をアップロードできませんでした: {{reason}}",
     "uploadedFolder": "フォルダー「{{name}}」をアップロードしました — {{count}}個のファイル",
     "uploadFolderFailed": "フォルダー「{{name}}」のアップロードに失敗しました: {{reason}}",
-    "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}"
+    "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}",
+    "nothingToPaste": "貼り付けるものがありません：クリップボードにファイルがありません",
+    "createFileDone": "ファイル「{{name}}」を作成しました",
+    "createFileFailed": "ファイル「{{name}}」を作成できませんでした: {{reason}}"
   },
   "fileElevation": {
     "toggle": "昇格した権限",
@@ -926,6 +962,8 @@
     "cancelCut": "切り取りを取り消す",
     "transferUpload": "アップロード中: {{name}}",
     "transferDownload": "ダウンロード中: {{name}}",
+    "transferDone": "完了: {{name}}",
+    "transferElevationEnded": "転送中に昇格モードがオフになりました。",
     "loading": "読み込み中…",
     "emptyDirectory": "（空のディレクトリ）",
     "dropHint": "ここにドロップして {{path}} にアップロード",
@@ -996,7 +1034,9 @@
       "chmod": "権限を編集…",
       "rename": "名前を変更",
       "cut": "切り取り",
-      "delete": "削除"
+      "delete": "削除",
+      "newFolder": "新しいフォルダー",
+      "newFile": "新しいファイル"
     },
     "properties": {
       "title": "プロパティ",
@@ -1027,10 +1067,22 @@
     },
     "renamePrompt": {
       "renameTitle": "名前を変更",
-      "newFolderTitle": "新しいフォルダー"
+      "newFolderTitle": "新しいフォルダー",
+      "newFileTitle": "新しいファイル",
+      "invalidName": "「/」を含まない名前を入力してください。「.」と「..」は使用できません。"
     },
     "copyProgress": "コピー中… {{done}} MB / {{total}} MB",
-    "copyProgressUnknownTotal": "コピー中… {{done}} MB"
+    "copyProgressUnknownTotal": "コピー中… {{done}} MB",
+    "directoryMenuLabel": "フォルダー操作",
+    "clipboardPaste": {
+      "title": "クリップボードのファイルをアップロード",
+      "intro": "クリップボードのこれらのファイルをアップロードしますか？",
+      "target": "アップロード先フォルダー",
+      "more": "…ほか {{count}} 件",
+      "confirm": "アップロード",
+      "cancel": "キャンセル",
+      "menuTitle": "クリップボードのファイルをアップロード"
+    }
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",
@@ -1040,6 +1092,9 @@
     "stopAutoContinuation": "自動モードを停止",
     "generating": "AIが応答／ドキュメントを生成中…",
     "stop": "停止",
+    "tryAgain": "再試行",
+    "errorDetails": "詳細",
+    "aiRetrying": "AIプロバイダーが過負荷です – {{seconds}} 秒後に再試行します（{{attempt}}/{{max}} 回目）",
     "noActiveProvider": "有効なAIプロバイダーが設定されていません。先に設定で追加してください。",
     "inputPlaceholder": "質問するか、コマンドを説明してください…",
     "send": "送信",
@@ -1051,6 +1106,9 @@
     "historyAttached": "添付: {{files}}",
     "queued": "次のリクエストと一緒に送信されます",
     "responseCancelled": "応答をキャンセルしました。",
+    "contextCompactedNotice": "このチャットの古い部分は、モデルのコンテキストに収めるために要約されました。",
+    "contextUsage": "コンテキスト {{used}} / {{window}}",
+    "contextUsageTooltip": "コンテキストがいっぱいになると、チャットの古い部分は自動的に要約されます。",
     "webResearchUnavailable": "このプロバイダーのアカウントではWebリサーチを利用できません（Web検索が無効になっています）。このセッションはWebリサーチなしで回答します。恒久的にオフにするには、設定 → AIプロバイダー → 「Webリサーチ」を開いてください。",
     "emptyResponse": "モデルから応答が返されませんでした。思考フェーズのあるモデルでは、プロバイダー設定で出力の上限を高くすると改善します。",
     "outputTruncated": "（省略されました）",

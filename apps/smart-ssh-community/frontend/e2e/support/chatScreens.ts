@@ -43,10 +43,10 @@ export async function openChatWithMessages(app: AppDriver): Promise<string> {
 /** A pending red command with a long line, and a command that is shown
  * without an editor. */
 export async function openChatWithConfirmation(app: AppDriver): Promise<string> {
-  await app.launch({ ...populated(), commands: { suggest_rule_patterns: { result: [
-    { label: "rm -rf /var/lib/app/cache", patternType: "Exact", patternValue: "rm -rf /var/lib/app/cache" },
-    { label: "rm -rf /var/lib/app/*", patternType: "Glob", patternValue: "rm -rf /var/lib/app/*" },
-  ] } } });
+  await app.launch({ ...populated(), commands: { explain_confirmation: { result: { segments: [], suggestions: [
+    { kind: "exact", verdict: { autoExec: true, reasons: [] }, names: [], patterns: [{ patternType: "exact", patternValue: "rm -rf /var/lib/app/cache" }] },
+    { kind: "subcommand", verdict: { autoExec: true, reasons: [] }, names: ["rm -rf"], patterns: [{ patternType: "glob", patternValue: "rm -rf /var/lib/app/*" }] },
+  ] } } } });
   const sessionId = await openSession(app, "db-primary");
   await app.emit(
     "chat-action-proposed",

@@ -251,6 +251,42 @@ impl SqlitePolicyStore {
         self.insert_unchecked(rule).await
     }
 
+    /// Legt mehrere Regeln atomar an (Spec 0011, Abschnitt 3): erst werden
+    /// alle Muster geprüft, dann alle in **einer** Transaktion geschrieben —
+    /// scheitert eines, wird keine gespeichert.
+    pub async fn create_many(&self, rules: &[StoredRule]) -> Result<(), PolicyStoreError> {
+        for rule in rules {
+            rule.pattern
+                .validate()
+                .map_err(PolicyStoreError::InvalidPattern)?;
+        }
+        let mut tx = self.pool.begin().await.map_err(backend_err)?;
+        for rule in rules {
+            let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
+            let (scope_type, scope_value) = scope_to_db(&rule.scope);
+            sqlx::query(
+                "INSERT INTO filter_rules \
+                 (id, pattern_type, pattern_value, action, scope_type, scope_value, priority, \
+                  created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&rule.id.0)
+            .bind(pattern_type)
+            .bind(pattern_value)
+            .bind(action_to_db(&rule.action))
+            .bind(scope_type)
+            .bind(scope_value)
+            .bind(rule.priority)
+            .bind(rule.created_at.to_rfc3339())
+            .bind(rule.updated_at.to_rfc3339())
+            .execute(&mut *tx)
+            .await
+            .map_err(backend_err)?;
+        }
+        tx.commit().await.map_err(backend_err)?;
+        Ok(())
+    }
+
     /// Schreibt ohne Musterprüfung — **nur für Tests**, die eine Regel aus
     /// einer älteren Datenbank nachstellen (Spec 0077, T-6c).
     #[cfg(any(test, feature = "test-support"))]

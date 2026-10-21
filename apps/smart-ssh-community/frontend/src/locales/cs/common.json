@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Úvodní adresář musí být absolutní cesta (/…) nebo začínat ~/.",
       "controlCharacter": "Úvodní adresář nesmí obsahovat řídicí znaky."
+    },
+    "tabs": {
+      "label": "Nastavení serveru",
+      "general": "Obecné",
+      "connection": "Připojení",
+      "security": "Zabezpečení",
+      "invalid": "Obsahuje chyby"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Celkové rozhodnutí",
     "subCommands": "Dílčí příkazy",
     "matchedRuleLabel": "Pravidlo:",
+    "segmentLabel": "Část {{index}}",
+    "checksLabel": "Kontroly:",
     "hardBlacklistLabel": "Pevná černá listina:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Žádné návrhy.",
     "binaryFileHint": "⚠ Binární soubor — textové porovnání není možné. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
     "diffTooLargeHint": "⚠ Obsah je příliš velký pro řádkový rozdíl. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
-    "noContentChange": "(žádná změna obsahu)"
+    "noContentChange": "(žádná změna obsahu)",
+    "quickRuleLabel": {
+      "exact": "Přesně: {{patterns}}",
+      "exactPerSegment": "Přesně po částech: {{patterns}}",
+      "pathScoped": "Stejný adresář: {{patterns}}",
+      "lastArgOpen": "Libovolný poslední argument: {{patterns}}",
+      "subcommand": "Všechna volání `{{names}}`: {{patterns}}",
+      "tool": "Všechna volání `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Části tohoto příkazu",
+      "covered": "pokryto pravidlem {{rule}}",
+      "coveredUnknown": "pokryto existujícím pravidlem",
+      "needsRule": "potřebuje pravidlo",
+      "blocked": "vždy se ptá, ať jsou pravidla jakákoli: {{reasons}}",
+      "verdictAuto": "příště se spustí automaticky",
+      "verdictAsk": "bude se stále ptát: {{reasons}}",
+      "notice": "Pravidlo vytvořeno. Tento příkaz se příště stále bude ptát: {{reasons}}",
+      "reasonOther": "jiná bezpečnostní kontrola"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Bezpečnostní varování · Klíč hostitele se změnil",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Poskytovatel AI momentálně omezuje požadavky (limit) – aplikace to již několikrát automaticky zopakovala. Chvíli počkejte a odešlete zprávu znovu.",
     "AI_NETWORK_ERROR": "Poskytovatel AI není dosažitelný. Zkontrolujte připojení k internetu a u vlastního koncového bodu základní URL, poté odešlete znovu.",
     "AI_INVALID_RESPONSE": "Neočekávaná odpověď od poskytovatele AI",
+    "AI_INVALID_TOOL_CALL": "AI opakovaně volala neexistující nástroj. Zkuste požadavek přeformulovat.",
     "AI_CONTEXT_TOO_LARGE": "Kontext je pro poskytovatele AI příliš velký. Snižte „Max. délku odpovědi (tokeny)“ nebo začněte nový chat.",
     "AI_PROVIDER_UNAVAILABLE": "Poskytovatel AI ohlásil chybu (např. údržbu nebo přetížení). Zkuste to později; pokud přetrvává, zkontrolujte nastavení poskytovatele.",
+    "AI_PROVIDER_OVERLOADED": "Poskytovatel AI je právě přetížený. Zkuste to za chvíli znovu.",
+    "AI_PROVIDER_BILLING": "Účet poskytovatele AI nemá žádný kredit. Zkontrolujte fakturaci v konzoli poskytovatele.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Poskytovatel AI požadavek odmítl.",
     "AI_RESPONSE_TRUNCATED": "Odpověď AI byla na úplný příkaz příliš dlouhá",
     "AI_MODEL_NOT_FOUND": "Poskytovatel AI tento model nezná. Zkontrolujte název modelu v Nastavení („Načíst modely“ vypíše dostupné); u Ollamy jej nejdřív stáhněte příkazem `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Tento model nepodporuje volání nástrojů. V nastavení poskytovatele zrušte zaškrtnutí „Podporuje nativní volání nástrojů“ (pak se použije záložní řešení založené na promptu) nebo vyberte model s podporou nástrojů.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Varování k hlavnímu heslu nebylo potvrzeno. Bez tohoto hesla jsou všechna data ztracena a neexistuje obnova — zaškrtněte políčko a nastavte heslo znovu. Nic se nezměnilo.",
     "KEYCHAIN_KEY_MISMATCH": "Klíč v klíčence nepatří k této databázi. Nic se nezměnilo — jeho uložení by databázi při dalším spuštění učinilo nečitelnou.",
     "SFTP_CONTENT_TOO_LARGE": "Soubor je větší než 50 MB a nelze jej zkopírovat do schránky.",
-    "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky."
+    "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky.",
+    "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje"
   },
   "mcpServer": {
     "hint": "Externí klienti MCP mohou prostřednictvím toho navrhovat příkazy, čtení/zápisy souborů a aktualizace poznámek na povolených serverech — každý požadavek vždy vyžaduje potvrzení v aplikaci, bez ohledu na stávající pravidla povolení.",
@@ -666,7 +699,10 @@
     "editUploadFailed": "Změnu v „{{name}}“ se nepodařilo nahrát: {{reason}}",
     "uploadedFolder": "Složka „{{name}}“ nahrána — souborů: {{count}}",
     "uploadFolderFailed": "Nahrání složky „{{name}}“ selhalo: {{reason}}",
-    "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}"
+    "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}",
+    "nothingToPaste": "Není co vložit: schránka neobsahuje žádné soubory",
+    "createFileDone": "Soubor „{{name}}“ vytvořen",
+    "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Zvýšená práva",
@@ -941,6 +977,8 @@
     "cancelCut": "Zrušit vyjmutí",
     "transferUpload": "Nahrávání: {{name}}",
     "transferDownload": "Stahování: {{name}}",
+    "transferDone": "Hotovo: {{name}}",
+    "transferElevationEnded": "Zvýšený režim byl během přenosu vypnut.",
     "loading": "Načítání…",
     "emptyDirectory": "(prázdný adresář)",
     "dropHint": "Pusťte sem pro nahrání do {{path}}",
@@ -1017,7 +1055,9 @@
       "chmod": "Upravit oprávnění…",
       "rename": "Přejmenovat",
       "cut": "Vyjmout",
-      "delete": "Smazat"
+      "delete": "Smazat",
+      "newFolder": "Nová složka",
+      "newFile": "Nový soubor"
     },
     "properties": {
       "title": "Vlastnosti",
@@ -1048,10 +1088,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Přejmenovat",
-      "newFolderTitle": "Nová složka"
+      "newFolderTitle": "Nová složka",
+      "newFileTitle": "Nový soubor",
+      "invalidName": "Zadejte název bez „/“. „.“ a „..“ nejsou povoleny."
     },
     "copyProgress": "Kopíruji… {{done}} MB z {{total}} MB",
-    "copyProgressUnknownTotal": "Kopíruji… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopíruji… {{done}} MB",
+    "directoryMenuLabel": "Akce složky",
+    "clipboardPaste": {
+      "title": "Nahrát soubory ze schránky",
+      "intro": "Nahrát tyto soubory ze schránky?",
+      "target": "Cílová složka",
+      "more": "… a dalších {{count}}",
+      "confirm": "Nahrát",
+      "cancel": "Zrušit",
+      "menuTitle": "Nahrát soubory ze schránky"
+    }
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",
@@ -1061,6 +1113,9 @@
     "stopAutoContinuation": "Zastavit automatický režim",
     "generating": "AI vytváří odpověď / dokument…",
     "stop": "Zastavit",
+    "tryAgain": "Zkusit znovu",
+    "errorDetails": "Podrobnosti",
+    "aiRetrying": "Poskytovatel AI je přetížen – nový pokus za {{seconds}} s (pokus {{attempt}} z {{max}})",
     "noActiveProvider": "Není nastaven žádný aktivní poskytovatel AI. Nejdříve jej nastavte v nastavení.",
     "inputPlaceholder": "Zeptejte se nebo popište příkaz …",
     "send": "Odeslat",
@@ -1072,6 +1127,9 @@
     "historyAttached": "Přiloženo: {{files}}",
     "queued": "Bude odesláno s dalším požadavkem",
     "responseCancelled": "Odpověď zrušena.",
+    "contextCompactedNotice": "Starší části tohoto chatu byly shrnuty, aby se vešly do kontextu modelu.",
+    "contextUsage": "Kontext {{used}} / {{window}}",
+    "contextUsageTooltip": "Starší části chatu se automaticky shrnou, když se kontext zaplní.",
     "webResearchUnavailable": "Webový průzkum není pro účet tohoto poskytovatele dostupný (vyhledávání na webu je tam vypnuto). Tato relace odpovídá bez webového průzkumu. Trvalé vypnutí: Nastavení → Poskytovatel AI → „Webový průzkum“.",
     "emptyResponse": "Model nevrátil žádnou odpověď. U modelů s fází přemýšlení pomůže vyšší limit výstupu v nastavení poskytovatele.",
     "outputTruncated": "(zkráceno)",

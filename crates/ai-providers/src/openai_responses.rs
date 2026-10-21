@@ -29,12 +29,14 @@ use ssh_manager_core::ai::{
 };
 
 use crate::action::parameters_json_schema;
-use crate::error::{map_transport_error, timeout_error};
+use crate::error::{
+    classify_provider_error, map_transport_error, timeout_error, ProviderErrorInfo,
+};
 use crate::fallback::fallback_system_prompt_addition;
 use crate::openai_compatible::{
     message_content_text, openai_compatible_default_max_tokens,
-    openai_compatible_model_max_output_tokens, retry_stream, role_str, OpenAiStreamState, RawEvent,
-    RetryKind, RetryState,
+    openai_compatible_model_max_output_tokens, retry_stream_with_overload, role_str,
+    OpenAiStreamState, RawEvent, RetryKind, RetryState,
 };
 use crate::request_logging::{log_outgoing_context, log_provider_transport_error};
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
@@ -64,6 +66,8 @@ pub struct OpenAiResponsesProvider {
     max_tokens_override: Option<u32>,
     /// Issue #168: offer the provider's `web_search` tool in the main chat.
     web_research: bool,
+    /// Issue #599: see `AiProvider::last_request_id`.
+    last_request: std::sync::Mutex<Option<Uuid>>,
 }
 
 impl OpenAiResponsesProvider {
@@ -87,6 +91,7 @@ impl OpenAiResponsesProvider {
             budget,
             max_tokens_override,
             web_research: false,
+            last_request: std::sync::Mutex::new(None),
         }
     }
 
@@ -186,23 +191,35 @@ impl AiProvider for OpenAiResponsesProvider {
             .as_u64()
             .unwrap_or(u64::from(model_max_tokens)) as u32;
 
-        retry_stream(RetryState {
-            parse: event_stream_from_response,
-            client: self.client.clone(),
-            url: format!("{}/responses", self.base_url.trim_end_matches('/')),
-            api_key: self.api_key.clone(),
-            native_tool_calling: self.supports_native_tool_calling,
-            request_id,
-            extra_headers: self.extra_headers.clone(),
-            body,
-            max_tokens,
-            model_max_tokens,
-            max_tokens_field: MAX_TOKENS_FIELD,
-            max_tokens_is_user_override,
-            retry_used: RetryKind::None,
-            inner: None,
-            finished: false,
-        })
+        retry_stream_with_overload(
+            "openai_responses",
+            &self.model,
+            &self.last_request,
+            RetryState {
+                parse: event_stream_from_response,
+                client: self.client.clone(),
+                url: format!("{}/responses", self.base_url.trim_end_matches('/')),
+                api_key: self.api_key.clone(),
+                native_tool_calling: self.supports_native_tool_calling,
+                request_id,
+                extra_headers: self.extra_headers.clone(),
+                body,
+                max_tokens,
+                model_max_tokens,
+                max_tokens_field: MAX_TOKENS_FIELD,
+                max_tokens_is_user_override,
+                retry_used: RetryKind::None,
+                inner: None,
+                finished: false,
+            },
+        )
+    }
+
+    fn last_request_id(&self) -> Option<Uuid> {
+        *self
+            .last_request
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -212,6 +229,7 @@ fn event_stream_from_response(
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
+    provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     process_frame_stream(
         Box::pin(sse_frame_stream(response)),
@@ -219,6 +237,7 @@ fn event_stream_from_response(
         request_id,
         api_key,
         extra_headers,
+        provider_request_id,
     )
 }
 
@@ -350,14 +369,35 @@ fn is_url_citation(annotation: &Value) -> bool {
     annotation.get("type").and_then(Value::as_str) == Some("url_citation")
 }
 
-/// Maps a `response.failed` / `error` event to a visible error.
-fn map_stream_error(code: Option<&str>, message: &str) -> AiError {
-    match code {
-        Some("rate_limit_exceeded") | Some("insufficient_quota") => AiError::RateLimited,
+/// Maps a `response.failed` / `error` event to a visible error (Issue #599:
+/// shared classification first, then the Responses-specific codes), and
+/// writes the one WARN line for it.
+fn stream_error(
+    state: &OpenAiStreamState,
+    error_type: Option<&str>,
+    code: Option<&str>,
+    message: &str,
+) -> AiError {
+    let info = ProviderErrorInfo {
+        error_type: error_type.map(str::to_string),
+        code: code.map(str::to_string),
+        message: Some(message.to_string()),
+    };
+    let mapped = map_stream_error(&info);
+    state.report_stream_error(&info, &mapped);
+    mapped
+}
+
+fn map_stream_error(info: &ProviderErrorInfo) -> AiError {
+    if let Some(mapped) = classify_provider_error(None, info) {
+        return mapped;
+    }
+    let message = info.message.clone().unwrap_or_default();
+    match info.code.as_deref() {
         Some("context_length_exceeded") => AiError::ContextTooLarge,
         Some("invalid_api_key") => AiError::AuthenticationFailed,
-        Some("model_not_found") => AiError::ModelNotFound(message.to_string()),
-        _ => AiError::ProviderUnavailable(message.to_string()),
+        Some("model_not_found") => AiError::ModelNotFound(message),
+        _ => AiError::ProviderUnavailable(message),
     }
 }
 
@@ -496,19 +536,21 @@ fn handle_event(
         "response.failed" => {
             let error = event.pointer("/response/error");
             let code = error.and_then(|e| e.get("code")).and_then(Value::as_str);
+            let error_type = error.and_then(|e| e.get("type")).and_then(Value::as_str);
             let message = error
                 .and_then(|e| e.get("message"))
                 .and_then(Value::as_str)
                 .unwrap_or("response failed");
-            return Some(Err(map_stream_error(code, message)));
+            return Some(Err(stream_error(state, error_type, code, message)));
         }
         "error" => {
             let code = event.get("code").and_then(Value::as_str);
+            let error_type = None::<&str>;
             let message = event
                 .get("message")
                 .and_then(Value::as_str)
                 .unwrap_or("stream error");
-            return Some(Err(map_stream_error(code, message)));
+            return Some(Err(stream_error(state, error_type, code, message)));
         }
         _ => {}
     }
@@ -521,6 +563,7 @@ fn process_frame_stream(
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
+    provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     let secrets: Vec<String> = std::iter::once(api_key)
         .chain(extra_headers.into_iter().map(|(_, value)| value))
@@ -536,6 +579,7 @@ fn process_frame_stream(
         pending: VecDeque::new(),
         finished: false,
         request_id,
+        provider_request_id,
         finish_reason: None,
     };
 
@@ -703,5 +747,53 @@ mod attachment_tests {
             ),
             "{events:?}"
         );
+    }
+
+    /// Issue #604: an unknown function call on the Responses path is
+    /// non-fatal; the valid call of the same response is kept.
+    #[tokio::test]
+    async fn test_responses_unknown_tool_is_non_fatal() {
+        use futures::StreamExt;
+        let frame = |data: &str| -> Result<crate::sse::SseFrame, reqwest::Error> {
+            Ok(crate::sse::SseFrame {
+                event: None,
+                data: data.to_string(),
+            })
+        };
+        let frames: Pin<
+            Box<dyn Stream<Item = Result<crate::sse::SseFrame, reqwest::Error>> + Send>,
+        > = Box::pin(futures::stream::iter(vec![
+            frame(
+                r#"{"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","name":"date","arguments":""}}"#,
+            ),
+            frame(
+                r#"{"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","name":"suggest_command","arguments":"{\"command\":\"ls\"}"}}"#,
+            ),
+            frame(r#"{"type":"response.completed"}"#),
+        ]));
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
+        assert!(
+            matches!(
+                &events[0],
+                RawEvent::Public(AiEvent::InvalidToolCall { tool_name, .. }) if tool_name == "date"
+            ),
+            "{events:?}"
+        );
+        assert!(matches!(
+            events[1],
+            RawEvent::Public(AiEvent::ActionProposed(_))
+        ));
+        assert!(!events
+            .iter()
+            .any(|e| matches!(e, RawEvent::Public(AiEvent::Error(_)))));
     }
 }

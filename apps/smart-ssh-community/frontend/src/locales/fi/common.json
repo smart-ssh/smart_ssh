@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Aloitushakemiston on oltava absoluuttinen polku (/…) tai alettava merkinnällä ~/.",
       "controlCharacter": "Aloitushakemisto ei saa sisältää ohjausmerkkejä."
+    },
+    "tabs": {
+      "label": "Palvelimen asetukset",
+      "general": "Yleiset",
+      "connection": "Yhteys",
+      "security": "Suojaus",
+      "invalid": "Sisältää virheitä"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Kokonaispäätös",
     "subCommands": "Alikomennot",
     "matchedRuleLabel": "Sääntö:",
+    "segmentLabel": "Osa {{index}}",
+    "checksLabel": "Tarkistukset:",
     "hardBlacklistLabel": "Kiinteä estolista:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Ei ehdotuksia.",
     "binaryFileHint": "⚠ Binääritiedosto – tekstivertailu ei ole mahdollista. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
     "diffTooLargeHint": "⚠ Sisältö on liian suuri rivikohtaiseen vertailuun. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
-    "noContentChange": "(ei sisällön muutosta)"
+    "noContentChange": "(ei sisällön muutosta)",
+    "quickRuleLabel": {
+      "exact": "Täsmälleen: {{patterns}}",
+      "exactPerSegment": "Täsmälleen osittain: {{patterns}}",
+      "pathScoped": "Sama hakemisto: {{patterns}}",
+      "lastArgOpen": "Mikä tahansa viimeinen argumentti: {{patterns}}",
+      "subcommand": "Kaikki `{{names}}`-kutsut: {{patterns}}",
+      "tool": "Kaikki `{{names}}`-kutsut: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Tämän komennon osat",
+      "covered": "kattaa sääntö {{rule}}",
+      "coveredUnknown": "kattaa olemassa oleva sääntö",
+      "needsRule": "tarvitsee säännön",
+      "blocked": "kysyy aina säännöistä riippumatta: {{reasons}}",
+      "verdictAuto": "suoritetaan ensi kerralla automaattisesti",
+      "verdictAsk": "kysyy edelleen: {{reasons}}",
+      "notice": "Sääntö luotu. Tämä komento kysyy ensi kerrallakin: {{reasons}}",
+      "reasonOther": "toinen turvatarkistus"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Turvavaroitus · Isäntäavain muuttunut",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Tekoälyn palveluntarjoaja rajoittaa pyyntöjä (pyyntöraja) – sovellus yritti jo automaattisesti muutaman kerran. Odota hetki ja lähetä viesti uudelleen.",
     "AI_NETWORK_ERROR": "Tekoälyn palveluntarjoajaa ei tavoiteta. Tarkista internet-yhteys ja mukautetussa päätepisteessä perus-URL ja lähetä sitten uudelleen.",
     "AI_INVALID_RESPONSE": "Odottamaton vastaus tekoälyn palveluntarjoajalta",
+    "AI_INVALID_TOOL_CALL": "Tekoäly kutsui toistuvasti työkalua, jota ei ole. Kokeile muotoilla pyyntö uudelleen.",
     "AI_CONTEXT_TOO_LARGE": "Konteksti on liian suuri tekoälyn palveluntarjoajalle. Pienennä kohtaa \"Vastauksen enimmäispituus (tokenia)\" tai aloita uusi keskustelu.",
     "AI_PROVIDER_UNAVAILABLE": "Tekoälyn palveluntarjoaja ilmoitti virheestä (esim. huolto tai ylikuormitus). Yritä myöhemmin uudelleen; jos ongelma jatkuu, tarkista palveluntarjoajan asetukset.",
+    "AI_PROVIDER_OVERLOADED": "Tekoälypalvelun tarjoaja on juuri nyt ylikuormitettu. Yritä hetken kuluttua uudelleen.",
+    "AI_PROVIDER_BILLING": "Tekoälypalvelun tilillä ei ole enää saldoa. Tarkista laskutus palveluntarjoajan konsolista.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Tekoälypalvelun tarjoaja hylkäsi pyynnön.",
     "AI_RESPONSE_TRUNCATED": "Tekoälyn vastaus oli liian pitkä täydelliseksi komennoksi",
     "AI_MODEL_NOT_FOUND": "Tekoälyn palveluntarjoaja ei tunne tätä mallia. Tarkista mallin nimi asetuksista (\"Lataa mallit\" listaa saatavilla olevat); Ollamalle lataa se ensin komennolla `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Tämä malli ei tue työkalukutsuja. Poista palveluntarjoajan asetuksista valinta \"Tukee natiivia työkalukutsua\" (silloin käytetään kehotepohjaista varatapaa) tai valitse malli, jolla on työkalutuki.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Pääsalasanan varoitusta ei ole vahvistettu. Ilman salasanaa kaikki tiedot menetetään eikä palautusta ole – valitse ruutu ja määritä uudelleen. Mitään ei muutettu.",
     "KEYCHAIN_KEY_MISMATCH": "Avainrenkaan avain ei kuulu tähän tietokantaan. Mitään ei muutettu – tallennus tekisi tietokannasta lukukelvottoman seuraavassa käynnistyksessä.",
     "SFTP_CONTENT_TOO_LARGE": "Tiedosto on yli 50 Mt eikä sitä voi kopioida leikepöydälle.",
-    "CLIPBOARD_FILE_FAILED": "Tiedostoa ei voitu asettaa leikepöydälle tässä järjestelmässä."
+    "CLIPBOARD_FILE_FAILED": "Tiedostoa ei voitu asettaa leikepöydälle tässä järjestelmässä.",
+    "SSH_SFTP_ALREADY_EXISTS": "Tämänniminen tiedosto tai kansio on jo olemassa"
   },
   "mcpServer": {
     "hint": "Ulkoiset MCP-asiakkaat voivat ehdottaa sen kautta komentoja, tiedostojen lukua ja kirjoitusta sekä muistiinpanojen päivityksiä sallituilla palvelimilla – jokainen pyyntö vaatii aina vahvistuksen sovelluksessa, voimassa olevista sallimissäännöistä riippumatta.",
@@ -656,7 +689,10 @@
     "editUploadFailed": "Kohteen “{{name}}” muutosta ei voitu lähettää: {{reason}}",
     "uploadedFolder": "Kansio “{{name}}” lähetetty – {{count}} tiedostoa",
     "uploadFolderFailed": "Kansion “{{name}}” lähetys epäonnistui: {{reason}}",
-    "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}"
+    "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}",
+    "nothingToPaste": "Ei liitettävää: leikepöydällä ei ole tiedostoja",
+    "createFileDone": "Tiedosto ”{{name}}” luotu",
+    "createFileFailed": "Tiedostoa ”{{name}}” ei voitu luoda: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Korotetut oikeudet",
@@ -931,6 +967,8 @@
     "cancelCut": "Peru leikkaus",
     "transferUpload": "Lähetetään: {{name}}",
     "transferDownload": "Ladataan: {{name}}",
+    "transferDone": "Valmis: {{name}}",
+    "transferElevationEnded": "Korotettu tila kytkettiin pois siirron aikana.",
     "loading": "Ladataan…",
     "emptyDirectory": "(tyhjä hakemisto)",
     "dropHint": "Pudota tähän lähettääksesi kohteeseen {{path}}",
@@ -1003,7 +1041,9 @@
       "chmod": "Muokkaa oikeuksia…",
       "rename": "Nimeä uudelleen",
       "cut": "Leikkaa",
-      "delete": "Poista"
+      "delete": "Poista",
+      "newFolder": "Uusi kansio",
+      "newFile": "Uusi tiedosto"
     },
     "properties": {
       "title": "Ominaisuudet",
@@ -1034,10 +1074,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Nimeä uudelleen",
-      "newFolderTitle": "Uusi kansio"
+      "newFolderTitle": "Uusi kansio",
+      "newFileTitle": "Uusi tiedosto",
+      "invalidName": "Anna nimi ilman merkkiä ”/”. ”.” ja ”..” eivät ole sallittuja."
     },
     "copyProgress": "Kopioidaan… {{done}} Mt / {{total}} Mt",
-    "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt"
+    "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt",
+    "directoryMenuLabel": "Kansion toiminnot",
+    "clipboardPaste": {
+      "title": "Lähetä tiedostot leikepöydältä",
+      "intro": "Lähetetäänkö nämä tiedostot leikepöydältä?",
+      "target": "Kohdekansio",
+      "more": "… ja {{count}} muuta",
+      "confirm": "Lähetä",
+      "cancel": "Peruuta",
+      "menuTitle": "Lähetä leikepöydän tiedostot"
+    }
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
@@ -1047,6 +1099,9 @@
     "stopAutoContinuation": "Lopeta automaattitila",
     "generating": "Tekoäly luo vastausta tai asiakirjaa…",
     "stop": "Pysäytä",
+    "tryAgain": "Yritä uudelleen",
+    "errorDetails": "Tiedot",
+    "aiRetrying": "Tekoälypalvelu on ylikuormitettu – yritetään uudelleen {{seconds}} s kuluttua (yritys {{attempt}}/{{max}})",
     "noActiveProvider": "Aktiivista tekoälyn palveluntarjoajaa ei ole määritetty. Määritä sellainen ensin asetuksissa.",
     "inputPlaceholder": "Esitä kysymys tai kuvaile komento …",
     "send": "Lähetä",
@@ -1058,6 +1113,9 @@
     "historyAttached": "Liitteenä: {{files}}",
     "queued": "Lähetetään seuraavan pyynnön mukana",
     "responseCancelled": "Vastaus peruttu.",
+    "contextCompactedNotice": "Tämän keskustelun vanhempia osia tiivistettiin, jotta ne mahtuvat mallin kontekstiin.",
+    "contextUsage": "Konteksti {{used}} / {{window}}",
+    "contextUsageTooltip": "Keskustelun vanhemmat osat tiivistetään automaattisesti, kun konteksti täyttyy.",
     "webResearchUnavailable": "Verkkotutkimus ei ole käytettävissä tälle palveluntarjoajatilille (verkkohaku on siellä poistettu käytöstä). Tämä istunto vastaa ilman verkkotutkimusta. Poistaaksesi sen pysyvästi käytöstä: Asetukset → Tekoälyn palveluntarjoaja → “Verkkotutkimus”.",
     "emptyResponse": "Malli ei palauttanut vastausta. Ajattelujaksolla varustetuilla malleilla auttaa korkeampi tulostusraja palveluntarjoajan asetuksissa.",
     "outputTruncated": "(katkaistu)",

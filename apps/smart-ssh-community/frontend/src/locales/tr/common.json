@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Başlangıç dizini mutlak bir yol (/…) olmalı veya ~/ ile başlamalıdır.",
       "controlCharacter": "Başlangıç dizini denetim karakterleri içermemelidir."
+    },
+    "tabs": {
+      "label": "Sunucu ayarları",
+      "general": "Genel",
+      "connection": "Bağlantı",
+      "security": "Güvenlik",
+      "invalid": "Hatalar içeriyor"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Genel karar",
     "subCommands": "Alt komutlar",
     "matchedRuleLabel": "Kural:",
+    "segmentLabel": "Bölüm {{index}}",
+    "checksLabel": "Denetimler:",
     "hardBlacklistLabel": "Katı kara liste:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Öneri yok.",
     "binaryFileHint": "⚠ İkili dosya — metin karşılaştırması mümkün değil. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
     "diffTooLargeHint": "⚠ İçerik satır farkı için çok büyük. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
-    "noContentChange": "(içerik değişikliği yok)"
+    "noContentChange": "(içerik değişikliği yok)",
+    "quickRuleLabel": {
+      "exact": "Tam: {{patterns}}",
+      "exactPerSegment": "Parça başına tam: {{patterns}}",
+      "pathScoped": "Aynı dizin: {{patterns}}",
+      "lastArgOpen": "Herhangi bir son argüman: {{patterns}}",
+      "subcommand": "Tüm `{{names}}` çağrıları: {{patterns}}",
+      "tool": "Tüm `{{names}}` çağrıları: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Bu komutun parçaları",
+      "covered": "{{rule}} kuralıyla kapsanıyor",
+      "coveredUnknown": "mevcut bir kuralla kapsanıyor",
+      "needsRule": "kural gerekiyor",
+      "blocked": "kurallardan bağımsız olarak her zaman sorar: {{reasons}}",
+      "verdictAuto": "bir dahaki sefere otomatik çalışır",
+      "verdictAsk": "yine de soracak: {{reasons}}",
+      "notice": "Kural oluşturuldu. Bu komut bir dahaki sefere yine soracak: {{reasons}}",
+      "reasonOther": "başka bir güvenlik denetimi"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Güvenlik uyarısı · Ana makine anahtarı değişti",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Yapay zeka sağlayıcısı şu an istekleri kısıtlıyor (hız sınırı) – uygulama zaten birkaç kez otomatik yeniden denedi. Lütfen biraz bekleyin ve mesajı yeniden gönderin.",
     "AI_NETWORK_ERROR": "Yapay zeka sağlayıcısına ulaşılamıyor. İnternet bağlantınızı ve özel uç noktada temel URL'yi denetleyin, sonra yeniden gönderin.",
     "AI_INVALID_RESPONSE": "Yapay zeka sağlayıcısından beklenmeyen yanıt",
+    "AI_INVALID_TOOL_CALL": "Yapay zeka var olmayan bir aracı çağırmaya devam etti. İsteği farklı ifade etmeyi deneyin.",
     "AI_CONTEXT_TOO_LARGE": "Bağlam yapay zeka sağlayıcısı için çok büyük. \"Maks. yanıt uzunluğu (token)\" değerini düşürün veya yeni bir sohbet başlatın.",
     "AI_PROVIDER_UNAVAILABLE": "Yapay zeka sağlayıcısı bir hata bildirdi (örn. bakım veya aşırı yük). Daha sonra yeniden deneyin; sürerse sağlayıcı ayarlarını denetleyin.",
+    "AI_PROVIDER_OVERLOADED": "Yapay zekâ sağlayıcısı şu anda aşırı yüklü. Biraz sonra tekrar deneyin.",
+    "AI_PROVIDER_BILLING": "Yapay zekâ sağlayıcısı hesabında kredi kalmadı. Sağlayıcının konsolunda faturalandırmayı kontrol edin.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Yapay zekâ sağlayıcısı isteği reddetti.",
     "AI_RESPONSE_TRUNCATED": "Yapay zeka yanıtı tam bir komut için çok uzundu",
     "AI_MODEL_NOT_FOUND": "Yapay zeka sağlayıcısı bu modeli tanımıyor. Ayarlar'da model adını denetleyin (\"Modelleri yükle\" kullanılabilir olanları listeler); Ollama için önce `ollama pull <name>` ile indirin.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Bu model araç çağırmayı desteklemiyor. Sağlayıcı ayarlarında \"Yerel araç çağırmayı destekler\" işaretini kaldırın (o zaman istem tabanlı yedek yöntem kullanılır) veya araç destekli bir model seçin.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Ana parola uyarısı onaylanmadı. Bu parola olmadan tüm veriler kaybolur ve kurtarma yoktur — kutuyu işaretleyin ve yeniden kurun. Hiçbir şey değiştirilmedi.",
     "KEYCHAIN_KEY_MISMATCH": "Anahtarlıktaki anahtar bu veritabanına ait değil. Hiçbir şey değiştirilmedi — saklamak, veritabanını bir sonraki başlatmada okunamaz hale getirirdi.",
     "SFTP_CONTENT_TOO_LARGE": "Dosya 50 MB'tan büyük olduğu için panoya kopyalanamaz.",
-    "CLIPBOARD_FILE_FAILED": "Dosya bu sistemde panoya konulamadı."
+    "CLIPBOARD_FILE_FAILED": "Dosya bu sistemde panoya konulamadı.",
+    "SSH_SFTP_ALREADY_EXISTS": "Bu adda bir dosya veya klasör zaten var"
   },
   "mcpServer": {
     "hint": "Harici MCP istemcileri bununla izin listesindeki sunucularda komut, dosya okuma/yazma ve not güncellemesi önerebilir — mevcut izin kurallarından bağımsız olarak her istek uygulamada her zaman onay gerektirir.",
@@ -656,7 +689,10 @@
     "editUploadFailed": "“{{name}}” değişikliği yüklenemedi: {{reason}}",
     "uploadedFolder": "“{{name}}” klasörü yüklendi — {{count}} dosya",
     "uploadFolderFailed": "“{{name}}” klasörü yüklenemedi: {{reason}}",
-    "uploadFailedMany": "{{name}} dosya yüklenemedi, örn.: {{reason}}"
+    "uploadFailedMany": "{{name}} dosya yüklenemedi, örn.: {{reason}}",
+    "nothingToPaste": "Yapıştırılacak bir şey yok: panoda dosya yok",
+    "createFileDone": "“{{name}}” dosyası oluşturuldu",
+    "createFileFailed": "“{{name}}” dosyası oluşturulamadı: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Yükseltilmiş haklar",
@@ -931,6 +967,8 @@
     "cancelCut": "Kesmeyi iptal et",
     "transferUpload": "Yükleniyor: {{name}}",
     "transferDownload": "İndiriliyor: {{name}}",
+    "transferDone": "Tamamlandı: {{name}}",
+    "transferElevationEnded": "Aktarım sırasında yükseltilmiş mod kapatıldı.",
     "loading": "Yükleniyor…",
     "emptyDirectory": "(boş dizin)",
     "dropHint": "{{path}} konumuna yüklemek için buraya bırakın",
@@ -1003,7 +1041,9 @@
       "chmod": "İzinleri düzenle…",
       "rename": "Yeniden adlandır",
       "cut": "Kes",
-      "delete": "Sil"
+      "delete": "Sil",
+      "newFolder": "Yeni klasör",
+      "newFile": "Yeni dosya"
     },
     "properties": {
       "title": "Özellikler",
@@ -1034,10 +1074,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Yeniden adlandır",
-      "newFolderTitle": "Yeni klasör"
+      "newFolderTitle": "Yeni klasör",
+      "newFileTitle": "Yeni dosya",
+      "invalidName": "“/” içermeyen bir ad girin. “.” ve “..” kullanılamaz."
     },
     "copyProgress": "Kopyalanıyor… {{done}} / {{total}} MB",
-    "copyProgressUnknownTotal": "Kopyalanıyor… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopyalanıyor… {{done}} MB",
+    "directoryMenuLabel": "Klasör eylemleri",
+    "clipboardPaste": {
+      "title": "Panodaki dosyaları yükle",
+      "intro": "Panodaki bu dosyalar yüklensin mi?",
+      "target": "Hedef klasör",
+      "more": "… ve {{count}} tane daha",
+      "confirm": "Yükle",
+      "cancel": "İptal",
+      "menuTitle": "Panodaki dosyaları yükle"
+    }
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",
@@ -1047,6 +1099,9 @@
     "stopAutoContinuation": "Otomatik modu durdur",
     "generating": "Yapay zeka yanıt / belge oluşturuyor…",
     "stop": "Durdur",
+    "tryAgain": "Yeniden dene",
+    "errorDetails": "Ayrıntılar",
+    "aiRetrying": "Yapay zekâ sağlayıcısı aşırı yüklü – {{seconds}} sn sonra yeniden denenecek (deneme {{attempt}}/{{max}})",
     "noActiveProvider": "Etkin yapay zeka sağlayıcısı yapılandırılmadı. Lütfen önce ayarlardan kurun.",
     "inputPlaceholder": "Bir soru sorun veya bir komutu tanımlayın …",
     "send": "Gönder",
@@ -1058,6 +1113,9 @@
     "historyAttached": "Ekli: {{files}}",
     "queued": "Bir sonraki istekle gönderilecek",
     "responseCancelled": "Yanıt iptal edildi.",
+    "contextCompactedNotice": "Bu sohbetin eski bölümleri, modelin bağlamına sığması için özetlendi.",
+    "contextUsage": "Bağlam {{used}} / {{window}}",
+    "contextUsageTooltip": "Bağlam dolduğunda sohbetin eski bölümleri otomatik olarak özetlenir.",
     "webResearchUnavailable": "Web araştırması bu sağlayıcı hesabı için kullanılamıyor (orada web araması devre dışı). Bu oturum web araştırması olmadan yanıt verir. Kalıcı olarak kapatmak için: Ayarlar → Yapay zeka sağlayıcısı → “Web araştırması”.",
     "emptyResponse": "Model yanıt döndürmedi. Düşünme aşamalı modellerde sağlayıcı ayarlarında daha yüksek bir çıktı sınırı yardımcı olur.",
     "outputTruncated": "(kesildi)",

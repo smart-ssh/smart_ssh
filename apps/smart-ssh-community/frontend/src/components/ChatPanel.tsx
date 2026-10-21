@@ -1,3 +1,4 @@
+import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -16,6 +17,7 @@ import {
   commandErrorCode,
   commandErrorMessage,
   continueTruncatedResponse,
+  retryChatTurn,
   exportDocument,
   getChatHistory,
   listAiProviders,
@@ -24,7 +26,7 @@ import {
   sendChatMessage,
   stopAutoContinuation,
   startNewChat,
-  suggestRulePatterns,
+  explainConfirmation,
   takeChatContentIntoNote,
 } from "../api";
 import {
@@ -39,22 +41,26 @@ import {
   onChatDocumentGenerated,
   onChatQuestionAsked,
   onChatError,
+  onChatAiRetrying,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseEmpty,
   onChatWebResearchUnavailable,
   onChatResponseTruncated,
+  onChatContextUsage,
+  onChatContextCompacted,
   onChatTextDelta,
   onChatWebActivity,
   onRiskAssessmentUpdated,
 } from "../events";
-import { translateErrorCode } from "../errorCodes";
+import { isRetryableAiError, translateErrorCode } from "../errorCodes";
 import {
   appendToDraft,
   loadVoiceInputEnabled,
   subscribeVoiceInputEnabled,
 } from "../voiceInputSettings";
 import { useStickToBottom } from "../hooks/useStickToBottom";
+import type { VoiceHandlers, VoicePhase } from "../useVoiceInput";
 import { VoiceInputControl } from "./VoiceInputControl";
 import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { LiveCommandOutput } from "./LiveCommandOutput";
@@ -67,6 +73,7 @@ import {
   listDocumentActions,
   subscribeComposer,
 } from "../extensions/registry";
+import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
 import {
   initialHistoryNavState,
@@ -81,8 +88,10 @@ import type {
   AiAction,
   Decision,
   DocumentFormat,
-  PatternSuggestionDto,
-  PatternType,
+  ExplainedSuggestionDto,
+  ConfirmationExplanationDto,
+  SuggestionVerdictDto,
+  SuggestionPatternDto,
   RiskAssessment,
   Scope,
   WebActivityDto,
@@ -174,7 +183,20 @@ export type ChatItem =
        * oder generischer Text>" statt des internen Chat-Flows. */
       origin: ActionOrigin;
     }
-  | { type: "error"; id: string; message: string; code: string | null }
+  | {
+      type: "error";
+      id: string;
+      message: string;
+      code: string | null;
+      /** Issue #600 — provider details (backend-redacted) and whether
+       * "Try again" is offered. */
+      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null };
+      retryable?: boolean;
+    }
+  // Issue #596: a rule was created from the confirmation card but the
+  // command will still ask next time; `reasons` are backend reason codes.
+  | { type: "ruleNotice"; id: string; reasons: string[] }
+  | { type: "contextCompacted"; id: string }
   | { type: "autoContinuationLimitReached"; id: string; limit: number }
   // Spec 0080, A3: eine Runde ohne Text und ohne vorgeschlagene Aktion
   // (`chat-response-empty`) — reines UI-Element aus dem Event, kein
@@ -334,6 +356,11 @@ interface ChatPanelProps {
 export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }: ChatPanelProps) {
   const { t } = useTranslation();
   const [items, setItems] = useState<ChatItem[]>([]);
+  // Issue #601: last real input size reported by the provider (numbers only).
+  const [contextUsage, setContextUsage] = useState<{
+    inputTokens: number;
+    windowTokens: number;
+  } | null>(null);
   const [draft, setDraft] = useState("");
   // Issue #471: Composer-Erweiterungspunkt, ausstehende Anhänge, Fehler am Eingabefeld.
   const composerActions = useSyncExternalStore(subscribeComposer, listComposerActions);
@@ -355,6 +382,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const dropHandlersRef = useRef(dropHandlers);
   dropHandlersRef.current = dropHandlers;
   const hasDropHandler = dropHandlers.length > 0;
+  const [dropOver, setDropOver] = useState(false);
   // Native Drops auf den Chat gehen an die registrierten Handler; ohne
   // Handler bleibt der Listener aus und das Ablegen tut im Chat nichts.
   // Pfade verlassen das Backend nicht (ADR 0113): der Handler holt sie dort.
@@ -364,15 +392,19 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     let cancelled = false;
     getCurrentWebview()
       .onDragDropEvent((event) => {
-        if (event.payload.type !== "drop") return;
-        const el = chatAreaRef.current;
-        // Nur das sichtbare Chat-Feld (ein ausgeblendeter Tab hat keinen offsetParent).
-        if (!el || el.offsetParent === null) return;
-        const rect = el.getBoundingClientRect();
-        const ratio = window.devicePixelRatio || 1;
-        const x = event.payload.position.x / ratio;
-        const y = event.payload.position.y / ratio;
-        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+        const payload = event.payload;
+        if (payload.type === "leave") {
+          setDropOver(false);
+          return;
+        }
+        // Only the visible chat area, and only under the pointer.
+        const inside = isPointerInside(chatAreaRef.current, payload.position);
+        if (payload.type === "over" || payload.type === "enter") {
+          setDropOver(inside);
+          return;
+        }
+        setDropOver(false);
+        if (!inside) return;
         for (const handler of dropHandlersRef.current) {
           void Promise.resolve(handler(composerCtxRef.current)).catch((err) =>
             setComposerError(commandErrorMessage(err)),
@@ -386,6 +418,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     return () => {
       cancelled = true;
       unlisten?.();
+      setDropOver(false);
     };
   }, [hasDropHandler]);
   const [sending, setSending] = useState(false);
@@ -403,6 +436,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * zuverlässige "die ganze Kette ist zu Ende"-Signal, unabhängig davon, ob
    * sie regulär endete, am Sicherheits-Cap oder durch "Automatik stoppen". */
   const [autoContinuing, setAutoContinuing] = useState(false);
+  // Issue #600: provider overloaded, automatic retry pending.
+  const [retrying, setRetrying] = useState<{ attempt: number; max: number; deadline: number } | null>(null);
+  const [retryNow, setRetryNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!retrying) return;
+    const id = window.setInterval(() => setRetryNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [retrying]);
   /** Issue #271: „Neuer Chat" läuft (Doppelklick-Schutz) bzw. ist gescheitert. */
   const [startingNewChat, setStartingNewChat] = useState(false);
   const [newChatError, setNewChatError] = useState<string | null>(null);
@@ -437,6 +478,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // Spec 0108: Spracheingabe an/aus (Standard an); der erkannte Text geht
   // über `handleDraftChange` in den Entwurf, nie direkt an die KI.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>("idle");
+  const [voiceFocusPending, setVoiceFocusPending] = useState(false);
+  const voiceBaseRef = useRef<string | null>(null);
   useEffect(() => {
     loadVoiceInputEnabled()
       .then(setVoiceEnabled)
@@ -549,6 +593,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     const unlisten = [
       onChatTextDelta((event) => {
         if (event.sessionId !== sessionId) return;
+        setRetrying(null);
         setItems((prev) => {
           const last = prev[prev.length - 1];
           if (last?.type === "assistant") {
@@ -559,6 +604,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       }),
       onChatActionProposed((event) => {
         if (event.sessionId !== sessionId) return;
+        setRetrying(null);
         // Spec 0026, Abschnitt 3/4: eine Zweitmeinung ist nur zu erwarten,
         // wenn sie aktiviert ist UND die Regel-Einschätzung überhaupt noch
         // Raum nach oben hat (ein bereits regelbasiertes "red" kann nicht
@@ -684,10 +730,47 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       }),
       onChatError((event) => {
         if (event.sessionId !== sessionId) return;
-        setItems((prev) => [
-          ...prev,
-          { type: "error", id: freshId(), message: event.message, code: event.code ?? null },
-        ]);
+        setRetrying(null);
+        setItems((prev) => {
+          // Issue #600: "Try again" only when nothing but the user's own
+          // message came since the last user turn (no reply, command or
+          // proposal that a resend would repeat or contradict).
+          let retryable = isRetryableAiError(event.code);
+          let sawUser = false;
+          for (let i = prev.length - 1; retryable && i >= 0; i--) {
+            const it = prev[i];
+            if (it.type === "user") {
+              sawUser = true;
+              break;
+            }
+            if (it.type === "assistant" || it.type === "action" || it.type === "error") retryable = false;
+          }
+          if (!sawUser) retryable = false;
+          return [
+            ...prev,
+            {
+              type: "error",
+              id: freshId(),
+              message: event.message,
+              code: event.code ?? null,
+              details: {
+                providerErrorType: event.providerErrorType,
+                httpStatus: event.httpStatus,
+                providerMessage: event.providerMessage,
+              },
+              retryable,
+            },
+          ];
+        });
+      }),
+      onChatAiRetrying((event) => {
+        if (event.sessionId !== sessionId) return;
+        setRetryNow(Date.now());
+        setRetrying({
+          attempt: event.attempt,
+          max: event.maxAttempts,
+          deadline: Date.now() + event.delaySecs * 1000,
+        });
       }),
       onChatResponseTruncated((event) => {
         if (event.sessionId !== sessionId) return;
@@ -736,8 +819,17 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
         );
       }),
+      onChatContextUsage((event) => {
+        if (event.sessionId !== sessionId) return;
+        setContextUsage({ inputTokens: event.inputTokens, windowTokens: event.windowTokens });
+      }),
+      onChatContextCompacted((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) => [...prev, { type: "contextCompacted", id: freshId() }]);
+      }),
       onChatResponseCancelled((event) => {
         if (event.sessionId !== sessionId) return;
+        setRetrying(null);
         setItems((prev) => [...prev, { type: "responseCancelled", id: freshId() }]);
       }),
       onChatAutoContinuationLimitReached((event) => {
@@ -862,10 +954,10 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * Kommando erscheinen. */
   const acceptWithRule = (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -878,12 +970,25 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     acceptAndCreateRule(
       sessionId,
       actionId,
-      patternType,
-      patternValue,
+      patterns,
       scope,
       undefined,
       editedCommand,
-    ).catch((err) =>
+    )
+      .then(() => {
+        // Issue #596: no silent failure — repeat why the command still asks.
+        if (verdict && !verdict.autoExec) {
+          setItems((prev) => [
+            ...prev,
+            {
+              type: "ruleNotice",
+              id: freshId(),
+              reasons: verdict.reasons.map((r) => r.code),
+            },
+          ]);
+        }
+      })
+      .catch((err) =>
       setItems((prev) => [
         ...prev,
         // Spec 0077, 3.1.4: Code weiterreichen statt `null`, damit ein
@@ -927,6 +1032,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     await runSend(() => continueTruncatedResponse(sessionId));
   };
 
+  /** Issue #600: "Try again" on a retryable error card. */
+  const handleRetryTurn = async (itemId: string) => {
+    if (sending) return;
+    setItems((prev) => prev.filter((it) => it.id !== itemId));
+    await runSend(() => retryChatTurn(sessionId));
+  };
+
   const runSend = async (call: () => Promise<void>) => {
     pendingSendsRef.current += 1;
     setSending(true);
@@ -948,6 +1060,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       if (pendingSendsRef.current === 0) {
         setSending(false);
         setAutoContinuing(false);
+        setRetrying(null);
         // Läuft im Backend nichts mehr, wartet auch keine Nachricht mehr.
         setItems((prev) =>
           prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
@@ -973,7 +1086,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || voicePhase !== "idle") return;
     const sentAttachments = attachments;
     setComposerError(null);
     // Spec 0066, §2: läuft schon eine Antwort, reiht das Backend die
@@ -1180,13 +1293,54 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   };
 
   draftRef.current = draft;
-  const handleVoiceText = (text: string) => {
-    handleDraftChange(appendToDraft(draftRef.current, text));
-    inputRef.current?.focus();
-  };
+  // Spec 0108 §5.2: live text. The draft before Start is kept; provisional
+  // text replaces everything after it, so no merging with edits is needed
+  // (the input is read-only meanwhile).
+  const voiceHandlers = useMemo<VoiceHandlers>(() => {
+    const showAfterBase = (text: string) => {
+      const base = voiceBaseRef.current;
+      if (base === null) return;
+      setDraft(appendToDraft(base, text));
+    };
+    return {
+      onStart: () => {
+        voiceBaseRef.current = draftRef.current;
+      },
+      onPartial: showAfterBase,
+      onFinal: (text) => {
+        showAfterBase(text);
+        voiceBaseRef.current = null;
+        setVoiceFocusPending(true);
+      },
+      onFailed: () => {
+        voiceBaseRef.current = null;
+        setVoiceFocusPending(true);
+      },
+      onCancel: () => {
+        if (voiceBaseRef.current !== null) setDraft(voiceBaseRef.current);
+        voiceBaseRef.current = null;
+      },
+    };
+  }, []);
+  const voiceLocked = voicePhase !== "idle";
+  // Once the input is editable again: focus it, caret at the end.
+  useEffect(() => {
+    if (!voiceFocusPending || voiceLocked) return;
+    setVoiceFocusPending(false);
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [voiceFocusPending, voiceLocked]);
 
   return (
-    <div ref={chatAreaRef} className="flex h-full flex-col">
+    <div ref={chatAreaRef} className="relative flex h-full flex-col">
+      {hasDropHandler && dropOver && (
+        <div
+          data-testid="chat-drop-highlight"
+          className="pointer-events-none absolute inset-0 z-10 border-2 border-dashed border-indigo-500 bg-indigo-950/30"
+        />
+      )}
       {readOnlyHint === undefined && (
         <div className="flex items-center justify-end gap-2 border-b border-slate-700 px-3 py-1.5">
           {newChatError !== null && (
@@ -1221,6 +1375,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
             onContinueTruncated={handleContinueTruncated}
+            onRetryTurn={handleRetryTurn}
+            retryDisabled={sending}
             questionState={questionStates.get(item.id)}
             onQuestionAnswer={handleQuestionAnswer}
             serverId={serverId}
@@ -1231,7 +1387,23 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
          * Stopp-Möglichkeit hat Vorrang vor dem generischen
          * "generiert Antwort"-Hinweis — sobald eine automatische Folgerunde
          * läuft, ist das die genauere, handlungsfähigere Information. */}
-        {autoContinuing ? (
+        {retrying ? (
+          <output
+            data-testid="chat-ai-retrying"
+            className="flex items-center gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200"
+          >
+            <span className="flex-1">
+              {t("chat.aiRetrying", {
+                seconds: Math.max(0, Math.ceil((retrying.deadline - retryNow) / 1000)),
+                attempt: retrying.attempt + 1,
+                max: retrying.max + 1,
+              })}
+            </span>
+            <Button size="sm" onClick={handleStopAutoContinuation}>
+              {t("chat.stop")}
+            </Button>
+          </output>
+        ) : autoContinuing ? (
           <div className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
             <span className="flex-1">
@@ -1311,6 +1483,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               ))}
             </ul>
           )}
+        {contextUsage && (
+          <ContextUsageIndicator
+            inputTokens={contextUsage.inputTokens}
+            windowTokens={contextUsage.windowTokens}
+          />
+        )}
         <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3">
           <span className="self-start py-1.5 font-mono text-sm leading-5 text-indigo-500">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
@@ -1322,10 +1500,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             ref={inputRef}
             rows={1}
             value={draft}
+            readOnly={voiceLocked}
+            data-provisional={voiceLocked ? "true" : undefined}
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className="max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className={`max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-slate-400" : "text-slate-100"} placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
           />
           {composerActions.map((action) => (
             <button
@@ -1345,8 +1525,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               {action.icon}
             </button>
           ))}
-          {voiceEnabled && <VoiceInputControl onText={handleVoiceText} panelRef={chatAreaRef} />}
-          <Button type="submit" variant="primary" disabled={draft.trim().length === 0}>
+          {voiceEnabled && (
+            <VoiceInputControl
+              handlers={voiceHandlers}
+              onPhaseChange={setVoicePhase}
+              panelRef={chatAreaRef}
+            />
+          )}
+          <Button type="submit" variant="primary" disabled={draft.trim().length === 0 || voiceLocked}>
             {t("chat.send")}
           </Button>
         </form>
@@ -1442,6 +1628,56 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
 // Exportiert für Komponententests (Spec 0029, Abschnitt 4: strukturelle
 // DOM-Prüfung der Badge-Position) — sonst rein intern von `ChatPanel`
 // genutzt.
+/** Issue #600: "Details" (collapsed, copyable) and "Try again" below the
+ * translated text of an AI error card. */
+function ErrorCardExtras({
+  item,
+  onRetryTurn,
+  retryDisabled,
+}: {
+  item: Extract<ChatItem, { type: "error" }>;
+  onRetryTurn?: (itemId: string) => void;
+  retryDisabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState<"ok" | "failed" | null>(null);
+  const d = item.details;
+  const lines: string[] = [];
+  if (item.code) lines.push(`code: ${item.code}`);
+  if (d?.providerErrorType) lines.push(`type: ${d.providerErrorType}`);
+  if (item.code) lines.push(`status: ${d?.httpStatus ?? "stream"}`);
+  if (d?.providerMessage) lines.push(`message: ${d.providerMessage}`);
+  const text = lines.join("\n");
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied("ok");
+    } catch {
+      setCopied("failed");
+    }
+  };
+  return (
+    <div className="mt-2 space-y-2 text-xs">
+      {lines.length > 0 && (
+        <details data-testid="chat-error-details">
+          <summary className="cursor-pointer select-none text-red-200">{t("chat.errorDetails")}</summary>
+          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-red-950/60 p-2 text-red-200">{text}</pre>
+          <Button size="sm" onClick={copy}>
+            {t("about.copyButton")}
+          </Button>
+          {copied === "ok" && <span className="ml-2">{t("about.copied")}</span>}
+          {copied === "failed" && <span className="ml-2">{t("about.copyFailed")}</span>}
+        </details>
+      )}
+      {item.retryable && onRetryTurn && (
+        <Button size="sm" disabled={retryDisabled} onClick={() => onRetryTurn(item.id)}>
+          {t("chat.tryAgain")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function ChatItemView({
   item,
   liveOutput,
@@ -1450,6 +1686,8 @@ export function ChatItemView({
   onAcceptWithRule,
   onExport,
   onContinueTruncated,
+  onRetryTurn,
+  retryDisabled = false,
   questionState,
   onQuestionAnswer,
   serverId,
@@ -1465,14 +1703,17 @@ export function ChatItemView({
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => void;
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
   /** Spec 0065, Teil 2 — s. `ChatPanel`s `handleContinueTruncated`-Kommentar. */
   onContinueTruncated: (itemId: string) => void;
+  /** Issue #600 — "Try again" on a retryable error card. */
+  onRetryTurn?: (itemId: string) => void;
+  retryDisabled?: boolean;
   /** Issue #547: derived lock state / answer handler of a question card. */
   questionState?: QuestionState;
   onQuestionAnswer?: (text: string) => void;
@@ -1526,7 +1767,17 @@ export function ChatItemView({
     return (
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
         ⚠ {translateErrorCode(t, item.code, item.message)}
+        {(item.details || item.retryable) && (
+          <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
+        )}
       </div>
+    );
+  }
+  if (item.type === "ruleNotice") {
+    return (
+      <output className="block border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+        {t("confirmDialog.explain.notice", { reasons: reasonList(t, item.reasons) })}
+      </output>
     );
   }
   if (item.type === "autoContinuationLimitReached") {
@@ -1537,6 +1788,9 @@ export function ChatItemView({
         {t("actionCard.autoContinuationLimitReached", { limit: item.limit })}
       </div>
     );
+  }
+  if (item.type === "contextCompacted") {
+    return <div className="px-1 text-xs text-slate-400">{t("chat.contextCompactedNotice")}</div>;
   }
   if (item.type === "responseCancelled") {
     return <div className="px-1 text-xs text-slate-400">⏹ {t("chat.responseCancelled")}</div>;
@@ -1759,6 +2013,7 @@ export function ChatItemView({
           onRespond={onRespond}
           onAcceptWithRule={onAcceptWithRule}
           serverId={serverId}
+          sessionId={sessionId}
         />
       )}
 
@@ -1837,16 +2092,18 @@ function ConfirmActionForm({
   onRespond,
   onAcceptWithRule,
   serverId,
+  sessionId,
 }: {
   actionId: string;
+  sessionId: string;
   initialCommand?: string;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => void;
   serverId: string;
 }) {
@@ -1884,6 +2141,9 @@ function ConfirmActionForm({
        * Bestätigungsdialog): primäre Aktion (Ausführen) links, Ablehnen
        * daneben, der Regel-Schnellvorschlag als eigene, deutlich
        * abgesetzte Aktionsgruppe rechts. */}
+      {initialCommand !== undefined && (
+        <CoverageList sessionId={sessionId} command={edited} />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {/* Allow colour (Spec 0009): no shared variant, so the policy-decision
          * look stays hand-written; the focus ring is the shared one. */}
@@ -1906,6 +2166,7 @@ function ConfirmActionForm({
          * Notiz-Aktualisierungen (kein `initialCommand` dort). */}
         {initialCommand !== undefined && (
           <QuickRuleButton
+            sessionId={sessionId}
             actionId={actionId}
             command={edited}
             wasEdited={edited !== initialCommand}
@@ -1918,6 +2179,69 @@ function ConfirmActionForm({
   );
 }
 
+/** Issue #596: backend reason codes as a translated, de-duplicated list. */
+function reasonList(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  codes: string[],
+): string {
+  return [...new Set(codes)]
+    .map((code) => translateErrorCode(t, code, t("confirmDialog.explain.reasonOther")))
+    .join("; ");
+}
+
+/** Issue #596, Spec 0011: which segments of the pending command existing
+ * rules already cover, which need a rule and which ask regardless of rules.
+ * Renders nothing while loading, on failure, or when the backend returns no
+ * segments (single segment without a rule-independent reason). */
+function CoverageList({ sessionId, command }: { sessionId: string; command: string }) {
+  const { t } = useTranslation();
+  const [explanation, setExplanation] = useState<ConfirmationExplanationDto | null>(null);
+  useEffect(() => {
+    let stale = false;
+    explainConfirmation(sessionId, command, "Global")
+      .then((r) => {
+        if (!stale) setExplanation(r);
+      })
+      .catch(() => {
+        if (!stale) setExplanation(null);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [sessionId, command]);
+  if (!explanation || explanation.segments.length === 0) return null;
+  return (
+    <div className="space-y-1 text-xs">
+      <div className="font-heading font-semibold tracking-wide text-slate-400 uppercase">
+        {t("confirmDialog.explain.heading")}
+      </div>
+      <ul className="space-y-0.5">
+        {explanation.segments.map((segment) => (
+          <li key={segment.index} className="flex flex-wrap gap-x-2">
+            <code className="font-mono break-all text-slate-200">{segment.text}</code>
+            {segment.state === "covered" && (
+              <span className="text-emerald-300">
+                ✓{" "}
+                {segment.rule
+                  ? t("confirmDialog.explain.covered", { rule: segment.rule.patternValue })
+                  : t("confirmDialog.explain.coveredUnknown")}
+              </span>
+            )}
+            {segment.state === "needsRule" && (
+              <span className="text-amber-300">{t("confirmDialog.explain.needsRule")}</span>
+            )}
+            {segment.state === "blocked" && (
+              <span className="text-amber-300">
+                {t("confirmDialog.explain.blocked", { reasons: reasonList(t, segment.reasons) })}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Spec 0011, Abschnitt 4: zusätzlicher Button neben Ausführen/Ablehnen,
  * öffnet ein kompaktes Dropdown mit Muster-Vorschlägen + Scope-Auswahl
  * (Default: aktueller Server). Klick auf einen Vorschlag ruft
@@ -1925,13 +2249,15 @@ function ConfirmActionForm({
  * Bestätigungsdialog selbst verschwindet dann über `onAccept`s
  * optimistisches `responded: true` (s. `ChatPanel.acceptWithRule`), genau
  * wie bei Ausführen/Ablehnen. */
-function QuickRuleButton({
+export function QuickRuleButton({
+  sessionId,
   actionId,
   command,
   wasEdited,
   serverId,
   onAccept,
 }: {
+  sessionId: string;
   actionId: string;
   command: string;
   /** Unabhängiger Review-Pass (Spec 0007/0008/0011): `true`, wenn `command`
@@ -1942,27 +2268,19 @@ function QuickRuleButton({
   serverId: string;
   onAccept: (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
+    verdict?: SuggestionVerdictDto,
   ) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState<PatternSuggestionDto[]>([]);
+  const [suggestions, setSuggestions] = useState<ExplainedSuggestionDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scopeKind, setScopeKind] = useState<"server" | "global" | "tag">("server");
   const [tag, setTag] = useState("");
-
-  // Unabhängiger Review-Pass: Vorschläge wurden bislang nur beim ERSTEN
-  // Öffnen geladen und danach nie neu geholt — bearbeitet der Nutzer den
-  // Text nach dem ersten Öffnen weiter, blieben die veralteten
-  // Vorschläge (aus dem alten Text) stehen und ausgewählt.
-  useEffect(() => {
-    setSuggestions([]);
-  }, [command]);
 
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -1979,18 +2297,7 @@ function QuickRuleButton({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  const toggleOpen = () => {
-    const next = !open;
-    setOpen(next);
-    if (next && suggestions.length === 0 && !loading) {
-      setLoading(true);
-      setError(null);
-      suggestRulePatterns(command)
-        .then(setSuggestions)
-        .catch((err) => setError(commandErrorMessage(err)))
-        .finally(() => setLoading(false));
-    }
-  };
+  const toggleOpen = () => setOpen((o) => !o);
 
   const buildScope = (): Scope | null => {
     if (scopeKind === "global") return "Global";
@@ -1999,15 +2306,43 @@ function QuickRuleButton({
     return trimmed ? { Tag: trimmed } : null;
   };
 
-  const handlePick = (suggestion: PatternSuggestionDto) => {
+  // Issue #596: suggestions and their verdicts come from the backend and
+  // depend on the command text and the chosen scope — reload on every change
+  // (also covers a command edited after the first opening). A stale answer
+  // is dropped.
+  const scopeKey = JSON.stringify(buildScope());
+  useEffect(() => {
+    setSuggestions([]);
+    const scope = buildScope();
+    if (!open || !scope) return;
+    let stale = false;
+    setLoading(true);
+    setError(null);
+    explainConfirmation(sessionId, command, scope)
+      .then((r) => {
+        if (!stale) setSuggestions(r.suggestions);
+      })
+      .catch((err) => {
+        if (!stale) setError(commandErrorMessage(err));
+      })
+      .finally(() => {
+        if (!stale) setLoading(false);
+      });
+    return () => {
+      stale = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, command, scopeKey, sessionId]);
+
+  const handlePick = (suggestion: ExplainedSuggestionDto) => {
     const scope = buildScope();
     if (!scope) return;
     onAccept(
       actionId,
-      suggestion.patternType,
-      suggestion.patternValue,
+      suggestion.patterns,
       scope,
       wasEdited ? command : null,
+      suggestion.verdict,
     );
     setOpen(false);
   };
@@ -2076,15 +2411,30 @@ function QuickRuleButton({
           )}
           <ul className="space-y-1">
             {suggestions.map((suggestion) => (
-              <li key={suggestion.patternValue}>
+              <li key={suggestion.patterns.map((p) => p.patternValue).join("\n")}>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handlePick(suggestion)}
                   className="w-full justify-start text-left font-mono break-all text-slate-200"
                 >
-                  {suggestion.label}
+                  {t(`confirmDialog.quickRuleLabel.${suggestion.kind}`, {
+                    names: suggestion.names.join(", "),
+                    patterns: suggestion.patterns.map((p) => p.patternValue).join(", "),
+                  })}
                 </Button>
+                <p
+                  className={`px-3 pb-1 text-xs ${suggestion.verdict.autoExec ? "text-emerald-300" : "text-amber-300"}`}
+                >
+                  {suggestion.verdict.autoExec
+                    ? t("confirmDialog.explain.verdictAuto")
+                    : t("confirmDialog.explain.verdictAsk", {
+                        reasons: reasonList(
+                          t,
+                          suggestion.verdict.reasons.map((r) => r.code),
+                        ),
+                      })}
+                </p>
               </li>
             ))}
           </ul>

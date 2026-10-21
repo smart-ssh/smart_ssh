@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { useVoiceInput } from "../useVoiceInput";
+import { useVoiceInput, type VoiceHandlers, type VoicePhase } from "../useVoiceInput";
 import { SPEECH_MODEL_SIZE_MIB, SPEECH_MODEL_SOURCE } from "../voiceApi";
 import { formatElapsed } from "../voiceInputSettings";
 import { Button, DialogFrame, Spinner } from "./ui";
@@ -14,16 +14,22 @@ export function isVoiceShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
 }
 
 interface VoiceInputControlProps {
-  onText: (text: string) => void;
+  handlers: VoiceHandlers;
+  /** Reports the phase so the chat input can lock while it is not `idle`. */
+  onPhaseChange: (phase: VoicePhase) => void;
   /** The shortcut only works while focus is inside this element. */
   panelRef: RefObject<HTMLElement | null>;
 }
 
 /** Microphone button next to the send button, plus consent dialog and error line. */
-export function VoiceInputControl({ onText, panelRef }: VoiceInputControlProps) {
+export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceInputControlProps) {
   const { t } = useTranslation();
-  const voice = useVoiceInput(onText);
+  const voice = useVoiceInput(handlers);
   const { toggle } = voice;
+  const { phase } = voice;
+  useEffect(() => {
+    onPhaseChange(phase);
+  }, [phase, onPhaseChange]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

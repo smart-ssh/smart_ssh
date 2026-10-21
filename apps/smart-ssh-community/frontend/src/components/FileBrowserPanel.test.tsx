@@ -2,7 +2,7 @@
 // sich, Mindestbreite wird nicht unterschritten, Wert überlebt Neustart."
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // jsdom implementiert Pointer-Capture nicht (s. https://github.com/jsdom/jsdom/issues/2527) —
 // `useDragResize` (Spec 0053) ruft `setPointerCapture`/`releasePointerCapture`
@@ -16,7 +16,9 @@ if (!Element.prototype.setPointerCapture) {
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
+  claimClipboardFiles,
   claimDroppedPaths,
+  clipboardHasFiles,
   closeEditSession,
   localFileMtime,
   pickUploadFiles,
@@ -33,6 +35,8 @@ import {
   sftpElevationDisable,
   sftpElevationEnable,
   sftpExists,
+  sftpCreateFile,
+  sftpMkdir,
   sftpList,
   sftpOpenForEditing,
   sftpCancelCopyContent,
@@ -44,7 +48,7 @@ import {
   sftpUpload,
   sessionIsRoot,
 } from "../api";
-import { onConnectionStatusChanged, onSftpTransferStarted } from "../events";
+import { onConnectionStatusChanged, onSftpTransferFinished, onSftpTransferStarted } from "../events";
 import {
   loadFileManagerColumnWidths,
   saveFileManagerColumnWidths,
@@ -76,6 +80,7 @@ vi.mock("../api", () => ({
   sftpElevationEnable: vi.fn(),
   sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
   sftpMkdir: vi.fn(),
+  sftpCreateFile: vi.fn(),
   sftpReadText: vi.fn(),
   sftpRename: vi.fn(),
   sftpUpload: vi.fn(),
@@ -86,6 +91,8 @@ vi.mock("../api", () => ({
   // captured — here the paths of the last simulated drop event.
   claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
   pickUploadFiles: vi.fn(),
+  clipboardHasFiles: vi.fn(() => Promise.resolve(false)),
+  claimClipboardFiles: vi.fn(),
   pickUploadFolder: vi.fn(),
   sftpLocalPathsAreFolders: vi.fn((_s: string, paths: string[]) =>
     Promise.resolve(paths.map(() => false)),
@@ -124,17 +131,43 @@ vi.mock("../fileTypeSettings", () => ({
 const nativeDrop = vi.hoisted(() => ({ paths: [] as string[] }));
 
 const dragDrop = vi.hoisted(() => ({
-  handler: null as null | ((event: { payload: { type: string; paths?: string[] } }) => void),
+  handler: null as null | ((event: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) => void),
   // Issue #29: how often a listener was registered / removed, so tests can
   // assert that a channel switch or a navigation does not re-register it.
   registrations: 0,
   unlistens: 0,
 }));
 
+// Position-based drop routing: jsdom has no layout, so the panel (the element
+// carrying `data-elevated`) gets a 0..100 CSS-pixel rect and an offsetParent.
+// Positions are physical pixels (CSS pixels * devicePixelRatio).
+const IN = { x: 10, y: 10 };
+const OUT = { x: 500, y: 500 };
+Object.defineProperty(HTMLElement.prototype, "offsetParent", {
+  configurable: true,
+  get() {
+    return document.body;
+  },
+});
+HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+  const panel = this.hasAttribute("data-elevated");
+  return {
+    left: 0,
+    top: 0,
+    right: panel ? 100 : 0,
+    bottom: panel ? 100 : 0,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+    toJSON() {},
+  } as DOMRect;
+};
+
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
     onDragDropEvent: vi.fn((h) => {
-      dragDrop.handler = (event: { payload: { type: string; paths?: string[] } }) => {
+      dragDrop.handler = (event: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) => {
         if (event.payload.type === "drop") nativeDrop.paths = event.payload.paths ?? [];
         h(event);
       };
@@ -1473,7 +1506,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     // channel — no waiting for a re-registered listener.
     expect(dragDrop.handler).toBe(normalModeHandler);
 
-    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     expect(await firstUpload).toEqual(["session-1", "/local/x.conf", "x.conf", "root"]);
     expect(sftpUpload).toHaveBeenCalledTimes(1);
@@ -1505,7 +1538,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     // re-registration (the old behaviour) would have happened by now.
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", "root"));
 
-    act(() => handlerBeforeSwitch({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => handlerBeforeSwitch({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", "root");
@@ -1527,7 +1560,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", null));
 
-    act(() => handlerWhileElevated({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => handlerWhileElevated({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", null);
@@ -1551,7 +1584,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "logs", null));
     await waitFor(() => expect(screen.getByDisplayValue("logs")).toBeInTheDocument());
 
-    act(() => handlerBeforeNavigation({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => handlerBeforeNavigation({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "logs/x.conf", null);
@@ -1807,7 +1840,7 @@ describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
     await screen.findByText(/a\.txt/);
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
     act(() =>
-      dragDrop.handler!({ payload: { type: "drop", paths: ["/home/user/.ssh/id_ed25519"] } }),
+      dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/home/user/.ssh/id_ed25519"] } }),
     );
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
@@ -1827,7 +1860,7 @@ describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
     renderPanel();
     await screen.findByText(/a\.txt/);
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
-    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.txt"] } }));
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/local/x.txt"] } }));
 
     await waitFor(() => expect(claimDroppedPaths).toHaveBeenCalledTimes(1));
     await act(async () => {});
@@ -1841,7 +1874,7 @@ describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
     renderPanel();
     await screen.findByText(/a\.txt/);
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
-    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/project"] } }));
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/local/project"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/project", "project", null);
@@ -1944,7 +1977,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
 
     // Drop hint while dragging files over the panel.
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
-    act(() => dragDrop.handler!({ payload: { type: "over" } }));
+    act(() => dragDrop.handler!({ payload: { type: "over", position: IN } }));
     expect(screen.getByText(/^Drop here to upload to /)).toBeVisible();
     expectNoGerman();
   });
@@ -2222,5 +2255,364 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
         "logs wird unwiderruflich vom Server gelöscht. Enthält 1 Datei(en) in 1 Ordner(n) (inkl. diesem) — alle werden mitgelöscht.",
       ),
     );
+  });
+});
+
+describe("FileBrowserPanel drop routing by pointer position", () => {
+  const HINT = new RegExp(`^${testI18n.t("fileBrowser.dropHint", { path: "\u0000" }).split("\u0000")[0]}`);
+  beforeEach(() => {
+    vi.mocked(sftpList).mockResolvedValue([]);
+    dragDrop.handler = null;
+    nativeDrop.paths = [];
+  });
+  afterEach(() => {
+    Object.defineProperty(window, "devicePixelRatio", { value: 1, configurable: true });
+  });
+
+  it("claims a drop inside the panel, ignores one outside", async () => {
+    renderPanel();
+    await waitFor(() => expect(document.querySelector("[data-elevated]")).not.toBeNull());
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    vi.mocked(claimDroppedPaths).mockClear();
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: OUT, paths: ["/l/x"] } }));
+    expect(claimDroppedPaths).not.toHaveBeenCalled();
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/l/x"] } }));
+    expect(claimDroppedPaths).toHaveBeenCalledTimes(1);
+  });
+
+  it("highlights only while over the panel and clears on leave / outside", async () => {
+    renderPanel();
+    await waitFor(() => expect(document.querySelector("[data-elevated]")).not.toBeNull());
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() => dragDrop.handler!({ payload: { type: "over", position: IN } }));
+    expect(screen.getByText(HINT)).toBeVisible();
+    act(() => dragDrop.handler!({ payload: { type: "over", position: OUT } }));
+    expect(screen.queryByText(HINT)).toBeNull();
+    act(() => dragDrop.handler!({ payload: { type: "over", position: IN } }));
+    act(() => dragDrop.handler!({ payload: { type: "leave" } }));
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("converts positions with devicePixelRatio", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+    renderPanel();
+    await waitFor(() => expect(document.querySelector("[data-elevated]")).not.toBeNull());
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    vi.mocked(claimDroppedPaths).mockClear();
+    // 150 physical px = 75 CSS px: inside; with ratio 1 it would be outside.
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: { x: 150, y: 150 }, paths: [] } }));
+    expect(claimDroppedPaths).toHaveBeenCalledTimes(1);
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: { x: 250, y: 250 }, paths: [] } }));
+    expect(claimDroppedPaths).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+  });
+
+  const emptySpace = (container: HTMLElement) => {
+    const scroller = container.querySelector("table")!.parentElement!;
+    return scroller;
+  };
+
+  it("opens the folder menu on empty space; a row still opens the entry menu", async () => {
+    const { container } = renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+
+    fireEvent.contextMenu(row);
+    expect(screen.getByText("Umbenennen")).toBeVisible();
+    expect(screen.queryByText("Neue Datei")).toBeNull();
+
+    fireEvent.contextMenu(emptySpace(container), { clientX: 10, clientY: 20 });
+    expect(screen.getByText("Neuer Ordner")).toBeVisible();
+    expect(screen.getByText("Neue Datei")).toBeVisible();
+    expect(screen.queryByText("Umbenennen")).toBeNull();
+    // Without a pending cut there is no Paste entry in the menu.
+    expect(screen.queryByRole("button", { name: "Einfügen" })).toBeNull();
+  });
+
+  it("opens the folder menu in an empty directory and closes on Escape and outside click", async () => {
+    vi.mocked(sftpList).mockResolvedValue([]);
+    const { container } = renderPanel();
+    const msg = await screen.findByText("(leeres Verzeichnis)");
+    fireEvent.contextMenu(msg.parentElement!);
+    expect(screen.getByText("Neue Datei")).toBeVisible();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByText("Neue Datei")).toBeNull();
+
+    fireEvent.contextMenu(container.querySelector("p")!.parentElement!);
+    expect(screen.getByText("Neue Datei")).toBeVisible();
+    fireEvent.click(document.body);
+    expect(screen.queryByText("Neue Datei")).toBeNull();
+  });
+
+  it("offers Paste in the menu while an entry is cut and moves it like the toolbar button", async () => {
+    vi.mocked(sftpList).mockImplementation((_s, requestedPath) =>
+      Promise.resolve(requestedPath === "sub" ? [] : [fileEntry, { ...fileEntry, name: "sub", path: "sub", isDir: true }]),
+    );
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpRename).mockResolvedValue(undefined);
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getAllByRole("button", { name: /^(Aktionen|Actions): / })[0]);
+    fireEvent.click(screen.getByText("Ausschneiden"));
+    fireEvent.click(await screen.findByText(/sub/));
+    await screen.findByText("(leeres Verzeichnis)");
+
+    fireEvent.contextMenu(container.querySelector("p")!.parentElement!);
+    const menu = screen.getByRole("group", { name: "Ordneraktionen" });
+    fireEvent.click(within(menu).getByText("Einfügen"));
+
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "sub/a.txt", null));
+  });
+
+  it("New file creates an empty file in the current directory and refreshes", async () => {
+    vi.mocked(sftpCreateFile).mockResolvedValue(undefined);
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.contextMenu(emptySpace(container));
+    fireEvent.click(screen.getByText("Neue Datei"));
+    fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "b.txt" } });
+    vi.mocked(sftpList).mockClear();
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() => expect(sftpCreateFile).toHaveBeenCalledWith("session-1", "b.txt", null));
+    await waitFor(() => expect(sftpList).toHaveBeenCalled());
+    expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "success" }));
+  });
+
+  it("New folder from the menu uses the same prompt as the toolbar button", async () => {
+    vi.mocked(sftpMkdir).mockResolvedValue(undefined);
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.contextMenu(emptySpace(container));
+    fireEvent.click(screen.getByText("Neuer Ordner"));
+    fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "d" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+    await waitFor(() => expect(sftpMkdir).toHaveBeenCalledWith("session-1", "d", null));
+  });
+
+  it("rejects invalid names in the prompt without a backend call", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    for (const bad of ["", "a/b", ".", ".."]) {
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(screen.getByText("Neue Datei"));
+      fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: bad } });
+      fireEvent.click(screen.getByText("Übernehmen"));
+      expect(await screen.findByRole("alert")).toBeVisible();
+      fireEvent.click(screen.getByText("Abbrechen"));
+    }
+    expect(sftpCreateFile).not.toHaveBeenCalled();
+    expect(sftpMkdir).not.toHaveBeenCalled();
+  });
+
+  it("shows the translated 'already exists' and permission-denied reasons", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    for (const [code, text] of [
+      ["SSH_SFTP_ALREADY_EXISTS", /existiert bereits/],
+      ["SSH_SFTP_PERMISSION_DENIED", /Zugriff verweigert/],
+    ] as const) {
+      vi.mocked(showToast).mockClear();
+      vi.mocked(sftpCreateFile).mockRejectedValueOnce({ message: "roh", code });
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(screen.getByText("Neue Datei"));
+      fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "a.txt" } });
+      fireEvent.click(screen.getByText("Übernehmen"));
+      await waitFor(() =>
+        expect(showToast).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: "error", message: expect.stringMatching(text) }),
+        ),
+      );
+    }
+    vi.mocked(sftpMkdir).mockRejectedValueOnce({ message: "roh", code: "SSH_SFTP_ALREADY_EXISTS" });
+    fireEvent.contextMenu(emptySpace(container));
+    fireEvent.click(screen.getByText("Neuer Ordner"));
+    fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "a.txt" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringMatching(/existiert bereits/) }),
+      ),
+    );
+  });
+
+  describe("paste of local clipboard files (issue #571)", () => {
+    beforeEach(() => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(false);
+      vi.mocked(sftpExists).mockResolvedValue(false);
+      vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    });
+
+    it("offers Paste only when the clipboard holds files", async () => {
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      await act(async () => {});
+      expect(screen.queryByRole("button", { name: "Einfügen" })).toBeNull();
+
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      fireEvent.keyDown(document, { key: "Escape" });
+      fireEvent.contextMenu(emptySpace(container));
+      expect(await screen.findByRole("button", { name: "Einfügen" })).toBeVisible();
+    });
+
+    it("hands the confirmed paths to the normal upload flow", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(claimClipboardFiles).mockResolvedValue(["/home/u/new.txt"]);
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+
+      await waitFor(() =>
+        expect(sftpUpload).toHaveBeenCalledWith("session-1", "/home/u/new.txt", "new.txt", null),
+      );
+      // Only the target directory goes to the backend, never a local path.
+      expect(claimClipboardFiles).toHaveBeenCalledWith("session-1", ".", expect.any(Object));
+    });
+
+    it("uploads nothing when the dialog was cancelled", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(claimClipboardFiles).mockResolvedValue([]);
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+      await waitFor(() => expect(claimClipboardFiles).toHaveBeenCalled());
+      await act(async () => {});
+      expect(sftpExists).not.toHaveBeenCalled();
+      expect(sftpUpload).not.toHaveBeenCalled();
+      expect(showToast).not.toHaveBeenCalled();
+    });
+
+    it("shows an info toast when the clipboard emptied in between", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(claimClipboardFiles).mockResolvedValue(null);
+      const { container } = renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(await screen.findByRole("button", { name: "Einfügen" }));
+      await waitFor(() =>
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "info" })),
+      );
+      expect(sftpUpload).not.toHaveBeenCalled();
+    });
+
+    it("a pending cut keeps Paste as a move and does not read the clipboard", async () => {
+      vi.mocked(clipboardHasFiles).mockResolvedValue(true);
+      vi.mocked(sftpRename).mockResolvedValue(undefined);
+      const { container } = renderPanel();
+      const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+      fireEvent.contextMenu(row);
+      fireEvent.click(screen.getByText("Ausschneiden"));
+      vi.mocked(clipboardHasFiles).mockClear();
+
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(
+        within(await screen.findByRole("group", { name: "Ordneraktionen" })).getByRole("button", {
+          name: "Einfügen",
+        }),
+      );
+      expect(clipboardHasFiles).not.toHaveBeenCalled();
+      expect(claimClipboardFiles).not.toHaveBeenCalled();
+    });
+  });
+
+  // Issue #621: the transfer listeners must survive an elevation switch.
+  describe("transfer rows across an elevation switch (issue #621)", () => {
+    type Handler<T> = (event: T) => void;
+    const enableElevation = async () => {
+      vi.mocked(sftpElevationEnable).mockResolvedValue({
+        active: true,
+        targetUser: "root",
+        sftpServerPath: "/usr/lib/openssh/sftp-server",
+        failure: null,
+      });
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
+      await screen.findByRole("alert");
+    };
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+      vi.mocked(sftpList).mockResolvedValue([{ ...entry, name: "a.txt", path: "a.txt" }]);
+    });
+    const subscribe = () => {
+      const started: Handler<any>[] = [];
+      const finished: Handler<any>[] = [];
+      let subscriptions = 0;
+      vi.mocked(onSftpTransferStarted).mockImplementation((h: any) => {
+        subscriptions++;
+        started.push(h);
+        return Promise.resolve(() => {
+          started.splice(started.indexOf(h), 1);
+        });
+      });
+      vi.mocked(onSftpTransferFinished).mockImplementation((h: any) => {
+        finished.push(h);
+        return Promise.resolve(() => {
+          // Unsubscribing is async: the old handler is gone before a new one
+          // is registered (the window in which events used to get lost).
+          finished.splice(finished.indexOf(h), 1);
+        });
+      });
+      return { started, finished, subscriptions: () => subscriptions };
+    };
+    const start = (h: ReturnType<typeof subscribe>, id = "t1") =>
+      act(() =>
+        h.started.forEach((fn) =>
+          fn({ sessionId: "session-1", transferId: id, kind: "download", fileName: "big.bin", totalBytes: 10 }),
+        ),
+      );
+    const finish = (h: ReturnType<typeof subscribe>, error: string | null, id = "t1") =>
+      act(() => h.finished.forEach((fn) => fn({ sessionId: "session-1", transferId: id, error })));
+
+    it("a transfer finishing right after elevation is switched off ends as done, with a note", async () => {
+      const h = subscribe();
+      await enableElevation();
+      const before = h.subscriptions();
+      start(h);
+      expect(screen.getByText(/Herunterladen: big\.bin/)).toBeVisible();
+
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+      expect(h.subscriptions()).toBe(before); // no re-subscription
+      finish(h, null);
+
+      expect(screen.queryByText(/Herunterladen: big\.bin/)).not.toBeInTheDocument();
+      expect(screen.getByText(/Fertig: big\.bin/)).toBeVisible();
+      expect(screen.getByText(/erhöhte Modus wurde während der Übertragung ausgeschaltet/)).toBeVisible();
+    });
+
+    it("a transfer without an elevation change disappears when finished", async () => {
+      const h = subscribe();
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      await waitFor(() => expect(h.finished.length).toBe(1));
+      start(h);
+      finish(h, null);
+      expect(screen.queryByText(/big\.bin/)).not.toBeInTheDocument();
+    });
+
+    it("a revoked transfer shows the inactive-channel message without the channel-error prefix", async () => {
+      const h = subscribe();
+      await enableElevation();
+      start(h);
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+      finish(h, "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv.");
+
+      expect(screen.getByText(/big\.bin: Erhöhte Rechte beendet/)).toBeVisible();
+      expect(screen.queryByText(/Channel-Fehler/)).not.toBeInTheDocument();
+    });
   });
 });

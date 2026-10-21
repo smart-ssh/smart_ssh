@@ -31,7 +31,8 @@ import type {
   NoteTarget,
   PatternDto,
   PatternSuggestionDto,
-  PatternType,
+  ConfirmationExplanationDto,
+  SuggestionPatternDto,
   RemoteEntryDto,
   RuleDto,
   RuleInput,
@@ -234,6 +235,11 @@ export const sendChatMessage = (sessionId: string, text: string, attachmentIds?:
 export const continueTruncatedResponse = (sessionId: string) =>
   invoke<void>("continue_truncated_response", { sessionId });
 
+/** Issue #600: "Try again" on an AI error card — resends the last user turn
+ * without adding the message again. */
+export const retryChatTurn = (sessionId: string) =>
+  invoke<void>("retry_chat_turn", { sessionId });
+
 /** Spec 0040, Abschnitt 6: "In Notiz übernehmen" — startet denselben
  * `ProposeNoteUpdate`-Bestätigungsablauf wie ein KI-Vorschlag (inkl.
  * `chat-action-proposed`-Event und Diff-Vorschau), nur mit `content`
@@ -427,6 +433,11 @@ export const evaluateExplained = (command: string, ctx: EvalContextInput) =>
 export const suggestRulePatterns = (command: string) =>
   invoke<PatternSuggestionDto[]>("suggest_rule_patterns", { command });
 
+/** Issue #596: coverage per segment, suggestions for uncovered segments and a
+ * verdict per suggestion, evaluated by the backend for the session's server. */
+export const explainConfirmation = (sessionId: string, command: string, scope: Scope) =>
+  invoke<ConfirmationExplanationDto>("explain_confirmation", { sessionId, command, scope });
+
 /** `editedCommand`: unabhängiger Review-Pass (Spec 0007/0008/0011) —
  * `undefined`/gleich dem ursprünglichen Kommando löst wie zuvor über
  * `Approve` auf; unterscheidet er sich, muss das Backend über
@@ -437,17 +448,15 @@ export const suggestRulePatterns = (command: string) =>
 export const acceptAndCreateRule = (
   sessionId: string,
   actionId: string,
-  patternType: PatternType,
-  patternValue: string,
+  patterns: SuggestionPatternDto[],
   scope: Scope,
   priority: number | undefined,
   editedCommand: string | null,
 ) =>
-  invoke<string>("accept_and_create_rule", {
+  invoke<string[]>("accept_and_create_rule", {
     sessionId,
     actionId,
-    patternType,
-    patternValue,
+    patterns,
     scope,
     priority: priority ?? null,
     editedCommand,
@@ -590,6 +599,28 @@ export const sftpUploadFolder = (
 export const claimDroppedPaths = (sessionId: string) =>
   invoke<string[]>("claim_dropped_paths", { sessionId });
 
+/** Issue #571: whether the OS clipboard holds local files. Returns no
+ * paths; only decides if "Paste" is offered. */
+export const clipboardHasFiles = () => invoke<boolean>("clipboard_has_files");
+
+/** Wording of the native paste confirmation (the backend adds the file list
+ * and the target directory; `{count}` in `moreLabel` is replaced). */
+export interface ClipboardPasteDialogTexts {
+  title: string;
+  intro: string;
+  targetLabel: string;
+  moreLabel: string;
+  confirmLabel: string;
+  cancelLabel: string;
+}
+
+/** Issue #571: reads the clipboard files in the backend, asks the user in a
+ * native dialog and — only after confirmation — grants them to this session
+ * and returns the paths. `null` = nothing on the clipboard, `[]` = cancelled.
+ * `targetDir` is display text only. */
+export const claimClipboardFiles = (sessionId: string, targetDir: string, texts: ClipboardPasteDialogTexts) =>
+  invoke<string[] | null>("claim_clipboard_files", { sessionId, targetDir, texts });
+
 /** Löscht Datei ODER Ordner (rekursiv, Spec 0054, Teil 3) — die
  * Bestätigung (inkl. `sftpDeletePreview` bei Ordnern) läuft im Frontend. */
 export const sftpDelete = (sessionId: string, path: string, elevatedUser: string | null = null) =>
@@ -608,6 +639,11 @@ export const sftpRename = (sessionId: string, from: string, to: string, elevated
 
 export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<void>("sftp_mkdir", { sessionId, path, elevatedUser });
+
+/** Issue #570: legt eine leere Datei an; ein vorhandener Name wird nie
+ * überschrieben (Fehlercode `SSH_SFTP_ALREADY_EXISTS`). */
+export const sftpCreateFile = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<void>("sftp_create_file", { sessionId, path, elevatedUser });
 
 /** Spec 0054, Teil 2: "Dateiinhalt kopieren" — liefert den Textinhalt einer
  * Remote-Datei; lehnt zu große oder nicht als UTF-8 dekodierbare

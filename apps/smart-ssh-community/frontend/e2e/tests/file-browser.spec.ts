@@ -130,6 +130,26 @@ test.describe("file browser", () => {
     await expect(trigger).toBeFocused();
   });
 
+  test("empty-space menu opens, is axe clean and closes with Escape and outside click (issue #570)", async ({ app }) => {
+    await openFileBrowser(app);
+    const page = app.page;
+    const scroller = page.locator("table").locator("xpath=..");
+    const box = (await scroller.boundingBox())!;
+    const open = () => scroller.click({ button: "right", position: { x: box.width - 4, y: box.height - 4 } });
+
+    await open();
+    await expect(page.getByRole("button", { name: "New folder", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeVisible();
+    await expectNoSeriousA11yViolations(page, "file browser: empty-space menu");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeHidden();
+
+    await open();
+    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeVisible();
+    await page.mouse.click(2, 2);
+    await expect(page.getByRole("button", { name: "New file", exact: true })).toBeHidden();
+  });
+
   test("elevation menu: labelled target user field, keyboard operable, axe clean (issue #544)", async ({ app }) => {
     test.setTimeout(90_000);
     await openFileBrowser(app);

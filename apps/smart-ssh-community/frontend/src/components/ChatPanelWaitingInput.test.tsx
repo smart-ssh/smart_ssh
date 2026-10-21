@@ -33,7 +33,7 @@ vi.mock("../api", () => ({
   sendChatMessage: vi.fn(() => Promise.resolve()),
   startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
   stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  suggestRulePatterns: vi.fn(),
+  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
   takeChatContentIntoNote: vi.fn(),
 }));
 
@@ -49,10 +49,13 @@ vi.mock("../events", () => ({
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
   onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
+  onChatContextUsage: () => Promise.resolve(() => {}),
+  onChatContextCompacted: () => Promise.resolve(() => {}),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
   onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),

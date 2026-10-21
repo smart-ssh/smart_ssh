@@ -59,6 +59,33 @@ Abschnitt 8.2):
 - Was die Oberfläche zurückbekommt, enthält **keine** Secret-Felder, nur welche
   Anmeldeart aktiv ist.
 
+**Aufbau des Server-Formulars.** Die Einstellungen eines Servers sind auf
+vier Reiter verteilt: **Allgemein**, **Verbindung**, **Sicherheit** und
+**Notizen**. Felder und Aktionen ändern sich dadurch nicht, nur ihr Ort:
+
+- *Allgemein*: Name, Gruppe, Tags, danach die Abschnitte von Erweiterungen und
+  am Ende „Server löschen" samt Auswirkungs-Vorschau.
+- *Verbindung*: Host, Port, Benutzername, Jump-Host, Anmeldung (alle Arten,
+  Schlüsselprüfung, Übernahme in den Schlüsselbund), Sudo-Passwort,
+  Startverzeichnis, „Erweitert" (SFTP-Server-Pfad) sowie „Verbindung testen"
+  mit Ergebnis und Schritt-Protokoll.
+- *Sicherheit*: Bestätigung nach Serverzugriff (Spec 0039), KI-Prüfung auf
+  Prompt-Injection und die gespeicherten Host-Keys.
+- *Notizen*: Notizen und Kontext-Vorschau. Die Notizen haben wie bisher ihren
+  eigenen Speichern-Knopf.
+
+Ein vorhandener Server öffnet auf *Allgemein*; solange derselbe Server gewählt
+bleibt, bleibt auch der gewählte Reiter, bei einem anderen Server öffnet wieder
+*Allgemein*. Alle Reiter teilen sich einen Entwurf: Ein Reiterwechsel verwirft
+keine Eingaben, und ein einziger „Speichern"-Knopf (sichtbar in *Allgemein*,
+*Verbindung* und *Sicherheit*) speichert alle Felder auf einmal. Ist ein Feld
+ungültig (z. B. leerer Host), wird der betroffene Reiter markiert und
+„Speichern" wechselt zum ersten markierten Reiter. Beim Anlegen eines neuen
+Servers gibt es *Allgemein*, *Verbindung* und *Sicherheit*; *Notizen* kommt
+nach dem ersten Speichern hinzu. Der lokale Pseudo-Server (Spec 0032) hat nur
+*Allgemein* (Tags) und *Notizen*. Die Reiter sind per Tastatur bedienbar
+(Pfeiltasten, Pos1/Ende; ein Tab-Stopp für die Leiste).
+
 **Löschen eines Servers** ist zweistufig (Spec 0046): erst eine Vorschau der
 Auswirkungen, dann das bestätigte Löschen.
 

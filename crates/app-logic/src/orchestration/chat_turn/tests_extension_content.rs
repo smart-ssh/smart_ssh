@@ -487,3 +487,94 @@ async fn compaction_requests_go_through_the_same_sealing() {
         .iter()
         .any(|m| matches!(m.content, MessageContent::Extension(_))));
 }
+
+/// Issue #620: an extension that stores content per session id.
+#[derive(Default)]
+struct KeyedExt {
+    store: Mutex<HashMap<(Uuid, String), String>>,
+    pending: Mutex<HashMap<(Uuid, String), String>>,
+}
+
+impl ChatContentExtension for KeyedExt {
+    fn name(&self) -> &str {
+        "files"
+    }
+    fn take_pending(&self, s: Uuid, id: &str) -> Option<PendingContent> {
+        let t = self.pending.lock().unwrap().remove(&(s, id.to_string()))?;
+        Some(PendingContent {
+            label: "f.txt".into(),
+            kind: "doc".into(),
+            blocks: vec![text(&t)],
+        })
+    }
+    fn persist(
+        &self,
+        s: Uuid,
+        part_id: &str,
+        blocks: Vec<ssh_manager_core::ai::RedactedBlock>,
+    ) -> Result<(), ChatContentError> {
+        let t = format!("{blocks:?}");
+        self.store.lock().unwrap().insert((s, part_id.into()), t);
+        Ok(())
+    }
+    fn resolve(
+        &self,
+        s: Uuid,
+        part: &ExtensionPart,
+    ) -> Result<Option<Vec<ResolvedBlock>>, ChatContentError> {
+        Ok(self
+            .store
+            .lock()
+            .unwrap()
+            .get(&(s, part.id.clone()))
+            .map(|_| vec![text("ORIGINAL-CONTENT")]))
+    }
+}
+
+#[tokio::test]
+async fn hooks_use_the_chat_session_id_so_content_survives_resume() {
+    let ext = Arc::new(KeyedExt::default());
+    let reg = Arc::new(ChatContentRegistry::new(vec![ext.clone()]));
+    let chat_a = Uuid::new_v4();
+    let chat_b = Uuid::new_v4();
+    let provider = MockAiProvider::with_rounds(vec![vec![AiEvent::Done], vec![AiEvent::Done]]);
+    let contexts = provider.received_contexts_handle();
+    let mut session = session_with_ai_provider(provider, MockSshTransport::default());
+    session.set_chat_content_for_tests(reg.clone());
+    session.set_chat_session_id_for_tests(tokio::sync::Mutex::new(Some(chat_a)));
+
+    // First tab id: accept + persist as the send path does.
+    let tab1 = Uuid::new_v4();
+    let key = session.extension_content_key(tab1).await;
+    assert_eq!(key, chat_a);
+    ext.pending
+        .lock()
+        .unwrap()
+        .insert((chat_a, "id0".into()), "orig".into());
+    let prepared = accept_extension_content(&reg, &redactor(), key, &ids(1)).unwrap();
+    prepared.persist(key).unwrap();
+    let part_id = ext.store.lock().unwrap().keys().next().unwrap().1.clone();
+    let mut p = part("f.txt");
+    p.id = part_id;
+    session.context.lock().await.history = vec![user_text("hi"), user_part(p)];
+
+    // "Resume": the same session, but a different tab id, still resolves.
+    run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+    let ctx = contexts.lock().unwrap()[0].clone();
+    let sent = format!("{:?}", ctx.history);
+    assert!(sent.contains("ORIGINAL-CONTENT"), "{sent}");
+
+    // After "New Chat" the key follows the new chat session id.
+    *session.chat_session_id.lock().await = Some(chat_b);
+    assert_eq!(session.extension_content_key(tab1).await, chat_b);
+    // Without a saved chat the tab id is the fallback.
+    *session.chat_session_id.lock().await = None;
+    assert_eq!(session.extension_content_key(tab1).await, tab1);
+}

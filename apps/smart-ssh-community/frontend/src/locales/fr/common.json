@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Le répertoire de départ doit être un chemin absolu (/…) ou commencer par ~/.",
       "controlCharacter": "Le répertoire de départ ne doit pas contenir de caractères de contrôle."
+    },
+    "tabs": {
+      "label": "Paramètres du serveur",
+      "general": "Général",
+      "connection": "Connexion",
+      "security": "Sécurité",
+      "invalid": "Contient des erreurs"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Décision globale",
     "subCommands": "Sous-commandes",
     "matchedRuleLabel": "Règle :",
+    "segmentLabel": "Partie {{index}}",
+    "checksLabel": "Vérifications :",
     "hardBlacklistLabel": "Liste noire stricte :"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Aucune suggestion.",
     "binaryFileHint": "⚠ Fichier binaire — comparaison de texte impossible. Taille précédente : {{oldSize}}, nouvelle taille : {{newSize}}.",
     "diffTooLargeHint": "⚠ Contenu trop volumineux pour une comparaison ligne à ligne. Taille précédente : {{oldSize}}, nouvelle taille : {{newSize}}.",
-    "noContentChange": "(aucun changement de contenu)"
+    "noContentChange": "(aucun changement de contenu)",
+    "quickRuleLabel": {
+      "exact": "Exact : {{patterns}}",
+      "exactPerSegment": "Exact par partie : {{patterns}}",
+      "pathScoped": "Même répertoire : {{patterns}}",
+      "lastArgOpen": "Dernier argument libre : {{patterns}}",
+      "subcommand": "Tous les appels `{{names}}` : {{patterns}}",
+      "tool": "Tous les appels `{{names}}` : {{patterns}}"
+    },
+    "explain": {
+      "heading": "Parties de cette commande",
+      "covered": "couverte par la règle {{rule}}",
+      "coveredUnknown": "couverte par une règle existante",
+      "needsRule": "nécessite une règle",
+      "blocked": "demande toujours, quelles que soient les règles : {{reasons}}",
+      "verdictAuto": "s'exécutera automatiquement la prochaine fois",
+      "verdictAsk": "demandera encore : {{reasons}}",
+      "notice": "Règle créée. Cette commande demandera encore la prochaine fois : {{reasons}}",
+      "reasonOther": "un autre contrôle de sécurité"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Alerte de sécurité · Clé d’hôte modifiée",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Le fournisseur d’IA limite actuellement les requêtes (limite de débit) – l’application a déjà réessayé automatiquement plusieurs fois. Patientez un moment et renvoyez le message.",
     "AI_NETWORK_ERROR": "Impossible de joindre le fournisseur d’IA. Vérifiez votre connexion Internet et, pour un point de terminaison personnalisé, l’URL de base, puis renvoyez.",
     "AI_INVALID_RESPONSE": "Réponse inattendue du fournisseur d’IA",
+    "AI_INVALID_TOOL_CALL": "L’IA a continué d’appeler un outil qui n’existe pas. Essayez de reformuler la demande.",
     "AI_CONTEXT_TOO_LARGE": "Contexte trop volumineux pour le fournisseur d’IA. Réduisez « Longueur max. de réponse (jetons) » ou démarrez un nouveau chat.",
     "AI_PROVIDER_UNAVAILABLE": "Le fournisseur d’IA a signalé une erreur (p. ex. maintenance ou surcharge). Réessayez plus tard ; si cela persiste, vérifiez les paramètres du fournisseur.",
+    "AI_PROVIDER_OVERLOADED": "Le fournisseur d'IA est surchargé en ce moment. Réessayez dans un instant.",
+    "AI_PROVIDER_BILLING": "Le compte du fournisseur d'IA n'a plus de crédit. Vérifiez la facturation dans la console du fournisseur.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Le fournisseur d'IA a rejeté la requête.",
     "AI_RESPONSE_TRUNCATED": "La réponse de l’IA était trop longue pour une commande complète",
     "AI_MODEL_NOT_FOUND": "Le fournisseur d’IA ne connaît pas ce modèle. Vérifiez le nom du modèle dans les paramètres (« Charger les modèles » liste ceux disponibles) ; pour Ollama, téléchargez-le d’abord avec `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Ce modèle ne prend pas en charge l’appel d’outils. Dans les paramètres du fournisseur, décochez « Prend en charge l’appel d’outils natif » (la solution de repli par prompt est alors utilisée) ou choisissez un modèle compatible.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L’avertissement sur le mot de passe principal n’a pas été confirmé. Sans ce mot de passe, toutes les données sont perdues et il n’existe aucune récupération — cochez la case et recommencez la configuration. Rien n’a été modifié.",
     "KEYCHAIN_KEY_MISMATCH": "La clé du trousseau n’appartient pas à cette base de données. Rien n’a été modifié — l’enregistrer rendrait la base illisible au prochain démarrage.",
     "SFTP_CONTENT_TOO_LARGE": "Le fichier dépasse 50 Mo et ne peut pas être copié dans le presse-papiers.",
-    "CLIPBOARD_FILE_FAILED": "Le fichier n’a pas pu être placé dans le presse-papiers sur ce système."
+    "CLIPBOARD_FILE_FAILED": "Le fichier n’a pas pu être placé dans le presse-papiers sur ce système.",
+    "SSH_SFTP_ALREADY_EXISTS": "Un fichier ou un dossier portant ce nom existe déjà"
   },
   "mcpServer": {
     "hint": "Des clients MCP externes peuvent l’utiliser pour proposer des commandes, des lectures/écritures de fichiers et des mises à jour de notes sur les serveurs autorisés — chaque demande exige toujours une confirmation dans l’application, indépendamment des règles d’autorisation existantes.",
@@ -661,7 +694,10 @@
     "editUploadFailed": "La modification de « {{name}} » n’a pas pu être téléversée : {{reason}}",
     "uploadedFolder": "Dossier « {{name}} » téléversé — {{count}} fichiers",
     "uploadFolderFailed": "Échec du téléversement du dossier « {{name}} » : {{reason}}",
-    "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}"
+    "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}",
+    "nothingToPaste": "Rien à coller : le presse-papiers ne contient aucun fichier",
+    "createFileDone": "Fichier « {{name}} » créé",
+    "createFileFailed": "Impossible de créer le fichier « {{name}} » : {{reason}}"
   },
   "fileElevation": {
     "toggle": "Droits élevés",
@@ -936,6 +972,8 @@
     "cancelCut": "Annuler la coupe",
     "transferUpload": "Téléversement : {{name}}",
     "transferDownload": "Téléchargement : {{name}}",
+    "transferDone": "Terminé : {{name}}",
+    "transferElevationEnded": "Le mode élevé a été désactivé pendant le transfert.",
     "loading": "Chargement…",
     "emptyDirectory": "(répertoire vide)",
     "dropHint": "Déposer ici pour téléverser vers {{path}}",
@@ -1010,7 +1048,9 @@
       "chmod": "Modifier les permissions…",
       "rename": "Renommer",
       "cut": "Couper",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "newFolder": "Nouveau dossier",
+      "newFile": "Nouveau fichier"
     },
     "properties": {
       "title": "Propriétés",
@@ -1041,10 +1081,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Renommer",
-      "newFolderTitle": "Nouveau dossier"
+      "newFolderTitle": "Nouveau dossier",
+      "newFileTitle": "Nouveau fichier",
+      "invalidName": "Saisissez un nom sans « / ». « . » et « .. » ne sont pas autorisés."
     },
     "copyProgress": "Copie… {{done}} Mo sur {{total}} Mo",
-    "copyProgressUnknownTotal": "Copie… {{done}} Mo"
+    "copyProgressUnknownTotal": "Copie… {{done}} Mo",
+    "directoryMenuLabel": "Actions du dossier",
+    "clipboardPaste": {
+      "title": "Téléverser les fichiers du presse-papiers",
+      "intro": "Téléverser ces fichiers du presse-papiers ?",
+      "target": "Dossier cible",
+      "more": "… et {{count}} autres",
+      "confirm": "Téléverser",
+      "cancel": "Annuler",
+      "menuTitle": "Téléverser les fichiers du presse-papiers"
+    }
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",
@@ -1054,6 +1106,9 @@
     "stopAutoContinuation": "Arrêter le mode automatique",
     "generating": "L’IA génère une réponse / un document…",
     "stop": "Arrêter",
+    "tryAgain": "Réessayer",
+    "errorDetails": "Détails",
+    "aiRetrying": "Le fournisseur d’IA est surchargé – nouvelle tentative dans {{seconds}} s (tentative {{attempt}} sur {{max}})",
     "noActiveProvider": "Aucun fournisseur d’IA actif configuré. Veuillez d’abord en configurer un dans les paramètres.",
     "inputPlaceholder": "Posez une question ou décrivez une commande …",
     "send": "Envoyer",
@@ -1065,6 +1120,9 @@
     "historyAttached": "Joint : {{files}}",
     "queued": "Sera envoyé avec la prochaine requête",
     "responseCancelled": "Réponse annulée.",
+    "contextCompactedNotice": "Les parties plus anciennes de ce chat ont été résumées pour tenir dans le contexte du modèle.",
+    "contextUsage": "Contexte {{used}} / {{window}}",
+    "contextUsageTooltip": "Les parties plus anciennes du chat sont résumées automatiquement lorsque le contexte est plein.",
     "webResearchUnavailable": "La recherche web n’est pas disponible pour ce compte fournisseur (la recherche web y est désactivée). Cette session répond sans recherche web. Pour la désactiver définitivement : Paramètres → Fournisseur d’IA → « Recherche web ».",
     "emptyResponse": "Le modèle n’a renvoyé aucune réponse. Pour les modèles avec phase de réflexion, une limite de sortie plus élevée dans les paramètres du fournisseur aide.",
     "outputTruncated": "(tronqué)",

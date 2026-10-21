@@ -191,12 +191,30 @@ impl AsRef<dyn OutputRedactor> for SwappableRedactor {
 #[async_trait]
 pub trait CommandEvaluator: Send + Sync {
     async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace;
+
+    /// Read-only evaluation as if `candidates` were additional stored rules
+    /// (issue #596: verdict for a rule suggestion). Stores nothing.
+    async fn evaluate_explained_with_candidates(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[ssh_manager_core::filter::Rule],
+    ) -> EvaluationTrace;
 }
 
 #[async_trait]
 impl<S: PolicyStore + Send + Sync> CommandEvaluator for FilterEngine<S> {
     async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
         FilterEngine::evaluate_explained(self, command, ctx).await
+    }
+
+    async fn evaluate_explained_with_candidates(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[ssh_manager_core::filter::Rule],
+    ) -> EvaluationTrace {
+        FilterEngine::evaluate_explained_with_candidates(self, command, ctx, candidates).await
     }
 }
 
@@ -685,6 +703,9 @@ pub struct SessionParts {
     /// der Datenbankdatei (Spec 0036, Spec 0057 §2.3),
     /// s. `persistence_sqlite::SqliteChatSessionStore::save_summary`.
     pub summary: AsyncMutex<Option<crate::compaction::RollingSummary>>,
+    /// Issue #601: real input sizes reported by the provider, used to
+    /// correct the compaction estimate (in memory, per session).
+    pub context_usage: StdMutex<crate::compaction::ContextUsageTracker>,
     /// MCP-Ausschluss aus der rollierenden Summary (Nachtrag zu Spec 0057
     /// §2.1, Entscheidung: die Summary bildet Chat-Kontinuität ab,
     /// MCP-Verkehr ist kein Chat — Audit bleibt vollständig im Ledger,
@@ -925,6 +946,14 @@ pub struct ChatTurnState {
 }
 
 impl Session {
+    /// Id handed to every `ChatContentExtension` hook (Issue #620): the saved
+    /// chat session id, which survives a resume under a new tab id. Only a
+    /// session without a saved chat (persistence off, local server) falls
+    /// back to the tab id; such content can never be resumed anyway.
+    pub async fn extension_content_key(&self, tab_id: SessionId) -> uuid::Uuid {
+        (*self.chat_session_id.lock().await).unwrap_or(tab_id)
+    }
+
     /// Spec 0085, A3: der einzige Weg, eine `Session` zu bauen. Der normale
     /// SFTP-Kanal startet immer leer; er wird beim ersten Zugriff aus dem
     /// Transport **dieser** Sitzung geöffnet (`ensure_sftp_open`).
@@ -1857,6 +1886,7 @@ mod tests {
             // für die dedizierten Kompaktierungs-Tests).
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
+            context_usage: Default::default(),
             mcp_origin_flags: StdMutex::new(Vec::new()),
             sudo_password: SwappableSudoPassword::new(None),
             status: StdMutex::new(ConnectionStatus::Connected),

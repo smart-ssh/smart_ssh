@@ -205,13 +205,16 @@ pub(crate) fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = Raw
     Box::pin(futures::stream::once(async move { event }))
 }
 
-use crate::action::{action_from_tool_arguments, parameters_json_schema};
-use crate::error::{error_stream, map_http_status, map_transport_error, timeout_error};
+use crate::action::{parameters_json_schema, tool_call_event};
+use crate::error::{
+    error_stream, map_http_response, map_stream_error_object, map_transport_error,
+    provider_request_id, timeout_error, ProviderErrorInfo,
+};
 use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_context_limit_retry, log_openai_round_summary, log_outgoing_context,
-    log_provider_error_response, log_provider_transport_error, log_stop_reason,
-    log_tool_call_fragment, log_tool_call_parse_error, log_tool_call_parsed,
+    log_provider_error_response_with_id, log_provider_transport_error, log_stop_reason,
+    log_tool_call_fragment,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
@@ -250,6 +253,8 @@ pub struct OpenAiCompatibleProvider {
     /// (Vorrang vor dem modellabhängigen Default, aber NICHT vor einem
     /// `SessionContext::max_tokens_hint` eines Nebenaufrufs).
     max_tokens_override: Option<u32>,
+    /// Issue #599: see `AiProvider::last_request_id`.
+    last_request: std::sync::Mutex<Option<Uuid>>,
 }
 
 impl OpenAiCompatibleProvider {
@@ -272,6 +277,7 @@ impl OpenAiCompatibleProvider {
             extra_headers,
             budget,
             max_tokens_override,
+            last_request: std::sync::Mutex::new(None),
         }
     }
 
@@ -521,6 +527,7 @@ pub(crate) type StreamParser = fn(
     Uuid,
     String,
     Vec<(String, String)>,
+    Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>>;
 
 /// s. `crate::anthropic::connect_and_stream`-Kommentar — identisches Muster,
@@ -587,6 +594,9 @@ pub(crate) async fn connect_and_stream(
 
         // Spec 0051, Teil 1: s. identischer Kommentar in
         // `crate::anthropic::connect_and_stream`.
+        let status = response.status();
+        let headers = response.headers().clone();
+        let provider_rid = provider_request_id(&headers);
         if response.status().as_u16() == 429 {
             let elapsed = retry_start.elapsed();
             let remaining = crate::retry::MAX_TOTAL_RETRY_TIME.saturating_sub(elapsed);
@@ -601,6 +611,20 @@ pub(crate) async fn connect_and_stream(
                 let text =
                     crate::sse::read_error_body_with_timeout_capped(response.text(), remaining)
                         .await;
+                // Issue #599: a 429 that is really an exhausted quota is a
+                // billing problem — never retried.
+                if ProviderErrorInfo::from_body(&text).is_billing() {
+                    let mapped = map_http_response(status, &headers, &text);
+                    log_provider_error_response_with_id(
+                        request_id,
+                        provider_rid.as_deref(),
+                        status.as_u16(),
+                        &text,
+                        &mapped,
+                        &secrets,
+                    );
+                    return to_raw_stream(error_stream(mapped));
+                }
                 crate::request_logging::log_provider_rate_limited_retry(
                     request_id, attempt, &text, delay, &secrets,
                 );
@@ -610,10 +634,9 @@ pub(crate) async fn connect_and_stream(
         }
 
         if !response.status().is_success() {
-            let status = response.status();
             // s. Kommentar beim 429-Retry-Zweig oben.
             let text = crate::sse::read_error_body_with_timeout(response.text()).await;
-            let mapped = map_http_status(status, &text);
+            let mapped = map_http_response(status, &headers, &text);
             // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
             // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
             // Varianten) verlieren Status/Body ab hier unwiederbringlich.
@@ -621,7 +644,14 @@ pub(crate) async fn connect_and_stream(
             // denselben redigierenden Logpfad geloggt wie jeder andere
             // Providerfehler — auch dann, wenn der Zweig unten
             // `ContextLimitError` statt `error_stream(mapped)` zurückgibt.
-            log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
+            log_provider_error_response_with_id(
+                request_id,
+                provider_rid.as_deref(),
+                status.as_u16(),
+                &text,
+                &mapped,
+                &secrets,
+            );
             // Spec 0087, A1.1: ein 400, der NICHT schon als „Modell nicht
             // gefunden" erkannt wurde (`mapped` bliebe dann `ModelNotFound`,
             // s. T4), und dessen Körper einen der Kontextgrenzen-Marker
@@ -630,7 +660,12 @@ pub(crate) async fn connect_and_stream(
             // betroffen). Andere Statuscodes (T5) bleiben unverändert
             // `ProviderUnavailable`.
             if status.as_u16() == 400
-                && matches!(mapped, AiError::ProviderUnavailable(_))
+                && matches!(
+                    mapped,
+                    AiError::ProviderUnavailable(_)
+                        | AiError::RejectedRequest(_)
+                        | AiError::ContextTooLarge
+                )
                 && is_context_length_error(&text)
             {
                 return raw_event_stream(RawEvent::ContextLimitError);
@@ -644,6 +679,7 @@ pub(crate) async fn connect_and_stream(
             request_id,
             api_key,
             extra_headers,
+            provider_rid,
         );
     }
 }
@@ -747,8 +783,55 @@ impl AiProvider for OpenAiCompatibleProvider {
             finished: false,
             parse: event_stream_from_response,
         };
-        retry_stream(state)
+        retry_stream_with_overload("openai_compatible", &self.model, &self.last_request, state)
     }
+
+    fn last_request_id(&self) -> Option<Uuid> {
+        *self
+            .last_request
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl RetryState {
+    /// The same request again, from scratch (no stream, nothing consumed).
+    fn fresh(&self) -> RetryState {
+        RetryState {
+            parse: self.parse,
+            client: self.client.clone(),
+            url: self.url.clone(),
+            api_key: self.api_key.clone(),
+            native_tool_calling: self.native_tool_calling,
+            request_id: self.request_id,
+            extra_headers: self.extra_headers.clone(),
+            body: self.body.clone(),
+            max_tokens: self.max_tokens,
+            model_max_tokens: self.model_max_tokens,
+            max_tokens_field: self.max_tokens_field,
+            max_tokens_is_user_override: self.max_tokens_is_user_override,
+            retry_used: RetryKind::None,
+            inner: None,
+            finished: false,
+        }
+    }
+}
+
+/// Issue #599: `retry_stream` plus the automatic retry on a pre-output
+/// provider overload (`crate::overload`), and the request span that gives
+/// every log line of this request its provider/model.
+pub(crate) fn retry_stream_with_overload(
+    provider: &'static str,
+    model: &str,
+    last_request: &std::sync::Mutex<Option<Uuid>>,
+    state: RetryState,
+) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    let request_id = state.request_id;
+    *last_request
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request_id);
+    let span = tracing::info_span!("ai_request", provider, model = %model);
+    crate::overload::with_overload_retry(span, request_id, move || retry_stream(state.fresh()))
 }
 
 /// Der äußere Retry-Wrapper (Spec 0065, Teil 3 / Spec 0087) — für beide
@@ -908,6 +991,9 @@ pub(crate) struct OpenAiStreamState {
     pub(crate) pending: VecDeque<RawEvent>,
     pub(crate) finished: bool,
     pub(crate) request_id: Uuid,
+    /// Issue #599: the provider's own request id (response header), for the
+    /// in-stream error log line.
+    pub(crate) provider_request_id: Option<String>,
     /// Spec 0065, Teil 3: letzter gesehener `finish_reason` — `None`, wenn
     /// noch keiner ankam (z. B. bei einem abrupten Verbindungsabbruch vor
     /// jedem Chunk mit diesem Feld).
@@ -915,7 +1001,33 @@ pub(crate) struct OpenAiStreamState {
 }
 
 impl OpenAiStreamState {
+    /// Issue #599: maps an in-stream error to an [`AiError`] and writes the
+    /// one WARN line for it. `info` is what the provider sent.
+    pub(crate) fn report_stream_error(&self, info: &ProviderErrorInfo, mapped: &AiError) {
+        let secrets: Vec<&str> = self.secrets.iter().map(String::as_str).collect();
+        crate::request_logging::log_provider_error(
+            self.request_id,
+            self.provider_request_id.as_deref(),
+            None,
+            info.error_type.as_deref().or(info.code.as_deref()),
+            mapped,
+            info.message.as_deref().unwrap_or("unbekannter Fehler"),
+            &secrets,
+        );
+    }
+
     pub(crate) fn handle_chunk(&mut self, chunk: &Value) {
+        // Issue #599: an in-stream `{"error": {...}}` chunk ends the response
+        // with a classified error; a partial tool call is never released.
+        if let Some(error) = chunk.get("error").filter(|e| !e.is_null()) {
+            let (mapped, info) = map_stream_error_object(error);
+            self.report_stream_error(&info, &mapped);
+            self.tool_calls.clear();
+            self.pending
+                .push_back(RawEvent::Public(AiEvent::Error(mapped)));
+            self.finished = true;
+            return;
+        }
         let choice = chunk.get("choices").and_then(|choices| choices.get(0));
 
         // analog zu Anthropics `stop_reason` (s.
@@ -1113,32 +1225,10 @@ impl OpenAiStreamState {
 }
 
 pub(crate) fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent {
-    match serde_json::from_str::<Value>(arguments) {
-        Ok(args_json) => match action_from_tool_arguments(name, &args_json) {
-            Ok(action) => {
-                log_tool_call_parsed(request_id, &action);
-                AiEvent::ActionProposed(action)
-            }
-            Err(err) => {
-                log_tool_call_parse_error(request_id, name, arguments, err.code(), &err);
-                AiEvent::Error(err)
-            }
-        },
-        // Ein nativer Tool-Call mit kaputtem JSON ist ein Protokollfehler
-        // des Providers, kein "Modell hat halt Prosa statt eines Blocks
-        // geliefert" wie im Fallback-Modus — deshalb hier bewusst ein
-        // `AiError` statt stillschweigendem Text-Fallback (anders als
-        // `parse_fallback_response`, s. `fallback.rs`).
-        Err(err) => {
-            // Spec 0094, A1.3: s. `anthropic::finalize_tool_use` — der Code
-            // stammt vom `AiError`, der aus diesem Fehlschlag entsteht.
-            let ai_error = AiError::InvalidResponse(format!(
-                "Tool-Call-Argumente sind kein gültiges JSON: {err}"
-            ));
-            log_tool_call_parse_error(request_id, name, arguments, ai_error.code(), &err);
-            AiEvent::Error(ai_error)
-        }
-    }
+    // Issue #604: unknown tool, broken JSON or invalid fields are
+    // non-fatal (`AiEvent::InvalidToolCall`); `AiError::InvalidResponse`
+    // stays for real protocol errors.
+    tool_call_event(request_id, name, arguments)
 }
 
 fn event_stream_from_response(
@@ -1147,6 +1237,7 @@ fn event_stream_from_response(
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
+    provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     process_frame_stream(
         Box::pin(sse_frame_stream(response)),
@@ -1154,6 +1245,7 @@ fn event_stream_from_response(
         request_id,
         api_key,
         extra_headers,
+        provider_request_id,
     )
 }
 
@@ -1167,6 +1259,7 @@ fn process_frame_stream(
     request_id: Uuid,
     api_key: String,
     extra_headers: Vec<(String, String)>,
+    provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     let secrets: Vec<String> = std::iter::once(api_key)
         .chain(extra_headers.into_iter().map(|(_, value)| value))
@@ -1182,6 +1275,7 @@ fn process_frame_stream(
         pending: VecDeque::new(),
         finished: false,
         request_id,
+        provider_request_id,
         finish_reason: None,
     };
 
@@ -1424,6 +1518,7 @@ mod tests {
             Uuid::new_v4(),
             String::new(),
             Vec::new(),
+            None,
         );
         let event = events.next().await;
 
@@ -1459,7 +1554,7 @@ mod tests {
             ]));
         let request_id = Uuid::new_v4();
         let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, request_id, String::new(), Vec::new())
+            process_frame_stream(frames, true, request_id, String::new(), Vec::new(), None)
                 .collect()
                 .await;
 
@@ -1492,10 +1587,16 @@ mod tests {
                 frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
                 frame("[DONE]"),
             ]));
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
         let log_text = crate::test_support::log_buffer_text();
@@ -1516,10 +1617,16 @@ mod tests {
                 frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
                 frame("[DONE]"),
             ]));
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(
             events,
@@ -1539,10 +1646,16 @@ mod tests {
                 frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
                 frame("[DONE]"),
             ]));
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, false, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            false,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
     }
@@ -1558,10 +1671,16 @@ mod tests {
                 frame(r#"{"choices":[{"delta":{},"finish_reason":"content_filter"}]}"#),
                 frame("[DONE]"),
             ]));
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
     }
@@ -1576,10 +1695,16 @@ mod tests {
         let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
             futures::stream::iter(vec![frame(r#"{"choices":[{"delta":{}}]}"#)]),
         );
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
     }
@@ -1595,10 +1720,16 @@ mod tests {
                 frame(r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#),
                 frame("[DONE]"),
             ]));
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(
             events,
@@ -1631,10 +1762,16 @@ mod tests {
             ]),
         );
 
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(
             events,
@@ -1660,10 +1797,16 @@ mod tests {
                 frame("[DONE]"),
             ]),
         );
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, false, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            false,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
     }
@@ -1681,10 +1824,16 @@ mod tests {
                 frame(r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#),
                 frame("[DONE]"),
             ]));
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
         let log_text = crate::test_support::log_buffer_text();
@@ -1717,10 +1866,16 @@ mod tests {
             ]),
         );
 
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(
             events,
@@ -1744,10 +1899,16 @@ mod tests {
             ]),
         );
 
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(
             events.len(),
@@ -1759,6 +1920,51 @@ mod tests {
             RawEvent::Public(AiEvent::ActionProposed(_))
         ));
         assert_eq!(events[1], RawEvent::Public(AiEvent::Done));
+    }
+
+    /// Issue #604: unknown tool and a known tool with a missing required
+    /// field are non-fatal; the valid call of the same response is kept.
+    #[tokio::test]
+    async fn test_invalid_tool_calls_are_non_fatal_and_valid_call_still_forwarded() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"date","arguments":""}},{"index":1,"function":{"name":"suggest_command","arguments":"{\"nothing\":\"rm -rf /\"}"}},{"index":2,"function":{"name":"suggest_command","arguments":"{\"command\":\"ls\"}"}}]}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
+        assert!(
+            matches!(
+                &events[0],
+                RawEvent::Public(AiEvent::InvalidToolCall { tool_name, .. }) if tool_name == "date"
+            ),
+            "{events:?}"
+        );
+        assert!(
+            matches!(
+                &events[1],
+                RawEvent::Public(AiEvent::InvalidToolCall { reason, .. })
+                    if *reason == ssh_manager_core::ai::InvalidToolCallReason::MissingField("command".into())
+            ),
+            "{events:?}"
+        );
+        assert!(matches!(
+            events[2],
+            RawEvent::Public(AiEvent::ActionProposed(_))
+        ));
+        assert_eq!(events[3], RawEvent::Public(AiEvent::Done));
     }
 
     /// Spec 0065 §3: die Verbindung bricht mitten in einem Tool-Call ab,
@@ -1773,10 +1979,16 @@ mod tests {
             )]),
         );
 
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
     }
@@ -1798,10 +2010,16 @@ mod tests {
             ]),
         );
 
-        let events: Vec<RawEvent> =
-            process_frame_stream(frames, true, Uuid::new_v4(), String::new(), Vec::new())
-                .collect()
-                .await;
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
 
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
     }

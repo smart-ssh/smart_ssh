@@ -7,7 +7,7 @@ use ssh_manager_core::filter::{hard_blacklist_patterns, RuleId, Scope};
 
 use app_logic::dto::{
     ActionUserDecision, EvalContextInput, EvaluationTraceDto, PatternDto, PatternSuggestionDto,
-    PatternType, RuleDto, RuleInput,
+    RuleDto, RuleInput,
 };
 use app_logic::error::CommandResult;
 use app_logic::state::{ActionId, AppState, SessionId};
@@ -100,6 +100,33 @@ pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<Pattern
     Ok(app_logic::rule_suggestions::suggest_rule_patterns(&command))
 }
 
+/// Issue #596, Spec 0011: coverage per segment, suggestions for the
+/// uncovered segments and a verdict per suggestion for the pending command
+/// of `session_id`, with the suggestions' patterns as candidate rules in
+/// `scope`. Read-only: nothing is stored. Server and tags come from the
+/// session, not from the frontend.
+#[tauri::command]
+pub async fn explain_confirmation(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    command: String,
+    scope: Scope,
+) -> CommandResult<app_logic::dto::ConfirmationExplanationDto> {
+    let session = state.sessions.get(session_id).ok_or_else(|| {
+        app_logic::error::CommandError::from(format!("unknown session {session_id:?}"))
+    })?;
+    let stored = app_logic::filter_rules::list_rules(&state.policy_store, None).await?;
+    Ok(app_logic::confirmation_explain::explain_confirmation(
+        &session,
+        state.profile_store.as_ref(),
+        &stored,
+        &command,
+        scope,
+        None,
+    )
+    .await)
+}
+
 /// Spec 0011, Abschnitt 3: versucht zuerst, die Regel anzulegen (Schritt 1,
 /// delegiert an [`app_logic::filter_rules::create_rule`] über
 /// [`app_logic::rule_suggestions::create_quick_rule`]), löst **danach** die
@@ -138,17 +165,16 @@ pub async fn accept_and_create_rule(
     // Kommentar).
     session_id: SessionId,
     action_id: ActionId,
-    pattern_type: PatternType,
-    pattern_value: String,
+    patterns: Vec<app_logic::dto::SuggestionPatternDto>,
     scope: Scope,
     priority: Option<i32>,
     edited_command: Option<String>,
-) -> CommandResult<RuleId> {
+) -> CommandResult<Vec<RuleId>> {
     let _ = session_id;
-    let rule_result = app_logic::rule_suggestions::create_quick_rule(
+    // Spec 0011, Abschnitt 3: alle Regeln des Vorschlags atomar.
+    let rule_result = app_logic::rule_suggestions::create_quick_rules(
         &state.policy_store,
-        pattern_type,
-        pattern_value,
+        patterns,
         scope,
         priority,
     )

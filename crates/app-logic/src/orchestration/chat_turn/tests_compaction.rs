@@ -2463,3 +2463,179 @@ async fn test_english_fallback_notice_fits_under_budget() {
         .iter()
         .any(|t| t.contains(truncation_marker(PromptLanguage::En))));
 }
+
+// --- Issue #601: real token counts ------------------------------------------
+
+fn usage_test_context(bytes: usize) -> SessionContext {
+    SessionContext {
+        system_context: String::new(),
+        history: (0..10).map(|_| user_msg(&"a".repeat(bytes / 10))).collect(),
+        available_actions: Vec::new(),
+        max_tokens_hint: None,
+    }
+}
+
+async fn compacts_with(session: &Session, bytes: usize, window: usize) -> bool {
+    let context = usage_test_context(bytes);
+    let result = crate::compaction::compact_for_send(
+        session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        context.clone(),
+        &crate::compaction::SystemContextParts::default(),
+        window,
+    )
+    .await;
+    result != context
+}
+
+#[test]
+fn test_usage_tracker_ratio_is_never_below_one_and_smoothed() {
+    let mut t = crate::compaction::ContextUsageTracker::default();
+    assert_eq!(t.ratio(), 1.0);
+    t.record(50, 100); // real below estimate
+    assert_eq!(t.ratio(), 1.0);
+    t.record(300, 100); // 3.0 -> smoothed with 1.0
+    assert!((t.ratio() - 2.0).abs() < 1e-9);
+    t.record(10, 0); // zero estimate must not divide by zero
+    assert!(t.ratio() >= 1.0);
+}
+
+#[tokio::test]
+async fn test_compaction_uses_observed_ratio_to_trigger_earlier() {
+    // Window 1000 -> trigger 750. 2400 bytes ~ 600 tokens = 60% of window.
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default(),
+    );
+    assert!(
+        !compacts_with(&session, 2400, 1000).await,
+        "no usage: unchanged"
+    );
+    session.context_usage.lock().unwrap().record(750, 500); // 1.5x, below trigger
+    assert!(
+        compacts_with(&session, 2400, 1000).await,
+        "1.5x ratio: 60% estimate must compact"
+    );
+}
+
+#[tokio::test]
+async fn test_compaction_forced_when_last_real_input_exceeded_trigger() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default(),
+    );
+    {
+        let mut t = session.context_usage.lock().unwrap();
+        t.record(800, 500); // over the 750 trigger
+        t.record(100, 500); // smoothing pulls the ratio back down
+    }
+    assert!(session.context_usage.lock().unwrap().ratio() < 1.5);
+    assert!(compacts_with(&session, 2400, 1000).await);
+}
+
+#[tokio::test]
+async fn test_usage_event_is_recorded_and_emitted_after_response() {
+    let provider = MockAiProvider::with_rounds(vec![vec![
+        AiEvent::TextDelta("ok".to_string()),
+        AiEvent::Usage { input_tokens: 1234 },
+        AiEvent::Done,
+    ]]);
+    let session = session_with_ai_provider(provider, MockSshTransport::default());
+    session.context.lock().await.history.push(user_msg("hi"));
+    let emitter = TestEmitter::default();
+    run_chat_turn(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+    let events = emitter.events.lock().unwrap();
+    let usage: Vec<_> = events
+        .iter()
+        .filter(|(n, _)| n == "chat-context-usage")
+        .collect();
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].1["inputTokens"], 1234);
+    assert!(usage[0].1["windowTokens"].is_u64());
+    drop(events);
+    assert_eq!(
+        session.context_usage.lock().unwrap().last_input_tokens,
+        Some(1234)
+    );
+}
+
+#[tokio::test]
+async fn test_compaction_note_event_once_per_step() {
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default(),
+    );
+    let emitter = TestEmitter::default();
+    for _ in 0..3 {
+        crate::compaction::compact_for_send(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            usage_test_context(8000),
+            &crate::compaction::SystemContextParts::default(),
+            1000,
+        )
+        .await;
+    }
+    let count = emitter
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(n, _)| n == "chat-context-compacted")
+        .count();
+    assert_eq!(count, 1, "same step must not be announced per request");
+}
+
+/// Token-dense output (hex/MAC): the 4-bytes-per-token estimate is far too
+/// low; with the observed ratio the real size stays below the window.
+#[tokio::test]
+async fn test_token_dense_session_stays_below_window_with_correction() {
+    let window = 20_000usize;
+    // Real tokenizer: ~1.6 bytes/token for dense hex => ratio 2.5 vs estimate.
+    let real_tokens = |ctx: &SessionContext| {
+        (crate::compaction::estimate_request_tokens(ctx) as f64 * 2.5) as u64
+    };
+    let session = session_with_ai_provider(
+        MockAiProvider::new(vec![AiEvent::Done]),
+        MockSshTransport::default(),
+    );
+    let mut history = Vec::new();
+    let mut max_real = 0u64;
+    for round in 0..40 {
+        history.push(user_msg(&format!("round {round}")));
+        history.push(user_msg(&"00:1a:2b:3c:4d:5e ".repeat(250)));
+        let sent = crate::compaction::compact_for_send(
+            &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
+            SessionContext {
+                system_context: String::new(),
+                history: history.clone(),
+                available_actions: Vec::new(),
+                max_tokens_hint: None,
+            },
+            &crate::compaction::SystemContextParts::default(),
+            window,
+        )
+        .await;
+        let real = real_tokens(&sent);
+        if round > 5 {
+            max_real = max_real.max(real);
+        }
+        let est = crate::compaction::estimate_request_tokens(&sent);
+        session.context_usage.lock().unwrap().record(real, est);
+    }
+    assert!(
+        max_real < window as u64,
+        "real input {max_real} must stay below window {window}"
+    );
+}

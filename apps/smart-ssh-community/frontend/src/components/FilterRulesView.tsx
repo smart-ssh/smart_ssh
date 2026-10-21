@@ -567,6 +567,12 @@ function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: Rule
           {matchedRule.action})
         </p>
       )}
+      {trace.checks.length > 0 && (
+        <p data-testid="trace-checks">
+          {t("filterRules.checksLabel")}{" "}
+          {trace.checks.map((c) => translateErrorCode(t, c, c)).join("; ")}
+        </p>
+      )}
       {trace.matchedHardBlacklistEntry && (
         <p>
           {t("filterRules.hardBlacklistLabel")} <code>{trace.matchedHardBlacklistEntry}</code>
@@ -579,8 +585,14 @@ function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: Rule
 /** Rekursiv: ein Trace pro Teilkommando (Chaining) bzw. Command-
  * Substitution, s. `EvaluationTraceDto`-Doc-Kommentar. */
 function TraceView({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto[] }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded border border-slate-700 bg-slate-900/60 p-2">
+      {trace.kind === "Segment" && trace.segmentIndex !== null && (
+        <span className="mr-2 text-xs text-slate-400">
+          {t("filterRules.segmentLabel", { index: trace.segmentIndex + 1 })}
+        </span>
+      )}
       <DecisionBadge decision={trace.decision} />
       <TraceDetails trace={trace} rules={rules} />
       {trace.subCommandTraces.length > 0 && (

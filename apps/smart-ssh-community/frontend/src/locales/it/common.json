@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "La directory iniziale deve essere un percorso assoluto (/…) o iniziare con ~/.",
       "controlCharacter": "La directory iniziale non deve contenere caratteri di controllo."
+    },
+    "tabs": {
+      "label": "Impostazioni del server",
+      "general": "Generale",
+      "connection": "Connessione",
+      "security": "Sicurezza",
+      "invalid": "Contiene errori"
     }
   },
   "filterRules": {
@@ -313,6 +320,8 @@
     "overallDecision": "Decisione complessiva",
     "subCommands": "Sottocomandi",
     "matchedRuleLabel": "Regola:",
+    "segmentLabel": "Segmento {{index}}",
+    "checksLabel": "Controlli:",
     "hardBlacklistLabel": "Blacklist fissa:"
   },
   "actionCard": {
@@ -367,7 +376,26 @@
     "noSuggestions": "Nessun suggerimento.",
     "binaryFileHint": "⚠ File binario: confronto testuale non possibile. Dimensione precedente: {{oldSize}}, nuova dimensione: {{newSize}}.",
     "diffTooLargeHint": "⚠ Contenuto troppo grande per un diff per righe. Dimensione precedente: {{oldSize}}, nuova dimensione: {{newSize}}.",
-    "noContentChange": "(nessuna modifica del contenuto)"
+    "noContentChange": "(nessuna modifica del contenuto)",
+    "quickRuleLabel": {
+      "exact": "Esatto: {{patterns}}",
+      "exactPerSegment": "Esatto per parte: {{patterns}}",
+      "pathScoped": "Stessa directory: {{patterns}}",
+      "lastArgOpen": "Qualsiasi ultimo argomento: {{patterns}}",
+      "subcommand": "Tutte le chiamate a `{{names}}`: {{patterns}}",
+      "tool": "Tutte le chiamate a `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Parti di questo comando",
+      "covered": "coperto dalla regola {{rule}}",
+      "coveredUnknown": "coperto da una regola esistente",
+      "needsRule": "richiede una regola",
+      "blocked": "chiede sempre, qualunque regola: {{reasons}}",
+      "verdictAuto": "verrà eseguito automaticamente la prossima volta",
+      "verdictAsk": "chiederà ancora: {{reasons}}",
+      "notice": "Regola creata. Questo comando chiederà ancora la prossima volta: {{reasons}}",
+      "reasonOther": "un altro controllo di sicurezza"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Avviso di sicurezza · Chiave host cambiata",
@@ -501,8 +529,12 @@
     "AI_RATE_LIMITED": "Il provider IA sta attualmente limitando le richieste (rate limit): l'app ha già riprovato automaticamente alcune volte. Attenda un momento e invii di nuovo il messaggio.",
     "AI_NETWORK_ERROR": "Impossibile raggiungere il provider IA. Verifichi la connessione a Internet e, per un endpoint personalizzato, l'URL di base, poi invii di nuovo.",
     "AI_INVALID_RESPONSE": "Risposta inattesa dal provider IA",
+    "AI_INVALID_TOOL_CALL": "L’IA ha continuato a chiamare uno strumento che non esiste. Prova a riformulare la richiesta.",
     "AI_CONTEXT_TOO_LARGE": "Contesto troppo grande per il provider IA. Riduca \"Lunghezza massima della risposta (token)\" o avvii una nuova chat.",
     "AI_PROVIDER_UNAVAILABLE": "Il provider IA ha segnalato un errore (ad es. manutenzione o sovraccarico). Riprovi più tardi; se persiste, verifichi le impostazioni del provider.",
+    "AI_PROVIDER_OVERLOADED": "Il provider di IA è sovraccarico in questo momento. Riprova tra un attimo.",
+    "AI_PROVIDER_BILLING": "L'account del provider di IA non ha più credito. Controlla la fatturazione nella console del provider.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Il provider di IA ha rifiutato la richiesta.",
     "AI_RESPONSE_TRUNCATED": "La risposta dell'IA era troppo lunga per un comando completo",
     "AI_MODEL_NOT_FOUND": "Il provider IA non conosce questo modello. Verifichi il nome del modello nelle Impostazioni (\"Carica modelli\" elenca quelli disponibili); per Ollama lo scarichi prima con `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Questo modello non supporta il tool calling. Nelle impostazioni del provider deselezioni \"Supporta il tool calling nativo\" (verrà usata l'alternativa basata sul prompt) o scelga un modello con supporto agli strumenti.",
@@ -570,7 +602,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L'avviso sulla password principale non è stato confermato. Senza quella password tutti i dati vanno persi e non c'è recupero: selezioni la casella e la imposti di nuovo. Nulla è stato modificato.",
     "KEYCHAIN_KEY_MISMATCH": "La chiave nel portachiavi non appartiene a questo database. Nulla è stato modificato: memorizzarla renderebbe il database illeggibile al prossimo avvio.",
     "SFTP_CONTENT_TOO_LARGE": "Il file supera i 50 MB e non può essere copiato negli appunti.",
-    "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema."
+    "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema.",
+    "SSH_SFTP_ALREADY_EXISTS": "Esiste già un file o una cartella con questo nome"
   },
   "mcpServer": {
     "hint": "I client MCP esterni possono usarlo per proporre comandi, letture/scritture di file e aggiornamenti di note sui server in elenco consentito; ogni richiesta richiede sempre conferma nell'app, indipendentemente dalle regole di consenso esistenti.",
@@ -661,7 +694,10 @@
     "editUploadFailed": "Impossibile caricare la modifica a “{{name}}”: {{reason}}",
     "uploadedFolder": "Cartella “{{name}}” caricata — {{count}} file",
     "uploadFolderFailed": "Caricamento della cartella “{{name}}” non riuscito: {{reason}}",
-    "uploadFailedMany": "Impossibile caricare {{name}} file, ad es.: {{reason}}"
+    "uploadFailedMany": "Impossibile caricare {{name}} file, ad es.: {{reason}}",
+    "nothingToPaste": "Niente da incollare: gli appunti non contengono file",
+    "createFileDone": "File «{{name}}» creato",
+    "createFileFailed": "Impossibile creare il file «{{name}}»: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Diritti elevati",
@@ -936,6 +972,8 @@
     "cancelCut": "Annulla taglio",
     "transferUpload": "Caricamento: {{name}}",
     "transferDownload": "Download: {{name}}",
+    "transferDone": "Completato: {{name}}",
+    "transferElevationEnded": "La modalità elevata è stata disattivata durante il trasferimento.",
     "loading": "Caricamento…",
     "emptyDirectory": "(directory vuota)",
     "dropHint": "Rilasci qui per caricare in {{path}}",
@@ -1010,7 +1048,9 @@
       "chmod": "Modifica permessi…",
       "rename": "Rinomina",
       "cut": "Taglia",
-      "delete": "Elimina"
+      "delete": "Elimina",
+      "newFolder": "Nuova cartella",
+      "newFile": "Nuovo file"
     },
     "properties": {
       "title": "Proprietà",
@@ -1041,10 +1081,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Rinomina",
-      "newFolderTitle": "Nuova cartella"
+      "newFolderTitle": "Nuova cartella",
+      "newFileTitle": "Nuovo file",
+      "invalidName": "Inserisci un nome senza «/». «.» e «..» non sono consentiti."
     },
     "copyProgress": "Copia in corso… {{done}} MB di {{total}} MB",
-    "copyProgressUnknownTotal": "Copia in corso… {{done}} MB"
+    "copyProgressUnknownTotal": "Copia in corso… {{done}} MB",
+    "directoryMenuLabel": "Azioni della cartella",
+    "clipboardPaste": {
+      "title": "Carica i file dagli appunti",
+      "intro": "Caricare questi file dagli appunti?",
+      "target": "Cartella di destinazione",
+      "more": "… e altri {{count}}",
+      "confirm": "Carica",
+      "cancel": "Annulla",
+      "menuTitle": "Carica i file dagli appunti"
+    }
   },
   "chat": {
     "jumpToLatest": "Vai al messaggio più recente",
@@ -1054,6 +1106,9 @@
     "stopAutoContinuation": "Interrompi modalità automatica",
     "generating": "L'IA sta generando una risposta / un documento…",
     "stop": "Interrompi",
+    "tryAgain": "Riprova",
+    "errorDetails": "Dettagli",
+    "aiRetrying": "Il provider IA è sovraccarico – nuovo tentativo tra {{seconds}} s (tentativo {{attempt}} di {{max}})",
     "noActiveProvider": "Nessun provider IA attivo configurato. La preghiamo di configurarne prima uno nelle impostazioni.",
     "inputPlaceholder": "Faccia una domanda o descriva un comando …",
     "send": "Invia",
@@ -1065,6 +1120,9 @@
     "historyAttached": "Allegato: {{files}}",
     "queued": "Verrà inviato con la prossima richiesta",
     "responseCancelled": "Risposta annullata.",
+    "contextCompactedNotice": "Le parti più vecchie di questa chat sono state riassunte per rientrare nel contesto del modello.",
+    "contextUsage": "Contesto {{used}} / {{window}}",
+    "contextUsageTooltip": "Le parti più vecchie della chat vengono riassunte automaticamente quando il contesto si riempie.",
     "webResearchUnavailable": "La ricerca web non è disponibile per questo account provider (la ricerca web è disattivata lì). Questa sessione risponde senza ricerca web. Per disattivarla in modo permanente: Impostazioni → Provider IA → “Ricerca web”.",
     "emptyResponse": "Il modello non ha restituito alcuna risposta. Per i modelli con fase di ragionamento aiuta un limite di output più alto nelle impostazioni del provider.",
     "outputTruncated": "(troncato)",

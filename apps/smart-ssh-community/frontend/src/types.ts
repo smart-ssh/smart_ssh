@@ -499,6 +499,20 @@ export interface ChatErrorEvent {
    * `null`/`undefined` wenn keiner vorliegt (reine Validierungsmeldung ohne
    * typisierten Fehler dahinter). Übersetzung via `translateErrorCode`. */
   code?: string | null;
+  /** Issue #600 — provider details for the "Details" view (the message is
+   * already redacted by the backend). */
+  providerErrorType?: string | null;
+  httpStatus?: number | null;
+  providerMessage?: string | null;
+}
+
+/** Issue #600 — the AI provider is overloaded; the request is repeated
+ * automatically after `delaySecs`. */
+export interface ChatAiRetryingEvent {
+  sessionId: string;
+  attempt: number;
+  maxAttempts: number;
+  delaySecs: number;
 }
 
 export interface ChatAutoContinuationLimitReachedEvent {
@@ -511,6 +525,18 @@ export interface ChatAutoContinuationLimitReachedEvent {
  * separat über den Retry). Zeigt einen Hinweis + „Weiter"-Aktion
  * (`continue_truncated_response`) an der letzten KI-Nachricht. */
 export interface ChatResponseTruncatedEvent {
+  sessionId: string;
+}
+
+/** Issue #601: real input size of the last request vs. the model window. */
+export interface ChatContextUsageEvent {
+  sessionId: string;
+  inputTokens: number;
+  windowTokens: number;
+}
+
+/** Issue #601: older chat parts were summarized/cut for a request. */
+export interface ChatContextCompactedEvent {
   sessionId: string;
 }
 
@@ -820,14 +846,63 @@ export interface EvaluationTraceDto {
   matchedRule: string | null;
   matchedHardBlacklistEntry: string | null;
   subCommandTraces: EvaluationTraceDto[];
+  /** What the trace describes: a pipeline/chain segment, a `$(...)` substitution or embedded code. */
+  kind: "Segment" | "Substitution" | "EmbeddedCode";
+  /** Position within the split command; only for `Segment` traces. */
+  segmentIndex: number | null;
+  /** Rule-independent checks that forced at least Confirm, as reason codes. */
+  checks: string[];
 }
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------
 
-export interface PatternSuggestionDto {
-  label: string;
+export type SuggestionKind = "exact" | "exactPerSegment" | "pathScoped" | "lastArgOpen" | "subcommand" | "tool";
+
+export interface SuggestionPatternDto {
   patternType: PatternType;
   patternValue: string;
+}
+
+/** A suggestion is a set of patterns that are created together; the label is
+ * rendered by the frontend from `kind` and `names` (no prose from the backend). */
+export interface PatternSuggestionDto {
+  kind: SuggestionKind;
+  names: string[];
+  patterns: SuggestionPatternDto[];
+}
+
+// --- Issue #596: explanation of a pending confirmation -------------------
+
+export type SegmentCoverageState = "covered" | "needsRule" | "blocked";
+
+export interface SegmentCoverageDto {
+  index: number;
+  text: string;
+  state: SegmentCoverageState;
+  /** Covering Allow rule (only for `covered`). */
+  rule: { patternType: PatternType; patternValue: string } | null;
+  /** Fixed reason codes (`FILTER_*`), translated via `errors.<code>`. */
+  reasons: string[];
+}
+
+export interface VerdictReasonDto {
+  code: string;
+  segmentIndex: number | null;
+}
+
+export interface SuggestionVerdictDto {
+  autoExec: boolean;
+  reasons: VerdictReasonDto[];
+}
+
+export interface ExplainedSuggestionDto extends PatternSuggestionDto {
+  verdict: SuggestionVerdictDto;
+}
+
+export interface ConfirmationExplanationDto {
+  /** Empty for a single segment without a rule-independent reason. */
+  segments: SegmentCoverageDto[];
+  suggestions: ExplainedSuggestionDto[];
 }
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------

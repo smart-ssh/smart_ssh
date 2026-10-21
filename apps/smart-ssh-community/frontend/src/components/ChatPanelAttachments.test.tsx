@@ -13,6 +13,7 @@ import { getChatHistory, sendChatMessage } from "../api";
 import {
   registerComposerAction,
   registerComposerDropHandler,
+  unregisterComposerDropHandler,
   resetComposerRegistryForTests,
 } from "../extensions/registry";
 import { testI18n } from "../testI18n";
@@ -65,7 +66,7 @@ vi.mock("../api", () => ({
   respondToAction: vi.fn(() => Promise.resolve()),
   sendChatMessage: vi.fn(() => Promise.resolve()),
   stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  suggestRulePatterns: vi.fn(),
+  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
   takeChatContentIntoNote: vi.fn(),
 }));
 
@@ -81,10 +82,13 @@ vi.mock("../events", () => ({
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
   onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
+  onChatContextUsage: () => Promise.resolve(() => {}),
+  onChatContextCompacted: () => Promise.resolve(() => {}),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
   onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
@@ -275,5 +279,71 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     );
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0]).toMatchObject({ sessionId: "session-1" });
+  });
+
+  describe("drop zone by pointer position", () => {
+    function prepare() {
+      const area = document.querySelector(".flex.h-full.flex-col") as HTMLElement;
+      area.getBoundingClientRect = () =>
+        ({ left: 0, right: 100, top: 0, bottom: 100 }) as DOMRect;
+      Object.defineProperty(area, "offsetParent", { get: () => document.body });
+    }
+    afterEach(() => {
+      Object.defineProperty(window, "devicePixelRatio", { value: 1, configurable: true });
+    });
+
+    it("highlights only while a handler is registered and the pointer is over the chat", async () => {
+      registerComposerDropHandler("test-drop", vi.fn());
+      renderChatPanel();
+      await waitFor(() => expect(dragState.handler).not.toBeNull());
+      prepare();
+      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
+      expect(screen.getByTestId("chat-drop-highlight")).toBeInTheDocument();
+      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 500, y: 500 } } }));
+      expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
+      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
+      act(() => dragState.handler?.({ payload: { type: "leave" } }));
+      expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
+      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
+      act(() => dragState.handler?.({ payload: { type: "drop", position: { x: 10, y: 10 } } }));
+      expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
+    });
+
+    it("shows nothing and listens to nothing without a handler", async () => {
+      renderChatPanel();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(dragState.handler).toBeNull();
+      expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
+    });
+
+    it("unregisterComposerDropHandler stops listening and highlight; unknown id is a no-op", async () => {
+      const handler = vi.fn();
+      registerComposerDropHandler("test-drop", handler);
+      renderChatPanel();
+      await waitFor(() => expect(dragState.handler).not.toBeNull());
+      prepare();
+      const before = dragState.handler;
+      act(() => dragState.handler?.({ payload: { type: "over", position: { x: 10, y: 10 } } }));
+      expect(screen.getByTestId("chat-drop-highlight")).toBeInTheDocument();
+      act(() => unregisterComposerDropHandler("unknown"));
+      expect(dragState.handler).toBe(before);
+      act(() => unregisterComposerDropHandler("test-drop"));
+      expect(dragState.handler).toBeNull();
+      expect(screen.queryByTestId("chat-drop-highlight")).toBeNull();
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("converts positions with devicePixelRatio", async () => {
+      Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+      const handler = vi.fn();
+      registerComposerDropHandler("test-drop", handler);
+      renderChatPanel();
+      await waitFor(() => expect(dragState.handler).not.toBeNull());
+      prepare();
+      act(() => dragState.handler?.({ payload: { type: "drop", position: { x: 150, y: 150 } } }));
+      expect(handler).toHaveBeenCalledTimes(1);
+      act(() => dragState.handler?.({ payload: { type: "drop", position: { x: 250, y: 250 } } }));
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
   });
 });

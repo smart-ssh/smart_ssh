@@ -616,7 +616,7 @@ async fn request_ai_title(
         request_context.history,
         session.redactor.as_ref(),
         &session.chat_content,
-        session_id,
+        session.extension_content_key(session_id).await,
     )
     .map_err(|_| TitleFailure::SealFailed)?;
     request_context.history.push(ChatMessage {
@@ -649,7 +649,11 @@ async fn request_ai_title(
             // aber defensiv: ignorieren statt eine Aktion auszuführen.
             AiEvent::ActionProposed(_) => {}
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv ignoriert.
-            AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
+            AiEvent::WebActivity(_)
+            | AiEvent::WebContentIngested
+            | AiEvent::Usage { .. }
+            | AiEvent::Retrying { .. }
+            | AiEvent::InvalidToolCall { .. } => {}
             AiEvent::Done => break,
             AiEvent::Error(_) => {
                 failure = Some(TitleFailure::Error);
@@ -912,7 +916,12 @@ pub async fn suggest_note_update_on_disconnect(
             AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
             // ignoriert.
-            AiEvent::TextDelta(_) | AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
+            AiEvent::TextDelta(_)
+            | AiEvent::WebActivity(_)
+            | AiEvent::WebContentIngested
+            | AiEvent::Usage { .. }
+            | AiEvent::Retrying { .. }
+            | AiEvent::InvalidToolCall { .. } => {}
         }
     }
 
@@ -1239,7 +1248,11 @@ async fn summarize_note_for_shrink(
                 AiEvent::ActionProposed(_) => {}
                 // Issue #162: Nebenaufrufe bekommen keine Web-Werkzeuge
                 // (s. `ai_providers::anthropic`); defensiv ignoriert.
-                AiEvent::WebActivity(_) | AiEvent::WebContentIngested => {}
+                AiEvent::WebActivity(_)
+                | AiEvent::WebContentIngested
+                | AiEvent::Usage { .. }
+                | AiEvent::Retrying { .. }
+                | AiEvent::InvalidToolCall { .. } => {}
                 AiEvent::Done => return Some((text, false)),
                 // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — die gekürzte Notiz gilt trotzdem als

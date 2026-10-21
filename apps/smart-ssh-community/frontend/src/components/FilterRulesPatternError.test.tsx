@@ -277,6 +277,9 @@ describe("Testansicht markiert ein ungültiges Muster (Spec 0077, 3.2.3)", () =>
       matchedRule: "rule-valid",
       matchedHardBlacklistEntry: null,
       subCommandTraces: [],
+      kind: "Segment",
+      segmentIndex: 0,
+      checks: [],
     });
     renderView();
 

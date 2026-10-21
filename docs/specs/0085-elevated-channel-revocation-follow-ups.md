@@ -52,6 +52,13 @@ aktiviert, oder der Kanal fällt weg. In jedem Fall gilt:
 5. Über den normalen Kanal ändert sich nichts.
 6. Kein Rückfall: Nach dem Abbruch läuft keine Operation dieses Befehls über
    den normalen Kanal weiter.
+7. Die Transferliste der Dateiansicht erreicht für jede Übertragung einen
+   Endzustand, auch wenn der erhöhte Modus währenddessen ausgeschaltet wird.
+   Scheitert die Übertragung am Widerruf, zeigt die Zeile den Text für den
+   nicht mehr aktiven erhöhten Modus (ohne „Channel-Fehler:“). Lief sie nach
+   A1.1 noch zu Ende, gilt sie als erledigt; die Zeile bleibt dann stehen und
+   nennt in einer Zeile, dass der erhöhte Modus währenddessen ausgeschaltet
+   wurde.
 
 **A2 — Kanal-Ende ist gesichert.**
 

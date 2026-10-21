@@ -1077,6 +1077,9 @@ pub struct EvaluationTraceDto {
     pub matched_rule: Option<RuleId>,
     pub matched_hard_blacklist_entry: Option<String>,
     pub sub_command_traces: Vec<EvaluationTraceDto>,
+    pub kind: ssh_manager_core::filter::TraceKind,
+    pub segment_index: Option<usize>,
+    pub checks: Vec<String>,
 }
 
 impl From<EvaluationTrace> for EvaluationTraceDto {
@@ -1085,6 +1088,9 @@ impl From<EvaluationTrace> for EvaluationTraceDto {
             decision: trace.decision,
             matched_rule: trace.matched_rule,
             matched_hard_blacklist_entry: trace.matched_hard_blacklist_entry,
+            kind: trace.kind,
+            segment_index: trace.segment_index,
+            checks: trace.checks,
             sub_command_traces: trace
                 .sub_command_traces
                 .into_iter()
@@ -1096,15 +1102,118 @@ impl From<EvaluationTrace> for EvaluationTraceDto {
 
 // --- Spec 0011: Regel-Schnellvorschlag ----------------------------------
 
+/// Art eines Muster-Vorschlags (Spec 0011, Abschnitt 2). Das Backend liefert
+/// nur die Art und Parameter, keinen Text: Die Beschriftung baut das
+/// Frontend übersetzt daraus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SuggestionKind {
+    /// Das Kommando selbst, unverändert.
+    Exact,
+    /// Je Teilkommando einer Verkettung/Pipeline das Kommando selbst.
+    ExactPerSegment,
+    /// Wie das Kommando, aber der Pfad durch sein Elternverzeichnis plus `*`
+    /// ersetzt (Zahlen nach Optionen werden `*`).
+    PathScoped,
+    /// Wie das Kommando, aber nur das letzte Argument ist frei (`*`).
+    LastArgOpen,
+    /// Unterkommando mit beliebigen Argumenten (`names`: `tool sub`).
+    Subcommand,
+    /// Alle Aufrufe eines Programms (`names`: das Programm).
+    Tool,
+}
+
+/// Ein einzelnes Muster eines Vorschlags.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionPatternDto {
+    pub pattern_type: PatternType,
+    pub pattern_value: String,
+}
+
 /// Ein Muster-Vorschlag für den Schnellvorschlag-Dropdown im
-/// Bestätigungsdialog (Spec 0011, Abschnitt 2).
+/// Bestätigungsdialog (Spec 0011, Abschnitt 2). Ein Vorschlag besteht aus
+/// einer **Menge** von Mustern, die zusammen (atomar) angelegt werden.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PatternSuggestionDto {
-    /// Menschenlesbar, für die Dropdown-Anzeige.
-    pub label: String,
+    pub kind: SuggestionKind,
+    /// Parameter für die Beschriftung (Programme bzw. `tool sub`), ohne
+    /// Doppelte, in Reihenfolge des Auftretens. Leer bei `exact*`.
+    pub names: Vec<String>,
+    pub patterns: Vec<SuggestionPatternDto>,
+}
+
+// --- Issue #596: Erklärung des Bestätigungsdialogs -----------------------
+
+/// Zustand eines Teilkommandos im Bestätigungsdialog (Spec 0011).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SegmentCoverageState {
+    /// Eine Allow-Regel lässt das Teilkommando automatisch laufen.
+    Covered,
+    /// Keine Regel greift; eine Allow-Regel könnte es abdecken.
+    NeedsRule,
+    /// Verlangt eine Bestätigung, egal welche Allow-Regel existiert
+    /// (`reasons`), oder eine Regel verlangt Bestätigung/verbietet es.
+    Blocked,
+}
+
+/// Die Regel, die ein Teilkommando abdeckt (nur Anzeige).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoveringRuleDto {
     pub pattern_type: PatternType,
     pub pattern_value: String,
+}
+
+/// Ein Teilkommando mit seinem Zustand. `reasons` sind feste Codes
+/// (`FILTER_*`-Codes), keine Texte.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentCoverageDto {
+    pub index: usize,
+    pub text: String,
+    pub state: SegmentCoverageState,
+    pub rule: Option<CoveringRuleDto>,
+    pub reasons: Vec<String>,
+}
+
+/// Grund, warum ein Vorschlag das Kommando nicht automatisch laufen lässt.
+/// `code`: `FILTER_NO_RULE_MATCHED` (Teilkommando ohne Regel), `FILTER_RULE_CONFIRM`, `FILTER_RULE_DENY`,
+/// ein `FILTER_*`-Code der Engine oder ein Code einer nachgelagerten
+/// Eskalation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerdictReasonDto {
+    pub code: String,
+    pub segment_index: Option<usize>,
+}
+
+/// Ergebnis der Auswertung des Kommandos mit den Mustern des Vorschlags als
+/// Kandidatenregeln.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionVerdictDto {
+    pub auto_exec: bool,
+    pub reasons: Vec<VerdictReasonDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplainedSuggestionDto {
+    #[serde(flatten)]
+    pub suggestion: PatternSuggestionDto,
+    pub verdict: SuggestionVerdictDto,
+}
+
+/// Antwort von `explain_confirmation`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmationExplanationDto {
+    /// Leer bei einem Teilkommando ohne regelunabhängigen Grund.
+    pub segments: Vec<SegmentCoverageDto>,
+    pub suggestions: Vec<ExplainedSuggestionDto>,
 }
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------

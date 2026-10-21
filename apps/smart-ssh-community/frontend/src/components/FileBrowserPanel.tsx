@@ -4,7 +4,9 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
 import { formatDateTime } from "../formatDateTime";
 import {
+  claimClipboardFiles,
   claimDroppedPaths,
+  clipboardHasFiles,
   commandErrorCode,
   commandErrorMessage,
   pickUploadFiles,
@@ -25,6 +27,7 @@ import {
   sftpExists,
   sftpList,
   sftpMkdir,
+  sftpCreateFile,
   sftpCancelCopyContent,
   sftpCopyContent,
   sftpCopyFile,
@@ -40,6 +43,7 @@ import {
   onSftpTransferFinished,
   onSftpTransferStarted,
 } from "../events";
+import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
 import {
   loadFileManagerColumnWidths,
@@ -115,6 +119,11 @@ interface Transfer {
   fileName: string;
   totalBytes: number | null;
   error: string | null;
+  /** Issue #621: the transfer started while elevated mode was on. */
+  startedElevated?: boolean;
+  /** Issue #621: finished successfully, but elevated mode ended meanwhile —
+   * the row stays (as done) with a note. */
+  doneElevationEnded?: boolean;
 }
 
 interface FileBrowserPanelProps {
@@ -174,6 +183,14 @@ export function FileBrowserPanel({
   const [deleteTarget, setDeleteTarget] = useState<RemoteEntryDto | null>(null);
   const [deletePreview, setDeletePreview] = useState<DeletePreviewDto | null>(null);
   const [mkdirOpen, setMkdirOpen] = useState<string | null>(null);
+  /** Issue #570: "Neue Datei" (Namensabfrage) und Kontextmenü auf leerer
+   * Fläche (Position, `null` = zu). `nameError` gilt für beide Abfragen. */
+  const [newFileOpen, setNewFileOpen] = useState<string | null>(null);
+  const [dirMenu, setDirMenu] = useState<{ x: number; y: number } | null>(null);
+  // Issue #571: whether the OS clipboard holds local files, checked each time
+  // the empty-space menu opens (no paths, only a flag).
+  const [clipboardFiles, setClipboardFiles] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [chmodTarget, setChmodTarget] = useState<RemoteEntryDto | null>(null);
   // Spec 0054, Teil 3: "Verschieben" per Ausschneiden/Einfügen (die Spec
   // erlaubt ausdrücklich Cut/Paste ODER Drag-and-Drop als Alternativen —
@@ -212,6 +229,7 @@ export function FileBrowserPanel({
   const [dragOver, setDragOver] = useState(false);
   const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
   const localEdit = useLocalEditSession(sessionId);
@@ -566,6 +584,29 @@ export function FileBrowserPanel({
     };
   }, [openMenu]);
 
+  // Issue #570: Kontextmenü auf leerer Fläche — Klick außerhalb und Escape
+  // schließen es wie das Eintragsmenü.
+  useEffect(() => {
+    if (dirMenu === null) return;
+    const handler = () => setDirMenu(null);
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDirMenu(null);
+    };
+    document.addEventListener("click", handler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("click", handler);
+      document.removeEventListener("keydown", keyHandler);
+    };
+  }, [dirMenu]);
+
+  // Issue #621: subscribe once per session. The handlers read the current
+  // channel user / path / load through refs, so toggling elevated mode never
+  // unsubscribes (an event in the re-subscription gap would be lost).
+  const channelUserRef = useRef(channelUser);
+  channelUserRef.current = channelUser;
+  const loadRef = useRef(load);
+  loadRef.current = load;
   useEffect(() => {
     const unlisten = [
       onSftpTransferStarted((event) => {
@@ -578,6 +619,7 @@ export function FileBrowserPanel({
             fileName: event.fileName,
             totalBytes: event.totalBytes,
             error: null,
+            startedElevated: channelUserRef.current !== null,
           },
         ]);
       }),
@@ -588,23 +630,29 @@ export function FileBrowserPanel({
             prev.map((t) => (t.id === event.transferId ? { ...t, error: event.error } : t)),
           );
         } else {
-          setTransfers((prev) => prev.filter((t) => t.id !== event.transferId));
+          const elevationEnded = channelUserRef.current === null;
+          setTransfers((prev) =>
+            prev.flatMap((t) => {
+              if (t.id !== event.transferId) return [t];
+              // Issue #621 / Spec 0085: completed although elevated mode was
+              // switched off meanwhile — keep the row as done, with a note.
+              return t.startedElevated && elevationEnded ? [{ ...t, doneElevationEnded: true }] : [];
+            }),
+          );
           // Erfolgreicher Transfer kann den Inhalt des aktuell offenen
           // Verzeichnisses geändert haben (Upload/Download berührt aber nur
           // die Ziel-/Quelldatei — ein Refresh ist trotzdem billig genug,
           // um nicht auf mögliche Rennbedingungen zwischen Event und
           // Nutzer-Navigation Rücksicht nehmen zu müssen).
-          load(path);
+          loadRef.current(pathRef.current);
         }
       }),
     ];
     return () => {
       unlisten.forEach((p) => p.then((fn) => fn()));
     };
-    // `channelUser`: das Neuladen nach einem Transfer muss den aktuellen
-    // Kanal nutzen (spec-reviewer-Fund, Spec 0067: veraltete Closure).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, path, channelUser]);
+    // Spec 0067: reload after a transfer uses the current channel (via refs).
+  }, [sessionId]);
 
   // Spec 0020, Abschnitt 5.1: Upload per Drag-and-Drop aus dem Betriebssystem.
   // Nur aktiv, während dieser Tab UND die Dateien-Ansicht sichtbar sind (s.
@@ -618,12 +666,16 @@ export function FileBrowserPanel({
     let cancelled = false;
     getCurrentWebview()
       .onDragDropEvent((event) => {
-        if (event.payload.type === "over") {
-          setDragOver(true);
-        } else if (event.payload.type === "leave") {
+        // Position-based routing: only events over this panel count; a drop
+        // elsewhere is left to the other zone (or ignored).
+        const payload = event.payload;
+        if (payload.type === "over" || payload.type === "enter") {
+          setDragOver(isPointerInside(panelRef.current, payload.position));
+        } else if (payload.type === "leave") {
           setDragOver(false);
-        } else if (event.payload.type === "drop") {
+        } else if (payload.type === "drop") {
           setDragOver(false);
+          if (!isPointerInside(panelRef.current, payload.position)) return;
           // Issue #29: always the `uploadMany` of the latest render — and
           // with it the current `channelUser` and `path` — never the one of
           // the render that registered this listener. Taken now, at the
@@ -1062,16 +1114,49 @@ export function FileBrowserPanel({
     performMove(from, newPath, "rename");
   };
 
+  /** Issue #570: ein Fehler aus "Neuer Ordner"/"Neue Datei" — "Name
+   * existiert" und "Zugriff verweigert" mit übersetztem Grund. */
+  const notifyCreateFailed = (key: string, name: string, err: unknown) => {
+    const code = commandErrorCode(err);
+    notifyFailed(
+      key,
+      name,
+      code === "SSH_SFTP_ALREADY_EXISTS" || code === "SSH_SFTP_PERMISSION_DENIED"
+        ? { message: translateErrorCode(t, code, commandErrorMessage(err)) }
+        : err,
+    );
+  };
+
   const handleConfirmMkdir = () => {
-    const name = mkdirOpen?.trim();
+    const name = mkdirOpen?.trim() ?? "";
+    if (!isValidEntryName(name)) {
+      setNameError(t("fileBrowser.renamePrompt.invalidName"));
+      return;
+    }
     setMkdirOpen(null);
-    if (!name) return;
+    setNameError(null);
     sftpMkdir(sessionId, joinPath(path, name), channelUser)
       .then(() => {
         notifyOk("fileToasts.mkdirDone", { name });
         load(path);
       })
-      .catch((err) => notifyFailed("fileToasts.mkdirFailed", name, err));
+      .catch((err) => notifyCreateFailed("fileToasts.mkdirFailed", name, err));
+  };
+
+  const handleConfirmNewFile = () => {
+    const name = newFileOpen?.trim() ?? "";
+    if (!isValidEntryName(name)) {
+      setNameError(t("fileBrowser.renamePrompt.invalidName"));
+      return;
+    }
+    setNewFileOpen(null);
+    setNameError(null);
+    sftpCreateFile(sessionId, joinPath(path, name), channelUser)
+      .then(() => {
+        notifyOk("fileToasts.createFileDone", { name });
+        load(path);
+      })
+      .catch((err) => notifyCreateFailed("fileToasts.createFileFailed", name, err));
   };
 
   const handleCut = (entry: RemoteEntryDto) => {
@@ -1087,6 +1172,30 @@ export function FileBrowserPanel({
     setCutEntry(null);
     if (target === cutEntry.path) return; // bereits hier, kein no-op-Fehler
     performMove(cutEntry.path, target, "move");
+  };
+
+  /** Issue #571: "Paste" of local files from the OS clipboard. The backend
+   * reads the clipboard and asks in a native dialog; the paths arrive here
+   * only after the user confirmed and go through the normal upload flow. */
+  const handlePasteClipboardFiles = async () => {
+    try {
+      const claimed = await claimClipboardFiles(sessionId, path, {
+        title: t("fileBrowser.clipboardPaste.title"),
+        intro: t("fileBrowser.clipboardPaste.intro"),
+        targetLabel: t("fileBrowser.clipboardPaste.target"),
+        moreLabel: t("fileBrowser.clipboardPaste.more", { count: "{count}", interpolation: { escapeValue: false } }),
+        confirmLabel: t("fileBrowser.clipboardPaste.confirm"),
+        cancelLabel: t("fileBrowser.clipboardPaste.cancel"),
+      });
+      if (claimed === null) {
+        showToast({ kind: "info", message: t("fileToasts.nothingToPaste") + modeSuffix });
+        return;
+      }
+      if (claimed.length === 0) return; // cancelled
+      await uploadMany(claimed);
+    } catch (err) {
+      notifyFailed("fileToasts.uploadFailed", path, err);
+    }
   };
 
   const handleChmod = (entry: RemoteEntryDto) => {
@@ -1113,6 +1222,7 @@ export function FileBrowserPanel({
 
   return (
     <div
+      ref={panelRef}
       className={`flex h-full flex-col border-2 ${elevated ? "border-amber-500" : "border-transparent"}`}
       data-elevated={elevated ? "true" : "false"}
     >
@@ -1176,7 +1286,13 @@ export function FileBrowserPanel({
           aria-label={t("fileBrowser.fileActionsGroup")}
           className="m-0 flex min-w-0 items-center gap-1.5 border-0 p-0"
         >
-        <Button size="sm" onClick={() => setMkdirOpen("")}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setNameError(null);
+            setMkdirOpen("");
+          }}
+        >
           {t("fileBrowser.newFolderButton")}
         </Button>
         <Button size="sm" onClick={handleUploadButton}>
@@ -1295,7 +1411,24 @@ export function FileBrowserPanel({
         <div className="space-y-1 border-b border-slate-800 bg-slate-950/60 px-2 py-1.5">
           {transfers.map((transfer) => (
             <div key={transfer.id} className="flex items-center gap-2 text-xs">
-              {transfer.error ? (
+              {transfer.doneElevationEnded ? (
+                <>
+                  <span className="text-emerald-400">✓</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-300">
+                    {t("fileBrowser.transferDone", { name: transfer.fileName })}{" "}
+                    <span className="text-slate-400">{t("fileBrowser.transferElevationEnded")}</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
+                    aria-label={t("common.close")}
+                    title={t("common.close")}
+                  >
+                    ✕
+                  </Button>
+                </>
+              ) : transfer.error ? (
                 <>
                   <span className="text-red-400">✗</span>
                   <span className="min-w-0 flex-1 truncate text-red-300">
@@ -1355,6 +1488,19 @@ export function FileBrowserPanel({
       <div
         ref={tableContainerRef}
         className={`relative min-h-0 flex-1 overflow-auto ${dragOver ? "bg-indigo-950/40" : ""}`}
+        // Issue #570: Rechtsklick auf leere Fläche (unter den Zeilen oder in
+        // einem leeren Verzeichnis). Die Zeilen stoppen das Ereignis selbst.
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setOpenMenu(null);
+          setClipboardFiles(false);
+          setDirMenu({ x: e.clientX, y: e.clientY });
+          if (!cutEntry) {
+            clipboardHasFiles()
+              .then(setClipboardFiles)
+              .catch(() => setClipboardFiles(false));
+          }
+        }}
       >
         {loading && <p className="p-3 text-xs text-slate-400">{t("fileBrowser.loading")}</p>}
         {error && <p className="p-3 text-xs text-red-400">{error}</p>}
@@ -1443,6 +1589,8 @@ export function FileBrowserPanel({
                   // native Browser-/OS-Kontextmenü.
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
+                    setDirMenu(null);
                     setOpenMenu({ entry, anchor: { x: e.clientX, y: e.clientY } });
                   }}
                 >
@@ -1580,6 +1728,30 @@ export function FileBrowserPanel({
         />
       )}
 
+      {dirMenu && (
+        <DirectoryMenu
+          x={dirMenu.x}
+          y={dirMenu.y}
+          pasteName={cutEntry?.name ?? null}
+          clipboardFiles={!cutEntry && clipboardFiles}
+          onNewFolder={() => {
+            setDirMenu(null);
+            setNameError(null);
+            setMkdirOpen("");
+          }}
+          onNewFile={() => {
+            setDirMenu(null);
+            setNameError(null);
+            setNewFileOpen("");
+          }}
+          onPaste={() => {
+            setDirMenu(null);
+            if (cutEntry) handlePaste();
+            else void handlePasteClipboardFiles();
+          }}
+        />
+      )}
+
       {/* Spec 0054, Teil 4: Statusleiste für den "Lokal öffnen"-Flow —
           zeigt an, solange eine Bearbeitung aktiv ist (`editing`), bietet
           bei einer erkannten lokalen Änderung (`changed`) den Upload an,
@@ -1675,9 +1847,27 @@ export function FileBrowserPanel({
         <RenamePrompt
           title={t("fileBrowser.renamePrompt.newFolderTitle")}
           initialValue={mkdirOpen}
-          onChange={setMkdirOpen}
+          error={nameError}
+          onChange={(value) => {
+            setNameError(null);
+            setMkdirOpen(value);
+          }}
           onCancel={() => setMkdirOpen(null)}
           onConfirm={handleConfirmMkdir}
+        />
+      )}
+
+      {newFileOpen !== null && (
+        <RenamePrompt
+          title={t("fileBrowser.renamePrompt.newFileTitle")}
+          initialValue={newFileOpen}
+          error={nameError}
+          onChange={(value) => {
+            setNameError(null);
+            setNewFileOpen(value);
+          }}
+          onCancel={() => setNewFileOpen(null)}
+          onConfirm={handleConfirmNewFile}
         />
       )}
 
@@ -2205,12 +2395,15 @@ function ChmodDialog({
 function RenamePrompt({
   title,
   initialValue,
+  error,
   onChange,
   onCancel,
   onConfirm,
 }: {
   title?: string;
   initialValue: string;
+  /** Issue #570: Hinweis zu einem ungültigen Namen (ohne Backend-Aufruf). */
+  error?: string | null;
   onChange: (value: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
@@ -2254,7 +2447,81 @@ function RenamePrompt({
           />
         )}
       </Field>
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-red-400">
+          {error}
+        </p>
+      )}
     </DialogFrame>
+  );
+}
+
+/** Issue #570: Namen für neue Einträge — nicht leer, kein `/`, nicht `.`
+ * oder `..` (wie bei Umbenennen). */
+function isValidEntryName(name: string): boolean {
+  return name !== "" && !name.includes("/") && name !== "." && name !== "..";
+}
+
+/** Issue #570: Kontextmenü auf leerer Fläche des Dateibrowsers — bewusst
+ * eine eigene kleine Komponente, damit `FileEntryMenu` nur Eintrags-
+ * Aktionen behält. Schließen per Klick außerhalb/Escape macht der Aufrufer. */
+function DirectoryMenu({
+  x,
+  y,
+  pasteName,
+  clipboardFiles,
+  onNewFolder,
+  onNewFile,
+  onPaste,
+}: {
+  x: number;
+  y: number;
+  pasteName: string | null;
+  clipboardFiles: boolean;
+  onNewFolder: () => void;
+  onNewFile: () => void;
+  onPaste: () => void;
+}) {
+  const { t } = useTranslation();
+  const firstRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    firstRef.current?.focus();
+  }, []);
+  const itemClass =
+    "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+  return (
+    <fieldset
+      className="fixed z-20 m-0 w-52 min-w-0 border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
+      style={{ left: x, top: y }}
+    >
+      <legend className="sr-only">{t("fileBrowser.directoryMenuLabel")}</legend>
+      <button ref={firstRef} type="button" onClick={onNewFolder} className={itemClass}>
+        {t("fileBrowser.menu.newFolder")}
+      </button>
+      <button type="button" onClick={onNewFile} className={itemClass}>
+        {t("fileBrowser.menu.newFile")}
+      </button>
+      {pasteName !== null && (
+        <button
+          type="button"
+          onClick={onPaste}
+          title={t("fileBrowser.pasteTitle", { name: pasteName })}
+          className={itemClass}
+        >
+          {t("fileBrowser.paste")}
+        </button>
+      )}
+      {pasteName === null && clipboardFiles && (
+        <button
+          type="button"
+          onClick={onPaste}
+          title={t("fileBrowser.clipboardPaste.menuTitle")}
+          className={itemClass}
+        >
+          {t("fileBrowser.paste")}
+        </button>
+      )}
+    </fieldset>
   );
 }
 

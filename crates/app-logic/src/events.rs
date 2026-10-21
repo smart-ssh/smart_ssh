@@ -838,6 +838,21 @@ struct ChatErrorPayload {
     session_id: SessionId,
     message: String,
     code: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_error_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    http_status: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_message: Option<String>,
+}
+
+/// Issue #600: optional provider details of a `chat-error` (shown under
+/// "Details"). `provider_message` must already be redacted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChatErrorDetails {
+    pub provider_error_type: Option<String>,
+    pub http_status: Option<u16>,
+    pub provider_message: Option<String>,
 }
 
 /// **Nicht Teil der Spec-Skizze aus Abschnitt 5** (die dort gelistete
@@ -863,6 +878,23 @@ pub fn emit_chat_error(
     message: String,
     code: Option<&'static str>,
 ) {
+    emit_chat_error_with_details(
+        emitter,
+        session_id,
+        message,
+        code,
+        ChatErrorDetails::default(),
+    );
+}
+
+/// Like [`emit_chat_error`], plus the provider details (Issue #600).
+pub fn emit_chat_error_with_details(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    message: String,
+    code: Option<&'static str>,
+    details: ChatErrorDetails,
+) {
     emit(
         emitter,
         "chat-error",
@@ -870,6 +902,9 @@ pub fn emit_chat_error(
             session_id,
             message,
             code,
+            provider_error_type: details.provider_error_type,
+            http_status: details.http_status,
+            provider_message: details.provider_message,
         },
     );
 }
@@ -897,6 +932,37 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
         emitter,
         "chat-response-truncated",
         &ChatResponseTruncatedPayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatAiRetryingPayload {
+    session_id: SessionId,
+    attempt: u32,
+    max_attempts: u32,
+    delay_secs: u64,
+}
+
+/// Issue #599: the AI provider is overloaded; the request is repeated
+/// automatically after `delay_secs`. Emitted before each wait, and only while
+/// nothing of the response has reached the chat. Carries no chat content.
+pub fn emit_chat_ai_retrying(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    attempt: u32,
+    max_attempts: u32,
+    delay_secs: u64,
+) {
+    emit(
+        emitter,
+        "chat-ai-retrying",
+        &ChatAiRetryingPayload {
+            session_id,
+            attempt,
+            max_attempts,
+            delay_secs,
+        },
     );
 }
 
@@ -1259,4 +1325,47 @@ mod tests {
         assert_eq!(json["exitCode"], 0);
         assert!(json.get("exit_code").is_none());
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatContextUsagePayload {
+    session_id: SessionId,
+    input_tokens: u64,
+    window_tokens: u64,
+}
+
+/// Issue #601: real input size of the last request vs. the model window.
+/// Numbers only, never content.
+pub fn emit_chat_context_usage(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    input_tokens: u64,
+    window_tokens: u64,
+) {
+    emit(
+        emitter,
+        "chat-context-usage",
+        &ChatContextUsagePayload {
+            session_id,
+            input_tokens,
+            window_tokens,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatContextCompactedPayload {
+    session_id: SessionId,
+}
+
+/// Issue #601: older parts of the chat were summarized or cut to fit the
+/// model's context for a request (once per compaction step).
+pub fn emit_chat_context_compacted(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-context-compacted",
+        &ChatContextCompactedPayload { session_id },
+    );
 }

@@ -12,6 +12,7 @@ test("a failing connection test shows a collapsed step log that expands to the f
   const page = app.page;
   await page.getByRole("button", { name: "Manage", exact: true }).click();
   await page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
+  await page.getByRole("tab", { name: "Connection", exact: true }).click();
   await page.getByRole("button", { name: "Test Connection", exact: true }).click();
   await expect.poll(async () => (await app.calls("test_connection")).length).toBe(1);
 
