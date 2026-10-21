@@ -367,7 +367,13 @@
     "noSuggestions": "Nenhuma sugestão.",
     "binaryFileHint": "⚠ Arquivo binário — comparação de texto não é possível. Tamanho anterior: {{oldSize}}, novo tamanho: {{newSize}}.",
     "diffTooLargeHint": "⚠ Conteúdo grande demais para uma comparação por linhas. Tamanho anterior: {{oldSize}}, novo tamanho: {{newSize}}.",
-    "noContentChange": "(sem alteração de conteúdo)"
+    "noContentChange": "(sem alteração de conteúdo)",
+    "quickRuleLabel": {
+      "exact": "Exato: {{patterns}}",
+      "exactPerSegment": "Exato por parte: {{patterns}}",
+      "subcommand": "Todas as chamadas de `{{names}}`: {{patterns}}",
+      "tool": "Todas as chamadas de `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Alerta de segurança · Chave de host alterada",

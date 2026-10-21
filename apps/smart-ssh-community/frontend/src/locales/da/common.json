@@ -367,7 +367,13 @@
     "noSuggestions": "Ingen forslag.",
     "binaryFileHint": "⚠ Binær fil – tekstsammenligning er ikke mulig. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
     "diffTooLargeHint": "⚠ Indholdet er for stort til en linjeforskel. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
-    "noContentChange": "(ingen indholdsændring)"
+    "noContentChange": "(ingen indholdsændring)",
+    "quickRuleLabel": {
+      "exact": "Nøjagtig: {{patterns}}",
+      "exactPerSegment": "Nøjagtig pr. del: {{patterns}}",
+      "subcommand": "Alle `{{names}}`-kald: {{patterns}}",
+      "tool": "Alle `{{names}}`-kald: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sikkerhedsadvarsel · Værtsnøgle ændret",
