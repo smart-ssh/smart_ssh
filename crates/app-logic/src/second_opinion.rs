@@ -139,7 +139,10 @@ pub async fn fetch_second_opinion(
             AiEvent::ActionProposed(_) => {}
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
             // ignoriert.
-            AiEvent::WebActivity(_) | AiEvent::WebContentIngested | AiEvent::Retrying { .. } => {}
+            AiEvent::WebActivity(_)
+            | AiEvent::WebContentIngested
+            | AiEvent::Usage { .. }
+            | AiEvent::Retrying { .. } => {}
         }
     }
 
@@ -336,7 +339,10 @@ pub async fn fetch_injection_check(
             AiEvent::ActionProposed(_) => {}
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
             // ignoriert.
-            AiEvent::WebActivity(_) | AiEvent::WebContentIngested | AiEvent::Retrying { .. } => {}
+            AiEvent::WebActivity(_)
+            | AiEvent::WebContentIngested
+            | AiEvent::Usage { .. }
+            | AiEvent::Retrying { .. } => {}
         }
     }
 

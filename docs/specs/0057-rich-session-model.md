@@ -150,6 +150,28 @@ für Anthropic, 128 000 für OpenAI (16 000 für gpt-3.5) und konservative
 32 000 für alle übrigen (OpenAI-kompatible, lokale Modelle, unbekannte
 Namen) — im Zweifel zu klein angenommen, nie zu groß.
 
+**Echte Token-Zahlen (Issue #601).** Meldet der Provider nach einer Antwort
+die tatsächliche Eingabegröße (Eingabe-Token plus Cache-Lese- und
+Cache-Schreib-Anteil), merkt sich die Sitzung sie. Die Schätzung der
+nächsten Anfrage wird mit dem beobachteten Verhältnis „echt / geschätzt“
+korrigiert — das Verhältnis liegt nie unter 1,0 (die Korrektur senkt die
+4-Byte-Schätzung also nie) und wird über mehrere Antworten geglättet.
+Kompaktiert wird, sobald die korrigierte Schätzung 75 % des Fensters
+erreicht. War die zuletzt gemeldete echte Größe bereits über 75 %,
+kompaktiert die nächste Anfrage in jedem Fall, was auch die Schätzung sagt.
+Ohne Usage-Angabe des Providers gilt die reine Schätzung. Der Zustand liegt
+nur im Speicher der Sitzung.
+
+**Anzeige im Chat.** Nach jeder Antwort zeigt der Chat über dem Eingabefeld
+die zuletzt gemeldete Eingabegröße und das Fenster, z. B. „Kontext 120k /
+200k“ — ab 75 % farbig hervorgehoben; ein Tooltip erklärt, dass ältere Teile
+automatisch zusammengefasst werden. Es werden nur Zahlen angezeigt, nie
+Inhalte. Wurden für eine Anfrage ältere Teile zusammengefasst oder gekürzt,
+erscheint einmal pro Kompaktierungsschritt (nicht je Anfrage) der Hinweis
+„Ältere Teile dieses Chats wurden zusammengefasst, damit sie in den Kontext
+des Modells passen.“ Gespeicherte Historie, Ledger und Notizen bleiben
+unverändert.
+
 ### 3.2 Ablauf (Reihenfolge der Kürzung)
 
 Kompaktiert wird in dieser Reihenfolge, jeweils nur so weit wie nötig, bis
