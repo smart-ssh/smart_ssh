@@ -255,6 +255,9 @@ pub(crate) mod test_stubs {
         async fn create_dir(&mut self, _: &str) -> Result<(), SshError> {
             unreachable!()
         }
+        async fn create_file_exclusive(&mut self, _: &str) -> Result<(), SshError> {
+            unreachable!()
+        }
         async fn remove_dir(&mut self, _: &str) -> Result<(), SshError> {
             unreachable!()
         }

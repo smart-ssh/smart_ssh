@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Varování k hlavnímu heslu nebylo potvrzeno. Bez tohoto hesla jsou všechna data ztracena a neexistuje obnova — zaškrtněte políčko a nastavte heslo znovu. Nic se nezměnilo.",
     "KEYCHAIN_KEY_MISMATCH": "Klíč v klíčence nepatří k této databázi. Nic se nezměnilo — jeho uložení by databázi při dalším spuštění učinilo nečitelnou.",
     "SFTP_CONTENT_TOO_LARGE": "Soubor je větší než 50 MB a nelze jej zkopírovat do schránky.",
-    "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky."
+    "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky.",
+    "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje"
   },
   "mcpServer": {
     "hint": "Externí klienti MCP mohou prostřednictvím toho navrhovat příkazy, čtení/zápisy souborů a aktualizace poznámek na povolených serverech — každý požadavek vždy vyžaduje potvrzení v aplikaci, bez ohledu na stávající pravidla povolení.",
@@ -666,7 +667,9 @@
     "editUploadFailed": "Změnu v „{{name}}“ se nepodařilo nahrát: {{reason}}",
     "uploadedFolder": "Složka „{{name}}“ nahrána — souborů: {{count}}",
     "uploadFolderFailed": "Nahrání složky „{{name}}“ selhalo: {{reason}}",
-    "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}"
+    "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}",
+    "createFileDone": "Soubor „{{name}}“ vytvořen",
+    "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Zvýšená práva",
@@ -1017,7 +1020,9 @@
       "chmod": "Upravit oprávnění…",
       "rename": "Přejmenovat",
       "cut": "Vyjmout",
-      "delete": "Smazat"
+      "delete": "Smazat",
+      "newFolder": "Nová složka",
+      "newFile": "Nový soubor"
     },
     "properties": {
       "title": "Vlastnosti",
@@ -1048,10 +1053,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Přejmenovat",
-      "newFolderTitle": "Nová složka"
+      "newFolderTitle": "Nová složka",
+      "newFileTitle": "Nový soubor",
+      "invalidName": "Zadejte název bez „/“. „.“ a „..“ nejsou povoleny."
     },
     "copyProgress": "Kopíruji… {{done}} MB z {{total}} MB",
-    "copyProgressUnknownTotal": "Kopíruji… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopíruji… {{done}} MB",
+    "directoryMenuLabel": "Akce složky"
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",

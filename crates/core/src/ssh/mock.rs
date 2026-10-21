@@ -271,6 +271,28 @@ impl SftpSession for MockSftpSession {
     /// reicht das; die tatsächliche Rekursions-/Verzeichnis-Logik von Spec
     /// 0054, Teil 3 wird gegen den echten lokalen Pseudo-Server getestet
     /// (`ssh-transport`s Integrationstests).
+    async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("create_file_exclusive {path}"));
+        if inner.permission_denied_paths.contains(path) {
+            return Err(SshError::SftpPermissionDenied(format!(
+                "keine Schreibrechte für {path}"
+            )));
+        }
+        if inner.files.contains_key(path) {
+            return Err(SshError::SftpAlreadyExists(path.to_string()));
+        }
+        inner.files.insert(
+            path.to_string(),
+            MockFile {
+                content: Vec::new(),
+                permissions: 0o644,
+                modified: Some(Utc::now()),
+            },
+        );
+        Ok(())
+    }
+
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.inner
             .lock()

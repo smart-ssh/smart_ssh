@@ -867,6 +867,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_delete_preview,
             commands::sftp_rename,
             commands::sftp_mkdir,
+            commands::sftp_create_file,
             commands::sftp_read_text,
             commands::sftp_copy_content,
             commands::sftp_copy_file,

@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind alle Daten verloren, und es gibt keine Wiederherstellung — setze das Häkchen und richte es erneut ein. Es wurde nichts verändert.",
     "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar.",
     "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden.",
-    "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden."
+    "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
+    "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits"
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
     "uploadedFolder": "Ordner „{{name}}“ hochgeladen — {{count}} Dateien",
     "uploadFolderFailed": "Ordner „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
-    "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}"
+    "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}",
+    "createFileDone": "Datei „{{name}}“ angelegt",
+    "createFileFailed": "Datei „{{name}}“ konnte nicht angelegt werden: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Erhöhte Rechte",
@@ -1003,7 +1006,9 @@
       "chmod": "Rechte bearbeiten…",
       "rename": "Umbenennen",
       "cut": "Ausschneiden",
-      "delete": "Löschen"
+      "delete": "Löschen",
+      "newFolder": "Neuer Ordner",
+      "newFile": "Neue Datei"
     },
     "properties": {
       "title": "Eigenschaften",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Umbenennen",
-      "newFolderTitle": "Neuer Ordner"
+      "newFolderTitle": "Neuer Ordner",
+      "newFileTitle": "Neue Datei",
+      "invalidName": "Einen Namen ohne „/“ eingeben. „.“ und „..“ sind nicht erlaubt."
     },
     "copyProgress": "Kopiere… {{done}} MB von {{total}} MB",
-    "copyProgressUnknownTotal": "Kopiere… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopiere… {{done}} MB",
+    "directoryMenuLabel": "Ordneraktionen"
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",

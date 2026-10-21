@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Varningen om huvudlösenordet har inte bekräftats. Utan lösenordet går alla data förlorade och det finns ingen återställning — kryssa i rutan och ställ in det igen. Inget ändrades.",
     "KEYCHAIN_KEY_MISMATCH": "Nyckeln i nyckelringen hör inte till den här databasen. Inget ändrades — att spara den skulle göra databasen oläsbar vid nästa start.",
     "SFTP_CONTENT_TOO_LARGE": "Filen är större än 50 MB och kan inte kopieras till urklipp.",
-    "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet."
+    "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet.",
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan"
   },
   "mcpServer": {
     "hint": "Externa MCP-klienter kan använda detta för att föreslå kommandon, filläsningar/filskrivningar och anteckningsuppdateringar på tillåtlistade servrar — varje begäran kräver alltid bekräftelse i appen, oavsett befintliga tillåtregler.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "Ändringen i “{{name}}” kunde inte laddas upp: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” uppladdad — {{count}} filer",
     "uploadFolderFailed": "Uppladdningen av mappen “{{name}}” misslyckades: {{reason}}",
-    "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}"
+    "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}",
+    "createFileDone": "Filen ”{{name}}” skapades",
+    "createFileFailed": "Filen ”{{name}}” kunde inte skapas: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Förhöjda rättigheter",
@@ -1003,7 +1006,9 @@
       "chmod": "Redigera behörigheter…",
       "rename": "Byt namn",
       "cut": "Klipp ut",
-      "delete": "Ta bort"
+      "delete": "Ta bort",
+      "newFolder": "Ny mapp",
+      "newFile": "Ny fil"
     },
     "properties": {
       "title": "Egenskaper",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Byt namn",
-      "newFolderTitle": "Ny mapp"
+      "newFolderTitle": "Ny mapp",
+      "newFileTitle": "Ny fil",
+      "invalidName": "Ange ett namn utan ”/”. ”.” och ”..” är inte tillåtna."
     },
     "copyProgress": "Kopierar… {{done}} MB av {{total}} MB",
-    "copyProgressUnknownTotal": "Kopierar… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopierar… {{done}} MB",
+    "directoryMenuLabel": "Mappåtgärder"
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",

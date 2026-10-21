@@ -367,6 +367,23 @@ impl SftpSession for GatedSftp {
         Ok(())
     }
 
+    async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError> {
+        self.record(format!("create_file_exclusive {path}")).await;
+        let mut entries = self.0.entries.lock().unwrap();
+        if entries.contains_key(path) {
+            return Err(SshError::SftpAlreadyExists(path.to_string()));
+        }
+        entries.insert(
+            path.to_string(),
+            Entry {
+                is_dir: false,
+                permissions: 0o644,
+                content: Vec::new(),
+            },
+        );
+        Ok(())
+    }
+
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.record(format!("remove_dir {path}")).await;
         let mut entries = self.0.entries.lock().unwrap();
@@ -447,6 +464,13 @@ impl SftpSession for CountingSftp {
     }
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.0.lock().unwrap().push(format!("create_dir {path}"));
+        Ok(())
+    }
+    async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("create_file_exclusive {path}"));
         Ok(())
     }
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
@@ -1715,5 +1739,66 @@ async fn test_t9_a_transfer_finished_before_the_revocation_still_reports_success
         vec![None, Some(ELEVATED_CHANNEL_INACTIVE_TEXT.to_string()),],
         "der erste Transfer war vor dem Widerruf fertig und meldet weiter \
          Erfolg; erst der zweite trägt die Widerrufs-Meldung"
+    );
+}
+
+// --- Issue #570: „Neue Datei" / „Neuer Ordner" im Dateibrowser -------------
+
+/// Erhöhter Modus: „Neue Datei" läuft auf dem erhöhten Kanal (nie auf dem
+/// normalen), schreibt genau eine Audit-Zeile mit dem Ziel-Nutzer und legt
+/// eine leere Datei an.
+#[tokio::test]
+async fn test_create_file_runs_elevated_and_is_audited() {
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+    let (logs, _capture) = capture_logs();
+
+    create_file_impl(&s.session, &s.elevated_channel(), "/t/new.txt")
+        .await
+        .expect("anlegen gelingt");
+
+    assert!(elevated.exists("/t/new.txt"));
+    assert_eq!(
+        elevated.0.entries.lock().unwrap()["/t/new.txt"].content,
+        Vec::<u8>::new()
+    );
+    assert!(
+        s.normal.calls().is_empty(),
+        "kein Rückfall auf den normalen Kanal"
+    );
+    let lines = logs.audit_lines("create_file", "/t/new.txt");
+    assert_eq!(lines.len(), 1, "genau eine Audit-Zeile, war: {lines:?}");
+    assert_eq!(lines[0].get("ok").map(String::as_str), Some("true"));
+    assert_eq!(
+        lines[0].get("target_user").map(String::as_str),
+        Some("root")
+    );
+}
+
+/// Ein vorhandener Name wird nie überschrieben — weder bei „Neue Datei" noch
+/// bei „Neuer Ordner" (Datei oder Ordner als Ziel).
+#[tokio::test]
+async fn test_create_file_and_mkdir_never_overwrite_an_existing_name() {
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+
+    for path in ["/t/a.txt", "/t/sub"] {
+        let err = create_file_impl(&s.session, &s.elevated_channel(), path)
+            .await
+            .expect_err("vorhandener Name");
+        assert_eq!(err.code, Some("SSH_SFTP_ALREADY_EXISTS"), "{path}");
+        let err = mkdir_impl(&s.session, &s.elevated_channel(), path)
+            .await
+            .expect_err("vorhandener Name");
+        assert_eq!(err.code, Some("SSH_SFTP_ALREADY_EXISTS"), "{path}");
+    }
+    assert_eq!(
+        elevated.0.entries.lock().unwrap()["/t/a.txt"].content,
+        b"ROOT-INHALT".to_vec(),
+        "der Inhalt der vorhandenen Datei bleibt unverändert"
+    );
+    assert!(
+        !elevated.ops().iter().any(|o| o.starts_with("create_dir")),
+        "mkdir auf vorhandenem Namen ruft create_dir nicht auf"
     );
 }

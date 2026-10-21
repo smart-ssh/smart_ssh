@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Cảnh báo về mật khẩu chính chưa được xác nhận. Không có mật khẩu đó thì toàn bộ dữ liệu sẽ mất và không thể khôi phục — hãy đánh dấu ô và thiết lập lại. Không có gì bị thay đổi.",
     "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo.",
     "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm.",
-    "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này."
+    "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này.",
+    "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này"
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",
@@ -651,7 +652,9 @@
     "editUploadFailed": "Không thể tải lên thay đổi của “{{name}}”: {{reason}}",
     "uploadedFolder": "Đã tải lên thư mục “{{name}}” — {{count}} tệp",
     "uploadFolderFailed": "Tải thư mục “{{name}}” lên thất bại: {{reason}}",
-    "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}"
+    "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}",
+    "createFileDone": "Đã tạo tệp “{{name}}”",
+    "createFileFailed": "Không thể tạo tệp “{{name}}”: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Quyền nâng cao",
@@ -996,7 +999,9 @@
       "chmod": "Sửa quyền…",
       "rename": "Đổi tên",
       "cut": "Cắt",
-      "delete": "Xóa"
+      "delete": "Xóa",
+      "newFolder": "Thư mục mới",
+      "newFile": "Tệp mới"
     },
     "properties": {
       "title": "Thuộc tính",
@@ -1027,10 +1032,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Đổi tên",
-      "newFolderTitle": "Thư mục mới"
+      "newFolderTitle": "Thư mục mới",
+      "newFileTitle": "Tệp mới",
+      "invalidName": "Nhập tên không chứa “/”. Không cho phép “.” và “..”."
     },
     "copyProgress": "Đang sao chép… {{done}} MB trên {{total}} MB",
-    "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB"
+    "copyProgressUnknownTotal": "Đang sao chép… {{done}} MB",
+    "directoryMenuLabel": "Thao tác thư mục"
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",

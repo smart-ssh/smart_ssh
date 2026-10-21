@@ -25,6 +25,7 @@ import {
   sftpExists,
   sftpList,
   sftpMkdir,
+  sftpCreateFile,
   sftpCancelCopyContent,
   sftpCopyContent,
   sftpCopyFile,
@@ -174,6 +175,11 @@ export function FileBrowserPanel({
   const [deleteTarget, setDeleteTarget] = useState<RemoteEntryDto | null>(null);
   const [deletePreview, setDeletePreview] = useState<DeletePreviewDto | null>(null);
   const [mkdirOpen, setMkdirOpen] = useState<string | null>(null);
+  /** Issue #570: "Neue Datei" (Namensabfrage) und Kontextmenü auf leerer
+   * Fläche (Position, `null` = zu). `nameError` gilt für beide Abfragen. */
+  const [newFileOpen, setNewFileOpen] = useState<string | null>(null);
+  const [dirMenu, setDirMenu] = useState<{ x: number; y: number } | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [chmodTarget, setChmodTarget] = useState<RemoteEntryDto | null>(null);
   // Spec 0054, Teil 3: "Verschieben" per Ausschneiden/Einfügen (die Spec
   // erlaubt ausdrücklich Cut/Paste ODER Drag-and-Drop als Alternativen —
@@ -565,6 +571,22 @@ export function FileBrowserPanel({
       document.removeEventListener("keydown", keyHandler);
     };
   }, [openMenu]);
+
+  // Issue #570: Kontextmenü auf leerer Fläche — Klick außerhalb und Escape
+  // schließen es wie das Eintragsmenü.
+  useEffect(() => {
+    if (dirMenu === null) return;
+    const handler = () => setDirMenu(null);
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDirMenu(null);
+    };
+    document.addEventListener("click", handler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("click", handler);
+      document.removeEventListener("keydown", keyHandler);
+    };
+  }, [dirMenu]);
 
   useEffect(() => {
     const unlisten = [
@@ -1062,16 +1084,49 @@ export function FileBrowserPanel({
     performMove(from, newPath, "rename");
   };
 
+  /** Issue #570: ein Fehler aus "Neuer Ordner"/"Neue Datei" — "Name
+   * existiert" und "Zugriff verweigert" mit übersetztem Grund. */
+  const notifyCreateFailed = (key: string, name: string, err: unknown) => {
+    const code = commandErrorCode(err);
+    notifyFailed(
+      key,
+      name,
+      code === "SSH_SFTP_ALREADY_EXISTS" || code === "SSH_SFTP_PERMISSION_DENIED"
+        ? { message: translateErrorCode(t, code, commandErrorMessage(err)) }
+        : err,
+    );
+  };
+
   const handleConfirmMkdir = () => {
-    const name = mkdirOpen?.trim();
+    const name = mkdirOpen?.trim() ?? "";
+    if (!isValidEntryName(name)) {
+      setNameError(t("fileBrowser.renamePrompt.invalidName"));
+      return;
+    }
     setMkdirOpen(null);
-    if (!name) return;
+    setNameError(null);
     sftpMkdir(sessionId, joinPath(path, name), channelUser)
       .then(() => {
         notifyOk("fileToasts.mkdirDone", { name });
         load(path);
       })
-      .catch((err) => notifyFailed("fileToasts.mkdirFailed", name, err));
+      .catch((err) => notifyCreateFailed("fileToasts.mkdirFailed", name, err));
+  };
+
+  const handleConfirmNewFile = () => {
+    const name = newFileOpen?.trim() ?? "";
+    if (!isValidEntryName(name)) {
+      setNameError(t("fileBrowser.renamePrompt.invalidName"));
+      return;
+    }
+    setNewFileOpen(null);
+    setNameError(null);
+    sftpCreateFile(sessionId, joinPath(path, name), channelUser)
+      .then(() => {
+        notifyOk("fileToasts.createFileDone", { name });
+        load(path);
+      })
+      .catch((err) => notifyCreateFailed("fileToasts.createFileFailed", name, err));
   };
 
   const handleCut = (entry: RemoteEntryDto) => {
@@ -1176,7 +1231,13 @@ export function FileBrowserPanel({
           aria-label={t("fileBrowser.fileActionsGroup")}
           className="m-0 flex min-w-0 items-center gap-1.5 border-0 p-0"
         >
-        <Button size="sm" onClick={() => setMkdirOpen("")}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setNameError(null);
+            setMkdirOpen("");
+          }}
+        >
           {t("fileBrowser.newFolderButton")}
         </Button>
         <Button size="sm" onClick={handleUploadButton}>
@@ -1355,6 +1416,13 @@ export function FileBrowserPanel({
       <div
         ref={tableContainerRef}
         className={`relative min-h-0 flex-1 overflow-auto ${dragOver ? "bg-indigo-950/40" : ""}`}
+        // Issue #570: Rechtsklick auf leere Fläche (unter den Zeilen oder in
+        // einem leeren Verzeichnis). Die Zeilen stoppen das Ereignis selbst.
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setOpenMenu(null);
+          setDirMenu({ x: e.clientX, y: e.clientY });
+        }}
       >
         {loading && <p className="p-3 text-xs text-slate-400">{t("fileBrowser.loading")}</p>}
         {error && <p className="p-3 text-xs text-red-400">{error}</p>}
@@ -1443,6 +1511,8 @@ export function FileBrowserPanel({
                   // native Browser-/OS-Kontextmenü.
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
+                    setDirMenu(null);
                     setOpenMenu({ entry, anchor: { x: e.clientX, y: e.clientY } });
                   }}
                 >
@@ -1580,6 +1650,28 @@ export function FileBrowserPanel({
         />
       )}
 
+      {dirMenu && (
+        <DirectoryMenu
+          x={dirMenu.x}
+          y={dirMenu.y}
+          pasteName={cutEntry?.name ?? null}
+          onNewFolder={() => {
+            setDirMenu(null);
+            setNameError(null);
+            setMkdirOpen("");
+          }}
+          onNewFile={() => {
+            setDirMenu(null);
+            setNameError(null);
+            setNewFileOpen("");
+          }}
+          onPaste={() => {
+            setDirMenu(null);
+            handlePaste();
+          }}
+        />
+      )}
+
       {/* Spec 0054, Teil 4: Statusleiste für den "Lokal öffnen"-Flow —
           zeigt an, solange eine Bearbeitung aktiv ist (`editing`), bietet
           bei einer erkannten lokalen Änderung (`changed`) den Upload an,
@@ -1675,9 +1767,27 @@ export function FileBrowserPanel({
         <RenamePrompt
           title={t("fileBrowser.renamePrompt.newFolderTitle")}
           initialValue={mkdirOpen}
-          onChange={setMkdirOpen}
+          error={nameError}
+          onChange={(value) => {
+            setNameError(null);
+            setMkdirOpen(value);
+          }}
           onCancel={() => setMkdirOpen(null)}
           onConfirm={handleConfirmMkdir}
+        />
+      )}
+
+      {newFileOpen !== null && (
+        <RenamePrompt
+          title={t("fileBrowser.renamePrompt.newFileTitle")}
+          initialValue={newFileOpen}
+          error={nameError}
+          onChange={(value) => {
+            setNameError(null);
+            setNewFileOpen(value);
+          }}
+          onCancel={() => setNewFileOpen(null)}
+          onConfirm={handleConfirmNewFile}
         />
       )}
 
@@ -2205,12 +2315,15 @@ function ChmodDialog({
 function RenamePrompt({
   title,
   initialValue,
+  error,
   onChange,
   onCancel,
   onConfirm,
 }: {
   title?: string;
   initialValue: string;
+  /** Issue #570: Hinweis zu einem ungültigen Namen (ohne Backend-Aufruf). */
+  error?: string | null;
   onChange: (value: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
@@ -2254,7 +2367,69 @@ function RenamePrompt({
           />
         )}
       </Field>
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-red-400">
+          {error}
+        </p>
+      )}
     </DialogFrame>
+  );
+}
+
+/** Issue #570: Namen für neue Einträge — nicht leer, kein `/`, nicht `.`
+ * oder `..` (wie bei Umbenennen). */
+function isValidEntryName(name: string): boolean {
+  return name !== "" && !name.includes("/") && name !== "." && name !== "..";
+}
+
+/** Issue #570: Kontextmenü auf leerer Fläche des Dateibrowsers — bewusst
+ * eine eigene kleine Komponente, damit `FileEntryMenu` nur Eintrags-
+ * Aktionen behält. Schließen per Klick außerhalb/Escape macht der Aufrufer. */
+function DirectoryMenu({
+  x,
+  y,
+  pasteName,
+  onNewFolder,
+  onNewFile,
+  onPaste,
+}: {
+  x: number;
+  y: number;
+  pasteName: string | null;
+  onNewFolder: () => void;
+  onNewFile: () => void;
+  onPaste: () => void;
+}) {
+  const { t } = useTranslation();
+  const firstRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    firstRef.current?.focus();
+  }, []);
+  const itemClass =
+    "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+  return (
+    <fieldset
+      className="fixed z-20 m-0 w-52 min-w-0 border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
+      style={{ left: x, top: y }}
+    >
+      <legend className="sr-only">{t("fileBrowser.directoryMenuLabel")}</legend>
+      <button ref={firstRef} type="button" onClick={onNewFolder} className={itemClass}>
+        {t("fileBrowser.menu.newFolder")}
+      </button>
+      <button type="button" onClick={onNewFile} className={itemClass}>
+        {t("fileBrowser.menu.newFile")}
+      </button>
+      {pasteName !== null && (
+        <button
+          type="button"
+          onClick={onPaste}
+          title={t("fileBrowser.pasteTitle", { name: pasteName })}
+          className={itemClass}
+        >
+          {t("fileBrowser.paste")}
+        </button>
+      )}
+    </fieldset>
   );
 }
 

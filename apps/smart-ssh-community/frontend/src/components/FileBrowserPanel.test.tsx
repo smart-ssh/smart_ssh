@@ -33,6 +33,8 @@ import {
   sftpElevationDisable,
   sftpElevationEnable,
   sftpExists,
+  sftpCreateFile,
+  sftpMkdir,
   sftpList,
   sftpOpenForEditing,
   sftpCancelCopyContent,
@@ -76,6 +78,7 @@ vi.mock("../api", () => ({
   sftpElevationEnable: vi.fn(),
   sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
   sftpMkdir: vi.fn(),
+  sftpCreateFile: vi.fn(),
   sftpReadText: vi.fn(),
   sftpRename: vi.fn(),
   sftpUpload: vi.fn(),
@@ -2220,6 +2223,144 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     await waitFor(() =>
       expect(body.textContent).toBe(
         "logs wird unwiderruflich vom Server gelöscht. Enthält 1 Datei(en) in 1 Ordner(n) (inkl. diesem) — alle werden mitgelöscht.",
+      ),
+    );
+  });
+});
+
+describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+  });
+
+  const emptySpace = (container: HTMLElement) => {
+    const scroller = container.querySelector("table")!.parentElement!;
+    return scroller;
+  };
+
+  it("opens the folder menu on empty space; a row still opens the entry menu", async () => {
+    const { container } = renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+
+    fireEvent.contextMenu(row);
+    expect(screen.getByText("Umbenennen")).toBeVisible();
+    expect(screen.queryByText("Neue Datei")).toBeNull();
+
+    fireEvent.contextMenu(emptySpace(container), { clientX: 10, clientY: 20 });
+    expect(screen.getByText("Neuer Ordner")).toBeVisible();
+    expect(screen.getByText("Neue Datei")).toBeVisible();
+    expect(screen.queryByText("Umbenennen")).toBeNull();
+    // Without a pending cut there is no Paste entry in the menu.
+    expect(screen.queryByRole("button", { name: "Einfügen" })).toBeNull();
+  });
+
+  it("opens the folder menu in an empty directory and closes on Escape and outside click", async () => {
+    vi.mocked(sftpList).mockResolvedValue([]);
+    const { container } = renderPanel();
+    const msg = await screen.findByText("(leeres Verzeichnis)");
+    fireEvent.contextMenu(msg.parentElement!);
+    expect(screen.getByText("Neue Datei")).toBeVisible();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByText("Neue Datei")).toBeNull();
+
+    fireEvent.contextMenu(container.querySelector("p")!.parentElement!);
+    expect(screen.getByText("Neue Datei")).toBeVisible();
+    fireEvent.click(document.body);
+    expect(screen.queryByText("Neue Datei")).toBeNull();
+  });
+
+  it("offers Paste in the menu while an entry is cut and moves it like the toolbar button", async () => {
+    vi.mocked(sftpList).mockImplementation((_s, requestedPath) =>
+      Promise.resolve(requestedPath === "sub" ? [] : [fileEntry, { ...fileEntry, name: "sub", path: "sub", isDir: true }]),
+    );
+    vi.mocked(sftpExists).mockResolvedValue(false);
+    vi.mocked(sftpRename).mockResolvedValue(undefined);
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getAllByRole("button", { name: /^(Aktionen|Actions): / })[0]);
+    fireEvent.click(screen.getByText("Ausschneiden"));
+    fireEvent.click(await screen.findByText(/sub/));
+    await screen.findByText("(leeres Verzeichnis)");
+
+    fireEvent.contextMenu(container.querySelector("p")!.parentElement!);
+    const menu = screen.getByRole("group", { name: "Ordneraktionen" });
+    fireEvent.click(within(menu).getByText("Einfügen"));
+
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "sub/a.txt", null));
+  });
+
+  it("New file creates an empty file in the current directory and refreshes", async () => {
+    vi.mocked(sftpCreateFile).mockResolvedValue(undefined);
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.contextMenu(emptySpace(container));
+    fireEvent.click(screen.getByText("Neue Datei"));
+    fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "b.txt" } });
+    vi.mocked(sftpList).mockClear();
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() => expect(sftpCreateFile).toHaveBeenCalledWith("session-1", "b.txt", null));
+    await waitFor(() => expect(sftpList).toHaveBeenCalled());
+    expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "success" }));
+  });
+
+  it("New folder from the menu uses the same prompt as the toolbar button", async () => {
+    vi.mocked(sftpMkdir).mockResolvedValue(undefined);
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.contextMenu(emptySpace(container));
+    fireEvent.click(screen.getByText("Neuer Ordner"));
+    fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "d" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+    await waitFor(() => expect(sftpMkdir).toHaveBeenCalledWith("session-1", "d", null));
+  });
+
+  it("rejects invalid names in the prompt without a backend call", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    for (const bad of ["", "a/b", ".", ".."]) {
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(screen.getByText("Neue Datei"));
+      fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: bad } });
+      fireEvent.click(screen.getByText("Übernehmen"));
+      expect(await screen.findByRole("alert")).toBeVisible();
+      fireEvent.click(screen.getByText("Abbrechen"));
+    }
+    expect(sftpCreateFile).not.toHaveBeenCalled();
+    expect(sftpMkdir).not.toHaveBeenCalled();
+  });
+
+  it("shows the translated 'already exists' and permission-denied reasons", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    for (const [code, text] of [
+      ["SSH_SFTP_ALREADY_EXISTS", /existiert bereits/],
+      ["SSH_SFTP_PERMISSION_DENIED", /Zugriff verweigert/],
+    ] as const) {
+      vi.mocked(showToast).mockClear();
+      vi.mocked(sftpCreateFile).mockRejectedValueOnce({ message: "roh", code });
+      fireEvent.contextMenu(emptySpace(container));
+      fireEvent.click(screen.getByText("Neue Datei"));
+      fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "a.txt" } });
+      fireEvent.click(screen.getByText("Übernehmen"));
+      await waitFor(() =>
+        expect(showToast).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: "error", message: expect.stringMatching(text) }),
+        ),
+      );
+    }
+    vi.mocked(sftpMkdir).mockRejectedValueOnce({ message: "roh", code: "SSH_SFTP_ALREADY_EXISTS" });
+    fireEvent.contextMenu(emptySpace(container));
+    fireEvent.click(screen.getByText("Neuer Ordner"));
+    fireEvent.change(within(await screen.findByRole("dialog")).getByRole("textbox"), { target: { value: "a.txt" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringMatching(/existiert bereits/) }),
       ),
     );
   });

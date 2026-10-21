@@ -42,6 +42,15 @@ Zeilenende zeigt **dieselben** Aktionen. Welche erscheinen, hängt vom Typ ab
 öffnen“ gibt es nur für Dateien. Die Reihenfolge ist: lesende und lokale Aktionen, ein Trenner,
 dann die server-verändernden Aktionen.
 
+Rechtsklick auf **leere Fläche** der Dateiliste (unter den Zeilen oder in einem
+leeren Verzeichnis) öffnet an der Mauszeigerposition ein eigenes Menü mit
+„Neuer Ordner“ und „Neue Datei“; das eingebaute Menü des Webviews erscheint
+dort nicht. Ist gerade ein Eintrag ausgeschnitten, enthält es zusätzlich
+„Einfügen“ (dieselbe Verschiebung wie die Schaltfläche in der Werkzeugleiste),
+sonst nicht. Ein Rechtsklick auf eine Zeile öffnet weiterhin das Eintragsmenü.
+Klick außerhalb und Escape schließen das Menü; es ist per Tastatur bedienbar
+und beschriftet.
+
 ## Teil 2: Lesende und lokale Aktionen (ohne Bestätigung)
 
 - **Herunterladen** direkt in den Download-Ordner des Betriebssystems, oder
@@ -85,7 +94,20 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
   wie beim zweistufigen Löschen eines Servers). Ordner werden von unten nach
   oben geleert und entfernt.
 - **Umbenennen:** per Dialog. Existiert der Zielname schon, warnt die App.
-- **Neuen Ordner anlegen** im aktuellen Verzeichnis.
+- **Neuen Ordner anlegen** im aktuellen Verzeichnis, per Werkzeugleiste oder
+  über das Menü auf leerer Fläche (Teil 1).
+- **Neue Datei anlegen** im aktuellen Verzeichnis, über das Menü auf leerer
+  Fläche: Ein Namensdialog (mit eigenem Titel) legt eine leere Datei an. Der
+  Name darf nicht leer sein, kein „/“ enthalten und nicht „.“ oder „..“ sein;
+  ein ungültiger Name wird im Dialog abgelehnt, ohne den Server zu fragen.
+  **Ein vorhandener Name wird nie überschrieben:** Gibt es schon eine Datei
+  oder einen Ordner dieses Namens, ändert sich nichts und ein Fehler-Hinweis
+  sagt, dass der Name bereits existiert — für „Neue Datei“ und „Neuer Ordner“
+  gleich. Fehlende Rechte werden einmal versucht und als „Zugriff verweigert“
+  gemeldet, ohne Wiederholung. Im erhöhten Modus laufen beide Aktionen über
+  den erhöhten Kanal als gewählter Nutzer und werden wie alle erhöhten
+  Änderungen protokolliert. Nach Erfolg wird die Liste aktualisiert und ein
+  Erfolgs-Hinweis erscheint.
 - **Verschieben:** innerhalb des Servers per Ausschneiden und Einfügen.
   Existiert das Ziel schon, warnt die App. Umbenennen und Verschieben sind
   für den Server dieselbe Operation.
