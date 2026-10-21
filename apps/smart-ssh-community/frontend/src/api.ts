@@ -189,8 +189,9 @@ export const cancelConnect = (attemptId: string) =>
 export const listChatSessions = (serverId: string) =>
   invoke<ChatSessionSummaryDto[]>("list_chat_sessions", { serverId });
 
-export const resumeChatSession = (serverId: string, sessionId: string) =>
-  invoke<string>("resume_chat_session", { serverId, sessionId });
+/** Issue #568: `attemptId` as for `connect` (progress events, cancel). */
+export const resumeChatSession = (serverId: string, sessionId: string, attemptId: string) =>
+  invoke<string>("resume_chat_session", { serverId, sessionId, attemptId });
 
 export const renameChatSession = (sessionId: string, newTitle: string) =>
   invoke<void>("rename_chat_session", { sessionId, newTitle });

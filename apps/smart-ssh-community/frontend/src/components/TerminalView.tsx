@@ -148,7 +148,7 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
-    if (link === "lost" && !lostShownRef.current) {
+    if ((link === "lost" || link === "reconnecting") && !lostShownRef.current) {
       lostShownRef.current = true;
       term.writeln(`\r\n${t("session.connectionLostPressR")}`);
     } else if (link === "live" && lostShownRef.current) {

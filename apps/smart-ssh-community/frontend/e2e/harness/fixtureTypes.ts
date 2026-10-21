@@ -4,6 +4,7 @@
 // fake backend persists its state in `sessionStorage` so a reload keeps it.
 import type {
   AiProviderConfigDto,
+  ChatSessionSummaryDto,
   GroupDto,
   HostKeyKind,
   ServerDto,
@@ -33,6 +34,8 @@ export interface FakeBackendFixture {
   groups?: GroupDto[];
   /** Sessions the backend already holds at start-up (`list_sessions`). */
   sessions?: SessionSummaryDto[];
+  /** Saved chat sessions per server id (`list_chat_sessions`, resume). */
+  chatSessions?: Record<string, ChatSessionSummaryDto[]>;
   aiProviders?: AiProviderConfigDto[];
   /** Contents of the frontend settings store (`settings.json`). */
   settings?: Record<string, unknown>;

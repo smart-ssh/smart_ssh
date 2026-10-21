@@ -2,13 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
-  commandErrorConnectLog,
   commandErrorMessage,
   listChatSessions,
   listGroups,
   listServers,
   listUnusableServers,
-  resumeChatSession,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
@@ -37,11 +35,10 @@ import { unusableReasonText } from "../unusableServer";
 import { Button } from "./ui";
 
 interface ServerListProps {
-  /** Only used by the "resume chat session" path (Issue #548: a plain
-   * connect opens a connecting tab through `onStartConnect`). */
-  onConnected: (sessionId: string, serverName: string, serverId: string) => void;
-  /** Issue #548: opens a "Connecting to …" tab and runs the attempt there. */
-  onStartConnect: (server: { id: string; name: string }) => void;
+  /** Issue #548: opens a "Connecting to …" tab and runs the attempt there.
+   * Issue #568: with `resumeChatSessionId` the attempt resumes that saved
+   * chat session (also on Retry). */
+  onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
   /** Issue #548: servers with a running connect attempt (keeps the
    * "Connecting…" state of the row). */
   connectingServerIds: ReadonlySet<string>;
@@ -95,7 +92,6 @@ function describeError(
  * hier, schließt `clearHostKeyPrompt()` eine evtl. noch offene Abfrage.
  */
 export function ServerList({
-  onConnected,
   onStartConnect,
   connectingServerIds,
   findExistingSessionId,
@@ -113,7 +109,6 @@ export function ServerList({
   const [unusableServers, setUnusableServers] = useState<UnusableServerDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectFailure, setConnectFailure] = useState<{
     message: string;
     steps: ConnectStepRecord[];
@@ -192,17 +187,6 @@ export function ServerList({
       .catch(() => setFirstRunAcknowledged(false));
   }, []);
 
-  /** Issue #51: ein gescheiterter Verbindungsaufbau zeigt unter der
-   * Meldung sein Schritt-Protokoll. Das Protokoll hängt an genau dieser
-   * Meldung — ersetzt ein anderer Fehler sie, verschwindet es mit ihr. Es
-   * lebt nur in diesem Zustand und wird nie gespeichert. */
-  const showConnectFailure = (err: unknown) => {
-    const message = describeError(t, err);
-    const steps = commandErrorConnectLog(err);
-    setError(message);
-    setConnectFailure(steps ? { message, steps } : null);
-  };
-
   const performConnect = async (server: ServerDto) => {
     setError(null);
     setConnectFailure(null);
@@ -231,7 +215,6 @@ export function ServerList({
     }
     // Issue #407: the buttons stay focusable (aria-disabled instead of
     // disabled) while an attempt is pending, so the guard lives here.
-    if (connectingId !== null) return;
     if (firstRunAcknowledged === false) {
       setPendingConnectServer(server);
       return;
@@ -253,20 +236,13 @@ export function ServerList({
     }
   };
 
-  const handleResumeSession = async (sessionId: string) => {
+  const handleResumeSession = (sessionId: string) => {
     const server = sessionPickerState?.server;
     if (!server) return;
     setSessionPickerState(null);
     setError(null);
-    setConnectingId(server.id);
-    try {
-      const tabSessionId = await resumeChatSession(server.id, sessionId);
-      onConnected(tabSessionId, server.name, server.id);
-    } catch (err) {
-      showConnectFailure(err);
-    } finally {
-      setConnectingId(null);
-    }
+    setConnectFailure(null);
+    onStartConnect({ id: server.id, name: server.name }, sessionId);
   };
 
   const reloadSessionPicker = async () => {
@@ -312,7 +288,7 @@ export function ServerList({
           ? {}
           : handlersFor({ kind: "server", id: server.id, label: server.name }))}
         onClick={() => handleConnect(server)}
-        aria-disabled={connectingId !== null ? "true" : undefined}
+       
         style={{ paddingLeft: `${depth * 16 + 16}px` }}
         className="flex w-full select-none items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 aria-disabled:opacity-60"
       >
@@ -347,7 +323,7 @@ export function ServerList({
               {tag}
             </span>
           ))}
-          {(connectingId === server.id || connectingServerIds.has(server.id)) && (
+          {connectingServerIds.has(server.id) && (
             <span className="text-xs text-indigo-300">{t("mainScreen.connecting")}</span>
           )}
         </div>

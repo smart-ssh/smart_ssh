@@ -79,6 +79,15 @@ nutzbar, die R-Taste auch.
 geht bei Erfolg auf `connected`, bei Misserfolg zurück auf `disconnected`.
 Die Sitzungsliste meldet während des Neuverbindens ebenfalls `reconnecting`.
 
+**6.1 Neue Shell und Verlustüberwachung (Nachtrag).** Nach jedem erfolgreichen
+Neuverbinden – manuell oder automatisch – öffnet das Terminal genau eine neue
+Shell und schreibt die Trennlinie. Der Verlust-Hinweis erscheint auch dann,
+wenn der Verlust zuerst als `reconnecting` gemeldet wird. Die
+Verbindungsüberwachung läuft für jede Verbindung, die eine Sitzung hält, auch
+nach einem Neuverbinden: ein erneuter Verlust wird wie der erste erkannt
+(Status `disconnected`, automatisches Neuverbinden, Knopf). Die Überwachung
+der ersetzten Verbindung meldet nichts für die neue.
+
 ## 7. Nicht Teil dieser Spec
 
 - Wiederherstellen des erhöhten Dateikanals, der lokalen Pfadfreigaben oder
