@@ -124,3 +124,30 @@ test("host key prompt during connect: dialog as before, step continues in the sa
   await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
   await expect(page.getByRole("toolbar").getByRole("button", { name: /^alpha$/ })).toHaveCount(1);
 });
+
+// Issue #568: resuming a saved chat session uses the same connecting tab.
+test("resuming a saved chat session shows the connecting tab, then the session tab", async ({ app }) => {
+  await app.launch({
+    settings: { ...ACKNOWLEDGED },
+    servers: [server({ id: "s-1", name: "alpha" })],
+    chatSessions: {
+      "s-1": [
+        { sessionId: "chat-1", title: "Old chat", startedAt: "2026-01-01T00:00:00Z", endedAt: null, messageCount: 2 },
+      ],
+    },
+    commands: { resume_chat_session: { hold: true } },
+  });
+  const page = app.page;
+  await page.getByRole("button", { name: /^alpha\b/ }).click();
+  await page.getByText("Old chat").click();
+
+  await expect(page.getByRole("heading", { name: "Connecting to alpha …" })).toBeVisible();
+  const calls = await app.calls("resume_chat_session");
+  expect(calls).toHaveLength(1);
+  expect(JSON.stringify(calls[0])).toContain("chat-1");
+
+  await app.release("resume_chat_session", { result: "session-resumed" });
+  await expect(page.getByRole("heading", { name: "Connecting to alpha …" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
+  await expect(page.getByRole("toolbar").getByRole("button", { name: /^alpha$/ })).toHaveCount(1);
+});
