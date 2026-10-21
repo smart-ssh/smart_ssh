@@ -81,6 +81,15 @@ Tastaturkurzbefehl zum Starten und Beenden (Abschnitt 5.8).
 
 **5.2** Der erkannte Text wird an den aktuellen Entwurf im Eingabefeld
 angehängt. Er wird nie automatisch gesendet; der Nutzer sendet mit Enter.
+Schon während der Aufnahme erscheinen die erkannten Wörter nach und nach als
+vorläufiger Text hinter dem Entwurf (Leerzeichen getrennt, wenn der Entwurf
+nicht leer ist); Wörter können sich dabei noch ändern. Mit *Stop* ersetzt das
+Ergebnis einer abschließenden Erkennung über die ganze Aufnahme den
+vorläufigen Text; der Entwurf davor bleibt unverändert. Ist das Ergebnis leer,
+verschwindet der vorläufige Text. Schlägt die abschließende Erkennung fehl,
+bleibt der letzte vorläufige Text stehen und die Fehlermeldung erscheint.
+Abbrechen entfernt allen vorläufigen Text und stellt den Entwurf wie vor dem
+Start wieder her. Live-Text gibt es immer; es gibt keine Einstellung dafür.
 
 **5.3** Die Sprache wird standardmäßig automatisch erkannt. Eine Einstellung
 erlaubt eine feste Sprache.
@@ -111,6 +120,17 @@ Logs nennen höchstens Dauer und Ergebnis.
 - Die Aufnahme ist auf 120 Sekunden begrenzt. Danach endet sie von selbst und
   die Erkennung läuft; die Oberfläche erhält den Zustand `finished`, und der
   nächste *Stop* liefert den Text.
+- Während der Aufnahme erkennt die App im Takt von etwa einer Sekunde den
+  bisherigen Ton und meldet den vorläufigen Text als Ereignis
+  `speech-partial-text` mit `text` (der gesamte vorläufige Text bisher) und
+  `revision` (wächst nur). Es läuft höchstens eine solche Erkennung zugleich;
+  eine langsame verzögert das nächste Ereignis, sie wird nicht aufgestaut.
+  Je Durchlauf wird nur das jüngste Stück (etwa 25 Sekunden) erkannt, früherer
+  Ton wird einmal erkannt und bleibt als fester Text. Nach *Stop* oder
+  *Abbrechen* kommen keine solchen Ereignisse mehr; verspätete ignoriert die
+  Oberfläche. Das Modell bleibt für eine Aufnahme geladen und wird nach *Stop*
+  oder *Abbrechen* freigegeben. Der endgültige Text kommt weiterhin nur als
+  Ergebnis von *Stop*, genau einmal.
 - Zustandsänderungen kommen als Ereignis: `recording`, `transcribing`,
   `idle`, `finished`. Die Erkennung läuft nicht im Oberflächen-Thread.
 - Die Aufnahme ist mono, 16 kHz. Eine Aufnahme unter etwa 0,1 Sekunde ergibt
@@ -134,10 +154,15 @@ Logs nennen höchstens Dauer und Ergebnis.
   verstrichene Zeit (`m:ss`); während der Erkennung zeigt er einen
   Ladeindikator und ist gesperrt. Alle drei Zustände haben eine
   Screenreader-Beschriftung.
-- Esc während der Aufnahme verwirft sie; der Entwurf bleibt unverändert.
+- Vom Start bis der endgültige Text eingefügt ist, ist das Eingabefeld
+  schreibgeschützt, der vorläufige Text ist gedämpft und kursiv dargestellt,
+  und Senden ist gesperrt. Danach ist das Feld wieder editierbar, hat den
+  Fokus, und der Cursor steht am Ende.
+- Esc während der Aufnahme verwirft sie; der Entwurf ist danach wieder genau
+  wie vor dem Start.
   Verlässt der Nutzer den Chat während der Aufnahme, wird sie verworfen.
 - Endet die Aufnahme nach 120 Sekunden von selbst, wird der Text wie bei
-  einem Klick auf „Beenden“ übernommen.
+  einem Klick auf „Beenden“ übernommen (der vorläufige Text wird ersetzt).
 - Der Text kommt wie getippter Text in den Entwurf (angehängt, mit einem
   Leerzeichen getrennt, wenn der Entwurf nicht leer ist) und gilt als
   ungeprüfte Nutzereingabe; er geht erst mit Enter auf dem normalen Sendeweg
