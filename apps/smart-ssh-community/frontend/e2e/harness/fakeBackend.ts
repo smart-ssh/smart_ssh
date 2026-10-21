@@ -191,6 +191,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     // unusable one override this command.
     list_unusable_servers: () => [],
     list_known_tags: () => [...new Set(model.servers.flatMap((s) => s.tags))].sort(),
+    explain_confirmation: () => ({ segments: [], suggestions: [] }),
     move_server_to_group: ({ id, groupId }) => {
       findServer(id).groupId = (groupId as string | null) ?? null;
       persist();

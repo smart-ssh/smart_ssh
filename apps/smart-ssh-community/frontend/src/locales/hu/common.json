@@ -377,6 +377,17 @@
       "lastArgOpen": "Bármely utolsó argumentum: {{patterns}}",
       "subcommand": "Az összes `{{names}}` hívás: {{patterns}}",
       "tool": "Az összes `{{names}}` hívás: {{patterns}}"
+    },
+    "explain": {
+      "heading": "A parancs részei",
+      "covered": "a(z) {{rule}} szabály lefedi",
+      "coveredUnknown": "meglévő szabály lefedi",
+      "needsRule": "szabályra van szükség",
+      "blocked": "a szabályoktól függetlenül mindig rákérdez: {{reasons}}",
+      "verdictAuto": "legközelebb automatikusan lefut",
+      "verdictAsk": "továbbra is rákérdez: {{reasons}}",
+      "notice": "Szabály létrehozva. Ez a parancs legközelebb is rákérdez: {{reasons}}",
+      "reasonOther": "másik biztonsági ellenőrzés"
     }
   },
   "hostKeyDialog": {
@@ -949,6 +960,8 @@
     "cancelCut": "Kivágás megszakítása",
     "transferUpload": "Feltöltés: {{name}}",
     "transferDownload": "Letöltés: {{name}}",
+    "transferDone": "Kész: {{name}}",
+    "transferElevationEnded": "A megemelt mód az átvitel közben ki lett kapcsolva.",
     "loading": "Betöltés…",
     "emptyDirectory": "(üres könyvtár)",
     "dropHint": "Ejtse ide a feltöltéshez ide: {{path}}",

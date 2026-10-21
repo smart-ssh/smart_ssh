@@ -377,6 +377,17 @@
       "lastArgOpen": "Qualquer último argumento: {{patterns}}",
       "subcommand": "Todas as chamadas de `{{names}}`: {{patterns}}",
       "tool": "Todas as chamadas de `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Partes deste comando",
+      "covered": "coberto pela regra {{rule}}",
+      "coveredUnknown": "coberto por uma regra existente",
+      "needsRule": "precisa de uma regra",
+      "blocked": "sempre pergunta, independentemente das regras: {{reasons}}",
+      "verdictAuto": "será executado automaticamente da próxima vez",
+      "verdictAsk": "ainda vai perguntar: {{reasons}}",
+      "notice": "Regra criada. Este comando ainda vai perguntar da próxima vez: {{reasons}}",
+      "reasonOther": "outra verificação de segurança"
     }
   },
   "hostKeyDialog": {
@@ -954,6 +965,8 @@
     "cancelCut": "Cancelar recorte",
     "transferUpload": "Enviando: {{name}}",
     "transferDownload": "Baixando: {{name}}",
+    "transferDone": "Concluído: {{name}}",
+    "transferElevationEnded": "O modo elevado foi desativado durante a transferência.",
     "loading": "Carregando…",
     "emptyDirectory": "(diretório vazio)",
     "dropHint": "Solte aqui para enviar para {{path}}",

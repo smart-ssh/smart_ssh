@@ -1144,6 +1144,78 @@ pub struct PatternSuggestionDto {
     pub patterns: Vec<SuggestionPatternDto>,
 }
 
+// --- Issue #596: Erklärung des Bestätigungsdialogs -----------------------
+
+/// Zustand eines Teilkommandos im Bestätigungsdialog (Spec 0011).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SegmentCoverageState {
+    /// Eine Allow-Regel lässt das Teilkommando automatisch laufen.
+    Covered,
+    /// Keine Regel greift; eine Allow-Regel könnte es abdecken.
+    NeedsRule,
+    /// Verlangt eine Bestätigung, egal welche Allow-Regel existiert
+    /// (`reasons`), oder eine Regel verlangt Bestätigung/verbietet es.
+    Blocked,
+}
+
+/// Die Regel, die ein Teilkommando abdeckt (nur Anzeige).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoveringRuleDto {
+    pub pattern_type: PatternType,
+    pub pattern_value: String,
+}
+
+/// Ein Teilkommando mit seinem Zustand. `reasons` sind feste Codes
+/// (`FILTER_*`-Codes), keine Texte.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentCoverageDto {
+    pub index: usize,
+    pub text: String,
+    pub state: SegmentCoverageState,
+    pub rule: Option<CoveringRuleDto>,
+    pub reasons: Vec<String>,
+}
+
+/// Grund, warum ein Vorschlag das Kommando nicht automatisch laufen lässt.
+/// `code`: `FILTER_NO_RULE_MATCHED` (Teilkommando ohne Regel), `FILTER_RULE_CONFIRM`, `FILTER_RULE_DENY`,
+/// ein `FILTER_*`-Code der Engine oder ein Code einer nachgelagerten
+/// Eskalation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerdictReasonDto {
+    pub code: String,
+    pub segment_index: Option<usize>,
+}
+
+/// Ergebnis der Auswertung des Kommandos mit den Mustern des Vorschlags als
+/// Kandidatenregeln.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionVerdictDto {
+    pub auto_exec: bool,
+    pub reasons: Vec<VerdictReasonDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplainedSuggestionDto {
+    #[serde(flatten)]
+    pub suggestion: PatternSuggestionDto,
+    pub verdict: SuggestionVerdictDto,
+}
+
+/// Antwort von `explain_confirmation`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmationExplanationDto {
+    /// Leer bei einem Teilkommando ohne regelunabhängigen Grund.
+    pub segments: Vec<SegmentCoverageDto>,
+    pub suggestions: Vec<ExplainedSuggestionDto>,
+}
+
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
 
 /// Exportformat für `export_document` (Spec 0012, Abschnitt 3). Seit Spec

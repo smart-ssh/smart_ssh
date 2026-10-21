@@ -377,6 +377,17 @@
       "lastArgOpen": "Bất kỳ đối số cuối nào: {{patterns}}",
       "subcommand": "Mọi lệnh gọi `{{names}}`: {{patterns}}",
       "tool": "Mọi lệnh gọi `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Các phần của lệnh này",
+      "covered": "được quy tắc {{rule}} bao phủ",
+      "coveredUnknown": "được một quy tắc hiện có bao phủ",
+      "needsRule": "cần một quy tắc",
+      "blocked": "luôn hỏi, bất kể quy tắc nào: {{reasons}}",
+      "verdictAuto": "lần sau sẽ tự động chạy",
+      "verdictAsk": "vẫn sẽ hỏi: {{reasons}}",
+      "notice": "Đã tạo quy tắc. Lệnh này lần sau vẫn sẽ hỏi: {{reasons}}",
+      "reasonOther": "một kiểm tra an toàn khác"
     }
   },
   "hostKeyDialog": {
@@ -944,6 +955,8 @@
     "cancelCut": "Hủy cắt",
     "transferUpload": "Đang tải lên: {{name}}",
     "transferDownload": "Đang tải xuống: {{name}}",
+    "transferDone": "Hoàn tất: {{name}}",
+    "transferElevationEnded": "Chế độ nâng quyền đã bị tắt trong khi truyền.",
     "loading": "Đang tải…",
     "emptyDirectory": "(thư mục trống)",
     "dropHint": "Thả vào đây để tải lên {{path}}",

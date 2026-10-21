@@ -377,6 +377,17 @@
       "lastArgOpen": "Dowolny ostatni argument: {{patterns}}",
       "subcommand": "Wszystkie wywołania `{{names}}`: {{patterns}}",
       "tool": "Wszystkie wywołania `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Części tego polecenia",
+      "covered": "objęte regułą {{rule}}",
+      "coveredUnknown": "objęte istniejącą regułą",
+      "needsRule": "wymaga reguły",
+      "blocked": "zawsze pyta, niezależnie od reguł: {{reasons}}",
+      "verdictAuto": "następnym razem uruchomi się automatycznie",
+      "verdictAsk": "nadal będzie pytać: {{reasons}}",
+      "notice": "Reguła utworzona. To polecenie nadal będzie pytać następnym razem: {{reasons}}",
+      "reasonOther": "inna kontrola bezpieczeństwa"
     }
   },
   "hostKeyDialog": {
@@ -959,6 +970,8 @@
     "cancelCut": "Anuluj wycinanie",
     "transferUpload": "Wysyłanie: {{name}}",
     "transferDownload": "Pobieranie: {{name}}",
+    "transferDone": "Gotowe: {{name}}",
+    "transferElevationEnded": "Tryb podwyższony został wyłączony podczas transferu.",
     "loading": "Wczytywanie…",
     "emptyDirectory": "(pusty katalog)",
     "dropHint": "Upuść tutaj, aby wysłać do {{path}}",

@@ -377,6 +377,17 @@
       "lastArgOpen": "कोई भी अंतिम आर्ग्युमेंट: {{patterns}}",
       "subcommand": "सभी `{{names}}` कॉल: {{patterns}}",
       "tool": "सभी `{{names}}` कॉल: {{patterns}}"
+    },
+    "explain": {
+      "heading": "इस कमांड के हिस्से",
+      "covered": "नियम {{rule}} द्वारा कवर",
+      "coveredUnknown": "मौजूदा नियम द्वारा कवर",
+      "needsRule": "नियम चाहिए",
+      "blocked": "नियमों से स्वतंत्र रूप से हमेशा पूछता है: {{reasons}}",
+      "verdictAuto": "अगली बार अपने-आप चलेगा",
+      "verdictAsk": "फिर भी पूछेगा: {{reasons}}",
+      "notice": "नियम बन गया। यह कमांड अगली बार भी पूछेगी: {{reasons}}",
+      "reasonOther": "एक और सुरक्षा जाँच"
     }
   },
   "hostKeyDialog": {
@@ -949,6 +960,8 @@
     "cancelCut": "कट रद्द करें",
     "transferUpload": "अपलोड हो रहा है: {{name}}",
     "transferDownload": "डाउनलोड हो रहा है: {{name}}",
+    "transferDone": "पूरा हुआ: {{name}}",
+    "transferElevationEnded": "स्थानांतरण के दौरान उन्नत मोड बंद कर दिया गया।",
     "loading": "लोड हो रहा है…",
     "emptyDirectory": "(खाली डायरेक्टरी)",
     "dropHint": "{{path}} में अपलोड करने के लिए यहाँ छोड़ें",

@@ -24,6 +24,7 @@ pub mod auto_reconnect;
 pub mod chat_content_extension;
 pub mod compaction;
 pub mod confirmation;
+pub mod confirmation_explain;
 pub mod connect_attempts;
 /// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.
 pub mod data_paths;

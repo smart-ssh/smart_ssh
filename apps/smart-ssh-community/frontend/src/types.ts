@@ -871,6 +871,40 @@ export interface PatternSuggestionDto {
   patterns: SuggestionPatternDto[];
 }
 
+// --- Issue #596: explanation of a pending confirmation -------------------
+
+export type SegmentCoverageState = "covered" | "needsRule" | "blocked";
+
+export interface SegmentCoverageDto {
+  index: number;
+  text: string;
+  state: SegmentCoverageState;
+  /** Covering Allow rule (only for `covered`). */
+  rule: { patternType: PatternType; patternValue: string } | null;
+  /** Fixed reason codes (`FILTER_*`), translated via `errors.<code>`. */
+  reasons: string[];
+}
+
+export interface VerdictReasonDto {
+  code: string;
+  segmentIndex: number | null;
+}
+
+export interface SuggestionVerdictDto {
+  autoExec: boolean;
+  reasons: VerdictReasonDto[];
+}
+
+export interface ExplainedSuggestionDto extends PatternSuggestionDto {
+  verdict: SuggestionVerdictDto;
+}
+
+export interface ConfirmationExplanationDto {
+  /** Empty for a single segment without a rule-independent reason. */
+  segments: SegmentCoverageDto[];
+  suggestions: ExplainedSuggestionDto[];
+}
+
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
 
 /** Spec 0012, Abschnitt 3 — kein `decision`-Feld: `GenerateDocument`

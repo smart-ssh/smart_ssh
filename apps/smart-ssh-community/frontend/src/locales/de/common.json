@@ -377,6 +377,17 @@
       "lastArgOpen": "Beliebiges letztes Argument: {{patterns}}",
       "subcommand": "Alle `{{names}}`-Aufrufe: {{patterns}}",
       "tool": "Alle `{{names}}`-Aufrufe: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Teile dieses Kommandos",
+      "covered": "abgedeckt durch Regel {{rule}}",
+      "coveredUnknown": "durch eine bestehende Regel abgedeckt",
+      "needsRule": "braucht eine Regel",
+      "blocked": "fragt immer nach, egal welche Regeln: {{reasons}}",
+      "verdictAuto": "läuft beim nächsten Mal automatisch",
+      "verdictAsk": "fragt weiterhin nach: {{reasons}}",
+      "notice": "Regel angelegt. Dieses Kommando fragt beim nächsten Mal weiterhin nach: {{reasons}}",
+      "reasonOther": "eine andere Sicherheitsprüfung"
     }
   },
   "hostKeyDialog": {
@@ -949,6 +960,8 @@
     "cancelCut": "Ausschneiden abbrechen",
     "transferUpload": "Hochladen: {{name}}",
     "transferDownload": "Herunterladen: {{name}}",
+    "transferDone": "Fertig: {{name}}",
+    "transferElevationEnded": "Der erhöhte Modus wurde während der Übertragung ausgeschaltet.",
     "loading": "Lädt…",
     "emptyDirectory": "(leeres Verzeichnis)",
     "dropHint": "Hier ablegen zum Hochladen nach {{path}}",

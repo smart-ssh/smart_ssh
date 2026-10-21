@@ -829,6 +829,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_known_tags,
             commands::evaluate_explained,
             commands::suggest_rule_patterns,
+            commands::explain_confirmation,
             commands::accept_and_create_rule,
             commands::export_document,
             commands::read_credential_file,

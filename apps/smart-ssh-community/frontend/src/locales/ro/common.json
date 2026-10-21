@@ -377,6 +377,17 @@
       "lastArgOpen": "Orice ultim argument: {{patterns}}",
       "subcommand": "Toate apelurile `{{names}}`: {{patterns}}",
       "tool": "Toate apelurile `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Părți ale acestei comenzi",
+      "covered": "acoperită de regula {{rule}}",
+      "coveredUnknown": "acoperită de o regulă existentă",
+      "needsRule": "necesită o regulă",
+      "blocked": "întreabă mereu, indiferent de reguli: {{reasons}}",
+      "verdictAuto": "data viitoare rulează automat",
+      "verdictAsk": "va întreba în continuare: {{reasons}}",
+      "notice": "Regulă creată. Această comandă va întreba și data viitoare: {{reasons}}",
+      "reasonOther": "altă verificare de securitate"
     }
   },
   "hostKeyDialog": {
@@ -954,6 +965,8 @@
     "cancelCut": "Anulează tăierea",
     "transferUpload": "Se încarcă: {{name}}",
     "transferDownload": "Se descarcă: {{name}}",
+    "transferDone": "Terminat: {{name}}",
+    "transferElevationEnded": "Modul cu drepturi ridicate a fost dezactivat în timpul transferului.",
     "loading": "Se încarcă…",
     "emptyDirectory": "(director gol)",
     "dropHint": "Plasați aici pentru a încărca în {{path}}",

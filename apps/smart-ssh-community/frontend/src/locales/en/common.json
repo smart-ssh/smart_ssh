@@ -377,6 +377,17 @@
       "lastArgOpen": "Any last argument: {{patterns}}",
       "subcommand": "All `{{names}}` calls: {{patterns}}",
       "tool": "All `{{names}}` calls: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Parts of this command",
+      "covered": "covered by rule {{rule}}",
+      "coveredUnknown": "covered by an existing rule",
+      "needsRule": "needs a rule",
+      "blocked": "always asks, whatever the rules: {{reasons}}",
+      "verdictAuto": "runs automatically next time",
+      "verdictAsk": "will still ask: {{reasons}}",
+      "notice": "Rule created. This command will still ask next time: {{reasons}}",
+      "reasonOther": "another safety check"
     }
   },
   "hostKeyDialog": {
@@ -949,6 +960,8 @@
     "cancelCut": "Cancel cut",
     "transferUpload": "Uploading: {{name}}",
     "transferDownload": "Downloading: {{name}}",
+    "transferDone": "Done: {{name}}",
+    "transferElevationEnded": "Elevated mode was switched off during the transfer.",
     "loading": "Loading…",
     "emptyDirectory": "(empty directory)",
     "dropHint": "Drop here to upload to {{path}}",

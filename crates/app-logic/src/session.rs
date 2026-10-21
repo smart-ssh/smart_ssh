@@ -191,12 +191,30 @@ impl AsRef<dyn OutputRedactor> for SwappableRedactor {
 #[async_trait]
 pub trait CommandEvaluator: Send + Sync {
     async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace;
+
+    /// Read-only evaluation as if `candidates` were additional stored rules
+    /// (issue #596: verdict for a rule suggestion). Stores nothing.
+    async fn evaluate_explained_with_candidates(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[ssh_manager_core::filter::Rule],
+    ) -> EvaluationTrace;
 }
 
 #[async_trait]
 impl<S: PolicyStore + Send + Sync> CommandEvaluator for FilterEngine<S> {
     async fn evaluate_explained(&self, command: &str, ctx: &EvalContext) -> EvaluationTrace {
         FilterEngine::evaluate_explained(self, command, ctx).await
+    }
+
+    async fn evaluate_explained_with_candidates(
+        &self,
+        command: &str,
+        ctx: &EvalContext,
+        candidates: &[ssh_manager_core::filter::Rule],
+    ) -> EvaluationTrace {
+        FilterEngine::evaluate_explained_with_candidates(self, command, ctx, candidates).await
     }
 }
 

@@ -957,6 +957,74 @@ fn check_finding_confirm(
     }
 }
 
+/// Issue #596: the post-engine escalations that do not depend on the user's
+/// choice, evaluated **read-only** for the verdict of a rule suggestion: the
+/// code of the first one that would turn an `AutoExec` into a `Confirm` for
+/// `command` (chat origin), or `None`. Same conditions and order as the chain
+/// in `handle_action_proposed`, but it never consumes the one-shot flags
+/// (`injection_suspected`, `injection_check_unavailable`) and skips the
+/// escalation after an earlier rejection (transient, not a property of the
+/// command).
+pub(crate) fn state_independent_escalation_code(
+    session: &Session,
+    command: &str,
+) -> Option<&'static str> {
+    use std::sync::atomic::Ordering::SeqCst;
+    let action = AiAction::SuggestCommand {
+        command: command.to_string(),
+    };
+    let pseudo = pseudo_command_for_risk_classification(&action);
+    if let Some(finding) = pseudo
+        .as_deref()
+        .and_then(ssh_manager_core::risk::secret_path_read_reason)
+    {
+        return Some(if finding.is_not_assessable() {
+            "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM"
+        } else {
+            "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM"
+        });
+    }
+    if let Some(finding) = pseudo
+        .as_deref()
+        .and_then(ssh_manager_core::risk::sftp_server_invocation_reason)
+    {
+        return Some(if finding.is_not_assessable() {
+            "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM"
+        } else {
+            "FILTER_SFTP_SERVER_REQUIRES_CONFIRM"
+        });
+    }
+    let risk_assessment = risk_assessment_for_action(&action);
+    if session.red_risk_always_confirm
+        && red_risk_confirm_reason(&action, risk_assessment.as_ref()).is_some()
+    {
+        return Some("FILTER_RED_RISK_REQUIRES_CONFIRM");
+    }
+    if session.untrusted_content_ingested.load(SeqCst) {
+        let is_modifying_action = risk_assessment
+            .as_ref()
+            .is_some_and(|r| r.server_risk != RiskLevel::None);
+        let escalate = match session.post_ingest_policy {
+            PostIngestPolicy::Strict => true,
+            PostIngestPolicy::Balanced => is_modifying_action,
+            PostIngestPolicy::Standard => false,
+        };
+        if escalate {
+            return Some("FILTER_POST_INGEST_REQUIRES_CONFIRM");
+        }
+    }
+    if session.injection_suspected.load(SeqCst) {
+        return Some("FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM");
+    }
+    if session.injection_check_unavailable.load(SeqCst) {
+        return Some("FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM");
+    }
+    if uses_stored_sudo_password(session, &action) {
+        return Some("FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM");
+    }
+    None
+}
+
 fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {
     let pseudo_command = pseudo_command_for_risk_classification(action)?;
     Some(RuleBasedRiskClassifier.classify(&pseudo_command))

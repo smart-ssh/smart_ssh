@@ -377,6 +377,17 @@
       "lastArgOpen": "Vilkårligt sidste argument: {{patterns}}",
       "subcommand": "Alle `{{names}}`-kald: {{patterns}}",
       "tool": "Alle `{{names}}`-kald: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Dele af denne kommando",
+      "covered": "dækket af reglen {{rule}}",
+      "coveredUnknown": "dækket af en eksisterende regel",
+      "needsRule": "mangler en regel",
+      "blocked": "spørger altid, uanset regler: {{reasons}}",
+      "verdictAuto": "kører automatisk næste gang",
+      "verdictAsk": "spørger stadig: {{reasons}}",
+      "notice": "Regel oprettet. Denne kommando spørger stadig næste gang: {{reasons}}",
+      "reasonOther": "endnu en sikkerhedskontrol"
     }
   },
   "hostKeyDialog": {
@@ -949,6 +960,8 @@
     "cancelCut": "Annuller klip",
     "transferUpload": "Uploader: {{name}}",
     "transferDownload": "Henter: {{name}}",
+    "transferDone": "Færdig: {{name}}",
+    "transferElevationEnded": "Den forhøjede tilstand blev slået fra under overførslen.",
     "loading": "Indlæser…",
     "emptyDirectory": "(tom mappe)",
     "dropHint": "Slip her for at uploade til {{path}}",

@@ -30,7 +30,7 @@ vi.mock("../api", () => ({
   sendChatMessage: vi.fn(() => Promise.resolve()),
   startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
   stopAutoContinuation: vi.fn(() => Promise.resolve()),
-  suggestRulePatterns: vi.fn(),
+  explainConfirmation: vi.fn(() => Promise.resolve({ segments: [], suggestions: [] })),
   takeChatContentIntoNote: vi.fn(),
 }));
 
