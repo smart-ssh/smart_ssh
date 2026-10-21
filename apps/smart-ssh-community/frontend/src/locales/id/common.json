@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Persis: {{patterns}}",
       "exactPerSegment": "Persis per bagian: {{patterns}}",
+      "pathScoped": "Direktori yang sama: {{patterns}}",
+      "lastArgOpen": "Argumen terakhir apa pun: {{patterns}}",
       "subcommand": "Semua panggilan `{{names}}`: {{patterns}}",
       "tool": "Semua panggilan `{{names}}`: {{patterns}}"
     }

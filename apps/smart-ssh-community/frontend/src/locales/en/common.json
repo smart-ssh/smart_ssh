@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Exact: {{patterns}}",
       "exactPerSegment": "Exact per part: {{patterns}}",
+      "pathScoped": "Same directory: {{patterns}}",
+      "lastArgOpen": "Any last argument: {{patterns}}",
       "subcommand": "All `{{names}}` calls: {{patterns}}",
       "tool": "All `{{names}}` calls: {{patterns}}"
     }

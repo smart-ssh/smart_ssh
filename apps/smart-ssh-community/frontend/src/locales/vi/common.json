@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Chính xác: {{patterns}}",
       "exactPerSegment": "Chính xác theo từng phần: {{patterns}}",
+      "pathScoped": "Cùng thư mục: {{patterns}}",
+      "lastArgOpen": "Bất kỳ đối số cuối nào: {{patterns}}",
       "subcommand": "Mọi lệnh gọi `{{names}}`: {{patterns}}",
       "tool": "Mọi lệnh gọi `{{names}}`: {{patterns}}"
     }

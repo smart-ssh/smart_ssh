@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Täsmälleen: {{patterns}}",
       "exactPerSegment": "Täsmälleen osittain: {{patterns}}",
+      "pathScoped": "Sama hakemisto: {{patterns}}",
+      "lastArgOpen": "Mikä tahansa viimeinen argumentti: {{patterns}}",
       "subcommand": "Kaikki `{{names}}`-kutsut: {{patterns}}",
       "tool": "Kaikki `{{names}}`-kutsut: {{patterns}}"
     }

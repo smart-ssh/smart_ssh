@@ -371,6 +371,8 @@
     "quickRuleLabel": {
       "exact": "Точно: {{patterns}}",
       "exactPerSegment": "Точно по частям: {{patterns}}",
+      "pathScoped": "Тот же каталог: {{patterns}}",
+      "lastArgOpen": "Любой последний аргумент: {{patterns}}",
       "subcommand": "Все вызовы `{{names}}`: {{patterns}}",
       "tool": "Все вызовы `{{names}}`: {{patterns}}"
     }
