@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Avertismentul privind parola principală nu a fost confirmat. Fără această parolă toate datele se pierd și nu există recuperare — bifați caseta și configurați din nou. Nimic nu a fost modificat.",
     "KEYCHAIN_KEY_MISMATCH": "Cheia din portchei nu aparține acestei baze de date. Nimic nu a fost modificat — stocarea ei ar face baza de date ilizibilă la următoarea pornire.",
     "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard.",
-    "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem."
+    "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem.",
+    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume"
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
@@ -661,7 +662,9 @@
     "editUploadFailed": "Modificarea „{{name}}” nu a putut fi încărcată: {{reason}}",
     "uploadedFolder": "Folderul „{{name}}” încărcat — fișiere: {{count}}",
     "uploadFolderFailed": "Încărcarea folderului „{{name}}” a eșuat: {{reason}}",
-    "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}"
+    "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}",
+    "createFileDone": "Fișierul „{{name}}” a fost creat",
+    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Drepturi ridicate",
@@ -1010,7 +1013,9 @@
       "chmod": "Editează permisiunile…",
       "rename": "Redenumește",
       "cut": "Taie",
-      "delete": "Șterge"
+      "delete": "Șterge",
+      "newFolder": "Dosar nou",
+      "newFile": "Fișier nou"
     },
     "properties": {
       "title": "Proprietăți",
@@ -1041,10 +1046,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Redenumește",
-      "newFolderTitle": "Folder nou"
+      "newFolderTitle": "Folder nou",
+      "newFileTitle": "Fișier nou",
+      "invalidName": "Introduceți un nume fără „/”. „.” și „..” nu sunt permise."
     },
     "copyProgress": "Se copiază… {{done}} din {{total}} MB",
-    "copyProgressUnknownTotal": "Se copiază… {{done}} MB"
+    "copyProgressUnknownTotal": "Se copiază… {{done}} MB",
+    "directoryMenuLabel": "Acțiuni pentru dosar"
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",

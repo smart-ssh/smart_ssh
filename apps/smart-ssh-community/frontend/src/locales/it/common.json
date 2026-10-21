@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L'avviso sulla password principale non è stato confermato. Senza quella password tutti i dati vanno persi e non c'è recupero: selezioni la casella e la imposti di nuovo. Nulla è stato modificato.",
     "KEYCHAIN_KEY_MISMATCH": "La chiave nel portachiavi non appartiene a questo database. Nulla è stato modificato: memorizzarla renderebbe il database illeggibile al prossimo avvio.",
     "SFTP_CONTENT_TOO_LARGE": "Il file supera i 50 MB e non può essere copiato negli appunti.",
-    "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema."
+    "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema.",
+    "SSH_SFTP_ALREADY_EXISTS": "Esiste già un file o una cartella con questo nome"
   },
   "mcpServer": {
     "hint": "I client MCP esterni possono usarlo per proporre comandi, letture/scritture di file e aggiornamenti di note sui server in elenco consentito; ogni richiesta richiede sempre conferma nell'app, indipendentemente dalle regole di consenso esistenti.",
@@ -661,7 +662,9 @@
     "editUploadFailed": "Impossibile caricare la modifica a “{{name}}”: {{reason}}",
     "uploadedFolder": "Cartella “{{name}}” caricata — {{count}} file",
     "uploadFolderFailed": "Caricamento della cartella “{{name}}” non riuscito: {{reason}}",
-    "uploadFailedMany": "Impossibile caricare {{name}} file, ad es.: {{reason}}"
+    "uploadFailedMany": "Impossibile caricare {{name}} file, ad es.: {{reason}}",
+    "createFileDone": "File «{{name}}» creato",
+    "createFileFailed": "Impossibile creare il file «{{name}}»: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Diritti elevati",
@@ -1010,7 +1013,9 @@
       "chmod": "Modifica permessi…",
       "rename": "Rinomina",
       "cut": "Taglia",
-      "delete": "Elimina"
+      "delete": "Elimina",
+      "newFolder": "Nuova cartella",
+      "newFile": "Nuovo file"
     },
     "properties": {
       "title": "Proprietà",
@@ -1041,10 +1046,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Rinomina",
-      "newFolderTitle": "Nuova cartella"
+      "newFolderTitle": "Nuova cartella",
+      "newFileTitle": "Nuovo file",
+      "invalidName": "Inserisci un nome senza «/». «.» e «..» non sono consentiti."
     },
     "copyProgress": "Copia in corso… {{done}} MB di {{total}} MB",
-    "copyProgressUnknownTotal": "Copia in corso… {{done}} MB"
+    "copyProgressUnknownTotal": "Copia in corso… {{done}} MB",
+    "directoryMenuLabel": "Azioni della cartella"
   },
   "chat": {
     "jumpToLatest": "Vai al messaggio più recente",

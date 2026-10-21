@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "The master password warning has not been confirmed. Without that password all data is lost and there is no recovery — tick the box and set it up again. Nothing was changed.",
     "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup.",
     "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard.",
-    "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system."
+    "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system.",
+    "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists"
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}",
     "uploadedFolder": "Folder “{{name}}” uploaded — {{count}} files",
     "uploadFolderFailed": "Uploading folder “{{name}}” failed: {{reason}}",
-    "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}"
+    "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}",
+    "createFileDone": "File “{{name}}” created",
+    "createFileFailed": "File “{{name}}” could not be created: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Elevated rights",
@@ -1003,7 +1006,9 @@
       "chmod": "Edit permissions…",
       "rename": "Rename",
       "cut": "Cut",
-      "delete": "Delete"
+      "delete": "Delete",
+      "newFolder": "New folder",
+      "newFile": "New file"
     },
     "properties": {
       "title": "Properties",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Rename",
-      "newFolderTitle": "New folder"
+      "newFolderTitle": "New folder",
+      "newFileTitle": "New file",
+      "invalidName": "Enter a name without “/”. “.” and “..” are not allowed."
     },
     "copyProgress": "Copying… {{done}} MB of {{total}} MB",
-    "copyProgressUnknownTotal": "Copying… {{done}} MB"
+    "copyProgressUnknownTotal": "Copying… {{done}} MB",
+    "directoryMenuLabel": "Folder actions"
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",

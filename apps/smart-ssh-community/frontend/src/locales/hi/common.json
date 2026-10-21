@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "मास्टर पासवर्ड की चेतावनी की पुष्टि नहीं हुई। इस पासवर्ड के बिना सारा डेटा खो जाता है और कोई पुनर्प्राप्ति नहीं है — बॉक्स चुनें और फिर से सेट अप करें। कुछ नहीं बदला।",
     "KEYCHAIN_KEY_MISMATCH": "कीचेन की कुंजी इस डेटाबेस की नहीं है। कुछ नहीं बदला — उसे संग्रहीत करने से अगले स्टार्टअप पर डेटाबेस अपठनीय हो जाएगा।",
     "SFTP_CONTENT_TOO_LARGE": "फ़ाइल 50 MB से बड़ी है और क्लिपबोर्ड पर कॉपी नहीं की जा सकती।",
-    "CLIPBOARD_FILE_FAILED": "इस सिस्टम पर फ़ाइल को क्लिपबोर्ड पर नहीं रखा जा सका।"
+    "CLIPBOARD_FILE_FAILED": "इस सिस्टम पर फ़ाइल को क्लिपबोर्ड पर नहीं रखा जा सका।",
+    "SSH_SFTP_ALREADY_EXISTS": "इस नाम की फ़ाइल या फ़ोल्डर पहले से मौजूद है"
   },
   "mcpServer": {
     "hint": "बाहरी MCP क्लाइंट इसके ज़रिए अनुमति-सूची वाले सर्वरों पर कमांड, फ़ाइल पढ़ना/लिखना और नोट अपडेट प्रस्तावित कर सकते हैं — हर अनुरोध के लिए ऐप में हमेशा पुष्टि आवश्यक है, मौजूदा अनुमति नियमों से स्वतंत्र।",
@@ -656,7 +657,9 @@
     "editUploadFailed": "“{{name}}” में बदलाव अपलोड नहीं हो सका: {{reason}}",
     "uploadedFolder": "फ़ोल्डर “{{name}}” अपलोड हुआ — {{count}} फ़ाइलें",
     "uploadFolderFailed": "फ़ोल्डर “{{name}}” अपलोड करना विफल रहा: {{reason}}",
-    "uploadFailedMany": "{{name}} फ़ाइलें अपलोड नहीं हो सकीं, जैसे: {{reason}}"
+    "uploadFailedMany": "{{name}} फ़ाइलें अपलोड नहीं हो सकीं, जैसे: {{reason}}",
+    "createFileDone": "फ़ाइल “{{name}}” बनाई गई",
+    "createFileFailed": "फ़ाइल “{{name}}” नहीं बनाई जा सकी: {{reason}}"
   },
   "fileElevation": {
     "toggle": "उन्नत अधिकार",
@@ -1003,7 +1006,9 @@
       "chmod": "अनुमतियाँ संपादित करें…",
       "rename": "नाम बदलें",
       "cut": "कट करें",
-      "delete": "हटाएँ"
+      "delete": "हटाएँ",
+      "newFolder": "नया फ़ोल्डर",
+      "newFile": "नई फ़ाइल"
     },
     "properties": {
       "title": "गुण",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "नाम बदलें",
-      "newFolderTitle": "नया फ़ोल्डर"
+      "newFolderTitle": "नया फ़ोल्डर",
+      "newFileTitle": "नई फ़ाइल",
+      "invalidName": "“/” के बिना नाम दर्ज करें। “.” और “..” की अनुमति नहीं है।"
     },
     "copyProgress": "कॉपी हो रहा है… {{total}} MB में से {{done}} MB",
-    "copyProgressUnknownTotal": "कॉपी हो रहा है… {{done}} MB"
+    "copyProgressUnknownTotal": "कॉपी हो रहा है… {{done}} MB",
+    "directoryMenuLabel": "फ़ोल्डर क्रियाएँ"
   },
   "chat": {
     "jumpToLatest": "नवीनतम संदेश पर जाएँ",

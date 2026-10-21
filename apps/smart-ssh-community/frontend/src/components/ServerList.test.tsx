@@ -10,11 +10,13 @@ import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
 import {
+  listChatSessions,
   listGroups,
   listServers,
   listUnusableServers,
   moveGroup,
   moveServerToGroup,
+  resumeChatSession,
 } from "../api";
 import { onHostKeyVerificationNeeded } from "../events";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
@@ -107,7 +109,6 @@ function renderList(
   return render(
     <I18nextProvider i18n={testI18n}>
       <ServerList
-        onConnected={vi.fn()}
         onStartConnect={startConnectMock}
         connectingServerIds={new Set()}
         findExistingSessionId={() => undefined}
@@ -271,6 +272,26 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
     expect(
       await screen.findByText(testI18n.t("errors.GROUP_CYCLE_DETECTED")),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ServerList resume saved chat session (issue #568)", () => {
+  it("starts the connecting tab with the chosen chat session id", async () => {
+    vi.mocked(listChatSessions).mockImplementationOnce(() =>
+      Promise.resolve([
+        { sessionId: "chat-9", title: "Old chat", startedAt: "2026-01-01T00:00:00Z", endedAt: null, messageCount: 2 },
+      ]),
+    );
+    startConnectMock.mockClear();
+    renderList();
+    fireEvent.click(await screen.findByText("prod-1"));
+    fireEvent.click(await screen.findByText("Old chat"));
+    await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(1));
+    expect(startConnectMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "remote-1" }),
+      "chat-9",
+    );
+    expect(resumeChatSession).not.toHaveBeenCalled();
   });
 });
 

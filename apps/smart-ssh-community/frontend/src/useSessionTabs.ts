@@ -21,6 +21,7 @@ import {
   getServer,
   listSessions,
   respondToAction,
+  resumeChatSession,
 } from "./api";
 import { translateErrorCode } from "./errorCodes";
 import {
@@ -80,6 +81,9 @@ export interface SessionTab {
   phase: TabPhase;
   /** Issue #548: id of the running connect attempt (`connecting` only). */
   attemptId: string | null;
+  /** Issue #568: chat session to resume; every attempt (incl. Retry) of
+   * this tab resumes the same one. Absent for a plain connect. */
+  resumeChatSessionId?: string | null;
   /** Issue #548: live step list from `connect-progress`. */
   progress: ConnectStepSnapshot[];
   /** Issue #548: set in phase `failed`. */
@@ -280,11 +284,18 @@ export function useSessionTabs() {
   /** Issue #548: runs one connect attempt for the tab `key`. The tab turns
    * into the session tab in place on success, shows the failure on error and
    * is left alone if the attempt was cancelled / the tab closed meanwhile. */
-  const runAttempt = async (key: string, serverId: string, attemptId: string) => {
+  const runAttempt = async (
+    key: string,
+    serverId: string,
+    attemptId: string,
+    resumeSessionId?: string | null,
+  ) => {
     const stillOwnsTab = () =>
       tabsRef.current.some((t) => t.sessionId === key && t.attemptId === attemptId);
     try {
-      const sessionId = await connect(serverId, attemptId);
+      const sessionId = resumeSessionId
+        ? await resumeChatSession(serverId, resumeSessionId, attemptId)
+        : await connect(serverId, attemptId);
       if (!stillOwnsTab()) {
         // Closed while the connect was finishing: do not leak the session.
         disconnect(sessionId).catch((err) => console.error(commandErrorMessage(err)));
@@ -334,7 +345,10 @@ export function useSessionTabs() {
 
   /** Issue #548: opens and focuses a "Connecting to …" tab and starts the
    * attempt. */
-  const startConnect = (server: { id: string; name: string }) => {
+  const startConnect = (
+    server: { id: string; name: string },
+    resumeChatSessionId?: string,
+  ) => {
     const attemptId = crypto.randomUUID();
     const key = `connecting:${attemptId}`;
     const tab: SessionTab = {
@@ -347,6 +361,7 @@ export function useSessionTabs() {
       mcp: null,
       phase: "connecting",
       attemptId,
+      ...(resumeChatSessionId ? { resumeChatSessionId } : {}),
       progress: [],
       failure: null,
     };
@@ -355,7 +370,7 @@ export function useSessionTabs() {
     // may be resumed before that.
     tabsRef.current = [...tabsRef.current, tab];
     setActiveSessionId(key);
-    void runAttempt(key, server.id, attemptId);
+    void runAttempt(key, server.id, attemptId, resumeChatSessionId);
   };
 
   /** Issue #548: "Retry" in a failed tab — new attempt, same tab. */
@@ -374,7 +389,7 @@ export function useSessionTabs() {
     tabsRef.current = tabsRef.current.map((t) =>
       t.sessionId === key ? { ...t, phase: "connecting", attemptId } : t,
     );
-    void runAttempt(key, tab.serverId, attemptId);
+    void runAttempt(key, tab.serverId, attemptId, tab.resumeChatSessionId);
   };
 
   /** Spec 0104: nur Nutzer-Tabs — ein MCP-Tab desselben Servers ist nie

@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "マスターパスワードに関する警告が確認されていません。このパスワードがないとすべてのデータが失われ、復旧はできません。チェックボックスをオンにして、もう一度設定してください。何も変更されていません。",
     "KEYCHAIN_KEY_MISMATCH": "キーチェーンの鍵は、このデータベースのものではありません。何も変更されていません。保存すると、次回の起動時にデータベースを読み取れなくなります。",
     "SFTP_CONTENT_TOO_LARGE": "ファイルが 50 MB を超えているため、クリップボードにコピーできません。",
-    "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。"
+    "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
+    "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します"
   },
   "mcpServer": {
     "hint": "外部のMCPクライアントは、許可リストに登録されたサーバーに対して、コマンド、ファイルの読み書き、メモの更新を提案できます。既存の許可ルールにかかわらず、すべてのリクエストでアプリ内の確認が常に必要です。",
@@ -651,7 +652,9 @@
     "editUploadFailed": "「{{name}}」の変更をアップロードできませんでした: {{reason}}",
     "uploadedFolder": "フォルダー「{{name}}」をアップロードしました — {{count}}個のファイル",
     "uploadFolderFailed": "フォルダー「{{name}}」のアップロードに失敗しました: {{reason}}",
-    "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}"
+    "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}",
+    "createFileDone": "ファイル「{{name}}」を作成しました",
+    "createFileFailed": "ファイル「{{name}}」を作成できませんでした: {{reason}}"
   },
   "fileElevation": {
     "toggle": "昇格した権限",
@@ -996,7 +999,9 @@
       "chmod": "権限を編集…",
       "rename": "名前を変更",
       "cut": "切り取り",
-      "delete": "削除"
+      "delete": "削除",
+      "newFolder": "新しいフォルダー",
+      "newFile": "新しいファイル"
     },
     "properties": {
       "title": "プロパティ",
@@ -1027,10 +1032,13 @@
     },
     "renamePrompt": {
       "renameTitle": "名前を変更",
-      "newFolderTitle": "新しいフォルダー"
+      "newFolderTitle": "新しいフォルダー",
+      "newFileTitle": "新しいファイル",
+      "invalidName": "「/」を含まない名前を入力してください。「.」と「..」は使用できません。"
     },
     "copyProgress": "コピー中… {{done}} MB / {{total}} MB",
-    "copyProgressUnknownTotal": "コピー中… {{done}} MB"
+    "copyProgressUnknownTotal": "コピー中… {{done}} MB",
+    "directoryMenuLabel": "フォルダー操作"
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",

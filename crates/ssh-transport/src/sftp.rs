@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use russh::client::Handle;
 use russh_sftp::client::error::Error as RusshSftpError;
 use russh_sftp::client::SftpSession as RusshSftpClient;
-use russh_sftp::protocol::{FileAttributes, StatusCode};
+use russh_sftp::protocol::{FileAttributes, OpenFlags, StatusCode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
@@ -323,6 +323,28 @@ impl SftpSession for RusshSftpSession {
             .create_dir(path)
             .await
             .map_err(|e| self.map_error(path, e))
+    }
+
+    async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError> {
+        let flags = OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE;
+        match self.inner.open_with_flags(path, flags).await {
+            Ok(mut file) => file
+                .shutdown()
+                .await
+                .map_err(|e| self.map_write_error(path, e)),
+            Err(e) => {
+                // SFTP v3 hat keinen „existiert"-Status: ein Server meldet
+                // EXCL-Konflikte als generisches `Failure`. Nur in diesem
+                // Fall wird nachgeschaut; jeder andere Fehler (auch
+                // `PermissionDenied`) bleibt unverändert.
+                if matches!(&e, RusshSftpError::Status(s) if s.status_code == StatusCode::Failure)
+                    && self.inner.symlink_metadata(path).await.is_ok()
+                {
+                    return Err(SshError::SftpAlreadyExists(path.to_string()));
+                }
+                Err(self.map_error(path, e))
+            }
+        }
     }
 
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {

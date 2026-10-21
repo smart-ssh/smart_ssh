@@ -189,8 +189,9 @@ export const cancelConnect = (attemptId: string) =>
 export const listChatSessions = (serverId: string) =>
   invoke<ChatSessionSummaryDto[]>("list_chat_sessions", { serverId });
 
-export const resumeChatSession = (serverId: string, sessionId: string) =>
-  invoke<string>("resume_chat_session", { serverId, sessionId });
+/** Issue #568: `attemptId` as for `connect` (progress events, cancel). */
+export const resumeChatSession = (serverId: string, sessionId: string, attemptId: string) =>
+  invoke<string>("resume_chat_session", { serverId, sessionId, attemptId });
 
 export const renameChatSession = (sessionId: string, newTitle: string) =>
   invoke<void>("rename_chat_session", { sessionId, newTitle });
@@ -607,6 +608,11 @@ export const sftpRename = (sessionId: string, from: string, to: string, elevated
 
 export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<void>("sftp_mkdir", { sessionId, path, elevatedUser });
+
+/** Issue #570: legt eine leere Datei an; ein vorhandener Name wird nie
+ * überschrieben (Fehlercode `SSH_SFTP_ALREADY_EXISTS`). */
+export const sftpCreateFile = (sessionId: string, path: string, elevatedUser: string | null = null) =>
+  invoke<void>("sftp_create_file", { sessionId, path, elevatedUser });
 
 /** Spec 0054, Teil 2: "Dateiinhalt kopieren" — liefert den Textinhalt einer
  * Remote-Datei; lehnt zu große oder nicht als UTF-8 dekodierbare

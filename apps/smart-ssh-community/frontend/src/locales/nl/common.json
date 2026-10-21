@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "De waarschuwing over het hoofdwachtwoord is niet bevestigd. Zonder dat wachtwoord gaan alle gegevens verloren en is herstel onmogelijk — vink het vakje aan en stel het opnieuw in. Er is niets gewijzigd.",
     "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken.",
     "SFTP_CONTENT_TOO_LARGE": "Het bestand is groter dan 50 MB en kan niet naar het klembord worden gekopieerd.",
-    "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst."
+    "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst.",
+    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam"
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "Wijziging in “{{name}}” kon niet worden geüpload: {{reason}}",
     "uploadedFolder": "Map “{{name}}” geüpload — {{count}} bestanden",
     "uploadFolderFailed": "Uploaden van map “{{name}}” mislukt: {{reason}}",
-    "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}"
+    "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}",
+    "createFileDone": "Bestand “{{name}}” aangemaakt",
+    "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Verhoogde rechten",
@@ -1003,7 +1006,9 @@
       "chmod": "Rechten bewerken…",
       "rename": "Hernoemen",
       "cut": "Knippen",
-      "delete": "Verwijderen"
+      "delete": "Verwijderen",
+      "newFolder": "Nieuwe map",
+      "newFile": "Nieuw bestand"
     },
     "properties": {
       "title": "Eigenschappen",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Hernoemen",
-      "newFolderTitle": "Nieuwe map"
+      "newFolderTitle": "Nieuwe map",
+      "newFileTitle": "Nieuw bestand",
+      "invalidName": "Voer een naam in zonder “/”. “.” en “..” zijn niet toegestaan."
     },
     "copyProgress": "Kopiëren… {{done}} MB van {{total}} MB",
-    "copyProgressUnknownTotal": "Kopiëren… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopiëren… {{done}} MB",
+    "directoryMenuLabel": "Mapacties"
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",

@@ -10,6 +10,7 @@ import type {
   GroupDto,
   ServerDto,
   SessionSummaryDto,
+  ChatSessionSummaryDto,
 } from "../../src/types";
 import type {
   CannedResponse,
@@ -33,6 +34,7 @@ interface Model {
   servers: ServerDto[];
   groups: GroupDto[];
   sessions: SessionSummaryDto[];
+  chatSessions: Record<string, ChatSessionSummaryDto[]>;
   aiProviders: AiProviderConfigDto[];
   settings: Record<string, unknown>;
   locale: string;
@@ -64,6 +66,7 @@ function loadModel(fixture: FakeBackendFixture): Model {
     servers: fixture.servers ?? [],
     groups: fixture.groups ?? [],
     sessions: fixture.sessions ?? [],
+    chatSessions: fixture.chatSessions ?? {},
     aiProviders: fixture.aiProviders ?? [],
     settings: fixture.settings ?? {},
     locale: fixture.locale ?? "en-US",
@@ -224,7 +227,8 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
 
     // --- Sessions --------------------------------------------------------
     list_sessions: () => model.sessions,
-    list_chat_sessions: () => [],
+    list_chat_sessions: ({ serverId }) => model.chatSessions[serverId as string] ?? [],
+    resume_chat_session: ({ serverId }) => openSession(findServer(serverId)),
     connect: async ({ serverId }) => {
       const server = findServer(serverId);
       const hostKey = model.hostKeys[server.id];

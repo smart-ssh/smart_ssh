@@ -43,7 +43,8 @@ Bezüge: Spec 0005 (SSH, Jump-Hosts), Spec 0069 (Fehlerpfad, Zeitgrenzen), Spec 
 - Die Meldung über der Serverliste entfällt für Verbindungsfehler; dort zeigt die Zeile des Servers „Verbindet…“, solange ein Versuch für ihn läuft.
 - Ein Klick auf einen Server, für den schon ein Tab (laufender oder gescheiterter Versuch, Sitzung) besteht, wechselt zu diesem Tab, statt einen zweiten Aufbau zu starten (Spec 0017).
 - Die Host-Key-Abfrage (Spec 0100) erscheint wie bisher; der Tab zeigt den Host-Key-Schritt währenddessen als „wartet auf Ihre Entscheidung“, nach „Vertrauen“ laufen die Schritte im selben Tab weiter.
-- Das automatische Wiederverbinden (Spec 0107) und das Fortsetzen einer gespeicherten Chat-Sitzung nutzen den Verbindungs-Tab nicht.
+- Auch das Fortsetzen einer gespeicherten Chat-Sitzung aus dem Auswahl-Screen (Spec 0034) öffnet sofort den Verbindungs-Tab, mit Schrittliste, Abbrechen und im Fehlerfall Fehler, Schritt-Protokoll sowie „Erneut versuchen" und „Schließen". „Erneut versuchen" setzt dieselbe Chat-Sitzung fort, nicht eine neue. Bei Erfolg wird der Tab zum Sitzungs-Tab mit der gespeicherten Historie; ein Abbruch lässt die gespeicherte Chat-Sitzung unverändert.
+- Das automatische Wiederverbinden (Spec 0107) nutzt den Verbindungs-Tab nicht.
 
 ## 5. Grenzen
 

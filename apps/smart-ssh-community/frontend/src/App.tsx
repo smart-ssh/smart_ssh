@@ -39,7 +39,6 @@ function App() {
   const {
     tabs: sessionTabs,
     activeSessionId,
-    openTab,
     startConnect,
     retryConnect,
     findExistingSessionId,
@@ -201,7 +200,6 @@ function App() {
           refreshProviderStatus={refreshProviderStatus}
           findExistingSessionId={findExistingSessionId}
           onSwitchToExistingTab={switchTo}
-          onConnected={(sessionId, serverName, serverId) => openTab(sessionId, serverId, serverName)}
           onStartConnect={startConnect}
           connectingServerIds={connectingServerIds}
           pendingNoteEditSelection={pendingNoteEditSelection}
@@ -225,9 +223,8 @@ interface MainScreenProps {
   pendingNoteEditSelection: Selection | null;
   onNoteEditSelectionConsumed: () => void;
   refreshProviderStatus: () => void;
-  onConnected: (sessionId: string, serverName: string, serverId: string) => void;
   /** Issue #548. */
-  onStartConnect: (server: { id: string; name: string }) => void;
+  onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
   connectingServerIds: ReadonlySet<string>;
   findExistingSessionId: (serverId: string) => string | undefined;
   onSwitchToExistingTab: (sessionId: string) => void;
@@ -244,7 +241,6 @@ function MainScreen({
   setSettingsOpen: setSettingsOpenRaw,
   hasActiveProvider,
   refreshProviderStatus,
-  onConnected,
   onStartConnect,
   connectingServerIds,
   findExistingSessionId,
@@ -346,7 +342,6 @@ function MainScreen({
               {t("mainScreen.serversHeading")}
             </h2>
             <ServerList
-              onConnected={onConnected}
               onStartConnect={onStartConnect}
               connectingServerIds={connectingServerIds}
               findExistingSessionId={findExistingSessionId}

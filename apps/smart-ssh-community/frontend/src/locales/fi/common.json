@@ -570,7 +570,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Pääsalasanan varoitusta ei ole vahvistettu. Ilman salasanaa kaikki tiedot menetetään eikä palautusta ole – valitse ruutu ja määritä uudelleen. Mitään ei muutettu.",
     "KEYCHAIN_KEY_MISMATCH": "Avainrenkaan avain ei kuulu tähän tietokantaan. Mitään ei muutettu – tallennus tekisi tietokannasta lukukelvottoman seuraavassa käynnistyksessä.",
     "SFTP_CONTENT_TOO_LARGE": "Tiedosto on yli 50 Mt eikä sitä voi kopioida leikepöydälle.",
-    "CLIPBOARD_FILE_FAILED": "Tiedostoa ei voitu asettaa leikepöydälle tässä järjestelmässä."
+    "CLIPBOARD_FILE_FAILED": "Tiedostoa ei voitu asettaa leikepöydälle tässä järjestelmässä.",
+    "SSH_SFTP_ALREADY_EXISTS": "Tämänniminen tiedosto tai kansio on jo olemassa"
   },
   "mcpServer": {
     "hint": "Ulkoiset MCP-asiakkaat voivat ehdottaa sen kautta komentoja, tiedostojen lukua ja kirjoitusta sekä muistiinpanojen päivityksiä sallituilla palvelimilla – jokainen pyyntö vaatii aina vahvistuksen sovelluksessa, voimassa olevista sallimissäännöistä riippumatta.",
@@ -656,7 +657,9 @@
     "editUploadFailed": "Kohteen “{{name}}” muutosta ei voitu lähettää: {{reason}}",
     "uploadedFolder": "Kansio “{{name}}” lähetetty – {{count}} tiedostoa",
     "uploadFolderFailed": "Kansion “{{name}}” lähetys epäonnistui: {{reason}}",
-    "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}"
+    "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}",
+    "createFileDone": "Tiedosto ”{{name}}” luotu",
+    "createFileFailed": "Tiedostoa ”{{name}}” ei voitu luoda: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Korotetut oikeudet",
@@ -1003,7 +1006,9 @@
       "chmod": "Muokkaa oikeuksia…",
       "rename": "Nimeä uudelleen",
       "cut": "Leikkaa",
-      "delete": "Poista"
+      "delete": "Poista",
+      "newFolder": "Uusi kansio",
+      "newFile": "Uusi tiedosto"
     },
     "properties": {
       "title": "Ominaisuudet",
@@ -1034,10 +1039,13 @@
     },
     "renamePrompt": {
       "renameTitle": "Nimeä uudelleen",
-      "newFolderTitle": "Uusi kansio"
+      "newFolderTitle": "Uusi kansio",
+      "newFileTitle": "Uusi tiedosto",
+      "invalidName": "Anna nimi ilman merkkiä ”/”. ”.” ja ”..” eivät ole sallittuja."
     },
     "copyProgress": "Kopioidaan… {{done}} Mt / {{total}} Mt",
-    "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt"
+    "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt",
+    "directoryMenuLabel": "Kansion toiminnot"
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",

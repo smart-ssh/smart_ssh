@@ -100,6 +100,11 @@ pub enum SshError {
     /// [`Self::ConnectionClosed`] vom Aufbau spricht und den Nutzer dann zum
     /// Port und SSH-Dienst schickt, obwohl die Sitzung schon lief.
     SessionClosed(String),
+    /// Issue #570: Beim Anlegen einer Datei oder eines Ordners im
+    /// Dateibrowser existiert der Zielname schon. Eigene Variante, damit die
+    /// Oberfläche „Name existiert bereits" zeigen kann, ohne den Text zu
+    /// lesen.
+    SftpAlreadyExists(String),
     /// Spec 0098, A4: Das Lesen eines Secrets aus dem [`CredentialStore`]
     /// ist mit [`crate::profiles::CredentialError::Backend`] gescheitert —
     /// der Secret-Speicher hat nicht geantwortet oder abgelehnt. Eigene
@@ -143,6 +148,7 @@ impl fmt::Display for SshError {
                 write!(f, "Credential-Auflösung fehlgeschlagen: {msg}")
             }
             SshError::SftpPermissionDenied(msg) => write!(f, "Zugriff verweigert: {msg}"),
+            SshError::SftpAlreadyExists(msg) => write!(f, "Name existiert bereits: {msg}"),
             SshError::ConnectionRefused(msg) => write!(f, "Verbindung abgelehnt: {msg}"),
             SshError::HostNotFound(msg) => write!(f, "Host nicht gefunden: {msg}"),
             SshError::HostUnreachable(msg) => write!(f, "Host nicht erreichbar: {msg}"),
@@ -192,6 +198,7 @@ impl SshError {
             SshError::JumpHostCycle => "SSH_JUMP_HOST_CYCLE",
             SshError::CredentialResolutionFailed(_) => "SSH_CREDENTIAL_RESOLUTION_FAILED",
             SshError::SftpPermissionDenied(_) => "SSH_SFTP_PERMISSION_DENIED",
+            SshError::SftpAlreadyExists(_) => "SSH_SFTP_ALREADY_EXISTS",
             SshError::ConnectionRefused(_) => "SSH_CONNECTION_REFUSED",
             SshError::HostNotFound(_) => "SSH_HOST_NOT_FOUND",
             SshError::HostUnreachable(_) => "SSH_HOST_UNREACHABLE",
