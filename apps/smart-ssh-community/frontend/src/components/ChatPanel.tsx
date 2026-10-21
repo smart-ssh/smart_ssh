@@ -67,6 +67,7 @@ import {
   listDocumentActions,
   subscribeComposer,
 } from "../extensions/registry";
+import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
 import {
   initialHistoryNavState,
@@ -355,6 +356,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const dropHandlersRef = useRef(dropHandlers);
   dropHandlersRef.current = dropHandlers;
   const hasDropHandler = dropHandlers.length > 0;
+  const [dropOver, setDropOver] = useState(false);
   // Native Drops auf den Chat gehen an die registrierten Handler; ohne
   // Handler bleibt der Listener aus und das Ablegen tut im Chat nichts.
   // Pfade verlassen das Backend nicht (ADR 0113): der Handler holt sie dort.
@@ -364,15 +366,19 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     let cancelled = false;
     getCurrentWebview()
       .onDragDropEvent((event) => {
-        if (event.payload.type !== "drop") return;
-        const el = chatAreaRef.current;
-        // Nur das sichtbare Chat-Feld (ein ausgeblendeter Tab hat keinen offsetParent).
-        if (!el || el.offsetParent === null) return;
-        const rect = el.getBoundingClientRect();
-        const ratio = window.devicePixelRatio || 1;
-        const x = event.payload.position.x / ratio;
-        const y = event.payload.position.y / ratio;
-        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+        const payload = event.payload;
+        if (payload.type === "leave") {
+          setDropOver(false);
+          return;
+        }
+        // Only the visible chat area, and only under the pointer.
+        const inside = isPointerInside(chatAreaRef.current, payload.position);
+        if (payload.type === "over" || payload.type === "enter") {
+          setDropOver(inside);
+          return;
+        }
+        setDropOver(false);
+        if (!inside) return;
         for (const handler of dropHandlersRef.current) {
           void Promise.resolve(handler(composerCtxRef.current)).catch((err) =>
             setComposerError(commandErrorMessage(err)),
@@ -386,6 +392,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     return () => {
       cancelled = true;
       unlisten?.();
+      setDropOver(false);
     };
   }, [hasDropHandler]);
   const [sending, setSending] = useState(false);
@@ -1186,7 +1193,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   };
 
   return (
-    <div ref={chatAreaRef} className="flex h-full flex-col">
+    <div ref={chatAreaRef} className="relative flex h-full flex-col">
+      {hasDropHandler && dropOver && (
+        <div
+          data-testid="chat-drop-highlight"
+          className="pointer-events-none absolute inset-0 z-10 border-2 border-dashed border-indigo-500 bg-indigo-950/30"
+        />
+      )}
       {readOnlyHint === undefined && (
         <div className="flex items-center justify-end gap-2 border-b border-slate-700 px-3 py-1.5">
           {newChatError !== null && (

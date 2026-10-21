@@ -2,7 +2,7 @@
 // sich, Mindestbreite wird nicht unterschritten, Wert überlebt Neustart."
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // jsdom implementiert Pointer-Capture nicht (s. https://github.com/jsdom/jsdom/issues/2527) —
 // `useDragResize` (Spec 0053) ruft `setPointerCapture`/`releasePointerCapture`
@@ -124,17 +124,43 @@ vi.mock("../fileTypeSettings", () => ({
 const nativeDrop = vi.hoisted(() => ({ paths: [] as string[] }));
 
 const dragDrop = vi.hoisted(() => ({
-  handler: null as null | ((event: { payload: { type: string; paths?: string[] } }) => void),
+  handler: null as null | ((event: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) => void),
   // Issue #29: how often a listener was registered / removed, so tests can
   // assert that a channel switch or a navigation does not re-register it.
   registrations: 0,
   unlistens: 0,
 }));
 
+// Position-based drop routing: jsdom has no layout, so the panel (the element
+// carrying `data-elevated`) gets a 0..100 CSS-pixel rect and an offsetParent.
+// Positions are physical pixels (CSS pixels * devicePixelRatio).
+const IN = { x: 10, y: 10 };
+const OUT = { x: 500, y: 500 };
+Object.defineProperty(HTMLElement.prototype, "offsetParent", {
+  configurable: true,
+  get() {
+    return document.body;
+  },
+});
+HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+  const panel = this.hasAttribute("data-elevated");
+  return {
+    left: 0,
+    top: 0,
+    right: panel ? 100 : 0,
+    bottom: panel ? 100 : 0,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+    toJSON() {},
+  } as DOMRect;
+};
+
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
     onDragDropEvent: vi.fn((h) => {
-      dragDrop.handler = (event: { payload: { type: string; paths?: string[] } }) => {
+      dragDrop.handler = (event: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) => {
         if (event.payload.type === "drop") nativeDrop.paths = event.payload.paths ?? [];
         h(event);
       };
@@ -1472,7 +1498,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     // channel — no waiting for a re-registered listener.
     expect(dragDrop.handler).toBe(normalModeHandler);
 
-    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     expect(await firstUpload).toEqual(["session-1", "/local/x.conf", "x.conf", "root"]);
     expect(sftpUpload).toHaveBeenCalledTimes(1);
@@ -1504,7 +1530,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     // re-registration (the old behaviour) would have happened by now.
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", "root"));
 
-    act(() => handlerBeforeSwitch({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => handlerBeforeSwitch({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", "root");
@@ -1526,7 +1552,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", ".", null));
 
-    act(() => handlerWhileElevated({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => handlerWhileElevated({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "x.conf", null);
@@ -1550,7 +1576,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "logs", null));
     await waitFor(() => expect(screen.getByDisplayValue("logs")).toBeInTheDocument());
 
-    act(() => handlerBeforeNavigation({ payload: { type: "drop", paths: ["/local/x.conf"] } }));
+    act(() => handlerBeforeNavigation({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/x.conf", "logs/x.conf", null);
@@ -1806,7 +1832,7 @@ describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
     await screen.findByText(/a\.txt/);
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
     act(() =>
-      dragDrop.handler!({ payload: { type: "drop", paths: ["/home/user/.ssh/id_ed25519"] } }),
+      dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/home/user/.ssh/id_ed25519"] } }),
     );
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
@@ -1826,7 +1852,7 @@ describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
     renderPanel();
     await screen.findByText(/a\.txt/);
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
-    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/x.txt"] } }));
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/local/x.txt"] } }));
 
     await waitFor(() => expect(claimDroppedPaths).toHaveBeenCalledTimes(1));
     await act(async () => {});
@@ -1840,7 +1866,7 @@ describe("FileBrowserPanel drop uses backend-granted paths (Issue #89)", () => {
     renderPanel();
     await screen.findByText(/a\.txt/);
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
-    act(() => dragDrop.handler!({ payload: { type: "drop", paths: ["/local/project"] } }));
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/local/project"] } }));
 
     await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(1));
     expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/project", "project", null);
@@ -1943,7 +1969,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
 
     // Drop hint while dragging files over the panel.
     await waitFor(() => expect(dragDrop.handler).not.toBeNull());
-    act(() => dragDrop.handler!({ payload: { type: "over" } }));
+    act(() => dragDrop.handler!({ payload: { type: "over", position: IN } }));
     expect(screen.getByText(/^Drop here to upload to /)).toBeVisible();
     expectNoGerman();
   });
@@ -2221,5 +2247,54 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
         "logs wird unwiderruflich vom Server gelöscht. Enthält 1 Datei(en) in 1 Ordner(n) (inkl. diesem) — alle werden mitgelöscht.",
       ),
     );
+  });
+});
+
+describe("FileBrowserPanel drop routing by pointer position", () => {
+  const HINT = new RegExp(`^${testI18n.t("fileBrowser.dropHint", { path: "\u0000" }).split("\u0000")[0]}`);
+  beforeEach(() => {
+    vi.mocked(sftpList).mockResolvedValue([]);
+    dragDrop.handler = null;
+    nativeDrop.paths = [];
+  });
+  afterEach(() => {
+    Object.defineProperty(window, "devicePixelRatio", { value: 1, configurable: true });
+  });
+
+  it("claims a drop inside the panel, ignores one outside", async () => {
+    renderPanel();
+    await waitFor(() => expect(document.querySelector("[data-elevated]")).not.toBeNull());
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    vi.mocked(claimDroppedPaths).mockClear();
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: OUT, paths: ["/l/x"] } }));
+    expect(claimDroppedPaths).not.toHaveBeenCalled();
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: IN, paths: ["/l/x"] } }));
+    expect(claimDroppedPaths).toHaveBeenCalledTimes(1);
+  });
+
+  it("highlights only while over the panel and clears on leave / outside", async () => {
+    renderPanel();
+    await waitFor(() => expect(document.querySelector("[data-elevated]")).not.toBeNull());
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    act(() => dragDrop.handler!({ payload: { type: "over", position: IN } }));
+    expect(screen.getByText(HINT)).toBeVisible();
+    act(() => dragDrop.handler!({ payload: { type: "over", position: OUT } }));
+    expect(screen.queryByText(HINT)).toBeNull();
+    act(() => dragDrop.handler!({ payload: { type: "over", position: IN } }));
+    act(() => dragDrop.handler!({ payload: { type: "leave" } }));
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("converts positions with devicePixelRatio", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+    renderPanel();
+    await waitFor(() => expect(document.querySelector("[data-elevated]")).not.toBeNull());
+    await waitFor(() => expect(dragDrop.handler).not.toBeNull());
+    vi.mocked(claimDroppedPaths).mockClear();
+    // 150 physical px = 75 CSS px: inside; with ratio 1 it would be outside.
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: { x: 150, y: 150 }, paths: [] } }));
+    expect(claimDroppedPaths).toHaveBeenCalledTimes(1);
+    act(() => dragDrop.handler!({ payload: { type: "drop", position: { x: 250, y: 250 }, paths: [] } }));
+    expect(claimDroppedPaths).toHaveBeenCalledTimes(1);
   });
 });
