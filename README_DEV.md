@@ -57,7 +57,7 @@ git push origin main --tags
 ### Release Workflow ([`.github/workflows/release.yml`](./.github/workflows/release.yml))
 When a `v*` tag is pushed (or triggered manually via **Workflow Dispatch** in GitHub Actions):
 - Builds native bundles across:
-  - **macOS** (`macos-latest`): Universal binary (`.dmg`, `.app` for both Apple Silicon and Intel)
+  - **macOS** (`macos-latest`): Universal binary (`.dmg`, `.app` for both Apple Silicon and Intel; minimum macOS 10.15 Catalina)
   - **Windows** (`windows-latest`): `.msi` and `.exe` installers
   - **Linux** (`ubuntu-22.04`): `.deb` and `.AppImage` packages
 - Automatically creates a GitHub Draft Release under the **Releases** section with all installers and binaries attached for download.
