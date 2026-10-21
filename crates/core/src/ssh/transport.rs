@@ -235,6 +235,10 @@ pub trait SftpSession: Send {
     async fn remove(&mut self, path: &str) -> Result<(), SshError>;
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError>;
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError>;
+    /// Legt eine **leere** Datei an und überschreibt nie etwas (Issue #570):
+    /// SFTP `OPEN` mit CREATE|EXCL, ein vorhandener Name (Datei, Ordner,
+    /// Symlink) scheitert atomar mit [`SshError::SftpAlreadyExists`].
+    async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError>;
     /// Löscht ein **leeres** Verzeichnis (SFTP `RMDIR`) — Gegenstück zu
     /// `remove()`, das nur auf Dateien wirkt (Spec 0054, Teil 3: rekursives
     /// Ordner-Löschen im Aufrufer baut darauf auf, indem zuerst alle

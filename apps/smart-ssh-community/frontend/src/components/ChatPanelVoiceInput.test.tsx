@@ -4,7 +4,7 @@
 // bewusst nur `ChatItemView` isoliert (kein API-Mocking nötig), das
 // Eingabefeld lebt aber in `ChatPanel` selbst, das für einen sinnvollen
 // Render deutlich mehr Abhängigkeiten mocken muss.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendChatMessage } from "../api";
@@ -71,10 +71,13 @@ vi.mock("../events", () => ({
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
   onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
+  onChatContextUsage: () => Promise.resolve(() => {}),
+  onChatContextCompacted: () => Promise.resolve(() => {}),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
   onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
@@ -94,6 +97,9 @@ function renderChatPanel() {
 }
 
 const statusListeners: Array<(ev: unknown) => void> = [];
+const partialListeners: Array<(ev: { text: string; revision: number }) => void> = [];
+const emitPartial = (text: string, revision: number) =>
+  act(() => partialListeners.forEach((h) => h({ text, revision })));
 
 vi.mock("../voiceApi", async (importActual) => ({
   ...(await importActual<typeof import("../voiceApi")>()),
@@ -109,6 +115,10 @@ vi.mock("../voiceApi", async (importActual) => ({
     return Promise.resolve(() => {});
   }),
   onSpeechRecordingState: vi.fn(() => Promise.resolve(() => {})),
+  onSpeechPartialText: vi.fn((h: (ev: { text: string; revision: number }) => void) => {
+    partialListeners.push(h);
+    return Promise.resolve(() => {});
+  }),
 }));
 
 vi.mock("../voiceInputSettings", async (importActual) => ({
@@ -123,6 +133,8 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     statusListeners.length = 0;
+    partialListeners.length = 0;
+    vi.mocked(stopVoiceRecording).mockResolvedValue("hallo welt");
     vi.mocked(getSpeechModelStatus).mockResolvedValue({ model: "base", state: "ready" } as never);
     vi.mocked(loadVoiceInputEnabled).mockResolvedValue(true);
   });
@@ -230,5 +242,90 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     await screen.findByPlaceholderText(PLACEHOLDER);
     await waitFor(() => expect(loadVoiceInputEnabled).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole("button", { name: START })).toBeNull());
+  });
+
+  describe("live text (issue #595)", () => {
+    const STOP = /Aufnahme beenden/;
+    async function startWith(draft: string) {
+      renderChatPanel();
+      const field = await screen.findByPlaceholderText(PLACEHOLDER);
+      if (draft) fireEvent.change(field, { target: { value: draft } });
+      fireEvent.click(await screen.findByRole("button", { name: START }));
+      await screen.findByRole("button", { name: STOP });
+      await waitFor(() => expect(partialListeners.length).toBeGreaterThan(0));
+      return field;
+    }
+
+    it("shows provisional text after the draft, marked and read-only, send disabled", async () => {
+      const field = await startWith("ls und");
+      await emitPartial("hallo", 1);
+      expect(field).toHaveValue("ls und hallo");
+      expect(field).toHaveAttribute("readonly");
+      expect(field).toHaveAttribute("data-provisional", "true");
+      expect(screen.getByRole("button", { name: "Senden" })).toBeDisabled();
+      await emitPartial("hallo wel", 2);
+      expect(field).toHaveValue("ls und hallo wel");
+    });
+
+    it("the final text replaces the provisional range; input is editable and focused afterwards", async () => {
+      const field = await startWith("ls und");
+      await emitPartial("hallo wel", 1);
+      fireEvent.click(screen.getByRole("button", { name: STOP }));
+      await waitFor(() => expect(field).toHaveValue("ls und hallo welt"));
+      await waitFor(() => expect(field).not.toHaveAttribute("readonly"));
+      expect(field).not.toHaveAttribute("data-provisional");
+      await waitFor(() => expect(field).toHaveFocus());
+      expect((field as HTMLTextAreaElement).selectionStart).toBe("ls und hallo welt".length);
+      expect(sendChatMessage).not.toHaveBeenCalled();
+    });
+
+    it("an empty final result restores the draft", async () => {
+      vi.mocked(stopVoiceRecording).mockResolvedValue("  ");
+      const field = await startWith("entwurf");
+      await emitPartial("noise", 1);
+      fireEvent.click(screen.getByRole("button", { name: STOP }));
+      await waitFor(() => expect(field).toHaveValue("entwurf"));
+      await waitFor(() => expect(field).not.toHaveAttribute("readonly"));
+    });
+
+    it("a failed final pass keeps the provisional text and shows the error", async () => {
+      vi.mocked(stopVoiceRecording).mockRejectedValue({ code: "speech_transcription_failed" });
+      const field = await startWith("a");
+      await emitPartial("b", 1);
+      fireEvent.click(screen.getByRole("button", { name: STOP }));
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+      expect(field).toHaveValue("a b");
+      await waitFor(() => expect(field).not.toHaveAttribute("readonly"));
+    });
+
+    it("Esc removes the provisional text and later events change nothing", async () => {
+      const field = await startWith("entwurf");
+      await emitPartial("hallo", 1);
+      fireEvent.keyDown(window, { key: "Escape" });
+      await waitFor(() => expect(field).toHaveValue("entwurf"));
+      await emitPartial("spaet", 2);
+      expect(field).toHaveValue("entwurf");
+      expect(field).not.toHaveAttribute("readonly");
+    });
+
+    it("ignores stale revisions and events after Stop", async () => {
+      const field = await startWith("");
+      await emitPartial("zwei", 2);
+      await emitPartial("eins", 1);
+      expect(field).toHaveValue("zwei");
+      fireEvent.click(screen.getByRole("button", { name: STOP }));
+      await waitFor(() => expect(field).toHaveValue("hallo welt"));
+      await emitPartial("spaet", 3);
+      expect(field).toHaveValue("hallo welt");
+    });
+
+    it("leaving the chat while recording cancels the recording", async () => {
+      const field = await startWith("x");
+      await emitPartial("y", 1);
+      expect(field).toHaveValue("x y");
+      cleanup();
+      await waitFor(() => expect(cancelVoiceRecording).toHaveBeenCalled());
+      expect(stopVoiceRecording).not.toHaveBeenCalled();
+    });
   });
 });

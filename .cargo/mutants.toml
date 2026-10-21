@@ -8,19 +8,19 @@ exclude_re = [
     # its mutants when the backslash is the LAST char. Then the escape skip
     # (`i += 2`) and the plain advance (`i += 1`) both end the loop with the
     # double quote still open, so the result is `None` either way. (#483)
-    "parser\\.rs:764:31: replace \\+ with \\* in scan_top_level_segments",
-    "parser\\.rs:764:31: replace \\+ with - in scan_top_level_segments",
-    "parser\\.rs:764:35: replace < with <= in scan_top_level_segments",
+    "parser\\.rs:816:31: replace \\+ with \\* in scan_top_level_segments",
+    "parser\\.rs:816:31: replace \\+ with - in scan_top_level_segments",
+    "parser\\.rs:816:35: replace < with <= in scan_top_level_segments",
     # CRLF handling: not swallowing the `\n` after a `\r` only yields an
     # empty segment on the next iteration, which `push_segment` drops; and
     # swallowing a `\n` that follows a `\n` skips just an empty segment. (#483)
-    "parser\\.rs:816:26: replace == with != in scan_top_level_segments",
-    "parser\\.rs:816:49: replace \\+ with \\* in scan_top_level_segments",
-    "parser\\.rs:817:27: replace \\+= with \\*= in scan_top_level_segments",
+    "parser\\.rs:868:26: replace == with != in scan_top_level_segments",
+    "parser\\.rs:868:49: replace \\+ with \\* in scan_top_level_segments",
+    "parser\\.rs:869:27: replace \\+= with \\*= in scan_top_level_segments",
     # `&&` / `||` treated as two single operators: the second one pushes an
     # empty range, which `push_segment` drops, so the segments are identical. (#483)
-    "parser\\.rs:823:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'&'\\) with false in scan_top_level_segments",
-    "parser\\.rs:835:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'\\|'\\) with false in scan_top_level_segments",
+    "parser\\.rs:875:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'&'\\) with false in scan_top_level_segments",
+    "parser\\.rs:903:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'\\|'\\) with false in scan_top_level_segments",
 
     # --- Issue #484: redirection detection in filter/parser.rs ---
     # contains_unquoted_output_redirection: `i + 1 < chars.len()` guards the
@@ -46,11 +46,11 @@ exclude_re = [
     # `name.len() > 2` in unclassified_shell_source: the only 2-char name
     # ending in `sh` is `sh`, which `program_kind` always classifies, so
     # the fallback is never called with it. (#486)
-    "parser\\.rs:1496:39: replace > with >= in unclassified_shell_source",
+    "parser\\.rs:1564:39: replace > with >= in unclassified_shell_source",
     # `i = j + 1` in contains_ansi_c_escape: with `j * 1` the scan resumes at
     # the closing quote, which is not a `$`, so it only costs one extra
     # step; when the quote is missing (`j == len`) the loop ends either way. (#486)
-    "parser\\.rs:940:19: replace \\+ with \\* in contains_ansi_c_escape",
+    "parser\\.rs:1008:19: replace \\+ with \\* in contains_ansi_c_escape",
 
     # --- Issue #485: filter parser, option analysis ---
     # `letter_option` is only called for specs with a non-empty
@@ -58,22 +58,22 @@ exclude_re = [
     # code_value, script_value, next_word_value, attached_value and
     # digit_value are all empty, so `a || b` and `a && b` of any two of them
     # are both false. Issue #485.
-    'parser\.rs:1827:13: replace \|\| with && in letter_option',
-    'parser\.rs:1830:13: replace \|\| with && in letter_option',
-    'parser\.rs:1831:13: replace \|\| with && in letter_option',
+    'parser\.rs:1895:13: replace \|\| with && in letter_option',
+    'parser\.rs:1898:13: replace \|\| with && in letter_option',
+    'parser\.rs:1899:13: replace \|\| with && in letter_option',
     # No OptionSpec has a non-empty `long_script`, so `in_list(long_script)`
     # is always false and `script |= false` equals `script &= false`.
     # Issue #485.
-    'parser\.rs:1895:24: replace \|= with &= in analyse_options',
+    'parser\.rs:1963:24: replace \|= with &= in analyse_options',
     # The `attached_value` branch only exists in PERL_OPTIONS and
     # RUBY_OPTIONS, whose stdin_flag and script_value are empty, so
     # `stdin_flag && script_value` equals `stdin_flag || script_value` (both
     # false). Issue #485.
-    'parser\.rs:1962:25: replace \|\| with && in analyse_options',
+    'parser\.rs:2030:25: replace \|\| with && in analyse_options',
     # `code_operand` is only set by specs (bash, ksh, csh) whose code_value and
     # long_code are empty, so `codes` is always empty there and the guard
     # `codes.is_empty()` is always true. Issue #485.
-    'parser\.rs:1977:21: replace match guard codes\.is_empty\(\) with true in analyse_options',
+    'parser\.rs:2045:21: replace match guard codes\.is_empty\(\) with true in analyse_options',
 
     # --- classifier.rs: glob handling and secret paths (issue #488) ---
     # `brace_depth > 0` after the glob scan in glob_to_regex: `brace_depth` is

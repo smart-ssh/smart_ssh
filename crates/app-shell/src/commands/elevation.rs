@@ -547,6 +547,14 @@ impl SftpSession for BrowserSftp<'_> {
         self.operation().await?.sftp().create_dir(path).await
     }
 
+    async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .create_file_exclusive(path)
+            .await
+    }
+
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.operation().await?.sftp().remove_dir(path).await
     }

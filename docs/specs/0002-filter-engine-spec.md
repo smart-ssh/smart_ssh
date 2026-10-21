@@ -92,6 +92,17 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    beginnt. Das Ziel ist ein eigener Prüfbestandteil mit mindestens
    `Confirm`, kein bloßes Argument von `ls`.
 
+   Ausgenommen sind genau diese nicht schreibenden Umleitungen:
+   `>/dev/null` (auch `1>/dev/null`), `2>/dev/null`, `&>/dev/null`, `2>&1`
+   und `>&2` (auch `1>&2`). Zwischen Operator und `/dev/null` darf Leerraum
+   stehen; `/dev/null` bzw. die Ziffer muss das ganze Zielwort sein. Sie
+   lösen die Umleitungs-Bestätigung nicht aus; Blacklist, Regeln,
+   Substitution und Risikoeinstufung entscheiden unverändert. Jede andere
+   Umleitung bleibt mindestens `Confirm`, z. B. `>/dev/null2`,
+   `>/dev/zero`, `>"/dev/null"`, `>$OUT`, `>>/dev/null`, `>|/dev/null`,
+   `<>/dev/null`, `>&3`, `3>&1`, `>&file`, `>&-` sowie ein Kommando, das
+   neben einer erlaubten Form eine weitere Umleitung enthält.
+
    Eingabe-Umleitung (`<`) wird bewusst nicht gesondert behandelt. Ein
    Lesezugriff wie `cat < /etc/shadow` bekommt dieselbe Entscheidung wie
    `cat /etc/shadow`, weil das Kommando selbst schon auf die Datei zugreift.
@@ -158,6 +169,33 @@ wird nicht als Ganzes gegen `ls *` geprüft. Stattdessen gilt:
    unbegrenzten Abstieg, der den Prozess per Stack-Überlauf beenden könnte.
    Die Grenzen gelten für **jeden** Konsumenten der Zerlegung gleichermaßen,
    für die Filter-Engine wie für die Risiko-Einstufung.
+
+8. **Nachvollziehbarkeit je Teilkommando.** Die Auswertung kann erklärt
+   werden (Testansicht, Protokoll). Reine Berichterstattung: die
+   Entscheidung ändert sich dadurch nie.
+   - Jeder Teil hat eine Art: Teilkommando einer Verkettung/Pipeline
+     (mit laufendem Index ab 0), Inhalt einer Command-Substitution oder
+     eingebetteter Code (`bash -c`, `eval`, Here-String, `trap`, `alias`).
+     Substitutionen und eingebetteter Code haben keinen Index.
+   - Je Teil: Entscheidung, gegriffene Regel (falls vorhanden) und die
+     regelunabhängigen Prüfungen, die mindestens `Confirm` erzwungen haben:
+     Hard-Blacklist, Ausgabe-Umleitung, Command-Substitution,
+     nicht sicher analysierbare Eingabe (jeweils als Grundcode).
+     Beispiel `ps aux | grep java 2>/tmp/e | wc -l` mit `Allow: ps *` und
+     `Allow: grep *`: Teil 0 `AutoExec` (Regel `ps *`), Teil 1 `Confirm`
+     (Regel `grep *`, Prüfung Ausgabe-Umleitung), Teil 2 `Confirm` ohne Regel.
+   - Der Kommandotext eines Teils steht nicht in der Auswertung; wer ihn
+     braucht, zerlegt das Kommando selbst.
+   - Die Protokollzeile der Entscheidung (Stufe `info`) nennt je Teilkommando
+     Index, Entscheidung samt Grundcode, Regelkennung oder „none“ und die
+     Prüfungen — nie Kommandotext.
+   - **Auswertung mit Kandidatenregeln.** Die Engine kann ein Kommando so
+     auswerten, als wären zusätzliche, nicht gespeicherte Regeln vorhanden
+     (gleiche Scope-Behandlung und Rangfolge; eine Regel, deren Scope nicht
+     zum Kontext passt, hat keine Wirkung). Es wird nichts gespeichert und
+     keine bestehende Regel verändert. So lässt sich zeigen, ob eine neue
+     Regel das Kommando automatisch ausführbar machen würde (im Beispiel
+     oben bleibt es mit `Allow: wc *` wegen der Umleitung bei `Confirm`).
 
 ## 5. Auswertungskontext und Auswertung
 

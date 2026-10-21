@@ -68,6 +68,27 @@ App `AI_MODEL_NO_TOOL_SUPPORT` statt der generischen Provider-Meldung. Andere
 den Zug: kein Kommando wird ausgeführt oder vorgeschlagen. Die Voreinstellung
 der Ollama-Karte (natives Tool-Calling an) bleibt.
 
+**A2b — Fehlerkarte im Chat: Details und „Erneut versuchen" (Issue #600).**
+Unter dem übersetzten Text eines KI-Fehlers zeigt die Fehlerkarte
+
+- einen eingeklappten Bereich „Details" mit Code, Fehlertyp des Providers,
+  HTTP-Status (bei einem Fehler mitten im Antwortstrom „stream") und der
+  Original-Meldung des Providers; er lässt sich kopieren. Die Meldung ist
+  vor der Anzeige geschwärzt; fehlt eine Angabe, entfällt die Zeile.
+- „Erneut versuchen" bei `AI_PROVIDER_OVERLOADED`, `AI_PROVIDER_UNAVAILABLE`,
+  `AI_RATE_LIMITED`, `AI_TIMEOUT` und `AI_NETWORK_ERROR`, solange nach der
+  letzten Nutzer-Nachricht weder Antworttext noch Kommando oder Vorschlag
+  entstanden ist. Der Knopf schickt die letzte Nutzer-Nachricht mit dem
+  aktuellen Verlauf erneut: die Nachricht steht danach nur einmal im Verlauf,
+  und kein Kommando wird erneut ausgeführt. Die Karte verschwindet beim Klick.
+  Andere Codes (z. B. Authentifizierung, Kontext zu groß) haben keinen Knopf.
+- Wiederholt die App eine überlastete Anfrage selbst, zeigt der Chat eine
+  Statuszeile („Der KI-Anbieter ist überlastet – neuer Versuch in 5 s
+  (Versuch 2 von 4)") mit herunterzählender Sekundenanzeige und dem
+  „Stopp"-Knopf. Die Zeile verschwindet mit dem ersten Inhalt, dem
+  endgültigen Fehler oder dem Abbruch; „Stopp" beendet den Zug auch während
+  der Wartezeit.
+
 **A2 — KI-Fehler unterscheiden.**
 
 - Status 401/403 → Authentifizierung fehlgeschlagen, 429 → Rate-Limit

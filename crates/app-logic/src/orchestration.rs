@@ -86,7 +86,7 @@ pub use attachments::{
     ATTACHMENTS_REQUEST_TOO_LARGE, ATTACHMENTS_TOO_MANY, ATTACHMENTS_UNAVAILABLE,
     ATTACHMENTS_WHILE_BUSY, ATTACHMENT_INVALID, ATTACHMENT_TOO_LARGE, ATTACHMENT_UNRESOLVED,
 };
-pub use chat_turn::run_chat_turn;
+pub use chat_turn::{run_chat_turn, RETRY_NOT_POSSIBLE};
 pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHAT_BUSY};
 // `push_history`/`PENDING_ACTION_CONFIRM_TIMEOUT`: auch von `app-shell`
 // gebraucht (`commands::chat`/`commands::connect`), deshalb `pub` statt

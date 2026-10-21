@@ -57,8 +57,13 @@ pub(crate) const MODEL_NOT_FOUND_MARKERS: &[&str] = &[
 /// im Body steht oder die Struktur zuträfe (Prüfreihenfolge: Status
 /// zuerst, A3).
 pub(crate) fn map_http_status(status: reqwest::StatusCode, body: &str) -> AiError {
+    let parsed = ProviderErrorInfo::from_body(body);
     match status.as_u16() {
         401 | 403 => AiError::AuthenticationFailed,
+        // Issue #599: HTTP 402 (OpenRouter) and a 429 that is really an
+        // exhausted quota are billing problems, never a retry case.
+        402 => AiError::Billing(parsed.detail(body)),
+        429 if parsed.is_billing() => AiError::Billing(parsed.detail(body)),
         429 => AiError::RateLimited,
         400 if is_model_no_tool_support(body) => {
             AiError::ModelNoToolSupport(format!("HTTP {status}: {body}"))
@@ -68,8 +73,148 @@ pub(crate) fn map_http_status(status: reqwest::StatusCode, body: &str) -> AiErro
         {
             AiError::ModelNotFound(format!("HTTP {status}: {body}"))
         }
-        _ => AiError::ProviderUnavailable(format!("HTTP {status}: {body}")),
+        code => classify_provider_error(Some(code), &parsed)
+            .unwrap_or_else(|| AiError::ProviderUnavailable(format!("HTTP {status}: {body}"))),
     }
+}
+
+/// [`map_http_status`] plus the provider's `Retry-After` for an overload.
+pub(crate) fn map_http_response(
+    status: reqwest::StatusCode,
+    headers: &reqwest::header::HeaderMap,
+    body: &str,
+) -> AiError {
+    match map_http_status(status, body) {
+        AiError::Overloaded { .. } => AiError::Overloaded {
+            retry_after: crate::retry::parse_retry_after(headers),
+        },
+        other => other,
+    }
+}
+
+/// Provider request id from the response headers (`request-id` for Anthropic,
+/// `x-request-id` for the OpenAI family), for the error log line.
+pub(crate) fn provider_request_id(headers: &reqwest::header::HeaderMap) -> Option<String> {
+    ["request-id", "x-request-id"].iter().find_map(|name| {
+        headers
+            .get(*name)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.chars().take(128).collect())
+    })
+}
+
+/// `type` / `code` / `message` of a provider error object
+/// (`{"error": {...}}` over HTTP, or the object inside an in-stream error).
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ProviderErrorInfo {
+    pub(crate) error_type: Option<String>,
+    pub(crate) code: Option<String>,
+    pub(crate) message: Option<String>,
+}
+
+impl ProviderErrorInfo {
+    /// From a full response body `{"error": {...}}`; a body that is not
+    /// JSON or has no `error` object yields an empty info.
+    pub(crate) fn from_body(body: &str) -> Self {
+        serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .and_then(|v| v.get("error").map(Self::from_error_object))
+            .unwrap_or_default()
+    }
+
+    /// From the error object itself. `code` may be a string or a number
+    /// (some gateways); only strings are kept.
+    pub(crate) fn from_error_object(error: &serde_json::Value) -> Self {
+        let field = |name: &str| {
+            error
+                .get(name)
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        };
+        Self {
+            error_type: field("type"),
+            code: field("code"),
+            message: field("message"),
+        }
+    }
+
+    fn matches(&self, needle: &str) -> bool {
+        self.error_type.as_deref() == Some(needle) || self.code.as_deref() == Some(needle)
+    }
+
+    fn message_lower(&self) -> String {
+        self.message.as_deref().unwrap_or_default().to_lowercase()
+    }
+
+    /// Exhausted credit: Anthropic's "credit balance is too low" message or
+    /// OpenAI's `insufficient_quota`.
+    pub(crate) fn is_billing(&self) -> bool {
+        self.matches("insufficient_quota")
+            || self.message_lower().contains("credit balance is too low")
+    }
+
+    /// "type: message" for the error value and the log, falling back to
+    /// `fallback` when the provider sent neither.
+    pub(crate) fn detail(&self, fallback: &str) -> String {
+        let kind = self
+            .error_type
+            .as_deref()
+            .or(self.code.as_deref())
+            .unwrap_or("error");
+        match self.message.as_deref() {
+            Some(message) => format!("{kind}: {message}"),
+            None => format!("{kind}: {fallback}"),
+        }
+    }
+}
+
+/// Issue #599: shared mapping "provider error type → [`AiError`]" for HTTP
+/// error bodies and in-stream errors of all providers. `status` is `None`
+/// for an in-stream error. Returns `None` when nothing specific applies
+/// (e.g. Anthropic `api_error`, HTTP 500): the caller keeps
+/// `ProviderUnavailable`.
+pub(crate) fn classify_provider_error(
+    status: Option<u16>,
+    info: &ProviderErrorInfo,
+) -> Option<AiError> {
+    if status == Some(402) || info.is_billing() {
+        return Some(AiError::Billing(info.detail("")));
+    }
+    if info
+        .error_type
+        .as_deref()
+        .is_some_and(|t| t.contains("overloaded"))
+        || info
+            .code
+            .as_deref()
+            .is_some_and(|c| c.contains("overloaded"))
+        || matches!(status, Some(503 | 529))
+    {
+        return Some(AiError::Overloaded { retry_after: None });
+    }
+    if info.matches("rate_limit_error") || info.matches("rate_limit_exceeded") {
+        return Some(AiError::RateLimited);
+    }
+    if info.matches("invalid_request_error") {
+        if info.message_lower().contains("prompt is too long") {
+            return Some(AiError::ContextTooLarge);
+        }
+        return Some(AiError::RejectedRequest(info.detail("")));
+    }
+    None
+}
+
+/// Issue #599: maps the error object of an in-stream error event.
+pub(crate) fn map_stream_error_object(error: &serde_json::Value) -> (AiError, ProviderErrorInfo) {
+    let info = ProviderErrorInfo::from_error_object(error);
+    let mapped = classify_provider_error(None, &info).unwrap_or_else(|| {
+        AiError::ProviderUnavailable(
+            info.message
+                .clone()
+                .unwrap_or_else(|| "unbekannter Fehler".to_string()),
+        )
+    });
+    (mapped, info)
 }
 
 /// Spec 0072, A1: erkennt "Modell nicht gefunden" an einem strukturierten
@@ -570,5 +715,129 @@ mod map_transport_error_tests {
     fn test_timeout_error_carries_the_given_seconds() {
         let err = timeout_error(std::time::Duration::from_secs(42));
         assert!(matches!(err, AiError::Timeout { secs: 42 }));
+    }
+}
+
+#[cfg(test)]
+mod classify_tests {
+    use super::*;
+    use reqwest::StatusCode;
+
+    fn http(status: u16, body: &str) -> AiError {
+        map_http_status(StatusCode::from_u16(status).unwrap(), body)
+    }
+
+    fn err_body(kind: &str, message: &str) -> String {
+        serde_json::json!({"type": "error", "error": {"type": kind, "message": message}})
+            .to_string()
+    }
+
+    fn stream_err(kind: &str, message: &str) -> AiError {
+        map_stream_error_object(&serde_json::json!({"type": kind, "message": message})).0
+    }
+
+    #[test]
+    fn test_http_503_and_529_are_overloaded() {
+        for status in [503, 529] {
+            assert!(matches!(http(status, "busy"), AiError::Overloaded { .. }));
+        }
+        assert!(matches!(
+            http(529, &err_body("overloaded_error", "Overloaded")),
+            AiError::Overloaded { .. }
+        ));
+    }
+
+    #[test]
+    fn test_http_500_and_api_error_stay_provider_unavailable() {
+        assert!(matches!(http(500, "x"), AiError::ProviderUnavailable(_)));
+        assert!(matches!(
+            http(500, &err_body("api_error", "Internal")),
+            AiError::ProviderUnavailable(_)
+        ));
+        assert!(matches!(
+            stream_err("api_error", "Internal"),
+            AiError::ProviderUnavailable(m) if m == "Internal"
+        ));
+    }
+
+    #[test]
+    fn test_anthropic_credit_balance_400_is_billing() {
+        let body = err_body(
+            "invalid_request_error",
+            "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing.",
+        );
+        assert!(matches!(http(400, &body), AiError::Billing(m) if m.contains("credit balance")));
+        assert!(matches!(
+            stream_err("invalid_request_error", "Your credit balance is too low"),
+            AiError::Billing(_)
+        ));
+    }
+
+    #[test]
+    fn test_openai_insufficient_quota_and_402_are_billing() {
+        let body = serde_json::json!({"error": {"type": "insufficient_quota",
+            "code": "insufficient_quota", "message": "You exceeded your current quota"}})
+        .to_string();
+        assert!(matches!(http(429, &body), AiError::Billing(_)));
+        assert!(matches!(http(402, "{}"), AiError::Billing(_)));
+        // A plain 429 stays a rate limit.
+        assert_eq!(http(429, "{}"), AiError::RateLimited);
+    }
+
+    #[test]
+    fn test_prompt_too_long_is_context_too_large() {
+        let body = err_body(
+            "invalid_request_error",
+            "prompt is too long: 210000 tokens > 200000",
+        );
+        assert_eq!(http(400, &body), AiError::ContextTooLarge);
+        assert_eq!(
+            stream_err("invalid_request_error", "prompt is too long: 1 > 0"),
+            AiError::ContextTooLarge
+        );
+    }
+
+    #[test]
+    fn test_other_invalid_request_is_rejected_request() {
+        assert!(matches!(
+            stream_err("invalid_request_error", "messages: bad"),
+            AiError::RejectedRequest(m) if m == "invalid_request_error: messages: bad"
+        ));
+        assert!(matches!(
+            http(400, &err_body("invalid_request_error", "bad field")),
+            AiError::RejectedRequest(_)
+        ));
+    }
+
+    #[test]
+    fn test_stream_rate_limit_and_overload() {
+        assert_eq!(
+            stream_err("rate_limit_error", "slow down"),
+            AiError::RateLimited
+        );
+        assert!(matches!(
+            stream_err("overloaded_error", "Overloaded"),
+            AiError::Overloaded { .. }
+        ));
+    }
+
+    #[test]
+    fn test_overload_carries_retry_after_header() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::RETRY_AFTER, "7".parse().unwrap());
+        assert_eq!(
+            map_http_response(StatusCode::from_u16(529).unwrap(), &headers, "x"),
+            AiError::Overloaded {
+                retry_after: Some(std::time::Duration::from_secs(7))
+            }
+        );
+    }
+
+    #[test]
+    fn test_provider_request_id_header() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        assert_eq!(provider_request_id(&headers), None);
+        headers.insert("x-request-id", "req_abc".parse().unwrap());
+        assert_eq!(provider_request_id(&headers).as_deref(), Some("req_abc"));
     }
 }

@@ -313,6 +313,8 @@
     "overallDecision": "Gesamt-Entscheidung",
     "subCommands": "Teilkommandos",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Teilkommando {{index}}",
+    "checksLabel": "Prüfungen:",
     "hardBlacklistLabel": "Hard-Blacklist:"
   },
   "actionCard": {
@@ -367,7 +369,15 @@
     "noSuggestions": "Keine Vorschläge.",
     "binaryFileHint": "⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
     "diffTooLargeHint": "⚠ Inhalt zu groß für Zeilen-Diff. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
-    "noContentChange": "(keine inhaltliche Änderung)"
+    "noContentChange": "(keine inhaltliche Änderung)",
+    "quickRuleLabel": {
+      "exact": "Exakt: {{patterns}}",
+      "exactPerSegment": "Exakt je Teilkommando: {{patterns}}",
+      "pathScoped": "Gleiches Verzeichnis: {{patterns}}",
+      "lastArgOpen": "Beliebiges letztes Argument: {{patterns}}",
+      "subcommand": "Alle `{{names}}`-Aufrufe: {{patterns}}",
+      "tool": "Alle `{{names}}`-Aufrufe: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sicherheitswarnung · Host-Schlüssel geändert",
@@ -501,8 +511,12 @@
     "AI_RATE_LIMITED": "Der KI-Anbieter drosselt gerade die Anfragen (Rate-Limit) – die App hat es automatisch mehrfach erneut versucht. Bitte kurz warten und die Nachricht erneut senden.",
     "AI_NETWORK_ERROR": "Keine Verbindung zum KI-Provider. Internetverbindung und – bei eigenem Endpunkt – die Base-URL prüfen, dann erneut senden.",
     "AI_INVALID_RESPONSE": "Unerwartete Antwort des KI-Providers",
+    "AI_INVALID_TOOL_CALL": "Die KI hat wiederholt ein nicht vorhandenes Werkzeug aufgerufen. Formuliere die Anfrage anders.",
     "AI_CONTEXT_TOO_LARGE": "Kontext zu groß für den KI-Provider. „Max. Antwortlänge (Tokens)“ niedriger einstellen oder einen neuen Chat beginnen.",
     "AI_PROVIDER_UNAVAILABLE": "Der KI-Provider meldet einen Fehler (z. B. Wartung oder Überlastung). Später erneut versuchen; hält es an, Provider-Einstellungen prüfen.",
+    "AI_PROVIDER_OVERLOADED": "Der KI-Anbieter ist gerade überlastet. Bitte gleich noch einmal versuchen.",
+    "AI_PROVIDER_BILLING": "Beim KI-Anbieter ist kein Guthaben mehr auf dem Konto. Abrechnung in der Konsole des Anbieters prüfen.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Der KI-Anbieter hat die Anfrage abgelehnt.",
     "AI_RESPONSE_TRUNCATED": "Die KI-Antwort war zu lang für einen vollständigen Befehl",
     "AI_MODEL_NOT_FOUND": "Der KI-Provider kennt dieses Modell nicht. Modellnamen in den Einstellungen prüfen („Modelle laden“ zeigt die verfügbaren); bei Ollama das Modell zuerst mit `ollama pull <name>` laden.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Dieses Modell unterstützt keine Tool-Aufrufe. Beim Provider in den Einstellungen „Natives Tool-Calling unterstützt“ abwählen (dann läuft der Textmodus) oder ein Modell mit Tool-Unterstützung wählen.",
@@ -570,7 +584,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind alle Daten verloren, und es gibt keine Wiederherstellung — setze das Häkchen und richte es erneut ein. Es wurde nichts verändert.",
     "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar.",
     "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden.",
-    "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden."
+    "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
+    "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits"
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
@@ -656,7 +671,10 @@
     "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
     "uploadedFolder": "Ordner „{{name}}“ hochgeladen — {{count}} Dateien",
     "uploadFolderFailed": "Ordner „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
-    "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}"
+    "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}",
+    "nothingToPaste": "Nichts einzufügen: Die Zwischenablage enthält keine Dateien",
+    "createFileDone": "Datei „{{name}}“ angelegt",
+    "createFileFailed": "Datei „{{name}}“ konnte nicht angelegt werden: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Erhöhte Rechte",
@@ -1003,7 +1021,9 @@
       "chmod": "Rechte bearbeiten…",
       "rename": "Umbenennen",
       "cut": "Ausschneiden",
-      "delete": "Löschen"
+      "delete": "Löschen",
+      "newFolder": "Neuer Ordner",
+      "newFile": "Neue Datei"
     },
     "properties": {
       "title": "Eigenschaften",
@@ -1034,10 +1054,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Umbenennen",
-      "newFolderTitle": "Neuer Ordner"
+      "newFolderTitle": "Neuer Ordner",
+      "newFileTitle": "Neue Datei",
+      "invalidName": "Einen Namen ohne „/“ eingeben. „.“ und „..“ sind nicht erlaubt."
     },
     "copyProgress": "Kopiere… {{done}} MB von {{total}} MB",
-    "copyProgressUnknownTotal": "Kopiere… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopiere… {{done}} MB",
+    "directoryMenuLabel": "Ordneraktionen",
+    "clipboardPaste": {
+      "title": "Dateien aus der Zwischenablage hochladen",
+      "intro": "Diese Dateien aus der Zwischenablage hochladen?",
+      "target": "Zielordner",
+      "more": "… und {{count}} weitere",
+      "confirm": "Hochladen",
+      "cancel": "Abbrechen",
+      "menuTitle": "Dateien aus der Zwischenablage hochladen"
+    }
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
@@ -1047,6 +1079,9 @@
     "stopAutoContinuation": "Automatik stoppen",
     "generating": "KI generiert Antwort / Dokument…",
     "stop": "Stopp",
+    "tryAgain": "Erneut versuchen",
+    "errorDetails": "Details",
+    "aiRetrying": "Der KI-Anbieter ist überlastet – neuer Versuch in {{seconds}} s (Versuch {{attempt}} von {{max}})",
     "noActiveProvider": "Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.",
     "inputPlaceholder": "Frage stellen oder Kommando beschreiben …",
     "send": "Senden",
@@ -1058,6 +1093,9 @@
     "historyAttached": "Angehängt: {{files}}",
     "queued": "Wird mit der nächsten Anfrage gesendet",
     "responseCancelled": "Antwort abgebrochen.",
+    "contextCompactedNotice": "Ältere Teile dieses Chats wurden zusammengefasst, damit sie in den Kontext des Modells passen.",
+    "contextUsage": "Kontext {{used}} / {{window}}",
+    "contextUsageTooltip": "Ältere Teile des Chats werden automatisch zusammengefasst, wenn der Kontext voll wird.",
     "webResearchUnavailable": "Web-Recherche ist für dieses Provider-Konto nicht verfügbar (die Websuche ist dort abgeschaltet). Diese Sitzung antwortet ohne Web-Recherche. Dauerhaft abschalten: Einstellungen → KI-Provider → „Web-Recherche“.",
     "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
     "outputTruncated": "(gekürzt)",

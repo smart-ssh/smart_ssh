@@ -275,6 +275,28 @@ impl SftpSession for LocalFileSession {
             .map_err(|e| io_err(path, e))
     }
 
+    async fn create_file_exclusive(&mut self, path: &str) -> Result<(), SshError> {
+        match tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(self.resolve(path))
+            .await
+        {
+            Ok(_) => Ok(()),
+            // Windows meldet „Zugriff verweigert" statt `AlreadyExists`, wenn
+            // der Name ein Ordner ist — daher zählt auch, dass er existiert.
+            Err(e)
+                if e.kind() == std::io::ErrorKind::AlreadyExists
+                    || tokio::fs::symlink_metadata(self.resolve(path))
+                        .await
+                        .is_ok() =>
+            {
+                Err(SshError::SftpAlreadyExists(path.to_string()))
+            }
+            Err(e) => Err(io_err(path, e)),
+        }
+    }
+
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
         tokio::fs::remove_dir(self.resolve(path))
             .await
@@ -461,6 +483,29 @@ mod tests {
         let back = session.list_dir(".").await.unwrap();
         assert_eq!(back.len(), 1);
         assert_eq!(back[0].name, "sub");
+    }
+
+    /// Issue #570: exclusive create makes an empty file and never touches an
+    /// existing file or folder.
+    #[tokio::test]
+    async fn test_create_file_exclusive_never_overwrites() {
+        let home = tempfile::tempdir().unwrap();
+        let mut session = LocalFileSession::with_home(Some(home.path().to_path_buf()));
+
+        session.create_file_exclusive("new.txt").await.unwrap();
+        assert_eq!(std::fs::read(home.path().join("new.txt")).unwrap(), b"");
+
+        session.write_file("keep.txt", b"payload").await.unwrap();
+        session.create_dir("dir").await.unwrap();
+        for name in ["keep.txt", "dir"] {
+            let err = session.create_file_exclusive(name).await.unwrap_err();
+            assert_eq!(err.code(), "SSH_SFTP_ALREADY_EXISTS", "{name}");
+        }
+        assert_eq!(
+            std::fs::read(home.path().join("keep.txt")).unwrap(),
+            b"payload"
+        );
+        assert!(home.path().join("dir").is_dir());
     }
 
     /// Issue #10: write, read, stat, rename, create/remove dir and delete

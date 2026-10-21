@@ -96,6 +96,30 @@ pub async fn continue_truncated_response(
     .await
 }
 
+/// Issue #600: "Try again" on a retryable AI error card.
+#[tauri::command]
+pub async fn retry_chat_turn(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: SessionId,
+) -> CommandResult<()> {
+    state.mcp.sessions.ensure_user_session(session_id)?;
+    let session = state
+        .sessions
+        .get(session_id)
+        .ok_or("Session nicht gefunden")?;
+    retry_chat_turn_impl(
+        &app,
+        &TauriEventEmitter(app.clone()),
+        &session,
+        session_id,
+        state.profile_store.as_ref(),
+        &state.policy_store,
+        &state.pending_action_confirmations,
+    )
+    .await
+}
+
 /// Kern von `send_chat_message` — herausgelöst, damit Spec 0040 Abschnitt 2
 /// einen Regressionstest schreiben kann, der tatsächlich HIER einsteigt
 /// (nicht erst bei `run_chat_turn`/`push_history`, s. dortiger Spec-Text:
@@ -151,6 +175,84 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     policy_store: &persistence_sqlite::SqlitePolicyStore,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
 ) -> CommandResult<()> {
+    send_turn_impl(
+        app,
+        emitter,
+        session,
+        session_id,
+        Some(text),
+        extension_parts,
+        prompt_history_store,
+        profile_store,
+        policy_store,
+        action_confirmations,
+    )
+    .await
+}
+
+/// Issue #600: "Try again" after a failed AI turn. Runs a new turn over the
+/// current history WITHOUT adding the user message again. Only allowed when
+/// the history ends with the user's own message (so no tool call, command or
+/// partial answer follows it) and no turn is running.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn retry_chat_turn_impl<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    emitter: &dyn EventEmitter,
+    session: &Session,
+    session_id: SessionId,
+    profile_store: &dyn ProfileStore,
+    policy_store: &persistence_sqlite::SqlitePolicyStore,
+    action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+) -> CommandResult<()> {
+    send_turn_impl(
+        app,
+        emitter,
+        session,
+        session_id,
+        None,
+        Default::default(),
+        None,
+        profile_store,
+        policy_store,
+        action_confirmations,
+    )
+    .await
+}
+
+/// Shared turn entry. `text == None` means "resend the last user turn".
+#[allow(clippy::too_many_arguments)]
+async fn send_turn_impl<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    emitter: &dyn EventEmitter,
+    session: &Session,
+    session_id: SessionId,
+    text: Option<String>,
+    extension_parts: app_logic::orchestration::PreparedExtensionParts,
+    prompt_history_store: Option<&persistence_sqlite::SqlitePromptHistoryStore>,
+    profile_store: &dyn ProfileStore,
+    policy_store: &persistence_sqlite::SqlitePolicyStore,
+    action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
+) -> CommandResult<()> {
+    let resend = text.is_none();
+    if resend {
+        let last_is_user_text = {
+            let ctx = session.context.lock().await;
+            matches!(
+                ctx.history.last(),
+                Some(ChatMessage {
+                    role: Role::User,
+                    content: MessageContent::Text(_),
+                })
+            )
+        };
+        if !last_is_user_text {
+            return Err(CommandError::with_code(
+                "Nothing to retry: the last turn already produced a reply or a command.",
+                app_logic::orchestration::RETRY_NOT_POSSIBLE,
+            ));
+        }
+    }
+    let text = text.unwrap_or_default();
     // Spec 0066, §2: läuft für diese Sitzung schon ein Turn, wird die
     // Nachricht nur eingereiht — sie geht mit der nächsten Anfrage an die KI
     // mit (s. `run_chat_turn`) bzw. nach Turn-Ende als neuer Turn (unten).
@@ -166,6 +268,12 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
         // des neuen Chats anhängen. Abgelehnt, der Text bleibt beim Nutzer.
         if turn.swapping {
             return Err(app_logic::orchestration::chat_switching_error());
+        }
+        if turn.running && resend {
+            return Err(CommandError::with_code(
+                "Nothing to retry: a turn is already running.",
+                app_logic::orchestration::RETRY_NOT_POSSIBLE,
+            ));
         }
         if turn.running {
             // Eingereiht werden nur Texte; Anhänge gehen nie still verloren.
@@ -201,7 +309,7 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     // Persistieren (z. B. kurzzeitig gesperrte DB) soll den eigentlichen
     // Chat-Versand nicht verhindern, deshalb best-effort statt `?`. `None`
     // gibt es nur in Tests ohne Datenbank; die App übergibt immer den Store.
-    if let Some(store) = prompt_history_store {
+    if let Some(store) = prompt_history_store.filter(|_| !resend) {
         if let Err(err) = store.record(&session.server_id, &text).await {
             eprintln!("Prompt konnte nicht in der Historie gespeichert werden: {err}");
         }
@@ -210,7 +318,7 @@ pub(crate) async fn send_chat_message_with_attachments_impl<R: tauri::Runtime>(
     if queued_only {
         return Ok(());
     }
-    let mut texts = vec![text];
+    let mut texts = if resend { Vec::new() } else { vec![text] };
 
     loop {
         // Spec 0032: `profile_store.get_server` findet den lokalen
@@ -799,6 +907,7 @@ mod send_chat_message_persistence_tests {
             ),
             model_context_window_tokens: usize::MAX / 1_000,
             summary: AsyncMutex::new(None),
+            context_usage: Default::default(),
             mcp_origin_flags: std::sync::Mutex::new(Vec::new()),
             sudo_password: app_logic::session::SwappableSudoPassword::new(None),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
@@ -920,6 +1029,67 @@ mod send_chat_message_persistence_tests {
             ) && m.role == Role::User),
             "die Nutzer-Nachricht muss in chat_messages persistiert sein, geladen: {loaded:?}"
         );
+    }
+
+    /// Issue #600: "Try again" runs a turn over the existing history; the
+    /// user message is not added a second time.
+    #[tokio::test]
+    async fn test_retry_chat_turn_does_not_duplicate_user_message() {
+        let _guard = lock_async().await;
+        let contexts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let gate = Arc::new(tokio::sync::Notify::new());
+        gate.notify_one();
+        let mut session = test_session(ServerId::new());
+        session.set_ai_provider_for_tests(Box::new(GatedRecordingProvider {
+            gate,
+            contexts: contexts.clone(),
+        }));
+        session.context.lock().await.history.push(ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("hello".to_string()),
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let policy_store =
+            persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+                .await
+                .unwrap()
+                .policy_store();
+        let app = test_app();
+        retry_chat_turn_impl(
+            app.handle(),
+            &TestEmitter::default(),
+            &session,
+            uuid::Uuid::new_v4(),
+            &InMemoryProfileStore::default(),
+            &policy_store,
+            &ConfirmationRegistry::new(),
+        )
+        .await
+        .unwrap();
+        {
+            let sent = contexts.lock().unwrap();
+            assert_eq!(sent.len(), 1);
+            assert_eq!(history_texts(&sent[0]), vec!["hello".to_string()]);
+        }
+
+        // The history now ends with something else (the turn ran): refused.
+        session.context.lock().await.history.push(ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text("partial".to_string()),
+        });
+        let err = retry_chat_turn_impl(
+            app.handle(),
+            &TestEmitter::default(),
+            &session,
+            uuid::Uuid::new_v4(),
+            &InMemoryProfileStore::default(),
+            &policy_store,
+            &ConfirmationRegistry::new(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, Some(app_logic::orchestration::RETRY_NOT_POSSIBLE));
+        assert_eq!(contexts.lock().unwrap().len(), 1);
     }
 
     /// Spec 0066, §2: erster `send()` hängt, bis `gate` geöffnet wird; jeder

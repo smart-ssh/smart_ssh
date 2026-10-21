@@ -978,3 +978,142 @@ async fn test_reasoning_model_context_retry_uses_max_completion_tokens_field() {
         vec![AiEvent::TextDelta("ok".to_string()), AiEvent::Done]
     );
 }
+
+fn openai_provider(uri: String) -> OpenAiCompatibleProvider {
+    OpenAiCompatibleProvider::new(
+        uri,
+        "gpt-test",
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    )
+}
+
+async fn error_status_events(status: u16, body: &str) -> (Vec<AiEvent>, usize) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(status).set_body_string(body.to_string()))
+        .mount(&server)
+        .await;
+    let events: Vec<AiEvent> = openai_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+    (events, server.received_requests().await.unwrap().len())
+}
+
+/// Issue #599: OpenAI `insufficient_quota` (HTTP 429) and OpenRouter's HTTP
+/// 402 are billing errors; neither is retried.
+#[tokio::test]
+async fn test_issue_599_insufficient_quota_and_402_are_billing_and_not_retried() {
+    let quota = r#"{"error":{"type":"insufficient_quota","code":"insufficient_quota","message":"You exceeded your current quota"}}"#;
+    for (status, body) in [
+        (429u16, quota),
+        (402, r#"{"error":{"message":"Insufficient credits"}}"#),
+    ] {
+        let (events, requests) = error_status_events(status, body).await;
+        assert_eq!(requests, 1, "{status}");
+        match events.as_slice() {
+            [AiEvent::Error(err)] => assert_eq!(err.code(), "AI_PROVIDER_BILLING", "{status}"),
+            other => panic!("{status}: {other:?}"),
+        }
+    }
+}
+
+/// Issue #599: a plain 429 keeps its Spec 0051 behaviour (rate limited).
+#[tokio::test]
+async fn test_issue_599_plain_429_stays_rate_limited() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "0")
+                .set_body_string(r#"{"error":{"message":"slow down"}}"#),
+        )
+        .mount(&server)
+        .await;
+    let events: Vec<AiEvent> = openai_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+    assert_eq!(events, vec![AiEvent::Error(AiError::RateLimited)]);
+}
+
+/// Issue #599: HTTP 503 is retried and ends as `AI_PROVIDER_OVERLOADED`.
+#[tokio::test]
+async fn test_issue_599_http_503_is_retried_then_overloaded() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(503).insert_header("retry-after", "0"))
+        .mount(&server)
+        .await;
+    let events: Vec<AiEvent> = openai_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+    assert_eq!(server.received_requests().await.unwrap().len(), 4);
+    assert!(matches!(
+        events.last(),
+        Some(AiEvent::Error(AiError::Overloaded { .. }))
+    ));
+}
+
+/// Issue #599: an in-stream `{"error": {...}}` chunk is mapped (fake stream);
+/// after content was emitted it is not retried.
+#[tokio::test]
+async fn test_issue_599_in_stream_error_chunk_is_mapped() {
+    let body = "data: {\"choices\":[{\"delta\":{\"content\":\"par\"}}]}\n\n\
+data: {\"error\":{\"type\":\"invalid_request_error\",\"message\":\"bad things\"}}\n\n";
+    let server = mock_server_with_sse_body(body).await;
+    let events: Vec<AiEvent> = openai_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    assert!(matches!(
+        events.last(),
+        Some(AiEvent::Error(AiError::RejectedRequest(m))) if m.contains("bad things")
+    ));
+}
+
+/// Issue #599: an in-stream overload chunk before any content is retried.
+#[tokio::test]
+async fn test_issue_599_in_stream_overload_chunk_before_content_is_retried() {
+    let server = MockServer::start().await;
+    let overloaded = "data: {\"error\":{\"type\":\"server_error\",\"code\":\"server_is_overloaded\",\"message\":\"busy\"}}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(overloaded),
+        )
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+                ),
+        )
+        .with_priority(2)
+        .mount(&server)
+        .await;
+    let events: Vec<AiEvent> = openai_provider(server.uri())
+        .send(empty_context())
+        .collect()
+        .await;
+    assert!(matches!(events[0], AiEvent::Retrying { attempt: 1, .. }));
+    assert!(events.contains(&AiEvent::TextDelta("ok".to_string())));
+    assert_eq!(events.last(), Some(&AiEvent::Done));
+}

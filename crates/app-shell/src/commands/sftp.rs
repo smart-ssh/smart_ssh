@@ -25,6 +25,7 @@ use ssh_manager_core::ssh::{SftpSession, SshError};
 use crate::elevated_sftp::ElevatedSftpRegistry;
 use crate::event_emitter::TauriEventEmitter;
 use app_logic::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
+use app_logic::error::ssh_command_error;
 use app_logic::error::CommandError;
 use app_logic::error::CommandResult;
 use app_logic::error::{SFTP_CONTENT_TOO_LARGE, SFTP_COPY_CANCELLED};
@@ -611,6 +612,140 @@ pub(super) fn claim_dropped_paths_impl(
         .collect())
 }
 
+/// Issue #571: whether the OS clipboard holds at least one local file or
+/// folder reference. Returns no paths — it only decides whether the empty-
+/// space menu offers "Paste". An unreadable clipboard counts as "no files".
+#[tauri::command]
+pub async fn clipboard_has_files(
+    clipboard: State<'_, crate::file_clipboard::FileClipboard>,
+) -> CommandResult<bool> {
+    match clipboard.get_files() {
+        Ok(files) => Ok(!files.is_empty()),
+        Err(err) => {
+            tracing::debug!(error = %err, "clipboard could not be read for the paste check");
+            Ok(false)
+        }
+    }
+}
+
+/// Texts of the paste confirmation dialog; the frontend supplies the
+/// localized wording, the file list and target are added by the backend.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardPasteDialogTexts {
+    pub title: String,
+    pub intro: String,
+    pub target_label: String,
+    pub more_label: String,
+    pub confirm_label: String,
+    pub cancel_label: String,
+}
+
+/// Maximum number of names listed in the confirmation dialog.
+const PASTE_DIALOG_MAX_NAMES: usize = 12;
+
+fn paste_dialog_message(
+    texts: &ClipboardPasteDialogTexts,
+    files: &[std::path::PathBuf],
+    target_dir: &str,
+) -> String {
+    let mut message = format!("{}\n", texts.intro);
+    for file in files.iter().take(PASTE_DIALOG_MAX_NAMES) {
+        message.push_str(&format!("\n• {}", file.display()));
+    }
+    if files.len() > PASTE_DIALOG_MAX_NAMES {
+        message.push_str(&format!(
+            "\n• {}",
+            texts.more_label.replace(
+                "{count}",
+                &(files.len() - PASTE_DIALOG_MAX_NAMES).to_string()
+            )
+        ));
+    }
+    message.push_str(&format!("\n\n{}: {}", texts.target_label, target_dir));
+    message
+}
+
+/// Core of [`claim_clipboard_files`]: nothing is granted unless `confirm`
+/// returns `true` (the user clicked the native dialog's confirm button) and
+/// the session still exists. `None` = nothing on the clipboard; `Some(empty)`
+/// = cancelled.
+pub(super) async fn claim_clipboard_files_impl<F, Fut>(
+    sessions: &SessionManager,
+    grants: &LocalPathGrants,
+    session_id: SessionId,
+    files: Vec<std::path::PathBuf>,
+    confirm: F,
+) -> CommandResult<Option<Vec<String>>>
+where
+    F: FnOnce(Vec<std::path::PathBuf>) -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    if sessions.get(session_id).is_none() {
+        return Err(CommandError::from("Session nicht gefunden"));
+    }
+    if files.is_empty() {
+        return Ok(None);
+    }
+    if !confirm(files.clone()).await {
+        return Ok(Some(Vec::new()));
+    }
+    Ok(Some(grant_for_live_session(
+        sessions, grants, session_id, files,
+    )))
+}
+
+/// Issue #571: "Paste" of local files from the OS clipboard as an upload.
+/// The backend reads the clipboard itself, shows a native confirmation that
+/// lists the files and the target directory, and only after the user
+/// confirmed grants the paths to this session and returns them (third grant
+/// source next to the open dialog and the native drop, ADR 0113/0145). The
+/// webview sends no local path; `target_dir` is display text only.
+/// `None` = nothing on the clipboard, empty list = cancelled.
+#[tauri::command]
+pub async fn claim_clipboard_files(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    grants: State<'_, LocalPathGrants>,
+    clipboard: State<'_, crate::file_clipboard::FileClipboard>,
+    session_id: SessionId,
+    target_dir: String,
+    texts: ClipboardPasteDialogTexts,
+) -> CommandResult<Option<Vec<String>>> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+
+    if state.sessions.get(session_id).is_none() {
+        return Err(CommandError::from("Session nicht gefunden"));
+    }
+    let files = clipboard.get_files().map_err(|err| {
+        tracing::debug!(error = %err, "clipboard could not be read for paste");
+        CommandError::from("The clipboard could not be read")
+    })?;
+    claim_clipboard_files_impl(
+        &state.sessions,
+        grants.inner(),
+        session_id,
+        files,
+        |files| async move {
+            let message = paste_dialog_message(&texts, &files, &target_dir);
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            app.dialog()
+                .message(message)
+                .title(&texts.title)
+                .buttons(MessageDialogButtons::OkCancelCustom(
+                    texts.confirm_label.clone(),
+                    texts.cancel_label.clone(),
+                ))
+                .show(move |confirmed| {
+                    let _ = tx.send(confirmed);
+                });
+            // A dialog that vanishes without an answer counts as cancel.
+            rx.await.unwrap_or(false)
+        },
+    )
+    .await
+}
+
 /// Grants `paths` only if the session is still there once the dialog
 /// returns — a session closed while the dialog was open gets no grants.
 /// A disconnect between this check and the grant leaves an entry for a
@@ -1078,15 +1213,69 @@ pub async fn sftp_mkdir(
         elevated.inner(),
         session_id,
         elevated_user,
-        |session, channel| async move {
-            let mut guard = lock_browser_sftp(&session, &channel).await;
-            let elevated_user = guard.elevated_user();
-            let mut sftp = guard.sftp().await?;
-            let result = sftp.create_dir(&path).await;
-            audit_elevated_change(elevated_user.as_deref(), "mkdir", &path, result.is_ok());
-            result?;
-            Ok(())
-        },
+        |session, channel| async move { mkdir_impl(&session, &channel, &path).await },
+    )
+    .await
+}
+
+async fn mkdir_impl(session: &Session, channel: &BrowserChannel, path: &str) -> CommandResult<()> {
+    let mut guard = lock_browser_sftp(session, channel).await;
+    let elevated_user = guard.elevated_user();
+    let mut sftp = guard.sftp().await?;
+    // Issue #570: ein vorhandener Name (Datei oder Ordner) wird mit
+    // demselben Fehler gemeldet wie bei „Neue Datei". Scheitert die
+    // Vorabprüfung selbst, entscheidet `create_dir` allein.
+    let result = if sftp.lstat(path).await.is_ok() {
+        Err(SshError::SftpAlreadyExists(path.to_string()))
+    } else {
+        sftp.create_dir(path).await
+    };
+    audit_elevated_change(elevated_user.as_deref(), "mkdir", path, result.is_ok());
+    // Mit Code (z. B. `SSH_SFTP_ALREADY_EXISTS`), damit die Oberfläche die
+    // Fehlerart ohne Textvergleich erkennt.
+    result.map_err(|err| ssh_command_error(&err))
+}
+
+async fn create_file_impl(
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+) -> CommandResult<()> {
+    let mut guard = lock_browser_sftp(session, channel).await;
+    let elevated_user = guard.elevated_user();
+    let mut sftp = guard.sftp().await?;
+    let result = sftp.create_file_exclusive(path).await;
+    audit_elevated_change(
+        elevated_user.as_deref(),
+        "create_file",
+        path,
+        result.is_ok(),
+    );
+    // Mit Code (z. B. `SSH_SFTP_ALREADY_EXISTS`), damit die Oberfläche die
+    // Fehlerart ohne Textvergleich erkennt.
+    result.map_err(|err| ssh_command_error(&err))
+}
+
+/// Issue #570: „Neue Datei" im Dateibrowser — legt eine leere Datei im
+/// aktuellen Verzeichnis an, schmal und benannt wie `sftp_mkdir` (Invariante
+/// 14: kein Filter-/KI-Pfad). Ein vorhandener Name wird nie überschrieben
+/// (CREATE|EXCL, `SSH_SFTP_ALREADY_EXISTS`); fehlende Rechte werden einmal
+/// versucht und gemeldet. Im erhöhten Modus läuft der Aufruf über den
+/// erhöhten Kanal und wird wie `sftp_mkdir` protokolliert.
+#[tauri::command]
+pub async fn sftp_create_file(
+    state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
+    session_id: SessionId,
+    path: String,
+    elevated_user: Option<String>,
+) -> CommandResult<()> {
+    run_browser_command(
+        &state,
+        elevated.inner(),
+        session_id,
+        elevated_user,
+        |session, channel| async move { create_file_impl(&session, &channel, &path).await },
     )
     .await
 }

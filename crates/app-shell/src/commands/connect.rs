@@ -939,6 +939,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             system_context_parts: tokio::sync::Mutex::new(system_context_parts),
             model_context_window_tokens,
             summary: tokio::sync::Mutex::new(initial_summary),
+            context_usage: Default::default(),
             mcp_origin_flags: std::sync::Mutex::new(initial_mcp_origin_flags),
             sudo_password: app_logic::session::SwappableSudoPassword::new(sudo_password),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),

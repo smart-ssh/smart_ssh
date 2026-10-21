@@ -313,6 +313,8 @@
     "overallDecision": "Keputusan Keseluruhan",
     "subCommands": "Sub-perintah",
     "matchedRuleLabel": "Aturan:",
+    "segmentLabel": "Segmen {{index}}",
+    "checksLabel": "Pemeriksaan:",
     "hardBlacklistLabel": "Daftar hitam keras:"
   },
   "actionCard": {
@@ -367,7 +369,15 @@
     "noSuggestions": "Tidak ada saran.",
     "binaryFileHint": "⚠ Berkas biner — perbandingan teks tidak memungkinkan. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
     "diffTooLargeHint": "⚠ Konten terlalu besar untuk diff per baris. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
-    "noContentChange": "(tidak ada perubahan konten)"
+    "noContentChange": "(tidak ada perubahan konten)",
+    "quickRuleLabel": {
+      "exact": "Persis: {{patterns}}",
+      "exactPerSegment": "Persis per bagian: {{patterns}}",
+      "pathScoped": "Direktori yang sama: {{patterns}}",
+      "lastArgOpen": "Argumen terakhir apa pun: {{patterns}}",
+      "subcommand": "Semua panggilan `{{names}}`: {{patterns}}",
+      "tool": "Semua panggilan `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Peringatan Keamanan · Kunci Host Berubah",
@@ -501,8 +511,12 @@
     "AI_RATE_LIMITED": "Penyedia AI sedang membatasi permintaan (batas laju) – aplikasi sudah mencoba ulang secara otomatis beberapa kali. Mohon tunggu sebentar dan kirim pesan lagi.",
     "AI_NETWORK_ERROR": "Tidak dapat menjangkau penyedia AI. Periksa koneksi internet Anda dan, untuk endpoint kustom, URL dasarnya, lalu kirim lagi.",
     "AI_INVALID_RESPONSE": "Respons tak terduga dari penyedia AI",
+    "AI_INVALID_TOOL_CALL": "AI terus memanggil alat yang tidak ada. Coba ubah rumusan permintaan.",
     "AI_CONTEXT_TOO_LARGE": "Konteks terlalu besar untuk penyedia AI. Turunkan \"Panjang respons maks. (token)\" atau mulai obrolan baru.",
     "AI_PROVIDER_UNAVAILABLE": "Penyedia AI melaporkan kesalahan (mis. pemeliharaan atau kelebihan beban). Coba lagi nanti; jika berlanjut, periksa pengaturan penyedia.",
+    "AI_PROVIDER_OVERLOADED": "Penyedia AI sedang kelebihan beban. Coba lagi sebentar lagi.",
+    "AI_PROVIDER_BILLING": "Akun penyedia AI tidak memiliki kredit lagi. Periksa penagihan di konsol penyedia.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Penyedia AI menolak permintaan tersebut.",
     "AI_RESPONSE_TRUNCATED": "Respons AI terlalu panjang untuk perintah yang lengkap",
     "AI_MODEL_NOT_FOUND": "Penyedia AI tidak mengenal model ini. Periksa nama model di Pengaturan (\"Muat model\" menampilkan yang tersedia); untuk Ollama, tarik dulu dengan `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Model ini tidak mendukung pemanggilan alat. Di pengaturan penyedia, hapus centang \"Mendukung pemanggilan alat bawaan\" (cadangan berbasis prompt akan digunakan) atau pilih model dengan dukungan alat.",
@@ -570,7 +584,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Peringatan kata sandi utama belum dikonfirmasi. Tanpa kata sandi itu semua data hilang dan tidak ada pemulihan — centang kotaknya dan atur lagi. Tidak ada yang diubah.",
     "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya.",
     "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip.",
-    "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini."
+    "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini.",
+    "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada"
   },
   "mcpServer": {
     "hint": "Klien MCP eksternal dapat menggunakan ini untuk mengusulkan perintah, pembacaan/penulisan berkas, dan pembaruan catatan pada server yang masuk daftar izin — setiap permintaan selalu memerlukan konfirmasi di aplikasi, terlepas dari aturan izin yang ada.",
@@ -651,7 +666,10 @@
     "editUploadFailed": "Perubahan pada “{{name}}” tidak dapat diunggah: {{reason}}",
     "uploadedFolder": "Folder “{{name}}” diunggah — {{count}} berkas",
     "uploadFolderFailed": "Gagal mengunggah folder “{{name}}”: {{reason}}",
-    "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}"
+    "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}",
+    "nothingToPaste": "Tidak ada yang ditempel: papan klip tidak berisi berkas",
+    "createFileDone": "File “{{name}}” dibuat",
+    "createFileFailed": "File “{{name}}” tidak dapat dibuat: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Hak tinggi",
@@ -996,7 +1014,9 @@
       "chmod": "Ubah izin…",
       "rename": "Ubah nama",
       "cut": "Potong",
-      "delete": "Hapus"
+      "delete": "Hapus",
+      "newFolder": "Folder baru",
+      "newFile": "File baru"
     },
     "properties": {
       "title": "Properti",
@@ -1027,10 +1047,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Ubah nama",
-      "newFolderTitle": "Folder baru"
+      "newFolderTitle": "Folder baru",
+      "newFileTitle": "File baru",
+      "invalidName": "Masukkan nama tanpa “/”. “.” dan “..” tidak diizinkan."
     },
     "copyProgress": "Menyalin… {{done}} MB dari {{total}} MB",
-    "copyProgressUnknownTotal": "Menyalin… {{done}} MB"
+    "copyProgressUnknownTotal": "Menyalin… {{done}} MB",
+    "directoryMenuLabel": "Tindakan folder",
+    "clipboardPaste": {
+      "title": "Unggah berkas dari papan klip",
+      "intro": "Unggah berkas-berkas ini dari papan klip?",
+      "target": "Folder tujuan",
+      "more": "… dan {{count}} lainnya",
+      "confirm": "Unggah",
+      "cancel": "Batal",
+      "menuTitle": "Unggah berkas dari papan klip"
+    }
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",
@@ -1040,6 +1072,9 @@
     "stopAutoContinuation": "Hentikan mode otomatis",
     "generating": "AI sedang membuat respons / dokumen…",
     "stop": "Berhenti",
+    "tryAgain": "Coba lagi",
+    "errorDetails": "Detail",
+    "aiRetrying": "Penyedia AI kelebihan beban – mencoba lagi dalam {{seconds}} dtk (percobaan {{attempt}} dari {{max}})",
     "noActiveProvider": "Belum ada penyedia AI aktif yang dikonfigurasi. Silakan siapkan di pengaturan terlebih dahulu.",
     "inputPlaceholder": "Ajukan pertanyaan atau jelaskan perintah …",
     "send": "Kirim",
@@ -1051,6 +1086,9 @@
     "historyAttached": "Dilampirkan: {{files}}",
     "queued": "Akan dikirim bersama permintaan berikutnya",
     "responseCancelled": "Respons dibatalkan.",
+    "contextCompactedNotice": "Bagian lama obrolan ini diringkas agar muat dalam konteks model.",
+    "contextUsage": "Konteks {{used}} / {{window}}",
+    "contextUsageTooltip": "Bagian lama obrolan diringkas secara otomatis saat konteks penuh.",
     "webResearchUnavailable": "Riset web tidak tersedia untuk akun penyedia ini (pencarian web dinonaktifkan di sana). Sesi ini menjawab tanpa riset web. Untuk mematikannya secara permanen: Pengaturan → Penyedia AI → “Riset web”.",
     "emptyResponse": "Model tidak mengembalikan respons. Untuk model dengan fase berpikir, batas keluaran yang lebih tinggi di pengaturan penyedia membantu.",
     "outputTruncated": "(dipotong)",

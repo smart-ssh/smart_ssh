@@ -65,6 +65,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "SSH_JUMP_HOST_CYCLE",
   "SSH_CREDENTIAL_RESOLUTION_FAILED",
   "SSH_SFTP_PERMISSION_DENIED",
+  // Issue #570: name already exists in the file browser.
+  "SSH_SFTP_ALREADY_EXISTS",
   // Spec 0069, Teil A3:
   "SSH_CONNECTION_REFUSED",
   "SSH_HOST_NOT_FOUND",
@@ -85,8 +87,14 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "AI_RATE_LIMITED",
   "AI_NETWORK_ERROR",
   "AI_INVALID_RESPONSE",
+  // Issue #604: repeated unknown/invalid tool calls ended the turn.
+  "AI_INVALID_TOOL_CALL",
   "AI_CONTEXT_TOO_LARGE",
   "AI_PROVIDER_UNAVAILABLE",
+  // Issue #599: overload, exhausted credit, rejected request.
+  "AI_PROVIDER_OVERLOADED",
+  "AI_PROVIDER_BILLING",
+  "AI_PROVIDER_REJECTED_REQUEST",
   // Spec 0065, Teil 3 (spec-reviewer-Fund, Review dieses Schritts): fehlte
   // hier — die englische UI zeigte bislang den rohen deutschen
   // Backend-Text statt einer Übersetzung.
@@ -247,6 +255,19 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Issue #358: „Datei kopieren" konnte die Zwischenablage nicht belegen.
   "CLIPBOARD_FILE_FAILED",
 ]);
+
+/** Issue #600: errors for which the error card offers "Try again". */
+const RETRYABLE_AI_CODES = new Set<string>([
+  "AI_PROVIDER_OVERLOADED",
+  "AI_PROVIDER_UNAVAILABLE",
+  "AI_RATE_LIMITED",
+  "AI_TIMEOUT",
+  "AI_NETWORK_ERROR",
+]);
+
+export function isRetryableAiError(code: string | null | undefined): boolean {
+  return !!code && RETRYABLE_AI_CODES.has(code);
+}
 
 /** Übersetzt `code` über den `errors`-Namespace, fällt bei `null`/
  * `undefined`/unbekanntem Code auf `fallback` zurück (den bestehenden

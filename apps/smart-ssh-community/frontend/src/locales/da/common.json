@@ -313,6 +313,8 @@
     "overallDecision": "Samlet afgørelse",
     "subCommands": "Underkommandoer",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Del {{index}}",
+    "checksLabel": "Kontroller:",
     "hardBlacklistLabel": "Hård sortliste:"
   },
   "actionCard": {
@@ -367,7 +369,15 @@
     "noSuggestions": "Ingen forslag.",
     "binaryFileHint": "⚠ Binær fil – tekstsammenligning er ikke mulig. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
     "diffTooLargeHint": "⚠ Indholdet er for stort til en linjeforskel. Tidligere størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
-    "noContentChange": "(ingen indholdsændring)"
+    "noContentChange": "(ingen indholdsændring)",
+    "quickRuleLabel": {
+      "exact": "Nøjagtig: {{patterns}}",
+      "exactPerSegment": "Nøjagtig pr. del: {{patterns}}",
+      "pathScoped": "Samme mappe: {{patterns}}",
+      "lastArgOpen": "Vilkårligt sidste argument: {{patterns}}",
+      "subcommand": "Alle `{{names}}`-kald: {{patterns}}",
+      "tool": "Alle `{{names}}`-kald: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sikkerhedsadvarsel · Værtsnøgle ændret",
@@ -501,8 +511,12 @@
     "AI_RATE_LIMITED": "AI-udbyderen begrænser i øjeblikket anmodninger (rate limit) – appen har allerede forsøgt automatisk et par gange. Vent lidt, og send beskeden igen.",
     "AI_NETWORK_ERROR": "AI-udbyderen kan ikke nås. Kontrollér din internetforbindelse og, ved et brugerdefineret endpoint, basis-URL'en, og send derefter igen.",
     "AI_INVALID_RESPONSE": "Uventet svar fra AI-udbyderen",
+    "AI_INVALID_TOOL_CALL": "AI'en blev ved med at kalde et værktøj, der ikke findes. Prøv at formulere forespørgslen anderledes.",
     "AI_CONTEXT_TOO_LARGE": "Konteksten er for stor til AI-udbyderen. Sænk \"Maks. svarlængde (tokens)\" eller start en ny chat.",
     "AI_PROVIDER_UNAVAILABLE": "AI-udbyderen meldte en fejl (f.eks. vedligeholdelse eller overbelastning). Prøv igen senere; fortsætter det, så kontrollér udbyderindstillingerne.",
+    "AI_PROVIDER_OVERLOADED": "AI-udbyderen er overbelastet lige nu. Prøv igen om et øjeblik.",
+    "AI_PROVIDER_BILLING": "AI-udbyderens konto har ikke mere kredit. Tjek betalingen i udbyderens konsol.",
+    "AI_PROVIDER_REJECTED_REQUEST": "AI-udbyderen afviste anmodningen.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var for langt til en komplet kommando",
     "AI_MODEL_NOT_FOUND": "AI-udbyderen kender ikke denne model. Kontrollér modelnavnet i Indstillinger (\"Indlæs modeller\" viser de tilgængelige); for Ollama skal den først hentes med `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Denne model understøtter ikke værktøjskald. Fjern markeringen af \"Understøtter native værktøjskald\" i udbyderindstillingerne (så bruges den promptbaserede reserveløsning), eller vælg en model med værktøjsunderstøttelse.",
@@ -570,7 +584,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Advarslen om hovedadgangskoden er ikke bekræftet. Uden den adgangskode går alle data tabt, og der er ingen gendannelse – markér feltet, og opsæt den igen. Intet blev ændret.",
     "KEYCHAIN_KEY_MISMATCH": "Nøglen i nøgleringen hører ikke til denne database. Intet blev ændret – at gemme den ville gøre databasen ulæselig ved næste opstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større end 50 MB og kan ikke kopieres til udklipsholderen.",
-    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system."
+    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system.",
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede"
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruge dette til at foreslå kommandoer, fillæsninger/-skrivninger og noteopdateringer på servere på tilladelseslisten – hver anmodning kræver altid bekræftelse i appen, uanset eksisterende tillad-regler.",
@@ -656,7 +671,10 @@
     "editUploadFailed": "Ændring af “{{name}}” kunne ikke uploades: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” uploadet – {{count}} filer",
     "uploadFolderFailed": "Upload af mappen “{{name}}” mislykkedes: {{reason}}",
-    "uploadFailedMany": "{{name}} filer kunne ikke uploades, f.eks.: {{reason}}"
+    "uploadFailedMany": "{{name}} filer kunne ikke uploades, f.eks.: {{reason}}",
+    "nothingToPaste": "Intet at indsætte: udklipsholderen indeholder ingen filer",
+    "createFileDone": "Filen “{{name}}” er oprettet",
+    "createFileFailed": "Filen “{{name}}” kunne ikke oprettes: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Forhøjede rettigheder",
@@ -1003,7 +1021,9 @@
       "chmod": "Rediger rettigheder…",
       "rename": "Omdøb",
       "cut": "Klip",
-      "delete": "Slet"
+      "delete": "Slet",
+      "newFolder": "Ny mappe",
+      "newFile": "Ny fil"
     },
     "properties": {
       "title": "Egenskaber",
@@ -1034,10 +1054,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Omdøb",
-      "newFolderTitle": "Ny mappe"
+      "newFolderTitle": "Ny mappe",
+      "newFileTitle": "Ny fil",
+      "invalidName": "Angiv et navn uden “/”. “.” og “..” er ikke tilladt."
     },
     "copyProgress": "Kopierer… {{done}} MB af {{total}} MB",
-    "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopierer… {{done}} MB",
+    "directoryMenuLabel": "Mappehandlinger",
+    "clipboardPaste": {
+      "title": "Upload filer fra udklipsholderen",
+      "intro": "Upload disse filer fra udklipsholderen?",
+      "target": "Målmappe",
+      "more": "… og {{count}} mere",
+      "confirm": "Overfør",
+      "cancel": "Annuller",
+      "menuTitle": "Upload filerne fra udklipsholderen"
+    }
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",
@@ -1047,6 +1079,9 @@
     "stopAutoContinuation": "Stop automatisk tilstand",
     "generating": "AI genererer et svar / dokument…",
     "stop": "Stop",
+    "tryAgain": "Prøv igen",
+    "errorDetails": "Detaljer",
+    "aiRetrying": "AI-udbyderen er overbelastet – nyt forsøg om {{seconds}} s (forsøg {{attempt}} af {{max}})",
     "noActiveProvider": "Ingen aktiv AI-udbyder konfigureret. Opsæt en i indstillingerne først.",
     "inputPlaceholder": "Stil et spørgsmål, eller beskriv en kommando …",
     "send": "Send",
@@ -1058,6 +1093,9 @@
     "historyAttached": "Vedhæftet: {{files}}",
     "queued": "Sendes med næste anmodning",
     "responseCancelled": "Svaret blev annulleret.",
+    "contextCompactedNotice": "Ældre dele af denne chat er blevet opsummeret, så de passer ind i modellens kontekst.",
+    "contextUsage": "Kontekst {{used}} / {{window}}",
+    "contextUsageTooltip": "Ældre dele af chatten opsummeres automatisk, når konteksten er ved at være fyldt.",
     "webResearchUnavailable": "Webresearch er ikke tilgængelig for denne udbyderkonto (websøgning er slået fra dér). Denne session svarer uden webresearch. Sådan slår du det fra permanent: Indstillinger → AI-udbyder → “Webresearch”.",
     "emptyResponse": "Modellen returnerede intet svar. For modeller med en tænkefase hjælper en højere outputgrænse i udbyderindstillingerne.",
     "outputTruncated": "(afkortet)",

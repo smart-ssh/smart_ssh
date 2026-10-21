@@ -313,6 +313,8 @@
     "overallDecision": "Samlet avgjørelse",
     "subCommands": "Underkommandoer",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Del {{index}}",
+    "checksLabel": "Kontroller:",
     "hardBlacklistLabel": "Hard svarteliste:"
   },
   "actionCard": {
@@ -367,7 +369,15 @@
     "noSuggestions": "Ingen forslag.",
     "binaryFileHint": "⚠ Binærfil – tekstsammenligning er ikke mulig. Forrige størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
     "diffTooLargeHint": "⚠ Innholdet er for stort for en linjesammenligning. Forrige størrelse: {{oldSize}}, ny størrelse: {{newSize}}.",
-    "noContentChange": "(ingen innholdsendring)"
+    "noContentChange": "(ingen innholdsendring)",
+    "quickRuleLabel": {
+      "exact": "Nøyaktig: {{patterns}}",
+      "exactPerSegment": "Nøyaktig per del: {{patterns}}",
+      "pathScoped": "Samme katalog: {{patterns}}",
+      "lastArgOpen": "Vilkårlig siste argument: {{patterns}}",
+      "subcommand": "Alle `{{names}}`-kall: {{patterns}}",
+      "tool": "Alle `{{names}}`-kall: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sikkerhetsadvarsel · Vertsnøkkel endret",
@@ -501,8 +511,12 @@
     "AI_RATE_LIMITED": "AI-leverandøren begrenser forespørsler for øyeblikket (rate limit) – appen har allerede prøvd på nytt automatisk noen ganger. Vent litt og send meldingen igjen.",
     "AI_NETWORK_ERROR": "Får ikke kontakt med AI-leverandøren. Sjekk internettforbindelsen og, for et eget endepunkt, basis-URL-en, og send på nytt.",
     "AI_INVALID_RESPONSE": "Uventet svar fra AI-leverandøren",
+    "AI_INVALID_TOOL_CALL": "KI-en fortsatte å kalle et verktøy som ikke finnes. Prøv å formulere forespørselen på nytt.",
     "AI_CONTEXT_TOO_LARGE": "Konteksten er for stor for AI-leverandøren. Senk “Maks. svarlengde (tokens)” eller start en ny chat.",
     "AI_PROVIDER_UNAVAILABLE": "AI-leverandøren meldte en feil (f.eks. vedlikehold eller overbelastning). Prøv igjen senere; vedvarer det, sjekk leverandørinnstillingene.",
+    "AI_PROVIDER_OVERLOADED": "KI-leverandøren er overbelastet akkurat nå. Prøv igjen om et øyeblikk.",
+    "AI_PROVIDER_BILLING": "KI-leverandørens konto har ikke mer kreditt. Sjekk faktureringen i leverandørens konsoll.",
+    "AI_PROVIDER_REJECTED_REQUEST": "KI-leverandøren avviste forespørselen.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var for langt for en komplett kommando",
     "AI_MODEL_NOT_FOUND": "AI-leverandøren kjenner ikke denne modellen. Sjekk modellnavnet i Innstillinger (“Last modeller” viser de tilgjengelige); for Ollama, hent den først med `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Denne modellen støtter ikke verktøykall. Fjern avkryssingen for “Støtter innebygd verktøykall” i leverandørinnstillingene (da brukes den promptbaserte reserveløsningen) eller velg en modell med verktøystøtte.",
@@ -570,7 +584,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Advarselen om hovedpassordet er ikke bekreftet. Uten dette passordet går alle data tapt og det finnes ingen gjenoppretting – kryss av i boksen og sett det opp på nytt. Ingenting ble endret.",
     "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større enn 50 MB og kan ikke kopieres til utklippstavlen.",
-    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet."
+    "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede"
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruke dette til å foreslå kommandoer, fillesing/-skriving og notatoppdateringer på tillatte servere – hver forespørsel krever alltid bekreftelse i appen, uavhengig av eksisterende tillat-regler.",
@@ -656,7 +671,10 @@
     "editUploadFailed": "Endringen i “{{name}}” kunne ikke lastes opp: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” lastet opp – {{count}} filer",
     "uploadFolderFailed": "Opplasting av mappen “{{name}}” mislyktes: {{reason}}",
-    "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}"
+    "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}",
+    "nothingToPaste": "Ingenting å lime inn: utklippstavlen inneholder ingen filer",
+    "createFileDone": "Filen «{{name}}» er opprettet",
+    "createFileFailed": "Filen «{{name}}» kunne ikke opprettes: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Utvidede rettigheter",
@@ -1003,7 +1021,9 @@
       "chmod": "Rediger tillatelser…",
       "rename": "Gi nytt navn",
       "cut": "Klipp ut",
-      "delete": "Slett"
+      "delete": "Slett",
+      "newFolder": "Ny mappe",
+      "newFile": "Ny fil"
     },
     "properties": {
       "title": "Egenskaper",
@@ -1034,10 +1054,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Gi nytt navn",
-      "newFolderTitle": "Ny mappe"
+      "newFolderTitle": "Ny mappe",
+      "newFileTitle": "Ny fil",
+      "invalidName": "Skriv inn et navn uten «/». «.» og «..» er ikke tillatt."
     },
     "copyProgress": "Kopierer… {{done}} MB av {{total}} MB",
-    "copyProgressUnknownTotal": "Kopierer… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopierer… {{done}} MB",
+    "directoryMenuLabel": "Mappehandlinger",
+    "clipboardPaste": {
+      "title": "Last opp filer fra utklippstavlen",
+      "intro": "Laste opp disse filene fra utklippstavlen?",
+      "target": "Målmappe",
+      "more": "… og {{count}} til",
+      "confirm": "Last opp",
+      "cancel": "Avbryt",
+      "menuTitle": "Last opp filene fra utklippstavlen"
+    }
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",
@@ -1047,6 +1079,9 @@
     "stopAutoContinuation": "Stopp automatisk modus",
     "generating": "AI lager et svar / dokument…",
     "stop": "Stopp",
+    "tryAgain": "Prøv igjen",
+    "errorDetails": "Detaljer",
+    "aiRetrying": "AI-leverandøren er overbelastet – nytt forsøk om {{seconds}} s (forsøk {{attempt}} av {{max}})",
     "noActiveProvider": "Ingen aktiv AI-leverandør er satt opp. Sett opp en i innstillingene først.",
     "inputPlaceholder": "Still et spørsmål eller beskriv en kommando …",
     "send": "Send",
@@ -1058,6 +1093,9 @@
     "historyAttached": "Vedlagt: {{files}}",
     "queued": "Sendes med neste forespørsel",
     "responseCancelled": "Svaret ble avbrutt.",
+    "contextCompactedNotice": "Eldre deler av denne chatten ble oppsummert for å passe inn i modellens kontekst.",
+    "contextUsage": "Kontekst {{used}} / {{window}}",
+    "contextUsageTooltip": "Eldre deler av chatten oppsummeres automatisk når konteksten blir full.",
     "webResearchUnavailable": "Nettsøk er ikke tilgjengelig for denne leverandørkontoen (nettsøk er slått av der). Denne økten svarer uten nettsøk. For å slå det av permanent: Innstillinger → AI-leverandør → “Nettsøk”.",
     "emptyResponse": "Modellen ga ikke noe svar. For modeller med en tenkefase hjelper en høyere utdatagrense i leverandørinnstillingene.",
     "outputTruncated": "(avkortet)",

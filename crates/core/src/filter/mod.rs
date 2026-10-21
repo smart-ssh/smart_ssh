@@ -22,20 +22,20 @@ mod adversarial_tests;
 mod property_tests;
 
 pub use engine::{
-    exceeds_command_length_limit, matches_hard_blacklist, scope_applies, CombinedPolicySource,
-    FilterEngine, PolicySource, PolicySourceError, PolicySourceResult, PolicyStore,
-    DEFAULT_MAX_COMMAND_LENGTH,
+    allow_rule_matches_segment, exceeds_command_length_limit, matches_hard_blacklist,
+    scope_applies, CombinedPolicySource, FilterEngine, PolicySource, PolicySourceError,
+    PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
 };
 // Spec 0043, Fund B: von `crate::risk::classifier` wiederverwendet, damit
 // beide Konsumenten (Filter-Engine hier, Risiko-Klassifizierer dort)
 // denselben Rekursions-Cap für verschachtelte Command-Substitution nutzen
 // — analog zu `DEFAULT_MAX_COMMAND_LENGTH` oben.
-pub use parser::MAX_SUBSTITUTION_DEPTH;
+pub use parser::{split_top_level_segments, MAX_SUBSTITUTION_DEPTH};
 // Spec 0077, 3.1.1: Prüfung eines Musters beim Speichern und Melden.
 pub use pattern::PatternError;
 pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
-    RuleOrigin, Scope,
+    RuleOrigin, Scope, TraceKind,
 };
 // Spec 0026, Abschnitt 2: von `crate::risk` wiederverwendet, s.
 // `parser::segment_command`-Doc-Kommentar. `pub(crate)` statt `pub` — bleibt

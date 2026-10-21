@@ -313,6 +313,8 @@
     "overallDecision": "总体决定",
     "subCommands": "子命令",
     "matchedRuleLabel": "规则：",
+    "segmentLabel": "片段 {{index}}",
+    "checksLabel": "检查：",
     "hardBlacklistLabel": "硬性黑名单："
   },
   "actionCard": {
@@ -367,7 +369,15 @@
     "noSuggestions": "没有建议。",
     "binaryFileHint": "⚠ 二进制文件——无法进行文本比较。原大小：{{oldSize}}，新大小：{{newSize}}。",
     "diffTooLargeHint": "⚠ 内容过大，无法进行逐行对比。原大小：{{oldSize}}，新大小：{{newSize}}。",
-    "noContentChange": "（内容无变化）"
+    "noContentChange": "（内容无变化）",
+    "quickRuleLabel": {
+      "exact": "精确：{{patterns}}",
+      "exactPerSegment": "按部分精确：{{patterns}}",
+      "pathScoped": "同一目录：{{patterns}}",
+      "lastArgOpen": "任意最后一个参数：{{patterns}}",
+      "subcommand": "`{{names}}` 的所有调用：{{patterns}}",
+      "tool": "`{{names}}` 的所有调用：{{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "安全警告 · 主机密钥已更改",
@@ -501,8 +511,12 @@
     "AI_RATE_LIMITED": "AI 提供商目前正在限制请求（速率限制）——应用已自动重试数次。请稍候片刻，再重新发送消息。",
     "AI_NETWORK_ERROR": "无法连接 AI 提供商。请检查您的网络连接，若使用自定义端点，还需检查基础 URL，然后重新发送。",
     "AI_INVALID_RESPONSE": "AI 提供商返回了意料之外的响应",
+    "AI_INVALID_TOOL_CALL": "AI 一直在调用不存在的工具。请尝试换一种方式表述请求。",
     "AI_CONTEXT_TOO_LARGE": "上下文对 AI 提供商而言过大。请调低“最大回复长度（token）”，或开始新的聊天。",
     "AI_PROVIDER_UNAVAILABLE": "AI 提供商报告了错误（例如维护或过载）。请稍后再试；如果持续出现，请检查提供商设置。",
+    "AI_PROVIDER_OVERLOADED": "AI 提供商目前过载。请稍后再试。",
+    "AI_PROVIDER_BILLING": "AI 提供商账户已没有余额。请在提供商控制台中检查计费。",
+    "AI_PROVIDER_REJECTED_REQUEST": "AI 提供商拒绝了该请求。",
     "AI_RESPONSE_TRUNCATED": "AI 的回复过长，无法构成完整的命令",
     "AI_MODEL_NOT_FOUND": "AI 提供商不认识该模型。请在设置中检查模型名称（“加载模型”会列出可用的模型）；对于 Ollama，请先用 `ollama pull <name>` 拉取。",
     "AI_MODEL_NO_TOOL_SUPPORT": "该模型不支持工具调用。请在提供商设置中取消勾选“支持原生工具调用”（此时将使用基于提示词的后备方案），或选择支持工具调用的模型。",
@@ -570,7 +584,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "尚未确认主密码警告。没有该密码，所有数据都会丢失且无法恢复——请勾选复选框后重新设置。未做任何更改。",
     "KEYCHAIN_KEY_MISMATCH": "密钥环中的密钥不属于此数据库。未做任何更改——保存它会导致数据库在下次启动时无法读取。",
     "SFTP_CONTENT_TOO_LARGE": "文件大于 50 MB，无法复制到剪贴板。",
-    "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。"
+    "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。",
+    "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹"
   },
   "mcpServer": {
     "hint": "外部 MCP 客户端可借此在允许列表中的服务器上提出命令、文件读写和备注更新的请求——无论现有的允许规则如何，每个请求始终都需要在应用中确认。",
@@ -651,7 +666,10 @@
     "editUploadFailed": "无法上传对“{{name}}”的更改：{{reason}}",
     "uploadedFolder": "文件夹“{{name}}”已上传——{{count}} 个文件",
     "uploadFolderFailed": "上传文件夹“{{name}}”失败：{{reason}}",
-    "uploadFailedMany": "有 {{name}} 个文件无法上传，例如：{{reason}}"
+    "uploadFailedMany": "有 {{name}} 个文件无法上传，例如：{{reason}}",
+    "nothingToPaste": "没有可粘贴的内容：剪贴板中没有文件",
+    "createFileDone": "已创建文件“{{name}}”",
+    "createFileFailed": "无法创建文件“{{name}}”：{{reason}}"
   },
   "fileElevation": {
     "toggle": "提权",
@@ -996,7 +1014,9 @@
       "chmod": "编辑权限…",
       "rename": "重命名",
       "cut": "剪切",
-      "delete": "删除"
+      "delete": "删除",
+      "newFolder": "新建文件夹",
+      "newFile": "新建文件"
     },
     "properties": {
       "title": "属性",
@@ -1027,10 +1047,22 @@
     },
     "renamePrompt": {
       "renameTitle": "重命名",
-      "newFolderTitle": "新建文件夹"
+      "newFolderTitle": "新建文件夹",
+      "newFileTitle": "新建文件",
+      "invalidName": "请输入不含“/”的名称。不允许使用“.”和“..”。"
     },
     "copyProgress": "正在复制… {{done}} MB / {{total}} MB",
-    "copyProgressUnknownTotal": "正在复制… {{done}} MB"
+    "copyProgressUnknownTotal": "正在复制… {{done}} MB",
+    "directoryMenuLabel": "文件夹操作",
+    "clipboardPaste": {
+      "title": "上传剪贴板中的文件",
+      "intro": "要上传剪贴板中的这些文件吗？",
+      "target": "目标文件夹",
+      "more": "…另有 {{count}} 个",
+      "confirm": "上传",
+      "cancel": "取消",
+      "menuTitle": "上传剪贴板中的文件"
+    }
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
@@ -1040,6 +1072,9 @@
     "stopAutoContinuation": "停止自动模式",
     "generating": "AI 正在生成回复/文档…",
     "stop": "停止",
+    "tryAgain": "重试",
+    "errorDetails": "详情",
+    "aiRetrying": "AI 提供商过载 – {{seconds}} 秒后重试（第 {{attempt}} 次，共 {{max}} 次）",
     "noActiveProvider": "尚未配置活动的 AI 提供商。请先在设置中配置。",
     "inputPlaceholder": "提出问题或描述一条命令…",
     "send": "发送",
@@ -1051,6 +1086,9 @@
     "historyAttached": "附件：{{files}}",
     "queued": "将随下一次请求一并发送",
     "responseCancelled": "回复已取消。",
+    "contextCompactedNotice": "此聊天较早的部分已被总结，以适应模型的上下文。",
+    "contextUsage": "上下文 {{used}} / {{window}}",
+    "contextUsageTooltip": "当上下文已满时，聊天中较早的部分会被自动总结。",
     "webResearchUnavailable": "此提供商账户无法使用联网调研（网络搜索在该处已被禁用）。本会话不使用联网调研来回答。如需永久关闭：设置 → AI 提供商 →“联网调研”。",
     "emptyResponse": "模型没有返回任何回复。对于有思考阶段的模型，在提供商设置中调高输出上限会有帮助。",
     "outputTruncated": "（已截断）",

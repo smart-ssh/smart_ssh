@@ -304,3 +304,55 @@ fn exhausted_budget_snapshot() -> ai_providers::RateLimitHeaderSnapshot {
         ..Default::default()
     }
 }
+
+/// Issue #599: a provider retry notice becomes a `chat-ai-retrying` event
+/// (no chat error, no extra send), and the final overload error is shown
+/// with its own code.
+#[tokio::test]
+async fn test_issue_599_retrying_notice_is_emitted_and_overload_is_shown() {
+    let run = run_turn(vec![vec![
+        AiEvent::Retrying {
+            attempt: 1,
+            max_attempts: 3,
+            delay_secs: 2,
+        },
+        AiEvent::Error(AiError::Overloaded { retry_after: None }),
+    ]])
+    .await;
+
+    assert_eq!(run.sends.len(), 1);
+    assert_eq!(run.count("chat-ai-retrying"), 1);
+    let (_, payload) = run
+        .events
+        .iter()
+        .find(|(n, _)| n == "chat-ai-retrying")
+        .unwrap();
+    assert_eq!(payload["attempt"], 1);
+    assert_eq!(payload["maxAttempts"], 3);
+    assert_eq!(payload["delaySecs"], 2);
+    let (_, error) = run.events.iter().find(|(n, _)| n == "chat-error").unwrap();
+    assert_eq!(error["code"], "AI_PROVIDER_OVERLOADED");
+}
+
+/// Issue #600: the provider message in `chat-error` is redacted before it is
+/// emitted; type and status are carried along.
+#[tokio::test]
+async fn test_issue_600_chat_error_details_are_redacted() {
+    let run = run_turn(vec![vec![AiEvent::Error(AiError::RejectedRequest(
+        "invalid_request_error: bad value password=Geheim-0600 in messages".to_string(),
+    ))]])
+    .await;
+    let (_, error) = run.events.iter().find(|(n, _)| n == "chat-error").unwrap();
+    assert_eq!(error["code"], "AI_PROVIDER_REJECTED_REQUEST");
+    assert_eq!(error["providerErrorType"], "invalid_request_error");
+    let message = error["providerMessage"].as_str().unwrap();
+    assert!(message.contains("bad value"), "{message}");
+    assert!(!message.contains("Geheim-0600"), "{message}");
+
+    let run = run_turn(vec![vec![AiEvent::Error(AiError::ProviderUnavailable(
+        "HTTP 503 Service Unavailable: busy".to_string(),
+    ))]])
+    .await;
+    let (_, error) = run.events.iter().find(|(n, _)| n == "chat-error").unwrap();
+    assert_eq!(error["httpStatus"], 503);
+}

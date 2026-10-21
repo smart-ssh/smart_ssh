@@ -313,6 +313,8 @@
     "overallDecision": "Samlat beslut",
     "subCommands": "Underkommandon",
     "matchedRuleLabel": "Regel:",
+    "segmentLabel": "Del {{index}}",
+    "checksLabel": "Kontroller:",
     "hardBlacklistLabel": "Hård svartlista:"
   },
   "actionCard": {
@@ -367,7 +369,15 @@
     "noSuggestions": "Inga förslag.",
     "binaryFileHint": "⚠ Binärfil — textjämförelse är inte möjlig. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
     "diffTooLargeHint": "⚠ Innehållet är för stort för en raddiff. Tidigare storlek: {{oldSize}}, ny storlek: {{newSize}}.",
-    "noContentChange": "(ingen innehållsändring)"
+    "noContentChange": "(ingen innehållsändring)",
+    "quickRuleLabel": {
+      "exact": "Exakt: {{patterns}}",
+      "exactPerSegment": "Exakt per del: {{patterns}}",
+      "pathScoped": "Samma katalog: {{patterns}}",
+      "lastArgOpen": "Valfritt sista argument: {{patterns}}",
+      "subcommand": "Alla `{{names}}`-anrop: {{patterns}}",
+      "tool": "Alla `{{names}}`-anrop: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Säkerhetsvarning · Värdnyckeln har ändrats",
@@ -501,8 +511,12 @@
     "AI_RATE_LIMITED": "AI-leverantören begränsar just nu anropen (rate limit) – appen har redan försökt automatiskt några gånger. Vänta en stund och skicka meddelandet igen.",
     "AI_NETWORK_ERROR": "AI-leverantören kan inte nås. Kontrollera internetanslutningen och, vid en egen slutpunkt, bas-URL:en, och skicka sedan igen.",
     "AI_INVALID_RESPONSE": "Oväntat svar från AI-leverantören",
+    "AI_INVALID_TOOL_CALL": "AI:n fortsatte att anropa ett verktyg som inte finns. Försök formulera om förfrågan.",
     "AI_CONTEXT_TOO_LARGE": "Kontexten är för stor för AI-leverantören. Sänk \"Max. svarslängd (tokens)\" eller starta en ny chatt.",
     "AI_PROVIDER_UNAVAILABLE": "AI-leverantören rapporterade ett fel (t.ex. underhåll eller överbelastning). Försök igen senare; om det består, kontrollera leverantörsinställningarna.",
+    "AI_PROVIDER_OVERLOADED": "AI-leverantören är överbelastad just nu. Försök igen om en stund.",
+    "AI_PROVIDER_BILLING": "AI-leverantörens konto har inget kredit kvar. Kontrollera faktureringen i leverantörens konsol.",
+    "AI_PROVIDER_REJECTED_REQUEST": "AI-leverantören avvisade begäran.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var för långt för ett komplett kommando",
     "AI_MODEL_NOT_FOUND": "AI-leverantören känner inte till modellen. Kontrollera modellnamnet i Inställningar (\"Läs in modeller\" visar de tillgängliga); för Ollama, hämta den först med `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Modellen stöder inte verktygsanrop. Avmarkera \"Stöder inbyggda verktygsanrop\" i leverantörsinställningarna (då används den promptbaserade reservlösningen) eller välj en modell med verktygsstöd.",
@@ -570,7 +584,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Varningen om huvudlösenordet har inte bekräftats. Utan lösenordet går alla data förlorade och det finns ingen återställning — kryssa i rutan och ställ in det igen. Inget ändrades.",
     "KEYCHAIN_KEY_MISMATCH": "Nyckeln i nyckelringen hör inte till den här databasen. Inget ändrades — att spara den skulle göra databasen oläsbar vid nästa start.",
     "SFTP_CONTENT_TOO_LARGE": "Filen är större än 50 MB och kan inte kopieras till urklipp.",
-    "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet."
+    "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet.",
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan"
   },
   "mcpServer": {
     "hint": "Externa MCP-klienter kan använda detta för att föreslå kommandon, filläsningar/filskrivningar och anteckningsuppdateringar på tillåtlistade servrar — varje begäran kräver alltid bekräftelse i appen, oavsett befintliga tillåtregler.",
@@ -656,7 +671,10 @@
     "editUploadFailed": "Ändringen i “{{name}}” kunde inte laddas upp: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” uppladdad — {{count}} filer",
     "uploadFolderFailed": "Uppladdningen av mappen “{{name}}” misslyckades: {{reason}}",
-    "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}"
+    "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}",
+    "nothingToPaste": "Inget att klistra in: urklipp innehåller inga filer",
+    "createFileDone": "Filen ”{{name}}” skapades",
+    "createFileFailed": "Filen ”{{name}}” kunde inte skapas: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Förhöjda rättigheter",
@@ -1003,7 +1021,9 @@
       "chmod": "Redigera behörigheter…",
       "rename": "Byt namn",
       "cut": "Klipp ut",
-      "delete": "Ta bort"
+      "delete": "Ta bort",
+      "newFolder": "Ny mapp",
+      "newFile": "Ny fil"
     },
     "properties": {
       "title": "Egenskaper",
@@ -1034,10 +1054,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Byt namn",
-      "newFolderTitle": "Ny mapp"
+      "newFolderTitle": "Ny mapp",
+      "newFileTitle": "Ny fil",
+      "invalidName": "Ange ett namn utan ”/”. ”.” och ”..” är inte tillåtna."
     },
     "copyProgress": "Kopierar… {{done}} MB av {{total}} MB",
-    "copyProgressUnknownTotal": "Kopierar… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopierar… {{done}} MB",
+    "directoryMenuLabel": "Mappåtgärder",
+    "clipboardPaste": {
+      "title": "Ladda upp filer från urklipp",
+      "intro": "Ladda upp dessa filer från urklipp?",
+      "target": "Målmapp",
+      "more": "… och {{count}} till",
+      "confirm": "Ladda upp",
+      "cancel": "Avbryt",
+      "menuTitle": "Ladda upp filerna från urklipp"
+    }
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",
@@ -1047,6 +1079,9 @@
     "stopAutoContinuation": "Stoppa automatiskt läge",
     "generating": "AI skapar ett svar / dokument…",
     "stop": "Stoppa",
+    "tryAgain": "Försök igen",
+    "errorDetails": "Detaljer",
+    "aiRetrying": "AI-leverantören är överbelastad – nytt försök om {{seconds}} s (försök {{attempt}} av {{max}})",
     "noActiveProvider": "Ingen aktiv AI-leverantör har ställts in. Ställ först in en i inställningarna.",
     "inputPlaceholder": "Ställ en fråga eller beskriv ett kommando …",
     "send": "Skicka",
@@ -1058,6 +1093,9 @@
     "historyAttached": "Bifogat: {{files}}",
     "queued": "Skickas med nästa begäran",
     "responseCancelled": "Svaret avbröts.",
+    "contextCompactedNotice": "Äldre delar av den här chatten har sammanfattats för att rymmas i modellens kontext.",
+    "contextUsage": "Kontext {{used}} / {{window}}",
+    "contextUsageTooltip": "Äldre delar av chatten sammanfattas automatiskt när kontexten blir full.",
     "webResearchUnavailable": "Webbsökning är inte tillgänglig för det här leverantörskontot (webbsökning är avstängd där). Den här sessionen svarar utan webbsökning. Så stänger du av den permanent: Inställningar → AI-leverantör → “Webbsökning”.",
     "emptyResponse": "Modellen gav inget svar. För modeller med en tänkefas hjälper en högre utdatagräns i leverantörsinställningarna.",
     "outputTruncated": "(kapad)",

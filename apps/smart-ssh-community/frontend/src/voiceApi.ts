@@ -45,6 +45,17 @@ export const onSpeechRecordingState = (
 ): Promise<UnlistenFn> =>
   listen<{ state: RecordingState }>("speech-recording-state", (e) => handler(e.payload.state));
 
+/** Provisional text of the running recording (Spec 0108 §5.7); revisions only grow. */
+export interface SpeechPartialEvent {
+  text: string;
+  revision: number;
+}
+
+export const onSpeechPartialText = (
+  handler: (event: SpeechPartialEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<SpeechPartialEvent>("speech-partial-text", (e) => handler(e.payload));
+
 /** Approximate download sizes (Spec 0108 §2.1), for the consent dialog and settings. */
 export const SPEECH_MODEL_SIZE_MIB: Record<SpeechModelId, number> = { base: 142, small: 466 };
 export const SPEECH_MODEL_SOURCE = "huggingface.co";

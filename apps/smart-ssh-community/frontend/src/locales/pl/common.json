@@ -313,6 +313,8 @@
     "overallDecision": "Decyzja końcowa",
     "subCommands": "Polecenia składowe",
     "matchedRuleLabel": "Reguła:",
+    "segmentLabel": "Część {{index}}",
+    "checksLabel": "Kontrole:",
     "hardBlacklistLabel": "Twarda czarna lista:"
   },
   "actionCard": {
@@ -367,7 +369,15 @@
     "noSuggestions": "Brak propozycji.",
     "binaryFileHint": "⚠ Plik binarny — porównanie tekstowe niemożliwe. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
     "diffTooLargeHint": "⚠ Zawartość zbyt duża na porównanie wierszy. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
-    "noContentChange": "(brak zmiany zawartości)"
+    "noContentChange": "(brak zmiany zawartości)",
+    "quickRuleLabel": {
+      "exact": "Dokładnie: {{patterns}}",
+      "exactPerSegment": "Dokładnie dla każdej części: {{patterns}}",
+      "pathScoped": "Ten sam katalog: {{patterns}}",
+      "lastArgOpen": "Dowolny ostatni argument: {{patterns}}",
+      "subcommand": "Wszystkie wywołania `{{names}}`: {{patterns}}",
+      "tool": "Wszystkie wywołania `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Ostrzeżenie bezpieczeństwa · Zmieniony klucz hosta",
@@ -501,8 +511,12 @@
     "AI_RATE_LIMITED": "Dostawca AI chwilowo ogranicza żądania (limit) – aplikacja ponowiła już próbę kilka razy automatycznie. Poczekaj chwilę i wyślij wiadomość ponownie.",
     "AI_NETWORK_ERROR": "Nie można połączyć się z dostawcą AI. Sprawdź połączenie z internetem, a przy własnym punkcie końcowym bazowy URL, i wyślij ponownie.",
     "AI_INVALID_RESPONSE": "Nieoczekiwana odpowiedź dostawcy AI",
+    "AI_INVALID_TOOL_CALL": "AI wielokrotnie wywoływało narzędzie, które nie istnieje. Spróbuj sformułować prośbę inaczej.",
     "AI_CONTEXT_TOO_LARGE": "Kontekst zbyt duży dla dostawcy AI. Zmniejsz „Maks. długość odpowiedzi (tokeny)” lub zacznij nowy czat.",
     "AI_PROVIDER_UNAVAILABLE": "Dostawca AI zgłosił błąd (np. konserwacja lub przeciążenie). Spróbuj później; jeśli się powtarza, sprawdź ustawienia dostawcy.",
+    "AI_PROVIDER_OVERLOADED": "Dostawca AI jest teraz przeciążony. Spróbuj ponownie za chwilę.",
+    "AI_PROVIDER_BILLING": "Konto dostawcy AI nie ma już środków. Sprawdź rozliczenia w konsoli dostawcy.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Dostawca AI odrzucił żądanie.",
     "AI_RESPONSE_TRUNCATED": "Odpowiedź AI była zbyt długa na pełne polecenie",
     "AI_MODEL_NOT_FOUND": "Dostawca AI nie zna tego modelu. Sprawdź nazwę modelu w Ustawieniach („Wczytaj modele” pokazuje dostępne); w Ollamie najpierw pobierz go poleceniem `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Ten model nie obsługuje wywoływania narzędzi. W ustawieniach dostawcy odznacz „Obsługuje natywne wywoływanie narzędzi” (zostanie użyty zapasowy tryb oparty na promptach) lub wybierz model z obsługą narzędzi.",
@@ -570,7 +584,8 @@
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Ostrzeżenie o haśle głównym nie zostało potwierdzone. Bez tego hasła wszystkie dane przepadają, a odzyskanie nie jest możliwe — zaznacz pole i skonfiguruj ponownie. Nic nie zmieniono.",
     "KEYCHAIN_KEY_MISMATCH": "Klucz w magazynie kluczy nie należy do tej bazy danych. Nic nie zmieniono — zapisanie go uniemożliwiłoby odczyt bazy przy następnym uruchomieniu.",
     "SFTP_CONTENT_TOO_LARGE": "Plik jest większy niż 50 MB i nie można go skopiować do schowka.",
-    "CLIPBOARD_FILE_FAILED": "Nie udało się umieścić pliku w schowku w tym systemie."
+    "CLIPBOARD_FILE_FAILED": "Nie udało się umieścić pliku w schowku w tym systemie.",
+    "SSH_SFTP_ALREADY_EXISTS": "Plik lub folder o tej nazwie już istnieje"
   },
   "mcpServer": {
     "hint": "Zewnętrzni klienci MCP mogą przez niego proponować polecenia, odczyty/zapisy plików i aktualizacje notatek na serwerach z listy dozwolonych — każde żądanie zawsze wymaga potwierdzenia w aplikacji, niezależnie od istniejących reguł zezwalających.",
@@ -666,7 +681,10 @@
     "editUploadFailed": "Nie udało się wysłać zmiany w „{{name}}”: {{reason}}",
     "uploadedFolder": "Folder „{{name}}” wysłany — plików: {{count}}",
     "uploadFolderFailed": "Wysyłanie folderu „{{name}}” nie powiodło się: {{reason}}",
-    "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}"
+    "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}",
+    "nothingToPaste": "Nic do wklejenia: schowek nie zawiera plików",
+    "createFileDone": "Utworzono plik „{{name}}”",
+    "createFileFailed": "Nie można utworzyć pliku „{{name}}”: {{reason}}"
   },
   "fileElevation": {
     "toggle": "Podwyższone uprawnienia",
@@ -1017,7 +1035,9 @@
       "chmod": "Edytuj uprawnienia…",
       "rename": "Zmień nazwę",
       "cut": "Wytnij",
-      "delete": "Usuń"
+      "delete": "Usuń",
+      "newFolder": "Nowy folder",
+      "newFile": "Nowy plik"
     },
     "properties": {
       "title": "Właściwości",
@@ -1048,10 +1068,22 @@
     },
     "renamePrompt": {
       "renameTitle": "Zmień nazwę",
-      "newFolderTitle": "Nowy folder"
+      "newFolderTitle": "Nowy folder",
+      "newFileTitle": "Nowy plik",
+      "invalidName": "Wpisz nazwę bez „/”. „.” i „..” są niedozwolone."
     },
     "copyProgress": "Kopiowanie… {{done}} MB z {{total}} MB",
-    "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB"
+    "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB",
+    "directoryMenuLabel": "Akcje folderu",
+    "clipboardPaste": {
+      "title": "Prześlij pliki ze schowka",
+      "intro": "Przesłać te pliki ze schowka?",
+      "target": "Folder docelowy",
+      "more": "… i {{count}} więcej",
+      "confirm": "Prześlij",
+      "cancel": "Anuluj",
+      "menuTitle": "Prześlij pliki ze schowka"
+    }
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",
@@ -1061,6 +1093,9 @@
     "stopAutoContinuation": "Zatrzymaj tryb automatyczny",
     "generating": "AI generuje odpowiedź / dokument…",
     "stop": "Zatrzymaj",
+    "tryAgain": "Spróbuj ponownie",
+    "errorDetails": "Szczegóły",
+    "aiRetrying": "Dostawca AI jest przeciążony – ponowna próba za {{seconds}} s (próba {{attempt}} z {{max}})",
     "noActiveProvider": "Nie skonfigurowano aktywnego dostawcy AI. Najpierw skonfiguruj go w ustawieniach.",
     "inputPlaceholder": "Zadaj pytanie lub opisz polecenie …",
     "send": "Wyślij",
@@ -1072,6 +1107,9 @@
     "historyAttached": "Załączono: {{files}}",
     "queued": "Zostanie wysłane z następnym żądaniem",
     "responseCancelled": "Odpowiedź anulowana.",
+    "contextCompactedNotice": "Starsze części tego czatu zostały streszczone, aby zmieściły się w kontekście modelu.",
+    "contextUsage": "Kontekst {{used}} / {{window}}",
+    "contextUsageTooltip": "Starsze części czatu są automatycznie streszczane, gdy kontekst się zapełnia.",
     "webResearchUnavailable": "Wyszukiwanie w sieci jest niedostępne dla konta u tego dostawcy (wyszukiwanie wyłączone). Ta sesja odpowiada bez wyszukiwania w sieci. Aby wyłączyć na stałe: Ustawienia → Dostawca AI → „Wyszukiwanie w sieci”.",
     "emptyResponse": "Model nie zwrócił odpowiedzi. Przy modelach z fazą myślenia pomaga wyższy limit wyjścia w ustawieniach dostawcy.",
     "outputTruncated": "(obcięto)",

@@ -1094,6 +1094,12 @@ mod tests {
         async fn create_dir(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
             unreachable!()
         }
+        async fn create_file_exclusive(
+            &mut self,
+            _path: &str,
+        ) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
         async fn remove_dir(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
             unreachable!()
         }

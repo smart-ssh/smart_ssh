@@ -170,6 +170,10 @@ impl SftpSession for MismatchSftp {
         unreachable!("diese Tests legen kein Verzeichnis an")
     }
 
+    async fn create_file_exclusive(&mut self, _path: &str) -> Result<(), SshError> {
+        unreachable!()
+    }
+
     async fn remove_dir(&mut self, _path: &str) -> Result<(), SshError> {
         unreachable!("diese Tests löschen kein Verzeichnis")
     }

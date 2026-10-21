@@ -110,7 +110,68 @@ pub enum AiEvent {
     /// keinen Inhalt (nichts zu schwärzen/zu fencen), wird nie angezeigt
     /// oder gespeichert und kann das Flag nur setzen, nie löschen.
     WebContentIngested,
+    /// Issue #601: die vom Provider gemeldete Eingabegröße dieser Anfrage
+    /// (Eingabe-Token inkl. Cache-Lese-/Schreib-Anteil). Rein zählend, kein
+    /// Inhalt; Provider ohne Usage-Angabe senden es nicht.
+    Usage {
+        input_tokens: u64,
+    },
+    /// Issue #599: the provider is overloaded and the request is repeated
+    /// automatically after `delay_secs`. Emitted before each wait, and only
+    /// while nothing of the response has been emitted yet. Purely
+    /// informational: the chat shows a notice, nothing is executed.
+    Retrying {
+        /// 1-based number of the retry that follows.
+        attempt: u32,
+        max_attempts: u32,
+        delay_secs: u64,
+    },
+    /// Issue #604: the model called a tool that does not exist, or a known
+    /// tool with unusable arguments. Non-fatal: nothing is executed and the
+    /// stream goes on, so valid calls of the same response still run. The
+    /// chat turn tells the model what was wrong. Carries no arguments (they
+    /// may hold user content).
+    InvalidToolCall {
+        /// Tool name as sent by the model, already sanitized
+        /// ([`sanitize_tool_name`]).
+        tool_name: String,
+        reason: InvalidToolCallReason,
+    },
     Error(AiError),
+}
+
+/// Issue #604: why a tool call was rejected before it reached the filter
+/// engine. Only fixed vocabulary and schema field names — never content of
+/// the arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InvalidToolCallReason {
+    UnknownTool,
+    /// The arguments are not valid JSON.
+    InvalidJson,
+    /// A required field is missing or not a string.
+    MissingField(String),
+    /// A field has a value that is not allowed.
+    InvalidValue(String),
+}
+
+impl InvalidToolCallReason {
+    /// Short fixed text for the model and the logs.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::UnknownTool => "unknown tool".to_string(),
+            Self::InvalidJson => "invalid arguments: not valid JSON".to_string(),
+            Self::MissingField(field) => format!("invalid arguments: field `{field}` missing"),
+            Self::InvalidValue(field) => {
+                format!("invalid arguments: invalid value for `{field}`")
+            }
+        }
+    }
+}
+
+/// Issue #604: a model-chosen tool name made safe to show and to echo back:
+/// control characters removed, at most 64 characters.
+pub fn sanitize_tool_name(name: &str) -> String {
+    name.chars().filter(|c| !c.is_control()).take(64).collect()
 }
 
 /// Art einer serverseitigen Web-Recherche (Issue #162).
@@ -906,6 +967,20 @@ pub enum AiError {
     /// attachment (`Image` or `Pdf`; text attachments never fail). Raised
     /// before any request is made; nothing is sent.
     InputUnsupported(MediaClass),
+    /// Issue #599: the provider is temporarily overloaded (Anthropic
+    /// `overloaded_error`, HTTP 503/529, or the equivalent in-stream error).
+    /// `retry_after` is the provider's own hint, if it sent one.
+    Overloaded {
+        retry_after: Option<std::time::Duration>,
+    },
+    /// Issue #599: the provider account has no credit left (Anthropic
+    /// "credit balance is too low", OpenAI `insufficient_quota`, HTTP 402).
+    /// Carries the provider's error type and message. Never retried.
+    Billing(String),
+    /// Issue #599: the provider rejected the request as invalid
+    /// (`invalid_request_error` that is neither billing nor a too-large
+    /// context). Carries the provider's error type and message.
+    RejectedRequest(String),
 }
 
 /// Issue #506 (ADR 0141, decision 5): media class of a binary content block.
@@ -982,6 +1057,11 @@ impl fmt::Display for AiError {
                 }
                 MediaClass::Image => write!(f, "Dieses Modell kann keine Bilder lesen."),
             },
+            AiError::Overloaded { .. } => write!(f, "KI-Provider ist überlastet"),
+            AiError::Billing(msg) => write!(f, "Kein Guthaben beim KI-Provider: {msg}"),
+            AiError::RejectedRequest(msg) => {
+                write!(f, "Der KI-Provider hat die Anfrage abgelehnt: {msg}")
+            }
         }
     }
 }
@@ -1007,6 +1087,9 @@ impl AiError {
             AiError::Timeout { .. } => "AI_TIMEOUT",
             AiError::WebResearchRejected(_) => "AI_WEB_RESEARCH_REJECTED",
             AiError::InputUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
+            AiError::Overloaded { .. } => "AI_PROVIDER_OVERLOADED",
+            AiError::Billing(_) => "AI_PROVIDER_BILLING",
+            AiError::RejectedRequest(_) => "AI_PROVIDER_REJECTED_REQUEST",
         }
     }
 }
@@ -1035,6 +1118,9 @@ mod ai_error_code_tests {
             AiError::Timeout { secs: 90 },
             AiError::WebResearchRejected("x".to_string()),
             AiError::InputUnsupported(MediaClass::Image),
+            AiError::Overloaded { retry_after: None },
+            AiError::Billing("x".to_string()),
+            AiError::RejectedRequest("x".to_string()),
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
         let mut unique = codes.clone();
