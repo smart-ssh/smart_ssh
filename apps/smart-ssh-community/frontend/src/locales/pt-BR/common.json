@@ -954,6 +954,8 @@
     "cancelCut": "Cancelar recorte",
     "transferUpload": "Enviando: {{name}}",
     "transferDownload": "Baixando: {{name}}",
+    "transferDone": "Concluído: {{name}}",
+    "transferElevationEnded": "O modo elevado foi desativado durante a transferência.",
     "loading": "Carregando…",
     "emptyDirectory": "(diretório vazio)",
     "dropHint": "Solte aqui para enviar para {{path}}",

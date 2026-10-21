@@ -954,6 +954,8 @@
     "cancelCut": "Anulează tăierea",
     "transferUpload": "Se încarcă: {{name}}",
     "transferDownload": "Se descarcă: {{name}}",
+    "transferDone": "Terminat: {{name}}",
+    "transferElevationEnded": "Modul cu drepturi ridicate a fost dezactivat în timpul transferului.",
     "loading": "Se încarcă…",
     "emptyDirectory": "(director gol)",
     "dropHint": "Plasați aici pentru a încărca în {{path}}",

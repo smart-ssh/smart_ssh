@@ -944,6 +944,8 @@
     "cancelCut": "잘라내기 취소",
     "transferUpload": "업로드 중: {{name}}",
     "transferDownload": "다운로드 중: {{name}}",
+    "transferDone": "완료: {{name}}",
+    "transferElevationEnded": "전송 중에 상승 모드가 꺼졌습니다.",
     "loading": "불러오는 중…",
     "emptyDirectory": "(빈 디렉터리)",
     "dropHint": "여기에 놓으면 {{path}}에 업로드합니다",

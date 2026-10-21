@@ -944,6 +944,8 @@
     "cancelCut": "切り取りを取り消す",
     "transferUpload": "アップロード中: {{name}}",
     "transferDownload": "ダウンロード中: {{name}}",
+    "transferDone": "完了: {{name}}",
+    "transferElevationEnded": "転送中に昇格モードがオフになりました。",
     "loading": "読み込み中…",
     "emptyDirectory": "（空のディレクトリ）",
     "dropHint": "ここにドロップして {{path}} にアップロード",

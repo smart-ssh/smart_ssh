@@ -949,6 +949,8 @@
     "cancelCut": "Avbryt utklipp",
     "transferUpload": "Laster opp: {{name}}",
     "transferDownload": "Laster ned: {{name}}",
+    "transferDone": "Ferdig: {{name}}",
+    "transferElevationEnded": "Utvidet modus ble slått av under overføringen.",
     "loading": "Laster…",
     "emptyDirectory": "(tom katalog)",
     "dropHint": "Slipp her for å laste opp til {{path}}",

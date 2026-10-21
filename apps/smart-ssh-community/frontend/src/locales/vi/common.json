@@ -944,6 +944,8 @@
     "cancelCut": "Hủy cắt",
     "transferUpload": "Đang tải lên: {{name}}",
     "transferDownload": "Đang tải xuống: {{name}}",
+    "transferDone": "Hoàn tất: {{name}}",
+    "transferElevationEnded": "Chế độ nâng quyền đã bị tắt trong khi truyền.",
     "loading": "Đang tải…",
     "emptyDirectory": "(thư mục trống)",
     "dropHint": "Thả vào đây để tải lên {{path}}",

@@ -949,6 +949,8 @@
     "cancelCut": "Ausschneiden abbrechen",
     "transferUpload": "Hochladen: {{name}}",
     "transferDownload": "Herunterladen: {{name}}",
+    "transferDone": "Fertig: {{name}}",
+    "transferElevationEnded": "Der erhöhte Modus wurde während der Übertragung ausgeschaltet.",
     "loading": "Lädt…",
     "emptyDirectory": "(leeres Verzeichnis)",
     "dropHint": "Hier ablegen zum Hochladen nach {{path}}",

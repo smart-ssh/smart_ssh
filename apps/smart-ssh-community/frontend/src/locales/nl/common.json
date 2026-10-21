@@ -949,6 +949,8 @@
     "cancelCut": "Knippen annuleren",
     "transferUpload": "Uploaden: {{name}}",
     "transferDownload": "Downloaden: {{name}}",
+    "transferDone": "Klaar: {{name}}",
+    "transferElevationEnded": "De verhoogde modus is tijdens de overdracht uitgeschakeld.",
     "loading": "Laden…",
     "emptyDirectory": "(lege map)",
     "dropHint": "Hier neerzetten om te uploaden naar {{path}}",

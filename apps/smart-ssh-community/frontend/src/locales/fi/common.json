@@ -949,6 +949,8 @@
     "cancelCut": "Peru leikkaus",
     "transferUpload": "Lähetetään: {{name}}",
     "transferDownload": "Ladataan: {{name}}",
+    "transferDone": "Valmis: {{name}}",
+    "transferElevationEnded": "Korotettu tila kytkettiin pois siirron aikana.",
     "loading": "Ladataan…",
     "emptyDirectory": "(tyhjä hakemisto)",
     "dropHint": "Pudota tähän lähettääksesi kohteeseen {{path}}",

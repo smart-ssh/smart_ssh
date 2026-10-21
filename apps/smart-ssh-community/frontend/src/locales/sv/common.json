@@ -949,6 +949,8 @@
     "cancelCut": "Avbryt klipp ut",
     "transferUpload": "Laddar upp: {{name}}",
     "transferDownload": "Laddar ned: {{name}}",
+    "transferDone": "Klart: {{name}}",
+    "transferElevationEnded": "Förhöjt läge stängdes av under överföringen.",
     "loading": "Laddar…",
     "emptyDirectory": "(tom katalog)",
     "dropHint": "Släpp här för att ladda upp till {{path}}",

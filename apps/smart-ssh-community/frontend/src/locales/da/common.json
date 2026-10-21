@@ -949,6 +949,8 @@
     "cancelCut": "Annuller klip",
     "transferUpload": "Uploader: {{name}}",
     "transferDownload": "Henter: {{name}}",
+    "transferDone": "Færdig: {{name}}",
+    "transferElevationEnded": "Den forhøjede tilstand blev slået fra under overførslen.",
     "loading": "Indlæser…",
     "emptyDirectory": "(tom mappe)",
     "dropHint": "Slip her for at uploade til {{path}}",

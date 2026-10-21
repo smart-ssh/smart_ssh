@@ -48,7 +48,7 @@ import {
   sftpUpload,
   sessionIsRoot,
 } from "../api";
-import { onConnectionStatusChanged, onSftpTransferStarted } from "../events";
+import { onConnectionStatusChanged, onSftpTransferFinished, onSftpTransferStarted } from "../events";
 import {
   loadFileManagerColumnWidths,
   saveFileManagerColumnWidths,
@@ -2523,6 +2523,96 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       );
       expect(clipboardHasFiles).not.toHaveBeenCalled();
       expect(claimClipboardFiles).not.toHaveBeenCalled();
+    });
+  });
+
+  // Issue #621: the transfer listeners must survive an elevation switch.
+  describe("transfer rows across an elevation switch (issue #621)", () => {
+    type Handler<T> = (event: T) => void;
+    const enableElevation = async () => {
+      vi.mocked(sftpElevationEnable).mockResolvedValue({
+        active: true,
+        targetUser: "root",
+        sftpServerPath: "/usr/lib/openssh/sftp-server",
+        failure: null,
+      });
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
+      await screen.findByRole("alert");
+    };
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+      vi.mocked(sftpList).mockResolvedValue([{ ...entry, name: "a.txt", path: "a.txt" }]);
+    });
+    const subscribe = () => {
+      const started: Handler<any>[] = [];
+      const finished: Handler<any>[] = [];
+      let subscriptions = 0;
+      vi.mocked(onSftpTransferStarted).mockImplementation((h: any) => {
+        subscriptions++;
+        started.push(h);
+        return Promise.resolve(() => {
+          started.splice(started.indexOf(h), 1);
+        });
+      });
+      vi.mocked(onSftpTransferFinished).mockImplementation((h: any) => {
+        finished.push(h);
+        return Promise.resolve(() => {
+          // Unsubscribing is async: the old handler is gone before a new one
+          // is registered (the window in which events used to get lost).
+          finished.splice(finished.indexOf(h), 1);
+        });
+      });
+      return { started, finished, subscriptions: () => subscriptions };
+    };
+    const start = (h: ReturnType<typeof subscribe>, id = "t1") =>
+      act(() =>
+        h.started.forEach((fn) =>
+          fn({ sessionId: "session-1", transferId: id, kind: "download", fileName: "big.bin", totalBytes: 10 }),
+        ),
+      );
+    const finish = (h: ReturnType<typeof subscribe>, error: string | null, id = "t1") =>
+      act(() => h.finished.forEach((fn) => fn({ sessionId: "session-1", transferId: id, error })));
+
+    it("a transfer finishing right after elevation is switched off ends as done, with a note", async () => {
+      const h = subscribe();
+      await enableElevation();
+      const before = h.subscriptions();
+      start(h);
+      expect(screen.getByText(/Herunterladen: big\.bin/)).toBeVisible();
+
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+      expect(h.subscriptions()).toBe(before); // no re-subscription
+      finish(h, null);
+
+      expect(screen.queryByText(/Herunterladen: big\.bin/)).not.toBeInTheDocument();
+      expect(screen.getByText(/Fertig: big\.bin/)).toBeVisible();
+      expect(screen.getByText(/erhöhte Modus wurde während der Übertragung ausgeschaltet/)).toBeVisible();
+    });
+
+    it("a transfer without an elevation change disappears when finished", async () => {
+      const h = subscribe();
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      await waitFor(() => expect(h.finished.length).toBe(1));
+      start(h);
+      finish(h, null);
+      expect(screen.queryByText(/big\.bin/)).not.toBeInTheDocument();
+    });
+
+    it("a revoked transfer shows the inactive-channel message without the channel-error prefix", async () => {
+      const h = subscribe();
+      await enableElevation();
+      start(h);
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+      finish(h, "Erhöhte Rechte beendet — der erhöhte Kanal ist nicht mehr aktiv.");
+
+      expect(screen.getByText(/big\.bin: Erhöhte Rechte beendet/)).toBeVisible();
+      expect(screen.queryByText(/Channel-Fehler/)).not.toBeInTheDocument();
     });
   });
 });

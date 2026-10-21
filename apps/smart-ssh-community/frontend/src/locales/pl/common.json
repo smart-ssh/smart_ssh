@@ -959,6 +959,8 @@
     "cancelCut": "Anuluj wycinanie",
     "transferUpload": "Wysyłanie: {{name}}",
     "transferDownload": "Pobieranie: {{name}}",
+    "transferDone": "Gotowe: {{name}}",
+    "transferElevationEnded": "Tryb podwyższony został wyłączony podczas transferu.",
     "loading": "Wczytywanie…",
     "emptyDirectory": "(pusty katalog)",
     "dropHint": "Upuść tutaj, aby wysłać do {{path}}",

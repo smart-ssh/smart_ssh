@@ -954,6 +954,8 @@
     "cancelCut": "Cancelar corte",
     "transferUpload": "Subiendo: {{name}}",
     "transferDownload": "Descargando: {{name}}",
+    "transferDone": "Completado: {{name}}",
+    "transferElevationEnded": "El modo elevado se desactivó durante la transferencia.",
     "loading": "Cargando…",
     "emptyDirectory": "(directorio vacío)",
     "dropHint": "Suelte aquí para subir a {{path}}",
