@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "De startmap moet een absoluut pad (/…) zijn of met ~/ beginnen.",
       "controlCharacter": "De startmap mag geen stuurtekens bevatten."
+    },
+    "tabs": {
+      "label": "Serverinstellingen",
+      "general": "Algemeen",
+      "connection": "Verbinding",
+      "security": "Beveiliging",
+      "invalid": "Bevat fouten"
     }
   },
   "filterRules": {

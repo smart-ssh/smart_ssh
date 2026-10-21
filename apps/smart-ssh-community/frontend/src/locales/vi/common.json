@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Thư mục khởi đầu phải là đường dẫn tuyệt đối (/…) hoặc bắt đầu bằng ~/.",
       "controlCharacter": "Thư mục khởi đầu không được chứa ký tự điều khiển."
+    },
+    "tabs": {
+      "label": "Cài đặt máy chủ",
+      "general": "Chung",
+      "connection": "Kết nối",
+      "security": "Bảo mật",
+      "invalid": "Có lỗi"
     }
   },
   "filterRules": {

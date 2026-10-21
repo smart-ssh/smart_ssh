@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Directorul de pornire trebuie să fie o cale absolută (/…) sau să înceapă cu ~/.",
       "controlCharacter": "Directorul de pornire nu trebuie să conțină caractere de control."
+    },
+    "tabs": {
+      "label": "Setările serverului",
+      "general": "General",
+      "connection": "Conexiune",
+      "security": "Securitate",
+      "invalid": "Conține erori"
     }
   },
   "filterRules": {
