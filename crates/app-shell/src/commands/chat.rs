@@ -1065,10 +1065,11 @@ mod send_chat_message_persistence_tests {
         )
         .await
         .unwrap();
-        let sent = contexts.lock().unwrap();
-        assert_eq!(sent.len(), 1);
-        assert_eq!(history_texts(&sent[0]), vec!["hello".to_string()]);
-        drop(sent);
+        {
+            let sent = contexts.lock().unwrap();
+            assert_eq!(sent.len(), 1);
+            assert_eq!(history_texts(&sent[0]), vec!["hello".to_string()]);
+        }
 
         // The history now ends with something else (the turn ran): refused.
         session.context.lock().await.history.push(ChatMessage {
