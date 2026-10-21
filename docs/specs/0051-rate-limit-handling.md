@@ -41,6 +41,23 @@ Limit). Bitte kurz warten und erneut senden." (DE und EN). Sie ist als
 eigener Fall erkennbar, getrennt von der allgemeinen „Provider-Konfiguration
 prüfen"-Meldung, und weist aufs Warten hin, nicht auf die Konfiguration.
 
+## Teil 4 — Überlastung und Protokollierung
+
+Meldet der Anbieter Überlastung oder Wartung (HTTP 529/503 oder ein
+Überlastungsfehler im Stream), wird die Anfrage bis zu **3-mal** wiederholt,
+mit Wartezeiten von etwa 2, 5 und 10 Sekunden plus Jitter. Ein `Retry-After`
+des Anbieters wird beachtet; die Gesamtwartezeit ist auf 30 Sekunden
+begrenzt. Wiederholt wird nur, solange noch keine Ausgabe der Antwort beim
+Nutzer angekommen ist. Vor jeder Wartezeit erhält die Oberfläche ein Ereignis
+(`chat-ai-retrying`) mit Versuch und Wartezeit; Abbrechen während der Wartezeit
+beendet die Runde sofort. Eine 429-Antwort, die in Wahrheit erschöpftes
+Guthaben bedeutet, wird nicht wiederholt.
+
+Jede fehlgeschlagene Anfrage schreibt genau eine WARN-Zeile ins App-Log:
+eigene Request-ID, Request-ID des Anbieters (falls vorhanden), HTTP-Status
+oder „stream", Fehlertyp des Anbieters, App-Fehlercode und die redigierte
+Meldung (auf 512 Zeichen gekürzt). Keine Schlüssel, keine Nachrichteninhalte.
+
 ## Sicherheits- und Konsistenzzusagen
 
 - Redaction läuft vor jedem (Wieder-)Versand.
@@ -56,3 +73,8 @@ prüfen"-Meldung, und weist aufs Warten hin, nicht auf die Konfiguration.
   die Sitzung hängt nicht.
 - Mehrere KI-Anfragen je Nachricht werden nicht quasi-gleichzeitig
   abgefeuert.
+- Anbieter meldet 529 und gelingt beim zweiten Versuch: Die Runde läuft ohne
+  Fehlermeldung weiter.
+- Dauerhafte Überlastung: Nach 3 Wiederholungen erscheint die Überlastungs-
+  Meldung; Guthaben erschöpft erscheint sofort, ohne Wiederholung.
+- Überlastungsfehler nach bereits ausgegebenem Text: keine Wiederholung.
