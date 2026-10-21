@@ -1100,7 +1100,18 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
 
     match result {
         Ok((transport, redactor, sudo_password)) => {
+            let loss_watch = transport.connection_loss_watch();
             claim.succeed(transport, redactor, sudo_password).await;
+            // Issue #565: the new connection gets its own loss watch; the
+            // one of the replaced transport no longer reports.
+            if let Some(watch) = loss_watch {
+                app_logic::session::spawn_connection_watch(
+                    session_id,
+                    &session,
+                    watch,
+                    Arc::new(crate::event_emitter::TauriEventEmitter(app.clone())),
+                );
+            }
             tracing::info!(session_id = %session_id, "session reconnected");
             emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Connected, None);
             Ok(())

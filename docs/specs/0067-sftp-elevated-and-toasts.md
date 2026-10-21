@@ -93,7 +93,12 @@ Rechteerhöhung“) mit dem Menüpunkt „Als anderer Nutzer …“. Er öffnet 
 kleines Feld „Ziel-Nutzer“ mit der Erklärung „Führt den Dateibrowser über sudo
 als dieser Nutzer aus. Standard: root.“ und einem Bestätigen-Knopf („Erhöhen“).
 Das Menü ist per Tastatur bedienbar (Enter/Leertaste öffnet, Escape schließt
-und gibt den Fokus an den Pfeil-Knopf zurück). Der zuletzt bestätigte Nutzer
+und gibt den Fokus an den Pfeil-Knopf zurück). Ein Klick irgendwo außerhalb von Menü
+und Feld schließt beide, ohne die Erhöhung zu ändern; ein Klick auf den
+Pfeil-Knopf öffnet und schließt das Menü, ein Klick im Menü oder im Feld lässt
+es offen. Auch das Umschalten der Erhöhung und das Ausblenden des
+Dateibrowsers (Wechsel zum Terminal oder zu einem anderen Sitzungs-Tab)
+schließen beide. Der zuletzt bestätigte Nutzer
 ist im Feld für den Rest der Sitzung vorbelegt (nicht gespeichert). In der
 Werkzeugleiste steht kein unbeschriftetes Textfeld. Gültig sind übliche
 POSIX-Nutzernamen (Kleinbuchstaben, Ziffern, `_`, `-`; höchstens 32 Zeichen,

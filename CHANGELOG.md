@@ -9,6 +9,168 @@ Features that are only available in a paid edition are marked with
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-14
+
+### Highlights
+- Voice input in the AI chat with local speech recognition; audio stays on your computer.
+- The interface is now available in many more languages, from French and Spanish to Japanese and Hindi.
+- Automatic reconnect after a connection loss, with chat history and AI context kept.
+- Whole-folder upload in the file browser, plus copying remote files to the clipboard.
+- Commands now show their output live in the chat, and a hung command can be stopped.
+- Keyboard use and focus handling were improved across the whole interface.
+
+### Added
+- Voice input in the AI chat: a microphone button next to “Send” (or
+  Ctrl+Shift+M) dictates text into the input field. Recognition runs locally
+  with a Whisper model; a dialog asks before the speech model is downloaded.
+  Model and language can be chosen under “Voice input” in the settings.
+- The interface is now also available in French, Spanish, Italian, Portuguese
+  (Brazil), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish,
+  Czech, Ukrainian, Russian, Japanese, Simplified Chinese, Korean, Turkish,
+  Greek, Hungarian, Romanian, Indonesian, Vietnamese and Hindi. The language
+  can be chosen in the settings or follows the system.
+- After a connection loss, the tab can be reconnected with “Reconnect” or the
+  R key; chat history and AI context are kept.
+- Smart SSH can reconnect automatically (off, 30 s, 60 s or 5 min; default
+  60 s). If an AI step was running, the AI continues by itself afterwards.
+- The file browser uploads whole folders including subfolders, via “Upload
+  folder” or drag and drop. Existing files are listed and confirmed once;
+  symbolic links are skipped, and a summary lists skipped and failed files.
+- In the file browser, “Copy file” puts a remote file (up to 50 MB) on the
+  clipboard so it can be pasted in the file manager.
+- The output of a running command appears live, line by line, in the chat,
+  separated into standard and error output and redacted like the result.
+- If a running command is probably waiting for input (e.g. “Continue?
+  [Y/n]”), the chat shows a notice next to the stop button; after stopping,
+  the AI suggests a non-interactive variant.
+- “New chat” in a connected session starts a fresh conversation without
+  disconnecting SSH. The old chat stays in the list.
+- AI web research is now also available with the official OpenAI provider
+  (“Web research” switch in the AI settings).
+- The server settings show the stored host keys (algorithm and fingerprint)
+  so they can be compared against a second source.
+
+### Changed
+- macOS 10.15 (Catalina) or later is now required.
+- The AI answers in the interface language by default; session titles,
+  closing notes and summaries follow it. Date and time follow the selected
+  language instead of the system setting, and the language picker shows each
+  language under its own name.
+- The AI proposes independent commands together in one reply and uses
+  non-interactive options (e.g. `-y`) so commands do not hang.
+- While an AI command is running, the file browser, terminal and disconnect
+  of the same session remain usable; disconnecting cancels the command.
+- A dead SSH connection is detected after about a minute and shown as
+  “disconnected”, even on a silent network outage.
+- “Copy file content” works for text files up to 50 MB (previously 256 KB);
+  from 5 MB on, progress is shown and the copy can be cancelled.
+- The AI keeps server notes short and in fixed sections and stores lasting
+  facts instead of events. Existing notes are rewritten at the next suggestion.
+- After entering the API key, the provider form loads the model list when you
+  leave the field; a rejected key is clearly shown in red.
+- If a local Ollama model without tool support causes an error, the app shows
+  “This model does not support tool calling” with a hint to untick “Supports
+  native tool calling” in the provider settings.
+- The host key prompt also shows the key type of the offered key (e.g.
+  `ssh-ed25519`), including during the connection test.
+- Muted text and labels on accent surfaces are easier to read in the dark
+  theme (contrast per WCAG AA).
+- Keyboard use and focus were improved across the interface: consistent
+  buttons and visible focus rings; dialogs and menus close with Escape and
+  return focus; the session tab bar and the server tree are operated with
+  the arrow keys and Home/End (Delete closes the focused tab); more readable
+  hint texts and labeled fields.
+- In the startup dialogs and the host key dialog, the primary action is now
+  on the right, before it “Quit”/“Cancel” or “Reject”.
+- The file browser toolbar separates file actions and elevated privileges
+  into two groups and wraps in small windows.
+- Notifications appear at the top right instead of the bottom left and no
+  longer cover the chat input field in small windows.
+
+### Fixed
+- Settings close with Escape again on macOS after a category was clicked.
+- In narrow windows the version text no longer crowds the tab bar: below
+  1024 px only the dev marker remains; version and edition are shown under
+  Settings > About.
+- While a connection is being established, server entries stay reachable by
+  keyboard; after closing the host key dialog, focus returns to the server.
+- “Owner”, “Group” and “Others” in the file browser's permissions dialog are
+  labeled in the selected language.
+- A prompt sent in the open chat is immediately reachable with the Up arrow
+  key.
+- The “Continue” button after a truncated AI reply sends its instruction in
+  the interface language instead of always in German; English sessions
+  receive all AI tool descriptions in English.
+- Risk classification rates a command with trailing spaces inside a chain
+  (`;`, `&&`, `|`) as strictly as the command on its own.
+- Password keywords with decomposed accents (e.g. `contraseña` from the
+  clipboard) and with a typographic apostrophe (`clé d’accès`) are masked.
+- The automatic note suggestion after disconnecting affects only the
+  server's note, never the group's.
+- A running AI command on localhost can be cancelled; it is terminated with
+  its pipelines and the output so far is kept. When a local command reaches
+  the output limit, its pipeline members and background processes are
+  terminated too.
+- A message you send exactly while “New chat” is in progress is rejected and
+  stays in the input field instead of ending up in the new chat.
+- Queued messages and command results are merged into one message when sent
+  to the AI; strict OpenAI-compatible servers no longer reject them.
+- A chat session can no longer be deleted while it is being resumed.
+- Allow rules with an invalid pattern are no longer described to the AI as
+  runnable without confirmation; such rules are logged once per connection.
+- Moving a filter rule in priority is atomic and can no longer leave two
+  rules with the same priority. Arrows next to a rule with an invalid
+  pattern are disabled and give the reason.
+- If saving settings fails or the settings file is corrupted, the app reports
+  the error and no longer overwrites the file.
+- “Try again” on the startup screen also works when registering the startup
+  events failed.
+- “Test connection” reports an empty key file path as a missing required
+  field, even if it consists only of whitespace or invisible characters.
+- The elevated file browser finds `sftp-server` on servers whose login shell
+  is csh, tcsh or fish.
+- The keychain-unreachable message says that only the key of the encrypted
+  database is stored there and that the database cannot be opened without it.
+- Unusable servers (unreadable login method) count as existing servers when
+  importing an SSH configuration and appear in a group's delete preview.
+
+### Security
+- If the optional AI second opinion or the AI check for injected instructions
+  fails (e.g. expired key, rate limit, provider unreachable), this is shown
+  instead of being silently skipped, and the affected or next action requires
+  confirmation. If the second opinion cannot be set up on connect, or the
+  injection check is enabled but not active, the session shows a notice.
+- If a reply is stopped or aborted by an error after a web research, the
+  session still counts as “has read untrusted content”; following actions
+  are escalated accordingly.
+- Content that an edition attaches to a chat message is always redacted,
+  fenced as untrusted and size-checked before it reaches the AI; attachments
+  over 20 MiB per request or of unsupported types are rejected.
+- Updated the TLS library (rustls) to fix four published advisories affecting
+  outbound HTTPS connections.
+- Fork bombs, including renamed ones (e.g. `b(){ b|b& };b`) and ones embedded
+  in a longer command, are rated high risk. A command with an incomplete
+  here-doc suffix (e.g. `rm;<<`) is no longer rated lower than the command
+  alone.
+- Credentials are redacted for German keywords (`Passwort:`, `Schlüssel=`),
+  also in decomposed Unicode form, and for password keywords in the newly
+  supported languages. More password forms are recognized: `mysqlsh`,
+  `mysqlpump`, `mysql5`, `mariadb-*`, `openssl -K`, Drupal 7 hashes and quoted
+  passwords spanning a line break.
+- The elevated file browser no longer suggests a sudo rule if `sftp-server`,
+  a parent directory or a symlink on the way is not owned by root or is
+  writable by others; a warning is shown instead.
+- Paths and file names in startup dialogs, and rejected input in server
+  forms, are no longer broken up or reversed by line separators or
+  text-direction control characters.
+- If the app cannot restrict the permissions of a sensitive file (database,
+  host keys, logs, settings), a warning is written to the log file.
+- The master password file is checked more strictly: a link at its
+  intermediate location is not followed, and an unreadable location is no
+  longer interpreted as “no master password”.
+- The MCP token in the settings is hidden by default and can be shown with a
+  button; “Copy configuration” still copies the real token.
+
 ## [0.6.0] — 2026-10-09
 
 ### Highlights

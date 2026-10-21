@@ -258,6 +258,27 @@ export function FileBrowserPanel({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [elevationMenuOpen, otherUserOpen]);
+  const elevationGroupRef = useRef<HTMLFieldSetElement>(null);
+  // Issue #569: a click outside the elevation group closes the menu and the
+  // target user form. Clicks inside (arrow button, menu, form) are ignored, so
+  // the arrow button's own toggle is not undone.
+  useEffect(() => {
+    if (!elevationMenuOpen && !otherUserOpen) return;
+    const onClick = (e: MouseEvent) => {
+      // composedPath, not target: a clicked menu item may already be detached.
+      const group = elevationGroupRef.current;
+      if (group && e.composedPath().includes(group)) return;
+      setElevationMenuOpen(false);
+      setOtherUserOpen(false);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, [elevationMenuOpen, otherUserOpen]);
+  // Hiding the panel or switching the elevation closes both.
+  useEffect(() => {
+    setElevationMenuOpen(false);
+    setOtherUserOpen(false);
+  }, [isVisible, elevation]);
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
   const [elevationWarning, setElevationWarning] = useState<string | null>(null);
   const elevated = elevation !== null;
@@ -363,6 +384,8 @@ export function FileBrowserPanel({
   };
 
   const handleToggleElevation = async (targetUser: string = "root") => {
+    setElevationMenuOpen(false);
+    setOtherUserOpen(false);
     if (elevated) {
       updateElevation(null);
       load(path, null);
@@ -1165,6 +1188,7 @@ export function FileBrowserPanel({
         </fieldset>
         {!elevated && sessionRoot !== undefined && sessionRoot !== true && (
           <fieldset
+            ref={elevationGroupRef}
             aria-label={t("fileElevation.group")}
             className="relative m-0 flex min-w-0 items-center gap-0.5 border-0 border-l border-slate-700 p-0 pl-2"
           >
