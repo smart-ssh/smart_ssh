@@ -11,6 +11,7 @@ import type {
   ChatDocumentGeneratedEvent,
   ChatQuestionAskedEvent,
   ChatErrorEvent,
+  ChatAiRetryingEvent,
   ChatQueuedMessagesSentEvent,
   ChatResponseCancelledEvent,
   ChatResponseEmptyEvent,
@@ -118,6 +119,12 @@ export const onChatActionWaitingInput = (
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));
+
+/** Issue #600 — automatic retry after a provider overload. */
+export const onChatAiRetrying = (
+  handler: (event: ChatAiRetryingEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatAiRetryingEvent>("chat-ai-retrying", (e) => handler(e.payload));
 
 /** Spec 0065, Teil 2 — s. `ChatResponseTruncatedEvent`-Doc-Kommentar. */
 export const onChatResponseTruncated = (

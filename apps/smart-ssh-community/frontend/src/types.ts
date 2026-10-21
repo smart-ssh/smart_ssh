@@ -499,6 +499,20 @@ export interface ChatErrorEvent {
    * `null`/`undefined` wenn keiner vorliegt (reine Validierungsmeldung ohne
    * typisierten Fehler dahinter). Übersetzung via `translateErrorCode`. */
   code?: string | null;
+  /** Issue #600 — provider details for the "Details" view (the message is
+   * already redacted by the backend). */
+  providerErrorType?: string | null;
+  httpStatus?: number | null;
+  providerMessage?: string | null;
+}
+
+/** Issue #600 — the AI provider is overloaded; the request is repeated
+ * automatically after `delaySecs`. */
+export interface ChatAiRetryingEvent {
+  sessionId: string;
+  attempt: number;
+  maxAttempts: number;
+  delaySecs: number;
 }
 
 export interface ChatAutoContinuationLimitReachedEvent {
