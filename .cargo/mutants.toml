@@ -20,7 +20,7 @@ exclude_re = [
     # `&&` / `||` treated as two single operators: the second one pushes an
     # empty range, which `push_segment` drops, so the segments are identical. (#483)
     "parser\\.rs:875:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'&'\\) with false in scan_top_level_segments",
-    "parser\\.rs:887:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'\\|'\\) with false in scan_top_level_segments",
+    "parser\\.rs:903:24: replace match guard chars\\.get\\(i \\+ 1\\) == Some\\(&'\\|'\\) with false in scan_top_level_segments",
 
     # --- Issue #484: redirection detection in filter/parser.rs ---
     # contains_unquoted_output_redirection: `i + 1 < chars.len()` guards the
