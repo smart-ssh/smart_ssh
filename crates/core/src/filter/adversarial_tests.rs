@@ -1598,3 +1598,47 @@ mod mutants_485 {
         );
     }
 }
+
+mod non_writing_redirection_adversarial {
+    use super::*;
+
+    /// Writing redirections next to an allowed form never reach `AutoExec`
+    /// under `Allow "ls *"`.
+    #[tokio::test]
+    async fn writing_redirections_still_confirm_with_allow_rule() {
+        let eng = engine(vec![rule("allow-ls", "ls *", RuleAction::Allow, 100)]);
+        for cmd in [
+            "ls >/dev/null2",
+            "ls >/dev/null/../etc/passwd",
+            "ls >\"/dev/null\"",
+            "ls >$OUT",
+            "ls >>/dev/null",
+            "ls >|/dev/null",
+            "ls <>/dev/null",
+            "ls >&3",
+            "ls 3>&1",
+            "ls >&2foo",
+            "ls >&file",
+            "ls 2>&-",
+            "ls 2>/dev/null >/etc/x",
+            "ls 2>&1 >/etc/x",
+            "ls >/dev/null; ls >/etc/x",
+        ] {
+            let d = eng.evaluate(cmd, &ctx()).await;
+            assert!(matches!(d, Decision::Confirm { .. }), "{cmd:?}: {d:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn allowed_form_does_not_soften_deny() {
+        let eng = engine(vec![allow_all(), deny_rm()]);
+        for cmd in [
+            "rm -rf / 2>/dev/null",
+            "rm x &>/dev/null",
+            "ls && rm x 2>&1",
+        ] {
+            let d = eng.evaluate(cmd, &ctx()).await;
+            assert!(matches!(d, Decision::Deny { .. }), "{cmd:?}: {d:?}");
+        }
+    }
+}
