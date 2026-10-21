@@ -842,8 +842,10 @@ async fn generate_rolling_summary(
                 AiEvent::ActionProposed(_) => {}
                 // Issue #162: Nebenaufrufe bekommen keine Web-Werkzeuge
                 // (s. `ai_providers::anthropic`); defensiv ignoriert.
-                AiEvent::WebActivity(_) | AiEvent::WebContentIngested | AiEvent::Usage { .. } => {}
-                // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
+                AiEvent::WebActivity(_)
+                | AiEvent::WebContentIngested
+                | AiEvent::Usage { .. }
+                | AiEvent::Retrying { .. } => {} // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — eine unvollständige Zusammenfassung ist
                 // immer noch besser als gar keine.
                 AiEvent::Done | AiEvent::TextTruncated => return Some(text),

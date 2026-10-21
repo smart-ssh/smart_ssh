@@ -116,6 +116,16 @@ pub enum AiEvent {
     Usage {
         input_tokens: u64,
     },
+    /// Issue #599: the provider is overloaded and the request is repeated
+    /// automatically after `delay_secs`. Emitted before each wait, and only
+    /// while nothing of the response has been emitted yet. Purely
+    /// informational: the chat shows a notice, nothing is executed.
+    Retrying {
+        /// 1-based number of the retry that follows.
+        attempt: u32,
+        max_attempts: u32,
+        delay_secs: u64,
+    },
     Error(AiError),
 }
 
@@ -912,6 +922,20 @@ pub enum AiError {
     /// attachment (`Image` or `Pdf`; text attachments never fail). Raised
     /// before any request is made; nothing is sent.
     InputUnsupported(MediaClass),
+    /// Issue #599: the provider is temporarily overloaded (Anthropic
+    /// `overloaded_error`, HTTP 503/529, or the equivalent in-stream error).
+    /// `retry_after` is the provider's own hint, if it sent one.
+    Overloaded {
+        retry_after: Option<std::time::Duration>,
+    },
+    /// Issue #599: the provider account has no credit left (Anthropic
+    /// "credit balance is too low", OpenAI `insufficient_quota`, HTTP 402).
+    /// Carries the provider's error type and message. Never retried.
+    Billing(String),
+    /// Issue #599: the provider rejected the request as invalid
+    /// (`invalid_request_error` that is neither billing nor a too-large
+    /// context). Carries the provider's error type and message.
+    RejectedRequest(String),
 }
 
 /// Issue #506 (ADR 0141, decision 5): media class of a binary content block.
@@ -988,6 +1012,11 @@ impl fmt::Display for AiError {
                 }
                 MediaClass::Image => write!(f, "Dieses Modell kann keine Bilder lesen."),
             },
+            AiError::Overloaded { .. } => write!(f, "KI-Provider ist überlastet"),
+            AiError::Billing(msg) => write!(f, "Kein Guthaben beim KI-Provider: {msg}"),
+            AiError::RejectedRequest(msg) => {
+                write!(f, "Der KI-Provider hat die Anfrage abgelehnt: {msg}")
+            }
         }
     }
 }
@@ -1013,6 +1042,9 @@ impl AiError {
             AiError::Timeout { .. } => "AI_TIMEOUT",
             AiError::WebResearchRejected(_) => "AI_WEB_RESEARCH_REJECTED",
             AiError::InputUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
+            AiError::Overloaded { .. } => "AI_PROVIDER_OVERLOADED",
+            AiError::Billing(_) => "AI_PROVIDER_BILLING",
+            AiError::RejectedRequest(_) => "AI_PROVIDER_REJECTED_REQUEST",
         }
     }
 }
@@ -1041,6 +1073,9 @@ mod ai_error_code_tests {
             AiError::Timeout { secs: 90 },
             AiError::WebResearchRejected("x".to_string()),
             AiError::InputUnsupported(MediaClass::Image),
+            AiError::Overloaded { retry_after: None },
+            AiError::Billing("x".to_string()),
+            AiError::RejectedRequest("x".to_string()),
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
         let mut unique = codes.clone();

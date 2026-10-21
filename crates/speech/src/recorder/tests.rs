@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use super::*;
 use crate::audio::{resample_mono, to_mono_16k};
-use crate::transcribe::{parse_language, InvalidLanguage, TranscribeError, Transcriber};
+use crate::transcribe::{
+    parse_language, InvalidLanguage, TranscribeError, TranscribeSession, Transcriber,
+};
 
 const WAV: &[u8] = include_bytes!("../testdata/short.wav");
 
@@ -27,6 +29,9 @@ fn decode_wav(bytes: &[u8]) -> Vec<f32> {
 
 struct FakeCapture(Vec<f32>, Arc<AtomicUsize>);
 impl AudioCapture for FakeCapture {
+    fn snapshot(&self) -> Vec<f32> {
+        self.0.clone()
+    }
     fn finish(self: Box<Self>) -> Vec<f32> {
         self.0.clone()
     }
@@ -362,4 +367,221 @@ async fn cancel_during_manual_transcription_discards_the_text() {
     assert_eq!(stop.await.unwrap(), Err(RecordError::NotRecording));
     assert_eq!(events.lock().unwrap().last(), Some(&RecorderState::Idle));
     assert_eq!(rec.stop().await, Err(RecordError::NotRecording));
+}
+
+type Partials = Arc<Mutex<Vec<(u64, String)>>>;
+
+fn live_recorder(
+    source: Arc<FakeSource>,
+    tr: Arc<dyn Transcriber>,
+    max: Duration,
+    window: Duration,
+) -> (Recorder, Events, Partials) {
+    let events: Events = Arc::default();
+    let partials: Partials = Arc::default();
+    let (ev, pa) = (Arc::clone(&events), Arc::clone(&partials));
+    let rec = Recorder::with_live(
+        source,
+        tr,
+        max,
+        Arc::new(move |s| ev.lock().unwrap().push(s)),
+        Arc::new(move |r, t| pa.lock().unwrap().push((r, t))),
+        LiveConfig {
+            interval: Duration::from_millis(20),
+            window,
+        },
+        tokio::runtime::Handle::current(),
+    );
+    (rec, events, partials)
+}
+
+async fn wait_partials(p: &Partials, n: usize) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while p.lock().unwrap().len() < n {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("partial events");
+}
+
+/// Counts model loads and concurrent passes; text grows with every pass.
+#[derive(Default)]
+struct SessionTranscriber {
+    opens: Arc<AtomicUsize>,
+    closes: Arc<AtomicUsize>,
+    running: Arc<AtomicUsize>,
+    overlap: Arc<AtomicUsize>,
+    passes: Arc<AtomicUsize>,
+}
+struct FakeSession(SessionTranscriber);
+impl Transcriber for SessionTranscriber {
+    fn transcribe(&self, _: &Path, _: &[f32], _: Option<&str>) -> Result<String, TranscribeError> {
+        panic!("sessions only");
+    }
+    fn open_session(
+        &self,
+        _: &Path,
+    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
+        self.opens.fetch_add(1, Ordering::SeqCst);
+        Ok(Some(Box::new(FakeSession(SessionTranscriber {
+            opens: Arc::clone(&self.opens),
+            closes: Arc::clone(&self.closes),
+            running: Arc::clone(&self.running),
+            overlap: Arc::clone(&self.overlap),
+            passes: Arc::clone(&self.passes),
+        }))))
+    }
+}
+impl TranscribeSession for FakeSession {
+    fn transcribe(&self, samples: &[f32], _: Option<&str>) -> Result<String, TranscribeError> {
+        if self.0.running.fetch_add(1, Ordering::SeqCst) > 0 {
+            self.0.overlap.fetch_add(1, Ordering::SeqCst);
+        }
+        std::thread::sleep(Duration::from_millis(60)); // slower than the interval
+        self.0.running.fetch_sub(1, Ordering::SeqCst);
+        let n = self.0.passes.fetch_add(1, Ordering::SeqCst);
+        Ok(format!("w{n}-{}", samples.len()))
+    }
+}
+impl Drop for FakeSession {
+    fn drop(&mut self) {
+        self.0.closes.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[tokio::test]
+async fn live_events_grow_before_stop_and_final_text_is_returned_once() {
+    let tr = Arc::new(FakeTranscriber::default());
+    let (rec, _, partials) = live_recorder(
+        FakeSource::new(vec![0.1; 16_000]),
+        Arc::clone(&tr) as Arc<dyn Transcriber>,
+        MAX_RECORDING,
+        LIVE_WINDOW,
+    );
+    rec.start(model(), None).unwrap();
+    wait_partials(&partials, 1).await;
+    // Same audio every pass: text is unchanged, so only one event so far.
+    assert_eq!(partials.lock().unwrap()[0].1, "heard 16000 samples");
+    assert_eq!(rec.stop().await.unwrap(), "heard 16000 samples");
+}
+
+#[tokio::test]
+async fn live_revisions_increase_with_changing_text() {
+    let tr = Arc::new(SessionTranscriber::default());
+    let (rec, _, partials) = live_recorder(
+        FakeSource::new(vec![0.1; 16_000]),
+        tr,
+        MAX_RECORDING,
+        LIVE_WINDOW,
+    );
+    rec.start(model(), None).unwrap();
+    wait_partials(&partials, 3).await;
+    let seen = partials.lock().unwrap().clone();
+    assert!(seen.windows(2).all(|w| w[0].0 < w[1].0), "{seen:?}");
+    assert_ne!(seen[0].1, seen[1].1);
+    rec.cancel();
+}
+
+#[tokio::test]
+async fn one_pass_at_a_time_and_model_loaded_once_then_freed() {
+    let tr = Arc::new(SessionTranscriber::default());
+    let (opens, closes, overlap) = (
+        Arc::clone(&tr.opens),
+        Arc::clone(&tr.closes),
+        Arc::clone(&tr.overlap),
+    );
+    let (rec, _, partials) = live_recorder(
+        FakeSource::new(vec![0.1; 16_000]),
+        tr,
+        MAX_RECORDING,
+        LIVE_WINDOW,
+    );
+    rec.start(model(), None).unwrap();
+    wait_partials(&partials, 3).await;
+    let text = rec.stop().await.unwrap();
+    assert!(text.starts_with('w'));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(
+        overlap.load(Ordering::SeqCst),
+        0,
+        "no overlapping live passes"
+    );
+    assert_eq!(opens.load(Ordering::SeqCst), 1, "model loaded once");
+    assert_eq!(closes.load(Ordering::SeqCst), 1, "model freed after stop");
+}
+
+#[tokio::test]
+async fn cancel_stops_live_events_and_frees_the_model() {
+    let tr = Arc::new(SessionTranscriber::default());
+    let closes = Arc::clone(&tr.closes);
+    let (rec, _, partials) = live_recorder(
+        FakeSource::new(vec![0.1; 16_000]),
+        tr,
+        MAX_RECORDING,
+        LIVE_WINDOW,
+    );
+    rec.start(model(), None).unwrap();
+    wait_partials(&partials, 1).await;
+    rec.cancel();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let n = partials.lock().unwrap().len();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(partials.lock().unwrap().len(), n, "no event after cancel");
+    assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn auto_stop_returns_final_text_after_live_events() {
+    let tr = Arc::new(FakeTranscriber::default());
+    let (rec, events, partials) = live_recorder(
+        FakeSource::new(vec![0.1; 16_000]),
+        tr,
+        Duration::from_millis(300),
+        LIVE_WINDOW,
+    );
+    rec.start(model(), None).unwrap();
+    wait_partials(&partials, 1).await;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while events.lock().unwrap().last() != Some(&RecorderState::Finished) {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let n = partials.lock().unwrap().len();
+    assert_eq!(rec.stop().await.unwrap(), "heard 16000 samples");
+    assert_eq!(partials.lock().unwrap().len(), n);
+}
+
+#[tokio::test]
+async fn long_audio_is_recognised_in_a_bounded_window() {
+    // 3 s window, 3 s... of audio is 10 s: earlier audio is fixed in chunks.
+    let tr = Arc::new(FakeTranscriber::default());
+    let (rec, _, partials) = live_recorder(
+        FakeSource::new(vec![0.1; 160_000]),
+        Arc::clone(&tr) as Arc<dyn Transcriber>,
+        MAX_RECORDING,
+        Duration::from_secs(3),
+    );
+    rec.start(model(), None).unwrap();
+    wait_partials(&partials, 1).await;
+    assert!(tr.calls.lock().unwrap().iter().all(|c| c.1 <= 48_000));
+    rec.cancel();
+}
+
+#[tokio::test]
+async fn failed_final_pass_still_errors_after_live_text() {
+    let tr = Arc::new(FakeTranscriber {
+        fail: true,
+        ..Default::default()
+    });
+    let (rec, _, _) = live_recorder(
+        FakeSource::new(vec![0.1; 16_000]),
+        tr,
+        MAX_RECORDING,
+        LIVE_WINDOW,
+    );
+    rec.start(model(), None).unwrap();
+    assert_eq!(rec.stop().await, Err(RecordError::TranscriptionFailed));
 }

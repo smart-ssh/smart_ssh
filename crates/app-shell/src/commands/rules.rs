@@ -7,7 +7,7 @@ use ssh_manager_core::filter::{hard_blacklist_patterns, RuleId, Scope};
 
 use app_logic::dto::{
     ActionUserDecision, EvalContextInput, EvaluationTraceDto, PatternDto, PatternSuggestionDto,
-    PatternType, RuleDto, RuleInput,
+    RuleDto, RuleInput,
 };
 use app_logic::error::CommandResult;
 use app_logic::state::{ActionId, AppState, SessionId};
@@ -138,17 +138,16 @@ pub async fn accept_and_create_rule(
     // Kommentar).
     session_id: SessionId,
     action_id: ActionId,
-    pattern_type: PatternType,
-    pattern_value: String,
+    patterns: Vec<app_logic::dto::SuggestionPatternDto>,
     scope: Scope,
     priority: Option<i32>,
     edited_command: Option<String>,
-) -> CommandResult<RuleId> {
+) -> CommandResult<Vec<RuleId>> {
     let _ = session_id;
-    let rule_result = app_logic::rule_suggestions::create_quick_rule(
+    // Spec 0011, Abschnitt 3: alle Regeln des Vorschlags atomar.
+    let rule_result = app_logic::rule_suggestions::create_quick_rules(
         &state.policy_store,
-        pattern_type,
-        pattern_value,
+        patterns,
         scope,
         priority,
     )

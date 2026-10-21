@@ -11,6 +11,25 @@ pub trait Transcriber: Send + Sync {
         samples: &[f32],
         language: Option<&str>,
     ) -> Result<String, TranscribeError>;
+
+    /// Loads the model once for several passes over one recording. `None`
+    /// (the default) means the engine keeps no state: every pass calls
+    /// `transcribe`.
+    fn open_session(
+        &self,
+        _model: &Path,
+    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
+        Ok(None)
+    }
+}
+
+/// A transcriber with the model already loaded. Dropping it frees the model.
+pub trait TranscribeSession: Send + Sync {
+    fn transcribe(
+        &self,
+        samples: &[f32],
+        language: Option<&str>,
+    ) -> Result<String, TranscribeError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,17 +56,16 @@ pub struct InvalidLanguage;
 #[derive(Default)]
 pub struct WhisperTranscriber;
 
-impl Transcriber for WhisperTranscriber {
+struct WhisperSession(whisper_rs::WhisperContext);
+
+impl TranscribeSession for WhisperSession {
     fn transcribe(
         &self,
-        model: &Path,
         samples: &[f32],
         language: Option<&str>,
     ) -> Result<String, TranscribeError> {
-        use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
-        let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default())
-            .map_err(|_| TranscribeError)?;
-        let mut state = ctx.create_state().map_err(|_| TranscribeError)?;
+        use whisper_rs::{FullParams, SamplingStrategy};
+        let mut state = self.0.create_state().map_err(|_| TranscribeError)?;
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_language(Some(language.unwrap_or("auto")));
         params.set_translate(false);
@@ -61,5 +79,27 @@ impl Transcriber for WhisperTranscriber {
             text.push_str(&segment.to_string());
         }
         Ok(text.trim().to_owned())
+    }
+}
+
+impl Transcriber for WhisperTranscriber {
+    fn transcribe(
+        &self,
+        model: &Path,
+        samples: &[f32],
+        language: Option<&str>,
+    ) -> Result<String, TranscribeError> {
+        let session = self.open_session(model)?.ok_or(TranscribeError)?;
+        session.transcribe(samples, language)
+    }
+
+    fn open_session(
+        &self,
+        model: &Path,
+    ) -> Result<Option<Box<dyn TranscribeSession>>, TranscribeError> {
+        use whisper_rs::{WhisperContext, WhisperContextParameters};
+        let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default())
+            .map_err(|_| TranscribeError)?;
+        Ok(Some(Box::new(WhisperSession(ctx))))
     }
 }

@@ -13,53 +13,84 @@ Muster-Vorschläge.
 
 ## 2. Muster-Vorschläge
 
-Die Heuristik ist bewusst einfach und erhebt keinen Anspruch auf
-Vollständigkeit. Es gibt höchstens drei Vorschläge, doppelte werden entfernt:
+Ein Vorschlag besteht aus einer **Menge** von Mustern, die zusammen angelegt
+werden. Es gibt höchstens sechs Vorschläge, vom Spezifischen zum Allgemeinen
+geordnet; Vorschläge mit gleicher Muster-Menge erscheinen nur einmal.
 
-- **Exakt:** das Kommando selbst, unverändert.
-- **Basis-Wildcard:** erstes Wort plus ` *`, z. B. `ls -la /var/log` →
-  `ls *`; nur, wenn das Kommando mehr als ein Wort hat. Ist das erste Wort ein
-  `sudo`/`doas` oder ein durchreichender Wrapper wie `env`, wird stattdessen
-  das zweite Wort verwendet (`apt *` statt `sudo *`): Ein Vorschlag `sudo *`
-  würde jedes `sudo`-Kommando automatisch ausführbar machen. Dank des
-  Abgleichs mit und ohne `sudo` (ADR 0002) deckt `apt *` auch `sudo apt …` ab.
-- **Subkommando-Wildcard:** wenn das zweite Wort nicht mit `-` beginnt (also
-  wie ein Subkommando aussieht, nicht wie eine Option), z. B.
-  `systemctl status nginx` → `systemctl status *`.
+**Teilkommandos.** Eine Verkettung oder Pipeline (`|`, `&&`, `||`, `;`)
+wird so zerlegt wie von der Filter-Engine (Spec 0002, Abschnitt 4); die
+Vorschläge entstehen je Teilkommando, weil die Engine jedes Teilkommando
+einzeln prüft. Gleiche Teilkommandos zählen einmal. Lässt sich das Kommando
+nicht sicher zerlegen, gibt es nur den Exakt-Vorschlag.
 
-Ein Vorschlag, dessen Muster sich nicht übersetzen lässt (z. B. wegen einer
-einzelnen `[` im Kommando), wird weggelassen (Spec 0077).
+- **Exakt:** das Kommando selbst; bei mehreren Teilkommandos „exakt je
+  Teilkommando" (ein Muster je Teilkommando, nie die ganze Zeile).
+- **Unterkommando:** das Unterkommando mit beliebigen Argumenten und ohne
+  Argumente, z. B. `systemctl status nginx` → `systemctl status` und
+  `systemctl status *` (zwei Muster, ein Vorschlag). Das Unterkommando ist
+  das erste Wort nach dem Programm, das nicht mit `-` beginnt. Bei bekannten
+  Programmen werden Optionen davor übersprungen, bleiben aber **wörtlich** im
+  Muster, damit die Regel kein anderes Unterkommando trifft: `git -C
+  /srv/app pull` → `git -C /srv/app pull` und `git -C /srv/app pull *`
+  (nicht `git -C /srv/app push`). Bekannt: `git` (`-C`, `-c`, `--git-dir`,
+  `--work-tree`), `docker` (`--context`, `-H`/`--host`), `kubectl` (`-n`,
+  `--namespace`, `--context`), `systemctl` (`--user`, `--system`).
+  Teilkommandos ohne Unterkommando fallen auf die Programm-Variante zurück.
+- **Programm:** alle Aufrufe des Programms (`<programm> *`), nur wenn das
+  Teilkommando mehr als ein Wort hat. Bei `sudo`/`doas` ohne Optionen gilt das
+  Programm dahinter (`apt *` statt `sudo *` oder `sudo apt *`); dank des
+  Abgleichs mit und ohne `sudo` (ADR 0002) trifft `apt *` auch `sudo apt …`.
+  Kein Vorschlag nennt ein reines `sudo`-Muster.
+
+Wörter mit Anführungszeichen, Glob- oder Shell-Sonderzeichen fließen nicht in
+ein Glob-Muster ein. Programme hinter anderen Wrappern (`env`, Variablen-
+zuweisung) und `sudo` mit Optionen erhalten nur den Exakt-Vorschlag.
+
+Jeder Vorschlag trifft das bestätigte Kommando: Seine Muster decken jedes
+Teilkommando so ab, wie die Engine eine Allow-Regel abgleicht. Ein Vorschlag,
+bei dem das nicht zutrifft, oder dessen Muster sich nicht übersetzen lässt
+(Spec 0077), wird weggelassen. Regelunabhängige Prüfungen (Hard-Blacklist,
+Umleitung, Substitution, undurchsichtige Eingabe, Risiko Rot) gelten weiter
+und werden durch eine Regel nie aufgehoben.
+
+Die Beschriftung ist übersetzt: Das Backend liefert nur die Art des Vorschlags
+und Parameter (Programme bzw. Unterkommandos); die Oberfläche baut den Text
+in der gewählten Sprache und zeigt die Muster dahinter.
 
 ## 3. Akzeptieren und Regel anlegen
 
 Der Klick auf einen Vorschlag tut zwei Dinge:
 
-1. Er legt eine Regel mit der Aktion **Allow** an. Die Aktion ist fest, weil
-   eine Confirm-Regel gegenüber dem Standardfall nichts bringt. Die Priorität
-   ist 0, sofern nicht anders angegeben. Die Anlage läuft über dieselbe Logik
-   und Prüfung wie das Regel-Formular (Spec 0009, Spec 0077).
+1. Er legt für **jedes** Muster des Vorschlags eine Regel mit der Aktion
+   **Allow** an, alle mit demselben Geltungsbereich, **atomar**: Ist ein
+   Muster ungültig oder scheitert das Speichern, wird keine der Regeln
+   gespeichert. Die Aktion ist fest, weil eine Confirm-Regel gegenüber dem
+   Standardfall nichts bringt. Die Priorität ist 0, sofern nicht anders
+   angegeben. Die Anlage läuft über dieselbe Prüfung wie das Regel-Formular
+   (Spec 0009, Spec 0077).
 2. Er löst die wartende Bestätigung auf, exakt wie ein normales „Ausführen".
 
-Die Bestätigung wird auch dann aufgelöst, wenn die Regel nicht angelegt
-werden konnte (z. B. ungültiges Muster); der Fehler kommt getrennt zurück
+Die Bestätigung wird auch dann aufgelöst, wenn die Regeln nicht angelegt
+werden konnten (z. B. ungültiges Muster); der Fehler kommt getrennt zurück
 und wird übersetzt angezeigt.
 
-Die neue Regel wirkt nicht rückwirkend auf das gerade laufende Kommando. Es
+Die neuen Regeln wirken nicht rückwirkend auf das gerade laufende Kommando. Es
 läuft aufgrund der ausdrücklichen Bestätigung in diesem Moment, nicht wegen
-der neuen Regel. Erst künftige, ähnliche Vorschläge profitieren.
+der neuen Regeln. Erst künftige, ähnliche Vorschläge profitieren.
 
 ## 4. Oberfläche
 
-Das Aufklappmenü zeigt die Vorschläge mit Beschriftung und Muster-Vorschau.
-Daneben wählt der Nutzer den Geltungsbereich: **„Dieser Server"** (Vorgabe,
-die sicherere Wahl), „Global" oder „Tag" (mit Tag-Name). Die Auswahl entspricht
-der im Regel-Formular (Spec 0009). Ein Klick auf einen Vorschlag schließt den
-Dialog.
+Das Aufklappmenü zeigt die Vorschläge mit übersetzter Beschriftung und den
+Mustern des Vorschlags (bei mehreren, durch Komma getrennt). Daneben wählt der
+Nutzer den Geltungsbereich: **„Dieser Server"** (Vorgabe, die sicherere Wahl),
+„Global" oder „Tag" (mit Tag-Name). Die Auswahl entspricht der im
+Regel-Formular (Spec 0009). Ein Klick auf einen Vorschlag schließt den Dialog.
 
 ## 5. Grenzen
 
 - Es wird nur die Aktion Allow angeboten.
-- Die Vorschläge sind keine sicherheitsrelevante Auswertung: Sie zerlegen das
-  Kommando nur nach Wörtern und erkennen weder Verkettung noch Substitution.
-  Ob ein später passendes Kommando automatisch läuft, entscheidet allein die
-  Filter-Engine (Spec 0002).
+- Die Vorschläge sind keine sicherheitsrelevante Auswertung. Ob ein später
+  passendes Kommando automatisch läuft, entscheidet allein die Filter-Engine
+  (Spec 0002); Vorschläge ändern nichts daran, was sie erlaubt oder ablehnt.
+- Vorgeschlagen werden alle Teilkommandos, auch solche, die bereits eine
+  Regel erlaubt; doppelte Regeln sind harmlos.

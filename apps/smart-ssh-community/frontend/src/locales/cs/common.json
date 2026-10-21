@@ -367,7 +367,13 @@
     "noSuggestions": "Žádné návrhy.",
     "binaryFileHint": "⚠ Binární soubor — textové porovnání není možné. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
     "diffTooLargeHint": "⚠ Obsah je příliš velký pro řádkový rozdíl. Předchozí velikost: {{oldSize}}, nová velikost: {{newSize}}.",
-    "noContentChange": "(žádná změna obsahu)"
+    "noContentChange": "(žádná změna obsahu)",
+    "quickRuleLabel": {
+      "exact": "Přesně: {{patterns}}",
+      "exactPerSegment": "Přesně po částech: {{patterns}}",
+      "subcommand": "Všechna volání `{{names}}`: {{patterns}}",
+      "tool": "Všechna volání `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Bezpečnostní varování · Klíč hostitele se změnil",
@@ -503,6 +509,9 @@
     "AI_INVALID_RESPONSE": "Neočekávaná odpověď od poskytovatele AI",
     "AI_CONTEXT_TOO_LARGE": "Kontext je pro poskytovatele AI příliš velký. Snižte „Max. délku odpovědi (tokeny)“ nebo začněte nový chat.",
     "AI_PROVIDER_UNAVAILABLE": "Poskytovatel AI ohlásil chybu (např. údržbu nebo přetížení). Zkuste to později; pokud přetrvává, zkontrolujte nastavení poskytovatele.",
+    "AI_PROVIDER_OVERLOADED": "Poskytovatel AI je právě přetížený. Zkuste to za chvíli znovu.",
+    "AI_PROVIDER_BILLING": "Účet poskytovatele AI nemá žádný kredit. Zkontrolujte fakturaci v konzoli poskytovatele.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Poskytovatel AI požadavek odmítl.",
     "AI_RESPONSE_TRUNCATED": "Odpověď AI byla na úplný příkaz příliš dlouhá",
     "AI_MODEL_NOT_FOUND": "Poskytovatel AI tento model nezná. Zkontrolujte název modelu v Nastavení („Načíst modely“ vypíše dostupné); u Ollamy jej nejdřív stáhněte příkazem `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Tento model nepodporuje volání nástrojů. V nastavení poskytovatele zrušte zaškrtnutí „Podporuje nativní volání nástrojů“ (pak se použije záložní řešení založené na promptu) nebo vyberte model s podporou nástrojů.",
@@ -668,6 +677,7 @@
     "uploadedFolder": "Složka „{{name}}“ nahrána — souborů: {{count}}",
     "uploadFolderFailed": "Nahrání složky „{{name}}“ selhalo: {{reason}}",
     "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}",
+    "nothingToPaste": "Není co vložit: schránka neobsahuje žádné soubory",
     "createFileDone": "Soubor „{{name}}“ vytvořen",
     "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}"
   },
@@ -1059,7 +1069,16 @@
     },
     "copyProgress": "Kopíruji… {{done}} MB z {{total}} MB",
     "copyProgressUnknownTotal": "Kopíruji… {{done}} MB",
-    "directoryMenuLabel": "Akce složky"
+    "directoryMenuLabel": "Akce složky",
+    "clipboardPaste": {
+      "title": "Nahrát soubory ze schránky",
+      "intro": "Nahrát tyto soubory ze schránky?",
+      "target": "Cílová složka",
+      "more": "… a dalších {{count}}",
+      "confirm": "Nahrát",
+      "cancel": "Zrušit",
+      "menuTitle": "Nahrát soubory ze schránky"
+    }
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",

@@ -367,7 +367,13 @@
     "noSuggestions": "Ei ehdotuksia.",
     "binaryFileHint": "⚠ Binääritiedosto – tekstivertailu ei ole mahdollista. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
     "diffTooLargeHint": "⚠ Sisältö on liian suuri rivikohtaiseen vertailuun. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
-    "noContentChange": "(ei sisällön muutosta)"
+    "noContentChange": "(ei sisällön muutosta)",
+    "quickRuleLabel": {
+      "exact": "Täsmälleen: {{patterns}}",
+      "exactPerSegment": "Täsmälleen osittain: {{patterns}}",
+      "subcommand": "Kaikki `{{names}}`-kutsut: {{patterns}}",
+      "tool": "Kaikki `{{names}}`-kutsut: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Turvavaroitus · Isäntäavain muuttunut",
@@ -503,6 +509,9 @@
     "AI_INVALID_RESPONSE": "Odottamaton vastaus tekoälyn palveluntarjoajalta",
     "AI_CONTEXT_TOO_LARGE": "Konteksti on liian suuri tekoälyn palveluntarjoajalle. Pienennä kohtaa \"Vastauksen enimmäispituus (tokenia)\" tai aloita uusi keskustelu.",
     "AI_PROVIDER_UNAVAILABLE": "Tekoälyn palveluntarjoaja ilmoitti virheestä (esim. huolto tai ylikuormitus). Yritä myöhemmin uudelleen; jos ongelma jatkuu, tarkista palveluntarjoajan asetukset.",
+    "AI_PROVIDER_OVERLOADED": "Tekoälypalvelun tarjoaja on juuri nyt ylikuormitettu. Yritä hetken kuluttua uudelleen.",
+    "AI_PROVIDER_BILLING": "Tekoälypalvelun tilillä ei ole enää saldoa. Tarkista laskutus palveluntarjoajan konsolista.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Tekoälypalvelun tarjoaja hylkäsi pyynnön.",
     "AI_RESPONSE_TRUNCATED": "Tekoälyn vastaus oli liian pitkä täydelliseksi komennoksi",
     "AI_MODEL_NOT_FOUND": "Tekoälyn palveluntarjoaja ei tunne tätä mallia. Tarkista mallin nimi asetuksista (\"Lataa mallit\" listaa saatavilla olevat); Ollamalle lataa se ensin komennolla `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Tämä malli ei tue työkalukutsuja. Poista palveluntarjoajan asetuksista valinta \"Tukee natiivia työkalukutsua\" (silloin käytetään kehotepohjaista varatapaa) tai valitse malli, jolla on työkalutuki.",
@@ -658,6 +667,7 @@
     "uploadedFolder": "Kansio “{{name}}” lähetetty – {{count}} tiedostoa",
     "uploadFolderFailed": "Kansion “{{name}}” lähetys epäonnistui: {{reason}}",
     "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}",
+    "nothingToPaste": "Ei liitettävää: leikepöydällä ei ole tiedostoja",
     "createFileDone": "Tiedosto ”{{name}}” luotu",
     "createFileFailed": "Tiedostoa ”{{name}}” ei voitu luoda: {{reason}}"
   },
@@ -1045,7 +1055,16 @@
     },
     "copyProgress": "Kopioidaan… {{done}} Mt / {{total}} Mt",
     "copyProgressUnknownTotal": "Kopioidaan… {{done}} Mt",
-    "directoryMenuLabel": "Kansion toiminnot"
+    "directoryMenuLabel": "Kansion toiminnot",
+    "clipboardPaste": {
+      "title": "Lähetä tiedostot leikepöydältä",
+      "intro": "Lähetetäänkö nämä tiedostot leikepöydältä?",
+      "target": "Kohdekansio",
+      "more": "… ja {{count}} muuta",
+      "confirm": "Lähetä",
+      "cancel": "Peruuta",
+      "menuTitle": "Lähetä leikepöydän tiedostot"
+    }
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",

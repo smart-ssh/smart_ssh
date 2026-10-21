@@ -367,7 +367,13 @@
     "noSuggestions": "没有建议。",
     "binaryFileHint": "⚠ 二进制文件——无法进行文本比较。原大小：{{oldSize}}，新大小：{{newSize}}。",
     "diffTooLargeHint": "⚠ 内容过大，无法进行逐行对比。原大小：{{oldSize}}，新大小：{{newSize}}。",
-    "noContentChange": "（内容无变化）"
+    "noContentChange": "（内容无变化）",
+    "quickRuleLabel": {
+      "exact": "精确：{{patterns}}",
+      "exactPerSegment": "按部分精确：{{patterns}}",
+      "subcommand": "`{{names}}` 的所有调用：{{patterns}}",
+      "tool": "`{{names}}` 的所有调用：{{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "安全警告 · 主机密钥已更改",
@@ -503,6 +509,9 @@
     "AI_INVALID_RESPONSE": "AI 提供商返回了意料之外的响应",
     "AI_CONTEXT_TOO_LARGE": "上下文对 AI 提供商而言过大。请调低“最大回复长度（token）”，或开始新的聊天。",
     "AI_PROVIDER_UNAVAILABLE": "AI 提供商报告了错误（例如维护或过载）。请稍后再试；如果持续出现，请检查提供商设置。",
+    "AI_PROVIDER_OVERLOADED": "AI 提供商目前过载。请稍后再试。",
+    "AI_PROVIDER_BILLING": "AI 提供商账户已没有余额。请在提供商控制台中检查计费。",
+    "AI_PROVIDER_REJECTED_REQUEST": "AI 提供商拒绝了该请求。",
     "AI_RESPONSE_TRUNCATED": "AI 的回复过长，无法构成完整的命令",
     "AI_MODEL_NOT_FOUND": "AI 提供商不认识该模型。请在设置中检查模型名称（“加载模型”会列出可用的模型）；对于 Ollama，请先用 `ollama pull <name>` 拉取。",
     "AI_MODEL_NO_TOOL_SUPPORT": "该模型不支持工具调用。请在提供商设置中取消勾选“支持原生工具调用”（此时将使用基于提示词的后备方案），或选择支持工具调用的模型。",
@@ -653,6 +662,7 @@
     "uploadedFolder": "文件夹“{{name}}”已上传——{{count}} 个文件",
     "uploadFolderFailed": "上传文件夹“{{name}}”失败：{{reason}}",
     "uploadFailedMany": "有 {{name}} 个文件无法上传，例如：{{reason}}",
+    "nothingToPaste": "没有可粘贴的内容：剪贴板中没有文件",
     "createFileDone": "已创建文件“{{name}}”",
     "createFileFailed": "无法创建文件“{{name}}”：{{reason}}"
   },
@@ -1038,7 +1048,16 @@
     },
     "copyProgress": "正在复制… {{done}} MB / {{total}} MB",
     "copyProgressUnknownTotal": "正在复制… {{done}} MB",
-    "directoryMenuLabel": "文件夹操作"
+    "directoryMenuLabel": "文件夹操作",
+    "clipboardPaste": {
+      "title": "上传剪贴板中的文件",
+      "intro": "要上传剪贴板中的这些文件吗？",
+      "target": "目标文件夹",
+      "more": "…另有 {{count}} 个",
+      "confirm": "上传",
+      "cancel": "取消",
+      "menuTitle": "上传剪贴板中的文件"
+    }
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",

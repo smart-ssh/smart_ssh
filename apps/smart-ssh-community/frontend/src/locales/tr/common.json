@@ -367,7 +367,13 @@
     "noSuggestions": "Öneri yok.",
     "binaryFileHint": "⚠ İkili dosya — metin karşılaştırması mümkün değil. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
     "diffTooLargeHint": "⚠ İçerik satır farkı için çok büyük. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
-    "noContentChange": "(içerik değişikliği yok)"
+    "noContentChange": "(içerik değişikliği yok)",
+    "quickRuleLabel": {
+      "exact": "Tam: {{patterns}}",
+      "exactPerSegment": "Parça başına tam: {{patterns}}",
+      "subcommand": "Tüm `{{names}}` çağrıları: {{patterns}}",
+      "tool": "Tüm `{{names}}` çağrıları: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Güvenlik uyarısı · Ana makine anahtarı değişti",
@@ -503,6 +509,9 @@
     "AI_INVALID_RESPONSE": "Yapay zeka sağlayıcısından beklenmeyen yanıt",
     "AI_CONTEXT_TOO_LARGE": "Bağlam yapay zeka sağlayıcısı için çok büyük. \"Maks. yanıt uzunluğu (token)\" değerini düşürün veya yeni bir sohbet başlatın.",
     "AI_PROVIDER_UNAVAILABLE": "Yapay zeka sağlayıcısı bir hata bildirdi (örn. bakım veya aşırı yük). Daha sonra yeniden deneyin; sürerse sağlayıcı ayarlarını denetleyin.",
+    "AI_PROVIDER_OVERLOADED": "Yapay zekâ sağlayıcısı şu anda aşırı yüklü. Biraz sonra tekrar deneyin.",
+    "AI_PROVIDER_BILLING": "Yapay zekâ sağlayıcısı hesabında kredi kalmadı. Sağlayıcının konsolunda faturalandırmayı kontrol edin.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Yapay zekâ sağlayıcısı isteği reddetti.",
     "AI_RESPONSE_TRUNCATED": "Yapay zeka yanıtı tam bir komut için çok uzundu",
     "AI_MODEL_NOT_FOUND": "Yapay zeka sağlayıcısı bu modeli tanımıyor. Ayarlar'da model adını denetleyin (\"Modelleri yükle\" kullanılabilir olanları listeler); Ollama için önce `ollama pull <name>` ile indirin.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Bu model araç çağırmayı desteklemiyor. Sağlayıcı ayarlarında \"Yerel araç çağırmayı destekler\" işaretini kaldırın (o zaman istem tabanlı yedek yöntem kullanılır) veya araç destekli bir model seçin.",
@@ -658,6 +667,7 @@
     "uploadedFolder": "“{{name}}” klasörü yüklendi — {{count}} dosya",
     "uploadFolderFailed": "“{{name}}” klasörü yüklenemedi: {{reason}}",
     "uploadFailedMany": "{{name}} dosya yüklenemedi, örn.: {{reason}}",
+    "nothingToPaste": "Yapıştırılacak bir şey yok: panoda dosya yok",
     "createFileDone": "“{{name}}” dosyası oluşturuldu",
     "createFileFailed": "“{{name}}” dosyası oluşturulamadı: {{reason}}"
   },
@@ -1045,7 +1055,16 @@
     },
     "copyProgress": "Kopyalanıyor… {{done}} / {{total}} MB",
     "copyProgressUnknownTotal": "Kopyalanıyor… {{done}} MB",
-    "directoryMenuLabel": "Klasör eylemleri"
+    "directoryMenuLabel": "Klasör eylemleri",
+    "clipboardPaste": {
+      "title": "Panodaki dosyaları yükle",
+      "intro": "Panodaki bu dosyalar yüklensin mi?",
+      "target": "Hedef klasör",
+      "more": "… ve {{count}} tane daha",
+      "confirm": "Yükle",
+      "cancel": "İptal",
+      "menuTitle": "Panodaki dosyaları yükle"
+    }
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",

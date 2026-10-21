@@ -367,7 +367,13 @@
     "noSuggestions": "Brak propozycji.",
     "binaryFileHint": "⚠ Plik binarny — porównanie tekstowe niemożliwe. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
     "diffTooLargeHint": "⚠ Zawartość zbyt duża na porównanie wierszy. Poprzedni rozmiar: {{oldSize}}, nowy rozmiar: {{newSize}}.",
-    "noContentChange": "(brak zmiany zawartości)"
+    "noContentChange": "(brak zmiany zawartości)",
+    "quickRuleLabel": {
+      "exact": "Dokładnie: {{patterns}}",
+      "exactPerSegment": "Dokładnie dla każdej części: {{patterns}}",
+      "subcommand": "Wszystkie wywołania `{{names}}`: {{patterns}}",
+      "tool": "Wszystkie wywołania `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Ostrzeżenie bezpieczeństwa · Zmieniony klucz hosta",
@@ -503,6 +509,9 @@
     "AI_INVALID_RESPONSE": "Nieoczekiwana odpowiedź dostawcy AI",
     "AI_CONTEXT_TOO_LARGE": "Kontekst zbyt duży dla dostawcy AI. Zmniejsz „Maks. długość odpowiedzi (tokeny)” lub zacznij nowy czat.",
     "AI_PROVIDER_UNAVAILABLE": "Dostawca AI zgłosił błąd (np. konserwacja lub przeciążenie). Spróbuj później; jeśli się powtarza, sprawdź ustawienia dostawcy.",
+    "AI_PROVIDER_OVERLOADED": "Dostawca AI jest teraz przeciążony. Spróbuj ponownie za chwilę.",
+    "AI_PROVIDER_BILLING": "Konto dostawcy AI nie ma już środków. Sprawdź rozliczenia w konsoli dostawcy.",
+    "AI_PROVIDER_REJECTED_REQUEST": "Dostawca AI odrzucił żądanie.",
     "AI_RESPONSE_TRUNCATED": "Odpowiedź AI była zbyt długa na pełne polecenie",
     "AI_MODEL_NOT_FOUND": "Dostawca AI nie zna tego modelu. Sprawdź nazwę modelu w Ustawieniach („Wczytaj modele” pokazuje dostępne); w Ollamie najpierw pobierz go poleceniem `ollama pull <name>`.",
     "AI_MODEL_NO_TOOL_SUPPORT": "Ten model nie obsługuje wywoływania narzędzi. W ustawieniach dostawcy odznacz „Obsługuje natywne wywoływanie narzędzi” (zostanie użyty zapasowy tryb oparty na promptach) lub wybierz model z obsługą narzędzi.",
@@ -668,6 +677,7 @@
     "uploadedFolder": "Folder „{{name}}” wysłany — plików: {{count}}",
     "uploadFolderFailed": "Wysyłanie folderu „{{name}}” nie powiodło się: {{reason}}",
     "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}",
+    "nothingToPaste": "Nic do wklejenia: schowek nie zawiera plików",
     "createFileDone": "Utworzono plik „{{name}}”",
     "createFileFailed": "Nie można utworzyć pliku „{{name}}”: {{reason}}"
   },
@@ -1059,7 +1069,16 @@
     },
     "copyProgress": "Kopiowanie… {{done}} MB z {{total}} MB",
     "copyProgressUnknownTotal": "Kopiowanie… {{done}} MB",
-    "directoryMenuLabel": "Akcje folderu"
+    "directoryMenuLabel": "Akcje folderu",
+    "clipboardPaste": {
+      "title": "Prześlij pliki ze schowka",
+      "intro": "Przesłać te pliki ze schowka?",
+      "target": "Folder docelowy",
+      "more": "… i {{count}} więcej",
+      "confirm": "Prześlij",
+      "cancel": "Anuluj",
+      "menuTitle": "Prześlij pliki ze schowka"
+    }
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",

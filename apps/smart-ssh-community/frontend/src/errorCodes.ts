@@ -89,6 +89,10 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "AI_INVALID_RESPONSE",
   "AI_CONTEXT_TOO_LARGE",
   "AI_PROVIDER_UNAVAILABLE",
+  // Issue #599: overload, exhausted credit, rejected request.
+  "AI_PROVIDER_OVERLOADED",
+  "AI_PROVIDER_BILLING",
+  "AI_PROVIDER_REJECTED_REQUEST",
   // Spec 0065, Teil 3 (spec-reviewer-Fund, Review dieses Schritts): fehlte
   // hier — die englische UI zeigte bislang den rohen deutschen
   // Backend-Text statt einer Übersetzung.

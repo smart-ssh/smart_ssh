@@ -902,6 +902,37 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatAiRetryingPayload {
+    session_id: SessionId,
+    attempt: u32,
+    max_attempts: u32,
+    delay_secs: u64,
+}
+
+/// Issue #599: the AI provider is overloaded; the request is repeated
+/// automatically after `delay_secs`. Emitted before each wait, and only while
+/// nothing of the response has reached the chat. Carries no chat content.
+pub fn emit_chat_ai_retrying(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    attempt: u32,
+    max_attempts: u32,
+    delay_secs: u64,
+) {
+    emit(
+        emitter,
+        "chat-ai-retrying",
+        &ChatAiRetryingPayload {
+            session_id,
+            attempt,
+            max_attempts,
+            delay_secs,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatWebActivityPayload {
     session_id: SessionId,
     activity: crate::dto::WebActivityDto,

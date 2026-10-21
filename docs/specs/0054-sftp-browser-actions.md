@@ -111,6 +111,22 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
 - **Verschieben:** innerhalb des Servers per Ausschneiden und Einfügen.
   Existiert das Ziel schon, warnt die App. Umbenennen und Verschieben sind
   für den Server dieselbe Operation.
+- **Dateien aus der Zwischenablage hochladen:** Liegen Dateien oder Ordner des
+  Betriebssystems in der Zwischenablage (kopiert im Finder, Explorer oder
+  Linux-Dateimanager, auch die Zwischendatei aus „Datei kopieren“ unter
+  ihrem ursprünglichen Namen), bietet das Kontextmenü der leeren Fläche
+  „Einfügen“ an. Das Menü prüft das beim Öffnen; enthält die Zwischenablage
+  nur Text, ist sie leer oder nicht lesbar, fehlt der Eintrag. Ist gerade ein
+  Eintrag ausgeschnitten, bedeutet „Einfügen“ weiterhin Verschieben und die
+  Zwischenablage wird nicht gelesen. Nach dem Klick zeigt die App einen
+  nativen Dialog mit den Dateien und dem Zielordner; erst nach „Hochladen“
+  wird hochgeladen, bei „Abbrechen“ passiert nichts und nichts wird freigegeben.
+  Der Upload läuft wie ein Ablegen: Ordner rekursiv, bestehende Ziele mit
+  Überschreib-Vorschau bzw. Ordner-Bestätigung, Fortschritt in der
+  Übertragungsliste, im erhöhten Kanal als gewählter Nutzer. Fehlt die
+  Schreibberechtigung, erscheint einmal die Meldung „Zugriff verweigert“, ohne
+  Wiederholung. Hat sich die Zwischenablage zwischen Menü und Klick geleert,
+  erscheint nur ein Hinweis.
 - **Hochladen:** lokale Dateien in den aktuellen Remote-Ordner, per Dialog
   oder Drag-and-Drop. Überschreibt der Upload eine bestehende Datei, zeigt
   die App eine **Diff-Vorschau** (Spec 0020, Abschnitt 4.2); ist eine Seite
@@ -217,5 +233,8 @@ scheitert) werden sichtbar gemeldet.
   laufenden älteren Installation gehören können.
 - Der Download-Ordner ist der des Betriebssystems; ein eigener
   Standardordner ist nicht einstellbar.
+- Das Lesen von Dateien aus der Zwischenablage hängt vom Betriebssystem ab
+  (unter Linux X11 und Wayland, soweit der Dateimanager Dateiverweise
+  bereitstellt); ist sie nicht lesbar, fehlt „Einfügen“ ohne Meldung.
 - Verschieben per Drag-and-Drop zwischen Ordnern gibt es nicht, nur
   Ausschneiden und Einfügen.

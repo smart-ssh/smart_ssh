@@ -765,3 +765,105 @@ mod folder_upload_tests {
         assert_eq!(kinds, vec![true, false, false]);
     }
 }
+
+/// Issue #571: a paste that the user cancels grants nothing — a following
+/// upload of the clipboard file fails with `LOCAL_PATH_NOT_GRANTED`.
+#[tokio::test]
+async fn test_cancelled_clipboard_paste_grants_nothing() {
+    let s = setup().await;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("a.txt");
+    write(&file, b"x");
+
+    let claimed = claim_clipboard_files_impl(
+        &s.sessions,
+        &s.grants,
+        s.session_id,
+        vec![file.clone()],
+        |_| async { false },
+    )
+    .await
+    .unwrap();
+    assert_eq!(claimed, Some(Vec::new()));
+
+    let err = s.upload(&file, "/srv/a.txt").await.unwrap_err();
+    assert_eq!(err.message, LOCAL_PATH_NOT_GRANTED);
+    assert_eq!(s.transfer_events(), 0);
+}
+
+/// Issue #571: after the confirmation the paths are granted and uploadable.
+/// The dialog gets the clipboard files.
+#[tokio::test]
+async fn test_confirmed_clipboard_paste_grants_and_uploads() {
+    let s = setup().await;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("a.txt");
+    write(&file, b"hello");
+
+    let shown = std::sync::Mutex::new(Vec::new());
+    let claimed = claim_clipboard_files_impl(
+        &s.sessions,
+        &s.grants,
+        s.session_id,
+        vec![file.clone()],
+        |files| {
+            *shown.lock().unwrap() = files;
+            async { true }
+        },
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(*shown.lock().unwrap(), vec![file.clone()]);
+    assert_eq!(claimed.len(), 1);
+
+    s.upload(&file, "/srv/a.txt").await.unwrap();
+    // A sibling that was not on the clipboard stays ungranted.
+    let other = dir.path().join("b.txt");
+    write(&other, b"y");
+    assert_eq!(
+        s.upload(&other, "/srv/b.txt").await.unwrap_err().message,
+        LOCAL_PATH_NOT_GRANTED
+    );
+}
+
+/// Issue #571: an empty clipboard shows no dialog and grants nothing; an
+/// unknown session is an error and the dialog is never shown.
+#[tokio::test]
+async fn test_clipboard_paste_without_files_or_session_shows_no_dialog() {
+    let s = setup().await;
+    let asked = std::sync::atomic::AtomicBool::new(false);
+    let ask = |_: Vec<std::path::PathBuf>| {
+        asked.store(true, std::sync::atomic::Ordering::SeqCst);
+        async { true }
+    };
+    let none = claim_clipboard_files_impl(&s.sessions, &s.grants, s.session_id, vec![], ask)
+        .await
+        .unwrap();
+    assert_eq!(none, None);
+    assert!(!asked.load(std::sync::atomic::Ordering::SeqCst));
+
+    let file = std::path::PathBuf::from("/tmp/a.txt");
+    let unknown = SessionId::new_v4();
+    let err =
+        claim_clipboard_files_impl(&s.sessions, &s.grants, unknown, vec![file.clone()], ask).await;
+    assert!(err.is_err());
+    assert!(!asked.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(s.grants.check(unknown, &file, None).is_err());
+}
+
+#[test]
+fn test_paste_dialog_lists_files_and_target() {
+    let texts = ClipboardPasteDialogTexts {
+        title: "t".into(),
+        intro: "Upload?".into(),
+        target_label: "Target".into(),
+        more_label: "and {count} more".into(),
+        confirm_label: "Upload".into(),
+        cancel_label: "Cancel".into(),
+    };
+    let files: Vec<std::path::PathBuf> = (0..14).map(|i| format!("/x/f{i}").into()).collect();
+    let m = paste_dialog_message(&texts, &files, "/srv/www");
+    assert!(m.contains("/x/f0") && m.contains("/x/f11") && !m.contains("/x/f12"));
+    assert!(m.contains("and 2 more") && m.contains("Target: /srv/www"));
+}

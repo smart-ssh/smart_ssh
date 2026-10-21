@@ -44,8 +44,8 @@ export async function openChatWithMessages(app: AppDriver): Promise<string> {
  * without an editor. */
 export async function openChatWithConfirmation(app: AppDriver): Promise<string> {
   await app.launch({ ...populated(), commands: { suggest_rule_patterns: { result: [
-    { label: "rm -rf /var/lib/app/cache", patternType: "Exact", patternValue: "rm -rf /var/lib/app/cache" },
-    { label: "rm -rf /var/lib/app/*", patternType: "Glob", patternValue: "rm -rf /var/lib/app/*" },
+    { kind: "exact", names: [], patterns: [{ patternType: "exact", patternValue: "rm -rf /var/lib/app/cache" }] },
+    { kind: "subcommand", names: ["rm -rf"], patterns: [{ patternType: "glob", patternValue: "rm -rf /var/lib/app/*" }] },
   ] } } });
   const sessionId = await openSession(app, "db-primary");
   await app.emit(
