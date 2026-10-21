@@ -946,6 +946,14 @@ pub struct ChatTurnState {
 }
 
 impl Session {
+    /// Id handed to every `ChatContentExtension` hook (Issue #620): the saved
+    /// chat session id, which survives a resume under a new tab id. Only a
+    /// session without a saved chat (persistence off, local server) falls
+    /// back to the tab id; such content can never be resumed anyway.
+    pub async fn extension_content_key(&self, tab_id: SessionId) -> uuid::Uuid {
+        (*self.chat_session_id.lock().await).unwrap_or(tab_id)
+    }
+
     /// Spec 0085, A3: der einzige Weg, eine `Session` zu bauen. Der normale
     /// SFTP-Kanal startet immer leer; er wird beim ersten Zugriff aus dem
     /// Transport **dieser** Sitzung geöffnet (`ensure_sftp_open`).

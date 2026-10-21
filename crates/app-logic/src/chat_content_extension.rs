@@ -39,6 +39,12 @@ pub struct PendingContent {
 pub struct ChatContentError(pub String);
 
 /// Registered through `Wiring`. All methods have no-op defaults.
+///
+/// Every `session_id` passed to a hook is the **saved chat session id** (the
+/// id `session_removed` and `reconcile` already use), not the id of the open
+/// tab: it stays the same after the chat is resumed under a new tab and
+/// changes with "New Chat". Only a connection without a saved chat (chat
+/// persistence off) passes the tab id.
 pub trait ChatContentExtension: Send + Sync {
     /// Registered name: `[a-z0-9]+`, unique.
     fn name(&self) -> &str {
