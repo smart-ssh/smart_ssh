@@ -94,6 +94,9 @@ der Kern dessen Datenmodell kennt.
 - Gespeichert wird nur der Verweis mit der Nachricht (wie Spec 0034,
   Abschnitt 3) und beim Fortsetzen geladen. Sitzungen ohne Verweise laden
   unverändert.
+- Die Erweiterung verwaltet den Inhalt unter der ID der gespeicherten
+  Chat-Sitzung. Deshalb bleibt er nach einem Neustart und dem Fortsetzen
+  der Sitzung verfügbar; nach „Neuer Chat“ gehört neuer Inhalt zum neuen Chat.
 - Löscht man eine Sitzung (oder den Server), verschwinden ihre Verweise mit;
   die Erweiterung wird darüber informiert und räumt ihren Inhalt auf.
 - Nach dem Fortsetzen zeigt der Verlauf Anzeigename und Art (Text, Bild, PDF)

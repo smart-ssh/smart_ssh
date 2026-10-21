@@ -43,7 +43,7 @@ pub async fn send_chat_message(
     let extension_parts = app_logic::orchestration::accept_extension_content(
         &state.chat_content,
         session.redactor.as_ref(),
-        session_id,
+        session.extension_content_key(session_id).await,
         ids,
     )?;
     send_chat_message_with_attachments_impl(
@@ -301,7 +301,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
     // Issue #505: hand the checked blocks to their extension only now, after
     // the busy check; an error sends nothing (the guard resets the turn).
     if !queued_only {
-        extension_parts.persist(session_id)?;
+        extension_parts.persist(session.extension_content_key(session_id).await)?;
     }
     let mut extension_parts = Some(extension_parts);
     // Spec 0015, Abschnitt 3: Prompt-Historie ist eine Zusatzfunktion für
