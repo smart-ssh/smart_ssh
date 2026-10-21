@@ -126,7 +126,52 @@ pub enum AiEvent {
         max_attempts: u32,
         delay_secs: u64,
     },
+    /// Issue #604: the model called a tool that does not exist, or a known
+    /// tool with unusable arguments. Non-fatal: nothing is executed and the
+    /// stream goes on, so valid calls of the same response still run. The
+    /// chat turn tells the model what was wrong. Carries no arguments (they
+    /// may hold user content).
+    InvalidToolCall {
+        /// Tool name as sent by the model, already sanitized
+        /// ([`sanitize_tool_name`]).
+        tool_name: String,
+        reason: InvalidToolCallReason,
+    },
     Error(AiError),
+}
+
+/// Issue #604: why a tool call was rejected before it reached the filter
+/// engine. Only fixed vocabulary and schema field names — never content of
+/// the arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InvalidToolCallReason {
+    UnknownTool,
+    /// The arguments are not valid JSON.
+    InvalidJson,
+    /// A required field is missing or not a string.
+    MissingField(String),
+    /// A field has a value that is not allowed.
+    InvalidValue(String),
+}
+
+impl InvalidToolCallReason {
+    /// Short fixed text for the model and the logs.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::UnknownTool => "unknown tool".to_string(),
+            Self::InvalidJson => "invalid arguments: not valid JSON".to_string(),
+            Self::MissingField(field) => format!("invalid arguments: field `{field}` missing"),
+            Self::InvalidValue(field) => {
+                format!("invalid arguments: invalid value for `{field}`")
+            }
+        }
+    }
+}
+
+/// Issue #604: a model-chosen tool name made safe to show and to echo back:
+/// control characters removed, at most 64 characters.
+pub fn sanitize_tool_name(name: &str) -> String {
+    name.chars().filter(|c| !c.is_control()).take(64).collect()
 }
 
 /// Art einer serverseitigen Web-Recherche (Issue #162).

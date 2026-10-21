@@ -511,6 +511,7 @@
     "AI_RATE_LIMITED": "Il provider IA sta attualmente limitando le richieste (rate limit): l'app ha già riprovato automaticamente alcune volte. Attenda un momento e invii di nuovo il messaggio.",
     "AI_NETWORK_ERROR": "Impossibile raggiungere il provider IA. Verifichi la connessione a Internet e, per un endpoint personalizzato, l'URL di base, poi invii di nuovo.",
     "AI_INVALID_RESPONSE": "Risposta inattesa dal provider IA",
+    "AI_INVALID_TOOL_CALL": "L’IA ha continuato a chiamare uno strumento che non esiste. Prova a riformulare la richiesta.",
     "AI_CONTEXT_TOO_LARGE": "Contesto troppo grande per il provider IA. Riduca \"Lunghezza massima della risposta (token)\" o avvii una nuova chat.",
     "AI_PROVIDER_UNAVAILABLE": "Il provider IA ha segnalato un errore (ad es. manutenzione o sovraccarico). Riprovi più tardi; se persiste, verifichi le impostazioni del provider.",
     "AI_PROVIDER_OVERLOADED": "Il provider di IA è sovraccarico in questo momento. Riprova tra un attimo.",

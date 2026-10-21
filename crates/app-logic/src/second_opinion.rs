@@ -142,7 +142,8 @@ pub async fn fetch_second_opinion(
             AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
             | AiEvent::Usage { .. }
-            | AiEvent::Retrying { .. } => {}
+            | AiEvent::Retrying { .. }
+            | AiEvent::InvalidToolCall { .. } => {}
         }
     }
 
@@ -342,7 +343,8 @@ pub async fn fetch_injection_check(
             AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
             | AiEvent::Usage { .. }
-            | AiEvent::Retrying { .. } => {}
+            | AiEvent::Retrying { .. }
+            | AiEvent::InvalidToolCall { .. } => {}
         }
     }
 

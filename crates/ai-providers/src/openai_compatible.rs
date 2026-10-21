@@ -205,7 +205,7 @@ pub(crate) fn raw_event_stream(event: RawEvent) -> Pin<Box<dyn Stream<Item = Raw
     Box::pin(futures::stream::once(async move { event }))
 }
 
-use crate::action::{action_from_tool_arguments, parameters_json_schema};
+use crate::action::{parameters_json_schema, tool_call_event};
 use crate::error::{
     error_stream, map_http_response, map_stream_error_object, map_transport_error,
     provider_request_id, timeout_error, ProviderErrorInfo,
@@ -214,7 +214,7 @@ use crate::fallback::{fallback_system_prompt_addition, parse_fallback_response};
 use crate::request_logging::{
     log_context_limit_retry, log_openai_round_summary, log_outgoing_context,
     log_provider_error_response_with_id, log_provider_transport_error, log_stop_reason,
-    log_tool_call_fragment, log_tool_call_parse_error, log_tool_call_parsed,
+    log_tool_call_fragment,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
 
@@ -1225,32 +1225,10 @@ impl OpenAiStreamState {
 }
 
 pub(crate) fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent {
-    match serde_json::from_str::<Value>(arguments) {
-        Ok(args_json) => match action_from_tool_arguments(name, &args_json) {
-            Ok(action) => {
-                log_tool_call_parsed(request_id, &action);
-                AiEvent::ActionProposed(action)
-            }
-            Err(err) => {
-                log_tool_call_parse_error(request_id, name, arguments, err.code(), &err);
-                AiEvent::Error(err)
-            }
-        },
-        // Ein nativer Tool-Call mit kaputtem JSON ist ein Protokollfehler
-        // des Providers, kein "Modell hat halt Prosa statt eines Blocks
-        // geliefert" wie im Fallback-Modus — deshalb hier bewusst ein
-        // `AiError` statt stillschweigendem Text-Fallback (anders als
-        // `parse_fallback_response`, s. `fallback.rs`).
-        Err(err) => {
-            // Spec 0094, A1.3: s. `anthropic::finalize_tool_use` — der Code
-            // stammt vom `AiError`, der aus diesem Fehlschlag entsteht.
-            let ai_error = AiError::InvalidResponse(format!(
-                "Tool-Call-Argumente sind kein gültiges JSON: {err}"
-            ));
-            log_tool_call_parse_error(request_id, name, arguments, ai_error.code(), &err);
-            AiEvent::Error(ai_error)
-        }
-    }
+    // Issue #604: unknown tool, broken JSON or invalid fields are
+    // non-fatal (`AiEvent::InvalidToolCall`); `AiError::InvalidResponse`
+    // stays for real protocol errors.
+    tool_call_event(request_id, name, arguments)
 }
 
 fn event_stream_from_response(
@@ -1942,6 +1920,51 @@ mod tests {
             RawEvent::Public(AiEvent::ActionProposed(_))
         ));
         assert_eq!(events[1], RawEvent::Public(AiEvent::Done));
+    }
+
+    /// Issue #604: unknown tool and a known tool with a missing required
+    /// field are non-fatal; the valid call of the same response is kept.
+    #[tokio::test]
+    async fn test_invalid_tool_calls_are_non_fatal_and_valid_call_still_forwarded() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(
+                    r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"date","arguments":""}},{"index":1,"function":{"name":"suggest_command","arguments":"{\"nothing\":\"rm -rf /\"}"}},{"index":2,"function":{"name":"suggest_command","arguments":"{\"command\":\"ls\"}"}}]}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
+        assert!(
+            matches!(
+                &events[0],
+                RawEvent::Public(AiEvent::InvalidToolCall { tool_name, .. }) if tool_name == "date"
+            ),
+            "{events:?}"
+        );
+        assert!(
+            matches!(
+                &events[1],
+                RawEvent::Public(AiEvent::InvalidToolCall { reason, .. })
+                    if *reason == ssh_manager_core::ai::InvalidToolCallReason::MissingField("command".into())
+            ),
+            "{events:?}"
+        );
+        assert!(matches!(
+            events[2],
+            RawEvent::Public(AiEvent::ActionProposed(_))
+        ));
+        assert_eq!(events[3], RawEvent::Public(AiEvent::Done));
     }
 
     /// Spec 0065 §3: die Verbindung bricht mitten in einem Tool-Call ab,

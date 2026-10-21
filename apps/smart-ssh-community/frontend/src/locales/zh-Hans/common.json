@@ -511,6 +511,7 @@
     "AI_RATE_LIMITED": "AI 提供商目前正在限制请求（速率限制）——应用已自动重试数次。请稍候片刻，再重新发送消息。",
     "AI_NETWORK_ERROR": "无法连接 AI 提供商。请检查您的网络连接，若使用自定义端点，还需检查基础 URL，然后重新发送。",
     "AI_INVALID_RESPONSE": "AI 提供商返回了意料之外的响应",
+    "AI_INVALID_TOOL_CALL": "AI 一直在调用不存在的工具。请尝试换一种方式表述请求。",
     "AI_CONTEXT_TOO_LARGE": "上下文对 AI 提供商而言过大。请调低“最大回复长度（token）”，或开始新的聊天。",
     "AI_PROVIDER_UNAVAILABLE": "AI 提供商报告了错误（例如维护或过载）。请稍后再试；如果持续出现，请检查提供商设置。",
     "AI_PROVIDER_OVERLOADED": "AI 提供商目前过载。请稍后再试。",
