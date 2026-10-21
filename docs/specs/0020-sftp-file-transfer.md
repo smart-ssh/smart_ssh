@@ -221,6 +221,15 @@ Ablegen aus dem Betriebssystem wird nur vom Dateibrowser des **aktiven Tabs**
 entgegengenommen, und nur, solange dessen Ansicht „Dateien“ gewählt ist;
 sonst würden mehrere Hintergrund-Tabs gleichzeitig zum Ziel.
 
+Das Ziel richtet sich nach der **Zeigerposition**: Der Dateibrowser nimmt ein
+Ablegen nur an, wenn der Zeiger über seinem sichtbaren Bereich liegt (das
+ganze Dateien-Feld samt Werkzeugleiste). Ein Ablegen über dem Chat, dem
+Terminal oder einer anderen Fläche lädt nichts hoch; über dem Chat geht es an
+dessen Ablege-Handler (Spec 0110). Jedes Ablegen hat höchstens einen
+Empfänger. Die Ablege-Markierung des Dateibrowsers erscheint nur, solange der
+Zeiger beim Ziehen über ihm ist, und verschwindet beim Verlassen, beim
+Abbruch und beim Ablegen.
+
 ## 6. Zugesichertes Verhalten (durch automatische Tests belegt)
 
 - Die Abbildung auf `sftp-read`/`sftp-write`, die Pfad-Normalisierung, die
