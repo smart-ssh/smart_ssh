@@ -699,7 +699,7 @@ where
 /// The backend reads the clipboard itself, shows a native confirmation that
 /// lists the files and the target directory, and only after the user
 /// confirmed grants the paths to this session and returns them (third grant
-/// source next to the open dialog and the native drop, ADR 0113/0146). The
+/// source next to the open dialog and the native drop, ADR 0113/0145). The
 /// webview sends no local path; `target_dir` is display text only.
 /// `None` = nothing on the clipboard, empty list = cancelled.
 #[tauri::command]
