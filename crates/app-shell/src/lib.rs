@@ -764,6 +764,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::terminal_resize,
             commands::send_chat_message,
             commands::continue_truncated_response,
+            commands::retry_chat_turn,
             commands::take_chat_content_into_note,
             commands::respond_to_action,
             commands::cancel_running_command,

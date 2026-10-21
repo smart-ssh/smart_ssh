@@ -1013,11 +1013,12 @@ async fn run_one_round(
                     code = err.code(),
                     "AI turn ended with an error",
                 );
-                emit_chat_error(
+                crate::events::emit_chat_error_with_details(
                     emitter,
                     session_id,
                     describe_ai_error(&err),
                     Some(err.code()),
+                    ai_error_details(&err, session.redactor.as_ref()),
                 );
                 break;
             }
@@ -1097,6 +1098,44 @@ fn injection_check_text(activity: &WebActivity) -> String {
         text.push_str(content);
     }
     text
+}
+
+/// Command error code: "Try again" is not possible (the history does not end
+/// with the user's own message, or a turn is running). Issue #600.
+pub const RETRY_NOT_POSSIBLE: &str = "RETRY_NOT_POSSIBLE";
+
+/// Issue #600: provider details for the "Details" view. The provider text is
+/// redacted here, before it is emitted. Type and status are taken from what
+/// the provider adapters put into the error ("type: message", "HTTP 503: …");
+/// an in-stream error has no status.
+pub(crate) fn ai_error_details(
+    err: &AiError,
+    redactor: &dyn OutputRedactor,
+) -> crate::events::ChatErrorDetails {
+    let (provider_error_type, raw_message): (Option<String>, Option<&str>) = match err {
+        AiError::Overloaded { .. } => (Some("overloaded_error".to_string()), None),
+        AiError::Billing(m) | AiError::RejectedRequest(m) => match m.split_once(": ") {
+            Some((kind, rest)) => (Some(kind.to_string()), Some(rest)),
+            None => (None, Some(m.as_str())),
+        },
+        AiError::ProviderUnavailable(m)
+        | AiError::ModelNotFound(m)
+        | AiError::ModelNoToolSupport(m)
+        | AiError::NetworkError(m)
+        | AiError::InvalidResponse(m) => (None, Some(m.as_str())),
+        _ => (None, None),
+    };
+    let http_status = raw_message
+        .and_then(|m| m.strip_prefix("HTTP "))
+        .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
+        .and_then(|digits| digits.parse::<u16>().ok());
+    crate::events::ChatErrorDetails {
+        provider_error_type,
+        http_status,
+        provider_message: raw_message
+            .map(|m| redactor.redact_text(m))
+            .filter(|m| !m.trim().is_empty()),
+    }
 }
 
 fn describe_ai_error(err: &AiError) -> String {

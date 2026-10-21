@@ -838,6 +838,21 @@ struct ChatErrorPayload {
     session_id: SessionId,
     message: String,
     code: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_error_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    http_status: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_message: Option<String>,
+}
+
+/// Issue #600: optional provider details of a `chat-error` (shown under
+/// "Details"). `provider_message` must already be redacted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChatErrorDetails {
+    pub provider_error_type: Option<String>,
+    pub http_status: Option<u16>,
+    pub provider_message: Option<String>,
 }
 
 /// **Nicht Teil der Spec-Skizze aus Abschnitt 5** (die dort gelistete
@@ -863,6 +878,23 @@ pub fn emit_chat_error(
     message: String,
     code: Option<&'static str>,
 ) {
+    emit_chat_error_with_details(
+        emitter,
+        session_id,
+        message,
+        code,
+        ChatErrorDetails::default(),
+    );
+}
+
+/// Like [`emit_chat_error`], plus the provider details (Issue #600).
+pub fn emit_chat_error_with_details(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    message: String,
+    code: Option<&'static str>,
+    details: ChatErrorDetails,
+) {
     emit(
         emitter,
         "chat-error",
@@ -870,6 +902,9 @@ pub fn emit_chat_error(
             session_id,
             message,
             code,
+            provider_error_type: details.provider_error_type,
+            http_status: details.http_status,
+            provider_message: details.provider_message,
         },
     );
 }
