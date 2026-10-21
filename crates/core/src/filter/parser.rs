@@ -77,6 +77,18 @@ pub(super) fn split_command(cmd: &str) -> ParseResult {
     }
 }
 
+/// Öffentlicher, schreibgeschützter Zugriff auf dieselbe Zerlegung wie die
+/// Filter-Engine (Spec 0011, Abschnitt 2): die Teilkommandos von `cmd` an
+/// `|`, `&&`, `||`, `;`. `None`, wenn `cmd` leer ist oder nicht sicher
+/// zerlegt werden kann — der Aufrufer darf dann keine Teilkommando-Muster
+/// ableiten. Kein zweiter Shell-Parser: delegiert an [`split_command`].
+pub fn split_top_level_segments(cmd: &str) -> Option<Vec<String>> {
+    match split_command(cmd) {
+        ParseResult::Segments(segments) => Some(segments),
+        ParseResult::Empty | ParseResult::Ambiguous { .. } => None,
+    }
+}
+
 /// Kollabiert Whitespace-Läufe (Leerzeichen, Tabs, ...) zu je einem
 /// Leerzeichen und trimmt die Enden, damit Muster unabhängig von
 /// Whitespace-Varianten in der Eingabe zuverlässig matchen.

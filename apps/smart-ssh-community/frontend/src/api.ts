@@ -31,7 +31,7 @@ import type {
   NoteTarget,
   PatternDto,
   PatternSuggestionDto,
-  PatternType,
+  SuggestionPatternDto,
   RemoteEntryDto,
   RuleDto,
   RuleInput,
@@ -437,17 +437,15 @@ export const suggestRulePatterns = (command: string) =>
 export const acceptAndCreateRule = (
   sessionId: string,
   actionId: string,
-  patternType: PatternType,
-  patternValue: string,
+  patterns: SuggestionPatternDto[],
   scope: Scope,
   priority: number | undefined,
   editedCommand: string | null,
 ) =>
-  invoke<string>("accept_and_create_rule", {
+  invoke<string[]>("accept_and_create_rule", {
     sessionId,
     actionId,
-    patternType,
-    patternValue,
+    patterns,
     scope,
     priority: priority ?? null,
     editedCommand,

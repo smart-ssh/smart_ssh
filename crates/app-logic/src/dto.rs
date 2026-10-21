@@ -1096,15 +1096,41 @@ impl From<EvaluationTrace> for EvaluationTraceDto {
 
 // --- Spec 0011: Regel-Schnellvorschlag ----------------------------------
 
+/// Art eines Muster-Vorschlags (Spec 0011, Abschnitt 2). Das Backend liefert
+/// nur die Art und Parameter, keinen Text: Die Beschriftung baut das
+/// Frontend übersetzt daraus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SuggestionKind {
+    /// Das Kommando selbst, unverändert.
+    Exact,
+    /// Je Teilkommando einer Verkettung/Pipeline das Kommando selbst.
+    ExactPerSegment,
+    /// Unterkommando mit beliebigen Argumenten (`names`: `tool sub`).
+    Subcommand,
+    /// Alle Aufrufe eines Programms (`names`: das Programm).
+    Tool,
+}
+
+/// Ein einzelnes Muster eines Vorschlags.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionPatternDto {
+    pub pattern_type: PatternType,
+    pub pattern_value: String,
+}
+
 /// Ein Muster-Vorschlag für den Schnellvorschlag-Dropdown im
-/// Bestätigungsdialog (Spec 0011, Abschnitt 2).
+/// Bestätigungsdialog (Spec 0011, Abschnitt 2). Ein Vorschlag besteht aus
+/// einer **Menge** von Mustern, die zusammen (atomar) angelegt werden.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PatternSuggestionDto {
-    /// Menschenlesbar, für die Dropdown-Anzeige.
-    pub label: String,
-    pub pattern_type: PatternType,
-    pub pattern_value: String,
+    pub kind: SuggestionKind,
+    /// Parameter für die Beschriftung (Programme bzw. `tool sub`), ohne
+    /// Doppelte, in Reihenfolge des Auftretens. Leer bei `exact*`.
+    pub names: Vec<String>,
+    pub patterns: Vec<SuggestionPatternDto>,
 }
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------
