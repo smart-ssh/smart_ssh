@@ -283,7 +283,14 @@ impl SftpSession for LocalFileSession {
             .await
         {
             Ok(_) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            // Windows meldet „Zugriff verweigert" statt `AlreadyExists`, wenn
+            // der Name ein Ordner ist — daher zählt auch, dass er existiert.
+            Err(e)
+                if e.kind() == std::io::ErrorKind::AlreadyExists
+                    || tokio::fs::symlink_metadata(self.resolve(path))
+                        .await
+                        .is_ok() =>
+            {
                 Err(SshError::SftpAlreadyExists(path.to_string()))
             }
             Err(e) => Err(io_err(path, e)),
