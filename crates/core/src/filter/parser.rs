@@ -727,12 +727,64 @@ pub(super) fn contains_unquoted_output_redirection(text: &str) -> bool {
         match c {
             '\'' => in_single = true,
             '"' => in_double = true,
-            '>' if chars.get(i + 1) != Some(&'(') => return true,
+            '>' if chars.get(i + 1) != Some(&'(') => match non_writing_redirection_len(&chars, i) {
+                // Skip the rest of the allowed form (it contains no quotes).
+                Some(len) => {
+                    i += len;
+                    continue;
+                }
+                None => return true,
+            },
             _ => {}
         }
         i += 1;
     }
     false
+}
+
+/// True if `c` ends a shell word at top level (whitespace or an operator).
+fn is_word_end(c: Option<&char>) -> bool {
+    match c {
+        None => true,
+        Some(c) => c.is_whitespace() || matches!(c, '|' | ';' | '&' | ')'),
+    }
+}
+
+/// If the `>` at `chars[i]` is one of the exact non-writing redirections
+/// (`>/dev/null`, `1>`/`2>`/`&>` `/dev/null`, `2>&1`, `>&2`, `1>&2`), returns
+/// how many chars from `i` it consumes; otherwise `None` (= output
+/// redirection). Everything not listed stays a redirection (Spec 0002).
+fn non_writing_redirection_len(chars: &[char], i: usize) -> Option<usize> {
+    // The char before `>` selects the form; a digit other than 1/2, `<`
+    // (`<>`) and anything else unknown is not allowed.
+    let prev = if i == 0 { None } else { Some(chars[i - 1]) };
+    if matches!(prev, Some('<'))
+        || matches!(prev, Some(d) if d.is_ascii_digit() && d != '1' && d != '2')
+    {
+        return None;
+    }
+    match chars.get(i + 1) {
+        Some('&') => {
+            let fd = *chars.get(i + 2)?;
+            let ok = match (prev, fd) {
+                (Some('2'), '1') => true,
+                (Some('2'), _) => false,
+                (_, '2') => prev != Some('&'),
+                _ => false,
+            };
+            (ok && is_word_end(chars.get(i + 3))).then_some(3)
+        }
+        _ => {
+            let mut j = i + 1;
+            while matches!(chars.get(j), Some(' ' | '\t')) {
+                j += 1;
+            }
+            let target: Vec<char> = "/dev/null".chars().collect();
+            let end = j + target.len();
+            (chars.get(j..end) == Some(&target[..]) && is_word_end(chars.get(end)))
+                .then_some(end - i)
+        }
+    }
 }
 
 /// Zerlegt `cmd` an den Top-Level-Operatoren `&&`, `||`, `;`, `|`, `&` sowie
@@ -824,6 +876,22 @@ fn scan_top_level_segments(cmd: &str) -> Option<Vec<String>> {
                     push_segment(&chars, current_start, i, &mut segments);
                     i += 2;
                     current_start = i;
+                    continue;
+                }
+                // `&>/dev/null` is one redirection operator, not a background
+                // `&` followed by `>`: keep it inside the segment.
+                '&' if chars.get(i + 1) == Some(&'>')
+                    && non_writing_redirection_len(&chars, i + 1).is_some() =>
+                {
+                    i += 1;
+                    continue;
+                }
+                // Likewise `2>&1` / `>&2`: the `&` belongs to the fd operator.
+                '&' if i > 0
+                    && chars[i - 1] == '>'
+                    && non_writing_redirection_len(&chars, i - 1).is_some() =>
+                {
+                    i += 1;
                     continue;
                 }
                 '&' => {
