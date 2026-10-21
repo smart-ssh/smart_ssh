@@ -369,7 +369,13 @@
     "noSuggestions": "Немає пропозицій.",
     "binaryFileHint": "⚠ Двійковий файл — текстове порівняння неможливе. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
     "diffTooLargeHint": "⚠ Вміст завеликий для порівняння рядків. Попередній розмір: {{oldSize}}, новий розмір: {{newSize}}.",
-    "noContentChange": "(вміст не змінено)"
+    "noContentChange": "(вміст не змінено)",
+    "quickRuleLabel": {
+      "exact": "Точно: {{patterns}}",
+      "exactPerSegment": "Точно для кожної частини: {{patterns}}",
+      "subcommand": "Усі виклики `{{names}}`: {{patterns}}",
+      "tool": "Усі виклики `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Попередження безпеки · Ключ хоста змінився",

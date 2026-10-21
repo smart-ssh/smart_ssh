@@ -369,7 +369,13 @@
     "noSuggestions": "Geen suggesties.",
     "binaryFileHint": "⚠ Binair bestand — tekstvergelijking niet mogelijk. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
     "diffTooLargeHint": "⚠ Inhoud te groot voor een regelvergelijking. Vorige grootte: {{oldSize}}, nieuwe grootte: {{newSize}}.",
-    "noContentChange": "(geen inhoudswijziging)"
+    "noContentChange": "(geen inhoudswijziging)",
+    "quickRuleLabel": {
+      "exact": "Precies: {{patterns}}",
+      "exactPerSegment": "Precies per onderdeel: {{patterns}}",
+      "subcommand": "Alle `{{names}}`-aanroepen: {{patterns}}",
+      "tool": "Alle `{{names}}`-aanroepen: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Beveiligingswaarschuwing · Hostsleutel gewijzigd",

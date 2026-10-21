@@ -369,7 +369,13 @@
     "noSuggestions": "Ei ehdotuksia.",
     "binaryFileHint": "⚠ Binääritiedosto – tekstivertailu ei ole mahdollista. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
     "diffTooLargeHint": "⚠ Sisältö on liian suuri rivikohtaiseen vertailuun. Aiempi koko: {{oldSize}}, uusi koko: {{newSize}}.",
-    "noContentChange": "(ei sisällön muutosta)"
+    "noContentChange": "(ei sisällön muutosta)",
+    "quickRuleLabel": {
+      "exact": "Täsmälleen: {{patterns}}",
+      "exactPerSegment": "Täsmälleen osittain: {{patterns}}",
+      "subcommand": "Kaikki `{{names}}`-kutsut: {{patterns}}",
+      "tool": "Kaikki `{{names}}`-kutsut: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Turvavaroitus · Isäntäavain muuttunut",

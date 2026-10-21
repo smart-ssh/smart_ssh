@@ -369,7 +369,13 @@
     "noSuggestions": "Tidak ada saran.",
     "binaryFileHint": "⚠ Berkas biner — perbandingan teks tidak memungkinkan. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
     "diffTooLargeHint": "⚠ Konten terlalu besar untuk diff per baris. Ukuran sebelumnya: {{oldSize}}, ukuran baru: {{newSize}}.",
-    "noContentChange": "(tidak ada perubahan konten)"
+    "noContentChange": "(tidak ada perubahan konten)",
+    "quickRuleLabel": {
+      "exact": "Persis: {{patterns}}",
+      "exactPerSegment": "Persis per bagian: {{patterns}}",
+      "subcommand": "Semua panggilan `{{names}}`: {{patterns}}",
+      "tool": "Semua panggilan `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Peringatan Keamanan · Kunci Host Berubah",

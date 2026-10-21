@@ -859,6 +859,26 @@ fn segment_summary(trace: &EvaluationTrace) -> String {
     format!("[{}]", items.join(", "))
 }
 
+/// Ob eine **Allow**-Regel mit `pattern` das Teilkommando `segment` in der
+/// Filter-Engine träfe (Spec 0011, Abschnitt 2). Spiegelt exakt die
+/// Textvarianten, die `evaluate_segment_explained` für Allow-Regeln
+/// auswertet: Original und `sudo`/`doas`-befreit, jeweils ohne
+/// Command-Substitutionen. Rein lesend; ändert die Auswertung nicht. Dient
+/// dem Schnellvorschlag dazu, nur Muster anzubieten, die das bestätigte
+/// Kommando wirklich abdecken. Andere Prüfungen (Blacklist, Umleitung,
+/// Substitution, undurchsichtige Eingabe) bleiben davon unberührt.
+pub fn allow_rule_matches_segment(pattern: &super::types::Pattern, segment: &str) -> bool {
+    let normalized = parser::normalize_whitespace(segment);
+    let (_elevated, stripped) = parser::detect_elevation(&normalized);
+    let (original_literal, _) = parser::strip_substitutions(&normalized);
+    let (stripped_literal, _) = parser::strip_substitutions(&stripped);
+    let original_literal = parser::normalize_whitespace(&original_literal);
+    let stripped_literal = parser::normalize_whitespace(&stripped_literal);
+    pattern.matches_for_user_rule(&original_literal, &RuleAction::Allow)
+        || (original_literal != stripped_literal
+            && pattern.matches_for_user_rule(&stripped_literal, &RuleAction::Allow))
+}
+
 /// Hash von Art und Text des Musters — nur zum Wiedererkennen einer
 /// bereits gemeldeten Regel, der Text selbst wird nicht gehalten.
 fn pattern_fingerprint(pattern: &super::types::Pattern) -> u64 {

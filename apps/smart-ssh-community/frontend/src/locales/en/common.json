@@ -369,7 +369,13 @@
     "noSuggestions": "No suggestions.",
     "binaryFileHint": "⚠ Binary file — text comparison not possible. Previous size: {{oldSize}}, new size: {{newSize}}.",
     "diffTooLargeHint": "⚠ Content too large for a line diff. Previous size: {{oldSize}}, new size: {{newSize}}.",
-    "noContentChange": "(no content change)"
+    "noContentChange": "(no content change)",
+    "quickRuleLabel": {
+      "exact": "Exact: {{patterns}}",
+      "exactPerSegment": "Exact per part: {{patterns}}",
+      "subcommand": "All `{{names}}` calls: {{patterns}}",
+      "tool": "All `{{names}}` calls: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Security Warning · Host Key Changed",

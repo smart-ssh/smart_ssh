@@ -369,7 +369,13 @@
     "noSuggestions": "Nincs javaslat.",
     "binaryFileHint": "⚠ Bináris fájl – szöveges összehasonlítás nem lehetséges. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
     "diffTooLargeHint": "⚠ A tartalom túl nagy a soronkénti összehasonlításhoz. Korábbi méret: {{oldSize}}, új méret: {{newSize}}.",
-    "noContentChange": "(nincs tartalmi változás)"
+    "noContentChange": "(nincs tartalmi változás)",
+    "quickRuleLabel": {
+      "exact": "Pontos: {{patterns}}",
+      "exactPerSegment": "Pontos részenként: {{patterns}}",
+      "subcommand": "Az összes `{{names}}` hívás: {{patterns}}",
+      "tool": "Az összes `{{names}}` hívás: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Biztonsági figyelmeztetés · A gazdakulcs megváltozott",

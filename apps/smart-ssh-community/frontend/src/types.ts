@@ -830,10 +830,19 @@ export interface EvaluationTraceDto {
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------
 
-export interface PatternSuggestionDto {
-  label: string;
+export type SuggestionKind = "exact" | "exactPerSegment" | "subcommand" | "tool";
+
+export interface SuggestionPatternDto {
   patternType: PatternType;
   patternValue: string;
+}
+
+/** A suggestion is a set of patterns that are created together; the label is
+ * rendered by the frontend from `kind` and `names` (no prose from the backend). */
+export interface PatternSuggestionDto {
+  kind: SuggestionKind;
+  names: string[];
+  patterns: SuggestionPatternDto[];
 }
 
 // --- Spec 0012: KI-generierte Dokumente ---------------------------------

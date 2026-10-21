@@ -369,7 +369,13 @@
     "noSuggestions": "Вариантов нет.",
     "binaryFileHint": "⚠ Двоичный файл — текстовое сравнение невозможно. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
     "diffTooLargeHint": "⚠ Содержимое слишком велико для построчного сравнения. Прежний размер: {{oldSize}}, новый размер: {{newSize}}.",
-    "noContentChange": "(содержимое не изменилось)"
+    "noContentChange": "(содержимое не изменилось)",
+    "quickRuleLabel": {
+      "exact": "Точно: {{patterns}}",
+      "exactPerSegment": "Точно по частям: {{patterns}}",
+      "subcommand": "Все вызовы `{{names}}`: {{patterns}}",
+      "tool": "Все вызовы `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Предупреждение безопасности · Ключ хоста изменился",

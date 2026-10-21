@@ -82,7 +82,7 @@ import type {
   Decision,
   DocumentFormat,
   PatternSuggestionDto,
-  PatternType,
+  SuggestionPatternDto,
   RiskAssessment,
   Scope,
   WebActivityDto,
@@ -862,8 +862,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * Kommando erscheinen. */
   const acceptWithRule = (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
   ) => {
@@ -878,8 +877,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     acceptAndCreateRule(
       sessionId,
       actionId,
-      patternType,
-      patternValue,
+      patterns,
       scope,
       undefined,
       editedCommand,
@@ -1465,8 +1463,7 @@ export function ChatItemView({
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
   ) => void;
@@ -1843,8 +1840,7 @@ function ConfirmActionForm({
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
   ) => void;
@@ -1925,7 +1921,7 @@ function ConfirmActionForm({
  * Bestätigungsdialog selbst verschwindet dann über `onAccept`s
  * optimistisches `responded: true` (s. `ChatPanel.acceptWithRule`), genau
  * wie bei Ausführen/Ablehnen. */
-function QuickRuleButton({
+export function QuickRuleButton({
   actionId,
   command,
   wasEdited,
@@ -1942,8 +1938,7 @@ function QuickRuleButton({
   serverId: string;
   onAccept: (
     actionId: string,
-    patternType: PatternType,
-    patternValue: string,
+    patterns: SuggestionPatternDto[],
     scope: Scope,
     editedCommand: string | null,
   ) => void;
@@ -2004,8 +1999,7 @@ function QuickRuleButton({
     if (!scope) return;
     onAccept(
       actionId,
-      suggestion.patternType,
-      suggestion.patternValue,
+      suggestion.patterns,
       scope,
       wasEdited ? command : null,
     );
@@ -2076,14 +2070,17 @@ function QuickRuleButton({
           )}
           <ul className="space-y-1">
             {suggestions.map((suggestion) => (
-              <li key={suggestion.patternValue}>
+              <li key={suggestion.patterns.map((p) => p.patternValue).join("\n")}>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handlePick(suggestion)}
                   className="w-full justify-start text-left font-mono break-all text-slate-200"
                 >
-                  {suggestion.label}
+                  {t(`confirmDialog.quickRuleLabel.${suggestion.kind}`, {
+                    names: suggestion.names.join(", "),
+                    patterns: suggestion.patterns.map((p) => p.patternValue).join(", "),
+                  })}
                 </Button>
               </li>
             ))}

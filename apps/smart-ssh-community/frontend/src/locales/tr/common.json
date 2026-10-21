@@ -369,7 +369,13 @@
     "noSuggestions": "Öneri yok.",
     "binaryFileHint": "⚠ İkili dosya — metin karşılaştırması mümkün değil. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
     "diffTooLargeHint": "⚠ İçerik satır farkı için çok büyük. Önceki boyut: {{oldSize}}, yeni boyut: {{newSize}}.",
-    "noContentChange": "(içerik değişikliği yok)"
+    "noContentChange": "(içerik değişikliği yok)",
+    "quickRuleLabel": {
+      "exact": "Tam: {{patterns}}",
+      "exactPerSegment": "Parça başına tam: {{patterns}}",
+      "subcommand": "Tüm `{{names}}` çağrıları: {{patterns}}",
+      "tool": "Tüm `{{names}}` çağrıları: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Güvenlik uyarısı · Ana makine anahtarı değişti",

@@ -369,7 +369,13 @@
     "noSuggestions": "कोई सुझाव नहीं।",
     "binaryFileHint": "⚠ बाइनरी फ़ाइल — टेक्स्ट तुलना संभव नहीं। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
     "diffTooLargeHint": "⚠ पंक्ति-अंतर के लिए सामग्री बहुत बड़ी है। पिछला आकार: {{oldSize}}, नया आकार: {{newSize}}।",
-    "noContentChange": "(सामग्री में कोई बदलाव नहीं)"
+    "noContentChange": "(सामग्री में कोई बदलाव नहीं)",
+    "quickRuleLabel": {
+      "exact": "सटीक: {{patterns}}",
+      "exactPerSegment": "प्रत्येक भाग के लिए सटीक: {{patterns}}",
+      "subcommand": "सभी `{{names}}` कॉल: {{patterns}}",
+      "tool": "सभी `{{names}}` कॉल: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "सुरक्षा चेतावनी · होस्ट कुंजी बदली",

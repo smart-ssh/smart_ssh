@@ -369,7 +369,13 @@
     "noSuggestions": "Nicio sugestie.",
     "binaryFileHint": "⚠ Fișier binar — comparația de text nu este posibilă. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
     "diffTooLargeHint": "⚠ Conținut prea mare pentru o comparație pe linii. Dimensiune anterioară: {{oldSize}}, dimensiune nouă: {{newSize}}.",
-    "noContentChange": "(conținut nemodificat)"
+    "noContentChange": "(conținut nemodificat)",
+    "quickRuleLabel": {
+      "exact": "Identic: {{patterns}}",
+      "exactPerSegment": "Identic pe părți: {{patterns}}",
+      "subcommand": "Toate apelurile `{{names}}`: {{patterns}}",
+      "tool": "Toate apelurile `{{names}}`: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Avertisment de securitate · Cheia de host s-a schimbat",

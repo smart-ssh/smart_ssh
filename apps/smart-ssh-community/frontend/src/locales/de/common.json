@@ -369,7 +369,13 @@
     "noSuggestions": "Keine Vorschläge.",
     "binaryFileHint": "⚠ Binärdatei — kein Textvergleich möglich. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
     "diffTooLargeHint": "⚠ Inhalt zu groß für Zeilen-Diff. Bisherige Größe: {{oldSize}}, neue Größe: {{newSize}}.",
-    "noContentChange": "(keine inhaltliche Änderung)"
+    "noContentChange": "(keine inhaltliche Änderung)",
+    "quickRuleLabel": {
+      "exact": "Exakt: {{patterns}}",
+      "exactPerSegment": "Exakt je Teilkommando: {{patterns}}",
+      "subcommand": "Alle `{{names}}`-Aufrufe: {{patterns}}",
+      "tool": "Alle `{{names}}`-Aufrufe: {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Sicherheitswarnung · Host-Schlüssel geändert",

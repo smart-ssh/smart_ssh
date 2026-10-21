@@ -369,7 +369,13 @@
     "noSuggestions": "Aucune suggestion.",
     "binaryFileHint": "⚠ Fichier binaire — comparaison de texte impossible. Taille précédente : {{oldSize}}, nouvelle taille : {{newSize}}.",
     "diffTooLargeHint": "⚠ Contenu trop volumineux pour une comparaison ligne à ligne. Taille précédente : {{oldSize}}, nouvelle taille : {{newSize}}.",
-    "noContentChange": "(aucun changement de contenu)"
+    "noContentChange": "(aucun changement de contenu)",
+    "quickRuleLabel": {
+      "exact": "Exact : {{patterns}}",
+      "exactPerSegment": "Exact par partie : {{patterns}}",
+      "subcommand": "Tous les appels `{{names}}` : {{patterns}}",
+      "tool": "Tous les appels `{{names}}` : {{patterns}}"
+    }
   },
   "hostKeyDialog": {
     "mismatchLabel": "Alerte de sécurité · Clé d’hôte modifiée",
