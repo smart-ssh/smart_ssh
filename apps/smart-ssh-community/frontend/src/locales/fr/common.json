@@ -377,6 +377,17 @@
       "lastArgOpen": "Dernier argument libre : {{patterns}}",
       "subcommand": "Tous les appels `{{names}}` : {{patterns}}",
       "tool": "Tous les appels `{{names}}` : {{patterns}}"
+    },
+    "explain": {
+      "heading": "Parties de cette commande",
+      "covered": "couverte par la règle {{rule}}",
+      "coveredUnknown": "couverte par une règle existante",
+      "needsRule": "nécessite une règle",
+      "blocked": "demande toujours, quelles que soient les règles : {{reasons}}",
+      "verdictAuto": "s'exécutera automatiquement la prochaine fois",
+      "verdictAsk": "demandera encore : {{reasons}}",
+      "notice": "Règle créée. Cette commande demandera encore la prochaine fois : {{reasons}}",
+      "reasonOther": "un autre contrôle de sécurité"
     }
   },
   "hostKeyDialog": {

@@ -114,5 +114,52 @@ Regel-Formular (Spec 0009). Ein Klick auf einen Vorschlag schließt den Dialog.
 - Die Vorschläge sind keine sicherheitsrelevante Auswertung. Ob ein später
   passendes Kommando automatisch läuft, entscheidet allein die Filter-Engine
   (Spec 0002); Vorschläge ändern nichts daran, was sie erlaubt oder ablehnt.
-- Vorgeschlagen werden alle Teilkommandos, auch solche, die bereits eine
-  Regel erlaubt; doppelte Regeln sind harmlos.
+- Teilkommandos, die bereits eine Allow-Regel abdeckt, bekommen kein Muster
+  (Abschnitt 6). Die Vorschläge selbst legen nur Allow-Regeln an; ob das
+  Kommando danach automatisch läuft, zeigt das Urteil je Vorschlag.
+
+## 6. Abdeckung je Teilkommando und Urteil je Vorschlag
+
+**Abdeckung.** Besteht das Kommando aus mehr als einem Teilkommando
+(Verkettung, Pipeline), listet die Bestätigungskarte jedes Teilkommando in
+der Reihenfolge des Kommandos mit seinem Zustand:
+
+- **abgedeckt** – eine bestehende Allow-Regel lässt das Teilkommando
+  automatisch laufen; die Karte nennt das Muster dieser Regel;
+- **braucht eine Regel** – keine Regel greift;
+- **fragt unabhängig von Regeln nach** – mit Grund: Umleitung, Substitution,
+  nicht analysierbare Eingabe, Blacklist, eine Regel verlangt Bestätigung,
+  eine Regel verbietet es.
+
+Bei einem einzelnen Teilkommando erscheint diese Zeile nur, wenn ein
+regelunabhängiger Grund greift. Die Zustände stammen aus der Auswertung der
+Filter-Engine (Spec 0002, §4.8), nicht aus einem eigenen Abgleich.
+
+**Nur unabgedeckte Teilkommandos.** Die Vorschläge (Abschnitt 2) enthalten
+Muster nur für Teilkommandos, die nicht abgedeckt sind. Kleine Helfer wie
+`wc -l`, `head -20` oder `sort` werden wie jedes andere Teilkommando
+vorgeschlagen. Sind alle Teilkommandos abgedeckt, gibt es keinen Vorschlag.
+
+**Urteil je Vorschlag.** Jeder Vorschlag sagt vorab, ob seine Annahme dazu
+führt, dass genau dieses Kommando künftig automatisch läuft:
+
+- **„läuft beim nächsten Mal automatisch"** – die Engine liefert mit den
+  Mustern des Vorschlags als zusätzlichen Allow-Regeln im gewählten
+  Geltungsbereich und nach allen vom Nutzer unabhängigen Eskalationen
+  (z. B. rotes Risiko bei aktivierter Einstellung, Secret-Pfad, hinterlegtes
+  Sudo-Passwort, Hinweis auf eingeschleuste Anweisungen) „automatisch";
+- **„fragt weiterhin nach: …"** – sonst, mit den Gründen (z. B. Umleitung,
+  Teilkommando ohne Regel, Risiko rot). Der Nutzer kann die Regel trotzdem
+  anlegen; die Beschriftung macht die Grenze klar.
+
+Ein Kommando mit Substitution, `bash -c`, `eval` oder nicht analysierbarer
+Eingabe bekommt nie „läuft automatisch", solange die Engine es nicht selbst
+automatisch zulässt. Ein Geltungsbereich, der auf diesem Server nicht gilt
+(Server-Regel eines anderen Servers), zählt nicht. Ein Wechsel des
+Geltungsbereichs oder des bearbeiteten Kommandotexts wertet die Urteile neu
+aus. Die Auswertung ist rein lesend: Es wird nichts gespeichert, bevor der
+Nutzer einen Vorschlag annimmt.
+
+**Hinweis nach dem Annehmen.** Genügen die angelegten Regeln nicht, damit
+das Kommando automatisch läuft, erscheint im Chat ein kurzer Hinweis mit den
+Gründen. Bei „läuft automatisch" erscheint keiner.

@@ -377,6 +377,17 @@
       "lastArgOpen": "Argumen terakhir apa pun: {{patterns}}",
       "subcommand": "Semua panggilan `{{names}}`: {{patterns}}",
       "tool": "Semua panggilan `{{names}}`: {{patterns}}"
+    },
+    "explain": {
+      "heading": "Bagian perintah ini",
+      "covered": "tercakup oleh aturan {{rule}}",
+      "coveredUnknown": "tercakup oleh aturan yang ada",
+      "needsRule": "perlu aturan",
+      "blocked": "selalu bertanya, apa pun aturannya: {{reasons}}",
+      "verdictAuto": "berjalan otomatis lain kali",
+      "verdictAsk": "tetap akan bertanya: {{reasons}}",
+      "notice": "Aturan dibuat. Perintah ini tetap akan bertanya lain kali: {{reasons}}",
+      "reasonOther": "pemeriksaan keamanan lain"
     }
   },
   "hostKeyDialog": {
