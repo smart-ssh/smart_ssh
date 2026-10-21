@@ -313,8 +313,8 @@
     "overallDecision": "Celkové rozhodnutí",
     "subCommands": "Dílčí příkazy",
     "matchedRuleLabel": "Pravidlo:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "Část {{index}}",
+    "checksLabel": "Kontroly:",
     "hardBlacklistLabel": "Pevná černá listina:"
   },
   "actionCard": {

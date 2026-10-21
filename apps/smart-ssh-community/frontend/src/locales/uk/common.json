@@ -313,8 +313,8 @@
     "overallDecision": "Загальне рішення",
     "subCommands": "Підкоманди",
     "matchedRuleLabel": "Правило:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "Частина {{index}}",
+    "checksLabel": "Перевірки:",
     "hardBlacklistLabel": "Жорсткий чорний список:"
   },
   "actionCard": {

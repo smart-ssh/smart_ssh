@@ -313,7 +313,7 @@
     "overallDecision": "Décision globale",
     "subCommands": "Sous-commandes",
     "matchedRuleLabel": "Règle :",
-    "segmentLabel": "Segment {{index}}",
+    "segmentLabel": "Partie {{index}}",
     "checksLabel": "Vérifications :",
     "hardBlacklistLabel": "Liste noire stricte :"
   },

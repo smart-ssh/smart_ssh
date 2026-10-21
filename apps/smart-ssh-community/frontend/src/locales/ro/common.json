@@ -313,8 +313,8 @@
     "overallDecision": "Decizie generală",
     "subCommands": "Subcomenzi",
     "matchedRuleLabel": "Regulă:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "Segmentul {{index}}",
+    "checksLabel": "Verificări:",
     "hardBlacklistLabel": "Listă neagră fixă:"
   },
   "actionCard": {

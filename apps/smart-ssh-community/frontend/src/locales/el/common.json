@@ -313,8 +313,8 @@
     "overallDecision": "Συνολική απόφαση",
     "subCommands": "Υποεντολές",
     "matchedRuleLabel": "Κανόνας:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "Τμήμα {{index}}",
+    "checksLabel": "Έλεγχοι:",
     "hardBlacklistLabel": "Αυστηρή μαύρη λίστα:"
   },
   "actionCard": {

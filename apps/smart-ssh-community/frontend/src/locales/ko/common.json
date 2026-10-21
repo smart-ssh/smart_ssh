@@ -313,8 +313,8 @@
     "overallDecision": "최종 결정",
     "subCommands": "하위 명령",
     "matchedRuleLabel": "규칙:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "세그먼트 {{index}}",
+    "checksLabel": "검사:",
     "hardBlacklistLabel": "하드 블랙리스트:"
   },
   "actionCard": {

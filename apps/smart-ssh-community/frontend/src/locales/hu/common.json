@@ -313,8 +313,8 @@
     "overallDecision": "Összesített döntés",
     "subCommands": "Részparancsok",
     "matchedRuleLabel": "Szabály:",
-    "segmentLabel": "Segment {{index}}",
-    "checksLabel": "Checks:",
+    "segmentLabel": "{{index}}. szakasz",
+    "checksLabel": "Ellenőrzések:",
     "hardBlacklistLabel": "Szigorú feketelista:"
   },
   "actionCard": {
