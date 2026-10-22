@@ -28,7 +28,22 @@ use futures::{Stream, StreamExt};
 /// empfangenem Frame neu gestartet), damit eine legitime, aber lange
 /// laufende Antwort (viele Tool-Calls, große Ausgabe) nicht fälschlich
 /// abgebrochen wird, solange der Provider weiterhin Daten schickt.
-pub(crate) const SSE_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(90);
+pub(crate) const SSE_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Issue #694: maximum wait for *real content* (text/tool-call/usage/done
+/// event or provider error) while streaming, and for the response headers.
+/// Same value as [`SSE_INACTIVITY_TIMEOUT`] (one constant). Keep-alives
+/// (SSE comments, empty frames, Anthropic `ping`) do not restart it, see
+/// [`frame_is_content`].
+pub(crate) const CONTENT_TIMEOUT: Duration = SSE_INACTIVITY_TIMEOUT;
+
+/// Issue #694: whether a parsed SSE frame is real content that restarts the
+/// content timeout. SSE comment lines never become frames
+/// (`parse_frame`); additionally an empty `data` payload and Anthropic's
+/// `ping` event are keep-alives.
+pub(crate) fn frame_is_content(frame: &SseFrame) -> bool {
+    !frame.data.trim().is_empty() && frame.event.as_deref() != Some("ping")
+}
 
 /// Bug-Diagnose "KI antwortet nicht" (2026-09, Nutzerbericht): ein
 /// Live-Repro zeigte einen Fall, in dem [`SSE_INACTIVITY_TIMEOUT`] (oben)
@@ -206,6 +221,24 @@ pub(crate) fn sse_frame_stream(
     )
 }
 
+/// Issue #694 test helper: an endless frame stream that yields `frame` every
+/// `every` of (virtual) time.
+#[cfg(test)]
+pub(crate) fn periodic_frames(
+    event: Option<&str>,
+    data: &str,
+    every: Duration,
+) -> std::pin::Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> {
+    let frame = SseFrame {
+        event: event.map(str::to_string),
+        data: data.to_string(),
+    };
+    Box::pin(futures::stream::unfold(frame, move |frame| async move {
+        tokio::time::sleep(every).await;
+        Some((Ok(frame.clone()), frame))
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,6 +311,27 @@ mod tests {
             "sollte nach der kürzeren `cap` (5s) abbrechen, nicht erst nach \
              der vollen SSE_INACTIVITY_TIMEOUT (90s)"
         );
+    }
+
+    /// Issue #694: comment-only keep-alives (`: PROCESSING`) never become
+    /// frames, so they cannot restart the content timeout.
+    #[test]
+    fn test_comment_only_keep_alive_yields_no_frame() {
+        let mut buffer = ": OPENROUTER PROCESSING\n\n: PROCESSING\n\n".to_string();
+        assert!(drain_complete_frames(&mut buffer).is_empty());
+    }
+
+    #[test]
+    fn test_frame_is_content_rejects_keep_alives() {
+        let f = |event: Option<&str>, data: &str| SseFrame {
+            event: event.map(str::to_string),
+            data: data.to_string(),
+        };
+        assert!(!frame_is_content(&f(None, "")));
+        assert!(!frame_is_content(&f(None, "  ")));
+        assert!(!frame_is_content(&f(Some("ping"), "{\"type\":\"ping\"}")));
+        assert!(frame_is_content(&f(None, "{\"a\":1}")));
+        assert!(frame_is_content(&f(Some("message_start"), "{}")));
     }
 
     #[test]
