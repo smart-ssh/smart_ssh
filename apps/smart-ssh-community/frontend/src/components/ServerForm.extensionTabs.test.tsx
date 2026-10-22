@@ -125,7 +125,6 @@ describe("ServerForm extension tabs (issue #608)", () => {
     expect(tabNames()).toEqual(["Allgemein", "Verbindung", "Sicherheit", "Notizen"]);
     expect(container.querySelector("[data-extension-section]")).toBeNull();
     expect(container.querySelectorAll('[role="tabpanel"]')).toHaveLength(4);
-    expect(container.querySelectorAll('[role="region"]')).toHaveLength(0);
     // Siblings of the form: only the General wrapper (hidden unless active)
     // and the Notes panel; no empty wrappers for Connection/Security.
     const form = container.querySelector("form") as HTMLElement;
@@ -140,7 +139,7 @@ describe("ServerForm extension tabs (issue #608)", () => {
     registerServerFormSection({ id: "s-conn", tab: "connection", component: Sec });
     const { container } = renderForm();
     await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
-    const region = screen.getByText("sec-body").closest('[role="region"]') as HTMLElement;
+    const region = screen.getByText("sec-body").closest('section') as HTMLElement;
     const connTab = screen.getByRole("tab", { name: "Verbindung" });
     expect(region.getAttribute("aria-labelledby")).toBe(connTab.id);
     // Keyboard: End reaches the last (extension) tab.

@@ -52,9 +52,9 @@ export function ServerFormTabSections({
   const all = useSyncExternalStore(subscribeFormSlots, listServerFormSections);
   if (!all.some((s) => (s.tab ?? "general") === tab)) return null;
   return (
-    <div role="region" aria-labelledby={labelledBy} hidden={hidden} className="space-y-6">
+    <section aria-labelledby={labelledBy} hidden={hidden} className="space-y-6">
       <ServerFormSections serverId={serverId} dirty={dirty} tab={tab} />
-    </div>
+    </section>
   );
 }
 
