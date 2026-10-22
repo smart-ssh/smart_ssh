@@ -156,7 +156,6 @@ export function Sidebar({
     rows[next]?.focus();
   };
 
-  const rowRole = narrow ? "button" : "treeitem";
   const tabIndexFor = (key: string) => (key === tabStopKey ? 0 : -1);
 
   /** Gemeinsame Attribute einer Baumzeile (Tree-Semantik + Roving tabindex). */
@@ -181,9 +180,10 @@ export function Sidebar({
       className={`rounded ${highlightFor({ kind: "group", id: node.group.id })}`}
     >
       <div role={narrow ? "listitem" : "none"} className="flex items-center">
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
       <div
-        role={rowRole}
       onKeyDown={onTreeKeyDown}
+      role={narrow ? "button" : "treeitem"}
       tabIndex={tabIndexFor(`group:${node.group.id}`)}
       {...rowProps(`group:${node.group.id}`, depth, isSelected("group", node.group.id))}
         {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
@@ -206,9 +206,10 @@ export function Sidebar({
 
   const renderServer = (server: ServerDto, depth: number) => (
     <div key={server.id} role={narrow ? "listitem" : "none"} className="flex items-center">
+    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
     <div
-      role={rowRole}
       onKeyDown={onTreeKeyDown}
+      role={narrow ? "button" : "treeitem"}
       tabIndex={tabIndexFor(`server:${server.id}`)}
       {...rowProps(`server:${server.id}`, depth, isSelected("server", server.id))}
       // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
@@ -232,9 +233,10 @@ export function Sidebar({
    * Ziehen und kein Bearbeiten-Formular. */
   const renderUnusableServer = (server: UnusableServerDto, depth: number) => (
     <div key={server.id} role={narrow ? "listitem" : "none"}>
+    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
     <div
-      role={rowRole}
       onKeyDown={onTreeKeyDown}
+      role={narrow ? "button" : "treeitem"}
       tabIndex={tabIndexFor(`unusableServer:${server.id}`)}
       {...rowProps(`unusableServer:${server.id}`, depth, isSelected("unusableServer", server.id))}
       data-testid="unusable-server-entry"
@@ -312,9 +314,10 @@ export function Sidebar({
                   const label = i18n.exists(view.label) ? t(view.label) : view.label;
                   return (
                     <div key={view.id} role={narrow ? "listitem" : "none"}>
+                    {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the role is "button" in the narrow list and "treeitem" in the wide tree */}
                     <div
-                      role={rowRole}
                       onKeyDown={onTreeKeyDown}
+                      role={narrow ? "button" : "treeitem"}
                       tabIndex={tabIndexFor(key)}
                       {...rowProps(key, 0, selected)}
                       data-testid="extension-view-entry"
