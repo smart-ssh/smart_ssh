@@ -94,6 +94,7 @@ test.describe("narrow Manage area @phone", () => {
     await expectUsable(back(app));
     await expectUsable(page.getByRole("button", { name: "Save", exact: true }));
     await noHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page, "narrow group form");
     await captureScreen(page, "manage-narrow-group-form");
     await back(app).click();
     await page.getByRole("button", { name: "Import …", exact: true }).click();
@@ -101,6 +102,38 @@ test.describe("narrow Manage area @phone", () => {
     await noHorizontalScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow import");
     await captureScreen(page, "manage-narrow-import");
+  });
+
+  test("export dialog, notes and a group-form extension section fit", async ({ app }) => {
+    await app.launch({ ...populated(), commands: { export_ssh_config: { result: { path: "/home/me/very/long/path/".repeat(5) + "config", exported: [{ originalName: "db primary", alias: "db-primary", renamed: true }], includeHint: "Include /home/me/very/long/path/".repeat(3) } } } });
+    const page = app.page;
+    await page.evaluate(() => {
+      const ext = (window as unknown as { __e2eExtensions: Record<string, (...a: unknown[]) => unknown> }).__e2eExtensions;
+      const h = ext.createElement;
+      const long = "Group extension content that is long enough to need wrapping on a phone. ".repeat(4);
+      ext.registerGroupFormSection({ id: "ext-group-section", component: () => h("p", { "data-testid": "ext-group-section" }, long) });
+    });
+    await openManage(app);
+    await page.getByRole("button", { name: "Export …", exact: true }).click();
+    await expectUsable(page.getByRole("dialog"));
+    await noHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page, "narrow export");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "📁 Lab" }).click();
+    const groupSection = page.getByTestId("ext-group-section");
+    await groupSection.scrollIntoViewIfNeeded();
+    await expectUsable(groupSection);
+    await noHorizontalScroll(page);
+    await back(app).click();
+
+    await page.getByRole("button", { name: "🖥️ db-primary" }).click();
+    const notes = page.getByText("Notes", { exact: true }).first();
+    await notes.scrollIntoViewIfNeeded();
+    await expectUsable(notes);
+    await noHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page, "narrow notes");
   });
 
   test("extension manage view and server form section are reachable", async ({ app }) => {
