@@ -1,6 +1,6 @@
 # Spec 0113 — Schmales Layout
 
-Status: umgesetzt (Grundlage); die Anordnung je Bereich folgt in eigenen Änderungen
+Status: umgesetzt (Grundlage); die Anordnung je Bereich folgt in eigenen Änderungen (Dateibrowser: Abschnitt 5b)
 Zweck: Ab einer bestimmten Fensterbreite ordnet die App ihre Oberfläche wie auf einem Telefon an. Die Funktionen bleiben dieselben.
 Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 
@@ -54,6 +54,14 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 - Zeilen des Serverbaums sind mindestens 44 px hoch. Jede Server- und Ordnerzeile (außer dem lokalen Server) hat eine Schaltfläche „⋯“; sie öffnet „Verschieben nach…“ mit „Ohne Gruppe“ und allen Ordnern. Ziele, die nichts ändern würden, und ein Ordner in seinem eigenen Unterordner sind nicht wählbar. Das Verschieben bewirkt dasselbe wie Ziehen und Ablegen; Ziehen mit der Maus bleibt möglich, eine Fingergeste zum Scrollen startet kein Ziehen.
 - Die Sitzungsauswahl ist ein Vollbild-Dialog; die Liste nutzt die verfügbare Höhe, „Neue Unterhaltung“, Umbenennen und Löschen sind mindestens 44 px groß.
 - Im Verbindungs-Reiter bleiben „Erneut versuchen“, „Schließen“ und „Abbrechen“ am unteren Rand sichtbar, auch bei langem Protokoll.
+
+## 5b. Dateibrowser
+
+- Die Liste zeigt je Eintrag eine Zeile von mindestens 44 px Höhe: Symbol und Name in voller Breite, darunter in einer zweiten Zeile Größe und Änderungszeit. Besitzer, Gruppe und Rechte erscheinen nicht als Spalten; sie bleiben über „Eigenschaften“ erreichbar. Spalten lassen sich nicht verstellen; die gespeicherten Spaltenbreiten werden weder benutzt noch verändert und gelten beim Wechsel zum breiten Layout unverändert weiter.
+- Jede Zeile hat eine sichtbare Schaltfläche „⋯“ (mindestens 44×44 px), die das Eintragsmenü öffnet.
+- Die Werkzeugleiste zeigt Ausgangsverzeichnis, übergeordnetes Verzeichnis, das Pfadfeld und eine Schaltfläche „Dateiaktionen“. Dahinter liegen alle übrigen Aktionen der breiten Leiste: Neuer Ordner, Hochladen, Ordner hochladen, Einfügen und Ausschneiden verwerfen (solange etwas ausgeschnitten ist) sowie die Rechteerhöhung samt „Als anderer Benutzer…“. Das Formular für den Zielbenutzer erscheint am unteren Rand. Der Hinweis auf den erhöhten Modus bleibt oberhalb der Leiste sichtbar und mit seiner Schaltfläche zum Beenden bedienbar.
+- Eintragsmenü, Menü der leeren Fläche und das Menü der Werkzeugleiste öffnen sich als Blatt am unteren Rand über die ganze Fensterbreite; ihre Einträge sind mindestens 44 px hoch. Sie schließen wie im breiten Layout (Escape, Tipp außerhalb, Auswahl).
+- Die Dialoge des Dateibrowsers folgen Abschnitt 5; die Übertragungsliste passt sich der Breite an.
 
 ## 6. Erweiterungsbereiche
 

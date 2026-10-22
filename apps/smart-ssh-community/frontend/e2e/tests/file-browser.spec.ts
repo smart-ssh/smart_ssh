@@ -6,6 +6,7 @@ import type { RemoteEntryDto } from "../../src/types";
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
+import { expectFullyInViewport, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 import { openSession } from "../support/session";
 
@@ -206,5 +207,75 @@ test.describe("file browser", () => {
     await rowMenu(page, "notes.txt").click();
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await captureScreen(page, "file-browser-delete");
+  });
+});
+
+// Issue #584, Spec 0113: the file browser below 640 px.
+test.describe("file browser, narrow layout @phone", () => {
+  async function openNarrow(app: AppDriver) {
+    await app.launch({ ...populated(), commands: { sftp_list: { result: ENTRIES } } });
+    await openSession(app, "db-primary");
+    await app.page.getByRole("tab", { name: "Files", exact: true }).click();
+    await expect(app.page.getByText("notes.txt")).toBeVisible();
+  }
+  const noPageScroll = (page: Page) =>
+    page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+
+  test("two-line rows, no horizontal scroll, toolbar actions behind the overflow menu", async ({ app }) => {
+    await openNarrow(app);
+    const page = app.page;
+    expect(await noPageScroll(page)).toBe(true);
+    await expect(page.locator("table")).toHaveCount(0);
+    const row = page.getByRole("listitem").filter({ hasText: "notes.txt" });
+    await expect(row).toContainText("2.0 KB");
+    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await expectUsable(rowMenu(page, "notes.txt"));
+    await captureScreen(page, "file-browser-narrow-list");
+
+    const more = page.getByRole("button", { name: "File actions", exact: true });
+    await expectUsable(more);
+    await more.click();
+    for (const name of ["+ Folder", "Upload", "Upload folder", "Elevated rights", /As another user/]) {
+      const item = page.getByRole("menuitem", { name });
+      await expect(item.first()).toBeVisible();
+      await expectFullyInViewport(item.first());
+    }
+    await expectNoSeriousA11yViolations(page, "file browser narrow: overflow menu");
+    await captureScreen(page, "file-browser-narrow-overflow");
+    // The screenshot helper resizes through wide sizes, which drops the menu.
+    await more.click();
+    await page.getByRole("menuitem", { name: /As another user/ }).click();
+    const field = page.getByLabel("Target user");
+    await expectFullyInViewport(field);
+    await expect(page.getByRole("button", { name: "Elevate", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(field).toBeHidden();
+    await expect(page.getByRole("button", { name: "File actions", exact: true })).toBeFocused();
+  });
+
+  test("row menu opens inside the viewport, Properties shows owner, group and permissions", async ({ app }) => {
+    await openNarrow(app);
+    const page = app.page;
+    await rowMenu(page, "notes.txt").click();
+    const del = page.getByRole("button", { name: "Delete", exact: true });
+    await expectFullyInViewport(del);
+    await expectNoSeriousA11yViolations(page, "file browser narrow: entry menu");
+    await captureScreen(page, "file-browser-narrow-menu");
+    await expect(del).toBeVisible();
+    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("deploy");
+    await expect(dialog).toContainText("644");
+    await expect(dialog).toContainText("rw-r--r--");
+    expect(await noPageScroll(page)).toBe(true);
+  });
+
+  test("resizing to wide restores the table with the default column widths", async ({ app }) => {
+    await openNarrow(app);
+    const page = app.page;
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator("table")).toBeVisible();
+    const widths = await page.locator("col").evaluateAll((cols) => cols.map((c) => (c as HTMLElement).style.width));
+    expect(widths).toEqual(["", "90px", "90px", "150px", "36px"]);
   });
 });
