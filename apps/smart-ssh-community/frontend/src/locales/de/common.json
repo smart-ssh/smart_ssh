@@ -387,7 +387,8 @@
       "verdictAuto": "läuft beim nächsten Mal automatisch",
       "verdictAsk": "fragt weiterhin nach: {{reasons}}",
       "notice": "Regel angelegt. Dieses Kommando fragt beim nächsten Mal weiterhin nach: {{reasons}}",
-      "reasonOther": "eine andere Sicherheitsprüfung"
+      "reasonOther": "eine andere Sicherheitsprüfung",
+      "loadFailed": "Regelabdeckung konnte nicht geladen werden"
     }
   },
   "hostKeyDialog": {

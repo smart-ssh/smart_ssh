@@ -387,7 +387,8 @@
       "verdictAuto": "suoritetaan ensi kerralla automaattisesti",
       "verdictAsk": "kysyy edelleen: {{reasons}}",
       "notice": "Sääntö luotu. Tämä komento kysyy ensi kerrallakin: {{reasons}}",
-      "reasonOther": "toinen turvatarkistus"
+      "reasonOther": "toinen turvatarkistus",
+      "loadFailed": "Sääntöjen kattavuutta ei voitu ladata"
     }
   },
   "hostKeyDialog": {

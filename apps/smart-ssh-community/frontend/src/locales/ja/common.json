@@ -387,7 +387,8 @@
       "verdictAuto": "次回から自動的に実行されます",
       "verdictAsk": "引き続き確認します: {{reasons}}",
       "notice": "ルールを作成しました。このコマンドは次回も確認が必要です: {{reasons}}",
-      "reasonOther": "別の安全チェック"
+      "reasonOther": "別の安全チェック",
+      "loadFailed": "ルールの適用範囲を読み込めませんでした"
     }
   },
   "hostKeyDialog": {

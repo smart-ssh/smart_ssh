@@ -387,7 +387,8 @@
       "verdictAuto": "berjalan otomatis lain kali",
       "verdictAsk": "tetap akan bertanya: {{reasons}}",
       "notice": "Aturan dibuat. Perintah ini tetap akan bertanya lain kali: {{reasons}}",
-      "reasonOther": "pemeriksaan keamanan lain"
+      "reasonOther": "pemeriksaan keamanan lain",
+      "loadFailed": "Cakupan aturan tidak dapat dimuat"
     }
   },
   "hostKeyDialog": {
