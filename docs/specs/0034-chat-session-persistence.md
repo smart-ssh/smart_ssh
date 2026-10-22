@@ -177,6 +177,13 @@ bereits erhöhter Kanal bleiben unverändert.
    Nutzer sie nach dem Wechsel erneut senden kann. Schlägt der Wechsel
    fehl, gilt dasselbe; der bisherige Chat bleibt unverändert und
    Nachrichten werden danach wieder normal angenommen.
+7. **Chat-ID für das Frontend.** Das Frontend erfährt die ID des aktuellen
+   gespeicherten Chats jeder Sitzung: beim Verbinden und Fortsetzen, nach
+   einem erneuten Verbinden und nach „Neuer Chat" über das Ereignis
+   `chat-session-changed` (Sitzungs-ID und Chat-ID), nach einem Neuladen der
+   Oberfläche über die Sitzungsliste. Die Chat-ID ist leer beim lokalen
+   Pseudo-Server und bei Sitzungen ohne gespeicherten Chat. Das Ereignis
+   enthält nur Kennungen, keine Nachrichten.
 
 ## 12. Grenzen
 

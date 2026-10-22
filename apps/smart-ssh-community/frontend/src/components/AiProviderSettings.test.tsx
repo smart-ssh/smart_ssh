@@ -1380,3 +1380,58 @@ describe("AiProviderSettings add-provider dialog (issue #603)", () => {
     expect(addAiProvider).not.toHaveBeenCalled();
   });
 });
+
+describe("AiProviderSettings name prefill from model (issue #602)", () => {
+  const name = () => screen.getByLabelText("Name") as HTMLInputElement;
+  const model = () => screen.getByLabelText("Modell");
+
+  it("name follows each change of the model while untouched", () => {
+    renderFormWithDialog();
+    fireEvent.change(model(), { target: { value: "g" } });
+    expect(name().value).toBe("g");
+    fireEvent.change(model(), { target: { value: "gpt-5" } });
+    expect(name().value).toBe("gpt-5");
+    expect(model()).toHaveValue("gpt-5");
+  });
+
+  it("a name typed by the user is kept, also after clearing it", () => {
+    renderFormWithDialog();
+    fireEvent.change(model(), { target: { value: "gpt-5" } });
+    fireEvent.change(name(), { target: { value: "Mine" } });
+    fireEvent.change(model(), { target: { value: "gpt-6" } });
+    expect(name().value).toBe("Mine");
+    fireEvent.change(name(), { target: { value: "" } });
+    fireEvent.change(model(), { target: { value: "gpt-7" } });
+    expect(name().value).toBe("");
+  });
+
+  it("a name entered first is kept when a model is chosen", () => {
+    renderFormWithDialog();
+    fireEvent.change(name(), { target: { value: "Mine" } });
+    fireEvent.change(model(), { target: { value: "gpt-5" } });
+    expect(name().value).toBe("Mine");
+  });
+
+  it("stays auto-filled across a provider type switch and saves the name", async () => {
+    renderFormWithDialog();
+    fireEvent.change(model(), { target: { value: "m1" } });
+    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "anthropic" } });
+    fireEvent.change(model(), { target: { value: "claude-sonnet-5-5" } });
+    expect(name().value).toBe("claude-sonnet-5-5");
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-ant-x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+    await waitFor(() => expect(addAiProvider).toHaveBeenCalled());
+    expect(vi.mocked(addAiProvider).mock.calls.at(-1)?.[0].displayName).toBe(
+      "claude-sonnet-5-5",
+    );
+  });
+
+  it("reopening the dialog resets the edited state", () => {
+    renderFormWithDialog();
+    fireEvent.change(name(), { target: { value: "Mine" } });
+    fireEvent.click(screen.getByRole("button", { name: /Abbrechen/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Provider hinzufügen" }));
+    fireEvent.change(model(), { target: { value: "gpt-5" } });
+    expect(name().value).toBe("gpt-5");
+  });
+});
