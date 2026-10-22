@@ -23,7 +23,12 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 ## 4. Sitzungsansicht
 
 - Eine Sitzung zeigt die Reiter KI, Terminal und Dateien; jeweils einer ist sichtbar.
-- Nach dem Verbinden ist der Reiter KI aktiv.
+- Nach dem Verbinden ist der Reiter KI aktiv. Die Wahl bleibt, solange die Sitzung offen ist.
+- Die Reiter sind per Pfeiltasten bedienbar. Der Reiter Dateien zeigt weiterhin die Markierung des erhöhten Modus.
+- Es gibt keinen Trenner. Alle drei Bereiche bleiben geöffnet, auch die nicht sichtbaren; ihr Zustand geht beim Umschalten nicht verloren. Das Terminal passt sich beim Anzeigen der vollen Breite an.
+- Beim Wechsel zum breiten Layout gilt wieder die Aufteilung mit der zuletzt gewählten Ansicht des rechten Bereichs; beim Zurückwechseln der zuletzt gewählte Reiter. Die gespeicherte Breite der Aufteilung wird im schmalen Layout weder benutzt noch verändert.
+- Eine MCP-Sitzung zeigt nur den Chat, ohne Reiter.
+- Der Kopf der Sitzung bleibt kompakt: Servername und Status bleiben sichtbar, „Neu verbinden“ und „Trennen“ liegen hinter einer Schaltfläche „⋯“.
 
 ## 5. Dialoge und Zwei-Spalten-Ansichten
 
