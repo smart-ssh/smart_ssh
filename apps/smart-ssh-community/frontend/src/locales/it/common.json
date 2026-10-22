@@ -1105,6 +1105,7 @@
   },
   "chat": {
     "jumpToLatest": "Vai al messaggio più recente",
+    "composerMore": "Altre azioni di input",
     "newChat": "Nuova chat",
     "newChatDisabledHint": "Non disponibile mentre l'IA risponde o è aperta una conferma.",
     "autoContinuing": "Modalità automatica in corso: l'IA risponde da sola all'ultimo risultato…",

@@ -1098,6 +1098,7 @@
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
+    "composerMore": "Weitere Eingabe-Aktionen",
     "newChat": "Neuer Chat",
     "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",
     "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",

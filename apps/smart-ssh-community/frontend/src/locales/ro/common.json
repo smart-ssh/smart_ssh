@@ -1105,6 +1105,7 @@
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
+    "composerMore": "Mai multe acțiuni de introducere",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",
     "autoContinuing": "Modul automat rulează — IA răspunde singură la ultimul rezultat…",

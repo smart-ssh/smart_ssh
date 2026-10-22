@@ -1091,6 +1091,7 @@
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
+    "composerMore": "更多输入操作",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",
     "autoContinuing": "自动模式运行中——AI 正在自行对上一个结果作出回应…",

@@ -1091,6 +1091,7 @@
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",
+    "composerMore": "Thêm thao tác nhập",
     "newChat": "Cuộc trò chuyện mới",
     "newChatDisabledHint": "Không khả dụng khi AI đang phản hồi hoặc có yêu cầu xác nhận đang mở.",
     "autoContinuing": "Chế độ tự động đang chạy — AI tự phản hồi kết quả cuối cùng…",
