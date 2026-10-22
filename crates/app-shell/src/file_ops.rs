@@ -320,6 +320,17 @@ impl FileOps {
             .unwrap_or_default()
     }
 
+    /// Nur für Tests: wurde mindestens eine erhöhte Operation dieser Sitzung
+    /// gestoppt? Tests warten darauf, bevor sie den Mock freigeben.
+    #[cfg(test)]
+    pub(crate) fn has_stopped_elevated(&self, session_id: SessionId) -> bool {
+        self.ops
+            .lock()
+            .unwrap()
+            .get(&session_id)
+            .is_some_and(|l| l.iter().any(|h| h.0.elevated && h.is_stopped()))
+    }
+
     fn has_elevated(&self, session_id: SessionId) -> bool {
         self.ops
             .lock()
