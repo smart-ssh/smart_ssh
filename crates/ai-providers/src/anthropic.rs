@@ -2098,7 +2098,10 @@ mod tests {
     #[tokio::test]
     async fn test_issue_609_minimal_and_missing_usage() {
         let events = collect_frames(vec![
-            frame("message_start", r#"{"message":{"usage":{"input_tokens":7}}}"#),
+            frame(
+                "message_start",
+                r#"{"message":{"usage":{"input_tokens":7}}}"#,
+            ),
             frame("message_stop", "{}"),
         ])
         .await;
