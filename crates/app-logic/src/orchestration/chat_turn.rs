@@ -61,6 +61,10 @@ mod tests_web;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_web_research_rejected;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_request_deadline;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
@@ -824,6 +828,8 @@ async fn run_one_round(
     // genau einmal mit demselben (bereits kompaktierten und geschwärzten)
     // Kontext wiederholt wird, s. `AiError::WebResearchRejected` unten.
     let mut stream = session.ai_provider.send(request_context.clone());
+    crate::events::emit_chat_ai_request_started(emitter, session_id, &session.ai_provider_label);
+    let mut trace = RequestTrace::new();
     // Issue #169: höchstens ein Wiederholversuch ohne Web-Werkzeuge je
     // Anfrage, nie eine Schleife.
     let mut web_research_retry_used = false;
@@ -870,18 +876,32 @@ async fn run_one_round(
         // Streams schließt die HTTP-Verbindung und verwirft auch eine
         // gerade laufende Retry-/Backoff-Wartezeit aus `ai_providers`
         // (kein weiterer Request nach Stopp).
+        // Issue #694: the total deadline ends the request even while content
+        // keeps arriving; text received so far stays visible.
         let next = tokio::select! {
             biased;
             () = session.auto_continue_stop_requested() => None,
+            () = tokio::time::sleep_until(trace.deadline) => {
+                Some(Some(AiEvent::Error(AiError::TotalDeadline {
+                    secs: TOTAL_REQUEST_DEADLINE.as_secs(),
+                })))
+            }
             event = stream.next() => Some(event),
         };
         let Some(event) = next else {
             drop(stream);
+            trace.log_finished(session, "stopped_by_user");
             flush_text_buffer(session, &mut text_buffer).await;
             emit_chat_response_cancelled(emitter, session_id);
             return RoundOutcome::Finished;
         };
         let Some(event) = event else { break };
+        if !matches!(
+            event,
+            AiEvent::Retrying { .. } | AiEvent::WebContentIngested
+        ) {
+            trace.log_first_content(session);
+        }
         match event {
             AiEvent::TextDelta(delta) => {
                 if !delta.is_empty() {
@@ -1049,6 +1069,7 @@ async fn run_one_round(
                 handle_web_activity(session, session_id, emitter, activity, &mut text_buffer).await;
             }
             AiEvent::Done => {
+                trace.log_finished(session, "done");
                 flush_text_buffer(session, &mut text_buffer).await;
                 // Spec 0080, A2, Klarstellung Q-BL-0259-01 (Variante b): nur
                 // bei `Done` (nicht bei `TextTruncated`/`Error`, s.
@@ -1066,6 +1087,7 @@ async fn run_one_round(
                 break;
             }
             AiEvent::TextTruncated => {
+                trace.log_finished(session, "done");
                 // Spec 0065, Teil 2: der bis hierhin gestreamte Text bleibt
                 // gültig und sichtbar (genau wie bei `Done`) — zusätzlich
                 // ein eigenes Event, das das Frontend in einen Hinweis samt
@@ -1088,6 +1110,7 @@ async fn run_one_round(
                 // used` sichert das zusätzlich ab (ein zweiter landet im
                 // allgemeinen Fehlerzweig unten).
                 web_research_retry_used = true;
+                trace.log_finished(session, "error");
                 drop(stream);
                 flush_text_buffer(session, &mut text_buffer).await;
                 session.ai_provider.disable_web_research();
@@ -1097,8 +1120,22 @@ async fn run_one_round(
                     return RoundOutcome::StoppedBeforeSend;
                 }
                 stream = session.ai_provider.send(request_context.clone());
+                crate::events::emit_chat_ai_request_started(
+                    emitter,
+                    session_id,
+                    &session.ai_provider_label,
+                );
+                trace = RequestTrace::new();
             }
             AiEvent::Error(err) => {
+                trace.log_finished(
+                    session,
+                    match err {
+                        AiError::Timeout { .. } => "content_timeout",
+                        AiError::TotalDeadline { .. } => "total_deadline",
+                        _ => "error",
+                    },
+                );
                 flush_text_buffer(session, &mut text_buffer).await;
                 // Issue #599: the final error code of the turn at WARN, with
                 // the session and the provider-call id for correlation. No
@@ -1114,7 +1151,7 @@ async fn run_one_round(
                     session_id,
                     describe_ai_error(&err),
                     Some(err.code()),
-                    ai_error_details(&err, session.redactor.as_ref()),
+                    ai_error_details(&err, &session.ai_provider_label, session.redactor.as_ref()),
                 );
                 break;
             }
@@ -1208,6 +1245,7 @@ pub const RETRY_NOT_POSSIBLE: &str = "RETRY_NOT_POSSIBLE";
 /// an in-stream error has no status.
 pub(crate) fn ai_error_details(
     err: &AiError,
+    provider_label: &str,
     redactor: &dyn OutputRedactor,
 ) -> crate::events::ChatErrorDetails {
     let (provider_error_type, raw_message): (Option<String>, Option<&str>) = match err {
@@ -1223,6 +1261,12 @@ pub(crate) fn ai_error_details(
         | AiError::InvalidResponse(m) => (None, Some(m.as_str())),
         _ => (None, None),
     };
+    let (provider_name, timeout_secs) = match err {
+        AiError::Timeout { secs } | AiError::TotalDeadline { secs } => {
+            (Some(provider_label.to_string()), Some(*secs))
+        }
+        _ => (None, None),
+    };
     let http_status = raw_message
         .and_then(|m| m.strip_prefix("HTTP "))
         .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
@@ -1233,6 +1277,52 @@ pub(crate) fn ai_error_details(
         provider_message: raw_message
             .map(|m| redactor.redact_text(m))
             .filter(|m| !m.trim().is_empty()),
+        provider_name,
+        timeout_secs,
+    }
+}
+
+/// Issue #694: no AI request lasts longer than this, however much content
+/// keeps arriving.
+pub(crate) const TOTAL_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// Issue #694: timing and log lines of one AI request. Logs carry the request
+/// id, durations and the outcome only, never prompt or answer text.
+struct RequestTrace {
+    started: tokio::time::Instant,
+    deadline: tokio::time::Instant,
+    first_content_logged: bool,
+}
+
+impl RequestTrace {
+    fn new() -> Self {
+        let started = tokio::time::Instant::now();
+        Self {
+            started,
+            deadline: started + TOTAL_REQUEST_DEADLINE,
+            first_content_logged: false,
+        }
+    }
+
+    fn log_first_content(&mut self, session: &Session) {
+        if self.first_content_logged {
+            return;
+        }
+        self.first_content_logged = true;
+        tracing::info!(
+            request_id = ?session.ai_provider.last_request_id(),
+            time_to_first_content_ms = self.started.elapsed().as_millis() as u64,
+            "AI request: first content received",
+        );
+    }
+
+    fn log_finished(&self, session: &Session, outcome: &'static str) {
+        tracing::info!(
+            request_id = ?session.ai_provider.last_request_id(),
+            duration_ms = self.started.elapsed().as_millis() as u64,
+            outcome,
+            "AI request finished",
+        );
     }
 }
 
