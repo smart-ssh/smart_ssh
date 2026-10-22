@@ -235,9 +235,9 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     // Titelleistenhöhe frei (`pt-9` zusätzlich zum `p-6`, also
     // `pt-15`), über dem die Drag-Leiste liegt — die Karte rückt nie
     // darunter.
-    <div className="flex h-screen flex-col items-center overflow-y-auto bg-slate-900 px-6 pb-6 pt-15 text-slate-100">
+    <div className="flex h-screen flex-col items-center overflow-y-auto bg-slate-900 px-6 pb-6 pt-15 text-slate-100 narrow:px-4">
       <StartupTitleBarDragStrip />
-      <div className="my-auto w-full max-w-md rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl">
+      <div className="my-auto w-full max-w-md rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl narrow:p-4">
         <h1 className="font-heading mb-1 text-xl font-semibold tracking-wide">Smart SSH</h1>
 
         {state === null ? (
