@@ -27,7 +27,9 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 
 ## 5. Dialoge und Zwei-Spalten-Ansichten
 
-- Dialoge füllen das ganze Fenster.
+- Dialoge füllen das ganze Fenster; Titel und Aktionsleiste bleiben sichtbar, nur der Inhalt dazwischen scrollt. Aktionen brechen um, sodass jede Schaltfläche ganz sichtbar bleibt.
+- Die Host-Key-Abfrage folgt denselben Regeln: Fingerabdrücke brechen um und bleiben kopierbar, die Abfrage bleibt modal und lässt sich nicht durch Tippen außerhalb schließen.
+- Start- und Entsperransicht passen ohne waagerechtes Scrollen in 390 px Breite. Meldungen (Toasts) nutzen die Fensterbreite abzüglich des Randes; ihre Aktionen bleiben erreichbar.
 - Ansichten mit zwei Bereichen (Liste und Detail) zeigen zuerst die Liste; die Auswahl öffnet das Detail, und ein Zurück-Element führt zur Liste.
 
 ## 6. Erweiterungsbereiche
