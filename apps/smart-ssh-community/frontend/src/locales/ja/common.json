@@ -130,7 +130,8 @@
     "rootDropZone": "ここにドロップすると最上位（グループなし）に移動します",
     "hintRoot": "→ 最上位（グループなし）",
     "hintGroup": "→ このグループに移動",
-    "hintCycle": "グループを自分自身のサブグループへ移動することはできません"
+    "hintCycle": "グループを自分自身のサブグループへ移動することはできません",
+    "moveTo": "「{{name}}」の移動先…"
   },
   "management": {
     "emptyState": "左側でグループまたはサーバーを選択するか、「{{addGroup}}」／「{{addServer}}」から新規作成してください。"
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "開始ディレクトリは絶対パス（/…）か、~/ で始まるパスである必要があります。",
       "controlCharacter": "開始ディレクトリに制御文字を含めることはできません。"
+    },
+    "tabs": {
+      "label": "サーバー設定",
+      "general": "一般",
+      "connection": "接続",
+      "security": "セキュリティ",
+      "invalid": "エラーがあります"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
+    "menu": {
+      "open": "ナビゲーションメニューを開く",
+      "title": "ナビゲーションメニュー",
+      "sessions": "開いているセッション"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "外部ツール",
@@ -1079,6 +1092,7 @@
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",
+    "composerMore": "その他の入力操作",
     "newChat": "新しいチャット",
     "newChatDisabledHint": "AIが応答中、または確認が開いている間は利用できません。",
     "autoContinuing": "自動モードで実行中 — AIが最後の結果に自動で応答します…",
@@ -1174,6 +1188,9 @@
     "splitHandle": "パネルの区切り",
     "terminalTab": "ターミナル",
     "filesTab": "ファイル",
+    "aiTab": "AI",
+    "paneTabs": "セッションのパネル",
+    "moreActions": "その他の操作",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
     "reconnectingAuto": "再接続中… ({{attempt}} 回目)",
     "stopReconnect": "停止",

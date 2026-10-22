@@ -130,7 +130,8 @@
     "rootDropZone": "Lepas di sini untuk memindahkan ke tingkat teratas (tanpa grup)",
     "hintRoot": "→ tingkat teratas (tanpa grup)",
     "hintGroup": "→ pindahkan ke grup ini",
-    "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri"
+    "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri",
+    "moveTo": "Pindahkan “{{name}}” ke…"
   },
   "management": {
     "emptyState": "Pilih grup atau server di sebelah kiri, atau buat yang baru melalui \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Direktori awal harus berupa jalur absolut (/…) atau diawali ~/.",
       "controlCharacter": "Direktori awal tidak boleh mengandung karakter kontrol."
+    },
+    "tabs": {
+      "label": "Pengaturan server",
+      "general": "Umum",
+      "connection": "Koneksi",
+      "security": "Keamanan",
+      "invalid": "Berisi kesalahan"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
+    "menu": {
+      "open": "Buka menu navigasi",
+      "title": "Menu navigasi",
+      "sessions": "Sesi terbuka"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Alat eksternal",
@@ -1079,6 +1092,7 @@
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",
+    "composerMore": "Tindakan input lainnya",
     "newChat": "Obrolan baru",
     "newChatDisabledHint": "Tidak tersedia saat AI sedang merespons atau konfirmasi sedang terbuka.",
     "autoContinuing": "Mode otomatis berjalan — AI merespons hasil terakhir dengan sendirinya…",
@@ -1174,6 +1188,9 @@
     "splitHandle": "Pembagi panel",
     "terminalTab": "Terminal",
     "filesTab": "Berkas",
+    "aiTab": "AI",
+    "paneTabs": "Panel sesi",
+    "moreActions": "Tindakan lainnya",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
     "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
     "stopReconnect": "Berhenti",

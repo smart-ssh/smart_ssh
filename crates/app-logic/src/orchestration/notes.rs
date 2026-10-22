@@ -648,6 +648,12 @@ async fn request_ai_title(
             // Kein `ActionProposed` erwartet (keine Schemas angeboten),
             // aber defensiv: ignorieren statt eine Aktion auszuführen.
             AiEvent::ActionProposed(_) => {}
+            // Issue #610: reported as title usage (passive).
+            AiEvent::RequestUsage(usage) => {
+                session
+                    .report_ai_usage(crate::ai_usage::AiUsagePurpose::SessionTitle, usage)
+                    .await;
+            }
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv ignoriert.
             AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
@@ -914,6 +920,14 @@ pub async fn suggest_note_update_on_disconnect(
             // Hinweis an (kein sichtbarer Chat-Turn) — ein abgeschnittener
             // Vorschlag ist hier gleichbedeutend mit "kein Vorschlag".
             AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
+            // Issue #610: passive report. The stop conditions above are
+            // unchanged: usage that arrives after the loop stopped (e.g.
+            // behind `ActionProposed`) is not reported and never awaited.
+            AiEvent::RequestUsage(usage) => {
+                session
+                    .report_ai_usage(crate::ai_usage::AiUsagePurpose::NoteSuggestion, usage)
+                    .await;
+            }
             // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
             // ignoriert.
             AiEvent::TextDelta(_)
@@ -1251,6 +1265,7 @@ async fn summarize_note_for_shrink(
                 AiEvent::WebActivity(_)
                 | AiEvent::WebContentIngested
                 | AiEvent::Usage { .. }
+                | AiEvent::RequestUsage(_)
                 | AiEvent::Retrying { .. }
                 | AiEvent::InvalidToolCall { .. } => {}
                 AiEvent::Done => return Some((text, false)),

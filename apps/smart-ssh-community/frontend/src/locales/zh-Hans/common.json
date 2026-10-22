@@ -130,7 +130,8 @@
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
     "hintGroup": "→ 移入此分组",
-    "hintCycle": "分组不能移入其自身的子分组"
+    "hintCycle": "分组不能移入其自身的子分组",
+    "moveTo": "将“{{name}}”移动到…"
   },
   "management": {
     "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。"
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "起始目录必须是绝对路径（/…）或以 ~/ 开头。",
       "controlCharacter": "起始目录不得包含控制字符。"
+    },
+    "tabs": {
+      "label": "服务器设置",
+      "general": "常规",
+      "connection": "连接",
+      "security": "安全",
+      "invalid": "包含错误"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
+    "menu": {
+      "open": "打开导航菜单",
+      "title": "导航菜单",
+      "sessions": "已打开的会话"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "外部工具",
@@ -1079,6 +1092,7 @@
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
+    "composerMore": "更多输入操作",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",
     "autoContinuing": "自动模式运行中——AI 正在自行对上一个结果作出回应…",
@@ -1174,6 +1188,9 @@
     "splitHandle": "面板分隔条",
     "terminalTab": "终端",
     "filesTab": "文件",
+    "aiTab": "AI",
+    "paneTabs": "会话面板",
+    "moreActions": "更多操作",
     "terminalOpenFailed": "无法打开终端：{{error}}",
     "reconnectingAuto": "正在重新连接…（第 {{attempt}} 次尝试）",
     "stopReconnect": "停止",

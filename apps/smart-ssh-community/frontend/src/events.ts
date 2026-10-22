@@ -22,6 +22,7 @@ import type {
   ChatWebActivityEvent,
   ChatWebResearchUnavailableEvent,
   AutoReconnectChangedEvent,
+  ChatSessionChangedEvent,
   ConnectionStatusChangedEvent,
   ConnectProgressEvent,
   HostKeyVerificationEndedEvent,
@@ -47,6 +48,11 @@ export const onConnectionStatusChanged = (
   handler: (event: ConnectionStatusChangedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ConnectionStatusChangedEvent>("connection-status-changed", (e) => handler(e.payload));
+
+export const onChatSessionChanged = (
+  handler: (event: ChatSessionChangedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatSessionChangedEvent>("chat-session-changed", (e) => handler(e.payload));
 
 export const onAutoReconnectChanged = (
   handler: (event: AutoReconnectChangedEvent) => void,

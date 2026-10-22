@@ -9,6 +9,10 @@ if (!fixture) {
 }
 installFakeBackend(fixture);
 
+// Test hook: lets a spec register extension actions the way an edition would.
+const { registerComposerAction, registerDocumentAction } = await import("../../src/extensions/registry");
+(window as unknown as { __e2eExtensions: unknown }).__e2eExtensions = { registerComposerAction, registerDocumentAction };
+
 // The fake IPC layer must exist before the app's first `invoke`, which
 // happens at module evaluation time of `main.tsx` (top-level await).
 await import("../../src/main.tsx");

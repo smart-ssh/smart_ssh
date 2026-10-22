@@ -130,7 +130,8 @@
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
     "hintRoot": "→ översta nivån (ingen grupp)",
     "hintGroup": "→ flytta in i den här gruppen",
-    "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp"
+    "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
+    "moveTo": "Flytta ”{{name}}” till…"
   },
   "management": {
     "emptyState": "Välj en grupp eller server till vänster, eller skapa något nytt via \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Startkatalogen måste vara en absolut sökväg (/…) eller börja med ~/.",
       "controlCharacter": "Startkatalogen får inte innehålla styrtecken."
+    },
+    "tabs": {
+      "label": "Serverinställningar",
+      "general": "Allmänt",
+      "connection": "Anslutning",
+      "security": "Säkerhet",
+      "invalid": "Innehåller fel"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Översikt",
     "pendingAction": "Väntar på bekräftelse",
     "closeTab": "Stäng fliken \"{{name}}\"",
+    "menu": {
+      "open": "Öppna navigeringsmenyn",
+      "title": "Navigeringsmeny",
+      "sessions": "Öppna sessioner"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Externt verktyg",
@@ -1086,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",
+    "composerMore": "Fler inmatningsåtgärder",
     "newChat": "Ny chatt",
     "newChatDisabledHint": "Inte tillgängligt medan AI svarar eller en bekräftelse är öppen.",
     "autoContinuing": "Automatiskt läge körs — AI svarar på det senaste resultatet på egen hand…",
@@ -1182,6 +1196,9 @@
     "splitHandle": "Panelavdelare",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "AI",
+    "paneTabs": "Sessionsdelar",
+    "moreActions": "Fler åtgärder",
     "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
     "reconnectingAuto": "Återansluter… (försök {{attempt}})",
     "stopReconnect": "Avbryt",

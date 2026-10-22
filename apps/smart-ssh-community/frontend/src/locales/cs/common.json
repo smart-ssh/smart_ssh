@@ -130,7 +130,8 @@
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
     "hintRoot": "→ nejvyšší úroveň (bez skupiny)",
     "hintGroup": "→ přesunout do této skupiny",
-    "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny"
+    "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny",
+    "moveTo": "Přesunout „{{name}}“ do…"
   },
   "management": {
     "emptyState": "Vyberte vlevo skupinu nebo server, nebo vytvořte něco nového pomocí „{{addGroup}}“/„{{addServer}}“."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Úvodní adresář musí být absolutní cesta (/…) nebo začínat ~/.",
       "controlCharacter": "Úvodní adresář nesmí obsahovat řídicí znaky."
+    },
+    "tabs": {
+      "label": "Nastavení serveru",
+      "general": "Obecné",
+      "connection": "Připojení",
+      "security": "Zabezpečení",
+      "invalid": "Obsahuje chyby"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Přehled",
     "pendingAction": "Čeká na potvrzení",
     "closeTab": "Zavřít kartu „{{name}}“",
+    "menu": {
+      "open": "Otevřít navigační nabídku",
+      "title": "Navigační nabídka",
+      "sessions": "Otevřené relace"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Externí nástroj",
@@ -1100,6 +1113,7 @@
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",
+    "composerMore": "Další akce zadávání",
     "newChat": "Nový chat",
     "newChatDisabledHint": "Není dostupné, dokud AI odpovídá nebo je otevřeno potvrzení.",
     "autoContinuing": "Běží automatický režim — AI na poslední výsledek odpovídá sama…",
@@ -1198,6 +1212,9 @@
     "splitHandle": "Dělicí lišta panelů",
     "terminalTab": "Terminál",
     "filesTab": "Soubory",
+    "aiTab": "AI",
+    "paneTabs": "Části relace",
+    "moreActions": "Další akce",
     "terminalOpenFailed": "Terminál se nepodařilo otevřít: {{error}}",
     "reconnectingAuto": "Znovu se připojuji… (pokus {{attempt}})",
     "stopReconnect": "Zastavit",

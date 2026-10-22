@@ -130,7 +130,8 @@
     "rootDropZone": "Solte aqui para mover ao nível superior (sem grupo)",
     "hintRoot": "→ nível superior (sem grupo)",
     "hintGroup": "→ mover para este grupo",
-    "hintCycle": "Um grupo não pode ser movido para o seu próprio subgrupo"
+    "hintCycle": "Um grupo não pode ser movido para o seu próprio subgrupo",
+    "moveTo": "Mover “{{name}}” para…"
   },
   "management": {
     "emptyState": "Selecione um grupo ou servidor à esquerda, ou crie algo novo com \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "O diretório inicial deve ser um caminho absoluto (/…) ou começar com ~/.",
       "controlCharacter": "O diretório inicial não pode conter caracteres de controle."
+    },
+    "tabs": {
+      "label": "Configurações do servidor",
+      "general": "Geral",
+      "connection": "Conexão",
+      "security": "Segurança",
+      "invalid": "Contém erros"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Visão geral",
     "pendingAction": "Aguardando confirmação",
     "closeTab": "Fechar aba \"{{name}}\"",
+    "menu": {
+      "open": "Abrir menu de navegação",
+      "title": "Menu de navegação",
+      "sessions": "Sessões abertas"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Ferramenta externa",
@@ -1093,6 +1106,7 @@
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",
+    "composerMore": "Mais ações de entrada",
     "newChat": "Novo chat",
     "newChatDisabledHint": "Indisponível enquanto a IA responde ou uma confirmação está aberta.",
     "autoContinuing": "Modo automático em execução — a IA responde sozinha ao último resultado…",
@@ -1190,6 +1204,9 @@
     "splitHandle": "Divisor de painel",
     "terminalTab": "Terminal",
     "filesTab": "Arquivos",
+    "aiTab": "IA",
+    "paneTabs": "Painéis da sessão",
+    "moreActions": "Mais ações",
     "terminalOpenFailed": "Não foi possível abrir o terminal: {{error}}",
     "reconnectingAuto": "Reconectando… (tentativa {{attempt}})",
     "stopReconnect": "Parar",

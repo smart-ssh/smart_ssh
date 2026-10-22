@@ -130,7 +130,8 @@
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
     "hintRoot": "→ nivel superior (fără grup)",
     "hintGroup": "→ mută în acest grup",
-    "hintCycle": "Un grup nu poate fi mutat în propriul subgrup"
+    "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
+    "moveTo": "Mută „{{name}}” în…"
   },
   "management": {
     "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Directorul de pornire trebuie să fie o cale absolută (/…) sau să înceapă cu ~/.",
       "controlCharacter": "Directorul de pornire nu trebuie să conțină caractere de control."
+    },
+    "tabs": {
+      "label": "Setările serverului",
+      "general": "General",
+      "connection": "Conexiune",
+      "security": "Securitate",
+      "invalid": "Conține erori"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",
+    "menu": {
+      "open": "Deschide meniul de navigare",
+      "title": "Meniu de navigare",
+      "sessions": "Sesiuni deschise"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Instrument extern",
@@ -1093,6 +1106,7 @@
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
+    "composerMore": "Mai multe acțiuni de introducere",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",
     "autoContinuing": "Modul automat rulează — IA răspunde singură la ultimul rezultat…",
@@ -1186,6 +1200,9 @@
     "splitHandle": "Separator de panou",
     "terminalTab": "Terminal",
     "filesTab": "Fișiere",
+    "aiTab": "IA",
+    "paneTabs": "Panourile sesiunii",
+    "moreActions": "Mai multe acțiuni",
     "terminalOpenFailed": "Terminalul nu a putut fi deschis: {{error}}",
     "connectionLostPressR": "Conexiunea a fost pierdută. Apăsați R pentru reconectare.",
     "reconnect": "Reconectare",

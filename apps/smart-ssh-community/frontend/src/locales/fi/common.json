@@ -130,7 +130,8 @@
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
     "hintRoot": "→ ylin taso (ei ryhmää)",
     "hintGroup": "→ siirrä tähän ryhmään",
-    "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä"
+    "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
+    "moveTo": "Siirrä ”{{name}}” kohteeseen…"
   },
   "management": {
     "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Aloitushakemiston on oltava absoluuttinen polku (/…) tai alettava merkinnällä ~/.",
       "controlCharacter": "Aloitushakemisto ei saa sisältää ohjausmerkkejä."
+    },
+    "tabs": {
+      "label": "Palvelimen asetukset",
+      "general": "Yleiset",
+      "connection": "Yhteys",
+      "security": "Suojaus",
+      "invalid": "Sisältää virheitä"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",
+    "menu": {
+      "open": "Avaa navigointivalikko",
+      "title": "Navigointivalikko",
+      "sessions": "Avoimet istunnot"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Ulkoinen työkalu",
@@ -1086,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
+    "composerMore": "Lisää syöttötoimintoja",
     "newChat": "Uusi keskustelu",
     "newChatDisabledHint": "Ei käytettävissä, kun tekoäly vastaa tai vahvistus on auki.",
     "autoContinuing": "Automaattitila käynnissä – tekoäly vastaa viimeiseen tulokseen itse…",
@@ -1182,6 +1196,9 @@
     "splitHandle": "Paneelien jakaja",
     "terminalTab": "Pääte",
     "filesTab": "Tiedostot",
+    "aiTab": "Tekoäly",
+    "paneTabs": "Istunnon osat",
+    "moreActions": "Lisää toimintoja",
     "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
     "reconnectingAuto": "Yhdistetään uudelleen… (yritys {{attempt}})",
     "stopReconnect": "Pysäytä",

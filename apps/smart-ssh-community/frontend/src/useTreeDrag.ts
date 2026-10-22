@@ -53,7 +53,14 @@ interface Pending {
  * auf das Ausgangselement liefert, wird verschluckt, damit ein Ziehen
  * nicht zusätzlich verbindet oder auswählt.
  */
-export function useTreeDrag(onDrop: (item: DragItem, target: DropTarget) => void) {
+export function useTreeDrag(
+  onDrop: (item: DragItem, target: DropTarget) => void,
+  /** Issue #582: with `touchDrag: false` a touch pointer never starts a drag,
+   * so a vertical scroll gesture cannot turn into one (the narrow layout
+   * offers "Move to…" instead). Mouse and pen are unaffected. */
+  options: { touchDrag?: boolean } = {},
+) {
+  const touchDrag = options.touchDrag ?? true;
   const [drag, setDrag] = useState<TreeDragState | null>(null);
   const pendingRef = useRef<Pending | null>(null);
   const draggingRef = useRef(false);
@@ -98,6 +105,7 @@ export function useTreeDrag(onDrop: (item: DragItem, target: DropTarget) => void
       onPointerDown: (event: React.PointerEvent) => {
         suppressClickRef.current = false;
         if (event.button !== 0) return;
+        if (!touchDrag && event.pointerType === "touch") return;
         pendingRef.current = {
           item,
           pointerId: event.pointerId,
@@ -151,7 +159,7 @@ export function useTreeDrag(onDrop: (item: DragItem, target: DropTarget) => void
         }
       },
     }),
-    [reset],
+    [reset, touchDrag],
   );
 
   return { drag, handlersFor };

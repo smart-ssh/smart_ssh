@@ -32,6 +32,7 @@ vi.mock("./events", () => ({
   onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onMcpActionTabRequested: vi.fn(() => Promise.resolve(() => {})),
+  onChatSessionChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 const server = { id: "srv-1", name: "prod-db" };

@@ -130,7 +130,8 @@
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
     "hintRoot": "→ najwyższy poziom (bez grupy)",
     "hintGroup": "→ przenieś do tej grupy",
-    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy"
+    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
+    "moveTo": "Przenieś „{{name}}” do…"
   },
   "management": {
     "emptyState": "Wybierz grupę lub serwer po lewej albo utwórz coś nowego przez „{{addGroup}}”/„{{addServer}}”."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Katalog startowy musi być ścieżką bezwzględną (/…) lub zaczynać się od ~/.",
       "controlCharacter": "Katalog startowy nie może zawierać znaków sterujących."
+    },
+    "tabs": {
+      "label": "Ustawienia serwera",
+      "general": "Ogólne",
+      "connection": "Połączenie",
+      "security": "Bezpieczeństwo",
+      "invalid": "Zawiera błędy"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Przegląd",
     "pendingAction": "Oczekiwanie na potwierdzenie",
     "closeTab": "Zamknij kartę „{{name}}”",
+    "menu": {
+      "open": "Otwórz menu nawigacji",
+      "title": "Menu nawigacji",
+      "sessions": "Otwarte sesje"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Narzędzie zewnętrzne",
@@ -1100,6 +1113,7 @@
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",
+    "composerMore": "Więcej akcji pola wiadomości",
     "newChat": "Nowy czat",
     "newChatDisabledHint": "Niedostępne, gdy AI odpowiada lub otwarte jest potwierdzenie.",
     "autoContinuing": "Tryb automatyczny działa — AI samodzielnie odpowiada na ostatni wynik…",
@@ -1198,6 +1212,9 @@
     "splitHandle": "Separator paneli",
     "terminalTab": "Terminal",
     "filesTab": "Pliki",
+    "aiTab": "AI",
+    "paneTabs": "Panele sesji",
+    "moreActions": "Więcej akcji",
     "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}",
     "reconnectingAuto": "Ponowne łączenie… (próba {{attempt}})",
     "stopReconnect": "Zatrzymaj",

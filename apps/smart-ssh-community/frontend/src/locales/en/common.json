@@ -130,7 +130,8 @@
     "rootDropZone": "Drop here to move to the top level (no group)",
     "hintRoot": "→ top level (no group)",
     "hintGroup": "→ move into this group",
-    "hintCycle": "A group cannot be moved into its own subgroup"
+    "hintCycle": "A group cannot be moved into its own subgroup",
+    "moveTo": "Move “{{name}}” to…"
   },
   "management": {
     "emptyState": "Select a group or server on the left, or create something new via \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "The start directory must be an absolute path (/…) or start with ~/.",
       "controlCharacter": "The start directory must not contain control characters."
+    },
+    "tabs": {
+      "label": "Server settings",
+      "general": "General",
+      "connection": "Connection",
+      "security": "Security",
+      "invalid": "Contains errors"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Overview",
     "pendingAction": "Waiting for confirmation",
     "closeTab": "Close tab \"{{name}}\"",
+    "menu": {
+      "open": "Open navigation menu",
+      "title": "Navigation menu",
+      "sessions": "Open sessions"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "External tool",
@@ -1086,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",
+    "composerMore": "More input actions",
     "newChat": "New chat",
     "newChatDisabledHint": "Not available while the AI is responding or a confirmation is open.",
     "autoContinuing": "Automatic mode running — the AI responds to the last result on its own…",
@@ -1182,6 +1196,9 @@
     "splitHandle": "Panel divider",
     "terminalTab": "Terminal",
     "filesTab": "Files",
+    "aiTab": "AI",
+    "paneTabs": "Session panes",
+    "moreActions": "More actions",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
     "reconnectingAuto": "Reconnecting… (attempt {{attempt}})",
     "stopReconnect": "Stop",

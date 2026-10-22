@@ -130,7 +130,8 @@
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
     "hintRoot": "→ øverste nivå (ingen gruppe)",
     "hintGroup": "→ flytt inn i denne gruppen",
-    "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe"
+    "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe",
+    "moveTo": "Flytt «{{name}}» til…"
   },
   "management": {
     "emptyState": "Velg en gruppe eller server til venstre, eller opprett noe nytt via “{{addGroup}}”/“{{addServer}}”."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Startkatalogen må være en absolutt sti (/…) eller starte med ~/.",
       "controlCharacter": "Startkatalogen må ikke inneholde kontrolltegn."
+    },
+    "tabs": {
+      "label": "Serverinnstillinger",
+      "general": "Generelt",
+      "connection": "Tilkobling",
+      "security": "Sikkerhet",
+      "invalid": "Inneholder feil"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
+    "menu": {
+      "open": "Åpne navigasjonsmenyen",
+      "title": "Navigasjonsmeny",
+      "sessions": "Åpne økter"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Eksternt verktøy",
@@ -1086,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",
+    "composerMore": "Flere inndatahandlinger",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgjengelig mens AI svarer eller en bekreftelse er åpen.",
     "autoContinuing": "Automatisk modus kjører – AI-en svarer selv på det siste resultatet…",
@@ -1182,6 +1196,9 @@
     "splitHandle": "Panelskille",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "KI",
+    "paneTabs": "Øktdeler",
+    "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
     "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
     "stopReconnect": "Stopp",

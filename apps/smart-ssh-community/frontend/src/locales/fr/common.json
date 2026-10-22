@@ -130,7 +130,8 @@
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
     "hintRoot": "→ niveau supérieur (sans groupe)",
     "hintGroup": "→ déplacer dans ce groupe",
-    "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe"
+    "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe",
+    "moveTo": "Déplacer « {{name}} » vers…"
   },
   "management": {
     "emptyState": "Sélectionnez un groupe ou un serveur à gauche, ou créez un élément via « {{addGroup}} »/« {{addServer}} »."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Le répertoire de départ doit être un chemin absolu (/…) ou commencer par ~/.",
       "controlCharacter": "Le répertoire de départ ne doit pas contenir de caractères de contrôle."
+    },
+    "tabs": {
+      "label": "Paramètres du serveur",
+      "general": "Général",
+      "connection": "Connexion",
+      "security": "Sécurité",
+      "invalid": "Contient des erreurs"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Vue d’ensemble",
     "pendingAction": "En attente de confirmation",
     "closeTab": "Fermer l’onglet « {{name}} »",
+    "menu": {
+      "open": "Ouvrir le menu de navigation",
+      "title": "Menu de navigation",
+      "sessions": "Sessions ouvertes"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Outil externe",
@@ -1093,6 +1106,7 @@
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",
+    "composerMore": "Plus d'actions de saisie",
     "newChat": "Nouveau chat",
     "newChatDisabledHint": "Indisponible pendant que l’IA répond ou qu’une confirmation est ouverte.",
     "autoContinuing": "Mode automatique en cours — l’IA répond d’elle-même au dernier résultat…",
@@ -1190,6 +1204,9 @@
     "splitHandle": "Séparateur de panneau",
     "terminalTab": "Terminal",
     "filesTab": "Fichiers",
+    "aiTab": "IA",
+    "paneTabs": "Zones de la session",
+    "moreActions": "Plus d’actions",
     "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}",
     "reconnectingAuto": "Reconnexion… (tentative {{attempt}})",
     "stopReconnect": "Arrêter",

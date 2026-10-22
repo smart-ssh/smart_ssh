@@ -130,7 +130,8 @@
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
     "hintRoot": "→ üst düzey (grupsuz)",
     "hintGroup": "→ bu gruba taşı",
-    "hintCycle": "Bir grup kendi alt grubuna taşınamaz"
+    "hintCycle": "Bir grup kendi alt grubuna taşınamaz",
+    "moveTo": "“{{name}}” öğesini taşı…"
   },
   "management": {
     "emptyState": "Solda bir grup veya sunucu seçin ya da \"{{addGroup}}\"/\"{{addServer}}\" ile yeni bir şey oluşturun."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Başlangıç dizini mutlak bir yol (/…) olmalı veya ~/ ile başlamalıdır.",
       "controlCharacter": "Başlangıç dizini denetim karakterleri içermemelidir."
+    },
+    "tabs": {
+      "label": "Sunucu ayarları",
+      "general": "Genel",
+      "connection": "Bağlantı",
+      "security": "Güvenlik",
+      "invalid": "Hatalar içeriyor"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Genel bakış",
     "pendingAction": "Onay bekleniyor",
     "closeTab": "\"{{name}}\" sekmesini kapat",
+    "menu": {
+      "open": "Gezinme menüsünü aç",
+      "title": "Gezinme menüsü",
+      "sessions": "Açık oturumlar"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Harici araç",
@@ -1086,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",
+    "composerMore": "Diğer giriş eylemleri",
     "newChat": "Yeni sohbet",
     "newChatDisabledHint": "Yapay zeka yanıt verirken veya bir onay açıkken kullanılamaz.",
     "autoContinuing": "Otomatik mod çalışıyor — yapay zeka son sonuca kendi başına yanıt veriyor…",
@@ -1178,6 +1192,9 @@
     "splitHandle": "Panel ayırıcı",
     "terminalTab": "Terminal",
     "filesTab": "Dosyalar",
+    "aiTab": "YZ",
+    "paneTabs": "Oturum bölmeleri",
+    "moreActions": "Diğer işlemler",
     "terminalOpenFailed": "Terminal açılamadı: {{error}}",
     "connectionLostPressR": "Bağlantı koptu. Yeniden bağlanmak için R'ye basın.",
     "reconnect": "Yeniden bağlan",

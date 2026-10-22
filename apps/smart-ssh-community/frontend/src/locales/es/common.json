@@ -130,7 +130,8 @@
     "rootDropZone": "Suelte aquí para mover al nivel superior (sin grupo)",
     "hintRoot": "→ nivel superior (sin grupo)",
     "hintGroup": "→ mover a este grupo",
-    "hintCycle": "Un grupo no puede moverse a su propio subgrupo"
+    "hintCycle": "Un grupo no puede moverse a su propio subgrupo",
+    "moveTo": "Mover «{{name}}» a…"
   },
   "management": {
     "emptyState": "Seleccione un grupo o servidor a la izquierda, o cree algo nuevo con “{{addGroup}}”/“{{addServer}}”."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "El directorio de inicio debe ser una ruta absoluta (/…) o empezar por ~/.",
       "controlCharacter": "El directorio de inicio no debe contener caracteres de control."
+    },
+    "tabs": {
+      "label": "Ajustes del servidor",
+      "general": "General",
+      "connection": "Conexión",
+      "security": "Seguridad",
+      "invalid": "Contiene errores"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
+    "menu": {
+      "open": "Abrir el menú de navegación",
+      "title": "Menú de navegación",
+      "sessions": "Sesiones abiertas"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Herramienta externa",
@@ -1093,6 +1106,7 @@
   },
   "chat": {
     "jumpToLatest": "Ir al mensaje más reciente",
+    "composerMore": "Más acciones de entrada",
     "newChat": "Nuevo chat",
     "newChatDisabledHint": "No disponible mientras la IA responde o hay una confirmación abierta.",
     "autoContinuing": "Modo automático en marcha: la IA responde por sí sola al último resultado…",
@@ -1190,6 +1204,9 @@
     "splitHandle": "Divisor de paneles",
     "terminalTab": "Terminal",
     "filesTab": "Archivos",
+    "aiTab": "IA",
+    "paneTabs": "Paneles de la sesión",
+    "moreActions": "Más acciones",
     "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
     "reconnectingAuto": "Reconectando… (intento {{attempt}})",
     "stopReconnect": "Detener",

@@ -130,7 +130,8 @@
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
     "hintRoot": "→ hoogste niveau (geen groep)",
     "hintGroup": "→ naar deze groep verplaatsen",
-    "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst"
+    "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst",
+    "moveTo": "“{{name}}” verplaatsen naar…"
   },
   "management": {
     "emptyState": "Selecteer links een groep of server, of maak iets nieuws aan via \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "De startmap moet een absoluut pad (/…) zijn of met ~/ beginnen.",
       "controlCharacter": "De startmap mag geen stuurtekens bevatten."
+    },
+    "tabs": {
+      "label": "Serverinstellingen",
+      "general": "Algemeen",
+      "connection": "Verbinding",
+      "security": "Beveiliging",
+      "invalid": "Bevat fouten"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",
+    "menu": {
+      "open": "Navigatiemenu openen",
+      "title": "Navigatiemenu",
+      "sessions": "Open sessies"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Extern hulpmiddel",
@@ -1086,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",
+    "composerMore": "Meer invoeracties",
     "newChat": "Nieuwe chat",
     "newChatDisabledHint": "Niet beschikbaar terwijl de AI antwoordt of een bevestiging openstaat.",
     "autoContinuing": "Automatische modus actief — de AI reageert zelf op het laatste resultaat…",
@@ -1182,6 +1196,9 @@
     "splitHandle": "Paneelscheiding",
     "terminalTab": "Terminal",
     "filesTab": "Bestanden",
+    "aiTab": "AI",
+    "paneTabs": "Sessiedelen",
+    "moreActions": "Meer acties",
     "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
     "reconnectingAuto": "Opnieuw verbinden… (poging {{attempt}})",
     "stopReconnect": "Stoppen",

@@ -10,23 +10,38 @@ import { Button } from "./components/ui";
 import { ToastHost } from "./components/ToastHost";
 import { HostKeyPromptHost } from "./components/HostKeyPromptHost";
 import { ServerList } from "./components/ServerList";
+import { NarrowHeaderNav } from "./components/NarrowHeaderNav";
 import { SessionTabBar } from "./components/SessionTabBar";
 import { ConnectingTabView } from "./components/ConnectingTabView";
 import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
 import { commandErrorMessage, listAiProviders } from "./api";
-import { subscribeRequestServerNoteEdit } from "./navigationBus";
+import {
+  subscribeRequestResumeChatSession,
+  subscribeRequestServerNoteEdit,
+  type ResumeChatSessionRequest,
+} from "./navigationBus";
+import { useIsNarrow } from "./hooks/useIsNarrow";
+import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
 import { useSessionTabs } from "./useSessionTabs";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
 
-type Tab = "connect" | "manage" | "rules";
+type Tab = MainTab;
 
 function App() {
   const [tab, setTab] = useState<Tab>("connect");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // WebKit on macOS does not focus a clicked button, so the opener is taken
+  // from the click and handed to the dialog as the focus-return target.
+  const [settingsOpener, setSettingsOpener] = useState<HTMLElement | null>(null);
+  const openSettingsFrom = (opener: HTMLElement) => {
+    setSettingsOpener(opener);
+    setSettingsOpen(true);
+  };
+  const narrow = useIsNarrow();
   const [hasActiveProvider, setHasActiveProvider] = useState<boolean | null>(null);
   // Spec 0057, §4.2 (Etappe 4): "Mache ich selbst" springt zur
   // Server-Bearbeitung — s. `navigationBus.ts`-Doc-Kommentar. Lebt hier
@@ -46,6 +61,25 @@ function App() {
     markActionSettled,
     requestCloseTab,
   } = useSessionTabs();
+
+  // Issue #611: an extension asks to resume a saved chat session. An open
+  // tab of the server wins (Spec 0017 §3); otherwise the overview takes the
+  // request and runs the picker's resume path (first-run gate, connecting tab).
+  const [resumeRequest, setResumeRequest] = useState<ResumeChatSessionRequest | null>(null);
+  useEffect(
+    () =>
+      subscribeRequestResumeChatSession((request) => {
+        const existing = findExistingSessionId(request.serverId);
+        if (existing) {
+          switchTo(existing);
+          return;
+        }
+        switchTo(null);
+        setTab("connect");
+        setResumeRequest(request);
+      }),
+    [findExistingSessionId, switchTo],
+  );
 
   useEffect(
     () =>
@@ -140,12 +174,27 @@ function App() {
     // `select-none` (Spec 0014).
     <div className="flex h-screen flex-col bg-slate-900 text-slate-100 overflow-hidden">
       <AppHeader>
-        <SessionTabBar
-          tabs={sessionTabs}
-          activeSessionId={activeSessionId}
-          onSwitch={switchTo}
-          onRequestClose={requestCloseTab}
-        />
+        {narrow ? (
+          <NarrowHeaderNav
+            tabs={sessionTabs}
+            activeSessionId={activeSessionId}
+            tab={tab}
+            onSelectMainTab={(next) => {
+              switchTo(null);
+              setTab(next);
+            }}
+            onSwitch={switchTo}
+            onRequestClose={requestCloseTab}
+            onOpenSettings={openSettingsFrom}
+          />
+        ) : (
+          <SessionTabBar
+            tabs={sessionTabs}
+            activeSessionId={activeSessionId}
+            onSwitch={switchTo}
+            onRequestClose={requestCloseTab}
+          />
+        )}
       </AppHeader>
       <NoteSuggestionToast />
       <NoteShrinkSuggestionToast />
@@ -194,14 +243,19 @@ function App() {
         <MainScreen
           tab={tab}
           setTab={setTab}
+          narrow={narrow}
           settingsOpen={settingsOpen}
+          settingsOpener={settingsOpener}
           setSettingsOpen={setSettingsOpen}
+          openSettingsFrom={openSettingsFrom}
           hasActiveProvider={hasActiveProvider}
           refreshProviderStatus={refreshProviderStatus}
           findExistingSessionId={findExistingSessionId}
           onSwitchToExistingTab={switchTo}
           onStartConnect={startConnect}
           connectingServerIds={connectingServerIds}
+          resumeRequest={resumeRequest}
+          onResumeRequestConsumed={() => setResumeRequest(null)}
           pendingNoteEditSelection={pendingNoteEditSelection}
           onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
@@ -215,13 +269,19 @@ function App() {
 interface MainScreenProps {
   tab: Tab;
   setTab: (tab: Tab) => void;
+  narrow: boolean;
   settingsOpen: boolean;
+  settingsOpener: HTMLElement | null;
   setSettingsOpen: (open: boolean) => void;
+  openSettingsFrom: (opener: HTMLElement) => void;
   hasActiveProvider: boolean | null;
   /** Spec 0057, §4.2 (Etappe 4) — s. `App`s Doc-Kommentar zum
    * `navigationBus`. */
   pendingNoteEditSelection: Selection | null;
   onNoteEditSelectionConsumed: () => void;
+  /** Issue #611. */
+  resumeRequest: ResumeChatSessionRequest | null;
+  onResumeRequestConsumed: () => void;
   refreshProviderStatus: () => void;
   /** Issue #548. */
   onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
@@ -237,8 +297,11 @@ interface MainScreenProps {
 function MainScreen({
   tab,
   setTab,
+  narrow,
   settingsOpen,
+  settingsOpener,
   setSettingsOpen: setSettingsOpenRaw,
+  openSettingsFrom: openSettingsRaw,
   hasActiveProvider,
   refreshProviderStatus,
   onStartConnect,
@@ -247,17 +310,13 @@ function MainScreen({
   onSwitchToExistingTab,
   pendingNoteEditSelection,
   onNoteEditSelectionConsumed,
+  resumeRequest,
+  onResumeRequestConsumed,
   onCreateFirstServer,
   onCreateServerInGroup,
 }: MainScreenProps) {
   const { t } = useTranslation();
-  // WebKit on macOS does not focus a clicked button, so the opener is taken
-  // from the click event and handed to the dialog as the focus-return target.
-  const [settingsOpener, setSettingsOpener] = useState<HTMLElement | null>(null);
-  const openSettingsFrom = (event: { currentTarget: HTMLElement }) => {
-    setSettingsOpener(event.currentTarget);
-    setSettingsOpenRaw(true);
-  };
+  const openSettingsFrom = (event: { currentTarget: HTMLElement }) => openSettingsRaw(event.currentTarget);
   // Spec 0033, Abschnitt 4: hier statt in `ServerList` selbst gehalten,
   // damit der Auf-/Zuklapp-Zustand einen Tab-Wechsel weg von "Verbinden"
   // übersteht (`ServerList` wird beim Wechsel zu "Verwalten"/"Filter-Regeln"
@@ -276,53 +335,34 @@ function MainScreen({
   };
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
+      {!narrow && (
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
         <div className="flex items-center gap-6">
           <h1 className="font-heading text-xl font-semibold tracking-wide">Smart SSH</h1>
           <nav className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => setTab("connect")}
-              aria-current={tab === "connect" ? "page" : undefined}
-              className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
-                tab === "connect"
-                  ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
-                  : "border-transparent text-slate-400 hover:bg-slate-800"
-              }`}
-            >
-              {t("nav.connect")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("manage")}
-              aria-current={tab === "manage" ? "page" : undefined}
-              className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
-                tab === "manage"
-                  ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
-                  : "border-transparent text-slate-400 hover:bg-slate-800"
-              }`}
-            >
-              {t("nav.manage")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("rules")}
-              aria-current={tab === "rules" ? "page" : undefined}
-              className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
-                tab === "rules"
-                  ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
-                  : "border-transparent text-slate-400 hover:bg-slate-800"
-              }`}
-            >
-              {t("nav.rules")}
-            </button>
+            {MAIN_TAB_ENTRIES.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setTab(entry.id)}
+                aria-current={tab === entry.id ? "page" : undefined}
+                className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
+                  tab === entry.id
+                    ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
+                    : "border-transparent text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                {t(entry.labelKey)}
+              </button>
+            ))}
           </nav>
         </div>
         <Button onClick={openSettingsFrom}>{t("settings.title")}</Button>
       </header>
+      )}
 
       {tab === "connect" ? (
-        <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8">
+        <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8 narrow:px-3 narrow:py-4">
           {hasActiveProvider === false && (
             <p className="rounded border border-amber-800 bg-amber-950 px-4 py-3 text-sm text-amber-200">
               {t("mainScreen.noActiveProvider")}{" "}
@@ -348,6 +388,8 @@ function MainScreen({
               onSwitchToExistingTab={onSwitchToExistingTab}
               collapsedGroupIds={collapsedGroupIds}
               onToggleGroup={toggleGroup}
+              resumeRequest={resumeRequest}
+              onResumeRequestConsumed={onResumeRequestConsumed}
               onCreateFirstServer={onCreateFirstServer}
               onCreateServerInGroup={onCreateServerInGroup}
             />

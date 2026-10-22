@@ -1,4 +1,4 @@
-// Before/after images of a named screen at both window sizes, for review PRs.
+// Before/after images of a named screen at each size in `SCREENSHOT_SIZES`, for review PRs.
 // Writes `e2e/screenshots/<label>/<name>-<width>x<height>.png` (git-ignored).
 // Run with `SCREENSHOT_LABEL=before` / `after` to keep two sets side by side;
 // the label defaults to `current`.
@@ -9,6 +9,7 @@ import type { Page } from "@playwright/test";
 export const SCREENSHOT_SIZES = [
   { width: 1280, height: 800 },
   { width: 800, height: 560 },
+  { width: 390, height: 844 },
 ] as const;
 
 /**

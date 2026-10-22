@@ -130,7 +130,8 @@
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
     "hintRoot": "→ cấp cao nhất (không thuộc nhóm)",
     "hintGroup": "→ chuyển vào nhóm này",
-    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó"
+    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
+    "moveTo": "Di chuyển “{{name}}” tới…"
   },
   "management": {
     "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -272,6 +273,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Thư mục khởi đầu phải là đường dẫn tuyệt đối (/…) hoặc bắt đầu bằng ~/.",
       "controlCharacter": "Thư mục khởi đầu không được chứa ký tự điều khiển."
+    },
+    "tabs": {
+      "label": "Cài đặt máy chủ",
+      "general": "Chung",
+      "connection": "Kết nối",
+      "security": "Bảo mật",
+      "invalid": "Có lỗi"
     }
   },
   "filterRules": {
@@ -411,6 +419,11 @@
     "overview": "Tổng quan",
     "pendingAction": "Đang chờ xác nhận",
     "closeTab": "Đóng tab \"{{name}}\"",
+    "menu": {
+      "open": "Mở menu điều hướng",
+      "title": "Menu điều hướng",
+      "sessions": "Phiên đang mở"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Công cụ bên ngoài",
@@ -1079,6 +1092,7 @@
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",
+    "composerMore": "Thêm thao tác nhập",
     "newChat": "Cuộc trò chuyện mới",
     "newChatDisabledHint": "Không khả dụng khi AI đang phản hồi hoặc có yêu cầu xác nhận đang mở.",
     "autoContinuing": "Chế độ tự động đang chạy — AI tự phản hồi kết quả cuối cùng…",
@@ -1174,6 +1188,9 @@
     "splitHandle": "Thanh chia khung",
     "terminalTab": "Dòng lệnh",
     "filesTab": "Tệp",
+    "aiTab": "AI",
+    "paneTabs": "Các ngăn của phiên",
+    "moreActions": "Thêm hành động",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
     "reconnectingAuto": "Đang kết nối lại… (lần thử {{attempt}})",
     "stopReconnect": "Dừng",

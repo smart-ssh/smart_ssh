@@ -531,3 +531,46 @@ async fn citation_alone_signals_ingest_and_plain_answer_does_not() {
     let events = collect(&web_provider(&server, true)).await;
     assert_eq!(ingested(&events), 0, "{events:?}");
 }
+
+#[tokio::test]
+async fn test_issue_609_completed_event_reports_usage() {
+    let server = serve(sse(&[
+        (
+            "response.output_text.delta",
+            r#"{"type":"response.output_text.delta","delta":"hi"}"#,
+        ),
+        (
+            "response.completed",
+            r#"{"type":"response.completed","response":{"model":"gpt-5-x","service_tier":"default","usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100},"output_tokens":40,"output_tokens_details":{"reasoning_tokens":25}}}}"#,
+        ),
+    ]))
+    .await;
+    let events: Vec<AiEvent> = provider(&server, true).send(context()).collect().await;
+    assert_eq!(
+        events,
+        vec![
+            AiEvent::TextDelta("hi".into()),
+            AiEvent::RequestUsage(ssh_manager_core::ai::AiUsage {
+                input_tokens: Some(120),
+                output_tokens: Some(40),
+                cache_read_tokens: Some(100),
+                reasoning_tokens: Some(25),
+                service_tier: Some("default".into()),
+                response_model: Some("gpt-5-x".into()),
+                ..Default::default()
+            }),
+            AiEvent::Done,
+        ]
+    );
+}
+
+#[tokio::test]
+async fn test_issue_609_completed_without_usage_has_no_usage_event() {
+    let server = serve(sse(&[(
+        "response.completed",
+        r#"{"type":"response.completed","response":{"model":"gpt-5-x"}}"#,
+    )]))
+    .await;
+    let events: Vec<AiEvent> = provider(&server, true).send(context()).collect().await;
+    assert_eq!(events, vec![AiEvent::Done]);
+}
