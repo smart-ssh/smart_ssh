@@ -2191,24 +2191,34 @@ function reasonList(
 
 /** Issue #596, Spec 0011: which segments of the pending command existing
  * rules already cover, which need a rule and which ask regardless of rules.
- * Renders nothing while loading, on failure, or when the backend returns no
- * segments (single segment without a rule-independent reason). */
+ * Renders nothing while loading or when the backend returns no
+ * segments (single segment without a rule-independent reason); a muted
+ * line on failure. */
 function CoverageList({ sessionId, command }: { sessionId: string; command: string }) {
   const { t } = useTranslation();
   const [explanation, setExplanation] = useState<ConfirmationExplanationDto | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let stale = false;
+    setFailed(false);
     explainConfirmation(sessionId, command, "Global")
       .then((r) => {
         if (!stale) setExplanation(r);
       })
       .catch(() => {
-        if (!stale) setExplanation(null);
+        // The backend logs the error; the card says the lookup failed.
+        if (!stale) {
+          setExplanation(null);
+          setFailed(true);
+        }
       });
     return () => {
       stale = true;
     };
   }, [sessionId, command]);
+  if (failed) {
+    return <div className="text-xs text-slate-400">{t("confirmDialog.explain.loadFailed")}</div>;
+  }
   if (!explanation || explanation.segments.length === 0) return null;
   return (
     <div className="space-y-1 text-xs">

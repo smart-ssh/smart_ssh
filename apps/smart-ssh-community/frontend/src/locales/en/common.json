@@ -387,7 +387,8 @@
       "verdictAuto": "runs automatically next time",
       "verdictAsk": "will still ask: {{reasons}}",
       "notice": "Rule created. This command will still ask next time: {{reasons}}",
-      "reasonOther": "another safety check"
+      "reasonOther": "another safety check",
+      "loadFailed": "Rule coverage could not be loaded"
     }
   },
   "hostKeyDialog": {
