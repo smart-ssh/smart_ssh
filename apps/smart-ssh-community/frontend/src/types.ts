@@ -206,6 +206,13 @@ export type ConnectionStatus =
   | "reconnecting"
   | "awaiting_host_key";
 
+/** Issue #611: the persisted chat session a runtime session uses now
+ * (`null`: local pseudo-server / no-persist). */
+export interface ChatSessionChangedEvent {
+  sessionId: string;
+  chatSessionId: string | null;
+}
+
 export interface ConnectionStatusChangedEvent {
   sessionId: string;
   status: ConnectionStatus;
@@ -949,6 +956,8 @@ export interface SessionSummaryDto {
   serverName: string;
   status: ConnectionStatus;
   hasPendingAction: boolean;
+  /** Issue #611. */
+  chatSessionId?: string | null;
   /** Spec 0104: gesetzt, wenn die Sitzung einem MCP-Client gehört. */
   mcp: McpSessionInfo | null;
 }

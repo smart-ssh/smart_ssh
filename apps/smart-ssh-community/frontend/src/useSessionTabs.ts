@@ -27,11 +27,13 @@ import { translateErrorCode } from "./errorCodes";
 import {
   onActionDecisionEscalated,
   onChatActionProposed,
+  onChatSessionChanged,
   onChatActionResult,
   onConnectProgress,
   onConnectionStatusChanged,
   onMcpActionTabRequested,
 } from "./events";
+import { forgetChatSessionId, setChatSessionId } from "./chatSessionIds";
 import { clearHostKeyPrompt } from "./hostKeyPromptBus";
 import type {
   ConnectStepRecord,
@@ -140,6 +142,7 @@ export function useSessionTabs() {
     listSessions()
       .then((summaries) => {
         if (summaries.length === 0) return;
+        for (const s of summaries) setChatSessionId(s.sessionId, s.chatSessionId ?? null);
         setTabs(
           summaries.map((s) => ({
             sessionId: s.sessionId,
@@ -171,6 +174,9 @@ export function useSessionTabs() {
           prev.map((t) => (t.sessionId === event.sessionId ? { ...t, status: event.status } : t)),
         );
       }),
+      // Issue #611: not tied to a tab — the event for a new session comes
+      // before its tab is connected.
+      onChatSessionChanged((event) => setChatSessionId(event.sessionId, event.chatSessionId)),
       onConnectProgress((event) => {
         setTabs((prev) =>
           prev.map((t) =>
@@ -464,6 +470,7 @@ export function useSessionTabs() {
     } catch (err) {
       console.error(commandErrorMessage(err));
     }
+    forgetChatSessionId(sessionId);
     removeTabAndPickNextActive(sessionId);
   };
 

@@ -86,6 +86,31 @@ pub fn emit_connection_status_changed(
     );
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatSessionChangedPayload {
+    session_id: SessionId,
+    chat_session_id: Option<String>,
+}
+
+/// Issue #611: the persisted chat session a runtime session currently uses
+/// (`None`: local pseudo-server or no-persist). Sent at connect/resume,
+/// after a reconnect and after "New Chat". Ids only, no content.
+pub fn emit_chat_session_changed(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    chat_session_id: Option<Uuid>,
+) {
+    emit(
+        emitter,
+        "chat-session-changed",
+        &ChatSessionChangedPayload {
+            session_id,
+            chat_session_id: chat_session_id.map(|id| id.to_string()),
+        },
+    );
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostKeyKind {
@@ -1338,6 +1363,22 @@ mod tests {
     //! kam im Frontend als `undefined` an (`result.exitCode`).
 
     use super::*;
+
+    /// Issue #611: `chat-session-changed` payload shape (camelCase, `null`
+    /// for a session without a persisted chat).
+    #[test]
+    fn test_chat_session_changed_payload_shape() {
+        let emitter = TestEmitter::default();
+        let session_id = Uuid::new_v4();
+        let chat = Uuid::new_v4();
+        emit_chat_session_changed(&emitter, session_id, Some(chat));
+        emit_chat_session_changed(&emitter, session_id, None);
+        let events = emitter.events.lock().unwrap();
+        assert_eq!(events[0].0, "chat-session-changed");
+        assert_eq!(events[0].1["sessionId"], session_id.to_string());
+        assert_eq!(events[0].1["chatSessionId"], chat.to_string());
+        assert!(events[1].1["chatSessionId"].is_null());
+    }
 
     /// Issue #37: `host-key-verification-needed` trägt additiv die
     /// `promptId`, an der das Frontend das passende Ende-Ereignis erkennt.

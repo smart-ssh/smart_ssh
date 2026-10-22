@@ -130,7 +130,8 @@
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
     "hintRoot": "→ najwyższy poziom (bez grupy)",
     "hintGroup": "→ przenieś do tej grupy",
-    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy"
+    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
+    "moveTo": "Przenieś „{{name}}” do…"
   },
   "management": {
     "emptyState": "Wybierz grupę lub serwer po lewej albo utwórz coś nowego przez „{{addGroup}}”/„{{addServer}}”."
@@ -1123,6 +1124,7 @@
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",
+    "composerMore": "Więcej akcji pola wiadomości",
     "newChat": "Nowy czat",
     "newChatDisabledHint": "Niedostępne, gdy AI odpowiada lub otwarte jest potwierdzenie.",
     "autoContinuing": "Tryb automatyczny działa — AI samodzielnie odpowiada na ostatni wynik…",

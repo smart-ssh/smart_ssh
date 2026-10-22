@@ -61,6 +61,10 @@ mod tests_web;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_web_research_rejected;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_usage;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
@@ -1020,9 +1024,14 @@ async fn run_one_round(
                     session.model_context_window_tokens as u64,
                 );
             }
-            // Issue #609: full usage is not consumed yet (no persistence in
-            // this issue); the chat flow is unchanged.
-            AiEvent::RequestUsage(_) => {}
+            // Issue #610: passive report to the registered observers; the
+            // loop's stop conditions are unchanged, a usage event that comes
+            // after the loop stopped is not reported.
+            AiEvent::RequestUsage(usage) => {
+                session
+                    .report_ai_usage(crate::ai_usage::AiUsagePurpose::ChatTurn, usage)
+                    .await;
+            }
             AiEvent::Retrying {
                 attempt,
                 max_attempts,

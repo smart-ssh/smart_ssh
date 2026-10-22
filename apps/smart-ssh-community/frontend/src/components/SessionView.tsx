@@ -8,6 +8,7 @@ import { sessionTabLabel } from "../useSessionTabs";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
 import { useDragResize } from "../useDragResize";
 import { ChatPanel } from "./ChatPanel";
+import { SessionHeaderItems } from "../extensions/SessionHeaderItems";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { Button, Tabs, useTabsIdBase, type TabItem } from "./ui";
 import { panelId, tabId } from "./ui/Tabs";
@@ -399,6 +400,7 @@ export function SessionView({
               {t("session.reconnectGaveUp")}
             </output>
           )}
+          <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
           {!narrow && showReconnect && reconnectButton}
           {reconnectError && (
             <span role="alert" className="font-mono text-xs text-red-300">

@@ -72,7 +72,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
       {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
        * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
        * damit kein String-Literal; die statische Analyse von
@@ -93,7 +93,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
         aria-describedby={descriptionId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl focus:outline-none ${
+        className={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl narrow:max-h-none narrow:max-w-none narrow:border-0 focus:outline-none ${
           isMismatch ? "border-red-600 bg-red-950/95" : "border-slate-600 bg-slate-800"
         }`}
       >
@@ -127,7 +127,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                   {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
                 </p>
               ) : null}
-              <div className="mb-4 grid grid-cols-2 gap-px border border-red-700/40 bg-red-700/25">
+              <div className="mb-4 grid grid-cols-2 gap-px narrow:grid-cols-1 border border-red-700/40 bg-red-700/25">
                 <div className="flex flex-col gap-1 bg-red-950 p-3">
                   <span className="font-heading text-xs font-semibold tracking-wide text-red-300 uppercase">
                     {t("hostKeyDialog.known")}
@@ -148,7 +148,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
 
               </div>
 
-              <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-red-700/30 pt-4">
+              <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-red-700/30 pt-4">
                 <button
                   ref={rejectButtonRef}
                   type="button"
@@ -189,7 +189,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
 
             </div>
 
-            <div className="flex shrink-0 justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
               <Button
                 ref={rejectButtonRef}
                 onClick={() => decide("reject")}

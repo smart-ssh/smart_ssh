@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
@@ -29,6 +30,7 @@ import type {
 import { useTreeDrag } from "../useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { ConnectStepLog } from "./ConnectStepLog";
+import { MoveToDialog } from "./MoveToDialog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../unusableServer";
@@ -55,6 +57,10 @@ interface ServerListProps {
    * bleibt, statt bei jedem Remount dieser Komponente zurückzufallen. */
   collapsedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  /** Issue #611: an extension's request to resume a saved chat session; it
+   * takes the same path as choosing the session in the picker. */
+  resumeRequest?: { serverId: string; chatSessionId: string } | null;
+  onResumeRequestConsumed?: () => void;
   /** Spec 0069, Teil C1 (BL-0082): Klick auf "Ersten Server anlegen" im
    * Einstiegs-Block — wechselt zum Tab "Verwalten" mit geöffnetem
    * Neu-Formular (`App.tsx`s `handleCreateFirstServer`). */
@@ -98,10 +104,15 @@ export function ServerList({
   onSwitchToExistingTab,
   collapsedGroupIds,
   onToggleGroup,
+  resumeRequest = null,
+  onResumeRequestConsumed,
   onCreateFirstServer,
   onCreateServerInGroup,
 }: ServerListProps) {
   const { t } = useTranslation();
+  const narrow = useIsNarrow();
+  // Issue #582: row whose "Move to…" dialog is open (narrow layout).
+  const [moveItem, setMoveItem] = useState<DragItem | null>(null);
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [groups, setGroups] = useState<GroupDto[]>([]);
   // Issue #100: Server mit unlesbarer Anmeldeart — sichtbar, aber nicht
@@ -121,6 +132,8 @@ export function ServerList({
   // statt eines rohen Backend-Fehlers).
   const [firstRunAcknowledged, setFirstRunAcknowledged] = useState<boolean | null>(null);
   const [pendingConnectServer, setPendingConnectServer] = useState<ServerDto | null>(null);
+  // Issue #611: chat session to resume once the first-run notice is done.
+  const [pendingResumeId, setPendingResumeId] = useState<string | null>(null);
   // Spec 0034, Abschnitt 6: `null` = kein Auswahl-Screen offen. Enthält
   // sowohl den Server (für Titel/erneutes Nachladen nach Umbenennen/
   // Löschen) als auch die aktuell geladene Sitzungsliste.
@@ -164,7 +177,21 @@ export function ServerList({
     }
     await loadTree();
   };
-  const { drag, handlersFor } = useTreeDrag((item, target) => void handleDrop(item, target));
+  const { drag, handlersFor } = useTreeDrag((item, target) => void handleDrop(item, target), {
+    touchDrag: !narrow,
+  });
+  const indent = (depth: number) => (narrow ? depth * 12 + 12 : depth * 16 + 16);
+  const moreButton = (item: DragItem) => (
+    <Button
+      variant="ghost"
+      onClick={() => setMoveItem(item)}
+      title={t("treeDrag.moveTo", { name: item.label })}
+      aria-label={t("treeDrag.moveTo", { name: item.label })}
+      className="mr-1 min-h-11 min-w-11 shrink-0"
+    >
+      ⋯
+    </Button>
+  );
   const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
   const highlightFor = (target: DropTarget) =>
     drag?.target &&
@@ -187,11 +214,38 @@ export function ServerList({
       .catch(() => setFirstRunAcknowledged(false));
   }, []);
 
-  const performConnect = async (server: ServerDto) => {
+  const performConnect = async (server: ServerDto, resumeChatSessionId?: string) => {
     setError(null);
     setConnectFailure(null);
-    onStartConnect({ id: server.id, name: server.name });
+    const target = { id: server.id, name: server.name };
+    if (resumeChatSessionId) onStartConnect(target, resumeChatSessionId);
+    else onStartConnect(target);
   };
+
+  // Issue #611: same checks as a click on the server plus the picker's
+  // resume choice: open tab → switch; first-run notice → show it first;
+  // otherwise the connecting tab resumes the chat session.
+  useEffect(() => {
+    if (!resumeRequest || loading || firstRunAcknowledged === null) return;
+    onResumeRequestConsumed?.();
+    const existing = findExistingSessionId(resumeRequest.serverId);
+    if (existing) {
+      onSwitchToExistingTab(existing);
+      return;
+    }
+    const server = servers.find((s) => s.id === resumeRequest.serverId);
+    if (!server) {
+      console.error("resume request for an unknown or unusable server");
+      return;
+    }
+    if (firstRunAcknowledged === false) {
+      setPendingResumeId(resumeRequest.chatSessionId);
+      setPendingConnectServer(server);
+      return;
+    }
+    void performConnect(server, resumeRequest.chatSessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeRequest, loading, firstRunAcknowledged, servers]);
 
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
    * `connect()`-Aufruf, nicht die übrige App-Nutzung davor — deshalb hier
@@ -265,7 +319,9 @@ export function ServerList({
     // Jetzt wird der lokale Zustand erst NACH erfolgreichem Speichern
     // gesetzt.
     const server = pendingConnectServer;
+    const resumeId = pendingResumeId;
     setPendingConnectServer(null);
+    setPendingResumeId(null);
     try {
       await saveFirstRunNoticeAcknowledged();
     } catch (err) {
@@ -276,11 +332,13 @@ export function ServerList({
     // Spec 0031, Abschnitt 6: Erweiterungs-Handler erst nach erfolgreichem
     // Speichern; sie blockieren den Verbindungsaufbau nicht.
     afterStored();
-    if (server) await performConnect(server);
+    if (server) {
+      await performConnect(server, resumeId ?? undefined);
+    }
   };
 
   const renderServerRow = (server: ServerDto, depth: number) => (
-    <li key={server.id}>
+    <li key={server.id} className={narrow ? "flex items-center" : undefined}>
       <button
         type="button"
         // Issue #48: der lokale Pseudo-Server (Spec 0032) ist nicht ziehbar.
@@ -289,17 +347,17 @@ export function ServerList({
           : handlersFor({ kind: "server", id: server.id, label: server.name }))}
         onClick={() => handleConnect(server)}
        
-        style={{ paddingLeft: `${depth * 16 + 16}px` }}
-        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 aria-disabled:opacity-60"
+        style={{ paddingLeft: `${indent(depth)}px` }}
+        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 aria-disabled:opacity-60"
       >
-        <div>
-          <p className="font-medium text-slate-100">{server.name}</p>
+        <div className="min-w-0">
+          <p className="font-medium break-words text-slate-100">{server.name}</p>
           {/* Spec 0046, Fund 5: der lokale Pseudo-Server hat konzeptionell
            * keinen Port (direkte Prozessausführung, kein SSH/TCP) —
            * `server.port` wäre hier immer `0` (s. `local_server::
            * synthetic_server`), das würde einen nicht existierenden Port
            * suggerieren statt ihn einfach auszublenden. */}
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-400 narrow:break-all">
             {server.isLocal
               ? `${server.username}@${server.host}`
               : `${server.username}@${server.host}:${server.port}`}
@@ -317,7 +375,7 @@ export function ServerList({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 narrow:flex-wrap">
           {server.tags.map((tag) => (
             <span key={tag} className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-200">
               {tag}
@@ -328,6 +386,7 @@ export function ServerList({
           )}
         </div>
       </button>
+      {narrow && !server.isLocal && moreButton({ kind: "server", id: server.id, label: server.name })}
     </li>
   );
 
@@ -336,10 +395,10 @@ export function ServerList({
   const renderUnusableServerRow = (server: UnusableServerDto, depth: number) => (
     <li key={server.id} data-testid="unusable-server-row">
       <div
-        style={{ paddingLeft: `${depth * 16 + 16}px` }}
-        className="flex w-full select-none items-center justify-between py-3 pr-4 text-left opacity-70"
+        style={{ paddingLeft: `${indent(depth)}px` }}
+        className="flex w-full select-none items-center justify-between gap-2 py-3 pr-4 text-left opacity-70 narrow:flex-wrap narrow:pr-2"
       >
-        <div>
+        <div className="min-w-0 break-words">
           <p className="font-medium text-slate-300">
             <span aria-hidden="true">⚠️</span> {server.name}
           </p>
@@ -378,8 +437,8 @@ export function ServerList({
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
             title={node.group.name}
-            style={{ paddingLeft: `${depth * 16 + 16}px` }}
-            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 pr-2 text-left text-sm font-medium text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
+            style={{ paddingLeft: `${indent(depth)}px` }}
+            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
           >
             <span className="w-3 text-slate-400">{collapsed ? "▸" : "▾"}</span>
             <span className="truncate" title={node.group.name}>
@@ -390,10 +449,11 @@ export function ServerList({
             onClick={() => onCreateServerInGroup(node.group.id)}
             title={t("mainScreen.newServerInGroup", { name: node.group.name })}
             aria-label={t("mainScreen.newServerInGroup", { name: node.group.name })}
-            className="mr-3"
+            className="mr-3 narrow:mr-1 narrow:min-h-11 narrow:min-w-11"
           >
             +
           </Button>
+          {narrow && moreButton({ kind: "group", id: node.group.id, label: node.group.name })}
         </div>
         {!collapsed &&
           (node.children.length > 0 ||
@@ -499,6 +559,16 @@ export function ServerList({
             </li>
           )}
         </ul>
+      )}
+
+      {moveItem && (
+        <MoveToDialog
+          item={moveItem}
+          groups={groups}
+          servers={servers}
+          onMove={(item, target) => void handleDrop(item, target)}
+          onClose={() => setMoveItem(null)}
+        />
       )}
 
       {drag && <TreeDragGhost drag={drag} kind={dropKind} />}

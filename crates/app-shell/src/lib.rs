@@ -113,6 +113,8 @@ pub(crate) struct StartupInputs {
     pub(crate) keychain: credentials_keyring::KeychainAvailability,
     /// Issue #464: from `Wiring`, handed to the `AppState`.
     pub(crate) outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+    /// Issue #610: from `Wiring`, handed to the `AppState`.
+    pub(crate) ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
 }
 
 /// Spec 0071, A11a/A11b: EINE Sprachwahl für ALLE Startdialoge dieses
@@ -142,6 +144,7 @@ fn startup_inputs(
     data_dir_lock: persistence_sqlite::DataDirLock,
     language: app_logic::startup_error_messages::Language,
     outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+    ai_usage_observers: Arc<Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>>,
 ) -> StartupInputs {
     // Spec 0071, A3/A16: Das Session-Bus-Indiz und der Schlüsselbund-Zustand
     // werden hier EINMAL pro Programmlauf ermittelt und danach im `AppState`
@@ -184,6 +187,7 @@ fn startup_inputs(
         language,
         keychain,
         outgoing_transform,
+        ai_usage_observers,
     }
 }
 
@@ -380,6 +384,7 @@ pub(crate) async fn open_and_assemble(
         // Spec 0075, §5.1: leer, bis eine Vorschau gelaufen ist.
         pending_ssh_config_import: std::sync::Mutex::new(None),
         outgoing_transform: inputs.outgoing_transform.clone(),
+        ai_usage_observers: inputs.ai_usage_observers.clone(),
         chat_content: chat_content.clone(),
     };
     Ok(app_state)
@@ -527,6 +532,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         data_dir_lock,
         language,
         wiring.outgoing_transform.take(),
+        Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
     tracing::info!(?mode, "determined how the root key is kept (Spec 0101, §5)");

@@ -34,7 +34,7 @@ export function ToastHost() {
 
   return (
     <div
-      className="fixed right-4 top-14 z-50 flex max-h-[calc(100vh-4.5rem)] w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto"
+      className="fixed right-4 top-14 narrow:left-4 z-50 flex max-h-[calc(100vh-4.5rem)] w-96 max-w-[calc(100vw-2rem)] narrow:w-auto flex-col gap-2 overflow-y-auto"
       // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- <output> ist ein Formular-Element, dessen Live-Region-Unterstützung je nach Webview und Screenreader schwankt; role="status" auf einem einfachen Container hält die Ansage verlässlich (Issue #112).
       role="status"
     >

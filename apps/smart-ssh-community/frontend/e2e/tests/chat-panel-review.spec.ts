@@ -11,6 +11,8 @@ import { chatInput, redCommandProposal } from "../support/session";
 const SIZES = [
   { width: 1280, height: 800 },
   { width: 800, height: 560 },
+  // Issue #583: the phone size runs in the phone projects only (tag in the title).
+  { width: 390, height: 844 },
 ];
 
 /** Presses Tab `count` times from the current focus and returns, for every
@@ -142,7 +144,7 @@ test.describe("chat panel review", () => {
   });
 
   for (const size of SIZES) {
-    test(`no clipped text in the chat at ${size.width}×${size.height}`, async ({ app }) => {
+    test(`no clipped text in the chat at ${size.width}×${size.height}${size.width < 640 ? " @phone" : ""}`, async ({ app }) => {
       await app.page.setViewportSize(size);
       await openChatWithMessages(app);
       const sessionId = await app.page.evaluate(

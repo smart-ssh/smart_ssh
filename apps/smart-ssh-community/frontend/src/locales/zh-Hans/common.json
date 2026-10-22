@@ -130,7 +130,8 @@
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
     "hintGroup": "→ 移入此分组",
-    "hintCycle": "分组不能移入其自身的子分组"
+    "hintCycle": "分组不能移入其自身的子分组",
+    "moveTo": "将“{{name}}”移动到…"
   },
   "management": {
     "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。"
@@ -1102,6 +1103,7 @@
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
+    "composerMore": "更多输入操作",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",
     "autoContinuing": "自动模式运行中——AI 正在自行对上一个结果作出回应…",

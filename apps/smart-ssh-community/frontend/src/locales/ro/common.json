@@ -130,7 +130,8 @@
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
     "hintRoot": "→ nivel superior (fără grup)",
     "hintGroup": "→ mută în acest grup",
-    "hintCycle": "Un grup nu poate fi mutat în propriul subgrup"
+    "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
+    "moveTo": "Mută „{{name}}” în…"
   },
   "management": {
     "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”."
@@ -1116,6 +1117,7 @@
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
+    "composerMore": "Mai multe acțiuni de introducere",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",
     "autoContinuing": "Modul automat rulează — IA răspunde singură la ultimul rezultat…",

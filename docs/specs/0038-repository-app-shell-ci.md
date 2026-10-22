@@ -185,6 +185,33 @@ Abschnitt 5). Regeln:
   je Start die Menge der vorhandenen Chat-Sitzungen, damit Reste nach einem
   Absturz zwischen Löschen und Aufruf verschwinden.
 
+### Beobachter der KI-Nutzung
+
+Eine Edition kann über die Verdrahtung beliebig viele Beobachter für die
+Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
+
+- Jede abgeschlossene KI-Anfrage einer Sitzung, die eine Nutzungsangabe
+  liefert, wird jedem Beobachter genau einmal gemeldet. Das gilt für den
+  Haupt-Chat (auch für automatische Folgerunden und Fortsetzungen) und für die
+  Nebenaufrufe: Risiko-Zweitmeinung, Einschleusungs-Prüfung, automatischer
+  Titel, Notiz-Vorschlag und Zusammenfassung alter Gesprächsrunden. Anfragen
+  ohne Sitzung (Modell-Abfrage, Prüfung eines Zugangs) werden nicht gemeldet.
+- Die Meldung nennt: gespeicherte Chat-Sitzung und Server (beide leer beim
+  lokalen Pseudo-Server; die Chat-Sitzung auch ohne Speicherung), laufende
+  Sitzung, Anbieter-Konfiguration, Anbieter-Typ, eingestelltes Modell, Zweck
+  der Anfrage, die Nutzungsangabe und den Zeitpunkt. Sie enthält keinen
+  Prompt, keine Antwort und kein Kommando.
+- Die Beobachter sind rein passiv: Sie geben nichts zurück und beeinflussen
+  weder Filter noch Bestätigung noch Ausführung. Sie werden erst nach dem
+  Ende der Anfrage und außerhalb des Streamings aufgerufen. Ein langsamer
+  oder abstürzender Beobachter verzögert oder stört den Chat nicht; ein
+  Absturz wird einmal ohne Inhalt protokolliert und die übrigen Beobachter
+  werden trotzdem benachrichtigt.
+- Trifft die Nutzungsangabe erst ein, nachdem die Auswertung des Antwort-
+  Stroms beendet war, entsteht keine Meldung; der Kern wartet nie darauf.
+- Der Kern speichert nichts davon. Community registriert keinen Beobachter;
+  dann ändert sich nichts.
+
 ## 3. Ein Binary je Edition
 
 Das Community-Binary ist ein dünnes Programm, das nur die Verdrahtung der
@@ -222,6 +249,22 @@ registrieren kann. Jeder Typ hat einen tatsächlichen Renderer:
   eingebunden und bleibt eingebunden, solange derselbe Server gewählt ist.
   Wird der aktive Reiter abgemeldet, zeigt die Ansicht wieder Allgemein.
   Eine erneute Registrierung mit derselben Kennung ersetzt den Reiter,
+- **Einträge im Sitzungs-Kopf**: ein kleines Element in der Kopfzeile einer
+  verbundenen Sitzung, zwischen Status und den Schaltflächen für erneutes
+  Verbinden und Trennen, sortiert nach einer optionalen Reihenfolge und dann
+  nach Registrierungsreihenfolge. Es erscheint nicht in MCP-Sitzungen. Es
+  bekommt nur Kennungen: die ID der laufenden Sitzung, die Server-ID und die
+  ID des aktuellen gespeicherten Chats (leer beim lokalen Pseudo-Server und
+  bei Sitzungen ohne gespeicherten Chat; sie ändert sich nach „Neuer Chat“),
+  weder Zugangsdaten noch Nachrichten. Ein Eintrag lässt sich wieder
+  abmelden,
+- **Anfrage, einen Chat fortzusetzen**: eine Edition kann die App bitten, einen
+  gespeicherten Chat eines Servers fortzusetzen. Das verhält sich genau wie
+  die Wahl dieses Chats in der Chat-Auswahl: Hat der Server schon einen
+  offenen Tab, wird zu ihm gewechselt und nichts fortgesetzt (Spec 0017 §3);
+  sonst gelten der Erststart-Hinweis (Spec 0031), der Verbindungs-Tab mit
+  Fortschritt, die Host-Key-Abfrage und „Erneut versuchen“ wie beim
+  Fortsetzen aus der Auswahl. Die Anfrage umgeht keine dieser Prüfungen,
 - **Abschnitte im Gruppen-Formular**: wie beim Server, nur für bestehende
   Gruppen,
 - **Ansichten im Verwalten-Tab**: ein Eintrag mit Beschriftung und Symbol
@@ -236,7 +279,7 @@ zuvor.
 
 Die Beiträge werden registriert, bevor die erste Komponente rendert; eine
 spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig. Bei
-Einstellungs-Abschnitten, Formular-Abschnitten, Server-Reitern, Verwalten-Ansichten und
+Einstellungs-Abschnitten, Formular-Abschnitten, Server-Reitern, Sitzungs-Kopf-Einträgen, Verwalten-Ansichten und
 Chat-Aktionen erscheint sie in einer bereits geöffneten Ansicht ohne Neuladen.
 
 **Berechtigungen im Frontend:** Ein Hook liest den Stand der

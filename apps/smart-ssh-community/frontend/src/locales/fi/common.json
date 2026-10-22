@@ -130,7 +130,8 @@
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
     "hintRoot": "→ ylin taso (ei ryhmää)",
     "hintGroup": "→ siirrä tähän ryhmään",
-    "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä"
+    "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
+    "moveTo": "Siirrä ”{{name}}” kohteeseen…"
   },
   "management": {
     "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -1109,6 +1110,7 @@
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
+    "composerMore": "Lisää syöttötoimintoja",
     "newChat": "Uusi keskustelu",
     "newChatDisabledHint": "Ei käytettävissä, kun tekoäly vastaa tai vahvistus on auki.",
     "autoContinuing": "Automaattitila käynnissä – tekoäly vastaa viimeiseen tulokseen itse…",
