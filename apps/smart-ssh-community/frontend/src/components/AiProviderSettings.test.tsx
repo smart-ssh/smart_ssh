@@ -85,9 +85,16 @@ function renderForm() {
   );
 }
 
+/** Issue #603: the add form lives in a dialog opened from "Provider hinzufügen". */
+function renderFormWithDialog() {
+  const result = renderForm();
+  fireEvent.click(screen.getByRole("button", { name: "Provider hinzufügen" }));
+  return result;
+}
+
 describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
   it("shows a non-blocking hint for an Anthropic key with the wrong prefix, and the submit button stays enabled", () => {
-    renderForm();
+    renderFormWithDialog();
 
     // Default provider type is "openai" (emptyForm()); switch to Anthropic.
     fireEvent.change(screen.getByLabelText("Typ"), {
@@ -106,7 +113,7 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
   });
 
   it("shows no hint once the key matches the expected prefix", () => {
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "anthropic" },
@@ -119,7 +126,7 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
   });
 
   it("shows no hint for a generic OpenAI-compatible provider regardless of key content", () => {
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "generic_openai_compatible" },
@@ -132,7 +139,7 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
   });
 
   it("shows no hint while the key field is still empty", () => {
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "anthropic" },
@@ -149,7 +156,7 @@ describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
 // `supportsModelDiscovery` fehlte der Button hier, dieser Test schlug fehl.
 describe('AiProviderSettings "Modelle laden"-Button (Spec 0072, B2/B3)', () => {
   it("erscheint auch für den Provider-Typ anthropic", () => {
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "anthropic" },
@@ -170,7 +177,7 @@ describe('AiProviderSettings "Modelle laden"-Button (Spec 0072, B2/B3)', () => {
 // unsaved form data and renders each of the three outcomes distinctly.
 describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () => {
   it("is disabled until an API key is entered", () => {
-    renderForm();
+    renderFormWithDialog();
 
     expect(
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
@@ -191,7 +198,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
    * selbstgehosteten Endpunkt schicken — dieselbe Gefahr, gegen die der
    * "Modelle laden"-Button bereits abgesichert ist. */
   it("stays disabled for a generic OpenAI-compatible provider until the base URL is filled in, even with a key entered", () => {
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "generic_openai_compatible" },
@@ -215,7 +222,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
 
   it("shows a valid result", async () => {
     vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc" },
     });
@@ -236,7 +243,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     vi.mocked(testAiProviderCredentials).mockResolvedValue({
       kind: "authenticationFailed",
     });
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-wrong" },
     });
@@ -257,7 +264,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       kind: "unreachable",
       message: "connection refused",
     });
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc" },
     });
@@ -283,7 +290,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       message: "HTTP 429: too many requests",
       code: "AI_RATE_LIMITED",
     });
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc" },
     });
@@ -312,7 +319,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       message: "HTTP 404: model_not_found",
       code: "AI_MODEL_NOT_FOUND",
     });
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc" },
     });
@@ -335,7 +342,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       message: "HTTP 400: m does not support tools",
       code: "AI_MODEL_NO_TOOL_SUPPORT",
     });
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc" },
     });
@@ -356,7 +363,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
 
   it("clears a stale result once the key is edited again", async () => {
     vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc" },
     });
@@ -383,7 +390,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
 // es dafür gar keine eigene Überschrift).
 describe("AiProviderSettings visual structure (Spec 0056, Teil 3)", () => {
   it("renders all three card sections with their headings", () => {
-    renderForm();
+    renderFormWithDialog();
 
     expect(
       screen.getByRole("heading", { name: "Konfigurierte Provider" }),
@@ -406,7 +413,7 @@ describe("AiProviderSettings max_tokens override (Spec 0065, Teil 4)", () => {
   }
 
   it("defaults to empty (Automatisch) and is not sent as 0", async () => {
-    renderForm();
+    renderFormWithDialog();
     openAdvanced();
 
     const field = screen.getByLabelText("Max. Antwortlänge (Tokens)", {
@@ -432,7 +439,7 @@ describe("AiProviderSettings max_tokens override (Spec 0065, Teil 4)", () => {
   });
 
   it("sends the entered value as a number", async () => {
-    renderForm();
+    renderFormWithDialog();
     openAdvanced();
 
     fireEvent.change(
@@ -459,7 +466,7 @@ describe("AiProviderSettings max_tokens override (Spec 0065, Teil 4)", () => {
   });
 
   it("shows a validation hint and disables submit for 0", () => {
-    renderForm();
+    renderFormWithDialog();
     openAdvanced();
 
     fireEvent.change(
@@ -713,7 +720,7 @@ describe("AiProviderSettings — Schlüsselbund nicht verfügbar (Spec 0071, A13
       message: "Der Systemschlüsselbund ist nicht verfügbar.",
     });
 
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Claude" },
     });
@@ -820,7 +827,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
     vi.mocked(setActiveAiProvider).mockResolvedValueOnce(undefined);
 
-    renderForm();
+    renderFormWithDialog();
     await screen.findByText(WILL_ACTIVATE_HINT);
     fillAndSubmit();
 
@@ -847,7 +854,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
       .mockResolvedValueOnce([activeAnthropicProvider(), newOpenAiProvider()]);
     vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
 
-    renderForm();
+    renderFormWithDialog();
     await screen.findByText("Claude");
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
     fillAndSubmit();
@@ -873,7 +880,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
       }),
     ]);
 
-    renderForm();
+    renderFormWithDialog();
     expect(await screen.findByText(WILL_ACTIVATE_HINT)).toBeInTheDocument();
   });
 
@@ -881,7 +888,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     vi.mocked(listAiProviders).mockResolvedValueOnce([]);
     vi.mocked(addAiProvider).mockRejectedValueOnce(new Error("add boom"));
 
-    renderForm();
+    renderFormWithDialog();
     await screen.findByText(WILL_ACTIVATE_HINT);
     fillAndSubmit();
 
@@ -899,7 +906,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
       message: "raw activation failure",
     });
 
-    renderForm();
+    renderFormWithDialog();
     await screen.findByText(WILL_ACTIVATE_HINT);
     fillAndSubmit();
 
@@ -926,7 +933,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
       .mockResolvedValueOnce([activeAnthropicProvider(), newOpenAiProvider()]);
     vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
 
-    renderForm();
+    renderFormWithDialog();
     expect(await screen.findByText("list boom")).toBeInTheDocument();
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
     fillAndSubmit();
@@ -945,7 +952,7 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
       .mockResolvedValueOnce([activeAnthropicProvider(), newOpenAiProvider()]);
     vi.mocked(addAiProvider).mockResolvedValueOnce("new-form-id");
 
-    renderForm();
+    renderFormWithDialog();
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
     fillAndSubmit();
 
@@ -961,7 +968,7 @@ describe("AiProviderSettings web research toggle (Spec 0105)", () => {
   const LABEL = "Web-Recherche (im Web suchen und Seiten lesen)";
 
   it("is shown checked for a new Anthropic or OpenAI provider", () => {
-    renderForm();
+    renderFormWithDialog();
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "generic_openai_compatible" },
     });
@@ -976,7 +983,7 @@ describe("AiProviderSettings web research toggle (Spec 0105)", () => {
   });
 
   it("is not offered for generic OpenAI-compatible endpoints and Ollama", () => {
-    renderForm();
+    renderFormWithDialog();
     for (const type of ["generic_openai_compatible", "ollama"]) {
       fireEvent.change(screen.getByLabelText("Typ"), {
         target: { value: type },
@@ -987,7 +994,7 @@ describe("AiProviderSettings web research toggle (Spec 0105)", () => {
 
   it("turns web research off for an existing provider without touching its key", async () => {
     vi.mocked(listAiProviders).mockResolvedValue([activeAnthropicProvider()]);
-    renderForm();
+    renderFormWithDialog();
 
     // The new-provider form (default type OpenAI) has its own switch now;
     // pick the one inside the configured provider's entry.
@@ -1047,15 +1054,15 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
     fireEvent.change(keyField(), { target: { value } });
   }
 
-  function datalistValues(container: HTMLElement) {
+  function datalistValues(_container?: HTMLElement) {
     return Array.from(
-      container.querySelectorAll("#ai-provider-model-options option"),
+      document.body.querySelectorAll("#ai-provider-model-options option"),
     ).map((o) => o.getAttribute("value"));
   }
 
   it("loads the model list after the key field is left, without another click", async () => {
     mockFormDiscovery(() => Promise.resolve(["gpt-4o", "gpt-4o-mini"]));
-    const { container } = renderForm();
+    const { container } = renderFormWithDialog();
 
     typeKey("sk-valid-key");
     fireEvent.blur(keyField());
@@ -1072,7 +1079,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
   it("typing without leaving the field triggers no request; ten characters then blur trigger exactly one", async () => {
     mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
-    renderForm();
+    renderFormWithDialog();
 
     let typed = "";
     for (const ch of "sk-abcdefg") {
@@ -1088,7 +1095,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
   it("leaving the field again with unchanged type, URL and key triggers no new request", async () => {
     mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
-    renderForm();
+    renderFormWithDialog();
 
     typeKey("sk-valid-key");
     fireEvent.blur(keyField());
@@ -1112,7 +1119,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
   it("an empty key field on blur triggers no request", async () => {
     mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.blur(keyField());
     typeKey("   ");
@@ -1123,7 +1130,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
   it("does not trigger for a generic provider until the base URL is set; leaving the URL field then triggers", async () => {
     mockFormDiscovery(() => Promise.resolve(["llama"]));
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "generic_openai_compatible" },
@@ -1145,7 +1152,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
   it("never triggers automatically for Ollama", async () => {
     mockFormDiscovery(() => Promise.resolve(["llama3"]));
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Typ"), {
       target: { value: "ollama" },
@@ -1167,7 +1174,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
     mockFormDiscovery(() =>
       Promise.reject({ code: "AI_AUTH_FAILED", message: "401" }),
     );
-    renderForm();
+    renderFormWithDialog();
 
     typeKey("sk-wrong-key");
     fireEvent.blur(keyField());
@@ -1189,7 +1196,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
   it("an empty model list shows the 'no models returned' hint", async () => {
     mockFormDiscovery(() => Promise.resolve([]));
-    renderForm();
+    renderFormWithDialog();
 
     typeKey("sk-valid-key");
     fireEvent.blur(keyField());
@@ -1206,7 +1213,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
     mockFormDiscovery(() =>
       Promise.reject({ code: "AI_TIMEOUT", message: "timed out" }),
     );
-    renderForm();
+    renderFormWithDialog();
 
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Prov" },
@@ -1238,7 +1245,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
           })
         : Promise.resolve(["fresh-model"]);
     });
-    const { container } = renderForm();
+    const { container } = renderFormWithDialog();
 
     typeKey("sk-first");
     fireEvent.blur(keyField());
@@ -1271,7 +1278,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
   it('the "Modelle laden" button still works as a manual retry', async () => {
     mockFormDiscovery(() => Promise.resolve(["gpt-4o"]));
-    renderForm();
+    renderFormWithDialog();
 
     typeKey("sk-valid-key");
     fireEvent.blur(keyField());
@@ -1284,5 +1291,92 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
     fireEvent.click(screen.getByRole("button", { name: "Modelle laden" }));
     await waitFor(() => expect(formDiscoveryCalls()).toHaveLength(2));
+  });
+});
+
+// Issue #603: the add form is a dialog opened from "Provider hinzufügen".
+describe("AiProviderSettings add-provider dialog (issue #603)", () => {
+  const openButton = () => screen.getByRole("button", { name: "Provider hinzufügen" });
+
+  function fillForm() {
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Prov" } });
+    fireEvent.change(screen.getByLabelText("Modell"), { target: { value: "gpt-4o" } });
+    fireEvent.change(screen.getByLabelText("API-Key"), { target: { value: "sk-abc" } });
+  }
+
+  it("shows no inline form; the button opens the dialog with the form fields", () => {
+    renderForm();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("API-Key")).not.toBeInTheDocument();
+
+    fireEvent.click(openButton());
+
+    const dialog = screen.getByRole("dialog", { name: "Provider hinzufügen" });
+    expect(within(dialog).getByLabelText("Typ")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("API-Key")).toBeInTheDocument();
+  });
+
+  it("add success closes the dialog, reloads the list and shows the new provider", async () => {
+    vi.mocked(listAiProviders)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "x1",
+          providerType: "openai",
+          displayName: "Prov",
+          baseUrl: null,
+          model: "gpt-4o",
+          supportsNativeToolCalling: true,
+          isActive: true,
+          extraHeaders: [],
+          attestationUrl: null,
+          maxTokensOverride: null,
+          webResearchEnabled: true,
+        },
+      ]);
+    vi.mocked(addAiProvider).mockResolvedValueOnce("x1");
+    vi.mocked(setActiveAiProvider).mockResolvedValueOnce(undefined);
+    renderFormWithDialog();
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(screen.getByText("aktiv")).toBeInTheDocument();
+  });
+
+  it("add failure keeps the dialog open with the entered values and shows the error inside it", async () => {
+    vi.mocked(addAiProvider).mockRejectedValueOnce(new Error("boom"));
+    renderFormWithDialog();
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toBeInTheDocument());
+    expect(within(dialog).getByLabelText("Name")).toHaveValue("Prov");
+    expect(within(dialog).getByLabelText("API-Key")).toHaveValue("sk-abc");
+  });
+
+  it("Cancel and Escape discard the entries; reopening shows an empty form; a backdrop click does not close", () => {
+    renderForm();
+    fireEvent.click(openButton());
+    fillForm();
+
+    fireEvent.click(document.querySelector("[data-modal-backdrop]") as HTMLElement);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(openButton());
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.getByLabelText("API-Key")).toHaveValue("");
+    fillForm();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(openButton());
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(addAiProvider).not.toHaveBeenCalled();
   });
 });
