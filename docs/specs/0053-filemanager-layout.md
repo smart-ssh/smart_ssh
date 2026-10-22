@@ -43,6 +43,10 @@ senkrechter Ziehgriff.
   Bereich nicht mehr seine Mindestbreite lässt, wird nur die angezeigte
   Breite begrenzt.
 
+## Schmales Layout
+
+- Unter 640 px Fensterbreite zeigt der Dateimanager keine Spalten, sondern zweizeilige Einträge; Spaltenbreiten sind dort nicht verstellbar und die gespeicherten Breiten bleiben unverändert (Spec 0113, Abschnitt 5b).
+
 ## Nicht Teil dieser Spec
 
 - Rechte-Bearbeitung (chmod) und andere Aktionen: Spec 0054.
