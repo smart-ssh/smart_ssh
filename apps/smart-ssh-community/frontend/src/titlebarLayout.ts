@@ -22,9 +22,9 @@ export type Platform = "macos" | "windows" | "linux" | "unknown";
  * entsteht, falls die Aktivierung (der Normalfall) erfolgreich ist. */
 export type DecorationMode = "pending" | "custom" | "native";
 
-/** Höhe der Titelleiste (Tailwind `h-9`, 36px) — für Header und
+/** Höhe der Titelleiste (Tailwind `h-9`, 36px; `h-11`, 44px in the narrow layout so the burger button fits, issue #579) — für Header und
  * Drag-Schichten gleichermaßen. */
-export const TITLEBAR_HEIGHT_CLASS = "h-9";
+export const TITLEBAR_HEIGHT_CLASS = "h-9 narrow:h-11";
 
 /** Freiraum für die macOS-Ampel (links). */
 const MAC_CONTROLS_CLEARANCE = "max(78px, var(--tauri-plugin-decoration-left-clearance, 78px))";

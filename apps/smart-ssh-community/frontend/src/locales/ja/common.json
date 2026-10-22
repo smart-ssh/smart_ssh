@@ -418,6 +418,11 @@
     "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
+    "menu": {
+      "open": "ナビゲーションメニューを開く",
+      "title": "ナビゲーションメニュー",
+      "sessions": "開いているセッション"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "外部ツール",

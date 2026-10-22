@@ -70,6 +70,8 @@ ein Warten hinweg gehalten.
   Nutzer-Tab aktiv, sonst die Übersicht.
 - Localhost (Spec 0032) ist ein Tab wie jeder andere.
 
+Im schmalen Layout (Spec 0113) erscheint die Tab-Leiste nicht in der Titelleiste. Stattdessen listet das Burger-Menü dieselben Sitzungen mit Name, Zustand und Schließen-Schaltfläche; Auswählen und Schließen verhalten sich wie bei den Reitern.
+
 ## 4. Zustand je Sitzung
 
 Jede Sitzung behält, auch im Hintergrund und über einen Tab-Wechsel hinweg:

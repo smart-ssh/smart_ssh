@@ -418,6 +418,11 @@
     "overview": "Áttekintés",
     "pendingAction": "Megerősítésre vár",
     "closeTab": "A(z) \"{{name}}\" lap bezárása",
+    "menu": {
+      "open": "Navigációs menü megnyitása",
+      "title": "Navigációs menü",
+      "sessions": "Megnyitott munkamenetek"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Külső eszköz",

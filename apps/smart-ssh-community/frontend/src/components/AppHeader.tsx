@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useIsNarrow } from "../hooks/useIsNarrow";
 import { getAppInfo } from "../api";
 import type { AppInfoDto } from "../types";
 import { TITLEBAR_DRAG_LAYER_Z_INDEX, useIsAnyModalOpen } from "../modalLayer";
@@ -39,6 +40,8 @@ export function AppHeader({ children }: AppHeaderProps) {
   const [decorationMode, setDecorationMode] = useState<DecorationMode>("pending");
   const [appInfo, setAppInfo] = useState<AppInfoDto | null>(null);
   const anyModalOpen = useIsAnyModalOpen();
+  // Issue #579, Spec 0113 §3: narrow, the bar holds only the children (burger + title).
+  const narrow = useIsNarrow();
 
   useEffect(() => {
     if (!SHOW_EARLY_ACCESS_TITLEBAR_INFO) return;
@@ -92,6 +95,7 @@ export function AppHeader({ children }: AppHeaderProps) {
             eckiger Cursor-Chevron + Balken in Akzentfarbe, optionaler
             Spark oben rechts (ab ~32px Icon-Größe entfernt, s. Entwurf —
             hier bei 16px Titelleisten-Höhe bereits ohne Spark). */}
+        {!narrow && (
         <div data-tauri-drag-region className="flex items-center gap-2">
           <svg
             data-tauri-drag-region
@@ -142,11 +146,12 @@ export function AppHeader({ children }: AppHeaderProps) {
             )}
           </span>
         </div>
+        )}
 
         {/* Mittlerer Bereich: Platz für künftige Session-Tabs (Spec 0014, Abschnitt 4) */}
         <div
           data-tauri-drag-region
-          className="flex flex-1 items-center justify-center px-4"
+          className={`flex flex-1 items-center justify-center ${narrow ? "min-w-0 px-1" : "px-4"}`}
         >
           {children}
         </div>
