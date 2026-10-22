@@ -2200,10 +2200,12 @@ function CoverageList({ sessionId, command }: { sessionId: string; command: stri
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let stale = false;
-    setFailed(false);
     explainConfirmation(sessionId, command, "Global")
       .then((r) => {
-        if (!stale) setExplanation(r);
+        if (!stale) {
+          setExplanation(r);
+          setFailed(false);
+        }
       })
       .catch(() => {
         // The backend logs the error; the card says the lookup failed.
