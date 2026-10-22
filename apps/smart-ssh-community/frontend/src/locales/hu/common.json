@@ -418,6 +418,11 @@
     "overview": "Áttekintés",
     "pendingAction": "Megerősítésre vár",
     "closeTab": "A(z) \"{{name}}\" lap bezárása",
+    "menu": {
+      "open": "Navigációs menü megnyitása",
+      "title": "Navigációs menü",
+      "sessions": "Megnyitott munkamenetek"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Külső eszköz",
@@ -1185,6 +1190,9 @@
     "splitHandle": "Panelelválasztó",
     "terminalTab": "Terminál",
     "filesTab": "Fájlok",
+    "aiTab": "MI",
+    "paneTabs": "Munkamenet-panelek",
+    "moreActions": "További műveletek",
     "terminalOpenFailed": "A terminál nem nyitható meg: {{error}}",
     "connectionLostPressR": "A kapcsolat megszakadt. Nyomja meg az R gombot az újracsatlakozáshoz.",
     "reconnect": "Újracsatlakozás",

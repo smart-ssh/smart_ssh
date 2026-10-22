@@ -418,6 +418,11 @@
     "overview": "Обзор",
     "pendingAction": "Ожидает подтверждения",
     "closeTab": "Закрыть вкладку «{{name}}»",
+    "menu": {
+      "open": "Открыть меню навигации",
+      "title": "Меню навигации",
+      "sessions": "Открытые сеансы"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Внешний инструмент",
@@ -1205,6 +1210,9 @@
     "splitHandle": "Разделитель панелей",
     "terminalTab": "Терминал",
     "filesTab": "Файлы",
+    "aiTab": "ИИ",
+    "paneTabs": "Панели сеанса",
+    "moreActions": "Ещё действия",
     "terminalOpenFailed": "Не удалось открыть терминал: {{error}}",
     "reconnectingAuto": "Повторное подключение… (попытка {{attempt}})",
     "stopReconnect": "Остановить",

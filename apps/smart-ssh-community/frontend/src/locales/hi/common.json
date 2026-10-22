@@ -418,6 +418,11 @@
     "overview": "अवलोकन",
     "pendingAction": "पुष्टि की प्रतीक्षा",
     "closeTab": "टैब \"{{name}}\" बंद करें",
+    "menu": {
+      "open": "नेविगेशन मेनू खोलें",
+      "title": "नेविगेशन मेनू",
+      "sessions": "खुले सत्र"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "बाहरी टूल",
@@ -1189,6 +1194,9 @@
     "splitHandle": "पैनल विभाजक",
     "terminalTab": "टर्मिनल",
     "filesTab": "फ़ाइलें",
+    "aiTab": "एआई",
+    "paneTabs": "सत्र पैनल",
+    "moreActions": "अधिक क्रियाएँ",
     "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
     "reconnectingAuto": "फिर से कनेक्ट हो रहा है… (प्रयास {{attempt}})",
     "stopReconnect": "रोकें",

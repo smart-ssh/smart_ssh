@@ -418,6 +418,11 @@
     "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
+    "menu": {
+      "open": "Åpne navigasjonsmenyen",
+      "title": "Navigasjonsmeny",
+      "sessions": "Åpne økter"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Eksternt verktøy",
@@ -1189,6 +1194,9 @@
     "splitHandle": "Panelskille",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "KI",
+    "paneTabs": "Øktdeler",
+    "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
     "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
     "stopReconnect": "Stopp",

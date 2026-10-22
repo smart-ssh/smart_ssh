@@ -418,6 +418,11 @@
     "overview": "Oversigt",
     "pendingAction": "Venter på bekræftelse",
     "closeTab": "Luk fanen \"{{name}}\"",
+    "menu": {
+      "open": "Åbn navigationsmenuen",
+      "title": "Navigationsmenu",
+      "sessions": "Åbne sessioner"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Eksternt værktøj",
@@ -1189,6 +1194,9 @@
     "splitHandle": "Panelskillelinje",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "AI",
+    "paneTabs": "Sessionsdele",
+    "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}",
     "reconnectingAuto": "Genopretter forbindelsen… (forsøg {{attempt}})",
     "stopReconnect": "Afbryd",

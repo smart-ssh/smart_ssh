@@ -418,6 +418,11 @@
     "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
+    "menu": {
+      "open": "Abrir el menú de navegación",
+      "title": "Menú de navegación",
+      "sessions": "Sesiones abiertas"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Herramienta externa",
@@ -1197,6 +1202,9 @@
     "splitHandle": "Divisor de paneles",
     "terminalTab": "Terminal",
     "filesTab": "Archivos",
+    "aiTab": "IA",
+    "paneTabs": "Paneles de la sesión",
+    "moreActions": "Más acciones",
     "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
     "reconnectingAuto": "Reconectando… (intento {{attempt}})",
     "stopReconnect": "Detener",

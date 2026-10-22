@@ -418,6 +418,11 @@
     "overview": "Panoramica",
     "pendingAction": "In attesa di conferma",
     "closeTab": "Chiudi scheda \"{{name}}\"",
+    "menu": {
+      "open": "Apri il menu di navigazione",
+      "title": "Menu di navigazione",
+      "sessions": "Sessioni aperte"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Strumento esterno",
@@ -1197,6 +1202,9 @@
     "splitHandle": "Divisore del pannello",
     "terminalTab": "Terminale",
     "filesTab": "File",
+    "aiTab": "IA",
+    "paneTabs": "Aree della sessione",
+    "moreActions": "Altre azioni",
     "terminalOpenFailed": "Impossibile aprire il terminale: {{error}}",
     "reconnectingAuto": "Riconnessione… (tentativo {{attempt}})",
     "stopReconnect": "Interrompi",

@@ -418,6 +418,11 @@
     "overview": "Tổng quan",
     "pendingAction": "Đang chờ xác nhận",
     "closeTab": "Đóng tab \"{{name}}\"",
+    "menu": {
+      "open": "Mở menu điều hướng",
+      "title": "Menu điều hướng",
+      "sessions": "Phiên đang mở"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Công cụ bên ngoài",
@@ -1181,6 +1186,9 @@
     "splitHandle": "Thanh chia khung",
     "terminalTab": "Dòng lệnh",
     "filesTab": "Tệp",
+    "aiTab": "AI",
+    "paneTabs": "Các ngăn của phiên",
+    "moreActions": "Thêm hành động",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
     "reconnectingAuto": "Đang kết nối lại… (lần thử {{attempt}})",
     "stopReconnect": "Dừng",

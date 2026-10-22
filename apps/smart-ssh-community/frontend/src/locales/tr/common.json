@@ -418,6 +418,11 @@
     "overview": "Genel bakış",
     "pendingAction": "Onay bekleniyor",
     "closeTab": "\"{{name}}\" sekmesini kapat",
+    "menu": {
+      "open": "Gezinme menüsünü aç",
+      "title": "Gezinme menüsü",
+      "sessions": "Açık oturumlar"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Harici araç",
@@ -1185,6 +1190,9 @@
     "splitHandle": "Panel ayırıcı",
     "terminalTab": "Terminal",
     "filesTab": "Dosyalar",
+    "aiTab": "YZ",
+    "paneTabs": "Oturum bölmeleri",
+    "moreActions": "Diğer işlemler",
     "terminalOpenFailed": "Terminal açılamadı: {{error}}",
     "connectionLostPressR": "Bağlantı koptu. Yeniden bağlanmak için R'ye basın.",
     "reconnect": "Yeniden bağlan",

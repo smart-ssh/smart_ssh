@@ -418,6 +418,11 @@
     "overview": "Översikt",
     "pendingAction": "Väntar på bekräftelse",
     "closeTab": "Stäng fliken \"{{name}}\"",
+    "menu": {
+      "open": "Öppna navigeringsmenyn",
+      "title": "Navigeringsmeny",
+      "sessions": "Öppna sessioner"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Externt verktyg",
@@ -1189,6 +1194,9 @@
     "splitHandle": "Panelavdelare",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "AI",
+    "paneTabs": "Sessionsdelar",
+    "moreActions": "Fler åtgärder",
     "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
     "reconnectingAuto": "Återansluter… (försök {{attempt}})",
     "stopReconnect": "Avbryt",

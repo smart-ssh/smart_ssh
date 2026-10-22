@@ -206,10 +206,22 @@ registrieren kann. Jeder Typ hat einen tatsächlichen Renderer:
   **Ablege-Handler** registrieren, der Dateien bekommt, die auf den Chat
   gezogen werden,
 - **Erweiterungen der Erststart-Seite** (Spec 0031 §6),
-- **Abschnitte im Server-Formular**: unter dem Formular eines bestehenden
-  Servers, auch beim lokalen Pseudo-Server. Der Abschnitt erfährt die
-  Server-ID und ob das Formular ungespeicherte Änderungen hat. Bei einem
-  neuen, noch nicht gespeicherten Server erscheint kein Abschnitt,
+- **Abschnitte im Server-Formular**: am Ende eines Reiters (Allgemein,
+  Verbindung, Sicherheit oder Notizen) im Formular eines bestehenden
+  Servers, auch beim lokalen Pseudo-Server (dort nur Allgemein und
+  Notizen). Der Registrierende wählt den Reiter; ohne Angabe ist es
+  Allgemein. Der Abschnitt erfährt die Server-ID und ob das Formular
+  ungespeicherte Änderungen hat. Bei einem neuen, noch nicht gespeicherten
+  Server erscheint kein Abschnitt,
+- **Reiter in den Server-Einstellungen**: ein eigener Reiter mit
+  Beschriftung (Text oder Übersetzungsschlüssel) hinter den eingebauten
+  Reitern, sortiert nach einer optionalen Reihenfolge und dann nach
+  Registrierungsreihenfolge. Er erscheint nur bei gespeicherten Servern
+  (auch beim lokalen Pseudo-Server) und bekommt nur die Server-ID – weder
+  den Entwurf des Formulars noch Zugangsdaten. Er wird beim ersten Öffnen
+  eingebunden und bleibt eingebunden, solange derselbe Server gewählt ist.
+  Wird der aktive Reiter abgemeldet, zeigt die Ansicht wieder Allgemein.
+  Eine erneute Registrierung mit derselben Kennung ersetzt den Reiter,
 - **Abschnitte im Gruppen-Formular**: wie beim Server, nur für bestehende
   Gruppen,
 - **Ansichten im Verwalten-Tab**: ein Eintrag mit Beschriftung und Symbol
@@ -224,7 +236,7 @@ zuvor.
 
 Die Beiträge werden registriert, bevor die erste Komponente rendert; eine
 spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig. Bei
-Einstellungs-Abschnitten, Formular-Abschnitten, Verwalten-Ansichten und
+Einstellungs-Abschnitten, Formular-Abschnitten, Server-Reitern, Verwalten-Ansichten und
 Chat-Aktionen erscheint sie in einer bereits geöffneten Ansicht ohne Neuladen.
 
 **Berechtigungen im Frontend:** Ein Hook liest den Stand der

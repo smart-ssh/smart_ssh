@@ -418,6 +418,11 @@
     "overview": "Огляд",
     "pendingAction": "Очікує підтвердження",
     "closeTab": "Закрити вкладку «{{name}}»",
+    "menu": {
+      "open": "Відкрити меню навігації",
+      "title": "Меню навігації",
+      "sessions": "Відкриті сеанси"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Зовнішній інструмент",
@@ -1205,6 +1210,9 @@
     "splitHandle": "Роздільник панелей",
     "terminalTab": "Термінал",
     "filesTab": "Файли",
+    "aiTab": "ШІ",
+    "paneTabs": "Панелі сеансу",
+    "moreActions": "Більше дій",
     "terminalOpenFailed": "Не вдалося відкрити термінал: {{error}}",
     "reconnectingAuto": "Повторне підключення… (спроба {{attempt}})",
     "stopReconnect": "Зупинити",

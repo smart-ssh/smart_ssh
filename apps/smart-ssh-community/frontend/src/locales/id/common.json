@@ -418,6 +418,11 @@
     "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
+    "menu": {
+      "open": "Buka menu navigasi",
+      "title": "Menu navigasi",
+      "sessions": "Sesi terbuka"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Alat eksternal",
@@ -1181,6 +1186,9 @@
     "splitHandle": "Pembagi panel",
     "terminalTab": "Terminal",
     "filesTab": "Berkas",
+    "aiTab": "AI",
+    "paneTabs": "Panel sesi",
+    "moreActions": "Tindakan lainnya",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
     "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
     "stopReconnect": "Berhenti",

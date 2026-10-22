@@ -418,6 +418,11 @@
     "overview": "Přehled",
     "pendingAction": "Čeká na potvrzení",
     "closeTab": "Zavřít kartu „{{name}}“",
+    "menu": {
+      "open": "Otevřít navigační nabídku",
+      "title": "Navigační nabídka",
+      "sessions": "Otevřené relace"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Externí nástroj",
@@ -1205,6 +1210,9 @@
     "splitHandle": "Dělicí lišta panelů",
     "terminalTab": "Terminál",
     "filesTab": "Soubory",
+    "aiTab": "AI",
+    "paneTabs": "Části relace",
+    "moreActions": "Další akce",
     "terminalOpenFailed": "Terminál se nepodařilo otevřít: {{error}}",
     "reconnectingAuto": "Znovu se připojuji… (pokus {{attempt}})",
     "stopReconnect": "Zastavit",

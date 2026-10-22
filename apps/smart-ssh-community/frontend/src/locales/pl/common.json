@@ -418,6 +418,11 @@
     "overview": "Przegląd",
     "pendingAction": "Oczekiwanie na potwierdzenie",
     "closeTab": "Zamknij kartę „{{name}}”",
+    "menu": {
+      "open": "Otwórz menu nawigacji",
+      "title": "Menu nawigacji",
+      "sessions": "Otwarte sesje"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Narzędzie zewnętrzne",
@@ -1205,6 +1210,9 @@
     "splitHandle": "Separator paneli",
     "terminalTab": "Terminal",
     "filesTab": "Pliki",
+    "aiTab": "AI",
+    "paneTabs": "Panele sesji",
+    "moreActions": "Więcej akcji",
     "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}",
     "reconnectingAuto": "Ponowne łączenie… (próba {{attempt}})",
     "stopReconnect": "Zatrzymaj",
