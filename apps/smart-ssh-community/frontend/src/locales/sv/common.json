@@ -387,7 +387,8 @@
       "verdictAuto": "körs automatiskt nästa gång",
       "verdictAsk": "frågar fortfarande: {{reasons}}",
       "notice": "Regel skapad. Det här kommandot frågar fortfarande nästa gång: {{reasons}}",
-      "reasonOther": "en annan säkerhetskontroll"
+      "reasonOther": "en annan säkerhetskontroll",
+      "loadFailed": "Regeltäckningen kunde inte läsas in"
     }
   },
   "hostKeyDialog": {

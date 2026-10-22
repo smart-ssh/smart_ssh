@@ -387,7 +387,8 @@
       "verdictAuto": "příště se spustí automaticky",
       "verdictAsk": "bude se stále ptát: {{reasons}}",
       "notice": "Pravidlo vytvořeno. Tento příkaz se příště stále bude ptát: {{reasons}}",
-      "reasonOther": "jiná bezpečnostní kontrola"
+      "reasonOther": "jiná bezpečnostní kontrola",
+      "loadFailed": "Pokrytí pravidly se nepodařilo načíst"
     }
   },
   "hostKeyDialog": {

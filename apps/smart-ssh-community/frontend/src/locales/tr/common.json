@@ -387,7 +387,8 @@
       "verdictAuto": "bir dahaki sefere otomatik çalışır",
       "verdictAsk": "yine de soracak: {{reasons}}",
       "notice": "Kural oluşturuldu. Bu komut bir dahaki sefere yine soracak: {{reasons}}",
-      "reasonOther": "başka bir güvenlik denetimi"
+      "reasonOther": "başka bir güvenlik denetimi",
+      "loadFailed": "Kural kapsamı yüklenemedi"
     }
   },
   "hostKeyDialog": {

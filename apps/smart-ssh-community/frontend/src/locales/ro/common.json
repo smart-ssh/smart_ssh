@@ -387,7 +387,8 @@
       "verdictAuto": "data viitoare rulează automat",
       "verdictAsk": "va întreba în continuare: {{reasons}}",
       "notice": "Regulă creată. Această comandă va întreba și data viitoare: {{reasons}}",
-      "reasonOther": "altă verificare de securitate"
+      "reasonOther": "altă verificare de securitate",
+      "loadFailed": "Acoperirea regulilor nu a putut fi încărcată"
     }
   },
   "hostKeyDialog": {

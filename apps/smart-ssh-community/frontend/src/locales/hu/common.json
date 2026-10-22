@@ -387,7 +387,8 @@
       "verdictAuto": "legközelebb automatikusan lefut",
       "verdictAsk": "továbbra is rákérdez: {{reasons}}",
       "notice": "Szabály létrehozva. Ez a parancs legközelebb is rákérdez: {{reasons}}",
-      "reasonOther": "másik biztonsági ellenőrzés"
+      "reasonOther": "másik biztonsági ellenőrzés",
+      "loadFailed": "A szabályok lefedettségét nem sikerült betölteni"
     }
   },
   "hostKeyDialog": {

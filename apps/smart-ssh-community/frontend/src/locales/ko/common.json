@@ -387,7 +387,8 @@
       "verdictAuto": "다음부터 자동으로 실행됩니다",
       "verdictAsk": "계속 확인합니다: {{reasons}}",
       "notice": "규칙을 만들었습니다. 이 명령은 다음에도 확인이 필요합니다: {{reasons}}",
-      "reasonOther": "다른 보안 검사"
+      "reasonOther": "다른 보안 검사",
+      "loadFailed": "규칙 적용 범위를 불러올 수 없습니다"
     }
   },
   "hostKeyDialog": {
