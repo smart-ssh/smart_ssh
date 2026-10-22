@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ServerFormSections, useServerSettingsTabs } from "../extensions/FormSlots";
+import { ServerFormSections, ServerFormTabSections, useServerSettingsTabs } from "../extensions/FormSlots";
 import { resolveSectionLabel } from "../resolveSectionLabel";
 import { ConnectStepLog } from "./ConnectStepLog";
 import {
@@ -46,7 +46,7 @@ import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button, TabPanel, Tabs, useTabsIdBase, type TabItem } from "./ui";
+import { Button, TabPanel, Tabs, tabId, useTabsIdBase, type TabItem } from "./ui";
 import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
 
 interface ServerFormProps {
@@ -1582,12 +1582,20 @@ export function ServerForm({
 
       {!isCreate && serverId && loaded && (
         <>
-          <div hidden={activeTab !== "connection"} className="space-y-6">
-            <ServerFormSections serverId={serverId} dirty={dirty} tab="connection" />
-          </div>
-          <div hidden={activeTab !== "security"} className="space-y-6">
-            <ServerFormSections serverId={serverId} dirty={dirty} tab="security" />
-          </div>
+          <ServerFormTabSections
+            serverId={serverId}
+            dirty={dirty}
+            tab="connection"
+            hidden={activeTab !== "connection"}
+            labelledBy={tabId(tabsIdBase, "connection")}
+          />
+          <ServerFormTabSections
+            serverId={serverId}
+            dirty={dirty}
+            tab="security"
+            hidden={activeTab !== "security"}
+            labelledBy={tabId(tabsIdBase, "security")}
+          />
           <div hidden={activeTab !== "general"} className="space-y-6">
             <ServerFormSections serverId={serverId} dirty={dirty} tab="general" />
 

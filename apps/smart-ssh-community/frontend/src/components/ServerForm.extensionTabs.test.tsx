@@ -3,6 +3,7 @@
 // Issue #606: the server form is split into General, Connection, Security
 // and Notes tabs (Spec 0008). One draft, one Save.
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import axe from "axe-core";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createServer, getServer, updateServer } from "../api";
@@ -124,6 +125,31 @@ describe("ServerForm extension tabs (issue #608)", () => {
     expect(tabNames()).toEqual(["Allgemein", "Verbindung", "Sicherheit", "Notizen"]);
     expect(container.querySelector("[data-extension-section]")).toBeNull();
     expect(container.querySelectorAll('[role="tabpanel"]')).toHaveLength(4);
+    expect(container.querySelectorAll('[role="region"]')).toHaveLength(0);
+    // Siblings of the form: only the General wrapper (hidden unless active)
+    // and the Notes panel; no empty wrappers for Connection/Security.
+    const form = container.querySelector("form") as HTMLElement;
+    const after = Array.from(form.parentElement!.children).slice(
+      Array.from(form.parentElement!.children).indexOf(form) + 1,
+    );
+    expect(after.map((el) => el.getAttribute("role") ?? "div")).toEqual(["div", "tabpanel"]);
+  });
+
+  it("keeps Connection sections inside a labelled region and is keyboard/axe clean with an extension tab", async () => {
+    registerServerSettingsTab({ id: "a", label: "Ten", component: Ext });
+    registerServerFormSection({ id: "s-conn", tab: "connection", component: Sec });
+    const { container } = renderForm();
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    const region = screen.getByText("sec-body").closest('[role="region"]') as HTMLElement;
+    const connTab = screen.getByRole("tab", { name: "Verbindung" });
+    expect(region.getAttribute("aria-labelledby")).toBe(connTab.id);
+    // Keyboard: End reaches the last (extension) tab.
+    screen.getByRole("tab", { selected: true }).focus();
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "End" });
+    expect(screen.getByRole("tab", { name: "Ten", selected: true })).toHaveFocus();
+    expect(screen.getByTestId("ext-tab")).toBeVisible();
+    const results = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
+    expect(results.violations.filter((v) => v.impact === "serious" || v.impact === "critical")).toEqual([]);
   });
 
   it("lists extension tabs after Notes sorted by order, lazily mounted, with the server id", async () => {

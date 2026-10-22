@@ -32,6 +32,32 @@ export function ServerFormSections({
   );
 }
 
+/** Sections placed in a tab whose panel is not rendered by the extension
+ * layer (Connection/Security of a saved server). Renders nothing, not even a
+ * wrapper, when no section targets the tab; otherwise a labelled region that
+ * follows the tab's visibility. */
+export function ServerFormTabSections({
+  serverId,
+  dirty,
+  tab,
+  hidden,
+  labelledBy,
+}: {
+  serverId: string;
+  dirty: boolean;
+  tab: ServerFormTabId;
+  hidden: boolean;
+  labelledBy: string;
+}) {
+  const all = useSyncExternalStore(subscribeFormSlots, listServerFormSections);
+  if (!all.some((s) => (s.tab ?? "general") === tab)) return null;
+  return (
+    <div role="region" aria-labelledby={labelledBy} hidden={hidden} className="space-y-6">
+      <ServerFormSections serverId={serverId} dirty={dirty} tab={tab} />
+    </div>
+  );
+}
+
 /** Registered server settings tabs (re-renders on later registration). */
 export function useServerSettingsTabs() {
   return useSyncExternalStore(subscribeFormSlots, listServerSettingsTabs);
