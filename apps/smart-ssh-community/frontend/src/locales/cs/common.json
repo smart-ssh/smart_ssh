@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Úvodní adresář musí být absolutní cesta (/…) nebo začínat ~/.",
       "controlCharacter": "Úvodní adresář nesmí obsahovat řídicí znaky."
+    },
+    "tabs": {
+      "label": "Nastavení serveru",
+      "general": "Obecné",
+      "connection": "Připojení",
+      "security": "Zabezpečení",
+      "invalid": "Obsahuje chyby"
     }
   },
   "filterRules": {

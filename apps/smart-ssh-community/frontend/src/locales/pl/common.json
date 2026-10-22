@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Katalog startowy musi być ścieżką bezwzględną (/…) lub zaczynać się od ~/.",
       "controlCharacter": "Katalog startowy nie może zawierać znaków sterujących."
+    },
+    "tabs": {
+      "label": "Ustawienia serwera",
+      "general": "Ogólne",
+      "connection": "Połączenie",
+      "security": "Bezpieczeństwo",
+      "invalid": "Zawiera błędy"
     }
   },
   "filterRules": {

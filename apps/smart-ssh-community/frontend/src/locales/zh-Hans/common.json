@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "起始目录必须是绝对路径（/…）或以 ~/ 开头。",
       "controlCharacter": "起始目录不得包含控制字符。"
+    },
+    "tabs": {
+      "label": "服务器设置",
+      "general": "常规",
+      "connection": "连接",
+      "security": "安全",
+      "invalid": "包含错误"
     }
   },
   "filterRules": {

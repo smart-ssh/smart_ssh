@@ -45,7 +45,7 @@ import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button } from "./ui";
+import { Button, TabPanel, Tabs, useTabsIdBase, type TabItem } from "./ui";
 import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
 
 interface ServerFormProps {
@@ -373,6 +373,57 @@ export function ServerForm({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Issue #606: the form is split into tabs. All panels stay mounted (hidden),
+  // so one draft, the refs and the connection-test log survive tab switches.
+  type ServerTab = "general" | "connection" | "security" | "notes";
+  const tabsIdBase = useTabsIdBase();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [activeTab, setActiveTab] = useState<ServerTab>(autoFocusNotes && !isCreate ? "notes" : "general");
+  const [invalidTabs, setInvalidTabs] = useState<ReadonlySet<ServerTab>>(new Set());
+  const [reportValidityPending, setReportValidityPending] = useState(false);
+  // Selecting another server opens General again (derived state, no effect).
+  const [tabsServerId, setTabsServerId] = useState(serverId);
+  if (tabsServerId !== serverId) {
+    setTabsServerId(serverId);
+    setActiveTab("general");
+    setInvalidTabs(new Set());
+  }
+  const availableTabs: ServerTab[] = isLocal
+    ? ["general", "notes"]
+    : isCreate
+      ? ["general", "connection", "security"]
+      : ["general", "connection", "security", "notes"];
+  const tabItems: TabItem[] = availableTabs.map((id) => ({
+    id,
+    label: id === "notes" ? t("common.notes") : t(`serverForm.tabs.${id}`),
+    invalid: invalidTabs.has(id),
+    invalidLabel: t("serverForm.tabs.invalid"),
+  }));
+  // Tabs whose fields fail the browser validation (the form is `noValidate`,
+  // so that an invalid field in a hidden panel cannot silently block saving).
+  const collectInvalidTabs = (): Set<ServerTab> => {
+    const found = new Set<ServerTab>();
+    const panels = formRef.current?.querySelectorAll<HTMLElement>('[role="tabpanel"]') ?? [];
+    for (const panel of panels) {
+      const tab = (["general", "connection", "security"] as const).find((id) =>
+        panel.id.endsWith(`-panel-${id}`),
+      );
+      if (!tab) continue;
+      for (const el of panel.querySelectorAll<HTMLInputElement>("input, select, textarea")) {
+        if (!el.checkValidity()) {
+          found.add(tab);
+          break;
+        }
+      }
+    }
+    return found;
+  };
+  useEffect(() => {
+    if (!reportValidityPending) return;
+    setReportValidityPending(false);
+    formRef.current?.reportValidity();
+  }, [reportValidityPending, activeTab]);
   const [deleting, setDeleting] = useState(false);
   const [deletePreview, setDeletePreview] = useState<DeleteServerResult | null>(null);
   // Spec 0071, A17: Der Server ist gelöscht, aber mindestens ein Secret
@@ -592,8 +643,14 @@ export function ServerForm({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isLocal && startDirectoryError) {
-      setError(startDirectoryError);
+    const invalid = collectInvalidTabs();
+    if (!isLocal && startDirectoryError) invalid.add("connection");
+    setInvalidTabs(invalid);
+    if (invalid.size > 0) {
+      const first = availableTabs.find((id) => invalid.has(id));
+      if (first) setActiveTab(first);
+      if (!isLocal && startDirectoryError) setError(startDirectoryError);
+      setReportValidityPending(true);
       return;
     }
     setSaving(true);
@@ -605,6 +662,7 @@ export function ServerForm({
         await updateServer(serverId, buildInput());
       }
       setDirty(false);
+      setInvalidTabs(new Set());
       onSaved();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -798,6 +856,15 @@ export function ServerForm({
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
+        <Tabs
+          tabs={tabItems}
+          value={activeTab}
+          onChange={(id) => setActiveTab(id as ServerTab)}
+          ariaLabel={t("serverForm.tabs.label")}
+          idBase={tabsIdBase}
+        />
+
+        <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-6">
         <div className="block text-sm text-slate-300">
           {t("serverForm.tags")}
           <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
@@ -845,6 +912,10 @@ export function ServerForm({
           </Button>
         </div>
 
+        <ServerFormSections serverId={loaded.id} dirty={dirty} />
+        </TabPanel>
+
+        <TabPanel idBase={tabsIdBase} id="notes" active={activeTab === "notes"} className="space-y-6">
         <div className="block text-sm text-slate-300">
           {t("common.notes")}
           {isLocalNoteLarge && (
@@ -876,7 +947,7 @@ export function ServerForm({
             {savingLocalNotes ? t("common.saving") : t("common.save")}
           </Button>
         </div>
-        <ServerFormSections serverId={loaded.id} dirty={dirty} />
+        </TabPanel>
       </div>
     );
   }
@@ -887,8 +958,25 @@ export function ServerForm({
         {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
       </h2>
 
-      <form onSubmit={handleSubmit} onChange={() => setDirty(true)} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+      <Tabs
+        tabs={tabItems}
+        value={activeTab}
+        onChange={(id) => setActiveTab(id as ServerTab)}
+        ariaLabel={t("serverForm.tabs.label")}
+        idBase={tabsIdBase}
+      />
+
+      <form
+        ref={formRef}
+        noValidate
+        onSubmit={handleSubmit}
+        onChange={() => {
+          setDirty(true);
+          if (invalidTabs.size > 0) setInvalidTabs(collectInvalidTabs());
+        }}
+        className="space-y-3"
+      >
+        <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-3">
           <Field label={t("common.name")}>
             {(control) => (
               <input
@@ -902,47 +990,6 @@ export function ServerForm({
               />
             )}
           </Field>
-          <Field label={t("serverForm.host")}>
-            {(control) => (
-              <input
-                {...control}
-                {...TECHNICAL_INPUT_PROPS}
-                type="text"
-                required
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                className={`${FIELD_CONTROL_CLASS} w-full`}
-              />
-            )}
-          </Field>
-          <Field label={t("serverForm.port")}>
-            {(control) => (
-              <input
-                {...control}
-                type="number"
-                required
-                min={1}
-                max={65535}
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                className={`${FIELD_CONTROL_CLASS} w-full`}
-              />
-            )}
-          </Field>
-          <Field label={t("serverForm.username")}>
-            {(control) => (
-              <input
-                {...control}
-                {...TECHNICAL_INPUT_PROPS}
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className={`${FIELD_CONTROL_CLASS} w-full`}
-              />
-            )}
-          </Field>
-        </div>
 
         <Field label={t("serverForm.group")}>
           {(control) => (
@@ -958,24 +1005,6 @@ export function ServerForm({
               {flattenGroupOptions(allGroups).map((option) => (
                 <option key={option.group.id} value={option.group.id}>
                   {groupOptionLabel(option)}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-
-        <Field label={t("serverForm.jumpHost")}>
-          {(control) => (
-            <select
-              {...control}
-              value={jumpHost ?? ""}
-              onChange={(e) => setJumpHost(e.target.value || null)}
-              className={`${FIELD_CONTROL_CLASS} w-full`}
-            >
-              <option value="">{t("serverForm.noJumpHost")}</option>
-              {possibleJumpHosts.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
                 </option>
               ))}
             </select>
@@ -1018,6 +1047,69 @@ export function ServerForm({
             />
           </div>
         </div>
+        </TabPanel>
+
+        <TabPanel idBase={tabsIdBase} id="connection" active={activeTab === "connection"} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t("serverForm.host")}>
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="text"
+                required
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+          <Field label={t("serverForm.port")}>
+            {(control) => (
+              <input
+                {...control}
+                type="number"
+                required
+                min={1}
+                max={65535}
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+          <Field label={t("serverForm.username")}>
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+        </div>
+
+        <Field label={t("serverForm.jumpHost")}>
+          {(control) => (
+            <select
+              {...control}
+              value={jumpHost ?? ""}
+              onChange={(e) => setJumpHost(e.target.value || null)}
+              className={`${FIELD_CONTROL_CLASS} w-full`}
+            >
+              <option value="">{t("serverForm.noJumpHost")}</option>
+              {possibleJumpHosts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">{t("serverForm.authFieldset")}</legend>
@@ -1315,6 +1407,64 @@ export function ServerForm({
           )}
         </fieldset>
 
+        {!isLocal && (
+          <Field
+            label={t("serverForm.startDirectoryLabel")}
+            help={startDirectoryError ? undefined : t("serverForm.startDirectoryHint")}
+            error={startDirectoryError ?? undefined}
+          >
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                value={startDirectory}
+                onChange={(e) => setStartDirectory(e.target.value)}
+                placeholder={t("serverForm.startDirectoryPlaceholder")}
+                className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
+              />
+            )}
+          </Field>
+        )}
+
+        {!isLocal && (
+          <details className="rounded border border-slate-700 p-3">
+            <summary className="cursor-pointer text-sm text-slate-300">
+              {t("serverForm.advanced")}
+            </summary>
+            <Field
+              label={t("serverForm.sftpServerPathLabel")}
+              help={t("serverForm.sftpServerPathHint")}
+              className="mt-3"
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  {...TECHNICAL_INPUT_PROPS}
+                  value={sftpServerPath}
+                  onChange={(e) => setSftpServerPath(e.target.value)}
+                  placeholder={t("serverForm.sftpServerPathPlaceholder")}
+                  className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
+                />
+              )}
+            </Field>
+          </details>
+        )}
+
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={runTest} disabled={testing}>
+            {testing ? t("common.testing") : t("serverForm.testConnection")}
+          </Button>
+          {testResult && <TestResultBadge result={testResult} />}
+        </div>
+        {/* Issue #51: Schritt-Protokoll des letzten Tests, zugeklappt —
+         * bei Erfolg wie bei Fehlschlag. */}
+        {testResult?.steps && testResult.steps.length > 0 && (
+          <ConnectStepLog steps={testResult.steps} />
+        )}
+        </TabPanel>
+
+        <TabPanel idBase={tabsIdBase} id="security" active={activeTab === "security"} className="space-y-3">
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">
             {t("serverForm.postIngestFieldset")}
@@ -1364,49 +1514,6 @@ export function ServerForm({
           </p>
         </fieldset>
 
-        {!isLocal && (
-          <Field
-            label={t("serverForm.startDirectoryLabel")}
-            help={startDirectoryError ? undefined : t("serverForm.startDirectoryHint")}
-            error={startDirectoryError ?? undefined}
-          >
-            {(control) => (
-              <input
-                {...control}
-                {...TECHNICAL_INPUT_PROPS}
-                value={startDirectory}
-                onChange={(e) => setStartDirectory(e.target.value)}
-                placeholder={t("serverForm.startDirectoryPlaceholder")}
-                className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
-              />
-            )}
-          </Field>
-        )}
-
-        {!isLocal && (
-          <details className="rounded border border-slate-700 p-3">
-            <summary className="cursor-pointer text-sm text-slate-300">
-              {t("serverForm.advanced")}
-            </summary>
-            <Field
-              label={t("serverForm.sftpServerPathLabel")}
-              help={t("serverForm.sftpServerPathHint")}
-              className="mt-3"
-            >
-              {(control) => (
-                <input
-                  {...control}
-                  {...TECHNICAL_INPUT_PROPS}
-                  value={sftpServerPath}
-                  onChange={(e) => setSftpServerPath(e.target.value)}
-                  placeholder={t("serverForm.sftpServerPathPlaceholder")}
-                  className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
-                />
-              )}
-            </Field>
-          </details>
-        )}
-
         {!isCreate && !isLocal && storedHostKeys !== null && (
           <section aria-labelledby="stored-host-keys-heading" className="space-y-1">
             <h3 id="stored-host-keys-heading" className="text-sm font-medium text-slate-300">
@@ -1426,54 +1533,23 @@ export function ServerForm({
             )}
           </section>
         )}
+        </TabPanel>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary"
-            type="submit"
-            disabled={saving}
-          >
-            {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-          </Button>
-          <Button
-            onClick={runTest}
-            disabled={testing}
-          >
-            {testing ? t("common.testing") : t("serverForm.testConnection")}
-          </Button>
-          {testResult && <TestResultBadge result={testResult} />}
-        </div>
-        {/* Issue #51: Schritt-Protokoll des letzten Tests, zugeklappt —
-         * bei Erfolg wie bei Fehlschlag. */}
-        {testResult?.steps && testResult.steps.length > 0 && (
-          <ConnectStepLog steps={testResult.steps} />
+        {activeTab !== "notes" && (
+          <div>
+            <Button variant="primary" type="submit" disabled={saving}>
+              {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
+            </Button>
+          </div>
         )}
       </form>
 
       {!isCreate && serverId && loaded && (
         <>
+          <div hidden={activeTab !== "general"} className="space-y-6">
             <ServerFormSections serverId={serverId} dirty={dirty} />
-            <NotesPanel
-              target={{ Server: serverId }}
-              currentNotes={loaded.notes}
-              onNotesChanged={onSaved}
-              autoFocus={autoFocusNotes}
-            />
-
-            <div>
-              <Button size="sm"
-                onClick={handlePreview}
-                disabled={previewLoading}
-              >
-                {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
-              </Button>
-              {preview !== null && (
-                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
-                  {preview || t("serverForm.noContext")}
-                </pre>
-              )}
-            </div>
 
             <div className="border-t border-slate-700 pt-4">
               <Button variant="danger" size="sm"
@@ -1586,6 +1662,29 @@ export function ServerForm({
                 </div>
               )}
             </div>
+          </div>
+          <TabPanel idBase={tabsIdBase} id="notes" active={activeTab === "notes"} className="space-y-6">
+            <NotesPanel
+              target={{ Server: serverId }}
+              currentNotes={loaded.notes}
+              onNotesChanged={onSaved}
+              autoFocus={autoFocusNotes}
+            />
+
+            <div>
+              <Button size="sm"
+                onClick={handlePreview}
+                disabled={previewLoading}
+              >
+                {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
+              </Button>
+              {preview !== null && (
+                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
+                  {preview || t("serverForm.noContext")}
+                </pre>
+              )}
+            </div>
+          </TabPanel>
         </>
       )}
 

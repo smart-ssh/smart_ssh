@@ -84,15 +84,48 @@ const SCREENS: Record<string, Screen> = {
       await app.launch(longContent());
       await manage(app);
       await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await expect(app.page.getByRole("tab", { name: "General", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(app.page.getByRole("button", { name: "Delete Server" })).toBeVisible();
+    },
+    tabs: 40,
+  },
+  "management-server-form-connection": {
+    open: async (app) => {
+      await app.launch(longContent());
+      await manage(app);
+      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("tab", { name: "Connection", exact: true }).click();
       await expect(app.page.getByRole("button", { name: "Test Connection", exact: true })).toBeVisible();
     },
     tabs: 40,
+  },
+  "management-server-form-security": {
+    open: async (app) => {
+      await app.launch(longContent());
+      await manage(app);
+      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("tab", { name: "Security", exact: true }).click();
+      await expect(app.page.getByRole("radio").first()).toBeVisible();
+    },
+    tabs: 30,
+  },
+  "management-server-form-notes": {
+    open: async (app) => {
+      await app.launch(longContent());
+      await manage(app);
+      await app.page.getByRole("treeitem", { name: `🖥️ ${LONG}` }).click();
+      await app.page.getByRole("tab", { name: "Notes", exact: true }).click();
+      await expect(app.page.getByRole("button", { name: "Context Preview" }).first()).toBeVisible();
+    },
+    tabs: 30,
   },
   "management-new-server": {
     open: async (app) => {
       await app.launch(longContent());
       await manage(app);
       await app.page.getByRole("button", { name: "+ Server", exact: true }).click();
+      await expect(app.page.getByRole("tab")).toHaveCount(3);
+      await app.page.getByRole("tab", { name: "Connection", exact: true }).click();
       await expect(app.page.getByRole("button", { name: "Test Connection", exact: true })).toBeVisible();
     },
     tabs: 40,
@@ -137,6 +170,7 @@ const SCREENS: Record<string, Screen> = {
       });
       await manage(app);
       await app.page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
+      await app.page.getByRole("tab", { name: "Connection", exact: true }).click();
       await app.page.getByRole("button", { name: "Test Connection", exact: true }).click();
       await app.page.getByText("Details", { exact: true }).click();
       await expect(app.page.getByTestId("connect-step-log")).toHaveAttribute("open");

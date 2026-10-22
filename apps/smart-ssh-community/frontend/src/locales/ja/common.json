@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "開始ディレクトリは絶対パス（/…）か、~/ で始まるパスである必要があります。",
       "controlCharacter": "開始ディレクトリに制御文字を含めることはできません。"
+    },
+    "tabs": {
+      "label": "サーバー設定",
+      "general": "一般",
+      "connection": "接続",
+      "security": "セキュリティ",
+      "invalid": "エラーがあります"
     }
   },
   "filterRules": {
