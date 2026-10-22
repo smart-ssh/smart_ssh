@@ -1178,6 +1178,7 @@ async fn handle_web_activity(
             session_id,
             emitter,
             &check_text,
+            "web_research",
         )
         .await;
     }
