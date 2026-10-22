@@ -59,6 +59,17 @@ In keinem Fall blockiert die Suche das Speichern des Anbieters. Der Key geht
 dabei nur an den Anbieter (wie bei „Modelle laden"), er wird weder
 protokolliert noch gespeichert, bevor der Nutzer den Anbieter anlegt.
 
+### Anbietername aus dem Modell
+
+Im Formular „Provider hinzufügen" übernimmt das Namensfeld das Modell
+(Auswahl aus der Liste oder Eingabe, bei jeder Änderung), solange der Nutzer
+den Namen nicht selbst bearbeitet hat. Sobald er im Namensfeld tippt, bleibt
+der Name unverändert — auch wenn er ihn wieder leert. Ein zuerst eingegebener
+Name bleibt erhalten. Das Modell wird dadurch nie verändert. Ein Wechsel des
+Anbieter-Typs ändert die Regel nicht; beim erneuten Öffnen des Formulars
+beginnt der Zustand von vorn. Der Ollama-Schnellstart behält seinen eigenen
+Namen.
+
 ## 3. Zusatz-Header
 
 Eine Anbieter-Konfiguration kann beliebige zusätzliche HTTP-Header tragen

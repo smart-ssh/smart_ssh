@@ -86,6 +86,9 @@ export function AddAiProviderDialog({
   const typeSelectRef = useRef<HTMLSelectElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<AiProviderConfigInput>(emptyForm());
+  // Issue #602: the name mirrors the model until the user edits the name.
+  // The dialog is add-only and remounts per open, so this resets with it.
+  const [nameEditedByUser, setNameEditedByUser] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -306,7 +309,10 @@ export function AddAiProviderDialog({
               type="text"
               required
               value={form.displayName}
-              onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+              onChange={(e) => {
+                setNameEditedByUser(true);
+                setForm({ ...form, displayName: e.target.value });
+              }}
               className={`mt-1 w-full ${FIELD_CLASS}`}
             />
           </label>
@@ -321,7 +327,13 @@ export function AddAiProviderDialog({
                 list={supportsModelDiscovery(form.providerType) ? MODEL_DATALIST_ID : undefined}
                 placeholder={t("aiProvider.modelPlaceholder")}
                 value={form.model}
-                onChange={(e) => setForm({ ...form, model: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    model: e.target.value,
+                    displayName: nameEditedByUser ? form.displayName : e.target.value,
+                  })
+                }
                 className={`w-full ${FIELD_CLASS}`}
               />
               {supportsModelDiscovery(form.providerType) && (

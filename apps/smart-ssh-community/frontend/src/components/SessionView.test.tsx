@@ -157,7 +157,7 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
     await waitFor(() => expect(getRightPanel().style.width).toBe("300px"));
   });
 
-  it("falls back to the default split on a window too small for both minimums", async () => {
+  it("falls back to a split that fits the window on a window too small for both minimums", async () => {
     vi.mocked(loadAiSshSplitWidthPx).mockResolvedValue(900);
 
     renderSessionView();
@@ -165,7 +165,7 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
 
     triggerResize(500); // < LEFT_MIN (360) + RIGHT_MIN (300) + HANDLE (6)
 
-    await waitFor(() => expect(getRightPanel().style.width).toBe("420px"));
+    await waitFor(() => expect(getRightPanel().style.width).toBe("247px"));
   });
 
   it("does not lose the stored preference when dragging in a too-small window", async () => {
@@ -179,7 +179,7 @@ describe("SessionView AI/SSH split (Spec 0053, Teil 2)", () => {
     renderSessionView();
     await waitFor(() => expect(getRightPanel().style.width).toBe("900px"));
     triggerResize(500); // < LEFT_MIN (360) + RIGHT_MIN (300) + HANDLE (6)
-    await waitFor(() => expect(getRightPanel().style.width).toBe("420px"));
+    await waitFor(() => expect(getRightPanel().style.width).toBe("247px"));
 
     const handle = screen.getByLabelText("Bereichsaufteilung");
     Object.defineProperty(handle.parentElement, "clientWidth", {
