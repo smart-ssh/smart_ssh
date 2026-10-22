@@ -32,6 +32,7 @@ import {
   sftpDownload,
   sftpDownloadDefault,
   sftpDownloadDir,
+  sftpCancelTransfer,
   sftpElevationDisable,
   sftpElevationEnable,
   sftpExists,
@@ -48,7 +49,12 @@ import {
   sftpUpload,
   sessionIsRoot,
 } from "../api";
-import { onConnectionStatusChanged, onSftpTransferFinished, onSftpTransferStarted } from "../events";
+import {
+  onConnectionStatusChanged,
+  onSftpTransferFinished,
+  onSftpTransferProgress,
+  onSftpTransferStarted,
+} from "../events";
 import {
   loadFileManagerColumnWidths,
   saveFileManagerColumnWidths,
@@ -76,7 +82,8 @@ vi.mock("../api", () => ({
   sftpDownload: vi.fn(),
   sftpDownloadDefault: vi.fn(),
   sftpDownloadDir: vi.fn(),
-  sftpElevationDisable: vi.fn(() => Promise.resolve()),
+  sftpElevationDisable: vi.fn(() => Promise.resolve({ disabled: true, runningOperations: [] })),
+  sftpCancelTransfer: vi.fn(() => Promise.resolve(true)),
   sftpElevationEnable: vi.fn(),
   sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
   sftpMkdir: vi.fn(),
@@ -110,6 +117,7 @@ vi.mock("../events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferStarted: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferFinished: vi.fn(() => Promise.resolve(() => {})),
+  onSftpTransferProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
@@ -1406,7 +1414,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     fireEvent.change(screen.getByLabelText("Ziel-Nutzer"), { target: { value: "www-data" } });
     fireEvent.click(screen.getByRole("button", { name: "Erhöhen" }));
 
-    await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "www-data"));
+    await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "www-data", false));
     expect(await screen.findByRole("alert")).toHaveTextContent("www-data");
   });
 
@@ -1460,7 +1468,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     fireEvent.click(screen.getByRole("menuitem"));
     fireEvent.change(screen.getByLabelText("Ziel-Nutzer"), { target: { value: "postgres" } });
     fireEvent.click(screen.getByRole("button", { name: "Erhöhen" }));
-    await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "postgres"));
+    await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "postgres", false));
 
     fireEvent.click(arrow);
     fireEvent.click(screen.getByRole("menuitem"));
@@ -1469,7 +1477,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
   it("uses root when no target user is given", async () => {
     await enableElevation();
-    expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "root");
+    expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "root", false);
   });
 
   it("a drag-and-drop upload after switching uses the elevated channel (no stale closure)", async () => {
@@ -2613,6 +2621,74 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
 
       expect(screen.getByText(/big\.bin: Erhöhte Rechte beendet/)).toBeVisible();
       expect(screen.queryByText(/Channel-Fehler/)).not.toBeInTheDocument();
+    });
+
+    // Issue #622
+    const running = [
+      { id: "op1", kind: "download" as const, path: "/srv/big.bin", bytesDone: 5, bytesTotal: 10, filesDone: null, filesTotal: null },
+      { id: "op2", kind: "delete" as const, path: "/srv/old", bytesDone: null, bytesTotal: null, filesDone: null, filesTotal: null },
+    ];
+
+    it("ending elevated rights with running operations asks first; Cancel keeps the mode on", async () => {
+      await enableElevation();
+      vi.mocked(sftpElevationDisable).mockResolvedValueOnce({ disabled: false, runningOperations: running });
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte beenden/ }));
+
+      expect(await screen.findByText("Erhöhte Rechte beenden?")).toBeVisible();
+      expect(screen.getByText("/srv/big.bin")).toBeVisible();
+      expect(screen.getByText("/srv/old")).toBeVisible();
+      fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
+
+      await waitFor(() => expect(screen.queryByText("Erhöhte Rechte beenden?")).not.toBeInTheDocument());
+      expect(screen.getByRole("alert")).toBeVisible();
+      expect(sftpElevationDisable).not.toHaveBeenCalledWith("session-1", true);
+    });
+
+    it("confirming the dialog stops the operations and switches the mode off", async () => {
+      await enableElevation();
+      vi.mocked(sftpElevationDisable).mockResolvedValueOnce({ disabled: false, runningOperations: running });
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte beenden/ }));
+      await screen.findByText("Erhöhte Rechte beenden?");
+      const confirm = screen.getAllByRole("button", { name: /Erhöhte Rechte beenden/ }).at(-1)!;
+      fireEvent.click(confirm);
+
+      await waitFor(() => expect(sftpElevationDisable).toHaveBeenCalledWith("session-1", true));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    });
+
+    it("ending elevated rights without running operations needs no dialog", async () => {
+      await enableElevation();
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte beenden/ }));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+      expect(screen.queryByText("Erhöhte Rechte beenden?")).not.toBeInTheDocument();
+    });
+
+    it("a cancelled transfer shows its state, a running one has a cancel button and progress", async () => {
+      const h = subscribe();
+      const progress: Handler<any>[] = [];
+      vi.mocked(onSftpTransferProgress).mockImplementation((hd: any) => {
+        progress.push(hd);
+        return Promise.resolve(() => {});
+      });
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      await waitFor(() => expect(h.finished.length).toBe(1));
+      start(h);
+      act(() =>
+        progress.forEach((fn) =>
+          fn({ sessionId: "session-1", transferId: "t1", bytesDone: 4, totalBytes: 10 }),
+        ),
+      );
+      expect(screen.getByRole("progressbar", { name: "big.bin" })).toHaveAttribute("value", "4");
+      fireEvent.click(screen.getByRole("button", { name: "Übertragung abbrechen" }));
+      expect(sftpCancelTransfer).toHaveBeenCalledWith("session-1", "t1");
+
+      act(() =>
+        h.finished.forEach((fn) =>
+          fn({ sessionId: "session-1", transferId: "t1", error: null, stopped: "cancelled" }),
+        ),
+      );
+      expect(screen.getByText("big.bin: abgebrochen")).toBeVisible();
     });
   });
 });

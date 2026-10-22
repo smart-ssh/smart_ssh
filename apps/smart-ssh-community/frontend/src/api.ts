@@ -12,6 +12,7 @@ import type {
   DataPathEntryDto,
   DeletePreviewDto,
   DownloadResultDto,
+  ElevationDisableDto,
   ElevationResultDto,
   DeleteServerResult,
   DeleteUnusableServerResult,
@@ -773,11 +774,20 @@ export const getAppInfo = () => invoke<AppInfoDto>("get_app_info");
 
 /** Spec 0067, A1–A3: erhöhten Dateibrowser-Kanal einschalten (`sudo -n
  * <sftp-server>`). Ein Fehlschlag kommt als `failure`, nicht als Exception. */
-export const sftpElevationEnable = (sessionId: string, targetUser: string | null) =>
-  invoke<ElevationResultDto>("sftp_elevation_enable", { sessionId, targetUser });
+export const sftpElevationEnable = (
+  sessionId: string,
+  targetUser: string | null,
+  confirmStop = false,
+) => invoke<ElevationResultDto>("sftp_elevation_enable", { sessionId, targetUser, confirmStop });
 
-export const sftpElevationDisable = (sessionId: string) =>
-  invoke<void>("sftp_elevation_disable", { sessionId });
+/** Issue #622: without `confirmStop`, running elevated operations are listed
+ * in `runningOperations` and nothing changes (`disabled: false`). */
+export const sftpElevationDisable = (sessionId: string, confirmStop = false) =>
+  invoke<ElevationDisableDto>("sftp_elevation_disable", { sessionId, confirmStop });
+
+/** Issue #622: per-transfer cancel button. */
+export const sftpCancelTransfer = (sessionId: string, transferId: string) =>
+  invoke<boolean>("sftp_cancel_transfer", { sessionId, transferId });
 
 /** Ziel-Nutzer des aktiven erhöhten Kanals, `null` = aus. */
 export const sftpElevationStatus = (sessionId: string) =>
