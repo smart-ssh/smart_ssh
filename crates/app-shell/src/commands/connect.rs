@@ -743,10 +743,11 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
         crate::risk_second_opinion::resolve_second_opinion_provider(app, state)
             .await
             .into_parts();
-    let (risk_second_opinion_provider, risk_second_opinion_budget) = match second_opinion_resolved {
-        Some((provider, budget)) => (Some(provider), Some(budget)),
-        None => (None, None),
-    };
+    let (risk_second_opinion_provider, risk_second_opinion_budget, second_opinion_source) =
+        match second_opinion_resolved {
+            Some((provider, budget, source)) => (Some(provider), Some(budget), Some(source)),
+            None => (None, None, None),
+        };
 
     // Spec 0092, A1.3: einmalig gelesen, wie die Zweitmeinung oben — eine
     // Änderung greift erst bei der nächsten Verbindung. Fail-safe „an",
@@ -768,19 +769,35 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     // Issue #231: eingeschaltet, aber ohne Anbieter → Sitzungs-Hinweis
     // (`injection_check_inactive_notice_pending`), kein Zwang zur
     // Bestätigung. Ist die Prüfung am Server aus, bleibt es still.
-    let (injection_check_provider, injection_check_budget, injection_check_inactive) =
-        if server.ai_injection_check_enabled {
-            match crate::risk_second_opinion::resolve_second_opinion_provider(app, state)
-                .await
-                .into_parts()
-                .0
-            {
-                Some((provider, budget)) => (Some(provider), Some(budget), false),
-                None => (None, None, true),
-            }
-        } else {
-            (None, None, false)
-        };
+    let (
+        injection_check_provider,
+        injection_check_budget,
+        injection_check_inactive,
+        injection_check_source,
+    ) = if server.ai_injection_check_enabled {
+        match crate::risk_second_opinion::resolve_second_opinion_provider(app, state)
+            .await
+            .into_parts()
+            .0
+        {
+            Some((provider, budget, source)) => (Some(provider), Some(budget), false, Some(source)),
+            None => (None, None, true, None),
+        }
+    } else {
+        (None, None, false, None)
+    };
+    // Issue #610: the side calls share one configured provider.
+    let side_call_source = second_opinion_source.or(injection_check_source);
+    let ai_usage_reporting = app_logic::ai_usage::AiUsageReporting {
+        observers: state.ai_usage_observers.clone(),
+        runtime_session_id: session_id.to_string(),
+        main: app_logic::ai_usage::AiUsageSource {
+            provider_config_id: active_config.id.0.to_string(),
+            provider_type: active_config.provider_type,
+            configured_model: active_config.model.clone(),
+        },
+        side_call: side_call_source,
+    };
 
     // Spec 0034, Abschnitt 2: `chat_sessions.server_id` referenziert
     // `servers(id)` — der lokale Pseudo-Server hat (Spec 0032) bewusst
@@ -978,7 +995,8 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             auto_reconnect: Default::default(),
         })
         .with_start_directory(start_directory)
-        .with_is_root(is_root),
+        .with_is_root(is_root)
+        .with_usage_reporting(Some(ai_usage_reporting)),
     );
     state.sessions.insert(session_id, Arc::clone(&session));
     crate::auto_reconnect::install_hook(app, &session);
@@ -2151,6 +2169,7 @@ mod connect_flow_tests {
             pending_ssh_config_import: std::sync::Mutex::new(None),
             outgoing_transform: None,
             chat_content: Default::default(),
+            ai_usage_observers: Default::default(),
         };
         Fixture {
             state,
