@@ -130,7 +130,8 @@
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
     "hintRoot": "→ najwyższy poziom (bez grupy)",
     "hintGroup": "→ przenieś do tej grupy",
-    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy"
+    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
+    "moveTo": "Przenieś „{{name}}” do…"
   },
   "management": {
     "emptyState": "Wybierz grupę lub serwer po lewej albo utwórz coś nowego przez „{{addGroup}}”/„{{addServer}}”."

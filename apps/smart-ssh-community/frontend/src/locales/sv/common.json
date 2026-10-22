@@ -130,7 +130,8 @@
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
     "hintRoot": "→ översta nivån (ingen grupp)",
     "hintGroup": "→ flytta in i den här gruppen",
-    "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp"
+    "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
+    "moveTo": "Flytta ”{{name}}” till…"
   },
   "management": {
     "emptyState": "Välj en grupp eller server till vänster, eller skapa något nytt via \"{{addGroup}}\"/\"{{addServer}}\"."

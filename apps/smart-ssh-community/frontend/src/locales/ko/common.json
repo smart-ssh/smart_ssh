@@ -130,7 +130,8 @@
     "rootDropZone": "여기에 놓으면 최상위(그룹 없음)로 이동합니다",
     "hintRoot": "→ 최상위(그룹 없음)",
     "hintGroup": "→ 이 그룹으로 이동",
-    "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다"
+    "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다",
+    "moveTo": "“{{name}}” 이동 위치…"
   },
   "management": {
     "emptyState": "왼쪽에서 그룹이나 서버를 선택하거나 \"{{addGroup}}\"/\"{{addServer}}\"로 새로 만드십시오."
