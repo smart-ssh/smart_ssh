@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ServerFormSections } from "../extensions/FormSlots";
+import { ServerFormSections, useServerSettingsTabs } from "../extensions/FormSlots";
+import { resolveSectionLabel } from "../resolveSectionLabel";
 import { ConnectStepLog } from "./ConnectStepLog";
 import {
   clearServerSudoPassword,
@@ -251,7 +252,7 @@ export function ServerForm({
   autoFocusNotes = false,
   movedTo = null,
 }: ServerFormProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const AUTH_KIND_LABELS = authKindLabels(t);
   const isCreate = serverId === null;
 
@@ -379,7 +380,10 @@ export function ServerForm({
   type ServerTab = "general" | "connection" | "security" | "notes";
   const tabsIdBase = useTabsIdBase();
   const formRef = useRef<HTMLFormElement>(null);
-  const [activeTab, setActiveTab] = useState<ServerTab>(autoFocusNotes && !isCreate ? "notes" : "general");
+  const [requestedTab, setActiveTab] = useState<string>(autoFocusNotes && !isCreate ? "notes" : "general");
+  // Issue #608: extension tabs (saved servers only, local pseudo-server included).
+  const extensionTabs = useServerSettingsTabs();
+  const [openedExtTabs, setOpenedExtTabs] = useState<ReadonlySet<string>>(new Set());
   const [invalidTabs, setInvalidTabs] = useState<ReadonlySet<ServerTab>>(new Set());
   const [reportValidityPending, setReportValidityPending] = useState(false);
   // Selecting another server opens General again (derived state, no effect).
@@ -388,18 +392,46 @@ export function ServerForm({
     setTabsServerId(serverId);
     setActiveTab("general");
     setInvalidTabs(new Set());
+    setOpenedExtTabs(new Set());
   }
   const availableTabs: ServerTab[] = isLocal
     ? ["general", "notes"]
     : isCreate
       ? ["general", "connection", "security"]
       : ["general", "connection", "security", "notes"];
-  const tabItems: TabItem[] = availableTabs.map((id) => ({
-    id,
-    label: id === "notes" ? t("common.notes") : t(`serverForm.tabs.${id}`),
-    invalid: invalidTabs.has(id),
-    invalidLabel: t("serverForm.tabs.invalid"),
-  }));
+  const shownExtTabs = !isCreate && loaded ? extensionTabs : [];
+  const tabItems: TabItem[] = [
+    ...availableTabs.map((id) => ({
+      id: id as string,
+      label: id === "notes" ? t("common.notes") : t(`serverForm.tabs.${id}`),
+      invalid: invalidTabs.has(id),
+      invalidLabel: t("serverForm.tabs.invalid"),
+    })),
+    ...shownExtTabs.map((x) => ({
+      id: `ext:${x.id}`,
+      label: resolveSectionLabel(x.label, x.id, i18n, t),
+    })),
+  ];
+  // An unregistered active extension tab falls back to General.
+  const activeTab = tabItems.some((item) => item.id === requestedTab) ? requestedTab : "general";
+  if (activeTab.startsWith("ext:") && !openedExtTabs.has(activeTab)) {
+    setOpenedExtTabs(new Set(openedExtTabs).add(activeTab));
+  }
+  // Lazily mounted when first opened, mounted while the server stays selected.
+  const renderExtensionPanels = (extServerId: string) =>
+    shownExtTabs
+    .filter((x) => openedExtTabs.has(`ext:${x.id}`))
+    .map((x) => (
+      <TabPanel
+        key={x.id}
+        idBase={tabsIdBase}
+        id={`ext:${x.id}`}
+        active={activeTab === `ext:${x.id}`}
+        className="space-y-6"
+      >
+        <x.component serverId={extServerId} />
+      </TabPanel>
+    ));
   // Tabs whose fields fail the browser validation (the form is `noValidate`,
   // so that an invalid field in a hidden panel cannot silently block saving).
   const collectInvalidTabs = (): Set<ServerTab> => {
@@ -912,7 +944,7 @@ export function ServerForm({
           </Button>
         </div>
 
-        <ServerFormSections serverId={loaded.id} dirty={dirty} />
+        <ServerFormSections serverId={loaded.id} dirty={dirty} tab="general" />
         </TabPanel>
 
         <TabPanel idBase={tabsIdBase} id="notes" active={activeTab === "notes"} className="space-y-6">
@@ -947,7 +979,9 @@ export function ServerForm({
             {savingLocalNotes ? t("common.saving") : t("common.save")}
           </Button>
         </div>
+        <ServerFormSections serverId={loaded.id} dirty={dirty} tab="notes" />
         </TabPanel>
+        {renderExtensionPanels(loaded.id)}
       </div>
     );
   }
@@ -1548,8 +1582,14 @@ export function ServerForm({
 
       {!isCreate && serverId && loaded && (
         <>
+          <div hidden={activeTab !== "connection"} className="space-y-6">
+            <ServerFormSections serverId={serverId} dirty={dirty} tab="connection" />
+          </div>
+          <div hidden={activeTab !== "security"} className="space-y-6">
+            <ServerFormSections serverId={serverId} dirty={dirty} tab="security" />
+          </div>
           <div hidden={activeTab !== "general"} className="space-y-6">
-            <ServerFormSections serverId={serverId} dirty={dirty} />
+            <ServerFormSections serverId={serverId} dirty={dirty} tab="general" />
 
             <div className="border-t border-slate-700 pt-4">
               <Button variant="danger" size="sm"
@@ -1684,7 +1724,9 @@ export function ServerForm({
                 </pre>
               )}
             </div>
+          <ServerFormSections serverId={serverId} dirty={dirty} tab="notes" />
           </TabPanel>
+          {renderExtensionPanels(serverId)}
         </>
       )}
 

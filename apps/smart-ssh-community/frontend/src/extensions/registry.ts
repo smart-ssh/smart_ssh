@@ -133,9 +133,25 @@ export interface ServerFormSectionContext {
   dirty: boolean;
 }
 
+/** Built-in tabs of the server settings (issue #608). */
+export type ServerFormTabId = "general" | "connection" | "security" | "notes";
+
 export interface ServerFormSectionContribution {
   id: string;
+  /** Built-in tab the section is rendered at the bottom of. Default
+   * `"general"`. */
+  tab?: ServerFormTabId;
   component: ComponentType<ServerFormSectionContext>;
+}
+
+/** Issue #608 (Spec 0038, Abschnitt 4): an extension's own tab in the
+ * settings of a saved server. `label` is plain text or an i18n key (like
+ * settings sections). The component only gets the server id. */
+export interface ServerSettingsTabContribution {
+  id: string;
+  label: string;
+  order?: number;
+  component: ComponentType<{ serverId: string }>;
 }
 
 /** Kontext für einen Abschnitt im Gruppen-Formular (nur bestehende Gruppen). */
@@ -199,6 +215,7 @@ interface Registry {
   composerActions: Map<string, ComposerAction>;
   composerDropHandlers: Map<string, ComposerDropHandler>;
   serverFormSections: Map<string, ServerFormSectionContribution>;
+  serverSettingsTabs: Map<string, ServerSettingsTabContribution>;
   groupFormSections: Map<string, GroupFormSectionContribution>;
   manageViews: Map<string, ManageViewContribution>;
   settingsSections: Map<string, SettingsSectionContribution>;
@@ -210,6 +227,7 @@ const registry: Registry = {
   composerActions: new Map(),
   composerDropHandlers: new Map(),
   serverFormSections: new Map(),
+  serverSettingsTabs: new Map(),
   groupFormSections: new Map(),
   manageViews: new Map(),
   settingsSections: new Map(),
@@ -303,11 +321,17 @@ export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[] {
 // erscheint. Die Schnappschüsse ändern sich nur bei einer Änderung.
 const formSlotListeners = new Set<() => void>();
 let serverFormSectionsSnapshot: ServerFormSectionContribution[] = [];
+let serverSettingsTabsSnapshot: ServerSettingsTabContribution[] = [];
 let groupFormSectionsSnapshot: GroupFormSectionContribution[] = [];
 let manageViewsSnapshot: ManageViewContribution[] = [];
 
 function notifyFormSlotsChanged(): void {
   serverFormSectionsSnapshot = Array.from(registry.serverFormSections.values());
+  // Map insertion order is the registration order; a replace keeps its slot.
+  // Array.prototype.sort is stable, so equal `order` keeps that order.
+  serverSettingsTabsSnapshot = Array.from(registry.serverSettingsTabs.values()).sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0),
+  );
   groupFormSectionsSnapshot = Array.from(registry.groupFormSections.values());
   manageViewsSnapshot = Array.from(registry.manageViews.values());
   for (const listener of Array.from(formSlotListeners)) listener();
@@ -329,6 +353,16 @@ export function registerServerFormSection(section: ServerFormSectionContribution
   notifyFormSlotsChanged();
 }
 
+/** Registers (or replaces, same `id`) a tab in the server settings. */
+export function registerServerSettingsTab(tab: ServerSettingsTabContribution): void {
+  registry.serverSettingsTabs.set(tab.id, tab);
+  notifyFormSlotsChanged();
+}
+
+export function unregisterServerSettingsTab(id: string): void {
+  if (registry.serverSettingsTabs.delete(id)) notifyFormSlotsChanged();
+}
+
 export function registerGroupFormSection(section: GroupFormSectionContribution): void {
   registry.groupFormSections.set(section.id, section);
   notifyFormSlotsChanged();
@@ -342,6 +376,9 @@ export function registerManageView(view: ManageViewContribution): void {
 /** Zwischen zwei Änderungen dieselbe Array-Referenz (nicht verändern). */
 export function listServerFormSections(): ServerFormSectionContribution[] {
   return serverFormSectionsSnapshot;
+}
+export function listServerSettingsTabs(): ServerSettingsTabContribution[] {
+  return serverSettingsTabsSnapshot;
 }
 export function listGroupFormSections(): GroupFormSectionContribution[] {
   return groupFormSectionsSnapshot;
@@ -358,6 +395,7 @@ export function resetRegistryForTests(): void {
   registry.documentActions.clear();
   registry.firstRunNoticeExtensions.clear();
   registry.serverFormSections.clear();
+  registry.serverSettingsTabs.clear();
   registry.groupFormSections.clear();
   registry.manageViews.clear();
   notifyFormSlotsChanged();
