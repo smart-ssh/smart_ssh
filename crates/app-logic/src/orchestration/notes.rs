@@ -652,6 +652,7 @@ async fn request_ai_title(
             AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
             | AiEvent::Usage { .. }
+            | AiEvent::RequestUsage(_)
             | AiEvent::Retrying { .. }
             | AiEvent::InvalidToolCall { .. } => {}
             AiEvent::Done => break,
@@ -920,6 +921,7 @@ pub async fn suggest_note_update_on_disconnect(
             | AiEvent::WebActivity(_)
             | AiEvent::WebContentIngested
             | AiEvent::Usage { .. }
+            | AiEvent::RequestUsage(_)
             | AiEvent::Retrying { .. }
             | AiEvent::InvalidToolCall { .. } => {}
         }
@@ -1251,6 +1253,7 @@ async fn summarize_note_for_shrink(
                 AiEvent::WebActivity(_)
                 | AiEvent::WebContentIngested
                 | AiEvent::Usage { .. }
+                | AiEvent::RequestUsage(_)
                 | AiEvent::Retrying { .. }
                 | AiEvent::InvalidToolCall { .. } => {}
                 AiEvent::Done => return Some((text, false)),

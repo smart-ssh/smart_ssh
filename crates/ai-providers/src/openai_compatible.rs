@@ -217,6 +217,7 @@ use crate::request_logging::{
     log_tool_call_fragment,
 };
 use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
+use ssh_manager_core::ai::AiUsage;
 
 pub struct OpenAiCompatibleProvider {
     client: reqwest::Client,
@@ -324,6 +325,10 @@ impl OpenAiCompatibleProvider {
             "model": self.model,
             "messages": messages,
             "stream": true,
+            // Issue #609: ask for the final usage chunk. Endpoints that
+            // reject the option are retried once without it
+            // (`connect_and_stream`).
+            "stream_options": {"include_usage": true},
         });
         body[openai_max_tokens_field_name(&self.base_url, &self.model)] = json!(max_tokens);
 
@@ -530,6 +535,14 @@ pub(crate) type StreamParser = fn(
     Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>>;
 
+/// Issue #609: endpoint endpoint+model keys that rejected `stream_options` with a 400 in
+/// this app run. Later requests to them omit the option up front.
+fn no_stream_options_urls() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static SET: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    SET.get_or_init(Default::default)
+}
+
 /// s. `crate::anthropic::connect_and_stream`-Kommentar — identisches Muster,
 /// losgelöst von `send()`, damit Spec 0065 Teil 3 sie ein zweites Mal mit
 /// höherem `max_tokens` aufrufen kann.
@@ -542,8 +555,26 @@ pub(crate) async fn connect_and_stream(
     native_tool_calling: bool,
     request_id: Uuid,
     extra_headers: Vec<(String, String)>,
-    body: Value,
+    mut body: Value,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
+    // Issue #609: `stream_options` (usage reporting) is optional. Drop it up
+    // front for an endpoint that rejected it earlier in this run.
+    let mut dropped_stream_options = false;
+    let stream_options_key = format!(
+        "{url}\n{}",
+        body.get("model")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+    );
+    if body.get("stream_options").is_some()
+        && no_stream_options_urls()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&stream_options_key)
+    {
+        body.as_object_mut().map(|o| o.remove("stream_options"));
+        dropped_stream_options = true;
+    }
     // Spec-Reviewer-Fund (Spec 0049, Review von Fund 2): nicht nur der
     // API-Key, auch jeder `extra_headers`-Wert (Spec 0025, Abschnitt 3 —
     // dort trägt ein Nutzer z. B. ein zweites Gateway-Auth-Token ein) muss
@@ -637,6 +668,23 @@ pub(crate) async fn connect_and_stream(
             // s. Kommentar beim 429-Retry-Zweig oben.
             let text = crate::sse::read_error_body_with_timeout(response.text()).await;
             let mapped = map_http_response(status, &headers, &text);
+            // Issue #609: an endpoint answering 400 while `stream_options`
+            // is on the request is retried once without it — nothing else in
+            // the request changes. Remembered only once the retry succeeds.
+            if status.as_u16() == 400
+                && body.get("stream_options").is_some()
+                && !matches!(mapped, AiError::ModelNotFound(_))
+                && !is_context_length_error(&text)
+                && !text.to_lowercase().contains("context")
+            {
+                tracing::info!(
+                    request_id = %request_id,
+                    "endpoint rejected stream_options; retrying once without usage reporting",
+                );
+                body.as_object_mut().map(|o| o.remove("stream_options"));
+                dropped_stream_options = true;
+                continue;
+            }
             // Spec 0049, Fund 2: hier geloggt, nicht erst nach der
             // Rückgabe — `AuthenticationFailed`/`RateLimited` (Unit-
             // Varianten) verlieren Status/Body ab hier unwiederbringlich.
@@ -673,6 +721,12 @@ pub(crate) async fn connect_and_stream(
             return to_raw_stream(error_stream(mapped));
         }
 
+        if dropped_stream_options {
+            no_stream_options_urls()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(stream_options_key.clone());
+        }
         return parse(
             response,
             native_tool_calling,
@@ -998,6 +1052,8 @@ pub(crate) struct OpenAiStreamState {
     /// noch keiner ankam (z. B. bei einem abrupten Verbindungsabbruch vor
     /// jedem Chunk mit diesem Feld).
     pub(crate) finish_reason: Option<String>,
+    /// Issue #609: provider-reported usage, delivered once by `finalize`.
+    pub(crate) usage: AiUsage,
 }
 
 impl OpenAiStreamState {
@@ -1016,6 +1072,19 @@ impl OpenAiStreamState {
         );
     }
 
+    /// Issue #609: the usage as a public event, at most once.
+    pub(crate) fn take_usage_event(&mut self) -> Option<RawEvent> {
+        let usage = std::mem::take(&mut self.usage);
+        // A bare model name without any count is not a usage report.
+        let reported = usage.input_tokens.is_some()
+            || usage.output_tokens.is_some()
+            || usage.cache_read_tokens.is_some()
+            || usage.cache_write_tokens.is_some()
+            || usage.reasoning_tokens.is_some()
+            || usage.provider_reported_cost_usd.is_some();
+        reported.then_some(RawEvent::Public(AiEvent::RequestUsage(usage)))
+    }
+
     pub(crate) fn handle_chunk(&mut self, chunk: &Value) {
         // Issue #599: an in-stream `{"error": {...}}` chunk ends the response
         // with a classified error; a partial tool call is never released.
@@ -1029,6 +1098,21 @@ impl OpenAiStreamState {
             return;
         }
         let choice = chunk.get("choices").and_then(|choices| choices.get(0));
+
+        // Issue #609: the final usage chunk (`stream_options.include_usage`;
+        // OpenRouter and Ollama also send it unconditionally). Numeric and
+        // metadata fields only.
+        if let Some(usage) = chunk.get("usage").filter(|u| u.is_object()) {
+            let model = self.usage.response_model.take();
+            self.usage = crate::usage::parse_chat_completions(usage);
+            self.usage.response_model = model;
+        }
+        if let Some(model) = crate::usage::model_of(chunk) {
+            self.usage.response_model = Some(model);
+        }
+        if let Some(tier) = crate::usage::service_tier_of(chunk) {
+            self.usage.service_tier = Some(tier);
+        }
 
         // analog zu Anthropics `stop_reason` (s.
         // `AnthropicStreamState::handle_event`s `message_delta`-Zweig) —
@@ -1187,6 +1271,9 @@ impl OpenAiStreamState {
                     &call.arguments,
                 )));
             }
+            if let Some(event) = self.take_usage_event() {
+                events.push(event);
+            }
             events.push(RawEvent::Public(if finish_reason_is_length {
                 AiEvent::TextTruncated
             } else {
@@ -1213,6 +1300,9 @@ impl OpenAiStreamState {
             }
             if let Some(action) = result.action {
                 events.push(RawEvent::Public(AiEvent::ActionProposed(action)));
+            }
+            if let Some(event) = self.take_usage_event() {
+                events.push(event);
             }
             events.push(RawEvent::Public(if finish_reason_is_length {
                 AiEvent::TextTruncated
@@ -1277,6 +1367,7 @@ fn process_frame_stream(
         request_id,
         provider_request_id,
         finish_reason: None,
+        usage: AiUsage::default(),
     };
 
     Box::pin(futures::stream::unfold(state, |mut state| async move {
