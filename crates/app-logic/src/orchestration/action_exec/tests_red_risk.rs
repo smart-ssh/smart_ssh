@@ -553,36 +553,42 @@ async fn test_t9_read_remote_file_on_a_red_non_secret_path_is_escalated() {
     );
 }
 
-/// Spec 0092 (Folge aus T1/T2): `cat ~/.ssh/id_rsa.pub` ist kein
-/// Secret-Pfad (öffentlicher Schlüssel, s. Spec 0068), der Klassifizierer
-/// stuft es auf der Daten-Achse aber rot ein — mit eingeschalteter
-/// Einstellung eskaliert es deshalb über das neue Glied. Hier festgehalten,
-/// weil dieser Fall den bestehenden Spec-0068-Test angepasst hat
-/// (`test_secret_path_read_always_requires_confirm_even_with_allow_rule`).
+/// Issue #687: `cat ~/.ssh/id_rsa.pub` ist kein Secret-Pfad und auf der
+/// Daten-Achse nicht rot (öffentlicher Schlüssel) — mit Allow-Regel und
+/// eingeschalteter Einstellung läuft es automatisch. Der private Schlüssel
+/// fragt weiter, mit dem genaueren Secret-Pfad-Code.
 #[tokio::test]
-async fn test_red_risk_escalates_a_public_key_read_that_is_no_secret_path() {
-    let command = "cat ~/.ssh/id_rsa.pub";
-    assert!(
-        ssh_manager_core::risk::secret_path_read_reason(command).is_none(),
-        "Vorbedingung: kein Secret-Pfad"
-    );
-    let session = red_risk_session(MockSshTransport::default().with_response(command, output("")));
-    let (decision, payload) = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        proposed_decision_code(
-            &session,
-            AiAction::SuggestCommand {
-                command: command.to_string(),
-            },
-        ),
-    )
-    .await
-    .expect("Dialog muss enden");
-    assert!(
-        matches!(&decision, Decision::Confirm { code, .. }
-            if code == "FILTER_RED_RISK_REQUIRES_CONFIRM"),
-        "{payload}"
-    );
+async fn test_public_key_read_is_autoexec_private_key_read_asks() {
+    for (command, expect_confirm) in [
+        ("cat ~/.ssh/id_rsa.pub", false),
+        ("cat ~/.ssh/id_rsa", true),
+    ] {
+        let session =
+            red_risk_session(MockSshTransport::default().with_response(command, output("")));
+        let (decision, payload) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            proposed_decision_code(
+                &session,
+                AiAction::SuggestCommand {
+                    command: command.to_string(),
+                },
+            ),
+        )
+        .await
+        .expect("Dialog muss enden");
+        if expect_confirm {
+            assert!(
+                matches!(&decision, Decision::Confirm { code, .. }
+                    if code == "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM"),
+                "{command}: {payload}"
+            );
+        } else {
+            assert!(
+                matches!(&decision, Decision::AutoExec),
+                "{command}: {payload}"
+            );
+        }
+    }
 }
 
 // --- T17: Messfall Mehrzeilen-Skript ----------------------------------

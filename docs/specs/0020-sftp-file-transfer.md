@@ -235,6 +235,12 @@ Empfänger. Die Ablege-Markierung des Dateibrowsers erscheint nur, solange der
 Zeiger beim Ziehen über ihm ist, und verschwindet beim Verlassen, beim
 Abbruch und beim Ablegen.
 
+Die Zeigerposition gilt auf jeder Plattform und bei jeder Anzeigeskalierung
+für die Fläche, über der der Zeiger tatsächlich steht: Unter macOS liefert das
+Betriebssystem sie bereits in logischen Pixeln, unter Windows und Linux in
+physischen Pixeln; sie wird entsprechend umgerechnet, damit etwa bei
+Retina-Skalierung ein Ablegen über dem Dateibrowser nicht beim Chat landet.
+
 ## 6. Zugesichertes Verhalten (durch automatische Tests belegt)
 
 - Die Abbildung auf `sftp-read`/`sftp-write`, die Pfad-Normalisierung, die
