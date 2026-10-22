@@ -38,6 +38,32 @@ use super::types::RiskLevel;
 /// unberührt.
 const READ_COMMAND_PREFIX: &str = r"^(?:cat|less|head|tail|sftp-read|sftp-write)\b.*";
 
+/// Issue #687: gemeinsame Quelle für „privater SSH-Schlüssel" — genutzt von
+/// den Secret-Pfad-Mustern und den roten Datenrisiko-Mustern, damit beide
+/// Listen nicht auseinanderlaufen. Die `regex`-Crate kennt kein Lookahead;
+/// daher die ausbuchstabierte Alternation "Ende, anderes Zeichen, oder `.`
+/// gefolgt von etwas anderem als genau `pub`" (`.pubx`/`.pub.bak` bleiben
+/// privat, nur exakt `.pub` ist ausgenommen).
+macro_rules! ssh_key_end {
+    () => {
+        r"(?:$|[^a-z0-9_.-]|\.(?:$|[^p]|p(?:$|[^u])|pu(?:$|[^b])|pub[a-z0-9_.-]))"
+    };
+}
+
+/// Jede `id_<name>` (nicht `.pub`).
+macro_rules! ssh_identity_key {
+    () => {
+        concat!(r"\bid_[a-z0-9_-]+", ssh_key_end!())
+    };
+}
+
+/// Jeder `ssh_host_<name>_key` (nicht `.pub`).
+macro_rules! ssh_host_key {
+    () => {
+        concat!(r"\bssh_host_[a-z0-9_]+_key", ssh_key_end!())
+    };
+}
+
 /// Spec 0068, Teil 2: Befehle, die Dateiinhalt in die Ausgabe bringen (und
 /// damit in Chat/KI-Kontext bzw. zum MCP-Client), plus die Datei-Lese-
 /// Aktion als `sftp-read`-Pseudokommando. Bewusst NICHT enthalten: `cp`,
@@ -123,15 +149,12 @@ pub(super) fn secret_path_patterns() -> &'static [(regex::Regex, &'static str)] 
             // "Ende, anderes Zeichen, oder `.` gefolgt von etwas anderem als
             // `pub`").
             (
-                r"\bid_[a-z0-9_-]+(?:$|[^a-z0-9_.-]|\.(?:$|[^p]|p(?:$|[^u])|pu(?:$|[^b])))",
+                ssh_identity_key!(),
                 "Liest einen privaten SSH-Schlüssel (id_*)",
             ),
             // Host-Private-Keys (`/etc/ssh/ssh_host_*_key`, nicht `.pub`) —
             // Review-Fund, `\.key\b` trifft `_key` nicht.
-            (
-                r"\bssh_host_[a-z0-9_]+_key(?:$|[^a-z0-9_.-]|\.(?:$|[^p]|p(?:$|[^u])|pu(?:$|[^b])))",
-                "Liest einen privaten SSH-Host-Schlüssel",
-            ),
+            (ssh_host_key!(), "Liest einen privaten SSH-Host-Schlüssel"),
             (r"\.pem\b", "Liest eine Zertifikat-/Schlüsseldatei (.pem)"),
             (r"\.key\b", "Liest eine Schlüsseldatei (.key)"),
             (
@@ -175,7 +198,10 @@ pub(super) fn secret_path_patterns() -> &'static [(regex::Regex, &'static str)] 
                 r"/etc/kubernetes/[a-z0-9_-]+\.conf",
                 "Liest eine Kubernetes-Admin-Konfiguration",
             ),
-            (r"\bwp-config\.php\b", "Liest WordPress-Zugangsdaten (wp-config.php)"),
+            (
+                r"\bwp-config\.php\b",
+                "Liest WordPress-Zugangsdaten (wp-config.php)",
+            ),
             (
                 r"\.docker/config\.json",
                 "Liest Docker-Registry-Zugangsdaten",
@@ -382,14 +408,17 @@ pub(super) fn data_risk_patterns() -> &'static [(Pattern, RiskLevel, &'static st
         vec![
             // --- Rot: enthält mit hoher Wahrscheinlichkeit Secrets --------
             (
-                Regex(format!("{READ_COMMAND_PREFIX}id_rsa")),
+                Regex(format!(
+                    concat!("{}", ssh_identity_key!()),
+                    READ_COMMAND_PREFIX
+                )),
                 RiskLevel::Red,
-                "Zugriff auf eine SSH-Private-Key-Datei (id_rsa)",
+                "Zugriff auf eine SSH-Private-Key-Datei (id_*)",
             ),
             (
-                Regex(format!("{READ_COMMAND_PREFIX}id_ed25519")),
+                Regex(format!(concat!("{}", ssh_host_key!()), READ_COMMAND_PREFIX)),
                 RiskLevel::Red,
-                "Zugriff auf eine SSH-Private-Key-Datei (id_ed25519)",
+                "Zugriff auf einen SSH-Host-Private-Key (ssh_host_*_key)",
             ),
             (
                 Regex(format!(r"{READ_COMMAND_PREFIX}\.pem\b")),

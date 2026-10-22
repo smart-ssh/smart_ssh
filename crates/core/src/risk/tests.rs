@@ -1633,7 +1633,7 @@ mod mutants_489 {
         assert_eq!(a.data_risk, RiskLevel::Red);
         assert_eq!(
             a.data_risk_reason.as_deref(),
-            Some("Zugriff auf eine SSH-Private-Key-Datei (id_rsa)")
+            Some("Zugriff auf eine SSH-Private-Key-Datei (id_*)")
         );
     }
 
@@ -1949,5 +1949,52 @@ fn compiled_invalid_patterns_never_match() {
     for p in [Pattern::Regex("(".into()), Pattern::Glob("[".into())] {
         assert!(!CompiledPattern::new(&p).matches("("));
         assert!(!p.matches("("));
+    }
+}
+
+// --- Issue #687: SSH-Schlüssel, Datenrisiko == Secret-Pfad -------------
+
+/// Rot aus den SSH-Key-Mustern genau dann, wenn der Secret-Pfad-Check den
+/// Lesebefehl meldet; `.pub` (exakt) ist ausgenommen.
+#[test]
+fn test_ssh_key_data_risk_matches_secret_path_rule() {
+    let cases: [(&str, bool); 22] = [
+        ("~/.ssh/id_rsa", true),
+        ("~/.ssh/id_ed25519", true),
+        ("~/.ssh/id_ecdsa", true),
+        ("~/.ssh/id_deploy", true),
+        ("~/.ssh/id_rsa.bak", true),
+        ("~/.ssh/id_rsa.pubx", true),
+        ("~/.ssh/id_rsa.p", true),
+        ("~/.ssh/id_rsa.pu", true),
+        ("~/.ssh/id_rsa.pub.bak", true),
+        ("/etc/ssh/ssh_host_rsa_key", true),
+        ("/etc/ssh/ssh_host_ed25519_key", true),
+        ("/etc/ssh/ssh_host_rsa_key.bak", true),
+        ("/root/.ssh/ID_RSA", true),
+        ("~/.ssh/id_rsa.pub", false),
+        ("~/.ssh/id_ed25519.pub", false),
+        ("~/.ssh/id_deploy.pub", false),
+        ("/etc/ssh/ssh_host_ed25519_key.pub", false),
+        ("/etc/ssh/ssh_host_rsa_key.pub", false),
+        ("/home/u/.ssh/id_ecdsa.pub", false),
+        ("~/.ssh/known_hosts", false),
+        ("~/.ssh/config", false),
+        ("~/.ssh/authorized_keys", false),
+    ];
+    for command in ["cat", "head", "tail", "less", "sftp-read"] {
+        for (path, red) in cases {
+            let full = format!("{command} {path}");
+            assert_eq!(
+                classify(&full).data_risk == RiskLevel::Red,
+                red,
+                "data risk: {full}"
+            );
+            assert_eq!(
+                secret_path_read_reason(&full).is_some(),
+                red,
+                "secret path: {full}"
+            );
+        }
     }
 }
