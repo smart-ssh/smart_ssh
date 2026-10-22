@@ -91,21 +91,21 @@ export function ChatSessionPickerScreen({
         </p>
       )}
 
-      <Button ref={newConversationRef} variant="primary" onClick={onNewConversation} className="mb-4 w-full">
+      <Button ref={newConversationRef} variant="primary" onClick={onNewConversation} className="mb-4 w-full narrow:min-h-11 narrow:shrink-0">
         {t("chatSessionPicker.newConversation")}
       </Button>
 
       <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
         {t("chatSessionPicker.pastSessions")}
       </p>
-      <ul className="max-h-72 divide-y divide-slate-700 overflow-y-auto rounded border border-slate-700">
+      <ul className="max-h-72 narrow:max-h-none divide-y divide-slate-700 overflow-y-auto rounded border border-slate-700">
         {sessions.map((session) => (
           <li key={session.sessionId} className="flex items-center gap-2 px-3 py-2">
             <button
               type="button"
               onClick={() => onResume(session.sessionId)}
               disabled={busySessionId === session.sessionId}
-              className="min-w-0 flex-1 rounded text-left focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 rounded text-left narrow:min-h-11 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none disabled:opacity-50"
             >
               {renamingId === session.sessionId ? (
                 <input
@@ -141,6 +141,7 @@ export function ChatSessionPickerScreen({
             <Button
               variant="ghost"
               size="sm"
+              className="narrow:min-h-11 narrow:min-w-11"
               onClick={(e) => {
                 e.stopPropagation();
                 startRename(session);
@@ -154,6 +155,7 @@ export function ChatSessionPickerScreen({
             <Button
               variant="ghost"
               size="sm"
+              className="narrow:min-h-11 narrow:min-w-11"
               onClick={(e) => {
                 e.stopPropagation();
                 handleDelete(session.sessionId);

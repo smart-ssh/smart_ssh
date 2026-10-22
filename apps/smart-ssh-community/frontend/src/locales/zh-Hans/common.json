@@ -130,7 +130,8 @@
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
     "hintGroup": "→ 移入此分组",
-    "hintCycle": "分组不能移入其自身的子分组"
+    "hintCycle": "分组不能移入其自身的子分组",
+    "moveTo": "将“{{name}}”移动到…"
   },
   "management": {
     "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。"

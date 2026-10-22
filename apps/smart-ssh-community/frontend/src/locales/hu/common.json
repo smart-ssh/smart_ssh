@@ -130,7 +130,8 @@
     "rootDropZone": "Ejtse ide a legfelső szintre helyezéshez (csoport nélkül)",
     "hintRoot": "→ legfelső szint (csoport nélkül)",
     "hintGroup": "→ áthelyezés ebbe a csoportba",
-    "hintCycle": "A csoport nem helyezhető a saját alcsoportjába"
+    "hintCycle": "A csoport nem helyezhető a saját alcsoportjába",
+    "moveTo": "„{{name}}” áthelyezése ide…"
   },
   "management": {
     "emptyState": "Válasszon ki egy csoportot vagy szervert balra, vagy hozzon létre újat a(z) \"{{addGroup}}\"/\"{{addServer}}\" gombbal."

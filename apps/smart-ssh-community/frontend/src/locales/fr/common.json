@@ -130,7 +130,8 @@
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
     "hintRoot": "→ niveau supérieur (sans groupe)",
     "hintGroup": "→ déplacer dans ce groupe",
-    "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe"
+    "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe",
+    "moveTo": "Déplacer « {{name}} » vers…"
   },
   "management": {
     "emptyState": "Sélectionnez un groupe ou un serveur à gauche, ou créez un élément via « {{addGroup}} »/« {{addServer}} »."

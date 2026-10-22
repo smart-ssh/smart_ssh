@@ -142,7 +142,7 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
         <ExtensionBoundary key={id} id={id} onError={onExtensionError}>
           <section
             data-testid={`first-run-notice-extension-${id}`}
-            className="mt-3 border-t border-slate-700 pt-3 text-slate-300"
+            className="mt-3 min-w-0 max-w-full break-words border-t border-slate-700 pt-3 text-slate-300"
           >
             <Component {...context} />
           </section>

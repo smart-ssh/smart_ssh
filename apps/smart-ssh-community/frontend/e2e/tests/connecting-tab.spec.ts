@@ -1,7 +1,9 @@
 // Issue #548: a connecting tab with live steps opens right away.
 import { expect, test } from "../support/app";
 import { emitProgress, lastAttemptId, snapshotStep } from "../support/connecting";
-import { ACKNOWLEDGED, server } from "../support/data";
+import { ACKNOWLEDGED, failingStepLog, server } from "../support/data";
+import { expectUsable } from "../support/layout";
+import { captureScreen } from "../support/screenshots";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 
 const launchHeld = (app: Parameters<Parameters<typeof test>[2]>[0]["app"]) =>
@@ -150,4 +152,37 @@ test("resuming a saved chat session shows the connecting tab, then the session t
   await expect(page.getByRole("heading", { name: "Connecting to alpha …" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
   await expect(page.getByRole("toolbar").getByRole("button", { name: /^alpha$/ })).toHaveCount(1);
+});
+
+// Issue #582, Spec 0113 §5a: the connecting tab at phone width.
+test("connecting tab at phone width: progress, wrapped step log and Retry/Close visible @phone", async ({ app }) => {
+  await app.launch({
+    settings: { ...ACKNOWLEDGED },
+    servers: [server({ id: "s-1", name: "alpha" })],
+    commands: { connect: { hold: true } },
+  });
+  const page = app.page;
+  const noHScroll = async () =>
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: /^alpha\b/ }).click();
+  await emitProgress(app, [
+    snapshotStep("dnsResolution", "ok", { code: "contacting", target: "a-very-long-hostname.internal.example.test:22" }),
+    snapshotStep("tcpConnect", "running", { code: "contacting", target: "10.0.0.1:22" }),
+  ]);
+  await expect(page.getByTestId("connect-progress-list").getByRole("listitem")).toHaveCount(2);
+  await expectUsable(page.getByRole("button", { name: "Cancel", exact: true }));
+  await noHScroll();
+  await captureScreen(page, "connecting-tab-narrow-progress");
+
+  await app.release("connect", {
+    error: { message: "Authentication failed", code: "SSH_AUTH_FAILED", connect_log: failingStepLog(2) },
+  });
+  await expect(page.getByRole("heading", { name: "Connection to alpha failed" })).toBeVisible();
+  await page.getByTestId("connect-step-log").locator("summary").click();
+  await expect(page.locator("[data-failed='true']")).toBeVisible();
+  await expectUsable(page.getByRole("button", { name: "Retry", exact: true }));
+  await expectUsable(page.getByRole("button", { name: "Close", exact: true }));
+  await noHScroll();
+  await expectNoSeriousA11yViolations(page, "failed connect tab, phone");
+  await captureScreen(page, "connecting-tab-narrow-failed");
 });

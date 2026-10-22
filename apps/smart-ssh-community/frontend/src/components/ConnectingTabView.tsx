@@ -25,8 +25,8 @@ export function ConnectingTabView({ tab, isActiveTab, onRetry, onClose }: Props)
   }, [failed, isActiveTab]);
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8">
-      <h2 className="flex items-center gap-2 text-lg font-semibold">
+    <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8 narrow:px-3 narrow:py-4">
+      <h2 className="flex items-center gap-2 break-words text-lg font-semibold">
         {failed ? (
           <span aria-hidden="true" className="text-red-400">
             ✗
@@ -43,13 +43,13 @@ export function ConnectingTabView({ tab, isActiveTab, onRetry, onClose }: Props)
       )}
       {failed && tab.failure && (
         <div>
-          <p role="alert" className="text-sm text-red-400">
+          <p role="alert" className="break-words text-sm text-red-400">
             {tab.failure.message}
           </p>
           <ConnectStepLog steps={tab.failure.steps} />
         </div>
       )}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 narrow:sticky narrow:bottom-0 narrow:-mx-3 narrow:border-t narrow:border-slate-800 narrow:bg-slate-900 narrow:px-3 narrow:py-2">
         {failed ? (
           <>
             <Button ref={retryRef} variant="primary" onClick={onRetry}>
