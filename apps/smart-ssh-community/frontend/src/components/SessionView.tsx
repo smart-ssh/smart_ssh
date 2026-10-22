@@ -138,6 +138,14 @@ export function SessionView({
   const [narrowTab, setNarrowTab] = useState<NarrowTab>("ai");
   const paneTabsBase = useTabsIdBase();
   const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
   const [filesElevatedUser, setFilesElevatedUser] = useState<string | null>(null);
 
   // Spec 0053, Teil 2: `preferredRightWidth` ist die vom Nutzer gewählte
@@ -411,9 +419,6 @@ export function SessionView({
             </Button>
             {menuOpen && (
               <div
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setMenuOpen(false);
-                }}
                 className="absolute right-2 top-full z-20 flex w-48 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded border border-slate-700 bg-slate-900 p-2 shadow-lg"
               >
                 {showReconnect && reconnectButton}
