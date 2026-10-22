@@ -110,6 +110,8 @@ Fenster an seiner Oberkante bewegen:
 Nach der Entsperrung übernimmt der Header; es gibt dann keinen zweiten
 Streifen.
 
+Im schmalen Layout (Spec 0113) zeigt die Titelleiste statt Marke und Tab-Leiste nur die Burger-Schaltfläche und den aktuellen Titel. Die Fläche um beide bleibt Drag-Region, die Burger-Schaltfläche selbst nicht; die Fenster-Steuerung wird nicht verdeckt. Bei offenem Menü liegt die Drag-Schicht wie bei jedem Dialog darüber.
+
 ## 6. Grenzen
 
 - Der Abstand der macOS-Ampel zum Fensterrand ist ein fest eingestellter

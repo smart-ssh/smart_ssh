@@ -418,6 +418,11 @@
     "overview": "Visão geral",
     "pendingAction": "Aguardando confirmação",
     "closeTab": "Fechar aba \"{{name}}\"",
+    "menu": {
+      "open": "Abrir menu de navegação",
+      "title": "Menu de navegação",
+      "sessions": "Sessões abertas"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Ferramenta externa",

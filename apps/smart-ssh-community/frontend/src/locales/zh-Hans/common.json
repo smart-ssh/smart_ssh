@@ -418,6 +418,11 @@
     "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
+    "menu": {
+      "open": "打开导航菜单",
+      "title": "导航菜单",
+      "sessions": "已打开的会话"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "外部工具",
