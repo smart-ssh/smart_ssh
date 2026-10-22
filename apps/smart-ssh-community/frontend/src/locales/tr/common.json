@@ -130,7 +130,8 @@
     "rootDropZone": "Üst düzeye (grupsuz) taşımak için buraya bırakın",
     "hintRoot": "→ üst düzey (grupsuz)",
     "hintGroup": "→ bu gruba taşı",
-    "hintCycle": "Bir grup kendi alt grubuna taşınamaz"
+    "hintCycle": "Bir grup kendi alt grubuna taşınamaz",
+    "moveTo": "“{{name}}” öğesini taşı…"
   },
   "management": {
     "emptyState": "Solda bir grup veya sunucu seçin ya da \"{{addGroup}}\"/\"{{addServer}}\" ile yeni bir şey oluşturun."
@@ -1098,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",
+    "composerMore": "Diğer giriş eylemleri",
     "newChat": "Yeni sohbet",
     "newChatDisabledHint": "Yapay zeka yanıt verirken veya bir onay açıkken kullanılamaz.",
     "autoContinuing": "Otomatik mod çalışıyor — yapay zeka son sonuca kendi başına yanıt veriyor…",

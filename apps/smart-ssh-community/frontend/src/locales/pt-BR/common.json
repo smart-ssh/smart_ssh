@@ -130,7 +130,8 @@
     "rootDropZone": "Solte aqui para mover ao nível superior (sem grupo)",
     "hintRoot": "→ nível superior (sem grupo)",
     "hintGroup": "→ mover para este grupo",
-    "hintCycle": "Um grupo não pode ser movido para o seu próprio subgrupo"
+    "hintCycle": "Um grupo não pode ser movido para o seu próprio subgrupo",
+    "moveTo": "Mover “{{name}}” para…"
   },
   "management": {
     "emptyState": "Selecione um grupo ou servidor à esquerda, ou crie algo novo com \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -1105,6 +1106,7 @@
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",
+    "composerMore": "Mais ações de entrada",
     "newChat": "Novo chat",
     "newChatDisabledHint": "Indisponível enquanto a IA responde ou uma confirmação está aberta.",
     "autoContinuing": "Modo automático em execução — a IA responde sozinha ao último resultado…",

@@ -130,7 +130,8 @@
     "rootDropZone": "Pusťte sem pro přesun na nejvyšší úroveň (bez skupiny)",
     "hintRoot": "→ nejvyšší úroveň (bez skupiny)",
     "hintGroup": "→ přesunout do této skupiny",
-    "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny"
+    "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny",
+    "moveTo": "Přesunout „{{name}}“ do…"
   },
   "management": {
     "emptyState": "Vyberte vlevo skupinu nebo server, nebo vytvořte něco nového pomocí „{{addGroup}}“/„{{addServer}}“."
@@ -1112,6 +1113,7 @@
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",
+    "composerMore": "Další akce zadávání",
     "newChat": "Nový chat",
     "newChatDisabledHint": "Není dostupné, dokud AI odpovídá nebo je otevřeno potvrzení.",
     "autoContinuing": "Běží automatický režim — AI na poslední výsledek odpovídá sama…",

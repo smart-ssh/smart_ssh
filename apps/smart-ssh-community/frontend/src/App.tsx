@@ -362,7 +362,7 @@ function MainScreen({
       )}
 
       {tab === "connect" ? (
-        <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8">
+        <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8 narrow:px-3 narrow:py-4">
           {hasActiveProvider === false && (
             <p className="rounded border border-amber-800 bg-amber-950 px-4 py-3 text-sm text-amber-200">
               {t("mainScreen.noActiveProvider")}{" "}

@@ -39,7 +39,7 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
       <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-200">
         {t("connectLog.title")}
       </summary>
-      <div className="mt-2 space-y-2 rounded border border-slate-700 bg-slate-900/60 p-2">
+      <div className="mt-2 space-y-2 break-words rounded border border-slate-700 bg-slate-900/60 p-2">
         {groups.map((group) => (
           <div key={group.hopIndex}>
             {multiHop && (
@@ -65,7 +65,7 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                       <span aria-hidden="true">
                         {failed ? "✗" : record.status.state === "ok" ? "✓" : "…"}
                       </span>
-                      <span className="font-medium">{stepLabel(t, record.step)}</span>
+                      <span className="min-w-0 font-medium">{stepLabel(t, record.step)}</span>
                       <span>{stepStatusText(t, record)}</span>
                       <span className="text-slate-400">{formatDuration(record.durationMs)}</span>
                     </div>

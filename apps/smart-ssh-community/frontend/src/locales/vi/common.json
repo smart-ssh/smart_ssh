@@ -130,7 +130,8 @@
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
     "hintRoot": "→ cấp cao nhất (không thuộc nhóm)",
     "hintGroup": "→ chuyển vào nhóm này",
-    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó"
+    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
+    "moveTo": "Di chuyển “{{name}}” tới…"
   },
   "management": {
     "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -1091,6 +1092,7 @@
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",
+    "composerMore": "Thêm thao tác nhập",
     "newChat": "Cuộc trò chuyện mới",
     "newChatDisabledHint": "Không khả dụng khi AI đang phản hồi hoặc có yêu cầu xác nhận đang mở.",
     "autoContinuing": "Chế độ tự động đang chạy — AI tự phản hồi kết quả cuối cùng…",

@@ -130,7 +130,8 @@
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
     "hintRoot": "→ øverste nivå (ingen gruppe)",
     "hintGroup": "→ flytt inn i denne gruppen",
-    "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe"
+    "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe",
+    "moveTo": "Flytt «{{name}}» til…"
   },
   "management": {
     "emptyState": "Velg en gruppe eller server til venstre, eller opprett noe nytt via “{{addGroup}}”/“{{addServer}}”."
@@ -1098,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",
+    "composerMore": "Flere inndatahandlinger",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgjengelig mens AI svarer eller en bekreftelse er åpen.",
     "autoContinuing": "Automatisk modus kjører – AI-en svarer selv på det siste resultatet…",

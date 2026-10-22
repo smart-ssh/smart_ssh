@@ -130,7 +130,8 @@
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
     "hintRoot": "→ hoogste niveau (geen groep)",
     "hintGroup": "→ naar deze groep verplaatsen",
-    "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst"
+    "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst",
+    "moveTo": "“{{name}}” verplaatsen naar…"
   },
   "management": {
     "emptyState": "Selecteer links een groep of server, of maak iets nieuws aan via \"{{addGroup}}\"/\"{{addServer}}\"."
@@ -1098,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",
+    "composerMore": "Meer invoeracties",
     "newChat": "Nieuwe chat",
     "newChatDisabledHint": "Niet beschikbaar terwijl de AI antwoordt of een bevestiging openstaat.",
     "autoContinuing": "Automatische modus actief — de AI reageert zelf op het laatste resultaat…",

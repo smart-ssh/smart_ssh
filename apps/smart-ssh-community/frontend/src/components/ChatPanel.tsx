@@ -1,5 +1,6 @@
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import {
+  type ComponentPropsWithoutRef,
   type FormEvent,
   type KeyboardEvent,
   useEffect,
@@ -59,6 +60,7 @@ import {
   loadVoiceInputEnabled,
   subscribeVoiceInputEnabled,
 } from "../voiceInputSettings";
+import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useStickToBottom } from "../hooks/useStickToBottom";
 import type { VoiceHandlers, VoicePhase } from "../useVoiceInput";
 import { VoiceInputControl } from "./VoiceInputControl";
@@ -66,6 +68,7 @@ import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { LiveCommandOutput } from "./LiveCommandOutput";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
+  type ComposerAction,
   type ComposerAttachment,
   type ComposerContext,
   listComposerActions,
@@ -367,6 +370,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const dropHandlers = useSyncExternalStore(subscribeComposer, listComposerDropHandlers);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [composerError, setComposerError] = useState<string | null>(null);
+  // Spec 0113 §6a: below 640 px the composer actions sit behind a "+" menu.
+  const narrow = useIsNarrow();
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const invokeComposerAction = (action: ComposerAction) => {
+    setComposerError(null);
+    void Promise.resolve(action.onInvoke(composerCtx)).catch((err) =>
+      setComposerError(commandErrorMessage(err)),
+    );
+  };
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const composerCtx = useMemo<ComposerContext>(
     () => ({
@@ -1489,8 +1501,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             windowTokens={contextUsage.windowTokens}
           />
         )}
-        <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3">
-          <span className="self-start py-1.5 font-mono text-sm leading-5 text-indigo-500">&gt;</span>
+        <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3 narrow:[&>textarea]:order-first narrow:[&>textarea]:basis-full">
+          <span className="self-start narrow:hidden py-1.5 font-mono text-sm leading-5 text-indigo-500">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
               Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
               `resize-none` + die Höhen-Effekt oben ergeben das
@@ -1505,26 +1517,55 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className={`max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-slate-400" : "text-slate-100"} placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
+            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-slate-400" : "text-slate-100"} placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
           />
-          {composerActions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              aria-label={action.label}
-              title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
-              disabled={action.disabled}
-              onClick={() => {
-                setComposerError(null);
-                void Promise.resolve(action.onInvoke(composerCtx)).catch((err) =>
-                  setComposerError(commandErrorMessage(err)),
-                );
-              }}
-              className="rounded p-1.5 text-slate-300 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
-            >
-              {action.icon}
-            </button>
-          ))}
+          {narrow ? (
+            composerActions.length > 0 && (
+              <div className="relative">
+                <Button
+                  aria-label={t("chat.composerMore")}
+                  aria-expanded={composerMenuOpen}
+                  onClick={() => setComposerMenuOpen((o) => !o)}
+                  className="min-h-11 min-w-11"
+                >
+                  +
+                </Button>
+                {composerMenuOpen && (
+                  <div className="absolute bottom-full left-0 z-20 mb-1 flex w-56 max-w-[calc(100vw-1.5rem)] flex-col gap-1 rounded border border-slate-700 bg-slate-900 p-2 shadow-lg">
+                    {composerActions.map((action) => (
+                      <Button
+                        key={action.id}
+                        title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
+                        disabled={action.disabled}
+                        onClick={() => {
+                          setComposerMenuOpen(false);
+                          invokeComposerAction(action);
+                        }}
+                        className="min-h-11 w-full justify-start gap-2 text-left"
+                      >
+                        <span aria-hidden="true">{action.icon}</span>
+                        {action.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            composerActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                aria-label={action.label}
+                title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
+                disabled={action.disabled}
+                onClick={() => invokeComposerAction(action)}
+                className="rounded p-1.5 text-slate-300 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+              >
+                {action.icon}
+              </button>
+            ))
+          )}
           {voiceEnabled && (
             <VoiceInputControl
               handlers={voiceHandlers}
@@ -1532,7 +1573,12 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               panelRef={chatAreaRef}
             />
           )}
-          <Button type="submit" variant="primary" disabled={draft.trim().length === 0 || voiceLocked}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="narrow:ml-auto narrow:min-h-11 narrow:min-w-20"
+            disabled={draft.trim().length === 0 || voiceLocked}
+          >
             {t("chat.send")}
           </Button>
         </form>
@@ -1739,7 +1785,7 @@ export function ChatItemView({
   }
   if (item.type === "user") {
     return (
-      <div className="ml-auto max-w-[80%] border border-indigo-500/60 bg-indigo-700 px-3 py-2 text-sm text-indigo-50">
+      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] break-words border border-indigo-500/60 bg-indigo-700 px-3 py-2 text-sm text-indigo-50">
         {item.text}
         {item.attachments && item.attachments.length > 0 && (
           <p className="mt-1 text-xs text-indigo-200/80">
@@ -1853,7 +1899,7 @@ export function ChatItemView({
   }
   if (item.type === "historyAttachments") {
     return (
-      <div className="ml-auto max-w-[80%] border border-indigo-500/40 bg-indigo-800/60 px-3 py-1 text-xs text-indigo-100">
+      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] border border-indigo-500/40 bg-indigo-800/60 px-3 py-1 text-xs text-indigo-100">
         {t("chat.historyAttached", { files: attachmentLine(t, item.items) })}
       </div>
     );
@@ -2133,7 +2179,7 @@ function ConfirmActionForm({
             value={edited}
             onChange={(e) => setEdited(e.target.value)}
             rows={2}
-            className="w-full border border-amber-700/50 bg-slate-950 px-3 py-2 font-mono text-sm text-slate-100"
+            className="w-full border border-amber-700/50 bg-slate-950 px-3 py-2 font-mono text-sm break-all text-slate-100"
           />
         </label>
       )}
@@ -2150,14 +2196,14 @@ function ConfirmActionForm({
         <button
           type="button"
           onClick={handleApprove}
-          className="font-heading bg-emerald-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-emerald-950 hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"
+          className="font-heading bg-emerald-600 px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-emerald-950 hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"
         >
           {t("confirmDialog.execute")}
         </button>
         <Button
           variant="danger"
           size="sm"
-          className="px-4 py-1.5"
+          className="px-4 py-1.5 narrow:min-h-11"
           onClick={() => onRespond(actionId, { decision: "deny" })}
         >
           {t("confirmDialog.deny")}
@@ -2348,8 +2394,8 @@ export function QuickRuleButton({
   };
 
   return (
-    <div className="relative ml-auto inline-flex border border-indigo-600/50">
-      <Button variant="ghost" size="sm" className="rounded-none px-3" onClick={toggleOpen}>
+    <div className="relative ml-auto inline-flex border border-indigo-600/50 narrow:static narrow:ml-0 narrow:w-full">
+      <Button variant="ghost" size="sm" className="rounded-none px-3 narrow:min-h-11 narrow:flex-1" onClick={toggleOpen}>
         {t("confirmDialog.quickRule")}
       </Button>
       <Button
@@ -2359,12 +2405,12 @@ export function QuickRuleButton({
         onClick={toggleOpen}
         aria-label={t("confirmDialog.quickRuleDropdownAria")}
         aria-expanded={open}
-        className="rounded-none border-l border-indigo-600/40 px-2 font-mono"
+        className="rounded-none border-l border-indigo-600/40 px-2 font-mono narrow:min-h-11 narrow:min-w-11"
       >
         ▾
       </Button>
       {open && (
-        <div className="absolute right-0 top-full z-10 mt-1 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg">
+        <div className="absolute right-0 top-full z-10 mt-1 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:top-auto narrow:bottom-0 narrow:mt-0 narrow:max-h-[70vh] narrow:w-auto narrow:overflow-y-auto narrow:p-3">
           <div className="font-heading border-b border-slate-800 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
             {t("confirmDialog.newRulePatternHeading")}
           </div>
@@ -2416,7 +2462,7 @@ export function QuickRuleButton({
                   variant="ghost"
                   size="sm"
                   onClick={() => handlePick(suggestion)}
-                  className="w-full justify-start text-left font-mono break-all text-slate-200"
+                  className="w-full justify-start text-left font-mono break-all text-slate-200 narrow:min-h-11 narrow:h-auto"
                 >
                   {t(`confirmDialog.quickRuleLabel.${suggestion.kind}`, {
                     names: suggestion.names.join(", "),
@@ -2580,6 +2626,16 @@ function TakeIntoNoteButton({
  * Bestätigungsdialog/keine Approve-Deny-Buttons wie bei `type: "action"` —
  * es ist bereits nichts Persistentes passiert, das rückgängig zu machen
  * wäre. */
+/** Spec 0113 §4a: in the narrow layout a code block scrolls sideways inside its own box, so it
+ * must be reachable by keyboard; the wide layout keeps the plain `pre`. */
+function ScrollablePre(props: ComponentPropsWithoutRef<"pre">) {
+  const narrow = useIsNarrow();
+  // A scrollable region must be keyboard-reachable (axe "scrollable-region-focusable").
+  // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+  return <pre {...props} tabIndex={narrow ? 0 : undefined} />;
+}
+const MARKDOWN_COMPONENTS = { pre: ({ node: _node, ...rest }: ComponentPropsWithoutRef<"pre"> & { node?: unknown }) => <ScrollablePre {...rest} /> };
+
 function DocumentCard({
   title,
   contentMarkdown,
@@ -2605,19 +2661,19 @@ function DocumentCard({
 
   return (
     <div className="rounded-lg border border-indigo-700/60 bg-slate-800/80 p-3.5 text-sm shadow-md">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="text-base">📄</span>
-          <span className="font-semibold text-slate-100">{title}</span>
+          <span className="min-w-0 break-words font-semibold text-slate-100">{title}</span>
         </div>
         <span className="rounded bg-indigo-950/80 px-2 py-0.5 text-xs text-indigo-300 border border-indigo-800/50">
           {t("chat.documentGenerated")}
         </span>
       </div>
       <div className="prose prose-sm prose-invert max-w-none rounded bg-slate-950 p-3 prose-pre:bg-slate-900 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{contentMarkdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{contentMarkdown}</ReactMarkdown>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2 narrow:[&_button]:min-h-11">
         <Button
           variant="primary"
           size="sm"
@@ -2716,9 +2772,9 @@ function AssistantMessageView({
   const forceVisible = exporting !== null || savedFormat !== null || noteState !== "idle";
 
   return (
-    <div className="group max-w-[85%] space-y-2 rounded-lg bg-slate-800 p-3 text-sm text-slate-100 shadow-sm">
+    <div className="group max-w-[85%] narrow:max-w-[95%] min-w-0 space-y-2 rounded-lg bg-slate-800 p-3 text-sm text-slate-100 shadow-sm">
       <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-slate-950 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{text}</ReactMarkdown>
       </div>
       {/* Spec 0080, A3, zweiter Punkt: keine Export-/Notiz-Leiste bei
        * leerem Text — anders als die (bewusst verworfene) Mindestlängen-

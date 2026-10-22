@@ -130,7 +130,8 @@
     "rootDropZone": "여기에 놓으면 최상위(그룹 없음)로 이동합니다",
     "hintRoot": "→ 최상위(그룹 없음)",
     "hintGroup": "→ 이 그룹으로 이동",
-    "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다"
+    "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다",
+    "moveTo": "“{{name}}” 이동 위치…"
   },
   "management": {
     "emptyState": "왼쪽에서 그룹이나 서버를 선택하거나 \"{{addGroup}}\"/\"{{addServer}}\"로 새로 만드십시오."
@@ -1091,6 +1092,7 @@
   },
   "chat": {
     "jumpToLatest": "최신 메시지로 이동",
+    "composerMore": "입력 추가 동작",
     "newChat": "새 채팅",
     "newChatDisabledHint": "AI가 응답하는 중이거나 확인 창이 열려 있는 동안에는 사용할 수 없습니다.",
     "autoContinuing": "자동 모드 실행 중 — AI가 마지막 결과에 스스로 응답합니다…",
