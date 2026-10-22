@@ -387,7 +387,8 @@
       "verdictAuto": "será executado automaticamente da próxima vez",
       "verdictAsk": "ainda vai perguntar: {{reasons}}",
       "notice": "Regra criada. Este comando ainda vai perguntar da próxima vez: {{reasons}}",
-      "reasonOther": "outra verificação de segurança"
+      "reasonOther": "outra verificação de segurança",
+      "loadFailed": "Não foi possível carregar a cobertura de regras"
     }
   },
   "hostKeyDialog": {

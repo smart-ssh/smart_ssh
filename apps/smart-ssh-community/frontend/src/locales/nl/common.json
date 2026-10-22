@@ -387,7 +387,8 @@
       "verdictAuto": "wordt de volgende keer automatisch uitgevoerd",
       "verdictAsk": "vraagt nog steeds: {{reasons}}",
       "notice": "Regel aangemaakt. Dit commando vraagt de volgende keer nog steeds: {{reasons}}",
-      "reasonOther": "een andere veiligheidscontrole"
+      "reasonOther": "een andere veiligheidscontrole",
+      "loadFailed": "Regeldekking kon niet worden geladen"
     }
   },
   "hostKeyDialog": {

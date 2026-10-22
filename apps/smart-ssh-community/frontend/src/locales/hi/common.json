@@ -387,7 +387,8 @@
       "verdictAuto": "अगली बार अपने-आप चलेगा",
       "verdictAsk": "फिर भी पूछेगा: {{reasons}}",
       "notice": "नियम बन गया। यह कमांड अगली बार भी पूछेगी: {{reasons}}",
-      "reasonOther": "एक और सुरक्षा जाँच"
+      "reasonOther": "एक और सुरक्षा जाँच",
+      "loadFailed": "नियम कवरेज लोड नहीं हो सका"
     }
   },
   "hostKeyDialog": {
