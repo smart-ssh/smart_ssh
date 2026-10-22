@@ -67,13 +67,21 @@ pub enum SecondOpinionSetup {
     /// bzw. nie gesetzt): bleibt still wie bisher.
     Disabled,
     /// Eingeschaltet und aufgelöst.
-    Ready(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>),
+    Ready(
+        Box<dyn AiProvider>,
+        Arc<ProviderBudgetGuard>,
+        app_logic::ai_usage::AiUsageSource,
+    ),
     /// Eingeschaltet, aber der Provider fehlt/ist gelöscht, seine ID ist
     /// ungültig oder sein Credential ist nicht auflösbar.
     Unavailable,
 }
 
-type ResolvedProvider = Option<(Box<dyn AiProvider>, Arc<ProviderBudgetGuard>)>;
+type ResolvedProvider = Option<(
+    Box<dyn AiProvider>,
+    Arc<ProviderBudgetGuard>,
+    app_logic::ai_usage::AiUsageSource,
+)>;
 
 impl SecondOpinionSetup {
     /// Zerlegt in den bisherigen Provider/Budget-Paarwert und das Flag
@@ -81,7 +89,9 @@ impl SecondOpinionSetup {
     pub fn into_parts(self) -> (ResolvedProvider, bool) {
         match self {
             SecondOpinionSetup::Disabled => (None, false),
-            SecondOpinionSetup::Ready(provider, budget) => (Some((provider, budget)), false),
+            SecondOpinionSetup::Ready(provider, budget, source) => {
+                (Some((provider, budget, source)), false)
+            }
             SecondOpinionSetup::Unavailable => (None, true),
         }
     }
@@ -157,7 +167,12 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
         // Web-Werkzeuge.
         false,
     );
-    SecondOpinionSetup::Ready(provider, budget)
+    let source = app_logic::ai_usage::AiUsageSource {
+        provider_config_id: config.id.0.to_string(),
+        provider_type: config.provider_type,
+        configured_model: config.model.clone(),
+    };
+    SecondOpinionSetup::Ready(provider, budget, source)
 }
 
 /// Spec 0092, T16: die Einstellung darf sich durch einen fehlerhaften Wert in

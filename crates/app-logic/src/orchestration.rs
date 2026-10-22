@@ -66,7 +66,7 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
-mod action_exec;
+pub(crate) mod action_exec;
 mod attachments;
 mod chat_turn;
 mod live_output;
