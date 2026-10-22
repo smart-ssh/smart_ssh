@@ -235,7 +235,8 @@ pub(crate) async fn execute_read_remote_file(
             session
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
-            check_for_injected_instructions(session, session_id, emitter, &content).await;
+            check_for_injected_instructions(session, session_id, emitter, &content, "file_read")
+                .await;
             true
         }
         Err(err) => {

@@ -1328,6 +1328,7 @@ async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
         Uuid::new_v4(),
         &emitter,
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
     assert!(
@@ -1380,6 +1381,7 @@ async fn test_injection_check_no_does_not_change_followup_decision() {
         Uuid::new_v4(),
         &emitter,
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
     assert!(
@@ -1422,6 +1424,7 @@ async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_fla
         Uuid::new_v4(),
         &emitter,
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
 
@@ -1473,7 +1476,14 @@ async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_conten
     let emitter = TestEmitter::default();
 
     let before = tokio::time::Instant::now();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, &huge_content).await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        &huge_content,
+        "command_output",
+    )
+    .await;
     let elapsed = before.elapsed();
 
     assert!(

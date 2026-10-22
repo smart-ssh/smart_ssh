@@ -217,7 +217,14 @@ async fn test_injection_check_provider_error_notifies_and_forces_next_confirmati
     let session = session_with_injection_check(FailingProvider);
     let emitter = TestEmitter::default();
 
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, "file body cat-me").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        "file body cat-me",
+        "command_output",
+    )
+    .await;
 
     let events = emitter.events.lock().unwrap().clone();
     let notice = find(&events, "chat-error").expect("a session notice must be shown");
@@ -269,7 +276,14 @@ async fn test_injection_check_provider_error_notifies_and_forces_next_confirmati
 async fn test_injection_check_without_verdict_counts_as_unavailable() {
     let session = session_with_injection_check(TextProvider("hmm"));
     let emitter = TestEmitter::default();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, "content").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        "content",
+        "command_output",
+    )
+    .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_some());
     assert!(session
         .injection_check_unavailable
@@ -283,7 +297,14 @@ async fn test_failed_injection_check_never_clears_earlier_suspicion() {
     session
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    check_for_injected_instructions(&session, Uuid::new_v4(), &TestEmitter::default(), "x").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        "x",
+        "command_output",
+    )
+    .await;
     assert!(session
         .injection_suspected
         .load(std::sync::atomic::Ordering::SeqCst));
@@ -294,7 +315,14 @@ async fn test_failed_injection_check_never_clears_earlier_suspicion() {
 async fn test_successful_injection_check_has_no_notice() {
     let session = session_with_injection_check(TextProvider("VERDICT: no\nfine"));
     let emitter = TestEmitter::default();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, "content").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        "content",
+        "command_output",
+    )
+    .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_none());
     assert!(!session
         .injection_check_unavailable
@@ -305,7 +333,14 @@ async fn test_successful_injection_check_has_no_notice() {
 #[tokio::test]
 async fn test_unavailable_flag_survives_a_denied_action() {
     let session = session_with_injection_check(FailingProvider);
-    check_for_injected_instructions(&session, Uuid::new_v4(), &TestEmitter::default(), "x").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        "x",
+        "command_output",
+    )
+    .await;
     let (decision, _) = proposed_decision_code(
         &session,
         AiAction::SuggestCommand {
@@ -360,4 +395,96 @@ async fn test_no_setup_failure_means_no_notice() {
     let emitter = TestEmitter::default();
     announce_second_opinion_setup_failure(&session, Uuid::new_v4(), &emitter);
     assert!(emitter.events.lock().unwrap().is_empty());
+}
+
+// --- Issue #688: injection check log lines ---------------------------------
+
+/// Start and end line per verdict, with source and `content_len`; no
+/// content, no reason text at info.
+#[tokio::test]
+async fn test_issue_688_injection_check_logs_start_and_verdict() {
+    const REASON: &str = "reasonmarker688";
+    const CONTENT: &str = "contentmarker688";
+    let reason_suspected = format!("ja - {REASON}");
+    let reason_clean = format!("VERDICT: no\n{REASON}");
+    let reason_suspected: &'static str = Box::leak(reason_suspected.into_boxed_str());
+    let reason_clean: &'static str = Box::leak(reason_clean.into_boxed_str());
+    type Make = Box<dyn Fn() -> Box<dyn AiProvider>>;
+    let cases: Vec<(&str, &str, Make)> = vec![
+        (
+            "suspected",
+            "command_output",
+            Box::new(move || Box::new(TextProvider(reason_suspected))),
+        ),
+        (
+            "clean",
+            "file_read",
+            Box::new(move || Box::new(TextProvider(reason_clean))),
+        ),
+        (
+            "no_verdict",
+            "web_research",
+            Box::new(|| Box::new(TextProvider("hmm"))),
+        ),
+        (
+            "provider_error",
+            "command_output",
+            Box::new(|| Box::new(FailingProvider)),
+        ),
+    ];
+    for (verdict, source, make) in cases {
+        let mut session =
+            test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+        session.set_injection_check_provider_for_tests(Some(make()));
+        log_capture::start_recording();
+        check_for_injected_instructions(
+            &session,
+            Uuid::new_v4(),
+            &TestEmitter::default(),
+            CONTENT,
+            source,
+        )
+        .await;
+        let lines = log_capture::recorded_lines_at_info_or_above();
+        let parse = |msg: &str| -> Vec<serde_json::Value> {
+            lines
+                .iter()
+                .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+                .filter(|v| v["fields"]["message"] == msg)
+                .collect()
+        };
+        let started = parse("injection check started");
+        let finished = parse("injection check finished");
+        assert_eq!(started.len(), 1, "{verdict}: {lines:?}");
+        assert_eq!(finished.len(), 1, "{verdict}: {lines:?}");
+        assert_eq!(started[0]["fields"]["source"], source);
+        assert_eq!(started[0]["fields"]["content_len"], CONTENT.len() as u64);
+        assert_eq!(finished[0]["fields"]["source"], source);
+        assert_eq!(finished[0]["fields"]["content_len"], CONTENT.len() as u64);
+        assert_eq!(finished[0]["fields"]["verdict"], verdict);
+        assert!(finished[0]["fields"]["duration_ms"].is_u64());
+        for l in &lines {
+            assert!(
+                !l.contains(CONTENT) && !l.contains(REASON) && !l.contains(SECRET_FRAGMENT),
+                "no content or reason at info: {l}"
+            );
+        }
+    }
+}
+
+/// No provider configured: the check does not run, so nothing is logged.
+#[tokio::test]
+async fn test_issue_688_no_provider_logs_no_injection_check_lines() {
+    let session =
+        test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
+    log_capture::start_recording();
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        "x",
+        "file_read",
+    )
+    .await;
+    assert!(!log_capture::recorded_text().contains("injection check"));
 }

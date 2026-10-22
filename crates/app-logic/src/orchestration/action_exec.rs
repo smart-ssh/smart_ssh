@@ -72,6 +72,10 @@ mod tests_not_assessable;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_escalation_log;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_live_output;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
@@ -154,6 +158,7 @@ pub(crate) async fn handle_action_proposed(
     let evaluation = evaluate_action(session, &action, profile_store).await;
     let matched_rule = evaluation.matched_rule.clone();
     let matched_rule_origin = evaluation.matched_rule_origin;
+    let engine_decision = evaluation.decision.clone();
     let mut decision = evaluation.decision;
 
     // Vorgezogen (war vorher erst nach der Eskalationskette berechnet, s.
@@ -391,6 +396,12 @@ pub(crate) async fn handle_action_proposed(
             code: "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM".to_string(),
         };
     }
+
+    // Issue #688: one default-level line when the chain above turned the
+    // engine's `AutoExec` into something stricter. Logging only; the
+    // decision is not touched. Compared once after the chain so a new step
+    // cannot forget it; the code is that of the step that set the decision.
+    log_filter_escalation(session_id, &action, &engine_decision, &decision);
 
     // Spec 0088, A1.2/A1.4: Die Registrierung liegt weiterhin VOR den
     // `await`s für Vorschau und Zweitmeinung (s. Kommentar weiter unten:
@@ -920,6 +931,55 @@ fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
         | AiAction::GenerateDocument { .. }
         | AiAction::AskUser { .. } => None,
     }
+}
+
+/// Issue #688 / Spec 0094: name of a decision's kind, for log lines.
+fn decision_kind(decision: &Decision) -> &'static str {
+    match decision {
+        Decision::AutoExec => "AutoExec",
+        Decision::Confirm { .. } => "Confirm",
+        Decision::Deny { .. } => "Deny",
+    }
+}
+
+/// Issue #688: logs `filter decision escalated` when the post-engine chain
+/// changed the engine decision. Only kinds, the escalation code, the action
+/// kind, the session id and the byte length — no command, path or reason.
+fn log_filter_escalation(
+    session_id: SessionId,
+    action: &AiAction,
+    engine_decision: &Decision,
+    final_decision: &Decision,
+) {
+    if matches!(engine_decision, Decision::AutoExec) && matches!(final_decision, Decision::AutoExec)
+    {
+        return;
+    }
+    // The chain only ever turns `AutoExec` into `Confirm`.
+    if !matches!(engine_decision, Decision::AutoExec) {
+        return;
+    }
+    let code = match final_decision {
+        Decision::Confirm { code, .. } | Decision::Deny { code, .. } => code.as_str(),
+        Decision::AutoExec => return,
+    };
+    let action_kind = match action {
+        AiAction::SuggestCommand { .. } => "command",
+        AiAction::ReadRemoteFile { .. } => "file_read",
+        AiAction::WriteRemoteFile { .. } => "file_write",
+        AiAction::ProposeNoteUpdate { .. } => "note_update",
+        AiAction::GenerateDocument { .. } => "document",
+        AiAction::AskUser { .. } => "ask_user",
+    };
+    tracing::info!(
+        session_id = %session_id,
+        engine_decision = decision_kind(engine_decision),
+        final_decision = decision_kind(final_decision),
+        code,
+        action_kind,
+        command_len = pseudo_command_for_risk_classification(action).map_or(0, |c| c.len()),
+        "filter decision escalated",
+    );
 }
 
 /// `Confirm`-Entscheidung für einen Treffer der Secret-Pfad- bzw.
@@ -1947,7 +2007,14 @@ async fn execute_suggested_command(
             session
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
-            check_for_injected_instructions(session, session_id, emitter, &combined_output).await;
+            check_for_injected_instructions(
+                session,
+                session_id,
+                emitter,
+                &combined_output,
+                "command_output",
+            )
+            .await;
             true
         }
         Err(err) => {
@@ -2124,6 +2191,7 @@ pub(crate) async fn check_for_injected_instructions(
     session_id: SessionId,
     emitter: &dyn EventEmitter,
     content: &str,
+    source: &'static str,
 ) {
     let Some(provider) = session.injection_check_provider.as_deref() else {
         return;
@@ -2147,7 +2215,37 @@ pub(crate) async fn check_for_injected_instructions(
         )
         .await;
     }
-    match crate::second_opinion::fetch_injection_check(provider, content).await {
+    tracing::info!(
+        session_id = %session_id,
+        source,
+        content_len = content.len(),
+        "injection check started",
+    );
+    let started = std::time::Instant::now();
+    let outcome = crate::second_opinion::fetch_injection_check(provider, content).await;
+    let verdict = match &outcome {
+        crate::second_opinion::SideCallOutcome::Verdict(true, _) => "suspected",
+        crate::second_opinion::SideCallOutcome::Verdict(false, _) => "clean",
+        crate::second_opinion::SideCallOutcome::NoVerdict => "no_verdict",
+        crate::second_opinion::SideCallOutcome::ProviderError { .. } => "provider_error",
+    };
+    tracing::info!(
+        session_id = %session_id,
+        source,
+        content_len = content.len(),
+        verdict,
+        duration_ms = started.elapsed().as_millis() as u64,
+        "injection check finished",
+    );
+    if let crate::second_opinion::SideCallOutcome::Verdict(_, reason) = &outcome {
+        // Spec 0094 A2: reason text only at debug, through the log redactor.
+        tracing::debug!(
+            session_id = %session_id,
+            reason = %ssh_manager_core::ai::default_log_redactor().redact_text(reason),
+            "injection check reason",
+        );
+    }
+    match outcome {
         crate::second_opinion::SideCallOutcome::Verdict(true, _reason) => {
             session
                 .injection_suspected
