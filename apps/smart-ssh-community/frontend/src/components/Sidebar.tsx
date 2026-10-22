@@ -11,6 +11,8 @@ import {
 } from "../treeDrag";
 import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { useTreeDrag } from "../useTreeDrag";
+import { useIsNarrow } from "../hooks/useIsNarrow";
+import { MoveToDialog } from "./MoveToDialog";
 import { useManageViews } from "../extensions/FormSlots";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../unusableServer";
@@ -88,9 +90,26 @@ export function Sidebar({
   const manageViews = useManageViews();
   const tree = buildGroupTree(groups, servers, unusableServers);
   const localServer = servers.find((s) => s.isLocal);
-  const { drag, handlersFor } = useTreeDrag((item, target) => {
-    if (classifyDrop(item, target, groups, servers) !== "noop") onMove(item, target);
-  });
+  const narrow = useIsNarrow();
+  // Issue #585: row whose "Move to…" dialog is open (narrow layout).
+  const [moveItem, setMoveItem] = useState<DragItem | null>(null);
+  const { drag, handlersFor } = useTreeDrag(
+    (item, target) => {
+      if (classifyDrop(item, target, groups, servers) !== "noop") onMove(item, target);
+    },
+    { touchDrag: !narrow },
+  );
+  const moreButton = (item: DragItem) => (
+    <Button
+      variant="ghost"
+      onClick={() => setMoveItem(item)}
+      title={t("treeDrag.moveTo", { name: item.label })}
+      aria-label={t("treeDrag.moveTo", { name: item.label })}
+      className="mr-1 min-h-11 min-w-11 shrink-0"
+    >
+      ⋯
+    </Button>
+  );
   const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
   const highlightFor = (target: DropTarget) =>
     drag?.target &&
@@ -117,14 +136,14 @@ export function Sidebar({
 
   const onTreeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.getAttribute("role") !== "treeitem") return;
+    if (!target.hasAttribute("data-tree-key")) return;
     if (event.key === " " || event.key === "Enter") {
       event.preventDefault();
       target.click();
       return;
     }
     const rows = Array.from(
-      treeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [],
+      treeRef.current?.querySelectorAll<HTMLElement>("[data-tree-key]") ?? [],
     );
     const index = rows.indexOf(target);
     let next: number;
@@ -137,12 +156,16 @@ export function Sidebar({
     rows[next]?.focus();
   };
 
+  const rowRole = narrow ? "button" : "treeitem";
   const tabIndexFor = (key: string) => (key === tabStopKey ? 0 : -1);
 
   /** Gemeinsame Attribute einer Baumzeile (Tree-Semantik + Roving tabindex). */
   const rowProps = (key: string, depth: number, selected: boolean) => ({
-    "aria-level": depth + 1,
-    "aria-selected": selected,
+    // Narrow rows sit next to a "⋯" button, which a tree does not allow; the
+    // narrow list is a plain list of buttons instead (issue #585).
+    ...(narrow
+      ? { "aria-current": selected ? ("true" as const) : undefined }
+      : { "aria-level": depth + 1, "aria-selected": selected }),
     "data-tree-key": key,
     onFocus: () => setFocusedKey(key),
   });
@@ -157,8 +180,9 @@ export function Sidebar({
       data-drop-target={groupDropTargetValue(node.group.id)}
       className={`rounded ${highlightFor({ kind: "group", id: node.group.id })}`}
     >
+      <div role={narrow ? "listitem" : "none"} className="flex items-center">
       <div
-        role="treeitem"
+        role={rowRole}
       onKeyDown={onTreeKeyDown}
       tabIndex={tabIndexFor(`group:${node.group.id}`)}
       {...rowProps(`group:${node.group.id}`, depth, isSelected("group", node.group.id))}
@@ -166,11 +190,13 @@ export function Sidebar({
         onClick={() => onSelect({ kind: "group", id: node.group.id })}
         title={node.group.name}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
           isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
         }`}
       >
         📁 {node.group.name}
+      </div>
+      {narrow && moreButton({ kind: "group", id: node.group.id, label: node.group.name })}
       </div>
       {node.children.map((child) => renderNode(child, depth + 1))}
       {node.servers.map((s) => renderServer(s, depth + 1))}
@@ -179,9 +205,9 @@ export function Sidebar({
   );
 
   const renderServer = (server: ServerDto, depth: number) => (
+    <div key={server.id} role={narrow ? "listitem" : "none"} className="flex items-center">
     <div
-      key={server.id}
-      role="treeitem"
+      role={rowRole}
       onKeyDown={onTreeKeyDown}
       tabIndex={tabIndexFor(`server:${server.id}`)}
       {...rowProps(`server:${server.id}`, depth, isSelected("server", server.id))}
@@ -192,20 +218,22 @@ export function Sidebar({
       onClick={() => onSelect({ kind: "server", id: server.id })}
       title={server.name}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
         isSelected("server", server.id) ? "bg-slate-800 text-white" : "text-slate-300"
       }`}
     >
       🖥️ {server.name}
+    </div>
+    {narrow && !server.isLocal && moreButton({ kind: "server", id: server.id, label: server.name })}
     </div>
   );
 
   /** Issue #100: auswählbar, damit das Löschen erreichbar ist — aber kein
    * Ziehen und kein Bearbeiten-Formular. */
   const renderUnusableServer = (server: UnusableServerDto, depth: number) => (
+    <div key={server.id} role={narrow ? "listitem" : "none"}>
     <div
-      key={server.id}
-      role="treeitem"
+      role={rowRole}
       onKeyDown={onTreeKeyDown}
       tabIndex={tabIndexFor(`unusableServer:${server.id}`)}
       {...rowProps(`unusableServer:${server.id}`, depth, isSelected("unusableServer", server.id))}
@@ -220,10 +248,11 @@ export function Sidebar({
       <span aria-hidden="true">⚠️</span> {server.name}{" "}
       <span className="text-xs not-italic text-slate-400">({t("unusableServer.badge")})</span>
     </div>
+    </div>
   );
 
   return (
-    <div className="flex w-64 shrink-0 flex-col border-r border-slate-800">
+    <div className="flex w-64 shrink-0 flex-col border-r border-slate-800 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
       <div className="flex gap-1 border-b border-slate-800 p-2">
         <Button size="sm"
           onClick={() => onSelect({ kind: "newGroup", parentId: currentFolder })}
@@ -264,7 +293,7 @@ export function Sidebar({
         {keys.length > 0 && (
           <div
             ref={treeRef}
-            role="tree"
+            role={narrow ? "list" : "tree"}
             className="flex flex-col"
           >
         {localServer && (
@@ -282,9 +311,9 @@ export function Sidebar({
                   const selected = selection?.kind === "extensionView" && selection.id === view.id;
                   const label = i18n.exists(view.label) ? t(view.label) : view.label;
                   return (
+                    <div key={view.id} role={narrow ? "listitem" : "none"}>
                     <div
-                      key={view.id}
-                      role="treeitem"
+                      role={rowRole}
                       onKeyDown={onTreeKeyDown}
                       tabIndex={tabIndexFor(key)}
                       {...rowProps(key, 0, selected)}
@@ -292,12 +321,13 @@ export function Sidebar({
                       onClick={() => onSelect({ kind: "extensionView", id: view.id })}
                       title={label}
                       style={{ paddingLeft: "8px" }}
-                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
                         selected ? "bg-slate-800 text-white" : "text-slate-300"
                       }`}
                     >
                       {view.icon && <span aria-hidden="true">{view.icon} </span>}
                       {label}
+                    </div>
                     </div>
                   );
                 })}
@@ -319,6 +349,15 @@ export function Sidebar({
          * Wurzel-Ziel greift. */}
         <div className="min-h-4 flex-1" />
       </div>
+      {moveItem && (
+        <MoveToDialog
+          item={moveItem}
+          groups={groups}
+          servers={servers}
+          onMove={onMove}
+          onClose={() => setMoveItem(null)}
+        />
+      )}
       {drag && <TreeDragGhost drag={drag} kind={dropKind} />}
     </div>
   );

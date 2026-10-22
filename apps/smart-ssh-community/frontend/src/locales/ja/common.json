@@ -134,7 +134,8 @@
     "moveTo": "「{{name}}」の移動先…"
   },
   "management": {
-    "emptyState": "左側でグループまたはサーバーを選択するか、「{{addGroup}}」／「{{addServer}}」から新規作成してください。"
+    "emptyState": "左側でグループまたはサーバーを選択するか、「{{addGroup}}」／「{{addServer}}」から新規作成してください。",
+    "back": "戻る"
   },
   "groupForm": {
     "titleNew": "新しいグループ",

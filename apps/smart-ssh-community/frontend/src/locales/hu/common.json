@@ -134,7 +134,8 @@
     "moveTo": "„{{name}}” áthelyezése ide…"
   },
   "management": {
-    "emptyState": "Válasszon ki egy csoportot vagy szervert balra, vagy hozzon létre újat a(z) \"{{addGroup}}\"/\"{{addServer}}\" gombbal."
+    "emptyState": "Válasszon ki egy csoportot vagy szervert balra, vagy hozzon létre újat a(z) \"{{addGroup}}\"/\"{{addServer}}\" gombbal.",
+    "back": "Vissza"
   },
   "groupForm": {
     "titleNew": "Új csoport",

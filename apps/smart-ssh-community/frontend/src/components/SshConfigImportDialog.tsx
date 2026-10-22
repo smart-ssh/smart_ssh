@@ -328,7 +328,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                           </div>
                         )}
 
-                        <dl className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5 pl-6 text-xs">
+                        <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] break-words gap-x-2 gap-y-0.5 pl-6 text-xs">
                           <dt className="text-slate-400">{t("sshConfigImport.field.host")}</dt>
                           <dd>
                             {e.host.value}{" "}

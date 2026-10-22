@@ -134,7 +134,8 @@
     "moveTo": "“{{name}}” öğesini taşı…"
   },
   "management": {
-    "emptyState": "Solda bir grup veya sunucu seçin ya da \"{{addGroup}}\"/\"{{addServer}}\" ile yeni bir şey oluşturun."
+    "emptyState": "Solda bir grup veya sunucu seçin ya da \"{{addGroup}}\"/\"{{addServer}}\" ile yeni bir şey oluşturun.",
+    "back": "Geri"
   },
   "groupForm": {
     "titleNew": "Yeni grup",

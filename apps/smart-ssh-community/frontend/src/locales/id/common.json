@@ -134,7 +134,8 @@
     "moveTo": "Pindahkan “{{name}}” ke…"
   },
   "management": {
-    "emptyState": "Pilih grup atau server di sebelah kiri, atau buat yang baru melalui \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Pilih grup atau server di sebelah kiri, atau buat yang baru melalui \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Kembali"
   },
   "groupForm": {
     "titleNew": "Grup Baru",

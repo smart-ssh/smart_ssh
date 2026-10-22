@@ -183,6 +183,7 @@ export function GroupForm({
         <Button variant="primary"
           type="submit"
           disabled={saving}
+          className="narrow:min-h-11 narrow:w-full"
         >
           {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
         </Button>
