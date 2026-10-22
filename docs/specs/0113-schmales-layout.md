@@ -34,6 +34,13 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 - Eine MCP-Sitzung zeigt nur den Chat, ohne Reiter.
 - Der Kopf der Sitzung bleibt kompakt: Servername und Status bleiben sichtbar, „Neu verbinden“ und „Trennen“ liegen hinter einer Schaltfläche „⋯“.
 
+## 4a. Chat
+
+- Nachrichten nutzen fast die ganze Breite. Code-Blöcke scrollen innen seitlich (per Tastatur erreichbar), nie die Seite.
+- Das Eingabefeld steht unten und füllt die Breite. Darunter liegt eine kompakte Zeile mit Sprachaufnahme und Senden; die Aktionen von Erweiterungen liegen hinter einer Schaltfläche „+“ (je eine Berührung mehr, gleiche Aktionen, gleiche Reihenfolge).
+- Die Bestätigungskarte für Kommandos zeigt den vollständigen Befehl umgebrochen, nie gekürzt; Ausführen und Ablehnen sind mindestens 44 px hoch. „Akzeptieren + Regel“ öffnet die Regelvorschläge als Fläche am unteren Fensterrand über die volle Breite.
+- Rückfrage-, Web-, Ausgabe-, Notiz-Diff- und Dokumentkarten samt Aktionszeile passen in die Breite. Die Anzeige „Automatik läuft“ und ihre Stopp-Schaltfläche bleiben sichtbar.
+
 ## 5. Dialoge und Zwei-Spalten-Ansichten
 
 - Dialoge füllen das ganze Fenster; Titel und Aktionsleiste bleiben sichtbar, nur der Inhalt dazwischen scrollt. Aktionen brechen um, sodass jede Schaltfläche ganz sichtbar bleibt.
