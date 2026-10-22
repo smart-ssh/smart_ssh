@@ -12,7 +12,9 @@ use russh_sftp::client::SftpSession as RusshSftpClient;
 use russh_sftp::protocol::{FileAttributes, OpenFlags, StatusCode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
+use ssh_manager_core::ssh::{
+    ChunkControl, ChunkSource, RemoteEntry, SftpSession, SshError, TransferEnd,
+};
 
 use crate::handler::ClientHandler;
 
@@ -282,6 +284,67 @@ impl SftpSession for RusshSftpSession {
             .await
             .map_err(|e| self.map_write_error(path, e))?;
         Ok(())
+    }
+
+    async fn read_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
+    ) -> Result<TransferEnd, SshError> {
+        let mut file = self
+            .inner
+            .open(path)
+            .await
+            .map_err(|e| self.map_error(path, e))?;
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        loop {
+            let n = file.read(&mut buf).await.map_err(|e| {
+                let message = format!("SFTP-Lesefehler bei '{path}': {e}");
+                if is_channel_gone_io(&e) && self.session.is_closed() {
+                    SshError::SessionClosed(message)
+                } else {
+                    SshError::ChannelError(message)
+                }
+            })?;
+            if n == 0 {
+                return Ok(TransferEnd::Completed);
+            }
+            if on_chunk(&buf[..n]) == ChunkControl::Stop {
+                return Ok(TransferEnd::Stopped);
+            }
+        }
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
+    ) -> Result<TransferEnd, SshError> {
+        // `create()` (CREATE|TRUNCATE|WRITE) wie in `write_file`.
+        let mut file = self
+            .inner
+            .create(path)
+            .await
+            .map_err(|e| self.map_error(path, e))?;
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        let end = loop {
+            match next_chunk(&mut buf) {
+                ChunkSource::Data(n) => file
+                    .write_all(&buf[..n])
+                    .await
+                    .map_err(|e| self.map_write_error(path, e))?,
+                ChunkSource::Eof => break TransferEnd::Completed,
+                ChunkSource::Stop => break TransferEnd::Stopped,
+            }
+        };
+        // Wie in `write_file`: erst `shutdown()` wartet auf die ausstehenden
+        // Bestätigungen.
+        file.shutdown()
+            .await
+            .map_err(|e| self.map_write_error(path, e))?;
+        Ok(end)
     }
 
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {

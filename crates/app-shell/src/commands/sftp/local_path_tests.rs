@@ -107,7 +107,9 @@ impl Setup {
             .lock()
             .unwrap()
             .iter()
-            .filter(|(name, _)| name.starts_with("sftp-transfer-"))
+            .filter(|(name, _)| {
+                name.starts_with("sftp-transfer-") && name != "sftp-transfer-progress"
+            })
             .count()
     }
 

@@ -273,7 +273,8 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     sftp_local_paths_are_folders: (args) =>
       (args.localPaths as string[]).map(() => false),
     clipboard_has_files: () => false,
-    sftp_elevation_disable: () => null,
+    sftp_elevation_disable: () => ({ disabled: true, runningOperations: [] }),
+    sftp_cancel_transfer: () => true,
     sftp_elevation_status: () => null,
     // Approve/deny of a pending action; the result event is up to the test.
     respond_to_action: () => null,

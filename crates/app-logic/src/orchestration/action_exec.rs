@@ -483,8 +483,18 @@ pub(crate) async fn handle_action_proposed(
                 )
                 .await;
             }
-            let second_opinion =
-                crate::second_opinion::fetch_second_opinion(provider, &pseudo_command).await;
+            let mut request_usage = None;
+            let second_opinion = crate::second_opinion::fetch_second_opinion_with_usage(
+                provider,
+                &pseudo_command,
+                &mut request_usage,
+            )
+            .await;
+            if let Some(usage) = request_usage {
+                session
+                    .report_ai_usage(crate::ai_usage::AiUsagePurpose::RiskSecondOpinion, usage)
+                    .await;
+            }
             // Issue #102: "konnte nicht geprüft werden" (Provider-Fehler
             // ODER kein erkennbares Urteil) ist vom Ergebnis "geprüft,
             // unauffällig" unterscheidbar. Die Stufe bleibt die
@@ -2147,7 +2157,19 @@ pub(crate) async fn check_for_injected_instructions(
         )
         .await;
     }
-    match crate::second_opinion::fetch_injection_check(provider, content).await {
+    let mut request_usage = None;
+    let check = crate::second_opinion::fetch_injection_check_with_usage(
+        provider,
+        content,
+        &mut request_usage,
+    )
+    .await;
+    if let Some(usage) = request_usage {
+        session
+            .report_ai_usage(crate::ai_usage::AiUsagePurpose::InjectionCheck, usage)
+            .await;
+    }
+    match check {
         crate::second_opinion::SideCallOutcome::Verdict(true, _reason) => {
             session
                 .injection_suspected

@@ -34,6 +34,7 @@ import type {
   NoteUpdateSuggestedEvent,
   RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
+  SftpTransferProgressEvent,
   SftpTransferStartedEvent,
   StartupPromptRequest,
   TerminalOutputEvent,
@@ -259,6 +260,11 @@ export const onSftpTransferStarted = (
   handler: (event: SftpTransferStartedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<SftpTransferStartedEvent>("sftp-transfer-started", (e) => handler(e.payload));
+
+export const onSftpTransferProgress = (
+  handler: (event: SftpTransferProgressEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<SftpTransferProgressEvent>("sftp-transfer-progress", (e) => handler(e.payload));
 
 export const onSftpTransferFinished = (
   handler: (event: SftpTransferFinishedEvent) => void,

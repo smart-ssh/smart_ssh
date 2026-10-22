@@ -1068,6 +1068,27 @@ export interface ElevationResultDto {
   } | null;
   /** Hinweis bei aktivem Kanal: sftp-server ist nicht sicher geschützt. */
   warning?: { kind: "sftpServerUnsafe"; path: string } | null;
+  /** Issue #622: elevated operations still running when the target user is
+   * changed without confirmation (then `active` stays true, nothing changed). */
+  runningOperations?: RunningOperationDto[];
+}
+
+/** Issue #622: one running elevated operation, listed in the confirmation
+ * dialog before elevated rights end. */
+export interface RunningOperationDto {
+  id: string;
+  kind: "download" | "upload" | "delete" | "chmod";
+  path: string;
+  bytesDone: number | null;
+  bytesTotal: number | null;
+  filesDone: number | null;
+  filesTotal: number | null;
+}
+
+/** Issue #622: result of `sftp_elevation_disable`. */
+export interface ElevationDisableDto {
+  disabled: boolean;
+  runningOperations: RunningOperationDto[];
 }
 
 /** Spec 0067, Teil B: `crate::dto::DownloadResultDto`. */
@@ -1151,6 +1172,27 @@ export interface SftpTransferFinishedEvent {
   transferId: string;
   /** `null` bei Erfolg, sonst die Fehlermeldung. */
   error: string | null;
+  /** Issue #622: stopped by the cancel button or by ending elevated rights
+   * (no error). */
+  stopped?: "cancelled" | "stopped" | null;
+  /** Issue #622: a stopped upload whose partial remote file could not be
+   * removed. */
+  incompleteRemotePath?: string | null;
+}
+
+/** Issue #622: throttled progress of a running transfer. */
+export interface SftpTransferProgressEvent {
+  sessionId: string;
+  transferId: string;
+  bytesDone: number;
+  totalBytes: number | null;
+  /** Folder transfers: aggregate over all files. */
+  folder?: {
+    filesDone: number;
+    filesTotal: number;
+    bytesDone: number;
+    bytesTotal: number;
+  };
 }
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------

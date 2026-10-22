@@ -26,7 +26,7 @@ use secrecy::SecretString;
 
 use super::auth::{KeyFileContent, KeyFileError, KeyFileFacts, KeyFileReader};
 use super::error::SshError;
-use super::transport::SftpSession;
+use super::transport::{ChunkControl, ChunkSource, SftpSession, TransferEnd};
 use super::types::RemoteEntry;
 
 #[derive(Debug, Clone)]
@@ -186,6 +186,64 @@ impl SftpSession for MockSftpSession {
             },
         );
         Ok(())
+    }
+
+    async fn read_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
+    ) -> Result<TransferEnd, SshError> {
+        let content = {
+            let mut inner = self.inner.lock().unwrap();
+            inner.calls.push(format!("read_file_chunked {path}"));
+            inner
+                .files
+                .get(path)
+                .map(|f| f.content.clone())
+                .ok_or_else(|| Self::not_found(path))?
+        };
+        for chunk in content.chunks(chunk_size.max(1)) {
+            if on_chunk(chunk) == ChunkControl::Stop {
+                return Ok(TransferEnd::Stopped);
+            }
+        }
+        Ok(TransferEnd::Completed)
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
+    ) -> Result<TransferEnd, SshError> {
+        {
+            let mut inner = self.inner.lock().unwrap();
+            inner.calls.push(format!("write_file_chunked {path}"));
+            if inner.permission_denied_paths.contains(path) {
+                return Err(SshError::SftpPermissionDenied(format!(
+                    "keine Schreibrechte für {path}"
+                )));
+            }
+        }
+        let mut content = Vec::new();
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        let end = loop {
+            match next_chunk(&mut buf) {
+                ChunkSource::Data(n) => content.extend_from_slice(&buf[..n]),
+                ChunkSource::Eof => break TransferEnd::Completed,
+                ChunkSource::Stop => break TransferEnd::Stopped,
+            }
+        };
+        self.inner.lock().unwrap().files.insert(
+            path.to_string(),
+            MockFile {
+                content,
+                permissions: 0o644,
+                modified: Some(Utc::now()),
+            },
+        );
+        Ok(end)
     }
 
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {

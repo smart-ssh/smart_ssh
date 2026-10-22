@@ -1158,16 +1158,10 @@ struct SftpTransferStartedPayload {
 }
 
 /// Spec 0020, Abschnitt 5, letzter Punkt: Fortschrittsanzeige für Transfers.
-/// **Design-Entscheidung**: `SftpSession::read_file`/`write_file` (Spec
-/// 0020, Abschnitt 3, bereits exakt wie spezifiziert in Teil 1 umgesetzt)
-/// arbeiten auf einem einzelnen In-Memory-Puffer, nicht gestreamt — echte
-/// Byte-für-Byte-Fortschrittswerte ließen sich damit nicht ermitteln, ohne
-/// den bereits committeten Trait rückwirkend um eine Chunk-Schnittstelle zu
-/// erweitern. Statt eine Prozentanzeige vorzutäuschen, die die Schnittstelle
-/// gar nicht hergibt, zeigt das Frontend zwischen "started" und "finished"
-/// einen unbestimmten (pulsierenden) Fortschritt, beschriftet mit Dateiname
-/// und — falls bekannt — Gesamtgröße. Siehe ADR-Vorschlag am Ende der
-/// Aufgabe.
+/// Issue #622: Transfers laufen in Stücken (`SftpSession::read_file_chunked`/
+/// `write_file_chunked`); zwischen "started" und "finished" kommen gedrosselte
+/// `sftp-transfer-progress`-Ereignisse. Fehlt ein Fortschrittswert (Gesamtgröße
+/// unbekannt), zeigt das Frontend weiter den unbestimmten Fortschritt.
 pub fn emit_sftp_transfer_started(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
@@ -1196,6 +1190,15 @@ struct SftpTransferFinishedPayload {
     transfer_id: Uuid,
     /// `None` bei Erfolg, sonst die Fehlermeldung.
     error: Option<String>,
+    /// Issue #622: `cancelled` (Abbrechen-Knopf) oder `stopped` (bestätigtes
+    /// Ausschalten des erhöhten Modus bzw. Widerruf). Dann ist `error`
+    /// `None` — ein Abbruch ist kein Kanalfehler.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stopped: Option<&'static str>,
+    /// Issue #622: bei einem abgebrochenen Upload, dessen Teildatei auf dem
+    /// Server nicht entfernt werden konnte: ihr Pfad.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    incomplete_remote_path: Option<String>,
 }
 
 pub fn emit_sftp_transfer_finished(
@@ -1211,6 +1214,76 @@ pub fn emit_sftp_transfer_finished(
             session_id,
             transfer_id,
             error,
+            stopped: None,
+            incomplete_remote_path: None,
+        },
+    );
+}
+
+/// Issue #622: der Transfer wurde gestoppt (`stopped`: `"cancelled"` oder
+/// `"stopped"`). Kein Fehlertext — die Zeile zeigt den Zustand.
+pub fn emit_sftp_transfer_stopped(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    stopped: &'static str,
+    incomplete_remote_path: Option<String>,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-finished",
+        &SftpTransferFinishedPayload {
+            session_id,
+            transfer_id,
+            error: None,
+            stopped: Some(stopped),
+            incomplete_remote_path,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpTransferProgressPayload {
+    session_id: SessionId,
+    transfer_id: Uuid,
+    bytes_done: u64,
+    total_bytes: Option<u64>,
+    /// Ordner-Transfers: Dateien fertig / gesamt (erst nach dem Durchlaufen
+    /// des Baums bekannt) und Byte-Summen über alle Dateien.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    folder: Option<SftpFolderProgress>,
+}
+
+/// Issue #622: Gesamtfortschritt eines Ordner-Transfers.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpFolderProgress {
+    pub files_done: u64,
+    pub files_total: u64,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+}
+
+/// Issue #622: Fortschritt eines laufenden Transfers. Der Aufrufer drosselt
+/// (höchstens ca. 4 Ereignisse pro Sekunde je Transfer).
+pub fn emit_sftp_transfer_progress(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    bytes_done: u64,
+    total_bytes: Option<u64>,
+    folder: Option<SftpFolderProgress>,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-progress",
+        &SftpTransferProgressPayload {
+            session_id,
+            transfer_id,
+            bytes_done,
+            total_bytes,
+            folder,
         },
     );
 }

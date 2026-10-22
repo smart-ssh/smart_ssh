@@ -64,6 +64,12 @@ pub struct Wiring {
     /// file content right before they are sent to the server. Community
     /// registers none, so text is sent unchanged.
     pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+
+    /// Issue #610 (Spec 0038, section 2): observers told about every
+    /// completed AI request of a session (ids, provider, purpose, usage;
+    /// never content). Passive: they cannot influence the chat flow.
+    /// Community registers none.
+    pub ai_usage_observers: Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>,
 }
 
 impl Wiring {
@@ -98,6 +104,7 @@ impl Wiring {
             chat_content_extensions: Vec::new(),
 
             outgoing_transform: None,
+            ai_usage_observers: Vec::new(),
         }
     }
 }
@@ -110,5 +117,11 @@ mod tests {
     #[test]
     fn test_community_registers_no_chat_content_extensions() {
         assert!(Wiring::community().chat_content_extensions.is_empty());
+    }
+
+    /// Issue #610: Community registers no AI usage observer.
+    #[test]
+    fn test_community_registers_no_ai_usage_observers() {
+        assert!(Wiring::community().ai_usage_observers.is_empty());
     }
 }

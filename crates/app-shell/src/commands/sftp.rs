@@ -29,23 +29,25 @@ use app_logic::error::ssh_command_error;
 use app_logic::error::CommandError;
 use app_logic::error::CommandResult;
 use app_logic::error::{SFTP_CONTENT_TOO_LARGE, SFTP_COPY_CANCELLED};
-use app_logic::events::{
-    emit_sftp_transfer_finished, emit_sftp_transfer_started, EventEmitter, SftpTransferKind,
-};
+use app_logic::events::EventEmitter;
 use app_logic::local_path_grants::{GrantedLocalPath, LocalPathGrants, LOCAL_PATH_NOT_GRANTED};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::{AppState, SessionId};
 
 use super::elevation::{
     audit_elevated_change, file_name_of, lock_browser_sftp, run_browser_command,
-    safe_local_segment, write_local_download, BrowserChannel,
+    safe_local_segment, BrowserChannel,
 };
+use crate::file_ops::{OpHandle, OpKind};
 
 /// Spec 0085, A1 (T1–T9): Widerruf des erhöhten Modus innerhalb eines schon
 /// laufenden Browser-Befehls. Eigene Datei, weil der Aufbau (Test-Double mit
 /// Haltepunkt, Audit-Mitschnitt) für sich genommen umfangreich ist.
 mod folder_upload;
 pub(crate) use folder_upload::*;
+
+mod transfer;
+use transfer::{download_file, stopped_error, upload_file, FileRun};
 
 #[cfg(test)]
 mod revocation_tests;
@@ -150,47 +152,20 @@ async fn download_one_file(
     local_path: std::path::PathBuf,
     total_bytes: Option<u64>,
 ) -> CommandResult<()> {
-    let file_name = file_name_of(remote_path);
+    // Issue #622: in Stücken, mit Fortschritt und Abbruch — s. `transfer`.
     let transfer_id = Uuid::new_v4();
-    emit_sftp_transfer_started(
+    let guard = channel.register_op(transfer_id, OpKind::Download, remote_path);
+    guard.handle().set_bytes_total(total_bytes);
+    let run = FileRun {
         emitter,
+        session,
+        channel,
         session_id,
-        transfer_id,
-        SftpTransferKind::Download,
-        file_name,
-        total_bytes,
-    );
-
-    let result: CommandResult<()> = async {
-        let bytes = {
-            let mut guard = lock_browser_sftp(session, channel).await;
-            let mut sftp = guard.sftp().await?;
-            sftp.read_file(remote_path).await?
-        };
-        // Spec 0067, spec-reviewer-Fund: im erhöhten Modus können das
-        // Root-Dateien sein (z. B. /etc/shadow) — lokal nur für den eigenen
-        // Nutzer lesbar anlegen statt mit der Standard-umask.
-        let restrict = channel.is_elevated();
-        tokio::task::spawn_blocking(move || write_local_download(&local_path, &bytes, restrict))
-            .await
-            .map_err(|e| format!("Hintergrund-Task für Download fehlgeschlagen: {e}"))??;
-        Ok(())
-    }
-    .await;
-
-    emit_sftp_transfer_finished(
-        emitter,
-        session_id,
-        transfer_id,
-        // Spec 0086, A2.1: derselbe Text wie im Befehlsergebnis, wenn der
-        // erhöhte Modus mitten im Transfer widerrufen wurde — s.
-        // `BrowserChannel::transfer_error_message`.
-        result
-            .as_ref()
-            .err()
-            .map(|e| channel.transfer_error_message(e)),
-    );
-    result
+        op: guard.handle(),
+        folder: false,
+    };
+    download_file(&run, transfer_id, remote_path, local_path, total_bytes, 0).await?;
+    Ok(())
 }
 
 /// Spec 0020, Abschnitt 5: "nativer Speichern-Dialog" — derselbe
@@ -299,10 +274,18 @@ async fn download_recursive(
     remote_root: &str,
     local_root: &std::path::Path,
 ) -> CommandResult<u64> {
+    // Issue #622: ein Vorgang für den ganzen Ordner (Bestätigungsdialog,
+    // Abbrechen), erst den Baum durchlaufen (Dateizahl und Gesamtgröße
+    // bekannt), dann Datei für Datei in Stücken laden.
+    let op_guard = channel.register_op(Uuid::new_v4(), OpKind::Download, remote_root);
+    let op = op_guard.handle();
     tokio::fs::create_dir_all(local_root).await?;
-    let mut file_count = 0u64;
+    let mut files: Vec<(String, std::path::PathBuf, u64)> = Vec::new();
     let mut queue = vec![(remote_root.to_string(), local_root.to_path_buf())];
     while let Some((remote_dir, local_dir)) = queue.pop() {
+        if op.is_user_stopped() {
+            return Err(stopped_error());
+        }
         let entries = {
             let mut guard = lock_browser_sftp(session, channel).await;
             let mut sftp = guard.sftp().await?;
@@ -315,19 +298,37 @@ async fn download_recursive(
                 tokio::fs::create_dir_all(&local_entry_path).await?;
                 queue.push((entry.path, local_entry_path));
             } else {
-                download_one_file(
-                    emitter,
-                    session,
-                    channel,
-                    session_id,
-                    &entry.path,
-                    local_entry_path,
-                    Some(entry.size),
-                )
-                .await?;
-                file_count += 1;
+                files.push((entry.path, local_entry_path, entry.size));
             }
         }
+    }
+    op.set_files(0, Some(files.len() as u64));
+    op.set_bytes_total(Some(files.iter().map(|f| f.2).sum()));
+    let run = FileRun {
+        emitter,
+        session,
+        channel,
+        session_id,
+        op,
+        folder: true,
+    };
+    let mut file_count = 0u64;
+    let mut base_bytes = 0u64;
+    for (remote_path, local_path, size) in files {
+        if op.is_user_stopped() {
+            return Err(stopped_error());
+        }
+        base_bytes += download_file(
+            &run,
+            Uuid::new_v4(),
+            &remote_path,
+            local_path,
+            Some(size),
+            base_bytes,
+        )
+        .await?;
+        op.add_files_done();
+        file_count += 1;
     }
     Ok(file_count)
 }
@@ -469,6 +470,18 @@ pub async fn sftp_download_dir(
         },
     )
     .await
+}
+
+/// Issue #622: cancel button of a transfer row. Stops the transfer (for a
+/// folder transfer: the whole folder) at the next chunk; the row shows
+/// "cancelled". `false`: no such running transfer (already finished).
+#[tauri::command]
+pub async fn sftp_cancel_transfer(
+    elevated: State<'_, ElevatedSftpRegistry>,
+    session_id: SessionId,
+    transfer_id: Uuid,
+) -> CommandResult<bool> {
+    Ok(elevated.ops().cancel(session_id, transfer_id))
 }
 
 /// Issue #89: `local_path` comes from the webview and proves nothing on its
@@ -777,58 +790,19 @@ async fn upload_impl(
     local_path: &GrantedLocalPath,
     remote_path: &str,
 ) -> CommandResult<()> {
-    let file_name = file_name_of(remote_path);
-
-    let local_path_for_stat = local_path.as_path().to_path_buf();
-    let total_bytes = tokio::task::spawn_blocking(move || {
-        std::fs::metadata(&local_path_for_stat)
-            .map(|m| m.len())
-            .ok()
-    })
-    .await
-    .unwrap_or(None);
-
+    // Issue #622: in Stücken, mit Fortschritt und Abbruch — s. `transfer`.
     let transfer_id = Uuid::new_v4();
-    emit_sftp_transfer_started(
+    let guard = channel.register_op(transfer_id, OpKind::Upload, remote_path);
+    let run = FileRun {
         emitter,
+        session,
+        channel,
         session_id,
-        transfer_id,
-        SftpTransferKind::Upload,
-        file_name,
-        total_bytes,
-    );
-
-    let local_path_for_read = local_path.as_path().to_path_buf();
-    let result: CommandResult<()> = async {
-        let bytes = tokio::task::spawn_blocking(move || std::fs::read(local_path_for_read))
-            .await
-            .map_err(|e| format!("Hintergrund-Task für Upload fehlgeschlagen: {e}"))??;
-        let mut guard = lock_browser_sftp(session, channel).await;
-        let elevated_user = guard.elevated_user();
-        let mut sftp = guard.sftp().await?;
-        let written = sftp.write_file(remote_path, &bytes).await;
-        audit_elevated_change(
-            elevated_user.as_deref(),
-            "upload",
-            remote_path,
-            written.is_ok(),
-        );
-        written?;
-        Ok(())
-    }
-    .await;
-
-    emit_sftp_transfer_finished(
-        emitter,
-        session_id,
-        transfer_id,
-        // Spec 0086, A2.1 — s. `download_one_file`.
-        result
-            .as_ref()
-            .err()
-            .map(|e| channel.transfer_error_message(e)),
-    );
-    result
+        op: guard.handle(),
+        folder: false,
+    };
+    upload_file(&run, transfer_id, local_path.as_path(), remote_path, 0).await?;
+    Ok(())
 }
 
 /// Sammelt rekursiv **alle** Verzeichnispfade unter `root` (inklusive
@@ -949,10 +923,19 @@ async fn delete_impl(session: &Session, channel: &BrowserChannel, path: &str) ->
     // Einträge mit erhöhten Rechten gelöscht wurden.
     let elevated_user = guard.elevated_user();
     let mut sftp = guard.sftp().await?;
-    let result = delete_recursive(&mut sftp, path).await;
-    audit_elevated_change(elevated_user.as_deref(), "delete", path, result.is_ok());
-    result?;
-    Ok(())
+    // Issue #622: als laufende Operation eingetragen (Bestätigungsdialog).
+    let op = channel.register_op(Uuid::new_v4(), OpKind::Delete, path);
+    let result = delete_recursive(&mut sftp, path, op.handle()).await;
+    audit_elevated_change(
+        elevated_user.as_deref(),
+        "delete",
+        path,
+        matches!(result, Ok(Some(()))),
+    );
+    match result? {
+        Some(()) => Ok(()),
+        None => Err(stopped_error()),
+    }
 }
 
 /// Eigentliche Rekursions-Logik hinter `sftp_delete` — von der
@@ -960,7 +943,15 @@ async fn delete_impl(session: &Session, channel: &BrowserChannel, path: &str) ->
 /// sie sich direkt gegen ein `SftpSession`-Testdouble prüfen lässt (s.
 /// `sftp_mutation_tests` unten, gegen den echten lokalen Pseudo-Server via
 /// `ssh_transport::LocalFileSession`).
-async fn delete_recursive(sftp: &mut dyn SftpSession, path: &str) -> Result<(), SshError> {
+///
+/// Issue #622: `Ok(None)` = vom Nutzer gestoppt; geprüft wird vor jedem
+/// Eintrag, schon Gelöschtes bleibt gelöscht (wie bei einem Widerruf, Spec
+/// 0085).
+async fn delete_recursive(
+    sftp: &mut dyn SftpSession,
+    path: &str,
+    op: &OpHandle,
+) -> Result<Option<()>, SshError> {
     // `lstat` statt `stat` (Spec-Reviewer-Fund, Spec 0054, Review des
     // Gesamtpakets, ERHÖHTE Priorität): `stat` folgt Symlinks — ein
     // Eintrag, der selbst ein Symlink auf ein Verzeichnis ist, würde damit
@@ -969,10 +960,13 @@ async fn delete_recursive(sftp: &mut dyn SftpSession, path: &str) -> Result<(), 
     // `/var/www/current -> /etc`) rekursiv gelöscht. `lstat` meldet für
     // einen Symlink dessen eigenen Typ, nie den des Ziels — der Symlink
     // selbst wird dann korrekt nur entfernt, nie in ihn hinein rekursiert.
+    if op.is_user_stopped() {
+        return Ok(None);
+    }
     let root_entry = sftp.lstat(path).await?;
     if !root_entry.is_dir {
         sftp.remove(path).await?;
-        return Ok(());
+        return Ok(Some(()));
     }
 
     let (dirs, _file_count) = walk_dirs_and_count_files(sftp, path).await?;
@@ -984,17 +978,26 @@ async fn delete_recursive(sftp: &mut dyn SftpSession, path: &str) -> Result<(), 
     // liest dieselben, kleinen Verzeichnislisten erneut — für den ohnehin
     // seltenen "Ordner löschen"-Fall keine spürbare Mehrkosten.
     for dir in &dirs {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
         let entries = sftp.list_dir(dir).await?;
         for entry in entries {
             if !entry.is_dir {
+                if op.is_user_stopped() {
+                    return Ok(None);
+                }
                 sftp.remove(&entry.path).await?;
             }
         }
     }
     for dir in dirs.into_iter().rev() {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
         sftp.remove_dir(&dir).await?;
     }
-    Ok(())
+    Ok(Some(()))
 }
 
 /// Spec 0054, Teil 3: existiert ein Zielpfad bereits? Grundlage für die
@@ -1106,9 +1109,15 @@ async fn chmod_impl(
     // Spec 0085, A1.4 — s. `delete_impl`.
     let elevated_user = guard.elevated_user();
     let mut sftp = guard.sftp().await?;
-    let result = chmod_recursive(&mut sftp, path, mode, recursive).await;
-    audit_elevated_change(elevated_user.as_deref(), "chmod", path, result.is_ok());
-    Ok(result?)
+    let op = channel.register_op(Uuid::new_v4(), OpKind::Chmod, path);
+    let result = chmod_recursive(&mut sftp, path, mode, recursive, op.handle()).await;
+    audit_elevated_change(
+        elevated_user.as_deref(),
+        "chmod",
+        path,
+        matches!(result, Ok(Some(_))),
+    );
+    result?.ok_or_else(stopped_error)
 }
 
 /// Eigentliche Rekursions-Logik hinter `sftp_chmod` — s. `delete_recursive`s
@@ -1119,10 +1128,11 @@ async fn chmod_recursive(
     path: &str,
     mode: u32,
     recursive: bool,
-) -> Result<u64, SshError> {
+    op: &OpHandle,
+) -> Result<Option<u64>, SshError> {
     if !recursive {
         sftp.set_permissions(path, mode).await?;
-        return Ok(1);
+        return Ok(Some(1));
     }
     // `lstat` statt `stat` — dieselbe Symlink-Begründung wie in
     // `delete_recursive`: ein Symlink auf ein Verzeichnis darf ein
@@ -1130,7 +1140,7 @@ async fn chmod_recursive(
     let root_entry = sftp.lstat(path).await?;
     if !root_entry.is_dir {
         sftp.set_permissions(path, mode).await?;
-        return Ok(1);
+        return Ok(Some(1));
     }
 
     // Erst den ganzen Baum LESEND ablaufen (mit den unveränderten
@@ -1143,6 +1153,9 @@ async fn chmod_recursive(
     let mut all_paths = vec![path.to_string()];
     let mut queue = vec![path.to_string()];
     while let Some(dir) = queue.pop() {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
         let entries = sftp.list_dir(&dir).await?;
         for entry in entries {
             all_paths.push(entry.path.clone());
@@ -1157,9 +1170,12 @@ async fn chmod_recursive(
     // `set_permissions` (Pfadauflösung braucht `x` auf jedem Vorfahren).
     let count = all_paths.len() as u64;
     for entry_path in all_paths.into_iter().rev() {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
         sftp.set_permissions(&entry_path, mode).await?;
     }
-    Ok(count)
+    Ok(Some(count))
 }
 
 /// Spec 0054, Teil 3: "Umbenennen" UND "Verschieben" laufen über denselben
@@ -1958,7 +1974,7 @@ mod sftp_mutation_tests {
         std::fs::write(root.join("sub/b.txt"), b"b").unwrap();
         let mut sftp = LocalFileSession::new();
 
-        delete_recursive(&mut sftp, root.to_str().unwrap())
+        delete_recursive(&mut sftp, root.to_str().unwrap(), &OpHandle::detached())
             .await
             .expect("delete_recursive() sollte gelingen");
 
@@ -1972,7 +1988,7 @@ mod sftp_mutation_tests {
         std::fs::write(&file, b"x").unwrap();
         let mut sftp = LocalFileSession::new();
 
-        delete_recursive(&mut sftp, file.to_str().unwrap())
+        delete_recursive(&mut sftp, file.to_str().unwrap(), &OpHandle::detached())
             .await
             .unwrap();
 
@@ -2000,7 +2016,7 @@ mod sftp_mutation_tests {
         std::os::unix::fs::symlink(&outside, &link).unwrap();
         let mut sftp = LocalFileSession::new();
 
-        delete_recursive(&mut sftp, link.to_str().unwrap())
+        delete_recursive(&mut sftp, link.to_str().unwrap(), &OpHandle::detached())
             .await
             .expect("delete_recursive() sollte gelingen (löscht nur den Symlink)");
 
@@ -2028,9 +2044,15 @@ mod sftp_mutation_tests {
         std::os::unix::fs::symlink(&outside, &link).unwrap();
         let mut sftp = LocalFileSession::new();
 
-        chmod_recursive(&mut sftp, link.to_str().unwrap(), 0o700, true)
-            .await
-            .expect("chmod_recursive() sollte gelingen (setzt nur den Symlink selbst)");
+        chmod_recursive(
+            &mut sftp,
+            link.to_str().unwrap(),
+            0o700,
+            true,
+            &OpHandle::detached(),
+        )
+        .await
+        .expect("chmod_recursive() sollte gelingen (setzt nur den Symlink selbst)");
 
         let victim_entry = sftp.stat(victim.to_str().unwrap()).await.unwrap();
         assert_eq!(
@@ -2074,9 +2096,15 @@ mod sftp_mutation_tests {
         std::fs::write(&child, b"x").unwrap();
         let mut sftp = LocalFileSession::new();
 
-        chmod_recursive(&mut sftp, root.to_str().unwrap(), 0o700, false)
-            .await
-            .unwrap();
+        chmod_recursive(
+            &mut sftp,
+            root.to_str().unwrap(),
+            0o700,
+            false,
+            &OpHandle::detached(),
+        )
+        .await
+        .unwrap();
 
         let root_entry = sftp.stat(root.to_str().unwrap()).await.unwrap();
         let child_entry = sftp.stat(child.to_str().unwrap()).await.unwrap();
@@ -2103,13 +2131,19 @@ mod sftp_mutation_tests {
         // der Bug, den `chmod_recursive`s "erst lesend traversieren, dann
         // von unten nach oben setzen"-Reihenfolge verhindern soll; dieser
         // Test verifiziert das Ergebnis, nicht die Reihenfolge selbst.
-        let changed = chmod_recursive(&mut sftp, root.to_str().unwrap(), 0o700, true)
-            .await
-            .expect("chmod_recursive() sollte gelingen");
+        let changed = chmod_recursive(
+            &mut sftp,
+            root.to_str().unwrap(),
+            0o700,
+            true,
+            &OpHandle::detached(),
+        )
+        .await
+        .expect("chmod_recursive() sollte gelingen");
 
         // Spec 0067, Teil B: Anzahl für die Sammelmeldung — tree, sub,
         // sub/child.txt.
-        assert_eq!(changed, 3);
+        assert_eq!(changed, Some(3));
         let root_entry = sftp.stat(root.to_str().unwrap()).await.unwrap();
         let sub_entry = sftp.stat(root.join("sub").to_str().unwrap()).await.unwrap();
         let nested_entry = sftp.stat(nested.to_str().unwrap()).await.unwrap();

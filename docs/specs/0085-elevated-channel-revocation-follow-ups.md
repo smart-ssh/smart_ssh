@@ -35,13 +35,26 @@ aktiviert, oder der Kanal fällt weg. In jedem Fall gilt:
    A2.1, Neu-Aktivieren für einen anderen Nutzer) führt **kein**
    Browser-Befehl mehr eine SFTP-Operation über den widerrufenen Kanal aus.
    Das gilt auch für Befehle, die vor dem Widerruf begonnen haben. Eine schon
-   laufende einzelne SFTP-Operation darf zu Ende laufen.
+   laufende einzelne SFTP-Operation (bei einem Transfer: das gerade laufende
+   Stück) darf zu Ende laufen.
 2. Ein so abgebrochener Befehl endet mit dem Fehler
    `ELEVATED_CHANNEL_INACTIVE` („Der erhöhte Modus ist nicht mehr aktiv …“),
    nicht mit Erfolg und nicht mit einem SFTP-Fehler. Schon geänderte Einträge
    bleiben geändert.
-3. Das Ausschalten wartet höchstens auf die gerade laufende einzelne
-   SFTP-Operation, nicht auf den Rest des Befehls. „Vorgang“ in Spec 0084 §9
+3. Läuft beim Ausschalten oder beim Wechsel des Zielnutzers keine erhöhte
+   Operation, geschieht beides sofort und ohne Rückfrage. Läuft mindestens
+   eine (Download oder Upload, einzeln oder als Ordner, rekursives Löschen,
+   rekursives Ändern der Rechte), bleibt der erhöhte Modus zunächst an und
+   sichtbar; ein Dialog listet die laufenden Operationen (Art, Pfad,
+   Fortschritt, soweit bekannt) und sagt, dass sie gestoppt werden. „Erhöhte
+   Rechte beenden“ stoppt sie alle und schließt danach den Kanal;
+   „Abbrechen“ ändert nichts, alles läuft weiter. Ein gestoppter Transfer
+   endet nach dem laufenden Stück, eine Rekursion vor dem nächsten Eintrag;
+   danach wird mit dem Kanal nichts mehr gelesen oder geschrieben. Trennen
+   der Verbindung und Schließen des Tabs stoppen alle erhöhten Operationen
+   ohne Dialog (A1.2). Das Ausschalten wartet nach dem Stoppen nur auf das
+   Aufräumen der gestoppten Operationen (begrenzt auf wenige Sekunden), dann
+   wird der Kanal in jedem Fall widerrufen, nicht auf den Rest eines Befehls. „Vorgang“ in Spec 0084 §9
    heißt seitdem: eine einzelne SFTP-Operation.
 4. Ein abgebrochener erhöhter Lösch- oder chmod-Befehl, bei dem mindestens
    eine Operation lief, schreibt die Protokollzeile wie bei jedem Fehlschlag:
@@ -56,9 +69,10 @@ aktiviert, oder der Kanal fällt weg. In jedem Fall gilt:
    Endzustand, auch wenn der erhöhte Modus währenddessen ausgeschaltet wird.
    Scheitert die Übertragung am Widerruf, zeigt die Zeile den Text für den
    nicht mehr aktiven erhöhten Modus (ohne „Channel-Fehler:“). Lief sie nach
-   A1.1 noch zu Ende, gilt sie als erledigt; die Zeile bleibt dann stehen und
-   nennt in einer Zeile, dass der erhöhte Modus währenddessen ausgeschaltet
-   wurde.
+   A1.1 noch zu Ende (etwa weil sie schon im letzten Stück war), gilt sie als
+   erledigt; die Zeile bleibt dann stehen und nennt in einer Zeile, dass der
+   erhöhte Modus währenddessen ausgeschaltet wurde. Ein per Dialog (A1.3)
+   gestoppter Transfer zeigt „gestoppt“, kein Fehler.
 
 **A2 — Kanal-Ende ist gesichert.**
 

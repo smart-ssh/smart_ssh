@@ -628,6 +628,9 @@ pub struct Session {
     /// Issue #544: result of the connect-time `id -u` probe. `Some(true)` =
     /// uid 0, `None` = unknown (probe failed or not run). UI hint only.
     is_root: Option<bool>,
+    /// Issue #610: where completed AI requests are reported (observers an
+    /// edition registered). `None` = nobody listens. Private: set at build.
+    usage_reporting: Option<crate::ai_usage::AiUsageReporting>,
 }
 
 impl std::ops::Deref for Session {
@@ -963,7 +966,49 @@ impl Session {
             sftp: NormalSftpChannel::default(),
             start_directory: Default::default(),
             is_root: None,
+            usage_reporting: None,
         }
+    }
+
+    /// Issue #610: sets up reporting of completed AI requests to observers.
+    /// Only at construction. An empty observer list is the same as none.
+    pub fn with_usage_reporting(
+        mut self,
+        reporting: Option<crate::ai_usage::AiUsageReporting>,
+    ) -> Self {
+        self.usage_reporting = reporting.filter(|r| !r.observers.is_empty());
+        self
+    }
+
+    /// Issue #610: tells the observers about one completed AI request of
+    /// this session. Passive: returns nothing, never waits for an observer,
+    /// carries no content. Call it when the provider's `RequestUsage` arrived
+    /// before the stream loop stopped; never wait for it.
+    pub async fn report_ai_usage(
+        &self,
+        purpose: crate::ai_usage::AiUsagePurpose,
+        usage: ssh_manager_core::ai::AiUsage,
+    ) {
+        let Some(reporting) = &self.usage_reporting else {
+            return;
+        };
+        let Some(source) = reporting.source_for(purpose) else {
+            return;
+        };
+        let chat_session_id = (*self.chat_session_id.lock().await).map(|id| id.to_string());
+        let record = crate::ai_usage::AiUsageRecord {
+            chat_session_id,
+            runtime_session_id: reporting.runtime_session_id.clone(),
+            server_id: (!crate::dto::is_local(self.server_id))
+                .then(|| self.server_id.0.to_string()),
+            provider_config_id: source.provider_config_id.clone(),
+            provider_type: source.provider_type,
+            configured_model: source.configured_model.clone(),
+            purpose,
+            usage,
+            completed_at: chrono::Utc::now(),
+        };
+        crate::ai_usage::notify(&reporting.observers, record);
     }
 
     /// Issue #544: records the `id -u` probe result; only at construction.
