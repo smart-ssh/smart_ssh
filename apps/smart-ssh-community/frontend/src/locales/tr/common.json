@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Başlangıç dizini mutlak bir yol (/…) olmalı veya ~/ ile başlamalıdır.",
       "controlCharacter": "Başlangıç dizini denetim karakterleri içermemelidir."
+    },
+    "tabs": {
+      "label": "Sunucu ayarları",
+      "general": "Genel",
+      "connection": "Bağlantı",
+      "security": "Güvenlik",
+      "invalid": "Hatalar içeriyor"
     }
   },
   "filterRules": {

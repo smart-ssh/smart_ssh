@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Direktori awal harus berupa jalur absolut (/…) atau diawali ~/.",
       "controlCharacter": "Direktori awal tidak boleh mengandung karakter kontrol."
+    },
+    "tabs": {
+      "label": "Pengaturan server",
+      "general": "Umum",
+      "connection": "Koneksi",
+      "security": "Keamanan",
+      "invalid": "Berisi kesalahan"
     }
   },
   "filterRules": {

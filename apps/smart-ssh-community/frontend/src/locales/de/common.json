@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Das Startverzeichnis muss ein absoluter Pfad (/…) sein oder mit ~/ beginnen.",
       "controlCharacter": "Das Startverzeichnis darf keine Steuerzeichen enthalten."
+    },
+    "tabs": {
+      "label": "Servereinstellungen",
+      "general": "Allgemein",
+      "connection": "Verbindung",
+      "security": "Sicherheit",
+      "invalid": "Enthält Fehler"
     }
   },
   "filterRules": {

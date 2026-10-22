@@ -272,6 +272,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "A kezdőkönyvtárnak abszolút útvonalnak (/…) kell lennie, vagy ~/-lel kell kezdődnie.",
       "controlCharacter": "A kezdőkönyvtár nem tartalmazhat vezérlőkaraktert."
+    },
+    "tabs": {
+      "label": "Szerverbeállítások",
+      "general": "Általános",
+      "connection": "Kapcsolat",
+      "security": "Biztonság",
+      "invalid": "Hibákat tartalmaz"
     }
   },
   "filterRules": {

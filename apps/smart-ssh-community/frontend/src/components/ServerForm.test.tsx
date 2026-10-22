@@ -131,6 +131,11 @@ function renderForm() {
   );
 }
 
+// Issue #606: the form is split into tabs; open the one that holds the field.
+function openTab(name: string) {
+  fireEvent.click(screen.getByRole("tab", { name }));
+}
+
 function authKindSelect(): HTMLSelectElement {
   const select = screen
     .getAllByRole("combobox")
@@ -155,12 +160,14 @@ beforeEach(() => {
 describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
   it("is hidden for the default auth kind (Passwort)", () => {
     renderNewServerForm();
+    openTab("Verbindung");
 
     expect(screen.queryByText(ED25519_HINT)).not.toBeInTheDocument();
   });
 
   it("appears when auth kind is switched to Private Key", () => {
     renderNewServerForm();
+    openTab("Verbindung");
 
     fireEvent.change(authKindSelect(), { target: { value: "privateKey" } });
 
@@ -169,6 +176,7 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
 
   it("disappears again when switching away from Private Key", () => {
     renderNewServerForm();
+    openTab("Verbindung");
 
     fireEvent.change(authKindSelect(), { target: { value: "privateKey" } });
     expect(screen.getByText(ED25519_HINT)).toBeInTheDocument();
@@ -179,6 +187,7 @@ describe("ServerForm Ed25519 recommendation (Spec 0069, Teil C2)", () => {
 
   it("is hidden for certificate auth", () => {
     renderNewServerForm();
+    openTab("Verbindung");
 
     fireEvent.change(authKindSelect(), { target: { value: "certificate" } });
 
@@ -296,6 +305,7 @@ describe("ServerForm — Verbindungstest ohne Schlüsseldatei-Pfad (issue #254)"
 
     renderForm();
     await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
     expect(await screen.findByText("Pfad zur Schlüsseldatei ist erforderlich")).toBeInTheDocument();
@@ -320,6 +330,7 @@ const IDENTITY_PATH = "/home/deploy/.ssh/id_ed25519";
 describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () => {
   it("ist im Dropdown wählbar und zeigt danach Pfadfeld + Dateidialog-Knopf (B-1, B-2)", () => {
     renderNewServerForm();
+    openTab("Verbindung");
 
     fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
 
@@ -330,6 +341,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
   it("übernimmt den vom Dateidialog gewählten Pfad ins Textfeld (B-2)", async () => {
     vi.mocked(pickFilePath).mockResolvedValue(IDENTITY_PATH);
     renderNewServerForm();
+    openTab("Verbindung");
     fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
 
     fireEvent.click(screen.getByText("Datei wählen…"));
@@ -354,6 +366,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
         problem: { code: "KEY_FILE_NOT_FOUND", message: "Datei nicht gefunden: /tmp/nope" },
       });
       renderNewServerForm();
+      openTab("Verbindung");
       fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: "/tmp/nope" },
@@ -387,6 +400,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     try {
       vi.mocked(inspectKeyFile).mockRejectedValue(new Error("IPC kaputt"));
       renderNewServerForm();
+      openTab("Verbindung");
       fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
@@ -419,6 +433,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
         problem: null,
       });
       renderNewServerForm();
+      openTab("Verbindung");
       fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
@@ -464,6 +479,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
         problem: { code: "KEY_FILE_TOO_LARGE", message: "zu groß" },
       });
       renderNewServerForm();
+      openTab("Verbindung");
       fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
@@ -505,6 +521,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
         problem: { code: "KEY_FILE_INVALID_KEY", message: "kein gültiger Schlüssel" },
       });
       renderNewServerForm();
+      openTab("Verbindung");
       fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
       fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), {
         target: { value: IDENTITY_PATH },
@@ -534,6 +551,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     try {
       vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
       renderNewServerForm();
+      openTab("Verbindung");
       fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
       const input = screen.getByPlaceholderText("~/.ssh/id_ed25519");
       fireEvent.change(input, { target: { value: IDENTITY_PATH } });
@@ -593,6 +611,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       </I18nextProvider>,
     );
 
+    openTab("Verbindung");
     const button = await screen.findByRole("button", {
       name: "In die verschlüsselte Datenbank übernehmen",
     });
@@ -627,6 +646,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
     vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
 
     renderForm();
+    openTab("Verbindung");
 
     expect(await screen.findByDisplayValue(IDENTITY_PATH)).toBeInTheDocument();
   });
@@ -637,6 +657,7 @@ describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 00
     vi.mocked(getServer).mockResolvedValue(serverDto({ authKind: "agent" }));
 
     renderForm();
+    openTab("Verbindung");
 
     await screen.findByText(/web-01/);
     expect(
@@ -659,6 +680,7 @@ describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 00
     );
 
     renderForm();
+    openTab("Verbindung");
 
     const button = await screen.findByRole("button", {
       name: "In die verschlüsselte Datenbank übernehmen",
@@ -681,6 +703,7 @@ describe("ServerForm — Überführung in die verschlüsselte Datenbank (Spec 00
     );
 
     renderForm();
+    openTab("Verbindung");
     const button = await screen.findByRole("button", {
       name: "In die verschlüsselte Datenbank übernehmen",
     });
@@ -759,6 +782,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     renderInTabs(true);
     await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
 
+    openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
     // Issue #182: the test-connection prompt shows the key type too.
@@ -795,6 +819,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
     );
     const { switchTab } = renderInTabs(true);
     await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
     await waitFor(() => expect(testConnection).toHaveBeenCalled());
 
@@ -849,6 +874,7 @@ describe("ServerForm — step log of a test connection (issue #51)", () => {
       </I18nextProvider>,
     );
     await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
     const details = await screen.findByTestId("connect-step-log");
