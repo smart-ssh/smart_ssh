@@ -67,6 +67,12 @@ async function expectSheet(page: Page, dialog: Locator, title: RegExp | string, 
   await noHorizontalScroll(page);
 }
 
+/** Navigation lives behind the burger menu at phone width (Spec 0113 §3). */
+async function openFromMenu(page: Page, name: string) {
+  await page.getByRole("button", { name: "Open navigation menu" }).click();
+  await page.getByRole("dialog", { name: "Navigation menu" }).getByRole("button", { name, exact: true }).click();
+}
+
 const entry = (name: string): RemoteEntryDto => ({
   name,
   path: `/home/deploy/${name}`,
@@ -84,10 +90,9 @@ const entry = (name: string): RemoteEntryDto => ({
 async function openEntryMenuItem(app: import("../support/app").AppDriver, item: RegExp | string) {
   await app.launch({ ...populated(), commands: { sftp_list: { result: [entry("notes.txt")] } } });
   const page = app.page;
-  // The session screen itself is not yet adapted to phone width (separate issue), so open it without the chat-input check.
   await page.getByRole("button", { name: /^db-primary\b/ }).click();
   await expect.poll(async () => (await app.calls("connect")).length).toBe(1);
-  await page.getByRole("button", { name: /^Files/ }).click();
+  await page.getByRole("tab", { name: "Files", exact: true }).click();
   await expect(page.getByText("notes.txt")).toBeVisible();
   await page.getByRole("button", { name: /^Actions: notes.txt$/ }).click();
   await page.getByRole("button", { name: item, exact: typeof item === "string" }).click();
@@ -130,7 +135,7 @@ test("md: first-run notice is a full-screen sheet @phone", async ({ app }) => {
 test("lg: add provider dialog is a full-screen sheet @phone", async ({ app }) => {
   await app.launch(populated());
   const page = app.page;
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openFromMenu(page, "Settings");
   await page.getByRole("button", { name: "AI Provider", exact: true }).click();
   await page.getByRole("button", { name: "Add Provider", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add Provider" });
@@ -159,7 +164,7 @@ test("xl: ssh_config import dialog is a full-screen sheet @phone", async ({ app 
   };
   await app.launch({ ...populated(), commands: { preview_ssh_config_import: { result: preview } } });
   const page = app.page;
-  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await openFromMenu(page, "Manage");
   await page.getByRole("button", { name: "Import …", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expectSheet(page, dialog, "Import ssh_config", ["Cancel"]);
