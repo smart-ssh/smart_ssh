@@ -74,6 +74,29 @@ Review-Priorität: erhöht für A3 (Sitzungsaufbau, normaler Kanal), sonst norma
 - **A2.2** Für alle anderen Fehler bleibt der Text, wie er ist. Eine
   Übertragung, die vor dem Widerruf fertig war, meldet weiter Erfolg.
 
+### A5 — Übertragungen in Stücken, Fortschritt, Abbrechen
+
+- **A5.1** Up- und Downloads laufen in Stücken von höchstens 256 KiB; der
+  Speicher hält je Übertragung höchstens ein Stück, nie die ganze Datei. Die
+  Größengrenzen aus A1 bleiben unverändert.
+- **A5.2** Ein Download wird in eine Temp-Datei neben dem Ziel geschrieben und
+  erst nach vollständigem Erfolg unter dem Zielnamen abgelegt; eine vorhandene
+  Datei gleichen Namens wird erst dann ersetzt. Bei Fehler oder Abbruch ist die
+  Temp-Datei weg und die vorhandene Datei unverändert. Im erhöhten Modus ist
+  die lokale Datei nur für den eigenen Nutzer lesbar.
+- **A5.3** Jede Übertragung meldet Fortschritt (übertragene Bytes, Gesamtgröße,
+  falls bekannt), höchstens ca. viermal pro Sekunde, nie rückwärts. Die Zeile
+  zeigt einen Fortschrittsbalken, solange die Gesamtgröße bekannt ist.
+  Ordner-Übertragungen melden zusätzlich Dateien fertig / gesamt und Bytes
+  fertig / gesamt, sobald der Baum durchlaufen ist.
+- **A5.4** Jede laufende Übertragung hat einen Abbrechen-Knopf. Abbrechen
+  beendet sie nach dem laufenden Stück (bei einem Ordner den ganzen Ordner); die
+  Zeile zeigt „abgebrochen“, keine Fehlermeldung, kein Fehler-Toast. Eine
+  Teildatei lokal wird gelöscht; eine Teildatei auf dem Server wird entfernt,
+  gelingt das nicht, nennt die Zeile den unvollständigen Pfad. Dasselbe gilt
+  mit „gestoppt“, wenn der Nutzer das Beenden des erhöhten Modus bestätigt
+  (Spec 0085 A1.3).
+
 ### A3 — Transport und Kanal bleiben ein Paar
 
 - **A3.1** Code außerhalb der Anwendungslogik darf den Transport einer

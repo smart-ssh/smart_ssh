@@ -21,6 +21,7 @@ import {
   sftpDownload,
   sftpDownloadDefault,
   sftpDownloadDir,
+  sftpCancelTransfer,
   sftpElevationDisable,
   sftpElevationEnable,
   sftpElevationStatus,
@@ -41,6 +42,7 @@ import { translateErrorCode } from "../errorCodes";
 import {
   onConnectionStatusChanged,
   onSftpTransferFinished,
+  onSftpTransferProgress,
   onSftpTransferStarted,
 } from "../events";
 import { isPointerInside } from "../dropZone";
@@ -57,6 +59,7 @@ import type {
   DeletePreviewDto,
   DownloadResultDto,
   ElevationResultDto,
+  RunningOperationDto,
   LocalFilePreviewDto,
   FolderUploadPreviewDto,
   FolderUploadSummaryDto,
@@ -125,6 +128,23 @@ interface Transfer {
   /** Issue #621: finished successfully, but elevated mode ended meanwhile —
    * the row stays (as done) with a note. */
   doneElevationEnded?: boolean;
+  /** Issue #622: bytes transferred so far (progress events, throttled). */
+  bytesDone?: number;
+  /** Issue #622: folder transfers — files done / total (known once the walk is done). */
+  folder?: { filesDone: number; filesTotal: number };
+  /** Issue #622: ended without error — `cancelled` (cancel button) or `stopped`
+   * (elevated rights ended). */
+  stopped?: "cancelled" | "stopped";
+  /** Issue #622: a stopped upload left this incomplete remote file behind. */
+  incompleteRemotePath?: string;
+}
+
+/** Issue #622: asked before ending elevated rights (or changing the target
+ * user) while elevated operations still run. */
+interface StopPrompt {
+  operations: RunningOperationDto[];
+  /** What to do after the user confirmed. */
+  action: { kind: "disable" } | { kind: "switch"; targetUser: string };
 }
 
 interface FileBrowserPanelProps {
@@ -348,12 +368,12 @@ export function FileBrowserPanel({
   onElevationChangeRef.current = onElevationChange;
   /** Einzige Stelle, die den Modus ändert: hält Elternansicht und (beim
    * Beenden) das Backend synchron — "Backend aktiv ⇔ UI zeigt erhöht". */
-  const updateElevation = (next: { targetUser: string } | null) => {
+  const updateElevation = (next: { targetUser: string } | null, backendDone = false) => {
     elevationGenerationRef.current += 1;
     setElevation(next);
     if (next === null) setElevationWarning(null);
     onElevationChangeRef.current?.(next?.targetUser ?? null);
-    if (next === null) {
+    if (next === null && !backendDone) {
       sftpElevationDisable(sessionId).catch((err) =>
         console.warn("Konnte erhöhten Modus nicht beenden:", err),
       );
@@ -418,6 +438,8 @@ export function FileBrowserPanel({
       action: action ? { label: t(revealLabelKey()), onClick: action } : undefined,
     });
   const notifyFailed = (key: string, name: string, err: unknown) => {
+    // Issue #622: a stopped operation is not an error — its row shows the state.
+    if (commandErrorCode(err) === "FILE_OPERATION_STOPPED") return;
     showToast({
       kind: "error",
       message: t(key, { name, reason: commandErrorMessage(err) }) + modeSuffix,
@@ -441,14 +463,36 @@ export function FileBrowserPanel({
     setElevationMenuOpen(false);
     setOtherUserOpen(false);
     if (elevated) {
-      updateElevation(null);
+      // Issue #622: with running elevated operations the backend changes
+      // nothing and lists them; the user confirms (or cancels) first.
+      try {
+        const result = await sftpElevationDisable(sessionId, false);
+        if (!result.disabled) {
+          setStopPrompt({ operations: result.runningOperations, action: { kind: "disable" } });
+          return;
+        }
+      } catch (err) {
+        console.warn("Konnte erhöhten Modus nicht beenden:", err);
+      }
+      updateElevation(null, true);
       load(path, null);
       return;
     }
+    await enableElevation(targetUser);
+  };
+
+  const enableElevation = async (targetUser: string, confirmStop = false) => {
     setEnablingElevation(true);
     const generation = elevationGenerationRef.current;
     try {
-      const result = await sftpElevationEnable(sessionId, targetUser.trim() || null);
+      const result = await sftpElevationEnable(sessionId, targetUser.trim() || null, confirmStop);
+      if (result.runningOperations && result.runningOperations.length > 0) {
+        setStopPrompt({
+          operations: result.runningOperations,
+          action: { kind: "switch", targetUser },
+        });
+        return;
+      }
       if (generation !== elevationGenerationRef.current) {
         // Inzwischen ausgeschaltet/Verbindung weg — nicht wieder "erhöht"
         // anzeigen, Backend-Kanal schließen.
@@ -471,6 +515,26 @@ export function FileBrowserPanel({
       });
     } finally {
       setEnablingElevation(false);
+    }
+  };
+
+  const [stopPrompt, setStopPrompt] = useState<StopPrompt | null>(null);
+  /** Issue #622: "End elevated rights" in the dialog — stops the listed
+   * operations, then closes the channel. */
+  const confirmStopPrompt = async () => {
+    const prompt = stopPrompt;
+    setStopPrompt(null);
+    if (!prompt) return;
+    if (prompt.action.kind === "disable") {
+      try {
+        await sftpElevationDisable(sessionId, true);
+      } catch (err) {
+        console.warn("Konnte erhöhten Modus nicht beenden:", err);
+      }
+      updateElevation(null, true);
+      load(path, null);
+    } else {
+      await enableElevation(prompt.action.targetUser, true);
     }
   };
 
@@ -659,9 +723,36 @@ export function FileBrowserPanel({
           },
         ]);
       }),
+      onSftpTransferProgress((event) => {
+        if (event.sessionId !== sessionId) return;
+        setTransfers((prev) =>
+          prev.map((row) =>
+            row.id === event.transferId
+              ? {
+                  ...row,
+                  bytesDone: Math.max(row.bytesDone ?? 0, event.bytesDone),
+                  totalBytes: event.totalBytes ?? row.totalBytes,
+                  folder: event.folder
+                    ? { filesDone: event.folder.filesDone, filesTotal: event.folder.filesTotal }
+                    : row.folder,
+                }
+              : row,
+          ),
+        );
+      }),
       onSftpTransferFinished((event) => {
         if (event.sessionId !== sessionId) return;
-        if (event.error) {
+        if (event.stopped) {
+          // Issue #622: cancelled / stopped — a final state, not an error.
+          const stopped = event.stopped;
+          setTransfers((prev) =>
+            prev.map((row) =>
+              row.id === event.transferId
+                ? { ...row, stopped, incompleteRemotePath: event.incompleteRemotePath ?? undefined }
+                : row,
+            ),
+          );
+        } else if (event.error) {
           setTransfers((prev) =>
             prev.map((t) => (t.id === event.transferId ? { ...t, error: event.error } : t)),
           );
@@ -1612,6 +1703,33 @@ export function FileBrowserPanel({
                     ✕
                   </Button>
                 </>
+              ) : transfer.stopped ? (
+                <>
+                  <span className="text-amber-400">■</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-300">
+                    {t(
+                      transfer.stopped === "cancelled"
+                        ? "fileBrowser.transferCancelled"
+                        : "fileBrowser.transferStopped",
+                      { name: transfer.fileName },
+                    )}
+                    {transfer.incompleteRemotePath && (
+                      <span className="text-amber-300">
+                        {" "}
+                        {t("fileBrowser.transferIncomplete", { path: transfer.incompleteRemotePath })}
+                      </span>
+                    )}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
+                    aria-label={t("common.close")}
+                    title={t("common.close")}
+                  >
+                    ✕
+                  </Button>
+                </>
               ) : transfer.error ? (
                 <>
                   <span className="text-red-400">✗</span>
@@ -1639,7 +1757,33 @@ export function FileBrowserPanel({
                       { name: transfer.fileName },
                     )}
                     {transfer.totalBytes !== null && ` (${formatBytes(transfer.totalBytes)})`}
+                    {transfer.folder &&
+                      ` — ${t("fileBrowser.transferFiles", {
+                        done: transfer.folder.filesDone,
+                        total: transfer.folder.filesTotal,
+                      })}`}
                   </span>
+                  {transfer.totalBytes !== null && transfer.totalBytes > 0 ? (
+                    <progress
+                      className="h-1.5 w-24 shrink-0"
+                      max={transfer.totalBytes}
+                      value={Math.min(transfer.bytesDone ?? 0, transfer.totalBytes)}
+                      aria-label={transfer.fileName}
+                    />
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      sftpCancelTransfer(sessionId, transfer.id).catch((err) =>
+                        console.warn("Konnte Transfer nicht abbrechen:", err),
+                      )
+                    }
+                    aria-label={t("fileBrowser.transferCancel")}
+                    title={t("fileBrowser.transferCancel")}
+                  >
+                    ✕
+                  </Button>
                 </>
               )}
             </div>
@@ -2254,6 +2398,52 @@ export function FileBrowserPanel({
                 <span className="text-amber-300">{t("fileBrowser.folderUpload.skipped")}:</span>{" "}
                 <span className="font-mono">{e.path}</span> —{" "}
                 {t("fileBrowser.folderUpload.reason." + e.reason)}
+              </li>
+            ))}
+          </ul>
+        </DialogFrame>
+      )}
+
+      {stopPrompt && (
+        <DialogFrame
+          layer="sessionTab"
+          size="sm"
+          title={t("fileElevation.stopTitle")}
+          onClose={() => setStopPrompt(null)}
+          actions={
+            <>
+              <Button onClick={() => setStopPrompt(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button variant="danger" onClick={confirmStopPrompt}>
+                {t("fileElevation.toggleOff")}
+              </Button>
+            </>
+          }
+        >
+          <p>{t("fileElevation.stopBody")}</p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {stopPrompt.operations.map((op) => (
+              <li key={op.id} className="break-all">
+                <span className="font-semibold">
+                  {t(
+                    {
+                      download: "fileElevation.opDownload",
+                      upload: "fileElevation.opUpload",
+                      delete: "fileElevation.opDelete",
+                      chmod: "fileElevation.opChmod",
+                    }[op.kind],
+                  )}
+                </span>{" "}
+                <span className="font-mono">{op.path}</span>
+                {op.bytesTotal !== null && op.bytesDone !== null && (
+                  <span className="text-slate-400">
+                    {" "}
+                    ({formatBytes(op.bytesDone)} / {formatBytes(op.bytesTotal)}
+                    {op.filesTotal !== null &&
+                      op.filesDone !== null &&
+                      ` — ${t("fileBrowser.transferFiles", { done: op.filesDone, total: op.filesTotal })}`}
+                    )
+                  </span>
+                )}
               </li>
             ))}
           </ul>

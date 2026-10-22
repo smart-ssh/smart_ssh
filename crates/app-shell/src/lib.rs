@@ -24,6 +24,7 @@ mod elevated_sftp;
 /// `tauri::AppHandle` trägt (s. dortiger Moduldoc-Kommentar).
 mod event_emitter;
 mod file_clipboard;
+mod file_ops;
 mod first_run_notice;
 mod local_server;
 mod mcp_backend;
@@ -874,6 +875,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::clipboard_has_files,
             commands::claim_clipboard_files,
             commands::sftp_delete,
+            commands::sftp_cancel_transfer,
             commands::sftp_delete_preview,
             commands::sftp_rename,
             commands::sftp_mkdir,

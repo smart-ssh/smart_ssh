@@ -21,7 +21,8 @@ vi.mock("../api", () => ({
   sftpDownload: vi.fn(),
   sftpDownloadDefault: vi.fn(),
   sftpDownloadDir: vi.fn(),
-  sftpElevationDisable: vi.fn(() => Promise.resolve()),
+  sftpElevationDisable: vi.fn(() => Promise.resolve({ disabled: true, runningOperations: [] })),
+  sftpCancelTransfer: vi.fn(() => Promise.resolve(true)),
   sftpElevationEnable: vi.fn(),
   sftpElevationStatus: vi.fn(() => Promise.resolve(null)),
   sftpMkdir: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock("../events", () => ({
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferStarted: vi.fn(() => Promise.resolve(() => {})),
   onSftpTransferFinished: vi.fn(() => Promise.resolve(() => {})),
+  onSftpTransferProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({

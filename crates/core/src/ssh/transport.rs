@@ -179,6 +179,31 @@ pub trait RunningExec: Send {
     ) -> Result<ExecOutcome, SshError>;
 }
 
+/// Issue #622: Antwort des Aufrufers auf ein gelesenes Stück.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChunkControl {
+    Continue,
+    Stop,
+}
+
+/// Issue #622: Was ein Upload-Aufrufer für das nächste Stück liefert.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChunkSource {
+    /// Die ersten `n` Bytes des Puffers sind das nächste Stück.
+    Data(usize),
+    /// Quelle zu Ende.
+    Eof,
+    /// Abbruch gewünscht (Nutzer oder Widerruf).
+    Stop,
+}
+
+/// Issue #622: wie ein chunked Transfer endete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransferEnd {
+    Completed,
+    Stopped,
+}
+
 /// Dateizugriff über SFTP (Spec 0020, Abschnitt 3) — läuft, wie
 /// [`SshTransport::execute`], **nicht** über die Filter-Engine; Kontrolle
 /// über SFTP-initiierte Datei-Operationen ist Sache der aufrufenden Ebene
@@ -223,6 +248,29 @@ pub trait SftpSession: Send {
         progress: &mut (dyn FnMut(u64) + Send),
     ) -> Result<Vec<u8>, SshError>;
     async fn write_file(&mut self, path: &str, content: &[u8]) -> Result<(), SshError>;
+    /// Issue #622: liest `path` in Stücken von höchstens `chunk_size` Bytes
+    /// und übergibt jedes an `on_chunk`; der Speicher hält nie mehr als ein
+    /// Stück. Antwortet `on_chunk` mit [`ChunkControl::Stop`], endet das Lesen
+    /// sofort mit `Ok(`[`TransferEnd::Stopped`]`)` — vor dem nächsten Stück.
+    async fn read_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
+    ) -> Result<TransferEnd, SshError>;
+    /// Issue #622: Gegenstück zu [`Self::read_file_chunked`] — legt `path` an
+    /// (bzw. überschreibt es) und schreibt, was `next_chunk` liefert. Der
+    /// Aufrufer bekommt einen Puffer der Größe `chunk_size` und meldet, wie
+    /// viele Bytes davon gültig sind ([`ChunkSource`]). Bei
+    /// [`ChunkSource::Stop`] bleibt die bis dahin geschriebene Datei stehen
+    /// (der Aufrufer räumt sie auf) und das Ergebnis ist
+    /// `Ok(`[`TransferEnd::Stopped`]`)`.
+    async fn write_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
+    ) -> Result<TransferEnd, SshError>;
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
     /// Wie `stat`, folgt aber KEINEM Symlink am Zielpfad selbst (SFTP
     /// `LSTAT`) — meldet für einen Symlink dessen eigenen Typ (`is_dir ==

@@ -25,12 +25,14 @@ use app_logic::session::{Session, SessionManager};
 use app_logic::state::{AppState, SessionId};
 use ssh_manager_core::ssh::SftpSession;
 
-use super::{authorize_local_path, grant_for_live_session, upload_impl};
+use super::transfer::{stopped_error, upload_file, FileRun, FILE_OPERATION_STOPPED};
+use super::{authorize_local_path, grant_for_live_session};
 use crate::commands::elevation::{
     audit_elevated_change, lock_browser_sftp, run_browser_command, BrowserChannel,
 };
 use crate::elevated_sftp::ElevatedSftpRegistry;
 use crate::event_emitter::TauriEventEmitter;
+use crate::file_ops::OpKind;
 
 /// The upload button's "Upload folder" entry: native folder dialog in the
 /// backend (same pattern as `pick_upload_files`); the picked folder is
@@ -292,6 +294,39 @@ pub(super) async fn upload_folder_impl(
 ) -> CommandResult<FolderUploadSummary> {
     let plan = plan_blocking(root, snapshot).await?;
     let remote_root = join_remote(remote_dir, &plan.folder_name);
+    // Issue #622: ein Vorgang für den ganzen Ordner (Bestätigungsdialog,
+    // Abbrechen); Dateizahl und Gesamtgröße sind nach dem Durchlaufen des
+    // Baums bekannt.
+    let op_guard = channel.register_op(uuid::Uuid::new_v4(), OpKind::Upload, &remote_root);
+    let op = op_guard.handle();
+    {
+        let locals: Vec<_> = plan
+            .files
+            .iter()
+            .map(|f| f.local.as_path().to_path_buf())
+            .collect();
+        let count = locals.len() as u64;
+        let total = tokio::task::spawn_blocking(move || {
+            locals
+                .iter()
+                .filter_map(|p| std::fs::metadata(p).ok())
+                .map(|m| m.len())
+                .sum::<u64>()
+        })
+        .await
+        .unwrap_or(0);
+        op.set_files(0, Some(count));
+        op.set_bytes_total(Some(total));
+    }
+    let run = FileRun {
+        emitter,
+        session,
+        channel,
+        session_id,
+        op,
+        folder: true,
+    };
+    let mut base_bytes = 0u64;
     let mut summary = FolderUploadSummary {
         folder_name: plan.folder_name.clone(),
         skipped: plan.skipped.clone(),
@@ -323,6 +358,9 @@ pub(super) async fn upload_folder_impl(
     }
 
     for file in &plan.files {
+        if op.is_user_stopped() {
+            return Err(stopped_error());
+        }
         if failed_dirs
             .iter()
             .any(|f| file.relative.starts_with(&format!("{f}/")))
@@ -369,11 +407,27 @@ pub(super) async fn upload_folder_impl(
             .await
             .map_err(|e| format!("Hintergrund-Task für Ordner-Upload fehlgeschlagen: {e}"))?;
         let result = match fresh {
-            Ok(local) => upload_impl(emitter, session, channel, session_id, &local, &remote).await,
+            Ok(local) => {
+                upload_file(
+                    &run,
+                    uuid::Uuid::new_v4(),
+                    local.as_path(),
+                    &remote,
+                    base_bytes,
+                )
+                .await
+            }
             Err(err) => Err(err),
         };
         match result {
-            Ok(()) => summary.files_uploaded += 1,
+            Ok(sent) => {
+                summary.files_uploaded += 1;
+                base_bytes += sent;
+                op.add_files_done();
+            }
+            // Gestoppt: der ganze Ordner-Upload endet, die Zeile trägt den
+            // Zustand.
+            Err(err) if err.code == Some(FILE_OPERATION_STOPPED) => return Err(err),
             Err(err) => summary.failed.push(FailedEntry {
                 path: file.relative.clone(),
                 error: channel.transfer_error_message(&err),
