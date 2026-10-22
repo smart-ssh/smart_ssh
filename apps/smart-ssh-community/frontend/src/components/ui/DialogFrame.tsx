@@ -66,7 +66,7 @@ export function DialogFrame({
     <ModalBackdrop
       layer={layer}
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 narrow:items-stretch ${
-        reserveTitlebar ? "px-4 pb-4 pt-13 narrow:px-0 narrow:pb-0" : "p-4 narrow:p-0"
+        reserveTitlebar ? "px-4 pb-4 pt-13 narrow:px-0 narrow:pb-0" : "p-4 narrow:p-0 narrow:pt-9"
       }`}
     >
       {/* `role` is a dynamic value (dialog | alertdialog), which the linter cannot see; the key handler only wraps Tab (focus trap). */}

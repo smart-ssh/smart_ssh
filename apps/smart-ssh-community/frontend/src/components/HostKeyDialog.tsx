@@ -72,7 +72,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 narrow:items-stretch narrow:p-0">
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
       {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
        * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
        * damit kein String-Literal; die statische Analyse von
