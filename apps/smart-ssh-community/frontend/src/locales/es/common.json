@@ -130,7 +130,8 @@
     "rootDropZone": "Suelte aquí para mover al nivel superior (sin grupo)",
     "hintRoot": "→ nivel superior (sin grupo)",
     "hintGroup": "→ mover a este grupo",
-    "hintCycle": "Un grupo no puede moverse a su propio subgrupo"
+    "hintCycle": "Un grupo no puede moverse a su propio subgrupo",
+    "moveTo": "Mover «{{name}}» a…"
   },
   "management": {
     "emptyState": "Seleccione un grupo o servidor a la izquierda, o cree algo nuevo con “{{addGroup}}”/“{{addServer}}”."

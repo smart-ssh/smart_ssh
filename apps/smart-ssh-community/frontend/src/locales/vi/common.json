@@ -130,7 +130,8 @@
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
     "hintRoot": "→ cấp cao nhất (không thuộc nhóm)",
     "hintGroup": "→ chuyển vào nhóm này",
-    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó"
+    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
+    "moveTo": "Di chuyển “{{name}}” tới…"
   },
   "management": {
     "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\"."
