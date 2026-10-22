@@ -8,7 +8,15 @@ import { testI18n } from "../testI18n";
 import type { SessionTab } from "../useSessionTabs";
 import { NarrowHeaderNav } from "./NarrowHeaderNav";
 
-const base = { status: "connected", hasPendingAction: false, pendingActionId: null, mcp: null, attemptId: null, progress: [], failure: null } as const;
+const base: Omit<SessionTab, "sessionId" | "serverId" | "serverName" | "phase"> = {
+  status: "connected",
+  hasPendingAction: false,
+  pendingActionId: null,
+  mcp: null,
+  attemptId: null,
+  progress: [],
+  failure: null,
+};
 const tabs: SessionTab[] = [
   { ...base, sessionId: "s1", serverId: "a", serverName: "prod-db", phase: "connected" },
   { ...base, sessionId: "s2", serverId: "b", serverName: "staging", phase: "connecting" },
