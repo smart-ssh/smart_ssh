@@ -121,5 +121,5 @@ export function useTabsIdBase(): string {
   return useId();
 }
 
-const tabId = (base: string, id: string) => `${base}-tab-${id}`;
+export const tabId = (base: string, id: string) => `${base}-tab-${id}`;
 const panelId = (base: string, id: string) => `${base}-panel-${id}`;

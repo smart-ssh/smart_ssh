@@ -1117,3 +1117,172 @@ async fn test_issue_599_in_stream_overload_chunk_before_content_is_retried() {
     assert!(events.contains(&AiEvent::TextDelta("ok".to_string())));
     assert_eq!(events.last(), Some(&AiEvent::Done));
 }
+
+// ---- Issue #609: token usage -------------------------------------------
+
+fn usage_events(events: &[AiEvent]) -> Vec<ssh_manager_core::ai::AiUsage> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            AiEvent::RequestUsage(u) => Some(u.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+async fn send_to(server: &MockServer) -> Vec<AiEvent> {
+    send_to_model(server, "gpt-test").await
+}
+
+async fn send_to_model(server: &MockServer, model: &str) -> Vec<AiEvent> {
+    let provider = OpenAiCompatibleProvider::new(
+        server.uri(),
+        model,
+        "test-key",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+    provider.send(empty_context()).collect().await
+}
+
+#[tokio::test]
+async fn test_issue_609_request_carries_include_usage() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains(
+            r#""stream_options":{"include_usage":true}"#.to_string(),
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string("data: [DONE]\n\n"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let events = send_to(&server).await;
+    assert_eq!(events, vec![AiEvent::Done]);
+}
+
+#[tokio::test]
+async fn test_issue_609_plain_usage_chunk_with_reasoning_and_cache() {
+    let body = "data: {\"model\":\"gpt-5-2025\",\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n\
+data: {\"model\":\"gpt-5-2025\",\"service_tier\":\"default\",\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":50,\"prompt_tokens_details\":{\"cached_tokens\":64},\"completion_tokens_details\":{\"reasoning_tokens\":30}}}\n\n\
+data: [DONE]\n\n";
+    let server = mock_server_with_sse_body(body).await;
+    let events = send_to(&server).await;
+    assert_eq!(
+        usage_events(&events),
+        vec![ssh_manager_core::ai::AiUsage {
+            input_tokens: Some(100),
+            output_tokens: Some(50),
+            cache_read_tokens: Some(64),
+            reasoning_tokens: Some(30),
+            service_tier: Some("default".into()),
+            response_model: Some("gpt-5-2025".into()),
+            ..Default::default()
+        }]
+    );
+    assert_eq!(events.last(), Some(&AiEvent::Done));
+    assert!(matches!(events[events.len() - 2], AiEvent::RequestUsage(_)));
+}
+
+#[tokio::test]
+async fn test_issue_609_openrouter_cost_and_cache_write() {
+    let body = "data: {\"choices\":[{\"delta\":{\"content\":\"x\"},\"finish_reason\":\"stop\"}]}\n\n\
+data: {\"model\":\"anthropic/claude-x\",\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"cost\":0.00123,\"prompt_tokens_details\":{\"cached_tokens\":2,\"cache_write_tokens\":8},\"cost_details\":{\"upstream_inference_cost\":0.001}}}\n\n\
+data: [DONE]\n\n";
+    let server = mock_server_with_sse_body(body).await;
+    let events = send_to(&server).await;
+    assert_eq!(
+        usage_events(&events),
+        vec![ssh_manager_core::ai::AiUsage {
+            input_tokens: Some(10),
+            output_tokens: Some(5),
+            cache_read_tokens: Some(2),
+            cache_write_tokens: Some(8),
+            provider_reported_cost_usd: Some(0.00123),
+            response_model: Some("anthropic/claude-x".into()),
+            ..Default::default()
+        }]
+    );
+}
+
+#[tokio::test]
+async fn test_issue_609_minimal_usage_leaves_other_fields_none_and_no_usage_no_event() {
+    let body = "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n\
+data: {\"choices\":[],\"usage\":{\"completion_tokens\":3}}\n\n\
+data: [DONE]\n\n";
+    let server = mock_server_with_sse_body(body).await;
+    let events = send_to(&server).await;
+    assert_eq!(
+        usage_events(&events),
+        vec![ssh_manager_core::ai::AiUsage {
+            output_tokens: Some(3),
+            ..Default::default()
+        }]
+    );
+    let body =
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+    let server = mock_server_with_sse_body(body).await;
+    assert!(usage_events(&send_to(&server).await).is_empty());
+}
+
+#[tokio::test]
+async fn test_issue_609_truncated_text_reports_usage_once_before_text_truncated() {
+    let body =
+        "data: {\"choices\":[{\"delta\":{\"content\":\"abc\"},\"finish_reason\":\"length\"}]}\n\n\
+data: {\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":9}}\n\n\
+data: [DONE]\n\n";
+    let server = mock_server_with_sse_body(body).await;
+    let events = send_to(&server).await;
+    assert_eq!(usage_events(&events).len(), 1);
+    assert_eq!(events.last(), Some(&AiEvent::TextTruncated));
+}
+
+#[tokio::test]
+async fn test_issue_609_stream_cut_off_without_done_does_not_panic() {
+    // Connection ends after the usage chunk, no [DONE].
+    let body = "data: {\"choices\":[{\"delta\":{\"content\":\"abc\"}}]}\n\n\
+data: {\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":9}}\n\n";
+    let server = mock_server_with_sse_body(body).await;
+    let events = send_to(&server).await;
+    assert!(usage_events(&events).len() <= 1);
+}
+
+#[tokio::test]
+async fn test_issue_609_400_on_stream_options_retries_once_without_it_and_remembers() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(BodyContains("stream_options".to_string()))
+        .respond_with(ResponseTemplate::new(400).set_body_string(
+            r#"{"error":{"message":"Unrecognized request argument supplied: stream_options"}}"#,
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+                ),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let first = send_to_model(&server, "gpt-no-stream-options").await;
+    assert_eq!(first, vec![AiEvent::TextDelta("ok".into()), AiEvent::Done]);
+    // Second request in the same run: option is omitted up front, so the
+    // rejecting mock (expect(1)) is not hit again.
+    let second = send_to_model(&server, "gpt-no-stream-options").await;
+    assert_eq!(second, first);
+}

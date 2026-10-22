@@ -59,10 +59,6 @@ for (const category of ["AI Provider", "MCP Server"]) {
     await app.launch(longContent());
     const page = app.page;
     const dialog = await openSettings(page, category);
-    if (category === "AI Provider") {
-      await dialog.getByRole("button", { name: /Advanced/ }).click();
-      await dialog.getByRole("button", { name: "+ Header", exact: true }).click().catch(() => undefined);
-    }
     // Clicking inside the section scrolled it; measure the order from the top.
     await dialog.locator("nav ~ div").evaluate((root) => {
       for (const el of [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))]) el.scrollTop = 0;
@@ -72,6 +68,22 @@ for (const category of ["AI Provider", "MCP Server"]) {
     await expectUsable(dialog.getByRole("button", { name: "Close", exact: true }));
     await captureScreen(page, `settings-${category.replace(/\W/g, "").toLowerCase()}`);
   });
+
+  if (category === "AI Provider") {
+    // Issue #603: the add form moved into its own dialog.
+    test("settings: the add-provider dialog has a Tab order that follows the visual order, with visible focus", async ({ app }) => {
+      test.setTimeout(90_000);
+      await app.launch(longContent());
+      const page = app.page;
+      const settings = await openSettings(page, category);
+      await settings.getByRole("button", { name: "Add Provider", exact: true }).click();
+      const add = page.getByRole("dialog", { name: "Add Provider" });
+      await add.getByRole("button", { name: /Advanced/ }).click();
+      await add.getByRole("button", { name: "+ Header", exact: true }).click();
+      await expectTabOrderFollowsVisualOrder(page, add);
+      await expectNoClippedText(add);
+    });
+  }
 
   test(`settings: Escape closes the dialog from ${category} and focus returns to the trigger`, async ({ app }) => {
     await app.launch(longContent());

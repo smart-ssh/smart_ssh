@@ -114,6 +114,42 @@ ist das eine eigene Fehlerart; sie tritt vor jeder Anfrage auf.
 Bei „Kontext zu groß" kürzt die aufrufende Seite ältere Verlaufseinträge,
 bevor erneut gesendet wird (Spec 0057, Spec 0087).
 
+## 6a. Token-Verbrauch (Usage)
+
+Jeder Anbieter meldet den Verbrauch einer abgeschlossenen Anfrage in einer
+gemeinsamen, typisierten Form (`AiUsage`) und liefert ihn genau einmal als
+eigenes Ereignis unmittelbar vor dem Abschlussereignis (`Done` bzw.
+`TextTruncated`). Eine Anfrage, die ohne Abschlussereignis endet (Fehler,
+Abbruch), meldet keinen Verbrauch. Das Ereignis ändert das Chat-Verhalten
+nicht; es wird nirgends angezeigt oder gespeichert. Es ist unabhängig vom
+frühen Eingabegrößen-Signal für die Kompaktierung.
+
+Felder (alle optional; was der Endpunkt nicht sendet, bleibt leer, nichts
+wird geschätzt): Eingabe-, Ausgabe-, Cache-Lese-, Cache-Schreib- und
+Reasoning-Token, Anzahl Websuchen, Service-Tier, tatsächlich antwortendes
+Modell und vom Endpunkt gemeldete Kosten in USD. Bei Anthropic zählt die
+Eingabe ohne Cache-Anteile; bei OpenAI-artigen APIs enthält sie die
+gecachten Token.
+
+| Feld | Anthropic | Chat Completions (OpenAI, OpenRouter, Ollama, generisch) | Responses |
+|---|---|---|---|
+| Eingabe | `input_tokens` | `prompt_tokens` | `input_tokens` |
+| Ausgabe | `output_tokens` (letztes `message_delta`) | `completion_tokens` | `output_tokens` |
+| Cache gelesen | `cache_read_input_tokens` | `prompt_tokens_details.cached_tokens` | `input_tokens_details.cached_tokens` |
+| Cache geschrieben | Summe von `cache_creation` je TTL, sonst `cache_creation_input_tokens` | `prompt_tokens_details.cache_write_tokens` | – |
+| Reasoning | – | `completion_tokens_details.reasoning_tokens` | `output_tokens_details.reasoning_tokens` |
+| Websuchen | `server_tool_use.web_search_requests` | – | – |
+| Service-Tier | `service_tier` | `service_tier` | `service_tier` |
+| Modell | `model` | `model` | `model` |
+| Kosten | – | `usage.cost` (OpenRouter) | – |
+
+Chat-Completions-Anfragen senden `stream_options.include_usage = true`.
+Antwortet ein Endpunkt darauf mit 400, wird die Anfrage einmal ohne diese
+Option wiederholt (sonst unverändert); der Endpunkt bleibt für den Rest des
+App-Laufs ohne die Option, und es gibt dann keinen Verbrauch, aber keinen
+Fehler. Ein 400 wegen zu großen Kontexts löst diese Wiederholung nicht aus.
+Im Log stehen nur Zahlen, nie Nachrichteninhalt.
+
 ## 7. Akzeptanzfälle
 
 - Tool-Call-Antwort eines nativen Anbieters wird korrekt zu einem
@@ -127,6 +163,8 @@ bevor erneut gesendet wird (Spec 0057, Spec 0087).
 - Redaction maskiert bekannte Secret-Muster in Kommando-Ergebnissen und
   lässt den übrigen Output unverändert.
 - Ein ungültiger API-Key wird als Authentifizierungsfehler durchgereicht.
+- Eine abgeschlossene Anfrage meldet ihren Verbrauch genau einmal; fehlende
+  Angaben bleiben leer.
 
 ## 8. Konfiguration und Grenzen
 
