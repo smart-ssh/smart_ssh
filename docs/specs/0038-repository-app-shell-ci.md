@@ -185,6 +185,33 @@ Abschnitt 5). Regeln:
   je Start die Menge der vorhandenen Chat-Sitzungen, damit Reste nach einem
   Absturz zwischen Löschen und Aufruf verschwinden.
 
+### Beobachter der KI-Nutzung
+
+Eine Edition kann über die Verdrahtung beliebig viele Beobachter für die
+Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
+
+- Jede abgeschlossene KI-Anfrage einer Sitzung, die eine Nutzungsangabe
+  liefert, wird jedem Beobachter genau einmal gemeldet. Das gilt für den
+  Haupt-Chat (auch für automatische Folgerunden und Fortsetzungen) und für die
+  Nebenaufrufe: Risiko-Zweitmeinung, Einschleusungs-Prüfung, automatischer
+  Titel, Notiz-Vorschlag und Zusammenfassung alter Gesprächsrunden. Anfragen
+  ohne Sitzung (Modell-Abfrage, Prüfung eines Zugangs) werden nicht gemeldet.
+- Die Meldung nennt: gespeicherte Chat-Sitzung und Server (beide leer beim
+  lokalen Pseudo-Server; die Chat-Sitzung auch ohne Speicherung), laufende
+  Sitzung, Anbieter-Konfiguration, Anbieter-Typ, eingestelltes Modell, Zweck
+  der Anfrage, die Nutzungsangabe und den Zeitpunkt. Sie enthält keinen
+  Prompt, keine Antwort und kein Kommando.
+- Die Beobachter sind rein passiv: Sie geben nichts zurück und beeinflussen
+  weder Filter noch Bestätigung noch Ausführung. Sie werden erst nach dem
+  Ende der Anfrage und außerhalb des Streamings aufgerufen. Ein langsamer
+  oder abstürzender Beobachter verzögert oder stört den Chat nicht; ein
+  Absturz wird einmal ohne Inhalt protokolliert und die übrigen Beobachter
+  werden trotzdem benachrichtigt.
+- Trifft die Nutzungsangabe erst ein, nachdem die Auswertung des Antwort-
+  Stroms beendet war, entsteht keine Meldung; der Kern wartet nie darauf.
+- Der Kern speichert nichts davon. Community registriert keinen Beobachter;
+  dann ändert sich nichts.
+
 ## 3. Ein Binary je Edition
 
 Das Community-Binary ist ein dünnes Programm, das nur die Verdrahtung der

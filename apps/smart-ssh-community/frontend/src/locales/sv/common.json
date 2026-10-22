@@ -1099,6 +1099,7 @@
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",
+    "composerMore": "Fler inmatningsåtgärder",
     "newChat": "Ny chatt",
     "newChatDisabledHint": "Inte tillgängligt medan AI svarar eller en bekräftelse är öppen.",
     "autoContinuing": "Automatiskt läge körs — AI svarar på det senaste resultatet på egen hand…",

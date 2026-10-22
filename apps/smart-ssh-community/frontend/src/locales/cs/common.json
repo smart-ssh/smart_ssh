@@ -1113,6 +1113,7 @@
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",
+    "composerMore": "Další akce zadávání",
     "newChat": "Nový chat",
     "newChatDisabledHint": "Není dostupné, dokud AI odpovídá nebo je otevřeno potvrzení.",
     "autoContinuing": "Běží automatický režim — AI na poslední výsledek odpovídá sama…",

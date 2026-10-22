@@ -20,6 +20,7 @@
 //! er erreichbar ist (A1).
 
 pub mod ai_provider_factory;
+pub mod ai_usage;
 pub mod auto_reconnect;
 pub mod chat_content_extension;
 pub mod compaction;
