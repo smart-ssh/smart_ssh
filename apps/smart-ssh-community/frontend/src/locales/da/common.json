@@ -418,6 +418,11 @@
     "overview": "Oversigt",
     "pendingAction": "Venter på bekræftelse",
     "closeTab": "Luk fanen \"{{name}}\"",
+    "menu": {
+      "open": "Åbn navigationsmenuen",
+      "title": "Navigationsmenu",
+      "sessions": "Åbne sessioner"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Eksternt værktøj",

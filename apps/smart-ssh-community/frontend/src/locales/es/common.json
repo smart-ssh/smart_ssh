@@ -418,6 +418,11 @@
     "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
+    "menu": {
+      "open": "Abrir el menú de navegación",
+      "title": "Menú de navegación",
+      "sessions": "Sesiones abiertas"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Herramienta externa",

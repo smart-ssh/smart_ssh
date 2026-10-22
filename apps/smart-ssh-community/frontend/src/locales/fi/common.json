@@ -418,6 +418,11 @@
     "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",
+    "menu": {
+      "open": "Avaa navigointivalikko",
+      "title": "Navigointivalikko",
+      "sessions": "Avoimet istunnot"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Ulkoinen työkalu",

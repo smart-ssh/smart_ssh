@@ -18,7 +18,11 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 
 ## 3. Rahmen
 
-- Die Navigation liegt hinter einem Burger-Menü. Es enthält Übersicht, Verbinden, Verwalten, Regeln, Einstellungen und die offenen Sitzungen.
+- Die Titelleiste zeigt nur eine Burger-Schaltfläche und den aktuellen Titel: auf den Übersichtsseiten den App-Namen, in einer Sitzung Servername und Verbindungszustand. Reiter und die Navigation der Übersicht erscheinen nicht inline. Die Titelleiste ist dabei 44 px hoch; der Rest der Leiste bleibt ziehbar, die Fenster-Steuerung der Plattform bleibt frei.
+- Die Burger-Schaltfläche öffnet ein Menü von der linken Kante, beschriftet als Navigationsmenü. Es enthält Übersicht, Verbinden, Verwalten, Regeln und Einstellungen; darunter den Abschnitt „Offene Sitzungen“ mit jeder Sitzung samt Name, Zustand (verbindet, verbunden, fehlgeschlagen, Warnhinweis bei wartender Bestätigung) und Schließen-Schaltfläche. Jeder Eintrag führt genau dorthin wie sein Gegenstück im breiten Layout; das Schließen einer Sitzung verhält sich wie das Schließen ihres Reiters (gleiche Rückfrage, gleicher Verbindungsabbau) und lässt das Menü offen.
+- Der aktuelle Eintrag ist markiert.
+- Das Menü schließt bei Auswahl eines Eintrags, mit Escape, bei einem Tipp außerhalb und sobald das Fenster 640 px erreicht. Solange es offen ist, bleibt der Fokus darin; danach kehrt er zur Burger-Schaltfläche zurück.
+- Die Tastenkürzel für Sitzungen gelten unverändert.
 
 ## 4. Sitzungsansicht
 

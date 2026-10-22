@@ -1,17 +1,10 @@
 import { useState, type FocusEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Spinner } from "./ui";
-import { sessionTabLabel, type SessionTab } from "../useSessionTabs";
+import { type SessionTab } from "../useSessionTabs";
+import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
-
-const STATUS_DOT: Record<SessionTab["status"], string> = {
-  connected: "bg-emerald-500",
-  disconnected: "bg-slate-500",
-  reconnecting: "bg-amber-500",
-  awaiting_host_key: "bg-amber-500",
-};
 
 interface SessionTabBarProps {
   tabs: SessionTab[];
@@ -106,12 +99,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
         // MCP-Abzeichen und zeigen eine wartende Bestätigung als
         // beschriftetes Abzeichen statt nur als Punkt — sie werden nie von
         // selbst aktiv, der Hinweis muss also aus dem Hintergrund auffallen.
-        const label =
-          tab.phase === "connecting"
-            ? t("connectTab.connecting", { name: tab.serverName })
-            : tab.phase === "failed"
-              ? t("connectTab.failed", { name: tab.serverName })
-              : sessionTabLabel(tab, t("sessionTabs.mcp.unnamedClient"));
+        const label = tabDisplayLabel(tab, t);
         return (
           <div
             key={tab.sessionId}
@@ -136,37 +124,12 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
                     : label
               }
             >
-              {tab.phase === "connecting" ? (
-                <Spinner className="h-2.5 w-2.5 shrink-0" />
-              ) : tab.phase === "failed" ? (
-                <span aria-hidden="true" className="shrink-0 text-red-400">
-                  ✗
-                </span>
-              ) : (
-                <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[tab.status]}`} />
-              )}
-              {tab.mcp && (
-                <span className="shrink-0 border border-fuchsia-500/60 px-1 text-[10px] leading-tight text-fuchsia-300">
-                  {t("sessionTabs.mcp.badge")}
-                </span>
-              )}
-              <span
-                title={label}
-                className={tab.mcp ? "max-w-[24ch] truncate" : tab.phase !== "connected" ? "max-w-[28ch] truncate" : "max-w-[12ch] truncate"}
-              >
-                {label}
-              </span>
-              {tab.hasPendingAction &&
-                (tab.mcp ? (
-                  <span className="shrink-0 animate-pulse bg-amber-400 px-1 text-[10px] leading-tight text-slate-950">
-                    {t("sessionTabs.mcp.pendingBadge")}
-                  </span>
-                ) : (
-                  <span
-                    className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
-                    title={t("sessionTabs.pendingAction")}
-                  />
-                ))}
+              <SessionTabContent
+                tab={tab}
+                t={t}
+                label={label}
+                labelClass={tab.mcp ? "max-w-[24ch] truncate" : tab.phase !== "connected" ? "max-w-[28ch] truncate" : "max-w-[12ch] truncate"}
+              />
             </button>
             <button
               type="button"
