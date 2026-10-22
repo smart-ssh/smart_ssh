@@ -13,11 +13,13 @@ import {
   onActionDecisionEscalated,
   onChatActionProposed,
   onChatActionResult,
+  onChatSessionChanged,
   onConnectionStatusChanged,
   onMcpActionTabRequested,
 } from "./events";
 // Registriert die Test-i18n-Instanz global für `useTranslation()` im Hook.
 import "./testI18n";
+import { getChatSessionId, resetChatSessionIdsForTests } from "./chatSessionIds";
 import type { ChatActionProposedEvent, McpActionTabRequestedEvent } from "./types";
 import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
@@ -36,6 +38,7 @@ vi.mock("./events", () => ({
   onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
   onConnectionStatusChanged: vi.fn(() => Promise.resolve(() => {})),
   onMcpActionTabRequested: vi.fn(() => Promise.resolve(() => {})),
+  onChatSessionChanged: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 // jsdom hat kein `window.confirm` — `requestCloseTab` fragt bei einer
@@ -361,5 +364,35 @@ describe("useSessionTabs / closing the active tab (Spec 0104, §3)", () => {
 
     expect(result.current.tabs).toEqual([]);
     expect(result.current.activeSessionId).toBeNull();
+  });
+});
+
+// Issue #611: the chat session id of a runtime session follows
+// `chat-session-changed`, also before the tab exists.
+describe("useSessionTabs / chat session id (Issue #611)", () => {
+  it("stores the id from list_sessions and from chat-session-changed", async () => {
+    resetChatSessionIdsForTests();
+    let handler: ((e: { sessionId: string; chatSessionId: string | null }) => void) | null = null;
+    vi.mocked(onChatSessionChanged).mockImplementation((h) => {
+      handler = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(listSessions).mockResolvedValue([
+      {
+        sessionId: "session-1",
+        serverId: "server-1",
+        serverName: "prod-db",
+        status: "connected",
+        hasPendingAction: false,
+        chatSessionId: "chat-a",
+        mcp: null,
+      },
+    ]);
+    await renderWithOneTab();
+    expect(getChatSessionId("session-1")).toBe("chat-a");
+    act(() => handler!({ sessionId: "session-1", chatSessionId: "chat-b" }));
+    expect(getChatSessionId("session-1")).toBe("chat-b");
+    act(() => handler!({ sessionId: "not-a-tab-yet", chatSessionId: "chat-c" }));
+    expect(getChatSessionId("not-a-tab-yet")).toBe("chat-c");
   });
 });

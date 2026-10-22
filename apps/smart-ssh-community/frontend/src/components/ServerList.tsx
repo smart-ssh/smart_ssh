@@ -55,6 +55,10 @@ interface ServerListProps {
    * bleibt, statt bei jedem Remount dieser Komponente zurückzufallen. */
   collapsedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  /** Issue #611: an extension's request to resume a saved chat session; it
+   * takes the same path as choosing the session in the picker. */
+  resumeRequest?: { serverId: string; chatSessionId: string } | null;
+  onResumeRequestConsumed?: () => void;
   /** Spec 0069, Teil C1 (BL-0082): Klick auf "Ersten Server anlegen" im
    * Einstiegs-Block — wechselt zum Tab "Verwalten" mit geöffnetem
    * Neu-Formular (`App.tsx`s `handleCreateFirstServer`). */
@@ -98,6 +102,8 @@ export function ServerList({
   onSwitchToExistingTab,
   collapsedGroupIds,
   onToggleGroup,
+  resumeRequest = null,
+  onResumeRequestConsumed,
   onCreateFirstServer,
   onCreateServerInGroup,
 }: ServerListProps) {
@@ -121,6 +127,8 @@ export function ServerList({
   // statt eines rohen Backend-Fehlers).
   const [firstRunAcknowledged, setFirstRunAcknowledged] = useState<boolean | null>(null);
   const [pendingConnectServer, setPendingConnectServer] = useState<ServerDto | null>(null);
+  // Issue #611: chat session to resume once the first-run notice is done.
+  const [pendingResumeId, setPendingResumeId] = useState<string | null>(null);
   // Spec 0034, Abschnitt 6: `null` = kein Auswahl-Screen offen. Enthält
   // sowohl den Server (für Titel/erneutes Nachladen nach Umbenennen/
   // Löschen) als auch die aktuell geladene Sitzungsliste.
@@ -187,11 +195,38 @@ export function ServerList({
       .catch(() => setFirstRunAcknowledged(false));
   }, []);
 
-  const performConnect = async (server: ServerDto) => {
+  const performConnect = async (server: ServerDto, resumeChatSessionId?: string) => {
     setError(null);
     setConnectFailure(null);
-    onStartConnect({ id: server.id, name: server.name });
+    const target = { id: server.id, name: server.name };
+    if (resumeChatSessionId) onStartConnect(target, resumeChatSessionId);
+    else onStartConnect(target);
   };
+
+  // Issue #611: same checks as a click on the server plus the picker's
+  // resume choice: open tab → switch; first-run notice → show it first;
+  // otherwise the connecting tab resumes the chat session.
+  useEffect(() => {
+    if (!resumeRequest || loading || firstRunAcknowledged === null) return;
+    onResumeRequestConsumed?.();
+    const existing = findExistingSessionId(resumeRequest.serverId);
+    if (existing) {
+      onSwitchToExistingTab(existing);
+      return;
+    }
+    const server = servers.find((s) => s.id === resumeRequest.serverId);
+    if (!server) {
+      console.error("resume request for an unknown or unusable server");
+      return;
+    }
+    if (firstRunAcknowledged === false) {
+      setPendingResumeId(resumeRequest.chatSessionId);
+      setPendingConnectServer(server);
+      return;
+    }
+    void performConnect(server, resumeRequest.chatSessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeRequest, loading, firstRunAcknowledged, servers]);
 
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
    * `connect()`-Aufruf, nicht die übrige App-Nutzung davor — deshalb hier
@@ -265,7 +300,9 @@ export function ServerList({
     // Jetzt wird der lokale Zustand erst NACH erfolgreichem Speichern
     // gesetzt.
     const server = pendingConnectServer;
+    const resumeId = pendingResumeId;
     setPendingConnectServer(null);
+    setPendingResumeId(null);
     try {
       await saveFirstRunNoticeAcknowledged();
     } catch (err) {
@@ -276,7 +313,9 @@ export function ServerList({
     // Spec 0031, Abschnitt 6: Erweiterungs-Handler erst nach erfolgreichem
     // Speichern; sie blockieren den Verbindungsaufbau nicht.
     afterStored();
-    if (server) await performConnect(server);
+    if (server) {
+      await performConnect(server, resumeId ?? undefined);
+    }
   };
 
   const renderServerRow = (server: ServerDto, depth: number) => (

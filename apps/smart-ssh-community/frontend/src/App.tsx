@@ -17,7 +17,11 @@ import { SessionView } from "./components/SessionView";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
 import { commandErrorMessage, listAiProviders } from "./api";
-import { subscribeRequestServerNoteEdit } from "./navigationBus";
+import {
+  subscribeRequestResumeChatSession,
+  subscribeRequestServerNoteEdit,
+  type ResumeChatSessionRequest,
+} from "./navigationBus";
 import { useIsNarrow } from "./hooks/useIsNarrow";
 import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
 import { useSessionTabs } from "./useSessionTabs";
@@ -57,6 +61,25 @@ function App() {
     markActionSettled,
     requestCloseTab,
   } = useSessionTabs();
+
+  // Issue #611: an extension asks to resume a saved chat session. An open
+  // tab of the server wins (Spec 0017 §3); otherwise the overview takes the
+  // request and runs the picker's resume path (first-run gate, connecting tab).
+  const [resumeRequest, setResumeRequest] = useState<ResumeChatSessionRequest | null>(null);
+  useEffect(
+    () =>
+      subscribeRequestResumeChatSession((request) => {
+        const existing = findExistingSessionId(request.serverId);
+        if (existing) {
+          switchTo(existing);
+          return;
+        }
+        switchTo(null);
+        setTab("connect");
+        setResumeRequest(request);
+      }),
+    [findExistingSessionId, switchTo],
+  );
 
   useEffect(
     () =>
@@ -231,6 +254,8 @@ function App() {
           onSwitchToExistingTab={switchTo}
           onStartConnect={startConnect}
           connectingServerIds={connectingServerIds}
+          resumeRequest={resumeRequest}
+          onResumeRequestConsumed={() => setResumeRequest(null)}
           pendingNoteEditSelection={pendingNoteEditSelection}
           onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
@@ -254,6 +279,9 @@ interface MainScreenProps {
    * `navigationBus`. */
   pendingNoteEditSelection: Selection | null;
   onNoteEditSelectionConsumed: () => void;
+  /** Issue #611. */
+  resumeRequest: ResumeChatSessionRequest | null;
+  onResumeRequestConsumed: () => void;
   refreshProviderStatus: () => void;
   /** Issue #548. */
   onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
@@ -282,6 +310,8 @@ function MainScreen({
   onSwitchToExistingTab,
   pendingNoteEditSelection,
   onNoteEditSelectionConsumed,
+  resumeRequest,
+  onResumeRequestConsumed,
   onCreateFirstServer,
   onCreateServerInGroup,
 }: MainScreenProps) {
@@ -358,6 +388,8 @@ function MainScreen({
               onSwitchToExistingTab={onSwitchToExistingTab}
               collapsedGroupIds={collapsedGroupIds}
               onToggleGroup={toggleGroup}
+              resumeRequest={resumeRequest}
+              onResumeRequestConsumed={onResumeRequestConsumed}
               onCreateFirstServer={onCreateFirstServer}
               onCreateServerInGroup={onCreateServerInGroup}
             />

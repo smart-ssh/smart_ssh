@@ -1245,6 +1245,9 @@ pub struct SessionSummaryDto {
     pub server_name: String,
     pub status: ConnectionStatus,
     pub has_pending_action: bool,
+    /// Issue #611: current persisted chat session id (`None` for the local
+    /// pseudo-server and no-persist sessions).
+    pub chat_session_id: Option<String>,
     /// Spec 0104: `Some`, wenn die Sitzung einem MCP-Client gehört — das
     /// Frontend beschriftet und kennzeichnet den Tab dann als MCP-Tab, auch
     /// nach einem Reload.
