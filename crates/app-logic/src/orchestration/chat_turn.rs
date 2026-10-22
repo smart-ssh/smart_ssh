@@ -61,6 +61,10 @@ mod tests_web;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_web_research_rejected;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_usage;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
