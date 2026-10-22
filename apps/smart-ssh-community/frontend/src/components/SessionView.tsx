@@ -8,6 +8,7 @@ import { sessionTabLabel } from "../useSessionTabs";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
 import { useDragResize } from "../useDragResize";
 import { ChatPanel } from "./ChatPanel";
+import { SessionHeaderItems } from "../extensions/SessionHeaderItems";
 import { Button } from "./ui";
 import { FileBrowserPanel } from "./FileBrowserPanel";
 import { TerminalView, type TerminalLink } from "./TerminalView";
@@ -335,6 +336,7 @@ export function SessionView({
               {t("session.reconnectGaveUp")}
             </output>
           )}
+          <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
           {link !== "live" && autoAttempt === null && (
             <Button
               variant="secondary"

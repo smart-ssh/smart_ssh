@@ -154,6 +154,21 @@ export interface ServerSettingsTabContribution {
   component: ComponentType<{ serverId: string }>;
 }
 
+/** Issue #611 (Spec 0038, Abschnitt 4): a small item in the header of a
+ * connected (non-MCP) session, between the status and the reconnect /
+ * Disconnect controls. The component gets ids only (no credentials, no
+ * message content). `chatSessionId` is `null` for the local pseudo-server
+ * and no-persist sessions. */
+export interface SessionHeaderItemContribution {
+  id: string;
+  order?: number;
+  component: ComponentType<{
+    runtimeSessionId: string;
+    serverId: string;
+    chatSessionId: string | null;
+  }>;
+}
+
 /** Kontext für einen Abschnitt im Gruppen-Formular (nur bestehende Gruppen). */
 export interface GroupFormSectionContext {
   groupId: string;
@@ -216,6 +231,7 @@ interface Registry {
   composerDropHandlers: Map<string, ComposerDropHandler>;
   serverFormSections: Map<string, ServerFormSectionContribution>;
   serverSettingsTabs: Map<string, ServerSettingsTabContribution>;
+  sessionHeaderItems: Map<string, SessionHeaderItemContribution>;
   groupFormSections: Map<string, GroupFormSectionContribution>;
   manageViews: Map<string, ManageViewContribution>;
   settingsSections: Map<string, SettingsSectionContribution>;
@@ -228,6 +244,7 @@ const registry: Registry = {
   composerDropHandlers: new Map(),
   serverFormSections: new Map(),
   serverSettingsTabs: new Map(),
+  sessionHeaderItems: new Map(),
   groupFormSections: new Map(),
   manageViews: new Map(),
   settingsSections: new Map(),
@@ -322,6 +339,7 @@ export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[] {
 const formSlotListeners = new Set<() => void>();
 let serverFormSectionsSnapshot: ServerFormSectionContribution[] = [];
 let serverSettingsTabsSnapshot: ServerSettingsTabContribution[] = [];
+let sessionHeaderItemsSnapshot: SessionHeaderItemContribution[] = [];
 let groupFormSectionsSnapshot: GroupFormSectionContribution[] = [];
 let manageViewsSnapshot: ManageViewContribution[] = [];
 
@@ -330,6 +348,9 @@ function notifyFormSlotsChanged(): void {
   // Map insertion order is the registration order; a replace keeps its slot.
   // Array.prototype.sort is stable, so equal `order` keeps that order.
   serverSettingsTabsSnapshot = Array.from(registry.serverSettingsTabs.values()).sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0),
+  );
+  sessionHeaderItemsSnapshot = Array.from(registry.sessionHeaderItems.values()).sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0),
   );
   groupFormSectionsSnapshot = Array.from(registry.groupFormSections.values());
@@ -363,6 +384,16 @@ export function unregisterServerSettingsTab(id: string): void {
   if (registry.serverSettingsTabs.delete(id)) notifyFormSlotsChanged();
 }
 
+/** Registers (or replaces, same `id`) an item in the session header. */
+export function registerSessionHeaderItem(item: SessionHeaderItemContribution): void {
+  registry.sessionHeaderItems.set(item.id, item);
+  notifyFormSlotsChanged();
+}
+
+export function unregisterSessionHeaderItem(id: string): void {
+  if (registry.sessionHeaderItems.delete(id)) notifyFormSlotsChanged();
+}
+
 export function registerGroupFormSection(section: GroupFormSectionContribution): void {
   registry.groupFormSections.set(section.id, section);
   notifyFormSlotsChanged();
@@ -380,6 +411,9 @@ export function listServerFormSections(): ServerFormSectionContribution[] {
 export function listServerSettingsTabs(): ServerSettingsTabContribution[] {
   return serverSettingsTabsSnapshot;
 }
+export function listSessionHeaderItems(): SessionHeaderItemContribution[] {
+  return sessionHeaderItemsSnapshot;
+}
 export function listGroupFormSections(): GroupFormSectionContribution[] {
   return groupFormSectionsSnapshot;
 }
@@ -396,6 +430,7 @@ export function resetRegistryForTests(): void {
   registry.firstRunNoticeExtensions.clear();
   registry.serverFormSections.clear();
   registry.serverSettingsTabs.clear();
+  registry.sessionHeaderItems.clear();
   registry.groupFormSections.clear();
   registry.manageViews.clear();
   notifyFormSlotsChanged();

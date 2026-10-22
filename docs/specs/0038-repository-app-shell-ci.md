@@ -222,6 +222,22 @@ registrieren kann. Jeder Typ hat einen tatsächlichen Renderer:
   eingebunden und bleibt eingebunden, solange derselbe Server gewählt ist.
   Wird der aktive Reiter abgemeldet, zeigt die Ansicht wieder Allgemein.
   Eine erneute Registrierung mit derselben Kennung ersetzt den Reiter,
+- **Einträge im Sitzungs-Kopf**: ein kleines Element in der Kopfzeile einer
+  verbundenen Sitzung, zwischen Status und den Schaltflächen für erneutes
+  Verbinden und Trennen, sortiert nach einer optionalen Reihenfolge und dann
+  nach Registrierungsreihenfolge. Es erscheint nicht in MCP-Sitzungen. Es
+  bekommt nur Kennungen: die ID der laufenden Sitzung, die Server-ID und die
+  ID des aktuellen gespeicherten Chats (leer beim lokalen Pseudo-Server und
+  bei Sitzungen ohne gespeicherten Chat; sie ändert sich nach „Neuer Chat“),
+  weder Zugangsdaten noch Nachrichten. Ein Eintrag lässt sich wieder
+  abmelden,
+- **Anfrage, einen Chat fortzusetzen**: eine Edition kann die App bitten, einen
+  gespeicherten Chat eines Servers fortzusetzen. Das verhält sich genau wie
+  die Wahl dieses Chats in der Chat-Auswahl: Hat der Server schon einen
+  offenen Tab, wird zu ihm gewechselt und nichts fortgesetzt (Spec 0017 §3);
+  sonst gelten der Erststart-Hinweis (Spec 0031), der Verbindungs-Tab mit
+  Fortschritt, die Host-Key-Abfrage und „Erneut versuchen“ wie beim
+  Fortsetzen aus der Auswahl. Die Anfrage umgeht keine dieser Prüfungen,
 - **Abschnitte im Gruppen-Formular**: wie beim Server, nur für bestehende
   Gruppen,
 - **Ansichten im Verwalten-Tab**: ein Eintrag mit Beschriftung und Symbol
@@ -236,7 +252,7 @@ zuvor.
 
 Die Beiträge werden registriert, bevor die erste Komponente rendert; eine
 spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig. Bei
-Einstellungs-Abschnitten, Formular-Abschnitten, Server-Reitern, Verwalten-Ansichten und
+Einstellungs-Abschnitten, Formular-Abschnitten, Server-Reitern, Sitzungs-Kopf-Einträgen, Verwalten-Ansichten und
 Chat-Aktionen erscheint sie in einer bereits geöffneten Ansicht ohne Neuladen.
 
 **Berechtigungen im Frontend:** Ein Hook liest den Stand der

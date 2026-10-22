@@ -6,6 +6,7 @@ import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAiSshSplitWidthPx, saveAiSshSplitWidthPx } from "../layoutSettings";
 import { testI18n } from "../testI18n";
+import { registerSessionHeaderItem, resetRegistryForTests } from "../extensions/registry";
 import { SessionView } from "./SessionView";
 
 vi.mock("./ChatPanel", () => ({
@@ -276,5 +277,33 @@ describe("SessionView MCP session (Spec 0104)", () => {
 
     expect(screen.getByTestId("chat-panel-stub")).toHaveTextContent("chat-panel-stub");
     expect(screen.getByText("terminal-stub")).toBeInTheDocument();
+  });
+});
+
+describe("SessionView header items (Issue #611)", () => {
+  it("renders a registered item in a normal session but not in an MCP session", () => {
+    registerSessionHeaderItem({
+      id: "probe",
+      component: ({ runtimeSessionId }) => <span data-testid="hdr-item">{runtimeSessionId}</span>,
+    });
+    try {
+      const { unmount } = renderSessionView();
+      expect(screen.getByTestId("hdr-item")).toHaveTextContent("session-1");
+      unmount();
+      render(
+        <SessionView
+          sessionId="session-1"
+          serverName="srv1"
+          serverId="server-1"
+          onRequestClose={vi.fn()}
+          onActionSettled={vi.fn()}
+          isActiveTab={true}
+          mcp={{ clientName: "client" }}
+        />,
+      );
+      expect(screen.queryByTestId("hdr-item")).toBeNull();
+    } finally {
+      resetRegistryForTests();
+    }
   });
 });

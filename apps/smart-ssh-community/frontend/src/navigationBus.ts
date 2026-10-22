@@ -20,3 +20,25 @@ export function subscribeRequestServerNoteEdit(listener: Listener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+/** Issue #611: an extension asks to resume a saved chat session of a server.
+ * `App` handles it with the same path as the session picker (switch to an
+ * open tab of the server, otherwise the first-run gate and the connecting
+ * tab). */
+export interface ResumeChatSessionRequest {
+  serverId: string;
+  chatSessionId: string;
+}
+
+type ResumeListener = (request: ResumeChatSessionRequest) => void;
+
+const resumeListeners = new Set<ResumeListener>();
+
+export function requestResumeChatSession(serverId: string, chatSessionId: string): void {
+  for (const listener of Array.from(resumeListeners)) listener({ serverId, chatSessionId });
+}
+
+export function subscribeRequestResumeChatSession(listener: ResumeListener): () => void {
+  resumeListeners.add(listener);
+  return () => resumeListeners.delete(listener);
+}

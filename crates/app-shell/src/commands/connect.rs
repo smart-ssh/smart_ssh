@@ -998,6 +998,12 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
         ConnectionStatus::Connected,
         None,
     );
+    // Issue #611: the frontend learns the chat session id of the new session.
+    app_logic::events::emit_chat_session_changed(
+        &crate::event_emitter::TauriEventEmitter(app.clone()),
+        session_id,
+        chat_session_id,
+    );
     Ok(session_id)
 }
 
@@ -1115,6 +1121,8 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
             }
             tracing::info!(session_id = %session_id, "session reconnected");
             emit_connection_status_changed(&emitter, session_id, ConnectionStatus::Connected, None);
+            let current = *session.chat_session_id.lock().await;
+            app_logic::events::emit_chat_session_changed(&emitter, session_id, current);
             Ok(())
         }
         Err(err) => {
