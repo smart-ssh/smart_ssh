@@ -24,6 +24,7 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 use ssh_manager_core::ssh::SftpSession;
 
 use crate::commands::BrowserAccess;
+use crate::file_ops::{FileOps, StopReason, STOP_WAIT};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::SessionId;
 
@@ -192,6 +193,9 @@ impl ElevatedSftpSlot {
 #[derive(Default)]
 pub struct ElevatedSftpRegistry {
     slots: StdMutex<HashMap<SessionId, ElevatedSftpSlot>>,
+    /// Issue #622: laufende Datei-Operationen aller Sitzungen. Jede Stelle
+    /// unten, die einen Kanal widerruft, stoppt auch dessen Operationen.
+    ops: Arc<FileOps>,
     /// Nur für den Regressionstest T8b (Spec 0084, §6): ein Haltepunkt
     /// **zwischen** den beiden Schritten von [`Self::remove_session`]. Der
     /// Test lässt dort ein gleichzeitiges Aktivieren vollständig
@@ -206,6 +210,10 @@ pub struct ElevatedSftpRegistry {
 type InterleaveHook = Box<dyn Fn() + Send>;
 
 impl ElevatedSftpRegistry {
+    pub(crate) fn ops(&self) -> &Arc<FileOps> {
+        &self.ops
+    }
+
     /// Der erhöhte Kanal dieser Sitzung, sofern aktiv.
     pub(crate) fn slot(
         &self,
@@ -243,6 +251,7 @@ impl ElevatedSftpRegistry {
         // dessen Sperre wartet.
         if let Some(previous) = &previous {
             previous.mark_revoked();
+            self.ops.stop_elevated(session_id, StopReason::Revoked);
         }
         Ok(previous)
     }
@@ -256,6 +265,7 @@ impl ElevatedSftpRegistry {
         let slot = self.slots.lock().unwrap().remove(&session_id);
         if let Some(slot) = &slot {
             slot.mark_revoked();
+            self.ops.stop_elevated(session_id, StopReason::Revoked);
         }
         slot
     }
@@ -296,6 +306,7 @@ impl ElevatedSftpRegistry {
         let slot = self.slots.lock().unwrap().remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
+            self.ops.stop_elevated(session_id, StopReason::Revoked);
         }
         session
     }
@@ -307,6 +318,7 @@ impl ElevatedSftpRegistry {
         let slot = self.slots.lock().unwrap().remove(&session_id);
         if let Some(slot) = slot {
             slot.mark_revoked();
+            self.ops.stop_elevated(session_id, StopReason::Revoked);
         }
     }
 
@@ -338,8 +350,8 @@ use ssh_manager_core::ssh::elevated::{
 };
 
 use app_logic::dto::{
-    ElevationFailureDto, ElevationFailureKind, ElevationResultDto, ElevationWarningDto,
-    ElevationWarningKind,
+    ElevationDisableDto, ElevationFailureDto, ElevationFailureKind, ElevationResultDto,
+    ElevationWarningDto, ElevationWarningKind,
 };
 use app_logic::error::{CommandError, CommandResult};
 
@@ -378,6 +390,7 @@ fn failure(
             detail,
         }),
         warning: None,
+        running_operations: Vec::new(),
     })
 }
 
@@ -408,6 +421,42 @@ async fn run_probe(
 /// freigibt und dann den Transport nimmt) ein Sperrzyklus
 /// (spec-reviewer, Runde 2).
 pub(crate) async fn enable(
+    ctx: &ElevationContext<'_>,
+    login: &str,
+    override_path: Option<&str>,
+    requested_user: Option<&str>,
+    confirm_stop: bool,
+    access: &BrowserAccess,
+) -> CommandResult<ElevationResultDto> {
+    let target_user = requested_user
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_ELEVATION_USER)
+        .to_string();
+    // Issue #622: Ein Nutzerwechsel widerruft den bisherigen Kanal. Laufen
+    // darüber noch Operationen, geschieht das nur nach Bestätigung — ohne sie
+    // kommt die Liste zurück und nichts ändert sich.
+    let running = ctx.registry.ops().running_elevated(ctx.session_id);
+    if !running.is_empty() {
+        if !confirm_stop {
+            return Ok(ElevationResultDto {
+                active: true,
+                target_user,
+                sftp_server_path: None,
+                failure: None,
+                warning: None,
+                running_operations: running,
+            });
+        }
+        stop_running_and_wait(ctx.registry, ctx.session_id).await;
+    }
+    enable_after_confirmation(ctx, login, override_path, requested_user, access).await
+}
+
+/// [`enable`] ohne die Prüfung auf laufende Operationen (Issue #622). Der
+/// bisherige Kanal wird ohne Rücksicht auf sie widerrufen — die Widerrufs-
+/// Tests (Spec 0084/0085) prüfen damit den Mechanismus selbst.
+pub(crate) async fn enable_after_confirmation(
     ctx: &ElevationContext<'_>,
     login: &str,
     override_path: Option<&str>,
@@ -592,6 +641,7 @@ pub(crate) async fn enable(
                     kind: ElevationWarningKind::SftpServerUnsafe,
                     path,
                 }),
+                running_operations: Vec::new(),
             })
         }
         Err(err) => failure(
@@ -614,7 +664,50 @@ pub(crate) async fn enable(
 /// * Eine **unbekannte** Sitzungskennung liefert wie bisher
 ///   `Err("Session nicht gefunden")`; „nicht aktiv“ (also `Ok`, ohne dass
 ///   etwas passiert) gilt nur für eine bekannte Sitzung ohne Kanal (T9).
+///
+/// Issue #622: Laufen noch erhöhte Operationen, passiert ohne `confirm_stop`
+/// **nichts** — die Liste kommt zurück (`disabled == false`) und der Kanal
+/// bleibt offen, nur für diese Operationen. Mit `confirm_stop` werden sie
+/// zuerst gestoppt (und räumen ihre Teilergebnisse über den noch gültigen
+/// Kanal auf), erst danach wird widerrufen.
 pub(crate) async fn disable(
+    sessions: &SessionManager,
+    registry: &ElevatedSftpRegistry,
+    session_id: SessionId,
+    confirm_stop: bool,
+    access: &BrowserAccess,
+) -> CommandResult<ElevationDisableDto> {
+    if sessions.get(session_id).is_none() {
+        return Err(CommandError::from("Session nicht gefunden"));
+    }
+    let running = registry.ops().running_elevated(session_id);
+    if !running.is_empty() {
+        if !confirm_stop {
+            return Ok(ElevationDisableDto {
+                disabled: false,
+                running_operations: running,
+            });
+        }
+        stop_running_and_wait(registry, session_id).await;
+    }
+    if let Some(slot) = registry.take(session_id, access) {
+        if slot.revoke().await {
+            tracing::info!(source = "manual", "file browser elevated rights disabled");
+        }
+    }
+    Ok(ElevationDisableDto {
+        disabled: true,
+        running_operations: Vec::new(),
+    })
+}
+
+/// Nur für Tests: das Ausschalten ohne Bestätigungsdialog und ohne die
+/// laufenden Operationen vorher zu stoppen — der reine Widerruf des Kanals,
+/// wie ihn Trennen und Neu-Aktivieren auslösen. Die Widerrufs-Tests (Spec
+/// 0084/0085) prüfen damit, dass ein Widerruf mitten in einem Befehl sofort
+/// wirkt.
+#[cfg(test)]
+pub(crate) async fn disable_now(
     sessions: &SessionManager,
     registry: &ElevatedSftpRegistry,
     session_id: SessionId,
@@ -624,11 +717,24 @@ pub(crate) async fn disable(
         return Err(CommandError::from("Session nicht gefunden"));
     }
     if let Some(slot) = registry.take(session_id, access) {
-        if slot.revoke().await {
-            tracing::info!(source = "manual", "file browser elevated rights disabled");
-        }
+        slot.revoke().await;
     }
     Ok(())
+}
+
+/// Issue #622: bestätigtes Stoppen — Transfers enden beim nächsten Stück,
+/// Rekursionen beim nächsten Eintrag; danach bleibt Zeit fürs Aufräumen
+/// (Temp-Datei, Teil-Upload), das noch den Kanal braucht. Bleibt eine
+/// Operation hängen, wird nach [`STOP_WAIT`] trotzdem widerrufen
+/// (Sicherheit vor Aufräumen).
+async fn stop_running_and_wait(registry: &ElevatedSftpRegistry, session_id: SessionId) {
+    registry
+        .ops()
+        .stop_elevated(session_id, StopReason::Stopped);
+    registry
+        .ops()
+        .wait_elevated_idle(session_id, STOP_WAIT)
+        .await;
 }
 
 #[cfg(test)]
@@ -650,7 +756,7 @@ mod tests {
         let (t, log) = transport(probe, check);
         let f = fixture(Box::new(t));
 
-        let result = enable(&f.ctx(), "deploy", None, None, &access())
+        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
             .await
             .expect("Sitzung steht, das Aktivieren darf nicht mit Err enden");
 
@@ -673,7 +779,7 @@ mod tests {
         );
         let f = fixture(Box::new(t));
 
-        let result = enable(&f.ctx(), "deploy", None, None, &access())
+        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
             .await
             .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
 
@@ -710,7 +816,7 @@ mod tests {
             t.safety = safety;
             let f = fixture(Box::new(t));
 
-            let result = enable(&f.ctx(), "deploy", None, None, &access())
+            let result = enable(&f.ctx(), "deploy", None, None, false, &access())
                 .await
                 .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
 
@@ -736,7 +842,7 @@ mod tests {
         );
         t.safety = output(0, "UNSAFE /usr/lib/openssh\n", "");
         let f = fixture(Box::new(t));
-        let result = enable(&f.ctx(), "deploy", None, None, &access())
+        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
             .await
             .unwrap();
         let failure = result.failure.unwrap();
@@ -753,7 +859,7 @@ mod tests {
             t.safety = safety;
             let f = fixture(Box::new(t));
 
-            let result = enable(&f.ctx(), "deploy", None, None, &access())
+            let result = enable(&f.ctx(), "deploy", None, None, false, &access())
                 .await
                 .unwrap();
 
@@ -775,7 +881,7 @@ mod tests {
         let (probe, check) = working_probes();
         let (t, log) = transport(probe, check);
         let f = fixture(Box::new(t));
-        let result = enable(&f.ctx(), "deploy", None, None, &access())
+        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
             .await
             .unwrap();
         assert!(result.active && result.warning.is_none(), "{result:?}");
@@ -807,7 +913,7 @@ mod tests {
         ] {
             let (t, _log) = transport(probe, check);
             let f = fixture(Box::new(t));
-            let result = enable(&f.ctx(), "deploy", None, None, &access())
+            let result = enable(&f.ctx(), "deploy", None, None, false, &access())
                 .await
                 .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
             assert_eq!(result.failure.map(|f| f.kind), Some(expected));
@@ -823,6 +929,7 @@ mod tests {
             "deploy",
             Some("/opt/ssh/sftp-server"),
             Some("www-data"),
+            false,
             &access(),
         )
         .await
@@ -840,9 +947,16 @@ mod tests {
 
         let (t, log) = transport(output(0, "", ""), output(0, "", ""));
         let f = fixture(Box::new(t));
-        let result = enable(&f.ctx(), "deploy", Some("/opt/x; reboot"), None, &access())
-            .await
-            .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
+        let result = enable(
+            &f.ctx(),
+            "deploy",
+            Some("/opt/x; reboot"),
+            None,
+            false,
+            &access(),
+        )
+        .await
+        .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
         assert_eq!(
             result.failure.map(|f| f.kind),
             Some(ElevationFailureKind::InvalidPath)
@@ -860,7 +974,7 @@ mod tests {
         t.start_fails = true;
         let f = fixture(Box::new(t));
 
-        let result = enable(&f.ctx(), "deploy", None, None, &access())
+        let result = enable(&f.ctx(), "deploy", None, None, false, &access())
             .await
             .expect("ein gescheiterter Versuch ist ein Ergebnis, kein Err");
 
@@ -881,7 +995,7 @@ mod tests {
         let (probe, check) = working_probes();
         let (t, _log) = transport(probe, check);
         let f = fixture(Box::new(t));
-        enable(&f.ctx(), "deploy", None, None, &access())
+        enable(&f.ctx(), "deploy", None, None, false, &access())
             .await
             .expect("Vorbedingung: Aktivieren gelingt");
         assert!(f.is_active().await, "Vorbedingung: Kanal ist aktiv");
@@ -912,7 +1026,7 @@ mod tests {
 
         let f_for_enable = f.clone();
         let activation = tokio::spawn(async move {
-            enable(&f_for_enable.ctx(), "deploy", None, None, &access()).await
+            enable(&f_for_enable.ctx(), "deploy", None, None, false, &access()).await
         });
 
         // Warten, bis das Aktivieren wirklich vor dem Eintrag steht — sonst
@@ -962,7 +1076,7 @@ mod tests {
 
         let f_for_enable = f.clone();
         let activation = tokio::spawn(async move {
-            enable(&f_for_enable.ctx(), "deploy", None, None, &access()).await
+            enable(&f_for_enable.ctx(), "deploy", None, None, false, &access()).await
         });
         expect_within(
             "das Aktivieren erreicht den Öffnen-Schritt",
@@ -1069,6 +1183,26 @@ mod tests {
         ) -> Result<(), ssh_manager_core::ssh::SshError> {
             unreachable!()
         }
+        async fn read_file_chunked(
+            &mut self,
+            _path: &str,
+            _chunk_size: usize,
+            _on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ssh_manager_core::ssh::ChunkControl
+                      + Send),
+        ) -> Result<ssh_manager_core::ssh::TransferEnd, ssh_manager_core::ssh::SshError> {
+            unreachable!("dieser Test lädt nichts herunter")
+        }
+
+        async fn write_file_chunked(
+            &mut self,
+            _path: &str,
+            _chunk_size: usize,
+            _next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ssh_manager_core::ssh::ChunkSource
+                      + Send),
+        ) -> Result<ssh_manager_core::ssh::TransferEnd, ssh_manager_core::ssh::SshError> {
+            unreachable!("dieser Test lädt nichts hoch")
+        }
+
         async fn stat(
             &mut self,
             _path: &str,
@@ -1144,7 +1278,7 @@ mod tests {
             .slot(f.session_id, &access())
             .expect("Vorbedingung: Kanal aktiv");
 
-        disable(&f.sessions, &f.registry, f.session_id, &access())
+        disable(&f.sessions, &f.registry, f.session_id, false, &access())
             .await
             .expect("Ausschalten gelingt");
 
@@ -1173,14 +1307,20 @@ mod tests {
         let (t, _log) = transport(probe, check);
         let f = fixture(Box::new(t));
 
-        disable(&f.sessions, &f.registry, f.session_id, &access())
+        disable(&f.sessions, &f.registry, f.session_id, false, &access())
             .await
             .expect("bekannte Sitzung ohne Kanal: „nicht aktiv“ ist kein Fehler");
         assert!(!f.is_active().await);
 
-        let err = disable(&f.sessions, &f.registry, SessionId::new_v4(), &access())
-            .await
-            .expect_err("unbekannte Sitzungskennung meldet wie bisher einen Fehler");
+        let err = disable(
+            &f.sessions,
+            &f.registry,
+            SessionId::new_v4(),
+            false,
+            &access(),
+        )
+        .await
+        .expect_err("unbekannte Sitzungskennung meldet wie bisher einen Fehler");
         assert_eq!(err.message, "Session nicht gefunden");
         assert!(!f.is_active().await);
     }

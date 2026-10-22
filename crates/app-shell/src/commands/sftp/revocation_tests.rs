@@ -315,6 +315,58 @@ impl SftpSession for GatedSftp {
         Ok(())
     }
 
+    async fn read_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ssh_manager_core::ssh::ChunkControl + Send),
+    ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+        self.record(format!("read_file_chunked {path}")).await;
+        let content = self
+            .0
+            .entries
+            .lock()
+            .unwrap()
+            .get(path)
+            .map(|e| e.content.clone())
+            .ok_or_else(|| SshError::ChannelError(format!("Datei nicht gefunden: {path}")))?;
+        for chunk in content.chunks(chunk_size.max(1)) {
+            if on_chunk(chunk) == ssh_manager_core::ssh::ChunkControl::Stop {
+                return Ok(ssh_manager_core::ssh::TransferEnd::Stopped);
+            }
+        }
+        Ok(ssh_manager_core::ssh::TransferEnd::Completed)
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ssh_manager_core::ssh::ChunkSource
+                  + Send),
+    ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+        use ssh_manager_core::ssh::{ChunkSource, TransferEnd};
+        self.record(format!("write_file_chunked {path}")).await;
+        let mut content = Vec::new();
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        let end = loop {
+            match next_chunk(&mut buf) {
+                ChunkSource::Data(n) => content.extend_from_slice(&buf[..n]),
+                ChunkSource::Eof => break TransferEnd::Completed,
+                ChunkSource::Stop => break TransferEnd::Stopped,
+            }
+        };
+        self.0.entries.lock().unwrap().insert(
+            path.to_string(),
+            Entry {
+                is_dir: false,
+                permissions: 0o644,
+                content,
+            },
+        );
+        Ok(end)
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.record(format!("stat {path}")).await;
         self.entry(path)
@@ -446,6 +498,33 @@ impl SftpSession for CountingSftp {
         self.0.lock().unwrap().push(format!("write_file {path}"));
         Ok(())
     }
+    async fn read_file_chunked(
+        &mut self,
+        _path: &str,
+        _chunk_size: usize,
+        _on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ssh_manager_core::ssh::ChunkControl + Send),
+    ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("read_file_chunked {_path}"));
+        Ok(ssh_manager_core::ssh::TransferEnd::Completed)
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        _path: &str,
+        _chunk_size: usize,
+        _next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ssh_manager_core::ssh::ChunkSource
+                  + Send),
+    ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("write_file_chunked {_path}"));
+        Ok(ssh_manager_core::ssh::TransferEnd::Completed)
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.0.lock().unwrap().push(format!("stat {path}"));
         Err(SshError::ChannelError("kein Eintrag".to_string()))
@@ -804,7 +883,7 @@ async fn test_t1_disabling_during_a_recursive_delete_stops_it_immediately() {
     let (sessions, registry) = (s.sessions.clone(), s.registry.clone());
     let session_id = s.session_id;
     let disable = tokio::spawn(async move {
-        crate::elevated_sftp::disable(
+        crate::elevated_sftp::disable_now(
             &sessions,
             &registry,
             session_id,
@@ -863,7 +942,7 @@ async fn test_t2_disabling_during_a_recursive_chmod_stops_it_immediately() {
     let (sessions, registry) = (s.sessions.clone(), s.registry.clone());
     let session_id = s.session_id;
     let disable = tokio::spawn(async move {
-        crate::elevated_sftp::disable(
+        crate::elevated_sftp::disable_now(
             &sessions,
             &registry,
             session_id,
@@ -953,6 +1032,7 @@ async fn test_t4_reactivating_for_another_user_during_a_recursive_delete_stops_i
         "deploy",
         None,
         None,
+        false,
         &crate::test_support::elevation::access(),
     )
     .await
@@ -972,7 +1052,7 @@ async fn test_t4_reactivating_for_another_user_during_a_recursive_delete_stops_i
     let f = Arc::new(f);
     let f_for_switch = f.clone();
     let switch = tokio::spawn(async move {
-        crate::elevated_sftp::enable(
+        crate::elevated_sftp::enable_after_confirmation(
             &f_for_switch.ctx(),
             "deploy",
             None,
@@ -1044,7 +1124,7 @@ async fn test_t5_disabling_waits_only_for_the_running_operation_not_for_the_rest
     let (sessions, registry) = (s.sessions.clone(), s.registry.clone());
     let session_id = s.session_id;
     let disable = tokio::spawn(async move {
-        crate::elevated_sftp::disable(
+        crate::elevated_sftp::disable_now(
             &sessions,
             &registry,
             session_id,
@@ -1690,14 +1770,15 @@ async fn test_t9_an_ordinary_channel_error_keeps_its_text_in_the_event() {
 /// fertig war, meldet weiter Erfolg (`error: None`).
 ///
 /// Geprüft am rekursiven Download, der mehrere Transfer-Paare erzeugt:
-/// Operation 1 ist das `list_dir` auf `/t`, Operation 2 liest `/t/a.txt`.
-/// Genau dort hält der Mock an (`pause_after = 2`), der Test entfernt die
+/// Operation 1 und 2 sind das Durchlaufen des Baums (`list_dir` auf `/t` und
+/// `/t/sub`, Issue #622), Operation 3 liest `/t/a.txt`.
+/// Operation 4 liest die zweite Datei; genau dort hält der Mock an (`pause_after = 4`), der Test entfernt die
 /// Sitzung und gibt frei — `/t/a.txt` läuft also zu Ende, jede weitere
 /// Operation scheitert am Widerruf. Der Haltepunkt am Slot taugt hier nicht:
 /// er wird beim ersten Durchlauf verbraucht und träfe das `list_dir`.
 #[tokio::test]
 async fn test_t9_a_transfer_finished_before_the_revocation_still_reports_success() {
-    let elevated = GatedSftp::small_tree(2);
+    let elevated = GatedSftp::small_tree(4);
     let s = setup(Box::new(elevated.clone())).await;
     let slot = s.slot();
 
@@ -1724,10 +1805,19 @@ async fn test_t9_a_transfer_finished_before_the_revocation_still_reports_success
     );
 
     elevated.wait_until_paused().await;
+    let ops = elevated.ops();
     assert_eq!(
-        elevated.ops(),
-        vec!["list_dir /t".to_string(), "read_file /t/a.txt".to_string()],
-        "Vorbedingung: der Mock hält im ersten Datei-Transfer"
+        &ops[..3],
+        [
+            "list_dir /t",
+            "list_dir /t/sub",
+            "read_file_chunked /t/a.txt"
+        ],
+        "Vorbedingung: erst der Baum, dann die erste Datei"
+    );
+    assert!(
+        ops[3].starts_with("read_file_chunked "),
+        "Vorbedingung: der Mock hält im zweiten Datei-Transfer, war: {ops:?}"
     );
     s.registry.remove_session(&s.sessions, s.session_id);
     s.wait_until_revoked(&slot).await;

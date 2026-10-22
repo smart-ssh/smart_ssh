@@ -8,7 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tauri::State;
 
-use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
+use ssh_manager_core::ssh::{
+    ChunkControl, ChunkSource, RemoteEntry, SftpSession, SshError, TransferEnd,
+};
 
 use crate::elevated_sftp::{
     ElevatedSftp, ElevatedSftpRegistry, ElevatedSftpSlot, ElevationContext,
@@ -86,6 +88,10 @@ pub(super) struct BrowserChannel {
     /// `Arc`, weil eine laufende Operation ihn setzen muss, während der
     /// Befehl selbst den Kanal noch hält.
     revoked_mid_command: Arc<AtomicBool>,
+    /// Issue #622: Zuordnung der laufenden Datei-Operationen (Abbrechen,
+    /// Übersicht für den Bestätigungsdialog).
+    ops: Arc<crate::file_ops::FileOps>,
+    session_id: SessionId,
 }
 
 enum BrowserChannelKind {
@@ -113,6 +119,42 @@ impl BrowserChannel {
         Self {
             kind,
             revoked_mid_command: Arc::new(AtomicBool::new(false)),
+            ops: registry.ops().clone(),
+            session_id,
+        }
+    }
+
+    /// Issue #622: trägt eine Operation dieses Befehls ein. Nur Operationen
+    /// auf dem erhöhten Kanal erscheinen im Bestätigungsdialog.
+    pub(super) fn register_op(
+        &self,
+        id: uuid::Uuid,
+        kind: crate::file_ops::OpKind,
+        path: &str,
+    ) -> crate::file_ops::OpGuard {
+        self.ops
+            .register(self.session_id, id, kind, path, self.is_elevated())
+    }
+
+    /// Issue #622: Ein Transfer wurde gestoppt, weil der erhöhte Kanal
+    /// widerrufen wurde (Trennen, Neu-Aktivieren): wie ein Widerruf an der
+    /// nächsten Operation — Vermerk setzen, bekannte Meldung (Spec 0085,
+    /// A1.2; Spec 0086, A2.1).
+    pub(super) fn revoked_error(&self) -> CommandError {
+        self.revoked_mid_command.store(true, Ordering::SeqCst);
+        CommandError::from(ELEVATED_CHANNEL_INACTIVE)
+    }
+
+    /// Issue #622: Ist der erhöhte Kanal dieses Befehls inzwischen widerrufen
+    /// (oder nie dagewesen)? Transfers prüfen das vor **jedem** Stück, damit
+    /// nach dem Schließen kein weiteres Stück mehr verarbeitet wird.
+    pub(super) fn is_revoked(&self) -> bool {
+        match &self.kind {
+            BrowserChannelKind::Normal => false,
+            BrowserChannelKind::Elevated {
+                slot: Some(slot), ..
+            } => slot.is_revoked(),
+            BrowserChannelKind::Elevated { slot: None, .. } => true,
         }
     }
 
@@ -527,6 +569,32 @@ impl SftpSession for BrowserSftp<'_> {
             .await
     }
 
+    async fn read_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
+    ) -> Result<TransferEnd, SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .read_file_chunked(path, chunk_size, on_chunk)
+            .await
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
+    ) -> Result<TransferEnd, SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .write_file_chunked(path, chunk_size, next_chunk)
+            .await
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.operation().await?.sftp().stat(path).await
     }
@@ -566,30 +634,6 @@ impl SftpSession for BrowserSftp<'_> {
             .set_permissions(path, mode)
             .await
     }
-}
-
-pub(super) fn write_local_download(
-    path: &std::path::Path,
-    bytes: &[u8],
-    owner_only: bool,
-) -> std::io::Result<()> {
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    if owner_only {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    #[cfg(not(unix))]
-    let _ = owner_only;
-    let mut file = options.open(path)?;
-    std::io::Write::write_all(&mut file, bytes)?;
-    #[cfg(unix)]
-    if owner_only {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-    }
-    Ok(())
 }
 
 /// Spec 0067, A5 (baut auf der Audit-Erfassbarkeit aus 0054 auf): jede
@@ -670,6 +714,7 @@ pub async fn sftp_elevation_enable(
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
     target_user: Option<String>,
+    confirm_stop: Option<bool>,
 ) -> CommandResult<app_logic::dto::ElevationResultDto> {
     let session = state
         .sessions
@@ -691,6 +736,7 @@ pub async fn sftp_elevation_enable(
                 detail: None,
             }),
             warning: None,
+            running_operations: Vec::new(),
         });
     }
     let server = state.profile_store.get_server(&session.server_id).await?;
@@ -704,6 +750,7 @@ pub async fn sftp_elevation_enable(
         &server.username,
         server.sftp_server_path.as_deref(),
         target_user.as_deref(),
+        confirm_stop.unwrap_or(false),
         &BrowserAccess(()),
     )
     .await
@@ -723,11 +770,13 @@ pub async fn sftp_elevation_disable(
     state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
-) -> CommandResult<()> {
+    confirm_stop: Option<bool>,
+) -> CommandResult<app_logic::dto::ElevationDisableDto> {
     crate::elevated_sftp::disable(
         &state.sessions,
         elevated.inner(),
         session_id,
+        confirm_stop.unwrap_or(false),
         &BrowserAccess(()),
     )
     .await
@@ -994,7 +1043,7 @@ mod browser_channel_tests {
         drop(guard);
 
         // Ausschalten in B lässt A unberührt.
-        crate::elevated_sftp::disable(&sessions, &registry, id_b, &BrowserAccess(()))
+        crate::elevated_sftp::disable(&sessions, &registry, id_b, false, &BrowserAccess(()))
             .await
             .expect("B ist bekannt, hat aber keinen Kanal — kein Fehler");
         let channel_a = BrowserChannel::from_request(&registry, id_a, Some("root".to_string()));
@@ -1065,7 +1114,7 @@ mod browser_channel_tests {
 
         let channel = held_channel(session_id, &registry, &session).await;
 
-        crate::elevated_sftp::disable(&sessions, &registry, session_id, &BrowserAccess(()))
+        crate::elevated_sftp::disable(&sessions, &registry, session_id, false, &BrowserAccess(()))
             .await
             .expect("Ausschalten gelingt");
 
@@ -1087,7 +1136,7 @@ mod browser_channel_tests {
             crate::test_support::elevation::working_transport(),
         ));
         // Ausgangslage über den echten Weg: erhöhte Rechte als root aktiv.
-        crate::elevated_sftp::enable(&f.ctx(), "deploy", None, None, &BrowserAccess(()))
+        crate::elevated_sftp::enable(&f.ctx(), "deploy", None, None, false, &BrowserAccess(()))
             .await
             .expect("Vorbedingung: Aktivieren als root gelingt");
         let channel =
@@ -1104,6 +1153,7 @@ mod browser_channel_tests {
             "deploy",
             None,
             Some("www-data"),
+            false,
             &BrowserAccess(()),
         )
         .await
@@ -1223,7 +1273,7 @@ mod browser_channel_tests {
         let f = crate::test_support::elevation::fixture(Box::new(
             crate::test_support::elevation::working_transport(),
         ));
-        crate::elevated_sftp::enable(&f.ctx(), "deploy", None, None, &BrowserAccess(()))
+        crate::elevated_sftp::enable(&f.ctx(), "deploy", None, None, false, &BrowserAccess(()))
             .await
             .expect("Vorbedingung: Aktivieren als root gelingt");
 
@@ -1248,6 +1298,7 @@ mod browser_channel_tests {
                 "deploy",
                 None,
                 Some("www-data"),
+                false,
                 &BrowserAccess(()),
             )
             .await

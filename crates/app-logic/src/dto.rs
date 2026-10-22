@@ -1553,6 +1553,37 @@ pub struct ElevationResultDto {
     /// Hinweis bei aktivem Kanal (Spec 0067, A3): `sftp-server` bzw. ein
     /// übergeordnetes Verzeichnis ist nicht sicher geschützt.
     pub warning: Option<ElevationWarningDto>,
+    /// Issue #622: Operationen, die noch über den erhöhten Kanal laufen.
+    /// Nicht leer nur, wenn `sftp_elevation_enable` (Nutzerwechsel) ohne
+    /// Bestätigung aufgerufen wurde: nichts wurde geändert, der bisherige
+    /// Kanal bleibt aktiv (`active`, `target_user` beschreiben ihn).
+    #[serde(default)]
+    pub running_operations: Vec<RunningOperationDto>,
+}
+
+/// Issue #622: eine laufende Operation des erhöhten Kanals — für den
+/// Bestätigungsdialog vor dem Ausschalten/Umschalten.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RunningOperationDto {
+    pub id: String,
+    /// `download` | `upload` | `delete` | `chmod`.
+    pub kind: &'static str,
+    pub path: String,
+    pub bytes_done: Option<u64>,
+    pub bytes_total: Option<u64>,
+    pub files_done: Option<u64>,
+    pub files_total: Option<u64>,
+}
+
+/// Issue #622: Ergebnis von `sftp_elevation_disable`. `disabled == false`
+/// mit nicht leerer `running_operations` heißt: nichts geändert, der Nutzer
+/// muss das Stoppen bestätigen.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevationDisableDto {
+    pub disabled: bool,
+    pub running_operations: Vec<RunningOperationDto>,
 }
 
 #[derive(Debug, Clone, Serialize)]
