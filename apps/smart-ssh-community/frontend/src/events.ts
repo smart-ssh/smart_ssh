@@ -12,6 +12,7 @@ import type {
   ChatQuestionAskedEvent,
   ChatErrorEvent,
   ChatAiRetryingEvent,
+  ChatAiRequestStartedEvent,
   ChatQueuedMessagesSentEvent,
   ChatResponseCancelledEvent,
   ChatResponseEmptyEvent,
@@ -121,6 +122,12 @@ export const onChatActionWaitingInput = (
 
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));
+
+/** Issue #694 — a request to the AI provider was sent (wait line). */
+export const onChatAiRequestStarted = (
+  handler: (event: ChatAiRequestStartedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatAiRequestStartedEvent>("chat-ai-request-started", (e) => handler(e.payload));
 
 /** Issue #600 — automatic retry after a provider overload. */
 export const onChatAiRetrying = (
