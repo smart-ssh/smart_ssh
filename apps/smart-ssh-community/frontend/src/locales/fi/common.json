@@ -448,6 +448,8 @@
     "active": "aktiivinen",
     "setActive": "Aseta aktiiviseksi",
     "addProvider": "Lisää palveluntarjoaja",
+    "editProvider": "Muokkaa palveluntarjoajaa",
+    "apiKeyUnchangedPlaceholder": "Ei muutosta – syötä uusi avain korvataksesi sen",
     "type": "Tyyppi",
     "providerName": "Nimi",
     "model": "Malli",

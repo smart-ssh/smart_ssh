@@ -8,12 +8,14 @@ import {
   discoverModels,
   setActiveAiProvider,
   testAiProviderCredentials,
+  updateAiProvider,
 } from "../api";
 import { Button } from "./ui";
 import { DialogFrame } from "./ui/DialogFrame";
 import { translateErrorCode } from "../errorCodes";
 import { effectiveApiKey, OLLAMA_BASE_URL } from "../ollama";
 import {
+  type AiProviderConfigDto,
   type AiProviderConfigInput,
   type ProviderType,
   type TestAiProviderCredentialsResult,
@@ -65,7 +67,28 @@ export interface AddAiProviderResult {
   activationError: unknown;
 }
 
+function formFromProvider(provider: AiProviderConfigDto): AiProviderConfigInput {
+  return {
+    providerType: provider.providerType,
+    displayName: provider.displayName,
+    baseUrl: provider.baseUrl,
+    model: provider.model,
+    supportsNativeToolCalling: provider.supportsNativeToolCalling,
+    // The stored key never reaches the frontend; empty = unchanged.
+    apiKey: "",
+    extraHeaders: provider.extraHeaders.map(([k, v]) => [k, v] as [string, string]),
+    attestationUrl: provider.attestationUrl,
+    maxTokensOverride: provider.maxTokensOverride,
+    webResearchEnabled: provider.webResearchEnabled,
+  };
+}
+
 interface AddAiProviderDialogProps {
+  /** Issue #690: edit mode - the saved provider to edit. The type is shown
+   * but fixed; an empty API key field keeps the stored credential. */
+  provider?: AiProviderConfigDto;
+  /** Edit mode: called after `update_ai_provider` succeeded. */
+  onUpdated?: () => void;
   /** The provider list is loaded and none is active: the new provider is
    * activated (Spec 0069, B6). */
   willActivate: boolean;
@@ -78,6 +101,8 @@ interface AddAiProviderDialogProps {
  * (Cancel, Escape) discards the entries - including the API key - and
  * reopening starts empty. */
 export function AddAiProviderDialog({
+  provider,
+  onUpdated,
   willActivate,
   onClose,
   onAdded,
@@ -85,10 +110,13 @@ export function AddAiProviderDialog({
   const { t } = useTranslation();
   const typeSelectRef = useRef<HTMLSelectElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<AiProviderConfigInput>(emptyForm());
+  const editing = provider !== undefined;
+  const [form, setForm] = useState<AiProviderConfigInput>(() =>
+    provider ? formFromProvider(provider) : emptyForm(),
+  );
   // Issue #602: the name mirrors the model until the user edits the name.
   // The dialog is add-only and remounts per open, so this resets with it.
-  const [nameEditedByUser, setNameEditedByUser] = useState(false);
+  const [nameEditedByUser, setNameEditedByUser] = useState(editing);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -127,6 +155,12 @@ export function AddAiProviderDialog({
     setSubmitting(true);
     setError(null);
     try {
+      if (provider) {
+        // Issue #690: empty key = keep the stored credential.
+        await updateAiProvider(provider.id, form);
+        onUpdated?.();
+        return;
+      }
       // Spec 0069, Teil B5: Ollama mit leerem Key -> Platzhalter statt des
       // (dann leeren) `form.apiKey` - jeder andere Providertyp unverändert.
       const newId = await addAiProvider({ ...form, apiKey: effectiveApiKey(form) });
@@ -160,6 +194,9 @@ export function AddAiProviderDialog({
    * Anfrage je Formular gleichzeitig; ändern sich Typ, Base-URL oder Key,
    * während sie läuft, wird ihr Ergebnis verworfen. Der Key geht genau wie
    * bisher nur an `discover_models`, nirgends sonst hin. */
+  // Edit mode: an empty field stays empty so the backend uses the stored key.
+  const keyForRequest = (f: AiProviderConfigInput) => (editing ? f.apiKey : effectiveApiKey(f));
+
   const runModelDiscovery = async () => {
     if (discoveryInFlightRef.current) return;
     const requestForm = form;
@@ -174,10 +211,10 @@ export function AddAiProviderDialog({
     const isCurrent = () =>
       sameDiscoveryInputs(requestInputs, discoveryInputsOf(formRef.current));
     try {
-      const discovered = await discoverModels({
-        ...requestForm,
-        apiKey: effectiveApiKey(requestForm),
-      });
+      const requestConfig = { ...requestForm, apiKey: keyForRequest(requestForm) };
+      const discovered = provider
+        ? await discoverModels(requestConfig, provider.id)
+        : await discoverModels(requestConfig);
       if (!isCurrent()) return;
       setModels(discovered);
       setModelsEmpty(discovered.length === 0);
@@ -220,7 +257,10 @@ export function AddAiProviderDialog({
     setCredentialTestRunning(true);
     setCredentialTestResult(null);
     try {
-      const result = await testAiProviderCredentials({ ...form, apiKey: effectiveApiKey(form) });
+      const testConfig = { ...form, apiKey: keyForRequest(form) };
+      const result = provider
+        ? await testAiProviderCredentials(testConfig, provider.id)
+        : await testAiProviderCredentials(testConfig);
       setCredentialTestResult(result);
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -246,7 +286,7 @@ export function AddAiProviderDialog({
     <DialogFrame
       layer="app"
       size="lg"
-      title={t("aiProvider.addProvider")}
+      title={editing ? t("aiProvider.editProvider") : t("aiProvider.addProvider")}
       onClose={onClose}
       onSubmit={handleSubmit}
       initialFocusRef={typeSelectRef}
@@ -258,7 +298,13 @@ export function AddAiProviderDialog({
             variant="primary"
             disabled={submitting || (form.maxTokensOverride !== null && form.maxTokensOverride <= 0)}
           >
-            {submitting ? t("aiProvider.adding") : t("aiProvider.add")}
+            {editing
+              ? submitting
+                ? t("common.saving")
+                : t("common.save")
+              : submitting
+                ? t("aiProvider.adding")
+                : t("aiProvider.add")}
           </Button>
         </>
       }
@@ -275,6 +321,7 @@ export function AddAiProviderDialog({
             <select
               ref={typeSelectRef}
               value={form.providerType}
+              disabled={editing}
               onChange={(e) => {
                 const nextType = e.target.value as ProviderType;
                 setForm({
@@ -422,7 +469,8 @@ export function AddAiProviderDialog({
             <input
               {...TECHNICAL_INPUT_PROPS}
               type="password"
-              required={form.providerType !== "ollama"}
+              required={!editing && form.providerType !== "ollama"}
+              placeholder={editing ? t("aiProvider.apiKeyUnchangedPlaceholder") : undefined}
               value={form.apiKey}
               onChange={(e) => {
                 setForm({ ...form, apiKey: e.target.value });
@@ -490,7 +538,7 @@ export function AddAiProviderDialog({
                 // Spec 0069, Teil B5: bei Ollama ist ein leerer Key kein
                 // Grund zu sperren — "Zugangsdaten testen" ist ohne Key
                 // freigegeben.
-                (form.providerType !== "ollama" && !form.apiKey.trim()) ||
+                (!editing && form.providerType !== "ollama" && !form.apiKey.trim()) ||
                 (needsBaseUrl(form.providerType) && !form.baseUrl?.trim())
               }
               
@@ -665,7 +713,7 @@ export function AddAiProviderDialog({
 
         {/* Spec 0069, Teil B6: Hinweis vor dem Speichern, nur solange kein
             Provider aktiv ist. */}
-        {willActivate && (
+        {!editing && willActivate && (
           <p className="text-xs text-slate-400">{t("aiProvider.addHintWillActivate")}</p>
         )}
       </div>

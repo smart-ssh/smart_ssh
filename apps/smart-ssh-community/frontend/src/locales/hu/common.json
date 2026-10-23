@@ -448,6 +448,8 @@
     "active": "aktív",
     "setActive": "Aktívvá tétel",
     "addProvider": "Szolgáltató hozzáadása",
+    "editProvider": "Szolgáltató szerkesztése",
+    "apiKeyUnchangedPlaceholder": "Változatlan – adjon meg új kulcsot a cseréhez",
     "type": "Típus",
     "providerName": "Név",
     "model": "Modell",

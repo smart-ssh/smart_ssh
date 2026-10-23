@@ -448,6 +448,8 @@
     "active": "activo",
     "setActive": "Activar",
     "addProvider": "Añadir proveedor",
+    "editProvider": "Editar proveedor",
+    "apiKeyUnchangedPlaceholder": "Sin cambios: introduce una clave nueva para reemplazarla",
     "type": "Tipo",
     "providerName": "Nombre",
     "model": "Modelo",

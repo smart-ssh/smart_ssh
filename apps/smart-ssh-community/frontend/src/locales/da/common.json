@@ -448,6 +448,8 @@
     "active": "aktiv",
     "setActive": "Gør aktiv",
     "addProvider": "Tilføj udbyder",
+    "editProvider": "Rediger udbyder",
+    "apiKeyUnchangedPlaceholder": "Uændret – indtast en ny nøgle for at erstatte den",
     "type": "Type",
     "providerName": "Navn",
     "model": "Model",

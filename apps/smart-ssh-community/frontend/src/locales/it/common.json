@@ -448,6 +448,8 @@
     "active": "attivo",
     "setActive": "Imposta come attivo",
     "addProvider": "Aggiungi provider",
+    "editProvider": "Modifica provider",
+    "apiKeyUnchangedPlaceholder": "Invariata – inserisci una nuova chiave per sostituirla",
     "type": "Tipo",
     "providerName": "Nome",
     "model": "Modello",

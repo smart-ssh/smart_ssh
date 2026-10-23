@@ -448,6 +448,8 @@
     "active": "aktiv",
     "setActive": "Gjør aktiv",
     "addProvider": "Legg til leverandør",
+    "editProvider": "Rediger leverandør",
+    "apiKeyUnchangedPlaceholder": "Uendret – skriv inn en ny nøkkel for å erstatte den",
     "type": "Type",
     "providerName": "Navn",
     "model": "Modell",

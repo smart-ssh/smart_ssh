@@ -191,6 +191,16 @@ inaktiv), ein Formular zum Anlegen (Typ-Auswahl, Name, Modell, Basis-URL nur
 bei `generic_openai_compatible` und `ollama`, API-Key als Passwortfeld), eine
 Löschen-Schaltfläche je Eintrag und die Wahl des aktiven Anbieters.
 
+Jeder Eintrag hat außerdem eine Bearbeiten-Schaltfläche. Sie öffnet denselben
+Dialog wie das Anlegen (Titel „Provider bearbeiten"), vorbelegt mit den
+gespeicherten Werten; der Typ wird angezeigt, ist aber nicht änderbar. Das
+Key-Feld ist leer und trägt den Hinweis, dass der Key unverändert bleibt, wenn
+nichts eingegeben wird — der gespeicherte Key wird nie angezeigt. „Zugangsdaten
+testen" und die Modellsuche verwenden bei leerem Key-Feld den gespeicherten
+Key, sonst den eingegebenen. Speichern ändert den Eintrag (der aktive Status
+bleibt), aktualisiert die Liste und zeigt Prüffehler im Dialog wie beim
+Anlegen; Abbrechen oder Escape schließt ohne Änderung.
+
 Ist kein Anbieter aktiv, steht im Chat statt der Eingabezeile ein Hinweis, den
 Anbieter zuerst in den Einstellungen einzurichten, statt eine Eingabe
 anzubieten, die ohnehin fehlschlüge. Die Hauptansicht zeigt einen entsprechenden

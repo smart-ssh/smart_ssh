@@ -448,6 +448,8 @@
     "active": "有効",
     "setActive": "有効にする",
     "addProvider": "プロバイダーを追加",
+    "editProvider": "プロバイダーを編集",
+    "apiKeyUnchangedPlaceholder": "変更なし – 置き換えるには新しいキーを入力",
     "type": "種類",
     "providerName": "名前",
     "model": "モデル",

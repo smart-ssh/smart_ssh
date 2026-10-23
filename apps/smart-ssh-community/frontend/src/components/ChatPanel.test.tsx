@@ -115,6 +115,51 @@ describe("risk badge positioning (Spec 0029)", () => {
   });
 });
 
+describe("risk badge reason tooltip (Issue #691, Spec 0026)", () => {
+  const both: RiskAssessment = {
+    serverRisk: "red",
+    serverRiskReason: "server reason",
+    dataRisk: "yellow",
+    dataRiskReason: "data reason",
+    aiReviewed: false,
+  };
+
+  it("shows the info marker and an accessible description equal to the reason on both badges", () => {
+    renderItem(buildActionItem({ riskAssessment: both }));
+    for (const [label, reason] of [
+      ["Server", "server reason"],
+      ["Daten", "data reason"],
+    ]) {
+      const badge = screen.getByText(label).closest("button");
+      expect(badge).not.toBeNull();
+      expect(badge?.textContent).toContain("ⓘ");
+      expect(badge).toHaveAccessibleDescription(reason);
+      expect(badge?.hasAttribute("title")).toBe(false);
+    }
+  });
+
+  it("shows no marker, no button and no title on a badge without a reason", () => {
+    renderItem(
+      buildActionItem({
+        riskAssessment: { ...both, dataRiskReason: null },
+      }),
+    );
+    const badge = screen.getByText("Daten");
+    expect(badge.textContent).not.toContain("ⓘ");
+    expect(badge.closest("button")).toBeNull();
+    expect(badge.hasAttribute("title")).toBe(false);
+  });
+
+  it("shows the reason on focus and hides it on Escape", () => {
+    renderItem(buildActionItem({ riskAssessment: both }));
+    const badge = screen.getByText("Server").closest("button") as HTMLElement;
+    fireEvent.focus(badge);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("server reason");
+    fireEvent.keyDown(badge, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+});
+
 // Spec 0045, Abschnitt 4/7: registrierte Dokument-Aktionen erscheinen neben
 // dem bestehenden Markdown-Export-Button in der Dokument-Karte.
 describe("second opinion unavailable notice (Issue #102)", () => {

@@ -448,6 +448,8 @@
     "active": "etkin",
     "setActive": "Etkin yap",
     "addProvider": "Sağlayıcı ekle",
+    "editProvider": "Sağlayıcıyı düzenle",
+    "apiKeyUnchangedPlaceholder": "Değişmedi – değiştirmek için yeni bir anahtar girin",
     "type": "Tür",
     "providerName": "Ad",
     "model": "Model",

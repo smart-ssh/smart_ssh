@@ -448,6 +448,8 @@
     "active": "активен",
     "setActive": "Сделать активным",
     "addProvider": "Добавить провайдера",
+    "editProvider": "Изменить провайдера",
+    "apiKeyUnchangedPlaceholder": "Без изменений – введите новый ключ, чтобы заменить",
     "type": "Тип",
     "providerName": "Название",
     "model": "Модель",
