@@ -104,7 +104,7 @@ import type {
   QuestionOption,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-import { Button } from "./ui";
+import { Button, Tooltip } from "./ui";
 import { AutoExecRulesLine } from "./AutoExecRulesLine";
 import { WebActivityCard } from "./WebActivityCard";
 import { QuestionCard, deriveQuestionStates, type QuestionState } from "./QuestionCard";
@@ -1613,6 +1613,27 @@ const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none
  * Kommando-Text — deshalb kein eigenes `mb-*` mehr hier (das übernimmt die
  * Zeile als Ganzes), und `null` statt eines leeren Containers, wenn beide
  * Achsen `none` sind (kein Layout-Sprung, Spec Abschnitt 2). */
+function RiskBadge({
+  reason,
+  level,
+  label,
+}: {
+  reason: string | null | undefined;
+  level: "yellow" | "red";
+  label: string;
+}) {
+  const cls = `font-heading px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[level]}`;
+  if (!reason) return <span className={cls}>{label}</span>;
+  return (
+    <Tooltip content={reason} className={cls}>
+      {label}
+      <span aria-hidden="true" className="ml-1 normal-case">
+        ⓘ
+      </span>
+    </Tooltip>
+  );
+}
+
 function RiskBadges({
   assessment,
   pending,
@@ -1632,20 +1653,18 @@ function RiskBadges({
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {hasServerBadge && (
-        <span
-          title={assessment.serverRiskReason ?? undefined}
-          className={`font-heading px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.serverRisk as "yellow" | "red"]}`}
-        >
-          {t("actionCard.riskServerLabel")}
-        </span>
+        <RiskBadge
+          reason={assessment.serverRiskReason}
+          level={assessment.serverRisk as "yellow" | "red"}
+          label={t("actionCard.riskServerLabel")}
+        />
       )}
       {hasDataBadge && (
-        <span
-          title={assessment.dataRiskReason ?? undefined}
-          className={`font-heading px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase ${RISK_LEVEL_BADGE_CLASS[assessment.dataRisk as "yellow" | "red"]}`}
-        >
-          {t("actionCard.riskDataLabel")}
-        </span>
+        <RiskBadge
+          reason={assessment.dataRiskReason}
+          level={assessment.dataRisk as "yellow" | "red"}
+          label={t("actionCard.riskDataLabel")}
+        />
       )}
       {unavailable && (
         <output
