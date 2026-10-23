@@ -135,7 +135,8 @@
     "moveTo": "Siirrä ”{{name}}” kohteeseen…"
   },
   "management": {
-    "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Takaisin"
   },
   "groupForm": {
     "titleNew": "Uusi ryhmä",

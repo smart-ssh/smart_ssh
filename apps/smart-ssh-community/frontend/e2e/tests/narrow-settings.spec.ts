@@ -1,4 +1,4 @@
-// Issue #586, Spec 0113 §5c: Settings and the filter rules view at phone width.
+// Issue #586, Spec 0113 §5d: Settings and the filter rules view at phone width.
 // Tagged `@phone`: runs in the phone projects only (390×844).
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "../support/app";

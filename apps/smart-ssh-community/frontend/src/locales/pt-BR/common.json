@@ -135,7 +135,8 @@
     "moveTo": "Mover “{{name}}” para…"
   },
   "management": {
-    "emptyState": "Selecione um grupo ou servidor à esquerda, ou crie algo novo com \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Selecione um grupo ou servidor à esquerda, ou crie algo novo com \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Voltar"
   },
   "groupForm": {
     "titleNew": "Novo grupo",

@@ -63,7 +63,14 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 - Eintragsmenü, Menü der leeren Fläche und das Menü der Werkzeugleiste öffnen sich als Blatt am unteren Rand über die ganze Fensterbreite; ihre Einträge sind mindestens 44 px hoch. Sie schließen wie im breiten Layout (Escape, Tipp außerhalb, Auswahl).
 - Die Dialoge des Dateibrowsers folgen Abschnitt 5; die Übertragungsliste passt sich der Breite an.
 
-## 5c. Einstellungen und Filterregeln
+## 5c. Verwalten-Ansicht
+
+- Die Verwalten-Ansicht zeigt zuerst die Liste (Server, Gruppen, Ansichten von Erweiterungen, „Gruppe“, „Server“, Import und Export) über die volle Breite. Die Auswahl eines Eintrags öffnet Formular oder Detail über die volle Breite, darüber steht eine Zeile mit „Zurück“. „Zurück“ führt zur Liste an derselben Scroll-Position. Wie beim Wechsel zwischen Einträgen im breiten Layout werden dabei ungespeicherte Eingaben verworfen.
+- Jede Server- und Gruppenzeile der Liste (außer dem lokalen Server) hat wie in der Verbinden-Ansicht eine Schaltfläche „⋯“ mit „Verschieben nach…“; Ziehen per Fingergeste startet keinen Vorgang.
+- Formulare haben eine Spalte, Beschriftungen stehen über den Feldern, Hinweise brechen um. Im Server-Formular bleibt „Speichern“ am unteren Rand sichtbar; Löschen steht am Ende des Formulars.
+- Notizen, Import und Export passen in die Breite. Abschnitte und Ansichten von Erweiterungen erhalten die volle Breite (siehe Abschnitt 6).
+
+## 5d. Einstellungen und Filterregeln
 
 - Die Einstellungen öffnen sich als Vollbild. Zuerst erscheint die Liste der Bereiche (eingebaute und von Erweiterungen, in der üblichen Reihenfolge); die Auswahl zeigt den Bereich in voller Breite mit einer Schaltfläche „Zurück“ zur Liste. „Schließen“ ist in beiden Ansichten sichtbar; Escape schließt die Einstellungen. Beim Zurückgehen steht der Fokus wieder auf dem zuletzt gewählten Bereich.
 - Alle Bereiche passen in 390 px: zweispaltige Anordnungen werden einspaltig, breite Eingaben und Tabellen brechen um oder scrollen in ihrem eigenen Rahmen. Der Funktionsumfang der Bereiche ist unverändert; Erweiterungsbereiche erhalten die volle Breite.

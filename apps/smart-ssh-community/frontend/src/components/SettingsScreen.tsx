@@ -110,7 +110,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
   const [activeId, setActiveId] = useState<string>(categories[0]?.id ?? AI_PROVIDER_CATEGORY_ID);
   const active = categories.find((c) => c.id === activeId) ?? categories[0];
 
-  // Issue #586, Spec 0113 §5c: below 640 px the dialog is full-screen and shows
+  // Issue #586, Spec 0113 §5d: below 640 px the dialog is full-screen and shows
   // either the section list or one section (list -> detail with a Back button).
   const narrow = useIsNarrow();
   const [narrowView, setNarrowView] = useState<"list" | "detail">("list");

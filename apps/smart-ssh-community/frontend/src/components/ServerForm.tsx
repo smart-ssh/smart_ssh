@@ -1084,7 +1084,7 @@ export function ServerForm({
         </TabPanel>
 
         <TabPanel idBase={tabsIdBase} id="connection" active={activeTab === "connection"} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
           <Field label={t("serverForm.host")}>
             {(control) => (
               <input
@@ -1186,7 +1186,7 @@ export function ServerForm({
           {auth.kind === "privateKey" && (
             <div className="space-y-2">
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.privateKeyLabel")}{" "}
                     {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
@@ -1238,7 +1238,7 @@ export function ServerForm({
           {auth.kind === "certificate" && (
             <div className="space-y-2">
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.certificateLabel")}{" "}
                     {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
@@ -1264,7 +1264,7 @@ export function ServerForm({
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.associatedKey")}{" "}
                     {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
@@ -1293,7 +1293,7 @@ export function ServerForm({
           {auth.kind === "identityFile" && (
             <div className="space-y-2">
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">{t("serverForm.identityFilePathLabel")}</span>
                   <Button size="sm"
                     onClick={async () => {
@@ -1572,8 +1572,8 @@ export function ServerForm({
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         {activeTab !== "notes" && (
-          <div>
-            <Button variant="primary" type="submit" disabled={saving}>
+          <div className="narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-t narrow:border-slate-800 narrow:bg-slate-900 narrow:px-4 narrow:py-2">
+            <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:w-full">
               {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
             </Button>
           </div>

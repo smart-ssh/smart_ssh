@@ -135,7 +135,8 @@
     "moveTo": "Di chuyển “{{name}}” tới…"
   },
   "management": {
-    "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Quay lại"
   },
   "groupForm": {
     "titleNew": "Nhóm mới",

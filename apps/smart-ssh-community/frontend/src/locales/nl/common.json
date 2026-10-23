@@ -135,7 +135,8 @@
     "moveTo": "“{{name}}” verplaatsen naar…"
   },
   "management": {
-    "emptyState": "Selecteer links een groep of server, of maak iets nieuws aan via \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Selecteer links een groep of server, of maak iets nieuws aan via \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Terug"
   },
   "groupForm": {
     "titleNew": "Nieuwe groep",

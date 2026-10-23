@@ -135,7 +135,8 @@
     "moveTo": "„{{name}}“ verschieben nach…"
   },
   "management": {
-    "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen."
+    "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen.",
+    "back": "Zurück"
   },
   "groupForm": {
     "titleNew": "Neue Gruppe",

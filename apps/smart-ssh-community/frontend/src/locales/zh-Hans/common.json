@@ -135,7 +135,8 @@
     "moveTo": "将“{{name}}”移动到…"
   },
   "management": {
-    "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。"
+    "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。",
+    "back": "返回"
   },
   "groupForm": {
     "titleNew": "新建分组",
