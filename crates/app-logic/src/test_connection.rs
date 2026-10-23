@@ -207,7 +207,7 @@ async fn run_test_connection(
     let attempt = connector.connect(&target, &tiered, key_files, host_key_store, log, limits);
     let outcome = match tokio::time::timeout(overall, attempt).await {
         Err(_elapsed) => {
-            log.fail_running(SshError::Timeout.code());
+            log.fail_running_timeout();
             return Ok(TestConnectionResult::Timeout);
         }
         Ok(result) => result,

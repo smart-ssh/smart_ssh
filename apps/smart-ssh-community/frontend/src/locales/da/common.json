@@ -935,12 +935,15 @@
       "handshake": "SSH-handshake",
       "hostKeyCheck": "Kontrol af værtsnøgle",
       "authentication": "Godkendelse",
-      "sessionReady": "Session oprettet"
+      "sessionReady": "Session oprettet",
+      "dnsSkipped": "IP-adresse – ingen opslag nødvendigt"
     },
     "status": {
       "ok": "OK",
       "running": "i gang",
-      "failed": "mislykkedes ({{code}})"
+      "failed": "mislykkedes ({{code}})",
+      "skipped": "sprunget over",
+      "failedReason": "mislykkedes: {{reason}}"
     },
     "hostKeyResult": {
       "known": "kendt",
@@ -962,6 +965,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvist accepteret, yderligere godkendelse kræves",
       "remainingMethods": "Serveren tilbyder også: {{methods}} (ikke prøvet)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-forbindelsen fik timeout",
+      "SSH_TIMEOUT": "Timeout",
+      "SSH_CONNECTION_REFUSED": "Forbindelsen blev afvist",
+      "SSH_HOST_NOT_FOUND": "Værten blev ikke fundet",
+      "SSH_HOST_UNREACHABLE": "Værten er ikke tilgængelig",
+      "SSH_AUTH_FAILED": "Godkendelse mislykkedes"
     }
   },
   "fileBrowser": {

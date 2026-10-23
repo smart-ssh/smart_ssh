@@ -935,12 +935,15 @@
       "handshake": "SSH el sıkışması",
       "hostKeyCheck": "Ana makine anahtarı denetimi",
       "authentication": "Kimlik doğrulama",
-      "sessionReady": "Oturum kuruldu"
+      "sessionReady": "Oturum kuruldu",
+      "dnsSkipped": "IP adresi – ad çözümleme gerekmez"
     },
     "status": {
       "ok": "Tamam",
       "running": "devam ediyor",
-      "failed": "başarısız ({{code}})"
+      "failed": "başarısız ({{code}})",
+      "skipped": "atlandı",
+      "failedReason": "başarısız: {{reason}}"
     },
     "hostKeyResult": {
       "known": "bilinen",
@@ -962,6 +965,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "kısmen kabul edildi, ek kimlik doğrulama gerekli",
       "remainingMethods": "Sunucu ayrıca şunları sunuyor: {{methods}} (denenmedi)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP bağlantısı zaman aşımına uğradı",
+      "SSH_TIMEOUT": "Zaman aşımı",
+      "SSH_CONNECTION_REFUSED": "Bağlantı reddedildi",
+      "SSH_HOST_NOT_FOUND": "Ana makine bulunamadı",
+      "SSH_HOST_UNREACHABLE": "Ana makineye ulaşılamıyor",
+      "SSH_AUTH_FAILED": "Kimlik doğrulama başarısız"
     }
   },
   "fileBrowser": {

@@ -40,6 +40,9 @@ pub const HOST_KEY_CHANGED: &str = "HOST_KEY_CHANGED";
 /// erlaubt 255 Zeichen einschließlich CR LF.
 const MAX_SERVER_VERSION_CHARS: usize = 255;
 
+/// Schrittcode für eine Zeitüberschreitung während der TCP-Verbindung.
+pub const TCP_TIMEOUT_CODE: &str = "SSH_TCP_TIMEOUT";
+
 /// Ein Schritt eines Verbindungsversuchs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(
@@ -132,6 +135,9 @@ pub enum StepStatus {
     /// Läuft noch — nur in einer Momentaufnahme mitten im Versuch zu sehen.
     Running,
     Ok,
+    /// Der Schritt war nicht nötig (z. B. keine Namensauflösung für eine
+    /// IP-Adresse).
+    Skipped,
     /// Hier ist der Versuch gescheitert. `code` ist ein stabiler Code, nie
     /// freier Text.
     Failed {
@@ -258,6 +264,11 @@ impl ConnectLog {
         self.finish(id, StepStatus::Ok);
     }
 
+    /// Beendet einen Schritt als übersprungen (nicht nötig).
+    pub fn skip(&self, id: StepId) {
+        self.finish(id, StepStatus::Skipped);
+    }
+
     /// Beendet einen Schritt als gescheitert.
     pub fn fail(&self, id: StepId, code: &str) {
         self.finish(
@@ -276,6 +287,19 @@ impl ConnectLog {
             }
         }
         self.notify();
+    }
+
+    /// Wie [`Self::fail_running`] für eine abgelaufene Zeitgrenze: läuft
+    /// gerade die TCP-Verbindung, lautet der Code `SSH_TCP_TIMEOUT`, sonst
+    /// `SSH_TIMEOUT`.
+    pub fn fail_running_timeout(&self) -> &'static str {
+        let tcp = self.lock().iter().any(|e| {
+            e.record.status == StepStatus::Running
+                && matches!(e.record.step, ConnectStep::TcpConnect { .. })
+        });
+        let code = if tcp { TCP_TIMEOUT_CODE } else { "SSH_TIMEOUT" };
+        self.fail_running(code);
+        code
     }
 
     /// Markiert jeden noch laufenden Schritt als gescheitert — für Fehler,
@@ -364,6 +388,7 @@ impl ConnectStepSnapshot {
                 let (status, error_code) = match (&r.status, waiting) {
                     (_, true) | (StepStatus::Running, _) => ("running", None),
                     (StepStatus::Ok, _) => ("ok", None),
+                    (StepStatus::Skipped, _) => ("skipped", None),
                     (StepStatus::Failed { code }, _) => ("failed", Some(code.clone())),
                 };
                 let running = status == "running";
@@ -501,6 +526,54 @@ mod tests {
                 code: "SSH_CONNECTION_REFUSED".into()
             }
         );
+    }
+
+    #[test]
+    fn timeout_during_tcp_step_gets_tcp_timeout_code() {
+        let log = ConnectLog::new();
+        let dns = log.start(
+            0,
+            "u@h:22",
+            ConnectStep::DnsResolution {
+                host: "10.255.255.1".into(),
+                port: 22,
+                addresses: vec![],
+            },
+        );
+        log.skip(dns);
+        log.start(
+            0,
+            "u@h:22",
+            ConnectStep::TcpConnect {
+                address: None,
+                port: 22,
+            },
+        );
+        assert_eq!(log.fail_running_timeout(), "SSH_TCP_TIMEOUT");
+        let steps = log.snapshot();
+        assert_eq!(steps[0].status, StepStatus::Skipped);
+        assert_eq!(
+            steps[1].status,
+            StepStatus::Failed {
+                code: "SSH_TCP_TIMEOUT".into()
+            }
+        );
+    }
+
+    #[test]
+    fn timeout_in_later_step_keeps_ssh_timeout_code() {
+        let log = ConnectLog::new();
+        let tcp = log.start(
+            0,
+            "u@h:22",
+            ConnectStep::TcpConnect {
+                address: None,
+                port: 22,
+            },
+        );
+        log.succeed(tcp);
+        log.start(0, "u@h:22", ConnectStep::SessionReady);
+        assert_eq!(log.fail_running_timeout(), "SSH_TIMEOUT");
     }
 
     #[test]
