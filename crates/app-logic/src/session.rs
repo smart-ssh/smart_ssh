@@ -108,15 +108,25 @@ impl SwappableRedactor {
         redactor: Box<dyn OutputRedactor>,
         secrets: &[secrecy::SecretString],
     ) {
-        // Hold the literal lock across both writes so no reader sees the new
-        // pattern redactor with the old literal set or vice versa for long.
+        use secrecy::ExposeSecret;
+        // Build the complete new set first, then install it with a single
+        // assignment under one write guard: a concurrent reader sees either
+        // the old or the new set, never an empty one (no fail-open window).
+        let mut fresh: Vec<Vec<u8>> = Vec::new();
+        for secret in secrets {
+            let value = secret.expose_secret().as_bytes();
+            if !value.is_empty() && !fresh.iter().any(|k| k == value) {
+                fresh.push(value.to_vec());
+            }
+        }
+        // Longest first, so a secret that contains another is masked whole.
+        fresh.sort_by_key(|k| std::cmp::Reverse(k.len()));
         let mut known = self
             .literal_secrets
             .write()
             .unwrap_or_else(|e| e.into_inner());
-        known.clear();
+        *known = fresh;
         drop(known);
-        self.add_secret_values(secrets);
         self.replace(redactor);
     }
 
@@ -2052,6 +2062,46 @@ mod tests {
             manager.get(other_id).unwrap().redactor.redact_text(text),
             text
         );
+    }
+
+    /// Issue #635: `replace_with_literals` installs the new set atomically —
+    /// a still-known value is never unmasked while another thread replaces
+    /// the set — and drops empty values.
+    #[test]
+    fn test_replace_with_literals_is_atomic_for_known_values() {
+        use secrecy::SecretString;
+        let red = Arc::new(SwappableRedactor::new(Box::new(
+            DefaultOutputRedactor::new(),
+        )));
+        let keep = SecretString::from("keep-secret-9".to_string());
+        red.add_secret_values(std::slice::from_ref(&keep));
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let reader = {
+            let (red, stop) = (red.clone(), stop.clone());
+            std::thread::spawn(move || {
+                let mut leaks = 0;
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    if red
+                        .redact_text("x keep-secret-9 y")
+                        .contains("keep-secret-9")
+                    {
+                        leaks += 1;
+                    }
+                }
+                leaks
+            })
+        };
+        for _ in 0..100 {
+            red.replace_with_literals(
+                Box::new(DefaultOutputRedactor::new()),
+                &[keep.clone(), SecretString::from(String::new())],
+            );
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(reader.join().unwrap(), 0);
+        assert_eq!(red.redact_text("a keep-secret-9"), "a [REDACTED]");
+        red.replace_with_literals(Box::new(DefaultOutputRedactor::new()), &[]);
+        assert_eq!(red.redact_text("a keep-secret-9"), "a keep-secret-9");
     }
 
     /// Issue #635: a rebuild with a known set replaces the literal values;
