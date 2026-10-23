@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ajustes",
+    "backToList": "Secciones",
     "categories": {
       "aiProvider": "Proveedor de IA",
       "displayLanguage": "Pantalla e idioma",
@@ -994,6 +995,7 @@
     "transferFiles": "{{done}} de {{total}} archivos",
     "transferRemaining": "quedan {{time}}",
     "loading": "Cargando…",
+    "noPermissionToOpen": "Sin permiso para abrir esta carpeta (falta x)",
     "emptyDirectory": "(directorio vacío)",
     "dropHint": "Suelte aquí para subir a {{path}}",
     "cancel": "Cancelar",
@@ -1031,7 +1033,8 @@
     },
     "moveCollision": {
       "title": "El destino ya existe",
-      "body": "ya existe y se sobrescribiría."
+      "body": "ya existe y se sobrescribiría.",
+      "folderBody": "ya existe como carpeta y no se puede reemplazar."
     },
     "folderUpload": {
       "conflictTitle": "¿Sobrescribir archivos de la carpeta?",
@@ -1093,6 +1096,12 @@
       "execute": "Ejecución",
       "numeric": "Numérico",
       "recursive": "Recursivo",
+      "special": "Bits especiales",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Al aplicar de forma recursiva, los bits especiales solo van a las carpetas, nunca a los archivos.",
+      "recursiveSummary": "Carpetas: {{folders}}, archivos: {{files}}",
       "recursiveWarning": "— cambia los permisos de TODOS los archivos y subcarpetas de esta carpeta. Acción potente, no se puede deshacer.",
       "owner": "Propietario",
       "group": "Grupo",

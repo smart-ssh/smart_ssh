@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Impostazioni",
+    "backToList": "Sezioni",
     "categories": {
       "aiProvider": "Provider IA",
       "displayLanguage": "Schermo e lingua",
@@ -994,6 +995,7 @@
     "transferFiles": "{{done}} di {{total}} file",
     "transferRemaining": "{{time}} rimanenti",
     "loading": "Caricamento…",
+    "noPermissionToOpen": "Nessun permesso per aprire questa cartella (manca x)",
     "emptyDirectory": "(directory vuota)",
     "dropHint": "Rilasci qui per caricare in {{path}}",
     "cancel": "Annulla",
@@ -1031,7 +1033,8 @@
     },
     "moveCollision": {
       "title": "La destinazione esiste già",
-      "body": "esiste già e verrebbe sovrascritto."
+      "body": "esiste già e verrebbe sovrascritto.",
+      "folderBody": "esiste già come cartella e non può essere sostituito."
     },
     "folderUpload": {
       "conflictTitle": "Sovrascrivere i file nella cartella?",
@@ -1093,6 +1096,12 @@
       "execute": "Esecuzione",
       "numeric": "Numerico",
       "recursive": "Ricorsivo",
+      "special": "Bit speciali",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Con l'applicazione ricorsiva i bit speciali vanno solo alle cartelle, mai ai file.",
+      "recursiveSummary": "Cartelle: {{folders}}, file: {{files}}",
       "recursiveWarning": "— modifica i permessi di TUTTI i file e sottocartelle in questa cartella. Azione potente, non annullabile.",
       "owner": "Proprietario",
       "group": "Gruppo",

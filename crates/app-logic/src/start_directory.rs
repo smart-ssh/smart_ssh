@@ -270,6 +270,9 @@ pub(crate) mod test_stubs {
         async fn rename(&mut self, _: &str, _: &str) -> Result<(), SshError> {
             unreachable!()
         }
+        async fn posix_rename(&mut self, _: &str, _: &str) -> Result<bool, SshError> {
+            unreachable!()
+        }
         async fn create_dir(&mut self, _: &str) -> Result<(), SshError> {
             unreachable!()
         }

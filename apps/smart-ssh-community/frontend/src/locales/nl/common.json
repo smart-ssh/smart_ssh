@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Instellingen",
+    "backToList": "Onderdelen",
     "categories": {
       "aiProvider": "AI-provider",
       "displayLanguage": "Weergave en taal",
@@ -989,6 +990,7 @@
     "transferFiles": "{{done}} van {{total}} bestanden",
     "transferRemaining": "nog {{time}}",
     "loading": "Laden…",
+    "noPermissionToOpen": "Geen toestemming om deze map te openen (x ontbreekt)",
     "emptyDirectory": "(lege map)",
     "dropHint": "Hier neerzetten om te uploaden naar {{path}}",
     "cancel": "Annuleren",
@@ -1024,7 +1026,8 @@
     },
     "moveCollision": {
       "title": "Doel bestaat al",
-      "body": "bestaat al en zou worden overschreven."
+      "body": "bestaat al en zou worden overschreven.",
+      "folderBody": "bestaat al als map en kan niet worden vervangen."
     },
     "folderUpload": {
       "conflictTitle": "Bestanden in de map overschrijven?",
@@ -1086,6 +1089,12 @@
       "execute": "Uitvoeren",
       "numeric": "Numeriek",
       "recursive": "Recursief",
+      "special": "Speciale bits",
+      "setuid": "setuid-bit",
+      "setgid": "setgid-bit",
+      "sticky": "sticky-bit",
+      "specialHint": "Bij recursief toepassen krijgen alleen mappen speciale bits, nooit bestanden.",
+      "recursiveSummary": "Mappen: {{folders}}, bestanden: {{files}}",
       "recursiveWarning": "— wijzigt de rechten van ALLE bestanden en submappen in deze map. Krachtige actie, niet ongedaan te maken.",
       "owner": "Eigenaar",
       "group": "Groep",

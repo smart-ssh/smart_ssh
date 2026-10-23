@@ -27,6 +27,7 @@ import {
   sftpElevationEnable,
   sftpElevationStatus,
   sftpExists,
+  sftpStat,
   sftpList,
   sftpMkdir,
   sftpCreateFile,
@@ -229,6 +230,8 @@ export function FileBrowserPanel({
     from: string;
     to: string;
     kind: MoveKind;
+    /** Issue #625: ein Ordner als Ziel lässt sich nicht ersetzen. */
+    targetIsDir: boolean;
   } | null>(null);
   // Upload-Überschreib-Diff-Vorschau (Spec 0054, Teil 3): `remoteText` ist
   // `null`, wenn die Remote-Datei nicht als Text lesbar war (Binärdatei/zu
@@ -622,11 +625,16 @@ export function FileBrowserPanel({
 
   // `elevatedOverride`: beim Umschalten ist der neue Modus im State noch
   // nicht angekommen — der Aufrufer übergibt ihn dann explizit.
+  // Issue #624: the mode of every listed entry, so an empty listing of a
+  // folder can be explained by the folder's own (missing) execute bit.
+  const knownDirModes = useRef(new Map<string, number>());
+
   const load = useCallback((targetPath: string, userOverride?: string | null) => {
     setLoading(true);
     setError(null);
     sftpList(sessionId, targetPath, userOverride === undefined ? channelUser : userOverride)
       .then((result) => {
+        for (const e of result) knownDirModes.current.set(e.path, e.permissionsOctal);
         setEntries(result);
         setPath(targetPath);
         setPathInput(targetPath);
@@ -1213,7 +1221,13 @@ export function FileBrowserPanel({
     try {
       const exists = await sftpExists(sessionId, to, channelUser);
       if (exists) {
-        setMoveCollision({ from, to, kind });
+        // Kann `stat` nicht antworten, gilt das Ziel als Datei; das Backend
+        // lehnt das Ersetzen eines Ordners ohnehin ab.
+        const targetIsDir = await sftpStat(sessionId, to, channelUser).then(
+          (entry) => entry.isDir,
+          () => false,
+        );
+        setMoveCollision({ from, to, kind, targetIsDir });
         return;
       }
       await sftpRename(sessionId, from, to, channelUser);
@@ -1228,7 +1242,7 @@ export function FileBrowserPanel({
     if (!moveCollision) return;
     const { from, to, kind } = moveCollision;
     setMoveCollision(null);
-    sftpRename(sessionId, from, to, channelUser)
+    sftpRename(sessionId, from, to, channelUser, true)
       .then(() => {
         notifyMoved(from, to, kind);
         load(path);
@@ -1338,12 +1352,12 @@ export function FileBrowserPanel({
     setChmodTarget(entry);
   };
 
-  const handleConfirmChmod = (mode: number, recursive: boolean) => {
+  const handleConfirmChmod = (mode: number, recursive: boolean, applySpecialBits: boolean) => {
     if (!chmodTarget) return;
     const target = chmodTarget;
     setChmodTarget(null);
     const modeText = mode.toString(8).padStart(3, "0");
-    sftpChmod(sessionId, target.path, mode, recursive, channelUser)
+    sftpChmod(sessionId, target.path, mode, recursive, applySpecialBits, channelUser)
       .then((count) => {
         if (recursive && target.isDir) {
           notifyOk("fileToasts.chmodRecursive", { name: target.name, mode: modeText, count });
@@ -1853,7 +1867,11 @@ export function FileBrowserPanel({
         {loading && <p className="p-3 text-xs text-slate-400">{t("fileBrowser.loading")}</p>}
         {error && <p className="p-3 text-xs text-red-400">{error}</p>}
         {!loading && !error && entries.length === 0 && (
-          <p className="p-3 text-xs text-slate-400">{t("fileBrowser.emptyDirectory")}</p>
+          <p className="p-3 text-xs text-slate-400">
+            {(knownDirModes.current.get(path) ?? 0o111) & 0o111
+              ? t("fileBrowser.emptyDirectory")
+              : t("fileBrowser.noPermissionToOpen")}
+          </p>
         )}
         {!loading && !error && narrow && entries.length > 0 && (
           <ul className="m-0 list-none p-0 text-xs">
@@ -2300,23 +2318,29 @@ export function FileBrowserPanel({
           layer="sessionTab"
           size="sm"
           title={
-            elevated
+            elevated && !moveCollision.targetIsDir
               ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
               : t("fileBrowser.moveCollision.title")
           }
           onClose={() => setMoveCollision(null)}
           actions={
             <>
-              <Button onClick={() => setMoveCollision(null)}>{t("fileBrowser.cancel")}</Button>
-              <Button variant="danger" onClick={handleConfirmMoveCollision}>
-                {t("fileBrowser.overwrite")}
+              <Button onClick={() => setMoveCollision(null)}>
+                {t("fileBrowser.cancel")}
               </Button>
+              {!moveCollision.targetIsDir && (
+                <Button variant="danger" onClick={handleConfirmMoveCollision}>
+                  {t("fileBrowser.overwrite")}
+                </Button>
+              )}
             </>
           }
         >
           <p>
             <span className="font-mono text-xs break-all">{moveCollision.to}</span>{" "}
-            {t("fileBrowser.moveCollision.body")}
+            {moveCollision.targetIsDir
+              ? t("fileBrowser.moveCollision.folderBody")
+              : t("fileBrowser.moveCollision.body")}
           </p>
         </DialogFrame>
       )}
@@ -2613,7 +2637,7 @@ function FilePropertiesDialog({
   onClose: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  const octal = entry.permissionsOctal.toString(8).padStart(3, "0");
+  const octal = entry.permissionsOctal.toString(8).padStart(4, "0");
   const owner = entry.owner ?? (entry.uid !== null ? String(entry.uid) : "—");
   const group = entry.group ?? (entry.gid !== null ? String(entry.gid) : "—");
 
@@ -2680,7 +2704,7 @@ function ChmodDialog({
    * gesetzt.“ */
   modeNote: string | null;
   onCancel: () => void;
-  onConfirm: (mode: number, recursive: boolean) => void;
+  onConfirm: (mode: number, recursive: boolean, applySpecialBits: boolean) => void;
 }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState(entry.permissionsOctal);
@@ -2705,6 +2729,12 @@ function ChmodDialog({
 
   const toggleBit = (bit: number) => applyMode(mode ^ bit);
 
+  // Issue #624: a recursive apply only touches folders' special bits when
+  // the user changed them here.
+  const specialChanged = (mode & 0o7000) !== (entry.permissionsOctal & 0o7000);
+  const fileBits = mode & 0o777;
+  const folderBits = fileBits | ((fileBits & 0o444) >> 2);
+
   const handleNumericChange = (value: string) => {
     setNumericInput(value);
     if (/^[0-7]{1,4}$/.test(value)) {
@@ -2720,7 +2750,7 @@ function ChmodDialog({
       onClose={onCancel}
       onSubmit={(e) => {
         e.preventDefault();
-        onConfirm(mode, recursive);
+        onConfirm(mode, recursive, specialChanged);
       }}
       actions={
         <>
@@ -2775,6 +2805,30 @@ function ChmodDialog({
         </tbody>
       </table>
 
+      <fieldset className="mb-3 text-sm text-slate-300">
+        <legend className="sr-only">{t("fileBrowser.chmod.special")}</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {(
+            [
+              [0o4000, "setuid"],
+              [0o2000, "setgid"],
+              [0o1000, "sticky"],
+            ] as const
+          ).map(([bit, key]) => (
+            <label key={key} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={(mode & bit) !== 0}
+                onChange={() => toggleBit(bit)}
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              />
+              {t(`fileBrowser.chmod.${key}`)}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-400">{t("fileBrowser.chmod.specialHint")}</p>
+      </fieldset>
+
       <Field label={t("fileBrowser.chmod.numeric")} className="mb-3">
         {(control) => (
           <input
@@ -2801,6 +2855,14 @@ function ChmodDialog({
             {t("fileBrowser.chmod.recursiveWarning")}
           </span>
         </label>
+      )}
+      {entry.isDir && recursive && (
+        <p className="mt-2 text-xs text-slate-300">
+          {t("fileBrowser.chmod.recursiveSummary", {
+            folders: folderBits.toString(8).padStart(3, "0"),
+            files: fileBits.toString(8).padStart(3, "0"),
+          })}
+        </p>
       )}
     </DialogFrame>
   );

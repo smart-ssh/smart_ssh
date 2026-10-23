@@ -11,6 +11,7 @@ mod host_key;
 mod local;
 mod local_sftp;
 mod sftp;
+mod sftp_tap;
 mod shell;
 #[cfg(feature = "test-support")]
 pub mod test_keys;

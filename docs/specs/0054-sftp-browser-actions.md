@@ -94,9 +94,22 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
 
 - **Rechte bearbeiten (chmod):** Ein Dialog mit Checkbox-Matrix
   (Besitzer/Gruppe/andere × lesen/schreiben/ausführen) und numerischer
-  Eingabe. Für Ordner optional rekursiv, deutlich gekennzeichnet; die Rechte
-  werden dann auf jeden Eintrag im Baum gesetzt, Dateien und Ordner. Das
-  Ergebnis nennt die Zahl der geänderten Einträge.
+  Eingabe sowie eigenen Kästchen für setuid, setgid und sticky (mit kurzem
+  Hinweis). Für Ordner optional rekursiv, deutlich gekennzeichnet; das
+  Ergebnis nennt die Zahl der geänderten Einträge. Rekursiv arbeitet es wie
+  `chmod -R` mit großem `X`: Dateien erhalten genau die gewählten neun
+  Rechtebits; Ordner erhalten dieselben Bits plus „ausführen“ für jede
+  Klasse (Besitzer/Gruppe/andere), die „lesen“ hat, damit sie betretbar
+  bleiben. Sonderbits setzt die rekursive Anwendung nie auf Dateien; Ordner
+  behalten ihre eigenen Sonderbits, außer der Nutzer hat sie im Dialog
+  geändert – dann erhalten nur Ordner die gewählten. Bei gesetztem
+  „rekursiv“ zeigt der Dialog eine Zeile wie „Ordner: 755, Dateien: 644“.
+  Ohne „rekursiv“ wird genau der Dialogwert gesetzt. Die Eigenschaften
+  zeigen die Rechte ebenfalls vierstellig.
+- **Ordner ohne „ausführen“:** Liefert das Auflisten eines Ordners keine
+  Einträge und hat der Ordner selbst kein „ausführen“-Bit, zeigt die Liste
+  „Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)“ statt eines leeren
+  Ordners.
 - **Löschen:** Datei oder Ordner, **Bestätigung immer**. Bei Ordnern zeigt
   der Dialog vorab, wie viele Dateien und Ordner gelöscht werden (Vorschau
   wie beim zweistufigen Löschen eines Servers). Ordner werden von unten nach
@@ -119,6 +132,19 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
 - **Verschieben:** innerhalb des Servers per Ausschneiden und Einfügen.
   Existiert das Ziel schon, warnt die App. Umbenennen und Verschieben sind
   für den Server dieselbe Operation.
+- **Überschreiben bei Umbenennen und Verschieben:** Bestätigt der Nutzer in
+  der Warnung „Überschreiben“, ersetzt die Datei das vorhandene Ziel; die
+  Quelle ist danach weg, das Ziel hat ihren Inhalt. Ohne Bestätigung wird nie
+  ersetzt. Bietet der Server den atomaren Austausch an
+  (`posix-rename@openssh.com`), geschieht er in einem Schritt. Sonst wird die
+  Ziel-Datei zuerst entfernt und dann umbenannt; scheitert das Umbenennen
+  danach, sagt die Fehlermeldung, dass das Ziel bereits entfernt wurde und die
+  Quelle unverändert ist. **Ein Ordner als Ziel wird nie ersetzt:** Die
+  Warnung sagt dann, dass der Zielordner existiert und nicht ersetzt werden
+  kann, und bietet kein „Überschreiben“ an. Fehler zeigen den Grund des
+  Servers (z. B. „Zugriff verweigert“). Im erhöhten Modus läuft alles über den
+  erhöhten Kanal, mit denselben Widerrufsprüfungen und demselben Protokoll
+  wie andere erhöhte Änderungen.
 - **Dateien aus der Zwischenablage hochladen:** Liegen Dateien oder Ordner des
   Betriebssystems in der Zwischenablage (kopiert im Finder, Explorer oder
   Linux-Dateimanager, auch die Zwischendatei aus „Datei kopieren“ unter

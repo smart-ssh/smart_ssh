@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ustawienia",
+    "backToList": "Sekcje",
     "categories": {
       "aiProvider": "Dostawca AI",
       "displayLanguage": "Wygląd i język",
@@ -999,6 +1000,7 @@
     "transferFiles": "{{done}} z {{total}} plików",
     "transferRemaining": "pozostało {{time}}",
     "loading": "Wczytywanie…",
+    "noPermissionToOpen": "Brak uprawnień do otwarcia tego folderu (brak x)",
     "emptyDirectory": "(pusty katalog)",
     "dropHint": "Upuść tutaj, aby wysłać do {{path}}",
     "cancel": "Anuluj",
@@ -1038,7 +1040,8 @@
     },
     "moveCollision": {
       "title": "Cel już istnieje",
-      "body": "już istnieje i zostałby nadpisany."
+      "body": "już istnieje i zostałby nadpisany.",
+      "folderBody": "już istnieje jako folder i nie można go zastąpić."
     },
     "folderUpload": {
       "conflictTitle": "Nadpisać pliki w folderze?",
@@ -1100,6 +1103,12 @@
       "execute": "Wykonywanie",
       "numeric": "Numerycznie",
       "recursive": "Rekurencyjnie",
+      "special": "Bity specjalne",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Przy zastosowaniu rekurencyjnym bity specjalne trafiają tylko do folderów, nigdy do plików.",
+      "recursiveSummary": "Foldery: {{folders}}, pliki: {{files}}",
       "recursiveWarning": "— zmienia uprawnienia WSZYSTKICH plików i podfolderów w tym folderze. Potężna operacja, nie można jej cofnąć.",
       "owner": "Właściciel",
       "group": "Grupa",

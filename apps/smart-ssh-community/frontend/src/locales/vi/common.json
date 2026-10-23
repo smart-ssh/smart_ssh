@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Cài đặt",
+    "backToList": "Mục",
     "categories": {
       "aiProvider": "Nhà cung cấp AI",
       "displayLanguage": "Hiển thị & Ngôn ngữ",
@@ -984,6 +985,7 @@
     "transferFiles": "{{done}}/{{total}} tệp",
     "transferRemaining": "còn {{time}}",
     "loading": "Đang tải…",
+    "noPermissionToOpen": "Không có quyền mở thư mục này (thiếu x)",
     "emptyDirectory": "(thư mục trống)",
     "dropHint": "Thả vào đây để tải lên {{path}}",
     "cancel": "Hủy",
@@ -1017,7 +1019,8 @@
     },
     "moveCollision": {
       "title": "Đích đã tồn tại",
-      "body": "đã tồn tại và sẽ bị ghi đè."
+      "body": "đã tồn tại và sẽ bị ghi đè.",
+      "folderBody": "đã tồn tại dưới dạng thư mục và không thể thay thế."
     },
     "folderUpload": {
       "conflictTitle": "Ghi đè các tệp trong thư mục?",
@@ -1079,6 +1082,12 @@
       "execute": "Thực thi",
       "numeric": "Dạng số",
       "recursive": "Đệ quy",
+      "special": "Bit đặc biệt",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Khi áp dụng đệ quy, bit đặc biệt chỉ áp cho thư mục, không bao giờ cho tệp.",
+      "recursiveSummary": "Thư mục: {{folders}}, tệp: {{files}}",
       "recursiveWarning": "— thay đổi quyền của TẤT CẢ tệp và thư mục con trong thư mục này. Thao tác mạnh, không thể hoàn tác.",
       "owner": "Chủ sở hữu",
       "group": "Nhóm",
