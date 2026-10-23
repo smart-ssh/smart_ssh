@@ -99,6 +99,27 @@ impl SwappableRedactor {
         *self.inner.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
     }
 
+    /// Issue #635: replaces the pattern-based redactor **and** the literal
+    /// secret set with exactly `secrets` (empty values ignored). Only the
+    /// extension rebuild path calls this; every other swap (reconnect) keeps
+    /// the literal set add-only. Text stored already redacted is not touched.
+    fn replace_with_literals(
+        &self,
+        redactor: Box<dyn OutputRedactor>,
+        secrets: &[secrecy::SecretString],
+    ) {
+        // Hold the literal lock across both writes so no reader sees the new
+        // pattern redactor with the old literal set or vice versa for long.
+        let mut known = self
+            .literal_secrets
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        known.clear();
+        drop(known);
+        self.add_secret_values(secrets);
+        self.replace(redactor);
+    }
+
     /// Issue #464: from now on `secrets` are masked wherever this redactor
     /// runs (live output, result, ledger, history, logs). Called before the
     /// command that uses them starts, so its own output is already covered.
@@ -1088,8 +1109,24 @@ impl Session {
 
     /// Replaces the redactor of the open session (an extension's secret
     /// values changed). History is re-redacted on the next send.
+    ///
+    /// Literal secret values (issue #464, added by placeholder substitution)
+    /// are **kept**: this is the swap for anything but an extension rebuild.
     pub fn swap_redactor(&self, redactor: Box<dyn OutputRedactor>) {
         self.redactor.replace(redactor);
+    }
+
+    /// Issue #635: like [`Self::swap_redactor`], but the session's literal
+    /// secret values are **replaced** by `literals` (the extension's
+    /// currently known secrets), so a withdrawn value is no longer masked.
+    /// Only the extension rebuild path uses this; reconnect keeps literals.
+    /// Already redacted stored text is not re-read.
+    pub fn swap_redactor_with_literals(
+        &self,
+        redactor: Box<dyn OutputRedactor>,
+        literals: &[secrecy::SecretString],
+    ) {
+        self.redactor.replace_with_literals(redactor, literals);
     }
 
     /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.
@@ -2015,6 +2052,72 @@ mod tests {
             manager.get(other_id).unwrap().redactor.redact_text(text),
             text
         );
+    }
+
+    /// Issue #635: a rebuild with a known set replaces the literal values;
+    /// a plain swap (reconnect) keeps them.
+    #[tokio::test]
+    async fn test_rebuild_replaces_literals_but_reconnect_swap_keeps_them() {
+        use crate::session_extension::{
+            rebuild_redactors_for_sessions, ServerScope, SessionExtension,
+        };
+        use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+        use secrecy::SecretString;
+
+        struct Known(Vec<String>);
+        impl SessionExtension for Known {
+            fn known_secrets(&self, _scope: &ServerScope) -> Vec<SecretString> {
+                self.0.iter().cloned().map(SecretString::from).collect()
+            }
+        }
+
+        let manager = SessionManager::new();
+        let server_id = ServerId::new();
+        let id = Uuid::new_v4();
+        manager.insert(id, Arc::new(dummy_session(server_id)));
+        let session = manager.get(id).unwrap();
+        let text = "a=value-aaa-1 b=value-bbb-2";
+        session
+            .redactor
+            .add_secret_values(&[SecretString::from("value-aaa-1".to_string())]);
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=[REDACTED] b=value-bbb-2"
+        );
+
+        // reconnect-style swap: A stays masked
+        session.swap_redactor(Box::new(DefaultOutputRedactor::new()));
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=[REDACTED] b=value-bbb-2"
+        );
+
+        // rebuild with {B}: A no longer masked, B is
+        let ext = Known(vec!["value-bbb-2".to_string()]);
+        let profiles = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new();
+        rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id)
+            .await;
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=value-aaa-1 b=[REDACTED]"
+        );
+
+        // a value still known stays masked after another rebuild, and a
+        // later reconnect swap keeps it
+        rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id)
+            .await;
+        session.swap_redactor(Box::new(DefaultOutputRedactor::new()));
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=value-aaa-1 b=[REDACTED]"
+        );
+
+        // rebuild with an empty set withdraws everything
+        let none = Known(Vec::new());
+        rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&none), server_id)
+            .await;
+        assert_eq!(session.redactor.redact_text(text), text);
     }
 
     // --- Spec 0039, Abschnitt 5: history_contains_untrusted_content -------
