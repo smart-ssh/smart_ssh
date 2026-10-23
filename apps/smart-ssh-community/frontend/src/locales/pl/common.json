@@ -1187,6 +1187,7 @@
     "contextUsageTooltip": "Starsze części czatu są automatycznie streszczane, gdy kontekst się zapełnia.",
     "webResearchUnavailable": "Wyszukiwanie w sieci jest niedostępne dla konta u tego dostawcy (wyszukiwanie wyłączone). Ta sesja odpowiada bez wyszukiwania w sieci. Aby wyłączyć na stałe: Ustawienia → Dostawca AI → „Wyszukiwanie w sieci”.",
     "emptyResponse": "Model nie zwrócił odpowiedzi. Przy modelach z fazą myślenia pomaga wyższy limit wyjścia w ustawieniach dostawcy.",
+    "refusedResponse": "Model odrzucił to żądanie. Sformułuj je inaczej lub zacznij nowy czat.",
     "outputTruncated": "(obcięto)",
     "fileWritten": "Plik „{{path}}” zapisany.",
     "writtenWithSudoPassword": "Zapisano z użyciem zapisanego hasła sudo.",

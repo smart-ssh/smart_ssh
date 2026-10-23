@@ -1173,6 +1173,7 @@
     "contextUsageTooltip": "Ældre dele af chatten opsummeres automatisk, når konteksten er ved at være fyldt.",
     "webResearchUnavailable": "Webresearch er ikke tilgængelig for denne udbyderkonto (websøgning er slået fra dér). Denne session svarer uden webresearch. Sådan slår du det fra permanent: Indstillinger → AI-udbyder → “Webresearch”.",
     "emptyResponse": "Modellen returnerede intet svar. For modeller med en tænkefase hjælper en højere outputgrænse i udbyderindstillingerne.",
+    "refusedResponse": "Modellen afviste denne anmodning. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(afkortet)",
     "fileWritten": "Filen '{{path}}' er skrevet.",
     "writtenWithSudoPassword": "Skrevet med den gemte sudo-adgangskode.",

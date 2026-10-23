@@ -1173,6 +1173,7 @@
     "contextUsageTooltip": "A csevegés régebbi részeit a rendszer automatikusan összefoglalja, ha betelik a kontextus.",
     "webResearchUnavailable": "A webes kutatás ennél a szolgáltatói fióknál nem érhető el (a webkeresés ott le van tiltva). Ez a munkamenet webes kutatás nélkül válaszol. Végleges kikapcsolás: Beállítások → AI-szolgáltató → „Webes kutatás”.",
     "emptyResponse": "A modell nem adott választ. Gondolkodási fázisú modelleknél segít a szolgáltató beállításaiban magasabb kimeneti korlátot megadni.",
+    "refusedResponse": "A modell elutasította a kérést. Fogalmazza át, vagy kezdjen új csevegést.",
     "outputTruncated": "(csonkolva)",
     "fileWritten": "A(z) '{{path}}' fájl megírva.",
     "writtenWithSudoPassword": "A tárolt sudo-jelszóval megírva.",

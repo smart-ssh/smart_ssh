@@ -47,6 +47,7 @@ import {
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseEmpty,
+  onChatResponseRefused,
   onChatWebResearchUnavailable,
   onChatResponseTruncated,
   onChatContextUsage,
@@ -212,6 +213,8 @@ export type ChatItem =
   // (`chat-response-empty`) — reines UI-Element aus dem Event, kein
   // Chat-Inhalt (dieselbe Begründung wie bei `responseCancelled`).
   | { type: "emptyResponse"; id: string }
+  // Issue #647: the model declined the request (`chat-response-refused`).
+  | { type: "refusedResponse"; id: string }
   // Spec 0105 §7 (Issue #169): das Provider-Konto hat die Web-Werkzeuge
   // abgeschaltet, die Antwort kommt ohne Web-Recherche — reines UI-Element
   // aus dem Event, fester Text ohne Fehlertext des Providers.
@@ -829,6 +832,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         // `last?.type === "assistant"`, "emptyResponse" erfüllt das nie,
         // ein Folge-Delta hängt sich also immer an ein neues Element.
         setItems((prev) => [...prev, { type: "emptyResponse", id: freshId() }]);
+      }),
+      onChatResponseRefused((event) => {
+        if (event.sessionId !== sessionId) return;
+        // Issue #647: own item; text streamed before stays as it is.
+        setItems((prev) => [...prev, { type: "refusedResponse", id: freshId() }]);
       }),
       onChatWebResearchUnavailable((event) => {
         if (event.sessionId !== sessionId) return;
@@ -1878,6 +1886,13 @@ export function ChatItemView({
     return (
       <div className="border border-amber-700/40 bg-slate-800 px-3 py-2 text-sm text-amber-200">
         {t("chat.emptyResponse")}
+      </div>
+    );
+  }
+  if (item.type === "refusedResponse") {
+    return (
+      <div className="border border-amber-700/40 bg-slate-800 px-3 py-2 text-sm text-amber-200">
+        {t("chat.refusedResponse")}
       </div>
     );
   }
