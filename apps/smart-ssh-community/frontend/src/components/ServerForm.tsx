@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { ServerFormSections, ServerFormTabSections, useServerSettingsTabs } from "../extensions/FormSlots";
 import { resolveSectionLabel } from "../resolveSectionLabel";
 import { ConnectStepLog } from "./ConnectStepLog";
+import { TestConnectionDialog } from "./TestConnectionDialog";
 import {
+  cancelConnect,
   clearServerSudoPassword,
   commandErrorCode,
   commandErrorMessage,
@@ -23,7 +25,7 @@ import {
   updateServer,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
-import { onNoteShrinkSucceeded } from "../events";
+import { onConnectProgress, onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import { loadRiskClassifierSettings } from "../riskSettings";
@@ -39,6 +41,7 @@ import type {
   ServerDto,
   ServerInput,
   StoredHostKeyDto,
+  ConnectStepSnapshot,
   TestConnectionReport,
   TestConnectionResult,
 } from "../types";
@@ -75,6 +78,7 @@ function authKindLabels(
 ): Record<AuthMethodKind | "privateKey" | "identityFile", string> {
   return {
     password: t("serverForm.authKind.password"),
+    no_password: t("serverForm.authKind.password"),
     private_key: t("serverForm.authKind.privateKey"),
     privateKey: t("serverForm.authKind.privateKey"),
     agent: t("serverForm.authKind.agent"),
@@ -89,7 +93,9 @@ function authKindLabels(
  * Bedeutung "leer = unverändert" (Update) erst beim Absenden entsteht
  * (s. `toAuthMethodInput`). */
 type AuthFormState =
-  | { kind: "password"; value: string }
+  // `saved`: der Server hat ein gespeichertes Passwort (Issue #632) — nur
+  // dann bedeutet ein leeres Feld "unverändert" und gibt es "entfernen".
+  | { kind: "password"; value: string; saved: boolean; remove: boolean }
   | { kind: "privateKey"; keyContent: string; passphrase: string }
   | { kind: "agent" }
   | { kind: "certificate"; certContent: string; keyContent: string }
@@ -98,7 +104,7 @@ type AuthFormState =
 function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
   switch (kind) {
     case "password":
-      return { kind: "password", value: "" };
+      return { kind: "password", value: "", saved: false, remove: false };
     case "privateKey":
       return { kind: "privateKey", keyContent: "", passphrase: "" };
     case "agent":
@@ -130,6 +136,12 @@ function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodI
   const orNullIfUpdate = (value: string) => (value === "" && !isCreate ? null : value);
   switch (state.kind) {
     case "password":
+      // Issue #632: Das Passwort ist optional. "Entfernen" und ein leeres
+      // Feld ohne gespeichertes Passwort sind ausdrücklich "kein Passwort";
+      // "unveränderte" (`null`) gibt es nur bei einem gespeicherten.
+      if (state.remove || (state.value === "" && (isCreate || !state.saved))) {
+        return { kind: "noPassword" };
+      }
       return { kind: "password", value: orNullIfUpdate(state.value) };
     case "privateKey":
       return {
@@ -323,7 +335,7 @@ export function ServerForm({
   const [jumpHost, setJumpHost] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
-  const [auth, setAuth] = useState<AuthFormState>({ kind: "password", value: "" });
+  const [auth, setAuth] = useState<AuthFormState>(authStateFromKind("password"));
   // Spec 0076, B-3: der Vorab-Befund über die im Formular gerade
   // eingetragene Schlüsseldatei — `null`, solange kein Pfad gesetzt ist
   // oder noch keine Antwort da ist. Ein Fehlbefund hindert das Speichern
@@ -466,6 +478,11 @@ export function ServerForm({
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionReport | null>(null);
+  // Issue #633: the dialog with the live step list; `null` = closed.
+  const [testDialog, setTestDialog] = useState<{ steps: ConnectStepSnapshot[] } | null>(null);
+  // Attempt id of the test the dialog currently shows; a result or error of
+  // any other (cancelled) attempt is ignored.
+  const testAttemptRef = useRef<string | null>(null);
   const [pendingHostKey, setPendingHostKey] = useState<HostKeyInfo | null>(null);
 
   const [preview, setPreview] = useState<string | null>(null);
@@ -503,7 +520,7 @@ export function ServerForm({
       setGroupId(defaultGroupId);
       setJumpHost(null);
       setTags([]);
-      setAuth({ kind: "password", value: "" });
+      setAuth(authStateFromKind("password"));
       setSudoPassword("");
       setHasSudoPassword(false);
       setPostIngestPolicy("balanced");
@@ -532,7 +549,14 @@ export function ServerForm({
         setAuth(
           server.authKind === "identity_file"
             ? { kind: "identityFile", path: server.identityFilePath ?? "", passphrase: "" }
-            : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
+            : server.authKind === "password" || server.authKind === "no_password"
+              ? {
+                  kind: "password",
+                  value: "",
+                  saved: server.authKind === "password",
+                  remove: false,
+                }
+              : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
         );
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
@@ -787,13 +811,26 @@ export function ServerForm({
   };
 
   const runTest = async () => {
+    const attemptId = crypto.randomUUID();
+    testAttemptRef.current = attemptId;
     setTesting(true);
     setError(null);
     setTestResult(null);
+    setTestDialog({ steps: [] });
+    let unlisten: (() => void) | undefined;
     try {
-      const result = await testConnection(buildInput(), serverId ?? undefined);
+      // Subscribe before the command starts so no early step is missed.
+      unlisten = await onConnectProgress((event) => {
+        if (event.attemptId === attemptId) setTestDialog({ steps: event.steps });
+      });
+      const result = await testConnection(buildInput(), attemptId, serverId ?? undefined);
+      if (testAttemptRef.current !== attemptId) return;
       setTestResult(result);
       if (result.kind === "hostKeyUnknown" || result.kind === "hostKeyMismatch") {
+        // The host key prompt takes over from the progress dialog; the badge
+        // in the form keeps the result.
+        testAttemptRef.current = null;
+        setTestDialog(null);
         setPendingHostKey({
           host: result.host,
           port: result.port,
@@ -804,10 +841,30 @@ export function ServerForm({
         });
       }
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      if (testAttemptRef.current !== attemptId) return;
+      testAttemptRef.current = null;
+      setTestDialog(null);
+      if (commandErrorCode(err) !== "SSH_CONNECT_CANCELLED") {
+        setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      }
     } finally {
-      setTesting(false);
+      unlisten?.();
+      if (testAttemptRef.current === attemptId || testAttemptRef.current === null) setTesting(false);
     }
+  };
+
+  // Cancel (button or Escape) while the test runs: end it without an error.
+  const cancelTest = () => {
+    const attemptId = testAttemptRef.current;
+    testAttemptRef.current = null;
+    setTestDialog(null);
+    setTesting(false);
+    if (attemptId) void cancelConnect(attemptId).catch(() => undefined);
+  };
+
+  const closeTestDialog = () => {
+    testAttemptRef.current = null;
+    setTestDialog(null);
   };
 
   const handleTrustAndRetest = async () => {
@@ -1161,26 +1218,45 @@ export function ServerForm({
           </select>
 
           {auth.kind === "password" && (
-            <Field
-              label={
-                <>
-                  {t("serverForm.password")}{" "}
-                  {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
-                </>
-              }
-            >
-              {(control) => (
-                <input
-                  {...control}
-                  {...TECHNICAL_INPUT_PROPS}
-                  type="password"
-                  required={isCreate}
-                  value={auth.value}
-                  onChange={(e) => setAuth({ kind: "password", value: e.target.value })}
-                  className={`${FIELD_CONTROL_CLASS} w-full`}
-                />
+            <div className="space-y-2">
+              <Field
+                label={
+                  <>
+                    {t("serverForm.password")}{" "}
+                    <span className="text-slate-400">
+                      {!isCreate && auth.saved
+                        ? t("serverForm.unchangedHint")
+                        : t("serverForm.passwordOptionalHint")}
+                    </span>
+                  </>
+                }
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    {...TECHNICAL_INPUT_PROPS}
+                    type="password"
+                    disabled={auth.remove}
+                    value={auth.value}
+                    onChange={(e) => setAuth({ ...auth, value: e.target.value })}
+                    className={`${FIELD_CONTROL_CLASS} w-full`}
+                  />
+                )}
+              </Field>
+              {!isCreate && auth.saved && (
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={auth.remove}
+                    onChange={(e) => setAuth({ ...auth, remove: e.target.checked, value: "" })}
+                  />
+                  {t("serverForm.removeSavedPassword")}
+                </label>
               )}
-            </Field>
+              {!isCreate && !auth.saved && loaded?.authKind === "no_password" && (
+                <p className="text-xs text-slate-400">{t("serverForm.noPasswordSaved")}</p>
+              )}
+            </div>
           )}
 
           {auth.kind === "privateKey" && (
@@ -1640,7 +1716,8 @@ export function ServerForm({
               {deletePreview && (
                 <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
                   <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
-                  {deletePreview.server.authKind === "agent" &&
+                  {(deletePreview.server.authKind === "agent" ||
+                    deletePreview.server.authKind === "no_password") &&
                   !deletePreview.server.hasSudoPassword &&
                   !deletePreview.server.sudoPasswordUnknown &&
                   deletePreview.serversLosingJumpHost.length === 0 ? (
@@ -1657,6 +1734,7 @@ export function ServerForm({
                        * `sudoPasswordUnknown`) bleibt deshalb der einzige
                        * Hinweis für diese Anmeldeart. */}
                       {deletePreview.server.authKind !== "agent" &&
+                        deletePreview.server.authKind !== "no_password" &&
                         deletePreview.server.authKind !== "identity_file" && (
                           <li>
                             {t("serverForm.secretWillBeDeleted", {
@@ -1738,7 +1816,16 @@ export function ServerForm({
         </>
       )}
 
-      {pendingHostKey && (
+      {testDialog && (
+        <TestConnectionDialog
+          steps={testDialog.steps}
+          result={testing ? null : testResult}
+          onCancel={cancelTest}
+          onClose={closeTestDialog}
+        />
+      )}
+
+      {pendingHostKey && !testDialog && (
         <HostKeyDialog
           event={pendingHostKey}
           onDecision={(decision) => {

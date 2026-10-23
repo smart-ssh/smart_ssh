@@ -135,6 +135,31 @@ impl SetstatModeWatch {
     }
 }
 
+/// Issue #632: wie der Test-Server `none` und ein leeres Passwort behandelt.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AuthBehavior {
+    /// Methode `none` für `TEST_USERNAME` annehmen.
+    pub accept_none: bool,
+    /// `password` mit leerem Wert für `TEST_USERNAME` annehmen.
+    pub accept_empty_password: bool,
+}
+
+/// Issue #632: die beim Server eingegangenen Anmeldeversuche, in
+/// Reihenfolge ("none", "password:empty", "password:nonempty", "publickey").
+#[derive(Default)]
+pub struct AuthAttemptLog {
+    attempts: std::sync::Mutex<Vec<&'static str>>,
+}
+
+impl AuthAttemptLog {
+    pub fn attempts(&self) -> Vec<&'static str> {
+        self.attempts.lock().unwrap().clone()
+    }
+    fn record(&self, what: &'static str) {
+        self.attempts.lock().unwrap().push(what);
+    }
+}
+
 /// Läuft ein `RunningTestServer` und stoppt ihn beim Droppen (best effort —
 /// der Shutdown-Kanal wird geschlossen, der Accept-Loop-Task beendet sich
 /// dadurch spätestens beim nächsten `select!`-Durchlauf).
@@ -159,6 +184,8 @@ pub struct RunningTestServer {
     pub setstat_mode: Arc<SetstatModeWatch>,
     /// ADR 0122, R6 — s. [`FirstLineSentWatch`].
     pub first_line_sent: Arc<FirstLineSentWatch>,
+    /// Issue #632 — s. [`AuthAttemptLog`].
+    pub auth_attempts: Arc<AuthAttemptLog>,
     shutdown: Option<oneshot::Sender<()>>,
     accept_task: JoinHandle<()>,
 }
@@ -173,6 +200,12 @@ impl RunningTestServer {
     /// TCP-Ziele weiter, und bedient ein `sftp`-Subsystem gegen ein
     /// temporäres lokales Verzeichnis (`sftp_root`).
     pub async fn start() -> Self {
+        Self::start_with_auth(AuthBehavior::default()).await
+    }
+
+    /// Wie [`Self::start`], mit festgelegtem Verhalten für `none` und leeres
+    /// Passwort (Issue #632).
+    pub async fn start_with_auth(auth_behavior: AuthBehavior) -> Self {
         let key = PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519)
             .expect("Ed25519-Testschlüssel sollte immer erzeugbar sein");
         let host_public_key = key
@@ -205,6 +238,8 @@ impl RunningTestServer {
         let setstat_mode_for_loop = setstat_mode.clone();
         let first_line_sent = Arc::new(FirstLineSentWatch::default());
         let first_line_sent_for_loop = first_line_sent.clone();
+        let auth_attempts = Arc::new(AuthAttemptLog::default());
+        let auth_attempts_for_loop = auth_attempts.clone();
 
         let accept_task = tokio::spawn(async move {
             loop {
@@ -222,6 +257,7 @@ impl RunningTestServer {
                         let exec_channel = exec_channel_for_loop.clone();
                         let setstat_mode = setstat_mode_for_loop.clone();
                         let first_line_sent = first_line_sent_for_loop.clone();
+                        let auth_attempts = auth_attempts_for_loop.clone();
                         tokio::spawn(async move {
                             let handler = TestHandler {
                                 channels: HashMap::new(),
@@ -230,6 +266,8 @@ impl RunningTestServer {
                                 exec_channel,
                                 setstat_mode,
                                 first_line_sent,
+                                auth_attempts,
+                                auth_behavior,
                             };
                             let _ = russh::server::run_stream(config, stream, handler).await;
                         });
@@ -245,6 +283,7 @@ impl RunningTestServer {
             exec_channel,
             setstat_mode,
             first_line_sent,
+            auth_attempts,
             shutdown: Some(shutdown_tx),
             accept_task,
         }
@@ -283,13 +322,32 @@ struct TestHandler {
     setstat_mode: Arc<SetstatModeWatch>,
     /// ADR 0122, R6 — s. [`FirstLineSentWatch`].
     first_line_sent: Arc<FirstLineSentWatch>,
+    auth_attempts: Arc<AuthAttemptLog>,
+    auth_behavior: AuthBehavior,
 }
 
 impl Handler for TestHandler {
     type Error = russh::Error;
 
+    async fn auth_none(&mut self, user: &str) -> Result<Auth, Self::Error> {
+        self.auth_attempts.record("none");
+        if user == TEST_USERNAME && self.auth_behavior.accept_none {
+            Ok(Auth::Accept)
+        } else {
+            Ok(Auth::reject())
+        }
+    }
+
     async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
-        if user == TEST_USERNAME && password == TEST_PASSWORD {
+        self.auth_attempts.record(if password.is_empty() {
+            "password:empty"
+        } else {
+            "password:nonempty"
+        });
+        if user == TEST_USERNAME
+            && (password == TEST_PASSWORD
+                || (password.is_empty() && self.auth_behavior.accept_empty_password))
+        {
             Ok(Auth::Accept)
         } else {
             Ok(Auth::reject())

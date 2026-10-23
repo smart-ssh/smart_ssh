@@ -178,6 +178,9 @@
       "identityFile": "Schlüsseldatei"
     },
     "password": "Passwort",
+    "passwordOptionalHint": "(optional – leer lassen, wenn der Server eine Anmeldung ohne Passwort erlaubt)",
+    "removeSavedPassword": "Gespeichertes Passwort entfernen",
+    "noPasswordSaved": "Kein Passwort gespeichert. Die App versucht zuerst die Anmeldung ohne Passwort, dann mit leerem Passwort.",
     "unchangedHint": "(leer = unverändert)",
     "privateKeyLabel": "Private Key",
     "chooseFile": "Datei wählen…",
@@ -443,6 +446,8 @@
     "active": "aktiv",
     "setActive": "Aktiv setzen",
     "addProvider": "Provider hinzufügen",
+    "editProvider": "Provider bearbeiten",
+    "apiKeyUnchangedPlaceholder": "Unverändert – neuen Key eingeben, um ihn zu ersetzen",
     "type": "Typ",
     "providerName": "Name",
     "model": "Modell",
@@ -542,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Der KI-Provider meldet einen Fehler (z. B. Wartung oder Überlastung). Später erneut versuchen; hält es an, Provider-Einstellungen prüfen.",
     "AI_PROVIDER_OVERLOADED": "Der KI-Anbieter ist gerade überlastet. Bitte gleich noch einmal versuchen.",
     "AI_PROVIDER_BILLING": "Beim KI-Anbieter ist kein Guthaben mehr auf dem Konto. Abrechnung in der Konsole des Anbieters prüfen.",
+    "AI_PROVIDER_USAGE_LIMIT": "Das Nutzungslimit beim Anbieter ist erreicht. Limit in der Konsole des Anbieters erhöhen oder einen anderen Anbieter wählen.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Das Nutzungslimit beim Anbieter ist erreicht. Der Zugriff ist wieder möglich am {{date}}. Limit in der Konsole des Anbieters erhöhen oder einen anderen Anbieter wählen.",
     "AI_PROVIDER_REJECTED_REQUEST": "Der KI-Anbieter hat die Anfrage abgelehnt.",
     "AI_RESPONSE_TRUNCATED": "Die KI-Antwort war zu lang für einen vollständigen Befehl",
     "AI_MODEL_NOT_FOUND": "Der KI-Provider kennt dieses Modell nicht. Modellnamen in den Einstellungen prüfen („Modelle laden“ zeigt die verfügbaren); bei Ollama das Modell zuerst mit `ollama pull <name>` laden.",
@@ -936,12 +943,15 @@
       "handshake": "SSH-Handshake",
       "hostKeyCheck": "Host-Key-Prüfung",
       "authentication": "Anmeldung",
-      "sessionReady": "Sitzung aufgebaut"
+      "sessionReady": "Sitzung aufgebaut",
+      "dnsSkipped": "IP-Adresse – keine Auflösung nötig"
     },
     "status": {
       "ok": "OK",
       "running": "läuft",
-      "failed": "fehlgeschlagen ({{code}})"
+      "failed": "fehlgeschlagen ({{code}})",
+      "skipped": "übersprungen",
+      "failedReason": "fehlgeschlagen: {{reason}}"
     },
     "hostKeyResult": {
       "known": "bekannt",
@@ -949,6 +959,7 @@
       "changed": "geändert"
     },
     "authMethod": {
+      "none": "none (ohne Authentifizierung)",
       "password": "Passwort",
       "privateKey": "Privater Schlüssel",
       "agent": "SSH-Agent",
@@ -963,6 +974,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "teilweise akzeptiert, weitere Anmeldung nötig",
       "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-Verbindung hat das Zeitlimit überschritten",
+      "SSH_TIMEOUT": "Zeitüberschreitung",
+      "SSH_CONNECTION_REFUSED": "Verbindung abgelehnt",
+      "SSH_HOST_NOT_FOUND": "Host nicht gefunden",
+      "SSH_HOST_UNREACHABLE": "Host nicht erreichbar",
+      "SSH_AUTH_FAILED": "Anmeldung fehlgeschlagen"
     }
   },
   "fileBrowser": {

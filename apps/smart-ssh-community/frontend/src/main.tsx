@@ -5,6 +5,7 @@ import App from './App.tsx'
 import { getStartupState } from './api.ts'
 import { StartupGate } from './components/StartupGate.tsx'
 import { initI18n } from './i18n.ts'
+import { installContextMenuSuppression } from './contextMenu.ts'
 import type { StartupStateDto } from './types.ts'
 
 // Spec 0101, A16: **Der Startzustand steht vor dem ersten Render.**
@@ -43,6 +44,9 @@ try {
 await initI18n(
   startupState && startupState.screen !== 'unlocked' ? startupState.language : undefined,
 )
+
+// Issue #629: no WebView menu ("Reload") in release builds.
+if (import.meta.env.PROD) installContextMenuSuppression()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

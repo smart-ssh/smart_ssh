@@ -178,6 +178,9 @@
       "identityFile": "Arquivo de chave"
     },
     "password": "Senha",
+    "passwordOptionalHint": "(opcional – deixe vazio se o servidor permitir login sem senha)",
+    "removeSavedPassword": "Remover senha salva",
+    "noPasswordSaved": "Nenhuma senha salva. O app tenta primeiro o login sem senha e depois com uma senha vazia.",
     "unchangedHint": "(vazio = inalterado)",
     "privateKeyLabel": "Chave privada",
     "chooseFile": "Escolher arquivo…",
@@ -443,6 +446,8 @@
     "active": "ativo",
     "setActive": "Definir como ativo",
     "addProvider": "Adicionar provedor",
+    "editProvider": "Editar provedor",
+    "apiKeyUnchangedPlaceholder": "Inalterada – insira uma nova chave para substituí-la",
     "type": "Tipo",
     "providerName": "Nome",
     "model": "Modelo",
@@ -542,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "O provedor de IA relatou um erro (p. ex., manutenção ou sobrecarga). Tente novamente mais tarde; se persistir, verifique as configurações do provedor.",
     "AI_PROVIDER_OVERLOADED": "O provedor de IA está sobrecarregado no momento. Tente novamente em instantes.",
     "AI_PROVIDER_BILLING": "A conta do provedor de IA está sem crédito. Verifique a cobrança no console do provedor.",
+    "AI_PROVIDER_USAGE_LIMIT": "Limite de uso atingido no provedor. Aumente o limite no console do provedor ou escolha outro provedor.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Limite de uso atingido no provedor. O acesso volta em {{date}}. Aumente o limite no console do provedor ou escolha outro provedor.",
     "AI_PROVIDER_REJECTED_REQUEST": "O provedor de IA rejeitou a solicitação.",
     "AI_RESPONSE_TRUNCATED": "A resposta da IA foi longa demais para um comando completo",
     "AI_MODEL_NOT_FOUND": "O provedor de IA não conhece este modelo. Verifique o nome do modelo em Configurações (\"Carregar modelos\" lista os disponíveis); no Ollama, baixe-o antes com `ollama pull <name>`.",
@@ -941,12 +948,15 @@
       "handshake": "Handshake SSH",
       "hostKeyCheck": "Verificação da chave de host",
       "authentication": "Autenticação",
-      "sessionReady": "Sessão estabelecida"
+      "sessionReady": "Sessão estabelecida",
+      "dnsSkipped": "Endereço IP – resolução desnecessária"
     },
     "status": {
       "ok": "OK",
       "running": "em andamento",
-      "failed": "falhou ({{code}})"
+      "failed": "falhou ({{code}})",
+      "skipped": "ignorado",
+      "failedReason": "falhou: {{reason}}"
     },
     "hostKeyResult": {
       "known": "conhecida",
@@ -954,6 +964,7 @@
       "changed": "alterada"
     },
     "authMethod": {
+      "none": "none (sem autenticação)",
       "password": "Senha",
       "privateKey": "Chave privada",
       "agent": "Agente SSH",
@@ -968,6 +979,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "aceita parcialmente, autenticação adicional necessária",
       "remainingMethods": "O servidor também oferece: {{methods}} (não tentados)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "A conexão TCP expirou",
+      "SSH_TIMEOUT": "Tempo esgotado",
+      "SSH_CONNECTION_REFUSED": "Conexão recusada",
+      "SSH_HOST_NOT_FOUND": "Host não encontrado",
+      "SSH_HOST_UNREACHABLE": "Host inacessível",
+      "SSH_AUTH_FAILED": "Falha na autenticação"
     }
   },
   "fileBrowser": {

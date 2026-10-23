@@ -70,13 +70,18 @@ gelangt nie in ein Kommando.
 Ist der bereinigte Wert nicht leer, gilt er. Ist er leer oder nicht
 angegeben, wird bei einem bestehenden Server das gespeicherte Credential
 verwendet, bei einer Neuanlage ergibt das einen Fehler und keinen
-Anmeldeversuch mit leerem Wert. Das gilt für Passwort, Schlüsselinhalt,
-Zertifikat, Zertifikats-Schlüssel und Passphrase.
+Anmeldeversuch mit leerem Wert. Das gilt für Schlüsselinhalt, Zertifikat,
+Zertifikats-Schlüssel und Passphrase. **Ausnahme Passwort:** Es ist optional.
+Ist der bereinigte Wert leer und gibt es kein gespeichertes Passwort, gilt
+„kein Passwort" (Spec 0008, Abschnitt 6) — Speichern und Verbindungstest
+verhalten sich gleich; ein leeres Passwort wird nur in dieser Reihenfolge
+versucht: erst SSH-Methode `none`, dann `password` mit leerem Wert, und nur für
+„kein Passwort".
 
 **A8** Ein fehlendes Pflichtfeld wird im Verbindungstest mit denselben
-Fehlercodes gemeldet wie beim Speichern: `SERVER_PASSWORD_REQUIRED`,
-`SERVER_PRIVATE_KEY_REQUIRED`, `SERVER_CERTIFICATE_REQUIRED`,
-`SERVER_CERTIFICATE_KEY_REQUIRED`.
+Fehlercodes gemeldet wie beim Speichern: `SERVER_PRIVATE_KEY_REQUIRED`,
+`SERVER_CERTIFICATE_REQUIRED`, `SERVER_CERTIFICATE_KEY_REQUIRED`. Für das
+Passwort gibt es keinen solchen Fehler mehr.
 
 ## 4. Begründung
 

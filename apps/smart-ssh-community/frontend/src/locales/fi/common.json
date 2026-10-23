@@ -178,6 +178,9 @@
       "identityFile": "Avaintiedosto"
     },
     "password": "Salasana",
+    "passwordOptionalHint": "(valinnainen – jätä tyhjäksi, jos palvelin sallii kirjautumisen ilman salasanaa)",
+    "removeSavedPassword": "Poista tallennettu salasana",
+    "noPasswordSaved": "Salasanaa ei ole tallennettu. Sovellus yrittää ensin kirjautumista ilman salasanaa ja sitten tyhjällä salasanalla.",
     "unchangedHint": "(tyhjä = ei muutu)",
     "privateKeyLabel": "Yksityinen avain",
     "chooseFile": "Valitse tiedosto…",
@@ -443,6 +446,8 @@
     "active": "aktiivinen",
     "setActive": "Aseta aktiiviseksi",
     "addProvider": "Lisää palveluntarjoaja",
+    "editProvider": "Muokkaa palveluntarjoajaa",
+    "apiKeyUnchangedPlaceholder": "Ei muutosta – syötä uusi avain korvataksesi sen",
     "type": "Tyyppi",
     "providerName": "Nimi",
     "model": "Malli",
@@ -542,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Tekoälyn palveluntarjoaja ilmoitti virheestä (esim. huolto tai ylikuormitus). Yritä myöhemmin uudelleen; jos ongelma jatkuu, tarkista palveluntarjoajan asetukset.",
     "AI_PROVIDER_OVERLOADED": "Tekoälypalvelun tarjoaja on juuri nyt ylikuormitettu. Yritä hetken kuluttua uudelleen.",
     "AI_PROVIDER_BILLING": "Tekoälypalvelun tilillä ei ole enää saldoa. Tarkista laskutus palveluntarjoajan konsolista.",
+    "AI_PROVIDER_USAGE_LIMIT": "Palveluntarjoajan käyttöraja on saavutettu. Nosta rajaa palveluntarjoajan konsolissa tai valitse toinen palveluntarjoaja.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Palveluntarjoajan käyttöraja on saavutettu. Pääsy palautuu {{date}}. Nosta rajaa palveluntarjoajan konsolissa tai valitse toinen palveluntarjoaja.",
     "AI_PROVIDER_REJECTED_REQUEST": "Tekoälypalvelun tarjoaja hylkäsi pyynnön.",
     "AI_RESPONSE_TRUNCATED": "Tekoälyn vastaus oli liian pitkä täydelliseksi komennoksi",
     "AI_MODEL_NOT_FOUND": "Tekoälyn palveluntarjoaja ei tunne tätä mallia. Tarkista mallin nimi asetuksista (\"Lataa mallit\" listaa saatavilla olevat); Ollamalle lataa se ensin komennolla `ollama pull <name>`.",
@@ -936,12 +943,15 @@
       "handshake": "SSH-kättely",
       "hostKeyCheck": "Isäntäavaimen tarkistus",
       "authentication": "Todennus",
-      "sessionReady": "Istunto muodostettu"
+      "sessionReady": "Istunto muodostettu",
+      "dnsSkipped": "IP-osoite – hakua ei tarvita"
     },
     "status": {
       "ok": "OK",
       "running": "käynnissä",
-      "failed": "epäonnistui ({{code}})"
+      "failed": "epäonnistui ({{code}})",
+      "skipped": "ohitettu",
+      "failedReason": "epäonnistui: {{reason}}"
     },
     "hostKeyResult": {
       "known": "tunnettu",
@@ -949,6 +959,7 @@
       "changed": "muuttunut"
     },
     "authMethod": {
+      "none": "none (ei todennusta)",
       "password": "Salasana",
       "privateKey": "Yksityinen avain",
       "agent": "SSH-agentti",
@@ -963,6 +974,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "hyväksytty osittain, lisätodennus vaaditaan",
       "remainingMethods": "Palvelin tarjoaa myös: {{methods}} (ei kokeiltu)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-yhteys aikakatkaistiin",
+      "SSH_TIMEOUT": "Aikakatkaisu",
+      "SSH_CONNECTION_REFUSED": "Yhteys evättiin",
+      "SSH_HOST_NOT_FOUND": "Isäntää ei löytynyt",
+      "SSH_HOST_UNREACHABLE": "Isäntä ei ole tavoitettavissa",
+      "SSH_AUTH_FAILED": "Todennus epäonnistui"
     }
   },
   "fileBrowser": {

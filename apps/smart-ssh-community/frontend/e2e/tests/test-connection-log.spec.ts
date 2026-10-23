@@ -15,6 +15,8 @@ test("a failing connection test shows a collapsed step log that expands to the f
   await page.getByRole("tab", { name: "Connection", exact: true }).click();
   await page.getByRole("button", { name: "Test Connection", exact: true }).click();
   await expect.poll(async () => (await app.calls("test_connection")).length).toBe(1);
+  // Issue #633: the result first shows in a dialog; closing it leaves the form.
+  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
 
   const log = page.getByTestId("connect-step-log");
   const failedStep = log.locator("li[data-failed=true]");
@@ -27,7 +29,7 @@ test("a failing connection test shows a collapsed step log that expands to the f
   await expect(log).toHaveAttribute("open");
   await expect(failedStep).toBeVisible();
   await expect(failedStep).toContainText("Authentication");
-  await expect(failedStep).toContainText("failed (AUTH_FAILED)");
+  await expect(failedStep).toContainText("failed: AUTH_FAILED");
   // The steps before it are listed as successful.
   await expect(log.locator("li:not([data-failed])")).toHaveCount(4);
 });

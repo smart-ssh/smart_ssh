@@ -248,7 +248,11 @@ async fn connect_with_config(
     )
     .await;
     if let Err(err) = &result {
-        log.fail_running(err.code());
+        if matches!(err, SshError::Timeout) {
+            log.fail_running_timeout();
+        } else {
+            log.fail_running(err.code());
+        }
     }
     result
 }
@@ -549,20 +553,33 @@ async fn open_tcp(
             addresses: Vec::new(),
         },
     );
-    let addrs: Vec<std::net::SocketAddr> = match tokio::net::lookup_host((host, port)).await {
-        Ok(addrs) => addrs.collect(),
-        Err(err) => {
-            return Err(SshError::HostNotFound(format!(
-                "Host '{host}' ist nicht auflösbar (ursprünglicher Fehler: {err})"
-            )))
-        }
+    // An IP literal needs no lookup: the step is shown as skipped.
+    let addrs: Vec<std::net::SocketAddr> = if let Some(ip) = parse_ip_literal(host) {
+        let addrs = vec![std::net::SocketAddr::new(ip, port)];
+        log.update(dns_step, |step| {
+            if let ConnectStep::DnsResolution { addresses, .. } = step {
+                *addresses = vec![ip.to_string()];
+            }
+        });
+        log.skip(dns_step);
+        addrs
+    } else {
+        let addrs: Vec<std::net::SocketAddr> = match tokio::net::lookup_host((host, port)).await {
+            Ok(addrs) => addrs.collect(),
+            Err(err) => {
+                return Err(SshError::HostNotFound(format!(
+                    "Host '{host}' ist nicht auflösbar (ursprünglicher Fehler: {err})"
+                )))
+            }
+        };
+        log.update(dns_step, |step| {
+            if let ConnectStep::DnsResolution { addresses, .. } = step {
+                *addresses = addrs.iter().map(|a| a.ip().to_string()).collect();
+            }
+        });
+        log.succeed(dns_step);
+        addrs
     };
-    log.update(dns_step, |step| {
-        if let ConnectStep::DnsResolution { addresses, .. } = step {
-            *addresses = addrs.iter().map(|a| a.ip().to_string()).collect();
-        }
-    });
-    log.succeed(dns_step);
 
     let tcp_step = log.start(
         0,
@@ -586,6 +603,16 @@ async fn open_tcp(
     });
     log.succeed(tcp_step);
     Ok(socket)
+}
+
+/// IPv4/IPv6 literal (optionally in brackets, optionally with a zone id
+/// for IPv6, which only the resolver understands and is left to it).
+fn parse_ip_literal(host: &str) -> Option<std::net::IpAddr> {
+    let inner = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    inner.parse().ok()
 }
 
 /// Übersetzt das Ergebnis von `client::connect`/`client::connect_stream`:
@@ -1080,5 +1107,20 @@ mod keepalive_tests {
         );
         assert_eq!(config.keepalive_max, 3);
         assert!(config.nodelay);
+    }
+}
+
+#[cfg(test)]
+mod ip_literal_tests {
+    use super::parse_ip_literal;
+
+    #[test]
+    fn recognises_ip_literals_only() {
+        assert!(parse_ip_literal("192.0.2.1").is_some());
+        assert!(parse_ip_literal("2001:db8::1").is_some());
+        assert!(parse_ip_literal("[2001:db8::1]").is_some());
+        assert!(parse_ip_literal("example.com").is_none());
+        assert!(parse_ip_literal("1.2.3").is_none());
+        assert!(parse_ip_literal("").is_none());
     }
 }

@@ -178,6 +178,9 @@
       "identityFile": "Anahtar dosyası"
     },
     "password": "Parola",
+    "passwordOptionalHint": "(isteğe bağlı – sunucu parolasız girişe izin veriyorsa boş bırakın)",
+    "removeSavedPassword": "Kayıtlı parolayı kaldır",
+    "noPasswordSaved": "Kayıtlı parola yok. Uygulama önce parolasız girişi, ardından boş parola ile girişi dener.",
     "unchangedHint": "(boş = değişmez)",
     "privateKeyLabel": "Özel anahtar",
     "chooseFile": "Dosya seç…",
@@ -443,6 +446,8 @@
     "active": "etkin",
     "setActive": "Etkin yap",
     "addProvider": "Sağlayıcı ekle",
+    "editProvider": "Sağlayıcıyı düzenle",
+    "apiKeyUnchangedPlaceholder": "Değişmedi – değiştirmek için yeni bir anahtar girin",
     "type": "Tür",
     "providerName": "Ad",
     "model": "Model",
@@ -542,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Yapay zeka sağlayıcısı bir hata bildirdi (örn. bakım veya aşırı yük). Daha sonra yeniden deneyin; sürerse sağlayıcı ayarlarını denetleyin.",
     "AI_PROVIDER_OVERLOADED": "Yapay zekâ sağlayıcısı şu anda aşırı yüklü. Biraz sonra tekrar deneyin.",
     "AI_PROVIDER_BILLING": "Yapay zekâ sağlayıcısı hesabında kredi kalmadı. Sağlayıcının konsolunda faturalandırmayı kontrol edin.",
+    "AI_PROVIDER_USAGE_LIMIT": "Sağlayıcıdaki kullanım sınırına ulaşıldı. Sınırı sağlayıcının konsolunda yükseltin veya başka bir sağlayıcı seçin.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Sağlayıcıdaki kullanım sınırına ulaşıldı. Erişim {{date}} tarihinde geri gelecek. Sınırı sağlayıcının konsolunda yükseltin veya başka bir sağlayıcı seçin.",
     "AI_PROVIDER_REJECTED_REQUEST": "Yapay zekâ sağlayıcısı isteği reddetti.",
     "AI_RESPONSE_TRUNCATED": "Yapay zeka yanıtı tam bir komut için çok uzundu",
     "AI_MODEL_NOT_FOUND": "Yapay zeka sağlayıcısı bu modeli tanımıyor. Ayarlar'da model adını denetleyin (\"Modelleri yükle\" kullanılabilir olanları listeler); Ollama için önce `ollama pull <name>` ile indirin.",
@@ -936,12 +943,15 @@
       "handshake": "SSH el sıkışması",
       "hostKeyCheck": "Ana makine anahtarı denetimi",
       "authentication": "Kimlik doğrulama",
-      "sessionReady": "Oturum kuruldu"
+      "sessionReady": "Oturum kuruldu",
+      "dnsSkipped": "IP adresi – ad çözümleme gerekmez"
     },
     "status": {
       "ok": "Tamam",
       "running": "devam ediyor",
-      "failed": "başarısız ({{code}})"
+      "failed": "başarısız ({{code}})",
+      "skipped": "atlandı",
+      "failedReason": "başarısız: {{reason}}"
     },
     "hostKeyResult": {
       "known": "bilinen",
@@ -949,6 +959,7 @@
       "changed": "değişti"
     },
     "authMethod": {
+      "none": "none (kimlik doğrulama yok)",
       "password": "Parola",
       "privateKey": "Özel anahtar",
       "agent": "SSH aracısı",
@@ -963,6 +974,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "kısmen kabul edildi, ek kimlik doğrulama gerekli",
       "remainingMethods": "Sunucu ayrıca şunları sunuyor: {{methods}} (denenmedi)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP bağlantısı zaman aşımına uğradı",
+      "SSH_TIMEOUT": "Zaman aşımı",
+      "SSH_CONNECTION_REFUSED": "Bağlantı reddedildi",
+      "SSH_HOST_NOT_FOUND": "Ana makine bulunamadı",
+      "SSH_HOST_UNREACHABLE": "Ana makineye ulaşılamıyor",
+      "SSH_AUTH_FAILED": "Kimlik doğrulama başarısız"
     }
   },
   "fileBrowser": {

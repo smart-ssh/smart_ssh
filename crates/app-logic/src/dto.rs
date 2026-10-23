@@ -261,6 +261,8 @@ impl From<KeychainAvailability> for KeychainStatusDto {
 #[serde(rename_all = "snake_case")]
 pub enum AuthMethodKind {
     Password,
+    /// Issue #632: Passwortmethode ohne gespeichertes Passwort.
+    NoPassword,
     PrivateKey,
     Agent,
     Certificate,
@@ -274,6 +276,7 @@ impl From<&AuthMethod> for AuthMethodKind {
     fn from(auth: &AuthMethod) -> Self {
         match auth {
             AuthMethod::Password { .. } => AuthMethodKind::Password,
+            AuthMethod::NoPassword => AuthMethodKind::NoPassword,
             AuthMethod::PrivateKey { .. } => AuthMethodKind::PrivateKey,
             AuthMethod::Agent => AuthMethodKind::Agent,
             AuthMethod::Certificate { .. } => AuthMethodKind::Certificate,
@@ -767,9 +770,17 @@ pub fn normalize_start_directory_input(input: Option<String>) -> Result<Option<S
     rename_all_fields = "camelCase"
 )]
 pub enum AuthMethodInput {
+    /// Leeres/`None`-Feld heißt hier: bei einem bestehenden Passwort
+    /// unverändert, sonst (Neuanlage, Methodenwechsel) "kein Passwort"
+    /// (Issue #632). Ein Wert, der nach dem Trimmen (Spec 0073) leer ist,
+    /// zählt wie `None`.
     Password {
         value: Option<String>,
     },
+    /// Issue #632: ausdrücklich "kein Passwort" — entfernt auch ein
+    /// gespeichertes. Eigene Variante, damit "entfernen" nie mit "leer =
+    /// unverändert" verwechselt werden kann.
+    NoPassword,
     PrivateKey {
         key_content: Option<String>,
         passphrase: Option<String>,
@@ -2201,6 +2212,33 @@ mod tests {
             config.api_key.is_empty(),
             "ein nur aus unsichtbaren Zeichen bestehender Key muss leer werden, damit \
              `update_ai_provider` das bestehende Credential unverändert lässt"
+        );
+    }
+
+    // Issue #690: the edit dialog is prefilled from this DTO; the stored key
+    // must never be part of what reaches the frontend.
+    #[test]
+    fn ai_provider_config_dto_serializes_without_any_key_field() {
+        let dto = AiProviderConfigDto {
+            id: ProviderId::new(),
+            provider_type: ProviderType::Anthropic,
+            display_name: "Claude".into(),
+            base_url: None,
+            model: "m".into(),
+            supports_native_tool_calling: true,
+            is_active: false,
+            extra_headers: vec![],
+            attestation_url: None,
+            max_tokens_override: None,
+            web_research_enabled: true,
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        let keys: Vec<String> = json.as_object().unwrap().keys().cloned().collect();
+        assert!(
+            keys.iter().all(|k| !k.to_lowercase().contains("key")
+                && !k.to_lowercase().contains("secret")
+                && !k.to_lowercase().contains("credential")),
+            "DTO must not carry a credential field: {keys:?}"
         );
     }
 

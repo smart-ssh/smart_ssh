@@ -22,7 +22,9 @@ use ssh_manager_core::ssh::{
 };
 use ssh_transport::ConnectOutcome;
 
-use fixtures::test_server::{sftp_local_path, RunningTestServer, TEST_PASSWORD, TEST_USERNAME};
+use fixtures::test_server::{
+    sftp_local_path, AuthBehavior, RunningTestServer, TEST_PASSWORD, TEST_USERNAME,
+};
 
 const PASSWORD_CREDENTIAL: &str = "test-password-credential";
 
@@ -1803,8 +1805,14 @@ async fn test_issue_51_successful_connect_lists_every_step_with_duration() {
         kinds(&steps),
         ["dns", "tcp", "handshake", "hostKey", "auth", "ready"]
     );
-    for step in &steps {
-        assert_eq!(step.status, StepStatus::Ok, "{step:#?}");
+    for (i, step) in steps.iter().enumerate() {
+        // Issue #634: the host is an IP literal, so the DNS step is skipped.
+        let expected = if i == 0 {
+            StepStatus::Skipped
+        } else {
+            StepStatus::Ok
+        };
+        assert_eq!(step.status, expected, "{step:#?}");
         assert!(step.duration_ms.is_some(), "{step:#?}");
         assert_eq!(step.hop_index, 0);
         assert_eq!(
@@ -1893,7 +1901,8 @@ async fn test_issue_51_refused_port_marks_the_tcp_step() {
     match result {
         Err(SshError::ConnectionRefused(_)) => {
             assert_eq!(kinds(&steps), ["dns", "tcp"]);
-            assert_eq!(steps[0].status, StepStatus::Ok);
+            // IP literal: no lookup, the DNS step is skipped (issue #634).
+            assert_eq!(steps[0].status, StepStatus::Skipped);
             assert_eq!(
                 the_failed_step(&steps).status,
                 failed("SSH_CONNECTION_REFUSED")
@@ -1902,6 +1911,23 @@ async fn test_issue_51_refused_port_marks_the_tcp_step() {
         Err(other) => panic!("erwartet ConnectionRefused, bekam {other:?}"),
         Ok(_) => panic!("der geschlossene Port lieferte eine Verbindung"),
     }
+}
+
+/// Issue #634: a hostname gets a real (successful) DNS step.
+#[tokio::test]
+async fn test_issue_634_hostname_gets_a_real_dns_step() {
+    let target = ConnectionTarget {
+        hops: vec![password_hop("localhost", CLOSED_PORT)],
+    };
+    let (_result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        std::sync::Arc::new(TestHostKeyStore::default()),
+    )
+    .await;
+    assert_eq!(kinds(&steps)[0], "dns");
+    assert_eq!(steps[0].status, StepStatus::Ok);
 }
 
 /// Timeout: der Aufrufer bricht ab und schließt den laufenden Schritt —
@@ -2221,7 +2247,8 @@ async fn test_issue_51_jump_host_attempt_lists_steps_per_hop() {
         ["dns", "tcp", "handshake", "hostKey", "auth"],
         "{steps:#?}"
     );
-    assert!(hop0.iter().all(|s| s.status == StepStatus::Ok));
+    assert_eq!(hop0[0].status, StepStatus::Skipped);
+    assert!(hop0[1..].iter().all(|s| s.status == StepStatus::Ok));
     assert_eq!(
         hop1[0].hop,
         format!("{TEST_USERNAME}@127.0.0.1:{}", target_server.addr.port())
@@ -2528,4 +2555,123 @@ async fn test_idle_healthy_session_stays_connected_across_many_keepalives() {
     );
     let output = transport.execute("still-here").await.expect("exec works");
     assert_eq!(output.stdout, b"echo:still-here\n");
+}
+
+// --- Issue #632: Passwortmethode ohne Passwort ------------------------------
+
+fn no_password_hop(port: u16) -> Hop {
+    Hop {
+        host: "127.0.0.1".to_string(),
+        port,
+        username: TEST_USERNAME.to_string(),
+        auth: AuthMethod::NoPassword,
+    }
+}
+
+fn auth_methods(steps: &[ConnectStepRecord]) -> Vec<AuthMethodKind> {
+    steps
+        .iter()
+        .filter_map(|s| match &s.step {
+            ConnectStep::Authentication { method, .. } => Some(*method),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Nimmt der Server `none` an, folgt kein Passwortversuch.
+#[tokio::test]
+async fn test_issue_632_no_password_tries_none_first_and_stops_when_accepted() {
+    let server = RunningTestServer::start_with_auth(AuthBehavior {
+        accept_none: true,
+        accept_empty_password: false,
+    })
+    .await;
+    let target = ConnectionTarget {
+        hops: vec![no_password_hop(server.addr.port())],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert!(matches!(result, Ok(ConnectOutcome::Connected(_))));
+    assert_eq!(server.auth_attempts.attempts(), ["none"]);
+    assert_eq!(auth_methods(&steps), [AuthMethodKind::None]);
+}
+
+/// `none` abgelehnt, leeres Passwort angenommen: genau diese Reihenfolge.
+#[tokio::test]
+async fn test_issue_632_no_password_falls_back_to_empty_password() {
+    let server = RunningTestServer::start_with_auth(AuthBehavior {
+        accept_none: false,
+        accept_empty_password: true,
+    })
+    .await;
+    let target = ConnectionTarget {
+        hops: vec![no_password_hop(server.addr.port())],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert!(matches!(result, Ok(ConnectOutcome::Connected(_))));
+    assert_eq!(server.auth_attempts.attempts(), ["none", "password:empty"]);
+    assert_eq!(
+        auth_methods(&steps),
+        [AuthMethodKind::None, AuthMethodKind::Password]
+    );
+}
+
+/// Beides abgelehnt: der übliche Anmeldefehler, beide Versuche im Protokoll.
+#[tokio::test]
+async fn test_issue_632_no_password_rejected_lists_both_attempts() {
+    let server = RunningTestServer::start().await;
+    let target = ConnectionTarget {
+        hops: vec![no_password_hop(server.addr.port())],
+    };
+    let (result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert_eq!(result.err(), Some(SshError::AuthenticationFailed));
+    assert_eq!(server.auth_attempts.attempts(), ["none", "password:empty"]);
+    assert_eq!(
+        auth_methods(&steps),
+        [AuthMethodKind::None, AuthMethodKind::Password]
+    );
+    assert!(steps
+        .iter()
+        .filter(|s| matches!(s.step, ConnectStep::Authentication { .. }))
+        .all(|s| matches!(s.status, StepStatus::Failed { .. })));
+}
+
+/// Ein gespeichertes Passwort versucht nie `none` und nie ein leeres Passwort,
+/// auch wenn der Server beides annähme.
+#[tokio::test]
+async fn test_issue_632_saved_password_never_tries_none_or_empty_password() {
+    let server = RunningTestServer::start_with_auth(AuthBehavior {
+        accept_none: true,
+        accept_empty_password: true,
+    })
+    .await;
+    let target = ConnectionTarget {
+        hops: vec![password_hop("127.0.0.1", server.addr.port())],
+    };
+    let (result, _steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        trusted_host_keys(&server),
+    )
+    .await;
+    assert!(matches!(result, Ok(ConnectOutcome::Connected(_))));
+    assert_eq!(server.auth_attempts.attempts(), ["password:nonempty"]);
 }

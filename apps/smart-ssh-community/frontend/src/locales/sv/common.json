@@ -178,6 +178,9 @@
       "identityFile": "Nyckelfil"
     },
     "password": "Lösenord",
+    "passwordOptionalHint": "(valfritt – lämna tomt om servern tillåter inloggning utan lösenord)",
+    "removeSavedPassword": "Ta bort sparat lösenord",
+    "noPasswordSaved": "Inget lösenord sparat. Appen försöker först logga in utan lösenord och sedan med ett tomt lösenord.",
     "unchangedHint": "(tomt = oförändrat)",
     "privateKeyLabel": "Privat nyckel",
     "chooseFile": "Välj fil…",
@@ -443,6 +446,8 @@
     "active": "aktiv",
     "setActive": "Gör aktiv",
     "addProvider": "Lägg till leverantör",
+    "editProvider": "Redigera leverantör",
+    "apiKeyUnchangedPlaceholder": "Oförändrad – ange en ny nyckel för att ersätta den",
     "type": "Typ",
     "providerName": "Namn",
     "model": "Modell",
@@ -542,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI-leverantören rapporterade ett fel (t.ex. underhåll eller överbelastning). Försök igen senare; om det består, kontrollera leverantörsinställningarna.",
     "AI_PROVIDER_OVERLOADED": "AI-leverantören är överbelastad just nu. Försök igen om en stund.",
     "AI_PROVIDER_BILLING": "AI-leverantörens konto har inget kredit kvar. Kontrollera faktureringen i leverantörens konsol.",
+    "AI_PROVIDER_USAGE_LIMIT": "Användningsgränsen hos leverantören är nådd. Höj gränsen i leverantörens konsol eller välj en annan leverantör.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Användningsgränsen hos leverantören är nådd. Åtkomsten återkommer {{date}}. Höj gränsen i leverantörens konsol eller välj en annan leverantör.",
     "AI_PROVIDER_REJECTED_REQUEST": "AI-leverantören avvisade begäran.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var för långt för ett komplett kommando",
     "AI_MODEL_NOT_FOUND": "AI-leverantören känner inte till modellen. Kontrollera modellnamnet i Inställningar (\"Läs in modeller\" visar de tillgängliga); för Ollama, hämta den först med `ollama pull <name>`.",
@@ -936,12 +943,15 @@
       "handshake": "SSH-handskakning",
       "hostKeyCheck": "Kontroll av värdnyckel",
       "authentication": "Autentisering",
-      "sessionReady": "Session upprättad"
+      "sessionReady": "Session upprättad",
+      "dnsSkipped": "IP-adress – ingen namnuppslagning behövs"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
-      "failed": "misslyckades ({{code}})"
+      "failed": "misslyckades ({{code}})",
+      "skipped": "hoppades över",
+      "failedReason": "misslyckades: {{reason}}"
     },
     "hostKeyResult": {
       "known": "känd",
@@ -949,6 +959,7 @@
       "changed": "ändrad"
     },
     "authMethod": {
+      "none": "none (ingen autentisering)",
       "password": "Lösenord",
       "privateKey": "Privat nyckel",
       "agent": "SSH-agent",
@@ -963,6 +974,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtagen, ytterligare autentisering krävs",
       "remainingMethods": "Servern erbjuder även: {{methods}} (ej försökt)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-anslutningen översteg tidsgränsen",
+      "SSH_TIMEOUT": "Tidsgränsen överskreds",
+      "SSH_CONNECTION_REFUSED": "Anslutningen nekades",
+      "SSH_HOST_NOT_FOUND": "Värden hittades inte",
+      "SSH_HOST_UNREACHABLE": "Värden kan inte nås",
+      "SSH_AUTH_FAILED": "Autentiseringen misslyckades"
     }
   },
   "fileBrowser": {
