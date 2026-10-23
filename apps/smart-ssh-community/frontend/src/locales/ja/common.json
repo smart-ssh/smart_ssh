@@ -152,6 +152,8 @@
     "confirmDelete": "完全に削除"
   },
   "serverForm": {
+    "connect": "接続",
+    "connectSaveFirst": "先に変更を保存してください",
     "hostKeys": {
       "title": "ホストキー",
       "none": "ホストキーはまだ保存されていません。最初の接続時に保存されます。"

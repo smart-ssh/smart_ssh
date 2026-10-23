@@ -152,6 +152,8 @@
     "confirmDelete": "Delete permanently"
   },
   "serverForm": {
+    "connect": "Connect",
+    "connectSaveFirst": "Save your changes first",
     "hostKeys": {
       "title": "Host keys",
       "none": "No host key stored yet. It is stored on the first connection."

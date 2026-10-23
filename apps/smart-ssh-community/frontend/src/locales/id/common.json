@@ -152,6 +152,8 @@
     "confirmDelete": "Hapus permanen"
   },
   "serverForm": {
+    "connect": "Hubungkan",
+    "connectSaveFirst": "Simpan perubahan Anda terlebih dahulu",
     "hostKeys": {
       "title": "Kunci host",
       "none": "Belum ada kunci host yang tersimpan. Kunci disimpan pada koneksi pertama."

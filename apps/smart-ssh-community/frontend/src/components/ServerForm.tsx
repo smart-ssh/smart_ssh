@@ -60,6 +60,8 @@ interface ServerFormProps {
   allServers: ServerDto[];
   onSaved: () => void;
   onDeleted: () => void;
+  /** Issue #692: shows "Connect" next to Save for a saved server. */
+  onConnect?: (serverId: string) => void;
   /** Spec 0058, Teil 2 — s. `NotesPanel.autoFocus`-Doc-Kommentar. Gilt für
    * BEIDE Notiz-Editoren dieses Formulars (den lokalen Pseudo-Server-Zweig
    * unten und den regulären `NotesPanel`-Zweig) — "Mache ich selbst" kann
@@ -261,6 +263,7 @@ export function ServerForm({
   allServers,
   onSaved,
   onDeleted,
+  onConnect,
   autoFocusNotes = false,
   movedTo = null,
 }: ServerFormProps) {
@@ -1649,9 +1652,27 @@ export function ServerForm({
 
         {activeTab !== "notes" && (
           <div className="narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-t narrow:border-slate-800 narrow:bg-slate-900 narrow:px-4 narrow:py-2">
-            <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:w-full">
-              {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2 narrow:flex-col narrow:items-stretch">
+              <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:w-full">
+                {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
+              </Button>
+              {!isCreate && serverId && loaded && onConnect && (
+                <Button
+                  type="button"
+                  disabled={dirty || saving}
+                  title={dirty ? t("serverForm.connectSaveFirst") : undefined}
+                  onClick={() => onConnect(serverId)}
+                  className="narrow:min-h-11 narrow:w-full"
+                >
+                  {t("serverForm.connect")}
+                </Button>
+              )}
+              {!isCreate && dirty && onConnect && (
+                <span className="text-xs text-slate-400" data-testid="connect-save-first-hint">
+                  {t("serverForm.connectSaveFirst")}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </form>

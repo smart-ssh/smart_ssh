@@ -35,12 +35,15 @@ interface ManagementViewProps {
    * Einmalig aufgerufen, sobald `initialSelection` tatsächlich übernommen
    * wurde. */
   onInitialSelectionConsumed?: () => void;
+  /** Issue #692: "Connect" in a saved server's settings. */
+  onConnect?: (serverId: string) => void;
 }
 
 /** Spec 0008, Abschnitt 6: Sidebar links, Formular im Hauptbereich. */
 export function ManagementView({
   initialSelection = null,
   onInitialSelectionConsumed,
+  onConnect,
 }: ManagementViewProps) {
   const { t } = useTranslation();
   const manageViews = useManageViews();
@@ -255,6 +258,7 @@ export function ManagementView({
             allServers={servers}
             onSaved={reload}
             onDeleted={handleDeleted}
+            onConnect={onConnect}
             autoFocusNotes={focusNotesOnOpen}
           />
         )}
