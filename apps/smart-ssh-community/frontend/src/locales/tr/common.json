@@ -178,6 +178,9 @@
       "identityFile": "Anahtar dosyası"
     },
     "password": "Parola",
+    "passwordOptionalHint": "(isteğe bağlı – sunucu parolasız girişe izin veriyorsa boş bırakın)",
+    "removeSavedPassword": "Kayıtlı parolayı kaldır",
+    "noPasswordSaved": "Kayıtlı parola yok. Uygulama önce parolasız girişi, ardından boş parola ile girişi dener.",
     "unchangedHint": "(boş = değişmez)",
     "privateKeyLabel": "Özel anahtar",
     "chooseFile": "Dosya seç…",
@@ -951,6 +954,7 @@
       "changed": "değişti"
     },
     "authMethod": {
+      "none": "none (kimlik doğrulama yok)",
       "password": "Parola",
       "privateKey": "Özel anahtar",
       "agent": "SSH aracısı",

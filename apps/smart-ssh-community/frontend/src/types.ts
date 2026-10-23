@@ -10,7 +10,10 @@ export type ProviderType =
   | "generic_openai_compatible"
   | "ollama";
 
-export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate" | "identity_file";
+export type AuthMethodKind =
+  | "password"
+  | "no_password"
+  | "private_key" | "agent" | "certificate" | "identity_file";
 
 /** Spec 0039, Abschnitt 5.1 — steuert NICHT das Fencing selbst (in jeder
  * Stufe aktiv), nur ob/wann zusätzlich auf Bestätigung eskaliert wird,
@@ -692,6 +695,9 @@ export interface ServerInput {
 
 export type AuthMethodInput =
   | { kind: "password"; value: string | null }
+  /** Issue #632: ausdrücklich "kein Passwort" (entfernt auch ein gespeichertes);
+   * nie mit "leer = unverändert" (`value: null`) zu verwechseln. */
+  | { kind: "noPassword" }
   | { kind: "privateKey"; keyContent: string | null; passphrase: string | null }
   | { kind: "agent" }
   | { kind: "certificate"; certContent: string | null; keyContent: string | null }

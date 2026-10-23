@@ -178,6 +178,9 @@
       "identityFile": "Key File"
     },
     "password": "Password",
+    "passwordOptionalHint": "(optional – leave empty if the server allows login without a password)",
+    "removeSavedPassword": "Remove saved password",
+    "noPasswordSaved": "No password saved. The app first tries login without a password, then an empty password.",
     "unchangedHint": "(empty = unchanged)",
     "privateKeyLabel": "Private Key",
     "chooseFile": "Choose file…",
@@ -951,6 +954,7 @@
       "changed": "changed"
     },
     "authMethod": {
+      "none": "none (no authentication)",
       "password": "Password",
       "privateKey": "Private key",
       "agent": "SSH agent",
