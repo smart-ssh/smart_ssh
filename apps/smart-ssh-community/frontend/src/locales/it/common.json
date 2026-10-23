@@ -178,6 +178,9 @@
       "identityFile": "File della chiave"
     },
     "password": "Password",
+    "passwordOptionalHint": "(facoltativo – lascia vuoto se il server consente l’accesso senza password)",
+    "removeSavedPassword": "Rimuovi la password salvata",
+    "noPasswordSaved": "Nessuna password salvata. L’app prova prima l’accesso senza password, poi con una password vuota.",
     "unchangedHint": "(vuoto = invariato)",
     "privateKeyLabel": "Chiave privata",
     "chooseFile": "Scegli file…",
@@ -956,6 +959,7 @@
       "changed": "cambiata"
     },
     "authMethod": {
+      "none": "none (senza autenticazione)",
       "password": "Password",
       "privateKey": "Chiave privata",
       "agent": "Agente SSH",

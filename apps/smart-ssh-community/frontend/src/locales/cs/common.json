@@ -178,6 +178,9 @@
       "identityFile": "Soubor klíče"
     },
     "password": "Heslo",
+    "passwordOptionalHint": "(volitelné – nechte prázdné, pokud server povoluje přihlášení bez hesla)",
+    "removeSavedPassword": "Odstranit uložené heslo",
+    "noPasswordSaved": "Žádné heslo není uloženo. Aplikace nejprve zkusí přihlášení bez hesla, poté s prázdným heslem.",
     "unchangedHint": "(prázdné = beze změny)",
     "privateKeyLabel": "Soukromý klíč",
     "chooseFile": "Vybrat soubor…",
@@ -961,6 +964,7 @@
       "changed": "změněný"
     },
     "authMethod": {
+      "none": "none (bez ověření)",
       "password": "Heslo",
       "privateKey": "Soukromý klíč",
       "agent": "Agent SSH",

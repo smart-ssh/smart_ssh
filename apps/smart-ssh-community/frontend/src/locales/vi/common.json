@@ -178,6 +178,9 @@
       "identityFile": "Tệp khóa"
     },
     "password": "Mật khẩu",
+    "passwordOptionalHint": "(không bắt buộc – để trống nếu máy chủ cho phép đăng nhập không cần mật khẩu)",
+    "removeSavedPassword": "Xóa mật khẩu đã lưu",
+    "noPasswordSaved": "Chưa lưu mật khẩu. Ứng dụng thử đăng nhập không mật khẩu trước, sau đó thử với mật khẩu trống.",
     "unchangedHint": "(để trống = giữ nguyên)",
     "privateKeyLabel": "Khóa riêng tư",
     "chooseFile": "Chọn tệp…",
@@ -946,6 +949,7 @@
       "changed": "đã thay đổi"
     },
     "authMethod": {
+      "none": "none (không xác thực)",
       "password": "Mật khẩu",
       "privateKey": "Khóa riêng tư",
       "agent": "Tác nhân SSH",

@@ -178,6 +178,9 @@
       "identityFile": "Nyckelfil"
     },
     "password": "Lösenord",
+    "passwordOptionalHint": "(valfritt – lämna tomt om servern tillåter inloggning utan lösenord)",
+    "removeSavedPassword": "Ta bort sparat lösenord",
+    "noPasswordSaved": "Inget lösenord sparat. Appen försöker först logga in utan lösenord och sedan med ett tomt lösenord.",
     "unchangedHint": "(tomt = oförändrat)",
     "privateKeyLabel": "Privat nyckel",
     "chooseFile": "Välj fil…",
@@ -951,6 +954,7 @@
       "changed": "ändrad"
     },
     "authMethod": {
+      "none": "none (ingen autentisering)",
       "password": "Lösenord",
       "privateKey": "Privat nyckel",
       "agent": "SSH-agent",

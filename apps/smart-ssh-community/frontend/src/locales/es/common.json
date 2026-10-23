@@ -178,6 +178,9 @@
       "identityFile": "Archivo de clave"
     },
     "password": "Contraseña",
+    "passwordOptionalHint": "(opcional: déjelo vacío si el servidor permite iniciar sesión sin contraseña)",
+    "removeSavedPassword": "Quitar la contraseña guardada",
+    "noPasswordSaved": "No hay contraseña guardada. La aplicación prueba primero el acceso sin contraseña y después con una contraseña vacía.",
     "unchangedHint": "(vacío = sin cambios)",
     "privateKeyLabel": "Clave privada",
     "chooseFile": "Elegir archivo…",
@@ -956,6 +959,7 @@
       "changed": "cambiada"
     },
     "authMethod": {
+      "none": "none (sin autenticación)",
       "password": "Contraseña",
       "privateKey": "Clave privada",
       "agent": "Agente SSH",
