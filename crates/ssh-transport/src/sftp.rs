@@ -21,11 +21,21 @@ use crate::handler::ClientHandler;
 pub struct RusshSftpSession {
     inner: RusshSftpClient,
     session: SessionProbe,
+    /// Issue #625: Zugriff auf `posix-rename@openssh.com`, s. `sftp_tap`.
+    tap: Arc<crate::sftp_tap::SftpTap>,
 }
 
 impl RusshSftpSession {
-    pub(crate) fn new(inner: RusshSftpClient, session: SessionProbe) -> Self {
-        Self { inner, session }
+    pub(crate) fn new(
+        inner: RusshSftpClient,
+        session: SessionProbe,
+        tap: Arc<crate::sftp_tap::SftpTap>,
+    ) -> Self {
+        Self {
+            inner,
+            session,
+            tap,
+        }
     }
 
     /// Issue #155: [`map_sftp_error`] mit dem aktuellen Zustand der
@@ -379,6 +389,34 @@ impl SftpSession for RusshSftpSession {
             .rename(from, to)
             .await
             .map_err(|e| self.map_error(from, e))
+    }
+
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        use crate::sftp_tap::TapError;
+        if !self.tap.supports_posix_rename() {
+            return Ok(false);
+        }
+        match self.tap.posix_rename(from, to).await {
+            Ok((0, _)) => Ok(true),
+            Ok((code, message)) => {
+                let text = format!("{from} -> {to}: {message}");
+                // 3 = SSH_FX_PERMISSION_DENIED
+                if code == 3 {
+                    Err(SshError::SftpPermissionDenied(text))
+                } else {
+                    Err(SshError::ChannelError(format!("SFTP-Fehler bei {text}")))
+                }
+            }
+            Err(TapError::Timeout) => Err(SshError::Timeout),
+            Err(TapError::Closed) => {
+                let message = format!("SFTP-Kanal bei '{from}' geschlossen");
+                if self.session.is_closed() {
+                    Err(SshError::SessionClosed(message))
+                } else {
+                    Err(SshError::ChannelError(message))
+                }
+            }
+        }
     }
 
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {

@@ -347,7 +347,8 @@ impl SshTransport for RusshTransport {
             .request_subsystem(true, "sftp")
             .await
             .map_err(map_session_russh_error)?;
-        let client = russh_sftp::client::SftpSession::new(channel.into_stream())
+        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream());
+        let client = russh_sftp::client::SftpSession::new(stream)
             .await
             .map_err(|e| {
                 map_sftp_init_error("SFTP-Init fehlgeschlagen", e, self.handle.is_closed())
@@ -355,6 +356,7 @@ impl SshTransport for RusshTransport {
         Ok(Box::new(RusshSftpSession::new(
             client,
             SessionProbe::new(&self.handle),
+            tap,
         )))
     }
 
@@ -421,20 +423,21 @@ impl RusshTransport {
             request_timeout_secs: EXEC_SFTP_HANDSHAKE_TIMEOUT_SECS,
             ..Default::default()
         };
-        let client =
-            russh_sftp::client::SftpSession::new_with_config(channel.into_stream(), config)
-                .await
-                .map_err(|e| {
-                    map_sftp_init_error(
-                        "SFTP-Init über Exec-Kanal fehlgeschlagen",
-                        e,
-                        self.handle.is_closed(),
-                    )
-                })?;
+        let (stream, tap) = crate::sftp_tap::tap(channel.into_stream());
+        let client = russh_sftp::client::SftpSession::new_with_config(stream, config)
+            .await
+            .map_err(|e| {
+                map_sftp_init_error(
+                    "SFTP-Init über Exec-Kanal fehlgeschlagen",
+                    e,
+                    self.handle.is_closed(),
+                )
+            })?;
         client.set_timeout(russh_sftp::client::Config::default().request_timeout_secs);
         Ok(Box::new(RusshSftpSession::new(
             client,
             SessionProbe::new(&self.handle),
+            tap,
         )))
     }
 }

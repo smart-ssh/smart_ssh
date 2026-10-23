@@ -984,6 +984,7 @@
     "transferIncomplete": "File tidak lengkap tertinggal di server: {{path}}",
     "transferFiles": "{{done}} dari {{total}} file",
     "loading": "Memuat…",
+    "noPermissionToOpen": "Tidak ada izin untuk membuka folder ini (x tidak ada)",
     "emptyDirectory": "(direktori kosong)",
     "dropHint": "Lepas di sini untuk mengunggah ke {{path}}",
     "cancel": "Batal",
@@ -1017,7 +1018,8 @@
     },
     "moveCollision": {
       "title": "Target sudah ada",
-      "body": "sudah ada dan akan ditimpa."
+      "body": "sudah ada dan akan ditimpa.",
+      "folderBody": "sudah ada sebagai folder dan tidak dapat diganti."
     },
     "folderUpload": {
       "conflictTitle": "Timpa berkas di folder?",
@@ -1079,6 +1081,12 @@
       "execute": "Eksekusi",
       "numeric": "Numerik",
       "recursive": "Rekursif",
+      "special": "Bit khusus",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Saat diterapkan rekursif, bit khusus hanya dipasang pada folder, tidak pernah pada berkas.",
+      "recursiveSummary": "Folder: {{folders}}, berkas: {{files}}",
       "recursiveWarning": "— mengubah izin SEMUA berkas dan subfolder di folder ini. Tindakan berdampak besar, tidak dapat dibatalkan.",
       "owner": "Pemilik",
       "group": "Grup",

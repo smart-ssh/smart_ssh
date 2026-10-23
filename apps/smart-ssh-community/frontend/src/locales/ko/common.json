@@ -984,6 +984,7 @@
     "transferIncomplete": "서버에 불완전한 파일이 남아 있습니다: {{path}}",
     "transferFiles": "파일 {{total}}개 중 {{done}}개",
     "loading": "불러오는 중…",
+    "noPermissionToOpen": "이 폴더를 열 권한이 없습니다(x 없음)",
     "emptyDirectory": "(빈 디렉터리)",
     "dropHint": "여기에 놓으면 {{path}}에 업로드합니다",
     "cancel": "취소",
@@ -1017,7 +1018,8 @@
     },
     "moveCollision": {
       "title": "대상이 이미 있습니다",
-      "body": "이(가) 이미 있으며 덮어쓰게 됩니다."
+      "body": "이(가) 이미 있으며 덮어쓰게 됩니다.",
+      "folderBody": "은(는) 이미 폴더로 존재하며 대체할 수 없습니다."
     },
     "folderUpload": {
       "conflictTitle": "폴더의 파일을 덮어쓰시겠습니까?",
@@ -1079,6 +1081,12 @@
       "execute": "실행",
       "numeric": "숫자",
       "recursive": "재귀적으로",
+      "special": "특수 비트",
+      "setuid": "setuid 비트",
+      "setgid": "setgid 비트",
+      "sticky": "sticky 비트",
+      "specialHint": "재귀 적용 시 특수 비트는 폴더에만 설정되며 파일에는 설정되지 않습니다.",
+      "recursiveSummary": "폴더: {{folders}}, 파일: {{files}}",
       "recursiveWarning": "— 이 폴더의 모든 파일과 하위 폴더의 권한을 변경합니다. 강력한 동작이며 되돌릴 수 없습니다.",
       "owner": "소유자",
       "group": "그룹",

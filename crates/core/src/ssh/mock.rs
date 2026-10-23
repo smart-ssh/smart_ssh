@@ -49,6 +49,12 @@ struct Inner {
     /// 0020, Abschnitt 4.3, ohne einen echten privilegierten Zielpfad zu
     /// brauchen.
     permission_denied_paths: HashSet<String>,
+    /// Issue #625: bietet der simulierte Server `posix-rename@openssh.com` an?
+    posix_rename: bool,
+    /// Issue #625: Quellpfade, bei denen `rename` scheitern soll.
+    rename_fails_for: HashSet<String>,
+    /// Issue #625: Pfade, die `stat` als Ordner meldet.
+    dirs: HashSet<String>,
 }
 
 #[derive(Default, Clone)]
@@ -79,6 +85,28 @@ impl MockSftpSession {
             .unwrap()
             .permission_denied_paths
             .insert(path.into());
+        self
+    }
+
+    /// Issue #625: der simulierte Server bietet `posix-rename@openssh.com` an.
+    pub fn with_posix_rename(self) -> Self {
+        self.inner.lock().unwrap().posix_rename = true;
+        self
+    }
+
+    /// Issue #625: `rename` mit diesem Quellpfad scheitert.
+    pub fn with_rename_failure(self, from: impl Into<String>) -> Self {
+        self.inner
+            .lock()
+            .unwrap()
+            .rename_fails_for
+            .insert(from.into());
+        self
+    }
+
+    /// Issue #625: `stat` meldet diesen Pfad als Ordner.
+    pub fn with_dir(self, path: impl Into<String>) -> Self {
+        self.inner.lock().unwrap().dirs.insert(path.into());
         self
     }
 
@@ -249,6 +277,20 @@ impl SftpSession for MockSftpSession {
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let mut inner = self.inner.lock().unwrap();
         inner.calls.push(format!("stat {path}"));
+        if inner.dirs.contains(path) {
+            return Ok(RemoteEntry {
+                name: path.rsplit('/').next().unwrap_or(path).to_string(),
+                path: path.to_string(),
+                is_dir: true,
+                size: 0,
+                permissions: 0o755,
+                modified: None,
+                uid: None,
+                gid: None,
+                owner: None,
+                group: None,
+            });
+        }
         inner
             .files
             .get(path)
@@ -305,12 +347,29 @@ impl SftpSession for MockSftpSession {
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError> {
         let mut inner = self.inner.lock().unwrap();
         inner.calls.push(format!("rename {from} -> {to}"));
+        if inner.rename_fails_for.contains(from) {
+            return Err(SshError::ChannelError(format!("rename {from} failed")));
+        }
         let file = inner
             .files
             .remove(from)
             .ok_or_else(|| Self::not_found(from))?;
         inner.files.insert(to.to_string(), file);
         Ok(())
+    }
+
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        let mut inner = self.inner.lock().unwrap();
+        if !inner.posix_rename {
+            return Ok(false);
+        }
+        inner.calls.push(format!("posix_rename {from} -> {to}"));
+        let file = inner
+            .files
+            .remove(from)
+            .ok_or_else(|| Self::not_found(from))?;
+        inner.files.insert(to.to_string(), file);
+        Ok(true)
     }
 
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {

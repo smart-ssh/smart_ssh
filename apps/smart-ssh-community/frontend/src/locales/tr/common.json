@@ -989,6 +989,7 @@
     "transferIncomplete": "Sunucuda eksik bir dosya kaldı: {{path}}",
     "transferFiles": "{{total}} dosyadan {{done}}",
     "loading": "Yükleniyor…",
+    "noPermissionToOpen": "Bu klasörü açma izni yok (x eksik)",
     "emptyDirectory": "(boş dizin)",
     "dropHint": "{{path}} konumuna yüklemek için buraya bırakın",
     "cancel": "İptal",
@@ -1024,7 +1025,8 @@
     },
     "moveCollision": {
       "title": "Hedef zaten var",
-      "body": "zaten var ve üzerine yazılacak."
+      "body": "zaten var ve üzerine yazılacak.",
+      "folderBody": "zaten klasör olarak var ve değiştirilemez."
     },
     "folderUpload": {
       "conflictTitle": "Klasördeki dosyaların üzerine yazılsın mı?",
@@ -1086,6 +1088,12 @@
       "execute": "Çalıştırma",
       "numeric": "Sayısal",
       "recursive": "Özyinelemeli",
+      "special": "Özel bitler",
+      "setuid": "setuid biti",
+      "setgid": "setgid biti",
+      "sticky": "sticky biti",
+      "specialHint": "Özyinelemeli uygulamada özel bitler yalnızca klasörlere verilir, dosyalara asla.",
+      "recursiveSummary": "Klasörler: {{folders}}, dosyalar: {{files}}",
       "recursiveWarning": "— bu klasördeki TÜM dosya ve alt klasörlerin izinlerini değiştirir. Güçlü eylem, geri alınamaz.",
       "owner": "Sahip",
       "group": "Grup",

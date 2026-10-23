@@ -989,6 +989,7 @@
     "transferIncomplete": "Ofullständig fil kvar på servern: {{path}}",
     "transferFiles": "{{done}} av {{total}} filer",
     "loading": "Laddar…",
+    "noPermissionToOpen": "Ingen behörighet att öppna mappen (x saknas)",
     "emptyDirectory": "(tom katalog)",
     "dropHint": "Släpp här för att ladda upp till {{path}}",
     "cancel": "Avbryt",
@@ -1024,7 +1025,8 @@
     },
     "moveCollision": {
       "title": "Målet finns redan",
-      "body": "finns redan och skulle skrivas över."
+      "body": "finns redan och skulle skrivas över.",
+      "folderBody": "finns redan som mapp och kan inte ersättas."
     },
     "folderUpload": {
       "conflictTitle": "Skriva över filer i mappen?",
@@ -1086,6 +1088,12 @@
       "execute": "Kör",
       "numeric": "Numeriskt",
       "recursive": "Rekursivt",
+      "special": "Specialbitar",
+      "setuid": "setuid-bit",
+      "setgid": "setgid-bit",
+      "sticky": "sticky-bit",
+      "specialHint": "Vid rekursiv tillämpning får bara mappar specialbitar, aldrig filer.",
+      "recursiveSummary": "Mappar: {{folders}}, filer: {{files}}",
       "recursiveWarning": "— ändrar behörigheterna för ALLA filer och undermappar i den här mappen. Kraftfull åtgärd som inte kan ångras.",
       "owner": "Ägare",
       "group": "Grupp",

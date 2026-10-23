@@ -994,6 +994,7 @@
     "transferIncomplete": "Fichier incomplet laissé sur le serveur : {{path}}",
     "transferFiles": "{{done}} fichiers sur {{total}}",
     "loading": "Chargement…",
+    "noPermissionToOpen": "Pas d'autorisation pour ouvrir ce dossier (x manquant)",
     "emptyDirectory": "(répertoire vide)",
     "dropHint": "Déposer ici pour téléverser vers {{path}}",
     "cancel": "Annuler",
@@ -1031,7 +1032,8 @@
     },
     "moveCollision": {
       "title": "La cible existe déjà",
-      "body": "existe déjà et serait écrasé."
+      "body": "existe déjà et serait écrasé.",
+      "folderBody": "existe déjà en tant que dossier et ne peut pas être remplacé."
     },
     "folderUpload": {
       "conflictTitle": "Écraser les fichiers du dossier ?",
@@ -1093,6 +1095,12 @@
       "execute": "Exécution",
       "numeric": "Numérique",
       "recursive": "Récursif",
+      "special": "Bits spéciaux",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "En mode récursif, les bits spéciaux ne s'appliquent qu'aux dossiers, jamais aux fichiers.",
+      "recursiveSummary": "Dossiers: {{folders}}, fichiers: {{files}}",
       "recursiveWarning": "— modifie les permissions de TOUS les fichiers et sous-dossiers de ce dossier. Action puissante, irréversible.",
       "owner": "Propriétaire",
       "group": "Groupe",

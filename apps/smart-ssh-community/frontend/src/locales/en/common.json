@@ -989,6 +989,7 @@
     "transferIncomplete": "Incomplete file left on the server: {{path}}",
     "transferFiles": "{{done}} of {{total}} files",
     "loading": "Loading…",
+    "noPermissionToOpen": "No permission to open this folder (missing x)",
     "emptyDirectory": "(empty directory)",
     "dropHint": "Drop here to upload to {{path}}",
     "cancel": "Cancel",
@@ -1024,7 +1025,8 @@
     },
     "moveCollision": {
       "title": "Target already exists",
-      "body": "already exists and would be overwritten."
+      "body": "already exists and would be overwritten.",
+      "folderBody": "already exists as a folder and cannot be replaced."
     },
     "folderUpload": {
       "conflictTitle": "Overwrite files in the folder?",
@@ -1086,6 +1088,12 @@
       "execute": "Execute",
       "numeric": "Numeric",
       "recursive": "Recursive",
+      "special": "Special bits",
+      "setuid": "setuid bit",
+      "setgid": "setgid bit",
+      "sticky": "sticky bit",
+      "specialHint": "Special bits apply to folders only when applied recursively; files never get them.",
+      "recursiveSummary": "Folders: {{folders}}, files: {{files}}",
       "recursiveWarning": "— changes the permissions of ALL files and subfolders in this folder. Powerful action, cannot be undone.",
       "owner": "Owner",
       "group": "Group",
