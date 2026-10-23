@@ -29,9 +29,9 @@ import type {
   HostKeyVerificationNeededEvent,
   McpActionTabRequestedEvent,
   NoteShrinkFailedEvent,
-  NoteUpdateExpiredEvent,
   NoteShrinkSucceededEvent,
   NoteShrinkSuggestedEvent,
+  NoteUpdateExpiredEvent,
   NoteUpdateSuggestedEvent,
   RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
@@ -49,23 +49,17 @@ import type {
 export const onConnectionStatusChanged = (
   handler: (event: ConnectionStatusChangedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ConnectionStatusChangedEvent>("connection-status-changed", (e) =>
-    handler(e.payload),
-  );
+  listen<ConnectionStatusChangedEvent>("connection-status-changed", (e) => handler(e.payload));
 
 export const onChatSessionChanged = (
   handler: (event: ChatSessionChangedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatSessionChangedEvent>("chat-session-changed", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatSessionChangedEvent>("chat-session-changed", (e) => handler(e.payload));
 
 export const onAutoReconnectChanged = (
   handler: (event: AutoReconnectChangedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<AutoReconnectChangedEvent>("auto-reconnect-changed", (e) =>
-    handler(e.payload),
-  );
+  listen<AutoReconnectChangedEvent>("auto-reconnect-changed", (e) => handler(e.payload));
 
 export const onHostKeyVerificationNeeded = (
   handler: (event: HostKeyVerificationNeededEvent) => void,
@@ -91,65 +85,49 @@ export const onConnectProgress = (
 
 export const onTerminalOutput = (
   handler: (event: TerminalOutputEvent) => void,
-): Promise<UnlistenFn> =>
-  listen<TerminalOutputEvent>("terminal-output", (e) => handler(e.payload));
+): Promise<UnlistenFn> => listen<TerminalOutputEvent>("terminal-output", (e) => handler(e.payload));
 
 export const onChatTextDelta = (
   handler: (event: ChatTextDeltaEvent) => void,
-): Promise<UnlistenFn> =>
-  listen<ChatTextDeltaEvent>("chat-text-delta", (e) => handler(e.payload));
+): Promise<UnlistenFn> => listen<ChatTextDeltaEvent>("chat-text-delta", (e) => handler(e.payload));
 
 export const onChatActionProposed = (
   handler: (event: ChatActionProposedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatActionProposedEvent>("chat-action-proposed", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatActionProposedEvent>("chat-action-proposed", (e) => handler(e.payload));
 
 /** Spec 0026, Abschnitt 3, Punkt 4 — kommt (falls die KI-Zweitmeinung
  * aktiviert ist) nach `onChatActionProposed` für dieselbe `actionId`. */
 export const onRiskAssessmentUpdated = (
   handler: (event: RiskAssessmentUpdatedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<RiskAssessmentUpdatedEvent>("risk-assessment-updated", (e) =>
-    handler(e.payload),
-  );
+  listen<RiskAssessmentUpdatedEvent>("risk-assessment-updated", (e) => handler(e.payload));
 
 /** Spec 0092, A3.2 — s. `ActionDecisionEscalatedEvent`-Doc-Kommentar.
  * Kommt nach `onRiskAssessmentUpdated` für dieselbe `actionId`. */
 export const onActionDecisionEscalated = (
   handler: (event: ActionDecisionEscalatedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ActionDecisionEscalatedEvent>("action-decision-escalated", (e) =>
-    handler(e.payload),
-  );
+  listen<ActionDecisionEscalatedEvent>("action-decision-escalated", (e) => handler(e.payload));
 
 export const onChatActionResult = (
   handler: (event: ChatActionResultEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatActionResultEvent>("chat-action-result", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatActionResultEvent>("chat-action-result", (e) => handler(e.payload));
 
 /** Issue #325 (Spec 0106) — live output of a running command. */
 export const onChatActionOutput = (
   handler: (event: ChatActionOutputEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatActionOutputEvent>("chat-action-output", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatActionOutputEvent>("chat-action-output", (e) => handler(e.payload));
 
 /** Issue #327 — a running command is probably waiting for input. */
 export const onChatActionWaitingInput = (
   handler: (event: ChatActionWaitingInputEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatActionWaitingInputEvent>("chat-action-waiting-input", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatActionWaitingInputEvent>("chat-action-waiting-input", (e) => handler(e.payload));
 
-export const onChatError = (
-  handler: (event: ChatErrorEvent) => void,
-): Promise<UnlistenFn> =>
+export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));
 
 /** Issue #600 — automatic retry after a provider overload. */
@@ -162,25 +140,19 @@ export const onChatAiRetrying = (
 export const onChatResponseTruncated = (
   handler: (event: ChatResponseTruncatedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatResponseTruncatedEvent>("chat-response-truncated", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatResponseTruncatedEvent>("chat-response-truncated", (e) => handler(e.payload));
 
 /** Issue #601 — real context size after a response. */
 export const onChatContextUsage = (
   handler: (event: ChatContextUsageEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatContextUsageEvent>("chat-context-usage", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatContextUsageEvent>("chat-context-usage", (e) => handler(e.payload));
 
 /** Issue #601 — one event per compaction step. */
 export const onChatContextCompacted = (
   handler: (event: ChatContextCompactedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatContextCompactedEvent>("chat-context-compacted", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatContextCompactedEvent>("chat-context-compacted", (e) => handler(e.payload));
 
 /** Spec 0105 — eine serverseitige Web-Recherche des Providers. */
 export const onChatWebActivity = (
@@ -192,34 +164,27 @@ export const onChatWebActivity = (
 export const onChatWebResearchUnavailable = (
   handler: (event: ChatWebResearchUnavailableEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatWebResearchUnavailableEvent>(
-    "chat-web-research-unavailable",
-    (e) => handler(e.payload),
+  listen<ChatWebResearchUnavailableEvent>("chat-web-research-unavailable", (e) =>
+    handler(e.payload),
   );
 
 /** Spec 0080, A2 — s. `ChatResponseEmptyEvent`-Doc-Kommentar. */
 export const onChatResponseEmpty = (
   handler: (event: ChatResponseEmptyEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatResponseEmptyEvent>("chat-response-empty", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatResponseEmptyEvent>("chat-response-empty", (e) => handler(e.payload));
 
 /** Spec 0066, §1 — s. `ChatResponseCancelledEvent`-Doc-Kommentar. */
 export const onChatResponseCancelled = (
   handler: (event: ChatResponseCancelledEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatResponseCancelledEvent>("chat-response-cancelled", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatResponseCancelledEvent>("chat-response-cancelled", (e) => handler(e.payload));
 
 /** Spec 0066, §2 — s. `ChatQueuedMessagesSentEvent`-Doc-Kommentar. */
 export const onChatQueuedMessagesSent = (
   handler: (event: ChatQueuedMessagesSentEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatQueuedMessagesSentEvent>("chat-queued-messages-sent", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatQueuedMessagesSentEvent>("chat-queued-messages-sent", (e) => handler(e.payload));
 
 /** Spec 0021, Abschnitt 4 / `docs/adr/0021-turn-continuation-design.md`:
  * das Automatik-Cap ist ein weicher Stopp, kein Fehler — eigenes Event statt
@@ -228,9 +193,8 @@ export const onChatQueuedMessagesSent = (
 export const onChatAutoContinuationLimitReached = (
   handler: (event: ChatAutoContinuationLimitReachedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatAutoContinuationLimitReachedEvent>(
-    "chat-auto-continuation-limit-reached",
-    (e) => handler(e.payload),
+  listen<ChatAutoContinuationLimitReachedEvent>("chat-auto-continuation-limit-reached", (e) =>
+    handler(e.payload),
   );
 
 /** Spec 0021, Abschnitt 5 — s. `ChatAutoContinuationStartedEvent`-Doc-
@@ -238,9 +202,8 @@ export const onChatAutoContinuationLimitReached = (
 export const onChatAutoContinuationStarted = (
   handler: (event: ChatAutoContinuationStartedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatAutoContinuationStartedEvent>(
-    "chat-auto-continuation-started",
-    (e) => handler(e.payload),
+  listen<ChatAutoContinuationStartedEvent>("chat-auto-continuation-started", (e) =>
+    handler(e.payload),
   );
 
 /** Spec 0061, Abschnitt 4 — s. `AiBudgetWaitingEvent`-Doc-Kommentar. */
@@ -255,9 +218,7 @@ export const onAiBudgetWaiting = (
 export const onNoteUpdateSuggested = (
   handler: (event: NoteUpdateSuggestedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<NoteUpdateSuggestedEvent>("note-update-suggested", (e) =>
-    handler(e.payload),
-  );
+  listen<NoteUpdateSuggestedEvent>("note-update-suggested", (e) => handler(e.payload));
 
 /** Spec 0057, §4.2 (Etappe 4) — der ERSTE Dialog, bevor überhaupt ein
  * KI-Aufruf stattgefunden hat. App-weit, aus demselben Grund wie
@@ -265,67 +226,51 @@ export const onNoteUpdateSuggested = (
 export const onNoteShrinkSuggested = (
   handler: (event: NoteShrinkSuggestedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<NoteShrinkSuggestedEvent>("note-shrink-suggested", (e) =>
-    handler(e.payload),
-  );
+  listen<NoteShrinkSuggestedEvent>("note-shrink-suggested", (e) => handler(e.payload));
 
 /** Spec 0057, §4.2/§6 — der KI-Aufruf hinter "Ja, zusammenfassen" ist
  * fehlgeschlagen oder abgelaufen; die gespeicherte Notiz blieb unverändert. */
 export const onNoteShrinkFailed = (
   handler: (event: NoteShrinkFailedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<NoteShrinkFailedEvent>("note-shrink-failed", (e) =>
-    handler(e.payload),
-  );
+  listen<NoteShrinkFailedEvent>("note-shrink-failed", (e) => handler(e.payload));
 
 /** Spec 0058 (Politur-Paket) — das Erfolgs-Gegenstück, s.
  * `NoteShrinkSucceededEvent`-Doc-Kommentar. */
 export const onNoteShrinkSucceeded = (
   handler: (event: NoteShrinkSucceededEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<NoteShrinkSucceededEvent>("note-shrink-succeeded", (e) =>
-    handler(e.payload),
-  );
+  listen<NoteShrinkSucceededEvent>("note-shrink-succeeded", (e) => handler(e.payload));
 
 /** Spec 0012 — läuft, anders als `onChatActionProposed`, nie durch einen
  * Bestätigungsdialog (s. `ChatDocumentGeneratedEvent`-Doc-Kommentar). */
 export const onChatDocumentGenerated = (
   handler: (event: ChatDocumentGeneratedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatDocumentGeneratedEvent>("chat-document-generated", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatDocumentGeneratedEvent>("chat-document-generated", (e) => handler(e.payload));
 
 /** Issue #545: the AI asked a question with answer options (no UI yet). */
 export const onChatQuestionAsked = (
   handler: (event: ChatQuestionAskedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<ChatQuestionAskedEvent>("chat-question-asked", (e) =>
-    handler(e.payload),
-  );
+  listen<ChatQuestionAskedEvent>("chat-question-asked", (e) => handler(e.payload));
 
 // --- Spec 0020, Abschnitt 5: Manueller Dateibrowser ---------------------
 
 export const onSftpTransferStarted = (
   handler: (event: SftpTransferStartedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<SftpTransferStartedEvent>("sftp-transfer-started", (e) =>
-    handler(e.payload),
-  );
+  listen<SftpTransferStartedEvent>("sftp-transfer-started", (e) => handler(e.payload));
 
 export const onSftpTransferProgress = (
   handler: (event: SftpTransferProgressEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<SftpTransferProgressEvent>("sftp-transfer-progress", (e) =>
-    handler(e.payload),
-  );
+  listen<SftpTransferProgressEvent>("sftp-transfer-progress", (e) => handler(e.payload));
 
 export const onSftpTransferFinished = (
   handler: (event: SftpTransferFinishedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<SftpTransferFinishedEvent>("sftp-transfer-finished", (e) =>
-    handler(e.payload),
-  );
+  listen<SftpTransferFinishedEvent>("sftp-transfer-finished", (e) => handler(e.payload));
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
 
@@ -335,9 +280,7 @@ export const onSftpTransferFinished = (
 export const onMcpActionTabRequested = (
   handler: (event: McpActionTabRequestedEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<McpActionTabRequestedEvent>("mcp-action-tab-requested", (e) =>
-    handler(e.payload),
-  );
+  listen<McpActionTabRequestedEvent>("mcp-action-tab-requested", (e) => handler(e.payload));
 
 // --- Spec 0101, Etappe 3: Startfragen im Fenster -------------------------
 
@@ -373,6 +316,4 @@ export function base64ToBytes(base64: string): Uint8Array {
 export const onNoteUpdateExpired = (
   handler: (event: NoteUpdateExpiredEvent) => void,
 ): Promise<UnlistenFn> =>
-  listen<NoteUpdateExpiredEvent>("note-update-expired", (e) =>
-    handler(e.payload),
-  );
+  listen<NoteUpdateExpiredEvent>("note-update-expired", (e) => handler(e.payload));

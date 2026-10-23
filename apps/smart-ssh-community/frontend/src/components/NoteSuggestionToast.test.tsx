@@ -1,13 +1,7 @@
 // Spec 0057, §4.2 (Issue #94): eine vom Provider abgeschnittene Kürzung
 // wird im Notiz-Vorschlag als unvollständig markiert — die Warnung kommt
 // von der App selbst, über dem Diff, nicht aus dem KI-Text.
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { respondToAction } from "../api";
@@ -60,10 +54,7 @@ function suggestion(summaryIncomplete: boolean): NoteUpdateSuggestedEvent {
     sessionId: "session-1",
     actionId: "action-1",
     action: {
-      ProposeNoteUpdate: {
-        target: "CurrentServer",
-        new_content: "Gekürzte Notiz",
-      },
+      ProposeNoteUpdate: { target: "CurrentServer", new_content: "Gekürzte Notiz" },
     },
     previousNoteContent: "Lange alte Notiz",
     targetName: "Server A",
@@ -90,8 +81,7 @@ describe("NoteSuggestionToast — incomplete summary (Spec 0057, Issue #94)", ()
     // Über dem Diff: die Warnung steht im DOM vor dem Diff-Inhalt.
     const diffText = screen.getByText(/Gekürzte Notiz/);
     expect(
-      warning.compareDocumentPosition(diffText) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      warning.compareDocumentPosition(diffText) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -127,9 +117,7 @@ describe("NoteSuggestionToast — incomplete summary (Spec 0057, Issue #94)", ()
   });
 
   it("has the warning text in both locales", () => {
-    expect(testI18n.getFixedT("de")("noteSuggestion.summaryIncomplete")).toBe(
-      WARNING_DE,
-    );
+    expect(testI18n.getFixedT("de")("noteSuggestion.summaryIncomplete")).toBe(WARNING_DE);
     expect(testI18n.getFixedT("en")("noteSuggestion.summaryIncomplete")).toBe(
       "The summary was cut off and is incomplete. Check it carefully or reject it.",
     );

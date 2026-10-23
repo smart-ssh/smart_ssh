@@ -37,12 +37,8 @@ interface PendingSuggestion {
   error: string | null;
 }
 
-function targetKindFromEvent(
-  event: NoteUpdateSuggestedEvent,
-): "server" | "group" {
-  return event.action.ProposeNoteUpdate.target === "CurrentServer"
-    ? "server"
-    : "group";
+function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group" {
+  return event.action.ProposeNoteUpdate.target === "CurrentServer" ? "server" : "group";
 }
 
 /** Spec 0023, Abschnitt 3/4: prominenter Titel statt der früheren
@@ -52,11 +48,7 @@ function targetKindFromEvent(
  * bekommen bewusst das eigene Wort "Gruppen-Notiz-Vorschlag" (nicht
  * "Server-Notiz-Vorschlag für 'X'"), um die Verwechslungsgefahr auf der
  * Server-vs-Gruppe-Achse zu vermeiden. */
-function suggestionTitle(
-  t: TFunction,
-  kind: "server" | "group",
-  targetName: string | null,
-): string {
+function suggestionTitle(t: TFunction, kind: "server" | "group", targetName: string | null): string {
   const name = targetName ?? t("noteSuggestion.unknownTarget");
   return kind === "group"
     ? t("noteSuggestion.groupTitle", { name })
@@ -114,36 +106,22 @@ export function NoteSuggestionToast() {
     };
   }, []);
 
-  const updateSuggestion = (
-    actionId: string,
-    patch: Partial<PendingSuggestion>,
-  ) => {
-    setSuggestions((prev) =>
-      prev.map((s) => (s.actionId === actionId ? { ...s, ...patch } : s)),
-    );
+  const updateSuggestion = (actionId: string, patch: Partial<PendingSuggestion>) => {
+    setSuggestions((prev) => prev.map((s) => (s.actionId === actionId ? { ...s, ...patch } : s)));
   };
 
   const dismiss = (actionId: string) => {
     setSuggestions((prev) => prev.filter((s) => s.actionId !== actionId));
   };
 
-  const decide = async (
-    suggestion: PendingSuggestion,
-    decision: "approve" | "deny",
-  ) => {
+  const decide = async (suggestion: PendingSuggestion, decision: "approve" | "deny") => {
     updateSuggestion(suggestion.actionId, { deciding: true, error: null });
     try {
-      await respondToAction(suggestion.sessionId, suggestion.actionId, {
-        decision,
-      });
+      await respondToAction(suggestion.sessionId, suggestion.actionId, { decision });
       dismiss(suggestion.actionId);
     } catch (err) {
       if (commandErrorCode(err) === "ACTION_CONFIRMATION_UNKNOWN") {
-        updateSuggestion(suggestion.actionId, {
-          expired: true,
-          deciding: false,
-          error: null,
-        });
+        updateSuggestion(suggestion.actionId, { expired: true, deciding: false, error: null });
         return;
       }
       updateSuggestion(suggestion.actionId, {
@@ -172,11 +150,7 @@ export function NoteSuggestionToast() {
             <div className="flex items-center justify-between gap-2">
               <div className="space-y-1">
                 <p className="font-semibold text-slate-100">
-                  {suggestionTitle(
-                    t,
-                    suggestion.targetKind,
-                    suggestion.targetName,
-                  )}
+                  {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
                 </p>
                 <output className="block text-xs text-slate-300">
                   {t("noteSuggestion.expired")}
@@ -193,19 +167,13 @@ export function NoteSuggestionToast() {
           ) : !suggestion.expanded ? (
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-slate-100">
-                {suggestionTitle(
-                  t,
-                  suggestion.targetKind,
-                  suggestion.targetName,
-                )}
+                {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
               </span>
               <div className="flex shrink-0 gap-1">
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() =>
-                    updateSuggestion(suggestion.actionId, { expanded: true })
-                  }
+                  onClick={() => updateSuggestion(suggestion.actionId, { expanded: true })}
                 >
                   {t("noteSuggestion.show")}
                 </Button>
@@ -223,11 +191,7 @@ export function NoteSuggestionToast() {
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="font-semibold text-slate-100">
-                  {suggestionTitle(
-                    t,
-                    suggestion.targetKind,
-                    suggestion.targetName,
-                  )}
+                  {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
                 </p>
                 <Button
                   size="sm"
@@ -272,9 +236,7 @@ export function NoteSuggestionToast() {
                   onClick={() => decide(suggestion, "approve")}
                   disabled={suggestion.deciding}
                 >
-                  {suggestion.deciding
-                    ? t("noteSuggestion.applying")
-                    : t("noteSuggestion.apply")}
+                  {suggestion.deciding ? t("noteSuggestion.applying") : t("noteSuggestion.apply")}
                 </Button>
               </div>
             </div>
