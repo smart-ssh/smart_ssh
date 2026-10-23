@@ -1077,6 +1077,7 @@ pub async fn sftp_stat(
 /// dieselben Rechte auf **jeden** gefundenen Eintrag (Dateien UND
 /// Verzeichnisse selbst), nicht nur auf Blätter.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // one argument per IPC parameter
 pub async fn sftp_chmod(
     state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,
