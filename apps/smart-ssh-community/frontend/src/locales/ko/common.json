@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ 출력이 크기 제한에서 잘렸습니다. 불완전할 수 있습니다.",
     "liveOutputLabel": "실시간 출력",
     "liveOutputTruncatedNotice": "⚠ 크기 제한에 도달하여 이후 출력은 더 이상 표시되지 않습니다.",
+    "autoRanLead": "자동 실행됨",
+    "autoRanRule": "규칙",
+    "autoRanScopeGlobal": "전역",
+    "autoRanScopeServer": "서버 {{name}}",
+    "autoRanScopeTag": "태그 {{tag}}",
+    "autoRanOpenRule": "필터 규칙에서 이 규칙 열기",
     "mcpOrigin": "외부 도구(MCP): \"{{name}}\"",
     "mcpOriginGeneric": "외부 도구(MCP)",
     "mcpOriginHint": "이 동작은 내부 채팅이 아니라 로컬 MCP 서버를 통해 외부 도구가 요청한 것입니다."

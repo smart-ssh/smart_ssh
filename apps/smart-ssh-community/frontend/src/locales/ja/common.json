@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ 出力がサイズ上限で切り捨てられました — 不完全な可能性があります。",
     "liveOutputLabel": "ライブ出力",
     "liveOutputTruncatedNotice": "⚠ サイズ上限に達しました — これ以降の出力は表示されません。",
+    "autoRanLead": "自動実行",
+    "autoRanRule": "ルール",
+    "autoRanScopeGlobal": "グローバル",
+    "autoRanScopeServer": "サーバー {{name}}",
+    "autoRanScopeTag": "タグ {{tag}}",
+    "autoRanOpenRule": "このルールをフィルタルールで開く",
     "mcpOrigin": "外部ツール（MCP）: 「{{name}}」",
     "mcpOriginGeneric": "外部ツール（MCP）",
     "mcpOriginHint": "この操作は内部チャットからではなく、外部ツールがローカルのMCPサーバー経由でリクエストしたものです。"

@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ L'output è stato troncato al limite di dimensione: potrebbe essere incompleto.",
     "liveOutputLabel": "Output in tempo reale",
     "liveOutputTruncatedNotice": "⚠ Limite di dimensione raggiunto: l'ulteriore output non viene più mostrato.",
+    "autoRanLead": "Eseguito automaticamente",
+    "autoRanRule": "regola",
+    "autoRanScopeGlobal": "globale",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Apri questa regola nelle regole di filtro",
     "mcpOrigin": "Strumento esterno (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "strumento esterno (MCP)",
     "mcpOriginHint": "Questa azione non è stata richiesta dalla chat interna, ma da uno strumento esterno tramite il server MCP locale."

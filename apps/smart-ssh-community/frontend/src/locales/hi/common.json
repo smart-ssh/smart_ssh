@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ आउटपुट आकार सीमा पर काट दिया गया — यह अधूरा हो सकता है।",
     "liveOutputLabel": "लाइव आउटपुट",
     "liveOutputTruncatedNotice": "⚠ आकार सीमा पूरी हुई — आगे का आउटपुट अब नहीं दिखाया जाता।",
+    "autoRanLead": "अपने आप चलाया गया",
+    "autoRanRule": "नियम",
+    "autoRanScopeGlobal": "वैश्विक",
+    "autoRanScopeServer": "सर्वर {{name}}",
+    "autoRanScopeTag": "टैग {{tag}}",
+    "autoRanOpenRule": "इस नियम को फ़िल्टर नियमों में खोलें",
     "mcpOrigin": "बाहरी टूल (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "बाहरी टूल (MCP)",
     "mcpOriginHint": "यह कार्रवाई आंतरिक चैट ने नहीं, बल्कि स्थानीय MCP सर्वर के ज़रिए किसी बाहरी टूल ने माँगी थी।"

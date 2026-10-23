@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Вивід обрізано на межі розміру — він може бути неповним.",
     "liveOutputLabel": "Вивід наживо",
     "liveOutputTruncatedNotice": "⚠ Досягнуто межі розміру — подальший вивід більше не показується.",
+    "autoRanLead": "Виконано автоматично",
+    "autoRanRule": "правило",
+    "autoRanScopeGlobal": "глобальне",
+    "autoRanScopeServer": "сервер {{name}}",
+    "autoRanScopeTag": "тег {{tag}}",
+    "autoRanOpenRule": "Відкрити це правило у правилах фільтра",
     "mcpOrigin": "Зовнішній інструмент (MCP): «{{name}}»",
     "mcpOriginGeneric": "зовнішній інструмент (MCP)",
     "mcpOriginHint": "Цю дію запросив не внутрішній чат, а зовнішній інструмент через локальний сервер MCP."

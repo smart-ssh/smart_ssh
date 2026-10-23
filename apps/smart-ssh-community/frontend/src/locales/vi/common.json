@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Đầu ra bị cắt ở giới hạn kích thước — có thể chưa đầy đủ.",
     "liveOutputLabel": "Đầu ra trực tiếp",
     "liveOutputTruncatedNotice": "⚠ Đã đạt giới hạn kích thước — đầu ra tiếp theo không còn được hiển thị.",
+    "autoRanLead": "Đã chạy tự động",
+    "autoRanRule": "quy tắc",
+    "autoRanScopeGlobal": "toàn cục",
+    "autoRanScopeServer": "máy chủ {{name}}",
+    "autoRanScopeTag": "thẻ {{tag}}",
+    "autoRanOpenRule": "Mở quy tắc này trong quy tắc bộ lọc",
     "mcpOrigin": "Công cụ bên ngoài (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "công cụ bên ngoài (MCP)",
     "mcpOriginHint": "Hành động này không do cuộc trò chuyện nội bộ yêu cầu, mà do một công cụ bên ngoài yêu cầu qua máy chủ MCP cục bộ."

@@ -164,7 +164,7 @@ test.describe("narrow settings @phone", () => {
 
     // Edit
     await page.getByRole("button", { name: "Edit", exact: true }).nth(1).click();
-    await expect(page.getByRole("heading", { name: "Edit Rule" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Edit rule" })).toBeVisible();
     await noHorizontalScroll(page, view);
     await captureScreen(page, `narrow-rules-edit-${info.project.name}`);
     await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -172,7 +172,7 @@ test.describe("narrow settings @phone", () => {
 
     // Create
     await page.getByRole("button", { name: "+ Rule", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "New Rule" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Add rule" })).toBeVisible();
     await page.getByLabel("Pattern", { exact: true }).fill("systemctl status *");
     await page.getByRole("radio", { name: "Tag" }).check();
     await page.getByRole("combobox", { name: "Tag" }).fill("production");
