@@ -987,6 +987,7 @@
     "transferStopped": "{{name}}: रोका गया",
     "transferIncomplete": "सर्वर पर अधूरी फ़ाइल रह गई: {{path}}",
     "transferFiles": "{{total}} में से {{done}} फ़ाइलें",
+    "transferRemaining": "{{time}} शेष",
     "loading": "लोड हो रहा है…",
     "emptyDirectory": "(खाली डायरेक्टरी)",
     "dropHint": "{{path}} में अपलोड करने के लिए यहाँ छोड़ें",

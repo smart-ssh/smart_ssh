@@ -57,6 +57,14 @@ und beschriftet.
   **Herunterladen nach…** mit Dialog in einen gewählten Pfad. Ordner werden
   rekursiv heruntergeladen und landen als `<Zielordner>/<Ordnername>/…`.
   Jede Datei erscheint als eigene Übertragung mit Fortschritt.
+- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt neben dem
+  Fortschrittsbalken die übertragenen und die gesamten Bytes, die
+  Geschwindigkeit (gleitender Mittelwert der letzten ca. 5 Sekunden, in KB/s
+  oder MB/s) und die geschätzte Restzeit (`mm:ss` bzw. `h:mm:ss`). Ist die
+  Gesamtgröße unbekannt oder die Geschwindigkeit 0, steht statt der Werte „—“.
+  Bei Ordnerübertragungen gelten die Werte für den ganzen Ordner. Die Anzeige
+  aktualisiert sich höchstens etwa zweimal pro Sekunde; die Zahlen haben eine
+  feste Breite, damit die Zeile nicht springt.
 - **Dateiinhalt kopieren:** Der Text der Datei geht in die Zwischenablage.
   Binärdateien und Dateien über der Grenze aus Spec 0086 (50 MB) werden mit
   einer Meldung abgelehnt; große Dateien zeigen Fortschritt und lassen sich

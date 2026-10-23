@@ -992,6 +992,7 @@
     "transferStopped": "{{name}}: interrotto",
     "transferIncomplete": "File incompleto rimasto sul server: {{path}}",
     "transferFiles": "{{done}} di {{total}} file",
+    "transferRemaining": "{{time}} rimanenti",
     "loading": "Caricamento…",
     "emptyDirectory": "(directory vuota)",
     "dropHint": "Rilasci qui per caricare in {{path}}",

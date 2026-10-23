@@ -1,3 +1,4 @@
+import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -130,6 +131,8 @@ interface Transfer {
   doneElevationEnded?: boolean;
   /** Issue #622: bytes transferred so far (progress events, throttled). */
   bytesDone?: number;
+  /** Issue #623: moving-average speed and remaining time. */
+  rate?: RateState;
   /** Issue #622: folder transfers — files done / total (known once the walk is done). */
   folder?: { filesDone: number; filesTotal: number };
   /** Issue #622: ended without error — `cancelled` (cancel button) or `stopped`
@@ -725,13 +728,18 @@ export function FileBrowserPanel({
       }),
       onSftpTransferProgress((event) => {
         if (event.sessionId !== sessionId) return;
+        // Issue #623: folder transfers show the aggregate over all files.
+        const done = event.folder ? event.folder.bytesDone : event.bytesDone;
+        const total = event.folder ? event.folder.bytesTotal : event.totalBytes;
+        const now = Date.now();
         setTransfers((prev) =>
           prev.map((row) =>
             row.id === event.transferId
               ? {
                   ...row,
-                  bytesDone: Math.max(row.bytesDone ?? 0, event.bytesDone),
-                  totalBytes: event.totalBytes ?? row.totalBytes,
+                  bytesDone: Math.max(row.bytesDone ?? 0, done),
+                  totalBytes: total ?? row.totalBytes,
+                  rate: nextRate(row.rate, now, Math.max(row.bytesDone ?? 0, done), total ?? row.totalBytes),
                   folder: event.folder
                     ? { filesDone: event.folder.filesDone, filesTotal: event.folder.filesTotal }
                     : row.folder,
@@ -1771,6 +1779,18 @@ export function FileBrowserPanel({
                       aria-label={transfer.fileName}
                     />
                   ) : null}
+                  <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-slate-400">
+                    {formatBytes(transfer.bytesDone ?? 0)}
+                    {transfer.totalBytes !== null && ` / ${formatBytes(transfer.totalBytes)}`}
+                    {" · "}
+                    <span className="inline-block min-w-[5.5rem]">{formatSpeed(transfer.rate?.speed ?? null)}</span>
+                    {" · "}
+                    <span className="inline-block min-w-[6.5rem]">
+                      {transfer.rate?.etaSeconds != null
+                        ? t("fileBrowser.transferRemaining", { time: formatDuration(transfer.rate.etaSeconds) })
+                        : formatDuration(null)}
+                    </span>
+                  </span>
                   <Button
                     size="sm"
                     variant="ghost"

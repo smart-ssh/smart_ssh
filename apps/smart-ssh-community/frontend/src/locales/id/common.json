@@ -982,6 +982,7 @@
     "transferStopped": "{{name}}: dihentikan",
     "transferIncomplete": "File tidak lengkap tertinggal di server: {{path}}",
     "transferFiles": "{{done}} dari {{total}} file",
+    "transferRemaining": "sisa {{time}}",
     "loading": "Memuat…",
     "emptyDirectory": "(direktori kosong)",
     "dropHint": "Lepas di sini untuk mengunggah ke {{path}}",

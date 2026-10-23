@@ -987,6 +987,7 @@
     "transferStopped": "{{name}}: stoppet",
     "transferIncomplete": "Ufullstendig fil igjen på serveren: {{path}}",
     "transferFiles": "{{done}} av {{total}} filer",
+    "transferRemaining": "{{time}} igjen",
     "loading": "Laster…",
     "emptyDirectory": "(tom katalog)",
     "dropHint": "Slipp her for å laste opp til {{path}}",

@@ -982,6 +982,7 @@
     "transferStopped": "{{name}}: đã dừng",
     "transferIncomplete": "Tệp chưa hoàn chỉnh còn lại trên máy chủ: {{path}}",
     "transferFiles": "{{done}}/{{total}} tệp",
+    "transferRemaining": "còn {{time}}",
     "loading": "Đang tải…",
     "emptyDirectory": "(thư mục trống)",
     "dropHint": "Thả vào đây để tải lên {{path}}",

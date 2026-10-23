@@ -987,6 +987,7 @@
     "transferStopped": "{{name}}: stopped",
     "transferIncomplete": "Incomplete file left on the server: {{path}}",
     "transferFiles": "{{done}} of {{total}} files",
+    "transferRemaining": "{{time}} left",
     "loading": "Loading…",
     "emptyDirectory": "(empty directory)",
     "dropHint": "Drop here to upload to {{path}}",

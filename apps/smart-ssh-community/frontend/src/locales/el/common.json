@@ -987,6 +987,7 @@
     "transferStopped": "{{name}}: διακόπηκε",
     "transferIncomplete": "Ελλιπές αρχείο παρέμεινε στον διακομιστή: {{path}}",
     "transferFiles": "{{done}} από {{total}} αρχεία",
+    "transferRemaining": "απομένουν {{time}}",
     "loading": "Φόρτωση…",
     "emptyDirectory": "(κενός φάκελος)",
     "dropHint": "Αφήστε εδώ για μεταφόρτωση στο {{path}}",

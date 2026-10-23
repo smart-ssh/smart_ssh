@@ -987,6 +987,7 @@
     "transferStopped": "{{name}}: pysäytetty",
     "transferIncomplete": "Epätäydellinen tiedosto jäi palvelimelle: {{path}}",
     "transferFiles": "{{done}} / {{total}} tiedostoa",
+    "transferRemaining": "{{time}} jäljellä",
     "loading": "Ladataan…",
     "emptyDirectory": "(tyhjä hakemisto)",
     "dropHint": "Pudota tähän lähettääksesi kohteeseen {{path}}",

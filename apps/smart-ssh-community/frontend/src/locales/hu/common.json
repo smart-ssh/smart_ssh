@@ -987,6 +987,7 @@
     "transferStopped": "{{name}}: leállítva",
     "transferIncomplete": "Hiányos fájl maradt a kiszolgálón: {{path}}",
     "transferFiles": "{{done}} / {{total}} fájl",
+    "transferRemaining": "{{time}} van hátra",
     "loading": "Betöltés…",
     "emptyDirectory": "(üres könyvtár)",
     "dropHint": "Ejtse ide a feltöltéshez ide: {{path}}",

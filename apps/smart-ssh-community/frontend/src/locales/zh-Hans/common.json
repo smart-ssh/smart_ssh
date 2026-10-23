@@ -982,6 +982,7 @@
     "transferStopped": "{{name}}：已停止",
     "transferIncomplete": "服务器上遗留了不完整的文件：{{path}}",
     "transferFiles": "{{done}} / {{total}} 个文件",
+    "transferRemaining": "剩余 {{time}}",
     "loading": "正在加载…",
     "emptyDirectory": "（空目录）",
     "dropHint": "拖放到此处，上传到 {{path}}",

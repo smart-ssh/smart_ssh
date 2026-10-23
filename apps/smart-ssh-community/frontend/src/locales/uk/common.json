@@ -997,6 +997,7 @@
     "transferStopped": "{{name}}: зупинено",
     "transferIncomplete": "Неповний файл залишився на сервері: {{path}}",
     "transferFiles": "{{done}} із {{total}} файлів",
+    "transferRemaining": "залишилось {{time}}",
     "loading": "Завантаження…",
     "emptyDirectory": "(порожня тека)",
     "dropHint": "Скиньте сюди, щоб вивантажити до {{path}}",

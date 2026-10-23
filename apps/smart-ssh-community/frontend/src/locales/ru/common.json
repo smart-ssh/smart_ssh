@@ -997,6 +997,7 @@
     "transferStopped": "{{name}}: остановлено",
     "transferIncomplete": "Неполный файл остался на сервере: {{path}}",
     "transferFiles": "{{done}} из {{total}} файлов",
+    "transferRemaining": "осталось {{time}}",
     "loading": "Загрузка…",
     "emptyDirectory": "(пустой каталог)",
     "dropHint": "Отпустите здесь, чтобы загрузить в {{path}}",

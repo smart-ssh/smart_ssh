@@ -997,6 +997,7 @@
     "transferStopped": "{{name}}: zastaveno",
     "transferIncomplete": "Neúplný soubor zůstal na serveru: {{path}}",
     "transferFiles": "{{done}} z {{total}} souborů",
+    "transferRemaining": "zbývá {{time}}",
     "loading": "Načítání…",
     "emptyDirectory": "(prázdný adresář)",
     "dropHint": "Pusťte sem pro nahrání do {{path}}",

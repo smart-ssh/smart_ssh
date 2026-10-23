@@ -982,6 +982,7 @@
     "transferStopped": "{{name}}：停止しました",
     "transferIncomplete": "不完全なファイルがサーバーに残っています：{{path}}",
     "transferFiles": "{{total}} 件中 {{done}} 件",
+    "transferRemaining": "残り {{time}}",
     "loading": "読み込み中…",
     "emptyDirectory": "（空のディレクトリ）",
     "dropHint": "ここにドロップして {{path}} にアップロード",
