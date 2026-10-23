@@ -75,6 +75,7 @@ function authKindLabels(
 ): Record<AuthMethodKind | "privateKey" | "identityFile", string> {
   return {
     password: t("serverForm.authKind.password"),
+    no_password: t("serverForm.authKind.password"),
     private_key: t("serverForm.authKind.privateKey"),
     privateKey: t("serverForm.authKind.privateKey"),
     agent: t("serverForm.authKind.agent"),
@@ -89,7 +90,9 @@ function authKindLabels(
  * Bedeutung "leer = unverändert" (Update) erst beim Absenden entsteht
  * (s. `toAuthMethodInput`). */
 type AuthFormState =
-  | { kind: "password"; value: string }
+  // `saved`: der Server hat ein gespeichertes Passwort (Issue #632) — nur
+  // dann bedeutet ein leeres Feld "unverändert" und gibt es "entfernen".
+  | { kind: "password"; value: string; saved: boolean; remove: boolean }
   | { kind: "privateKey"; keyContent: string; passphrase: string }
   | { kind: "agent" }
   | { kind: "certificate"; certContent: string; keyContent: string }
@@ -98,7 +101,7 @@ type AuthFormState =
 function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
   switch (kind) {
     case "password":
-      return { kind: "password", value: "" };
+      return { kind: "password", value: "", saved: false, remove: false };
     case "privateKey":
       return { kind: "privateKey", keyContent: "", passphrase: "" };
     case "agent":
@@ -130,6 +133,12 @@ function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodI
   const orNullIfUpdate = (value: string) => (value === "" && !isCreate ? null : value);
   switch (state.kind) {
     case "password":
+      // Issue #632: Das Passwort ist optional. "Entfernen" und ein leeres
+      // Feld ohne gespeichertes Passwort sind ausdrücklich "kein Passwort";
+      // "unveränderte" (`null`) gibt es nur bei einem gespeicherten.
+      if (state.remove || (state.value === "" && (isCreate || !state.saved))) {
+        return { kind: "noPassword" };
+      }
       return { kind: "password", value: orNullIfUpdate(state.value) };
     case "privateKey":
       return {
@@ -323,7 +332,7 @@ export function ServerForm({
   const [jumpHost, setJumpHost] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
-  const [auth, setAuth] = useState<AuthFormState>({ kind: "password", value: "" });
+  const [auth, setAuth] = useState<AuthFormState>(authStateFromKind("password"));
   // Spec 0076, B-3: der Vorab-Befund über die im Formular gerade
   // eingetragene Schlüsseldatei — `null`, solange kein Pfad gesetzt ist
   // oder noch keine Antwort da ist. Ein Fehlbefund hindert das Speichern
@@ -503,7 +512,7 @@ export function ServerForm({
       setGroupId(defaultGroupId);
       setJumpHost(null);
       setTags([]);
-      setAuth({ kind: "password", value: "" });
+      setAuth(authStateFromKind("password"));
       setSudoPassword("");
       setHasSudoPassword(false);
       setPostIngestPolicy("balanced");
@@ -532,7 +541,14 @@ export function ServerForm({
         setAuth(
           server.authKind === "identity_file"
             ? { kind: "identityFile", path: server.identityFilePath ?? "", passphrase: "" }
-            : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
+            : server.authKind === "password" || server.authKind === "no_password"
+              ? {
+                  kind: "password",
+                  value: "",
+                  saved: server.authKind === "password",
+                  remove: false,
+                }
+              : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
         );
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
@@ -1161,26 +1177,45 @@ export function ServerForm({
           </select>
 
           {auth.kind === "password" && (
-            <Field
-              label={
-                <>
-                  {t("serverForm.password")}{" "}
-                  {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
-                </>
-              }
-            >
-              {(control) => (
-                <input
-                  {...control}
-                  {...TECHNICAL_INPUT_PROPS}
-                  type="password"
-                  required={isCreate}
-                  value={auth.value}
-                  onChange={(e) => setAuth({ kind: "password", value: e.target.value })}
-                  className={`${FIELD_CONTROL_CLASS} w-full`}
-                />
+            <div className="space-y-2">
+              <Field
+                label={
+                  <>
+                    {t("serverForm.password")}{" "}
+                    <span className="text-slate-400">
+                      {!isCreate && auth.saved
+                        ? t("serverForm.unchangedHint")
+                        : t("serverForm.passwordOptionalHint")}
+                    </span>
+                  </>
+                }
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    {...TECHNICAL_INPUT_PROPS}
+                    type="password"
+                    disabled={auth.remove}
+                    value={auth.value}
+                    onChange={(e) => setAuth({ ...auth, value: e.target.value })}
+                    className={`${FIELD_CONTROL_CLASS} w-full`}
+                  />
+                )}
+              </Field>
+              {!isCreate && auth.saved && (
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={auth.remove}
+                    onChange={(e) => setAuth({ ...auth, remove: e.target.checked, value: "" })}
+                  />
+                  {t("serverForm.removeSavedPassword")}
+                </label>
               )}
-            </Field>
+              {!isCreate && !auth.saved && loaded?.authKind === "no_password" && (
+                <p className="text-xs text-slate-400">{t("serverForm.noPasswordSaved")}</p>
+              )}
+            </div>
           )}
 
           {auth.kind === "privateKey" && (
@@ -1640,7 +1675,8 @@ export function ServerForm({
               {deletePreview && (
                 <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
                   <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
-                  {deletePreview.server.authKind === "agent" &&
+                  {(deletePreview.server.authKind === "agent" ||
+                    deletePreview.server.authKind === "no_password") &&
                   !deletePreview.server.hasSudoPassword &&
                   !deletePreview.server.sudoPasswordUnknown &&
                   deletePreview.serversLosingJumpHost.length === 0 ? (
@@ -1657,6 +1693,7 @@ export function ServerForm({
                        * `sudoPasswordUnknown`) bleibt deshalb der einzige
                        * Hinweis für diese Anmeldeart. */}
                       {deletePreview.server.authKind !== "agent" &&
+                        deletePreview.server.authKind !== "no_password" &&
                         deletePreview.server.authKind !== "identity_file" && (
                           <li>
                             {t("serverForm.secretWillBeDeleted", {

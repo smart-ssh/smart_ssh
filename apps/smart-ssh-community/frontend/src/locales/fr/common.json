@@ -178,6 +178,9 @@
       "identityFile": "Fichier de clé"
     },
     "password": "Mot de passe",
+    "passwordOptionalHint": "(facultatif – laissez vide si le serveur autorise la connexion sans mot de passe)",
+    "removeSavedPassword": "Supprimer le mot de passe enregistré",
+    "noPasswordSaved": "Aucun mot de passe enregistré. L’application essaie d’abord la connexion sans mot de passe, puis avec un mot de passe vide.",
     "unchangedHint": "(vide = inchangé)",
     "privateKeyLabel": "Clé privée",
     "chooseFile": "Choisir un fichier…",
@@ -953,6 +956,7 @@
       "changed": "modifiée"
     },
     "authMethod": {
+      "none": "none (sans authentification)",
       "password": "Mot de passe",
       "privateKey": "Clé privée",
       "agent": "Agent SSH",

@@ -187,6 +187,9 @@ fn block_comments(server: &Server, group_name: Option<&str>) -> Vec<String> {
         AuthMethod::Password { .. } => lines.push(
             "# smart-ssh: Anmeldung per Passwort — das Passwort wird nicht exportiert.".to_string(),
         ),
+        AuthMethod::NoPassword => lines.push(
+            "# smart-ssh: Anmeldung ohne Passwort (SSH-Methode none, dann leeres Passwort).".to_string(),
+        ),
         AuthMethod::PrivateKey { .. } => lines.push(
             "# smart-ssh: Anmeldung per gespeichertem Schlüssel — der Schlüssel liegt im Schlüsselbund und wird nicht exportiert.".to_string(),
         ),

@@ -282,6 +282,19 @@ fn resolve_final_hop_auth(
     existing: Option<&AuthMethod>,
 ) -> CommandResult<AuthMethod> {
     match input {
+        AuthMethodInput::NoPassword => Ok(AuthMethod::NoPassword),
+        // Issue #632: gleiche Regel wie beim Speichern
+        // (`server_credentials::resolve_auth_method`) — ein leeres Feld
+        // nimmt das gespeicherte Passwort, und gibt es keines, gilt "kein
+        // Passwort" (erst `none`, dann leeres `password`).
+        AuthMethodInput::Password { value }
+            if value
+                .as_deref()
+                .is_none_or(|v| trim_credential_value(v).is_empty())
+                && !matches!(existing, Some(AuthMethod::Password { .. })) =>
+        {
+            Ok(AuthMethod::NoPassword)
+        }
         AuthMethodInput::Password { value } => {
             let secret = resolve_secret(
                 value,
@@ -1404,12 +1417,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_empty_secret_without_existing_server_is_a_hard_error_not_a_result() {
+    async fn test_empty_private_key_without_existing_server_is_a_hard_error_not_a_result() {
         let profile_store = InMemoryProfileStore::new();
         let credential_store = InMemoryCredentialStore::new();
 
         let input = ServerInput {
-            auth: AuthMethodInput::Password { value: None },
+            auth: AuthMethodInput::PrivateKey {
+                key_content: None,
+                passphrase: None,
+            },
             ..password_input()
         };
 
@@ -1869,6 +1885,15 @@ mod tests {
         SecretSlot::CertificateKeyContent,
     ];
 
+    /// Issue #632: Das Passwort ist kein Pflichtfeld mehr — ein leeres Feld
+    /// ohne gespeichertes Passwort heißt "kein Passwort" (s. unten). Die
+    /// "leeres Pflichtfeld ist ein Fehler"-Regel gilt nur noch hierfür.
+    const REQUIRED_SECRET_SLOTS: [SecretSlot; 3] = [
+        SecretSlot::PrivateKeyContent,
+        SecretSlot::CertificateContent,
+        SecretSlot::CertificateKeyContent,
+    ];
+
     /// Füllt das jeweils **andere** Pflichtfeld derselben Anmeldeart, damit
     /// ein Fehler eindeutig vom geprüften Slot kommt und nicht vom Nachbarn.
     const SIBLING_FILLER: &str = "-----BEGIN CERTIFICATE----- nachbar";
@@ -2105,7 +2130,7 @@ mod tests {
     /// Profil, das sich anschließend nicht speichern ließ.
     #[test]
     fn test_q0149_02_empty_secret_on_create_is_an_error_in_both_paths() {
-        for slot in SECRET_SLOTS {
+        for slot in REQUIRED_SECRET_SLOTS {
             for pasted in EMPTY_INPUTS {
                 let (via_test, via_save) = secret_both_ways(slot, Some(pasted), None);
 
@@ -2148,7 +2173,7 @@ mod tests {
     #[test]
     fn test_q0149_03_existing_server_with_other_auth_method_and_empty_field_reports_required_code()
     {
-        for slot in SECRET_SLOTS {
+        for slot in REQUIRED_SECRET_SLOTS {
             let code = slot.required_code();
             let other = slot.other_method();
             // Bestehender Server mit `Agent` (gar kein Secret-Slot) und mit
@@ -2178,11 +2203,51 @@ mod tests {
         }
     }
 
+    /// Issue #632: Ein leeres (oder nach dem Trimmen leeres) Passwortfeld
+    /// ohne gespeichertes Passwort wird im Verbindungstest zu "kein Passwort"
+    /// — und beim Speichern ebenso. Mit gespeichertem Passwort gilt weiter
+    /// "das Hinterlegte nehmen".
+    #[test]
+    fn test_issue_632_empty_password_means_no_password_in_both_paths() {
+        for pasted in EMPTY_INPUTS {
+            let store = InMemoryCredentialStore::new();
+            let ephemeral = EphemeralCredentialStore::new();
+            let via_test = resolve_final_hop_auth(
+                &ephemeral,
+                &store,
+                AuthMethodInput::Password {
+                    value: Some(pasted.to_string()),
+                },
+                None,
+            )
+            .unwrap();
+            assert_eq!(via_test, AuthMethod::NoPassword, "{pasted:?}");
+            let via_save = crate::server_credentials::resolve_auth_method(
+                &store,
+                ServerId::new(),
+                AuthMethodInput::Password {
+                    value: Some(pasted.to_string()),
+                },
+                None,
+            )
+            .unwrap();
+            assert_eq!(via_save, AuthMethod::NoPassword, "{pasted:?}");
+            assert!(snapshot(&store).is_empty(), "kein Secret wird geschrieben");
+        }
+        // Ausdrückliches "kein Passwort" ebenso.
+        let store = InMemoryCredentialStore::new();
+        let ephemeral = EphemeralCredentialStore::new();
+        assert_eq!(
+            resolve_final_hop_auth(&ephemeral, &store, AuthMethodInput::NoPassword, None).unwrap(),
+            AuthMethod::NoPassword
+        );
+    }
+
     /// Die Meldung verrät keinen Wert (I2): auch der hinterlegte Secret-Wert
     /// eines Nachbar-Slots taucht in ihr nicht auf.
     #[test]
     fn test_q0149_03_refusal_message_carries_no_secret() {
-        for slot in SECRET_SLOTS {
+        for slot in REQUIRED_SECRET_SLOTS {
             let other = slot.other_method();
             let (via_test, _) = secret_both_ways_from(slot, Some("\u{200B}"), &|| {
                 Some(other.input(Some("geheimer-nachbarwert")))

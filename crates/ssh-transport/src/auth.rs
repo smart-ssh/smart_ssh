@@ -3,10 +3,11 @@ use std::sync::Arc;
 use russh::client::{self, AuthResult};
 use russh::keys::{Certificate, PrivateKey, PrivateKeyWithHashAlg};
 use secrecy::{ExposeSecret, SecretString};
+use ssh_manager_core::profiles::AuthMethod;
 use ssh_manager_core::profiles::CredentialStore;
 use ssh_manager_core::ssh::{
     resolve_auth, AuthMethodKind, ConnectLog, ConnectStep, Hop, KeyFileReader, ResolvedAuth,
-    SshError,
+    SshError, StepId,
 };
 
 use crate::error::map_russh_error;
@@ -32,6 +33,11 @@ pub(crate) async fn authenticate(
     key_files: &(dyn KeyFileReader + Send + Sync),
     steps: &AuthSteps<'_>,
 ) -> Result<(), SshError> {
+    // Issue #632: "kein Passwort" = erst `none`, dann `password` mit leerem
+    // Wert; je Versuch ein eigener Protokollschritt.
+    if matches!(hop.auth, AuthMethod::NoPassword) {
+        return authenticate_without_password(handle, hop, steps).await;
+    }
     let step = steps.log.start(
         steps.hop_index,
         steps.hop,
@@ -48,6 +54,9 @@ pub(crate) async fn authenticate(
             .authenticate_password(hop.username.clone(), secret.expose_secret().to_string())
             .await
             .map_err(map_russh_error)?,
+        // Von `authenticate_without_password` oben abgefangen; hier nie
+        // erreichbar, aber kein stilles Durchwinken.
+        ResolvedAuth::NoPassword => return Err(SshError::AuthenticationFailed),
         ResolvedAuth::PrivateKey { key, passphrase } => {
             let private_key =
                 load_private_key(&key, passphrase.as_ref()).map_err(|e| name_hop(e, hop))?;
@@ -78,10 +87,20 @@ pub(crate) async fn authenticate(
         }
     };
 
+    finish_attempt(steps, step, &result)
+}
+
+/// Trägt bei Ablehnung die noch angebotenen Methoden ein und schließt den
+/// Schritt bei Erfolg.
+fn finish_attempt(
+    steps: &AuthSteps<'_>,
+    step: StepId,
+    result: &AuthResult,
+) -> Result<(), SshError> {
     if let AuthResult::Failure {
         remaining_methods: remaining,
         partial_success: partial,
-    } = &result
+    } = result
     {
         steps.log.update(step, |s| {
             if let ConnectStep::Authentication {
@@ -107,6 +126,51 @@ pub(crate) async fn authenticate(
         // geschlossen (`connect_with_log`).
         Err(SshError::AuthenticationFailed)
     }
+}
+
+/// Issue #632: Anmeldung für [`AuthMethod::NoPassword`]. Erst SSH-Methode
+/// `none`; lehnt der Server ab, `password` mit leerem Wert; lehnt er auch das
+/// ab, der übliche Anmeldefehler. Beide Versuche stehen im Verbindungs-
+/// protokoll. Erst nach einem abgelehnten `none` wird ein leeres Passwort
+/// gesendet, und nur für diese Methode — jede andere Methode sendet nie ein
+/// leeres Secret.
+async fn authenticate_without_password(
+    handle: &mut client::Handle<ClientHandler>,
+    hop: &Hop,
+    steps: &AuthSteps<'_>,
+) -> Result<(), SshError> {
+    let attempt = |method: AuthMethodKind| {
+        steps.log.start(
+            steps.hop_index,
+            steps.hop,
+            ConnectStep::Authentication {
+                method,
+                remaining_methods: Vec::new(),
+                partial_success: false,
+            },
+        )
+    };
+
+    let none_step = attempt(AuthMethodKind::None);
+    let none_result = handle
+        .authenticate_none(hop.username.clone())
+        .await
+        .map_err(map_russh_error)?;
+    if finish_attempt(steps, none_step, &none_result).is_ok() {
+        return Ok(());
+    }
+    // Der abgelehnte `none`-Schritt wird geschlossen, bevor der nächste
+    // beginnt (`fail_running` am Ende schließt sonst nur den letzten).
+    steps
+        .log
+        .fail(none_step, SshError::AuthenticationFailed.code());
+
+    let password_step = attempt(AuthMethodKind::Password);
+    let password_result = handle
+        .authenticate_password(hop.username.clone(), String::new())
+        .await
+        .map_err(map_russh_error)?;
+    finish_attempt(steps, password_step, &password_result)
 }
 
 /// Wohin [`authenticate`] seinen Schritt schreibt (Issue #51).

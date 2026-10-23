@@ -178,6 +178,9 @@
       "identityFile": "Nøglefil"
     },
     "password": "Adgangskode",
+    "passwordOptionalHint": "(valgfrit – lad feltet stå tomt, hvis serveren tillader login uden adgangskode)",
+    "removeSavedPassword": "Fjern gemt adgangskode",
+    "noPasswordSaved": "Ingen adgangskode gemt. Appen prøver først login uden adgangskode og derefter med en tom adgangskode.",
     "unchangedHint": "(tom = uændret)",
     "privateKeyLabel": "Privat nøgle",
     "chooseFile": "Vælg fil…",
@@ -948,6 +951,7 @@
       "changed": "ændret"
     },
     "authMethod": {
+      "none": "none (ingen godkendelse)",
       "password": "Adgangskode",
       "privateKey": "Privat nøgle",
       "agent": "SSH-agent",

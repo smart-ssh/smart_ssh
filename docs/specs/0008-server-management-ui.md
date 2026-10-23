@@ -116,8 +116,21 @@ Auswirkungen, dann das bestätigte Löschen.
   Gruppe selbst und ihre Nachfahren ausschließt, sodass ein Zyklus schon vor
   dem Absenden unmöglich ist), Notiz-Editor und eine Löschen-Schaltfläche mit
   der Vorschau aus Abschnitt 3.
+- **Passwort ist optional.** Bleibt das Passwortfeld bei Neuanlage leer (oder
+  besteht es nur aus Whitespace und unsichtbaren Randzeichen, Spec 0073), wird
+  der Server ausdrücklich „ohne Passwort" gespeichert; im Schlüsselbund entsteht
+  kein Eintrag, und beim erneuten Öffnen zeigt das Formular „Kein Passwort
+  gespeichert". Bei einem Server mit gespeichertem Passwort heißt ein leeres
+  Feld weiterhin „unverändert"; das Passwort entfernt nur die Option
+  „Gespeichertes Passwort entfernen", die den Server auf „ohne Passwort" setzt
+  und den Schlüsselbund-Eintrag löscht. Die Verbindung eines Servers ohne
+  Passwort versucht zuerst die SSH-Methode `none`, nimmt der Server sie nicht
+  an, dann `password` mit leerem Wert, danach der übliche Anmeldefehler. Das
+  Verbindungsprotokoll nennt beide Versuche. Ein Server mit gespeichertem
+  Passwort versucht nie `none` oder ein leeres Passwort.
 - **Server-Formular:** alle Felder aus Abschnitt 4. Die Anmeldeart wählt der
-  Nutzer aus, die Eingabefelder wechseln mit: Passwortfeld; Schlüsseldatei über
+  Nutzer aus, die Eingabefelder wechseln mit: Passwortfeld (**optional**, siehe
+  unten); Schlüsseldatei über
   den Datei-Dialog mit optionaler Passphrase; „Agent verwenden" ohne weitere
   Eingabe; Zertifikat und Schlüssel als zwei Dateiauswahlen. Tags werden als
   Chips eingegeben (durch Komma oder Enter getrennt). Dazu kommen der

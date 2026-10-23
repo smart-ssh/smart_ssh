@@ -282,7 +282,7 @@ fn auth_method_credential_refs(auth: &AuthMethod) -> Vec<&CredentialRef> {
             refs.extend(passphrase_ref.iter());
             refs
         }
-        AuthMethod::Agent => Vec::new(),
+        AuthMethod::Agent | AuthMethod::NoPassword => Vec::new(),
         AuthMethod::Certificate { cert_ref, key_ref } => vec![cert_ref, key_ref],
         // Spec 0076: Der Pfad steht in der DB, nicht im Schlüsselbund —
         // im Schlüsselbund liegt hier nur die optionale Passphrase. Die
@@ -490,18 +490,26 @@ pub fn resolve_auth_method(
         AuthMethodInput::Password { value } => {
             let ref_ = credential_ref(server_id, "password");
             let existed = matches!(existing, Some(AuthMethod::Password { .. }));
-            write_or_reuse_secret(
-                credential_store,
-                &ref_,
-                value,
-                existed,
-                "Passwort",
-                "SERVER_PASSWORD_REQUIRED",
-            )?;
-            Ok(AuthMethod::Password {
-                credential_ref: ref_,
-            })
+            // Issue #632: Ein leeres Feld ist kein Fehler mehr. Mit
+            // gespeichertem Passwort heißt es "unverändert"; sonst (auch bei
+            // einem Server, der schon "kein Passwort" hat) bleibt es bei
+            // "kein Passwort" — es wird nichts geschrieben.
+            match value.map(|v| trim_credential_value(&v)) {
+                Some(v) if !v.is_empty() => {
+                    credential_store
+                        .set(&ref_, SecretString::from(v))
+                        .map_err(secret_store_error)?;
+                    Ok(AuthMethod::Password {
+                        credential_ref: ref_,
+                    })
+                }
+                _ if existed => Ok(AuthMethod::Password {
+                    credential_ref: ref_,
+                }),
+                _ => Ok(AuthMethod::NoPassword),
+            }
         }
+        AuthMethodInput::NoPassword => Ok(AuthMethod::NoPassword),
         AuthMethodInput::PrivateKey {
             key_content,
             passphrase,
@@ -746,17 +754,51 @@ mod tests {
         store.get(r).ok().map(|s| s.expose_secret().to_string())
     }
 
+    /// Issue #632: Ein leeres Passwortfeld bei Neuanlage ist erlaubt und
+    /// speichert ausdrücklich "kein Passwort" — ohne Schlüsselbund-Eintrag.
     #[test]
-    fn test_create_password_requires_value() {
+    fn test_create_password_without_value_stores_no_password() {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        let result =
-            resolve_auth_method(&store, id, AuthMethodInput::Password { value: None }, None);
+        let auth = resolve_auth_method(&store, id, AuthMethodInput::Password { value: None }, None)
+            .unwrap();
 
-        let err = result.expect_err("erwartet: Fehler bei fehlendem Passwort");
-        // Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping.
-        assert_eq!(err.code, Some("SERVER_PASSWORD_REQUIRED"));
+        assert_eq!(auth, AuthMethod::NoPassword);
+        assert_eq!(secret_value(&store, &credential_ref(id, "password")), None);
+    }
+
+    /// Issue #632: "Gespeichertes Passwort entfernen" ist eine eigene
+    /// Eingabe und nie mit "leer = unverändert" zu verwechseln.
+    #[test]
+    fn test_explicit_no_password_is_distinct_from_unchanged() {
+        let id = ServerId::new();
+        let ref_ = credential_ref(id, "password");
+        let store = InMemoryCredentialStore::new().with_secret(&ref_, "old-password");
+        let existing = AuthMethod::Password {
+            credential_ref: ref_.clone(),
+        };
+
+        let unchanged = resolve_auth_method(
+            &store,
+            id,
+            AuthMethodInput::Password { value: None },
+            Some(&existing),
+        )
+        .unwrap();
+        assert_eq!(unchanged, existing);
+        assert_eq!(secret_value(&store, &ref_).as_deref(), Some("old-password"));
+
+        let removed =
+            resolve_auth_method(&store, id, AuthMethodInput::NoPassword, Some(&existing)).unwrap();
+        assert_eq!(removed, AuthMethod::NoPassword);
+        // Das alte Geheimnis wird erst vom Aufräumen nach erfolgreichem
+        // Speichern entfernt (Spec 0082); die Differenz enthält es.
+        let stale: Vec<_> = auth_method_credential_refs(&existing)
+            .into_iter()
+            .filter(|r| !auth_method_credential_refs(&removed).contains(r))
+            .collect();
+        assert_eq!(stale, vec![&ref_]);
     }
 
     #[test]
@@ -1263,21 +1305,22 @@ mod tests {
     }
 
     #[test]
-    fn test_password_of_only_whitespace_on_create_is_rejected_as_missing() {
+    fn test_password_of_only_whitespace_on_create_means_no_password() {
         let store = InMemoryCredentialStore::new();
         let id = ServerId::new();
 
-        let result = resolve_auth_method(
+        let auth = resolve_auth_method(
             &store,
             id,
             AuthMethodInput::Password {
                 value: Some("  \r\n\t ".to_string()),
             },
             None,
-        );
+        )
+        .unwrap();
 
-        let err = result.expect_err("ein rein aus Whitespace bestehender Paste ist kein Passwort");
-        assert_eq!(err.code, Some("SERVER_PASSWORD_REQUIRED"));
+        assert_eq!(auth, AuthMethod::NoPassword);
+        assert_eq!(secret_value(&store, &credential_ref(id, "password")), None);
     }
 
     #[test]

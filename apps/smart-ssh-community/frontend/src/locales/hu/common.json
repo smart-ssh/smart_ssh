@@ -178,6 +178,9 @@
       "identityFile": "Kulcsfájl"
     },
     "password": "Jelszó",
+    "passwordOptionalHint": "(nem kötelező – hagyja üresen, ha a kiszolgáló engedi a jelszó nélküli bejelentkezést)",
+    "removeSavedPassword": "Mentett jelszó eltávolítása",
+    "noPasswordSaved": "Nincs mentett jelszó. Az alkalmazás először jelszó nélkül próbál bejelentkezni, majd üres jelszóval.",
     "unchangedHint": "(üres = változatlan)",
     "privateKeyLabel": "Privát kulcs",
     "chooseFile": "Fájl kiválasztása…",
@@ -948,6 +951,7 @@
       "changed": "megváltozott"
     },
     "authMethod": {
+      "none": "none (hitelesítés nélkül)",
       "password": "Jelszó",
       "privateKey": "Privát kulcs",
       "agent": "SSH-ügynök",

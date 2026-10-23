@@ -178,6 +178,9 @@
       "identityFile": "Schlüsseldatei"
     },
     "password": "Passwort",
+    "passwordOptionalHint": "(optional – leer lassen, wenn der Server eine Anmeldung ohne Passwort erlaubt)",
+    "removeSavedPassword": "Gespeichertes Passwort entfernen",
+    "noPasswordSaved": "Kein Passwort gespeichert. Die App versucht zuerst die Anmeldung ohne Passwort, dann mit leerem Passwort.",
     "unchangedHint": "(leer = unverändert)",
     "privateKeyLabel": "Private Key",
     "chooseFile": "Datei wählen…",
@@ -948,6 +951,7 @@
       "changed": "geändert"
     },
     "authMethod": {
+      "none": "none (ohne Authentifizierung)",
       "password": "Passwort",
       "privateKey": "Privater Schlüssel",
       "agent": "SSH-Agent",

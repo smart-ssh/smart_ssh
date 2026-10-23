@@ -178,6 +178,9 @@
       "identityFile": "कुंजी फ़ाइल"
     },
     "password": "पासवर्ड",
+    "passwordOptionalHint": "(वैकल्पिक – यदि सर्वर बिना पासवर्ड लॉगिन की अनुमति देता है तो खाली छोड़ें)",
+    "removeSavedPassword": "सहेजा गया पासवर्ड हटाएँ",
+    "noPasswordSaved": "कोई पासवर्ड सहेजा नहीं गया है। ऐप पहले बिना पासवर्ड लॉगिन आज़माता है, फिर खाली पासवर्ड से।",
     "unchangedHint": "(खाली = अपरिवर्तित)",
     "privateKeyLabel": "निजी कुंजी",
     "chooseFile": "फ़ाइल चुनें…",
@@ -948,6 +951,7 @@
       "changed": "बदली हुई"
     },
     "authMethod": {
+      "none": "none (कोई प्रमाणीकरण नहीं)",
       "password": "पासवर्ड",
       "privateKey": "निजी कुंजी",
       "agent": "SSH एजेंट",
