@@ -345,9 +345,12 @@ export const deleteUnusableServer = (id: string, confirm: boolean) =>
 export const clearServerSudoPassword = (id: string) =>
   invoke<void>("clear_server_sudo_password", { id });
 
-export const testConnection = (input: ServerInput, existingServerId?: string) =>
+/** Issue #633: `attemptId` as for `connect` (progress events, cancel). A
+ * cancelled test rejects with `SSH_CONNECT_CANCELLED`. */
+export const testConnection = (input: ServerInput, attemptId: string, existingServerId?: string) =>
   invoke<TestConnectionReport>("test_connection", {
     input,
+    attemptId,
     existingServerId: existingServerId ?? null,
   });
 

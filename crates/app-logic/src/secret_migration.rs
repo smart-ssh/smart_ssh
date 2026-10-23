@@ -62,7 +62,7 @@ fn refs_of_server(id: ServerId, auth: &AuthMethod) -> Vec<CredentialRef> {
         // Ein Pfad ist kein Secret (Spec 0076, B-4) — nur die Passphrase
         // liegt im Schlüsselbund.
         AuthMethod::IdentityFile { passphrase_ref, .. } => refs.extend(passphrase_ref.clone()),
-        AuthMethod::Agent => {}
+        AuthMethod::Agent | AuthMethod::NoPassword => {}
     }
     refs
 }

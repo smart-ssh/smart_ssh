@@ -2493,6 +2493,16 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
     expect(screen.queryByRole("button", { name: "Einfügen" })).toBeNull();
   });
 
+  it("offers Refresh on empty space and reloads the listing (issue #629)", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    const before = vi.mocked(sftpList).mock.calls.length;
+    fireEvent.contextMenu(emptySpace(container), { clientX: 10, clientY: 20 });
+    fireEvent.click(screen.getByRole("button", { name: "Aktualisieren" }));
+    await waitFor(() => expect(vi.mocked(sftpList).mock.calls.length).toBeGreaterThan(before));
+    expect(screen.queryByText("Neue Datei")).toBeNull();
+  });
+
   it("opens the folder menu in an empty directory and closes on Escape and outside click", async () => {
     vi.mocked(sftpList).mockResolvedValue([]);
     const { container } = renderPanel();

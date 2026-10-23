@@ -44,12 +44,19 @@ dann die server-verändernden Aktionen.
 
 Rechtsklick auf **leere Fläche** der Dateiliste (unter den Zeilen oder in einem
 leeren Verzeichnis) öffnet an der Mauszeigerposition ein eigenes Menü mit
-„Neuer Ordner“ und „Neue Datei“; das eingebaute Menü des Webviews erscheint
+„Neuer Ordner“, „Neue Datei“ und „Aktualisieren“ (lädt nur die Liste des
+aktuellen Ordners neu, wie der Eintrag im Eintragsmenü); das eingebaute Menü des Webviews erscheint
 dort nicht. Ist gerade ein Eintrag ausgeschnitten, enthält es zusätzlich
 „Einfügen“ (dieselbe Verschiebung wie die Schaltfläche in der Werkzeugleiste),
 sonst nicht. Ein Rechtsklick auf eine Zeile öffnet weiterhin das Eintragsmenü.
 Klick außerhalb und Escape schließen das Menü; es ist per Tastatur bedienbar
 und beschriftet.
+
+In der Release-Version unterdrückt die App das eingebaute Webview-Menü (mit
+„Neu laden“, das Tabs und Layout verwerfen würde) überall, außer in
+Eingabefeldern, Textbereichen und dem Terminal, wo Ausschneiden/Kopieren/
+Einfügen bzw. Kopieren der Auswahl erhalten bleiben. Entwicklungs-Builds
+behalten das Webview-Menü.
 
 Alle Menüs und Popups des Dateibrowsers (Eintragsmenü per Rechtsklick und
 Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung ▾ mit dem Formular

@@ -91,7 +91,7 @@ Modellen: Konsistenz ist wichtiger als die Annahme, ein lokales Modell sei
 Anbieterfehler werden auf feste Arten abgebildet und nie still verschluckt:
 Authentifizierung fehlgeschlagen, Rate-Limit, Netzwerkfehler, ungültige
 Antwort, Kontext zu groß, Anbieter nicht erreichbar, Anbieter überlastet,
-Guthaben/Abrechnung erschöpft, Anfrage vom Anbieter abgelehnt. Ein ungültiger
+Guthaben/Abrechnung erschöpft, Nutzungslimit erreicht, Anfrage vom Anbieter abgelehnt. Ein ungültiger
 API-Key erscheint als Authentifizierungsfehler, nicht als leere Antwort.
 
 - **Überlastet:** Anbieter meldet Überlastung oder Wartung (z. B. HTTP 529
@@ -101,6 +101,15 @@ API-Key erscheint als Authentifizierungsfehler, nicht als leere Antwort.
 - **Guthaben/Abrechnung:** Guthaben aufgebraucht oder Kontingent erschöpft
   (z. B. „credit balance is too low", `insufficient_quota`, HTTP 402). Wird nie
   wiederholt; die Meldung verweist auf die Abrechnung beim Anbieter.
+- **Nutzungslimit erreicht:** Ein beim Anbieter eingestelltes Ausgaben- bzw.
+  Nutzungslimit ist erreicht (z. B. Anthropic, HTTP 400 `invalid_request_error`
+  „… workspace API usage limits …", oder jede 400/429-Antwort, deren Text
+  „regain access on …" enthält). Wird nie wiederholt. Nennt der Anbieter, wann
+  der Zugriff zurückkehrt, zeigt die Meldung dieses Datum („Nutzungslimit beim
+  Anbieter erreicht. Zugriff wieder möglich am …"), sonst ohne Datum; beide
+  verweisen darauf, das Limit in der Konsole des Anbieters zu erhöhen oder
+  einen anderen Anbieter zu wählen. Jede andere `invalid_request_error`-Antwort
+  gilt weiter als „Anfrage abgelehnt".
 - **Anfrage abgelehnt:** Der Anbieter lehnt die Anfrage selbst als ungültig ab
   (HTTP 400 `invalid_request_error`, soweit nicht Guthaben oder Kontextgröße).
   Wird nie wiederholt und nicht als „Wartung oder Überlastung" dargestellt.
