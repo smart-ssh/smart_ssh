@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ρυθμίσεις",
+    "backToList": "Ενότητες",
     "categories": {
       "aiProvider": "Πάροχος AI",
       "displayLanguage": "Εμφάνιση και γλώσσα",

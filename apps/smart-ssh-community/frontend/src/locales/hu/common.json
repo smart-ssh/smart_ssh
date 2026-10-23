@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Beállítások",
+    "backToList": "Szakaszok",
     "categories": {
       "aiProvider": "AI-szolgáltató",
       "displayLanguage": "Megjelenés és nyelv",

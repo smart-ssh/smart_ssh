@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Asetukset",
+    "backToList": "Osiot",
     "categories": {
       "aiProvider": "Tekoälyn palveluntarjoaja",
       "displayLanguage": "Näyttö ja kieli",

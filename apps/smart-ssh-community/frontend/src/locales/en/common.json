@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Settings",
+    "backToList": "Sections",
     "categories": {
       "aiProvider": "AI Provider",
       "displayLanguage": "Display & Language",

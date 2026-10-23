@@ -163,13 +163,13 @@ export function FilterRulesView() {
     selection?.kind === "rule" ? (rules.find((r) => r.id === selection.id) ?? null) : null;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4">
-      <div className="max-w-3xl space-y-6">
-        <div className="flex items-center justify-between">
+    <div className="min-h-0 flex-1 overflow-y-auto p-4 narrow:p-3">
+      <div className="max-w-3xl min-w-0 space-y-6">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="font-heading text-2xl font-bold tracking-wide text-slate-100">
             {t("filterRules.title")}
           </h2>
-          <Button variant="primary" onClick={() => setSelection({ kind: "new" })}>
+          <Button variant="primary" className="narrow:min-h-11" onClick={() => setSelection({ kind: "new" })}>
             {t("filterRules.addRule")}
           </Button>
         </div>
@@ -191,23 +191,24 @@ export function FilterRulesView() {
                     key={rule.id}
                     className={`border border-l-4 border-slate-700 bg-slate-800/60 px-3 py-2 text-sm ${ACTION_BORDER[rule.action]}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 narrow:flex-wrap">
                     <span
                       className={`font-heading w-[70px] shrink-0 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${ACTION_COLORS[rule.action]}`}
                     >
                       {rule.action}
                     </span>
                     <code
-                      className="min-w-0 flex-1 truncate font-mono text-slate-200"
+                      className="min-w-0 flex-1 truncate font-mono text-slate-200 narrow:basis-full narrow:overflow-visible narrow:break-all narrow:whitespace-normal"
                       title={`${rule.patternType}: ${rule.patternValue}`}
                     >
                       {rule.patternType}: {rule.patternValue}
                     </code>
-                    <span className="font-mono text-xs text-slate-400">
+                    <span className="font-mono text-xs text-slate-400 narrow:mr-auto">
                       {t("filterRules.priority", { value: rule.priority })}
                     </span>
                     <Button
                       size="sm"
+                      className="narrow:min-h-11 narrow:min-w-11"
                       onClick={() => movePriority(group.rules, index, -1)}
                       disabled={index === 0 || !!rule.patternError || !!group.rules[index - 1]?.patternError}
                       title={moveBlockedTitle(rule, group.rules[index - 1])}
@@ -217,6 +218,7 @@ export function FilterRulesView() {
                     </Button>
                     <Button
                       size="sm"
+                      className="narrow:min-h-11 narrow:min-w-11"
                       onClick={() => movePriority(group.rules, index, 1)}
                       disabled={
                         index === group.rules.length - 1 ||
@@ -228,10 +230,10 @@ export function FilterRulesView() {
                     >
                       <span aria-hidden="true">↓</span>
                     </Button>
-                    <Button size="sm" onClick={() => setSelection({ kind: "rule", id: rule.id })}>
+                    <Button size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={() => setSelection({ kind: "rule", id: rule.id })}>
                       {t("common.edit")}
                     </Button>
-                    <Button size="sm" variant="danger" onClick={() => handleDelete(rule.id)}>
+                    <Button size="sm" variant="danger" className="narrow:min-h-11" onClick={() => handleDelete(rule.id)}>
                       {t("common.delete")}
                     </Button>
                     </div>
@@ -360,7 +362,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         {isCreate ? t("filterRules.newRule") : t("filterRules.editRule")}
       </h3>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
         <label className="block text-sm text-slate-300">
           {t("filterRules.patternType")}
           <select
@@ -387,7 +389,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
         <label className="block text-sm text-slate-300">
           {t("filterRules.action")}
           <select
@@ -415,7 +417,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         <span id="filter-rule-scope-label" className="block text-sm text-slate-300">
           {t("filterRules.scope")}
         </span>
-        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex gap-4 text-sm text-slate-300">
+        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-300">
           <label className="flex items-center gap-1">
             <input
               type="radio"
@@ -481,9 +483,9 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         </div>
       )}
 
-      <div className="flex gap-2">
-        <Button onClick={onCancel}>{t("common.cancel")}</Button>
-        <Button type="submit" variant="primary" disabled={saving}>
+      <div className="flex flex-wrap gap-2">
+        <Button className="narrow:min-h-11" onClick={onCancel}>{t("common.cancel")}</Button>
+        <Button type="submit" variant="primary" className="narrow:min-h-11" disabled={saving}>
           {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
         </Button>
       </div>
@@ -675,7 +677,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
         <label className="block text-sm text-slate-300">
           {t("filterRules.simulateServer")}
           <select
@@ -743,6 +745,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
 
       <Button
         variant="primary"
+        className="narrow:min-h-11"
         onClick={handleTest}
         disabled={testing || !command.trim()}
       >

@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Cài đặt",
+    "backToList": "Mục",
     "categories": {
       "aiProvider": "Nhà cung cấp AI",
       "displayLanguage": "Hiển thị & Ngôn ngữ",

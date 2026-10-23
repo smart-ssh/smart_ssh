@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ayarlar",
+    "backToList": "Bölümler",
     "categories": {
       "aiProvider": "Yapay zeka sağlayıcısı",
       "displayLanguage": "Görünüm ve dil",

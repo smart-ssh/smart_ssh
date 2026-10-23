@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Nastavení",
+    "backToList": "Sekce",
     "categories": {
       "aiProvider": "Poskytovatel AI",
       "displayLanguage": "Zobrazení a jazyk",

@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "सेटिंग्स",
+    "backToList": "अनुभाग",
     "categories": {
       "aiProvider": "AI प्रदाता",
       "displayLanguage": "डिस्प्ले और भाषा",
