@@ -1117,3 +1117,36 @@ async fn test_issue_599_in_stream_overload_chunk_before_content_is_retried() {
     assert!(events.contains(&AiEvent::TextDelta("ok".to_string())));
     assert_eq!(events.last(), Some(&AiEvent::Done));
 }
+
+/// Issue #694: a server that accepts the connection but never sends response
+/// headers ends with a timeout error (120 s, virtual time) instead of hanging.
+#[tokio::test(start_paused = true)]
+async fn test_server_that_never_sends_headers_ends_with_timeout() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let _accept = tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((sock, _)) = listener.accept().await {
+            held.push(sock);
+        }
+    });
+    let provider = OpenAiCompatibleProvider::new(
+        format!("http://{addr}"),
+        "gpt-test",
+        "k",
+        true,
+        Vec::new(),
+        test_budget(),
+        None,
+    );
+
+    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+
+    assert!(
+        matches!(
+            events.last(),
+            Some(AiEvent::Error(AiError::Timeout { secs: 120 }))
+        ),
+        "{events:?}"
+    );
+}

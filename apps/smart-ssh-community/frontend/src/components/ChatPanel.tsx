@@ -42,6 +42,7 @@ import {
   onChatQuestionAsked,
   onChatError,
   onChatAiRetrying,
+  onChatAiRequestStarted,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseEmpty,
@@ -190,7 +191,13 @@ export type ChatItem =
       code: string | null;
       /** Issue #600 — provider details (backend-redacted) and whether
        * "Try again" is offered. */
-      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null };
+      details?: {
+        providerErrorType?: string | null;
+        httpStatus?: number | null;
+        providerMessage?: string | null;
+        providerName?: string | null;
+        timeoutSecs?: number | null;
+      };
       retryable?: boolean;
     }
   // Issue #596: a rule was created from the confirmation card but the
@@ -439,6 +446,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // Issue #600: provider overloaded, automatic retry pending.
   const [retrying, setRetrying] = useState<{ attempt: number; max: number; deadline: number } | null>(null);
   const [retryNow, setRetryNow] = useState(() => Date.now());
+  // Issue #694: a request is out; `since` is the last sign of life (request
+  // sent / last content) and drives the "Waiting for a response" line.
+  const [aiWait, setAiWait] = useState<{ provider: string; since: number; gotContent: boolean } | null>(null);
+  const [waitNow, setWaitNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!aiWait) return;
+    const id = window.setInterval(() => setWaitNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [aiWait]);
   useEffect(() => {
     if (!retrying) return;
     const id = window.setInterval(() => setRetryNow(Date.now()), 250);
@@ -591,9 +607,16 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     // dürfen beim Session-Wechsel/Unmount nicht weiterlaufen.
     const pendingBudgetTimers: number[] = [];
     const unlisten = [
+      onChatAiRequestStarted((event) => {
+        if (event.sessionId !== sessionId) return;
+        const now = Date.now();
+        setWaitNow(now);
+        setAiWait({ provider: event.providerName, since: now, gotContent: false });
+      }),
       onChatTextDelta((event) => {
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
+        setAiWait((w) => (w ? { ...w, since: Date.now(), gotContent: true } : w));
         setItems((prev) => {
           const last = prev[prev.length - 1];
           if (last?.type === "assistant") {
@@ -605,6 +628,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       onChatActionProposed((event) => {
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
+        setAiWait(null);
         // Spec 0026, Abschnitt 3/4: eine Zweitmeinung ist nur zu erwarten,
         // wenn sie aktiviert ist UND die Regel-Einschätzung überhaupt noch
         // Raum nach oben hat (ein bereits regelbasiertes "red" kann nicht
@@ -731,6 +755,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       onChatError((event) => {
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
+        setAiWait(null);
         setItems((prev) => {
           // Issue #600: "Try again" only when nothing but the user's own
           // message came since the last user turn (no reply, command or
@@ -757,6 +782,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 providerErrorType: event.providerErrorType,
                 httpStatus: event.httpStatus,
                 providerMessage: event.providerMessage,
+                providerName: event.providerName,
+                timeoutSecs: event.timeoutSecs,
               },
               retryable,
             },
@@ -925,6 +952,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * zu Ende. */
   const handleStopAutoContinuation = () => {
     setAutoContinuing(false);
+    setAiWait(null);
     stopAutoContinuation(sessionId).catch((err) =>
       setItems((prev) => [
         ...prev,
@@ -1041,6 +1069,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 
   const runSend = async (call: () => Promise<void>) => {
     pendingSendsRef.current += 1;
+    // Issue #694: drop a stale wait line from the previous turn.
+    if (pendingSendsRef.current === 1) setAiWait(null);
     setSending(true);
     try {
       await call();
@@ -1061,6 +1091,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         setSending(false);
         setAutoContinuing(false);
         setRetrying(null);
+        setAiWait(null);
         // Läuft im Backend nichts mehr, wartet auch keine Nachricht mehr.
         setItems((prev) =>
           prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
@@ -1403,6 +1434,24 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               {t("chat.stop")}
             </Button>
           </output>
+        ) : aiWait &&
+          (sending || autoContinuing) &&
+          (!aiWait.gotContent || waitNow - aiWait.since > 10_000) ? (
+          <output
+            data-testid="chat-ai-waiting"
+            className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300"
+          >
+            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
+            <span className="flex-1">
+              {t("chat.aiWaiting", {
+                provider: aiWait.provider,
+                seconds: Math.max(0, Math.floor((waitNow - aiWait.since) / 1000)),
+              })}
+            </span>
+            <Button size="sm" onClick={handleStopAutoContinuation}>
+              {t("chat.stop")}
+            </Button>
+          </output>
         ) : autoContinuing ? (
           <div className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
@@ -1630,6 +1679,26 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
 // genutzt.
 /** Issue #600: "Details" (collapsed, copyable) and "Try again" below the
  * translated text of an AI error card. */
+/** Issue #694: timeout errors name the provider and the limit. */
+function errorCardText(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  item: Extract<ChatItem, { type: "error" }>,
+): string {
+  const d = item.details;
+  if (d?.providerName && d.timeoutSecs) {
+    if (item.code === "AI_TIMEOUT") {
+      return t("errors.AI_TIMEOUT_NAMED", { provider: d.providerName, seconds: d.timeoutSecs });
+    }
+    if (item.code === "AI_TOTAL_DEADLINE") {
+      return t("errors.AI_TOTAL_DEADLINE", {
+        provider: d.providerName,
+        minutes: Math.round(d.timeoutSecs / 60),
+      });
+    }
+  }
+  return translateErrorCode(t, item.code, item.message);
+}
+
 function ErrorCardExtras({
   item,
   onRetryTurn,
@@ -1766,7 +1835,7 @@ export function ChatItemView({
   if (item.type === "error") {
     return (
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
-        ⚠ {translateErrorCode(t, item.code, item.message)}
+        ⚠ {errorCardText(t, item)}
         {(item.details || item.retryable) && (
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
         )}

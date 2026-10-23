@@ -56,6 +56,7 @@ vi.mock("../events", () => ({
   onChatContextUsage: vi.fn(() => Promise.resolve(() => {})),
   onChatContextCompacted: vi.fn(() => Promise.resolve(() => {})),
   onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),

@@ -43,7 +43,10 @@ use crate::request_logging::{
     log_cache_usage, log_outgoing_context, log_provider_error_response_with_id,
     log_provider_transport_error, log_stop_reason, log_text_delta_summary, log_tool_call_fragment,
 };
-use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
+use crate::sse::{
+    build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
+    SSE_INACTIVITY_TIMEOUT,
+};
 
 /// Spec 0072, B1: `pub(crate)`, damit `discovery::discover_models` (Modell-
 /// Discovery gegen `GET /v1/models`) dieselbe Version nutzt wie der
@@ -946,6 +949,8 @@ struct WebCitation {
 }
 
 struct AnthropicStreamState {
+    /// Issue #694: restarted only by real content frames.
+    content_deadline: tokio::time::Instant,
     frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>>,
     blocks: BTreeMap<u64, BlockKind>,
     fallback_text: String,
@@ -1420,6 +1425,7 @@ fn process_frame_stream(
     provider_request_id: Option<String>,
 ) -> Pin<Box<dyn Stream<Item = RawEvent> + Send>> {
     let state = AnthropicStreamState {
+        content_deadline: tokio::time::Instant::now() + CONTENT_TIMEOUT,
         frames,
         blocks: BTreeMap::new(),
         fallback_text: String::new(),
@@ -1445,8 +1451,11 @@ fn process_frame_stream(
             if state.finished {
                 return None;
             }
-            match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, state.frames.next()).await {
+            match tokio::time::timeout_at(state.content_deadline, state.frames.next()).await {
                 Ok(Some(Ok(frame))) => {
+                    if frame_is_content(&frame) {
+                        state.content_deadline = tokio::time::Instant::now() + CONTENT_TIMEOUT;
+                    }
                     let Some(event_type) = frame.event.clone() else {
                         continue;
                     };
@@ -1767,6 +1776,58 @@ mod tests {
             ),
             "expected Timeout after inactivity timeout, got {event:?}"
         );
+    }
+
+    /// Issue #694: keep-alive frames without content every 5 s must not keep
+    /// the stream alive: the content timeout fires after 120 s.
+    #[tokio::test(start_paused = true)]
+    async fn test_keep_alive_frames_do_not_restart_content_timeout() {
+        let frames = crate::sse::periodic_frames(
+            Some("ping"),
+            "{\"type\":\"ping\"}",
+            std::time::Duration::from_secs(5),
+        );
+        let start = tokio::time::Instant::now();
+        let mut events = process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
+        let event = events.next().await;
+        assert!(
+            matches!(
+                event,
+                Some(RawEvent::Public(AiEvent::Error(AiError::Timeout {
+                    secs: 120
+                })))
+            ),
+            "{event:?}"
+        );
+        assert_eq!(start.elapsed(), std::time::Duration::from_secs(120));
+    }
+
+    /// Issue #694: a long answer with real deltas every 30 s (3 minutes)
+    /// is not cut off by the content timeout.
+    #[tokio::test(start_paused = true)]
+    async fn test_slow_deltas_over_three_minutes_complete_without_error() {
+        let frames = crate::sse::periodic_frames(Some("content_block_delta"), "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}", std::time::Duration::from_secs(30));
+        let events = process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
+        let collected: Vec<RawEvent> = events.take(6).collect().await;
+        assert!(
+            collected
+                .iter()
+                .all(|e| matches!(e, RawEvent::Public(AiEvent::TextDelta(_)))),
+            "{collected:?}"
+        );
+    }
+
+    /// Issue #694: deltas every 30 s never trip the content timeout, so
+    /// only the total deadline (enforced by the caller) can end the stream.
+    #[tokio::test(start_paused = true)]
+    async fn test_continuous_deltas_for_eleven_minutes_keep_streaming() {
+        let frames = crate::sse::periodic_frames(Some("content_block_delta"), "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}", std::time::Duration::from_secs(30));
+        let events = process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None);
+        let collected: Vec<RawEvent> = events.take(22).collect().await;
+        assert_eq!(collected.len(), 22);
+        assert!(collected
+            .iter()
+            .all(|e| matches!(e, RawEvent::Public(AiEvent::TextDelta(_)))));
     }
 
     fn frame(event: &str, data: &str) -> Result<SseFrame, reqwest::Error> {
