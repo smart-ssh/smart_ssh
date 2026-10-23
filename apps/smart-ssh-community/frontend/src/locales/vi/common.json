@@ -914,7 +914,8 @@
     "dismiss": "Đóng đề xuất",
     "reject": "Từ chối",
     "applying": "Đang áp dụng…",
-    "apply": "Áp dụng"
+    "apply": "Áp dụng",
+    "expired": "Đã hết hạn — chưa áp dụng"
   },
   "connectLog": {
     "title": "Chi tiết",

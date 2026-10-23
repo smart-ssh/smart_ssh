@@ -919,7 +919,8 @@
     "dismiss": "Voorstel sluiten",
     "reject": "Afwijzen",
     "applying": "Toepassen…",
-    "apply": "Toepassen"
+    "apply": "Toepassen",
+    "expired": "Verlopen — niet toegepast"
   },
   "connectLog": {
     "title": "Details",

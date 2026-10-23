@@ -5,12 +5,10 @@
 // eine Typ stattdessen `#[serde(rename = "...")]` pro Variante nutzt.
 
 export type ProviderType =
-  | "openai"
-  | "anthropic"
-  | "generic_openai_compatible"
-  | "ollama";
+  "openai" | "anthropic" | "generic_openai_compatible" | "ollama";
 
-export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate" | "identity_file";
+export type AuthMethodKind =
+  "password" | "private_key" | "agent" | "certificate" | "identity_file";
 
 /** Spec 0039, Abschnitt 5.1 — steuert NICHT das Fencing selbst (in jeder
  * Stufe aktiv), nur ob/wann zusätzlich auf Bestätigung eskaliert wird,
@@ -102,7 +100,10 @@ export interface AiProviderConfigInput {
 
 /** Spec 0105: nur diese Provider-Typen haben serverseitige Web-Werkzeuge —
  * nur für sie zeigt das Formular den Schalter. */
-export function supportsWebResearch(type: ProviderType, baseUrl?: string | null): boolean {
+export function supportsWebResearch(
+  type: ProviderType,
+  baseUrl?: string | null,
+): boolean {
   if (type === "anthropic") return true;
   // OpenAI: nur der offizielle Dienst (keine eigene Basis-URL); gleiche Regel
   // wie `is_official_openai` im Backend.
@@ -180,7 +181,8 @@ export type Decision =
  * generischer Text>" statt des sonst gezeigten KI-Provider-Namens.
  * `clientName` ist der optionale `clientInfo.name` aus dem MCP-Handshake,
  * `null` falls der verbindende Client keinen übermittelt hat. */
-export type ActionOrigin = { kind: "internal" } | { kind: "mcp"; clientName: string | null };
+export type ActionOrigin =
+  { kind: "internal" } | { kind: "mcp"; clientName: string | null };
 
 /** Spec 0026, Abschnitt 2 — kein "grün": Abwesenheit eines Badges im UI
  * bedeutet bereits "laut bekannten Mustern unauffällig", kein
@@ -201,10 +203,7 @@ export interface RiskAssessment {
  * `connection-status-changed` (das Event kennt nur die Übergänge
  * connected/disconnected/reconnecting, Issue #355), nur als `SessionSummaryDto.status`. */
 export type ConnectionStatus =
-  | "connected"
-  | "disconnected"
-  | "reconnecting"
-  | "awaiting_host_key";
+  "connected" | "disconnected" | "reconnecting" | "awaiting_host_key";
 
 /** Issue #611: the persisted chat session a runtime session uses now
  * (`null`: local pseudo-server / no-persist). */
@@ -388,7 +387,9 @@ export interface ActionDecisionEscalatedEvent {
 export interface NoteUpdateSuggestedEvent {
   sessionId: string;
   actionId: string;
-  action: { ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string } };
+  action: {
+    ProposeNoteUpdate: { target: NoteTargetSelector; new_content: string };
+  };
   /** Spec 0019, Abschnitt 3 — s. `ChatActionProposedEvent`-Doc-Kommentar. */
   previousNoteContent: string | null;
   /** Spec 0023, Abschnitt 3 — s. `ChatActionProposedEvent.targetName`-Doc-
@@ -470,7 +471,12 @@ export type ActionResultPayload =
   | { kind: "fileRead"; path: string; content: string }
   /** Spec 0020, Abschnitt 4.2/4.3 — `backupPath` ist `null` nur, wenn die
    * Datei vor dem Schreiben nicht existierte. */
-  | { kind: "fileWrite"; path: string; backupPath: string | null; usedSudoPassword: boolean };
+  | {
+      kind: "fileWrite";
+      path: string;
+      backupPath: string | null;
+      usedSudoPassword: boolean;
+    };
 
 export interface ChatActionResultEvent {
   sessionId: string;
@@ -600,7 +606,8 @@ export interface ChatQueuedMessagesSentEvent {
 }
 
 /** Antwort auf `host-key-verification-needed` (`confirm_host_key`). */
-export type HostKeyUserDecision = { decision: "trust" } | { decision: "reject" };
+export type HostKeyUserDecision =
+  { decision: "trust" } | { decision: "reject" };
 
 /** Antwort auf ein `chat-action-proposed` mit `decision: Confirm` (`respond_to_action`). */
 export type ActionUserDecision =
@@ -692,7 +699,11 @@ export type AuthMethodInput =
   | { kind: "password"; value: string | null }
   | { kind: "privateKey"; keyContent: string | null; passphrase: string | null }
   | { kind: "agent" }
-  | { kind: "certificate"; certContent: string | null; keyContent: string | null }
+  | {
+      kind: "certificate";
+      certContent: string | null;
+      keyContent: string | null;
+    }
   /** Spec 0076, A-1/B-2 — anders als bei den übrigen Varianten ist `path`
    * kein Secret und nicht optional (s. `crate::dto::AuthMethodInput::
    * IdentityFile`-Doc-Kommentar: „leer = unverändert" gilt für
@@ -701,8 +712,7 @@ export type AuthMethodInput =
   | { kind: "identityFile"; path: string; passphrase: string | null };
 
 export type NoteEditorDto =
-  | { kind: "user" }
-  | { kind: "ai"; provider: string; model: string };
+  { kind: "user" } | { kind: "ai"; provider: string; model: string };
 
 export interface NoteRevisionDto {
   id: string;
@@ -718,7 +728,14 @@ export interface NoteRevisionDto {
 export type TestConnectionResult =
   | { kind: "success" }
   | { kind: "authenticationFailed" }
-  | { kind: "hostKeyUnknown"; host: string; port: number; rawKey: number[]; fingerprint: string; keyType: string | null }
+  | {
+      kind: "hostKeyUnknown";
+      host: string;
+      port: number;
+      rawKey: number[];
+      fingerprint: string;
+      keyType: string | null;
+    }
   | {
       kind: "hostKeyMismatch";
       host: string;
@@ -759,16 +776,15 @@ export type ConnectStep =
     }
   | {
       kind: "authentication";
-      method: "password" | "privateKey" | "agent" | "certificate" | "identityFile";
+      method:
+        "password" | "privateKey" | "agent" | "certificate" | "identityFile";
       remainingMethods: string[];
       partialSuccess: boolean;
     }
   | { kind: "sessionReady" };
 
 export type ConnectStepStatus =
-  | { state: "running" }
-  | { state: "ok" }
-  | { state: "failed"; code: string };
+  { state: "running" } | { state: "ok" } | { state: "failed"; code: string };
 
 export interface ConnectStepRecord {
   hopIndex: number;
@@ -780,7 +796,9 @@ export interface ConnectStepRecord {
 }
 
 /** Issue #51: `test_connection` liefert das Ergebnis flach plus `steps`. */
-export type TestConnectionReport = TestConnectionResult & { steps?: ConnectStepRecord[] };
+export type TestConnectionReport = TestConnectionResult & {
+  steps?: ConnectStepRecord[];
+};
 
 /** Spec 0050, Teil 3 — s. `crate::commands::TestAiProviderCredentialsResult`
  * Doc-Kommentar für die Mapping-Entscheidung (`RateLimited`/
@@ -863,7 +881,13 @@ export interface EvaluationTraceDto {
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog -----------
 
-export type SuggestionKind = "exact" | "exactPerSegment" | "pathScoped" | "lastArgOpen" | "subcommand" | "tool";
+export type SuggestionKind =
+  | "exact"
+  | "exactPerSegment"
+  | "pathScoped"
+  | "lastArgOpen"
+  | "subcommand"
+  | "tool";
 
 export interface SuggestionPatternDto {
   patternType: PatternType;
@@ -996,7 +1020,12 @@ export type ChatHistoryEntryDto =
       /** Spec 0043, Fund A — s. `ActionResultPayload`'s `truncated`. */
       truncated: boolean;
     }
-  | { type: "actionRejected"; role: ChatHistoryRole; command: string; reason: string }
+  | {
+      type: "actionRejected";
+      role: ChatHistoryRole;
+      command: string;
+      reason: string;
+    }
   /** Spec 0105. */
   | { type: "webActivity"; role: ChatHistoryRole; activity: WebActivityDto }
   /** Issue #504, Spec 0110 §5: Erweiterungsteile — nur Label und Art, nie Inhalt. */
@@ -1240,10 +1269,7 @@ export interface AppInfoDto {
 /** Warum der Systemschlüsselbund nicht verfügbar ist — von
  * `crate::dto::KeychainUnavailableReasonDto` (Spec 0071, A1). */
 export type KeychainUnavailableReason =
-  | "no_session_bus"
-  | "no_secret_service_provider"
-  | "locked"
-  | "unknown";
+  "no_session_bus" | "no_secret_service_provider" | "locked" | "unknown";
 
 /** Von `crate::dto::KeychainStatusDto` (Spec 0071, A15). Trägt bewusst
  * keinen Fehlertext — die anzeigbaren Texte stehen im
@@ -1571,4 +1597,9 @@ export interface StartDirectoryDto {
 /** Spec 0102: Ergebnis von `open_terminal`. */
 export interface TerminalStartDto {
   missingDirectory: string | null;
+}
+
+/** Issue #628: a pending note confirmation timed out in the backend. */
+export interface NoteUpdateExpiredEvent {
+  actionId: string;
 }

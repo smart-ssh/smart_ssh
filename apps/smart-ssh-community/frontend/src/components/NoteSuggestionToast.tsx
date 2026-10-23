@@ -1,8 +1,8 @@
 import type { TFunction } from "i18next";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, respondToAction } from "../api";
-import { onNoteUpdateSuggested } from "../events";
+import { commandErrorCode, commandErrorMessage, respondToAction } from "../api";
+import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../events";
 import type { NoteUpdateSuggestedEvent } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button } from "./ui";
@@ -31,11 +31,18 @@ interface PendingSuggestion {
    * auf "Anzeigen" wird der Inhalt (das "Dialog"-Äquivalent) eingeblendet. */
   expanded: boolean;
   deciding: boolean;
+  /** Issue #628: the backend no longer waits for an answer (timeout or
+   * unknown id) — the card only says so and can be closed. */
+  expired: boolean;
   error: string | null;
 }
 
-function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group" {
-  return event.action.ProposeNoteUpdate.target === "CurrentServer" ? "server" : "group";
+function targetKindFromEvent(
+  event: NoteUpdateSuggestedEvent,
+): "server" | "group" {
+  return event.action.ProposeNoteUpdate.target === "CurrentServer"
+    ? "server"
+    : "group";
 }
 
 /** Spec 0023, Abschnitt 3/4: prominenter Titel statt der früheren
@@ -45,7 +52,11 @@ function targetKindFromEvent(event: NoteUpdateSuggestedEvent): "server" | "group
  * bekommen bewusst das eigene Wort "Gruppen-Notiz-Vorschlag" (nicht
  * "Server-Notiz-Vorschlag für 'X'"), um die Verwechslungsgefahr auf der
  * Server-vs-Gruppe-Achse zu vermeiden. */
-function suggestionTitle(t: TFunction, kind: "server" | "group", targetName: string | null): string {
+function suggestionTitle(
+  t: TFunction,
+  kind: "server" | "group",
+  targetName: string | null,
+): string {
   const name = targetName ?? t("noteSuggestion.unknownTarget");
   return kind === "group"
     ? t("noteSuggestion.groupTitle", { name })
@@ -83,34 +94,69 @@ export function NoteSuggestionToast() {
           summaryIncomplete: event.summaryIncomplete === true,
           expanded: false,
           deciding: false,
+          expired: false,
           error: null,
         },
       ]);
     });
+    const unlistenExpired = onNoteUpdateExpired((event) => {
+      setSuggestions((prev) =>
+        prev.map((s) =>
+          s.actionId === event.actionId
+            ? { ...s, expired: true, deciding: false, error: null }
+            : s,
+        ),
+      );
+    });
     return () => {
       unlisten.then((fn) => fn());
+      unlistenExpired.then((fn) => fn());
     };
   }, []);
 
-  const updateSuggestion = (actionId: string, patch: Partial<PendingSuggestion>) => {
-    setSuggestions((prev) => prev.map((s) => (s.actionId === actionId ? { ...s, ...patch } : s)));
+  const updateSuggestion = (
+    actionId: string,
+    patch: Partial<PendingSuggestion>,
+  ) => {
+    setSuggestions((prev) =>
+      prev.map((s) => (s.actionId === actionId ? { ...s, ...patch } : s)),
+    );
   };
 
   const dismiss = (actionId: string) => {
     setSuggestions((prev) => prev.filter((s) => s.actionId !== actionId));
   };
 
-  const decide = async (suggestion: PendingSuggestion, decision: "approve" | "deny") => {
+  const decide = async (
+    suggestion: PendingSuggestion,
+    decision: "approve" | "deny",
+  ) => {
     updateSuggestion(suggestion.actionId, { deciding: true, error: null });
     try {
-      await respondToAction(suggestion.sessionId, suggestion.actionId, { decision });
+      await respondToAction(suggestion.sessionId, suggestion.actionId, {
+        decision,
+      });
       dismiss(suggestion.actionId);
     } catch (err) {
+      if (commandErrorCode(err) === "ACTION_CONFIRMATION_UNKNOWN") {
+        updateSuggestion(suggestion.actionId, {
+          expired: true,
+          deciding: false,
+          error: null,
+        });
+        return;
+      }
       updateSuggestion(suggestion.actionId, {
         deciding: false,
         error: commandErrorMessage(err),
       });
     }
+  };
+
+  /** ✕: an open suggestion counts as Reject; an expired one is only hidden. */
+  const close = (suggestion: PendingSuggestion) => {
+    if (suggestion.expired) dismiss(suggestion.actionId);
+    else void decide(suggestion, "deny");
   };
 
   if (suggestions.length === 0) return null;
@@ -122,22 +168,51 @@ export function NoteSuggestionToast() {
           key={suggestion.actionId}
           className="rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm shadow-lg"
         >
-          {!suggestion.expanded ? (
+          {suggestion.expired ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="space-y-1">
+                <p className="font-semibold text-slate-100">
+                  {suggestionTitle(
+                    t,
+                    suggestion.targetKind,
+                    suggestion.targetName,
+                  )}
+                </p>
+                <p role="status" className="text-xs text-slate-300">
+                  {t("noteSuggestion.expired")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => close(suggestion)}
+                aria-label={t("noteSuggestion.dismiss")}
+              >
+                ✕
+              </Button>
+            </div>
+          ) : !suggestion.expanded ? (
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-slate-100">
-                {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
+                {suggestionTitle(
+                  t,
+                  suggestion.targetKind,
+                  suggestion.targetName,
+                )}
               </span>
               <div className="flex shrink-0 gap-1">
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => updateSuggestion(suggestion.actionId, { expanded: true })}
+                  onClick={() =>
+                    updateSuggestion(suggestion.actionId, { expanded: true })
+                  }
                 >
                   {t("noteSuggestion.show")}
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => decide(suggestion, "deny")}
+                  onClick={() => close(suggestion)}
+                  disabled={suggestion.deciding}
                   aria-label={t("noteSuggestion.dismiss")}
                 >
                   ✕
@@ -146,9 +221,23 @@ export function NoteSuggestionToast() {
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="font-semibold text-slate-100">
-                {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-slate-100">
+                  {suggestionTitle(
+                    t,
+                    suggestion.targetKind,
+                    suggestion.targetName,
+                  )}
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => close(suggestion)}
+                  disabled={suggestion.deciding}
+                  aria-label={t("noteSuggestion.dismiss")}
+                >
+                  ✕
+                </Button>
+              </div>
               {suggestion.summaryIncomplete && (
                 <p
                   role="alert"
@@ -183,7 +272,9 @@ export function NoteSuggestionToast() {
                   onClick={() => decide(suggestion, "approve")}
                   disabled={suggestion.deciding}
                 >
-                  {suggestion.deciding ? t("noteSuggestion.applying") : t("noteSuggestion.apply")}
+                  {suggestion.deciding
+                    ? t("noteSuggestion.applying")
+                    : t("noteSuggestion.apply")}
                 </Button>
               </div>
             </div>

@@ -919,7 +919,8 @@
     "dismiss": "Stäng förslaget",
     "reject": "Avvisa",
     "applying": "Tillämpar…",
-    "apply": "Tillämpa"
+    "apply": "Tillämpa",
+    "expired": "Utgången — inte tillämpad"
   },
   "connectLog": {
     "title": "Detaljer",
