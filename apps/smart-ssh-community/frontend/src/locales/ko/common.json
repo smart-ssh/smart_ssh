@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "설정",
+    "backToList": "섹션",
     "categories": {
       "aiProvider": "AI 제공자",
       "displayLanguage": "화면 및 언어",
@@ -983,6 +984,7 @@
     "transferStopped": "{{name}}: 중지됨",
     "transferIncomplete": "서버에 불완전한 파일이 남아 있습니다: {{path}}",
     "transferFiles": "파일 {{total}}개 중 {{done}}개",
+    "transferRemaining": "{{time}} 남음",
     "loading": "불러오는 중…",
     "noPermissionToOpen": "이 폴더를 열 권한이 없습니다(x 없음)",
     "emptyDirectory": "(빈 디렉터리)",

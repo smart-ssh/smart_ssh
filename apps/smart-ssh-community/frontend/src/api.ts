@@ -602,6 +602,10 @@ export const claimDroppedPaths = (sessionId: string) =>
 
 /** Issue #571: whether the OS clipboard holds local files. Returns no
  * paths; only decides if "Paste" is offered. */
+/** Issue #626: backend clipboard write for text that arrives after an await
+ * (WebKit rejects `navigator.clipboard.writeText` without the user gesture). */
+export const clipboardWriteText = (text: string) =>
+  invoke<void>("clipboard_write_text", { text });
 export const clipboardHasFiles = () => invoke<boolean>("clipboard_has_files");
 
 /** Wording of the native paste confirmation (the backend adds the file list

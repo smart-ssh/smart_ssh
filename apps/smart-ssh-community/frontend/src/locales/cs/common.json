@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Nastavení",
+    "backToList": "Sekce",
     "categories": {
       "aiProvider": "Poskytovatel AI",
       "displayLanguage": "Zobrazení a jazyk",
@@ -998,6 +999,7 @@
     "transferStopped": "{{name}}: zastaveno",
     "transferIncomplete": "Neúplný soubor zůstal na serveru: {{path}}",
     "transferFiles": "{{done}} z {{total}} souborů",
+    "transferRemaining": "zbývá {{time}}",
     "loading": "Načítání…",
     "noPermissionToOpen": "Nemáte oprávnění otevřít tuto složku (chybí x)",
     "emptyDirectory": "(prázdný adresář)",

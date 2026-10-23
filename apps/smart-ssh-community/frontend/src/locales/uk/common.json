@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Параметри",
+    "backToList": "Розділи",
     "categories": {
       "aiProvider": "ШІ-провайдер",
       "displayLanguage": "Вигляд і мова",
@@ -998,6 +999,7 @@
     "transferStopped": "{{name}}: зупинено",
     "transferIncomplete": "Неповний файл залишився на сервері: {{path}}",
     "transferFiles": "{{done}} із {{total}} файлів",
+    "transferRemaining": "залишилось {{time}}",
     "loading": "Завантаження…",
     "noPermissionToOpen": "Немає дозволу відкрити цю теку (немає x)",
     "emptyDirectory": "(порожня тека)",

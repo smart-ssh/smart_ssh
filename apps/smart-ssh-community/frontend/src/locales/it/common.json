@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Impostazioni",
+    "backToList": "Sezioni",
     "categories": {
       "aiProvider": "Provider IA",
       "displayLanguage": "Schermo e lingua",
@@ -993,6 +994,7 @@
     "transferStopped": "{{name}}: interrotto",
     "transferIncomplete": "File incompleto rimasto sul server: {{path}}",
     "transferFiles": "{{done}} di {{total}} file",
+    "transferRemaining": "{{time}} rimanenti",
     "loading": "Caricamento…",
     "noPermissionToOpen": "Nessun permesso per aprire questa cartella (manca x)",
     "emptyDirectory": "(directory vuota)",

@@ -51,12 +51,29 @@ sonst nicht. Ein Rechtsklick auf eine Zeile öffnet weiterhin das Eintragsmenü.
 Klick außerhalb und Escape schließen das Menü; es ist per Tastatur bedienbar
 und beschriftet.
 
+Alle Menüs und Popups des Dateibrowsers (Eintragsmenü per Rechtsklick und
+Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung ▾ mit dem Formular
+„Ziel-Nutzer“) liegen immer vollständig im Fenster: Sie öffnen nach unten und
+rechts, klappen am unteren bzw. rechten Fensterrand nach oben bzw. links auf
+und werden notfalls verschoben; ist das Fenster kleiner als das Menü, scrollt
+das Menü. Beim Ändern der Fenstergröße wird neu platziert. Dasselbe gilt für
+das Dropdown der Schnellregel im Chat. Im schmalen Layout bleiben die Menüs
+unten angedockt.
+
 ## Teil 2: Lesende und lokale Aktionen (ohne Bestätigung)
 
 - **Herunterladen** direkt in den Download-Ordner des Betriebssystems, oder
   **Herunterladen nach…** mit Dialog in einen gewählten Pfad. Ordner werden
   rekursiv heruntergeladen und landen als `<Zielordner>/<Ordnername>/…`.
   Jede Datei erscheint als eigene Übertragung mit Fortschritt.
+- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt neben dem
+  Fortschrittsbalken die übertragenen und die gesamten Bytes, die
+  Geschwindigkeit (gleitender Mittelwert der letzten ca. 5 Sekunden, in KB/s
+  oder MB/s) und die geschätzte Restzeit (`mm:ss` bzw. `h:mm:ss`). Ist die
+  Gesamtgröße unbekannt oder die Geschwindigkeit 0, steht statt der Werte „—“.
+  Bei Ordnerübertragungen gelten die Werte für den ganzen Ordner. Die Anzeige
+  aktualisiert sich höchstens etwa zweimal pro Sekunde; die Zahlen haben eine
+  feste Breite, damit die Zeile nicht springt.
 - **Dateiinhalt kopieren:** Der Text der Datei geht in die Zwischenablage.
   Binärdateien und Dateien über der Grenze aus Spec 0086 (50 MB) werden mit
   einer Meldung abgelehnt; große Dateien zeigen Fortschritt und lassen sich

@@ -5,13 +5,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { exportSshConfig } from "../api";
+import { clipboardWriteText, exportSshConfig } from "../api";
 import { testI18n } from "../testI18n";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
 
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
   exportSshConfig: vi.fn(),
+  clipboardWriteText: vi.fn().mockResolvedValue(undefined),
 }));
 
 beforeEach(() => {
@@ -87,9 +88,6 @@ describe("SshConfigExportDialog (Spec 0075, §3.2.5/§3.2.7)", () => {
       exported: [{ originalName: "web1", alias: "web1", renamed: false }],
       includeHint: "Include /tmp/x.conf",
     });
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
-
     render(
       <I18nextProvider i18n={testI18n}>
         <SshConfigExportDialog onClose={vi.fn()} />
@@ -97,6 +95,6 @@ describe("SshConfigExportDialog (Spec 0075, §3.2.5/§3.2.7)", () => {
     );
 
     fireEvent.click(await screen.findByText("Kopieren"));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Include /tmp/x.conf"));
+    await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith("Include /tmp/x.conf"));
   });
 });

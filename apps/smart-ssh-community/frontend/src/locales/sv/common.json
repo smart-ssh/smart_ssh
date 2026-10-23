@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Inställningar",
+    "backToList": "Avsnitt",
     "categories": {
       "aiProvider": "AI-leverantör",
       "displayLanguage": "Visning och språk",
@@ -988,6 +989,7 @@
     "transferStopped": "{{name}}: stoppad",
     "transferIncomplete": "Ofullständig fil kvar på servern: {{path}}",
     "transferFiles": "{{done}} av {{total}} filer",
+    "transferRemaining": "{{time}} kvar",
     "loading": "Laddar…",
     "noPermissionToOpen": "Ingen behörighet att öppna mappen (x saknas)",
     "emptyDirectory": "(tom katalog)",
