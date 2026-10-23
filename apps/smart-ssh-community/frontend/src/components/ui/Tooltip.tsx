@@ -29,23 +29,24 @@ export function Tooltip({
   };
 
   return (
-    <span
-      // biome/oxlint: a focusable, described inline element; not interactive.
-      tabIndex={0}
-      aria-describedby={id}
-      className={className}
-      onMouseEnter={(e) => show(e.currentTarget)}
-      onMouseLeave={() => setPos(null)}
-      onFocus={(e) => show(e.currentTarget)}
-      onBlur={() => setPos(null)}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" && pos) {
-          e.stopPropagation();
-          setPos(null);
-        }
-      }}
-    >
-      {children}
+    <span className="inline-flex">
+      <button
+        type="button"
+        aria-describedby={id}
+        className={`cursor-default ${className}`}
+        onMouseEnter={(e) => show(e.currentTarget)}
+        onMouseLeave={() => setPos(null)}
+        onFocus={(e) => show(e.currentTarget)}
+        onBlur={() => setPos(null)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && pos) {
+            e.stopPropagation();
+            setPos(null);
+          }
+        }}
+      >
+        {children}
+      </button>
       <span
         id={id}
         role="tooltip"
