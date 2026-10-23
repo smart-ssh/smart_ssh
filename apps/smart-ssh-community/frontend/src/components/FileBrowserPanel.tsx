@@ -1899,7 +1899,8 @@ export function FileBrowserPanel({
                 // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- mouse-only shortcut to the ⋯ menu, same as the table row
                 <li
                   key={entry.path}
-                  className="flex min-h-11 items-center border-t border-slate-800/70 pl-2"
+                  data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
+                  className="group flex min-h-11 items-center border-t border-slate-800/70 pl-2 hover:bg-slate-700/60 focus-within:bg-slate-700/80 data-[active=true]:bg-slate-700/80"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1912,13 +1913,13 @@ export function FileBrowserPanel({
                       <button
                         type="button"
                         onClick={() => load(entry.path)}
-                        className="block max-w-full truncate rounded text-left text-sm text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="block max-w-full truncate rounded text-left text-sm text-indigo-300 group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         title={entry.name}
                       >
                         📁 {entry.name}
                       </button>
                     ) : (
-                      <span className="block truncate text-sm text-slate-200" title={entry.name}>
+                      <span className="block truncate text-sm text-slate-200 group-hover:underline" title={entry.name}>
                         📄 {entry.name}
                       </span>
                     )}
@@ -2020,7 +2021,8 @@ export function FileBrowserPanel({
               {entries.map((entry) => (
                 <tr
                   key={entry.path}
-                  className="border-t border-slate-800/70 hover:bg-slate-800/40"
+                  data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
+                  className="group border-t border-slate-800/70 hover:bg-slate-700/60 focus-within:bg-slate-700/80 data-[active=true]:bg-slate-700/80"
                   // Spec 0054, Teil 1: Rechtsklick öffnet dasselbe Menü wie
                   // das Drei-Punkte-Symbol, nur an der Klickposition statt
                   // in der Aktionsspalte verankert (s. `openMenu`-Doc-
@@ -2038,13 +2040,13 @@ export function FileBrowserPanel({
                       <button
                         type="button"
                         onClick={() => load(entry.path)}
-                        className="block max-w-full truncate rounded text-left text-indigo-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="block max-w-full truncate rounded text-left text-indigo-300 hover:underline group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         title={entry.name}
                       >
                         📁 {entry.name}
                       </button>
                     ) : (
-                      <span className="block truncate text-slate-200" title={entry.name}>
+                      <span className="block truncate text-slate-200 group-hover:underline" title={entry.name}>
                         📄 {entry.name}
                       </span>
                     )}
