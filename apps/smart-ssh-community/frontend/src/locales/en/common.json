@@ -545,6 +545,8 @@
     "AI_PROVIDER_UNAVAILABLE": "The AI provider reported an error (e.g. maintenance or overload). Try again later; if it persists, check the provider settings.",
     "AI_PROVIDER_OVERLOADED": "The AI provider is overloaded right now. Try again in a moment.",
     "AI_PROVIDER_BILLING": "The AI provider account has no credit left. Check billing in the provider's console.",
+    "AI_PROVIDER_USAGE_LIMIT": "Usage limit at the provider reached. Raise the limit in the provider console or choose another provider.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Usage limit at the provider reached. Access returns on {{date}}. Raise the limit in the provider console or choose another provider.",
     "AI_PROVIDER_REJECTED_REQUEST": "The AI provider rejected the request.",
     "AI_RESPONSE_TRUNCATED": "The AI response was too long for a complete command",
     "AI_MODEL_NOT_FOUND": "The AI provider doesn't know this model. Check the model name in Settings (\"Load models\" lists the available ones); for Ollama, pull it first with `ollama pull <name>`.",
@@ -923,7 +925,8 @@
     "dismiss": "Dismiss suggestion",
     "reject": "Reject",
     "applying": "Applying…",
-    "apply": "Apply"
+    "apply": "Apply",
+    "expired": "Expired — not applied"
   },
   "connectLog": {
     "title": "Details",

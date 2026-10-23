@@ -545,6 +545,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Tekoälyn palveluntarjoaja ilmoitti virheestä (esim. huolto tai ylikuormitus). Yritä myöhemmin uudelleen; jos ongelma jatkuu, tarkista palveluntarjoajan asetukset.",
     "AI_PROVIDER_OVERLOADED": "Tekoälypalvelun tarjoaja on juuri nyt ylikuormitettu. Yritä hetken kuluttua uudelleen.",
     "AI_PROVIDER_BILLING": "Tekoälypalvelun tilillä ei ole enää saldoa. Tarkista laskutus palveluntarjoajan konsolista.",
+    "AI_PROVIDER_USAGE_LIMIT": "Palveluntarjoajan käyttöraja on saavutettu. Nosta rajaa palveluntarjoajan konsolissa tai valitse toinen palveluntarjoaja.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Palveluntarjoajan käyttöraja on saavutettu. Pääsy palautuu {{date}}. Nosta rajaa palveluntarjoajan konsolissa tai valitse toinen palveluntarjoaja.",
     "AI_PROVIDER_REJECTED_REQUEST": "Tekoälypalvelun tarjoaja hylkäsi pyynnön.",
     "AI_RESPONSE_TRUNCATED": "Tekoälyn vastaus oli liian pitkä täydelliseksi komennoksi",
     "AI_MODEL_NOT_FOUND": "Tekoälyn palveluntarjoaja ei tunne tätä mallia. Tarkista mallin nimi asetuksista (\"Lataa mallit\" listaa saatavilla olevat); Ollamalle lataa se ensin komennolla `ollama pull <name>`.",
@@ -923,7 +925,8 @@
     "dismiss": "Sulje ehdotus",
     "reject": "Hylkää",
     "applying": "Otetaan käyttöön…",
-    "apply": "Ota käyttöön"
+    "apply": "Ota käyttöön",
+    "expired": "Vanhentunut — ei otettu käyttöön"
   },
   "connectLog": {
     "title": "Lisätiedot",

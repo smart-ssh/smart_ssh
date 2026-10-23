@@ -545,6 +545,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Poskytovatel AI ohlásil chybu (např. údržbu nebo přetížení). Zkuste to později; pokud přetrvává, zkontrolujte nastavení poskytovatele.",
     "AI_PROVIDER_OVERLOADED": "Poskytovatel AI je právě přetížený. Zkuste to za chvíli znovu.",
     "AI_PROVIDER_BILLING": "Účet poskytovatele AI nemá žádný kredit. Zkontrolujte fakturaci v konzoli poskytovatele.",
+    "AI_PROVIDER_USAGE_LIMIT": "U poskytovatele byl dosažen limit využití. Zvyšte limit v konzoli poskytovatele nebo zvolte jiného poskytovatele.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "U poskytovatele byl dosažen limit využití. Přístup se obnoví: {{date}}. Zvyšte limit v konzoli poskytovatele nebo zvolte jiného poskytovatele.",
     "AI_PROVIDER_REJECTED_REQUEST": "Poskytovatel AI požadavek odmítl.",
     "AI_RESPONSE_TRUNCATED": "Odpověď AI byla na úplný příkaz příliš dlouhá",
     "AI_MODEL_NOT_FOUND": "Poskytovatel AI tento model nezná. Zkontrolujte název modelu v Nastavení („Načíst modely“ vypíše dostupné); u Ollamy jej nejdřív stáhněte příkazem `ollama pull <name>`.",
@@ -933,7 +935,8 @@
     "dismiss": "Zavřít návrh",
     "reject": "Zamítnout",
     "applying": "Použití…",
-    "apply": "Použít"
+    "apply": "Použít",
+    "expired": "Platnost vypršela — nepoužito"
   },
   "connectLog": {
     "title": "Podrobnosti",

@@ -545,6 +545,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Il provider IA ha segnalato un errore (ad es. manutenzione o sovraccarico). Riprovi più tardi; se persiste, verifichi le impostazioni del provider.",
     "AI_PROVIDER_OVERLOADED": "Il provider di IA è sovraccarico in questo momento. Riprova tra un attimo.",
     "AI_PROVIDER_BILLING": "L'account del provider di IA non ha più credito. Controlla la fatturazione nella console del provider.",
+    "AI_PROVIDER_USAGE_LIMIT": "Limite di utilizzo raggiunto presso il provider. Aumenta il limite nella console del provider o scegli un altro provider.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Limite di utilizzo raggiunto presso il provider. L'accesso torna disponibile il {{date}}. Aumenta il limite nella console del provider o scegli un altro provider.",
     "AI_PROVIDER_REJECTED_REQUEST": "Il provider di IA ha rifiutato la richiesta.",
     "AI_RESPONSE_TRUNCATED": "La risposta dell'IA era troppo lunga per un comando completo",
     "AI_MODEL_NOT_FOUND": "Il provider IA non conosce questo modello. Verifichi il nome del modello nelle Impostazioni (\"Carica modelli\" elenca quelli disponibili); per Ollama lo scarichi prima con `ollama pull <name>`.",
@@ -928,7 +930,8 @@
     "dismiss": "Ignora suggerimento",
     "reject": "Rifiuta",
     "applying": "Applicazione…",
-    "apply": "Applica"
+    "apply": "Applica",
+    "expired": "Scaduto — non applicato"
   },
   "connectLog": {
     "title": "Dettagli",

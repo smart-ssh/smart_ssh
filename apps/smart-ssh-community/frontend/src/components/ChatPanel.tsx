@@ -3,6 +3,7 @@ import {
   type ComponentPropsWithoutRef,
   type FormEvent,
   type KeyboardEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -61,6 +62,7 @@ import {
   subscribeVoiceInputEnabled,
 } from "../voiceInputSettings";
 import { useIsNarrow } from "../hooks/useIsNarrow";
+import { useMenuPlacement } from "../hooks/useMenuPlacement";
 import { useStickToBottom } from "../hooks/useStickToBottom";
 import type { VoiceHandlers, VoicePhase } from "../useVoiceInput";
 import { VoiceInputControl } from "./VoiceInputControl";
@@ -193,7 +195,7 @@ export type ChatItem =
       code: string | null;
       /** Issue #600 — provider details (backend-redacted) and whether
        * "Try again" is offered. */
-      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null };
+      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null; accessReturns?: string | null };
       retryable?: boolean;
     }
   // Issue #596: a rule was created from the confirmation card but the
@@ -769,6 +771,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 providerErrorType: event.providerErrorType,
                 httpStatus: event.httpStatus,
                 providerMessage: event.providerMessage,
+                accessReturns: event.accessReturns,
               },
               retryable,
             },
@@ -1812,7 +1815,7 @@ export function ChatItemView({
   if (item.type === "error") {
     return (
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
-        ⚠ {translateErrorCode(t, item.code, item.message)}
+        ⚠ {translateErrorCode(t, item.code, item.message, { date: item.details?.accessReturns })}
         {(item.details || item.retryable) && (
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
         )}
@@ -2322,6 +2325,14 @@ export function QuickRuleButton({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  // Issue #627: the dropdown stays fully inside the window.
+  const quickRuleWrapRef = useRef<HTMLDivElement>(null);
+  const quickRuleMenuRef = useRef<HTMLDivElement>(null);
+  const getQuickRuleAnchor = useCallback(() => quickRuleWrapRef.current, []);
+  const quickRuleMenuStyle = useMenuPlacement(quickRuleMenuRef, getQuickRuleAnchor, open, {
+    align: "end",
+    gap: 4,
+  });
   const [suggestions, setSuggestions] = useState<ExplainedSuggestionDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2394,7 +2405,10 @@ export function QuickRuleButton({
   };
 
   return (
-    <div className="relative ml-auto inline-flex border border-indigo-600/50 narrow:static narrow:ml-0 narrow:w-full">
+    <div
+      ref={quickRuleWrapRef}
+      className="relative ml-auto inline-flex border border-indigo-600/50 narrow:static narrow:ml-0 narrow:w-full"
+    >
       <Button variant="ghost" size="sm" className="rounded-none px-3 narrow:min-h-11 narrow:flex-1" onClick={toggleOpen}>
         {t("confirmDialog.quickRule")}
       </Button>
@@ -2410,7 +2424,7 @@ export function QuickRuleButton({
         ▾
       </Button>
       {open && (
-        <div className="absolute right-0 top-full z-10 mt-1 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:top-auto narrow:bottom-0 narrow:mt-0 narrow:max-h-[70vh] narrow:w-auto narrow:overflow-y-auto narrow:p-3">
+        <div ref={quickRuleMenuRef} style={quickRuleMenuStyle} className="fixed z-10 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:top-auto narrow:bottom-0 narrow:mt-0 narrow:max-h-[70vh] narrow:w-auto narrow:overflow-y-auto narrow:p-3">
           <div className="font-heading border-b border-slate-800 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
             {t("confirmDialog.newRulePatternHeading")}
           </div>

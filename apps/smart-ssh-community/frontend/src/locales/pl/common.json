@@ -545,6 +545,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Dostawca AI zgłosił błąd (np. konserwacja lub przeciążenie). Spróbuj później; jeśli się powtarza, sprawdź ustawienia dostawcy.",
     "AI_PROVIDER_OVERLOADED": "Dostawca AI jest teraz przeciążony. Spróbuj ponownie za chwilę.",
     "AI_PROVIDER_BILLING": "Konto dostawcy AI nie ma już środków. Sprawdź rozliczenia w konsoli dostawcy.",
+    "AI_PROVIDER_USAGE_LIMIT": "Osiągnięto limit użycia u dostawcy. Zwiększ limit w konsoli dostawcy lub wybierz innego dostawcę.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Osiągnięto limit użycia u dostawcy. Dostęp wróci: {{date}}. Zwiększ limit w konsoli dostawcy lub wybierz innego dostawcę.",
     "AI_PROVIDER_REJECTED_REQUEST": "Dostawca AI odrzucił żądanie.",
     "AI_RESPONSE_TRUNCATED": "Odpowiedź AI była zbyt długa na pełne polecenie",
     "AI_MODEL_NOT_FOUND": "Dostawca AI nie zna tego modelu. Sprawdź nazwę modelu w Ustawieniach („Wczytaj modele” pokazuje dostępne); w Ollamie najpierw pobierz go poleceniem `ollama pull <name>`.",
@@ -933,7 +935,8 @@
     "dismiss": "Odrzuć propozycję",
     "reject": "Odrzuć",
     "applying": "Stosowanie…",
-    "apply": "Zastosuj"
+    "apply": "Zastosuj",
+    "expired": "Wygasło — nie zastosowano"
   },
   "connectLog": {
     "title": "Szczegóły",
