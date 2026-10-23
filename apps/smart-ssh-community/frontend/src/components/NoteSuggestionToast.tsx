@@ -178,9 +178,9 @@ export function NoteSuggestionToast() {
                     suggestion.targetName,
                   )}
                 </p>
-                <p role="status" className="text-xs text-slate-300">
+                <output className="block text-xs text-slate-300">
                   {t("noteSuggestion.expired")}
-                </p>
+                </output>
               </div>
               <Button
                 size="sm"
