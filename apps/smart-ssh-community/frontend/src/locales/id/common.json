@@ -1166,6 +1166,7 @@
     "contextUsageTooltip": "Bagian lama obrolan diringkas secara otomatis saat konteks penuh.",
     "webResearchUnavailable": "Riset web tidak tersedia untuk akun penyedia ini (pencarian web dinonaktifkan di sana). Sesi ini menjawab tanpa riset web. Untuk mematikannya secara permanen: Pengaturan → Penyedia AI → “Riset web”.",
     "emptyResponse": "Model tidak mengembalikan respons. Untuk model dengan fase berpikir, batas keluaran yang lebih tinggi di pengaturan penyedia membantu.",
+    "refusedResponse": "Model menolak permintaan ini. Susun ulang kalimatnya atau mulai obrolan baru.",
     "outputTruncated": "(dipotong)",
     "fileWritten": "Berkas '{{path}}' ditulis.",
     "writtenWithSudoPassword": "Ditulis menggunakan kata sandi sudo yang tersimpan.",

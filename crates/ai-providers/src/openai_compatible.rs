@@ -1073,6 +1073,21 @@ impl OpenAiStreamState {
     }
 
     /// Issue #609: the usage as a public event, at most once.
+    /// Issue #617: ahead of it, the real input size as [`AiEvent::Usage`]
+    /// (chat compaction / context indicator). OpenAI-style APIs count cached
+    /// tokens inside the prompt tokens, so `input_tokens` is already the
+    /// full prompt size and the cache fields are not added again.
+    pub(crate) fn take_usage_events(&mut self) -> Vec<RawEvent> {
+        let mut events = Vec::new();
+        if let Some(total) = self.usage.input_tokens.filter(|t| *t > 0) {
+            events.push(RawEvent::Public(AiEvent::Usage {
+                input_tokens: total,
+            }));
+        }
+        events.extend(self.take_usage_event());
+        events
+    }
+
     pub(crate) fn take_usage_event(&mut self) -> Option<RawEvent> {
         let usage = std::mem::take(&mut self.usage);
         // A bare model name without any count is not a usage report.
@@ -1231,6 +1246,24 @@ impl OpenAiStreamState {
         );
         let tool_call_truncated = abrupt || !finish_reason_confirms_completion;
 
+        // Issue #647: `content_filter` is a refusal — own outcome, no retry,
+        // pending tool calls are dropped (never released).
+        if self.finish_reason.as_deref() == Some("content_filter") {
+            self.tool_calls.clear();
+            let mut events = Vec::new();
+            if !self.native_tool_calling {
+                let result = parse_fallback_response(&self.fallback_text);
+                if !result.text.is_empty() {
+                    events.push(RawEvent::Public(AiEvent::TextDelta(result.text)));
+                }
+            }
+            if let Some(event) = self.take_usage_event() {
+                events.push(event);
+            }
+            events.push(RawEvent::Public(AiEvent::Refused));
+            return events;
+        }
+
         if self.native_tool_calling {
             if tool_call_truncated && !self.tool_calls.is_empty() {
                 // Spec 0065 §3, konservative Multi-Tool-Regel: die GANZE
@@ -1271,9 +1304,7 @@ impl OpenAiStreamState {
                     &call.arguments,
                 )));
             }
-            if let Some(event) = self.take_usage_event() {
-                events.push(event);
-            }
+            events.extend(self.take_usage_events());
             events.push(RawEvent::Public(if finish_reason_is_length {
                 AiEvent::TextTruncated
             } else {
@@ -1301,9 +1332,7 @@ impl OpenAiStreamState {
             if let Some(action) = result.action {
                 events.push(RawEvent::Public(AiEvent::ActionProposed(action)));
             }
-            if let Some(event) = self.take_usage_event() {
-                events.push(event);
-            }
+            events.extend(self.take_usage_events());
             events.push(RawEvent::Public(if finish_reason_is_length {
                 AiEvent::TextTruncated
             } else {
@@ -1751,10 +1780,9 @@ mod tests {
         assert_eq!(events, vec![RawEvent::RetryWithHigherMaxTokens]);
     }
 
-    /// T5 (Spec 0080, Wächter): `content_filter` (kein `length`) bleibt beim
-    /// bisherigen Verhalten (`Done`), auch ohne jeden Inhalt — der neue
-    /// Retry aus A1 greift nur für `finish_reason: "length"`. Grün auch mit
-    /// dem alten Code (Spec 0080 §5).
+    /// T5 (Spec 0080, Wächter): `content_filter` (kein `length`) löst auch
+    /// ohne jeden Inhalt keinen Retry aus (A1 greift nur für `length`).
+    /// Seit Issue #647 endet es als `Refused` statt `Done`.
     #[tokio::test]
     async fn test_content_filter_finish_reason_with_no_content_does_not_trigger_retry() {
         let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
@@ -1773,7 +1801,7 @@ mod tests {
         .collect()
         .await;
 
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Refused)]);
     }
 
     /// T6 (Spec 0080, Wächter): Verbindungsende ohne jedes `finish_reason`,
@@ -1798,6 +1826,39 @@ mod tests {
         .await;
 
         assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+    }
+
+    /// Issue #647: `content_filter` ends as `Refused` — text kept, a pending
+    /// tool call dropped, no retry.
+    #[tokio::test]
+    async fn test_content_filter_is_refused_without_retry_or_tool_call() {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> = Box::pin(
+            futures::stream::iter(vec![
+                frame(r#"{"choices":[{"delta":{"content":"No."}}]}"#),
+                frame(
+                    r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"suggest_command","arguments":"{\"command\":\"ls\"}"}}]}}]}"#,
+                ),
+                frame(r#"{"choices":[{"delta":{},"finish_reason":"content_filter"}]}"#),
+                frame("[DONE]"),
+            ]),
+        );
+        let events: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .collect()
+        .await;
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::TextDelta("No.".to_string())),
+                RawEvent::Public(AiEvent::Refused),
+            ]
+        );
     }
 
     /// T7 (Spec 0080, Wächter): `length` mit Inhalt aus reinem Leerraum —

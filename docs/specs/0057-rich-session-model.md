@@ -159,7 +159,7 @@ korrigiert — das Verhältnis liegt nie unter 1,0 (die Korrektur senkt die
 Kompaktiert wird, sobald die korrigierte Schätzung 75 % des Fensters
 erreicht. War die zuletzt gemeldete echte Größe bereits über 75 %,
 kompaktiert die nächste Anfrage in jedem Fall, was auch die Schätzung sagt.
-Ohne Usage-Angabe des Providers gilt die reine Schätzung. Der Zustand liegt
+Das gilt für Anthropic ebenso wie für OpenAI-kompatible Anbieter (Chat Completions, Responses, Ollama), sofern sie Usage melden; die gemeldete Größe ist dabei immer die volle Prompt-Größe (Cache-Anteile werden weder doppelt gezählt noch weggelassen). Ohne Usage-Angabe des Providers gilt die reine Schätzung. Der Zustand liegt
 nur im Speicher der Sitzung.
 
 **Anzeige im Chat.** Nach jeder Antwort zeigt der Chat über dem Eingabefeld

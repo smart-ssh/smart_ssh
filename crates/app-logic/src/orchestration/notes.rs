@@ -34,8 +34,8 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
     push_history, push_history_scoped, reapply_redaction_and_seal_for_send,
-    reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
-    write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
+    wait_for_ai_request_slot, wait_for_rate_limit_budget, write_ledger_entry,
+    PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
 
@@ -661,7 +661,7 @@ async fn request_ai_title(
             | AiEvent::Retrying { .. }
             | AiEvent::InvalidToolCall { .. } => {}
             AiEvent::Done => break,
-            AiEvent::Error(_) => {
+            AiEvent::Error(_) | AiEvent::Refused => {
                 failure = Some(TitleFailure::Error);
                 break;
             }
@@ -860,8 +860,23 @@ pub async fn suggest_note_update_on_disconnect(
         );
         return false;
     }
-    request_context.history =
-        reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
+    // Issue #564: same redaction-and-sealing entry point as chat turns,
+    // compaction and the title request; a sealing failure means no request
+    // and no proposal.
+    match reapply_redaction_and_seal_for_send(
+        request_context.history,
+        session.redactor.as_ref(),
+        &session.chat_content,
+        session.extension_content_key(session_id).await,
+    ) {
+        Ok(history) => request_context.history = history,
+        Err(_) => {
+            tracing::info!(
+                "skipping note-update suggestion on disconnect: sealing the request failed"
+            );
+            return false;
+        }
+    }
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(disconnect_completion_instruction(
@@ -919,7 +934,7 @@ pub async fn suggest_note_update_on_disconnect(
             // Spec 0065, Teil 2: dieser Nebenaufruf zeigt keinen „Weiter"-
             // Hinweis an (kein sichtbarer Chat-Turn) — ein abgeschnittener
             // Vorschlag ist hier gleichbedeutend mit "kein Vorschlag".
-            AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
+            AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated | AiEvent::Refused => break,
             // Issue #610: passive report. The stop conditions above are
             // unchanged: usage that arrives after the loop stopped (e.g.
             // behind `ActionProposed`) is not reported and never awaited.
@@ -1278,6 +1293,8 @@ async fn summarize_note_for_shrink(
                 // eine abgeschnittene Kürzung nicht wie eine absichtliche
                 // aussehen lässt.
                 AiEvent::TextTruncated => return Some((text, true)),
+                // Issue #647: a refused summary is no summary.
+                AiEvent::Refused => return None,
                 AiEvent::Error(err) => {
                     // Spec 0094, A1.7: s. `compaction::generate_rolling_summary`
                     // — ab `warn` nur der Code, der Text auf `debug`.

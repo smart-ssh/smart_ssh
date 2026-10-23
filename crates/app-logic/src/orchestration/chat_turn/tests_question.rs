@@ -52,6 +52,26 @@ fn question_events(emitter: &TestEmitter) -> Vec<serde_json::Value> {
 }
 
 #[tokio::test]
+async fn test_refused_turn_emits_refused_not_empty() {
+    let provider = MockAiProvider::with_rounds(vec![vec![AiEvent::Refused]]);
+    let session = session_with_ai_provider(provider, MockSshTransport::default());
+    let emitter = TestEmitter::default();
+
+    run_turn(&session, &emitter).await;
+
+    let names: Vec<String> = emitter
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
+    assert!(names.contains(&"chat-response-refused".to_string()));
+    assert!(!names.contains(&"chat-response-empty".to_string()));
+    assert!(!names.contains(&"chat-response-truncated".to_string()));
+}
+
+#[tokio::test]
 async fn test_valid_question_emits_one_event_stores_it_and_ends_turn() {
     let provider = MockAiProvider::with_rounds(vec![vec![
         ask("Which fix?", vec![opt("A"), opt("B")], true),

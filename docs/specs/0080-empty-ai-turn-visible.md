@@ -126,3 +126,18 @@ nichts.
   Kontext; dort hilft das Override-Feld (Spec 0065, Abschnitt 4).
 - Die Texte der Hinweise sind fest deutsch, wie der bestehende
   Kürzungs-Hinweis.
+
+## 9. Abgelehnte Anfrage (Issue #647)
+
+- Lehnt das Modell eine Anfrage ausdrücklich ab (Anthropic `stop_reason:
+  refusal`, OpenAI-kompatibel `finish_reason: content_filter`), ist das ein
+  eigenes Ergebnis „abgelehnt" – verschieden von fertig, abgeschnitten und
+  leer.
+- Der Chat zeigt dann einen eigenen Hinweis („Das Modell hat diese Anfrage
+  abgelehnt. Formuliere sie um oder starte einen neuen Chat.", in der
+  Oberflächensprache). Bereits gestreamter Text bleibt sichtbar. Der Hinweis
+  zur leeren Antwort (Abschnitt 3) erscheint für eine abgelehnte Runde nie.
+- Eine abgelehnte Runde löst keinen Retry mit höherem Ausgabelimit aus
+  (Spec 0065 Abschnitt 3); ein in ihr angefangener Kommandovorschlag wird
+  verworfen, nie vorgelegt oder ausgeführt.
+- Das Protokoll enthält Anbieter, Anfrage-ID und Stop-Grund, keinen Inhalt.

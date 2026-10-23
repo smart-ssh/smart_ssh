@@ -1189,6 +1189,12 @@ data: [DONE]\n\n";
     );
     assert_eq!(events.last(), Some(&AiEvent::Done));
     assert!(matches!(events[events.len() - 2], AiEvent::RequestUsage(_)));
+    // Issue #617: cached tokens (64) are inside the 100 prompt tokens, so the
+    // real input size is 100 — not 164 and not 36.
+    assert!(matches!(
+        events[events.len() - 3],
+        AiEvent::Usage { input_tokens: 100 }
+    ));
 }
 
 #[tokio::test]
