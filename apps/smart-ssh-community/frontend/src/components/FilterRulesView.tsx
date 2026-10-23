@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
@@ -26,6 +26,7 @@ import type {
 } from "../types";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 import { Button, FIELD_CONTROL_CLASS } from "./ui";
+import { DialogFrame } from "./ui/DialogFrame";
 
 type ScopeKind = "global" | "server" | "tag";
 
@@ -292,6 +293,7 @@ interface RuleFormProps {
 function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps) {
   const { t } = useTranslation();
   const isCreate = rule === null;
+  const patternTypeRef = useRef<HTMLSelectElement>(null);
   const [patternType, setPatternType] = useState<PatternType>(rule?.patternType ?? "glob");
   const [patternValue, setPatternValue] = useState(rule?.patternValue ?? "");
   const [action, setAction] = useState<RuleAction>(rule?.action ?? "Confirm");
@@ -354,18 +356,28 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
     patternType === "glob" ? "ls *" : patternType === "regex" ? "^systemctl\\s" : "ls -la";
 
   return (
-    <form
+    <DialogFrame
+      layer="app"
+      size="lg"
+      title={isCreate ? t("filterRules.newRule") : t("filterRules.editRule")}
+      onClose={onCancel}
       onSubmit={handleSubmit}
-      className="space-y-3 rounded border border-slate-700 bg-slate-800/40 p-4"
+      initialFocusRef={patternTypeRef}
+      actions={
+        <>
+          <Button className="narrow:min-h-11" onClick={onCancel}>{t("common.cancel")}</Button>
+          <Button type="submit" variant="primary" className="narrow:min-h-11" disabled={saving}>
+            {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
+          </Button>
+        </>
+      }
     >
-      <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-100">
-        {isCreate ? t("filterRules.newRule") : t("filterRules.editRule")}
-      </h3>
-
+      <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
         <label className="block text-sm text-slate-300">
           {t("filterRules.patternType")}
           <select
+            ref={patternTypeRef}
             value={patternType}
             onChange={(e) => setPatternType(e.target.value as PatternType)}
             className={`mt-1 w-full ${FIELD_CONTROL_CLASS}`}
@@ -483,13 +495,8 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <Button className="narrow:min-h-11" onClick={onCancel}>{t("common.cancel")}</Button>
-        <Button type="submit" variant="primary" className="narrow:min-h-11" disabled={saving}>
-          {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-        </Button>
       </div>
-    </form>
+    </DialogFrame>
   );
 }
 

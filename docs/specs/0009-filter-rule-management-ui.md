@@ -65,7 +65,14 @@ sich nur, dass Nutzerregeln greifen.
   Nutzer weiß, dass sie immer greifen.
 - **Regel-Formular:** Muster-Typ mit Eingabefeld, Aktion, Geltungsbereich
   (Global, ein Server aus der Serverliste oder ein Tag; ein neues, noch nicht
-  verwendetes Tag lässt sich eintippen) und Priorität als Zahlenfeld.
+  verwendetes Tag lässt sich eintippen) und Priorität als Zahlenfeld. Das
+  Formular öffnet sich als modaler Dialog über der Regelliste: „+ Regel"
+  öffnet „Regel hinzufügen", „Bearbeiten" öffnet „Regel bearbeiten" mit den
+  Werten der Regel. Der Fokus liegt zu Beginn auf dem ersten Feld und bleibt
+  im Dialog. Speichern schließt den Dialog und lädt die Liste neu;
+  Validierungsfehler (auch ein ungültiges Muster, Spec 0077) erscheinen im
+  Dialog, der dabei offen bleibt. Escape und „Abbrechen" schließen ohne zu
+  speichern; der Fokus kehrt zur auslösenden Schaltfläche zurück.
 - **Testen-Panel:** Eingabefeld für ein Beispielkommando, optional ein
   simulierter Server und simulierte Tags (Tags eines gewählten Servers werden
   übernommen). „Testen" zeigt die Gesamtentscheidung und bei verketteten
