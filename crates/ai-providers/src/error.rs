@@ -164,6 +164,11 @@ impl ProviderErrorInfo {
             || (self.matches("invalid_request_error") && message.contains("usage limits"))
     }
 
+    /// A 429 with this body is a quota problem, never a retry case.
+    pub(crate) fn is_quota_exhausted(&self) -> bool {
+        self.is_billing() || self.is_usage_limit()
+    }
+
     /// The date text after "regain access on", verbatim up to the end of
     /// the sentence (e.g. `2026-11-01 at 00:00 UTC`); `None` if absent.
     fn regain_access_date(&self) -> Option<String> {
