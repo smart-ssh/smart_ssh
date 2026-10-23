@@ -152,6 +152,8 @@
     "confirmDelete": "Végleges törlés"
   },
   "serverForm": {
+    "connect": "Csatlakozás",
+    "connectSaveFirst": "Először mentse a módosításokat",
     "hostKeys": {
       "title": "Gazdakulcsok",
       "none": "Még nincs tárolt gazdakulcs. Az első csatlakozáskor kerül mentésre."

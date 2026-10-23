@@ -152,6 +152,8 @@
     "confirmDelete": "Poista pysyvästi"
   },
   "serverForm": {
+    "connect": "Yhdistä",
+    "connectSaveFirst": "Tallenna muutokset ensin",
     "hostKeys": {
       "title": "Isäntäavaimet",
       "none": "Isäntäavainta ei ole vielä tallennettu. Se tallennetaan ensimmäisen yhteyden yhteydessä."

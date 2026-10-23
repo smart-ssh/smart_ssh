@@ -152,6 +152,8 @@
     "confirmDelete": "Smazat trvale"
   },
   "serverForm": {
+    "connect": "Připojit",
+    "connectSaveFirst": "Nejprve uložte změny",
     "hostKeys": {
       "title": "Klíče hostitelů",
       "none": "Zatím není uložen žádný klíč hostitele. Uloží se při prvním připojení."
