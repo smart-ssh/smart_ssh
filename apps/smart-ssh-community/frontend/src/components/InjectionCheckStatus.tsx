@@ -10,9 +10,8 @@ export function InjectionCheckStatus({ check }: { check?: InjectionCheckState })
   if (!check || check.state === "clean") return null;
   if (check.state === "running") {
     return (
-      <p
+      <output
         className="mt-1 flex items-center gap-2 text-xs text-slate-400"
-        role="status"
         data-testid="injection-check-running"
       >
         <span
@@ -20,18 +19,14 @@ export function InjectionCheckStatus({ check }: { check?: InjectionCheckState })
           aria-hidden="true"
         />
         {t("chat.injectionChecking")}
-      </p>
+      </output>
     );
   }
   if (check.state === "unavailable") {
     return (
-      <p
-        className="mt-1 text-xs text-amber-300"
-        role="status"
-        data-testid="injection-check-unavailable"
-      >
+      <output className="mt-1 block text-xs text-amber-300" data-testid="injection-check-unavailable">
         {translateErrorCode(t, "AI_INJECTION_CHECK_UNAVAILABLE", "")}
-      </p>
+      </output>
     );
   }
   return (
