@@ -938,12 +938,15 @@
       "handshake": "SSH 핸드셰이크",
       "hostKeyCheck": "호스트 키 확인",
       "authentication": "인증",
-      "sessionReady": "세션 수립됨"
+      "sessionReady": "세션 수립됨",
+      "dnsSkipped": "IP 주소 – 조회 불필요"
     },
     "status": {
       "ok": "OK",
       "running": "진행 중",
-      "failed": "실패 ({{code}})"
+      "failed": "실패 ({{code}})",
+      "skipped": "건너뜀",
+      "failedReason": "실패: {{reason}}"
     },
     "hostKeyResult": {
       "known": "알려짐",
@@ -966,6 +969,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "부분적으로 수락됨, 추가 인증이 필요합니다",
       "remainingMethods": "서버가 추가로 제공하는 방식: {{methods}} (시도하지 않음)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP 연결 시간 초과",
+      "SSH_TIMEOUT": "시간 초과",
+      "SSH_CONNECTION_REFUSED": "연결 거부됨",
+      "SSH_HOST_NOT_FOUND": "호스트를 찾을 수 없음",
+      "SSH_HOST_UNREACHABLE": "호스트에 연결할 수 없음",
+      "SSH_AUTH_FAILED": "인증 실패"
     }
   },
   "fileBrowser": {

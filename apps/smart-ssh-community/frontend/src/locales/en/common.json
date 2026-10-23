@@ -943,12 +943,15 @@
       "handshake": "SSH handshake",
       "hostKeyCheck": "Host key check",
       "authentication": "Authentication",
-      "sessionReady": "Session established"
+      "sessionReady": "Session established",
+      "dnsSkipped": "IP address – no lookup needed"
     },
     "status": {
       "ok": "OK",
       "running": "in progress",
-      "failed": "failed ({{code}})"
+      "failed": "failed ({{code}})",
+      "skipped": "skipped",
+      "failedReason": "failed: {{reason}}"
     },
     "hostKeyResult": {
       "known": "known",
@@ -971,6 +974,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "partially accepted, further authentication required",
       "remainingMethods": "Server also offers: {{methods}} (not tried)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP connection timed out",
+      "SSH_TIMEOUT": "Timed out",
+      "SSH_CONNECTION_REFUSED": "Connection refused",
+      "SSH_HOST_NOT_FOUND": "Host not found",
+      "SSH_HOST_UNREACHABLE": "Host unreachable",
+      "SSH_AUTH_FAILED": "Authentication failed"
     }
   },
   "fileBrowser": {

@@ -293,7 +293,7 @@ export interface ConnectStepSnapshot {
   hopIndex: number;
   /** `user@host:port` of the hop (Spec 0076 naming). */
   hop: string;
-  status: "running" | "ok" | "failed";
+  status: "running" | "ok" | "skipped" | "failed";
   errorCode: string | null;
   detail: ConnectStepDetail | null;
 }
@@ -776,6 +776,7 @@ export type ConnectStep =
 export type ConnectStepStatus =
   | { state: "running" }
   | { state: "ok" }
+  | { state: "skipped" }
   | { state: "failed"; code: string };
 
 export interface ConnectStepRecord {

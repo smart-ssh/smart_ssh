@@ -948,12 +948,15 @@
       "handshake": "Negociación SSH",
       "hostKeyCheck": "Comprobación de la clave de host",
       "authentication": "Autenticación",
-      "sessionReady": "Sesión establecida"
+      "sessionReady": "Sesión establecida",
+      "dnsSkipped": "Dirección IP: no hace falta resolución"
     },
     "status": {
       "ok": "OK",
       "running": "en curso",
-      "failed": "fallido ({{code}})"
+      "failed": "fallido ({{code}})",
+      "skipped": "omitido",
+      "failedReason": "falló: {{reason}}"
     },
     "hostKeyResult": {
       "known": "conocida",
@@ -976,6 +979,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "aceptada parcialmente, se requiere más autenticación",
       "remainingMethods": "El servidor también ofrece: {{methods}} (no probados)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Se agotó el tiempo de la conexión TCP",
+      "SSH_TIMEOUT": "Tiempo agotado",
+      "SSH_CONNECTION_REFUSED": "Conexión rechazada",
+      "SSH_HOST_NOT_FOUND": "Host no encontrado",
+      "SSH_HOST_UNREACHABLE": "Host inaccesible",
+      "SSH_AUTH_FAILED": "Falló la autenticación"
     }
   },
   "fileBrowser": {

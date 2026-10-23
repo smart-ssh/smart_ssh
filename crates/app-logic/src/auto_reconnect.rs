@@ -57,6 +57,7 @@ pub fn is_retryable_code(code: Option<&str>) -> bool {
         Some(
             "SSH_CONNECTION_FAILED"
                 | "SSH_TIMEOUT"
+                | "SSH_TCP_TIMEOUT"
                 | "SSH_CONNECTION_REFUSED"
                 | "SSH_HOST_NOT_FOUND"
                 | "SSH_HOST_UNREACHABLE"
@@ -323,6 +324,8 @@ mod tests {
     fn test_only_network_codes_are_retryable() {
         assert!(is_retryable_code(Some("SSH_HOST_UNREACHABLE")));
         assert!(is_retryable_code(Some("SSH_CONNECTION_REFUSED")));
+        assert!(is_retryable_code(Some("SSH_TIMEOUT")));
+        assert!(is_retryable_code(Some("SSH_TCP_TIMEOUT")));
         for code in [
             "SSH_AUTH_FAILED",
             "SSH_HOST_KEY_NOT_TRUSTED",

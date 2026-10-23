@@ -32,7 +32,7 @@ export function completionAnnouncement(t: T, steps: ConnectStepSnapshot[]): stri
   if (!last) return "";
   return t("connectTab.announce", {
     step: t(`connectLog.step.${last.kind}`),
-    result: t(last.status === "ok" ? "connectTab.resultOk" : "connectTab.resultFailed"),
+    result: t(last.status === "ok" || last.status === "skipped" ? "connectTab.resultOk" : "connectTab.resultFailed"),
   });
 }
 
@@ -63,13 +63,19 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
               <span className="inline-flex w-4 shrink-0 justify-center text-slate-300" aria-hidden="true">
                 {step.status === "running" ? (
                   <Spinner className="h-3 w-3" />
+                ) : step.status === "skipped" ? (
+                  "–"
                 ) : step.status === "ok" ? (
                   <span className="text-emerald-400">✓</span>
                 ) : (
                   "✗"
                 )}
               </span>
-              <span className="font-medium">{t(`connectLog.step.${step.kind}`)}</span>
+              <span className="font-medium">
+                {step.kind === "dnsResolution" && step.status === "skipped"
+                  ? t("connectLog.step.dnsSkipped")
+                  : t(`connectLog.step.${step.kind}`)}
+              </span>
               {multiHop && <span className="text-slate-400">{step.hop}</span>}
               {detail && <span className="break-all text-slate-400">{detail}</span>}
             </li>
