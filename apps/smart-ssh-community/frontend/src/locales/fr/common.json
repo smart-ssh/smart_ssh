@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Paramètres",
+    "backToList": "Rubriques",
     "categories": {
       "aiProvider": "Fournisseur d’IA",
       "displayLanguage": "Affichage et langue",

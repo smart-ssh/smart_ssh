@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Instellingen",
+    "backToList": "Onderdelen",
     "categories": {
       "aiProvider": "AI-provider",
       "displayLanguage": "Weergave en taal",

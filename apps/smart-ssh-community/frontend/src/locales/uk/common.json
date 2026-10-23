@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Параметри",
+    "backToList": "Розділи",
     "categories": {
       "aiProvider": "ШІ-провайдер",
       "displayLanguage": "Вигляд і мова",

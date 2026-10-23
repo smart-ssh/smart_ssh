@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Indstillinger",
+    "backToList": "Afsnit",
     "categories": {
       "aiProvider": "AI-udbyder",
       "displayLanguage": "Visning og sprog",

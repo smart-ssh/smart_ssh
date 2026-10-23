@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ustawienia",
+    "backToList": "Sekcje",
     "categories": {
       "aiProvider": "Dostawca AI",
       "displayLanguage": "Wygląd i język",

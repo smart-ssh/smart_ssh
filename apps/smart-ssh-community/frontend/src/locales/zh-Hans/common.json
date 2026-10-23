@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "设置",
+    "backToList": "分区",
     "categories": {
       "aiProvider": "AI 提供商",
       "displayLanguage": "显示与语言",

@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Innstillinger",
+    "backToList": "Seksjoner",
     "categories": {
       "aiProvider": "AI-leverandør",
       "displayLanguage": "Visning og språk",

@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Pengaturan",
+    "backToList": "Bagian",
     "categories": {
       "aiProvider": "Penyedia AI",
       "displayLanguage": "Tampilan & Bahasa",

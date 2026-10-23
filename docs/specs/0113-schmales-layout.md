@@ -70,6 +70,12 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 - Formulare haben eine Spalte, Beschriftungen stehen über den Feldern, Hinweise brechen um. Im Server-Formular bleibt „Speichern“ am unteren Rand sichtbar; Löschen steht am Ende des Formulars.
 - Notizen, Import und Export passen in die Breite. Abschnitte und Ansichten von Erweiterungen erhalten die volle Breite (siehe Abschnitt 6).
 
+## 5d. Einstellungen und Filterregeln
+
+- Die Einstellungen öffnen sich als Vollbild. Zuerst erscheint die Liste der Bereiche (eingebaute und von Erweiterungen, in der üblichen Reihenfolge); die Auswahl zeigt den Bereich in voller Breite mit einer Schaltfläche „Zurück“ zur Liste. „Schließen“ ist in beiden Ansichten sichtbar; Escape schließt die Einstellungen. Beim Zurückgehen steht der Fokus wieder auf dem zuletzt gewählten Bereich.
+- Alle Bereiche passen in 390 px: zweispaltige Anordnungen werden einspaltig, breite Eingaben und Tabellen brechen um oder scrollen in ihrem eigenen Rahmen. Der Funktionsumfang der Bereiche ist unverändert; Erweiterungsbereiche erhalten die volle Breite.
+- Die Filterregeln zeigen jede Regel als Karte: Aktion, darunter das vollständige, umgebrochene Muster, darunter Priorität und die Schaltflächen (Priorität erhöhen/senken, Bearbeiten, Löschen; mindestens 44 px hoch). Das Formular zum Anlegen und Bearbeiten ist einspaltig. Der Bereich „Regeln testen“ mit der Erklärung des Ergebnisses bleibt voll nutzbar. Regelprüfung und -speicherung ändern sich nicht.
+
 ## 6. Erweiterungsbereiche
 
 - Inhalte, die eine Edition in Erweiterungsbereichen einsetzt, haben keine feste Breite. Sie passen sich der Fensterbreite an und brechen um oder kürzen, statt die Seite zu verbreitern.
