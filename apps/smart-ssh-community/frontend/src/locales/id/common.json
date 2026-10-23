@@ -387,7 +387,8 @@
       "verdictAuto": "berjalan otomatis lain kali",
       "verdictAsk": "tetap akan bertanya: {{reasons}}",
       "notice": "Aturan dibuat. Perintah ini tetap akan bertanya lain kali: {{reasons}}",
-      "reasonOther": "pemeriksaan keamanan lain"
+      "reasonOther": "pemeriksaan keamanan lain",
+      "loadFailed": "Cakupan aturan tidak dapat dimuat"
     }
   },
   "hostKeyDialog": {
@@ -533,6 +534,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Model ini tidak mendukung pemanggilan alat. Di pengaturan penyedia, hapus centang \"Mendukung pemanggilan alat bawaan\" (cadangan berbasis prompt akan digunakan) atau pilih model dengan dukungan alat.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Layanan AI lokal tidak merespons. Jalankan Ollama (atau server lokal Anda) dan coba lagi.",
     "AI_TIMEOUT": "Penyedia AI terlalu lama merespons. Tunggu sebentar dan kirim lagi; dengan model lokal, periksa apakah mesin sedang sibuk atau modelnya terlalu besar.",
+    "AI_TIMEOUT_NAMED": "Tidak ada jawaban dari {{provider}} selama {{seconds}} dtk – permintaan dibatalkan. Coba lagi sebentar lagi.",
+    "AI_TOTAL_DEADLINE": "{{provider}} tidak selesai dalam {{minutes}} menit – permintaan dibatalkan. Teks yang sudah diterima tetap disimpan.",
     "AI_WEB_RESEARCH_REJECTED": "Penyedia AI menolak riset web untuk akun ini. Matikan “Riset web” untuk penyedia ini di bawah “Penyedia AI” di pengaturan.",
     "AI_ATTACHMENT_UNSUPPORTED": "Model ini tidak dapat membaca gambar atau PDF yang dilampirkan. Pilih model yang bisa atau hapus lampirannya.",
     "AI_NO_ACTIVE_PROVIDER": "Belum ada penyedia AI aktif. Tambahkan di Pengaturan → Penyedia AI dan jadikan aktif.",
@@ -1088,6 +1091,7 @@
     "tryAgain": "Coba lagi",
     "errorDetails": "Detail",
     "aiRetrying": "Penyedia AI kelebihan beban – mencoba lagi dalam {{seconds}} dtk (percobaan {{attempt}} dari {{max}})",
+    "aiWaiting": "Menunggu jawaban dari {{provider}} … {{seconds}} dtk",
     "noActiveProvider": "Belum ada penyedia AI aktif yang dikonfigurasi. Silakan siapkan di pengaturan terlebih dahulu.",
     "inputPlaceholder": "Ajukan pertanyaan atau jelaskan perintah …",
     "send": "Kirim",

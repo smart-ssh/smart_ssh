@@ -387,7 +387,8 @@
       "verdictAuto": "verrà eseguito automaticamente la prossima volta",
       "verdictAsk": "chiederà ancora: {{reasons}}",
       "notice": "Regola creata. Questo comando chiederà ancora la prossima volta: {{reasons}}",
-      "reasonOther": "un altro controllo di sicurezza"
+      "reasonOther": "un altro controllo di sicurezza",
+      "loadFailed": "Impossibile caricare la copertura delle regole"
     }
   },
   "hostKeyDialog": {
@@ -533,6 +534,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Questo modello non supporta il tool calling. Nelle impostazioni del provider deselezioni \"Supporta il tool calling nativo\" (verrà usata l'alternativa basata sul prompt) o scelga un modello con supporto agli strumenti.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Il servizio IA locale non risponde. Avvii Ollama (o il suo server locale) e riprovi.",
     "AI_TIMEOUT": "Il provider IA ha impiegato troppo tempo a rispondere. Attenda un momento e invii di nuovo; con un modello locale verifichi se la macchina è occupata o il modello troppo grande.",
+    "AI_TIMEOUT_NAMED": "Nessuna risposta da {{provider}} per {{seconds}} s – richiesta annullata. Riprova tra un attimo.",
+    "AI_TOTAL_DEADLINE": "{{provider}} non ha terminato entro {{minutes}} minuti – richiesta annullata. Il testo ricevuto finora viene mantenuto.",
     "AI_WEB_RESEARCH_REJECTED": "Il provider IA rifiuta la ricerca web per questo account. Disattivi \"Ricerca web\" per questo provider in \"Provider IA\" nelle impostazioni.",
     "AI_ATTACHMENT_UNSUPPORTED": "Questo modello non può leggere l’immagine o il PDF allegato. Scelga un modello che possa farlo o rimuova l’allegato.",
     "AI_NO_ACTIVE_PROVIDER": "Nessun provider IA attivo. Ne aggiunga uno in Impostazioni → Provider IA e lo imposti come attivo.",
@@ -1102,6 +1105,7 @@
     "tryAgain": "Riprova",
     "errorDetails": "Dettagli",
     "aiRetrying": "Il provider IA è sovraccarico – nuovo tentativo tra {{seconds}} s (tentativo {{attempt}} di {{max}})",
+    "aiWaiting": "In attesa di una risposta da {{provider}} … {{seconds}} s",
     "noActiveProvider": "Nessun provider IA attivo configurato. La preghiamo di configurarne prima uno nelle impostazioni.",
     "inputPlaceholder": "Faccia una domanda o descriva un comando …",
     "send": "Invia",

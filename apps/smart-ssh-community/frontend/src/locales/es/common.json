@@ -387,7 +387,8 @@
       "verdictAuto": "se ejecutará automáticamente la próxima vez",
       "verdictAsk": "seguirá preguntando: {{reasons}}",
       "notice": "Regla creada. Este comando seguirá preguntando la próxima vez: {{reasons}}",
-      "reasonOther": "otra comprobación de seguridad"
+      "reasonOther": "otra comprobación de seguridad",
+      "loadFailed": "No se pudo cargar la cobertura de reglas"
     }
   },
   "hostKeyDialog": {
@@ -533,6 +534,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Este modelo no admite llamadas a herramientas. En los ajustes del proveedor, desmarque “Admite llamadas nativas a herramientas” (se usará entonces la alternativa basada en prompt) o elija un modelo compatible.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "El servicio de IA local no responde. Inicie Ollama (o su servidor local) e inténtelo de nuevo.",
     "AI_TIMEOUT": "El proveedor de IA tardó demasiado en responder. Espere un momento y vuelva a enviar; con un modelo local, compruebe si el equipo está ocupado o si el modelo es demasiado grande.",
+    "AI_TIMEOUT_NAMED": "Sin respuesta de {{provider}} durante {{seconds}} s: solicitud cancelada. Inténtalo de nuevo en un momento.",
+    "AI_TOTAL_DEADLINE": "{{provider}} no terminó en {{minutes}} minutos: solicitud cancelada. Se conserva el texto recibido hasta ahora.",
     "AI_WEB_RESEARCH_REJECTED": "El proveedor de IA rechaza la investigación web para esta cuenta. Desactive “Investigación web” para este proveedor en “Proveedor de IA”, dentro de los ajustes.",
     "AI_ATTACHMENT_UNSUPPORTED": "Este modelo no puede leer la imagen o el PDF adjunto. Elija un modelo que pueda hacerlo o quite el adjunto.",
     "AI_NO_ACTIVE_PROVIDER": "Aún no hay ningún proveedor de IA activo. Añada uno en Ajustes → Proveedor de IA y actívelo.",
@@ -1102,6 +1105,7 @@
     "tryAgain": "Reintentar",
     "errorDetails": "Detalles",
     "aiRetrying": "El proveedor de IA está sobrecargado – reintentando en {{seconds}} s (intento {{attempt}} de {{max}})",
+    "aiWaiting": "Esperando respuesta de {{provider}} … {{seconds}} s",
     "noActiveProvider": "No hay ningún proveedor de IA activo configurado. Configure uno primero en los ajustes.",
     "inputPlaceholder": "Haga una pregunta o describa un comando …",
     "send": "Enviar",

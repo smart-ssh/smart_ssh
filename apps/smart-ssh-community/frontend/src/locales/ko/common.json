@@ -387,7 +387,8 @@
       "verdictAuto": "다음부터 자동으로 실행됩니다",
       "verdictAsk": "계속 확인합니다: {{reasons}}",
       "notice": "규칙을 만들었습니다. 이 명령은 다음에도 확인이 필요합니다: {{reasons}}",
-      "reasonOther": "다른 보안 검사"
+      "reasonOther": "다른 보안 검사",
+      "loadFailed": "규칙 적용 범위를 불러올 수 없습니다"
     }
   },
   "hostKeyDialog": {
@@ -533,6 +534,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "이 모델은 도구 호출을 지원하지 않습니다. 제공자 설정에서 \"네이티브 도구 호출 지원\"을 해제하거나(그러면 프롬프트 기반 대체 방식이 사용됩니다) 도구를 지원하는 모델을 선택하십시오.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "로컬 AI 서비스가 응답하지 않습니다. Ollama(또는 로컬 서버)를 시작한 후 다시 시도하십시오.",
     "AI_TIMEOUT": "AI 제공자의 응답이 너무 오래 걸렸습니다. 잠시 기다린 후 다시 보내십시오. 로컬 모델이라면 컴퓨터가 바쁜지, 모델이 너무 큰지 확인하십시오.",
+    "AI_TIMEOUT_NAMED": "{{provider}}에서 {{seconds}}초 동안 응답이 없습니다 – 요청이 취소되었습니다. 잠시 후 다시 시도하세요.",
+    "AI_TOTAL_DEADLINE": "{{provider}}이(가) {{minutes}}분 안에 끝나지 않았습니다 – 요청이 취소되었습니다. 지금까지 받은 텍스트는 유지됩니다.",
     "AI_WEB_RESEARCH_REJECTED": "AI 제공자가 이 계정의 웹 조사를 거부합니다. 설정의 “AI 제공자”에서 이 제공자의 “웹 조사”를 끄십시오.",
     "AI_ATTACHMENT_UNSUPPORTED": "이 모델은 첨부된 이미지나 PDF를 읽을 수 없습니다. 읽을 수 있는 모델을 선택하거나 첨부 파일을 제거하세요.",
     "AI_NO_ACTIVE_PROVIDER": "아직 활성 AI 제공자가 없습니다. 설정 → AI 제공자에서 추가하고 활성으로 설정하십시오.",
@@ -1088,6 +1091,7 @@
     "tryAgain": "다시 시도",
     "errorDetails": "상세 정보",
     "aiRetrying": "AI 제공업체가 과부하 상태입니다 – {{seconds}}초 후 재시도합니다 ({{attempt}}/{{max}}번째 시도)",
+    "aiWaiting": "{{provider}}의 응답을 기다리는 중 … {{seconds}}초",
     "noActiveProvider": "활성 AI 제공자가 설정되지 않았습니다. 먼저 설정에서 지정하십시오.",
     "inputPlaceholder": "질문하거나 명령을 설명하십시오 …",
     "send": "보내기",
