@@ -542,6 +542,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI-leverantören rapporterade ett fel (t.ex. underhåll eller överbelastning). Försök igen senare; om det består, kontrollera leverantörsinställningarna.",
     "AI_PROVIDER_OVERLOADED": "AI-leverantören är överbelastad just nu. Försök igen om en stund.",
     "AI_PROVIDER_BILLING": "AI-leverantörens konto har inget kredit kvar. Kontrollera faktureringen i leverantörens konsol.",
+    "AI_PROVIDER_USAGE_LIMIT": "Användningsgränsen hos leverantören är nådd. Höj gränsen i leverantörens konsol eller välj en annan leverantör.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Användningsgränsen hos leverantören är nådd. Åtkomsten återkommer {{date}}. Höj gränsen i leverantörens konsol eller välj en annan leverantör.",
     "AI_PROVIDER_REJECTED_REQUEST": "AI-leverantören avvisade begäran.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var för långt för ett komplett kommando",
     "AI_MODEL_NOT_FOUND": "AI-leverantören känner inte till modellen. Kontrollera modellnamnet i Inställningar (\"Läs in modeller\" visar de tillgängliga); för Ollama, hämta den först med `ollama pull <name>`.",

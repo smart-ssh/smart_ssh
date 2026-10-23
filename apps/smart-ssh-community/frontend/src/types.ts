@@ -511,6 +511,8 @@ export interface ChatErrorEvent {
   providerErrorType?: string | null;
   httpStatus?: number | null;
   providerMessage?: string | null;
+  /** Issue #631 — when access returns after a provider usage limit. */
+  accessReturns?: string | null;
 }
 
 /** Issue #600 — the AI provider is overloaded; the request is repeated

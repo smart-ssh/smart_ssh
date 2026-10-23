@@ -542,6 +542,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Furnizorul de IA a raportat o eroare (de ex. mentenanță sau suprasarcină). Încercați mai târziu; dacă persistă, verificați setările furnizorului.",
     "AI_PROVIDER_OVERLOADED": "Furnizorul de IA este supraîncărcat chiar acum. Încercați din nou într-un moment.",
     "AI_PROVIDER_BILLING": "Contul furnizorului de IA nu mai are credit. Verificați facturarea în consola furnizorului.",
+    "AI_PROVIDER_USAGE_LIMIT": "Limita de utilizare la furnizor a fost atinsă. Măriți limita în consola furnizorului sau alegeți alt furnizor.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Limita de utilizare la furnizor a fost atinsă. Accesul revine la {{date}}. Măriți limita în consola furnizorului sau alegeți alt furnizor.",
     "AI_PROVIDER_REJECTED_REQUEST": "Furnizorul de IA a respins cererea.",
     "AI_RESPONSE_TRUNCATED": "Răspunsul IA a fost prea lung pentru o comandă completă",
     "AI_MODEL_NOT_FOUND": "Furnizorul de IA nu cunoaște acest model. Verificați numele modelului în Setări („Încarcă modelele” le listează pe cele disponibile); pentru Ollama, descărcați-l mai întâi cu `ollama pull <name>`.",

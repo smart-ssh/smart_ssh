@@ -1224,6 +1224,10 @@ pub(crate) fn ai_error_details(
 ) -> crate::events::ChatErrorDetails {
     let (provider_error_type, raw_message): (Option<String>, Option<&str>) = match err {
         AiError::Overloaded { .. } => (Some("overloaded_error".to_string()), None),
+        AiError::UsageLimit { detail: m, .. } => match m.split_once(": ") {
+            Some((kind, rest)) => (Some(kind.to_string()), Some(rest)),
+            None => (None, Some(m.as_str())),
+        },
         AiError::Billing(m) | AiError::RejectedRequest(m) => match m.split_once(": ") {
             Some((kind, rest)) => (Some(kind.to_string()), Some(rest)),
             None => (None, Some(m.as_str())),
@@ -1245,6 +1249,13 @@ pub(crate) fn ai_error_details(
         provider_message: raw_message
             .map(|m| redactor.redact_text(m))
             .filter(|m| !m.trim().is_empty()),
+        access_returns: match err {
+            AiError::UsageLimit { regain_access, .. } => regain_access
+                .as_deref()
+                .map(|d| redactor.redact_text(d))
+                .filter(|d| !d.trim().is_empty()),
+            _ => None,
+        },
     }
 }
 
