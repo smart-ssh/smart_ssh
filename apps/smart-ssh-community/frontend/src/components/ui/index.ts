@@ -9,3 +9,4 @@ export type { FieldControlProps, FieldProps } from "./Field";
 export { Spinner } from "./Spinner";
 export { TabPanel, Tabs, tabId, useTabsIdBase } from "./Tabs";
 export type { TabItem } from "./Tabs";
+export { Tooltip } from "./Tooltip";

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from ".";
+import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Tooltip } from ".";
 
 describe("Button", () => {
   it("defaults to type=button so it never submits a form by accident", () => {
@@ -161,5 +161,24 @@ describe("DialogFrame", () => {
     );
     fireEvent.click(save);
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Tooltip", () => {
+  it("shows on focus and hover, hides on Escape and blur, and describes the trigger", () => {
+    render(<Tooltip content="Why this is risky">Label</Tooltip>);
+    const trigger = screen.getByText("Label");
+    expect(trigger).toHaveAccessibleDescription("Why this is risky");
+    expect(screen.getByRole("tooltip", { hidden: true })).not.toBeVisible();
+    fireEvent.focus(trigger);
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(screen.getByRole("tooltip", { hidden: true })).not.toBeVisible();
+    fireEvent.mouseEnter(trigger);
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    fireEvent.mouseLeave(trigger);
+    fireEvent.focus(trigger);
+    fireEvent.blur(trigger);
+    expect(screen.getByRole("tooltip", { hidden: true })).not.toBeVisible();
   });
 });
