@@ -195,7 +195,7 @@ export type ChatItem =
       code: string | null;
       /** Issue #600 — provider details (backend-redacted) and whether
        * "Try again" is offered. */
-      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null };
+      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null; accessReturns?: string | null };
       retryable?: boolean;
     }
   // Issue #596: a rule was created from the confirmation card but the
@@ -771,6 +771,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 providerErrorType: event.providerErrorType,
                 httpStatus: event.httpStatus,
                 providerMessage: event.providerMessage,
+                accessReturns: event.accessReturns,
               },
               retryable,
             },
@@ -1814,7 +1815,7 @@ export function ChatItemView({
   if (item.type === "error") {
     return (
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
-        ⚠ {translateErrorCode(t, item.code, item.message)}
+        ⚠ {translateErrorCode(t, item.code, item.message, { date: item.details?.accessReturns })}
         {(item.details || item.retryable) && (
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
         )}

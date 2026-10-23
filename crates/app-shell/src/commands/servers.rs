@@ -267,9 +267,11 @@ pub async fn convert_identity_file_to_keychain(
 /// `app_logic::test_connection::test_connection`.
 #[tauri::command]
 pub async fn test_connection(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     input: ServerInput,
     existing_server_id: Option<ServerId>,
+    attempt_id: String,
 ) -> CommandResult<TestConnectionReport> {
     if existing_server_id.is_some_and(app_logic::dto::is_local) {
         // Spec 0032, Abschnitt 5: kein Verbindungstest-Button für den
@@ -277,7 +279,14 @@ pub async fn test_connection(
         // werden könnte).
         return Err("Für den lokalen Pseudo-Server gibt es keinen Verbindungstest".into());
     }
-    app_logic::test_connection::test_connection(
+    // Issue #633: live `connect-progress` events and `cancel_connect` for
+    // this attempt id.
+    let progress = app_logic::test_connection::TestProgress {
+        guard: state.connect_attempts.register(&attempt_id),
+        attempt_id,
+        emitter: std::sync::Arc::new(crate::event_emitter::TauriEventEmitter(app)),
+    };
+    app_logic::test_connection::test_connection_tracked(
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         state.key_file_reader.as_ref(),
@@ -285,6 +294,7 @@ pub async fn test_connection(
         &app_logic::test_connection::RealConnector,
         input,
         existing_server_id,
+        &progress,
     )
     .await
 }

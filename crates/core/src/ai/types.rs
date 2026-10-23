@@ -1011,6 +1011,14 @@ pub enum AiError {
     /// "credit balance is too low", OpenAI `insufficient_quota`, HTTP 402).
     /// Carries the provider's error type and message. Never retried.
     Billing(String),
+    /// Issue #631: a spending/usage limit configured at the provider was
+    /// reached (Anthropic "workspace API usage limits"). `regain_access` is
+    /// the provider's "regain access on <date>" text, if it sent one. Never
+    /// retried.
+    UsageLimit {
+        detail: String,
+        regain_access: Option<String>,
+    },
     /// Issue #599: the provider rejected the request as invalid
     /// (`invalid_request_error` that is neither billing nor a too-large
     /// context). Carries the provider's error type and message.
@@ -1093,6 +1101,9 @@ impl fmt::Display for AiError {
             },
             AiError::Overloaded { .. } => write!(f, "KI-Provider ist überlastet"),
             AiError::Billing(msg) => write!(f, "Kein Guthaben beim KI-Provider: {msg}"),
+            AiError::UsageLimit { detail, .. } => {
+                write!(f, "Nutzungslimit beim KI-Provider erreicht: {detail}")
+            }
             AiError::RejectedRequest(msg) => {
                 write!(f, "Der KI-Provider hat die Anfrage abgelehnt: {msg}")
             }
@@ -1123,6 +1134,7 @@ impl AiError {
             AiError::InputUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
             AiError::Overloaded { .. } => "AI_PROVIDER_OVERLOADED",
             AiError::Billing(_) => "AI_PROVIDER_BILLING",
+            AiError::UsageLimit { .. } => "AI_PROVIDER_USAGE_LIMIT",
             AiError::RejectedRequest(_) => "AI_PROVIDER_REJECTED_REQUEST",
         }
     }
@@ -1154,6 +1166,10 @@ mod ai_error_code_tests {
             AiError::InputUnsupported(MediaClass::Image),
             AiError::Overloaded { retry_after: None },
             AiError::Billing("x".to_string()),
+            AiError::UsageLimit {
+                detail: "x".to_string(),
+                regain_access: None,
+            },
             AiError::RejectedRequest("x".to_string()),
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();
