@@ -1,5 +1,5 @@
-import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+=======
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
@@ -71,6 +71,7 @@ import { useDragResize } from "../useDragResize";
 import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { useIsNarrow } from "../hooks/useIsNarrow";
+import { useMenuPlacement } from "../hooks/useMenuPlacement";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
@@ -310,6 +311,12 @@ export function FileBrowserPanel({
     return () => document.removeEventListener("keydown", onKey);
   }, [elevationMenuOpen, otherUserOpen]);
   const elevationGroupRef = useRef<HTMLFieldSetElement>(null);
+  // Issue #627: the elevation menu and the target-user form stay inside the window.
+  const elevationMenuRef = useRef<HTMLDivElement>(null);
+  const otherUserFormRef = useRef<HTMLFormElement>(null);
+  const getElevationAnchor = useCallback(() => elevationGroupRef.current, []);
+  const elevationMenuStyle = useMenuPlacement(elevationMenuRef, getElevationAnchor, elevationMenuOpen, { gap: 4 });
+  const otherUserFormStyle = useMenuPlacement(otherUserFormRef, getElevationAnchor, otherUserOpen, { gap: 4 });
   // Issue #569: a click outside the elevation group closes the menu and the
   // target user form. Clicks inside (arrow button, menu, form) are ignored, so
   // the arrow button's own toggle is not undone.
@@ -1369,12 +1376,12 @@ export function FileBrowserPanel({
       .catch((err) => notifyFailed("fileToasts.chmodFailed", target.name, err));
   };
 
-  const renderEntryMenu = (entry: RemoteEntryDto, className: string, style?: CSSProperties) => (
+  const renderEntryMenu = (entry: RemoteEntryDto, className: string, point?: { x: number; y: number }) => (
     <FileEntryMenu
       entry={entry}
       narrow={narrow}
       className={className}
-      style={style}
+      point={point}
       onOpenLocally={handleOpenLocally}
       onDownloadDefault={handleDownloadDefault}
       onDownloadChoose={handleDownloadChoose}
@@ -1398,7 +1405,9 @@ export function FileBrowserPanel({
 
   const otherUserForm = otherUserOpen && (
               <form
-                className="absolute left-2 top-full z-20 mt-1 flex w-64 flex-col gap-1.5 rounded border border-slate-600 bg-slate-800 p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:bottom-0 narrow:left-0 narrow:top-auto narrow:mt-0 narrow:w-full narrow:rounded-b-none narrow:p-3"
+                ref={otherUserFormRef}
+                style={otherUserFormStyle}
+                className="fixed z-20 flex w-64 flex-col gap-1.5 rounded border border-slate-600 bg-slate-800 p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:bottom-0 narrow:left-0 narrow:top-auto narrow:mt-0 narrow:w-full narrow:rounded-b-none narrow:p-3"
                 onSubmit={(e) => {
                   e.preventDefault();
                   const user = otherUserDraft.trim();
@@ -1661,7 +1670,9 @@ export function FileBrowserPanel({
             {elevationMenuOpen && (
               <div
                 role="menu"
-                className="absolute left-2 top-full z-20 mt-1 rounded border border-slate-600 bg-slate-800 p-1 shadow-lg"
+                ref={elevationMenuRef}
+                style={elevationMenuStyle}
+                className="fixed z-20 rounded border border-slate-600 bg-slate-800 p-1 shadow-lg"
               >
                 <button
                   type="button"
@@ -2087,7 +2098,7 @@ export function FileBrowserPanel({
                       ⋮
                     </button>
                     {openMenu?.anchor === "row" && openMenu.entry.path === entry.path &&
-                      renderEntryMenu(entry, "absolute right-2 top-full z-10")}
+                      renderEntryMenu(entry, "fixed z-10")}
                   </td>
                 </tr>
               ))}
@@ -2109,7 +2120,7 @@ export function FileBrowserPanel({
           `transform`/`filter`/`perspective` setzt — hier nicht der Fall. */}
       {openMenu &&
         openMenu.anchor !== "row" &&
-        renderEntryMenu(openMenu.entry, "fixed z-20", { left: openMenu.anchor.x, top: openMenu.anchor.y })}
+        renderEntryMenu(openMenu.entry, "fixed z-20", openMenu.anchor)}
 
       {dirMenu && (
         <DirectoryMenu
@@ -2505,10 +2516,15 @@ export function FileBrowserPanel({
 }
 
 /** Focuses the ⋮ button of the entry with this path (no-op for the context menu). */
-function focusMenuTrigger(path: string): void {
+function findMenuTrigger(path: string): HTMLElement | null {
   for (const el of document.querySelectorAll<HTMLElement>("[data-menu-trigger]")) {
-    if (el.dataset.menuTrigger === path) el.focus();
+    if (el.dataset.menuTrigger === path) return el;
   }
+  return null;
+}
+
+function focusMenuTrigger(path: string): void {
+  findMenuTrigger(path)?.focus();
 }
 
 /** Spec 0054, Teil 1: die EINE Aktionsliste, die sowohl vom Drei-Punkte-
@@ -2523,7 +2539,7 @@ function FileEntryMenu({
   entry,
   narrow,
   className,
-  style,
+  point,
   onOpenLocally,
   onDownloadDefault,
   onDownloadChoose,
@@ -2541,7 +2557,8 @@ function FileEntryMenu({
   /** Issue #584: render as a bottom sheet across the viewport width. */
   narrow: boolean;
   className: string;
-  style?: CSSProperties;
+  /** Context menu: opens at this viewport point; otherwise anchored to the ⋮ button. */
+  point?: { x: number; y: number };
   onOpenLocally: (entry: RemoteEntryDto) => void;
   onDownloadDefault: (entry: RemoteEntryDto) => void;
   onDownloadChoose: (entry: RemoteEntryDto) => void;
@@ -2556,6 +2573,13 @@ function FileEntryMenu({
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
   const { t } = useTranslation();
+  // Issue #627: always fully inside the window (flips/shifts at the edges).
+  const menuRef = useRef<HTMLDivElement>(null);
+  const getAnchor = useCallback(
+    () => point ?? findMenuTrigger(entry.path),
+    [point?.x, point?.y, entry.path], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const style = useMenuPlacement(menuRef, getAnchor, true, { align: point ? "start" : "end", gap: point ? 0 : 4 });
   // The menu unmounts when an action runs. Focus the ⋮ button first, so a
   // dialog opened by the action remembers it and gives focus back on close.
   const act = (fn: () => void) => () => {
@@ -2565,6 +2589,7 @@ function FileEntryMenu({
   const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400`;
   return (
     <div
+      ref={menuRef}
       className={
         narrow
           ? "fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg"
@@ -2969,15 +2994,20 @@ function DirectoryMenu({
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
+  // Issue #627: always fully inside the window (flips/shifts at the edges).
+  const menuRef = useRef<HTMLFieldSetElement>(null);
+  const getAnchor = useCallback(() => ({ x, y }), [x, y]);
+  const placed = useMenuPlacement(menuRef, getAnchor, true);
   const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400`;
   return (
     <fieldset
+      ref={menuRef}
       className={
         narrow
           ? "fixed inset-x-0 bottom-0 z-30 m-0 min-w-0 rounded-t border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
           : "fixed z-20 m-0 w-52 min-w-0 border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
       }
-      style={narrow ? undefined : { left: x, top: y }}
+      style={narrow ? undefined : placed}
     >
       <legend className="sr-only">{t("fileBrowser.directoryMenuLabel")}</legend>
       <button ref={firstRef} type="button" onClick={onNewFolder} className={itemClass}>
