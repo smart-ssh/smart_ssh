@@ -152,6 +152,8 @@
     "confirmDelete": "Definitief verwijderen"
   },
   "serverForm": {
+    "connect": "Verbinden",
+    "connectSaveFirst": "Sla eerst je wijzigingen op",
     "hostKeys": {
       "title": "Hostsleutels",
       "none": "Nog geen hostsleutel opgeslagen. Deze wordt bij de eerste verbinding opgeslagen."

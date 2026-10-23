@@ -152,6 +152,8 @@
     "confirmDelete": "Xóa vĩnh viễn"
   },
   "serverForm": {
+    "connect": "Kết nối",
+    "connectSaveFirst": "Hãy lưu thay đổi trước",
     "hostKeys": {
       "title": "Khóa máy chủ",
       "none": "Chưa lưu khóa máy chủ nào. Khóa sẽ được lưu ở lần kết nối đầu tiên."

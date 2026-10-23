@@ -152,6 +152,8 @@
     "confirmDelete": "Slett permanent"
   },
   "serverForm": {
+    "connect": "Koble til",
+    "connectSaveFirst": "Lagre endringene først",
     "hostKeys": {
       "title": "Vertsnøkler",
       "none": "Ingen vertsnøkkel er lagret ennå. Den lagres ved første tilkobling."

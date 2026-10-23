@@ -86,6 +86,15 @@ nach dem ersten Speichern hinzu. Der lokale Pseudo-Server (Spec 0032) hat nur
 *Allgemein* (Tags) und *Notizen*. Die Reiter sind per Tastatur bedienbar
 (Pfeiltasten, Pos1/Ende; ein Tab-Stopp für die Leiste).
 
+**Verbinden aus den Einstellungen:** Neben „Speichern" zeigt das Formular eines
+gespeicherten Servers (nicht beim Anlegen) den Knopf „Verbinden". Solange das
+Formular ungespeicherte Änderungen hat, ist er deaktiviert und zeigt den Hinweis
+„Zuerst Änderungen speichern"; nach dem Speichern ist er wieder aktiv. Ein Klick
+wechselt zum Tab dieses Servers, falls einer offen ist (auch ein gerade
+verbindender), sonst läuft derselbe Ablauf wie beim Klick auf den Server in der
+Serverliste (Erststart-Hinweis, Sitzungsauswahl, Verbindungs-Tab); es gibt keinen
+eigenen Verbindungsweg.
+
 **Löschen eines Servers** ist zweistufig (Spec 0046): erst eine Vorschau der
 Auswirkungen, dann das bestätigte Löschen.
 

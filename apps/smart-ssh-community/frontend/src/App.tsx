@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AppHeader } from "./components/AppHeader";
 import { FilterRulesView } from "./components/FilterRulesView";
@@ -78,6 +78,24 @@ function App() {
         setTab("connect");
         setResumeRequest(request);
       }),
+    [findExistingSessionId, switchTo],
+  );
+
+  // Issue #692: "Connect" in a server's settings. An open (or connecting)
+  // tab wins; otherwise the overview runs the same flow as a click on the
+  // server in the list (first-run notice, session picker, connecting tab).
+  const [connectRequest, setConnectRequest] = useState<{ serverId: string } | null>(null);
+  const requestConnect = useCallback(
+    (serverId: string) => {
+      const existing = findExistingSessionId(serverId);
+      if (existing) {
+        switchTo(existing);
+        return;
+      }
+      switchTo(null);
+      setTab("connect");
+      setConnectRequest({ serverId });
+    },
     [findExistingSessionId, switchTo],
   );
 
@@ -256,6 +274,9 @@ function App() {
           connectingServerIds={connectingServerIds}
           resumeRequest={resumeRequest}
           onResumeRequestConsumed={() => setResumeRequest(null)}
+          connectRequest={connectRequest}
+          onConnectRequestConsumed={() => setConnectRequest(null)}
+          onRequestConnect={requestConnect}
           pendingNoteEditSelection={pendingNoteEditSelection}
           onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
@@ -282,6 +303,10 @@ interface MainScreenProps {
   /** Issue #611. */
   resumeRequest: ResumeChatSessionRequest | null;
   onResumeRequestConsumed: () => void;
+  /** Issue #692. */
+  connectRequest: { serverId: string } | null;
+  onConnectRequestConsumed: () => void;
+  onRequestConnect: (serverId: string) => void;
   refreshProviderStatus: () => void;
   /** Issue #548. */
   onStartConnect: (server: { id: string; name: string }, resumeChatSessionId?: string) => void;
@@ -312,6 +337,9 @@ function MainScreen({
   onNoteEditSelectionConsumed,
   resumeRequest,
   onResumeRequestConsumed,
+  connectRequest,
+  onConnectRequestConsumed,
+  onRequestConnect,
   onCreateFirstServer,
   onCreateServerInGroup,
 }: MainScreenProps) {
@@ -390,6 +418,8 @@ function MainScreen({
               onToggleGroup={toggleGroup}
               resumeRequest={resumeRequest}
               onResumeRequestConsumed={onResumeRequestConsumed}
+              connectRequest={connectRequest}
+              onConnectRequestConsumed={onConnectRequestConsumed}
               onCreateFirstServer={onCreateFirstServer}
               onCreateServerInGroup={onCreateServerInGroup}
             />
@@ -399,6 +429,7 @@ function MainScreen({
         <ManagementView
           initialSelection={pendingNoteEditSelection}
           onInitialSelectionConsumed={onNoteEditSelectionConsumed}
+          onConnect={onRequestConnect}
         />
       ) : (
         <FilterRulesView />

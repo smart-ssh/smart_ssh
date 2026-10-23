@@ -152,6 +152,8 @@
     "confirmDelete": "Ta bort permanent"
   },
   "serverForm": {
+    "connect": "Anslut",
+    "connectSaveFirst": "Spara dina ändringar först",
     "hostKeys": {
       "title": "Värdnycklar",
       "none": "Ingen värdnyckel har sparats ännu. Den sparas vid första anslutningen."
