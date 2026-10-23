@@ -446,6 +446,8 @@
     "active": "đang dùng",
     "setActive": "Đặt làm đang dùng",
     "addProvider": "Thêm nhà cung cấp",
+    "editProvider": "Sửa nhà cung cấp",
+    "apiKeyUnchangedPlaceholder": "Không đổi – nhập khóa mới để thay thế",
     "type": "Loại",
     "providerName": "Tên",
     "model": "Mô hình",

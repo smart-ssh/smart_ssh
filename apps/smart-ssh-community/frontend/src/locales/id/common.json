@@ -446,6 +446,8 @@
     "active": "aktif",
     "setActive": "Jadikan Aktif",
     "addProvider": "Tambah Penyedia",
+    "editProvider": "Edit penyedia",
+    "apiKeyUnchangedPlaceholder": "Tidak diubah – masukkan kunci baru untuk menggantinya",
     "type": "Jenis",
     "providerName": "Nama",
     "model": "Model",

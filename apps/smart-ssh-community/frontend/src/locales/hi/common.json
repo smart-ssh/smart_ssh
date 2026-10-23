@@ -446,6 +446,8 @@
     "active": "सक्रिय",
     "setActive": "सक्रिय करें",
     "addProvider": "प्रदाता जोड़ें",
+    "editProvider": "प्रदाता संपादित करें",
+    "apiKeyUnchangedPlaceholder": "अपरिवर्तित – बदलने के लिए नई कुंजी दर्ज करें",
     "type": "प्रकार",
     "providerName": "नाम",
     "model": "मॉडल",

@@ -446,6 +446,8 @@
     "active": "aktywny",
     "setActive": "Ustaw jako aktywny",
     "addProvider": "Dodaj dostawcę",
+    "editProvider": "Edytuj dostawcę",
+    "apiKeyUnchangedPlaceholder": "Bez zmian – wpisz nowy klucz, aby go zastąpić",
     "type": "Typ",
     "providerName": "Nazwa",
     "model": "Model",

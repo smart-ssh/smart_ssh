@@ -67,6 +67,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   const [providers, setProviders] = useState<AiProviderConfigDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<AiProviderConfigDto | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [attestationResults, setAttestationResults] = useState<Record<string, string>>({});
   const [attestationLoading, setAttestationLoading] = useState<Record<string, boolean>>({});
@@ -398,6 +399,9 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                       {t("aiProvider.setActive")}
                     </Button>
                   )}
+                  <Button size="sm" onClick={() => setEditingProvider(provider)}>
+                    {t("common.edit")}
+                  </Button>
                   <Button size="sm" variant="danger" onClick={() => handleDelete(provider.id)} >
                     {t("common.delete")}
                   </Button>
@@ -608,6 +612,22 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
            * Bedingung oben nicht zutrifft): bewusst keine Karte (Spec
            * 0069 §3.B3, "still"). */}
         </section>
+      )}
+
+      {editingProvider && (
+        <AddAiProviderDialog
+          key={editingProvider.id}
+          provider={editingProvider}
+          willActivate={false}
+          onClose={() => setEditingProvider(null)}
+          onAdded={() => undefined}
+          onUpdated={() => {
+            setEditingProvider(null);
+            setError(null);
+            reload();
+            onProvidersChanged();
+          }}
+        />
       )}
 
       {addDialogOpen && (

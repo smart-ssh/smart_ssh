@@ -446,6 +446,8 @@
     "active": "active",
     "setActive": "Set Active",
     "addProvider": "Add Provider",
+    "editProvider": "Edit provider",
+    "apiKeyUnchangedPlaceholder": "Unchanged – enter a new key to replace it",
     "type": "Type",
     "providerName": "Name",
     "model": "Model",

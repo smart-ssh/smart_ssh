@@ -446,6 +446,8 @@
     "active": "aktiv",
     "setActive": "Gör aktiv",
     "addProvider": "Lägg till leverantör",
+    "editProvider": "Redigera leverantör",
+    "apiKeyUnchangedPlaceholder": "Oförändrad – ange en ny nyckel för att ersätta den",
     "type": "Typ",
     "providerName": "Namn",
     "model": "Modell",
