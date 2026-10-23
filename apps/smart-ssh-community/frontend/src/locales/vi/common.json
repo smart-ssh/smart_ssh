@@ -152,6 +152,8 @@
     "confirmDelete": "Xóa vĩnh viễn"
   },
   "serverForm": {
+    "connect": "Kết nối",
+    "connectSaveFirst": "Hãy lưu thay đổi trước",
     "hostKeys": {
       "title": "Khóa máy chủ",
       "none": "Chưa lưu khóa máy chủ nào. Khóa sẽ được lưu ở lần kết nối đầu tiên."
@@ -178,6 +180,9 @@
       "identityFile": "Tệp khóa"
     },
     "password": "Mật khẩu",
+    "passwordOptionalHint": "(không bắt buộc – để trống nếu máy chủ cho phép đăng nhập không cần mật khẩu)",
+    "removeSavedPassword": "Xóa mật khẩu đã lưu",
+    "noPasswordSaved": "Chưa lưu mật khẩu. Ứng dụng thử đăng nhập không mật khẩu trước, sau đó thử với mật khẩu trống.",
     "unchangedHint": "(để trống = giữ nguyên)",
     "privateKeyLabel": "Khóa riêng tư",
     "chooseFile": "Chọn tệp…",
@@ -443,6 +448,8 @@
     "active": "đang dùng",
     "setActive": "Đặt làm đang dùng",
     "addProvider": "Thêm nhà cung cấp",
+    "editProvider": "Sửa nhà cung cấp",
+    "apiKeyUnchangedPlaceholder": "Không đổi – nhập khóa mới để thay thế",
     "type": "Loại",
     "providerName": "Tên",
     "model": "Mô hình",
@@ -933,12 +940,15 @@
       "handshake": "Bắt tay SSH",
       "hostKeyCheck": "Kiểm tra khóa máy chủ",
       "authentication": "Xác thực",
-      "sessionReady": "Đã thiết lập phiên"
+      "sessionReady": "Đã thiết lập phiên",
+      "dnsSkipped": "Địa chỉ IP – không cần phân giải"
     },
     "status": {
       "ok": "OK",
       "running": "đang tiến hành",
-      "failed": "thất bại ({{code}})"
+      "failed": "thất bại ({{code}})",
+      "skipped": "đã bỏ qua",
+      "failedReason": "thất bại: {{reason}}"
     },
     "hostKeyResult": {
       "known": "đã biết",
@@ -946,6 +956,7 @@
       "changed": "đã thay đổi"
     },
     "authMethod": {
+      "none": "none (không xác thực)",
       "password": "Mật khẩu",
       "privateKey": "Khóa riêng tư",
       "agent": "Tác nhân SSH",
@@ -960,6 +971,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "được chấp nhận một phần, cần xác thực thêm",
       "remainingMethods": "Máy chủ còn cung cấp: {{methods}} (chưa thử)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Kết nối TCP đã hết thời gian chờ",
+      "SSH_TIMEOUT": "Hết thời gian chờ",
+      "SSH_CONNECTION_REFUSED": "Kết nối bị từ chối",
+      "SSH_HOST_NOT_FOUND": "Không tìm thấy máy chủ",
+      "SSH_HOST_UNREACHABLE": "Không thể truy cập máy chủ",
+      "SSH_AUTH_FAILED": "Xác thực thất bại"
     }
   },
   "fileBrowser": {

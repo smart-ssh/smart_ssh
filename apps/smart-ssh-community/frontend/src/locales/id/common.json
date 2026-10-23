@@ -152,6 +152,8 @@
     "confirmDelete": "Hapus permanen"
   },
   "serverForm": {
+    "connect": "Hubungkan",
+    "connectSaveFirst": "Simpan perubahan Anda terlebih dahulu",
     "hostKeys": {
       "title": "Kunci host",
       "none": "Belum ada kunci host yang tersimpan. Kunci disimpan pada koneksi pertama."
@@ -178,6 +180,9 @@
       "identityFile": "Berkas Kunci"
     },
     "password": "Kata sandi",
+    "passwordOptionalHint": "(opsional – biarkan kosong jika server mengizinkan login tanpa kata sandi)",
+    "removeSavedPassword": "Hapus kata sandi tersimpan",
+    "noPasswordSaved": "Tidak ada kata sandi tersimpan. Aplikasi mencoba login tanpa kata sandi terlebih dahulu, lalu dengan kata sandi kosong.",
     "unchangedHint": "(kosong = tidak berubah)",
     "privateKeyLabel": "Kunci Privat",
     "chooseFile": "Pilih berkas…",
@@ -443,6 +448,8 @@
     "active": "aktif",
     "setActive": "Jadikan Aktif",
     "addProvider": "Tambah Penyedia",
+    "editProvider": "Edit penyedia",
+    "apiKeyUnchangedPlaceholder": "Tidak diubah – masukkan kunci baru untuk menggantinya",
     "type": "Jenis",
     "providerName": "Nama",
     "model": "Model",
@@ -933,12 +940,15 @@
       "handshake": "Handshake SSH",
       "hostKeyCheck": "Pemeriksaan kunci host",
       "authentication": "Autentikasi",
-      "sessionReady": "Sesi terbentuk"
+      "sessionReady": "Sesi terbentuk",
+      "dnsSkipped": "Alamat IP – tidak perlu pencarian"
     },
     "status": {
       "ok": "OK",
       "running": "sedang berlangsung",
-      "failed": "gagal ({{code}})"
+      "failed": "gagal ({{code}})",
+      "skipped": "dilewati",
+      "failedReason": "gagal: {{reason}}"
     },
     "hostKeyResult": {
       "known": "dikenal",
@@ -946,6 +956,7 @@
       "changed": "berubah"
     },
     "authMethod": {
+      "none": "none (tanpa autentikasi)",
       "password": "Kata sandi",
       "privateKey": "Kunci privat",
       "agent": "Agen SSH",
@@ -960,6 +971,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "diterima sebagian, autentikasi lebih lanjut diperlukan",
       "remainingMethods": "Server juga menawarkan: {{methods}} (tidak dicoba)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Koneksi TCP habis waktu",
+      "SSH_TIMEOUT": "Waktu habis",
+      "SSH_CONNECTION_REFUSED": "Koneksi ditolak",
+      "SSH_HOST_NOT_FOUND": "Host tidak ditemukan",
+      "SSH_HOST_UNREACHABLE": "Host tidak dapat dijangkau",
+      "SSH_AUTH_FAILED": "Autentikasi gagal"
     }
   },
   "fileBrowser": {

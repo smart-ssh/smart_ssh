@@ -152,6 +152,8 @@
     "confirmDelete": "Slet permanent"
   },
   "serverForm": {
+    "connect": "Opret forbindelse",
+    "connectSaveFirst": "Gem først dine ændringer",
     "hostKeys": {
       "title": "Værtsnøgler",
       "none": "Ingen værtsnøgle gemt endnu. Den gemmes ved første forbindelse."
@@ -178,6 +180,9 @@
       "identityFile": "Nøglefil"
     },
     "password": "Adgangskode",
+    "passwordOptionalHint": "(valgfrit – lad feltet stå tomt, hvis serveren tillader login uden adgangskode)",
+    "removeSavedPassword": "Fjern gemt adgangskode",
+    "noPasswordSaved": "Ingen adgangskode gemt. Appen prøver først login uden adgangskode og derefter med en tom adgangskode.",
     "unchangedHint": "(tom = uændret)",
     "privateKeyLabel": "Privat nøgle",
     "chooseFile": "Vælg fil…",
@@ -443,6 +448,8 @@
     "active": "aktiv",
     "setActive": "Gør aktiv",
     "addProvider": "Tilføj udbyder",
+    "editProvider": "Rediger udbyder",
+    "apiKeyUnchangedPlaceholder": "Uændret – indtast en ny nøgle for at erstatte den",
     "type": "Type",
     "providerName": "Navn",
     "model": "Model",
@@ -938,12 +945,15 @@
       "handshake": "SSH-handshake",
       "hostKeyCheck": "Kontrol af værtsnøgle",
       "authentication": "Godkendelse",
-      "sessionReady": "Session oprettet"
+      "sessionReady": "Session oprettet",
+      "dnsSkipped": "IP-adresse – ingen opslag nødvendigt"
     },
     "status": {
       "ok": "OK",
       "running": "i gang",
-      "failed": "mislykkedes ({{code}})"
+      "failed": "mislykkedes ({{code}})",
+      "skipped": "sprunget over",
+      "failedReason": "mislykkedes: {{reason}}"
     },
     "hostKeyResult": {
       "known": "kendt",
@@ -951,6 +961,7 @@
       "changed": "ændret"
     },
     "authMethod": {
+      "none": "none (ingen godkendelse)",
       "password": "Adgangskode",
       "privateKey": "Privat nøgle",
       "agent": "SSH-agent",
@@ -965,6 +976,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvist accepteret, yderligere godkendelse kræves",
       "remainingMethods": "Serveren tilbyder også: {{methods}} (ikke prøvet)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-forbindelsen fik timeout",
+      "SSH_TIMEOUT": "Timeout",
+      "SSH_CONNECTION_REFUSED": "Forbindelsen blev afvist",
+      "SSH_HOST_NOT_FOUND": "Værten blev ikke fundet",
+      "SSH_HOST_UNREACHABLE": "Værten er ikke tilgængelig",
+      "SSH_AUTH_FAILED": "Godkendelse mislykkedes"
     }
   },
   "fileBrowser": {

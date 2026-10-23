@@ -152,6 +152,8 @@
     "confirmDelete": "Ta bort permanent"
   },
   "serverForm": {
+    "connect": "Anslut",
+    "connectSaveFirst": "Spara dina ändringar först",
     "hostKeys": {
       "title": "Värdnycklar",
       "none": "Ingen värdnyckel har sparats ännu. Den sparas vid första anslutningen."
@@ -178,6 +180,9 @@
       "identityFile": "Nyckelfil"
     },
     "password": "Lösenord",
+    "passwordOptionalHint": "(valfritt – lämna tomt om servern tillåter inloggning utan lösenord)",
+    "removeSavedPassword": "Ta bort sparat lösenord",
+    "noPasswordSaved": "Inget lösenord sparat. Appen försöker först logga in utan lösenord och sedan med ett tomt lösenord.",
     "unchangedHint": "(tomt = oförändrat)",
     "privateKeyLabel": "Privat nyckel",
     "chooseFile": "Välj fil…",
@@ -443,6 +448,8 @@
     "active": "aktiv",
     "setActive": "Gör aktiv",
     "addProvider": "Lägg till leverantör",
+    "editProvider": "Redigera leverantör",
+    "apiKeyUnchangedPlaceholder": "Oförändrad – ange en ny nyckel för att ersätta den",
     "type": "Typ",
     "providerName": "Namn",
     "model": "Modell",
@@ -938,12 +945,15 @@
       "handshake": "SSH-handskakning",
       "hostKeyCheck": "Kontroll av värdnyckel",
       "authentication": "Autentisering",
-      "sessionReady": "Session upprättad"
+      "sessionReady": "Session upprättad",
+      "dnsSkipped": "IP-adress – ingen namnuppslagning behövs"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
-      "failed": "misslyckades ({{code}})"
+      "failed": "misslyckades ({{code}})",
+      "skipped": "hoppades över",
+      "failedReason": "misslyckades: {{reason}}"
     },
     "hostKeyResult": {
       "known": "känd",
@@ -951,6 +961,7 @@
       "changed": "ändrad"
     },
     "authMethod": {
+      "none": "none (ingen autentisering)",
       "password": "Lösenord",
       "privateKey": "Privat nyckel",
       "agent": "SSH-agent",
@@ -965,6 +976,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtagen, ytterligare autentisering krävs",
       "remainingMethods": "Servern erbjuder även: {{methods}} (ej försökt)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-anslutningen översteg tidsgränsen",
+      "SSH_TIMEOUT": "Tidsgränsen överskreds",
+      "SSH_CONNECTION_REFUSED": "Anslutningen nekades",
+      "SSH_HOST_NOT_FOUND": "Värden hittades inte",
+      "SSH_HOST_UNREACHABLE": "Värden kan inte nås",
+      "SSH_AUTH_FAILED": "Autentiseringen misslyckades"
     }
   },
   "fileBrowser": {

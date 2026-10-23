@@ -152,6 +152,8 @@
     "confirmDelete": "Endgültig löschen"
   },
   "serverForm": {
+    "connect": "Verbinden",
+    "connectSaveFirst": "Zuerst Änderungen speichern",
     "hostKeys": {
       "title": "Host-Keys",
       "none": "Noch kein Host-Key gespeichert. Er wird bei der ersten Verbindung gespeichert."
@@ -178,6 +180,9 @@
       "identityFile": "Schlüsseldatei"
     },
     "password": "Passwort",
+    "passwordOptionalHint": "(optional – leer lassen, wenn der Server eine Anmeldung ohne Passwort erlaubt)",
+    "removeSavedPassword": "Gespeichertes Passwort entfernen",
+    "noPasswordSaved": "Kein Passwort gespeichert. Die App versucht zuerst die Anmeldung ohne Passwort, dann mit leerem Passwort.",
     "unchangedHint": "(leer = unverändert)",
     "privateKeyLabel": "Private Key",
     "chooseFile": "Datei wählen…",
@@ -443,6 +448,8 @@
     "active": "aktiv",
     "setActive": "Aktiv setzen",
     "addProvider": "Provider hinzufügen",
+    "editProvider": "Provider bearbeiten",
+    "apiKeyUnchangedPlaceholder": "Unverändert – neuen Key eingeben, um ihn zu ersetzen",
     "type": "Typ",
     "providerName": "Name",
     "model": "Modell",
@@ -938,12 +945,15 @@
       "handshake": "SSH-Handshake",
       "hostKeyCheck": "Host-Key-Prüfung",
       "authentication": "Anmeldung",
-      "sessionReady": "Sitzung aufgebaut"
+      "sessionReady": "Sitzung aufgebaut",
+      "dnsSkipped": "IP-Adresse – keine Auflösung nötig"
     },
     "status": {
       "ok": "OK",
       "running": "läuft",
-      "failed": "fehlgeschlagen ({{code}})"
+      "failed": "fehlgeschlagen ({{code}})",
+      "skipped": "übersprungen",
+      "failedReason": "fehlgeschlagen: {{reason}}"
     },
     "hostKeyResult": {
       "known": "bekannt",
@@ -951,6 +961,7 @@
       "changed": "geändert"
     },
     "authMethod": {
+      "none": "none (ohne Authentifizierung)",
       "password": "Passwort",
       "privateKey": "Privater Schlüssel",
       "agent": "SSH-Agent",
@@ -965,6 +976,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "teilweise akzeptiert, weitere Anmeldung nötig",
       "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-Verbindung hat das Zeitlimit überschritten",
+      "SSH_TIMEOUT": "Zeitüberschreitung",
+      "SSH_CONNECTION_REFUSED": "Verbindung abgelehnt",
+      "SSH_HOST_NOT_FOUND": "Host nicht gefunden",
+      "SSH_HOST_UNREACHABLE": "Host nicht erreichbar",
+      "SSH_AUTH_FAILED": "Anmeldung fehlgeschlagen"
     }
   },
   "fileBrowser": {

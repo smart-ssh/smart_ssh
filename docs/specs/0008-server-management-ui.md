@@ -86,6 +86,15 @@ nach dem ersten Speichern hinzu. Der lokale Pseudo-Server (Spec 0032) hat nur
 *Allgemein* (Tags) und *Notizen*. Die Reiter sind per Tastatur bedienbar
 (Pfeiltasten, Pos1/Ende; ein Tab-Stopp für die Leiste).
 
+**Verbinden aus den Einstellungen:** Neben „Speichern" zeigt das Formular eines
+gespeicherten Servers (nicht beim Anlegen) den Knopf „Verbinden". Solange das
+Formular ungespeicherte Änderungen hat, ist er deaktiviert und zeigt den Hinweis
+„Zuerst Änderungen speichern"; nach dem Speichern ist er wieder aktiv. Ein Klick
+wechselt zum Tab dieses Servers, falls einer offen ist (auch ein gerade
+verbindender), sonst läuft derselbe Ablauf wie beim Klick auf den Server in der
+Serverliste (Erststart-Hinweis, Sitzungsauswahl, Verbindungs-Tab); es gibt keinen
+eigenen Verbindungsweg.
+
 **Löschen eines Servers** ist zweistufig (Spec 0046): erst eine Vorschau der
 Auswirkungen, dann das bestätigte Löschen.
 
@@ -116,8 +125,21 @@ Auswirkungen, dann das bestätigte Löschen.
   Gruppe selbst und ihre Nachfahren ausschließt, sodass ein Zyklus schon vor
   dem Absenden unmöglich ist), Notiz-Editor und eine Löschen-Schaltfläche mit
   der Vorschau aus Abschnitt 3.
+- **Passwort ist optional.** Bleibt das Passwortfeld bei Neuanlage leer (oder
+  besteht es nur aus Whitespace und unsichtbaren Randzeichen, Spec 0073), wird
+  der Server ausdrücklich „ohne Passwort" gespeichert; im Schlüsselbund entsteht
+  kein Eintrag, und beim erneuten Öffnen zeigt das Formular „Kein Passwort
+  gespeichert". Bei einem Server mit gespeichertem Passwort heißt ein leeres
+  Feld weiterhin „unverändert"; das Passwort entfernt nur die Option
+  „Gespeichertes Passwort entfernen", die den Server auf „ohne Passwort" setzt
+  und den Schlüsselbund-Eintrag löscht. Die Verbindung eines Servers ohne
+  Passwort versucht zuerst die SSH-Methode `none`, nimmt der Server sie nicht
+  an, dann `password` mit leerem Wert, danach der übliche Anmeldefehler. Das
+  Verbindungsprotokoll nennt beide Versuche. Ein Server mit gespeichertem
+  Passwort versucht nie `none` oder ein leeres Passwort.
 - **Server-Formular:** alle Felder aus Abschnitt 4. Die Anmeldeart wählt der
-  Nutzer aus, die Eingabefelder wechseln mit: Passwortfeld; Schlüsseldatei über
+  Nutzer aus, die Eingabefelder wechseln mit: Passwortfeld (**optional**, siehe
+  unten); Schlüsseldatei über
   den Datei-Dialog mit optionaler Passphrase; „Agent verwenden" ohne weitere
   Eingabe; Zertifikat und Schlüssel als zwei Dateiauswahlen. Tags werden als
   Chips eingegeben (durch Komma oder Enter getrennt). Dazu kommen der
@@ -212,6 +234,9 @@ Mögliche Ergebnisse: Erfolg, Anmeldung fehlgeschlagen, unbekannter Host-Key,
 geänderter Host-Key, Netzwerkfehler (mit Fehlercode, wenn bekannt, Spec 0069)
 und Zeitüberschreitung.
 
+- **Live-Anzeige und Abbruch.** Der Test zeigt seine Schritte live in einem
+  Dialog und lässt sich abbrechen; ein abgebrochener Test endet ohne Ergebnis
+  und ohne Fehler (Spec 0112).
 - **Nichts wird gespeichert.** Der Test nimmt die Formularwerte einschließlich
   noch nicht gespeicherter Secrets entgegen und legt weder in der Datenbank noch
   in der Credential-Ablage etwas ab. Bei einem bestehenden Server mit leerem

@@ -1435,3 +1435,87 @@ describe("AiProviderSettings name prefill from model (issue #602)", () => {
     expect(name().value).toBe("gpt-5");
   });
 });
+
+describe("AiProviderSettings edit saved provider (issue #690)", () => {
+  async function openEdit() {
+    vi.mocked(listAiProviders).mockResolvedValue([activeAnthropicProvider()]);
+    renderForm();
+    await screen.findByText("Claude");
+    fireEvent.click(screen.getByRole("button", { name: "Bearbeiten" }));
+    return screen.getByRole("dialog");
+  }
+
+  it("opens prefilled with a fixed type and an empty key field with placeholder", async () => {
+    const dialog = await openEdit();
+    expect(within(dialog).getByText("Provider bearbeiten")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Typ")).toBeDisabled();
+    expect(within(dialog).getByLabelText("Typ")).toHaveValue("anthropic");
+    const key = within(dialog).getByLabelText("API-Key") as HTMLInputElement;
+    expect(key.value).toBe("");
+    expect(key.placeholder).toMatch(/^Unverändert/);
+    expect(key).not.toBeRequired();
+    expect(within(dialog).getByDisplayValue("claude-sonnet")).toBeInTheDocument();
+  });
+
+  it("saves changes with an empty key and leaves the active flag alone", async () => {
+    const dialog = await openEdit();
+    fireEvent.change(within(dialog).getByDisplayValue("claude-sonnet"), {
+      target: { value: "claude-opus" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+    await waitFor(() => expect(updateAiProvider).toHaveBeenCalledTimes(1));
+    const [id, config] = vi.mocked(updateAiProvider).mock.calls[0];
+    expect(id).toBe("existing-anthropic");
+    expect(config.apiKey).toBe("");
+    expect(config.model).toBe("claude-opus");
+    expect(addAiProvider).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("sends a newly entered key on save", async () => {
+    const dialog = await openEdit();
+    fireEvent.change(within(dialog).getByLabelText("API-Key"), {
+      target: { value: "sk-ant-new" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+    await waitFor(() => expect(updateAiProvider).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateAiProvider).mock.calls[0][1].apiKey).toBe("sk-ant-new");
+  });
+
+  it("tests credentials with existingProviderId when the key is empty, with the new key otherwise", async () => {
+    vi.mocked(testAiProviderCredentials).mockResolvedValue({ kind: "valid" });
+    const dialog = await openEdit();
+    const testBtn = within(dialog).getByRole("button", { name: "Zugangsdaten testen" });
+    fireEvent.click(testBtn);
+    await waitFor(() => expect(testAiProviderCredentials).toHaveBeenCalledTimes(1));
+    let [config, existing] = vi.mocked(testAiProviderCredentials).mock.calls[0];
+    expect(config.apiKey).toBe("");
+    expect(existing).toBe("existing-anthropic");
+
+    fireEvent.change(within(dialog).getByLabelText("API-Key"), {
+      target: { value: "sk-ant-new" },
+    });
+    fireEvent.click(testBtn);
+    await waitFor(() => expect(testAiProviderCredentials).toHaveBeenCalledTimes(2));
+    [config, existing] = vi.mocked(testAiProviderCredentials).mock.calls[1];
+    expect(config.apiKey).toBe("sk-ant-new");
+    expect(existing).toBe("existing-anthropic");
+  });
+
+  it("shows a save error inside the dialog and keeps it open", async () => {
+    vi.mocked(updateAiProvider).mockRejectedValueOnce({ code: null, message: "boom" });
+    const dialog = await openEdit();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("boom");
+  });
+
+  it("Cancel and Escape close without calling update", async () => {
+    const dialog = await openEdit();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Abbrechen" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bearbeiten" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(updateAiProvider).not.toHaveBeenCalled();
+  });
+});

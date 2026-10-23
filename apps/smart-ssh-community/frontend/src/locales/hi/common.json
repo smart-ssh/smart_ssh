@@ -152,6 +152,8 @@
     "confirmDelete": "स्थायी रूप से हटाएँ"
   },
   "serverForm": {
+    "connect": "कनेक्ट करें",
+    "connectSaveFirst": "पहले अपने बदलाव सहेजें",
     "hostKeys": {
       "title": "होस्ट कुंजियाँ",
       "none": "अभी तक कोई होस्ट कुंजी संग्रहीत नहीं है। यह पहले कनेक्शन पर संग्रहीत होती है।"
@@ -178,6 +180,9 @@
       "identityFile": "कुंजी फ़ाइल"
     },
     "password": "पासवर्ड",
+    "passwordOptionalHint": "(वैकल्पिक – यदि सर्वर बिना पासवर्ड लॉगिन की अनुमति देता है तो खाली छोड़ें)",
+    "removeSavedPassword": "सहेजा गया पासवर्ड हटाएँ",
+    "noPasswordSaved": "कोई पासवर्ड सहेजा नहीं गया है। ऐप पहले बिना पासवर्ड लॉगिन आज़माता है, फिर खाली पासवर्ड से।",
     "unchangedHint": "(खाली = अपरिवर्तित)",
     "privateKeyLabel": "निजी कुंजी",
     "chooseFile": "फ़ाइल चुनें…",
@@ -443,6 +448,8 @@
     "active": "सक्रिय",
     "setActive": "सक्रिय करें",
     "addProvider": "प्रदाता जोड़ें",
+    "editProvider": "प्रदाता संपादित करें",
+    "apiKeyUnchangedPlaceholder": "अपरिवर्तित – बदलने के लिए नई कुंजी दर्ज करें",
     "type": "प्रकार",
     "providerName": "नाम",
     "model": "मॉडल",
@@ -938,12 +945,15 @@
       "handshake": "SSH हैंडशेक",
       "hostKeyCheck": "होस्ट कुंजी जाँच",
       "authentication": "प्रमाणीकरण",
-      "sessionReady": "सत्र स्थापित"
+      "sessionReady": "सत्र स्थापित",
+      "dnsSkipped": "IP पता – खोज की ज़रूरत नहीं"
     },
     "status": {
       "ok": "ठीक",
       "running": "जारी है",
-      "failed": "विफल ({{code}})"
+      "failed": "विफल ({{code}})",
+      "skipped": "छोड़ा गया",
+      "failedReason": "विफल: {{reason}}"
     },
     "hostKeyResult": {
       "known": "ज्ञात",
@@ -951,6 +961,7 @@
       "changed": "बदली हुई"
     },
     "authMethod": {
+      "none": "none (कोई प्रमाणीकरण नहीं)",
       "password": "पासवर्ड",
       "privateKey": "निजी कुंजी",
       "agent": "SSH एजेंट",
@@ -965,6 +976,14 @@
       "mac": "MAC (संदेश प्रमाणीकरण): {{value}}",
       "partialSuccess": "आंशिक रूप से स्वीकृत, आगे प्रमाणीकरण आवश्यक",
       "remainingMethods": "सर्वर ये भी प्रस्तावित करता है: {{methods}} (आज़माए नहीं गए)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP कनेक्शन का समय समाप्त हो गया",
+      "SSH_TIMEOUT": "समय समाप्त",
+      "SSH_CONNECTION_REFUSED": "कनेक्शन अस्वीकृत",
+      "SSH_HOST_NOT_FOUND": "होस्ट नहीं मिला",
+      "SSH_HOST_UNREACHABLE": "होस्ट तक पहुँच नहीं हो सकी",
+      "SSH_AUTH_FAILED": "प्रमाणीकरण विफल"
     }
   },
   "fileBrowser": {

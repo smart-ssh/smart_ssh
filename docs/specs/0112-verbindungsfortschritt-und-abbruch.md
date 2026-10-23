@@ -9,13 +9,16 @@ Bezüge: Spec 0005 (SSH, Jump-Hosts), Spec 0069 (Fehlerpfad, Zeitgrenzen), Spec 
 - Jeder Verbindungsaufbau, den die Oberfläche mit einer Versuchskennung (UUID) startet, meldet seinen Fortschritt als Ereignis `connect-progress`. Alle Ereignisse eines Aufbaus tragen diese Kennung und die Server-Kennung.
 - Das Ereignis enthält die vollständige aktuelle Schrittliste. Es kommt, sobald ein Schritt beginnt, seine Angabe sich ändert, er gelingt oder scheitert.
 - Die Zählung `attempt` beginnt bei 1. Wiederholt die App den Aufbau (z. B. nach „Vertrauen“ bei einem Host-Key), steigt sie um 1 und die Schrittliste beginnt neu.
-- Je Schritt: Art (Namensauflösung, TCP-Verbindung, Tunnel je Jump-Hop, Handshake, Host-Key-Prüfung, Anmeldung, Sitzung bereit), Hop-Bezeichnung nach Spec 0076, Status (`running`, `ok`, `failed`), bei `failed` der stabile Fehlercode, und eine kurze Angabe.
+- Je Schritt: Art (Namensauflösung, TCP-Verbindung, Tunnel je Jump-Hop, Handshake, Host-Key-Prüfung, Anmeldung, Sitzung bereit), Hop-Bezeichnung nach Spec 0076, Status (`running`, `ok`, `skipped`, `failed`), bei `failed` der stabile Fehlercode, und eine kurze Angabe.
 - Die Angabe ist ein stabiler Code mit Parametern, kein übersetzter Text:
   - Namensauflösung und TCP: `host:port`, zu dem gerade verbunden wird;
   - Tunnel: die Hop-Bezeichnung;
   - Handshake, solange er läuft: „wartet auf Antwort“;
   - Host-Key-Prüfung, solange die Host-Key-Abfrage offen ist: „wartet auf Ihre Entscheidung“ (der Schritt gilt dann als laufend);
   - Anmeldung: nur die gerade versuchte Methode (`publickey (agent)`, `publickey (key file)`, `password`).
+- Ist der Host eine IP-Adresse (IPv4 oder IPv6), findet keine Namensauflösung statt: Der Schritt erscheint mit Status `skipped` und der Bezeichnung „IP-Adresse – keine Auflösung nötig“; bei einem Hostnamen läuft die Auflösung wie bisher.
+- Läuft die Zeitgrenze ab, während die TCP-Verbindung aufgebaut wird, trägt der TCP-Schritt den Code `SSH_TCP_TIMEOUT` („TCP-Verbindung hat das Zeitlimit überschritten“); Zeitgrenzen in späteren Schritten behalten `SSH_TIMEOUT`. Das automatische Wiederverbinden (Spec 0107) behandelt beide Codes als wiederholbar.
+- Die Oberfläche zeigt bei einem gescheiterten Schritt einen übersetzten Grund statt des rohen Codes; der Code selbst steht nur in der Detailzeile und im kopierten Text.
 - Die Meldungen enthalten nie Passwort, Passphrase, Schlüsselmaterial oder den Pfad einer Schlüsseldatei.
 - Scheitert der Aufbau, endet die Meldungsfolge mit dem gescheiterten Schritt (z. B. Anmeldung mit Fehlercode, Handshake mit dem Zeitüberschreitungs-Code). Der Verbindungsfehler trägt das Schritt-Protokoll unverändert wie bisher.
 - Das automatische Wiederverbinden (Spec 0107) sendet keine `connect-progress`-Ereignisse.
@@ -45,6 +48,13 @@ Bezüge: Spec 0005 (SSH, Jump-Hosts), Spec 0069 (Fehlerpfad, Zeitgrenzen), Spec 
 - Die Host-Key-Abfrage (Spec 0100) erscheint wie bisher; der Tab zeigt den Host-Key-Schritt währenddessen als „wartet auf Ihre Entscheidung“, nach „Vertrauen“ laufen die Schritte im selben Tab weiter.
 - Auch das Fortsetzen einer gespeicherten Chat-Sitzung aus dem Auswahl-Screen (Spec 0034) öffnet sofort den Verbindungs-Tab, mit Schrittliste, Abbrechen und im Fehlerfall Fehler, Schritt-Protokoll sowie „Erneut versuchen" und „Schließen". „Erneut versuchen" setzt dieselbe Chat-Sitzung fort, nicht eine neue. Bei Erfolg wird der Tab zum Sitzungs-Tab mit der gespeicherten Historie; ein Abbruch lässt die gespeicherte Chat-Sitzung unverändert.
 - Das automatische Wiederverbinden (Spec 0107) nutzt den Verbindungs-Tab nicht.
+
+### Verbindungstest im Server-Formular
+
+- „Verbindung testen" (Spec 0008, Abschnitt 7) öffnet einen modalen Dialog mit derselben Schrittliste wie der Verbindungs-Tab; sie aktualisiert sich live aus `connect-progress`, während der Test läuft.
+- Solange der Test läuft, zeigt der Dialog „Abbrechen"; danach „Schließen". Das Ergebnis (Erfolg oder gescheiterter Schritt samt übersetztem Grund) bleibt im Dialog sichtbar. Nach dem Schließen zeigt das Formular wie bisher die kompakte Ergebnisanzeige und das aufklappbare Schritt-Protokoll.
+- „Abbrechen" oder Escape bricht einen laufenden Test ab (Abschnitt 2) und schließt den Dialog; ein abgebrochener Test zeigt keinen Fehler. Escape bei beendetem Test schließt nur den Dialog.
+- Meldet der Test einen unbekannten oder geänderten Host-Key, tritt die Host-Key-Abfrage an die Stelle des Dialogs.
 
 ## 5. Grenzen
 

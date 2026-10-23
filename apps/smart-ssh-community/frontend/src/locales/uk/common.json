@@ -152,6 +152,8 @@
     "confirmDelete": "Видалити назавжди"
   },
   "serverForm": {
+    "connect": "Підключитися",
+    "connectSaveFirst": "Спочатку збережіть зміни",
     "hostKeys": {
       "title": "Ключі хостів",
       "none": "Ключ хоста ще не збережено. Його буде збережено під час першого підключення."
@@ -178,6 +180,9 @@
       "identityFile": "Файл ключа"
     },
     "password": "Пароль",
+    "passwordOptionalHint": "(необов’язково – залиште порожнім, якщо сервер дозволяє вхід без пароля)",
+    "removeSavedPassword": "Видалити збережений пароль",
+    "noPasswordSaved": "Пароль не збережено. Застосунок спочатку пробує вхід без пароля, потім з порожнім паролем.",
     "unchangedHint": "(порожньо = без змін)",
     "privateKeyLabel": "Приватний ключ",
     "chooseFile": "Вибрати файл…",
@@ -443,6 +448,8 @@
     "active": "активний",
     "setActive": "Зробити активним",
     "addProvider": "Додати провайдера",
+    "editProvider": "Редагувати провайдера",
+    "apiKeyUnchangedPlaceholder": "Без змін – введіть новий ключ, щоб замінити",
     "type": "Тип",
     "providerName": "Назва",
     "model": "Модель",
@@ -948,12 +955,15 @@
       "handshake": "Рукостискання SSH",
       "hostKeyCheck": "Перевірка ключа хоста",
       "authentication": "Автентифікація",
-      "sessionReady": "Сеанс встановлено"
+      "sessionReady": "Сеанс встановлено",
+      "dnsSkipped": "IP-адреса – пошук не потрібен"
     },
     "status": {
       "ok": "OK",
       "running": "виконується",
-      "failed": "не вдалося ({{code}})"
+      "failed": "не вдалося ({{code}})",
+      "skipped": "пропущено",
+      "failedReason": "помилка: {{reason}}"
     },
     "hostKeyResult": {
       "known": "відомий",
@@ -961,6 +971,7 @@
       "changed": "змінений"
     },
     "authMethod": {
+      "none": "none (без автентифікації)",
       "password": "Пароль",
       "privateKey": "Приватний ключ",
       "agent": "Агент SSH",
@@ -975,6 +986,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "прийнято частково, потрібна подальша автентифікація",
       "remainingMethods": "Сервер також пропонує: {{methods}} (не пробувалося)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Час очікування TCP-з'єднання минув",
+      "SSH_TIMEOUT": "Час очікування минув",
+      "SSH_CONNECTION_REFUSED": "З'єднання відхилено",
+      "SSH_HOST_NOT_FOUND": "Хост не знайдено",
+      "SSH_HOST_UNREACHABLE": "Хост недоступний",
+      "SSH_AUTH_FAILED": "Автентифікація не вдалася"
     }
   },
   "fileBrowser": {
