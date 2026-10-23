@@ -67,7 +67,7 @@ sich nur, dass Nutzerregeln greifen.
   (Global, ein Server aus der Serverliste oder ein Tag; ein neues, noch nicht
   verwendetes Tag lässt sich eintippen) und Priorität als Zahlenfeld. Das
   Formular öffnet sich als modaler Dialog über der Regelliste: „+ Regel"
-  öffnet „Regel hinzufügen", „Bearbeiten" öffnet „Regel bearbeiten" mit den
+  öffnet „Neue Regel", „Bearbeiten" öffnet „Regel bearbeiten" mit den
   Werten der Regel. Der Fokus liegt zu Beginn auf dem ersten Feld und bleibt
   im Dialog. Speichern schließt den Dialog und lädt die Liste neu;
   Validierungsfehler (auch ein ungültiges Muster, Spec 0077) erscheinen im
