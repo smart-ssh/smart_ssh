@@ -29,7 +29,7 @@ test("a failing connection test shows a collapsed step log that expands to the f
   await expect(log).toHaveAttribute("open");
   await expect(failedStep).toBeVisible();
   await expect(failedStep).toContainText("Authentication");
-  await expect(failedStep).toContainText("failed (AUTH_FAILED)");
+  await expect(failedStep).toContainText("failed: AUTH_FAILED");
   // The steps before it are listed as successful.
   await expect(log.locator("li:not([data-failed])")).toHaveCount(4);
 });

@@ -934,12 +934,15 @@
       "handshake": "SSH 握手",
       "hostKeyCheck": "主机密钥检查",
       "authentication": "身份验证",
-      "sessionReady": "会话已建立"
+      "sessionReady": "会话已建立",
+      "dnsSkipped": "IP 地址 – 无需解析"
     },
     "status": {
       "ok": "正常",
       "running": "进行中",
-      "failed": "失败（{{code}}）"
+      "failed": "失败（{{code}}）",
+      "skipped": "已跳过",
+      "failedReason": "失败：{{reason}}"
     },
     "hostKeyResult": {
       "known": "已知",
@@ -962,6 +965,14 @@
       "mac": "MAC：{{value}}",
       "partialSuccess": "已部分接受，还需要进一步验证",
       "remainingMethods": "服务器还提供：{{methods}}（未尝试）"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP 连接超时",
+      "SSH_TIMEOUT": "超时",
+      "SSH_CONNECTION_REFUSED": "连接被拒绝",
+      "SSH_HOST_NOT_FOUND": "找不到主机",
+      "SSH_HOST_UNREACHABLE": "主机不可达",
+      "SSH_AUTH_FAILED": "身份验证失败"
     }
   },
   "fileBrowser": {

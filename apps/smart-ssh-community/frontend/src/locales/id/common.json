@@ -934,12 +934,15 @@
       "handshake": "Handshake SSH",
       "hostKeyCheck": "Pemeriksaan kunci host",
       "authentication": "Autentikasi",
-      "sessionReady": "Sesi terbentuk"
+      "sessionReady": "Sesi terbentuk",
+      "dnsSkipped": "Alamat IP – tidak perlu pencarian"
     },
     "status": {
       "ok": "OK",
       "running": "sedang berlangsung",
-      "failed": "gagal ({{code}})"
+      "failed": "gagal ({{code}})",
+      "skipped": "dilewati",
+      "failedReason": "gagal: {{reason}}"
     },
     "hostKeyResult": {
       "known": "dikenal",
@@ -962,6 +965,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "diterima sebagian, autentikasi lebih lanjut diperlukan",
       "remainingMethods": "Server juga menawarkan: {{methods}} (tidak dicoba)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Koneksi TCP habis waktu",
+      "SSH_TIMEOUT": "Waktu habis",
+      "SSH_CONNECTION_REFUSED": "Koneksi ditolak",
+      "SSH_HOST_NOT_FOUND": "Host tidak ditemukan",
+      "SSH_HOST_UNREACHABLE": "Host tidak dapat dijangkau",
+      "SSH_AUTH_FAILED": "Autentikasi gagal"
     }
   },
   "fileBrowser": {
