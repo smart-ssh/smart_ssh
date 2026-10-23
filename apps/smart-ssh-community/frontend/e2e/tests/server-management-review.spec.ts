@@ -172,6 +172,7 @@ const SCREENS: Record<string, Screen> = {
       await app.page.getByRole("treeitem", { name: "🖥️ db-primary" }).click();
       await app.page.getByRole("tab", { name: "Connection", exact: true }).click();
       await app.page.getByRole("button", { name: "Test Connection", exact: true }).click();
+      await app.page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
       await app.page.getByText("Details", { exact: true }).click();
       await expect(app.page.getByTestId("connect-step-log")).toHaveAttribute("open");
     },

@@ -225,6 +225,9 @@ Mögliche Ergebnisse: Erfolg, Anmeldung fehlgeschlagen, unbekannter Host-Key,
 geänderter Host-Key, Netzwerkfehler (mit Fehlercode, wenn bekannt, Spec 0069)
 und Zeitüberschreitung.
 
+- **Live-Anzeige und Abbruch.** Der Test zeigt seine Schritte live in einem
+  Dialog und lässt sich abbrechen; ein abgebrochener Test endet ohne Ergebnis
+  und ohne Fehler (Spec 0112).
 - **Nichts wird gespeichert.** Der Test nimmt die Formularwerte einschließlich
   noch nicht gespeicherter Secrets entgegen und legt weder in der Datenbank noch
   in der Credential-Ablage etwas ab. Bei einem bestehenden Server mit leerem
