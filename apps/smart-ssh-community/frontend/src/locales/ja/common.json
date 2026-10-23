@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ 出力がサイズ上限で切り捨てられました — 不完全な可能性があります。",
     "liveOutputLabel": "ライブ出力",
     "liveOutputTruncatedNotice": "⚠ サイズ上限に達しました — これ以降の出力は表示されません。",
+    "autoRanLead": "自動実行",
+    "autoRanRule": "ルール",
+    "autoRanScopeGlobal": "グローバル",
+    "autoRanScopeServer": "サーバー {{name}}",
+    "autoRanScopeTag": "タグ {{tag}}",
+    "autoRanOpenRule": "このルールをフィルタルールで開く",
     "mcpOrigin": "外部ツール（MCP）: 「{{name}}」",
     "mcpOriginGeneric": "外部ツール（MCP）",
     "mcpOriginHint": "この操作は内部チャットからではなく、外部ツールがローカルのMCPサーバー経由でリクエストしたものです。"
@@ -809,8 +815,6 @@
     },
     "tag": {
       "literalHint": "他のファイル由来のリテラルなタグです。許可ルールと完全に一致する場合があります。個別に選択を外せます。",
-      "allowDeselectedHint": "既存の許可ルールに一致し、拒否ルールには一致しないため、既定では選択が外れています。個別に再び選択できます。",
-      "autoDeselectedBadge": "自動的に選択解除",
       "matchesRuleHint": "既存のフィルタールール{{count}}件に一致: {{actions}}",
       "action": {
         "allow": "許可",

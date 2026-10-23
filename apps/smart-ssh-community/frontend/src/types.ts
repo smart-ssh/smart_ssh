@@ -356,6 +356,19 @@ export interface ChatActionProposedEvent {
   riskAssessment: RiskAssessment | null;
   /** Spec 0028, Abschnitt 6/9a. */
   origin: ActionOrigin;
+  /** Issue #696: only for `decision: "AutoExec"` — the rules that let the
+   * command run without confirmation (display only). Empty otherwise. */
+  autoExecRules?: AutoExecRule[];
+}
+
+/** Issue #696: one rule behind an automatic run; `segmentIndices` are the
+ * top-level segments of a chain it covered. */
+export interface AutoExecRule {
+  ruleId: string;
+  patternType: PatternType;
+  patternValue: string;
+  scope: Scope;
+  segmentIndices: number[];
 }
 
 /** Spec 0026, Abschnitt 3, Punkt 4. */

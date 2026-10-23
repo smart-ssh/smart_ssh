@@ -364,6 +364,12 @@
     "commandTruncatedNotice": "⚠ Rezultatul a fost tăiat la limita de dimensiune — poate fi incomplet.",
     "liveOutputLabel": "Rezultat în timp real",
     "liveOutputTruncatedNotice": "⚠ Limita de dimensiune atinsă — rezultatul următor nu mai este afișat.",
+    "autoRanLead": "Rulat automat",
+    "autoRanRule": "regulă",
+    "autoRanScopeGlobal": "globală",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "etichetă {{tag}}",
+    "autoRanOpenRule": "Deschide această regulă în regulile de filtrare",
     "mcpOrigin": "Instrument extern (MCP): „{{name}}”",
     "mcpOriginGeneric": "instrument extern (MCP)",
     "mcpOriginHint": "Această acțiune nu a fost solicitată de chatul intern, ci de un instrument extern prin serverul MCP local.",
@@ -819,8 +825,6 @@
     },
     "tag": {
       "literalHint": "Etichetă literală dintr-un fișier străin — se poate potrivi exact cu o regulă Permite. Poate fi deselectată individual.",
-      "allowDeselectedHint": "Se potrivește cu o regulă Permite existentă și cu nicio regulă Refuză — de aceea este deselectată implicit. Poate fi selectată din nou individual.",
-      "autoDeselectedBadge": "deselectată automat",
       "matchesRuleHint": "se potrivește cu {{count}} reguli de filtrare existente: {{actions}}",
       "action": {
         "allow": "Permite",

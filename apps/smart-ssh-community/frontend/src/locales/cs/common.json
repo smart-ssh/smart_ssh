@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Výstup byl oříznut na limitu velikosti — může být neúplný.",
     "liveOutputLabel": "Živý výstup",
     "liveOutputTruncatedNotice": "⚠ Dosažen limit velikosti — další výstup se již nezobrazuje.",
+    "autoRanLead": "Spuštěno automaticky",
+    "autoRanRule": "pravidlo",
+    "autoRanScopeGlobal": "globální",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "štítek {{tag}}",
+    "autoRanOpenRule": "Otevřít toto pravidlo v pravidlech filtru",
     "mcpOrigin": "Externí nástroj (MCP): „{{name}}“",
     "mcpOriginGeneric": "externí nástroj (MCP)",
     "mcpOriginHint": "Tuto akci nevyžádal interní chat, ale externí nástroj přes místní server MCP."
@@ -824,8 +830,6 @@
     },
     "tag": {
       "literalHint": "Doslovný štítek z cizího souboru — může přesně odpovídat pravidlu Povolit. Lze jednotlivě odznačit.",
-      "allowDeselectedHint": "Odpovídá stávajícímu pravidlu Povolit a žádnému pravidlu Zamítnout — proto je ve výchozím stavu odznačen. Lze jednotlivě znovu označit.",
-      "autoDeselectedBadge": "automaticky odznačeno",
       "matchesRuleHint": "odpovídá stávajícím pravidlům filtru (počet: {{count}}): {{actions}}",
       "action": {
         "allow": "Povolit",

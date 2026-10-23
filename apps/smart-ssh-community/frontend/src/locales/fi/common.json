@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Tuloste katkaistiin kokorajalla – se voi olla vajaa.",
     "liveOutputLabel": "Reaaliaikainen tuloste",
     "liveOutputTruncatedNotice": "⚠ Kokoraja saavutettu – lisätulostetta ei enää näytetä.",
+    "autoRanLead": "Suoritettu automaattisesti",
+    "autoRanRule": "sääntö",
+    "autoRanScopeGlobal": "yleinen",
+    "autoRanScopeServer": "palvelin {{name}}",
+    "autoRanScopeTag": "tunniste {{tag}}",
+    "autoRanOpenRule": "Avaa tämä sääntö suodatinsäännöissä",
     "mcpOrigin": "Ulkoinen työkalu (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "ulkoinen työkalu (MCP)",
     "mcpOriginHint": "Tätä toimintoa ei pyytänyt sisäinen keskustelu vaan ulkoinen työkalu paikallisen MCP-palvelimen kautta."
@@ -814,8 +820,6 @@
     },
     "tag": {
       "literalHint": "Sananmukainen tunniste vieraasta tiedostosta – voi täsmätä sallimissääntöön tarkasti. Valinnan voi poistaa yksitellen.",
-      "allowDeselectedHint": "Täsmää olemassa olevaan sallimissääntöön eikä yhtään estosääntöön – siksi oletuksena valitsematta. Voi valita uudelleen yksitellen.",
-      "autoDeselectedBadge": "automaattisesti poistettu valinnasta",
       "matchesRuleHint": "täsmää {{count}} olemassa olevaan suodatussääntöön: {{actions}}",
       "action": {
         "allow": "Salli",

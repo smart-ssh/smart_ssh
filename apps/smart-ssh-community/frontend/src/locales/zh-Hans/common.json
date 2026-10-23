@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ 输出已在大小上限处被截断——可能不完整。",
     "liveOutputLabel": "实时输出",
     "liveOutputTruncatedNotice": "⚠ 已达到大小上限——不再显示后续输出。",
+    "autoRanLead": "已自动执行",
+    "autoRanRule": "规则",
+    "autoRanScopeGlobal": "全局",
+    "autoRanScopeServer": "服务器 {{name}}",
+    "autoRanScopeTag": "标签 {{tag}}",
+    "autoRanOpenRule": "在过滤规则中打开此规则",
     "mcpOrigin": "外部工具（MCP）：“{{name}}”",
     "mcpOriginGeneric": "外部工具（MCP）",
     "mcpOriginHint": "此操作并非由内部聊天发起，而是由外部工具通过本地 MCP 服务器请求的。"
@@ -809,8 +815,6 @@
     },
     "tag": {
       "literalHint": "来自外部文件的字面标签——可能与某条允许规则精确匹配。可单独取消选择。",
-      "allowDeselectedHint": "与现有的某条允许规则匹配，且没有拒绝规则——因此默认取消选择。可单独重新选择。",
-      "autoDeselectedBadge": "已自动取消选择",
       "matchesRuleHint": "匹配 {{count}} 条现有的过滤规则：{{actions}}",
       "action": {
         "allow": "允许",

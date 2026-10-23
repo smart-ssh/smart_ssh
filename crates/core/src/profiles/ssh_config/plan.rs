@@ -78,26 +78,12 @@ impl PlannedTag {
     /// das Vorschau-DTO reicht sie an den Dialog durch, und `apply` nimmt
     /// sie für einen Eintrag ohne Wahl des Nutzers.
     ///
-    /// Trifft das Schlagwort eine Tag-`Allow`-Regel, ist es abgewählt — es
-    /// hebt ein importiertes Profil sonst unbemerkt von `Confirm` auf
-    /// `Allow`. Trifft es **zusätzlich** eine Tag-`Deny`-Regel, bleibt es
-    /// angewählt: Die Abwahl nähme dem Profil sonst auch die
-    /// `Deny`-Abdeckung, und `Deny` geht in der Filter-Engine ohnehin vor
-    /// `Allow`. Nur `Confirm`/`Deny` oder keine Regel ⇒ angewählt. Das gilt
-    /// für buchstäbliche und Muster-Schlagworte gleichermaßen (Issue #105).
+    /// Jedes Schlagwort ist angewählt, gleich ob es eine Tag-`Allow`-,
+    /// `Confirm`-, `Deny`-Regel oder keine trifft (Issue #636). Die
+    /// getroffenen Regeln samt Wirkung zeigt die Vorschau weiterhin an, damit
+    /// der Nutzer das Schlagwort bewusst abwählen kann.
     pub fn default_selected(&self) -> bool {
-        let mut hits_allow = false;
-        let mut hits_deny = false;
-        for m in &self.matched_rules {
-            // Erschöpfender `match` statt `==`: eine neue `RuleAction`
-            // zwingt hier zu einer bewussten Entscheidung.
-            match m.action {
-                RuleAction::Allow => hits_allow = true,
-                RuleAction::Deny => hits_deny = true,
-                RuleAction::Confirm => {}
-            }
-        }
-        hits_deny || !hits_allow
+        true
     }
 }
 

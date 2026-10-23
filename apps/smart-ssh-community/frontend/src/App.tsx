@@ -19,6 +19,7 @@ import { FeatureLockedDialog } from "./extensions/FeatureLockedDialog";
 import { commandErrorMessage, listAiProviders } from "./api";
 import {
   subscribeRequestResumeChatSession,
+  subscribeRequestOpenFilterRule,
   subscribeRequestServerNoteEdit,
   type ResumeChatSessionRequest,
 } from "./navigationBus";
@@ -105,6 +106,18 @@ function App() {
         switchTo(null);
         setTab("manage");
         setPendingNoteEditSelection({ kind: "server", id: serverId });
+      }),
+    [switchTo],
+  );
+
+  // Issue #696: a chat card opens one rule in the filter rules tab.
+  const [pendingRuleSelection, setPendingRuleSelection] = useState<string | null>(null);
+  useEffect(
+    () =>
+      subscribeRequestOpenFilterRule((ruleId) => {
+        switchTo(null);
+        setTab("rules");
+        setPendingRuleSelection(ruleId);
       }),
     [switchTo],
   );
@@ -279,6 +292,8 @@ function App() {
           onRequestConnect={requestConnect}
           pendingNoteEditSelection={pendingNoteEditSelection}
           onNoteEditSelectionConsumed={() => setPendingNoteEditSelection(null)}
+          pendingRuleSelection={pendingRuleSelection}
+          onRuleSelectionConsumed={() => setPendingRuleSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
           onCreateServerInGroup={handleCreateServerInGroup}
         />
@@ -300,6 +315,9 @@ interface MainScreenProps {
    * `navigationBus`. */
   pendingNoteEditSelection: Selection | null;
   onNoteEditSelectionConsumed: () => void;
+  /** Issue #696. */
+  pendingRuleSelection: string | null;
+  onRuleSelectionConsumed: () => void;
   /** Issue #611. */
   resumeRequest: ResumeChatSessionRequest | null;
   onResumeRequestConsumed: () => void;
@@ -335,6 +353,8 @@ function MainScreen({
   onSwitchToExistingTab,
   pendingNoteEditSelection,
   onNoteEditSelectionConsumed,
+  pendingRuleSelection,
+  onRuleSelectionConsumed,
   resumeRequest,
   onResumeRequestConsumed,
   connectRequest,
@@ -432,7 +452,10 @@ function MainScreen({
           onConnect={onRequestConnect}
         />
       ) : (
-        <FilterRulesView />
+        <FilterRulesView
+          initialRuleId={pendingRuleSelection}
+          onInitialRuleConsumed={onRuleSelectionConsumed}
+        />
       )}
 
       {settingsOpen && (

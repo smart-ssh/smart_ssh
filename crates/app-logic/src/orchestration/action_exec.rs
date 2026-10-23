@@ -74,6 +74,10 @@ mod tests_not_assessable;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_live_output;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_auto_exec_rules;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
@@ -155,7 +159,7 @@ pub(crate) async fn handle_action_proposed(
     let evaluation = evaluate_action(session, &action, profile_store).await;
     let matched_rule = evaluation.matched_rule.clone();
     let matched_rule_origin = evaluation.matched_rule_origin;
-    let mut decision = evaluation.decision;
+    let mut decision = evaluation.decision.clone();
 
     // Vorgezogen (war vorher erst nach der Eskalationskette berechnet, s.
     // Git-Historie) — die neue Spec-0039-Eskalation unten braucht die
@@ -439,6 +443,15 @@ pub(crate) async fn handle_action_proposed(
         }
     };
 
+    // Issue #696: name the rules behind an automatic run (display only; the
+    // trace is the one that made the decision, no second evaluation). Only for
+    // the final `AutoExec`: an escalation above already turned it into Confirm.
+    let auto_exec_rules = if matches!(decision, Decision::AutoExec) {
+        auto_exec_rules_for(session, profile_store, &action, &evaluation).await
+    } else {
+        Vec::new()
+    };
+
     let (previous_note_content, target_name) =
         note_target_preview_for_action(&action, session, profile_store).await;
     let (previous_file_content, previous_file_size) =
@@ -457,6 +470,7 @@ pub(crate) async fn handle_action_proposed(
         target_name,
         risk_assessment.clone(),
         origin.clone(),
+        auto_exec_rules,
     );
 
     // Spec 0026, Abschnitt 3: läuft NACH der bereits gesendeten
@@ -869,6 +883,30 @@ async fn tags_for_session(session: &Session, profile_store: &dyn ProfileStore) -
         .await
         .map(|s| s.tags)
         .unwrap_or_else(|_| session.tags.clone())
+}
+
+/// Issue #696: the rules behind an automatic run, from the trace of the
+/// evaluation that made the decision (see `confirmation_explain::auto_exec_rules`).
+async fn auto_exec_rules_for(
+    session: &Session,
+    profile_store: &dyn ProfileStore,
+    action: &AiAction,
+    evaluation: &EvaluationTrace,
+) -> Vec<crate::dto::AutoExecRuleDto> {
+    // Only filter-evaluated actions carry rule matches; notes never auto-run.
+    if !matches!(
+        action,
+        AiAction::SuggestCommand { .. } | AiAction::ReadRemoteFile { .. }
+    ) {
+        return Vec::new();
+    }
+    let tags = tags_for_session(session, profile_store).await;
+    let ctx = EvalContext {
+        server_id: session.server_id,
+        tags,
+    };
+    crate::confirmation_explain::auto_exec_rules(session.filter_engine.as_ref(), &ctx, evaluation)
+        .await
 }
 
 /// Spec 0020, Abschnitt 4.1/4.2: `ReadRemoteFile`/`WriteRemoteFile` werden
@@ -1569,6 +1607,7 @@ async fn handle_user_decision(
                             None,
                             risk_assessment,
                             origin,
+                            Vec::new(),
                         );
                         // Spec 0021, Abschnitt 3, Fall 4: das bearbeitete
                         // Kommando ist am Ende genau ein durch die

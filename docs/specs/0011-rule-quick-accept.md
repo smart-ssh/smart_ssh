@@ -163,3 +163,23 @@ Nutzer einen Vorschlag annimmt.
 **Hinweis nach dem Annehmen.** Genügen die angelegten Regeln nicht, damit
 das Kommando automatisch läuft, erscheint im Chat ein kurzer Hinweis mit den
 Gründen. Bei „läuft automatisch" erscheint keiner.
+
+## 7. Hinweis zur Regel bei automatischer Ausführung
+
+Läuft ein Kommando automatisch (Entscheidung „automatisch ausführen“, ohne
+Bestätigung), zeigt seine Karte im Chat unter dem Kommando eine gedämpfte
+Zeile: „Automatisch ausgeführt · Regel `<Muster>` · <Geltungsbereich>“. Der
+Geltungsbereich ist „global“, „Server `<Name>`“ oder „Tag `<Tag>`“.
+
+- Besteht das Kommando aus mehreren Teilkommandos, nennt die Zeile die Regel
+  jedes Teilkommandos; deckt eine Regel mehrere Teilkommandos ab, erscheint sie
+  nur einmal.
+- Ein Klick auf das Muster öffnet den Reiter der Filterregeln mit dieser
+  Regel zum Bearbeiten. Ist die Regel inzwischen gelöscht, steht das Muster
+  als einfacher Text ohne Verweis da.
+- Die Zeile erscheint nur live; beim Wiederöffnen eines gespeicherten Chats
+  ist sie nicht gefordert. Kommandos, die erst nach einer Bestätigung liefen,
+  und abgelehnte Kommandos zeigen keine Zeile. Das gilt gleich für Aktionen,
+  die von einem externen Werkzeug (MCP) angefragt wurden.
+- Die Zeile ist reine Anzeige: Sie stammt aus derselben Auswertung, die die
+  Entscheidung getroffen hat, und ändert diese nicht.

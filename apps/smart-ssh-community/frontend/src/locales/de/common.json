@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Ausgabe wurde am Größenlimit abgeschnitten — möglicherweise unvollständig.",
     "liveOutputLabel": "Live-Ausgabe",
     "liveOutputTruncatedNotice": "⚠ Größenlimit erreicht — weitere Ausgabe wird nicht mehr angezeigt.",
+    "autoRanLead": "Automatisch ausgeführt",
+    "autoRanRule": "Regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "Server {{name}}",
+    "autoRanScopeTag": "Tag {{tag}}",
+    "autoRanOpenRule": "Diese Regel in den Filterregeln öffnen",
     "mcpOrigin": "Externes Tool (MCP): „{{name}}“",
     "mcpOriginGeneric": "externes Tool (MCP)",
     "mcpOriginHint": "Diese Aktion wurde nicht vom internen Chat, sondern über den lokalen MCP-Server von einem externen Tool angefragt."
@@ -814,8 +820,6 @@
     },
     "tag": {
       "literalHint": "Buchstäbliches Schlagwort aus einer fremden Datei — kann eine Allow-Regel exakt treffen. Einzeln abwählbar.",
-      "allowDeselectedHint": "Trifft eine bestehende Allow-Regel und keine Deny-Regel — deshalb standardmäßig abgewählt. Einzeln wieder anwählbar.",
-      "autoDeselectedBadge": "automatisch abgewählt",
       "matchesRuleHint": "trifft {{count}} bestehende Filterregel(n): {{actions}}",
       "action": {
         "allow": "Allow",

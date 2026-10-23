@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Udskriften blev afskåret ved størrelsesgrænsen – den kan være ufuldstændig.",
     "liveOutputLabel": "Live-udskrift",
     "liveOutputTruncatedNotice": "⚠ Størrelsesgrænsen er nået – yderligere udskrift vises ikke mere.",
+    "autoRanLead": "Kørt automatisk",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Åbn denne regel i filterreglerne",
     "mcpOrigin": "Eksternt værktøj (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "eksternt værktøj (MCP)",
     "mcpOriginHint": "Denne handling blev ikke anmodet af den interne chat, men af et eksternt værktøj via den lokale MCP-server."
@@ -814,8 +820,6 @@
     },
     "tag": {
       "literalHint": "Bogstaveligt tag fra en fremmed fil – kan matche en tillad-regel præcist. Kan fravælges enkeltvis.",
-      "allowDeselectedHint": "Matcher en eksisterende tillad-regel og ingen forbyd-regel – derfor fravalgt som standard. Kan vælges igen enkeltvis.",
-      "autoDeselectedBadge": "fravalgt automatisk",
       "matchesRuleHint": "matcher {{count}} eksisterende filterregel/-regler: {{actions}}",
       "action": {
         "allow": "Tillad",

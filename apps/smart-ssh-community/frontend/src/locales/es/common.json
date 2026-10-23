@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ La salida se cortó en el límite de tamaño: puede estar incompleta.",
     "liveOutputLabel": "Salida en directo",
     "liveOutputTruncatedNotice": "⚠ Límite de tamaño alcanzado: ya no se muestra más salida.",
+    "autoRanLead": "Ejecutado automáticamente",
+    "autoRanRule": "regla",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "servidor {{name}}",
+    "autoRanScopeTag": "etiqueta {{tag}}",
+    "autoRanOpenRule": "Abrir esta regla en las reglas de filtro",
     "mcpOrigin": "Herramienta externa (MCP): “{{name}}”",
     "mcpOriginGeneric": "herramienta externa (MCP)",
     "mcpOriginHint": "Esta acción no fue solicitada por el chat interno, sino por una herramienta externa a través del servidor MCP local."
@@ -819,8 +825,6 @@
     },
     "tag": {
       "literalHint": "Etiqueta literal de un archivo ajeno: puede coincidir exactamente con una regla de permiso. Se puede deseleccionar individualmente.",
-      "allowDeselectedHint": "Coincide con una regla de permiso existente y con ninguna regla de denegación, por eso está deseleccionada por defecto. Se puede volver a seleccionar individualmente.",
-      "autoDeselectedBadge": "deseleccionada automáticamente",
       "matchesRuleHint": "coincide con {{count}} regla(s) de filtro existente(s): {{actions}}",
       "action": {
         "allow": "Permitir",

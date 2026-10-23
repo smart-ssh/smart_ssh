@@ -364,6 +364,12 @@
     "commandTruncatedNotice": "⚠ A kimenet a méretkorlátnál megszakadt – hiányos lehet.",
     "liveOutputLabel": "Élő kimenet",
     "liveOutputTruncatedNotice": "⚠ Méretkorlát elérve – a további kimenet már nem látható.",
+    "autoRanLead": "Automatikusan lefutott",
+    "autoRanRule": "szabály",
+    "autoRanScopeGlobal": "globális",
+    "autoRanScopeServer": "szerver: {{name}}",
+    "autoRanScopeTag": "címke: {{tag}}",
+    "autoRanOpenRule": "Szabály megnyitása a szűrőszabályokban",
     "mcpOrigin": "Külső eszköz (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "külső eszköz (MCP)",
     "mcpOriginHint": "Ezt a műveletet nem a belső csevegés, hanem egy külső eszköz kérte a helyi MCP-szerveren keresztül.",
@@ -814,8 +820,6 @@
     },
     "tag": {
       "literalHint": "Szó szerinti címke idegen fájlból – pontosan illeszkedhet egy Engedélyezés szabályra. Egyenként kijelölése törölhető.",
-      "allowDeselectedHint": "Illeszkedik egy meglévő Engedélyezés szabályra, Tiltás szabályra nem – ezért alapból nincs kijelölve. Egyenként újra kijelölhető.",
-      "autoDeselectedBadge": "automatikusan kijelölés nélkül",
       "matchesRuleHint": "{{count}} meglévő szűrőszabályra illeszkedik: {{actions}}",
       "action": {
         "allow": "Engedélyezés",

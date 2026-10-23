@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ La sortie a été tronquée à la limite de taille — elle peut être incomplète.",
     "liveOutputLabel": "Sortie en direct",
     "liveOutputTruncatedNotice": "⚠ Limite de taille atteinte — la suite de la sortie n’est plus affichée.",
+    "autoRanLead": "Exécuté automatiquement",
+    "autoRanRule": "règle",
+    "autoRanScopeGlobal": "globale",
+    "autoRanScopeServer": "serveur {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Ouvrir cette règle dans les règles de filtrage",
     "mcpOrigin": "Outil externe (MCP) : « {{name}} »",
     "mcpOriginGeneric": "outil externe (MCP)",
     "mcpOriginHint": "Cette action n’a pas été demandée par le chat interne, mais par un outil externe via le serveur MCP local."
@@ -819,8 +825,6 @@
     },
     "tag": {
       "literalHint": "Étiquette littérale issue d’un fichier externe — peut correspondre exactement à une règle d’autorisation. Désélectionnable individuellement.",
-      "allowDeselectedHint": "Correspond à une règle d’autorisation existante et à aucune règle de refus — donc désélectionnée par défaut. Sélectionnable de nouveau individuellement.",
-      "autoDeselectedBadge": "désélectionnée automatiquement",
       "matchesRuleHint": "correspond à {{count}} règle(s) de filtrage existante(s) : {{actions}}",
       "action": {
         "allow": "Autoriser",
