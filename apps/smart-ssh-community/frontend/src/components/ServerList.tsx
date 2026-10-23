@@ -61,6 +61,10 @@ interface ServerListProps {
    * takes the same path as choosing the session in the picker. */
   resumeRequest?: { serverId: string; chatSessionId: string } | null;
   onResumeRequestConsumed?: () => void;
+  /** Issue #692: "Connect" in the server's settings — handled like a click
+   * on the server row. */
+  connectRequest?: { serverId: string } | null;
+  onConnectRequestConsumed?: () => void;
   /** Spec 0069, Teil C1 (BL-0082): Klick auf "Ersten Server anlegen" im
    * Einstiegs-Block — wechselt zum Tab "Verwalten" mit geöffnetem
    * Neu-Formular (`App.tsx`s `handleCreateFirstServer`). */
@@ -106,6 +110,8 @@ export function ServerList({
   onToggleGroup,
   resumeRequest = null,
   onResumeRequestConsumed,
+  connectRequest = null,
+  onConnectRequestConsumed,
   onCreateFirstServer,
   onCreateServerInGroup,
 }: ServerListProps) {
@@ -246,6 +252,20 @@ export function ServerList({
     void performConnect(server, resumeRequest.chatSessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeRequest, loading, firstRunAcknowledged, servers]);
+
+  // Issue #692: same flow as a click on the server (open tab → switch,
+  // first-run notice, session picker, connecting tab).
+  useEffect(() => {
+    if (!connectRequest || loading || firstRunAcknowledged === null) return;
+    onConnectRequestConsumed?.();
+    const server = servers.find((s) => s.id === connectRequest.serverId);
+    if (!server) {
+      console.error("connect request for an unknown or unusable server");
+      return;
+    }
+    void handleConnect(server);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectRequest, loading, firstRunAcknowledged, servers]);
 
   /** Spec 0031, Abschnitt 4: der Screen blockiert nur den ersten
    * `connect()`-Aufruf, nicht die übrige App-Nutzung davor — deshalb hier

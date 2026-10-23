@@ -152,6 +152,8 @@
     "confirmDelete": "Usuń na stałe"
   },
   "serverForm": {
+    "connect": "Połącz",
+    "connectSaveFirst": "Najpierw zapisz zmiany",
     "hostKeys": {
       "title": "Klucze hostów",
       "none": "Nie zapisano jeszcze klucza hosta. Zostanie zapisany przy pierwszym połączeniu."

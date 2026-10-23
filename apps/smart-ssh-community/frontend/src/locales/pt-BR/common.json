@@ -152,6 +152,8 @@
     "confirmDelete": "Excluir permanentemente"
   },
   "serverForm": {
+    "connect": "Conectar",
+    "connectSaveFirst": "Salve suas alterações primeiro",
     "hostKeys": {
       "title": "Chaves de host",
       "none": "Nenhuma chave de host armazenada ainda. Ela é armazenada na primeira conexão."

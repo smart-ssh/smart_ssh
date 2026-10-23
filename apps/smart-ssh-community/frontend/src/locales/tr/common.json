@@ -152,6 +152,8 @@
     "confirmDelete": "Kalıcı olarak sil"
   },
   "serverForm": {
+    "connect": "Bağlan",
+    "connectSaveFirst": "Önce değişikliklerinizi kaydedin",
     "hostKeys": {
       "title": "Ana makine anahtarları",
       "none": "Henüz kayıtlı ana makine anahtarı yok. İlk bağlantıda kaydedilir."

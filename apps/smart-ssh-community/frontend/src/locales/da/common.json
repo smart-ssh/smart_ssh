@@ -152,6 +152,8 @@
     "confirmDelete": "Slet permanent"
   },
   "serverForm": {
+    "connect": "Opret forbindelse",
+    "connectSaveFirst": "Gem først dine ændringer",
     "hostKeys": {
       "title": "Værtsnøgler",
       "none": "Ingen værtsnøgle gemt endnu. Den gemmes ved første forbindelse."

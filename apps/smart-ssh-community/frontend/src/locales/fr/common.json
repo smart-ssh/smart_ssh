@@ -152,6 +152,8 @@
     "confirmDelete": "Supprimer définitivement"
   },
   "serverForm": {
+    "connect": "Se connecter",
+    "connectSaveFirst": "Enregistrez d'abord vos modifications",
     "hostKeys": {
       "title": "Clés d’hôte",
       "none": "Aucune clé d’hôte enregistrée. Elle est enregistrée à la première connexion."

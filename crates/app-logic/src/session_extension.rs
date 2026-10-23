@@ -214,7 +214,9 @@ pub async fn rebuild_redactors_for_sessions(
             tags: session.tags.clone(),
         };
         let secrets = known_secrets(extension, Some(&scope));
-        session.swap_redactor(redactor_with_secrets(sudo.as_ref(), &secrets));
+        // The only path that replaces (not extends) the literal secret set.
+        session
+            .swap_redactor_with_literals(redactor_with_secrets(sudo.as_ref(), &secrets), &secrets);
     }
 }
 

@@ -152,6 +152,8 @@
     "confirmDelete": "Șterge definitiv"
   },
   "serverForm": {
+    "connect": "Conectare",
+    "connectSaveFirst": "Salvați mai întâi modificările",
     "hostKeys": {
       "title": "Chei de host",
       "none": "Nicio cheie de host stocată încă. Se stochează la prima conectare."
