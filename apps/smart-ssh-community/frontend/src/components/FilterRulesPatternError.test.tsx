@@ -296,3 +296,47 @@ describe("Testansicht markiert ein ungültiges Muster (Spec 0077, 3.2.3)", () =>
     expect(marker).not.toHaveTextContent("ls *");
   });
 });
+
+// Issue #695: add/edit open the rule form in a modal dialog.
+describe("Regel-Formular im Dialog (Issue #695)", () => {
+  it("opens as a dialog, keeps errors inside it, closes on Escape and returns focus", async () => {
+    listRulesMock.mockResolvedValue([validRule()]);
+    createRuleMock.mockRejectedValue({
+      message: LIBRARY_ERROR,
+      code: "FILTER_RULE_PATTERN_INVALID",
+    });
+    renderView();
+
+    const opener = await screen.findByRole("button", { name: /\+ Regel|\+ Rule/ });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(within(dialog).getByPlaceholderText("ls *")).toBeInTheDocument();
+    expect(dialog.querySelector("select")).toHaveFocus();
+
+    fireEvent.change(within(dialog).getByPlaceholderText("ls *"), {
+      target: { value: "(" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Anlegen|Create/ }));
+    expect(await within(dialog).findByText(LIBRARY_ERROR)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(opener).toHaveFocus();
+    expect(createRuleMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("edit opens a prefilled dialog; Cancel closes without saving", async () => {
+    listRulesMock.mockResolvedValue([validRule()]);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Bearbeiten|Edit/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByPlaceholderText("ls *")).toHaveValue("ls *");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Abbrechen|Cancel/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+});

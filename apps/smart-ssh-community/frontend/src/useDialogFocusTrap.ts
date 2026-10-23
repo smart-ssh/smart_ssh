@@ -4,7 +4,12 @@ const FOCUSABLE_SELECTOR =
   'a[href], area[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((el) => {
+    // A named radio group is one Tab stop (the checked radio); the arrow
+    // keys move within it, like the browser's native Tab order.
+    if (!(el instanceof HTMLInputElement) || el.type !== "radio" || el.checked || !el.name) return true;
+    return !container.querySelector(`input[type=radio][name="${CSS.escape(el.name)}"]:checked`);
+  });
 }
 
 interface UseDialogFocusTrapOptions {

@@ -110,8 +110,9 @@ test("filter rules: Tab order, edit form and test panel, long values", async ({ 
   await captureScreen(page, "filter-rules");
 
   await page.getByRole("button", { name: "Edit" }).first().click();
-  await expect(page.getByRole("heading", { name: "Edit Rule" })).toBeVisible();
-  await expectTabOrderFollowsVisualOrder(page, view);
-  await expectNoClippedText(view);
+  const ruleDialog = page.getByRole("dialog", { name: "Edit rule" });
+  await expect(ruleDialog).toBeVisible();
+  await expectTabOrderFollowsVisualOrder(page, ruleDialog);
+  await expectNoClippedText(ruleDialog);
   await captureScreen(page, "filter-rules-edit");
 });
