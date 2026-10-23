@@ -1027,8 +1027,10 @@
       "name": "Name",
       "size": "Größe",
       "permissions": "Rechte",
-      "modified": "Geändert"
+      "modified": "Geändert",
+      "owner": "Besitzer"
     },
+    "columnsMenu": "Spalten ein- oder ausblenden",
     "localEdit": {
       "uploading": "„{{name}}\" wird hochgeladen…",
       "changed": "„{{name}}\" wurde lokal geändert. Auf den Server hochladen?",

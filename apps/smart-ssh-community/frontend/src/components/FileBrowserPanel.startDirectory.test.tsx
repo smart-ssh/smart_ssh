@@ -72,6 +72,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 vi.mock("../layoutSettings", () => ({
   loadFileManagerColumnWidths: vi.fn(() => Promise.resolve({})),
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
+  loadHiddenFileColumns: vi.fn(() => Promise.resolve([])),
+  saveHiddenFileColumns: vi.fn(() => Promise.resolve()),
 }));
 
 function dirEntry(path: string): RemoteEntryDto {

@@ -1027,8 +1027,10 @@
       "name": "Ad",
       "size": "Boyut",
       "permissions": "İzinler",
-      "modified": "Değiştirilme"
+      "modified": "Değiştirilme",
+      "owner": "Sahip"
     },
+    "columnsMenu": "Sütunları göster veya gizle",
     "localEdit": {
       "uploading": "“{{name}}” yükleniyor…",
       "changed": "“{{name}}” yerel olarak değiştirildi. Sunucuya yüklensin mi?",

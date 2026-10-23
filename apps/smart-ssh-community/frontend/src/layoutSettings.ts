@@ -18,6 +18,27 @@ export interface FileManagerColumnWidths {
   size: number;
   permissions: number;
   modified: number;
+  owner: number;
+}
+
+/** Issue #653: the file list columns the user can hide (Name never). */
+export const HIDEABLE_FILE_COLUMNS = ["size", "permissions", "owner", "modified"] as const;
+export type HideableFileColumn = (typeof HIDEABLE_FILE_COLUMNS)[number];
+const FILE_MANAGER_HIDDEN_COLUMNS_KEY = "fileManagerHiddenColumns";
+
+/** Hidden columns, app-wide. Unknown/invalid entries are dropped (and so can
+ * never hide Name); nothing stored = all visible. */
+export async function loadHiddenFileColumns(): Promise<HideableFileColumn[]> {
+  const store = await settingsStore();
+  const stored = await store.get<unknown>(FILE_MANAGER_HIDDEN_COLUMNS_KEY);
+  if (!Array.isArray(stored)) return [];
+  return HIDEABLE_FILE_COLUMNS.filter((c) => stored.includes(c));
+}
+
+export async function saveHiddenFileColumns(hidden: readonly HideableFileColumn[]): Promise<void> {
+  const store = await settingsStore();
+  await store.set(FILE_MANAGER_HIDDEN_COLUMNS_KEY, [...hidden]);
+  await store.save();
 }
 
 /** Obergrenze rein als Sanity-Check gegen eine grob kaputte
@@ -57,6 +78,7 @@ export async function loadFileManagerColumnWidths(): Promise<Partial<FileManager
   if (isValidWidth(stored.size)) result.size = stored.size;
   if (isValidWidth(stored.permissions)) result.permissions = stored.permissions;
   if (isValidWidth(stored.modified)) result.modified = stored.modified;
+  if (isValidWidth(stored.owner)) result.owner = stored.owner;
   return result;
 }
 

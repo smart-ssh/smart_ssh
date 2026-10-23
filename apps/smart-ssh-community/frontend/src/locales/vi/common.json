@@ -1022,8 +1022,10 @@
       "name": "Tên",
       "size": "Kích thước",
       "permissions": "Quyền",
-      "modified": "Đã sửa đổi"
+      "modified": "Đã sửa đổi",
+      "owner": "Chủ sở hữu"
     },
+    "columnsMenu": "Hiện hoặc ẩn cột",
     "localEdit": {
       "uploading": "Đang tải lên “{{name}}”…",
       "changed": "“{{name}}” đã được thay đổi cục bộ. Tải lên máy chủ?",

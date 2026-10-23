@@ -1022,8 +1022,10 @@
       "name": "名前",
       "size": "サイズ",
       "permissions": "権限",
-      "modified": "更新日時"
+      "modified": "更新日時",
+      "owner": "所有者"
     },
+    "columnsMenu": "列の表示/非表示",
     "localEdit": {
       "uploading": "「{{name}}」をアップロード中…",
       "changed": "「{{name}}」がローカルで変更されました。サーバーにアップロードしますか？",

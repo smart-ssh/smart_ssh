@@ -1022,8 +1022,10 @@
       "name": "名称",
       "size": "大小",
       "permissions": "权限",
-      "modified": "修改时间"
+      "modified": "修改时间",
+      "owner": "所有者"
     },
+    "columnsMenu": "显示或隐藏列",
     "localEdit": {
       "uploading": "正在上传“{{name}}”…",
       "changed": "“{{name}}”已在本地被更改。要将其上传到服务器吗？",

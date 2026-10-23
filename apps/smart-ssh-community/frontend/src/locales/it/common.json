@@ -1032,8 +1032,10 @@
       "name": "Nome",
       "size": "Dimensione",
       "permissions": "Permessi",
-      "modified": "Modificato"
+      "modified": "Modificato",
+      "owner": "Proprietario"
     },
+    "columnsMenu": "Mostra o nascondi colonne",
     "localEdit": {
       "uploading": "Caricamento di “{{name}}”…",
       "changed": "“{{name}}” è stato modificato localmente. Caricarlo sul server?",

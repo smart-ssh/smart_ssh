@@ -59,6 +59,8 @@ import {
 import {
   loadFileManagerColumnWidths,
   saveFileManagerColumnWidths,
+  loadHiddenFileColumns,
+  saveHiddenFileColumns,
 } from "../layoutSettings";
 import { testI18n } from "../testI18n";
 import { showToast } from "../toastBus";
@@ -196,6 +198,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 vi.mock("../layoutSettings", () => ({
   loadFileManagerColumnWidths: vi.fn(() => Promise.resolve({})),
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
+  loadHiddenFileColumns: vi.fn(() => Promise.resolve([])),
+  saveHiddenFileColumns: vi.fn(() => Promise.resolve()),
 }));
 
 const entry: RemoteEntryDto = {
@@ -314,9 +318,9 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
 
     const { container } = renderPanel();
     await screen.findByText(/readme\.md/);
-    // 600px Container; andere Spalten (Rechte 90 + Geändert 150 + Aktionen
-    // 36) + Name-Minimum (120) = 396px stehen fest, für "Größe" bleiben
-    // maximal 600 - 396 = 204px.
+    // 600px Container; andere Spalten (Rechte 90 + Besitzer 130 + Geändert
+    // 150 + Aktionen 36) + Name-Minimum (120) = 526px stehen fest, für
+    // "Größe" bleiben maximal 600 - 526 = 74px.
     stubContainerWidth(container, 600);
 
     const handle = screen.getByTestId("column-resize-size");
@@ -326,7 +330,7 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
 
     await waitFor(() => {
       const sizeCol = container.querySelectorAll("colgroup col")[1] as HTMLElement;
-      expect(sizeCol.style.width).toBe("204px");
+      expect(sizeCol.style.width).toBe("74px");
     });
   });
 
@@ -360,6 +364,80 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     fireEvent.click(dirButton);
 
     await waitFor(() => expect(sftpList).toHaveBeenCalledWith("session-1", "logs", null));
+  });
+});
+
+describe("FileBrowserPanel Owner column and column visibility (issue #653)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(loadHiddenFileColumns).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.mocked(loadHiddenFileColumns).mockResolvedValue([]);
+  });
+
+  it("shows uid:gid when names are missing and user:group when present", async () => {
+    vi.mocked(sftpList).mockResolvedValue([
+      entry,
+      { ...entry, name: "b.txt", path: "b.txt", owner: "alice", group: "staff" },
+    ]);
+    renderPanel();
+    await screen.findByText(/readme\.md/);
+    expect(screen.getByText("1000:1000")).toBeTruthy();
+    expect(screen.getByText("alice:staff")).toBeTruthy();
+  });
+
+  it("hides and shows columns via the header context menu, Name is not offered, and persists", async () => {
+    vi.mocked(sftpList).mockResolvedValue([entry]);
+    const { container } = renderPanel();
+    await screen.findByText(/readme\.md/);
+
+    fireEvent.contextMenu(container.querySelector("thead tr") as HTMLElement, { clientX: 10, clientY: 10 });
+    const menu = await screen.findByRole("menu");
+    const items = within(menu).getAllByRole("menuitemcheckbox");
+    expect(items).toHaveLength(4);
+    expect(within(menu).queryByRole("menuitemcheckbox", { name: /^Name$/ })).toBeNull();
+
+    fireEvent.click(items[2]);
+    await waitFor(() => expect(container.querySelectorAll("thead th").length).toBe(5));
+    expect(screen.queryByText("1000:1000")).toBeNull();
+    expect(saveHiddenFileColumns).toHaveBeenCalledWith(["owner"]);
+
+    fireEvent.click(within(screen.getByRole("menu")).getAllByRole("menuitemcheckbox")[2]);
+    await waitFor(() => expect(container.querySelectorAll("thead th").length).toBe(6));
+    expect(screen.getByText("1000:1000")).toBeTruthy();
+    expect(saveHiddenFileColumns).toHaveBeenLastCalledWith([]);
+  });
+
+  it("applies the stored hidden columns on mount", async () => {
+    vi.mocked(sftpList).mockResolvedValue([entry]);
+    vi.mocked(loadHiddenFileColumns).mockResolvedValue(["size", "permissions", "owner", "modified"]);
+    const { container } = renderPanel();
+    await screen.findByText(/readme\.md/);
+    await waitFor(() => expect(container.querySelectorAll("thead th").length).toBe(2));
+    expect(container.querySelectorAll("colgroup col").length).toBe(2);
+  });
+
+  it("column resizing still works while another column is hidden", async () => {
+    vi.mocked(sftpList).mockResolvedValue([entry]);
+    vi.mocked(loadHiddenFileColumns).mockResolvedValue(["permissions"]);
+    const { container } = renderPanel();
+    await screen.findByText(/readme\.md/);
+    stubContainerWidth(container, 1000);
+    await waitFor(() => expect(container.querySelectorAll("colgroup col").length).toBe(5));
+
+    const handle = screen.getByTestId("column-resize-owner");
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    fireEvent.pointerMove(handle, { clientX: 130, buttons: 1 });
+    fireEvent.pointerUp(handle, { clientX: 130 });
+
+    await waitFor(() => {
+      // order: name, size, owner, modified, actions; default owner 130 + 30
+      expect((container.querySelectorAll("colgroup col")[2] as HTMLElement).style.width).toBe("160px");
+    });
+    expect(screen.queryByTestId("column-resize-permissions")).toBeNull();
   });
 });
 
@@ -2221,7 +2299,8 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
       "Group",
       "Close",
     ]) {
-      expect(screen.getByText(label)).toBeVisible();
+      // "Owner" is also a column header of the list behind the dialog.
+      expect(screen.getAllByText(label).at(-1)).toBeVisible();
     }
     expectNoGerman();
   });

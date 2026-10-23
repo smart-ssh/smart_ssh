@@ -1027,8 +1027,10 @@
       "name": "Namn",
       "size": "Storlek",
       "permissions": "Behörigheter",
-      "modified": "Ändrad"
+      "modified": "Ändrad",
+      "owner": "Ägare"
     },
+    "columnsMenu": "Visa eller dölj kolumner",
     "localEdit": {
       "uploading": "Laddar upp “{{name}}”…",
       "changed": "“{{name}}” ändrades lokalt. Ladda upp den till servern?",
