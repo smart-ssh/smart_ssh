@@ -815,8 +815,6 @@
     },
     "tag": {
       "literalHint": "Doslovný štítek z cizího souboru — může přesně odpovídat pravidlu Povolit. Lze jednotlivě odznačit.",
-      "allowDeselectedHint": "Odpovídá stávajícímu pravidlu Povolit a žádnému pravidlu Zamítnout — proto je ve výchozím stavu odznačen. Lze jednotlivě znovu označit.",
-      "autoDeselectedBadge": "automaticky odznačeno",
       "matchesRuleHint": "odpovídá stávajícím pravidlům filtru (počet: {{count}}): {{actions}}",
       "action": {
         "allow": "Povolit",

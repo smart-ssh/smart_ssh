@@ -805,8 +805,6 @@
     },
     "tag": {
       "literalHint": "Sananmukainen tunniste vieraasta tiedostosta – voi täsmätä sallimissääntöön tarkasti. Valinnan voi poistaa yksitellen.",
-      "allowDeselectedHint": "Täsmää olemassa olevaan sallimissääntöön eikä yhtään estosääntöön – siksi oletuksena valitsematta. Voi valita uudelleen yksitellen.",
-      "autoDeselectedBadge": "automaattisesti poistettu valinnasta",
       "matchesRuleHint": "täsmää {{count}} olemassa olevaan suodatussääntöön: {{actions}}",
       "action": {
         "allow": "Salli",

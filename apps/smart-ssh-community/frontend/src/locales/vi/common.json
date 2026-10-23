@@ -800,8 +800,6 @@
     },
     "tag": {
       "literalHint": "Thẻ nguyên văn từ một tệp lạ — có thể khớp chính xác với một quy tắc Cho phép. Có thể bỏ chọn riêng từng mục.",
-      "allowDeselectedHint": "Khớp với một quy tắc Cho phép hiện có và không có quy tắc Từ chối — vì vậy mặc định được bỏ chọn. Có thể chọn lại riêng từng mục.",
-      "autoDeselectedBadge": "tự động bỏ chọn",
       "matchesRuleHint": "khớp với {{count}} quy tắc lọc hiện có: {{actions}}",
       "action": {
         "allow": "Cho phép",

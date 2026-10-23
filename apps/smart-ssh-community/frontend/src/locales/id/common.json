@@ -800,8 +800,6 @@
     },
     "tag": {
       "literalHint": "Tag literal dari berkas asing — dapat cocok persis dengan aturan Izinkan. Dapat dibatalkan pilihannya satu per satu.",
-      "allowDeselectedHint": "Cocok dengan aturan Izinkan yang ada dan tanpa aturan Tolak — karena itu tidak dipilih secara default. Dapat dipilih lagi satu per satu.",
-      "autoDeselectedBadge": "dibatalkan pilihannya secara otomatis",
       "matchesRuleHint": "cocok dengan {{count}} aturan filter yang ada: {{actions}}",
       "action": {
         "allow": "Izinkan",

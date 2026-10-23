@@ -54,7 +54,7 @@ function preview(): SshConfigImportPreviewDto {
             origin: { file: "/tmp/config", line: 5, block: "prod *" },
             matchedRules: [{ ruleId: "rule-2", action: "allow" }],
             isLiteral: true,
-            defaultSelected: false,
+            defaultSelected: true,
           },
         ],
         identityFile: {
@@ -110,7 +110,7 @@ function previewIssue105(): SshConfigImportPreviewDto {
       origin: { file: "/tmp/config", line: 1, block: "*.prod.de" },
       matchedRules: [{ ruleId: "rule-a", action: "allow" }],
       isLiteral: false,
-      defaultSelected: false,
+      defaultSelected: true,
     },
     {
       tag: "prod",
@@ -209,11 +209,8 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
       index: 0,
       selected: true,
       identityMode: "keepAsFile",
-      // "prod" ist buchstäblich und trifft eine Allow-Regel (rule-2) —
-      // Q-BL-0216-02 lässt es standardmäßig abgewählt, ohne dass der Nutzer
-      // etwas tut. "*.prod.de" (Muster, trifft nur eine Confirm-Regel)
-      // bleibt angewählt.
-      droppedTags: ["prod"],
+      // Issue #636: kein Schlagwort startet abgewählt, auch nicht bei Allow.
+      droppedTags: [],
     });
     expect(onImported).toHaveBeenCalled();
   });
@@ -224,14 +221,14 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
   // bleibt es angewählt. Gegen den alten Stand (`defaultTagSelected` gab
   // immer `true` zurück) rot gesehen: beide Erwartungen unten schlugen
   // fehl, weil "prod" (Allow-Treffer) als angewählt startete.
-  it("Q-BL-0216-02: a literal tag hitting an Allow rule starts deselected, one hitting only Deny stays selected", async () => {
+  it("issue #636: literal tags hitting Allow or Deny rules both start selected", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(previewWithDenyOnlyLiteralTag());
     renderDialog();
     await screen.findByText("web1");
 
     const allowHitCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
     const denyOnlyHitCheckbox = screen.getByText("onlydeny").closest("label")?.querySelector("input");
-    expect(allowHitCheckbox).not.toBeChecked();
+    expect(allowHitCheckbox).toBeChecked();
     expect(denyOnlyHitCheckbox).toBeChecked();
   });
 
@@ -240,7 +237,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
   // Gegen den alten Stand (Ableitung nur für `isLiteral` + Allow-Treffer)
   // rot gesehen: "*.prod.de" (Muster) startete angewählt, "prod"
   // (Allow + Deny) abgewählt.
-  it("issue #105: a pattern tag with an Allow hit starts deselected, a tag hitting Allow and Deny stays selected", async () => {
+  it("issue #636: tags hitting Allow rules start selected and show the rule action, without a deselected badge", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(previewIssue105());
     vi.mocked(applySshConfigImport).mockResolvedValue({
       createdServers: 2,
@@ -253,10 +250,10 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     await screen.findByText("web1");
 
     const patternLabel = screen.getByText("*.prod.de").closest("label");
-    expect(patternLabel?.querySelector("input")).not.toBeChecked();
+    expect(patternLabel?.querySelector("input")).toBeChecked();
     // Gekennzeichnet samt Wirkung der Regel (§5.2a).
     expect(patternLabel?.textContent).toContain("Allow");
-    expect(patternLabel?.textContent).toContain("automatisch abgewählt");
+    expect(patternLabel?.textContent).not.toContain("automatisch abgewählt");
     const literalLabel = screen.getByText("prod").closest("label");
     expect(literalLabel?.querySelector("input")).toBeChecked();
     expect(literalLabel?.textContent).toContain("Deny");
@@ -264,7 +261,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
 
     fireEvent.click(screen.getByText("Importieren"));
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
-    expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags).toEqual(["*.prod.de"]);
+    expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags).toEqual([]);
   });
 
   it("issue #105: both defaults can be flipped by hand", async () => {
@@ -284,10 +281,10 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
     fireEvent.click(screen.getByText("Importieren"));
 
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
-    expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags).toEqual(["prod"]);
+    expect(vi.mocked(applySshConfigImport).mock.calls[0][0][0].droppedTags.sort()).toEqual(["*.prod.de", "prod"]);
   });
 
-  it("reselecting the literal Allow-tag that starts deselected removes it from droppedTags on confirm", async () => {
+  it("deselecting and reselecting the literal Allow-tag removes it from droppedTags on confirm", async () => {
     vi.mocked(previewSshConfigImport).mockResolvedValue(preview());
     vi.mocked(applySshConfigImport).mockResolvedValue({
       createdServers: 2,
@@ -301,7 +298,8 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
 
     const literalTagCheckbox = screen.getByText("prod").closest("label")?.querySelector("input");
     expect(literalTagCheckbox).toBeTruthy();
-    expect(literalTagCheckbox).not.toBeChecked();
+    expect(literalTagCheckbox).toBeChecked();
+    fireEvent.click(literalTagCheckbox as HTMLInputElement);
     fireEvent.click(literalTagCheckbox as HTMLInputElement);
 
     fireEvent.click(screen.getByText("Importieren"));
@@ -341,9 +339,7 @@ describe("SshConfigImportDialog (Spec 0075, §3.1.7)", () => {
 
     await waitFor(() => expect(applySshConfigImport).toHaveBeenCalled());
     const choices = vi.mocked(applySshConfigImport).mock.calls[0][0];
-    // "prod" ist ohnehin schon per Vorgabe abgewählt; nach dem Klick auf
-    // "*.prod.de" sind es beide.
-    expect(choices[0].droppedTags.sort()).toEqual(["*.prod.de", "prod"]);
+    expect(choices[0].droppedTags).toEqual(["*.prod.de"]);
   });
 
   it("cancel closes the dialog without applying anything", async () => {

@@ -805,8 +805,6 @@
     },
     "tag": {
       "literalHint": "Letterlijk label uit een extern bestand — kan exact bij een toestaan-regel passen. Afzonderlijk te deselecteren.",
-      "allowDeselectedHint": "Komt overeen met een bestaande toestaan-regel en geen weigeren-regel — daarom standaard gedeselecteerd. Afzonderlijk weer te selecteren.",
-      "autoDeselectedBadge": "automatisch gedeselecteerd",
       "matchesRuleHint": "komt overeen met {{count}} bestaande filterregel(s): {{actions}}",
       "action": {
         "allow": "Toestaan",

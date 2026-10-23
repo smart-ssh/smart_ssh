@@ -805,8 +805,6 @@
     },
     "tag": {
       "literalHint": "Szó szerinti címke idegen fájlból – pontosan illeszkedhet egy Engedélyezés szabályra. Egyenként kijelölése törölhető.",
-      "allowDeselectedHint": "Illeszkedik egy meglévő Engedélyezés szabályra, Tiltás szabályra nem – ezért alapból nincs kijelölve. Egyenként újra kijelölhető.",
-      "autoDeselectedBadge": "automatikusan kijelölés nélkül",
       "matchesRuleHint": "{{count}} meglévő szűrőszabályra illeszkedik: {{actions}}",
       "action": {
         "allow": "Engedélyezés",

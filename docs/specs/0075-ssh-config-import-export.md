@@ -432,15 +432,14 @@ Tag-`Allow`-Regel, die ein importiertes Profil von der Vorgabe
 betroffene Regel nennen. Der Nutzer kann sie einzeln abwählen.
 Nachgewiesen durch §6.4.3a.
 
-**Vorgabe in der Vorschau:** Jedes importierte Schlagwort — ob
-buchstäblich oder Muster —, das eine bestehende Tag-`Allow`-Regel trifft,
-ist standardmäßig **abgewählt**, es sei denn, es trifft zugleich eine
-Tag-`Deny`-Regel; dann bleibt es angewählt, damit die `Deny`-Abdeckung
-nicht verloren geht. Schlagworte, die nur `Confirm`-/`Deny`-Regeln oder
-keine Regel treffen, bleiben angewählt. Der Nutzer kann jedes Schlagwort
-in beide Richtungen umwählen. Bestätigt der Import einen Eintrag, ohne
-dass eine Wahl dazu vorliegt, gilt dieselbe Vorgabe: Die standardmäßig
-abgewählten Schlagworte entstehen nicht.
+**Vorgabe in der Vorschau:** Jedes importierte Schlagwort ist
+standardmäßig **angewählt** — gleich, ob es buchstäblich oder Muster ist
+und ob es eine bestehende Tag-`Allow`-, `Confirm`-, `Deny`-Regel oder keine
+trifft. Trifft es eine Regel, zeigt die Vorschau neben dem Schlagwort deren
+Wirkung an; es gibt keine automatische Abwahl und keine entsprechende
+Markierung. Der Nutzer kann jedes Schlagwort umwählen. Bestätigt der Import
+einen Eintrag, ohne dass eine Wahl dazu vorliegt, gilt dieselbe Vorgabe:
+Alle Schlagworte entstehen.
 
 **5.3 Kein unbemerkter Jump-Host.** Jeder Jump-Host, der beim Import
 entsteht, steht in der Vorschau. Eine Jump-Host-**Schleife** wird beim
@@ -643,9 +642,10 @@ wie es die Architekturregel verlangt.
    Erwartung: Die Vorschau kennzeichnet das Schlagwort und nennt die
    Regel (5.2a); der Nutzer kann es abwählen; wählt er ab, trägt das
    Profil das Schlagwort nicht. Zweiter Fall: eine `Deny`-Regel — sie
-   bleibt in jedem Fall wirksam (Stufen vor Scope-Genauigkeit). Vorgabe (§5.2a): Trifft `*.prod.de` nur die
-   `Allow`-Regel, startet es abgewählt; trifft es `Allow` und `Deny`,
-   bleibt es angewählt — für ein buchstäbliches Schlagwort ebenso.
+   bleibt in jedem Fall wirksam (Stufen vor Scope-Genauigkeit). Vorgabe (§5.2a): Das Schlagwort startet in
+   beiden Fällen angewählt, die Vorschau zeigt die Wirkung der Regel
+   (`Allow`/`Deny`) daneben, keine Abwahl-Markierung; für ein
+   buchstäbliches Schlagwort ebenso.
 
 4. **Jump-Host-Schleife.** `a` springt über `b`, `b` über `a`. Der
    Import legt die Schleife **nicht** an und sagt warum (5.3). Zweiter

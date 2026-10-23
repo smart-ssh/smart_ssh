@@ -810,8 +810,6 @@
     },
     "tag": {
       "literalHint": "Etichetă literală dintr-un fișier străin — se poate potrivi exact cu o regulă Permite. Poate fi deselectată individual.",
-      "allowDeselectedHint": "Se potrivește cu o regulă Permite existentă și cu nicio regulă Refuză — de aceea este deselectată implicit. Poate fi selectată din nou individual.",
-      "autoDeselectedBadge": "deselectată automat",
       "matchesRuleHint": "se potrivește cu {{count}} reguli de filtrare existente: {{actions}}",
       "action": {
         "allow": "Permite",

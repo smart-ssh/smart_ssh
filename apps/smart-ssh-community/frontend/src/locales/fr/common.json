@@ -810,8 +810,6 @@
     },
     "tag": {
       "literalHint": "Étiquette littérale issue d’un fichier externe — peut correspondre exactement à une règle d’autorisation. Désélectionnable individuellement.",
-      "allowDeselectedHint": "Correspond à une règle d’autorisation existante et à aucune règle de refus — donc désélectionnée par défaut. Sélectionnable de nouveau individuellement.",
-      "autoDeselectedBadge": "désélectionnée automatiquement",
       "matchesRuleHint": "correspond à {{count}} règle(s) de filtrage existante(s) : {{actions}}",
       "action": {
         "allow": "Autoriser",

@@ -805,8 +805,6 @@
     },
     "tag": {
       "literalHint": "Bokstavlig tagg från en främmande fil — kan matcha en tillåtregel exakt. Kan avmarkeras enskilt.",
-      "allowDeselectedHint": "Matchar en befintlig tillåtregel och ingen nekaregel — därför avmarkerad som standard. Kan väljas igen enskilt.",
-      "autoDeselectedBadge": "automatiskt avmarkerad",
       "matchesRuleHint": "matchar {{count}} befintlig(a) filterregel/filterregler: {{actions}}",
       "action": {
         "allow": "Tillåt",

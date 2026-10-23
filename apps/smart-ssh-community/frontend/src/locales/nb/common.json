@@ -805,8 +805,6 @@
     },
     "tag": {
       "literalHint": "Bokstavelig merkelapp fra en fremmed fil – kan treffe en tillat-regel nøyaktig. Kan velges bort enkeltvis.",
-      "allowDeselectedHint": "Samsvarer med en eksisterende tillat-regel og ingen nekt-regel – derfor valgt bort som standard. Kan velges igjen enkeltvis.",
-      "autoDeselectedBadge": "valgt bort automatisk",
       "matchesRuleHint": "samsvarer med {{count}} eksisterende filterregel/-regler: {{actions}}",
       "action": {
         "allow": "Tillat",

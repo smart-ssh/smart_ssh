@@ -815,8 +815,6 @@
     },
     "tag": {
       "literalHint": "Dosłowny tag z obcego pliku — może dokładnie pasować do reguły zezwalającej. Można odznaczyć osobno.",
-      "allowDeselectedHint": "Pasuje do istniejącej reguły zezwalającej i do żadnej odmawiającej — dlatego domyślnie odznaczony. Można zaznaczyć ponownie osobno.",
-      "autoDeselectedBadge": "odznaczono automatycznie",
       "matchesRuleHint": "pasuje do reguł filtrowania ({{count}}): {{actions}}",
       "action": {
         "allow": "Zezwól",

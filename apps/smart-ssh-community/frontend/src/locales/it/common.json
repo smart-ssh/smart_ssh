@@ -810,8 +810,6 @@
     },
     "tag": {
       "literalHint": "Tag letterale da un file esterno: può corrispondere esattamente a una regola Consenti. Deselezionabile singolarmente.",
-      "allowDeselectedHint": "Corrisponde a una regola Consenti esistente e a nessuna regola Nega: quindi deselezionato per impostazione predefinita. Selezionabile di nuovo singolarmente.",
-      "autoDeselectedBadge": "deselezionato automaticamente",
       "matchesRuleHint": "corrisponde a {{count}} regole di filtro esistenti: {{actions}}",
       "action": {
         "allow": "Consenti",
