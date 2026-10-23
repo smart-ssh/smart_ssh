@@ -86,9 +86,22 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
 
 - **Rechte bearbeiten (chmod):** Ein Dialog mit Checkbox-Matrix
   (Besitzer/Gruppe/andere × lesen/schreiben/ausführen) und numerischer
-  Eingabe. Für Ordner optional rekursiv, deutlich gekennzeichnet; die Rechte
-  werden dann auf jeden Eintrag im Baum gesetzt, Dateien und Ordner. Das
-  Ergebnis nennt die Zahl der geänderten Einträge.
+  Eingabe sowie eigenen Kästchen für setuid, setgid und sticky (mit kurzem
+  Hinweis). Für Ordner optional rekursiv, deutlich gekennzeichnet; das
+  Ergebnis nennt die Zahl der geänderten Einträge. Rekursiv arbeitet es wie
+  `chmod -R` mit großem `X`: Dateien erhalten genau die gewählten neun
+  Rechtebits; Ordner erhalten dieselben Bits plus „ausführen“ für jede
+  Klasse (Besitzer/Gruppe/andere), die „lesen“ hat, damit sie betretbar
+  bleiben. Sonderbits setzt die rekursive Anwendung nie auf Dateien; Ordner
+  behalten ihre eigenen Sonderbits, außer der Nutzer hat sie im Dialog
+  geändert – dann erhalten nur Ordner die gewählten. Bei gesetztem
+  „rekursiv“ zeigt der Dialog eine Zeile wie „Ordner: 755, Dateien: 644“.
+  Ohne „rekursiv“ wird genau der Dialogwert gesetzt. Die Eigenschaften
+  zeigen die Rechte ebenfalls vierstellig.
+- **Ordner ohne „ausführen“:** Liefert das Auflisten eines Ordners keine
+  Einträge und hat der Ordner selbst kein „ausführen“-Bit, zeigt die Liste
+  „Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)“ statt eines leeren
+  Ordners.
 - **Löschen:** Datei oder Ordner, **Bestätigung immer**. Bei Ordnern zeigt
   der Dialog vorab, wie viele Dateien und Ordner gelöscht werden (Vorschau
   wie beim zweistufigen Löschen eines Servers). Ordner werden von unten nach
