@@ -19,6 +19,7 @@ import {
   claimClipboardFiles,
   claimDroppedPaths,
   clipboardHasFiles,
+  clipboardWriteText,
   closeEditSession,
   localFileMtime,
   pickUploadFiles,
@@ -99,6 +100,7 @@ vi.mock("../api", () => ({
   claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
   pickUploadFiles: vi.fn(),
   clipboardHasFiles: vi.fn(() => Promise.resolve(false)),
+  clipboardWriteText: vi.fn(() => Promise.resolve()),
   claimClipboardFiles: vi.fn(),
   pickUploadFolder: vi.fn(),
   sftpLocalPathsAreFolders: vi.fn((_s: string, paths: string[]) =>
@@ -524,7 +526,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
     await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith("hallo welt"),
+      expect(clipboardWriteText).toHaveBeenCalledWith("hallo welt"),
     );
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith(
@@ -591,7 +593,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
-    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(big));
+    await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith(big));
   });
 
   it("shows the translated message for a file over 50 MB, not the backend text", async () => {
@@ -631,7 +633,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
         }),
     );
     vi.mocked(showToast).mockClear();
-    vi.mocked(navigator.clipboard.writeText).mockClear();
+    vi.mocked(clipboardWriteText).mockClear();
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -646,7 +648,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     rejectCopy({ code: "SFTP_COPY_CANCELLED", message: "cancelled" });
     await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
-    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(clipboardWriteText).not.toHaveBeenCalled();
     expect(showToast).not.toHaveBeenCalled();
   });
 
@@ -681,7 +683,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
         }),
       ),
     );
-    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(clipboardWriteText).not.toHaveBeenCalled();
   });
 
   it("shows the properties dialog with numeric and symbolic permissions", async () => {
@@ -1366,6 +1368,14 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     ).toBeVisible();
     expect(screen.getByText(/passwortlosen Dateizugriff als root/)).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    // Issue #626: the sudoers line goes through the backend clipboard path.
+    fireEvent.click(screen.getByRole("button", { name: "Kopieren" }));
+    await waitFor(() =>
+      expect(clipboardWriteText).toHaveBeenCalledWith(
+        "deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server",
+      ),
+    );
   });
 
   it("shows the unsafe sftp-server message and no sudoers line", async () => {
