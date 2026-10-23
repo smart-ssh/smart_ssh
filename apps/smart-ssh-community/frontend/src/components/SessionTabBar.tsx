@@ -138,7 +138,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
               // Eigener Tab-Stopp nur im aktiven Tab; die übrigen schließt die
               // Entf-Taste auf dem fokussierten Tab (Roving-Tabindex).
               tabIndex={active ? 0 : -1}
-              className={`${FOCUS_RING} shrink-0 px-1 text-slate-400 hover:text-slate-200`}
+              className={`${FOCUS_RING} inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-slate-400 hover:border-slate-500 hover:bg-slate-600/60 hover:text-slate-200 focus-visible:border-slate-500 focus-visible:bg-slate-600/60 focus-visible:text-slate-200`}
             >
               ✕
             </button>

@@ -2840,3 +2840,83 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
     });
   });
 });
+
+describe("FileBrowserPanel menus stay inside the window (issue #627)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  const origW = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+  const origH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    window.innerWidth = 1000;
+    window.innerHeight = 600;
+    // jsdom has no layout: every measured element is 200 x 300.
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 200 });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 300 });
+  });
+  afterEach(() => {
+    if (origW) Object.defineProperty(HTMLElement.prototype, "offsetWidth", origW);
+    if (origH) Object.defineProperty(HTMLElement.prototype, "offsetHeight", origH);
+  });
+
+  const menuOf = (label: string) => screen.getByText(label).closest("div,fieldset") as HTMLElement;
+
+  it("opens the row context menu where the click is when there is room", async () => {
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    fireEvent.contextMenu(row, { clientX: 100, clientY: 100 });
+    expect(menuOf("Umbenennen")).toHaveStyle({ left: "100px", top: "100px" });
+  });
+
+  it("opens the row context menu upward at the bottom edge", async () => {
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    fireEvent.contextMenu(row, { clientX: 100, clientY: 590 });
+    expect(menuOf("Umbenennen")).toHaveStyle({ top: "290px" });
+  });
+
+  it("opens the row context menu to the left at the right edge", async () => {
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    fireEvent.contextMenu(row, { clientX: 995, clientY: 100 });
+    expect(menuOf("Umbenennen")).toHaveStyle({ left: "792px" });
+  });
+
+  it("keeps the empty-space menu inside the window in the bottom right corner", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    const scroller = container.querySelector("table")!.parentElement!;
+    fireEvent.contextMenu(scroller, { clientX: 995, clientY: 595 });
+    expect(menuOf("Neuer Ordner")).toHaveStyle({ left: "792px", top: "295px" });
+  });
+
+  it("shifts the target user form inside the window near the right edge", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "root",
+      sftpServerPath: "",
+      failure: null,
+    });
+    // The elevation group sits at the right window edge.
+    const orig = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.tagName === "FIELDSET" && this.getAttribute("aria-label")?.includes("Rechte")) {
+        return { left: 900, top: 10, right: 990, bottom: 30, width: 90, height: 20, x: 900, y: 10, toJSON() {} } as DOMRect;
+      }
+      return orig.call(this);
+    };
+    try {
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.click(await screen.findByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /Als anderer Nutzer/ }));
+      const form = screen.getByLabelText("Ziel-Nutzer").closest("form") as HTMLElement;
+      // 900 + 200 would stick out; end-aligned: 990 - 200 = 790.
+      expect(form).toHaveStyle({ left: "790px" });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = orig;
+    }
+  });
+});
