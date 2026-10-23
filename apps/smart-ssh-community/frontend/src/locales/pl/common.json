@@ -930,7 +930,8 @@
     "dismiss": "Odrzuć propozycję",
     "reject": "Odrzuć",
     "applying": "Stosowanie…",
-    "apply": "Zastosuj"
+    "apply": "Zastosuj",
+    "expired": "Wygasło — nie zastosowano"
   },
   "connectLog": {
     "title": "Szczegóły",

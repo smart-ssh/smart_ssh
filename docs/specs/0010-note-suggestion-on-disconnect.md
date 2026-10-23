@@ -44,6 +44,14 @@ Bestätigung übernommen.
    Benachrichtigung**, auch wenn der Nutzer inzwischen einen anderen
    Bildschirm oder Tab geöffnet hat. Sie ist zunächst kompakt (Ziel und
    „Anzeigen"); „Anzeigen" klappt die Vorschau auf.
+   Die Benachrichtigung hat im kompakten wie im aufgeklappten Zustand ein
+   ✕. Bei einem offenen Vorschlag zählt ✕ als Ablehnen; bei einem
+   abgelaufenen blendet es die Benachrichtigung nur aus.
+7. Läuft die Stunde ab (auch bei der Notiz-Kürzung, Spec 0057), zeigt die
+   Benachrichtigung „Abgelaufen — nicht angewendet" und nur noch ✕;
+   Übernehmen und Ablehnen entfallen. Dieselbe Anzeige erscheint, wenn eine
+   Antwort auf einen Vorschlag ergibt, dass nichts mehr auf sie wartet,
+   ohne Fehlermeldung. Die Notiz bleibt unverändert.
 
 ## 3. Abgrenzung
 

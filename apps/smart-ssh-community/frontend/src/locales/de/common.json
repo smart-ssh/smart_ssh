@@ -920,7 +920,8 @@
     "dismiss": "Vorschlag verwerfen",
     "reject": "Ablehnen",
     "applying": "Übernimmt…",
-    "apply": "Übernehmen"
+    "apply": "Übernehmen",
+    "expired": "Abgelaufen — nicht angewendet"
   },
   "connectLog": {
     "title": "Details",

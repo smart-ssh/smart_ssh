@@ -915,7 +915,8 @@
     "dismiss": "제안 닫기",
     "reject": "거부",
     "applying": "적용 중…",
-    "apply": "적용"
+    "apply": "적용",
+    "expired": "만료됨 — 적용되지 않음"
   },
   "connectLog": {
     "title": "상세 정보",

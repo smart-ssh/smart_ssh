@@ -1,8 +1,8 @@
 import type { TFunction } from "i18next";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, respondToAction } from "../api";
-import { onNoteUpdateSuggested } from "../events";
+import { commandErrorCode, commandErrorMessage, respondToAction } from "../api";
+import { onNoteUpdateExpired, onNoteUpdateSuggested } from "../events";
 import type { NoteUpdateSuggestedEvent } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button } from "./ui";
@@ -31,6 +31,9 @@ interface PendingSuggestion {
    * auf "Anzeigen" wird der Inhalt (das "Dialog"-Äquivalent) eingeblendet. */
   expanded: boolean;
   deciding: boolean;
+  /** Issue #628: the backend no longer waits for an answer (timeout or
+   * unknown id) — the card only says so and can be closed. */
+  expired: boolean;
   error: string | null;
 }
 
@@ -83,12 +86,23 @@ export function NoteSuggestionToast() {
           summaryIncomplete: event.summaryIncomplete === true,
           expanded: false,
           deciding: false,
+          expired: false,
           error: null,
         },
       ]);
     });
+    const unlistenExpired = onNoteUpdateExpired((event) => {
+      setSuggestions((prev) =>
+        prev.map((s) =>
+          s.actionId === event.actionId
+            ? { ...s, expired: true, deciding: false, error: null }
+            : s,
+        ),
+      );
+    });
     return () => {
       unlisten.then((fn) => fn());
+      unlistenExpired.then((fn) => fn());
     };
   }, []);
 
@@ -106,11 +120,21 @@ export function NoteSuggestionToast() {
       await respondToAction(suggestion.sessionId, suggestion.actionId, { decision });
       dismiss(suggestion.actionId);
     } catch (err) {
+      if (commandErrorCode(err) === "ACTION_CONFIRMATION_UNKNOWN") {
+        updateSuggestion(suggestion.actionId, { expired: true, deciding: false, error: null });
+        return;
+      }
       updateSuggestion(suggestion.actionId, {
         deciding: false,
         error: commandErrorMessage(err),
       });
     }
+  };
+
+  /** ✕: an open suggestion counts as Reject; an expired one is only hidden. */
+  const close = (suggestion: PendingSuggestion) => {
+    if (suggestion.expired) dismiss(suggestion.actionId);
+    else void decide(suggestion, "deny");
   };
 
   if (suggestions.length === 0) return null;
@@ -122,7 +146,25 @@ export function NoteSuggestionToast() {
           key={suggestion.actionId}
           className="rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm shadow-lg"
         >
-          {!suggestion.expanded ? (
+          {suggestion.expired ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="space-y-1">
+                <p className="font-semibold text-slate-100">
+                  {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
+                </p>
+                <output className="block text-xs text-slate-300">
+                  {t("noteSuggestion.expired")}
+                </output>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => close(suggestion)}
+                aria-label={t("noteSuggestion.dismiss")}
+              >
+                ✕
+              </Button>
+            </div>
+          ) : !suggestion.expanded ? (
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-slate-100">
                 {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
@@ -137,7 +179,8 @@ export function NoteSuggestionToast() {
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => decide(suggestion, "deny")}
+                  onClick={() => close(suggestion)}
+                  disabled={suggestion.deciding}
                   aria-label={t("noteSuggestion.dismiss")}
                 >
                   ✕
@@ -146,9 +189,19 @@ export function NoteSuggestionToast() {
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="font-semibold text-slate-100">
-                {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-slate-100">
+                  {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => close(suggestion)}
+                  disabled={suggestion.deciding}
+                  aria-label={t("noteSuggestion.dismiss")}
+                >
+                  ✕
+                </Button>
+              </div>
               {suggestion.summaryIncomplete && (
                 <p
                   role="alert"

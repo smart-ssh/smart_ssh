@@ -920,7 +920,8 @@
     "dismiss": "Lukk forslag",
     "reject": "Avvis",
     "applying": "Bruker…",
-    "apply": "Bruk"
+    "apply": "Bruk",
+    "expired": "Utløpt — ikke brukt"
   },
   "connectLog": {
     "title": "Detaljer",

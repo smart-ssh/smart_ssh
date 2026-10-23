@@ -925,7 +925,8 @@
     "dismiss": "Descartar sugerencia",
     "reject": "Rechazar",
     "applying": "Aplicando…",
-    "apply": "Aplicar"
+    "apply": "Aplicar",
+    "expired": "Caducado — no aplicado"
   },
   "connectLog": {
     "title": "Detalles",
