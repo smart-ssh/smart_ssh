@@ -29,7 +29,9 @@ export function useMenuPlacement(
 ): CSSProperties | undefined {
   const narrow = useIsNarrow();
   const { align, gap } = options;
-  const [style, setStyle] = useState<CSSProperties>({ left: 0, top: 0, visibility: "hidden" });
+  // No `visibility: hidden` for the first frame: the layout effect below places
+  // the menu before paint, and a hidden menu could not take focus on mount.
+  const [style, setStyle] = useState<CSSProperties>({ left: 0, top: 0 });
   const anchorRef = useRef(getAnchor);
   const place = useCallback(() => {
     const menu = menuRef.current;
@@ -49,7 +51,7 @@ export function useMenuPlacement(
       ...(p.maxHeight !== null ? { maxHeight: p.maxHeight, overflowY: "auto" as const } : {}),
     };
     setStyle((prev) =>
-      prev.left === next.left && prev.top === next.top && prev.maxHeight === next.maxHeight && prev.visibility === undefined
+      prev.left === next.left && prev.top === next.top && prev.maxHeight === next.maxHeight
         ? prev
         : next,
     );
