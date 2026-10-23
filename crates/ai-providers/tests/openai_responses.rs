@@ -550,6 +550,8 @@ async fn test_issue_609_completed_event_reports_usage() {
         events,
         vec![
             AiEvent::TextDelta("hi".into()),
+            // Issue #617: full prompt size (cached tokens already inside).
+            AiEvent::Usage { input_tokens: 120 },
             AiEvent::RequestUsage(ssh_manager_core::ai::AiUsage {
                 input_tokens: Some(120),
                 output_tokens: Some(40),

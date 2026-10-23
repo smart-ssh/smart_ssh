@@ -1180,6 +1180,7 @@
     "contextUsageTooltip": "Le parti più vecchie della chat vengono riassunte automaticamente quando il contesto si riempie.",
     "webResearchUnavailable": "La ricerca web non è disponibile per questo account provider (la ricerca web è disattivata lì). Questa sessione risponde senza ricerca web. Per disattivarla in modo permanente: Impostazioni → Provider IA → “Ricerca web”.",
     "emptyResponse": "Il modello non ha restituito alcuna risposta. Per i modelli con fase di ragionamento aiuta un limite di output più alto nelle impostazioni del provider.",
+    "refusedResponse": "Il modello ha rifiutato questa richiesta. Riformulala o avvia una nuova chat.",
     "outputTruncated": "(troncato)",
     "fileWritten": "File '{{path}}' scritto.",
     "writtenWithSudoPassword": "Scritto con la password sudo memorizzata.",

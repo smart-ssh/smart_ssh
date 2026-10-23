@@ -99,6 +99,9 @@ Anbieter gedacht, deren Output-Maximum die App nicht kennt.
 - „Weiter" läuft durch Redaction, Fencing, Filter-Engine und Bestätigung.
 - Der Hinweis lässt sich nicht durch Ausgabeinhalt fälschen.
 - Ein unbekanntes Modell führt nicht zu einem 400 durch einen zu hohen Wert.
+- Eine vom Modell abgelehnte Runde (`refusal` / `content_filter`) ist weder
+  „abgeschnitten" noch Anlass für einen Retry; ein darin angefangener
+  Vorschlag wird verworfen (Spec 0080 Abschnitt 9).
 
 ## Akzeptanzfälle
 

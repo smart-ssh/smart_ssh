@@ -1173,6 +1173,7 @@
     "contextUsageTooltip": "Eldre deler av chatten oppsummeres automatisk når konteksten blir full.",
     "webResearchUnavailable": "Nettsøk er ikke tilgjengelig for denne leverandørkontoen (nettsøk er slått av der). Denne økten svarer uten nettsøk. For å slå det av permanent: Innstillinger → AI-leverandør → “Nettsøk”.",
     "emptyResponse": "Modellen ga ikke noe svar. For modeller med en tenkefase hjelper en høyere utdatagrense i leverandørinnstillingene.",
+    "refusedResponse": "Modellen avslo denne forespørselen. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(avkortet)",
     "fileWritten": "Filen «{{path}}» er skrevet.",
     "writtenWithSudoPassword": "Skrevet med det lagrede sudo-passordet.",

@@ -159,7 +159,7 @@ korrigiert — das Verhältnis liegt nie unter 1,0 (die Korrektur senkt die
 Kompaktiert wird, sobald die korrigierte Schätzung 75 % des Fensters
 erreicht. War die zuletzt gemeldete echte Größe bereits über 75 %,
 kompaktiert die nächste Anfrage in jedem Fall, was auch die Schätzung sagt.
-Ohne Usage-Angabe des Providers gilt die reine Schätzung. Der Zustand liegt
+Das gilt für Anthropic ebenso wie für OpenAI-kompatible Anbieter (Chat Completions, Responses, Ollama), sofern sie Usage melden; die gemeldete Größe ist dabei immer die volle Prompt-Größe (Cache-Anteile werden weder doppelt gezählt noch weggelassen). Ohne Usage-Angabe des Providers gilt die reine Schätzung. Der Zustand liegt
 nur im Speicher der Sitzung.
 
 **Anzeige im Chat.** Nach jeder Antwort zeigt der Chat über dem Eingabefeld
@@ -171,6 +171,13 @@ erscheint einmal pro Kompaktierungsschritt (nicht je Anfrage) der Hinweis
 „Ältere Teile dieses Chats wurden zusammengefasst, damit sie in den Kontext
 des Modells passen.“ Gespeicherte Historie, Ledger und Notizen bleiben
 unverändert.
+
+**Neuer Chat (Issue #648).** „Neuer Chat“ setzt die gemerkte Größe und das
+beobachtete Verhältnis zurück: die Anzeige zeigt sofort „0“ (Fenstergröße
+unverändert), und die Kompaktierung des neuen Chats nutzt nicht das
+Verhältnis des alten. Nach der ersten Antwort gilt wieder der echte Wert.
+Ein fortgesetzter gespeicherter Chat zeigt den Wert des vorigen Chats nicht;
+bis zu seiner ersten Antwort ist keine Größe bekannt.
 
 ### 3.2 Ablauf (Reihenfolge der Kürzung)
 

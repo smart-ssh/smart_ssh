@@ -857,6 +857,8 @@ async fn generate_rolling_summary(
                 // Nebenaufruf — eine unvollständige Zusammenfassung ist
                 // immer noch besser als gar keine.
                 AiEvent::Done | AiEvent::TextTruncated => return Some(text),
+                // Issue #647: a refused summary is no summary.
+                AiEvent::Refused => return None,
                 AiEvent::Error(err) => {
                     // Spec 0094, A1.7: `AiError`s `Display` kann Inhalt
                     // tragen (`ModelNotFound` den vollen Antworttext des
