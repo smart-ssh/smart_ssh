@@ -903,6 +903,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
     vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(sftpStat).mockResolvedValue({ ...fileEntry, isDir: false });
     vi.mocked(sftpRename).mockResolvedValue(undefined);
 
     renderPanel();
@@ -919,7 +920,26 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     expect(sftpRename).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("Überschreiben"));
-    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null));
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null, true));
+  });
+
+  it("rename onto an existing folder offers no overwrite and says it cannot be replaced", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(sftpStat).mockResolvedValue({ ...fileEntry, name: "b.txt", path: "b.txt", isDir: true });
+    vi.mocked(sftpRename).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Umbenennen"));
+    fireEvent.change(screen.getByDisplayValue("a.txt"), { target: { value: "b.txt" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    expect(await screen.findByText(/als Ordner und kann nicht ersetzt werden/)).toBeVisible();
+    expect(screen.queryByText("Überschreiben")).not.toBeInTheDocument();
+    expect(sftpRename).not.toHaveBeenCalled();
   });
 
   it("rename proceeds directly when there is no collision", async () => {

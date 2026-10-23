@@ -1024,7 +1024,8 @@
     },
     "moveCollision": {
       "title": "A cél már létezik",
-      "body": "már létezik, és felülíródna."
+      "body": "már létezik, és felülíródna.",
+      "folderBody": "már létezik mappaként, és nem cserélhető le."
     },
     "folderUpload": {
       "conflictTitle": "Felülírja a mappában lévő fájlokat?",

@@ -530,6 +530,10 @@ impl SftpSession for GatedSftp {
         Ok(())
     }
 
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        self.rename(from, to).await?;
+        Ok(true)
+    }
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.record(format!("create_dir {path}")).await;
         self.0.entries.lock().unwrap().insert(
@@ -664,6 +668,10 @@ impl SftpSession for CountingSftp {
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError> {
         self.0.lock().unwrap().push(format!("rename {from} {to}"));
         Ok(())
+    }
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        self.rename(from, to).await?;
+        Ok(true)
     }
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.0.lock().unwrap().push(format!("create_dir {path}"));

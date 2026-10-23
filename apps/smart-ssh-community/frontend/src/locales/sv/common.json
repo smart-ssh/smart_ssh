@@ -1024,7 +1024,8 @@
     },
     "moveCollision": {
       "title": "Målet finns redan",
-      "body": "finns redan och skulle skrivas över."
+      "body": "finns redan och skulle skrivas över.",
+      "folderBody": "finns redan som mapp och kan inte ersättas."
     },
     "folderUpload": {
       "conflictTitle": "Skriva över filer i mappen?",

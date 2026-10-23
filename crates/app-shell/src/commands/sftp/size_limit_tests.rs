@@ -185,6 +185,9 @@ impl SftpSession for MismatchSftp {
         unreachable!("diese Tests benennen nichts um")
     }
 
+    async fn posix_rename(&mut self, _from: &str, _to: &str) -> Result<bool, SshError> {
+        unreachable!()
+    }
     async fn create_dir(&mut self, _path: &str) -> Result<(), SshError> {
         unreachable!("diese Tests legen kein Verzeichnis an")
     }

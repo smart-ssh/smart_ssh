@@ -1031,7 +1031,8 @@
     },
     "moveCollision": {
       "title": "Ținta există deja",
-      "body": "există deja și ar fi suprascris."
+      "body": "există deja și ar fi suprascris.",
+      "folderBody": "există deja ca dosar și nu poate fi înlocuit."
     },
     "folderUpload": {
       "conflictTitle": "Suprascrieți fișierele din folder?",

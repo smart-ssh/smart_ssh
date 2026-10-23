@@ -1031,7 +1031,8 @@
     },
     "moveCollision": {
       "title": "El destino ya existe",
-      "body": "ya existe y se sobrescribiría."
+      "body": "ya existe y se sobrescribiría.",
+      "folderBody": "ya existe como carpeta y no se puede reemplazar."
     },
     "folderUpload": {
       "conflictTitle": "¿Sobrescribir archivos de la carpeta?",

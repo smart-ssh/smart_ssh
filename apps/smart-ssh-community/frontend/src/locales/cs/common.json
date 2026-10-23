@@ -1038,7 +1038,8 @@
     },
     "moveCollision": {
       "title": "Cíl již existuje",
-      "body": "již existuje a bude přepsáno."
+      "body": "již existuje a bude přepsáno.",
+      "folderBody": "již existuje jako složka a nelze jej nahradit."
     },
     "folderUpload": {
       "conflictTitle": "Přepsat soubory ve složce?",

@@ -1024,7 +1024,8 @@
     },
     "moveCollision": {
       "title": "Ziel existiert bereits",
-      "body": "gibt es schon und würde überschrieben."
+      "body": "gibt es schon und würde überschrieben.",
+      "folderBody": "gibt es schon als Ordner und kann nicht ersetzt werden."
     },
     "folderUpload": {
       "conflictTitle": "Dateien im Ordner überschreiben?",

@@ -1024,7 +1024,8 @@
     },
     "moveCollision": {
       "title": "Target already exists",
-      "body": "already exists and would be overwritten."
+      "body": "already exists and would be overwritten.",
+      "folderBody": "already exists as a folder and cannot be replaced."
     },
     "folderUpload": {
       "conflictTitle": "Overwrite files in the folder?",

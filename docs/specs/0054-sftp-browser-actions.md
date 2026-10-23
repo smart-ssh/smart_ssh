@@ -124,6 +124,19 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
 - **Verschieben:** innerhalb des Servers per Ausschneiden und Einfügen.
   Existiert das Ziel schon, warnt die App. Umbenennen und Verschieben sind
   für den Server dieselbe Operation.
+- **Überschreiben bei Umbenennen und Verschieben:** Bestätigt der Nutzer in
+  der Warnung „Überschreiben“, ersetzt die Datei das vorhandene Ziel; die
+  Quelle ist danach weg, das Ziel hat ihren Inhalt. Ohne Bestätigung wird nie
+  ersetzt. Bietet der Server den atomaren Austausch an
+  (`posix-rename@openssh.com`), geschieht er in einem Schritt. Sonst wird die
+  Ziel-Datei zuerst entfernt und dann umbenannt; scheitert das Umbenennen
+  danach, sagt die Fehlermeldung, dass das Ziel bereits entfernt wurde und die
+  Quelle unverändert ist. **Ein Ordner als Ziel wird nie ersetzt:** Die
+  Warnung sagt dann, dass der Zielordner existiert und nicht ersetzt werden
+  kann, und bietet kein „Überschreiben“ an. Fehler zeigen den Grund des
+  Servers (z. B. „Zugriff verweigert“). Im erhöhten Modus läuft alles über den
+  erhöhten Kanal, mit denselben Widerrufsprüfungen und demselben Protokoll
+  wie andere erhöhte Änderungen.
 - **Dateien aus der Zwischenablage hochladen:** Liegen Dateien oder Ordner des
   Betriebssystems in der Zwischenablage (kopiert im Finder, Explorer oder
   Linux-Dateimanager, auch die Zwischendatei aus „Datei kopieren“ unter

@@ -1038,7 +1038,8 @@
     },
     "moveCollision": {
       "title": "Cel już istnieje",
-      "body": "już istnieje i zostałby nadpisany."
+      "body": "już istnieje i zostałby nadpisany.",
+      "folderBody": "już istnieje jako folder i nie można go zastąpić."
     },
     "folderUpload": {
       "conflictTitle": "Nadpisać pliki w folderze?",

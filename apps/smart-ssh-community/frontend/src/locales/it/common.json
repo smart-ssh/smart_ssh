@@ -1031,7 +1031,8 @@
     },
     "moveCollision": {
       "title": "La destinazione esiste già",
-      "body": "esiste già e verrebbe sovrascritto."
+      "body": "esiste già e verrebbe sovrascritto.",
+      "folderBody": "esiste già come cartella e non può essere sostituito."
     },
     "folderUpload": {
       "conflictTitle": "Sovrascrivere i file nella cartella?",

@@ -1024,7 +1024,8 @@
     },
     "moveCollision": {
       "title": "Målet findes allerede",
-      "body": "findes allerede og ville blive overskrevet."
+      "body": "findes allerede og ville blive overskrevet.",
+      "folderBody": "findes allerede som mappe og kan ikke erstattes."
     },
     "folderUpload": {
       "conflictTitle": "Overskriv filer i mappen?",
