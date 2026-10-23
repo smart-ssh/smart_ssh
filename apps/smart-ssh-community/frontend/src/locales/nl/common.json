@@ -1143,6 +1143,12 @@
       "confirm": "Uploaden",
       "cancel": "Annuleren",
       "menuTitle": "Bestanden van het klembord uploaden"
+    },
+    "readFailure": {
+      "tooLarge": "Geen tekstdiff mogelijk: het bestand is te groot (meer dan 256 KB).",
+      "notText": "Geen tekstdiff mogelijk: het bestand is binair (geen geldige UTF-8-tekst).",
+      "permission": "Geen tekstdiff mogelijk: met de huidige rechten heb je geen leesrechten voor dit bestand.",
+      "other": "Geen tekstdiff mogelijk: het bestand kon niet worden gelezen ({{message}})."
     }
   },
   "chat": {

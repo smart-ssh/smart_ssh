@@ -1136,6 +1136,12 @@
       "confirm": "Tải lên",
       "cancel": "Hủy",
       "menuTitle": "Tải lên các tệp từ bộ nhớ tạm"
+    },
+    "readFailure": {
+      "tooLarge": "Không thể so sánh văn bản: tệp quá lớn (trên 256 KB).",
+      "notText": "Không thể so sánh văn bản: tệp là nhị phân (không phải văn bản UTF-8 hợp lệ).",
+      "permission": "Không thể so sánh văn bản: với quyền hiện tại, bạn không có quyền đọc tệp này.",
+      "other": "Không thể so sánh văn bản: không đọc được tệp ({{message}})."
     }
   },
   "chat": {

@@ -1150,6 +1150,12 @@
       "confirm": "Încarcă",
       "cancel": "Anulează",
       "menuTitle": "Încarcă fișierele din clipboard"
+    },
+    "readFailure": {
+      "tooLarge": "Diferență de text imposibilă: fișierul este prea mare (peste 256 KB).",
+      "notText": "Diferență de text imposibilă: fișierul este binar (nu este text UTF-8 valid).",
+      "permission": "Diferență de text imposibilă: cu drepturile curente nu ai permisiunea de citire pentru acest fișier.",
+      "other": "Diferență de text imposibilă: fișierul nu a putut fi citit ({{message}})."
     }
   },
   "chat": {

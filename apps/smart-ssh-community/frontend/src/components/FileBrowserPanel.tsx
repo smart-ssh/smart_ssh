@@ -70,6 +70,11 @@ import type {
 } from "../types";
 import { useDragResize } from "../useDragResize";
 import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
+import {
+  classifyPreviewReadFailure,
+  previewReadFailureHint,
+  type PreviewReadFailure,
+} from "../previewReadFailure";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useMenuPlacement } from "../hooks/useMenuPlacement";
@@ -243,6 +248,8 @@ export function FileBrowserPanel({
     remotePath: string;
     localPreview: LocalFilePreviewDto;
     remoteText: string | null;
+    /** Issue #655: why `remoteText` is `null`. */
+    remoteReadFailure: PreviewReadFailure | null;
     remoteSize: number;
   } | null>(null);
   // Issue #128: folder upload. `folderConfirm` = the list of existing remote
@@ -726,10 +733,21 @@ export function FileBrowserPanel({
   channelUserRef.current = channelUser;
   const loadRef = useRef(load);
   loadRef.current = load;
+  // Issue #655: file name of the edit upload in flight (matches the transfer
+  // events of that upload) and the ids of its hidden transfers.
+  const editUploadingNameRef = useRef<string | null>(null);
+  const editTransferIdsRef = useRef(new Set<string>());
   useEffect(() => {
     const unlisten = [
       onSftpTransferStarted((event) => {
         if (event.sessionId !== sessionId) return;
+        // Issue #655: an upload of the edit flow reports its errors only in
+        // the edit footer — no transfer row for it.
+        const editName = editUploadingNameRef.current;
+        if (editName !== null && event.kind === "upload" && event.fileName === editName) {
+          editTransferIdsRef.current.add(event.transferId);
+          return;
+        }
         setTransfers((prev) => [
           ...prev,
           {
@@ -744,6 +762,7 @@ export function FileBrowserPanel({
       }),
       onSftpTransferProgress((event) => {
         if (event.sessionId !== sessionId) return;
+        if (editTransferIdsRef.current.has(event.transferId)) return;
         // Issue #623: folder transfers show the aggregate over all files.
         const done = event.folder ? event.folder.bytesDone : event.bytesDone;
         const total = event.folder ? event.folder.bytesTotal : event.totalBytes;
@@ -766,6 +785,11 @@ export function FileBrowserPanel({
       }),
       onSftpTransferFinished((event) => {
         if (event.sessionId !== sessionId) return;
+        if (editTransferIdsRef.current.delete(event.transferId)) {
+          // Issue #655: hidden edit-flow transfer; the footer shows errors,
+          // `handleConfirmEditUpload` reloads the listing.
+          return;
+        }
         if (event.stopped) {
           // Issue #622: cancelled / stopped — a final state, not an error.
           const stopped = event.stopped;
@@ -878,12 +902,23 @@ export function FileBrowserPanel({
         await sftpUpload(sessionId, localPath, remotePath, channelUser);
         return "uploaded";
       }
-      const [localPreview, remoteText] = await Promise.all([
+      const [localPreview, remoteRead] = await Promise.all([
         readLocalTextPreview(sessionId, localPath),
-        sftpReadText(sessionId, remotePath, channelUser).catch(() => null),
+        sftpReadText(sessionId, remotePath, channelUser).then(
+          (text) => ({ text, failure: null as PreviewReadFailure | null }),
+          (err) => ({ text: null as string | null, failure: classifyPreviewReadFailure(err) }),
+        ),
       ]);
+      const remoteText = remoteRead.text;
       const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
-      setUploadConflict({ localPath, remotePath, localPreview, remoteText, remoteSize });
+      setUploadConflict({
+        localPath,
+        remotePath,
+        localPreview,
+        remoteText,
+        remoteReadFailure: remoteRead.failure,
+        remoteSize,
+      });
       return "conflict";
     } catch (err) {
       if (reportFailure) notifyFailed("fileToasts.uploadFailed", localBaseName(localPath), err);
@@ -1152,14 +1187,12 @@ export function FileBrowserPanel({
     // wurde hochgeladen), nicht vom aktuellen Modus der Ansicht.
     const editUser = localEdit.session?.elevatedUser ?? null;
     const editSuffix = editUser ? t("fileToasts.asElevated", { user: editUser }) : "";
+    editUploadingNameRef.current = name;
     localEdit.confirmUpload().then((error) => {
+      editUploadingNameRef.current = null;
+      // Issue #655: a failure is shown only in the edit footer (no toast).
       if (error === null) {
         showToast({ kind: "success", message: t("fileToasts.editUploaded", { name }) + editSuffix });
-      } else {
-        showToast({
-          kind: "error",
-          message: t("fileToasts.editUploadFailed", { name, reason: error }) + editSuffix,
-        });
       }
       load(path);
     });
@@ -2224,7 +2257,12 @@ export function FileBrowserPanel({
             />
           ) : (
             <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-              {t("fileBrowser.localEdit.noDiff", { size: formatBytes(editUploadOffer.localSize) })}
+              {editUploadOffer.remoteReadFailure
+                ? t(
+                    previewReadFailureHint(editUploadOffer.remoteReadFailure).key,
+                    previewReadFailureHint(editUploadOffer.remoteReadFailure).options,
+                  )
+                : t("fileBrowser.localEdit.noDiff", { size: formatBytes(editUploadOffer.localSize) })}
             </p>
           )}
         </DialogFrame>
@@ -2386,10 +2424,15 @@ export function FileBrowserPanel({
             />
           ) : (
             <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-              {t("fileBrowser.uploadConflict.noDiff", {
-                remoteSize: formatBytes(uploadConflict.remoteSize),
-                localSize: formatBytes(uploadConflict.localPreview.size),
-              })}
+              {uploadConflict.remoteReadFailure
+                ? t(
+                    previewReadFailureHint(uploadConflict.remoteReadFailure).key,
+                    previewReadFailureHint(uploadConflict.remoteReadFailure).options,
+                  )
+                : t("fileBrowser.uploadConflict.noDiff", {
+                    remoteSize: formatBytes(uploadConflict.remoteSize),
+                    localSize: formatBytes(uploadConflict.localPreview.size),
+                  })}
             </p>
           )}
         </DialogFrame>
