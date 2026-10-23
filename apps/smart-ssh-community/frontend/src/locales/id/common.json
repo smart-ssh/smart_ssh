@@ -915,7 +915,8 @@
     "dismiss": "Tutup saran",
     "reject": "Tolak",
     "applying": "Menerapkan…",
-    "apply": "Terapkan"
+    "apply": "Terapkan",
+    "expired": "Kedaluwarsa — tidak diterapkan"
   },
   "connectLog": {
     "title": "Detail",

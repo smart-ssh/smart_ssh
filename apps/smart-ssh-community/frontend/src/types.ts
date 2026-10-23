@@ -1572,3 +1572,8 @@ export interface StartDirectoryDto {
 export interface TerminalStartDto {
   missingDirectory: string | null;
 }
+
+/** Issue #628: a pending note confirmation timed out in the backend. */
+export interface NoteUpdateExpiredEvent {
+  actionId: string;
+}

@@ -915,7 +915,8 @@
     "dismiss": "提案を閉じる",
     "reject": "拒否",
     "applying": "適用中…",
-    "apply": "適用"
+    "apply": "適用",
+    "expired": "期限切れ — 適用されていません"
   },
   "connectLog": {
     "title": "詳細",

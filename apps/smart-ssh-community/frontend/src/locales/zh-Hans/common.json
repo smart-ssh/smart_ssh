@@ -915,7 +915,8 @@
     "dismiss": "忽略建议",
     "reject": "拒绝",
     "applying": "正在应用…",
-    "apply": "应用"
+    "apply": "应用",
+    "expired": "已过期 — 未应用"
   },
   "connectLog": {
     "title": "详情",

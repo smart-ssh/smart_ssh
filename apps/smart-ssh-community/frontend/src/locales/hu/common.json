@@ -920,7 +920,8 @@
     "dismiss": "Javaslat elvetése",
     "reject": "Elutasítás",
     "applying": "Alkalmazás…",
-    "apply": "Alkalmazás"
+    "apply": "Alkalmazás",
+    "expired": "Lejárt — nem alkalmazva"
   },
   "connectLog": {
     "title": "Részletek",

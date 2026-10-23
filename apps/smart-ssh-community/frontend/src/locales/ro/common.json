@@ -925,7 +925,8 @@
     "dismiss": "Închide sugestia",
     "reject": "Respinge",
     "applying": "Se aplică…",
-    "apply": "Aplică"
+    "apply": "Aplică",
+    "expired": "Expirat — neaplicat"
   },
   "connectLog": {
     "title": "Detalii",

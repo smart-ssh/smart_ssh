@@ -920,7 +920,8 @@
     "dismiss": "Öneriyi kapat",
     "reject": "Reddet",
     "applying": "Uygulanıyor…",
-    "apply": "Uygula"
+    "apply": "Uygula",
+    "expired": "Süresi doldu — uygulanmadı"
   },
   "connectLog": {
     "title": "Ayrıntılar",

@@ -920,7 +920,8 @@
     "dismiss": "Dismiss suggestion",
     "reject": "Reject",
     "applying": "Applying…",
-    "apply": "Apply"
+    "apply": "Apply",
+    "expired": "Expired — not applied"
   },
   "connectLog": {
     "title": "Details",

@@ -930,7 +930,8 @@
     "dismiss": "Zavřít návrh",
     "reject": "Zamítnout",
     "applying": "Použití…",
-    "apply": "Použít"
+    "apply": "Použít",
+    "expired": "Platnost vypršela — nepoužito"
   },
   "connectLog": {
     "title": "Podrobnosti",
