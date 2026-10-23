@@ -1,4 +1,4 @@
-=======
+import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
