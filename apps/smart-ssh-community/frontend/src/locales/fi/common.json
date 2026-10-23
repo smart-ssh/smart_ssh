@@ -922,7 +922,8 @@
     "dismiss": "Sulje ehdotus",
     "reject": "Hylkää",
     "applying": "Otetaan käyttöön…",
-    "apply": "Ota käyttöön"
+    "apply": "Ota käyttöön",
+    "expired": "Vanhentunut — ei otettu käyttöön"
   },
   "connectLog": {
     "title": "Lisätiedot",

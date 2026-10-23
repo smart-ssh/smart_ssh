@@ -535,9 +535,11 @@ pub async fn respond_to_action(
     // Fehler für eine unbekannte/bereits aufgelöste ID) — der zusätzliche
     // Session-Check war ohnehin redundant dazu, nicht die einzige
     // Absicherung.
-    state
-        .pending_action_confirmations
-        .resolve(&action_id, decision)?;
+    app_logic::confirmation::resolve_action_confirmation(
+        &state.pending_action_confirmations,
+        &action_id,
+        decision,
+    )?;
     Ok(())
 }
 

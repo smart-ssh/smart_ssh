@@ -575,6 +575,23 @@ pub fn emit_note_update_suggested(
     );
 }
 
+/// Issue #628: a pending note confirmation (disconnect suggestion or
+/// shrink suggestion) timed out; the card switches to "expired". Carries
+/// only the action id — never note content.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteUpdateExpiredPayload {
+    action_id: ActionId,
+}
+
+pub fn emit_note_update_expired(emitter: &dyn EventEmitter, action_id: ActionId) {
+    emit(
+        emitter,
+        "note-update-expired",
+        &NoteUpdateExpiredPayload { action_id },
+    );
+}
+
 /// Spec 0057, §4.2 (Etappe 4): der ERSTE Dialog ("Deine Notiz für diesen
 /// Server ist sehr groß …") — bewusst ein eigenes, app-weites Event statt
 /// einer Erweiterung von `note-update-suggested` (dessen `action`-Feld

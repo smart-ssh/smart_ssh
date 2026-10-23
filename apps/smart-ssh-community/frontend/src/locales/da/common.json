@@ -922,7 +922,8 @@
     "dismiss": "Skjul forslag",
     "reject": "Afvis",
     "applying": "Anvender…",
-    "apply": "Anvend"
+    "apply": "Anvend",
+    "expired": "Udløbet — ikke anvendt"
   },
   "connectLog": {
     "title": "Detaljer",

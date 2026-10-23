@@ -24,8 +24,8 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_action_result, emit_chat_document_generated, emit_note_shrink_failed,
-    emit_note_shrink_succeeded, emit_note_shrink_suggested, emit_note_update_suggested,
-    ActionResultPayload, EventEmitter,
+    emit_note_shrink_succeeded, emit_note_shrink_suggested, emit_note_update_expired,
+    emit_note_update_suggested, ActionResultPayload, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -1014,6 +1014,7 @@ pub async fn suggest_note_update_on_disconnect(
                 timeout_secs = PENDING_ACTION_CONFIRM_TIMEOUT.as_secs(),
                 "pending note-update confirmation timed out without a response, treating as denied"
             );
+            emit_note_update_expired(emitter, action_id);
             ActionUserDecision::Deny
         }
     };
@@ -1499,6 +1500,7 @@ pub async fn execute_note_shrink_request(
                 "pending note-shrink confirmation timed out without a response, treating as \
                  denied"
             );
+            emit_note_update_expired(emitter, action_id);
             ActionUserDecision::Deny
         }
     };
