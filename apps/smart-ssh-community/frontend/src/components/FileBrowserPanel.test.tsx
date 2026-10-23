@@ -699,7 +699,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     // "rw-r--r--" steht sowohl in der Tabellenspalte als auch im Dialog —
     // die numerische Darstellung ("644") ist eindeutig nur im Dialog.
     expect(screen.getAllByText("rw-r--r--").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("644")).toBeVisible();
+    expect(screen.getByText("0644")).toBeVisible();
   });
 
   it("'Aktualisieren' reloads the current directory", async () => {
@@ -747,8 +747,56 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o444, false, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o444, false, false, null),
     );
+  });
+
+  it("recursive chmod dialog shows the folder/file summary and sends special-bit changes (issue #624)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([{ ...dirEntry, permissionsOctal: 0o2755 }]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpChmod).mockResolvedValue(3);
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+    await screen.findByDisplayValue("2755");
+
+    expect(screen.queryByText(/^Ordner: /)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/^Rekursiv/));
+    expect(screen.getByText("Ordner: 755, Dateien: 755")).toBeVisible();
+
+    // 644 for the rwx part: folders get 755, files 644.
+    fireEvent.change(screen.getByDisplayValue("2755"), { target: { value: "2644" } });
+    expect(screen.getByText("Ordner: 755, Dateien: 644")).toBeVisible();
+    fireEvent.click(screen.getByText("Übernehmen"));
+    // Special bits untouched by the user: not applied explicitly.
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o2644, true, false, null),
+    );
+
+    // Ticking setgid explicitly reports the change.
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+    await screen.findByDisplayValue("2755");
+    fireEvent.click(screen.getByLabelText("setuid-Bit"));
+    fireEvent.click(screen.getByText("Übernehmen"));
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenLastCalledWith("session-1", "logs", 0o6755, false, true, null),
+    );
+  });
+
+  it("shows a permission hint for an empty folder without x (issue #624)", async () => {
+    const locked: RemoteEntryDto = { ...dirEntry, permissionsOctal: 0o2644, permissions: "drw-r-Sr--" };
+    vi.mocked(sftpList).mockImplementation(async (_s, p) => (p === "logs" ? [] : [locked]));
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    fireEvent.click(await screen.findByText(/logs/));
+
+    expect(
+      await screen.findByText("Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)"),
+    ).toBeVisible();
   });
 
   it("names the otherwise empty header cells of the file table and chmod matrix (issue #112)", async () => {
@@ -779,7 +827,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false, false, null),
     );
   });
 
@@ -809,7 +857,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "suid-bin", 0o4755, false, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "suid-bin", 0o4755, false, false, null),
     );
   });
 
@@ -828,7 +876,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o755, true, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o755, true, false, null),
     );
   });
 
@@ -857,6 +905,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
     vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(sftpStat).mockResolvedValue({ ...fileEntry, isDir: false });
     vi.mocked(sftpRename).mockResolvedValue(undefined);
 
     renderPanel();
@@ -873,7 +922,26 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     expect(sftpRename).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("Überschreiben"));
-    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null));
+    await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null, true));
+  });
+
+  it("rename onto an existing folder offers no overwrite and says it cannot be replaced", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(sftpStat).mockResolvedValue({ ...fileEntry, name: "b.txt", path: "b.txt", isDir: true });
+    vi.mocked(sftpRename).mockResolvedValue(undefined);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Umbenennen"));
+    fireEvent.change(screen.getByDisplayValue("a.txt"), { target: { value: "b.txt" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    expect(await screen.findByText(/als Ordner und kann nicht ersetzt werden/)).toBeVisible();
+    expect(screen.queryByText("Überschreiben")).not.toBeInTheDocument();
+    expect(sftpRename).not.toHaveBeenCalled();
   });
 
   it("rename proceeds directly when there is no collision", async () => {
@@ -2036,6 +2104,76 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     expectNoGerman();
   });
 
+  describe("transfer speed and remaining time (issue #623)", () => {
+    async function setup() {
+      let started: ((event: SftpTransferStartedEvent) => void) | null = null;
+      const progress: ((event: any) => void)[] = [];
+      vi.mocked(onSftpTransferStarted).mockImplementation((handler) => {
+        started = handler;
+        return Promise.resolve(() => {});
+      });
+      vi.mocked(onSftpTransferProgress).mockImplementation((hd: any) => {
+        progress.push(hd);
+        return Promise.resolve(() => {});
+      });
+      vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+      renderEn();
+      await screen.findByText(/a\.txt/);
+      await waitFor(() => expect(started).not.toBeNull());
+      await waitFor(() => expect(progress.length).toBeGreaterThan(0));
+      return { started: started!, emit: (e: any) => act(() => progress.forEach((fn) => fn(e))) };
+    }
+    const MB = 1024 * 1024;
+
+    // Only the clock: restoreAllMocks would also reset the module mocks.
+    let dateSpy: { mockRestore: () => void } | undefined;
+    afterEach(() => dateSpy?.mockRestore());
+
+    it("a file row shows speed and remaining time from the progress events", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "f.bin", totalBytes: 10 * MB }),
+      );
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: 10 * MB });
+      now += 2000;
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 2 * MB, totalBytes: 10 * MB });
+      expect(screen.getByText("1.0 MB/s")).toBeVisible();
+      expect(screen.getByText("00:08 left")).toBeVisible();
+    });
+
+    it("a folder row shows the aggregate speed and remaining time", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "dir", totalBytes: null }),
+      );
+      const folder = (bytesDone: number) => ({ filesDone: 1, filesTotal: 3, bytesDone, bytesTotal: 20 * MB });
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: 1, folder: folder(0) });
+      now += 2000;
+      // Per-file values are tiny; only the folder aggregate may drive the row.
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 1, totalBytes: 1, folder: folder(4 * MB) });
+      expect(screen.getByText("2.0 MB/s")).toBeVisible();
+      expect(screen.getByText("00:08 left")).toBeVisible();
+    });
+
+    it("an unknown total shows a dash for the remaining time", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "upload", fileName: "u.bin", totalBytes: null }),
+      );
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: null });
+      now += 2000;
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 2 * MB, totalBytes: null });
+      expect(screen.getByText("1.0 MB/s")).toBeVisible();
+      expect(screen.queryByText(/left/)).not.toBeInTheDocument();
+    });
+  });
+
   it("the native upload dialog gets an English title", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(pickUploadFiles).mockResolvedValue(null);
@@ -2372,7 +2510,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
 
   it("offers Paste in the menu while an entry is cut and moves it like the toolbar button", async () => {
     vi.mocked(sftpList).mockImplementation((_s, requestedPath) =>
-      Promise.resolve(requestedPath === "sub" ? [] : [fileEntry, { ...fileEntry, name: "sub", path: "sub", isDir: true }]),
+      Promise.resolve(requestedPath === "sub" ? [] : [fileEntry, { ...fileEntry, name: "sub", path: "sub", isDir: true, permissionsOctal: 0o755 }]),
     );
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpRename).mockResolvedValue(undefined);

@@ -322,6 +322,12 @@ impl SftpSession for LocalFileSession {
             .map_err(|e| io_err(from, e))
     }
 
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        // `fs::rename` ersetzt ein vorhandenes Ziel atomar (POSIX `rename(2)`).
+        self.rename(from, to).await?;
+        Ok(true)
+    }
+
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
         tokio::fs::create_dir(self.resolve(path))
             .await

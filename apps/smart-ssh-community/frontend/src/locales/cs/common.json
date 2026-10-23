@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Nastavení",
+    "backToList": "Sekce",
     "categories": {
       "aiProvider": "Poskytovatel AI",
       "displayLanguage": "Zobrazení a jazyk",
@@ -997,7 +998,9 @@
     "transferStopped": "{{name}}: zastaveno",
     "transferIncomplete": "Neúplný soubor zůstal na serveru: {{path}}",
     "transferFiles": "{{done}} z {{total}} souborů",
+    "transferRemaining": "zbývá {{time}}",
     "loading": "Načítání…",
+    "noPermissionToOpen": "Nemáte oprávnění otevřít tuto složku (chybí x)",
     "emptyDirectory": "(prázdný adresář)",
     "dropHint": "Pusťte sem pro nahrání do {{path}}",
     "cancel": "Zrušit",
@@ -1037,7 +1040,8 @@
     },
     "moveCollision": {
       "title": "Cíl již existuje",
-      "body": "již existuje a bude přepsáno."
+      "body": "již existuje a bude přepsáno.",
+      "folderBody": "již existuje jako složka a nelze jej nahradit."
     },
     "folderUpload": {
       "conflictTitle": "Přepsat soubory ve složce?",
@@ -1099,6 +1103,12 @@
       "execute": "Spuštění",
       "numeric": "Číselně",
       "recursive": "Rekurzivně",
+      "special": "Speciální bity",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Při rekurzivním použití se speciální bity nastaví jen složkám, nikdy souborům.",
+      "recursiveSummary": "Složky: {{folders}}, soubory: {{files}}",
       "recursiveWarning": "— změní oprávnění VŠECH souborů a podsložek v této složce. Mocná akce, nelze vrátit zpět.",
       "owner": "Vlastník",
       "group": "Skupina",

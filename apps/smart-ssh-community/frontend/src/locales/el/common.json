@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ρυθμίσεις",
+    "backToList": "Ενότητες",
     "categories": {
       "aiProvider": "Πάροχος AI",
       "displayLanguage": "Εμφάνιση και γλώσσα",
@@ -987,7 +988,9 @@
     "transferStopped": "{{name}}: διακόπηκε",
     "transferIncomplete": "Ελλιπές αρχείο παρέμεινε στον διακομιστή: {{path}}",
     "transferFiles": "{{done}} από {{total}} αρχεία",
+    "transferRemaining": "απομένουν {{time}}",
     "loading": "Φόρτωση…",
+    "noPermissionToOpen": "Δεν έχετε άδεια ανοίγματος αυτού του φακέλου (λείπει το x)",
     "emptyDirectory": "(κενός φάκελος)",
     "dropHint": "Αφήστε εδώ για μεταφόρτωση στο {{path}}",
     "cancel": "Ακύρωση",
@@ -1023,7 +1026,8 @@
     },
     "moveCollision": {
       "title": "Ο προορισμός υπάρχει ήδη",
-      "body": "υπάρχει ήδη και θα αντικατασταθεί."
+      "body": "υπάρχει ήδη και θα αντικατασταθεί.",
+      "folderBody": "υπάρχει ήδη ως φάκελος και δεν μπορεί να αντικατασταθεί."
     },
     "folderUpload": {
       "conflictTitle": "Αντικατάσταση αρχείων στον φάκελο;",
@@ -1085,6 +1089,12 @@
       "execute": "Εκτέλεση",
       "numeric": "Αριθμητικά",
       "recursive": "Αναδρομικά",
+      "special": "Ειδικά bit",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Στην αναδρομική εφαρμογή, τα ειδικά bit ισχύουν μόνο για φακέλους, ποτέ για αρχεία.",
+      "recursiveSummary": "Φάκελοι: {{folders}}, αρχεία: {{files}}",
       "recursiveWarning": "— αλλάζει τα δικαιώματα ΟΛΩΝ των αρχείων και υποφακέλων αυτού του φακέλου. Ισχυρή ενέργεια, δεν αναιρείται.",
       "owner": "Ιδιοκτήτης",
       "group": "Ομάδα",

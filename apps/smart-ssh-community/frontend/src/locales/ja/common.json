@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "設定",
+    "backToList": "セクション",
     "categories": {
       "aiProvider": "AIプロバイダー",
       "displayLanguage": "表示と言語",
@@ -982,7 +983,9 @@
     "transferStopped": "{{name}}：停止しました",
     "transferIncomplete": "不完全なファイルがサーバーに残っています：{{path}}",
     "transferFiles": "{{total}} 件中 {{done}} 件",
+    "transferRemaining": "残り {{time}}",
     "loading": "読み込み中…",
+    "noPermissionToOpen": "このフォルダを開く権限がありません（x がありません）",
     "emptyDirectory": "（空のディレクトリ）",
     "dropHint": "ここにドロップして {{path}} にアップロード",
     "cancel": "キャンセル",
@@ -1016,7 +1019,8 @@
     },
     "moveCollision": {
       "title": "移動先がすでに存在します",
-      "body": "はすでに存在しており、上書きされます。"
+      "body": "はすでに存在しており、上書きされます。",
+      "folderBody": "はすでにフォルダとして存在しており、置き換えられません。"
     },
     "folderUpload": {
       "conflictTitle": "フォルダー内のファイルを上書きしますか？",
@@ -1078,6 +1082,12 @@
       "execute": "実行",
       "numeric": "数値",
       "recursive": "再帰的",
+      "special": "特殊ビット",
+      "setuid": "setuid ビット",
+      "setgid": "setgid ビット",
+      "sticky": "sticky ビット",
+      "specialHint": "再帰適用では、特殊ビットはフォルダにのみ設定され、ファイルには設定されません。",
+      "recursiveSummary": "フォルダ: {{folders}}, ファイル: {{files}}",
       "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの権限を変更します。影響の大きい操作で、元に戻せません。",
       "owner": "所有者",
       "group": "グループ",

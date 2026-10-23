@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Setări",
+    "backToList": "Secțiuni",
     "categories": {
       "aiProvider": "Furnizor IA",
       "displayLanguage": "Afișare și limbă",
@@ -992,7 +993,9 @@
     "transferStopped": "{{name}}: oprit",
     "transferIncomplete": "Fișier incomplet rămas pe server: {{path}}",
     "transferFiles": "{{done}} din {{total}} fișiere",
+    "transferRemaining": "au mai rămas {{time}}",
     "loading": "Se încarcă…",
+    "noPermissionToOpen": "Nu aveți permisiunea de a deschide acest folder (lipsește x)",
     "emptyDirectory": "(director gol)",
     "dropHint": "Plasați aici pentru a încărca în {{path}}",
     "cancel": "Anulează",
@@ -1030,7 +1033,8 @@
     },
     "moveCollision": {
       "title": "Ținta există deja",
-      "body": "există deja și ar fi suprascris."
+      "body": "există deja și ar fi suprascris.",
+      "folderBody": "există deja ca dosar și nu poate fi înlocuit."
     },
     "folderUpload": {
       "conflictTitle": "Suprascrieți fișierele din folder?",
@@ -1092,6 +1096,12 @@
       "execute": "Execuție",
       "numeric": "Numeric",
       "recursive": "Recursiv",
+      "special": "Biți speciali",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "La aplicarea recursivă, biții speciali merg doar la foldere, niciodată la fișiere.",
+      "recursiveSummary": "Foldere: {{folders}}, fișiere: {{files}}",
       "recursiveWarning": "— modifică permisiunile TUTUROR fișierelor și subfolderelor din acest folder. Acțiune puternică, ireversibilă.",
       "owner": "Proprietar",
       "group": "Grup",

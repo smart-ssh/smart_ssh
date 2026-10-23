@@ -282,6 +282,12 @@ pub trait SftpSession: Send {
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError>;
     async fn remove(&mut self, path: &str) -> Result<(), SshError>;
     async fn rename(&mut self, from: &str, to: &str) -> Result<(), SshError>;
+    /// Issue #625: benennt `from` atomar nach `to` um und **ersetzt** dabei
+    /// ein vorhandenes Ziel (`posix-rename@openssh.com`). `Ok(true)`: der
+    /// Server hat es ausgeführt. `Ok(false)`: der Server bietet die
+    /// Erweiterung nicht an — es wurde **nichts** gesendet, der Aufrufer
+    /// weicht auf „Ziel entfernen, dann `rename`" aus.
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError>;
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError>;
     /// Legt eine **leere** Datei an und überschreibt nie etwas (Issue #570):
     /// SFTP `OPEN` mit CREATE|EXCL, ein vorhandener Name (Datei, Ordner,

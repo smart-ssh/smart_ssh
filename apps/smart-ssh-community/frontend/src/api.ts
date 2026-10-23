@@ -639,8 +639,13 @@ export const sftpDeletePreview = (sessionId: string, path: string, elevatedUser:
 /** Umbenennen UND Verschieben (Spec 0054, Teil 3 — SFTP `RENAME` kennt
  * keinen Unterschied). Kollisionsprüfung läuft im Frontend über
  * `sftpExists`, bevor dieser Befehl aufgerufen wird. */
-export const sftpRename = (sessionId: string, from: string, to: string, elevatedUser: string | null = null) =>
-  invoke<void>("sftp_rename", { sessionId, from, to, elevatedUser });
+export const sftpRename = (
+  sessionId: string,
+  from: string,
+  to: string,
+  elevatedUser: string | null = null,
+  overwrite = false,
+) => invoke<void>("sftp_rename", { sessionId, from, to, overwrite, elevatedUser });
 
 export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<void>("sftp_mkdir", { sessionId, path, elevatedUser });
@@ -722,8 +727,8 @@ export const sftpExists = (sessionId: string, path: string, elevatedUser: string
  * `elevatedUser` (alle `sftp*`-Wrapper): `null` = normaler Kanal, sonst der
  * erwartete Ziel-Nutzer des erhöhten Kanals — das Backend lehnt ab, wenn der
  * erhöhte Kanal fehlt oder als anderer Nutzer läuft (Spec 0067, A5). */
-export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, elevatedUser: string | null = null) =>
-  invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, elevatedUser });
+export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, applySpecialBits: boolean, elevatedUser: string | null = null) =>
+  invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, applySpecialBits, elevatedUser });
 
 /** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
  * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist

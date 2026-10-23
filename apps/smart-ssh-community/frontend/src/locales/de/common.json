@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Einstellungen",
+    "backToList": "Bereiche",
     "categories": {
       "aiProvider": "KI-Provider",
       "displayLanguage": "Anzeige & Sprache",
@@ -987,7 +988,9 @@
     "transferStopped": "{{name}}: gestoppt",
     "transferIncomplete": "Unvollständige Datei auf dem Server: {{path}}",
     "transferFiles": "{{done}} von {{total}} Dateien",
+    "transferRemaining": "noch {{time}}",
     "loading": "Lädt…",
+    "noPermissionToOpen": "Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)",
     "emptyDirectory": "(leeres Verzeichnis)",
     "dropHint": "Hier ablegen zum Hochladen nach {{path}}",
     "cancel": "Abbrechen",
@@ -1023,7 +1026,8 @@
     },
     "moveCollision": {
       "title": "Ziel existiert bereits",
-      "body": "gibt es schon und würde überschrieben."
+      "body": "gibt es schon und würde überschrieben.",
+      "folderBody": "gibt es schon als Ordner und kann nicht ersetzt werden."
     },
     "folderUpload": {
       "conflictTitle": "Dateien im Ordner überschreiben?",
@@ -1085,6 +1089,12 @@
       "execute": "Ausführen",
       "numeric": "Numerisch",
       "recursive": "Rekursiv",
+      "special": "Sonderbits",
+      "setuid": "setuid-Bit",
+      "setgid": "setgid-Bit",
+      "sticky": "sticky-Bit",
+      "specialHint": "Bei rekursiver Anwendung erhalten nur Ordner Sonderbits, nie Dateien.",
+      "recursiveSummary": "Ordner: {{folders}}, Dateien: {{files}}",
       "recursiveWarning": "— ändert die Rechte für ALLE Dateien und Unterordner in diesem Ordner. Mächtige Aktion, nicht rückgängig machbar.",
       "owner": "Besitzer",
       "group": "Gruppe",
