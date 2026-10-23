@@ -575,6 +575,23 @@ pub fn emit_note_update_suggested(
     );
 }
 
+/// Issue #628: a pending note confirmation (disconnect suggestion or
+/// shrink suggestion) timed out; the card switches to "expired". Carries
+/// only the action id — never note content.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteUpdateExpiredPayload {
+    action_id: ActionId,
+}
+
+pub fn emit_note_update_expired(emitter: &dyn EventEmitter, action_id: ActionId) {
+    emit(
+        emitter,
+        "note-update-expired",
+        &NoteUpdateExpiredPayload { action_id },
+    );
+}
+
 /// Spec 0057, §4.2 (Etappe 4): der ERSTE Dialog ("Deine Notiz für diesen
 /// Server ist sehr groß …") — bewusst ein eigenes, app-weites Event statt
 /// einer Erweiterung von `note-update-suggested` (dessen `action`-Feld
@@ -869,6 +886,8 @@ struct ChatErrorPayload {
     http_status: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     provider_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    access_returns: Option<String>,
 }
 
 /// Issue #600: optional provider details of a `chat-error` (shown under
@@ -878,6 +897,8 @@ pub struct ChatErrorDetails {
     pub provider_error_type: Option<String>,
     pub http_status: Option<u16>,
     pub provider_message: Option<String>,
+    /// Issue #631: when access returns after a provider usage limit.
+    pub access_returns: Option<String>,
 }
 
 /// **Nicht Teil der Spec-Skizze aus Abschnitt 5** (die dort gelistete
@@ -930,6 +951,7 @@ pub fn emit_chat_error_with_details(
             provider_error_type: details.provider_error_type,
             http_status: details.http_status,
             provider_message: details.provider_message,
+            access_returns: details.access_returns,
         },
     );
 }

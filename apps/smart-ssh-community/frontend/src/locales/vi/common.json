@@ -542,6 +542,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Nhà cung cấp AI báo lỗi (ví dụ đang bảo trì hoặc quá tải). Hãy thử lại sau; nếu vẫn lỗi, hãy kiểm tra cài đặt nhà cung cấp.",
     "AI_PROVIDER_OVERLOADED": "Nhà cung cấp AI hiện đang quá tải. Hãy thử lại sau giây lát.",
     "AI_PROVIDER_BILLING": "Tài khoản nhà cung cấp AI đã hết tín dụng. Hãy kiểm tra thanh toán trong bảng điều khiển của nhà cung cấp.",
+    "AI_PROVIDER_USAGE_LIMIT": "Đã đạt giới hạn sử dụng tại nhà cung cấp. Hãy tăng giới hạn trong bảng điều khiển của nhà cung cấp hoặc chọn nhà cung cấp khác.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Đã đạt giới hạn sử dụng tại nhà cung cấp. Quyền truy cập trở lại vào {{date}}. Hãy tăng giới hạn trong bảng điều khiển của nhà cung cấp hoặc chọn nhà cung cấp khác.",
     "AI_PROVIDER_REJECTED_REQUEST": "Nhà cung cấp AI đã từ chối yêu cầu.",
     "AI_RESPONSE_TRUNCATED": "Phản hồi của AI quá dài để tạo thành một lệnh hoàn chỉnh",
     "AI_MODEL_NOT_FOUND": "Nhà cung cấp AI không biết mô hình này. Kiểm tra tên mô hình trong Cài đặt (\"Tải danh sách mô hình\" liệt kê các mô hình có sẵn); với Ollama, hãy tải trước bằng `ollama pull <name>`.",
@@ -915,7 +917,8 @@
     "dismiss": "Đóng đề xuất",
     "reject": "Từ chối",
     "applying": "Đang áp dụng…",
-    "apply": "Áp dụng"
+    "apply": "Áp dụng",
+    "expired": "Đã hết hạn — chưa áp dụng"
   },
   "connectLog": {
     "title": "Chi tiết",

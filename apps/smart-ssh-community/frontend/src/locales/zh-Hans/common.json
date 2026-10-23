@@ -542,6 +542,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI 提供商报告了错误（例如维护或过载）。请稍后再试；如果持续出现，请检查提供商设置。",
     "AI_PROVIDER_OVERLOADED": "AI 提供商目前过载。请稍后再试。",
     "AI_PROVIDER_BILLING": "AI 提供商账户已没有余额。请在提供商控制台中检查计费。",
+    "AI_PROVIDER_USAGE_LIMIT": "已达到提供商的使用上限。请在提供商控制台提高上限，或选择其他提供商。",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "已达到提供商的使用上限。访问将于 {{date}} 恢复。请在提供商控制台提高上限，或选择其他提供商。",
     "AI_PROVIDER_REJECTED_REQUEST": "AI 提供商拒绝了该请求。",
     "AI_RESPONSE_TRUNCATED": "AI 的回复过长，无法构成完整的命令",
     "AI_MODEL_NOT_FOUND": "AI 提供商不认识该模型。请在设置中检查模型名称（“加载模型”会列出可用的模型）；对于 Ollama，请先用 `ollama pull <name>` 拉取。",
@@ -915,7 +917,8 @@
     "dismiss": "忽略建议",
     "reject": "拒绝",
     "applying": "正在应用…",
-    "apply": "应用"
+    "apply": "应用",
+    "expired": "已过期 — 未应用"
   },
   "connectLog": {
     "title": "详情",

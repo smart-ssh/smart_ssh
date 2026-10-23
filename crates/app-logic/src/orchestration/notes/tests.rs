@@ -2613,6 +2613,18 @@ async fn test_issue_107_disconnect_suggestion_timeout_leaves_no_entry_and_reject
         profile_store.note_revisions.lock().unwrap().is_empty(),
         "ein Timeout gilt als Ablehnung"
     );
+    assert_expired_event_emitted(&emitter, action_id);
+}
+
+/// Issue #628: the timeout tells the frontend which card expired.
+fn assert_expired_event_emitted(emitter: &TestEmitter, action_id: ActionId) {
+    let events = emitter.events.lock().unwrap();
+    let expired: Vec<_> = events
+        .iter()
+        .filter(|(name, _)| name == "note-update-expired")
+        .collect();
+    assert_eq!(expired.len(), 1);
+    assert_eq!(expired[0].1["actionId"], action_id.to_string());
 }
 
 #[tokio::test(start_paused = true)]
@@ -2654,6 +2666,7 @@ async fn test_issue_107_note_shrink_timeout_leaves_no_entry_and_rejects_late_res
         profile_store.get_server(&server_id).await.unwrap().notes,
         "Unveränderte Notiz."
     );
+    assert_expired_event_emitted(&emitter, action_id);
 }
 
 /// Der Vorschlag beim Verbindungsende ist app-weit (Spec 0010, Abschnitt

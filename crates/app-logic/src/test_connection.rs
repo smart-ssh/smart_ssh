@@ -20,7 +20,9 @@ use ssh_transport::{ConnectLimits, ConnectOutcome};
 use crate::dto::{AuthMethodInput, ServerInput, TestConnectionReport, TestConnectionResult};
 use crate::ephemeral_credentials::EphemeralCredentialStore;
 
+use crate::connect_attempts::ConnectAttemptGuard;
 use crate::error::{secret_store_error, CommandError, CommandResult};
+use crate::events::{emit_connect_progress, EventEmitter};
 
 /// Spec 0084, §4: liegt hier, weil `test_connection` (Tauri-frei, in
 /// `app-logic`) und `commands::connect` (Tauri-gebunden, in `app-shell`)
@@ -133,7 +135,79 @@ async fn test_connection_with_limits(
     existing_server_id: Option<ServerId>,
     limits: ConnectLimits,
 ) -> CommandResult<TestConnectionReport> {
-    let log = ConnectLog::new();
+    test_connection_with_progress(
+        profile_store,
+        real_credential_store,
+        key_files,
+        host_key_store,
+        connector,
+        input,
+        existing_server_id,
+        limits,
+        None,
+    )
+    .await
+}
+
+/// Issue #633: live progress and cancel for a connection test. Carries the
+/// attempt id the frontend generated, the event emitter for
+/// `connect-progress` events and the cancel guard registered under that id.
+pub struct TestProgress {
+    pub attempt_id: String,
+    pub emitter: Arc<dyn EventEmitter>,
+    pub guard: ConnectAttemptGuard,
+}
+
+/// `test_connection` with live `connect-progress` events and cancellation
+/// (Issue #633). A cancelled test ends with `SSH_CONNECT_CANCELLED`.
+#[allow(clippy::too_many_arguments)]
+pub async fn test_connection_tracked(
+    profile_store: &dyn ProfileStore,
+    real_credential_store: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_key_store: Arc<dyn HostKeyStore>,
+    connector: &dyn Connector,
+    input: ServerInput,
+    existing_server_id: Option<ServerId>,
+    progress: &TestProgress,
+) -> CommandResult<TestConnectionReport> {
+    test_connection_with_progress(
+        profile_store,
+        real_credential_store,
+        key_files,
+        host_key_store,
+        connector,
+        input,
+        existing_server_id,
+        SSH_CONNECT_LIMITS,
+        Some(progress),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn test_connection_with_progress(
+    profile_store: &dyn ProfileStore,
+    real_credential_store: &(dyn CredentialStore + Send + Sync),
+    key_files: &(dyn KeyFileReader + Send + Sync),
+    host_key_store: Arc<dyn HostKeyStore>,
+    connector: &dyn Connector,
+    input: ServerInput,
+    existing_server_id: Option<ServerId>,
+    limits: ConnectLimits,
+    progress: Option<&TestProgress>,
+) -> CommandResult<TestConnectionReport> {
+    let log = match progress {
+        Some(p) => {
+            let emitter = p.emitter.clone();
+            let attempt_id = p.attempt_id.clone();
+            let server_id = existing_server_id.unwrap_or_default();
+            ConnectLog::with_sink(Arc::new(move |steps| {
+                emit_connect_progress(emitter.as_ref(), &attempt_id, server_id, 1, steps);
+            }))
+        }
+        None => ConnectLog::new(),
+    };
     let result = run_test_connection(
         profile_store,
         real_credential_store,
@@ -144,6 +218,7 @@ async fn test_connection_with_limits(
         existing_server_id,
         limits,
         &log,
+        progress,
     )
     .await?;
     Ok(TestConnectionReport {
@@ -163,6 +238,7 @@ async fn run_test_connection(
     existing_server_id: Option<ServerId>,
     limits: ConnectLimits,
     log: &ConnectLog,
+    progress: Option<&TestProgress>,
 ) -> CommandResult<TestConnectionResult> {
     let existing_auth = match existing_server_id {
         Some(id) => Some(profile_store.get_server(&id).await?.auth),
@@ -205,7 +281,24 @@ async fn run_test_connection(
     // wächst — wie in `connect_session`.
     let overall = limits.overall(target.hops.len());
     let attempt = connector.connect(&target, &tiered, key_files, host_key_store, log, limits);
-    let outcome = match tokio::time::timeout(overall, attempt).await {
+    let timed = tokio::time::timeout(overall, attempt);
+    let timed = match progress {
+        Some(p) => tokio::select! {
+            out = timed => Some(out),
+            () = p.guard.cancelled() => None,
+        },
+        None => Some(timed.await),
+    };
+    let Some(timed) = timed else {
+        // Issue #633: cancelled by the user; the dropped attempt releases its
+        // sockets. Not a test result — the dialog just ends.
+        log.fail_running("SSH_CONNECT_CANCELLED");
+        return Err(CommandError::with_code(
+            "Verbindungsaufbau abgebrochen",
+            "SSH_CONNECT_CANCELLED",
+        ));
+    };
+    let outcome = match timed {
         Err(_elapsed) => {
             log.fail_running_timeout();
             return Ok(TestConnectionResult::Timeout);
@@ -2342,5 +2435,133 @@ mod tests {
         for marker in [FINGERPRINT_MARKER, VERSION_MARKER, "192.0.2.7"] {
             assert!(!log.contains(marker), "{marker} im Log: {log}");
         }
+    }
+
+    // --- Issue #633: live progress and cancel ------------------------------
+
+    struct CollectingEmitter(std::sync::Mutex<Vec<serde_json::Value>>);
+
+    impl EventEmitter for CollectingEmitter {
+        fn emit_event(&self, event: &str, payload: serde_json::Value) {
+            if event == "connect-progress" {
+                self.0.lock().unwrap().push(payload);
+            }
+        }
+    }
+
+    /// Starts a TCP step, then hangs (`hang`) or fails authentication.
+    struct ProgressConnector {
+        /// Cancels the attempt once the steps are written, then hangs.
+        cancel_with: Option<Arc<crate::connect_attempts::ConnectAttempts>>,
+    }
+
+    #[async_trait]
+    impl Connector for ProgressConnector {
+        async fn connect(
+            &self,
+            _target: &ConnectionTarget,
+            _credentials: &(dyn CredentialStore + Send + Sync),
+            _key_files: &(dyn KeyFileReader + Send + Sync),
+            _host_keys: Arc<dyn HostKeyStore>,
+            log: &ConnectLog,
+            _limits: ConnectLimits,
+        ) -> Result<ConnectOutcome, SshError> {
+            let tcp = log.start(
+                0,
+                "deploy@example.invalid:22",
+                ConnectStep::TcpConnect {
+                    address: Some("192.0.2.7".into()),
+                    port: 22,
+                },
+            );
+            log.succeed(tcp);
+            log.start(
+                0,
+                "deploy@example.invalid:22",
+                ConnectStep::Handshake {
+                    server_version: None,
+                    kex: None,
+                    host_key_algorithm: None,
+                    cipher: None,
+                    mac: None,
+                },
+            );
+            if let Some(attempts) = &self.cancel_with {
+                assert!(attempts.cancel("att-1"));
+                std::future::pending::<()>().await;
+            }
+            log.fail_running(SshError::AuthenticationFailed.code());
+            Err(SshError::AuthenticationFailed)
+        }
+    }
+
+    async fn run_tracked(
+        connector: &dyn Connector,
+        attempts: &crate::connect_attempts::ConnectAttempts,
+        emitter: Arc<CollectingEmitter>,
+    ) -> CommandResult<TestConnectionReport> {
+        let progress = TestProgress {
+            attempt_id: "att-1".into(),
+            emitter,
+            guard: attempts.register("att-1"),
+        };
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            test_connection_tracked(
+                &InMemoryProfileStore::new(),
+                &InMemoryCredentialStore::new(),
+                &MockKeyFileReader::new(),
+                Arc::new(NoOpHostKeyStore),
+                connector,
+                password_input(),
+                None,
+                &progress,
+            ),
+        )
+        .await
+        .expect("test must not hang")
+    }
+
+    #[tokio::test]
+    async fn tracked_test_emits_progress_events_with_the_attempt_id() {
+        let attempts = crate::connect_attempts::ConnectAttempts::new();
+        let emitter = Arc::new(CollectingEmitter(Default::default()));
+        let report = run_tracked(
+            &ProgressConnector { cancel_with: None },
+            &attempts,
+            emitter.clone(),
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            report.result,
+            TestConnectionResult::AuthenticationFailed
+        ));
+        let events = emitter.0.lock().unwrap();
+        assert!(!events.is_empty());
+        assert!(events.iter().all(|e| e["attemptId"] == "att-1"));
+        let last = events.last().unwrap();
+        let steps = last["steps"].as_array().unwrap();
+        assert_eq!(steps.last().unwrap()["status"], "failed");
+        assert_eq!(steps[0]["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn tracked_test_can_be_cancelled() {
+        let attempts = Arc::new(crate::connect_attempts::ConnectAttempts::new());
+        let emitter = Arc::new(CollectingEmitter(Default::default()));
+        let err = run_tracked(
+            &ProgressConnector {
+                cancel_with: Some(attempts.clone()),
+            },
+            &attempts,
+            emitter.clone(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, Some("SSH_CONNECT_CANCELLED"));
+        let events = emitter.0.lock().unwrap();
+        let steps = events.last().unwrap()["steps"].as_array().unwrap().clone();
+        assert_eq!(steps.last().unwrap()["status"], "failed");
     }
 }

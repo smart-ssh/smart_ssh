@@ -542,6 +542,8 @@
     "AI_PROVIDER_UNAVAILABLE": "De AI-provider meldde een fout (bijv. onderhoud of overbelasting). Probeer het later opnieuw; blijft het probleem bestaan, controleer dan de provider-instellingen.",
     "AI_PROVIDER_OVERLOADED": "De AI-provider is op dit moment overbelast. Probeer het zo meteen opnieuw.",
     "AI_PROVIDER_BILLING": "Het account bij de AI-provider heeft geen tegoed meer. Controleer de facturering in de console van de provider.",
+    "AI_PROVIDER_USAGE_LIMIT": "Gebruikslimiet bij de aanbieder bereikt. Verhoog de limiet in de console van de aanbieder of kies een andere aanbieder.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Gebruikslimiet bij de aanbieder bereikt. Toegang is weer mogelijk op {{date}}. Verhoog de limiet in de console van de aanbieder of kies een andere aanbieder.",
     "AI_PROVIDER_REJECTED_REQUEST": "De AI-provider heeft het verzoek geweigerd.",
     "AI_RESPONSE_TRUNCATED": "Het AI-antwoord was te lang voor een volledige opdracht",
     "AI_MODEL_NOT_FOUND": "De AI-provider kent dit model niet. Controleer de modelnaam in Instellingen (\"Modellen laden\" toont de beschikbare); haal bij Ollama het model eerst op met `ollama pull <name>`.",
@@ -920,7 +922,8 @@
     "dismiss": "Voorstel sluiten",
     "reject": "Afwijzen",
     "applying": "Toepassen…",
-    "apply": "Toepassen"
+    "apply": "Toepassen",
+    "expired": "Verlopen — niet toegepast"
   },
   "connectLog": {
     "title": "Details",

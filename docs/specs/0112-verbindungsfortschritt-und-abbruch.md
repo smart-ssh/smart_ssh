@@ -49,6 +49,13 @@ Bezüge: Spec 0005 (SSH, Jump-Hosts), Spec 0069 (Fehlerpfad, Zeitgrenzen), Spec 
 - Auch das Fortsetzen einer gespeicherten Chat-Sitzung aus dem Auswahl-Screen (Spec 0034) öffnet sofort den Verbindungs-Tab, mit Schrittliste, Abbrechen und im Fehlerfall Fehler, Schritt-Protokoll sowie „Erneut versuchen" und „Schließen". „Erneut versuchen" setzt dieselbe Chat-Sitzung fort, nicht eine neue. Bei Erfolg wird der Tab zum Sitzungs-Tab mit der gespeicherten Historie; ein Abbruch lässt die gespeicherte Chat-Sitzung unverändert.
 - Das automatische Wiederverbinden (Spec 0107) nutzt den Verbindungs-Tab nicht.
 
+### Verbindungstest im Server-Formular
+
+- „Verbindung testen" (Spec 0008, Abschnitt 7) öffnet einen modalen Dialog mit derselben Schrittliste wie der Verbindungs-Tab; sie aktualisiert sich live aus `connect-progress`, während der Test läuft.
+- Solange der Test läuft, zeigt der Dialog „Abbrechen"; danach „Schließen". Das Ergebnis (Erfolg oder gescheiterter Schritt samt übersetztem Grund) bleibt im Dialog sichtbar. Nach dem Schließen zeigt das Formular wie bisher die kompakte Ergebnisanzeige und das aufklappbare Schritt-Protokoll.
+- „Abbrechen" oder Escape bricht einen laufenden Test ab (Abschnitt 2) und schließt den Dialog; ein abgebrochener Test zeigt keinen Fehler. Escape bei beendetem Test schließt nur den Dialog.
+- Meldet der Test einen unbekannten oder geänderten Host-Key, tritt die Host-Key-Abfrage an die Stelle des Dialogs.
+
 ## 5. Grenzen
 
 - Keine Mindestanzeigedauer und kein Verlauf der Schrittlisten: sie leben nur im Tab.
