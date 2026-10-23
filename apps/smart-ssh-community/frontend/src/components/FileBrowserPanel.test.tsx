@@ -248,6 +248,20 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     });
   });
 
+  it("header cells are sticky with an opaque background and the table has no collapsed borders (#650)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([entry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    const { container } = renderPanel();
+    await screen.findByText(/readme\.md/);
+    const ths = container.querySelectorAll("thead th");
+    expect(ths.length).toBe(5);
+    ths.forEach((th) => {
+      expect(th).toHaveClass("sticky", "top-0", "bg-slate-900");
+    });
+    const table = container.querySelector("table");
+    expect(table).toHaveClass("border-separate", "border-spacing-0");
+  });
+
   it("dragging a column handle grows the column and persists the width on drag end", async () => {
     vi.mocked(sftpList).mockResolvedValue([entry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
