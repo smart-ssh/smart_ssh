@@ -172,6 +172,13 @@ erscheint einmal pro Kompaktierungsschritt (nicht je Anfrage) der Hinweis
 des Modells passen.“ Gespeicherte Historie, Ledger und Notizen bleiben
 unverändert.
 
+**Neuer Chat (Issue #648).** „Neuer Chat“ setzt die gemerkte Größe und das
+beobachtete Verhältnis zurück: die Anzeige zeigt sofort „0“ (Fenstergröße
+unverändert), und die Kompaktierung des neuen Chats nutzt nicht das
+Verhältnis des alten. Nach der ersten Antwort gilt wieder der echte Wert.
+Ein fortgesetzter gespeicherter Chat zeigt den Wert des vorigen Chats nicht;
+bis zu seiner ersten Antwort ist keine Größe bekannt.
+
 ### 3.2 Ablauf (Reihenfolge der Kürzung)
 
 Kompaktiert wird in dieser Reihenfolge, jeweils nur so weit wie nötig, bis

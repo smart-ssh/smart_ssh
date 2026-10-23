@@ -1291,6 +1291,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     setNewChatError(null);
     try {
       await startNewChat(sessionId);
+      // Issue #648: the new chat has no usage yet; keep the window size.
+      setContextUsage((prev) => (prev ? { ...prev, inputTokens: 0 } : prev));
       setItems([]);
       setHistoryNav(initialHistoryNavState);
     } catch (err) {
