@@ -1023,7 +1023,8 @@
     },
     "moveCollision": {
       "title": "Hedef zaten var",
-      "body": "zaten var ve üzerine yazılacak."
+      "body": "zaten var ve üzerine yazılacak.",
+      "folderBody": "zaten klasör olarak var ve değiştirilemez."
     },
     "folderUpload": {
       "conflictTitle": "Klasördeki dosyaların üzerine yazılsın mı?",

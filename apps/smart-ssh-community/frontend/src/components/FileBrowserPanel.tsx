@@ -26,6 +26,7 @@ import {
   sftpElevationEnable,
   sftpElevationStatus,
   sftpExists,
+  sftpStat,
   sftpList,
   sftpMkdir,
   sftpCreateFile,
@@ -226,6 +227,8 @@ export function FileBrowserPanel({
     from: string;
     to: string;
     kind: MoveKind;
+    /** Issue #625: ein Ordner als Ziel lässt sich nicht ersetzen. */
+    targetIsDir: boolean;
   } | null>(null);
   // Upload-Überschreib-Diff-Vorschau (Spec 0054, Teil 3): `remoteText` ist
   // `null`, wenn die Remote-Datei nicht als Text lesbar war (Binärdatei/zu
@@ -1205,7 +1208,13 @@ export function FileBrowserPanel({
     try {
       const exists = await sftpExists(sessionId, to, channelUser);
       if (exists) {
-        setMoveCollision({ from, to, kind });
+        // Kann `stat` nicht antworten, gilt das Ziel als Datei; das Backend
+        // lehnt das Ersetzen eines Ordners ohnehin ab.
+        const targetIsDir = await sftpStat(sessionId, to, channelUser).then(
+          (entry) => entry.isDir,
+          () => false,
+        );
+        setMoveCollision({ from, to, kind, targetIsDir });
         return;
       }
       await sftpRename(sessionId, from, to, channelUser);
@@ -1220,7 +1229,7 @@ export function FileBrowserPanel({
     if (!moveCollision) return;
     const { from, to, kind } = moveCollision;
     setMoveCollision(null);
-    sftpRename(sessionId, from, to, channelUser)
+    sftpRename(sessionId, from, to, channelUser, true)
       .then(() => {
         notifyMoved(from, to, kind);
         load(path);
@@ -2280,23 +2289,29 @@ export function FileBrowserPanel({
           layer="sessionTab"
           size="sm"
           title={
-            elevated
+            elevated && !moveCollision.targetIsDir
               ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
               : t("fileBrowser.moveCollision.title")
           }
           onClose={() => setMoveCollision(null)}
           actions={
             <>
-              <Button onClick={() => setMoveCollision(null)}>{t("fileBrowser.cancel")}</Button>
-              <Button variant="danger" onClick={handleConfirmMoveCollision}>
-                {t("fileBrowser.overwrite")}
+              <Button onClick={() => setMoveCollision(null)}>
+                {t("fileBrowser.cancel")}
               </Button>
+              {!moveCollision.targetIsDir && (
+                <Button variant="danger" onClick={handleConfirmMoveCollision}>
+                  {t("fileBrowser.overwrite")}
+                </Button>
+              )}
             </>
           }
         >
           <p>
             <span className="font-mono text-xs break-all">{moveCollision.to}</span>{" "}
-            {t("fileBrowser.moveCollision.body")}
+            {moveCollision.targetIsDir
+              ? t("fileBrowser.moveCollision.folderBody")
+              : t("fileBrowser.moveCollision.body")}
           </p>
         </DialogFrame>
       )}

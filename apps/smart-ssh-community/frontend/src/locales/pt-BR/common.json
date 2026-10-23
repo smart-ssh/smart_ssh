@@ -1030,7 +1030,8 @@
     },
     "moveCollision": {
       "title": "O destino já existe",
-      "body": "já existe e seria sobrescrito."
+      "body": "já existe e seria sobrescrito.",
+      "folderBody": "já existe como pasta e não pode ser substituído."
     },
     "folderUpload": {
       "conflictTitle": "Sobrescrever arquivos na pasta?",

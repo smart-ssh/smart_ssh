@@ -1030,7 +1030,8 @@
     },
     "moveCollision": {
       "title": "La cible existe déjà",
-      "body": "existe déjà et serait écrasé."
+      "body": "existe déjà et serait écrasé.",
+      "folderBody": "existe déjà en tant que dossier et ne peut pas être remplacé."
     },
     "folderUpload": {
       "conflictTitle": "Écraser les fichiers du dossier ?",

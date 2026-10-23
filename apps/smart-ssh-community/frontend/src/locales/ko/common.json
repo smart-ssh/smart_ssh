@@ -1016,7 +1016,8 @@
     },
     "moveCollision": {
       "title": "대상이 이미 있습니다",
-      "body": "이(가) 이미 있으며 덮어쓰게 됩니다."
+      "body": "이(가) 이미 있으며 덮어쓰게 됩니다.",
+      "folderBody": "은(는) 이미 폴더로 존재하며 대체할 수 없습니다."
     },
     "folderUpload": {
       "conflictTitle": "폴더의 파일을 덮어쓰시겠습니까?",

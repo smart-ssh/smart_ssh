@@ -1016,7 +1016,8 @@
     },
     "moveCollision": {
       "title": "Target sudah ada",
-      "body": "sudah ada dan akan ditimpa."
+      "body": "sudah ada dan akan ditimpa.",
+      "folderBody": "sudah ada sebagai folder dan tidak dapat diganti."
     },
     "folderUpload": {
       "conflictTitle": "Timpa berkas di folder?",

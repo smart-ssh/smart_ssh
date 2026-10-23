@@ -1016,7 +1016,8 @@
     },
     "moveCollision": {
       "title": "Đích đã tồn tại",
-      "body": "đã tồn tại và sẽ bị ghi đè."
+      "body": "đã tồn tại và sẽ bị ghi đè.",
+      "folderBody": "đã tồn tại dưới dạng thư mục và không thể thay thế."
     },
     "folderUpload": {
       "conflictTitle": "Ghi đè các tệp trong thư mục?",
