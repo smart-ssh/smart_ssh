@@ -697,7 +697,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     // "rw-r--r--" steht sowohl in der Tabellenspalte als auch im Dialog —
     // die numerische Darstellung ("644") ist eindeutig nur im Dialog.
     expect(screen.getAllByText("rw-r--r--").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("644")).toBeVisible();
+    expect(screen.getByText("0644")).toBeVisible();
   });
 
   it("'Aktualisieren' reloads the current directory", async () => {
@@ -745,8 +745,56 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o444, false, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o444, false, false, null),
     );
+  });
+
+  it("recursive chmod dialog shows the folder/file summary and sends special-bit changes (issue #624)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([{ ...dirEntry, permissionsOctal: 0o2755 }]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpChmod).mockResolvedValue(3);
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+    await screen.findByDisplayValue("2755");
+
+    expect(screen.queryByText(/^Ordner: /)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/^Rekursiv/));
+    expect(screen.getByText("Ordner: 755, Dateien: 755")).toBeVisible();
+
+    // 644 for the rwx part: folders get 755, files 644.
+    fireEvent.change(screen.getByDisplayValue("2755"), { target: { value: "2644" } });
+    expect(screen.getByText("Ordner: 755, Dateien: 644")).toBeVisible();
+    fireEvent.click(screen.getByText("Übernehmen"));
+    // Special bits untouched by the user: not applied explicitly.
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o2644, true, false, null),
+    );
+
+    // Ticking setgid explicitly reports the change.
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Rechte bearbeiten…"));
+    await screen.findByDisplayValue("2755");
+    fireEvent.click(screen.getByLabelText("setuid-Bit"));
+    fireEvent.click(screen.getByText("Übernehmen"));
+    await waitFor(() =>
+      expect(sftpChmod).toHaveBeenLastCalledWith("session-1", "logs", 0o6755, false, true, null),
+    );
+  });
+
+  it("shows a permission hint for an empty folder without x (issue #624)", async () => {
+    const locked: RemoteEntryDto = { ...dirEntry, permissionsOctal: 0o2644, permissions: "drw-r-Sr--" };
+    vi.mocked(sftpList).mockImplementation(async (_s, p) => (p === "logs" ? [] : [locked]));
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    fireEvent.click(await screen.findByText(/logs/));
+
+    expect(
+      await screen.findByText("Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)"),
+    ).toBeVisible();
   });
 
   it("names the otherwise empty header cells of the file table and chmod matrix (issue #112)", async () => {
@@ -777,7 +825,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "a.txt", 0o700, false, false, null),
     );
   });
 
@@ -807,7 +855,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "suid-bin", 0o4755, false, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "suid-bin", 0o4755, false, false, null),
     );
   });
 
@@ -826,7 +874,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.click(screen.getByText("Übernehmen"));
 
     await waitFor(() =>
-      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o755, true, null),
+      expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o755, true, false, null),
     );
   });
 
@@ -2362,7 +2410,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
 
   it("offers Paste in the menu while an entry is cut and moves it like the toolbar button", async () => {
     vi.mocked(sftpList).mockImplementation((_s, requestedPath) =>
-      Promise.resolve(requestedPath === "sub" ? [] : [fileEntry, { ...fileEntry, name: "sub", path: "sub", isDir: true }]),
+      Promise.resolve(requestedPath === "sub" ? [] : [fileEntry, { ...fileEntry, name: "sub", path: "sub", isDir: true, permissionsOctal: 0o755 }]),
     );
     vi.mocked(sftpExists).mockResolvedValue(false);
     vi.mocked(sftpRename).mockResolvedValue(undefined);
