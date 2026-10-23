@@ -23,6 +23,7 @@ import type {
   ChatWebActivityEvent,
   ChatWebResearchUnavailableEvent,
   AutoReconnectChangedEvent,
+  ChatSessionChangedEvent,
   ConnectionStatusChangedEvent,
   ConnectProgressEvent,
   HostKeyVerificationEndedEvent,
@@ -31,9 +32,11 @@ import type {
   NoteShrinkFailedEvent,
   NoteShrinkSucceededEvent,
   NoteShrinkSuggestedEvent,
+  NoteUpdateExpiredEvent,
   NoteUpdateSuggestedEvent,
   RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
+  SftpTransferProgressEvent,
   SftpTransferStartedEvent,
   StartupPromptRequest,
   TerminalOutputEvent,
@@ -48,6 +51,11 @@ export const onConnectionStatusChanged = (
   handler: (event: ConnectionStatusChangedEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ConnectionStatusChangedEvent>("connection-status-changed", (e) => handler(e.payload));
+
+export const onChatSessionChanged = (
+  handler: (event: ChatSessionChangedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatSessionChangedEvent>("chat-session-changed", (e) => handler(e.payload));
 
 export const onAutoReconnectChanged = (
   handler: (event: AutoReconnectChangedEvent) => void,
@@ -261,6 +269,11 @@ export const onSftpTransferStarted = (
 ): Promise<UnlistenFn> =>
   listen<SftpTransferStartedEvent>("sftp-transfer-started", (e) => handler(e.payload));
 
+export const onSftpTransferProgress = (
+  handler: (event: SftpTransferProgressEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<SftpTransferProgressEvent>("sftp-transfer-progress", (e) => handler(e.payload));
+
 export const onSftpTransferFinished = (
   handler: (event: SftpTransferFinishedEvent) => void,
 ): Promise<UnlistenFn> =>
@@ -304,3 +317,10 @@ export function base64ToBytes(base64: string): Uint8Array {
   }
   return bytes;
 }
+
+/** Issue #628: the backend timed out a pending note confirmation (update or
+ * shrink suggestion); the card switches to its "expired" state. */
+export const onNoteUpdateExpired = (
+  handler: (event: NoteUpdateExpiredEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<NoteUpdateExpiredEvent>("note-update-expired", (e) => handler(e.payload));

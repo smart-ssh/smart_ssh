@@ -4,7 +4,9 @@ import {
   formatDuration,
   formatStepLogText,
   groupByHop,
+  recordDetails,
   stepDetails,
+  stepLabel,
   stepStatusText,
 } from "./connectStepLog";
 import { testI18n } from "./testI18n";
@@ -73,7 +75,28 @@ describe("connectStepLog", () => {
   it("names the failure code of a failed step", () => {
     expect(
       stepStatusText(t, record({ status: { state: "failed", code: "HOST_KEY_CHANGED" } })),
-    ).toBe("failed (HOST_KEY_CHANGED)");
+    ).toBe("failed: HOST_KEY_CHANGED");
+  });
+
+  it("shows a translated reason for a failed step and the raw code in the details", () => {
+    const failed = record({
+      step: { kind: "tcpConnect", address: null, port: 22 },
+      status: { state: "failed", code: "SSH_TCP_TIMEOUT" },
+    });
+    expect(stepStatusText(t, failed)).toBe("failed: TCP connection timed out");
+    expect(stepStatusText(t, failed)).not.toContain("SSH_TCP_TIMEOUT");
+    expect(recordDetails(t, failed)).toBe(":22 · SSH_TCP_TIMEOUT");
+  });
+
+  it("labels a skipped DNS step as IP address without lookup", () => {
+    const skipped = record({
+      step: { kind: "dnsResolution", host: "192.0.2.1", port: 22, addresses: ["192.0.2.1"] },
+      status: { state: "skipped" },
+    });
+    expect(stepStatusText(t, skipped)).toBe("skipped");
+    expect(stepLabel(t, skipped.step, "skipped")).toBe("IP address – no lookup needed");
+    expect(formatStepLogText(t, [skipped])).toContain("– IP address – no lookup needed — skipped");
+    expect(stepLabel(t, skipped.step, "ok")).toBe("DNS resolution");
   });
 
   it("formats durations", () => {
@@ -89,7 +112,7 @@ describe("connectStepLog", () => {
         status: { state: "failed", code: "SSH_CONNECTION_REFUSED" },
       }),
     ]);
-    expect(single).toBe("✗ TCP connection — failed (SSH_CONNECTION_REFUSED) (5 ms) — 192.0.2.1:22");
+    expect(single).toBe("✗ TCP connection — failed: Connection refused (5 ms) — 192.0.2.1:22 · SSH_CONNECTION_REFUSED");
 
     const multi = formatStepLogText(t, [
       record({ hopIndex: 0 }),

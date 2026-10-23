@@ -846,7 +846,14 @@ async fn generate_rolling_summary(
                 | AiEvent::WebContentIngested
                 | AiEvent::Usage { .. }
                 | AiEvent::Retrying { .. }
-                | AiEvent::InvalidToolCall { .. } => {} // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
+                | AiEvent::InvalidToolCall { .. } => {}
+                // Issue #610: passive report (purpose `Other`).
+                AiEvent::RequestUsage(usage) => {
+                    session
+                        .report_ai_usage(crate::ai_usage::AiUsagePurpose::Other, usage)
+                        .await;
+                }
+                // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
                 // Nebenaufruf — eine unvollständige Zusammenfassung ist
                 // immer noch besser als gar keine.
                 AiEvent::Done | AiEvent::TextTruncated => return Some(text),

@@ -30,7 +30,8 @@ export function groupByHop(steps: ConnectStepRecord[]): HopGroup[] {
 }
 
 /** Bezeichnung eines Schritts ("DNS-Auflösung", …). */
-export function stepLabel(t: T, step: ConnectStep): string {
+export function stepLabel(t: T, step: ConnectStep, status?: string): string {
+  if (step.kind === "dnsResolution" && status === "skipped") return t("connectLog.step.dnsSkipped");
   return t(`connectLog.step.${step.kind}`);
 }
 
@@ -84,6 +85,19 @@ function formatHost(address: string): string {
   return address.includes(":") ? `[${address}]` : address;
 }
 
+/** Translated reason for a failure code; unknown codes show the code itself. */
+export function failureReason(t: T, code: string): string {
+  return t(`connectLog.reason.${code}`, { defaultValue: code });
+}
+
+/** Details line of a record: the step parameters plus, for a failed step,
+ * the raw failure code (the status text only shows the translated reason). */
+export function recordDetails(t: T, record: ConnectStepRecord): string {
+  const details = stepDetails(t, record.step);
+  if (record.status.state !== "failed") return details;
+  return details ? `${details} · ${record.status.code}` : record.status.code;
+}
+
 /** Ergebnis eines Schritts als kurzer Text. */
 export function stepStatusText(t: T, record: ConnectStepRecord): string {
   switch (record.status.state) {
@@ -91,9 +105,15 @@ export function stepStatusText(t: T, record: ConnectStepRecord): string {
       return t("connectLog.status.ok");
     case "running":
       return t("connectLog.status.running");
+    case "skipped":
+      return t("connectLog.status.skipped");
     case "failed":
-      return t("connectLog.status.failed", { code: record.status.code });
+      return t("connectLog.status.failedReason", { reason: failureReason(t, record.status.code) });
   }
+}
+
+export function statusMarker(state: string): string {
+  return state === "failed" ? "✗" : state === "ok" ? "✓" : state === "skipped" ? "–" : "…";
 }
 
 /** Dauer in ms bzw. s. */
@@ -114,10 +134,10 @@ export function formatStepLogText(t: T, steps: ConnectStepRecord[]): string {
       lines.push(t("connectLog.hop", { index: group.hopIndex + 1, hop: group.hop }));
     }
     for (const record of group.steps) {
-      const details = stepDetails(t, record.step);
-      const marker = record.status.state === "failed" ? "✗" : record.status.state === "ok" ? "✓" : "…";
+      const details = recordDetails(t, record);
+      const marker = statusMarker(record.status.state);
       lines.push(
-        `${multiHop ? "  " : ""}${marker} ${stepLabel(t, record.step)} — ${stepStatusText(t, record)} (${formatDuration(record.durationMs)})${details ? ` — ${details}` : ""}`,
+        `${multiHop ? "  " : ""}${marker} ${stepLabel(t, record.step, record.status.state)} — ${stepStatusText(t, record)} (${formatDuration(record.durationMs)})${details ? ` — ${details}` : ""}`,
       );
     }
   }

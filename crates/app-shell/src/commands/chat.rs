@@ -535,9 +535,11 @@ pub async fn respond_to_action(
     // Fehler für eine unbekannte/bereits aufgelöste ID) — der zusätzliche
     // Session-Check war ohnehin redundant dazu, nicht die einzige
     // Absicherung.
-    state
-        .pending_action_confirmations
-        .resolve(&action_id, decision)?;
+    app_logic::confirmation::resolve_action_confirmation(
+        &state.pending_action_confirmations,
+        &action_id,
+        decision,
+    )?;
     Ok(())
 }
 
@@ -611,10 +613,14 @@ pub async fn start_new_chat(
     let new_id = app_logic::orchestration::start_new_chat(
         &session,
         session_id,
-        &TauriEventEmitter(app),
+        &TauriEventEmitter(app.clone()),
         provider_id,
     )
     .await?;
+    // Issue #611: tell extensions (session header items) the new chat id.
+    if let Some(id) = new_id {
+        app_logic::events::emit_chat_session_changed(&TauriEventEmitter(app), session_id, Some(id));
+    }
     Ok(new_id.map(|id| id.to_string()))
 }
 
@@ -788,7 +794,16 @@ pub async fn list_sessions(state: State<'_, AppState>) -> CommandResult<Vec<Sess
             .await
             .map(|s| s.name)
             .unwrap_or_else(|_| "Unbekannter Server".to_string());
+        let chat_session_id = match state.sessions.get(entry.session_id) {
+            Some(session) => session
+                .chat_session_id
+                .lock()
+                .await
+                .map(|id| id.to_string()),
+            None => None,
+        };
         result.push(SessionSummaryDto {
+            chat_session_id,
             session_id: entry.session_id,
             server_id: entry.server_id,
             server_name,

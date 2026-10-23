@@ -27,8 +27,8 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    fence_untrusted, ActionSchema, AiError, AiEvent, AiProvider, MessageContent, RejectionReason,
-    Role, SessionContext, UntrustedKind, WebActivity, WebActivityKind, WebSource,
+    fence_untrusted, ActionSchema, AiError, AiEvent, AiProvider, AiUsage, MessageContent,
+    RejectionReason, Role, SessionContext, UntrustedKind, WebActivity, WebActivityKind, WebSource,
 };
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -619,7 +619,7 @@ async fn connect_and_stream(
                         .await;
                 // Issue #599: a 429 that is really an exhausted quota is a
                 // billing problem — never retried.
-                if crate::error::ProviderErrorInfo::from_body(&text).is_billing() {
+                if crate::error::ProviderErrorInfo::from_body(&text).is_quota_exhausted() {
                     let mapped = map_http_response(status, &headers, &text);
                     log_provider_error_response_with_id(
                         request_id,
@@ -986,6 +986,9 @@ struct AnthropicStreamState {
     /// zugeordneten Zitaten).
     web_activities: Vec<WebActivity>,
     web_citations: Vec<WebCitation>,
+    /// Issue #609: usage accumulated from `message_start` and the final
+    /// `message_delta`.
+    usage: AiUsage,
 }
 
 impl AnthropicStreamState {
@@ -1121,8 +1124,12 @@ impl AnthropicStreamState {
             // kumulativ nachgeliefert). Einmal pro Antwort, ganz am Anfang
             // des Streams.
             "message_start" => {
+                if let Some(model) = data.get("message").and_then(crate::usage::model_of) {
+                    self.usage.response_model = Some(model);
+                }
                 if let Some(usage) = data.get("message").and_then(|m| m.get("usage")) {
                     log_cache_usage(self.request_id, "anthropic", usage);
+                    crate::usage::merge_anthropic(&mut self.usage, usage);
                     // Issue #601: reale Eingabegröße für die Kompaktierung.
                     let field = |n: &str| usage.get(n).and_then(Value::as_u64).unwrap_or(0);
                     let total = field("input_tokens")
@@ -1138,6 +1145,9 @@ impl AnthropicStreamState {
             // `message_delta`-Event (Feld `delta.stop_reason`), nicht in
             // `message_stop` — dort steht nur noch ein leerer `"delta": {}`.
             "message_delta" => {
+                if let Some(usage) = data.get("usage") {
+                    crate::usage::merge_anthropic(&mut self.usage, usage);
+                }
                 if let Some(stop_reason) = data
                     .get("delta")
                     .and_then(|d| d.get("stop_reason"))
@@ -1260,6 +1270,11 @@ impl AnthropicStreamState {
         }
         if let Some(action) = fallback_action {
             events.push(RawEvent::Public(AiEvent::ActionProposed(action)));
+        }
+        // Issue #609: usage once per request, before the terminal event.
+        let usage = std::mem::take(&mut self.usage);
+        if !usage.is_empty() {
+            events.push(RawEvent::Public(AiEvent::RequestUsage(usage)));
         }
         // Spec 0065, Teil 2: kein Tool-Call betroffen (sonst wäre oben schon
         // zurückgekehrt worden), aber `stop_reason: max_tokens` — reiner
@@ -1441,6 +1456,7 @@ fn process_frame_stream(
         server_tool_inputs: BTreeMap::new(),
         web_activities: Vec::new(),
         web_citations: Vec::new(),
+        usage: AiUsage::default(),
     };
 
     Box::pin(futures::stream::unfold(state, |mut state| async move {
@@ -1866,6 +1882,13 @@ mod tests {
             events,
             vec![
                 RawEvent::Public(AiEvent::Usage { input_tokens: 5170 }),
+                RawEvent::Public(AiEvent::RequestUsage(AiUsage {
+                    input_tokens: Some(50),
+                    output_tokens: Some(1),
+                    cache_read_tokens: Some(0),
+                    cache_write_tokens: Some(5120),
+                    ..AiUsage::default()
+                })),
                 RawEvent::Public(AiEvent::Done)
             ]
         );
@@ -1903,6 +1926,13 @@ mod tests {
             events,
             vec![
                 RawEvent::Public(AiEvent::Usage { input_tokens: 5170 }),
+                RawEvent::Public(AiEvent::RequestUsage(AiUsage {
+                    input_tokens: Some(50),
+                    output_tokens: Some(1),
+                    cache_read_tokens: Some(5120),
+                    cache_write_tokens: Some(0),
+                    ..AiUsage::default()
+                })),
                 RawEvent::Public(AiEvent::Done)
             ]
         );
@@ -1933,7 +1963,16 @@ mod tests {
                 .collect()
                 .await;
 
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::RequestUsage(AiUsage {
+                    output_tokens: Some(12),
+                    ..AiUsage::default()
+                })),
+                RawEvent::Public(AiEvent::Done)
+            ]
+        );
         let log_text = crate::test_support::log_buffer_text();
         assert!(
             log_text.contains("end_turn"),
@@ -1965,7 +2004,16 @@ mod tests {
 
         // Spec 0065, Teil 2: kein Tool-Call beteiligt (reiner Text) — seit
         // diesem Fix `TextTruncated` statt `Done`, s. `finalize`-Kommentar.
-        assert_eq!(events, vec![RawEvent::Public(AiEvent::TextTruncated)]);
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::RequestUsage(AiUsage {
+                    output_tokens: Some(4096),
+                    ..AiUsage::default()
+                })),
+                RawEvent::Public(AiEvent::TextTruncated)
+            ]
+        );
         let log_text = crate::test_support::log_buffer_text();
         assert!(
             log_text.contains("max_tokens"),
@@ -2053,14 +2101,80 @@ mod tests {
 
         assert_eq!(
             events.len(),
-            2,
-            "erwartet: ActionProposed + Done, bekam {events:?}"
+            3,
+            "erwartet: ActionProposed + RequestUsage + Done, bekam {events:?}"
         );
         assert!(matches!(
             events[0],
             RawEvent::Public(AiEvent::ActionProposed(_))
         ));
-        assert_eq!(events[1], RawEvent::Public(AiEvent::Done));
+        assert_eq!(events[2], RawEvent::Public(AiEvent::Done));
+    }
+
+    fn usage_of(events: &[RawEvent]) -> Vec<AiUsage> {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                RawEvent::Public(AiEvent::RequestUsage(u)) => Some(u.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Issue #609: input from `message_start` and output from the final
+    /// `message_delta` are combined; cache writes are the TTL sum.
+    #[tokio::test]
+    async fn test_issue_609_usage_combines_start_and_delta() {
+        let events = collect_frames(vec![
+            frame(
+                "message_start",
+                r#"{"message":{"model":"claude-x-1","usage":{"input_tokens":10,"cache_read_input_tokens":300,"cache_creation_input_tokens":70,"cache_creation":{"ephemeral_5m_input_tokens":20,"ephemeral_1h_input_tokens":50},"output_tokens":1,"service_tier":"standard"}}}"#,
+            ),
+            frame(
+                "message_delta",
+                r#"{"delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":99,"server_tool_use":{"web_search_requests":2}}}"#,
+            ),
+            frame("message_stop", "{}"),
+        ])
+        .await;
+        assert_eq!(
+            usage_of(&events),
+            vec![AiUsage {
+                input_tokens: Some(10),
+                output_tokens: Some(99),
+                cache_read_tokens: Some(300),
+                cache_write_tokens: Some(70),
+                reasoning_tokens: None,
+                web_search_requests: Some(2),
+                service_tier: Some("standard".into()),
+                response_model: Some("claude-x-1".into()),
+                provider_reported_cost_usd: None,
+            }]
+        );
+        assert_eq!(events.last(), Some(&RawEvent::Public(AiEvent::Done)));
+    }
+
+    /// Issue #609: a minimal usage object leaves everything else `None`;
+    /// a stream without any usage yields no event.
+    #[tokio::test]
+    async fn test_issue_609_minimal_and_missing_usage() {
+        let events = collect_frames(vec![
+            frame(
+                "message_start",
+                r#"{"message":{"usage":{"input_tokens":7}}}"#,
+            ),
+            frame("message_stop", "{}"),
+        ])
+        .await;
+        assert_eq!(
+            usage_of(&events),
+            vec![AiUsage {
+                input_tokens: Some(7),
+                ..AiUsage::default()
+            }]
+        );
+        let events = collect_frames(vec![frame("message_stop", "{}")]).await;
+        assert!(usage_of(&events).is_empty());
     }
 
     /// Issue #604: an unknown tool (`date`, empty input) does not end the

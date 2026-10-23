@@ -230,6 +230,8 @@ pub trait KeyFileReader {
 #[derive(Debug, Clone)]
 pub enum ResolvedAuth {
     Password(SecretString),
+    /// Issue #632: erst SSH-Methode `none`, dann `password` mit leerem Wert.
+    NoPassword,
     PrivateKey {
         key: SecretString,
         passphrase: Option<SecretString>,
@@ -277,6 +279,7 @@ pub fn resolve_auth(
                 .map_err(|e| credential_lookup_error(e, SecretKind::Passphrase))?;
             Ok(ResolvedAuth::PrivateKey { key, passphrase })
         }
+        AuthMethod::NoPassword => Ok(ResolvedAuth::NoPassword),
         AuthMethod::Agent => Ok(ResolvedAuth::Agent),
         AuthMethod::Certificate { cert_ref, key_ref } => {
             let cert = credentials

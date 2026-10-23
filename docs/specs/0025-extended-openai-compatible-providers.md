@@ -59,6 +59,17 @@ In keinem Fall blockiert die Suche das Speichern des Anbieters. Der Key geht
 dabei nur an den Anbieter (wie bei „Modelle laden"), er wird weder
 protokolliert noch gespeichert, bevor der Nutzer den Anbieter anlegt.
 
+### Anbietername aus dem Modell
+
+Im Formular „Provider hinzufügen" übernimmt das Namensfeld das Modell
+(Auswahl aus der Liste oder Eingabe, bei jeder Änderung), solange der Nutzer
+den Namen nicht selbst bearbeitet hat. Sobald er im Namensfeld tippt, bleibt
+der Name unverändert — auch wenn er ihn wieder leert. Ein zuerst eingegebener
+Name bleibt erhalten. Das Modell wird dadurch nie verändert. Ein Wechsel des
+Anbieter-Typs ändert die Regel nicht; beim erneuten Öffnen des Formulars
+beginnt der Zustand von vorn. Der Ollama-Schnellstart behält seinen eigenen
+Namen.
+
 ## 3. Zusatz-Header
 
 Eine Anbieter-Konfiguration kann beliebige zusätzliche HTTP-Header tragen
@@ -89,3 +100,28 @@ Die App zeigt nur an, was der Anbieter selbst meldet.
 - Eine echte Attestierungsprüfung ist nicht Teil des Produkts.
 - Die entdeckten Modelle zeigen keine Zusatzdaten wie Preis oder
   Kontextfenstergröße; der generische OpenAI-Standard liefert sie nicht.
+
+## 5. Anbieter hinzufügen im Dialog
+
+Auf der Einstellungsseite „KI-Provider" steht unter der Liste der
+konfigurierten Anbieter die Schaltfläche „Provider hinzufügen" — sowohl bei
+leerer als auch bei gefüllter Liste (bei leerer Liste als hervorgehobene
+Hauptaktion). Das Anlegeformular ist nicht mehr Teil der Seite, sondern
+öffnet sich in einem Dialog über den Einstellungen; er enthält alle Felder
+des Formulars unverändert (Typ, Name, Modell mit Modellsuche, Base-URL,
+API-Key mit Zugangsdaten-Test, „Erweitert", Hinweis „wird als aktiver Provider
+verwendet").
+
+- „Hinzufügen" speichert den Anbieter, schließt den Dialog und zeigt den
+  neuen Anbieter in der Liste; war noch keiner aktiv, ist er aktiv.
+- Schlägt das Speichern fehl, bleibt der Dialog mit allen Eingaben offen
+  und der Fehler steht im Dialog. Gelingt das Speichern, aber nicht das
+  Aktivieren, schließt der Dialog, der Anbieter steht in der Liste und der
+  Fehler erscheint auf der Seite.
+- „Abbrechen" und Escape schließen den Dialog und verwerfen alle Eingaben
+  (auch den API-Key); Escape schließt nur den Dialog, nicht die
+  Einstellungen. Ein Klick außerhalb schließt ihn nicht. Beim erneuten
+  Öffnen ist das Formular leer, Modellsuche und Test sind zurückgesetzt.
+- Der Fokus wandert beim Öffnen in den Dialog, bleibt darin und kehrt beim
+  Schließen zur Schaltfläche „Provider hinzufügen" zurück. Im kleinen
+  Fenster bleiben Titel und Aktionen erreichbar; nur der Inhalt scrollt.

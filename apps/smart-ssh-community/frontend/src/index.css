@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Narrow (phone-like) layout, Spec 0113: below 640 px. Keep in sync with
+   `NARROW_QUERY` in `hooks/useIsNarrow.ts`. The wide layout stays the
+   unprefixed default; `narrow:` only adds the exception. */
+@custom-variant narrow (@media (max-width: 639.98px));
+
 /* No elastic "rubber-band" overscroll (WKWebView on macOS) on the document or
    on any scroll container, and no scroll chaining to the surrounding layout.
    Global on purpose: every scrollable element inherits the rule without a

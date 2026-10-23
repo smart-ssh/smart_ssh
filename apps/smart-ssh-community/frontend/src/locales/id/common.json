@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Pengaturan",
+    "backToList": "Bagian",
     "categories": {
       "aiProvider": "Penyedia AI",
       "displayLanguage": "Tampilan & Bahasa",
@@ -130,10 +131,12 @@
     "rootDropZone": "Lepas di sini untuk memindahkan ke tingkat teratas (tanpa grup)",
     "hintRoot": "→ tingkat teratas (tanpa grup)",
     "hintGroup": "→ pindahkan ke grup ini",
-    "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri"
+    "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri",
+    "moveTo": "Pindahkan “{{name}}” ke…"
   },
   "management": {
-    "emptyState": "Pilih grup atau server di sebelah kiri, atau buat yang baru melalui \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Pilih grup atau server di sebelah kiri, atau buat yang baru melalui \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Kembali"
   },
   "groupForm": {
     "titleNew": "Grup Baru",
@@ -149,6 +152,8 @@
     "confirmDelete": "Hapus permanen"
   },
   "serverForm": {
+    "connect": "Hubungkan",
+    "connectSaveFirst": "Simpan perubahan Anda terlebih dahulu",
     "hostKeys": {
       "title": "Kunci host",
       "none": "Belum ada kunci host yang tersimpan. Kunci disimpan pada koneksi pertama."
@@ -175,6 +180,9 @@
       "identityFile": "Berkas Kunci"
     },
     "password": "Kata sandi",
+    "passwordOptionalHint": "(opsional – biarkan kosong jika server mengizinkan login tanpa kata sandi)",
+    "removeSavedPassword": "Hapus kata sandi tersimpan",
+    "noPasswordSaved": "Tidak ada kata sandi tersimpan. Aplikasi mencoba login tanpa kata sandi terlebih dahulu, lalu dengan kata sandi kosong.",
     "unchangedHint": "(kosong = tidak berubah)",
     "privateKeyLabel": "Kunci Privat",
     "chooseFile": "Pilih berkas…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Direktori awal harus berupa jalur absolut (/…) atau diawali ~/.",
       "controlCharacter": "Direktori awal tidak boleh mengandung karakter kontrol."
+    },
+    "tabs": {
+      "label": "Pengaturan server",
+      "general": "Umum",
+      "connection": "Koneksi",
+      "security": "Keamanan",
+      "invalid": "Berisi kesalahan"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Keluaran dipotong pada batas ukuran — mungkin tidak lengkap.",
     "liveOutputLabel": "Keluaran langsung",
     "liveOutputTruncatedNotice": "⚠ Batas ukuran tercapai — keluaran selanjutnya tidak lagi ditampilkan.",
+    "autoRanLead": "Dijalankan otomatis",
+    "autoRanRule": "aturan",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Buka aturan ini di aturan filter",
     "mcpOrigin": "Alat eksternal (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "alat eksternal (MCP)",
     "mcpOriginHint": "Tindakan ini tidak diminta oleh obrolan internal, melainkan oleh alat eksternal melalui server MCP lokal."
@@ -412,6 +433,11 @@
     "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
+    "menu": {
+      "open": "Buka menu navigasi",
+      "title": "Menu navigasi",
+      "sessions": "Sesi terbuka"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Alat eksternal",
@@ -429,6 +455,8 @@
     "active": "aktif",
     "setActive": "Jadikan Aktif",
     "addProvider": "Tambah Penyedia",
+    "editProvider": "Edit penyedia",
+    "apiKeyUnchangedPlaceholder": "Tidak diubah – masukkan kunci baru untuk menggantinya",
     "type": "Jenis",
     "providerName": "Nama",
     "model": "Model",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Penyedia AI melaporkan kesalahan (mis. pemeliharaan atau kelebihan beban). Coba lagi nanti; jika berlanjut, periksa pengaturan penyedia.",
     "AI_PROVIDER_OVERLOADED": "Penyedia AI sedang kelebihan beban. Coba lagi sebentar lagi.",
     "AI_PROVIDER_BILLING": "Akun penyedia AI tidak memiliki kredit lagi. Periksa penagihan di konsol penyedia.",
+    "AI_PROVIDER_USAGE_LIMIT": "Batas penggunaan di penyedia tercapai. Naikkan batas di konsol penyedia atau pilih penyedia lain.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Batas penggunaan di penyedia tercapai. Akses kembali pada {{date}}. Naikkan batas di konsol penyedia atau pilih penyedia lain.",
     "AI_PROVIDER_REJECTED_REQUEST": "Penyedia AI menolak permintaan tersebut.",
     "AI_RESPONSE_TRUNCATED": "Respons AI terlalu panjang untuk perintah yang lengkap",
     "AI_MODEL_NOT_FOUND": "Penyedia AI tidak mengenal model ini. Periksa nama model di Pengaturan (\"Muat model\" menampilkan yang tersedia); untuk Ollama, tarik dulu dengan `ollama pull <name>`.",
@@ -690,6 +720,12 @@
     "toggleTitle": "Buka penjelajah berkas dengan hak tinggi (sudo) — memerlukan aturan sudo tanpa kata sandi untuk sftp-server",
     "enabling": "Memeriksa sudo …",
     "toggleOff": "Akhiri hak tinggi",
+    "stopTitle": "Akhiri hak tinggi?",
+    "stopBody": "Operasi ini masih berjalan. Mengakhiri hak tinggi akan menghentikannya.",
+    "opDownload": "Unduhan",
+    "opUpload": "Unggahan",
+    "opDelete": "Penghapusan",
+    "opChmod": "Perubahan izin",
     "banner": "Hak tinggi aktif: semua tindakan berkas di penjelajah ini dijalankan sebagai {{user}}.",
     "deleteFileTitle": "Hapus berkas sebagai {{user}}?",
     "deleteDirTitle": "Hapus folder sebagai {{user}}?",
@@ -782,8 +818,6 @@
     },
     "tag": {
       "literalHint": "Tag literal dari berkas asing — dapat cocok persis dengan aturan Izinkan. Dapat dibatalkan pilihannya satu per satu.",
-      "allowDeselectedHint": "Cocok dengan aturan Izinkan yang ada dan tanpa aturan Tolak — karena itu tidak dipilih secara default. Dapat dipilih lagi satu per satu.",
-      "autoDeselectedBadge": "dibatalkan pilihannya secara otomatis",
       "matchesRuleHint": "cocok dengan {{count}} aturan filter yang ada: {{actions}}",
       "action": {
         "allow": "Izinkan",
@@ -897,7 +931,8 @@
     "dismiss": "Tutup saran",
     "reject": "Tolak",
     "applying": "Menerapkan…",
-    "apply": "Terapkan"
+    "apply": "Terapkan",
+    "expired": "Kedaluwarsa — tidak diterapkan"
   },
   "connectLog": {
     "title": "Detail",
@@ -912,12 +947,15 @@
       "handshake": "Handshake SSH",
       "hostKeyCheck": "Pemeriksaan kunci host",
       "authentication": "Autentikasi",
-      "sessionReady": "Sesi terbentuk"
+      "sessionReady": "Sesi terbentuk",
+      "dnsSkipped": "Alamat IP – tidak perlu pencarian"
     },
     "status": {
       "ok": "OK",
       "running": "sedang berlangsung",
-      "failed": "gagal ({{code}})"
+      "failed": "gagal ({{code}})",
+      "skipped": "dilewati",
+      "failedReason": "gagal: {{reason}}"
     },
     "hostKeyResult": {
       "known": "dikenal",
@@ -925,6 +963,7 @@
       "changed": "berubah"
     },
     "authMethod": {
+      "none": "none (tanpa autentikasi)",
       "password": "Kata sandi",
       "privateKey": "Kunci privat",
       "agent": "Agen SSH",
@@ -939,6 +978,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "diterima sebagian, autentikasi lebih lanjut diperlukan",
       "remainingMethods": "Server juga menawarkan: {{methods}} (tidak dicoba)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Koneksi TCP habis waktu",
+      "SSH_TIMEOUT": "Waktu habis",
+      "SSH_CONNECTION_REFUSED": "Koneksi ditolak",
+      "SSH_HOST_NOT_FOUND": "Host tidak ditemukan",
+      "SSH_HOST_UNREACHABLE": "Host tidak dapat dijangkau",
+      "SSH_AUTH_FAILED": "Autentikasi gagal"
     }
   },
   "fileBrowser": {
@@ -960,7 +1007,14 @@
     "transferDownload": "Mengunduh: {{name}}",
     "transferDone": "Selesai: {{name}}",
     "transferElevationEnded": "Mode tinggi dimatikan selama transfer.",
+    "transferCancel": "Batalkan transfer",
+    "transferCancelled": "{{name}}: dibatalkan",
+    "transferStopped": "{{name}}: dihentikan",
+    "transferIncomplete": "File tidak lengkap tertinggal di server: {{path}}",
+    "transferFiles": "{{done}} dari {{total}} file",
+    "transferRemaining": "sisa {{time}}",
     "loading": "Memuat…",
+    "noPermissionToOpen": "Tidak ada izin untuk membuka folder ini (x tidak ada)",
     "emptyDirectory": "(direktori kosong)",
     "dropHint": "Lepas di sini untuk mengunggah ke {{path}}",
     "cancel": "Batal",
@@ -994,7 +1048,8 @@
     },
     "moveCollision": {
       "title": "Target sudah ada",
-      "body": "sudah ada dan akan ditimpa."
+      "body": "sudah ada dan akan ditimpa.",
+      "folderBody": "sudah ada sebagai folder dan tidak dapat diganti."
     },
     "folderUpload": {
       "conflictTitle": "Timpa berkas di folder?",
@@ -1056,6 +1111,12 @@
       "execute": "Eksekusi",
       "numeric": "Numerik",
       "recursive": "Rekursif",
+      "special": "Bit khusus",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Saat diterapkan rekursif, bit khusus hanya dipasang pada folder, tidak pernah pada berkas.",
+      "recursiveSummary": "Folder: {{folders}}, berkas: {{files}}",
       "recursiveWarning": "— mengubah izin SEMUA berkas dan subfolder di folder ini. Tindakan berdampak besar, tidak dapat dibatalkan.",
       "owner": "Pemilik",
       "group": "Grup",
@@ -1082,6 +1143,7 @@
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",
+    "composerMore": "Tindakan input lainnya",
     "newChat": "Obrolan baru",
     "newChatDisabledHint": "Tidak tersedia saat AI sedang merespons atau konfirmasi sedang terbuka.",
     "autoContinuing": "Mode otomatis berjalan — AI merespons hasil terakhir dengan sendirinya…",
@@ -1178,6 +1240,9 @@
     "splitHandle": "Pembagi panel",
     "terminalTab": "Terminal",
     "filesTab": "Berkas",
+    "aiTab": "AI",
+    "paneTabs": "Panel sesi",
+    "moreActions": "Tindakan lainnya",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
     "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
     "stopReconnect": "Berhenti",

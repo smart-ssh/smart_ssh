@@ -532,3 +532,57 @@ describe("ServerList not-usable servers (issue #100)", () => {
     expect(startConnectMock).not.toHaveBeenCalled();
   });
 });
+
+// Issue #611: an extension's request to resume a chat session takes the
+// picker's resume path.
+describe("ServerList resume request (Issue #611)", () => {
+  function renderWithRequest(opts: {
+    existing?: string;
+    onSwitch?: (id: string) => void;
+    onConsumed?: () => void;
+  }) {
+    return render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerList
+          onStartConnect={startConnectMock}
+          connectingServerIds={new Set()}
+          findExistingSessionId={() => opts.existing}
+          onSwitchToExistingTab={opts.onSwitch ?? vi.fn()}
+          collapsedGroupIds={new Set()}
+          onToggleGroup={vi.fn()}
+          onCreateFirstServer={vi.fn()}
+          onCreateServerInGroup={vi.fn()}
+          resumeRequest={{ serverId: "remote-1", chatSessionId: "chat-9" }}
+          onResumeRequestConsumed={opts.onConsumed}
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("starts the connecting tab with the chat session to resume", async () => {
+    startConnectMock.mockClear();
+    const onConsumed = vi.fn();
+    renderWithRequest({ onConsumed });
+    await waitFor(() =>
+      expect(startConnectMock).toHaveBeenCalledWith({ id: "remote-1", name: "prod-1" }, "chat-9"),
+    );
+    expect(onConsumed).toHaveBeenCalled();
+  });
+
+  it("switches to the open tab of the server instead of resuming", async () => {
+    startConnectMock.mockClear();
+    const onSwitch = vi.fn();
+    renderWithRequest({ existing: "tab-1", onSwitch });
+    await waitFor(() => expect(onSwitch).toHaveBeenCalledWith("tab-1"));
+    expect(startConnectMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the first-run notice before resuming when it is not acknowledged", async () => {
+    startConnectMock.mockClear();
+    const { loadFirstRunNoticeAcknowledged } = await import("../firstRunNotice");
+    vi.mocked(loadFirstRunNoticeAcknowledged).mockResolvedValueOnce(false);
+    renderWithRequest({});
+    await screen.findByRole("dialog");
+    expect(startConnectMock).not.toHaveBeenCalled();
+  });
+});

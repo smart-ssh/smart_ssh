@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Inställningar",
+    "backToList": "Avsnitt",
     "categories": {
       "aiProvider": "AI-leverantör",
       "displayLanguage": "Visning och språk",
@@ -130,10 +131,12 @@
     "rootDropZone": "Släpp här för att flytta till översta nivån (ingen grupp)",
     "hintRoot": "→ översta nivån (ingen grupp)",
     "hintGroup": "→ flytta in i den här gruppen",
-    "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp"
+    "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
+    "moveTo": "Flytta ”{{name}}” till…"
   },
   "management": {
-    "emptyState": "Välj en grupp eller server till vänster, eller skapa något nytt via \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Välj en grupp eller server till vänster, eller skapa något nytt via \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Tillbaka"
   },
   "groupForm": {
     "titleNew": "Ny grupp",
@@ -149,6 +152,8 @@
     "confirmDelete": "Ta bort permanent"
   },
   "serverForm": {
+    "connect": "Anslut",
+    "connectSaveFirst": "Spara dina ändringar först",
     "hostKeys": {
       "title": "Värdnycklar",
       "none": "Ingen värdnyckel har sparats ännu. Den sparas vid första anslutningen."
@@ -175,6 +180,9 @@
       "identityFile": "Nyckelfil"
     },
     "password": "Lösenord",
+    "passwordOptionalHint": "(valfritt – lämna tomt om servern tillåter inloggning utan lösenord)",
+    "removeSavedPassword": "Ta bort sparat lösenord",
+    "noPasswordSaved": "Inget lösenord sparat. Appen försöker först logga in utan lösenord och sedan med ett tomt lösenord.",
     "unchangedHint": "(tomt = oförändrat)",
     "privateKeyLabel": "Privat nyckel",
     "chooseFile": "Välj fil…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Startkatalogen måste vara en absolut sökväg (/…) eller börja med ~/.",
       "controlCharacter": "Startkatalogen får inte innehålla styrtecken."
+    },
+    "tabs": {
+      "label": "Serverinställningar",
+      "general": "Allmänt",
+      "connection": "Anslutning",
+      "security": "Säkerhet",
+      "invalid": "Innehåller fel"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Utdata kapades vid storleksgränsen — den kan vara ofullständig.",
     "liveOutputLabel": "Liveutdata",
     "liveOutputTruncatedNotice": "⚠ Storleksgränsen är nådd — ytterligare utdata visas inte längre.",
+    "autoRanLead": "Kördes automatiskt",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tagg {{tag}}",
+    "autoRanOpenRule": "Öppna regeln i filterreglerna",
     "mcpOrigin": "Externt verktyg (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "externt verktyg (MCP)",
     "mcpOriginHint": "Åtgärden begärdes inte av den interna chatten utan av ett externt verktyg via den lokala MCP-servern."
@@ -412,6 +433,11 @@
     "overview": "Översikt",
     "pendingAction": "Väntar på bekräftelse",
     "closeTab": "Stäng fliken \"{{name}}\"",
+    "menu": {
+      "open": "Öppna navigeringsmenyn",
+      "title": "Navigeringsmeny",
+      "sessions": "Öppna sessioner"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Externt verktyg",
@@ -429,6 +455,8 @@
     "active": "aktiv",
     "setActive": "Gör aktiv",
     "addProvider": "Lägg till leverantör",
+    "editProvider": "Redigera leverantör",
+    "apiKeyUnchangedPlaceholder": "Oförändrad – ange en ny nyckel för att ersätta den",
     "type": "Typ",
     "providerName": "Namn",
     "model": "Modell",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI-leverantören rapporterade ett fel (t.ex. underhåll eller överbelastning). Försök igen senare; om det består, kontrollera leverantörsinställningarna.",
     "AI_PROVIDER_OVERLOADED": "AI-leverantören är överbelastad just nu. Försök igen om en stund.",
     "AI_PROVIDER_BILLING": "AI-leverantörens konto har inget kredit kvar. Kontrollera faktureringen i leverantörens konsol.",
+    "AI_PROVIDER_USAGE_LIMIT": "Användningsgränsen hos leverantören är nådd. Höj gränsen i leverantörens konsol eller välj en annan leverantör.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Användningsgränsen hos leverantören är nådd. Åtkomsten återkommer {{date}}. Höj gränsen i leverantörens konsol eller välj en annan leverantör.",
     "AI_PROVIDER_REJECTED_REQUEST": "AI-leverantören avvisade begäran.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var för långt för ett komplett kommando",
     "AI_MODEL_NOT_FOUND": "AI-leverantören känner inte till modellen. Kontrollera modellnamnet i Inställningar (\"Läs in modeller\" visar de tillgängliga); för Ollama, hämta den först med `ollama pull <name>`.",
@@ -695,6 +725,12 @@
     "toggleTitle": "Öppna filbläddraren med förhöjda rättigheter (sudo) — kräver en lösenordsfri sudo-regel för sftp-server",
     "enabling": "Kontrollerar sudo …",
     "toggleOff": "Avsluta förhöjda rättigheter",
+    "stopTitle": "Avsluta förhöjda rättigheter?",
+    "stopBody": "De här åtgärderna pågår fortfarande. Om du avslutar förhöjda rättigheter stoppas de.",
+    "opDownload": "Nedladdning",
+    "opUpload": "Uppladdning",
+    "opDelete": "Borttagning",
+    "opChmod": "Ändring av behörigheter",
     "banner": "Förhöjda rättigheter aktiva: alla filåtgärder i den här bläddraren körs som {{user}}.",
     "deleteFileTitle": "Ta bort filen som {{user}}?",
     "deleteDirTitle": "Ta bort mappen som {{user}}?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Bokstavlig tagg från en främmande fil — kan matcha en tillåtregel exakt. Kan avmarkeras enskilt.",
-      "allowDeselectedHint": "Matchar en befintlig tillåtregel och ingen nekaregel — därför avmarkerad som standard. Kan väljas igen enskilt.",
-      "autoDeselectedBadge": "automatiskt avmarkerad",
       "matchesRuleHint": "matchar {{count}} befintlig(a) filterregel/filterregler: {{actions}}",
       "action": {
         "allow": "Tillåt",
@@ -902,7 +936,8 @@
     "dismiss": "Stäng förslaget",
     "reject": "Avvisa",
     "applying": "Tillämpar…",
-    "apply": "Tillämpa"
+    "apply": "Tillämpa",
+    "expired": "Utgången — inte tillämpad"
   },
   "connectLog": {
     "title": "Detaljer",
@@ -917,12 +952,15 @@
       "handshake": "SSH-handskakning",
       "hostKeyCheck": "Kontroll av värdnyckel",
       "authentication": "Autentisering",
-      "sessionReady": "Session upprättad"
+      "sessionReady": "Session upprättad",
+      "dnsSkipped": "IP-adress – ingen namnuppslagning behövs"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
-      "failed": "misslyckades ({{code}})"
+      "failed": "misslyckades ({{code}})",
+      "skipped": "hoppades över",
+      "failedReason": "misslyckades: {{reason}}"
     },
     "hostKeyResult": {
       "known": "känd",
@@ -930,6 +968,7 @@
       "changed": "ändrad"
     },
     "authMethod": {
+      "none": "none (ingen autentisering)",
       "password": "Lösenord",
       "privateKey": "Privat nyckel",
       "agent": "SSH-agent",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtagen, ytterligare autentisering krävs",
       "remainingMethods": "Servern erbjuder även: {{methods}} (ej försökt)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-anslutningen översteg tidsgränsen",
+      "SSH_TIMEOUT": "Tidsgränsen överskreds",
+      "SSH_CONNECTION_REFUSED": "Anslutningen nekades",
+      "SSH_HOST_NOT_FOUND": "Värden hittades inte",
+      "SSH_HOST_UNREACHABLE": "Värden kan inte nås",
+      "SSH_AUTH_FAILED": "Autentiseringen misslyckades"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Laddar ned: {{name}}",
     "transferDone": "Klart: {{name}}",
     "transferElevationEnded": "Förhöjt läge stängdes av under överföringen.",
+    "transferCancel": "Avbryt överföring",
+    "transferCancelled": "{{name}}: avbruten",
+    "transferStopped": "{{name}}: stoppad",
+    "transferIncomplete": "Ofullständig fil kvar på servern: {{path}}",
+    "transferFiles": "{{done}} av {{total}} filer",
+    "transferRemaining": "{{time}} kvar",
     "loading": "Laddar…",
+    "noPermissionToOpen": "Ingen behörighet att öppna mappen (x saknas)",
     "emptyDirectory": "(tom katalog)",
     "dropHint": "Släpp här för att ladda upp till {{path}}",
     "cancel": "Avbryt",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "Målet finns redan",
-      "body": "finns redan och skulle skrivas över."
+      "body": "finns redan och skulle skrivas över.",
+      "folderBody": "finns redan som mapp och kan inte ersättas."
     },
     "folderUpload": {
       "conflictTitle": "Skriva över filer i mappen?",
@@ -1063,6 +1118,12 @@
       "execute": "Kör",
       "numeric": "Numeriskt",
       "recursive": "Rekursivt",
+      "special": "Specialbitar",
+      "setuid": "setuid-bit",
+      "setgid": "setgid-bit",
+      "sticky": "sticky-bit",
+      "specialHint": "Vid rekursiv tillämpning får bara mappar specialbitar, aldrig filer.",
+      "recursiveSummary": "Mappar: {{folders}}, filer: {{files}}",
       "recursiveWarning": "— ändrar behörigheterna för ALLA filer och undermappar i den här mappen. Kraftfull åtgärd som inte kan ångras.",
       "owner": "Ägare",
       "group": "Grupp",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",
+    "composerMore": "Fler inmatningsåtgärder",
     "newChat": "Ny chatt",
     "newChatDisabledHint": "Inte tillgängligt medan AI svarar eller en bekräftelse är öppen.",
     "autoContinuing": "Automatiskt läge körs — AI svarar på det senaste resultatet på egen hand…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "Panelavdelare",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "AI",
+    "paneTabs": "Sessionsdelar",
+    "moreActions": "Fler åtgärder",
     "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
     "reconnectingAuto": "Återansluter… (försök {{attempt}})",
     "stopReconnect": "Avbryt",

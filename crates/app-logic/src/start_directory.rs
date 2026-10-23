@@ -224,6 +224,24 @@ pub(crate) mod test_stubs {
         async fn write_file(&mut self, _: &str, _: &[u8]) -> Result<(), SshError> {
             unreachable!()
         }
+        async fn read_file_chunked(
+            &mut self,
+            _path: &str,
+            _chunk_size: usize,
+            _on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ssh_manager_core::ssh::ChunkControl
+                      + Send),
+        ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+            unreachable!()
+        }
+        async fn write_file_chunked(
+            &mut self,
+            _path: &str,
+            _chunk_size: usize,
+            _next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ssh_manager_core::ssh::ChunkSource
+                      + Send),
+        ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+            unreachable!()
+        }
         async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
             self.stats.lock().unwrap().push(path.to_string());
             let is_dir = self.dirs.contains(path);
@@ -250,6 +268,9 @@ pub(crate) mod test_stubs {
             unreachable!()
         }
         async fn rename(&mut self, _: &str, _: &str) -> Result<(), SshError> {
+            unreachable!()
+        }
+        async fn posix_rename(&mut self, _: &str, _: &str) -> Result<bool, SshError> {
             unreachable!()
         }
         async fn create_dir(&mut self, _: &str) -> Result<(), SshError> {

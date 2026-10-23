@@ -11,6 +11,7 @@ import { FileTypeSettings } from "./FileTypeSettings";
 import { LanguageSettings } from "./LanguageSettings";
 import { MasterPasswordSettings } from "./MasterPasswordSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
+import { useIsNarrow } from "../hooks/useIsNarrow";
 import { ModalBackdrop } from "./ModalBackdrop";
 import { Button } from "./ui";
 
@@ -109,6 +110,23 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
   const [activeId, setActiveId] = useState<string>(categories[0]?.id ?? AI_PROVIDER_CATEGORY_ID);
   const active = categories.find((c) => c.id === activeId) ?? categories[0];
 
+  // Issue #586, Spec 0113 §5d: below 640 px the dialog is full-screen and shows
+  // either the section list or one section (list -> detail with a Back button).
+  const narrow = useIsNarrow();
+  const [narrowView, setNarrowView] = useState<"list" | "detail">("list");
+  const showList = !narrow || narrowView === "list";
+  const showDetail = !narrow || narrowView === "detail";
+  const backRef = useRef<HTMLButtonElement>(null);
+  const viewChanged = useRef(false);
+  useEffect(() => {
+    if (!narrow) return;
+    if (!viewChanged.current) {
+      viewChanged.current = true;
+      return;
+    }
+    (narrowView === "detail" ? backRef.current : activeNavRef.current)?.focus();
+  }, [narrow, narrowView]);
+
   // Issue #385 (docs/ui-guidelines.md, "Keyboard"): Escape closes, Tab stays
   // inside, focus starts on the active category and returns to the trigger.
   // Not `useDialogFocusTrap`: that hook pulls focus back from every element
@@ -166,7 +184,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
   };
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
+    <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-black/50 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
       {/* The key handler only implements Escape and the Tab wrap of the dialog. */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
@@ -177,21 +195,32 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
         onKeyDown={handleKeyDown}
         onClick={handleClick}
         tabIndex={-1}
-        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl outline-none"
+        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl outline-none narrow:h-full narrow:max-w-none narrow:flex-col narrow:rounded-none"
       >
-        <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40">
-          <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
-            {t("settings.title")}
-          </h2>
+        {showList && (
+        <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
+          <div className="flex items-center justify-between">
+            <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
+              {t("settings.title")}
+            </h2>
+            {narrow && (
+              <Button variant="ghost" size="sm" className="mr-2 min-h-11 min-w-11" onClick={onClose} aria-label={t("common.close")}>
+                ✕
+              </Button>
+            )}
+          </div>
           <ul className="flex-1">
             {categories.map((category) => (
               <li key={category.id}>
                 <button
                   type="button"
                   ref={category.id === active?.id ? activeNavRef : undefined}
-                  onClick={() => setActiveId(category.id)}
+                  onClick={() => {
+                    setActiveId(category.id);
+                    setNarrowView("detail");
+                  }}
                   aria-current={category.id === active?.id ? "page" : undefined}
-                  className={`w-full px-4 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
                     category.id === active?.id
                       ? "bg-indigo-600 text-slate-950"
                       : "text-slate-300 hover:bg-slate-800"
@@ -203,17 +232,35 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             ))}
           </ul>
         </nav>
+        )}
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
-            <h3 className="font-heading text-base font-semibold tracking-wide text-slate-100">
+        {showDetail && (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-700 px-6 py-4 narrow:px-2 narrow:py-2">
+            {narrow && (
+              <>
+                <h2 id={titleId} className="sr-only">
+                  {t("settings.title")}
+                </h2>
+                <Button
+                  ref={backRef}
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-11 shrink-0"
+                  onClick={() => setNarrowView("list")}
+                >
+                  ← {t("settings.backToList")}
+                </Button>
+              </>
+            )}
+            <h3 className="font-heading min-w-0 flex-1 truncate text-base font-semibold tracking-wide text-slate-100 narrow:text-center">
               {active?.label}
             </h3>
-            <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("common.close")}>
+            <Button variant="ghost" size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={onClose} aria-label={t("common.close")}>
               ✕
             </Button>
           </div>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="min-w-0 flex-1 overflow-y-auto p-6 narrow:p-3">
             {active?.id === AI_PROVIDER_CATEGORY_ID && (
               <AiProviderSettings onProvidersChanged={onProvidersChanged} />
             )}
@@ -228,6 +275,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             )}
           </div>
         </div>
+        )}
       </div>
     </ModalBackdrop>
   );

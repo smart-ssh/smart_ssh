@@ -27,7 +27,7 @@ use ssh_manager_core::profiles::AiAction;
 use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
 use ssh_manager_core::shared::ServerId;
 
-use crate::dto::ActionOrigin;
+use crate::dto::{ActionOrigin, AutoExecRuleDto};
 use crate::state::{ActionId, SessionId};
 
 pub trait EventEmitter: Send + Sync {
@@ -82,6 +82,31 @@ pub fn emit_connection_status_changed(
             session_id,
             status,
             reason,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatSessionChangedPayload {
+    session_id: SessionId,
+    chat_session_id: Option<String>,
+}
+
+/// Issue #611: the persisted chat session a runtime session currently uses
+/// (`None`: local pseudo-server or no-persist). Sent at connect/resume,
+/// after a reconnect and after "New Chat". Ids only, no content.
+pub fn emit_chat_session_changed(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    chat_session_id: Option<Uuid>,
+) {
+    emit(
+        emitter,
+        "chat-session-changed",
+        &ChatSessionChangedPayload {
+            session_id,
+            chat_session_id: chat_session_id.map(|id| id.to_string()),
         },
     );
 }
@@ -366,6 +391,10 @@ struct ChatActionProposedPayload {
     /// Bestätigungsdialog zeigt bei `Mcp` "Angefragt über: <client_name
     /// oder generischer Text>" statt des sonst gezeigten KI-Provider-Namens.
     origin: ActionOrigin,
+    /// Issue #696: only set when `decision` is `AutoExec` — the rules that
+    /// let the command run without confirmation (display only, taken from the
+    /// evaluation that made the decision). Empty otherwise.
+    auto_exec_rules: Vec<AutoExecRuleDto>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -382,6 +411,7 @@ pub fn emit_chat_action_proposed(
     target_name: Option<String>,
     risk_assessment: Option<RiskAssessment>,
     origin: ActionOrigin,
+    auto_exec_rules: Vec<AutoExecRuleDto>,
 ) {
     emit(
         emitter,
@@ -398,6 +428,7 @@ pub fn emit_chat_action_proposed(
             target_name,
             risk_assessment,
             origin,
+            auto_exec_rules,
         },
     );
 }
@@ -547,6 +578,23 @@ pub fn emit_note_update_suggested(
             target_name,
             summary_incomplete,
         },
+    );
+}
+
+/// Issue #628: a pending note confirmation (disconnect suggestion or
+/// shrink suggestion) timed out; the card switches to "expired". Carries
+/// only the action id — never note content.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NoteUpdateExpiredPayload {
+    action_id: ActionId,
+}
+
+pub fn emit_note_update_expired(emitter: &dyn EventEmitter, action_id: ActionId) {
+    emit(
+        emitter,
+        "note-update-expired",
+        &NoteUpdateExpiredPayload { action_id },
     );
 }
 
@@ -850,6 +898,8 @@ struct ChatErrorPayload {
     provider_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     timeout_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    access_returns: Option<String>,
 }
 
 /// Issue #600: optional provider details of a `chat-error` (shown under
@@ -861,6 +911,8 @@ pub struct ChatErrorDetails {
     pub provider_message: Option<String>,
     pub provider_name: Option<String>,
     pub timeout_secs: Option<u64>,
+    /// Issue #631: when access returns after a provider usage limit.
+    pub access_returns: Option<String>,
 }
 
 /// **Nicht Teil der Spec-Skizze aus Abschnitt 5** (die dort gelistete
@@ -915,6 +967,7 @@ pub fn emit_chat_error_with_details(
             provider_message: details.provider_message,
             provider_name: details.provider_name,
             timeout_secs: details.timeout_secs,
+            access_returns: details.access_returns,
         },
     );
 }
@@ -1168,16 +1221,10 @@ struct SftpTransferStartedPayload {
 }
 
 /// Spec 0020, Abschnitt 5, letzter Punkt: Fortschrittsanzeige für Transfers.
-/// **Design-Entscheidung**: `SftpSession::read_file`/`write_file` (Spec
-/// 0020, Abschnitt 3, bereits exakt wie spezifiziert in Teil 1 umgesetzt)
-/// arbeiten auf einem einzelnen In-Memory-Puffer, nicht gestreamt — echte
-/// Byte-für-Byte-Fortschrittswerte ließen sich damit nicht ermitteln, ohne
-/// den bereits committeten Trait rückwirkend um eine Chunk-Schnittstelle zu
-/// erweitern. Statt eine Prozentanzeige vorzutäuschen, die die Schnittstelle
-/// gar nicht hergibt, zeigt das Frontend zwischen "started" und "finished"
-/// einen unbestimmten (pulsierenden) Fortschritt, beschriftet mit Dateiname
-/// und — falls bekannt — Gesamtgröße. Siehe ADR-Vorschlag am Ende der
-/// Aufgabe.
+/// Issue #622: Transfers laufen in Stücken (`SftpSession::read_file_chunked`/
+/// `write_file_chunked`); zwischen "started" und "finished" kommen gedrosselte
+/// `sftp-transfer-progress`-Ereignisse. Fehlt ein Fortschrittswert (Gesamtgröße
+/// unbekannt), zeigt das Frontend weiter den unbestimmten Fortschritt.
 pub fn emit_sftp_transfer_started(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
@@ -1206,6 +1253,15 @@ struct SftpTransferFinishedPayload {
     transfer_id: Uuid,
     /// `None` bei Erfolg, sonst die Fehlermeldung.
     error: Option<String>,
+    /// Issue #622: `cancelled` (Abbrechen-Knopf) oder `stopped` (bestätigtes
+    /// Ausschalten des erhöhten Modus bzw. Widerruf). Dann ist `error`
+    /// `None` — ein Abbruch ist kein Kanalfehler.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stopped: Option<&'static str>,
+    /// Issue #622: bei einem abgebrochenen Upload, dessen Teildatei auf dem
+    /// Server nicht entfernt werden konnte: ihr Pfad.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    incomplete_remote_path: Option<String>,
 }
 
 pub fn emit_sftp_transfer_finished(
@@ -1221,6 +1277,76 @@ pub fn emit_sftp_transfer_finished(
             session_id,
             transfer_id,
             error,
+            stopped: None,
+            incomplete_remote_path: None,
+        },
+    );
+}
+
+/// Issue #622: der Transfer wurde gestoppt (`stopped`: `"cancelled"` oder
+/// `"stopped"`). Kein Fehlertext — die Zeile zeigt den Zustand.
+pub fn emit_sftp_transfer_stopped(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    stopped: &'static str,
+    incomplete_remote_path: Option<String>,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-finished",
+        &SftpTransferFinishedPayload {
+            session_id,
+            transfer_id,
+            error: None,
+            stopped: Some(stopped),
+            incomplete_remote_path,
+        },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SftpTransferProgressPayload {
+    session_id: SessionId,
+    transfer_id: Uuid,
+    bytes_done: u64,
+    total_bytes: Option<u64>,
+    /// Ordner-Transfers: Dateien fertig / gesamt (erst nach dem Durchlaufen
+    /// des Baums bekannt) und Byte-Summen über alle Dateien.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    folder: Option<SftpFolderProgress>,
+}
+
+/// Issue #622: Gesamtfortschritt eines Ordner-Transfers.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpFolderProgress {
+    pub files_done: u64,
+    pub files_total: u64,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+}
+
+/// Issue #622: Fortschritt eines laufenden Transfers. Der Aufrufer drosselt
+/// (höchstens ca. 4 Ereignisse pro Sekunde je Transfer).
+pub fn emit_sftp_transfer_progress(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    bytes_done: u64,
+    total_bytes: Option<u64>,
+    folder: Option<SftpFolderProgress>,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-progress",
+        &SftpTransferProgressPayload {
+            session_id,
+            transfer_id,
+            bytes_done,
+            total_bytes,
+            folder,
         },
     );
 }
@@ -1319,6 +1445,22 @@ mod tests {
     //! kam im Frontend als `undefined` an (`result.exitCode`).
 
     use super::*;
+
+    /// Issue #611: `chat-session-changed` payload shape (camelCase, `null`
+    /// for a session without a persisted chat).
+    #[test]
+    fn test_chat_session_changed_payload_shape() {
+        let emitter = TestEmitter::default();
+        let session_id = Uuid::new_v4();
+        let chat = Uuid::new_v4();
+        emit_chat_session_changed(&emitter, session_id, Some(chat));
+        emit_chat_session_changed(&emitter, session_id, None);
+        let events = emitter.events.lock().unwrap();
+        assert_eq!(events[0].0, "chat-session-changed");
+        assert_eq!(events[0].1["sessionId"], session_id.to_string());
+        assert_eq!(events[0].1["chatSessionId"], chat.to_string());
+        assert!(events[1].1["chatSessionId"].is_null());
+    }
 
     /// Issue #37: `host-key-verification-needed` trägt additiv die
     /// `promptId`, an der das Frontend das passende Ende-Ereignis erkennt.

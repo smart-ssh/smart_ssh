@@ -9,6 +9,6 @@ export default {
   ...base,
   root: fileURLToPath(new URL("..", import.meta.url)),
   optimizeDeps: {
-    entries: ["index.html", "e2e/harness/index.html"],
+    entries: ["index.html", "e2e/harness/index.html", "e2e/harness/narrow.html"],
   },
 };

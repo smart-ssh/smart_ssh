@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "सेटिंग्स",
+    "backToList": "अनुभाग",
     "categories": {
       "aiProvider": "AI प्रदाता",
       "displayLanguage": "डिस्प्ले और भाषा",
@@ -130,10 +131,12 @@
     "rootDropZone": "शीर्ष स्तर (बिना समूह) पर ले जाने के लिए यहाँ छोड़ें",
     "hintRoot": "→ शीर्ष स्तर (बिना समूह)",
     "hintGroup": "→ इस समूह में ले जाएँ",
-    "hintCycle": "किसी समूह को उसके ही उप-समूह में नहीं ले जाया जा सकता"
+    "hintCycle": "किसी समूह को उसके ही उप-समूह में नहीं ले जाया जा सकता",
+    "moveTo": "“{{name}}” को यहाँ ले जाएँ…"
   },
   "management": {
-    "emptyState": "बाईं ओर कोई समूह या सर्वर चुनें, या \"{{addGroup}}\"/\"{{addServer}}\" से कुछ नया बनाएँ।"
+    "emptyState": "बाईं ओर कोई समूह या सर्वर चुनें, या \"{{addGroup}}\"/\"{{addServer}}\" से कुछ नया बनाएँ।",
+    "back": "वापस"
   },
   "groupForm": {
     "titleNew": "नया समूह",
@@ -149,6 +152,8 @@
     "confirmDelete": "स्थायी रूप से हटाएँ"
   },
   "serverForm": {
+    "connect": "कनेक्ट करें",
+    "connectSaveFirst": "पहले अपने बदलाव सहेजें",
     "hostKeys": {
       "title": "होस्ट कुंजियाँ",
       "none": "अभी तक कोई होस्ट कुंजी संग्रहीत नहीं है। यह पहले कनेक्शन पर संग्रहीत होती है।"
@@ -175,6 +180,9 @@
       "identityFile": "कुंजी फ़ाइल"
     },
     "password": "पासवर्ड",
+    "passwordOptionalHint": "(वैकल्पिक – यदि सर्वर बिना पासवर्ड लॉगिन की अनुमति देता है तो खाली छोड़ें)",
+    "removeSavedPassword": "सहेजा गया पासवर्ड हटाएँ",
+    "noPasswordSaved": "कोई पासवर्ड सहेजा नहीं गया है। ऐप पहले बिना पासवर्ड लॉगिन आज़माता है, फिर खाली पासवर्ड से।",
     "unchangedHint": "(खाली = अपरिवर्तित)",
     "privateKeyLabel": "निजी कुंजी",
     "chooseFile": "फ़ाइल चुनें…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "प्रारंभ डायरेक्टरी निरपेक्ष पथ (/…) होनी चाहिए या ~/ से शुरू होनी चाहिए।",
       "controlCharacter": "प्रारंभ डायरेक्टरी में कंट्रोल कैरेक्टर नहीं होने चाहिए।"
+    },
+    "tabs": {
+      "label": "सर्वर सेटिंग्स",
+      "general": "सामान्य",
+      "connection": "कनेक्शन",
+      "security": "सुरक्षा",
+      "invalid": "त्रुटियाँ हैं"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ आउटपुट आकार सीमा पर काट दिया गया — यह अधूरा हो सकता है।",
     "liveOutputLabel": "लाइव आउटपुट",
     "liveOutputTruncatedNotice": "⚠ आकार सीमा पूरी हुई — आगे का आउटपुट अब नहीं दिखाया जाता।",
+    "autoRanLead": "अपने आप चलाया गया",
+    "autoRanRule": "नियम",
+    "autoRanScopeGlobal": "वैश्विक",
+    "autoRanScopeServer": "सर्वर {{name}}",
+    "autoRanScopeTag": "टैग {{tag}}",
+    "autoRanOpenRule": "इस नियम को फ़िल्टर नियमों में खोलें",
     "mcpOrigin": "बाहरी टूल (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "बाहरी टूल (MCP)",
     "mcpOriginHint": "यह कार्रवाई आंतरिक चैट ने नहीं, बल्कि स्थानीय MCP सर्वर के ज़रिए किसी बाहरी टूल ने माँगी थी।"
@@ -412,6 +433,11 @@
     "overview": "अवलोकन",
     "pendingAction": "पुष्टि की प्रतीक्षा",
     "closeTab": "टैब \"{{name}}\" बंद करें",
+    "menu": {
+      "open": "नेविगेशन मेनू खोलें",
+      "title": "नेविगेशन मेनू",
+      "sessions": "खुले सत्र"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "बाहरी टूल",
@@ -429,6 +455,8 @@
     "active": "सक्रिय",
     "setActive": "सक्रिय करें",
     "addProvider": "प्रदाता जोड़ें",
+    "editProvider": "प्रदाता संपादित करें",
+    "apiKeyUnchangedPlaceholder": "अपरिवर्तित – बदलने के लिए नई कुंजी दर्ज करें",
     "type": "प्रकार",
     "providerName": "नाम",
     "model": "मॉडल",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI प्रदाता ने त्रुटि बताई (जैसे रखरखाव या अधिभार)। बाद में फिर कोशिश करें; बनी रहे तो प्रदाता सेटिंग्स जाँचें।",
     "AI_PROVIDER_OVERLOADED": "AI प्रदाता अभी ओवरलोड है। थोड़ी देर बाद फिर कोशिश करें।",
     "AI_PROVIDER_BILLING": "AI प्रदाता के खाते में क्रेडिट नहीं बचा है। प्रदाता के कंसोल में बिलिंग जाँचें।",
+    "AI_PROVIDER_USAGE_LIMIT": "प्रदाता की उपयोग सीमा पूरी हो गई है। प्रदाता कंसोल में सीमा बढ़ाएँ या कोई दूसरा प्रदाता चुनें।",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "प्रदाता की उपयोग सीमा पूरी हो गई है। पहुँच {{date}} को फिर शुरू होगी। प्रदाता कंसोल में सीमा बढ़ाएँ या कोई दूसरा प्रदाता चुनें।",
     "AI_PROVIDER_REJECTED_REQUEST": "AI प्रदाता ने अनुरोध अस्वीकार कर दिया।",
     "AI_RESPONSE_TRUNCATED": "AI का उत्तर पूरे कमांड के लिए बहुत लंबा था",
     "AI_MODEL_NOT_FOUND": "AI प्रदाता इस मॉडल को नहीं जानता। सेटिंग्स में मॉडल का नाम जाँचें (\"मॉडल लोड करें\" उपलब्ध मॉडल दिखाता है); Ollama के लिए पहले `ollama pull <name>` से उसे लोड करें।",
@@ -695,6 +725,12 @@
     "toggleTitle": "फ़ाइल ब्राउज़र को उन्नत अधिकारों (sudo) के साथ खोलें — sftp-server के लिए बिना पासवर्ड वाला sudo नियम आवश्यक है",
     "enabling": "sudo जाँचा जा रहा है …",
     "toggleOff": "उन्नत अधिकार समाप्त करें",
+    "stopTitle": "उन्नत अधिकार समाप्त करें?",
+    "stopBody": "ये कार्य अभी चल रहे हैं। उन्नत अधिकार समाप्त करने पर वे रुक जाएँगे।",
+    "opDownload": "डाउनलोड",
+    "opUpload": "अपलोड",
+    "opDelete": "हटाना",
+    "opChmod": "अनुमतियाँ बदलना",
     "banner": "उन्नत अधिकार सक्रिय: इस ब्राउज़र की सभी फ़ाइल कार्रवाइयाँ {{user}} के रूप में चलती हैं।",
     "deleteFileTitle": "फ़ाइल को {{user}} के रूप में हटाएँ?",
     "deleteDirTitle": "फ़ोल्डर को {{user}} के रूप में हटाएँ?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "बाहरी फ़ाइल का शाब्दिक टैग — किसी अनुमति नियम से ठीक मेल खा सकता है। अलग-अलग अचयनित किया जा सकता है।",
-      "allowDeselectedHint": "मौजूदा अनुमति नियम से मेल खाता है और किसी अस्वीकार नियम से नहीं — इसलिए डिफ़ॉल्ट रूप से अचयनित। अलग-अलग फिर चुना जा सकता है।",
-      "autoDeselectedBadge": "अपने-आप अचयनित",
       "matchesRuleHint": "{{count}} मौजूदा फ़िल्टर नियम(ों) से मेल खाता है: {{actions}}",
       "action": {
         "allow": "अनुमति दें",
@@ -902,7 +936,8 @@
     "dismiss": "सुझाव खारिज करें",
     "reject": "अस्वीकार करें",
     "applying": "लागू हो रहा है…",
-    "apply": "लागू करें"
+    "apply": "लागू करें",
+    "expired": "समय समाप्त — लागू नहीं किया गया"
   },
   "connectLog": {
     "title": "विवरण",
@@ -917,12 +952,15 @@
       "handshake": "SSH हैंडशेक",
       "hostKeyCheck": "होस्ट कुंजी जाँच",
       "authentication": "प्रमाणीकरण",
-      "sessionReady": "सत्र स्थापित"
+      "sessionReady": "सत्र स्थापित",
+      "dnsSkipped": "IP पता – खोज की ज़रूरत नहीं"
     },
     "status": {
       "ok": "ठीक",
       "running": "जारी है",
-      "failed": "विफल ({{code}})"
+      "failed": "विफल ({{code}})",
+      "skipped": "छोड़ा गया",
+      "failedReason": "विफल: {{reason}}"
     },
     "hostKeyResult": {
       "known": "ज्ञात",
@@ -930,6 +968,7 @@
       "changed": "बदली हुई"
     },
     "authMethod": {
+      "none": "none (कोई प्रमाणीकरण नहीं)",
       "password": "पासवर्ड",
       "privateKey": "निजी कुंजी",
       "agent": "SSH एजेंट",
@@ -944,6 +983,14 @@
       "mac": "MAC (संदेश प्रमाणीकरण): {{value}}",
       "partialSuccess": "आंशिक रूप से स्वीकृत, आगे प्रमाणीकरण आवश्यक",
       "remainingMethods": "सर्वर ये भी प्रस्तावित करता है: {{methods}} (आज़माए नहीं गए)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP कनेक्शन का समय समाप्त हो गया",
+      "SSH_TIMEOUT": "समय समाप्त",
+      "SSH_CONNECTION_REFUSED": "कनेक्शन अस्वीकृत",
+      "SSH_HOST_NOT_FOUND": "होस्ट नहीं मिला",
+      "SSH_HOST_UNREACHABLE": "होस्ट तक पहुँच नहीं हो सकी",
+      "SSH_AUTH_FAILED": "प्रमाणीकरण विफल"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "डाउनलोड हो रहा है: {{name}}",
     "transferDone": "पूरा हुआ: {{name}}",
     "transferElevationEnded": "स्थानांतरण के दौरान उन्नत मोड बंद कर दिया गया।",
+    "transferCancel": "स्थानांतरण रद्द करें",
+    "transferCancelled": "{{name}}: रद्द किया गया",
+    "transferStopped": "{{name}}: रोका गया",
+    "transferIncomplete": "सर्वर पर अधूरी फ़ाइल रह गई: {{path}}",
+    "transferFiles": "{{total}} में से {{done}} फ़ाइलें",
+    "transferRemaining": "{{time}} शेष",
     "loading": "लोड हो रहा है…",
+    "noPermissionToOpen": "इस फ़ोल्डर को खोलने की अनुमति नहीं (x अनुपलब्ध)",
     "emptyDirectory": "(खाली डायरेक्टरी)",
     "dropHint": "{{path}} में अपलोड करने के लिए यहाँ छोड़ें",
     "cancel": "रद्द करें",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "लक्ष्य पहले से मौजूद है",
-      "body": "पहले से मौजूद है और अधिलेखित हो जाएगा।"
+      "body": "पहले से मौजूद है और अधिलेखित हो जाएगा।",
+      "folderBody": "पहले से फ़ोल्डर के रूप में मौजूद है और बदला नहीं जा सकता।"
     },
     "folderUpload": {
       "conflictTitle": "फ़ोल्डर की फ़ाइलें अधिलेखित करें?",
@@ -1063,6 +1118,12 @@
       "execute": "चलाना",
       "numeric": "संख्यात्मक",
       "recursive": "पुनरावर्ती",
+      "special": "विशेष बिट",
+      "setuid": "setuid बिट",
+      "setgid": "setgid बिट",
+      "sticky": "sticky बिट",
+      "specialHint": "पुनरावर्ती लागू करने पर विशेष बिट केवल फ़ोल्डरों पर लगते हैं, फ़ाइलों पर कभी नहीं।",
+      "recursiveSummary": "फ़ोल्डर: {{folders}}, फ़ाइलें: {{files}}",
       "recursiveWarning": "— इस फ़ोल्डर की सभी फ़ाइलों और उप-फ़ोल्डरों की अनुमतियाँ बदल देता है। शक्तिशाली कार्रवाई, पूर्ववत नहीं की जा सकती।",
       "owner": "स्वामी",
       "group": "समूह",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "नवीनतम संदेश पर जाएँ",
+    "composerMore": "और इनपुट क्रियाएँ",
     "newChat": "नई चैट",
     "newChatDisabledHint": "AI के उत्तर देते समय या पुष्टि खुली होने पर उपलब्ध नहीं।",
     "autoContinuing": "स्वचालित मोड चल रहा है — AI अंतिम परिणाम पर अपने-आप उत्तर दे रहा है…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "पैनल विभाजक",
     "terminalTab": "टर्मिनल",
     "filesTab": "फ़ाइलें",
+    "aiTab": "एआई",
+    "paneTabs": "सत्र पैनल",
+    "moreActions": "अधिक क्रियाएँ",
     "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
     "reconnectingAuto": "फिर से कनेक्ट हो रहा है… (प्रयास {{attempt}})",
     "stopReconnect": "रोकें",

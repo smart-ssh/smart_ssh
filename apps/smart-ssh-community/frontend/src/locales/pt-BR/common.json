@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Configurações",
+    "backToList": "Seções",
     "categories": {
       "aiProvider": "Provedor de IA",
       "displayLanguage": "Exibição e idioma",
@@ -130,10 +131,12 @@
     "rootDropZone": "Solte aqui para mover ao nível superior (sem grupo)",
     "hintRoot": "→ nível superior (sem grupo)",
     "hintGroup": "→ mover para este grupo",
-    "hintCycle": "Um grupo não pode ser movido para o seu próprio subgrupo"
+    "hintCycle": "Um grupo não pode ser movido para o seu próprio subgrupo",
+    "moveTo": "Mover “{{name}}” para…"
   },
   "management": {
-    "emptyState": "Selecione um grupo ou servidor à esquerda, ou crie algo novo com \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Selecione um grupo ou servidor à esquerda, ou crie algo novo com \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Voltar"
   },
   "groupForm": {
     "titleNew": "Novo grupo",
@@ -149,6 +152,8 @@
     "confirmDelete": "Excluir permanentemente"
   },
   "serverForm": {
+    "connect": "Conectar",
+    "connectSaveFirst": "Salve suas alterações primeiro",
     "hostKeys": {
       "title": "Chaves de host",
       "none": "Nenhuma chave de host armazenada ainda. Ela é armazenada na primeira conexão."
@@ -175,6 +180,9 @@
       "identityFile": "Arquivo de chave"
     },
     "password": "Senha",
+    "passwordOptionalHint": "(opcional – deixe vazio se o servidor permitir login sem senha)",
+    "removeSavedPassword": "Remover senha salva",
+    "noPasswordSaved": "Nenhuma senha salva. O app tenta primeiro o login sem senha e depois com uma senha vazia.",
     "unchangedHint": "(vazio = inalterado)",
     "privateKeyLabel": "Chave privada",
     "chooseFile": "Escolher arquivo…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "O diretório inicial deve ser um caminho absoluto (/…) ou começar com ~/.",
       "controlCharacter": "O diretório inicial não pode conter caracteres de controle."
+    },
+    "tabs": {
+      "label": "Configurações do servidor",
+      "general": "Geral",
+      "connection": "Conexão",
+      "security": "Segurança",
+      "invalid": "Contém erros"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ A saída foi cortada no limite de tamanho — pode estar incompleta.",
     "liveOutputLabel": "Saída ao vivo",
     "liveOutputTruncatedNotice": "⚠ Limite de tamanho atingido — a saída seguinte não é mais exibida.",
+    "autoRanLead": "Executado automaticamente",
+    "autoRanRule": "regra",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "servidor {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Abrir esta regra nas regras de filtro",
     "mcpOrigin": "Ferramenta externa (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "ferramenta externa (MCP)",
     "mcpOriginHint": "Esta ação não foi solicitada pelo chat interno, mas por uma ferramenta externa por meio do servidor MCP local."
@@ -412,6 +433,11 @@
     "overview": "Visão geral",
     "pendingAction": "Aguardando confirmação",
     "closeTab": "Fechar aba \"{{name}}\"",
+    "menu": {
+      "open": "Abrir menu de navegação",
+      "title": "Menu de navegação",
+      "sessions": "Sessões abertas"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Ferramenta externa",
@@ -429,6 +455,8 @@
     "active": "ativo",
     "setActive": "Definir como ativo",
     "addProvider": "Adicionar provedor",
+    "editProvider": "Editar provedor",
+    "apiKeyUnchangedPlaceholder": "Inalterada – insira uma nova chave para substituí-la",
     "type": "Tipo",
     "providerName": "Nome",
     "model": "Modelo",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "O provedor de IA relatou um erro (p. ex., manutenção ou sobrecarga). Tente novamente mais tarde; se persistir, verifique as configurações do provedor.",
     "AI_PROVIDER_OVERLOADED": "O provedor de IA está sobrecarregado no momento. Tente novamente em instantes.",
     "AI_PROVIDER_BILLING": "A conta do provedor de IA está sem crédito. Verifique a cobrança no console do provedor.",
+    "AI_PROVIDER_USAGE_LIMIT": "Limite de uso atingido no provedor. Aumente o limite no console do provedor ou escolha outro provedor.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Limite de uso atingido no provedor. O acesso volta em {{date}}. Aumente o limite no console do provedor ou escolha outro provedor.",
     "AI_PROVIDER_REJECTED_REQUEST": "O provedor de IA rejeitou a solicitação.",
     "AI_RESPONSE_TRUNCATED": "A resposta da IA foi longa demais para um comando completo",
     "AI_MODEL_NOT_FOUND": "O provedor de IA não conhece este modelo. Verifique o nome do modelo em Configurações (\"Carregar modelos\" lista os disponíveis); no Ollama, baixe-o antes com `ollama pull <name>`.",
@@ -700,6 +730,12 @@
     "toggleTitle": "Abrir o navegador de arquivos com direitos elevados (sudo) — requer uma regra de sudo sem senha para o sftp-server",
     "enabling": "Verificando sudo …",
     "toggleOff": "Encerrar direitos elevados",
+    "stopTitle": "Encerrar os direitos elevados?",
+    "stopBody": "Estas operações ainda estão em andamento. Encerrar os direitos elevados as interrompe.",
+    "opDownload": "Baixando",
+    "opUpload": "Enviando",
+    "opDelete": "Exclusão",
+    "opChmod": "Alteração de permissões",
     "banner": "Direitos elevados ativos: todas as ações de arquivo neste navegador são executadas como {{user}}.",
     "deleteFileTitle": "Excluir arquivo como {{user}}?",
     "deleteDirTitle": "Excluir pasta como {{user}}?",
@@ -792,8 +828,6 @@
     },
     "tag": {
       "literalHint": "Tag literal de um arquivo externo — pode corresponder exatamente a uma regra de permissão. Pode ser desmarcada individualmente.",
-      "allowDeselectedHint": "Corresponde a uma regra de permissão existente e a nenhuma regra de negação — por isso desmarcada por padrão. Pode ser marcada novamente individualmente.",
-      "autoDeselectedBadge": "desmarcada automaticamente",
       "matchesRuleHint": "corresponde a {{count}} regra(s) de filtro existente(s): {{actions}}",
       "action": {
         "allow": "Permitir",
@@ -907,7 +941,8 @@
     "dismiss": "Dispensar sugestão",
     "reject": "Rejeitar",
     "applying": "Aplicando…",
-    "apply": "Aplicar"
+    "apply": "Aplicar",
+    "expired": "Expirado — não aplicado"
   },
   "connectLog": {
     "title": "Detalhes",
@@ -922,12 +957,15 @@
       "handshake": "Handshake SSH",
       "hostKeyCheck": "Verificação da chave de host",
       "authentication": "Autenticação",
-      "sessionReady": "Sessão estabelecida"
+      "sessionReady": "Sessão estabelecida",
+      "dnsSkipped": "Endereço IP – resolução desnecessária"
     },
     "status": {
       "ok": "OK",
       "running": "em andamento",
-      "failed": "falhou ({{code}})"
+      "failed": "falhou ({{code}})",
+      "skipped": "ignorado",
+      "failedReason": "falhou: {{reason}}"
     },
     "hostKeyResult": {
       "known": "conhecida",
@@ -935,6 +973,7 @@
       "changed": "alterada"
     },
     "authMethod": {
+      "none": "none (sem autenticação)",
       "password": "Senha",
       "privateKey": "Chave privada",
       "agent": "Agente SSH",
@@ -949,6 +988,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "aceita parcialmente, autenticação adicional necessária",
       "remainingMethods": "O servidor também oferece: {{methods}} (não tentados)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "A conexão TCP expirou",
+      "SSH_TIMEOUT": "Tempo esgotado",
+      "SSH_CONNECTION_REFUSED": "Conexão recusada",
+      "SSH_HOST_NOT_FOUND": "Host não encontrado",
+      "SSH_HOST_UNREACHABLE": "Host inacessível",
+      "SSH_AUTH_FAILED": "Falha na autenticação"
     }
   },
   "fileBrowser": {
@@ -970,7 +1017,14 @@
     "transferDownload": "Baixando: {{name}}",
     "transferDone": "Concluído: {{name}}",
     "transferElevationEnded": "O modo elevado foi desativado durante a transferência.",
+    "transferCancel": "Cancelar transferência",
+    "transferCancelled": "{{name}}: cancelado",
+    "transferStopped": "{{name}}: interrompido",
+    "transferIncomplete": "Arquivo incompleto deixado no servidor: {{path}}",
+    "transferFiles": "{{done}} de {{total}} arquivos",
+    "transferRemaining": "restam {{time}}",
     "loading": "Carregando…",
+    "noPermissionToOpen": "Sem permissão para abrir esta pasta (falta x)",
     "emptyDirectory": "(diretório vazio)",
     "dropHint": "Solte aqui para enviar para {{path}}",
     "cancel": "Cancelar",
@@ -1008,7 +1062,8 @@
     },
     "moveCollision": {
       "title": "O destino já existe",
-      "body": "já existe e seria sobrescrito."
+      "body": "já existe e seria sobrescrito.",
+      "folderBody": "já existe como pasta e não pode ser substituído."
     },
     "folderUpload": {
       "conflictTitle": "Sobrescrever arquivos na pasta?",
@@ -1070,6 +1125,12 @@
       "execute": "Execução",
       "numeric": "Numérico",
       "recursive": "Recursivo",
+      "special": "Bits especiais",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Na aplicação recursiva, os bits especiais vão só para as pastas, nunca para os arquivos.",
+      "recursiveSummary": "Pastas: {{folders}}, arquivos: {{files}}",
       "recursiveWarning": "— altera as permissões de TODOS os arquivos e subpastas desta pasta. Ação poderosa, não pode ser desfeita.",
       "owner": "Proprietário",
       "group": "Grupo",
@@ -1096,6 +1157,7 @@
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",
+    "composerMore": "Mais ações de entrada",
     "newChat": "Novo chat",
     "newChatDisabledHint": "Indisponível enquanto a IA responde ou uma confirmação está aberta.",
     "autoContinuing": "Modo automático em execução — a IA responde sozinha ao último resultado…",
@@ -1194,6 +1256,9 @@
     "splitHandle": "Divisor de painel",
     "terminalTab": "Terminal",
     "filesTab": "Arquivos",
+    "aiTab": "IA",
+    "paneTabs": "Painéis da sessão",
+    "moreActions": "Mais ações",
     "terminalOpenFailed": "Não foi possível abrir o terminal: {{error}}",
     "reconnectingAuto": "Reconectando… (tentativa {{attempt}})",
     "stopReconnect": "Parar",

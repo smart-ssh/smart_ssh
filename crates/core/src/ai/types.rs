@@ -71,6 +71,34 @@ impl ProviderType {
     }
 }
 
+/// Issue #609 (Spec 0006): token usage of one completed AI request, as
+/// reported by the provider. Nothing is estimated: what the endpoint does
+/// not send stays `None`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AiUsage {
+    /// Prompt tokens as the provider counts them. Anthropic: excludes cache
+    /// reads/writes (they are reported separately); OpenAI-style APIs:
+    /// includes cached tokens.
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub reasoning_tokens: Option<u64>,
+    pub web_search_requests: Option<u32>,
+    pub service_tier: Option<String>,
+    /// The model that actually answered.
+    pub response_model: Option<String>,
+    /// Cost the endpoint reports itself (e.g. OpenRouter `usage.cost`), USD.
+    pub provider_reported_cost_usd: Option<f64>,
+}
+
+impl AiUsage {
+    /// `true` when the provider reported nothing at all.
+    pub fn is_empty(&self) -> bool {
+        *self == AiUsage::default()
+    }
+}
+
 /// Ereignis, das ein [`super::AiProvider`] während einer Konversation streamt
 /// (Spec 0006, Abschnitt 3).
 #[derive(Debug, Clone, PartialEq)]
@@ -116,6 +144,12 @@ pub enum AiEvent {
     Usage {
         input_tokens: u64,
     },
+    /// Issue #609: the complete token usage of this request, delivered at
+    /// most once per request, just before `Done` / `TextTruncated`. Numbers
+    /// and metadata only, never content; fields the endpoint did not report
+    /// stay `None`. Distinct from [`Self::Usage`], which is the early
+    /// input-size signal for context compaction (issue #601).
+    RequestUsage(AiUsage),
     /// Issue #599: the provider is overloaded and the request is repeated
     /// automatically after `delay_secs`. Emitted before each wait, and only
     /// while nothing of the response has been emitted yet. Purely
@@ -983,6 +1017,14 @@ pub enum AiError {
     /// "credit balance is too low", OpenAI `insufficient_quota`, HTTP 402).
     /// Carries the provider's error type and message. Never retried.
     Billing(String),
+    /// Issue #631: a spending/usage limit configured at the provider was
+    /// reached (Anthropic "workspace API usage limits"). `regain_access` is
+    /// the provider's "regain access on <date>" text, if it sent one. Never
+    /// retried.
+    UsageLimit {
+        detail: String,
+        regain_access: Option<String>,
+    },
     /// Issue #599: the provider rejected the request as invalid
     /// (`invalid_request_error` that is neither billing nor a too-large
     /// context). Carries the provider's error type and message.
@@ -1071,6 +1113,9 @@ impl fmt::Display for AiError {
             },
             AiError::Overloaded { .. } => write!(f, "KI-Provider ist überlastet"),
             AiError::Billing(msg) => write!(f, "Kein Guthaben beim KI-Provider: {msg}"),
+            AiError::UsageLimit { detail, .. } => {
+                write!(f, "Nutzungslimit beim KI-Provider erreicht: {detail}")
+            }
             AiError::RejectedRequest(msg) => {
                 write!(f, "Der KI-Provider hat die Anfrage abgelehnt: {msg}")
             }
@@ -1102,6 +1147,7 @@ impl AiError {
             AiError::InputUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
             AiError::Overloaded { .. } => "AI_PROVIDER_OVERLOADED",
             AiError::Billing(_) => "AI_PROVIDER_BILLING",
+            AiError::UsageLimit { .. } => "AI_PROVIDER_USAGE_LIMIT",
             AiError::RejectedRequest(_) => "AI_PROVIDER_REJECTED_REQUEST",
         }
     }
@@ -1134,6 +1180,10 @@ mod ai_error_code_tests {
             AiError::InputUnsupported(MediaClass::Image),
             AiError::Overloaded { retry_after: None },
             AiError::Billing("x".to_string()),
+            AiError::UsageLimit {
+                detail: "x".to_string(),
+                regain_access: None,
+            },
             AiError::RejectedRequest("x".to_string()),
         ];
         let codes: Vec<&'static str> = samples.iter().map(AiError::code).collect();

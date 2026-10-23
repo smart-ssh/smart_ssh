@@ -57,7 +57,7 @@ export function DialogFrame({
         {children}
       </div>
       {actions ? (
-        <div className="mt-4 flex justify-end gap-2">{actions}</div>
+        <div className="mt-4 flex flex-wrap justify-end gap-2 narrow:mt-3 narrow:shrink-0">{actions}</div>
       ) : null}
     </>
   );
@@ -65,8 +65,8 @@ export function DialogFrame({
   return (
     <ModalBackdrop
       layer={layer}
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 ${
-        reserveTitlebar ? "px-4 pb-4 pt-13" : "p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 narrow:items-stretch ${
+        reserveTitlebar ? "px-4 pb-4 pt-13 narrow:px-0 narrow:pb-0" : "p-4 narrow:p-0 narrow:pt-9"
       }`}
     >
       {/* `role` is a dynamic value (dialog | alertdialog), which the linter cannot see; the key handler only wraps Tab (focus trap). */}
@@ -78,11 +78,11 @@ export function DialogFrame({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded border border-slate-600 bg-slate-900 p-6 shadow-xl focus:outline-none`}
+        className={`flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded border border-slate-600 bg-slate-900 p-6 shadow-xl narrow:max-h-none narrow:max-w-none narrow:rounded-none narrow:border-0 narrow:p-4 focus:outline-none`}
       >
         <h2
           id={titleId}
-          className="font-heading mb-3 text-lg font-semibold text-slate-100"
+          className="font-heading mb-3 shrink-0 text-lg break-words font-semibold text-slate-100"
         >
           {title}
         </h2>

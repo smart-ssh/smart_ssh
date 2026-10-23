@@ -195,6 +195,9 @@ pub struct AppState {
     /// Issue #505 (ADR 0141): chat content extensions an edition registered;
     /// empty in Community. Handed to every new session.
     pub chat_content: Arc<crate::chat_content_extension::ChatContentRegistry>,
+    /// Issue #610 (Spec 0038 §2): observers of completed AI requests an
+    /// edition registered; empty in Community. Handed to every new session.
+    pub ai_usage_observers: Arc<Vec<Arc<dyn crate::ai_usage::AiUsageObserver>>>,
 }
 
 pub struct McpState {

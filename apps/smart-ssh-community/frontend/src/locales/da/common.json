@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Indstillinger",
+    "backToList": "Afsnit",
     "categories": {
       "aiProvider": "AI-udbyder",
       "displayLanguage": "Visning og sprog",
@@ -130,10 +131,12 @@
     "rootDropZone": "Slip her for at flytte til øverste niveau (ingen gruppe)",
     "hintRoot": "→ øverste niveau (ingen gruppe)",
     "hintGroup": "→ flyt ind i denne gruppe",
-    "hintCycle": "En gruppe kan ikke flyttes ind i sin egen undergruppe"
+    "hintCycle": "En gruppe kan ikke flyttes ind i sin egen undergruppe",
+    "moveTo": "Flyt “{{name}}” til…"
   },
   "management": {
-    "emptyState": "Vælg en gruppe eller server til venstre, eller opret noget nyt via \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Vælg en gruppe eller server til venstre, eller opret noget nyt via \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Tilbage"
   },
   "groupForm": {
     "titleNew": "Ny gruppe",
@@ -149,6 +152,8 @@
     "confirmDelete": "Slet permanent"
   },
   "serverForm": {
+    "connect": "Opret forbindelse",
+    "connectSaveFirst": "Gem først dine ændringer",
     "hostKeys": {
       "title": "Værtsnøgler",
       "none": "Ingen værtsnøgle gemt endnu. Den gemmes ved første forbindelse."
@@ -175,6 +180,9 @@
       "identityFile": "Nøglefil"
     },
     "password": "Adgangskode",
+    "passwordOptionalHint": "(valgfrit – lad feltet stå tomt, hvis serveren tillader login uden adgangskode)",
+    "removeSavedPassword": "Fjern gemt adgangskode",
+    "noPasswordSaved": "Ingen adgangskode gemt. Appen prøver først login uden adgangskode og derefter med en tom adgangskode.",
     "unchangedHint": "(tom = uændret)",
     "privateKeyLabel": "Privat nøgle",
     "chooseFile": "Vælg fil…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Startmappen skal være en absolut sti (/…) eller starte med ~/.",
       "controlCharacter": "Startmappen må ikke indeholde kontroltegn."
+    },
+    "tabs": {
+      "label": "Serverindstillinger",
+      "general": "Generelt",
+      "connection": "Forbindelse",
+      "security": "Sikkerhed",
+      "invalid": "Indeholder fejl"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Udskriften blev afskåret ved størrelsesgrænsen – den kan være ufuldstændig.",
     "liveOutputLabel": "Live-udskrift",
     "liveOutputTruncatedNotice": "⚠ Størrelsesgrænsen er nået – yderligere udskrift vises ikke mere.",
+    "autoRanLead": "Kørt automatisk",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Åbn denne regel i filterreglerne",
     "mcpOrigin": "Eksternt værktøj (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "eksternt værktøj (MCP)",
     "mcpOriginHint": "Denne handling blev ikke anmodet af den interne chat, men af et eksternt værktøj via den lokale MCP-server."
@@ -412,6 +433,11 @@
     "overview": "Oversigt",
     "pendingAction": "Venter på bekræftelse",
     "closeTab": "Luk fanen \"{{name}}\"",
+    "menu": {
+      "open": "Åbn navigationsmenuen",
+      "title": "Navigationsmenu",
+      "sessions": "Åbne sessioner"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Eksternt værktøj",
@@ -429,6 +455,8 @@
     "active": "aktiv",
     "setActive": "Gør aktiv",
     "addProvider": "Tilføj udbyder",
+    "editProvider": "Rediger udbyder",
+    "apiKeyUnchangedPlaceholder": "Uændret – indtast en ny nøgle for at erstatte den",
     "type": "Type",
     "providerName": "Navn",
     "model": "Model",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI-udbyderen meldte en fejl (f.eks. vedligeholdelse eller overbelastning). Prøv igen senere; fortsætter det, så kontrollér udbyderindstillingerne.",
     "AI_PROVIDER_OVERLOADED": "AI-udbyderen er overbelastet lige nu. Prøv igen om et øjeblik.",
     "AI_PROVIDER_BILLING": "AI-udbyderens konto har ikke mere kredit. Tjek betalingen i udbyderens konsol.",
+    "AI_PROVIDER_USAGE_LIMIT": "Forbrugsgrænsen hos udbyderen er nået. Hæv grænsen i udbyderens konsol, eller vælg en anden udbyder.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Forbrugsgrænsen hos udbyderen er nået. Adgangen vender tilbage {{date}}. Hæv grænsen i udbyderens konsol, eller vælg en anden udbyder.",
     "AI_PROVIDER_REJECTED_REQUEST": "AI-udbyderen afviste anmodningen.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var for langt til en komplet kommando",
     "AI_MODEL_NOT_FOUND": "AI-udbyderen kender ikke denne model. Kontrollér modelnavnet i Indstillinger (\"Indlæs modeller\" viser de tilgængelige); for Ollama skal den først hentes med `ollama pull <name>`.",
@@ -695,6 +725,12 @@
     "toggleTitle": "Åbn filbrowseren med forhøjede rettigheder (sudo) – kræver en sudo-regel uden adgangskode for sftp-server",
     "enabling": "Kontrollerer sudo …",
     "toggleOff": "Afslut forhøjede rettigheder",
+    "stopTitle": "Afslut forhøjede rettigheder?",
+    "stopBody": "Disse handlinger kører stadig. Hvis du afslutter forhøjede rettigheder, stoppes de.",
+    "opDownload": "Overførsel ned",
+    "opUpload": "Overførsel op",
+    "opDelete": "Sletning",
+    "opChmod": "Ændring af rettigheder",
     "banner": "Forhøjede rettigheder aktive: alle filhandlinger i denne browser kører som {{user}}.",
     "deleteFileTitle": "Slet fil som {{user}}?",
     "deleteDirTitle": "Slet mappe som {{user}}?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Bogstaveligt tag fra en fremmed fil – kan matche en tillad-regel præcist. Kan fravælges enkeltvis.",
-      "allowDeselectedHint": "Matcher en eksisterende tillad-regel og ingen forbyd-regel – derfor fravalgt som standard. Kan vælges igen enkeltvis.",
-      "autoDeselectedBadge": "fravalgt automatisk",
       "matchesRuleHint": "matcher {{count}} eksisterende filterregel/-regler: {{actions}}",
       "action": {
         "allow": "Tillad",
@@ -902,7 +936,8 @@
     "dismiss": "Skjul forslag",
     "reject": "Afvis",
     "applying": "Anvender…",
-    "apply": "Anvend"
+    "apply": "Anvend",
+    "expired": "Udløbet — ikke anvendt"
   },
   "connectLog": {
     "title": "Detaljer",
@@ -917,12 +952,15 @@
       "handshake": "SSH-handshake",
       "hostKeyCheck": "Kontrol af værtsnøgle",
       "authentication": "Godkendelse",
-      "sessionReady": "Session oprettet"
+      "sessionReady": "Session oprettet",
+      "dnsSkipped": "IP-adresse – ingen opslag nødvendigt"
     },
     "status": {
       "ok": "OK",
       "running": "i gang",
-      "failed": "mislykkedes ({{code}})"
+      "failed": "mislykkedes ({{code}})",
+      "skipped": "sprunget over",
+      "failedReason": "mislykkedes: {{reason}}"
     },
     "hostKeyResult": {
       "known": "kendt",
@@ -930,6 +968,7 @@
       "changed": "ændret"
     },
     "authMethod": {
+      "none": "none (ingen godkendelse)",
       "password": "Adgangskode",
       "privateKey": "Privat nøgle",
       "agent": "SSH-agent",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvist accepteret, yderligere godkendelse kræves",
       "remainingMethods": "Serveren tilbyder også: {{methods}} (ikke prøvet)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-forbindelsen fik timeout",
+      "SSH_TIMEOUT": "Timeout",
+      "SSH_CONNECTION_REFUSED": "Forbindelsen blev afvist",
+      "SSH_HOST_NOT_FOUND": "Værten blev ikke fundet",
+      "SSH_HOST_UNREACHABLE": "Værten er ikke tilgængelig",
+      "SSH_AUTH_FAILED": "Godkendelse mislykkedes"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Henter: {{name}}",
     "transferDone": "Færdig: {{name}}",
     "transferElevationEnded": "Den forhøjede tilstand blev slået fra under overførslen.",
+    "transferCancel": "Annuller overførsel",
+    "transferCancelled": "{{name}}: annulleret",
+    "transferStopped": "{{name}}: stoppet",
+    "transferIncomplete": "Ufuldstændig fil efterladt på serveren: {{path}}",
+    "transferFiles": "{{done}} af {{total}} filer",
+    "transferRemaining": "{{time}} tilbage",
     "loading": "Indlæser…",
+    "noPermissionToOpen": "Ingen tilladelse til at åbne denne mappe (x mangler)",
     "emptyDirectory": "(tom mappe)",
     "dropHint": "Slip her for at uploade til {{path}}",
     "cancel": "Annuller",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "Målet findes allerede",
-      "body": "findes allerede og ville blive overskrevet."
+      "body": "findes allerede og ville blive overskrevet.",
+      "folderBody": "findes allerede som mappe og kan ikke erstattes."
     },
     "folderUpload": {
       "conflictTitle": "Overskriv filer i mappen?",
@@ -1063,6 +1118,12 @@
       "execute": "Udfør",
       "numeric": "Numerisk",
       "recursive": "Rekursivt",
+      "special": "Specialbits",
+      "setuid": "setuid-bit",
+      "setgid": "setgid-bit",
+      "sticky": "sticky-bit",
+      "specialHint": "Ved rekursiv anvendelse får kun mapper specialbits, aldrig filer.",
+      "recursiveSummary": "Mapper: {{folders}}, filer: {{files}}",
       "recursiveWarning": "– ændrer rettighederne for ALLE filer og undermapper i denne mappe. Kraftfuld handling, kan ikke fortrydes.",
       "owner": "Ejer",
       "group": "Gruppe",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",
+    "composerMore": "Flere inputhandlinger",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgængelig, mens AI svarer, eller en bekræftelse er åben.",
     "autoContinuing": "Automatisk tilstand kører – AI svarer selv på det seneste resultat…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "Panelskillelinje",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "AI",
+    "paneTabs": "Sessionsdele",
+    "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}",
     "reconnectingAuto": "Genopretter forbindelsen… (forsøg {{attempt}})",
     "stopReconnect": "Afbryd",

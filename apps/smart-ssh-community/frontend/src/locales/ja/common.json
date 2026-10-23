@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "設定",
+    "backToList": "セクション",
     "categories": {
       "aiProvider": "AIプロバイダー",
       "displayLanguage": "表示と言語",
@@ -130,10 +131,12 @@
     "rootDropZone": "ここにドロップすると最上位（グループなし）に移動します",
     "hintRoot": "→ 最上位（グループなし）",
     "hintGroup": "→ このグループに移動",
-    "hintCycle": "グループを自分自身のサブグループへ移動することはできません"
+    "hintCycle": "グループを自分自身のサブグループへ移動することはできません",
+    "moveTo": "「{{name}}」の移動先…"
   },
   "management": {
-    "emptyState": "左側でグループまたはサーバーを選択するか、「{{addGroup}}」／「{{addServer}}」から新規作成してください。"
+    "emptyState": "左側でグループまたはサーバーを選択するか、「{{addGroup}}」／「{{addServer}}」から新規作成してください。",
+    "back": "戻る"
   },
   "groupForm": {
     "titleNew": "新しいグループ",
@@ -149,6 +152,8 @@
     "confirmDelete": "完全に削除"
   },
   "serverForm": {
+    "connect": "接続",
+    "connectSaveFirst": "先に変更を保存してください",
     "hostKeys": {
       "title": "ホストキー",
       "none": "ホストキーはまだ保存されていません。最初の接続時に保存されます。"
@@ -175,6 +180,9 @@
       "identityFile": "鍵ファイル"
     },
     "password": "パスワード",
+    "passwordOptionalHint": "（任意 – サーバーがパスワードなしのログインを許可している場合は空欄のままにします）",
+    "removeSavedPassword": "保存済みのパスワードを削除",
+    "noPasswordSaved": "パスワードは保存されていません。アプリはまずパスワードなしでのログインを試し、次に空のパスワードを試します。",
     "unchangedHint": "（空欄 = 変更しない）",
     "privateKeyLabel": "秘密鍵",
     "chooseFile": "ファイルを選択…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "開始ディレクトリは絶対パス（/…）か、~/ で始まるパスである必要があります。",
       "controlCharacter": "開始ディレクトリに制御文字を含めることはできません。"
+    },
+    "tabs": {
+      "label": "サーバー設定",
+      "general": "一般",
+      "connection": "接続",
+      "security": "セキュリティ",
+      "invalid": "エラーがあります"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ 出力がサイズ上限で切り捨てられました — 不完全な可能性があります。",
     "liveOutputLabel": "ライブ出力",
     "liveOutputTruncatedNotice": "⚠ サイズ上限に達しました — これ以降の出力は表示されません。",
+    "autoRanLead": "自動実行",
+    "autoRanRule": "ルール",
+    "autoRanScopeGlobal": "グローバル",
+    "autoRanScopeServer": "サーバー {{name}}",
+    "autoRanScopeTag": "タグ {{tag}}",
+    "autoRanOpenRule": "このルールをフィルタルールで開く",
     "mcpOrigin": "外部ツール（MCP）: 「{{name}}」",
     "mcpOriginGeneric": "外部ツール（MCP）",
     "mcpOriginHint": "この操作は内部チャットからではなく、外部ツールがローカルのMCPサーバー経由でリクエストしたものです。"
@@ -412,6 +433,11 @@
     "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
+    "menu": {
+      "open": "ナビゲーションメニューを開く",
+      "title": "ナビゲーションメニュー",
+      "sessions": "開いているセッション"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "外部ツール",
@@ -429,6 +455,8 @@
     "active": "有効",
     "setActive": "有効にする",
     "addProvider": "プロバイダーを追加",
+    "editProvider": "プロバイダーを編集",
+    "apiKeyUnchangedPlaceholder": "変更なし – 置き換えるには新しいキーを入力",
     "type": "種類",
     "providerName": "名前",
     "model": "モデル",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AIプロバイダーがエラーを報告しました（例: メンテナンスや過負荷）。しばらくしてからもう一度お試しください。解消しない場合は、プロバイダーの設定を確認してください。",
     "AI_PROVIDER_OVERLOADED": "AIプロバイダーは現在過負荷です。しばらくしてからもう一度お試しください。",
     "AI_PROVIDER_BILLING": "AIプロバイダーのアカウントに残高がありません。プロバイダーのコンソールで請求を確認してください。",
+    "AI_PROVIDER_USAGE_LIMIT": "プロバイダーの利用上限に達しました。プロバイダーのコンソールで上限を引き上げるか、別のプロバイダーを選んでください。",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "プロバイダーの利用上限に達しました。{{date}}にアクセスが復旧します。プロバイダーのコンソールで上限を引き上げるか、別のプロバイダーを選んでください。",
     "AI_PROVIDER_REJECTED_REQUEST": "AIプロバイダーがリクエストを拒否しました。",
     "AI_RESPONSE_TRUNCATED": "AIの応答が長すぎて、コマンドを完全な形で受け取れませんでした",
     "AI_MODEL_NOT_FOUND": "AIプロバイダーがこのモデルを認識していません。設定でモデル名を確認してください（「モデルを読み込む」で利用可能なモデルが一覧表示されます）。Ollamaの場合は、先に `ollama pull <name>` で取得してください。",
@@ -690,6 +720,12 @@
     "toggleTitle": "昇格した権限（sudo）でファイルブラウザーを開きます — sftp-serverに対するパスワードなしのsudoルールが必要です",
     "enabling": "sudoを確認中…",
     "toggleOff": "昇格した権限を終了",
+    "stopTitle": "昇格権限を終了しますか？",
+    "stopBody": "これらの操作はまだ実行中です。昇格権限を終了すると停止します。",
+    "opDownload": "ダウンロード",
+    "opUpload": "アップロード",
+    "opDelete": "削除",
+    "opChmod": "権限の変更",
     "banner": "昇格した権限が有効です: このブラウザーでのすべてのファイル操作は {{user}} として実行されます。",
     "deleteFileTitle": "{{user}} としてファイルを削除しますか？",
     "deleteDirTitle": "{{user}} としてフォルダーを削除しますか？",
@@ -782,8 +818,6 @@
     },
     "tag": {
       "literalHint": "他のファイル由来のリテラルなタグです。許可ルールと完全に一致する場合があります。個別に選択を外せます。",
-      "allowDeselectedHint": "既存の許可ルールに一致し、拒否ルールには一致しないため、既定では選択が外れています。個別に再び選択できます。",
-      "autoDeselectedBadge": "自動的に選択解除",
       "matchesRuleHint": "既存のフィルタールール{{count}}件に一致: {{actions}}",
       "action": {
         "allow": "許可",
@@ -897,7 +931,8 @@
     "dismiss": "提案を閉じる",
     "reject": "拒否",
     "applying": "適用中…",
-    "apply": "適用"
+    "apply": "適用",
+    "expired": "期限切れ — 適用されていません"
   },
   "connectLog": {
     "title": "詳細",
@@ -912,12 +947,15 @@
       "handshake": "SSHハンドシェイク",
       "hostKeyCheck": "ホストキーの確認",
       "authentication": "認証",
-      "sessionReady": "セッション確立"
+      "sessionReady": "セッション確立",
+      "dnsSkipped": "IPアドレス – 名前解決は不要"
     },
     "status": {
       "ok": "OK",
       "running": "進行中",
-      "failed": "失敗（{{code}}）"
+      "failed": "失敗（{{code}}）",
+      "skipped": "スキップ",
+      "failedReason": "失敗: {{reason}}"
     },
     "hostKeyResult": {
       "known": "既知",
@@ -925,6 +963,7 @@
       "changed": "変更あり"
     },
     "authMethod": {
+      "none": "none（認証なし）",
       "password": "パスワード",
       "privateKey": "秘密鍵",
       "agent": "SSHエージェント",
@@ -939,6 +978,14 @@
       "mac": "MAC：{{value}}",
       "partialSuccess": "部分的に受理されました。さらに認証が必要です",
       "remainingMethods": "サーバーは次の方式も提示しています: {{methods}}（未試行）"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP接続がタイムアウトしました",
+      "SSH_TIMEOUT": "タイムアウト",
+      "SSH_CONNECTION_REFUSED": "接続が拒否されました",
+      "SSH_HOST_NOT_FOUND": "ホストが見つかりません",
+      "SSH_HOST_UNREACHABLE": "ホストに到達できません",
+      "SSH_AUTH_FAILED": "認証に失敗しました"
     }
   },
   "fileBrowser": {
@@ -960,7 +1007,14 @@
     "transferDownload": "ダウンロード中: {{name}}",
     "transferDone": "完了: {{name}}",
     "transferElevationEnded": "転送中に昇格モードがオフになりました。",
+    "transferCancel": "転送をキャンセル",
+    "transferCancelled": "{{name}}：キャンセルしました",
+    "transferStopped": "{{name}}：停止しました",
+    "transferIncomplete": "不完全なファイルがサーバーに残っています：{{path}}",
+    "transferFiles": "{{total}} 件中 {{done}} 件",
+    "transferRemaining": "残り {{time}}",
     "loading": "読み込み中…",
+    "noPermissionToOpen": "このフォルダを開く権限がありません（x がありません）",
     "emptyDirectory": "（空のディレクトリ）",
     "dropHint": "ここにドロップして {{path}} にアップロード",
     "cancel": "キャンセル",
@@ -994,7 +1048,8 @@
     },
     "moveCollision": {
       "title": "移動先がすでに存在します",
-      "body": "はすでに存在しており、上書きされます。"
+      "body": "はすでに存在しており、上書きされます。",
+      "folderBody": "はすでにフォルダとして存在しており、置き換えられません。"
     },
     "folderUpload": {
       "conflictTitle": "フォルダー内のファイルを上書きしますか？",
@@ -1056,6 +1111,12 @@
       "execute": "実行",
       "numeric": "数値",
       "recursive": "再帰的",
+      "special": "特殊ビット",
+      "setuid": "setuid ビット",
+      "setgid": "setgid ビット",
+      "sticky": "sticky ビット",
+      "specialHint": "再帰適用では、特殊ビットはフォルダにのみ設定され、ファイルには設定されません。",
+      "recursiveSummary": "フォルダ: {{folders}}, ファイル: {{files}}",
       "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの権限を変更します。影響の大きい操作で、元に戻せません。",
       "owner": "所有者",
       "group": "グループ",
@@ -1082,6 +1143,7 @@
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",
+    "composerMore": "その他の入力操作",
     "newChat": "新しいチャット",
     "newChatDisabledHint": "AIが応答中、または確認が開いている間は利用できません。",
     "autoContinuing": "自動モードで実行中 — AIが最後の結果に自動で応答します…",
@@ -1178,6 +1240,9 @@
     "splitHandle": "パネルの区切り",
     "terminalTab": "ターミナル",
     "filesTab": "ファイル",
+    "aiTab": "AI",
+    "paneTabs": "セッションのパネル",
+    "moreActions": "その他の操作",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
     "reconnectingAuto": "再接続中… ({{attempt}} 回目)",
     "stopReconnect": "停止",

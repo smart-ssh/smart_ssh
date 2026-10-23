@@ -113,8 +113,40 @@ and a maintainer decides.
 ## Screenshots and accessibility scans in browser tests
 
 - `captureScreen(page, "name")` (`e2e/support/screenshots.ts`) writes the
-  current screen at 1280×800 and 800×560 to `e2e/screenshots/<label>/`. Set
+  current screen at 1280×800, 800×560 and 390×844 to `e2e/screenshots/<label>/`. Set
   `SCREENSHOT_LABEL=before` or `after` to keep two sets. Use it to attach
   before/after images to a review PR.
 - Add a screen to the axe scan with one line in the `SCREENS` table in
   `e2e/tests/accessibility.spec.ts`.
+
+## Narrow layout
+
+Spec 0113 describes the behaviour; this section is the rulebook for code.
+
+- **Breakpoint.** Narrow means a window below 640 px. It is defined once:
+  `@custom-variant narrow` in `src/index.css` (use `narrow:` in class names)
+  and `NARROW_QUERY` / `useIsNarrow()` in `src/hooks/useIsNarrow.ts`. Both
+  must stay in sync. The wide layout is the unprefixed default; `narrow:` and
+  `useIsNarrow()` describe the exception. Prefer the CSS variant; use the hook
+  only when the component tree itself differs.
+- **Touch targets.** Primary controls are at least 44×44 px when narrow.
+- **No horizontal page scroll.** Only inner content (code, tables, terminal)
+  may scroll sideways.
+- **Dialogs** are full-screen when narrow; two-pane views show list and
+  detail one after the other.
+- **Extension slots** must not assume fixed widths. Content placed into a
+  slot has to shrink to the window width and wrap or truncate.
+- **Tests.** Vitest: `setNarrow()` / `setWide()` / `setViewportWidth(px)` from
+  `src/test/matchMedia.ts` switch the mocked `matchMedia`. Playwright: the
+  `*-phone` projects (390×844) run only specs whose title carries `@phone`;
+  other projects skip those specs.
+
+## Menus and popups stay inside the window (issue #627)
+
+Every context menu, dropdown and popup is `position: fixed` and positioned with
+`useMenuPlacement` (`src/hooks/useMenuPlacement.ts`, geometry in
+`src/menuPlacement.ts`): it opens below/right of its anchor, flips at the window
+edges, shifts as a last resort and scrolls when the window is smaller than the
+menu. Do not hand-position menus with `absolute`/`top-full` or raw click
+coordinates. In the narrow layout menus remain bottom sheets (the hook returns
+no style).

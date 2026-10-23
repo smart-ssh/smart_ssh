@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Beállítások",
+    "backToList": "Szakaszok",
     "categories": {
       "aiProvider": "AI-szolgáltató",
       "displayLanguage": "Megjelenés és nyelv",
@@ -130,10 +131,12 @@
     "rootDropZone": "Ejtse ide a legfelső szintre helyezéshez (csoport nélkül)",
     "hintRoot": "→ legfelső szint (csoport nélkül)",
     "hintGroup": "→ áthelyezés ebbe a csoportba",
-    "hintCycle": "A csoport nem helyezhető a saját alcsoportjába"
+    "hintCycle": "A csoport nem helyezhető a saját alcsoportjába",
+    "moveTo": "„{{name}}” áthelyezése ide…"
   },
   "management": {
-    "emptyState": "Válasszon ki egy csoportot vagy szervert balra, vagy hozzon létre újat a(z) \"{{addGroup}}\"/\"{{addServer}}\" gombbal."
+    "emptyState": "Válasszon ki egy csoportot vagy szervert balra, vagy hozzon létre újat a(z) \"{{addGroup}}\"/\"{{addServer}}\" gombbal.",
+    "back": "Vissza"
   },
   "groupForm": {
     "titleNew": "Új csoport",
@@ -149,6 +152,8 @@
     "confirmDelete": "Végleges törlés"
   },
   "serverForm": {
+    "connect": "Csatlakozás",
+    "connectSaveFirst": "Először mentse a módosításokat",
     "hostKeys": {
       "title": "Gazdakulcsok",
       "none": "Még nincs tárolt gazdakulcs. Az első csatlakozáskor kerül mentésre."
@@ -175,6 +180,9 @@
       "identityFile": "Kulcsfájl"
     },
     "password": "Jelszó",
+    "passwordOptionalHint": "(nem kötelező – hagyja üresen, ha a kiszolgáló engedi a jelszó nélküli bejelentkezést)",
+    "removeSavedPassword": "Mentett jelszó eltávolítása",
+    "noPasswordSaved": "Nincs mentett jelszó. Az alkalmazás először jelszó nélkül próbál bejelentkezni, majd üres jelszóval.",
     "unchangedHint": "(üres = változatlan)",
     "privateKeyLabel": "Privát kulcs",
     "chooseFile": "Fájl kiválasztása…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "A kezdőkönyvtárnak abszolút útvonalnak (/…) kell lennie, vagy ~/-lel kell kezdődnie.",
       "controlCharacter": "A kezdőkönyvtár nem tartalmazhat vezérlőkaraktert."
+    },
+    "tabs": {
+      "label": "Szerverbeállítások",
+      "general": "Általános",
+      "connection": "Kapcsolat",
+      "security": "Biztonság",
+      "invalid": "Hibákat tartalmaz"
     }
   },
   "filterRules": {
@@ -349,6 +364,12 @@
     "commandTruncatedNotice": "⚠ A kimenet a méretkorlátnál megszakadt – hiányos lehet.",
     "liveOutputLabel": "Élő kimenet",
     "liveOutputTruncatedNotice": "⚠ Méretkorlát elérve – a további kimenet már nem látható.",
+    "autoRanLead": "Automatikusan lefutott",
+    "autoRanRule": "szabály",
+    "autoRanScopeGlobal": "globális",
+    "autoRanScopeServer": "szerver: {{name}}",
+    "autoRanScopeTag": "címke: {{tag}}",
+    "autoRanOpenRule": "Szabály megnyitása a szűrőszabályokban",
     "mcpOrigin": "Külső eszköz (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "külső eszköz (MCP)",
     "mcpOriginHint": "Ezt a műveletet nem a belső csevegés, hanem egy külső eszköz kérte a helyi MCP-szerveren keresztül.",
@@ -412,6 +433,11 @@
     "overview": "Áttekintés",
     "pendingAction": "Megerősítésre vár",
     "closeTab": "A(z) \"{{name}}\" lap bezárása",
+    "menu": {
+      "open": "Navigációs menü megnyitása",
+      "title": "Navigációs menü",
+      "sessions": "Megnyitott munkamenetek"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Külső eszköz",
@@ -429,6 +455,8 @@
     "active": "aktív",
     "setActive": "Aktívvá tétel",
     "addProvider": "Szolgáltató hozzáadása",
+    "editProvider": "Szolgáltató szerkesztése",
+    "apiKeyUnchangedPlaceholder": "Változatlan – adjon meg új kulcsot a cseréhez",
     "type": "Típus",
     "providerName": "Név",
     "model": "Modell",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Az AI-szolgáltató hibát jelzett (pl. karbantartás vagy túlterhelés). Próbálja újra később; ha tartós, ellenőrizze a szolgáltató beállításait.",
     "AI_PROVIDER_OVERLOADED": "Az AI-szolgáltató jelenleg túlterhelt. Próbálja újra egy pillanat múlva.",
     "AI_PROVIDER_BILLING": "Az AI-szolgáltatói fiókon nincs több kredit. Ellenőrizze a számlázást a szolgáltató konzolján.",
+    "AI_PROVIDER_USAGE_LIMIT": "A szolgáltatónál elérte a használati korlátot. Emelje a korlátot a szolgáltató konzoljában, vagy válasszon másik szolgáltatót.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "A szolgáltatónál elérte a használati korlátot. A hozzáférés visszatér: {{date}}. Emelje a korlátot a szolgáltató konzoljában, vagy válasszon másik szolgáltatót.",
     "AI_PROVIDER_REJECTED_REQUEST": "Az AI-szolgáltató elutasította a kérést.",
     "AI_RESPONSE_TRUNCATED": "Az AI válasza túl hosszú volt egy teljes parancshoz",
     "AI_MODEL_NOT_FOUND": "Az AI-szolgáltató nem ismeri ezt a modellt. Ellenőrizze a modell nevét a Beállításokban (a \"Modellek betöltése\" listázza az elérhetőket); Ollamánál előbb töltse le az `ollama pull <name>` paranccsal.",
@@ -695,6 +725,12 @@
     "toggleTitle": "A fájlböngésző megnyitása emelt jogokkal (sudo) – jelszó nélküli sudo-szabályt igényel az sftp-serverhez",
     "enabling": "Sudo ellenőrzése …",
     "toggleOff": "Emelt jogok befejezése",
+    "stopTitle": "Megszünteti a megemelt jogosultságot?",
+    "stopBody": "Ezek a műveletek még futnak. A megemelt jogosultság megszüntetése leállítja őket.",
+    "opDownload": "Letöltés",
+    "opUpload": "Feltöltés",
+    "opDelete": "Törlés",
+    "opChmod": "Jogosultságok módosítása",
     "banner": "Emelt jogok aktívak: a böngésző minden fájlművelete {{user}} néven fut.",
     "deleteFileTitle": "Fájl törlése {{user}} néven?",
     "deleteDirTitle": "Mappa törlése {{user}} néven?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Szó szerinti címke idegen fájlból – pontosan illeszkedhet egy Engedélyezés szabályra. Egyenként kijelölése törölhető.",
-      "allowDeselectedHint": "Illeszkedik egy meglévő Engedélyezés szabályra, Tiltás szabályra nem – ezért alapból nincs kijelölve. Egyenként újra kijelölhető.",
-      "autoDeselectedBadge": "automatikusan kijelölés nélkül",
       "matchesRuleHint": "{{count}} meglévő szűrőszabályra illeszkedik: {{actions}}",
       "action": {
         "allow": "Engedélyezés",
@@ -902,7 +936,8 @@
     "dismiss": "Javaslat elvetése",
     "reject": "Elutasítás",
     "applying": "Alkalmazás…",
-    "apply": "Alkalmazás"
+    "apply": "Alkalmazás",
+    "expired": "Lejárt — nem alkalmazva"
   },
   "connectLog": {
     "title": "Részletek",
@@ -917,12 +952,15 @@
       "handshake": "SSH-kézfogás",
       "hostKeyCheck": "Gazdakulcs ellenőrzése",
       "authentication": "Hitelesítés",
-      "sessionReady": "Munkamenet létrejött"
+      "sessionReady": "Munkamenet létrejött",
+      "dnsSkipped": "IP-cím – nincs szükség névfeloldásra"
     },
     "status": {
       "ok": "OK",
       "running": "folyamatban",
-      "failed": "sikertelen ({{code}})"
+      "failed": "sikertelen ({{code}})",
+      "skipped": "kihagyva",
+      "failedReason": "sikertelen: {{reason}}"
     },
     "hostKeyResult": {
       "known": "ismert",
@@ -930,6 +968,7 @@
       "changed": "megváltozott"
     },
     "authMethod": {
+      "none": "none (hitelesítés nélkül)",
       "password": "Jelszó",
       "privateKey": "Privát kulcs",
       "agent": "SSH-ügynök",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "részben elfogadva, további hitelesítés szükséges",
       "remainingMethods": "A szerver ezeket is kínálja: {{methods}} (nem próbálva)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "A TCP-kapcsolat időtúllépés miatt megszakadt",
+      "SSH_TIMEOUT": "Időtúllépés",
+      "SSH_CONNECTION_REFUSED": "A kapcsolatot elutasították",
+      "SSH_HOST_NOT_FOUND": "A gazdagép nem található",
+      "SSH_HOST_UNREACHABLE": "A gazdagép nem érhető el",
+      "SSH_AUTH_FAILED": "A hitelesítés sikertelen"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Letöltés: {{name}}",
     "transferDone": "Kész: {{name}}",
     "transferElevationEnded": "A megemelt mód az átvitel közben ki lett kapcsolva.",
+    "transferCancel": "Átvitel megszakítása",
+    "transferCancelled": "{{name}}: megszakítva",
+    "transferStopped": "{{name}}: leállítva",
+    "transferIncomplete": "Hiányos fájl maradt a kiszolgálón: {{path}}",
+    "transferFiles": "{{done}} / {{total}} fájl",
+    "transferRemaining": "{{time}} van hátra",
     "loading": "Betöltés…",
+    "noPermissionToOpen": "Nincs jogosultság a mappa megnyitásához (hiányzik az x)",
     "emptyDirectory": "(üres könyvtár)",
     "dropHint": "Ejtse ide a feltöltéshez ide: {{path}}",
     "cancel": "Mégse",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "A cél már létezik",
-      "body": "már létezik, és felülíródna."
+      "body": "már létezik, és felülíródna.",
+      "folderBody": "már létezik mappaként, és nem cserélhető le."
     },
     "folderUpload": {
       "conflictTitle": "Felülírja a mappában lévő fájlokat?",
@@ -1063,6 +1118,12 @@
       "execute": "Végrehajtás",
       "numeric": "Numerikus",
       "recursive": "Rekurzív",
+      "special": "Speciális bitek",
+      "setuid": "setuid-bit",
+      "setgid": "setgid-bit",
+      "sticky": "sticky-bit",
+      "specialHint": "Rekurzív alkalmazáskor a speciális bitek csak a mappákra kerülnek, a fájlokra soha.",
+      "recursiveSummary": "Mappák: {{folders}}, fájlok: {{files}}",
       "recursiveWarning": "– a mappa ÖSSZES fájljának és almappájának jogosultságait módosítja. Erőteljes művelet, nem vonható vissza.",
       "owner": "Tulajdonos",
       "group": "Csoport",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",
+    "composerMore": "További beviteli műveletek",
     "newChat": "Új csevegés",
     "newChatDisabledHint": "Nem érhető el, amíg az AI válaszol vagy megerősítés nyitva van.",
     "autoContinuing": "Automatikus mód fut – az AI magától válaszol az utolsó eredményre…",
@@ -1182,6 +1244,9 @@
     "splitHandle": "Panelelválasztó",
     "terminalTab": "Terminál",
     "filesTab": "Fájlok",
+    "aiTab": "MI",
+    "paneTabs": "Munkamenet-panelek",
+    "moreActions": "További műveletek",
     "terminalOpenFailed": "A terminál nem nyitható meg: {{error}}",
     "connectionLostPressR": "A kapcsolat megszakadt. Nyomja meg az R gombot az újracsatlakozáshoz.",
     "reconnect": "Újracsatlakozás",

@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Paramètres",
+    "backToList": "Rubriques",
     "categories": {
       "aiProvider": "Fournisseur d’IA",
       "displayLanguage": "Affichage et langue",
@@ -130,10 +131,12 @@
     "rootDropZone": "Déposer ici pour déplacer au niveau supérieur (sans groupe)",
     "hintRoot": "→ niveau supérieur (sans groupe)",
     "hintGroup": "→ déplacer dans ce groupe",
-    "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe"
+    "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe",
+    "moveTo": "Déplacer « {{name}} » vers…"
   },
   "management": {
-    "emptyState": "Sélectionnez un groupe ou un serveur à gauche, ou créez un élément via « {{addGroup}} »/« {{addServer}} »."
+    "emptyState": "Sélectionnez un groupe ou un serveur à gauche, ou créez un élément via « {{addGroup}} »/« {{addServer}} ».",
+    "back": "Retour"
   },
   "groupForm": {
     "titleNew": "Nouveau groupe",
@@ -149,6 +152,8 @@
     "confirmDelete": "Supprimer définitivement"
   },
   "serverForm": {
+    "connect": "Se connecter",
+    "connectSaveFirst": "Enregistrez d'abord vos modifications",
     "hostKeys": {
       "title": "Clés d’hôte",
       "none": "Aucune clé d’hôte enregistrée. Elle est enregistrée à la première connexion."
@@ -175,6 +180,9 @@
       "identityFile": "Fichier de clé"
     },
     "password": "Mot de passe",
+    "passwordOptionalHint": "(facultatif – laissez vide si le serveur autorise la connexion sans mot de passe)",
+    "removeSavedPassword": "Supprimer le mot de passe enregistré",
+    "noPasswordSaved": "Aucun mot de passe enregistré. L’application essaie d’abord la connexion sans mot de passe, puis avec un mot de passe vide.",
     "unchangedHint": "(vide = inchangé)",
     "privateKeyLabel": "Clé privée",
     "chooseFile": "Choisir un fichier…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Le répertoire de départ doit être un chemin absolu (/…) ou commencer par ~/.",
       "controlCharacter": "Le répertoire de départ ne doit pas contenir de caractères de contrôle."
+    },
+    "tabs": {
+      "label": "Paramètres du serveur",
+      "general": "Général",
+      "connection": "Connexion",
+      "security": "Sécurité",
+      "invalid": "Contient des erreurs"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ La sortie a été tronquée à la limite de taille — elle peut être incomplète.",
     "liveOutputLabel": "Sortie en direct",
     "liveOutputTruncatedNotice": "⚠ Limite de taille atteinte — la suite de la sortie n’est plus affichée.",
+    "autoRanLead": "Exécuté automatiquement",
+    "autoRanRule": "règle",
+    "autoRanScopeGlobal": "globale",
+    "autoRanScopeServer": "serveur {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Ouvrir cette règle dans les règles de filtrage",
     "mcpOrigin": "Outil externe (MCP) : « {{name}} »",
     "mcpOriginGeneric": "outil externe (MCP)",
     "mcpOriginHint": "Cette action n’a pas été demandée par le chat interne, mais par un outil externe via le serveur MCP local."
@@ -412,6 +433,11 @@
     "overview": "Vue d’ensemble",
     "pendingAction": "En attente de confirmation",
     "closeTab": "Fermer l’onglet « {{name}} »",
+    "menu": {
+      "open": "Ouvrir le menu de navigation",
+      "title": "Menu de navigation",
+      "sessions": "Sessions ouvertes"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Outil externe",
@@ -429,6 +455,8 @@
     "active": "actif",
     "setActive": "Définir comme actif",
     "addProvider": "Ajouter un fournisseur",
+    "editProvider": "Modifier le fournisseur",
+    "apiKeyUnchangedPlaceholder": "Inchangée – saisissez une nouvelle clé pour la remplacer",
     "type": "Type",
     "providerName": "Nom",
     "model": "Modèle",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Le fournisseur d’IA a signalé une erreur (p. ex. maintenance ou surcharge). Réessayez plus tard ; si cela persiste, vérifiez les paramètres du fournisseur.",
     "AI_PROVIDER_OVERLOADED": "Le fournisseur d'IA est surchargé en ce moment. Réessayez dans un instant.",
     "AI_PROVIDER_BILLING": "Le compte du fournisseur d'IA n'a plus de crédit. Vérifiez la facturation dans la console du fournisseur.",
+    "AI_PROVIDER_USAGE_LIMIT": "Limite d'utilisation atteinte chez le fournisseur. Augmentez la limite dans la console du fournisseur ou choisissez un autre fournisseur.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Limite d'utilisation atteinte chez le fournisseur. L'accès revient le {{date}}. Augmentez la limite dans la console du fournisseur ou choisissez un autre fournisseur.",
     "AI_PROVIDER_REJECTED_REQUEST": "Le fournisseur d'IA a rejeté la requête.",
     "AI_RESPONSE_TRUNCATED": "La réponse de l’IA était trop longue pour une commande complète",
     "AI_MODEL_NOT_FOUND": "Le fournisseur d’IA ne connaît pas ce modèle. Vérifiez le nom du modèle dans les paramètres (« Charger les modèles » liste ceux disponibles) ; pour Ollama, téléchargez-le d’abord avec `ollama pull <name>`.",
@@ -700,6 +730,12 @@
     "toggleTitle": "Ouvrir l’explorateur de fichiers avec des droits élevés (sudo) — nécessite une règle sudo sans mot de passe pour sftp-server",
     "enabling": "Vérification de sudo …",
     "toggleOff": "Terminer les droits élevés",
+    "stopTitle": "Mettre fin aux droits élevés ?",
+    "stopBody": "Ces opérations sont encore en cours. Mettre fin aux droits élevés les arrête.",
+    "opDownload": "Téléchargement",
+    "opUpload": "Envoi",
+    "opDelete": "Suppression",
+    "opChmod": "Modification des droits",
     "banner": "Droits élevés actifs : toutes les actions sur les fichiers dans cet explorateur s’exécutent en tant que {{user}}.",
     "deleteFileTitle": "Supprimer le fichier en tant que {{user}} ?",
     "deleteDirTitle": "Supprimer le dossier en tant que {{user}} ?",
@@ -792,8 +828,6 @@
     },
     "tag": {
       "literalHint": "Étiquette littérale issue d’un fichier externe — peut correspondre exactement à une règle d’autorisation. Désélectionnable individuellement.",
-      "allowDeselectedHint": "Correspond à une règle d’autorisation existante et à aucune règle de refus — donc désélectionnée par défaut. Sélectionnable de nouveau individuellement.",
-      "autoDeselectedBadge": "désélectionnée automatiquement",
       "matchesRuleHint": "correspond à {{count}} règle(s) de filtrage existante(s) : {{actions}}",
       "action": {
         "allow": "Autoriser",
@@ -907,7 +941,8 @@
     "dismiss": "Ignorer la suggestion",
     "reject": "Rejeter",
     "applying": "Application…",
-    "apply": "Appliquer"
+    "apply": "Appliquer",
+    "expired": "Expiré — non appliqué"
   },
   "connectLog": {
     "title": "Détails",
@@ -922,12 +957,15 @@
       "handshake": "Négociation SSH",
       "hostKeyCheck": "Vérification de la clé d’hôte",
       "authentication": "Authentification",
-      "sessionReady": "Session établie"
+      "sessionReady": "Session établie",
+      "dnsSkipped": "Adresse IP – aucune résolution nécessaire"
     },
     "status": {
       "ok": "OK",
       "running": "en cours",
-      "failed": "échec ({{code}})"
+      "failed": "échec ({{code}})",
+      "skipped": "ignoré",
+      "failedReason": "échec : {{reason}}"
     },
     "hostKeyResult": {
       "known": "connue",
@@ -935,6 +973,7 @@
       "changed": "modifiée"
     },
     "authMethod": {
+      "none": "none (sans authentification)",
       "password": "Mot de passe",
       "privateKey": "Clé privée",
       "agent": "Agent SSH",
@@ -949,6 +988,14 @@
       "mac": "MAC : {{value}}",
       "partialSuccess": "partiellement accepté, authentification supplémentaire requise",
       "remainingMethods": "Le serveur propose aussi : {{methods}} (non essayé)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Délai de connexion TCP dépassé",
+      "SSH_TIMEOUT": "Délai dépassé",
+      "SSH_CONNECTION_REFUSED": "Connexion refusée",
+      "SSH_HOST_NOT_FOUND": "Hôte introuvable",
+      "SSH_HOST_UNREACHABLE": "Hôte injoignable",
+      "SSH_AUTH_FAILED": "Échec de l'authentification"
     }
   },
   "fileBrowser": {
@@ -970,7 +1017,14 @@
     "transferDownload": "Téléchargement : {{name}}",
     "transferDone": "Terminé : {{name}}",
     "transferElevationEnded": "Le mode élevé a été désactivé pendant le transfert.",
+    "transferCancel": "Annuler le transfert",
+    "transferCancelled": "{{name}} : annulé",
+    "transferStopped": "{{name}} : arrêté",
+    "transferIncomplete": "Fichier incomplet laissé sur le serveur : {{path}}",
+    "transferFiles": "{{done}} fichiers sur {{total}}",
+    "transferRemaining": "{{time}} restantes",
     "loading": "Chargement…",
+    "noPermissionToOpen": "Pas d'autorisation pour ouvrir ce dossier (x manquant)",
     "emptyDirectory": "(répertoire vide)",
     "dropHint": "Déposer ici pour téléverser vers {{path}}",
     "cancel": "Annuler",
@@ -1008,7 +1062,8 @@
     },
     "moveCollision": {
       "title": "La cible existe déjà",
-      "body": "existe déjà et serait écrasé."
+      "body": "existe déjà et serait écrasé.",
+      "folderBody": "existe déjà en tant que dossier et ne peut pas être remplacé."
     },
     "folderUpload": {
       "conflictTitle": "Écraser les fichiers du dossier ?",
@@ -1070,6 +1125,12 @@
       "execute": "Exécution",
       "numeric": "Numérique",
       "recursive": "Récursif",
+      "special": "Bits spéciaux",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "En mode récursif, les bits spéciaux ne s'appliquent qu'aux dossiers, jamais aux fichiers.",
+      "recursiveSummary": "Dossiers: {{folders}}, fichiers: {{files}}",
       "recursiveWarning": "— modifie les permissions de TOUS les fichiers et sous-dossiers de ce dossier. Action puissante, irréversible.",
       "owner": "Propriétaire",
       "group": "Groupe",
@@ -1096,6 +1157,7 @@
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",
+    "composerMore": "Plus d'actions de saisie",
     "newChat": "Nouveau chat",
     "newChatDisabledHint": "Indisponible pendant que l’IA répond ou qu’une confirmation est ouverte.",
     "autoContinuing": "Mode automatique en cours — l’IA répond d’elle-même au dernier résultat…",
@@ -1194,6 +1256,9 @@
     "splitHandle": "Séparateur de panneau",
     "terminalTab": "Terminal",
     "filesTab": "Fichiers",
+    "aiTab": "IA",
+    "paneTabs": "Zones de la session",
+    "moreActions": "Plus d’actions",
     "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}",
     "reconnectingAuto": "Reconnexion… (tentative {{attempt}})",
     "stopReconnect": "Arrêter",

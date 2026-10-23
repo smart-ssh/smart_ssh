@@ -10,7 +10,9 @@ use std::path::{Component, Path, PathBuf};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
+use ssh_manager_core::ssh::{
+    ChunkControl, ChunkSource, RemoteEntry, SftpSession, SshError, TransferEnd,
+};
 
 fn io_err(path: &str, err: std::io::Error) -> SshError {
     if err.kind() == std::io::ErrorKind::PermissionDenied {
@@ -194,6 +196,57 @@ impl SftpSession for LocalFileSession {
             .map_err(|e| io_err(path, e))
     }
 
+    async fn read_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
+    ) -> Result<TransferEnd, SshError> {
+        use tokio::io::AsyncReadExt;
+        let mut file = tokio::fs::File::open(self.resolve(path))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        loop {
+            let n = file.read(&mut buf).await.map_err(|e| io_err(path, e))?;
+            if n == 0 {
+                return Ok(TransferEnd::Completed);
+            }
+            if on_chunk(&buf[..n]) == ChunkControl::Stop {
+                return Ok(TransferEnd::Stopped);
+            }
+        }
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
+    ) -> Result<TransferEnd, SshError> {
+        use tokio::io::AsyncWriteExt;
+        let mut file = tokio::fs::File::create(self.resolve(path))
+            .await
+            .map_err(|e| io_err(path, e))?;
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        loop {
+            match next_chunk(&mut buf) {
+                ChunkSource::Data(n) => file
+                    .write_all(&buf[..n])
+                    .await
+                    .map_err(|e| io_err(path, e))?,
+                ChunkSource::Eof => {
+                    file.flush().await.map_err(|e| io_err(path, e))?;
+                    return Ok(TransferEnd::Completed);
+                }
+                ChunkSource::Stop => {
+                    file.flush().await.map_err(|e| io_err(path, e))?;
+                    return Ok(TransferEnd::Stopped);
+                }
+            }
+        }
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = tokio::fs::metadata(self.resolve(path))
             .await
@@ -267,6 +320,12 @@ impl SftpSession for LocalFileSession {
         tokio::fs::rename(self.resolve(from), self.resolve(to))
             .await
             .map_err(|e| io_err(from, e))
+    }
+
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        // `fs::rename` ersetzt ein vorhandenes Ziel atomar (POSIX `rename(2)`).
+        self.rename(from, to).await?;
+        Ok(true)
     }
 
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {

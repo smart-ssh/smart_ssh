@@ -8,7 +8,8 @@ import {
   formatDuration,
   formatStepLogText,
   groupByHop,
-  stepDetails,
+  recordDetails,
+  statusMarker,
   stepLabel,
   stepStatusText,
 } from "../connectStepLog";
@@ -39,7 +40,7 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
       <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-200">
         {t("connectLog.title")}
       </summary>
-      <div className="mt-2 space-y-2 rounded border border-slate-700 bg-slate-900/60 p-2">
+      <div className="mt-2 space-y-2 break-words rounded border border-slate-700 bg-slate-900/60 p-2">
         {groups.map((group) => (
           <div key={group.hopIndex}>
             {multiHop && (
@@ -50,7 +51,7 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
             <ol className="space-y-1">
               {group.steps.map((record, i) => {
                 const failed = record.status.state === "failed";
-                const details = stepDetails(t, record.step);
+                const details = recordDetails(t, record);
                 return (
                   <li
                     key={i}
@@ -63,9 +64,9 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                   >
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span aria-hidden="true">
-                        {failed ? "✗" : record.status.state === "ok" ? "✓" : "…"}
+                        {statusMarker(record.status.state)}
                       </span>
-                      <span className="font-medium">{stepLabel(t, record.step)}</span>
+                      <span className="min-w-0 font-medium">{stepLabel(t, record.step, record.status.state)}</span>
                       <span>{stepStatusText(t, record)}</span>
                       <span className="text-slate-400">{formatDuration(record.durationMs)}</span>
                     </div>

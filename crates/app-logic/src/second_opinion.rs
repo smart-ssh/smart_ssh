@@ -17,7 +17,7 @@ use futures::StreamExt;
 use unicode_normalization::UnicodeNormalization;
 
 use ssh_manager_core::ai::{
-    truncate_for_second_opinion, AiEvent, AiProvider, ChatMessage, MessageContent, Role,
+    truncate_for_second_opinion, AiEvent, AiProvider, AiUsage, ChatMessage, MessageContent, Role,
     SessionContext, DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 use ssh_manager_core::risk::RiskLevel;
@@ -113,6 +113,17 @@ pub async fn fetch_second_opinion(
     provider: &dyn AiProvider,
     command_or_path: &str,
 ) -> SideCallOutcome<RiskLevel> {
+    fetch_second_opinion_with_usage(provider, command_or_path, &mut None).await
+}
+
+/// Like [`fetch_second_opinion`]; additionally stores the `RequestUsage` of
+/// the request in `usage` if it arrives before the stream loop stops
+/// (Issue #610). The stop conditions are unchanged; nothing waits for usage.
+pub async fn fetch_second_opinion_with_usage(
+    provider: &dyn AiProvider,
+    command_or_path: &str,
+    usage: &mut Option<AiUsage>,
+) -> SideCallOutcome<RiskLevel> {
     let context = build_second_opinion_context(SECOND_OPINION_PROMPT, command_or_path);
 
     let mut stream = provider.send(context);
@@ -144,6 +155,7 @@ pub async fn fetch_second_opinion(
             | AiEvent::Usage { .. }
             | AiEvent::Retrying { .. }
             | AiEvent::InvalidToolCall { .. } => {}
+            AiEvent::RequestUsage(request_usage) => *usage = Some(request_usage),
         }
     }
 
@@ -324,6 +336,15 @@ pub async fn fetch_injection_check(
     provider: &dyn AiProvider,
     content: &str,
 ) -> SideCallOutcome<bool> {
+    fetch_injection_check_with_usage(provider, content, &mut None).await
+}
+
+/// Like [`fetch_injection_check`]; see [`fetch_second_opinion_with_usage`].
+pub async fn fetch_injection_check_with_usage(
+    provider: &dyn AiProvider,
+    content: &str,
+    usage: &mut Option<AiUsage>,
+) -> SideCallOutcome<bool> {
     let context = build_second_opinion_context(INJECTION_CHECK_PROMPT, content);
 
     let mut stream = provider.send(context);
@@ -345,6 +366,7 @@ pub async fn fetch_injection_check(
             | AiEvent::Usage { .. }
             | AiEvent::Retrying { .. }
             | AiEvent::InvalidToolCall { .. } => {}
+            AiEvent::RequestUsage(request_usage) => *usage = Some(request_usage),
         }
     }
 

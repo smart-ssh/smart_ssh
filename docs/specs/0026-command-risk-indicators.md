@@ -157,7 +157,13 @@ Schaden lässt sich gut musterbasiert erfassen.
 1. Zwei kleine, getrennte Badges („Server", „Daten") an der Aktionskarte und
    im Bestätigungsdialog, nur sichtbar, wenn die Stufe nicht „keine" ist.
    Der Tooltip zeigt die Begründung (das gegriffene Muster bzw. die
-   KI-Begründung). Anordnung: Spec 0029.
+   KI-Begründung). Ein Badge mit Begründung zeigt nach dem Label ein kleines
+   „ⓘ"; ein Badge ohne Begründung zeigt es nicht. Das Badge ist per Tab
+   erreichbar; der Tooltip erscheint bei Mausüberfahrt und bei Tastaturfokus
+   und verschwindet bei Escape oder Fokusverlust. Die Begründung ist für
+   Screenreader als Beschreibung des Badges verfügbar. Der Tooltip ändert die
+   Größe der Badges nicht und wird vom Chat-Container nicht abgeschnitten.
+   Anordnung: Spec 0029.
 2. Ist die Zweitmeinung aktiv und noch ausstehend, erscheint ein dezenter
    Lade-Indikator neben dem Daten-Badge (bzw. an dessen Stelle, wenn die
    Regeln „keine" ergaben). Er verschwindet oder wird zu gelb/rot, sobald die

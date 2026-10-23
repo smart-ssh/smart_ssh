@@ -7,3 +7,6 @@ export type { DialogFrameProps } from "./DialogFrame";
 export { Field, FIELD_CONTROL_CLASS } from "./Field";
 export type { FieldControlProps, FieldProps } from "./Field";
 export { Spinner } from "./Spinner";
+export { TabPanel, Tabs, tabId, useTabsIdBase } from "./Tabs";
+export type { TabItem } from "./Tabs";
+export { Tooltip } from "./Tooltip";

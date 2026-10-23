@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "设置",
+    "backToList": "分区",
     "categories": {
       "aiProvider": "AI 提供商",
       "displayLanguage": "显示与语言",
@@ -130,10 +131,12 @@
     "rootDropZone": "拖放到此处，移至顶层（无分组）",
     "hintRoot": "→ 顶层（无分组）",
     "hintGroup": "→ 移入此分组",
-    "hintCycle": "分组不能移入其自身的子分组"
+    "hintCycle": "分组不能移入其自身的子分组",
+    "moveTo": "将“{{name}}”移动到…"
   },
   "management": {
-    "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。"
+    "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。",
+    "back": "返回"
   },
   "groupForm": {
     "titleNew": "新建分组",
@@ -149,6 +152,8 @@
     "confirmDelete": "永久删除"
   },
   "serverForm": {
+    "connect": "连接",
+    "connectSaveFirst": "请先保存更改",
     "hostKeys": {
       "title": "主机密钥",
       "none": "尚未保存主机密钥。首次连接时会保存。"
@@ -175,6 +180,9 @@
       "identityFile": "密钥文件"
     },
     "password": "密码",
+    "passwordOptionalHint": "（可选 – 如果服务器允许无密码登录，请留空）",
+    "removeSavedPassword": "移除已保存的密码",
+    "noPasswordSaved": "未保存密码。应用会先尝试无密码登录，再尝试空密码。",
     "unchangedHint": "（留空 = 保持不变）",
     "privateKeyLabel": "私钥",
     "chooseFile": "选择文件…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "起始目录必须是绝对路径（/…）或以 ~/ 开头。",
       "controlCharacter": "起始目录不得包含控制字符。"
+    },
+    "tabs": {
+      "label": "服务器设置",
+      "general": "常规",
+      "connection": "连接",
+      "security": "安全",
+      "invalid": "包含错误"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ 输出已在大小上限处被截断——可能不完整。",
     "liveOutputLabel": "实时输出",
     "liveOutputTruncatedNotice": "⚠ 已达到大小上限——不再显示后续输出。",
+    "autoRanLead": "已自动执行",
+    "autoRanRule": "规则",
+    "autoRanScopeGlobal": "全局",
+    "autoRanScopeServer": "服务器 {{name}}",
+    "autoRanScopeTag": "标签 {{tag}}",
+    "autoRanOpenRule": "在过滤规则中打开此规则",
     "mcpOrigin": "外部工具（MCP）：“{{name}}”",
     "mcpOriginGeneric": "外部工具（MCP）",
     "mcpOriginHint": "此操作并非由内部聊天发起，而是由外部工具通过本地 MCP 服务器请求的。"
@@ -412,6 +433,11 @@
     "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
+    "menu": {
+      "open": "打开导航菜单",
+      "title": "导航菜单",
+      "sessions": "已打开的会话"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "外部工具",
@@ -429,6 +455,8 @@
     "active": "活动",
     "setActive": "设为活动",
     "addProvider": "添加提供商",
+    "editProvider": "编辑提供商",
+    "apiKeyUnchangedPlaceholder": "保持不变 – 输入新密钥以替换",
     "type": "类型",
     "providerName": "名称",
     "model": "模型",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI 提供商报告了错误（例如维护或过载）。请稍后再试；如果持续出现，请检查提供商设置。",
     "AI_PROVIDER_OVERLOADED": "AI 提供商目前过载。请稍后再试。",
     "AI_PROVIDER_BILLING": "AI 提供商账户已没有余额。请在提供商控制台中检查计费。",
+    "AI_PROVIDER_USAGE_LIMIT": "已达到提供商的使用上限。请在提供商控制台提高上限，或选择其他提供商。",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "已达到提供商的使用上限。访问将于 {{date}} 恢复。请在提供商控制台提高上限，或选择其他提供商。",
     "AI_PROVIDER_REJECTED_REQUEST": "AI 提供商拒绝了该请求。",
     "AI_RESPONSE_TRUNCATED": "AI 的回复过长，无法构成完整的命令",
     "AI_MODEL_NOT_FOUND": "AI 提供商不认识该模型。请在设置中检查模型名称（“加载模型”会列出可用的模型）；对于 Ollama，请先用 `ollama pull <name>` 拉取。",
@@ -690,6 +720,12 @@
     "toggleTitle": "以提升的权限（sudo）打开文件浏览器——需要为 sftp-server 配置免密码的 sudo 规则",
     "enabling": "正在检查 sudo…",
     "toggleOff": "结束提权",
+    "stopTitle": "结束提权？",
+    "stopBody": "这些操作仍在运行。结束提权会将其停止。",
+    "opDownload": "下载",
+    "opUpload": "上传",
+    "opDelete": "删除",
+    "opChmod": "更改权限",
     "banner": "提权已启用：此浏览器中的所有文件操作均以 {{user}} 身份运行。",
     "deleteFileTitle": "以 {{user}} 身份删除文件？",
     "deleteDirTitle": "以 {{user}} 身份删除文件夹？",
@@ -782,8 +818,6 @@
     },
     "tag": {
       "literalHint": "来自外部文件的字面标签——可能与某条允许规则精确匹配。可单独取消选择。",
-      "allowDeselectedHint": "与现有的某条允许规则匹配，且没有拒绝规则——因此默认取消选择。可单独重新选择。",
-      "autoDeselectedBadge": "已自动取消选择",
       "matchesRuleHint": "匹配 {{count}} 条现有的过滤规则：{{actions}}",
       "action": {
         "allow": "允许",
@@ -897,7 +931,8 @@
     "dismiss": "忽略建议",
     "reject": "拒绝",
     "applying": "正在应用…",
-    "apply": "应用"
+    "apply": "应用",
+    "expired": "已过期 — 未应用"
   },
   "connectLog": {
     "title": "详情",
@@ -912,12 +947,15 @@
       "handshake": "SSH 握手",
       "hostKeyCheck": "主机密钥检查",
       "authentication": "身份验证",
-      "sessionReady": "会话已建立"
+      "sessionReady": "会话已建立",
+      "dnsSkipped": "IP 地址 – 无需解析"
     },
     "status": {
       "ok": "正常",
       "running": "进行中",
-      "failed": "失败（{{code}}）"
+      "failed": "失败（{{code}}）",
+      "skipped": "已跳过",
+      "failedReason": "失败：{{reason}}"
     },
     "hostKeyResult": {
       "known": "已知",
@@ -925,6 +963,7 @@
       "changed": "已更改"
     },
     "authMethod": {
+      "none": "none（无认证）",
       "password": "密码",
       "privateKey": "私钥",
       "agent": "SSH 代理",
@@ -939,6 +978,14 @@
       "mac": "MAC：{{value}}",
       "partialSuccess": "已部分接受，还需要进一步验证",
       "remainingMethods": "服务器还提供：{{methods}}（未尝试）"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP 连接超时",
+      "SSH_TIMEOUT": "超时",
+      "SSH_CONNECTION_REFUSED": "连接被拒绝",
+      "SSH_HOST_NOT_FOUND": "找不到主机",
+      "SSH_HOST_UNREACHABLE": "主机不可达",
+      "SSH_AUTH_FAILED": "身份验证失败"
     }
   },
   "fileBrowser": {
@@ -960,7 +1007,14 @@
     "transferDownload": "正在下载：{{name}}",
     "transferDone": "已完成：{{name}}",
     "transferElevationEnded": "传输期间提权模式已关闭。",
+    "transferCancel": "取消传输",
+    "transferCancelled": "{{name}}：已取消",
+    "transferStopped": "{{name}}：已停止",
+    "transferIncomplete": "服务器上遗留了不完整的文件：{{path}}",
+    "transferFiles": "{{done}} / {{total}} 个文件",
+    "transferRemaining": "剩余 {{time}}",
     "loading": "正在加载…",
+    "noPermissionToOpen": "无权打开此文件夹（缺少 x）",
     "emptyDirectory": "（空目录）",
     "dropHint": "拖放到此处，上传到 {{path}}",
     "cancel": "取消",
@@ -994,7 +1048,8 @@
     },
     "moveCollision": {
       "title": "目标已存在",
-      "body": "已存在，并将被覆盖。"
+      "body": "已存在，并将被覆盖。",
+      "folderBody": "已作为文件夹存在，无法替换。"
     },
     "folderUpload": {
       "conflictTitle": "覆盖文件夹中的文件？",
@@ -1056,6 +1111,12 @@
       "execute": "执行",
       "numeric": "数字",
       "recursive": "递归",
+      "special": "特殊位",
+      "setuid": "setuid 位",
+      "setgid": "setgid 位",
+      "sticky": "sticky 位",
+      "specialHint": "递归应用时，特殊位只会设置到文件夹，绝不会设置到文件。",
+      "recursiveSummary": "文件夹: {{folders}}, 文件: {{files}}",
       "recursiveWarning": "——会更改此文件夹中所有文件和子文件夹的权限。这是影响很大的操作，无法撤销。",
       "owner": "所有者",
       "group": "群组",
@@ -1082,6 +1143,7 @@
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
+    "composerMore": "更多输入操作",
     "newChat": "新聊天",
     "newChatDisabledHint": "AI 正在回复或有确认打开时不可用。",
     "autoContinuing": "自动模式运行中——AI 正在自行对上一个结果作出回应…",
@@ -1178,6 +1240,9 @@
     "splitHandle": "面板分隔条",
     "terminalTab": "终端",
     "filesTab": "文件",
+    "aiTab": "AI",
+    "paneTabs": "会话面板",
+    "moreActions": "更多操作",
     "terminalOpenFailed": "无法打开终端：{{error}}",
     "reconnectingAuto": "正在重新连接…（第 {{attempt}} 次尝试）",
     "stopReconnect": "停止",

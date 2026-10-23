@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Asetukset",
+    "backToList": "Osiot",
     "categories": {
       "aiProvider": "Tekoälyn palveluntarjoaja",
       "displayLanguage": "Näyttö ja kieli",
@@ -130,10 +131,12 @@
     "rootDropZone": "Pudota tähän siirtääksesi ylimmälle tasolle (ei ryhmää)",
     "hintRoot": "→ ylin taso (ei ryhmää)",
     "hintGroup": "→ siirrä tähän ryhmään",
-    "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä"
+    "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
+    "moveTo": "Siirrä ”{{name}}” kohteeseen…"
   },
   "management": {
-    "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Takaisin"
   },
   "groupForm": {
     "titleNew": "Uusi ryhmä",
@@ -149,6 +152,8 @@
     "confirmDelete": "Poista pysyvästi"
   },
   "serverForm": {
+    "connect": "Yhdistä",
+    "connectSaveFirst": "Tallenna muutokset ensin",
     "hostKeys": {
       "title": "Isäntäavaimet",
       "none": "Isäntäavainta ei ole vielä tallennettu. Se tallennetaan ensimmäisen yhteyden yhteydessä."
@@ -175,6 +180,9 @@
       "identityFile": "Avaintiedosto"
     },
     "password": "Salasana",
+    "passwordOptionalHint": "(valinnainen – jätä tyhjäksi, jos palvelin sallii kirjautumisen ilman salasanaa)",
+    "removeSavedPassword": "Poista tallennettu salasana",
+    "noPasswordSaved": "Salasanaa ei ole tallennettu. Sovellus yrittää ensin kirjautumista ilman salasanaa ja sitten tyhjällä salasanalla.",
     "unchangedHint": "(tyhjä = ei muutu)",
     "privateKeyLabel": "Yksityinen avain",
     "chooseFile": "Valitse tiedosto…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Aloitushakemiston on oltava absoluuttinen polku (/…) tai alettava merkinnällä ~/.",
       "controlCharacter": "Aloitushakemisto ei saa sisältää ohjausmerkkejä."
+    },
+    "tabs": {
+      "label": "Palvelimen asetukset",
+      "general": "Yleiset",
+      "connection": "Yhteys",
+      "security": "Suojaus",
+      "invalid": "Sisältää virheitä"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Tuloste katkaistiin kokorajalla – se voi olla vajaa.",
     "liveOutputLabel": "Reaaliaikainen tuloste",
     "liveOutputTruncatedNotice": "⚠ Kokoraja saavutettu – lisätulostetta ei enää näytetä.",
+    "autoRanLead": "Suoritettu automaattisesti",
+    "autoRanRule": "sääntö",
+    "autoRanScopeGlobal": "yleinen",
+    "autoRanScopeServer": "palvelin {{name}}",
+    "autoRanScopeTag": "tunniste {{tag}}",
+    "autoRanOpenRule": "Avaa tämä sääntö suodatinsäännöissä",
     "mcpOrigin": "Ulkoinen työkalu (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "ulkoinen työkalu (MCP)",
     "mcpOriginHint": "Tätä toimintoa ei pyytänyt sisäinen keskustelu vaan ulkoinen työkalu paikallisen MCP-palvelimen kautta."
@@ -412,6 +433,11 @@
     "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",
+    "menu": {
+      "open": "Avaa navigointivalikko",
+      "title": "Navigointivalikko",
+      "sessions": "Avoimet istunnot"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Ulkoinen työkalu",
@@ -429,6 +455,8 @@
     "active": "aktiivinen",
     "setActive": "Aseta aktiiviseksi",
     "addProvider": "Lisää palveluntarjoaja",
+    "editProvider": "Muokkaa palveluntarjoajaa",
+    "apiKeyUnchangedPlaceholder": "Ei muutosta – syötä uusi avain korvataksesi sen",
     "type": "Tyyppi",
     "providerName": "Nimi",
     "model": "Malli",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Tekoälyn palveluntarjoaja ilmoitti virheestä (esim. huolto tai ylikuormitus). Yritä myöhemmin uudelleen; jos ongelma jatkuu, tarkista palveluntarjoajan asetukset.",
     "AI_PROVIDER_OVERLOADED": "Tekoälypalvelun tarjoaja on juuri nyt ylikuormitettu. Yritä hetken kuluttua uudelleen.",
     "AI_PROVIDER_BILLING": "Tekoälypalvelun tilillä ei ole enää saldoa. Tarkista laskutus palveluntarjoajan konsolista.",
+    "AI_PROVIDER_USAGE_LIMIT": "Palveluntarjoajan käyttöraja on saavutettu. Nosta rajaa palveluntarjoajan konsolissa tai valitse toinen palveluntarjoaja.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Palveluntarjoajan käyttöraja on saavutettu. Pääsy palautuu {{date}}. Nosta rajaa palveluntarjoajan konsolissa tai valitse toinen palveluntarjoaja.",
     "AI_PROVIDER_REJECTED_REQUEST": "Tekoälypalvelun tarjoaja hylkäsi pyynnön.",
     "AI_RESPONSE_TRUNCATED": "Tekoälyn vastaus oli liian pitkä täydelliseksi komennoksi",
     "AI_MODEL_NOT_FOUND": "Tekoälyn palveluntarjoaja ei tunne tätä mallia. Tarkista mallin nimi asetuksista (\"Lataa mallit\" listaa saatavilla olevat); Ollamalle lataa se ensin komennolla `ollama pull <name>`.",
@@ -695,6 +725,12 @@
     "toggleTitle": "Avaa tiedostoselain korotetuilla oikeuksilla (sudo) – vaatii salasanattoman sudo-säännön sftp-serverille",
     "enabling": "Tarkistetaan sudoa …",
     "toggleOff": "Lopeta korotetut oikeudet",
+    "stopTitle": "Lopetetaanko korotetut oikeudet?",
+    "stopBody": "Nämä toiminnot ovat vielä käynnissä. Korotettujen oikeuksien lopettaminen pysäyttää ne.",
+    "opDownload": "Lataus",
+    "opUpload": "Lähetys",
+    "opDelete": "Poisto",
+    "opChmod": "Oikeuksien muutos",
     "banner": "Korotetut oikeudet käytössä: kaikki tämän selaimen tiedostotoiminnot suoritetaan käyttäjänä {{user}}.",
     "deleteFileTitle": "Poistetaanko tiedosto käyttäjänä {{user}}?",
     "deleteDirTitle": "Poistetaanko kansio käyttäjänä {{user}}?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Sananmukainen tunniste vieraasta tiedostosta – voi täsmätä sallimissääntöön tarkasti. Valinnan voi poistaa yksitellen.",
-      "allowDeselectedHint": "Täsmää olemassa olevaan sallimissääntöön eikä yhtään estosääntöön – siksi oletuksena valitsematta. Voi valita uudelleen yksitellen.",
-      "autoDeselectedBadge": "automaattisesti poistettu valinnasta",
       "matchesRuleHint": "täsmää {{count}} olemassa olevaan suodatussääntöön: {{actions}}",
       "action": {
         "allow": "Salli",
@@ -902,7 +936,8 @@
     "dismiss": "Sulje ehdotus",
     "reject": "Hylkää",
     "applying": "Otetaan käyttöön…",
-    "apply": "Ota käyttöön"
+    "apply": "Ota käyttöön",
+    "expired": "Vanhentunut — ei otettu käyttöön"
   },
   "connectLog": {
     "title": "Lisätiedot",
@@ -917,12 +952,15 @@
       "handshake": "SSH-kättely",
       "hostKeyCheck": "Isäntäavaimen tarkistus",
       "authentication": "Todennus",
-      "sessionReady": "Istunto muodostettu"
+      "sessionReady": "Istunto muodostettu",
+      "dnsSkipped": "IP-osoite – hakua ei tarvita"
     },
     "status": {
       "ok": "OK",
       "running": "käynnissä",
-      "failed": "epäonnistui ({{code}})"
+      "failed": "epäonnistui ({{code}})",
+      "skipped": "ohitettu",
+      "failedReason": "epäonnistui: {{reason}}"
     },
     "hostKeyResult": {
       "known": "tunnettu",
@@ -930,6 +968,7 @@
       "changed": "muuttunut"
     },
     "authMethod": {
+      "none": "none (ei todennusta)",
       "password": "Salasana",
       "privateKey": "Yksityinen avain",
       "agent": "SSH-agentti",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "hyväksytty osittain, lisätodennus vaaditaan",
       "remainingMethods": "Palvelin tarjoaa myös: {{methods}} (ei kokeiltu)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-yhteys aikakatkaistiin",
+      "SSH_TIMEOUT": "Aikakatkaisu",
+      "SSH_CONNECTION_REFUSED": "Yhteys evättiin",
+      "SSH_HOST_NOT_FOUND": "Isäntää ei löytynyt",
+      "SSH_HOST_UNREACHABLE": "Isäntä ei ole tavoitettavissa",
+      "SSH_AUTH_FAILED": "Todennus epäonnistui"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Ladataan: {{name}}",
     "transferDone": "Valmis: {{name}}",
     "transferElevationEnded": "Korotettu tila kytkettiin pois siirron aikana.",
+    "transferCancel": "Peruuta siirto",
+    "transferCancelled": "{{name}}: peruttu",
+    "transferStopped": "{{name}}: pysäytetty",
+    "transferIncomplete": "Epätäydellinen tiedosto jäi palvelimelle: {{path}}",
+    "transferFiles": "{{done}} / {{total}} tiedostoa",
+    "transferRemaining": "{{time}} jäljellä",
     "loading": "Ladataan…",
+    "noPermissionToOpen": "Ei oikeutta avata tätä kansiota (x puuttuu)",
     "emptyDirectory": "(tyhjä hakemisto)",
     "dropHint": "Pudota tähän lähettääksesi kohteeseen {{path}}",
     "cancel": "Peruuta",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "Kohde on jo olemassa",
-      "body": "on jo olemassa ja korvattaisiin."
+      "body": "on jo olemassa ja korvattaisiin.",
+      "folderBody": "on jo olemassa kansiona, eikä sitä voi korvata."
     },
     "folderUpload": {
       "conflictTitle": "Korvataanko kansion tiedostot?",
@@ -1063,6 +1118,12 @@
       "execute": "Suoritus",
       "numeric": "Numeerinen",
       "recursive": "Rekursiivinen",
+      "special": "Erikoisbitit",
+      "setuid": "setuid-bitti",
+      "setgid": "setgid-bitti",
+      "sticky": "sticky-bitti",
+      "specialHint": "Rekursiivisesti erikoisbitit asetetaan vain kansioille, ei koskaan tiedostoille.",
+      "recursiveSummary": "Kansiot: {{folders}}, tiedostot: {{files}}",
       "recursiveWarning": "– muuttaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden oikeuksia. Voimakas toiminto, ei peruttavissa.",
       "owner": "Omistaja",
       "group": "Ryhmä",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",
+    "composerMore": "Lisää syöttötoimintoja",
     "newChat": "Uusi keskustelu",
     "newChatDisabledHint": "Ei käytettävissä, kun tekoäly vastaa tai vahvistus on auki.",
     "autoContinuing": "Automaattitila käynnissä – tekoäly vastaa viimeiseen tulokseen itse…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "Paneelien jakaja",
     "terminalTab": "Pääte",
     "filesTab": "Tiedostot",
+    "aiTab": "Tekoäly",
+    "paneTabs": "Istunnon osat",
+    "moreActions": "Lisää toimintoja",
     "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
     "reconnectingAuto": "Yhdistetään uudelleen… (yritys {{attempt}})",
     "stopReconnect": "Pysäytä",

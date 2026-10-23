@@ -56,13 +56,13 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
   return (
     <div className="space-y-4 p-4" data-testid="unusable-server-panel">
       <div>
-        <h2 className="flex items-center gap-2 text-lg font-medium text-slate-100">
+        <h2 className="flex flex-wrap items-center gap-2 break-words text-lg font-medium text-slate-100">
           {server.name}
           <span className="rounded bg-amber-900 px-2 py-0.5 text-xs font-normal text-amber-200">
             {t("unusableServer.badge")}
           </span>
         </h2>
-        <p className="text-sm text-slate-400">{t("unusableServer.host", { host: server.host })}</p>
+        <p className="break-words text-sm text-slate-400">{t("unusableServer.host", { host: server.host })}</p>
       </div>
       <p className="rounded border border-amber-700 bg-amber-950 p-3 text-sm text-amber-200">
         {unusableReasonText(t, server.reason)}
@@ -91,7 +91,7 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
             <p className="mb-2 text-amber-200">{t("serverForm.deletedWithLeftoverSecretsHint")}</p>
             <ul className="mb-2 space-y-1 font-mono text-xs text-amber-200">
               {secretsLeftBehind.map((ref) => (
-                <li key={ref}>{ref}</li>
+                <li key={ref} className="break-all">{ref}</li>
               ))}
             </ul>
             <Button size="sm"
@@ -115,7 +115,7 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
               ))}
             </ul>
             <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm"
                 onClick={() => setPreview(null)}
               >

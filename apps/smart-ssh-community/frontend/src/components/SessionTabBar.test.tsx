@@ -116,3 +116,19 @@ describe("SessionTabBar MCP tabs", () => {
     expect(screen.getByText("prod-db")).toBeInTheDocument();
   });
 });
+
+describe("SessionTabBar close button frame", () => {
+  it("has a fixed 20x20 box with a reserved border and a hover/focus frame", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar tabs={tabs} activeSessionId="s1" onSwitch={vi.fn()} onRequestClose={vi.fn()} />
+      </I18nextProvider>,
+    );
+    const close = screen.getByRole("button", { name: testI18n.t("sessionTabs.closeTab", { name: "prod-db" }) });
+    // Fixed size + transparent border at rest => no layout shift on hover.
+    expect(close).toHaveClass("h-5", "w-5", "border", "border-transparent", "rounded");
+    for (const prefix of ["hover:", "focus-visible:"]) {
+      expect(close).toHaveClass(`${prefix}border-slate-500`, `${prefix}bg-slate-600/60`);
+    }
+  });
+});

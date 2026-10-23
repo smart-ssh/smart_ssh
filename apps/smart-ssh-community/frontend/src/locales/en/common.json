@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Settings",
+    "backToList": "Sections",
     "categories": {
       "aiProvider": "AI Provider",
       "displayLanguage": "Display & Language",
@@ -130,10 +131,12 @@
     "rootDropZone": "Drop here to move to the top level (no group)",
     "hintRoot": "→ top level (no group)",
     "hintGroup": "→ move into this group",
-    "hintCycle": "A group cannot be moved into its own subgroup"
+    "hintCycle": "A group cannot be moved into its own subgroup",
+    "moveTo": "Move “{{name}}” to…"
   },
   "management": {
-    "emptyState": "Select a group or server on the left, or create something new via \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Select a group or server on the left, or create something new via \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Back"
   },
   "groupForm": {
     "titleNew": "New Group",
@@ -149,6 +152,8 @@
     "confirmDelete": "Delete permanently"
   },
   "serverForm": {
+    "connect": "Connect",
+    "connectSaveFirst": "Save your changes first",
     "hostKeys": {
       "title": "Host keys",
       "none": "No host key stored yet. It is stored on the first connection."
@@ -175,6 +180,9 @@
       "identityFile": "Key File"
     },
     "password": "Password",
+    "passwordOptionalHint": "(optional – leave empty if the server allows login without a password)",
+    "removeSavedPassword": "Remove saved password",
+    "noPasswordSaved": "No password saved. The app first tries login without a password, then an empty password.",
     "unchangedHint": "(empty = unchanged)",
     "privateKeyLabel": "Private Key",
     "chooseFile": "Choose file…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "The start directory must be an absolute path (/…) or start with ~/.",
       "controlCharacter": "The start directory must not contain control characters."
+    },
+    "tabs": {
+      "label": "Server settings",
+      "general": "General",
+      "connection": "Connection",
+      "security": "Security",
+      "invalid": "Contains errors"
     }
   },
   "filterRules": {
@@ -287,8 +302,8 @@
     "priorityDisabledPatternError": "Cannot move: this rule's pattern is invalid.",
     "priorityDisabledNeighbourPatternError": "Cannot move: the neighbouring rule has an invalid pattern and cannot be swapped.",
     "testInvalidPatternRules": "Rules with an invalid pattern (do not match, or only partly):",
-    "newRule": "New Rule",
-    "editRule": "Edit Rule",
+    "newRule": "Add rule",
+    "editRule": "Edit rule",
     "patternType": "Pattern Type",
     "pattern": "Pattern",
     "action": "Action",
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Output was cut off at the size limit — it may be incomplete.",
     "liveOutputLabel": "Live output",
     "liveOutputTruncatedNotice": "⚠ Size limit reached — further output is no longer shown.",
+    "autoRanLead": "Ran automatically",
+    "autoRanRule": "rule",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Open this rule in the filter rules",
     "mcpOrigin": "External tool (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "external tool (MCP)",
     "mcpOriginHint": "This action was not requested by the internal chat, but by an external tool via the local MCP server."
@@ -412,6 +433,11 @@
     "overview": "Overview",
     "pendingAction": "Waiting for confirmation",
     "closeTab": "Close tab \"{{name}}\"",
+    "menu": {
+      "open": "Open navigation menu",
+      "title": "Navigation menu",
+      "sessions": "Open sessions"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "External tool",
@@ -429,6 +455,8 @@
     "active": "active",
     "setActive": "Set Active",
     "addProvider": "Add Provider",
+    "editProvider": "Edit provider",
+    "apiKeyUnchangedPlaceholder": "Unchanged – enter a new key to replace it",
     "type": "Type",
     "providerName": "Name",
     "model": "Model",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "The AI provider reported an error (e.g. maintenance or overload). Try again later; if it persists, check the provider settings.",
     "AI_PROVIDER_OVERLOADED": "The AI provider is overloaded right now. Try again in a moment.",
     "AI_PROVIDER_BILLING": "The AI provider account has no credit left. Check billing in the provider's console.",
+    "AI_PROVIDER_USAGE_LIMIT": "Usage limit at the provider reached. Raise the limit in the provider console or choose another provider.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Usage limit at the provider reached. Access returns on {{date}}. Raise the limit in the provider console or choose another provider.",
     "AI_PROVIDER_REJECTED_REQUEST": "The AI provider rejected the request.",
     "AI_RESPONSE_TRUNCATED": "The AI response was too long for a complete command",
     "AI_MODEL_NOT_FOUND": "The AI provider doesn't know this model. Check the model name in Settings (\"Load models\" lists the available ones); for Ollama, pull it first with `ollama pull <name>`.",
@@ -695,6 +725,12 @@
     "toggleTitle": "Open the file browser with elevated rights (sudo) — requires a passwordless sudo rule for sftp-server",
     "enabling": "Checking sudo …",
     "toggleOff": "End elevated rights",
+    "stopTitle": "End elevated rights?",
+    "stopBody": "These operations are still running. Ending elevated rights stops them.",
+    "opDownload": "Download",
+    "opUpload": "Upload",
+    "opDelete": "Delete",
+    "opChmod": "Change permissions",
     "banner": "Elevated rights active: all file actions in this browser run as {{user}}.",
     "deleteFileTitle": "Delete file as {{user}}?",
     "deleteDirTitle": "Delete folder as {{user}}?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Literal tag from a foreign file — can match an Allow rule exactly. Deselectable individually.",
-      "allowDeselectedHint": "Matches an existing Allow rule and no Deny rule — therefore deselected by default. Selectable again individually.",
-      "autoDeselectedBadge": "automatically deselected",
       "matchesRuleHint": "matches {{count}} existing filter rule(s): {{actions}}",
       "action": {
         "allow": "Allow",
@@ -902,7 +936,8 @@
     "dismiss": "Dismiss suggestion",
     "reject": "Reject",
     "applying": "Applying…",
-    "apply": "Apply"
+    "apply": "Apply",
+    "expired": "Expired — not applied"
   },
   "connectLog": {
     "title": "Details",
@@ -917,12 +952,15 @@
       "handshake": "SSH handshake",
       "hostKeyCheck": "Host key check",
       "authentication": "Authentication",
-      "sessionReady": "Session established"
+      "sessionReady": "Session established",
+      "dnsSkipped": "IP address – no lookup needed"
     },
     "status": {
       "ok": "OK",
       "running": "in progress",
-      "failed": "failed ({{code}})"
+      "failed": "failed ({{code}})",
+      "skipped": "skipped",
+      "failedReason": "failed: {{reason}}"
     },
     "hostKeyResult": {
       "known": "known",
@@ -930,6 +968,7 @@
       "changed": "changed"
     },
     "authMethod": {
+      "none": "none (no authentication)",
       "password": "Password",
       "privateKey": "Private key",
       "agent": "SSH agent",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "partially accepted, further authentication required",
       "remainingMethods": "Server also offers: {{methods}} (not tried)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP connection timed out",
+      "SSH_TIMEOUT": "Timed out",
+      "SSH_CONNECTION_REFUSED": "Connection refused",
+      "SSH_HOST_NOT_FOUND": "Host not found",
+      "SSH_HOST_UNREACHABLE": "Host unreachable",
+      "SSH_AUTH_FAILED": "Authentication failed"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Downloading: {{name}}",
     "transferDone": "Done: {{name}}",
     "transferElevationEnded": "Elevated mode was switched off during the transfer.",
+    "transferCancel": "Cancel transfer",
+    "transferCancelled": "{{name}}: cancelled",
+    "transferStopped": "{{name}}: stopped",
+    "transferIncomplete": "Incomplete file left on the server: {{path}}",
+    "transferFiles": "{{done}} of {{total}} files",
+    "transferRemaining": "{{time}} left",
     "loading": "Loading…",
+    "noPermissionToOpen": "No permission to open this folder (missing x)",
     "emptyDirectory": "(empty directory)",
     "dropHint": "Drop here to upload to {{path}}",
     "cancel": "Cancel",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "Target already exists",
-      "body": "already exists and would be overwritten."
+      "body": "already exists and would be overwritten.",
+      "folderBody": "already exists as a folder and cannot be replaced."
     },
     "folderUpload": {
       "conflictTitle": "Overwrite files in the folder?",
@@ -1063,6 +1118,12 @@
       "execute": "Execute",
       "numeric": "Numeric",
       "recursive": "Recursive",
+      "special": "Special bits",
+      "setuid": "setuid bit",
+      "setgid": "setgid bit",
+      "sticky": "sticky bit",
+      "specialHint": "Special bits apply to folders only when applied recursively; files never get them.",
+      "recursiveSummary": "Folders: {{folders}}, files: {{files}}",
       "recursiveWarning": "— changes the permissions of ALL files and subfolders in this folder. Powerful action, cannot be undone.",
       "owner": "Owner",
       "group": "Group",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",
+    "composerMore": "More input actions",
     "newChat": "New chat",
     "newChatDisabledHint": "Not available while the AI is responding or a confirmation is open.",
     "autoContinuing": "Automatic mode running — the AI responds to the last result on its own…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "Panel divider",
     "terminalTab": "Terminal",
     "filesTab": "Files",
+    "aiTab": "AI",
+    "paneTabs": "Session panes",
+    "moreActions": "More actions",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
     "reconnectingAuto": "Reconnecting… (attempt {{attempt}})",
     "stopReconnect": "Stop",

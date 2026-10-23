@@ -33,13 +33,19 @@ senkrechter Ziehgriff.
 - **Persistenz** wie bei Teil 1: Die gewählte Breite bleibt über einen
   Neustart erhalten.
 - **Kleine Fenster:** Passen beide Mindestbreiten nicht nebeneinander, gilt
-  die Standardaufteilung. Die gespeicherte Vorliebe bleibt dabei erhalten; sie
+  eine Aufteilung, in der der rechte Bereich nie breiter als das halbe Fenster
+  und nie breiter als die Standardbreite ist. Ab einer Fensterbreite unter
+  640 px gilt stattdessen das schmale Layout (Spec 0113 §4). Die gespeicherte Vorliebe bleibt dabei erhalten; sie
   wird weder durch die Anzeige in einem zu kleinen Fenster noch durch eine
   Ziehgeste dort überschrieben, und die Geste hat in diesem Zustand keine
   Wirkung. Wird das Fenster wieder größer, gilt die gespeicherte Breite.
 - Wird das Fenster verkleinert, so dass die gespeicherte Breite dem linken
   Bereich nicht mehr seine Mindestbreite lässt, wird nur die angezeigte
   Breite begrenzt.
+
+## Schmales Layout
+
+- Unter 640 px Fensterbreite zeigt der Dateimanager keine Spalten, sondern zweizeilige Einträge; Spaltenbreiten sind dort nicht verstellbar und die gespeicherten Breiten bleiben unverändert (Spec 0113, Abschnitt 5b).
 
 ## Nicht Teil dieser Spec
 

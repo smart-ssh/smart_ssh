@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Einstellungen",
+    "backToList": "Bereiche",
     "categories": {
       "aiProvider": "KI-Provider",
       "displayLanguage": "Anzeige & Sprache",
@@ -130,10 +131,12 @@
     "rootDropZone": "Hier ablegen für die oberste Ebene (ohne Gruppe)",
     "hintRoot": "→ oberste Ebene (ohne Gruppe)",
     "hintGroup": "→ in diese Gruppe verschieben",
-    "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden"
+    "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden",
+    "moveTo": "„{{name}}“ verschieben nach…"
   },
   "management": {
-    "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen."
+    "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen.",
+    "back": "Zurück"
   },
   "groupForm": {
     "titleNew": "Neue Gruppe",
@@ -149,6 +152,8 @@
     "confirmDelete": "Endgültig löschen"
   },
   "serverForm": {
+    "connect": "Verbinden",
+    "connectSaveFirst": "Zuerst Änderungen speichern",
     "hostKeys": {
       "title": "Host-Keys",
       "none": "Noch kein Host-Key gespeichert. Er wird bei der ersten Verbindung gespeichert."
@@ -175,6 +180,9 @@
       "identityFile": "Schlüsseldatei"
     },
     "password": "Passwort",
+    "passwordOptionalHint": "(optional – leer lassen, wenn der Server eine Anmeldung ohne Passwort erlaubt)",
+    "removeSavedPassword": "Gespeichertes Passwort entfernen",
+    "noPasswordSaved": "Kein Passwort gespeichert. Die App versucht zuerst die Anmeldung ohne Passwort, dann mit leerem Passwort.",
     "unchangedHint": "(leer = unverändert)",
     "privateKeyLabel": "Private Key",
     "chooseFile": "Datei wählen…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Das Startverzeichnis muss ein absoluter Pfad (/…) sein oder mit ~/ beginnen.",
       "controlCharacter": "Das Startverzeichnis darf keine Steuerzeichen enthalten."
+    },
+    "tabs": {
+      "label": "Servereinstellungen",
+      "general": "Allgemein",
+      "connection": "Verbindung",
+      "security": "Sicherheit",
+      "invalid": "Enthält Fehler"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Ausgabe wurde am Größenlimit abgeschnitten — möglicherweise unvollständig.",
     "liveOutputLabel": "Live-Ausgabe",
     "liveOutputTruncatedNotice": "⚠ Größenlimit erreicht — weitere Ausgabe wird nicht mehr angezeigt.",
+    "autoRanLead": "Automatisch ausgeführt",
+    "autoRanRule": "Regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "Server {{name}}",
+    "autoRanScopeTag": "Tag {{tag}}",
+    "autoRanOpenRule": "Diese Regel in den Filterregeln öffnen",
     "mcpOrigin": "Externes Tool (MCP): „{{name}}“",
     "mcpOriginGeneric": "externes Tool (MCP)",
     "mcpOriginHint": "Diese Aktion wurde nicht vom internen Chat, sondern über den lokalen MCP-Server von einem externen Tool angefragt."
@@ -412,6 +433,11 @@
     "overview": "Übersicht",
     "pendingAction": "Wartet auf Bestätigung",
     "closeTab": "Tab „{{name}}“ schließen",
+    "menu": {
+      "open": "Navigationsmenü öffnen",
+      "title": "Navigationsmenü",
+      "sessions": "Offene Sitzungen"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Externes Tool",
@@ -429,6 +455,8 @@
     "active": "aktiv",
     "setActive": "Aktiv setzen",
     "addProvider": "Provider hinzufügen",
+    "editProvider": "Provider bearbeiten",
+    "apiKeyUnchangedPlaceholder": "Unverändert – neuen Key eingeben, um ihn zu ersetzen",
     "type": "Typ",
     "providerName": "Name",
     "model": "Modell",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Der KI-Provider meldet einen Fehler (z. B. Wartung oder Überlastung). Später erneut versuchen; hält es an, Provider-Einstellungen prüfen.",
     "AI_PROVIDER_OVERLOADED": "Der KI-Anbieter ist gerade überlastet. Bitte gleich noch einmal versuchen.",
     "AI_PROVIDER_BILLING": "Beim KI-Anbieter ist kein Guthaben mehr auf dem Konto. Abrechnung in der Konsole des Anbieters prüfen.",
+    "AI_PROVIDER_USAGE_LIMIT": "Das Nutzungslimit beim Anbieter ist erreicht. Limit in der Konsole des Anbieters erhöhen oder einen anderen Anbieter wählen.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Das Nutzungslimit beim Anbieter ist erreicht. Der Zugriff ist wieder möglich am {{date}}. Limit in der Konsole des Anbieters erhöhen oder einen anderen Anbieter wählen.",
     "AI_PROVIDER_REJECTED_REQUEST": "Der KI-Anbieter hat die Anfrage abgelehnt.",
     "AI_RESPONSE_TRUNCATED": "Die KI-Antwort war zu lang für einen vollständigen Befehl",
     "AI_MODEL_NOT_FOUND": "Der KI-Provider kennt dieses Modell nicht. Modellnamen in den Einstellungen prüfen („Modelle laden“ zeigt die verfügbaren); bei Ollama das Modell zuerst mit `ollama pull <name>` laden.",
@@ -695,6 +725,12 @@
     "toggleTitle": "Dateibrowser mit erhöhten Rechten (sudo) öffnen — braucht eine sudo-Regel ohne Passwort für sftp-server",
     "enabling": "Prüfe sudo …",
     "toggleOff": "Erhöhte Rechte beenden",
+    "stopTitle": "Erhöhte Rechte beenden?",
+    "stopBody": "Diese Vorgänge laufen noch. Beim Beenden der erhöhten Rechte werden sie gestoppt.",
+    "opDownload": "Herunterladen",
+    "opUpload": "Hochladen",
+    "opDelete": "Löschen",
+    "opChmod": "Rechte ändern",
     "banner": "Erhöhte Rechte aktiv: Alle Dateiaktionen in diesem Browser laufen als {{user}}.",
     "deleteFileTitle": "Datei als {{user}} löschen?",
     "deleteDirTitle": "Ordner als {{user}} löschen?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Buchstäbliches Schlagwort aus einer fremden Datei — kann eine Allow-Regel exakt treffen. Einzeln abwählbar.",
-      "allowDeselectedHint": "Trifft eine bestehende Allow-Regel und keine Deny-Regel — deshalb standardmäßig abgewählt. Einzeln wieder anwählbar.",
-      "autoDeselectedBadge": "automatisch abgewählt",
       "matchesRuleHint": "trifft {{count}} bestehende Filterregel(n): {{actions}}",
       "action": {
         "allow": "Allow",
@@ -902,7 +936,8 @@
     "dismiss": "Vorschlag verwerfen",
     "reject": "Ablehnen",
     "applying": "Übernimmt…",
-    "apply": "Übernehmen"
+    "apply": "Übernehmen",
+    "expired": "Abgelaufen — nicht angewendet"
   },
   "connectLog": {
     "title": "Details",
@@ -917,12 +952,15 @@
       "handshake": "SSH-Handshake",
       "hostKeyCheck": "Host-Key-Prüfung",
       "authentication": "Anmeldung",
-      "sessionReady": "Sitzung aufgebaut"
+      "sessionReady": "Sitzung aufgebaut",
+      "dnsSkipped": "IP-Adresse – keine Auflösung nötig"
     },
     "status": {
       "ok": "OK",
       "running": "läuft",
-      "failed": "fehlgeschlagen ({{code}})"
+      "failed": "fehlgeschlagen ({{code}})",
+      "skipped": "übersprungen",
+      "failedReason": "fehlgeschlagen: {{reason}}"
     },
     "hostKeyResult": {
       "known": "bekannt",
@@ -930,6 +968,7 @@
       "changed": "geändert"
     },
     "authMethod": {
+      "none": "none (ohne Authentifizierung)",
       "password": "Passwort",
       "privateKey": "Privater Schlüssel",
       "agent": "SSH-Agent",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "teilweise akzeptiert, weitere Anmeldung nötig",
       "remainingMethods": "Server bietet außerdem an: {{methods}} (nicht versucht)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-Verbindung hat das Zeitlimit überschritten",
+      "SSH_TIMEOUT": "Zeitüberschreitung",
+      "SSH_CONNECTION_REFUSED": "Verbindung abgelehnt",
+      "SSH_HOST_NOT_FOUND": "Host nicht gefunden",
+      "SSH_HOST_UNREACHABLE": "Host nicht erreichbar",
+      "SSH_AUTH_FAILED": "Anmeldung fehlgeschlagen"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Herunterladen: {{name}}",
     "transferDone": "Fertig: {{name}}",
     "transferElevationEnded": "Der erhöhte Modus wurde während der Übertragung ausgeschaltet.",
+    "transferCancel": "Übertragung abbrechen",
+    "transferCancelled": "{{name}}: abgebrochen",
+    "transferStopped": "{{name}}: gestoppt",
+    "transferIncomplete": "Unvollständige Datei auf dem Server: {{path}}",
+    "transferFiles": "{{done}} von {{total}} Dateien",
+    "transferRemaining": "noch {{time}}",
     "loading": "Lädt…",
+    "noPermissionToOpen": "Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)",
     "emptyDirectory": "(leeres Verzeichnis)",
     "dropHint": "Hier ablegen zum Hochladen nach {{path}}",
     "cancel": "Abbrechen",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "Ziel existiert bereits",
-      "body": "gibt es schon und würde überschrieben."
+      "body": "gibt es schon und würde überschrieben.",
+      "folderBody": "gibt es schon als Ordner und kann nicht ersetzt werden."
     },
     "folderUpload": {
       "conflictTitle": "Dateien im Ordner überschreiben?",
@@ -1063,6 +1118,12 @@
       "execute": "Ausführen",
       "numeric": "Numerisch",
       "recursive": "Rekursiv",
+      "special": "Sonderbits",
+      "setuid": "setuid-Bit",
+      "setgid": "setgid-Bit",
+      "sticky": "sticky-Bit",
+      "specialHint": "Bei rekursiver Anwendung erhalten nur Ordner Sonderbits, nie Dateien.",
+      "recursiveSummary": "Ordner: {{folders}}, Dateien: {{files}}",
       "recursiveWarning": "— ändert die Rechte für ALLE Dateien und Unterordner in diesem Ordner. Mächtige Aktion, nicht rückgängig machbar.",
       "owner": "Besitzer",
       "group": "Gruppe",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
+    "composerMore": "Weitere Eingabe-Aktionen",
     "newChat": "Neuer Chat",
     "newChatDisabledHint": "Nicht möglich, solange die KI antwortet oder eine Bestätigung offen ist.",
     "autoContinuing": "Automatik läuft — KI reagiert automatisch auf das letzte Ergebnis…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "Bereichsaufteilung",
     "terminalTab": "Terminal",
     "filesTab": "Dateien",
+    "aiTab": "KI",
+    "paneTabs": "Sitzungsbereiche",
+    "moreActions": "Weitere Aktionen",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
     "reconnectingAuto": "Verbinde neu … (Versuch {{attempt}})",
     "stopReconnect": "Stopp",

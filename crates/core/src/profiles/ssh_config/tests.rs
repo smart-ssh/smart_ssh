@@ -996,14 +996,19 @@ fn planned_tag<'a>(plan: &'a ImportPlan, server: &str, tag: &str) -> &'a Planned
 }
 
 #[test]
-fn t_105_muster_schlagwort_mit_allow_treffer_ist_abgewaehlt() {
-    let plan = tag_default_plan(&[tag_rule("a", RuleAction::Allow, "*.prod.de")]);
-    let t = planned_tag(&plan, "web1.prod.de", "*.prod.de");
-    assert!(!t.is_literal);
-    assert!(
-        !t.default_selected(),
-        "Muster-Schlagwort hebt Confirm→Allow"
-    );
+fn t_636_allow_treffer_bleibt_angewaehlt_regel_bleibt_sichtbar() {
+    let plan = tag_default_plan(&[
+        tag_rule("a1", RuleAction::Allow, "*.prod.de"),
+        tag_rule("a2", RuleAction::Allow, "prod"),
+    ]);
+    let pat = planned_tag(&plan, "web1.prod.de", "*.prod.de");
+    assert!(!pat.is_literal);
+    assert!(pat.default_selected());
+    assert_eq!(pat.matched_rules.len(), 1);
+    let lit = planned_tag(&plan, "prod", "prod");
+    assert!(lit.is_literal);
+    assert!(lit.default_selected());
+    assert_eq!(lit.matched_rules.len(), 1);
 }
 
 #[test]
@@ -1015,18 +1020,8 @@ fn t_105_allow_und_deny_treffer_bleibt_angewaehlt() {
         tag_rule("d2", RuleAction::Deny, "prod"),
     ];
     let plan = tag_default_plan(&rules);
-    // Muster-Schlagwort
     assert!(planned_tag(&plan, "web1.prod.de", "*.prod.de").default_selected());
-    // Buchstäbliches Schlagwort
-    let lit = planned_tag(&plan, "prod", "prod");
-    assert!(lit.is_literal);
-    assert!(lit.default_selected(), "Abwahl nähme die Deny-Abdeckung");
-}
-
-#[test]
-fn t_105_buchstaebliches_schlagwort_nur_allow_bleibt_abgewaehlt() {
-    let plan = tag_default_plan(&[tag_rule("a", RuleAction::Allow, "prod")]);
-    assert!(!planned_tag(&plan, "prod", "prod").default_selected());
+    assert!(planned_tag(&plan, "prod", "prod").default_selected());
 }
 
 #[test]

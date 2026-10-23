@@ -91,7 +91,7 @@ Modellen: Konsistenz ist wichtiger als die Annahme, ein lokales Modell sei
 Anbieterfehler werden auf feste Arten abgebildet und nie still verschluckt:
 Authentifizierung fehlgeschlagen, Rate-Limit, Netzwerkfehler, ungültige
 Antwort, Kontext zu groß, Anbieter nicht erreichbar, Anbieter überlastet,
-Guthaben/Abrechnung erschöpft, Anfrage vom Anbieter abgelehnt. Ein ungültiger
+Guthaben/Abrechnung erschöpft, Nutzungslimit erreicht, Anfrage vom Anbieter abgelehnt. Ein ungültiger
 API-Key erscheint als Authentifizierungsfehler, nicht als leere Antwort.
 
 - **Überlastet:** Anbieter meldet Überlastung oder Wartung (z. B. HTTP 529
@@ -101,6 +101,15 @@ API-Key erscheint als Authentifizierungsfehler, nicht als leere Antwort.
 - **Guthaben/Abrechnung:** Guthaben aufgebraucht oder Kontingent erschöpft
   (z. B. „credit balance is too low", `insufficient_quota`, HTTP 402). Wird nie
   wiederholt; die Meldung verweist auf die Abrechnung beim Anbieter.
+- **Nutzungslimit erreicht:** Ein beim Anbieter eingestelltes Ausgaben- bzw.
+  Nutzungslimit ist erreicht (z. B. Anthropic, HTTP 400 `invalid_request_error`
+  „… workspace API usage limits …", oder jede 400/429-Antwort, deren Text
+  „regain access on …" enthält). Wird nie wiederholt. Nennt der Anbieter, wann
+  der Zugriff zurückkehrt, zeigt die Meldung dieses Datum („Nutzungslimit beim
+  Anbieter erreicht. Zugriff wieder möglich am …"), sonst ohne Datum; beide
+  verweisen darauf, das Limit in der Konsole des Anbieters zu erhöhen oder
+  einen anderen Anbieter zu wählen. Jede andere `invalid_request_error`-Antwort
+  gilt weiter als „Anfrage abgelehnt".
 - **Anfrage abgelehnt:** Der Anbieter lehnt die Anfrage selbst als ungültig ab
   (HTTP 400 `invalid_request_error`, soweit nicht Guthaben oder Kontextgröße).
   Wird nie wiederholt und nicht als „Wartung oder Überlastung" dargestellt.
@@ -124,6 +133,42 @@ ist das eine eigene Fehlerart; sie tritt vor jeder Anfrage auf.
 Bei „Kontext zu groß" kürzt die aufrufende Seite ältere Verlaufseinträge,
 bevor erneut gesendet wird (Spec 0057, Spec 0087).
 
+## 6a. Token-Verbrauch (Usage)
+
+Jeder Anbieter meldet den Verbrauch einer abgeschlossenen Anfrage in einer
+gemeinsamen, typisierten Form (`AiUsage`) und liefert ihn genau einmal als
+eigenes Ereignis unmittelbar vor dem Abschlussereignis (`Done` bzw.
+`TextTruncated`). Eine Anfrage, die ohne Abschlussereignis endet (Fehler,
+Abbruch), meldet keinen Verbrauch. Das Ereignis ändert das Chat-Verhalten
+nicht; es wird nirgends angezeigt oder gespeichert. Es ist unabhängig vom
+frühen Eingabegrößen-Signal für die Kompaktierung.
+
+Felder (alle optional; was der Endpunkt nicht sendet, bleibt leer, nichts
+wird geschätzt): Eingabe-, Ausgabe-, Cache-Lese-, Cache-Schreib- und
+Reasoning-Token, Anzahl Websuchen, Service-Tier, tatsächlich antwortendes
+Modell und vom Endpunkt gemeldete Kosten in USD. Bei Anthropic zählt die
+Eingabe ohne Cache-Anteile; bei OpenAI-artigen APIs enthält sie die
+gecachten Token.
+
+| Feld | Anthropic | Chat Completions (OpenAI, OpenRouter, Ollama, generisch) | Responses |
+|---|---|---|---|
+| Eingabe | `input_tokens` | `prompt_tokens` | `input_tokens` |
+| Ausgabe | `output_tokens` (letztes `message_delta`) | `completion_tokens` | `output_tokens` |
+| Cache gelesen | `cache_read_input_tokens` | `prompt_tokens_details.cached_tokens` | `input_tokens_details.cached_tokens` |
+| Cache geschrieben | Summe von `cache_creation` je TTL, sonst `cache_creation_input_tokens` | `prompt_tokens_details.cache_write_tokens` | – |
+| Reasoning | – | `completion_tokens_details.reasoning_tokens` | `output_tokens_details.reasoning_tokens` |
+| Websuchen | `server_tool_use.web_search_requests` | – | – |
+| Service-Tier | `service_tier` | `service_tier` | `service_tier` |
+| Modell | `model` | `model` | `model` |
+| Kosten | – | `usage.cost` (OpenRouter) | – |
+
+Chat-Completions-Anfragen senden `stream_options.include_usage = true`.
+Antwortet ein Endpunkt darauf mit 400, wird die Anfrage einmal ohne diese
+Option wiederholt (sonst unverändert); der Endpunkt bleibt für den Rest des
+App-Laufs ohne die Option, und es gibt dann keinen Verbrauch, aber keinen
+Fehler. Ein 400 wegen zu großen Kontexts löst diese Wiederholung nicht aus.
+Im Log stehen nur Zahlen, nie Nachrichteninhalt.
+
 ## 7. Akzeptanzfälle
 
 - Tool-Call-Antwort eines nativen Anbieters wird korrekt zu einem
@@ -137,6 +182,8 @@ bevor erneut gesendet wird (Spec 0057, Spec 0087).
 - Redaction maskiert bekannte Secret-Muster in Kommando-Ergebnissen und
   lässt den übrigen Output unverändert.
 - Ein ungültiger API-Key wird als Authentifizierungsfehler durchgereicht.
+- Eine abgeschlossene Anfrage meldet ihren Verbrauch genau einmal; fehlende
+  Angaben bleiben leer.
 
 ## 8. Konfiguration und Grenzen
 

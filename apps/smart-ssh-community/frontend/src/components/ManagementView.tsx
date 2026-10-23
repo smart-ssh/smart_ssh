@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
@@ -13,6 +13,8 @@ import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { GroupForm, type MovedTo } from "./GroupForm";
 import { useManageViews } from "../extensions/FormSlots";
 import { ServerForm } from "./ServerForm";
+import { useIsNarrow } from "../hooks/useIsNarrow";
+import { Button } from "./ui";
 import { Sidebar, type Selection } from "./Sidebar";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
@@ -33,15 +35,22 @@ interface ManagementViewProps {
    * Einmalig aufgerufen, sobald `initialSelection` tatsächlich übernommen
    * wurde. */
   onInitialSelectionConsumed?: () => void;
+  /** Issue #692: "Connect" in a saved server's settings. */
+  onConnect?: (serverId: string) => void;
 }
 
 /** Spec 0008, Abschnitt 6: Sidebar links, Formular im Hauptbereich. */
 export function ManagementView({
   initialSelection = null,
   onInitialSelectionConsumed,
+  onConnect,
 }: ManagementViewProps) {
   const { t } = useTranslation();
   const manageViews = useManageViews();
+  // Issue #585, Spec 0113 §5: below 640 px list and detail are two screens.
+  const narrow = useIsNarrow();
+  const listRef = useRef<HTMLDivElement>(null);
+  const listScroll = useRef(0);
   const [groups, setGroups] = useState<GroupDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
   // Issue #100: Server mit unlesbarer Anmeldeart — nur anzeigen und löschen.
@@ -139,8 +148,39 @@ export function ManagementView({
     reload();
   };
 
+  // Narrow: the list is shown while nothing is selected; "Back" clears the
+  // selection (like switching items, unsaved edits are discarded) and the
+  // list's scroll position is restored.
+  const showList = !narrow || !selection;
+  const showDetail = !narrow || Boolean(selection);
+
+  const findListScroller = () =>
+    listRef.current?.querySelector<HTMLElement>('[data-drop-target="root"]') ?? null;
+  const goBack = () => {
+    const scroller = findListScroller();
+    if (scroller) listScroll.current = scroller.scrollTop;
+    selectManually(null);
+  };
+  // Remember the scroll offset before the list unmounts (selection made).
+  const rememberListScroll = () => {
+    const scroller = findListScroller();
+    if (scroller) listScroll.current = scroller.scrollTop;
+  };
+  useLayoutEffect(() => {
+    if (narrow && !selection) {
+      const scroller = findListScroller();
+      if (scroller) scroller.scrollTop = listScroll.current;
+    }
+  }, [narrow, selection, groups, servers]);
+
   return (
     <div className="flex min-h-0 flex-1">
+      {showList && (
+      <div
+        ref={listRef}
+        className="flex min-h-0 min-w-0 shrink-0 narrow:flex-1"
+        onClickCapture={narrow ? rememberListScroll : undefined}
+      >
       <Sidebar
         groups={groups}
         servers={servers}
@@ -151,6 +191,8 @@ export function ManagementView({
         onExportSshConfig={() => setExportOpen(true)}
         onMove={(item, target) => void handleMove(item, target)}
       />
+      </div>
+      )}
       {importOpen && (
         <SshConfigImportDialog
           onClose={() => setImportOpen(false)}
@@ -161,7 +203,15 @@ export function ManagementView({
         />
       )}
       {exportOpen && <SshConfigExportDialog onClose={() => setExportOpen(false)} />}
-      <div className="flex-1 overflow-y-auto">
+      {showDetail && (
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        {narrow && selection && (
+          <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900 px-2 py-1">
+            <Button variant="ghost" onClick={goBack} className="min-h-11 min-w-11">
+              <span aria-hidden="true">←</span> {t("management.back")}
+            </Button>
+          </div>
+        )}
         {error && <p className="p-4 text-sm text-red-400">{error}</p>}
 
         {/* `key` erzwingt einen vollständigen Remount (statt Wiederverwendung
@@ -208,6 +258,7 @@ export function ManagementView({
             allServers={servers}
             onSaved={reload}
             onDeleted={handleDeleted}
+            onConnect={onConnect}
             autoFocusNotes={focusNotesOnOpen}
           />
         )}
@@ -234,7 +285,7 @@ export function ManagementView({
             const View = manageViews.find((v) => v.id === selection.id)?.component;
             return View ? <View key={selection.id} /> : null;
           })()}
-        {!selection && (
+        {!selection && !narrow && (
           // Spec 0072, Teil 3 (BL-0202): dieser Platzhaltertext stand fest
           // deutsch da und erschien so auch in der englischen Oberfläche —
           // lag außerhalb des Dateisatzes von Spec 0069. Interpoliert die
@@ -248,6 +299,7 @@ export function ManagementView({
           </p>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -12,18 +12,30 @@ use russh_sftp::client::SftpSession as RusshSftpClient;
 use russh_sftp::protocol::{FileAttributes, OpenFlags, StatusCode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use ssh_manager_core::ssh::{RemoteEntry, SftpSession, SshError};
+use ssh_manager_core::ssh::{
+    ChunkControl, ChunkSource, RemoteEntry, SftpSession, SshError, TransferEnd,
+};
 
 use crate::handler::ClientHandler;
 
 pub struct RusshSftpSession {
     inner: RusshSftpClient,
     session: SessionProbe,
+    /// Issue #625: Zugriff auf `posix-rename@openssh.com`, s. `sftp_tap`.
+    tap: Arc<crate::sftp_tap::SftpTap>,
 }
 
 impl RusshSftpSession {
-    pub(crate) fn new(inner: RusshSftpClient, session: SessionProbe) -> Self {
-        Self { inner, session }
+    pub(crate) fn new(
+        inner: RusshSftpClient,
+        session: SessionProbe,
+        tap: Arc<crate::sftp_tap::SftpTap>,
+    ) -> Self {
+        Self {
+            inner,
+            session,
+            tap,
+        }
     }
 
     /// Issue #155: [`map_sftp_error`] mit dem aktuellen Zustand der
@@ -284,6 +296,67 @@ impl SftpSession for RusshSftpSession {
         Ok(())
     }
 
+    async fn read_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
+    ) -> Result<TransferEnd, SshError> {
+        let mut file = self
+            .inner
+            .open(path)
+            .await
+            .map_err(|e| self.map_error(path, e))?;
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        loop {
+            let n = file.read(&mut buf).await.map_err(|e| {
+                let message = format!("SFTP-Lesefehler bei '{path}': {e}");
+                if is_channel_gone_io(&e) && self.session.is_closed() {
+                    SshError::SessionClosed(message)
+                } else {
+                    SshError::ChannelError(message)
+                }
+            })?;
+            if n == 0 {
+                return Ok(TransferEnd::Completed);
+            }
+            if on_chunk(&buf[..n]) == ChunkControl::Stop {
+                return Ok(TransferEnd::Stopped);
+            }
+        }
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        path: &str,
+        chunk_size: usize,
+        next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
+    ) -> Result<TransferEnd, SshError> {
+        // `create()` (CREATE|TRUNCATE|WRITE) wie in `write_file`.
+        let mut file = self
+            .inner
+            .create(path)
+            .await
+            .map_err(|e| self.map_error(path, e))?;
+        let mut buf = vec![0u8; chunk_size.max(1)];
+        let end = loop {
+            match next_chunk(&mut buf) {
+                ChunkSource::Data(n) => file
+                    .write_all(&buf[..n])
+                    .await
+                    .map_err(|e| self.map_write_error(path, e))?,
+                ChunkSource::Eof => break TransferEnd::Completed,
+                ChunkSource::Stop => break TransferEnd::Stopped,
+            }
+        };
+        // Wie in `write_file`: erst `shutdown()` wartet auf die ausstehenden
+        // Bestätigungen.
+        file.shutdown()
+            .await
+            .map_err(|e| self.map_write_error(path, e))?;
+        Ok(end)
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = self
             .inner
@@ -316,6 +389,34 @@ impl SftpSession for RusshSftpSession {
             .rename(from, to)
             .await
             .map_err(|e| self.map_error(from, e))
+    }
+
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        use crate::sftp_tap::TapError;
+        if !self.tap.supports_posix_rename() {
+            return Ok(false);
+        }
+        match self.tap.posix_rename(from, to).await {
+            Ok((0, _)) => Ok(true),
+            Ok((code, message)) => {
+                let text = format!("{from} -> {to}: {message}");
+                // 3 = SSH_FX_PERMISSION_DENIED
+                if code == 3 {
+                    Err(SshError::SftpPermissionDenied(text))
+                } else {
+                    Err(SshError::ChannelError(format!("SFTP-Fehler bei {text}")))
+                }
+            }
+            Err(TapError::Timeout) => Err(SshError::Timeout),
+            Err(TapError::Closed) => {
+                let message = format!("SFTP-Kanal bei '{from}' geschlossen");
+                if self.session.is_closed() {
+                    Err(SshError::SessionClosed(message))
+                } else {
+                    Err(SshError::ChannelError(message))
+                }
+            }
+        }
     }
 
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {

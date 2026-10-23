@@ -10,7 +10,10 @@ export type ProviderType =
   | "generic_openai_compatible"
   | "ollama";
 
-export type AuthMethodKind = "password" | "private_key" | "agent" | "certificate" | "identity_file";
+export type AuthMethodKind =
+  | "password"
+  | "no_password"
+  | "private_key" | "agent" | "certificate" | "identity_file";
 
 /** Spec 0039, Abschnitt 5.1 — steuert NICHT das Fencing selbst (in jeder
  * Stufe aktiv), nur ob/wann zusätzlich auf Bestätigung eskaliert wird,
@@ -206,6 +209,13 @@ export type ConnectionStatus =
   | "reconnecting"
   | "awaiting_host_key";
 
+/** Issue #611: the persisted chat session a runtime session uses now
+ * (`null`: local pseudo-server / no-persist). */
+export interface ChatSessionChangedEvent {
+  sessionId: string;
+  chatSessionId: string | null;
+}
+
 export interface ConnectionStatusChangedEvent {
   sessionId: string;
   status: ConnectionStatus;
@@ -283,7 +293,7 @@ export interface ConnectStepSnapshot {
   hopIndex: number;
   /** `user@host:port` of the hop (Spec 0076 naming). */
   hop: string;
-  status: "running" | "ok" | "failed";
+  status: "running" | "ok" | "skipped" | "failed";
   errorCode: string | null;
   detail: ConnectStepDetail | null;
 }
@@ -346,6 +356,19 @@ export interface ChatActionProposedEvent {
   riskAssessment: RiskAssessment | null;
   /** Spec 0028, Abschnitt 6/9a. */
   origin: ActionOrigin;
+  /** Issue #696: only for `decision: "AutoExec"` — the rules that let the
+   * command run without confirmation (display only). Empty otherwise. */
+  autoExecRules?: AutoExecRule[];
+}
+
+/** Issue #696: one rule behind an automatic run; `segmentIndices` are the
+ * top-level segments of a chain it covered. */
+export interface AutoExecRule {
+  ruleId: string;
+  patternType: PatternType;
+  patternValue: string;
+  scope: Scope;
+  segmentIndices: number[];
 }
 
 /** Spec 0026, Abschnitt 3, Punkt 4. */
@@ -508,6 +531,8 @@ export interface ChatErrorEvent {
    * limit in seconds. */
   providerName?: string | null;
   timeoutSecs?: number | null;
+  /** Issue #631 — when access returns after a provider usage limit. */
+  accessReturns?: string | null;
 }
 
 /** Issue #694 — a request to the AI provider was sent; the chat shows the
@@ -694,6 +719,9 @@ export interface ServerInput {
 
 export type AuthMethodInput =
   | { kind: "password"; value: string | null }
+  /** Issue #632: ausdrücklich "kein Passwort" (entfernt auch ein gespeichertes);
+   * nie mit "leer = unverändert" (`value: null`) zu verwechseln. */
+  | { kind: "noPassword" }
   | { kind: "privateKey"; keyContent: string | null; passphrase: string | null }
   | { kind: "agent" }
   | { kind: "certificate"; certContent: string | null; keyContent: string | null }
@@ -772,6 +800,7 @@ export type ConnectStep =
 export type ConnectStepStatus =
   | { state: "running" }
   | { state: "ok" }
+  | { state: "skipped" }
   | { state: "failed"; code: string };
 
 export interface ConnectStepRecord {
@@ -960,6 +989,8 @@ export interface SessionSummaryDto {
   serverName: string;
   status: ConnectionStatus;
   hasPendingAction: boolean;
+  /** Issue #611. */
+  chatSessionId?: string | null;
   /** Spec 0104: gesetzt, wenn die Sitzung einem MCP-Client gehört. */
   mcp: McpSessionInfo | null;
 }
@@ -1070,6 +1101,27 @@ export interface ElevationResultDto {
   } | null;
   /** Hinweis bei aktivem Kanal: sftp-server ist nicht sicher geschützt. */
   warning?: { kind: "sftpServerUnsafe"; path: string } | null;
+  /** Issue #622: elevated operations still running when the target user is
+   * changed without confirmation (then `active` stays true, nothing changed). */
+  runningOperations?: RunningOperationDto[];
+}
+
+/** Issue #622: one running elevated operation, listed in the confirmation
+ * dialog before elevated rights end. */
+export interface RunningOperationDto {
+  id: string;
+  kind: "download" | "upload" | "delete" | "chmod";
+  path: string;
+  bytesDone: number | null;
+  bytesTotal: number | null;
+  filesDone: number | null;
+  filesTotal: number | null;
+}
+
+/** Issue #622: result of `sftp_elevation_disable`. */
+export interface ElevationDisableDto {
+  disabled: boolean;
+  runningOperations: RunningOperationDto[];
 }
 
 /** Spec 0067, Teil B: `crate::dto::DownloadResultDto`. */
@@ -1153,6 +1205,27 @@ export interface SftpTransferFinishedEvent {
   transferId: string;
   /** `null` bei Erfolg, sonst die Fehlermeldung. */
   error: string | null;
+  /** Issue #622: stopped by the cancel button or by ending elevated rights
+   * (no error). */
+  stopped?: "cancelled" | "stopped" | null;
+  /** Issue #622: a stopped upload whose partial remote file could not be
+   * removed. */
+  incompleteRemotePath?: string | null;
+}
+
+/** Issue #622: throttled progress of a running transfer. */
+export interface SftpTransferProgressEvent {
+  sessionId: string;
+  transferId: string;
+  bytesDone: number;
+  totalBytes: number | null;
+  /** Folder transfers: aggregate over all files. */
+  folder?: {
+    filesDone: number;
+    filesTotal: number;
+    bytesDone: number;
+    bytesTotal: number;
+  };
 }
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
@@ -1531,4 +1604,9 @@ export interface StartDirectoryDto {
 /** Spec 0102: Ergebnis von `open_terminal`. */
 export interface TerminalStartDto {
   missingDirectory: string | null;
+}
+
+/** Issue #628: a pending note confirmation timed out in the backend. */
+export interface NoteUpdateExpiredEvent {
+  actionId: string;
 }

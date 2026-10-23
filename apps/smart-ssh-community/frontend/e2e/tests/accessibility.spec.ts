@@ -90,6 +90,13 @@ const SCREENS: Record<string, (app: AppDriver) => Promise<void>> = {
     await app.page.getByRole("button", { name: "Third-party licenses", exact: true }).click();
     await expect(app.page.getByRole("heading", { name: "Third-party licenses" })).toBeVisible();
   },
+  "settings: add AI provider dialog": async (app) => {
+    await app.launch(populated());
+    await app.page.getByRole("button", { name: "Settings", exact: true }).click();
+    await app.page.getByRole("button", { name: "AI Provider", exact: true }).click();
+    await app.page.getByRole("button", { name: "Add Provider", exact: true }).click();
+    await expect(app.page.getByRole("dialog", { name: "Add Provider" })).toBeVisible();
+  },
   "notes panel": async (app) => {
     await app.launch({ ...populated(), commands: NOTE_COMMANDS });
     await openNotes(app);

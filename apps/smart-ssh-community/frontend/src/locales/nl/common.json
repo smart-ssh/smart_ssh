@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Instellingen",
+    "backToList": "Onderdelen",
     "categories": {
       "aiProvider": "AI-provider",
       "displayLanguage": "Weergave en taal",
@@ -130,10 +131,12 @@
     "rootDropZone": "Hier neerzetten om naar het hoogste niveau te verplaatsen (geen groep)",
     "hintRoot": "→ hoogste niveau (geen groep)",
     "hintGroup": "→ naar deze groep verplaatsen",
-    "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst"
+    "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst",
+    "moveTo": "“{{name}}” verplaatsen naar…"
   },
   "management": {
-    "emptyState": "Selecteer links een groep of server, of maak iets nieuws aan via \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Selecteer links een groep of server, of maak iets nieuws aan via \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Terug"
   },
   "groupForm": {
     "titleNew": "Nieuwe groep",
@@ -149,6 +152,8 @@
     "confirmDelete": "Definitief verwijderen"
   },
   "serverForm": {
+    "connect": "Verbinden",
+    "connectSaveFirst": "Sla eerst je wijzigingen op",
     "hostKeys": {
       "title": "Hostsleutels",
       "none": "Nog geen hostsleutel opgeslagen. Deze wordt bij de eerste verbinding opgeslagen."
@@ -175,6 +180,9 @@
       "identityFile": "Sleutelbestand"
     },
     "password": "Wachtwoord",
+    "passwordOptionalHint": "(optioneel – laat leeg als de server inloggen zonder wachtwoord toestaat)",
+    "removeSavedPassword": "Opgeslagen wachtwoord verwijderen",
+    "noPasswordSaved": "Geen wachtwoord opgeslagen. De app probeert eerst in te loggen zonder wachtwoord en daarna met een leeg wachtwoord.",
     "unchangedHint": "(leeg = ongewijzigd)",
     "privateKeyLabel": "Privésleutel",
     "chooseFile": "Bestand kiezen…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "De startmap moet een absoluut pad (/…) zijn of met ~/ beginnen.",
       "controlCharacter": "De startmap mag geen stuurtekens bevatten."
+    },
+    "tabs": {
+      "label": "Serverinstellingen",
+      "general": "Algemeen",
+      "connection": "Verbinding",
+      "security": "Beveiliging",
+      "invalid": "Bevat fouten"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Uitvoer is bij de groottelimiet afgekapt — mogelijk onvolledig.",
     "liveOutputLabel": "Live-uitvoer",
     "liveOutputTruncatedNotice": "⚠ Groottelimiet bereikt — verdere uitvoer wordt niet meer getoond.",
+    "autoRanLead": "Automatisch uitgevoerd",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "globaal",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "label {{tag}}",
+    "autoRanOpenRule": "Open deze regel in de filterregels",
     "mcpOrigin": "Extern hulpmiddel (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "extern hulpmiddel (MCP)",
     "mcpOriginHint": "Deze actie is niet aangevraagd door de interne chat, maar door een extern hulpmiddel via de lokale MCP-server."
@@ -412,6 +433,11 @@
     "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",
+    "menu": {
+      "open": "Navigatiemenu openen",
+      "title": "Navigatiemenu",
+      "sessions": "Open sessies"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Extern hulpmiddel",
@@ -429,6 +455,8 @@
     "active": "actief",
     "setActive": "Actief maken",
     "addProvider": "Provider toevoegen",
+    "editProvider": "Provider bewerken",
+    "apiKeyUnchangedPlaceholder": "Ongewijzigd – voer een nieuwe sleutel in om te vervangen",
     "type": "Type",
     "providerName": "Naam",
     "model": "Model",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "De AI-provider meldde een fout (bijv. onderhoud of overbelasting). Probeer het later opnieuw; blijft het probleem bestaan, controleer dan de provider-instellingen.",
     "AI_PROVIDER_OVERLOADED": "De AI-provider is op dit moment overbelast. Probeer het zo meteen opnieuw.",
     "AI_PROVIDER_BILLING": "Het account bij de AI-provider heeft geen tegoed meer. Controleer de facturering in de console van de provider.",
+    "AI_PROVIDER_USAGE_LIMIT": "Gebruikslimiet bij de aanbieder bereikt. Verhoog de limiet in de console van de aanbieder of kies een andere aanbieder.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Gebruikslimiet bij de aanbieder bereikt. Toegang is weer mogelijk op {{date}}. Verhoog de limiet in de console van de aanbieder of kies een andere aanbieder.",
     "AI_PROVIDER_REJECTED_REQUEST": "De AI-provider heeft het verzoek geweigerd.",
     "AI_RESPONSE_TRUNCATED": "Het AI-antwoord was te lang voor een volledige opdracht",
     "AI_MODEL_NOT_FOUND": "De AI-provider kent dit model niet. Controleer de modelnaam in Instellingen (\"Modellen laden\" toont de beschikbare); haal bij Ollama het model eerst op met `ollama pull <name>`.",
@@ -695,6 +725,12 @@
     "toggleTitle": "Bestandsbeheer met verhoogde rechten (sudo) openen — vereist een sudo-regel zonder wachtwoord voor sftp-server",
     "enabling": "Sudo controleren …",
     "toggleOff": "Verhoogde rechten beëindigen",
+    "stopTitle": "Verhoogde rechten beëindigen?",
+    "stopBody": "Deze bewerkingen lopen nog. Als je de verhoogde rechten beëindigt, worden ze gestopt.",
+    "opDownload": "Downloaden",
+    "opUpload": "Uploaden",
+    "opDelete": "Verwijderen",
+    "opChmod": "Rechten wijzigen",
     "banner": "Verhoogde rechten actief: alle bestandsacties in dit bestandsbeheer worden uitgevoerd als {{user}}.",
     "deleteFileTitle": "Bestand verwijderen als {{user}}?",
     "deleteDirTitle": "Map verwijderen als {{user}}?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Letterlijk label uit een extern bestand — kan exact bij een toestaan-regel passen. Afzonderlijk te deselecteren.",
-      "allowDeselectedHint": "Komt overeen met een bestaande toestaan-regel en geen weigeren-regel — daarom standaard gedeselecteerd. Afzonderlijk weer te selecteren.",
-      "autoDeselectedBadge": "automatisch gedeselecteerd",
       "matchesRuleHint": "komt overeen met {{count}} bestaande filterregel(s): {{actions}}",
       "action": {
         "allow": "Toestaan",
@@ -902,7 +936,8 @@
     "dismiss": "Voorstel sluiten",
     "reject": "Afwijzen",
     "applying": "Toepassen…",
-    "apply": "Toepassen"
+    "apply": "Toepassen",
+    "expired": "Verlopen — niet toegepast"
   },
   "connectLog": {
     "title": "Details",
@@ -917,12 +952,15 @@
       "handshake": "SSH-handshake",
       "hostKeyCheck": "Hostsleutelcontrole",
       "authentication": "Authenticatie",
-      "sessionReady": "Sessie tot stand gebracht"
+      "sessionReady": "Sessie tot stand gebracht",
+      "dnsSkipped": "IP-adres – geen opzoeking nodig"
     },
     "status": {
       "ok": "OK",
       "running": "bezig",
-      "failed": "mislukt ({{code}})"
+      "failed": "mislukt ({{code}})",
+      "skipped": "overgeslagen",
+      "failedReason": "mislukt: {{reason}}"
     },
     "hostKeyResult": {
       "known": "bekend",
@@ -930,6 +968,7 @@
       "changed": "gewijzigd"
     },
     "authMethod": {
+      "none": "none (geen authenticatie)",
       "password": "Wachtwoord",
       "privateKey": "Privésleutel",
       "agent": "SSH-agent",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "gedeeltelijk geaccepteerd, verdere authenticatie vereist",
       "remainingMethods": "Server biedt ook aan: {{methods}} (niet geprobeerd)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-verbinding is verlopen",
+      "SSH_TIMEOUT": "Time-out",
+      "SSH_CONNECTION_REFUSED": "Verbinding geweigerd",
+      "SSH_HOST_NOT_FOUND": "Host niet gevonden",
+      "SSH_HOST_UNREACHABLE": "Host onbereikbaar",
+      "SSH_AUTH_FAILED": "Authenticatie mislukt"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Downloaden: {{name}}",
     "transferDone": "Klaar: {{name}}",
     "transferElevationEnded": "De verhoogde modus is tijdens de overdracht uitgeschakeld.",
+    "transferCancel": "Overdracht annuleren",
+    "transferCancelled": "{{name}}: geannuleerd",
+    "transferStopped": "{{name}}: gestopt",
+    "transferIncomplete": "Onvolledig bestand achtergelaten op de server: {{path}}",
+    "transferFiles": "{{done}} van {{total}} bestanden",
+    "transferRemaining": "nog {{time}}",
     "loading": "Laden…",
+    "noPermissionToOpen": "Geen toestemming om deze map te openen (x ontbreekt)",
     "emptyDirectory": "(lege map)",
     "dropHint": "Hier neerzetten om te uploaden naar {{path}}",
     "cancel": "Annuleren",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "Doel bestaat al",
-      "body": "bestaat al en zou worden overschreven."
+      "body": "bestaat al en zou worden overschreven.",
+      "folderBody": "bestaat al als map en kan niet worden vervangen."
     },
     "folderUpload": {
       "conflictTitle": "Bestanden in de map overschrijven?",
@@ -1063,6 +1118,12 @@
       "execute": "Uitvoeren",
       "numeric": "Numeriek",
       "recursive": "Recursief",
+      "special": "Speciale bits",
+      "setuid": "setuid-bit",
+      "setgid": "setgid-bit",
+      "sticky": "sticky-bit",
+      "specialHint": "Bij recursief toepassen krijgen alleen mappen speciale bits, nooit bestanden.",
+      "recursiveSummary": "Mappen: {{folders}}, bestanden: {{files}}",
       "recursiveWarning": "— wijzigt de rechten van ALLE bestanden en submappen in deze map. Krachtige actie, niet ongedaan te maken.",
       "owner": "Eigenaar",
       "group": "Groep",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",
+    "composerMore": "Meer invoeracties",
     "newChat": "Nieuwe chat",
     "newChatDisabledHint": "Niet beschikbaar terwijl de AI antwoordt of een bevestiging openstaat.",
     "autoContinuing": "Automatische modus actief — de AI reageert zelf op het laatste resultaat…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "Paneelscheiding",
     "terminalTab": "Terminal",
     "filesTab": "Bestanden",
+    "aiTab": "AI",
+    "paneTabs": "Sessiedelen",
+    "moreActions": "Meer acties",
     "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
     "reconnectingAuto": "Opnieuw verbinden… (poging {{attempt}})",
     "stopReconnect": "Stoppen",

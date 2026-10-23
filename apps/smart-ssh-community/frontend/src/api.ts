@@ -12,6 +12,7 @@ import type {
   DataPathEntryDto,
   DeletePreviewDto,
   DownloadResultDto,
+  ElevationDisableDto,
   ElevationResultDto,
   DeleteServerResult,
   DeleteUnusableServerResult,
@@ -344,9 +345,12 @@ export const deleteUnusableServer = (id: string, confirm: boolean) =>
 export const clearServerSudoPassword = (id: string) =>
   invoke<void>("clear_server_sudo_password", { id });
 
-export const testConnection = (input: ServerInput, existingServerId?: string) =>
+/** Issue #633: `attemptId` as for `connect` (progress events, cancel). A
+ * cancelled test rejects with `SSH_CONNECT_CANCELLED`. */
+export const testConnection = (input: ServerInput, attemptId: string, existingServerId?: string) =>
   invoke<TestConnectionReport>("test_connection", {
     input,
+    attemptId,
     existingServerId: existingServerId ?? null,
   });
 
@@ -601,6 +605,10 @@ export const claimDroppedPaths = (sessionId: string) =>
 
 /** Issue #571: whether the OS clipboard holds local files. Returns no
  * paths; only decides if "Paste" is offered. */
+/** Issue #626: backend clipboard write for text that arrives after an await
+ * (WebKit rejects `navigator.clipboard.writeText` without the user gesture). */
+export const clipboardWriteText = (text: string) =>
+  invoke<void>("clipboard_write_text", { text });
 export const clipboardHasFiles = () => invoke<boolean>("clipboard_has_files");
 
 /** Wording of the native paste confirmation (the backend adds the file list
@@ -634,8 +642,13 @@ export const sftpDeletePreview = (sessionId: string, path: string, elevatedUser:
 /** Umbenennen UND Verschieben (Spec 0054, Teil 3 — SFTP `RENAME` kennt
  * keinen Unterschied). Kollisionsprüfung läuft im Frontend über
  * `sftpExists`, bevor dieser Befehl aufgerufen wird. */
-export const sftpRename = (sessionId: string, from: string, to: string, elevatedUser: string | null = null) =>
-  invoke<void>("sftp_rename", { sessionId, from, to, elevatedUser });
+export const sftpRename = (
+  sessionId: string,
+  from: string,
+  to: string,
+  elevatedUser: string | null = null,
+  overwrite = false,
+) => invoke<void>("sftp_rename", { sessionId, from, to, overwrite, elevatedUser });
 
 export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<void>("sftp_mkdir", { sessionId, path, elevatedUser });
@@ -717,8 +730,8 @@ export const sftpExists = (sessionId: string, path: string, elevatedUser: string
  * `elevatedUser` (alle `sftp*`-Wrapper): `null` = normaler Kanal, sonst der
  * erwartete Ziel-Nutzer des erhöhten Kanals — das Backend lehnt ab, wenn der
  * erhöhte Kanal fehlt oder als anderer Nutzer läuft (Spec 0067, A5). */
-export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, elevatedUser: string | null = null) =>
-  invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, elevatedUser });
+export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, applySpecialBits: boolean, elevatedUser: string | null = null) =>
+  invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, applySpecialBits, elevatedUser });
 
 /** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
  * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist
@@ -773,11 +786,20 @@ export const getAppInfo = () => invoke<AppInfoDto>("get_app_info");
 
 /** Spec 0067, A1–A3: erhöhten Dateibrowser-Kanal einschalten (`sudo -n
  * <sftp-server>`). Ein Fehlschlag kommt als `failure`, nicht als Exception. */
-export const sftpElevationEnable = (sessionId: string, targetUser: string | null) =>
-  invoke<ElevationResultDto>("sftp_elevation_enable", { sessionId, targetUser });
+export const sftpElevationEnable = (
+  sessionId: string,
+  targetUser: string | null,
+  confirmStop = false,
+) => invoke<ElevationResultDto>("sftp_elevation_enable", { sessionId, targetUser, confirmStop });
 
-export const sftpElevationDisable = (sessionId: string) =>
-  invoke<void>("sftp_elevation_disable", { sessionId });
+/** Issue #622: without `confirmStop`, running elevated operations are listed
+ * in `runningOperations` and nothing changes (`disabled: false`). */
+export const sftpElevationDisable = (sessionId: string, confirmStop = false) =>
+  invoke<ElevationDisableDto>("sftp_elevation_disable", { sessionId, confirmStop });
+
+/** Issue #622: per-transfer cancel button. */
+export const sftpCancelTransfer = (sessionId: string, transferId: string) =>
+  invoke<boolean>("sftp_cancel_transfer", { sessionId, transferId });
 
 /** Ziel-Nutzer des aktiven erhöhten Kanals, `null` = aus. */
 export const sftpElevationStatus = (sessionId: string) =>

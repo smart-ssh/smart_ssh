@@ -1,8 +1,11 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ServerFormSections } from "../extensions/FormSlots";
+import { ServerFormSections, ServerFormTabSections, useServerSettingsTabs } from "../extensions/FormSlots";
+import { resolveSectionLabel } from "../resolveSectionLabel";
 import { ConnectStepLog } from "./ConnectStepLog";
+import { TestConnectionDialog } from "./TestConnectionDialog";
 import {
+  cancelConnect,
   clearServerSudoPassword,
   commandErrorCode,
   commandErrorMessage,
@@ -22,7 +25,7 @@ import {
   updateServer,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
-import { onNoteShrinkSucceeded } from "../events";
+import { onConnectProgress, onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import { loadRiskClassifierSettings } from "../riskSettings";
@@ -38,6 +41,7 @@ import type {
   ServerDto,
   ServerInput,
   StoredHostKeyDto,
+  ConnectStepSnapshot,
   TestConnectionReport,
   TestConnectionResult,
 } from "../types";
@@ -45,7 +49,7 @@ import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button } from "./ui";
+import { Button, TabPanel, Tabs, tabId, useTabsIdBase, type TabItem } from "./ui";
 import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
 
 interface ServerFormProps {
@@ -56,6 +60,8 @@ interface ServerFormProps {
   allServers: ServerDto[];
   onSaved: () => void;
   onDeleted: () => void;
+  /** Issue #692: shows "Connect" next to Save for a saved server. */
+  onConnect?: (serverId: string) => void;
   /** Spec 0058, Teil 2 — s. `NotesPanel.autoFocus`-Doc-Kommentar. Gilt für
    * BEIDE Notiz-Editoren dieses Formulars (den lokalen Pseudo-Server-Zweig
    * unten und den regulären `NotesPanel`-Zweig) — "Mache ich selbst" kann
@@ -74,6 +80,7 @@ function authKindLabels(
 ): Record<AuthMethodKind | "privateKey" | "identityFile", string> {
   return {
     password: t("serverForm.authKind.password"),
+    no_password: t("serverForm.authKind.password"),
     private_key: t("serverForm.authKind.privateKey"),
     privateKey: t("serverForm.authKind.privateKey"),
     agent: t("serverForm.authKind.agent"),
@@ -88,7 +95,9 @@ function authKindLabels(
  * Bedeutung "leer = unverändert" (Update) erst beim Absenden entsteht
  * (s. `toAuthMethodInput`). */
 type AuthFormState =
-  | { kind: "password"; value: string }
+  // `saved`: der Server hat ein gespeichertes Passwort (Issue #632) — nur
+  // dann bedeutet ein leeres Feld "unverändert" und gibt es "entfernen".
+  | { kind: "password"; value: string; saved: boolean; remove: boolean }
   | { kind: "privateKey"; keyContent: string; passphrase: string }
   | { kind: "agent" }
   | { kind: "certificate"; certContent: string; keyContent: string }
@@ -97,7 +106,7 @@ type AuthFormState =
 function authStateFromKind(kind: AuthFormState["kind"]): AuthFormState {
   switch (kind) {
     case "password":
-      return { kind: "password", value: "" };
+      return { kind: "password", value: "", saved: false, remove: false };
     case "privateKey":
       return { kind: "privateKey", keyContent: "", passphrase: "" };
     case "agent":
@@ -129,6 +138,12 @@ function toAuthMethodInput(state: AuthFormState, isCreate: boolean): AuthMethodI
   const orNullIfUpdate = (value: string) => (value === "" && !isCreate ? null : value);
   switch (state.kind) {
     case "password":
+      // Issue #632: Das Passwort ist optional. "Entfernen" und ein leeres
+      // Feld ohne gespeichertes Passwort sind ausdrücklich "kein Passwort";
+      // "unveränderte" (`null`) gibt es nur bei einem gespeicherten.
+      if (state.remove || (state.value === "" && (isCreate || !state.saved))) {
+        return { kind: "noPassword" };
+      }
       return { kind: "password", value: orNullIfUpdate(state.value) };
     case "privateKey":
       return {
@@ -248,10 +263,11 @@ export function ServerForm({
   allServers,
   onSaved,
   onDeleted,
+  onConnect,
   autoFocusNotes = false,
   movedTo = null,
 }: ServerFormProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const AUTH_KIND_LABELS = authKindLabels(t);
   const isCreate = serverId === null;
 
@@ -322,7 +338,7 @@ export function ServerForm({
   const [jumpHost, setJumpHost] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
-  const [auth, setAuth] = useState<AuthFormState>({ kind: "password", value: "" });
+  const [auth, setAuth] = useState<AuthFormState>(authStateFromKind("password"));
   // Spec 0076, B-3: der Vorab-Befund über die im Formular gerade
   // eingetragene Schlüsseldatei — `null`, solange kein Pfad gesetzt ist
   // oder noch keine Antwort da ist. Ein Fehlbefund hindert das Speichern
@@ -373,6 +389,88 @@ export function ServerForm({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Issue #606: the form is split into tabs. All panels stay mounted (hidden),
+  // so one draft, the refs and the connection-test log survive tab switches.
+  type ServerTab = "general" | "connection" | "security" | "notes";
+  const tabsIdBase = useTabsIdBase();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [requestedTab, setActiveTab] = useState<string>(autoFocusNotes && !isCreate ? "notes" : "general");
+  // Issue #608: extension tabs (saved servers only, local pseudo-server included).
+  const extensionTabs = useServerSettingsTabs();
+  const [openedExtTabs, setOpenedExtTabs] = useState<ReadonlySet<string>>(new Set());
+  const [invalidTabs, setInvalidTabs] = useState<ReadonlySet<ServerTab>>(new Set());
+  const [reportValidityPending, setReportValidityPending] = useState(false);
+  // Selecting another server opens General again (derived state, no effect).
+  const [tabsServerId, setTabsServerId] = useState(serverId);
+  if (tabsServerId !== serverId) {
+    setTabsServerId(serverId);
+    setActiveTab("general");
+    setInvalidTabs(new Set());
+    setOpenedExtTabs(new Set());
+  }
+  const availableTabs: ServerTab[] = isLocal
+    ? ["general", "notes"]
+    : isCreate
+      ? ["general", "connection", "security"]
+      : ["general", "connection", "security", "notes"];
+  const shownExtTabs = !isCreate && loaded ? extensionTabs : [];
+  const tabItems: TabItem[] = [
+    ...availableTabs.map((id) => ({
+      id: id as string,
+      label: id === "notes" ? t("common.notes") : t(`serverForm.tabs.${id}`),
+      invalid: invalidTabs.has(id),
+      invalidLabel: t("serverForm.tabs.invalid"),
+    })),
+    ...shownExtTabs.map((x) => ({
+      id: `ext:${x.id}`,
+      label: resolveSectionLabel(x.label, x.id, i18n, t),
+    })),
+  ];
+  // An unregistered active extension tab falls back to General.
+  const activeTab = tabItems.some((item) => item.id === requestedTab) ? requestedTab : "general";
+  if (activeTab.startsWith("ext:") && !openedExtTabs.has(activeTab)) {
+    setOpenedExtTabs(new Set(openedExtTabs).add(activeTab));
+  }
+  // Lazily mounted when first opened, mounted while the server stays selected.
+  const renderExtensionPanels = (extServerId: string) =>
+    shownExtTabs
+    .filter((x) => openedExtTabs.has(`ext:${x.id}`))
+    .map((x) => (
+      <TabPanel
+        key={x.id}
+        idBase={tabsIdBase}
+        id={`ext:${x.id}`}
+        active={activeTab === `ext:${x.id}`}
+        className="space-y-6"
+      >
+        <x.component serverId={extServerId} />
+      </TabPanel>
+    ));
+  // Tabs whose fields fail the browser validation (the form is `noValidate`,
+  // so that an invalid field in a hidden panel cannot silently block saving).
+  const collectInvalidTabs = (): Set<ServerTab> => {
+    const found = new Set<ServerTab>();
+    const panels = formRef.current?.querySelectorAll<HTMLElement>('[role="tabpanel"]') ?? [];
+    for (const panel of panels) {
+      const tab = (["general", "connection", "security"] as const).find((id) =>
+        panel.id.endsWith(`-panel-${id}`),
+      );
+      if (!tab) continue;
+      for (const el of panel.querySelectorAll<HTMLInputElement>("input, select, textarea")) {
+        if (!el.checkValidity()) {
+          found.add(tab);
+          break;
+        }
+      }
+    }
+    return found;
+  };
+  useEffect(() => {
+    if (!reportValidityPending) return;
+    setReportValidityPending(false);
+    formRef.current?.reportValidity();
+  }, [reportValidityPending, activeTab]);
   const [deleting, setDeleting] = useState(false);
   const [deletePreview, setDeletePreview] = useState<DeleteServerResult | null>(null);
   // Spec 0071, A17: Der Server ist gelöscht, aber mindestens ein Secret
@@ -383,6 +481,11 @@ export function ServerForm({
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionReport | null>(null);
+  // Issue #633: the dialog with the live step list; `null` = closed.
+  const [testDialog, setTestDialog] = useState<{ steps: ConnectStepSnapshot[] } | null>(null);
+  // Attempt id of the test the dialog currently shows; a result or error of
+  // any other (cancelled) attempt is ignored.
+  const testAttemptRef = useRef<string | null>(null);
   const [pendingHostKey, setPendingHostKey] = useState<HostKeyInfo | null>(null);
 
   const [preview, setPreview] = useState<string | null>(null);
@@ -420,7 +523,7 @@ export function ServerForm({
       setGroupId(defaultGroupId);
       setJumpHost(null);
       setTags([]);
-      setAuth({ kind: "password", value: "" });
+      setAuth(authStateFromKind("password"));
       setSudoPassword("");
       setHasSudoPassword(false);
       setPostIngestPolicy("balanced");
@@ -449,7 +552,14 @@ export function ServerForm({
         setAuth(
           server.authKind === "identity_file"
             ? { kind: "identityFile", path: server.identityFilePath ?? "", passphrase: "" }
-            : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
+            : server.authKind === "password" || server.authKind === "no_password"
+              ? {
+                  kind: "password",
+                  value: "",
+                  saved: server.authKind === "password",
+                  remove: false,
+                }
+              : authStateFromKind(server.authKind === "private_key" ? "privateKey" : server.authKind),
         );
         setSudoPassword("");
         setHasSudoPassword(server.hasSudoPassword);
@@ -592,8 +702,14 @@ export function ServerForm({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isLocal && startDirectoryError) {
-      setError(startDirectoryError);
+    const invalid = collectInvalidTabs();
+    if (!isLocal && startDirectoryError) invalid.add("connection");
+    setInvalidTabs(invalid);
+    if (invalid.size > 0) {
+      const first = availableTabs.find((id) => invalid.has(id));
+      if (first) setActiveTab(first);
+      if (!isLocal && startDirectoryError) setError(startDirectoryError);
+      setReportValidityPending(true);
       return;
     }
     setSaving(true);
@@ -605,6 +721,7 @@ export function ServerForm({
         await updateServer(serverId, buildInput());
       }
       setDirty(false);
+      setInvalidTabs(new Set());
       onSaved();
     } catch (err) {
       setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
@@ -697,13 +814,26 @@ export function ServerForm({
   };
 
   const runTest = async () => {
+    const attemptId = crypto.randomUUID();
+    testAttemptRef.current = attemptId;
     setTesting(true);
     setError(null);
     setTestResult(null);
+    setTestDialog({ steps: [] });
+    let unlisten: (() => void) | undefined;
     try {
-      const result = await testConnection(buildInput(), serverId ?? undefined);
+      // Subscribe before the command starts so no early step is missed.
+      unlisten = await onConnectProgress((event) => {
+        if (event.attemptId === attemptId) setTestDialog({ steps: event.steps });
+      });
+      const result = await testConnection(buildInput(), attemptId, serverId ?? undefined);
+      if (testAttemptRef.current !== attemptId) return;
       setTestResult(result);
       if (result.kind === "hostKeyUnknown" || result.kind === "hostKeyMismatch") {
+        // The host key prompt takes over from the progress dialog; the badge
+        // in the form keeps the result.
+        testAttemptRef.current = null;
+        setTestDialog(null);
         setPendingHostKey({
           host: result.host,
           port: result.port,
@@ -714,10 +844,30 @@ export function ServerForm({
         });
       }
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      if (testAttemptRef.current !== attemptId) return;
+      testAttemptRef.current = null;
+      setTestDialog(null);
+      if (commandErrorCode(err) !== "SSH_CONNECT_CANCELLED") {
+        setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      }
     } finally {
-      setTesting(false);
+      unlisten?.();
+      if (testAttemptRef.current === attemptId || testAttemptRef.current === null) setTesting(false);
     }
+  };
+
+  // Cancel (button or Escape) while the test runs: end it without an error.
+  const cancelTest = () => {
+    const attemptId = testAttemptRef.current;
+    testAttemptRef.current = null;
+    setTestDialog(null);
+    setTesting(false);
+    if (attemptId) void cancelConnect(attemptId).catch(() => undefined);
+  };
+
+  const closeTestDialog = () => {
+    testAttemptRef.current = null;
+    setTestDialog(null);
   };
 
   const handleTrustAndRetest = async () => {
@@ -798,6 +948,15 @@ export function ServerForm({
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
+        <Tabs
+          tabs={tabItems}
+          value={activeTab}
+          onChange={(id) => setActiveTab(id as ServerTab)}
+          ariaLabel={t("serverForm.tabs.label")}
+          idBase={tabsIdBase}
+        />
+
+        <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-6">
         <div className="block text-sm text-slate-300">
           {t("serverForm.tags")}
           <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
@@ -845,6 +1004,10 @@ export function ServerForm({
           </Button>
         </div>
 
+        <ServerFormSections serverId={loaded.id} dirty={dirty} tab="general" />
+        </TabPanel>
+
+        <TabPanel idBase={tabsIdBase} id="notes" active={activeTab === "notes"} className="space-y-6">
         <div className="block text-sm text-slate-300">
           {t("common.notes")}
           {isLocalNoteLarge && (
@@ -876,7 +1039,9 @@ export function ServerForm({
             {savingLocalNotes ? t("common.saving") : t("common.save")}
           </Button>
         </div>
-        <ServerFormSections serverId={loaded.id} dirty={dirty} />
+        <ServerFormSections serverId={loaded.id} dirty={dirty} tab="notes" />
+        </TabPanel>
+        {renderExtensionPanels(loaded.id)}
       </div>
     );
   }
@@ -887,8 +1052,25 @@ export function ServerForm({
         {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
       </h2>
 
-      <form onSubmit={handleSubmit} onChange={() => setDirty(true)} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+      <Tabs
+        tabs={tabItems}
+        value={activeTab}
+        onChange={(id) => setActiveTab(id as ServerTab)}
+        ariaLabel={t("serverForm.tabs.label")}
+        idBase={tabsIdBase}
+      />
+
+      <form
+        ref={formRef}
+        noValidate
+        onSubmit={handleSubmit}
+        onChange={() => {
+          setDirty(true);
+          if (invalidTabs.size > 0) setInvalidTabs(collectInvalidTabs());
+        }}
+        className="space-y-3"
+      >
+        <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-3">
           <Field label={t("common.name")}>
             {(control) => (
               <input
@@ -902,47 +1084,6 @@ export function ServerForm({
               />
             )}
           </Field>
-          <Field label={t("serverForm.host")}>
-            {(control) => (
-              <input
-                {...control}
-                {...TECHNICAL_INPUT_PROPS}
-                type="text"
-                required
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                className={`${FIELD_CONTROL_CLASS} w-full`}
-              />
-            )}
-          </Field>
-          <Field label={t("serverForm.port")}>
-            {(control) => (
-              <input
-                {...control}
-                type="number"
-                required
-                min={1}
-                max={65535}
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                className={`${FIELD_CONTROL_CLASS} w-full`}
-              />
-            )}
-          </Field>
-          <Field label={t("serverForm.username")}>
-            {(control) => (
-              <input
-                {...control}
-                {...TECHNICAL_INPUT_PROPS}
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className={`${FIELD_CONTROL_CLASS} w-full`}
-              />
-            )}
-          </Field>
-        </div>
 
         <Field label={t("serverForm.group")}>
           {(control) => (
@@ -958,24 +1099,6 @@ export function ServerForm({
               {flattenGroupOptions(allGroups).map((option) => (
                 <option key={option.group.id} value={option.group.id}>
                   {groupOptionLabel(option)}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-
-        <Field label={t("serverForm.jumpHost")}>
-          {(control) => (
-            <select
-              {...control}
-              value={jumpHost ?? ""}
-              onChange={(e) => setJumpHost(e.target.value || null)}
-              className={`${FIELD_CONTROL_CLASS} w-full`}
-            >
-              <option value="">{t("serverForm.noJumpHost")}</option>
-              {possibleJumpHosts.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
                 </option>
               ))}
             </select>
@@ -1018,6 +1141,69 @@ export function ServerForm({
             />
           </div>
         </div>
+        </TabPanel>
+
+        <TabPanel idBase={tabsIdBase} id="connection" active={activeTab === "connection"} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
+          <Field label={t("serverForm.host")}>
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="text"
+                required
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+          <Field label={t("serverForm.port")}>
+            {(control) => (
+              <input
+                {...control}
+                type="number"
+                required
+                min={1}
+                max={65535}
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+          <Field label={t("serverForm.username")}>
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={`${FIELD_CONTROL_CLASS} w-full`}
+              />
+            )}
+          </Field>
+        </div>
+
+        <Field label={t("serverForm.jumpHost")}>
+          {(control) => (
+            <select
+              {...control}
+              value={jumpHost ?? ""}
+              onChange={(e) => setJumpHost(e.target.value || null)}
+              className={`${FIELD_CONTROL_CLASS} w-full`}
+            >
+              <option value="">{t("serverForm.noJumpHost")}</option>
+              {possibleJumpHosts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
 
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">{t("serverForm.authFieldset")}</legend>
@@ -1035,32 +1221,51 @@ export function ServerForm({
           </select>
 
           {auth.kind === "password" && (
-            <Field
-              label={
-                <>
-                  {t("serverForm.password")}{" "}
-                  {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
-                </>
-              }
-            >
-              {(control) => (
-                <input
-                  {...control}
-                  {...TECHNICAL_INPUT_PROPS}
-                  type="password"
-                  required={isCreate}
-                  value={auth.value}
-                  onChange={(e) => setAuth({ kind: "password", value: e.target.value })}
-                  className={`${FIELD_CONTROL_CLASS} w-full`}
-                />
+            <div className="space-y-2">
+              <Field
+                label={
+                  <>
+                    {t("serverForm.password")}{" "}
+                    <span className="text-slate-400">
+                      {!isCreate && auth.saved
+                        ? t("serverForm.unchangedHint")
+                        : t("serverForm.passwordOptionalHint")}
+                    </span>
+                  </>
+                }
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    {...TECHNICAL_INPUT_PROPS}
+                    type="password"
+                    disabled={auth.remove}
+                    value={auth.value}
+                    onChange={(e) => setAuth({ ...auth, value: e.target.value })}
+                    className={`${FIELD_CONTROL_CLASS} w-full`}
+                  />
+                )}
+              </Field>
+              {!isCreate && auth.saved && (
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={auth.remove}
+                    onChange={(e) => setAuth({ ...auth, remove: e.target.checked, value: "" })}
+                  />
+                  {t("serverForm.removeSavedPassword")}
+                </label>
               )}
-            </Field>
+              {!isCreate && !auth.saved && loaded?.authKind === "no_password" && (
+                <p className="text-xs text-slate-400">{t("serverForm.noPasswordSaved")}</p>
+              )}
+            </div>
           )}
 
           {auth.kind === "privateKey" && (
             <div className="space-y-2">
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.privateKeyLabel")}{" "}
                     {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
@@ -1112,7 +1317,7 @@ export function ServerForm({
           {auth.kind === "certificate" && (
             <div className="space-y-2">
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.certificateLabel")}{" "}
                     {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
@@ -1138,7 +1343,7 @@ export function ServerForm({
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">
                     {t("serverForm.associatedKey")}{" "}
                     {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
@@ -1167,7 +1372,7 @@ export function ServerForm({
           {auth.kind === "identityFile" && (
             <div className="space-y-2">
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-slate-300">{t("serverForm.identityFilePathLabel")}</span>
                   <Button size="sm"
                     onClick={async () => {
@@ -1315,6 +1520,64 @@ export function ServerForm({
           )}
         </fieldset>
 
+        {!isLocal && (
+          <Field
+            label={t("serverForm.startDirectoryLabel")}
+            help={startDirectoryError ? undefined : t("serverForm.startDirectoryHint")}
+            error={startDirectoryError ?? undefined}
+          >
+            {(control) => (
+              <input
+                {...control}
+                {...TECHNICAL_INPUT_PROPS}
+                value={startDirectory}
+                onChange={(e) => setStartDirectory(e.target.value)}
+                placeholder={t("serverForm.startDirectoryPlaceholder")}
+                className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
+              />
+            )}
+          </Field>
+        )}
+
+        {!isLocal && (
+          <details className="rounded border border-slate-700 p-3">
+            <summary className="cursor-pointer text-sm text-slate-300">
+              {t("serverForm.advanced")}
+            </summary>
+            <Field
+              label={t("serverForm.sftpServerPathLabel")}
+              help={t("serverForm.sftpServerPathHint")}
+              className="mt-3"
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  {...TECHNICAL_INPUT_PROPS}
+                  value={sftpServerPath}
+                  onChange={(e) => setSftpServerPath(e.target.value)}
+                  placeholder={t("serverForm.sftpServerPathPlaceholder")}
+                  className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
+                />
+              )}
+            </Field>
+          </details>
+        )}
+
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={runTest} disabled={testing}>
+            {testing ? t("common.testing") : t("serverForm.testConnection")}
+          </Button>
+          {testResult && <TestResultBadge result={testResult} />}
+        </div>
+        {/* Issue #51: Schritt-Protokoll des letzten Tests, zugeklappt —
+         * bei Erfolg wie bei Fehlschlag. */}
+        {testResult?.steps && testResult.steps.length > 0 && (
+          <ConnectStepLog steps={testResult.steps} />
+        )}
+        </TabPanel>
+
+        <TabPanel idBase={tabsIdBase} id="security" active={activeTab === "security"} className="space-y-3">
         <fieldset className="rounded border border-slate-700 p-3">
           <legend className="px-1 text-sm text-slate-300">
             {t("serverForm.postIngestFieldset")}
@@ -1364,49 +1627,6 @@ export function ServerForm({
           </p>
         </fieldset>
 
-        {!isLocal && (
-          <Field
-            label={t("serverForm.startDirectoryLabel")}
-            help={startDirectoryError ? undefined : t("serverForm.startDirectoryHint")}
-            error={startDirectoryError ?? undefined}
-          >
-            {(control) => (
-              <input
-                {...control}
-                {...TECHNICAL_INPUT_PROPS}
-                value={startDirectory}
-                onChange={(e) => setStartDirectory(e.target.value)}
-                placeholder={t("serverForm.startDirectoryPlaceholder")}
-                className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
-              />
-            )}
-          </Field>
-        )}
-
-        {!isLocal && (
-          <details className="rounded border border-slate-700 p-3">
-            <summary className="cursor-pointer text-sm text-slate-300">
-              {t("serverForm.advanced")}
-            </summary>
-            <Field
-              label={t("serverForm.sftpServerPathLabel")}
-              help={t("serverForm.sftpServerPathHint")}
-              className="mt-3"
-            >
-              {(control) => (
-                <input
-                  {...control}
-                  {...TECHNICAL_INPUT_PROPS}
-                  value={sftpServerPath}
-                  onChange={(e) => setSftpServerPath(e.target.value)}
-                  placeholder={t("serverForm.sftpServerPathPlaceholder")}
-                  className={`${FIELD_CONTROL_CLASS} w-full font-mono`}
-                />
-              )}
-            </Field>
-          </details>
-        )}
-
         {!isCreate && !isLocal && storedHostKeys !== null && (
           <section aria-labelledby="stored-host-keys-heading" className="space-y-1">
             <h3 id="stored-host-keys-heading" className="text-sm font-medium text-slate-300">
@@ -1426,54 +1646,55 @@ export function ServerForm({
             )}
           </section>
         )}
+        </TabPanel>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary"
-            type="submit"
-            disabled={saving}
-          >
-            {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
-          </Button>
-          <Button
-            onClick={runTest}
-            disabled={testing}
-          >
-            {testing ? t("common.testing") : t("serverForm.testConnection")}
-          </Button>
-          {testResult && <TestResultBadge result={testResult} />}
-        </div>
-        {/* Issue #51: Schritt-Protokoll des letzten Tests, zugeklappt —
-         * bei Erfolg wie bei Fehlschlag. */}
-        {testResult?.steps && testResult.steps.length > 0 && (
-          <ConnectStepLog steps={testResult.steps} />
+        {activeTab !== "notes" && (
+          <div className="narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-t narrow:border-slate-800 narrow:bg-slate-900 narrow:px-4 narrow:py-2">
+            <div className="flex flex-wrap items-center gap-2 narrow:flex-col narrow:items-stretch">
+              <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:w-full">
+                {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
+              </Button>
+              {!isCreate && serverId && loaded && onConnect && (
+                <Button
+                  type="button"
+                  disabled={dirty || saving}
+                  title={dirty ? t("serverForm.connectSaveFirst") : undefined}
+                  onClick={() => onConnect(serverId)}
+                  className="narrow:min-h-11 narrow:w-full"
+                >
+                  {t("serverForm.connect")}
+                </Button>
+              )}
+              {!isCreate && dirty && onConnect && (
+                <span className="text-xs text-slate-400" data-testid="connect-save-first-hint">
+                  {t("serverForm.connectSaveFirst")}
+                </span>
+              )}
+            </div>
+          </div>
         )}
       </form>
 
       {!isCreate && serverId && loaded && (
         <>
-            <ServerFormSections serverId={serverId} dirty={dirty} />
-            <NotesPanel
-              target={{ Server: serverId }}
-              currentNotes={loaded.notes}
-              onNotesChanged={onSaved}
-              autoFocus={autoFocusNotes}
-            />
-
-            <div>
-              <Button size="sm"
-                onClick={handlePreview}
-                disabled={previewLoading}
-              >
-                {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
-              </Button>
-              {preview !== null && (
-                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
-                  {preview || t("serverForm.noContext")}
-                </pre>
-              )}
-            </div>
+          <ServerFormTabSections
+            serverId={serverId}
+            dirty={dirty}
+            tab="connection"
+            hidden={activeTab !== "connection"}
+            labelledBy={tabId(tabsIdBase, "connection")}
+          />
+          <ServerFormTabSections
+            serverId={serverId}
+            dirty={dirty}
+            tab="security"
+            hidden={activeTab !== "security"}
+            labelledBy={tabId(tabsIdBase, "security")}
+          />
+          <div hidden={activeTab !== "general"} className="space-y-6">
+            <ServerFormSections serverId={serverId} dirty={dirty} tab="general" />
 
             <div className="border-t border-slate-700 pt-4">
               <Button variant="danger" size="sm"
@@ -1516,7 +1737,8 @@ export function ServerForm({
               {deletePreview && (
                 <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
                   <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
-                  {deletePreview.server.authKind === "agent" &&
+                  {(deletePreview.server.authKind === "agent" ||
+                    deletePreview.server.authKind === "no_password") &&
                   !deletePreview.server.hasSudoPassword &&
                   !deletePreview.server.sudoPasswordUnknown &&
                   deletePreview.serversLosingJumpHost.length === 0 ? (
@@ -1533,6 +1755,7 @@ export function ServerForm({
                        * `sudoPasswordUnknown`) bleibt deshalb der einzige
                        * Hinweis für diese Anmeldeart. */}
                       {deletePreview.server.authKind !== "agent" &&
+                        deletePreview.server.authKind !== "no_password" &&
                         deletePreview.server.authKind !== "identity_file" && (
                           <li>
                             {t("serverForm.secretWillBeDeleted", {
@@ -1586,10 +1809,44 @@ export function ServerForm({
                 </div>
               )}
             </div>
+          </div>
+          <TabPanel idBase={tabsIdBase} id="notes" active={activeTab === "notes"} className="space-y-6">
+            <NotesPanel
+              target={{ Server: serverId }}
+              currentNotes={loaded.notes}
+              onNotesChanged={onSaved}
+              autoFocus={autoFocusNotes}
+            />
+
+            <div>
+              <Button size="sm"
+                onClick={handlePreview}
+                disabled={previewLoading}
+              >
+                {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
+              </Button>
+              {preview !== null && (
+                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
+                  {preview || t("serverForm.noContext")}
+                </pre>
+              )}
+            </div>
+          <ServerFormSections serverId={serverId} dirty={dirty} tab="notes" />
+          </TabPanel>
+          {renderExtensionPanels(serverId)}
         </>
       )}
 
-      {pendingHostKey && (
+      {testDialog && (
+        <TestConnectionDialog
+          steps={testDialog.steps}
+          result={testing ? null : testResult}
+          onCancel={cancelTest}
+          onClose={closeTestDialog}
+        />
+      )}
+
+      {pendingHostKey && !testDialog && (
         <HostKeyDialog
           event={pendingHostKey}
           onDecision={(decision) => {

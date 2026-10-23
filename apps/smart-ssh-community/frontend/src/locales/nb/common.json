@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Innstillinger",
+    "backToList": "Seksjoner",
     "categories": {
       "aiProvider": "AI-leverandør",
       "displayLanguage": "Visning og språk",
@@ -130,10 +131,12 @@
     "rootDropZone": "Slipp her for å flytte til øverste nivå (ingen gruppe)",
     "hintRoot": "→ øverste nivå (ingen gruppe)",
     "hintGroup": "→ flytt inn i denne gruppen",
-    "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe"
+    "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe",
+    "moveTo": "Flytt «{{name}}» til…"
   },
   "management": {
-    "emptyState": "Velg en gruppe eller server til venstre, eller opprett noe nytt via “{{addGroup}}”/“{{addServer}}”."
+    "emptyState": "Velg en gruppe eller server til venstre, eller opprett noe nytt via “{{addGroup}}”/“{{addServer}}”.",
+    "back": "Tilbake"
   },
   "groupForm": {
     "titleNew": "Ny gruppe",
@@ -149,6 +152,8 @@
     "confirmDelete": "Slett permanent"
   },
   "serverForm": {
+    "connect": "Koble til",
+    "connectSaveFirst": "Lagre endringene først",
     "hostKeys": {
       "title": "Vertsnøkler",
       "none": "Ingen vertsnøkkel er lagret ennå. Den lagres ved første tilkobling."
@@ -175,6 +180,9 @@
       "identityFile": "Nøkkelfil"
     },
     "password": "Passord",
+    "passwordOptionalHint": "(valgfritt – la stå tomt hvis serveren tillater innlogging uten passord)",
+    "removeSavedPassword": "Fjern lagret passord",
+    "noPasswordSaved": "Ingen passord lagret. Appen prøver først innlogging uten passord og deretter med tomt passord.",
     "unchangedHint": "(tomt = uendret)",
     "privateKeyLabel": "Privat nøkkel",
     "chooseFile": "Velg fil…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Startkatalogen må være en absolutt sti (/…) eller starte med ~/.",
       "controlCharacter": "Startkatalogen må ikke inneholde kontrolltegn."
+    },
+    "tabs": {
+      "label": "Serverinnstillinger",
+      "general": "Generelt",
+      "connection": "Tilkobling",
+      "security": "Sikkerhet",
+      "invalid": "Inneholder feil"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Utdata ble kuttet ved størrelsesgrensen – de kan være ufullstendige.",
     "liveOutputLabel": "Direkteutdata",
     "liveOutputTruncatedNotice": "⚠ Størrelsesgrensen er nådd – flere utdata vises ikke lenger.",
+    "autoRanLead": "Kjørt automatisk",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tagg {{tag}}",
+    "autoRanOpenRule": "Åpne denne regelen i filterreglene",
     "mcpOrigin": "Eksternt verktøy (MCP): “{{name}}”",
     "mcpOriginGeneric": "eksternt verktøy (MCP)",
     "mcpOriginHint": "Denne handlingen ble ikke forespurt av den interne chatten, men av et eksternt verktøy via den lokale MCP-serveren."
@@ -412,6 +433,11 @@
     "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
+    "menu": {
+      "open": "Åpne navigasjonsmenyen",
+      "title": "Navigasjonsmeny",
+      "sessions": "Åpne økter"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Eksternt verktøy",
@@ -429,6 +455,8 @@
     "active": "aktiv",
     "setActive": "Gjør aktiv",
     "addProvider": "Legg til leverandør",
+    "editProvider": "Rediger leverandør",
+    "apiKeyUnchangedPlaceholder": "Uendret – skriv inn en ny nøkkel for å erstatte den",
     "type": "Type",
     "providerName": "Navn",
     "model": "Modell",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI-leverandøren meldte en feil (f.eks. vedlikehold eller overbelastning). Prøv igjen senere; vedvarer det, sjekk leverandørinnstillingene.",
     "AI_PROVIDER_OVERLOADED": "KI-leverandøren er overbelastet akkurat nå. Prøv igjen om et øyeblikk.",
     "AI_PROVIDER_BILLING": "KI-leverandørens konto har ikke mer kreditt. Sjekk faktureringen i leverandørens konsoll.",
+    "AI_PROVIDER_USAGE_LIMIT": "Bruksgrensen hos leverandøren er nådd. Øk grensen i leverandørens konsoll, eller velg en annen leverandør.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Bruksgrensen hos leverandøren er nådd. Tilgangen kommer tilbake {{date}}. Øk grensen i leverandørens konsoll, eller velg en annen leverandør.",
     "AI_PROVIDER_REJECTED_REQUEST": "KI-leverandøren avviste forespørselen.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var for langt for en komplett kommando",
     "AI_MODEL_NOT_FOUND": "AI-leverandøren kjenner ikke denne modellen. Sjekk modellnavnet i Innstillinger (“Last modeller” viser de tilgjengelige); for Ollama, hent den først med `ollama pull <name>`.",
@@ -695,6 +725,12 @@
     "toggleTitle": "Åpne filutforskeren med utvidede rettigheter (sudo) – krever en sudo-regel uten passord for sftp-server",
     "enabling": "Sjekker sudo …",
     "toggleOff": "Avslutt utvidede rettigheter",
+    "stopTitle": "Avslutte utvidede rettigheter?",
+    "stopBody": "Disse operasjonene pågår fortsatt. Hvis du avslutter utvidede rettigheter, stoppes de.",
+    "opDownload": "Nedlasting",
+    "opUpload": "Opplasting",
+    "opDelete": "Sletting",
+    "opChmod": "Endring av tillatelser",
     "banner": "Utvidede rettigheter er aktive: alle filhandlinger i denne utforskeren kjøres som {{user}}.",
     "deleteFileTitle": "Slette filen som {{user}}?",
     "deleteDirTitle": "Slette mappen som {{user}}?",
@@ -787,8 +823,6 @@
     },
     "tag": {
       "literalHint": "Bokstavelig merkelapp fra en fremmed fil – kan treffe en tillat-regel nøyaktig. Kan velges bort enkeltvis.",
-      "allowDeselectedHint": "Samsvarer med en eksisterende tillat-regel og ingen nekt-regel – derfor valgt bort som standard. Kan velges igjen enkeltvis.",
-      "autoDeselectedBadge": "valgt bort automatisk",
       "matchesRuleHint": "samsvarer med {{count}} eksisterende filterregel/-regler: {{actions}}",
       "action": {
         "allow": "Tillat",
@@ -902,7 +936,8 @@
     "dismiss": "Lukk forslag",
     "reject": "Avvis",
     "applying": "Bruker…",
-    "apply": "Bruk"
+    "apply": "Bruk",
+    "expired": "Utløpt — ikke brukt"
   },
   "connectLog": {
     "title": "Detaljer",
@@ -917,12 +952,15 @@
       "handshake": "SSH-håndtrykk",
       "hostKeyCheck": "Sjekk av vertsnøkkel",
       "authentication": "Autentisering",
-      "sessionReady": "Økt opprettet"
+      "sessionReady": "Økt opprettet",
+      "dnsSkipped": "IP-adresse – ingen oppslag nødvendig"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
-      "failed": "mislyktes ({{code}})"
+      "failed": "mislyktes ({{code}})",
+      "skipped": "hoppet over",
+      "failedReason": "mislyktes: {{reason}}"
     },
     "hostKeyResult": {
       "known": "kjent",
@@ -930,6 +968,7 @@
       "changed": "endret"
     },
     "authMethod": {
+      "none": "none (ingen autentisering)",
       "password": "Passord",
       "privateKey": "Privat nøkkel",
       "agent": "SSH-agent",
@@ -944,6 +983,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtatt, videre autentisering kreves",
       "remainingMethods": "Serveren tilbyr også: {{methods}} (ikke prøvd)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-tilkoblingen fikk tidsavbrudd",
+      "SSH_TIMEOUT": "Tidsavbrudd",
+      "SSH_CONNECTION_REFUSED": "Tilkoblingen ble avvist",
+      "SSH_HOST_NOT_FOUND": "Verten ble ikke funnet",
+      "SSH_HOST_UNREACHABLE": "Verten er utilgjengelig",
+      "SSH_AUTH_FAILED": "Autentisering mislyktes"
     }
   },
   "fileBrowser": {
@@ -965,7 +1012,14 @@
     "transferDownload": "Laster ned: {{name}}",
     "transferDone": "Ferdig: {{name}}",
     "transferElevationEnded": "Utvidet modus ble slått av under overføringen.",
+    "transferCancel": "Avbryt overføring",
+    "transferCancelled": "{{name}}: avbrutt",
+    "transferStopped": "{{name}}: stoppet",
+    "transferIncomplete": "Ufullstendig fil igjen på serveren: {{path}}",
+    "transferFiles": "{{done}} av {{total}} filer",
+    "transferRemaining": "{{time}} igjen",
     "loading": "Laster…",
+    "noPermissionToOpen": "Ingen tillatelse til å åpne denne mappen (x mangler)",
     "emptyDirectory": "(tom katalog)",
     "dropHint": "Slipp her for å laste opp til {{path}}",
     "cancel": "Avbryt",
@@ -1001,7 +1055,8 @@
     },
     "moveCollision": {
       "title": "Målet finnes allerede",
-      "body": "finnes allerede og ville bli overskrevet."
+      "body": "finnes allerede og ville bli overskrevet.",
+      "folderBody": "finnes allerede som mappe og kan ikke erstattes."
     },
     "folderUpload": {
       "conflictTitle": "Overskrive filer i mappen?",
@@ -1063,6 +1118,12 @@
       "execute": "Kjør",
       "numeric": "Numerisk",
       "recursive": "Rekursivt",
+      "special": "Spesialbiter",
+      "setuid": "setuid-bit",
+      "setgid": "setgid-bit",
+      "sticky": "sticky-bit",
+      "specialHint": "Ved rekursiv bruk får bare mapper spesialbiter, aldri filer.",
+      "recursiveSummary": "Mapper: {{folders}}, filer: {{files}}",
       "recursiveWarning": "– endrer tillatelsene til ALLE filer og undermapper i denne mappen. Kraftig handling, kan ikke angres.",
       "owner": "Eier",
       "group": "Gruppe",
@@ -1089,6 +1150,7 @@
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",
+    "composerMore": "Flere inndatahandlinger",
     "newChat": "Ny chat",
     "newChatDisabledHint": "Ikke tilgjengelig mens AI svarer eller en bekreftelse er åpen.",
     "autoContinuing": "Automatisk modus kjører – AI-en svarer selv på det siste resultatet…",
@@ -1186,6 +1248,9 @@
     "splitHandle": "Panelskille",
     "terminalTab": "Terminal",
     "filesTab": "Filer",
+    "aiTab": "KI",
+    "paneTabs": "Øktdeler",
+    "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
     "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
     "stopReconnect": "Stopp",

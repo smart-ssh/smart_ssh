@@ -59,6 +59,42 @@ Abschnitt 8.2):
 - Was die Oberfläche zurückbekommt, enthält **keine** Secret-Felder, nur welche
   Anmeldeart aktiv ist.
 
+**Aufbau des Server-Formulars.** Die Einstellungen eines Servers sind auf
+vier Reiter verteilt: **Allgemein**, **Verbindung**, **Sicherheit** und
+**Notizen**. Felder und Aktionen ändern sich dadurch nicht, nur ihr Ort:
+
+- *Allgemein*: Name, Gruppe, Tags, danach die Abschnitte von Erweiterungen und
+  am Ende „Server löschen" samt Auswirkungs-Vorschau.
+- *Verbindung*: Host, Port, Benutzername, Jump-Host, Anmeldung (alle Arten,
+  Schlüsselprüfung, Übernahme in den Schlüsselbund), Sudo-Passwort,
+  Startverzeichnis, „Erweitert" (SFTP-Server-Pfad) sowie „Verbindung testen"
+  mit Ergebnis und Schritt-Protokoll.
+- *Sicherheit*: Bestätigung nach Serverzugriff (Spec 0039), KI-Prüfung auf
+  Prompt-Injection und die gespeicherten Host-Keys.
+- *Notizen*: Notizen und Kontext-Vorschau. Die Notizen haben wie bisher ihren
+  eigenen Speichern-Knopf.
+
+Ein vorhandener Server öffnet auf *Allgemein*; solange derselbe Server gewählt
+bleibt, bleibt auch der gewählte Reiter, bei einem anderen Server öffnet wieder
+*Allgemein*. Alle Reiter teilen sich einen Entwurf: Ein Reiterwechsel verwirft
+keine Eingaben, und ein einziger „Speichern"-Knopf (sichtbar in *Allgemein*,
+*Verbindung* und *Sicherheit*) speichert alle Felder auf einmal. Ist ein Feld
+ungültig (z. B. leerer Host), wird der betroffene Reiter markiert und
+„Speichern" wechselt zum ersten markierten Reiter. Beim Anlegen eines neuen
+Servers gibt es *Allgemein*, *Verbindung* und *Sicherheit*; *Notizen* kommt
+nach dem ersten Speichern hinzu. Der lokale Pseudo-Server (Spec 0032) hat nur
+*Allgemein* (Tags) und *Notizen*. Die Reiter sind per Tastatur bedienbar
+(Pfeiltasten, Pos1/Ende; ein Tab-Stopp für die Leiste).
+
+**Verbinden aus den Einstellungen:** Neben „Speichern" zeigt das Formular eines
+gespeicherten Servers (nicht beim Anlegen) den Knopf „Verbinden". Solange das
+Formular ungespeicherte Änderungen hat, ist er deaktiviert und zeigt den Hinweis
+„Zuerst Änderungen speichern"; nach dem Speichern ist er wieder aktiv. Ein Klick
+wechselt zum Tab dieses Servers, falls einer offen ist (auch ein gerade
+verbindender), sonst läuft derselbe Ablauf wie beim Klick auf den Server in der
+Serverliste (Erststart-Hinweis, Sitzungsauswahl, Verbindungs-Tab); es gibt keinen
+eigenen Verbindungsweg.
+
 **Löschen eines Servers** ist zweistufig (Spec 0046): erst eine Vorschau der
 Auswirkungen, dann das bestätigte Löschen.
 
@@ -89,8 +125,21 @@ Auswirkungen, dann das bestätigte Löschen.
   Gruppe selbst und ihre Nachfahren ausschließt, sodass ein Zyklus schon vor
   dem Absenden unmöglich ist), Notiz-Editor und eine Löschen-Schaltfläche mit
   der Vorschau aus Abschnitt 3.
+- **Passwort ist optional.** Bleibt das Passwortfeld bei Neuanlage leer (oder
+  besteht es nur aus Whitespace und unsichtbaren Randzeichen, Spec 0073), wird
+  der Server ausdrücklich „ohne Passwort" gespeichert; im Schlüsselbund entsteht
+  kein Eintrag, und beim erneuten Öffnen zeigt das Formular „Kein Passwort
+  gespeichert". Bei einem Server mit gespeichertem Passwort heißt ein leeres
+  Feld weiterhin „unverändert"; das Passwort entfernt nur die Option
+  „Gespeichertes Passwort entfernen", die den Server auf „ohne Passwort" setzt
+  und den Schlüsselbund-Eintrag löscht. Die Verbindung eines Servers ohne
+  Passwort versucht zuerst die SSH-Methode `none`, nimmt der Server sie nicht
+  an, dann `password` mit leerem Wert, danach der übliche Anmeldefehler. Das
+  Verbindungsprotokoll nennt beide Versuche. Ein Server mit gespeichertem
+  Passwort versucht nie `none` oder ein leeres Passwort.
 - **Server-Formular:** alle Felder aus Abschnitt 4. Die Anmeldeart wählt der
-  Nutzer aus, die Eingabefelder wechseln mit: Passwortfeld; Schlüsseldatei über
+  Nutzer aus, die Eingabefelder wechseln mit: Passwortfeld (**optional**, siehe
+  unten); Schlüsseldatei über
   den Datei-Dialog mit optionaler Passphrase; „Agent verwenden" ohne weitere
   Eingabe; Zertifikat und Schlüssel als zwei Dateiauswahlen. Tags werden als
   Chips eingegeben (durch Komma oder Enter getrennt). Dazu kommen der
@@ -185,6 +234,9 @@ Mögliche Ergebnisse: Erfolg, Anmeldung fehlgeschlagen, unbekannter Host-Key,
 geänderter Host-Key, Netzwerkfehler (mit Fehlercode, wenn bekannt, Spec 0069)
 und Zeitüberschreitung.
 
+- **Live-Anzeige und Abbruch.** Der Test zeigt seine Schritte live in einem
+  Dialog und lässt sich abbrechen; ein abgebrochener Test endet ohne Ergebnis
+  und ohne Fehler (Spec 0112).
 - **Nichts wird gespeichert.** Der Test nimmt die Formularwerte einschließlich
   noch nicht gespeicherter Secrets entgegen und legt weder in der Datenbank noch
   in der Credential-Ablage etwas ab. Bei einem bestehenden Server mit leerem

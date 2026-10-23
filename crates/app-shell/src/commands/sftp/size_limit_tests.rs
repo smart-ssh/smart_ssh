@@ -135,6 +135,25 @@ impl SftpSession for MismatchSftp {
         unreachable!("diese Tests schreiben nichts auf den Server")
     }
 
+    async fn read_file_chunked(
+        &mut self,
+        _path: &str,
+        _chunk_size: usize,
+        _on_chunk: &mut (dyn for<'a> FnMut(&'a [u8]) -> ssh_manager_core::ssh::ChunkControl + Send),
+    ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+        unreachable!("dieser Test lädt nichts herunter")
+    }
+
+    async fn write_file_chunked(
+        &mut self,
+        _path: &str,
+        _chunk_size: usize,
+        _next_chunk: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ssh_manager_core::ssh::ChunkSource
+                  + Send),
+    ) -> Result<ssh_manager_core::ssh::TransferEnd, SshError> {
+        unreachable!("dieser Test lädt nichts hoch")
+    }
+
     async fn stat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         self.0.ops.lock().unwrap().push(format!("stat {path}"));
         match self.0.stat {
@@ -166,6 +185,9 @@ impl SftpSession for MismatchSftp {
         unreachable!("diese Tests benennen nichts um")
     }
 
+    async fn posix_rename(&mut self, _from: &str, _to: &str) -> Result<bool, SshError> {
+        unreachable!()
+    }
     async fn create_dir(&mut self, _path: &str) -> Result<(), SshError> {
         unreachable!("diese Tests legen kein Verzeichnis an")
     }

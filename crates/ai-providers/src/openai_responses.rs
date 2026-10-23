@@ -404,6 +404,18 @@ fn map_stream_error(info: &ProviderErrorInfo) -> AiError {
     }
 }
 
+/// Issue #609: usage, model and tier from the terminal event's `response`.
+fn record_usage(state: &mut OpenAiStreamState, event: &Value) {
+    let Some(response) = event.get("response") else {
+        return;
+    };
+    if let Some(usage) = response.get("usage").filter(|u| u.is_object()) {
+        state.usage = crate::usage::parse_responses(usage);
+    }
+    state.usage.response_model = crate::usage::model_of(response);
+    state.usage.service_tier = crate::usage::service_tier_of(response);
+}
+
 /// Feeds one decoded event into `state`. Returns `Some(terminal)` when the
 /// event ends the response: `Ok(())` after completed/incomplete (finalize
 /// next), `Err(error)` after a failure (no finalize, no tool call released).
@@ -508,6 +520,7 @@ fn handle_event(
             }
         }
         "response.completed" => {
+            record_usage(state, event);
             state.finish_reason = Some(
                 if state.tool_calls.is_empty() {
                     "stop"
@@ -519,6 +532,7 @@ fn handle_event(
             return Some(Ok(()));
         }
         "response.incomplete" => {
+            record_usage(state, event);
             let reason = event
                 .pointer("/response/incomplete_details/reason")
                 .and_then(Value::as_str)
@@ -585,6 +599,7 @@ fn process_frame_stream(
         request_id,
         provider_request_id,
         finish_reason: None,
+        usage: Default::default(),
     };
 
     Box::pin(futures::stream::unfold(

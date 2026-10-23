@@ -27,7 +27,8 @@
     "fileBrowser.actionsColumn": "same word in this language",
     "fileBrowser.column.permissions": "same word in this language",
     "fileBrowser.properties.type": "same word in this language",
-    "session.terminalTab": "same word in this language"
+    "session.terminalTab": "same word in this language",
+    "actionCard.autoRanScopeTag": "same word in this language"
   },
   "es": {
     "common.ok": "same word in this language",
@@ -46,7 +47,9 @@
     "connectLog.status.ok": "same word in this language",
     "connectLog.detail.mac": "same word in this language",
     "session.terminalTab": "same word in this language",
-    "unusableServer.host": "same word in this language"
+    "unusableServer.host": "same word in this language",
+    "serverForm.tabs.general": "same word in this language",
+    "actionCard.autoRanScopeGlobal": "same word in this language"
   },
   "it": {
     "common.ok": "same word in this language",
@@ -78,7 +81,9 @@
     "connectLog.detail.mac": "same word in this language",
     "fileBrowser.deleteDialog.files_one": "same word in this language",
     "fileBrowser.properties.typeFile": "same word in this language",
-    "unusableServer.host": "same word in this language"
+    "unusableServer.host": "same word in this language",
+    "actionCard.autoRanScopeServer": "same word in this language",
+    "actionCard.autoRanScopeTag": "same word in this language"
   },
   "pl": {
     "common.ok": "same word in this language",
@@ -104,7 +109,9 @@
     "fileBrowser.properties.typeFolder": "same word in this language",
     "notes.editedByAi": "technical acronym; not translated",
     "session.terminalTab": "same word in this language",
-    "unusableServer.host": "same word in this language"
+    "unusableServer.host": "same word in this language",
+    "session.aiTab": "abbreviation AI is used as is in this language",
+    "actionCard.autoRanScopeTag": "same word in this language"
   },
   "cs": {
     "common.ok": "same word in this language",
@@ -129,7 +136,9 @@
     "sshConfigImport.field.jumpHost": "same word in this language",
     "connectLog.status.ok": "same word in this language",
     "connectLog.detail.mac": "technical acronym; not translated",
-    "notes.editedByAi": "technical acronym; not translated"
+    "notes.editedByAi": "technical acronym; not translated",
+    "session.aiTab": "abbreviation AI is used as is in this language",
+    "actionCard.autoRanScopeServer": "same word in this language"
   },
   "uk": {
     "common.ok": "same word in this language",
@@ -164,7 +173,8 @@
     "aiProvider.providerTypes.anthropic": "product name, protocol or path placeholder; not translated (glossary)",
     "aiProvider.providerTypes.ollama": "product name, protocol or path placeholder; not translated (glossary)",
     "common.ok": "same word in this language",
-    "connectLog.status.ok": "same word in this language"
+    "connectLog.status.ok": "same word in this language",
+    "session.aiTab": "abbreviation AI is used as is in this language"
   },
   "zh-Hans": {
     "serverForm.identityFilePathPlaceholder": "product name, protocol or path placeholder; not translated (glossary)",
@@ -173,7 +183,8 @@
     "aiProvider.attestationUrlPlaceholder": "product name, protocol or path placeholder; not translated (glossary)",
     "aiProvider.providerTypes.openai": "product name, protocol or path placeholder; not translated (glossary)",
     "aiProvider.providerTypes.anthropic": "product name, protocol or path placeholder; not translated (glossary)",
-    "aiProvider.providerTypes.ollama": "product name, protocol or path placeholder; not translated (glossary)"
+    "aiProvider.providerTypes.ollama": "product name, protocol or path placeholder; not translated (glossary)",
+    "session.aiTab": "abbreviation AI is used as is in this language"
   },
   "ko": {
     "serverForm.identityFilePathPlaceholder": "product name, protocol or path placeholder; not translated (glossary)",
@@ -186,7 +197,8 @@
     "common.ok": "same word in this language",
     "connectLog.status.ok": "same word in this language",
     "connectLog.detail.mac": "protocol term plus placeholder; not translated",
-    "notes.editedByAi": "'AI' is written the same in Korean; rest is placeholders"
+    "notes.editedByAi": "'AI' is written the same in Korean; rest is placeholders",
+    "session.aiTab": "abbreviation AI is used as is in this language"
   },
   "sv": {
     "common.ok": "the word is spelled the same in Swedish",
@@ -213,7 +225,10 @@
     "connectLog.status.ok": "the word is spelled the same in Swedish",
     "connectLog.detail.mac": "product or protocol name, or placeholder-led string",
     "notes.editedByAi": "product or protocol name, or placeholder-led string",
-    "session.terminalTab": "the word is spelled the same in Swedish"
+    "session.terminalTab": "the word is spelled the same in Swedish",
+    "session.aiTab": "abbreviation AI is used as is in this language",
+    "actionCard.autoRanScopeGlobal": "same word in this language",
+    "actionCard.autoRanScopeServer": "same word in this language"
   },
   "da": {
     "common.ok": "the word is spelled the same in Danish",
@@ -254,7 +269,11 @@
     "chat.stop": "the word is spelled the same in Danish",
     "chat.send": "the word is spelled the same in Danish",
     "notes.editedByAi": "product or protocol name, or placeholder-led string",
-    "session.terminalTab": "the word is spelled the same in Danish"
+    "session.terminalTab": "the word is spelled the same in Danish",
+    "session.aiTab": "abbreviation AI is used as is in this language",
+    "actionCard.autoRanScopeGlobal": "same word in this language",
+    "actionCard.autoRanScopeServer": "same word in this language",
+    "actionCard.autoRanScopeTag": "same word in this language"
   },
   "nb": {
     "common.ok": "the word is spelled the same in Norwegian",
@@ -285,7 +304,9 @@
     "fileBrowser.properties.type": "the word is spelled the same in Norwegian",
     "chat.send": "the word is spelled the same in Norwegian",
     "notes.editedByAi": "product or protocol name, or placeholder-led string",
-    "session.terminalTab": "the word is spelled the same in Norwegian"
+    "session.terminalTab": "the word is spelled the same in Norwegian",
+    "actionCard.autoRanScopeGlobal": "same word in this language",
+    "actionCard.autoRanScopeServer": "same word in this language"
   },
   "fi": {
     "common.ok": "the word is spelled the same in Finnish",
@@ -372,6 +393,8 @@
     "fileBrowser.properties.typeFolder": "same word in this language",
     "fileBrowser.chmod.numeric": "same word in this language",
     "session.terminalTab": "same word in this language",
-    "unusableServer.host": "same word in this language"
+    "unusableServer.host": "same word in this language",
+    "serverForm.tabs.general": "same word in this language",
+    "actionCard.autoRanScopeServer": "same word in this language"
   }
 }

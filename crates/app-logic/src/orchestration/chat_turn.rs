@@ -65,6 +65,10 @@ mod tests_web_research_rejected;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_request_deadline;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_usage;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
@@ -1040,6 +1044,14 @@ async fn run_one_round(
                     session.model_context_window_tokens as u64,
                 );
             }
+            // Issue #610: passive report to the registered observers; the
+            // loop's stop conditions are unchanged, a usage event that comes
+            // after the loop stopped is not reported.
+            AiEvent::RequestUsage(usage) => {
+                session
+                    .report_ai_usage(crate::ai_usage::AiUsagePurpose::ChatTurn, usage)
+                    .await;
+            }
             AiEvent::Retrying {
                 attempt,
                 max_attempts,
@@ -1251,6 +1263,10 @@ pub(crate) fn ai_error_details(
 ) -> crate::events::ChatErrorDetails {
     let (provider_error_type, raw_message): (Option<String>, Option<&str>) = match err {
         AiError::Overloaded { .. } => (Some("overloaded_error".to_string()), None),
+        AiError::UsageLimit { detail: m, .. } => match m.split_once(": ") {
+            Some((kind, rest)) => (Some(kind.to_string()), Some(rest)),
+            None => (None, Some(m.as_str())),
+        },
         AiError::Billing(m) | AiError::RejectedRequest(m) => match m.split_once(": ") {
             Some((kind, rest)) => (Some(kind.to_string()), Some(rest)),
             None => (None, Some(m.as_str())),
@@ -1280,6 +1296,13 @@ pub(crate) fn ai_error_details(
             .filter(|m| !m.trim().is_empty()),
         provider_name,
         timeout_secs,
+        access_returns: match err {
+            AiError::UsageLimit { regain_access, .. } => regain_access
+                .as_deref()
+                .map(|d| redactor.redact_text(d))
+                .filter(|d| !d.trim().is_empty()),
+            _ => None,
+        },
     }
 }
 

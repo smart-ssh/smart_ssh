@@ -99,6 +99,37 @@ impl SwappableRedactor {
         *self.inner.write().unwrap_or_else(|e| e.into_inner()) = Arc::from(redactor);
     }
 
+    /// Issue #635: replaces the pattern-based redactor **and** the literal
+    /// secret set with exactly `secrets` (empty values ignored). Only the
+    /// extension rebuild path calls this; every other swap (reconnect) keeps
+    /// the literal set add-only. Text stored already redacted is not touched.
+    fn replace_with_literals(
+        &self,
+        redactor: Box<dyn OutputRedactor>,
+        secrets: &[secrecy::SecretString],
+    ) {
+        use secrecy::ExposeSecret;
+        // Build the complete new set first, then install it with a single
+        // assignment under one write guard: a concurrent reader sees either
+        // the old or the new set, never an empty one (no fail-open window).
+        let mut fresh: Vec<Vec<u8>> = Vec::new();
+        for secret in secrets {
+            let value = secret.expose_secret().as_bytes();
+            if !value.is_empty() && !fresh.iter().any(|k| k == value) {
+                fresh.push(value.to_vec());
+            }
+        }
+        // Longest first, so a secret that contains another is masked whole.
+        fresh.sort_by_key(|k| std::cmp::Reverse(k.len()));
+        let mut known = self
+            .literal_secrets
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        *known = fresh;
+        drop(known);
+        self.replace(redactor);
+    }
+
     /// Issue #464: from now on `secrets` are masked wherever this redactor
     /// runs (live output, result, ledger, history, logs). Called before the
     /// command that uses them starts, so its own output is already covered.
@@ -200,6 +231,14 @@ pub trait CommandEvaluator: Send + Sync {
         ctx: &EvalContext,
         candidates: &[ssh_manager_core::filter::Rule],
     ) -> EvaluationTrace;
+
+    /// Resolves rule ids of a trace to the rules currently stored (display
+    /// only, issue #696). Deleted rules are absent from the result.
+    async fn rules_by_ids(
+        &self,
+        ctx: &EvalContext,
+        ids: &[ssh_manager_core::filter::RuleId],
+    ) -> Vec<ssh_manager_core::filter::Rule>;
 }
 
 #[async_trait]
@@ -215,6 +254,14 @@ impl<S: PolicyStore + Send + Sync> CommandEvaluator for FilterEngine<S> {
         candidates: &[ssh_manager_core::filter::Rule],
     ) -> EvaluationTrace {
         FilterEngine::evaluate_explained_with_candidates(self, command, ctx, candidates).await
+    }
+
+    async fn rules_by_ids(
+        &self,
+        ctx: &EvalContext,
+        ids: &[ssh_manager_core::filter::RuleId],
+    ) -> Vec<ssh_manager_core::filter::Rule> {
+        FilterEngine::rules_by_ids(self, ctx, ids).await
     }
 }
 
@@ -628,6 +675,9 @@ pub struct Session {
     /// Issue #544: result of the connect-time `id -u` probe. `Some(true)` =
     /// uid 0, `None` = unknown (probe failed or not run). UI hint only.
     is_root: Option<bool>,
+    /// Issue #610: where completed AI requests are reported (observers an
+    /// edition registered). `None` = nobody listens. Private: set at build.
+    usage_reporting: Option<crate::ai_usage::AiUsageReporting>,
 }
 
 impl std::ops::Deref for Session {
@@ -963,7 +1013,49 @@ impl Session {
             sftp: NormalSftpChannel::default(),
             start_directory: Default::default(),
             is_root: None,
+            usage_reporting: None,
         }
+    }
+
+    /// Issue #610: sets up reporting of completed AI requests to observers.
+    /// Only at construction. An empty observer list is the same as none.
+    pub fn with_usage_reporting(
+        mut self,
+        reporting: Option<crate::ai_usage::AiUsageReporting>,
+    ) -> Self {
+        self.usage_reporting = reporting.filter(|r| !r.observers.is_empty());
+        self
+    }
+
+    /// Issue #610: tells the observers about one completed AI request of
+    /// this session. Passive: returns nothing, never waits for an observer,
+    /// carries no content. Call it when the provider's `RequestUsage` arrived
+    /// before the stream loop stopped; never wait for it.
+    pub async fn report_ai_usage(
+        &self,
+        purpose: crate::ai_usage::AiUsagePurpose,
+        usage: ssh_manager_core::ai::AiUsage,
+    ) {
+        let Some(reporting) = &self.usage_reporting else {
+            return;
+        };
+        let Some(source) = reporting.source_for(purpose) else {
+            return;
+        };
+        let chat_session_id = (*self.chat_session_id.lock().await).map(|id| id.to_string());
+        let record = crate::ai_usage::AiUsageRecord {
+            chat_session_id,
+            runtime_session_id: reporting.runtime_session_id.clone(),
+            server_id: (!crate::dto::is_local(self.server_id))
+                .then(|| self.server_id.0.to_string()),
+            provider_config_id: source.provider_config_id.clone(),
+            provider_type: source.provider_type,
+            configured_model: source.configured_model.clone(),
+            purpose,
+            usage,
+            completed_at: chrono::Utc::now(),
+        };
+        crate::ai_usage::notify(&reporting.observers, record);
     }
 
     /// Issue #544: records the `id -u` probe result; only at construction.
@@ -1043,8 +1135,24 @@ impl Session {
 
     /// Replaces the redactor of the open session (an extension's secret
     /// values changed). History is re-redacted on the next send.
+    ///
+    /// Literal secret values (issue #464, added by placeholder substitution)
+    /// are **kept**: this is the swap for anything but an extension rebuild.
     pub fn swap_redactor(&self, redactor: Box<dyn OutputRedactor>) {
         self.redactor.replace(redactor);
+    }
+
+    /// Issue #635: like [`Self::swap_redactor`], but the session's literal
+    /// secret values are **replaced** by `literals` (the extension's
+    /// currently known secrets), so a withdrawn value is no longer masked.
+    /// Only the extension rebuild path uses this; reconnect keeps literals.
+    /// Already redacted stored text is not re-read.
+    pub fn swap_redactor_with_literals(
+        &self,
+        redactor: Box<dyn OutputRedactor>,
+        literals: &[secrecy::SecretString],
+    ) {
+        self.redactor.replace_with_literals(redactor, literals);
     }
 
     /// Der normale SFTP-Kanal dieser Sitzung, gesperrt — **zum Benutzen**.
@@ -1970,6 +2078,112 @@ mod tests {
             manager.get(other_id).unwrap().redactor.redact_text(text),
             text
         );
+    }
+
+    /// Issue #635: `replace_with_literals` installs the new set atomically —
+    /// a still-known value is never unmasked while another thread replaces
+    /// the set — and drops empty values.
+    #[test]
+    fn test_replace_with_literals_is_atomic_for_known_values() {
+        use secrecy::SecretString;
+        let red = Arc::new(SwappableRedactor::new(Box::new(
+            DefaultOutputRedactor::new(),
+        )));
+        let keep = SecretString::from("keep-secret-9".to_string());
+        red.add_secret_values(std::slice::from_ref(&keep));
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let reader = {
+            let (red, stop) = (red.clone(), stop.clone());
+            std::thread::spawn(move || {
+                let mut leaks = 0;
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    if red
+                        .redact_text("x keep-secret-9 y")
+                        .contains("keep-secret-9")
+                    {
+                        leaks += 1;
+                    }
+                }
+                leaks
+            })
+        };
+        for _ in 0..100 {
+            red.replace_with_literals(
+                Box::new(DefaultOutputRedactor::new()),
+                &[keep.clone(), SecretString::from(String::new())],
+            );
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(reader.join().unwrap(), 0);
+        assert_eq!(red.redact_text("a keep-secret-9"), "a [REDACTED]");
+        red.replace_with_literals(Box::new(DefaultOutputRedactor::new()), &[]);
+        assert_eq!(red.redact_text("a keep-secret-9"), "a keep-secret-9");
+    }
+
+    /// Issue #635: a rebuild with a known set replaces the literal values;
+    /// a plain swap (reconnect) keeps them.
+    #[tokio::test]
+    async fn test_rebuild_replaces_literals_but_reconnect_swap_keeps_them() {
+        use crate::session_extension::{
+            rebuild_redactors_for_sessions, ServerScope, SessionExtension,
+        };
+        use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+        use secrecy::SecretString;
+
+        struct Known(Vec<String>);
+        impl SessionExtension for Known {
+            fn known_secrets(&self, _scope: &ServerScope) -> Vec<SecretString> {
+                self.0.iter().cloned().map(SecretString::from).collect()
+            }
+        }
+
+        let manager = SessionManager::new();
+        let server_id = ServerId::new();
+        let id = Uuid::new_v4();
+        manager.insert(id, Arc::new(dummy_session(server_id)));
+        let session = manager.get(id).unwrap();
+        let text = "a=value-aaa-1 b=value-bbb-2";
+        session
+            .redactor
+            .add_secret_values(&[SecretString::from("value-aaa-1".to_string())]);
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=[REDACTED] b=value-bbb-2"
+        );
+
+        // reconnect-style swap: A stays masked
+        session.swap_redactor(Box::new(DefaultOutputRedactor::new()));
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=[REDACTED] b=value-bbb-2"
+        );
+
+        // rebuild with {B}: A no longer masked, B is
+        let ext = Known(vec!["value-bbb-2".to_string()]);
+        let profiles = InMemoryProfileStore::new();
+        let credentials = InMemoryCredentialStore::new();
+        rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id)
+            .await;
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=value-aaa-1 b=[REDACTED]"
+        );
+
+        // a value still known stays masked after another rebuild, and a
+        // later reconnect swap keeps it
+        rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&ext), server_id)
+            .await;
+        session.swap_redactor(Box::new(DefaultOutputRedactor::new()));
+        assert_eq!(
+            session.redactor.redact_text(text),
+            "a=value-aaa-1 b=[REDACTED]"
+        );
+
+        // rebuild with an empty set withdraws everything
+        let none = Known(Vec::new());
+        rebuild_redactors_for_sessions(&manager, &profiles, &credentials, Some(&none), server_id)
+            .await;
+        assert_eq!(session.redactor.redact_text(text), text);
     }
 
     // --- Spec 0039, Abschnitt 5: history_contains_untrusted_content -------

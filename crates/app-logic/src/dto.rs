@@ -261,6 +261,8 @@ impl From<KeychainAvailability> for KeychainStatusDto {
 #[serde(rename_all = "snake_case")]
 pub enum AuthMethodKind {
     Password,
+    /// Issue #632: Passwortmethode ohne gespeichertes Passwort.
+    NoPassword,
     PrivateKey,
     Agent,
     Certificate,
@@ -274,6 +276,7 @@ impl From<&AuthMethod> for AuthMethodKind {
     fn from(auth: &AuthMethod) -> Self {
         match auth {
             AuthMethod::Password { .. } => AuthMethodKind::Password,
+            AuthMethod::NoPassword => AuthMethodKind::NoPassword,
             AuthMethod::PrivateKey { .. } => AuthMethodKind::PrivateKey,
             AuthMethod::Agent => AuthMethodKind::Agent,
             AuthMethod::Certificate { .. } => AuthMethodKind::Certificate,
@@ -767,9 +770,17 @@ pub fn normalize_start_directory_input(input: Option<String>) -> Result<Option<S
     rename_all_fields = "camelCase"
 )]
 pub enum AuthMethodInput {
+    /// Leeres/`None`-Feld heißt hier: bei einem bestehenden Passwort
+    /// unverändert, sonst (Neuanlage, Methodenwechsel) "kein Passwort"
+    /// (Issue #632). Ein Wert, der nach dem Trimmen (Spec 0073) leer ist,
+    /// zählt wie `None`.
     Password {
         value: Option<String>,
     },
+    /// Issue #632: ausdrücklich "kein Passwort" — entfernt auch ein
+    /// gespeichertes. Eigene Variante, damit "entfernen" nie mit "leer =
+    /// unverändert" verwechselt werden kann.
+    NoPassword,
     PrivateKey {
         key_content: Option<String>,
         passphrase: Option<String>,
@@ -1167,6 +1178,19 @@ pub struct CoveringRuleDto {
     pub pattern_value: String,
 }
 
+/// Issue #696: a rule that let (a segment of) an auto-executed command run
+/// without confirmation. Display only. `segment_indices` lists the top-level
+/// segments the rule covered (one entry for an unsplit command).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoExecRuleDto {
+    pub rule_id: RuleId,
+    pub pattern_type: PatternType,
+    pub pattern_value: String,
+    pub scope: Scope,
+    pub segment_indices: Vec<usize>,
+}
+
 /// Ein Teilkommando mit seinem Zustand. `reasons` sind feste Codes
 /// (`FILTER_*`-Codes), keine Texte.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -1245,6 +1269,9 @@ pub struct SessionSummaryDto {
     pub server_name: String,
     pub status: ConnectionStatus,
     pub has_pending_action: bool,
+    /// Issue #611: current persisted chat session id (`None` for the local
+    /// pseudo-server and no-persist sessions).
+    pub chat_session_id: Option<String>,
     /// Spec 0104: `Some`, wenn die Sitzung einem MCP-Client gehört — das
     /// Frontend beschriftet und kennzeichnet den Tab dann als MCP-Tab, auch
     /// nach einem Reload.
@@ -1553,6 +1580,37 @@ pub struct ElevationResultDto {
     /// Hinweis bei aktivem Kanal (Spec 0067, A3): `sftp-server` bzw. ein
     /// übergeordnetes Verzeichnis ist nicht sicher geschützt.
     pub warning: Option<ElevationWarningDto>,
+    /// Issue #622: Operationen, die noch über den erhöhten Kanal laufen.
+    /// Nicht leer nur, wenn `sftp_elevation_enable` (Nutzerwechsel) ohne
+    /// Bestätigung aufgerufen wurde: nichts wurde geändert, der bisherige
+    /// Kanal bleibt aktiv (`active`, `target_user` beschreiben ihn).
+    #[serde(default)]
+    pub running_operations: Vec<RunningOperationDto>,
+}
+
+/// Issue #622: eine laufende Operation des erhöhten Kanals — für den
+/// Bestätigungsdialog vor dem Ausschalten/Umschalten.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RunningOperationDto {
+    pub id: String,
+    /// `download` | `upload` | `delete` | `chmod`.
+    pub kind: &'static str,
+    pub path: String,
+    pub bytes_done: Option<u64>,
+    pub bytes_total: Option<u64>,
+    pub files_done: Option<u64>,
+    pub files_total: Option<u64>,
+}
+
+/// Issue #622: Ergebnis von `sftp_elevation_disable`. `disabled == false`
+/// mit nicht leerer `running_operations` heißt: nichts geändert, der Nutzer
+/// muss das Stoppen bestätigen.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElevationDisableDto {
+    pub disabled: bool,
+    pub running_operations: Vec<RunningOperationDto>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -2167,6 +2225,33 @@ mod tests {
             config.api_key.is_empty(),
             "ein nur aus unsichtbaren Zeichen bestehender Key muss leer werden, damit \
              `update_ai_provider` das bestehende Credential unverändert lässt"
+        );
+    }
+
+    // Issue #690: the edit dialog is prefilled from this DTO; the stored key
+    // must never be part of what reaches the frontend.
+    #[test]
+    fn ai_provider_config_dto_serializes_without_any_key_field() {
+        let dto = AiProviderConfigDto {
+            id: ProviderId::new(),
+            provider_type: ProviderType::Anthropic,
+            display_name: "Claude".into(),
+            base_url: None,
+            model: "m".into(),
+            supports_native_tool_calling: true,
+            is_active: false,
+            extra_headers: vec![],
+            attestation_url: None,
+            max_tokens_override: None,
+            web_research_enabled: true,
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        let keys: Vec<String> = json.as_object().unwrap().keys().cloned().collect();
+        assert!(
+            keys.iter().all(|k| !k.to_lowercase().contains("key")
+                && !k.to_lowercase().contains("secret")
+                && !k.to_lowercase().contains("credential")),
+            "DTO must not carry a credential field: {keys:?}"
         );
     }
 

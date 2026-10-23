@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
@@ -7,6 +8,7 @@ import {
   claimClipboardFiles,
   claimDroppedPaths,
   clipboardHasFiles,
+  clipboardWriteText,
   commandErrorCode,
   commandErrorMessage,
   pickUploadFiles,
@@ -21,10 +23,12 @@ import {
   sftpDownload,
   sftpDownloadDefault,
   sftpDownloadDir,
+  sftpCancelTransfer,
   sftpElevationDisable,
   sftpElevationEnable,
   sftpElevationStatus,
   sftpExists,
+  sftpStat,
   sftpList,
   sftpMkdir,
   sftpCreateFile,
@@ -41,6 +45,7 @@ import { translateErrorCode } from "../errorCodes";
 import {
   onConnectionStatusChanged,
   onSftpTransferFinished,
+  onSftpTransferProgress,
   onSftpTransferStarted,
 } from "../events";
 import { isPointerInside } from "../dropZone";
@@ -57,6 +62,7 @@ import type {
   DeletePreviewDto,
   DownloadResultDto,
   ElevationResultDto,
+  RunningOperationDto,
   LocalFilePreviewDto,
   FolderUploadPreviewDto,
   FolderUploadSummaryDto,
@@ -65,6 +71,8 @@ import type {
 import { useDragResize } from "../useDragResize";
 import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
 import { NoteDiffPreview } from "./NoteDiffPreview";
+import { useIsNarrow } from "../hooks/useIsNarrow";
+import { useMenuPlacement } from "../hooks/useMenuPlacement";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
@@ -124,6 +132,25 @@ interface Transfer {
   /** Issue #621: finished successfully, but elevated mode ended meanwhile —
    * the row stays (as done) with a note. */
   doneElevationEnded?: boolean;
+  /** Issue #622: bytes transferred so far (progress events, throttled). */
+  bytesDone?: number;
+  /** Issue #623: moving-average speed and remaining time. */
+  rate?: RateState;
+  /** Issue #622: folder transfers — files done / total (known once the walk is done). */
+  folder?: { filesDone: number; filesTotal: number };
+  /** Issue #622: ended without error — `cancelled` (cancel button) or `stopped`
+   * (elevated rights ended). */
+  stopped?: "cancelled" | "stopped";
+  /** Issue #622: a stopped upload left this incomplete remote file behind. */
+  incompleteRemotePath?: string;
+}
+
+/** Issue #622: asked before ending elevated rights (or changing the target
+ * user) while elevated operations still run. */
+interface StopPrompt {
+  operations: RunningOperationDto[];
+  /** What to do after the user confirmed. */
+  action: { kind: "disable" } | { kind: "switch"; targetUser: string };
 }
 
 interface FileBrowserPanelProps {
@@ -205,6 +232,8 @@ export function FileBrowserPanel({
     from: string;
     to: string;
     kind: MoveKind;
+    /** Issue #625: ein Ordner als Ziel lässt sich nicht ersetzen. */
+    targetIsDir: boolean;
   } | null>(null);
   // Upload-Überschreib-Diff-Vorschau (Spec 0054, Teil 3): `remoteText` ist
   // `null`, wenn die Remote-Datei nicht als Text lesbar war (Binärdatei/zu
@@ -244,6 +273,12 @@ export function FileBrowserPanel({
   // Issue #544: `id -u` probe result of the session. `undefined` = not yet
   // answered; `null`/failure = unknown (controls shown); `true` = root (hidden).
   const [sessionRoot, setSessionRoot] = useState<boolean | null | undefined>(undefined);
+  // Issue #584, Spec 0113: below 640 px the toolbar collapses into an
+  // overflow menu and the list into two-line rows; functions stay the same.
+  const narrow = useIsNarrow();
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const overflowButtonRef = useRef<HTMLButtonElement>(null);
   const [elevationMenuOpen, setElevationMenuOpen] = useState(false);
   const [otherUserOpen, setOtherUserOpen] = useState(false);
   const [otherUserDraft, setOtherUserDraft] = useState("root");
@@ -271,12 +306,18 @@ export function FileBrowserPanel({
       e.stopPropagation();
       setElevationMenuOpen(false);
       setOtherUserOpen(false);
-      elevationMenuButtonRef.current?.focus();
+      (elevationMenuButtonRef.current ?? overflowButtonRef.current)?.focus();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [elevationMenuOpen, otherUserOpen]);
   const elevationGroupRef = useRef<HTMLFieldSetElement>(null);
+  // Issue #627: the elevation menu and the target-user form stay inside the window.
+  const elevationMenuRef = useRef<HTMLDivElement>(null);
+  const otherUserFormRef = useRef<HTMLFormElement>(null);
+  const getElevationAnchor = useCallback(() => elevationGroupRef.current, []);
+  const elevationMenuStyle = useMenuPlacement(elevationMenuRef, getElevationAnchor, elevationMenuOpen, { gap: 4 });
+  const otherUserFormStyle = useMenuPlacement(otherUserFormRef, getElevationAnchor, otherUserOpen, { gap: 4 });
   // Issue #569: a click outside the elevation group closes the menu and the
   // target user form. Clicks inside (arrow button, menu, form) are ignored, so
   // the arrow button's own toggle is not undone.
@@ -284,8 +325,11 @@ export function FileBrowserPanel({
     if (!elevationMenuOpen && !otherUserOpen) return;
     const onClick = (e: MouseEvent) => {
       // composedPath, not target: a clicked menu item may already be detached.
+      const path = e.composedPath();
       const group = elevationGroupRef.current;
-      if (group && e.composedPath().includes(group)) return;
+      if (group && path.includes(group)) return;
+      const overflow = overflowRef.current;
+      if (overflow && path.includes(overflow)) return;
       setElevationMenuOpen(false);
       setOtherUserOpen(false);
     };
@@ -296,7 +340,33 @@ export function FileBrowserPanel({
   useEffect(() => {
     setElevationMenuOpen(false);
     setOtherUserOpen(false);
+    setOverflowOpen(false);
   }, [isVisible, elevation]);
+  // Leaving the narrow layout drops the overflow menu.
+  useEffect(() => {
+    if (!narrow) setOverflowOpen(false);
+  }, [narrow]);
+  // Overflow menu: outside click and Escape close it (Escape returns focus).
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const onClick = (e: MouseEvent) => {
+      const overflow = overflowRef.current;
+      if (overflow && e.composedPath().includes(overflow)) return;
+      setOverflowOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOverflowOpen(false);
+      overflowButtonRef.current?.focus();
+    };
+    document.addEventListener("click", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [overflowOpen]);
   const [elevationFailure, setElevationFailure] = useState<ElevationResultDto | null>(null);
   const [elevationWarning, setElevationWarning] = useState<string | null>(null);
   const elevated = elevation !== null;
@@ -312,12 +382,12 @@ export function FileBrowserPanel({
   onElevationChangeRef.current = onElevationChange;
   /** Einzige Stelle, die den Modus ändert: hält Elternansicht und (beim
    * Beenden) das Backend synchron — "Backend aktiv ⇔ UI zeigt erhöht". */
-  const updateElevation = (next: { targetUser: string } | null) => {
+  const updateElevation = (next: { targetUser: string } | null, backendDone = false) => {
     elevationGenerationRef.current += 1;
     setElevation(next);
     if (next === null) setElevationWarning(null);
     onElevationChangeRef.current?.(next?.targetUser ?? null);
-    if (next === null) {
+    if (next === null && !backendDone) {
       sftpElevationDisable(sessionId).catch((err) =>
         console.warn("Konnte erhöhten Modus nicht beenden:", err),
       );
@@ -382,6 +452,8 @@ export function FileBrowserPanel({
       action: action ? { label: t(revealLabelKey()), onClick: action } : undefined,
     });
   const notifyFailed = (key: string, name: string, err: unknown) => {
+    // Issue #622: a stopped operation is not an error — its row shows the state.
+    if (commandErrorCode(err) === "FILE_OPERATION_STOPPED") return;
     showToast({
       kind: "error",
       message: t(key, { name, reason: commandErrorMessage(err) }) + modeSuffix,
@@ -405,14 +477,36 @@ export function FileBrowserPanel({
     setElevationMenuOpen(false);
     setOtherUserOpen(false);
     if (elevated) {
-      updateElevation(null);
+      // Issue #622: with running elevated operations the backend changes
+      // nothing and lists them; the user confirms (or cancels) first.
+      try {
+        const result = await sftpElevationDisable(sessionId, false);
+        if (!result.disabled) {
+          setStopPrompt({ operations: result.runningOperations, action: { kind: "disable" } });
+          return;
+        }
+      } catch (err) {
+        console.warn("Konnte erhöhten Modus nicht beenden:", err);
+      }
+      updateElevation(null, true);
       load(path, null);
       return;
     }
+    await enableElevation(targetUser);
+  };
+
+  const enableElevation = async (targetUser: string, confirmStop = false) => {
     setEnablingElevation(true);
     const generation = elevationGenerationRef.current;
     try {
-      const result = await sftpElevationEnable(sessionId, targetUser.trim() || null);
+      const result = await sftpElevationEnable(sessionId, targetUser.trim() || null, confirmStop);
+      if (result.runningOperations && result.runningOperations.length > 0) {
+        setStopPrompt({
+          operations: result.runningOperations,
+          action: { kind: "switch", targetUser },
+        });
+        return;
+      }
       if (generation !== elevationGenerationRef.current) {
         // Inzwischen ausgeschaltet/Verbindung weg — nicht wieder "erhöht"
         // anzeigen, Backend-Kanal schließen.
@@ -435,6 +529,26 @@ export function FileBrowserPanel({
       });
     } finally {
       setEnablingElevation(false);
+    }
+  };
+
+  const [stopPrompt, setStopPrompt] = useState<StopPrompt | null>(null);
+  /** Issue #622: "End elevated rights" in the dialog — stops the listed
+   * operations, then closes the channel. */
+  const confirmStopPrompt = async () => {
+    const prompt = stopPrompt;
+    setStopPrompt(null);
+    if (!prompt) return;
+    if (prompt.action.kind === "disable") {
+      try {
+        await sftpElevationDisable(sessionId, true);
+      } catch (err) {
+        console.warn("Konnte erhöhten Modus nicht beenden:", err);
+      }
+      updateElevation(null, true);
+      load(path, null);
+    } else {
+      await enableElevation(prompt.action.targetUser, true);
     }
   };
 
@@ -519,11 +633,16 @@ export function FileBrowserPanel({
 
   // `elevatedOverride`: beim Umschalten ist der neue Modus im State noch
   // nicht angekommen — der Aufrufer übergibt ihn dann explizit.
+  // Issue #624: the mode of every listed entry, so an empty listing of a
+  // folder can be explained by the folder's own (missing) execute bit.
+  const knownDirModes = useRef(new Map<string, number>());
+
   const load = useCallback((targetPath: string, userOverride?: string | null) => {
     setLoading(true);
     setError(null);
     sftpList(sessionId, targetPath, userOverride === undefined ? channelUser : userOverride)
       .then((result) => {
+        for (const e of result) knownDirModes.current.set(e.path, e.permissionsOctal);
         setEntries(result);
         setPath(targetPath);
         setPathInput(targetPath);
@@ -623,9 +742,41 @@ export function FileBrowserPanel({
           },
         ]);
       }),
+      onSftpTransferProgress((event) => {
+        if (event.sessionId !== sessionId) return;
+        // Issue #623: folder transfers show the aggregate over all files.
+        const done = event.folder ? event.folder.bytesDone : event.bytesDone;
+        const total = event.folder ? event.folder.bytesTotal : event.totalBytes;
+        const now = Date.now();
+        setTransfers((prev) =>
+          prev.map((row) =>
+            row.id === event.transferId
+              ? {
+                  ...row,
+                  bytesDone: Math.max(row.bytesDone ?? 0, done),
+                  totalBytes: total ?? row.totalBytes,
+                  rate: nextRate(row.rate, now, Math.max(row.bytesDone ?? 0, done), total ?? row.totalBytes),
+                  folder: event.folder
+                    ? { filesDone: event.folder.filesDone, filesTotal: event.folder.filesTotal }
+                    : row.folder,
+                }
+              : row,
+          ),
+        );
+      }),
       onSftpTransferFinished((event) => {
         if (event.sessionId !== sessionId) return;
-        if (event.error) {
+        if (event.stopped) {
+          // Issue #622: cancelled / stopped — a final state, not an error.
+          const stopped = event.stopped;
+          setTransfers((prev) =>
+            prev.map((row) =>
+              row.id === event.transferId
+                ? { ...row, stopped, incompleteRemotePath: event.incompleteRemotePath ?? undefined }
+                : row,
+            ),
+          );
+        } else if (event.error) {
           setTransfers((prev) =>
             prev.map((t) => (t.id === event.transferId ? { ...t, error: event.error } : t)),
           );
@@ -915,7 +1066,7 @@ export function FileBrowserPanel({
           job?.requestId === requestId ? { ...job, done: p.done, total: p.total ?? job.total } : job,
         ),
       );
-      await navigator.clipboard.writeText(content);
+      await clipboardWriteText(content);
       notifyOk("fileToasts.contentCopied", { name: entry.name });
     } catch (err) {
       // Ein Abbruch durch den Nutzer ist keine Störung: nichts anzeigen.
@@ -1078,7 +1229,13 @@ export function FileBrowserPanel({
     try {
       const exists = await sftpExists(sessionId, to, channelUser);
       if (exists) {
-        setMoveCollision({ from, to, kind });
+        // Kann `stat` nicht antworten, gilt das Ziel als Datei; das Backend
+        // lehnt das Ersetzen eines Ordners ohnehin ab.
+        const targetIsDir = await sftpStat(sessionId, to, channelUser).then(
+          (entry) => entry.isDir,
+          () => false,
+        );
+        setMoveCollision({ from, to, kind, targetIsDir });
         return;
       }
       await sftpRename(sessionId, from, to, channelUser);
@@ -1093,7 +1250,7 @@ export function FileBrowserPanel({
     if (!moveCollision) return;
     const { from, to, kind } = moveCollision;
     setMoveCollision(null);
-    sftpRename(sessionId, from, to, channelUser)
+    sftpRename(sessionId, from, to, channelUser, true)
       .then(() => {
         notifyMoved(from, to, kind);
         load(path);
@@ -1203,12 +1360,12 @@ export function FileBrowserPanel({
     setChmodTarget(entry);
   };
 
-  const handleConfirmChmod = (mode: number, recursive: boolean) => {
+  const handleConfirmChmod = (mode: number, recursive: boolean, applySpecialBits: boolean) => {
     if (!chmodTarget) return;
     const target = chmodTarget;
     setChmodTarget(null);
     const modeText = mode.toString(8).padStart(3, "0");
-    sftpChmod(sessionId, target.path, mode, recursive, channelUser)
+    sftpChmod(sessionId, target.path, mode, recursive, applySpecialBits, channelUser)
       .then((count) => {
         if (recursive && target.isDir) {
           notifyOk("fileToasts.chmodRecursive", { name: target.name, mode: modeText, count });
@@ -1219,6 +1376,68 @@ export function FileBrowserPanel({
       })
       .catch((err) => notifyFailed("fileToasts.chmodFailed", target.name, err));
   };
+
+  const renderEntryMenu = (entry: RemoteEntryDto, className: string, point?: { x: number; y: number }) => (
+    <FileEntryMenu
+      entry={entry}
+      narrow={narrow}
+      className={className}
+      point={point}
+      onOpenLocally={handleOpenLocally}
+      onDownloadDefault={handleDownloadDefault}
+      onDownloadChoose={handleDownloadChoose}
+      onCopyContent={handleCopyContent}
+      onCopyFile={handleCopyFile}
+      onCopyPath={handleCopyPath}
+      onShowProperties={handleShowProperties}
+      onRefresh={handleRefresh}
+      onRename={(e) => {
+        setOpenMenu(null);
+        setRenaming({ entry: e, value: e.name });
+      }}
+      onCut={handleCut}
+      onChmod={handleChmod}
+      onDelete={(e) => {
+        setOpenMenu(null);
+        setDeleteTarget(e);
+      }}
+    />
+  );
+
+  const otherUserForm = otherUserOpen && (
+              <form
+                ref={otherUserFormRef}
+                style={otherUserFormStyle}
+                className="fixed z-20 flex w-64 flex-col gap-1.5 rounded border border-slate-600 bg-slate-800 p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:bottom-0 narrow:left-0 narrow:top-auto narrow:mt-0 narrow:w-full narrow:rounded-b-none narrow:p-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const user = otherUserDraft.trim();
+                  if (!user) return;
+                  setElevationTargetUser(user);
+                  setOtherUserOpen(false);
+                  handleToggleElevation(user);
+                }}
+              >
+                <label className="text-xs" htmlFor="file-elevation-target-user">
+                  {t("fileElevation.targetUser")}
+                </label>
+                <input
+                  {...TECHNICAL_INPUT_PROPS}
+                  id="file-elevation-target-user"
+                  ref={otherUserInputRef}
+                  value={otherUserDraft}
+                  onChange={(e) => setOtherUserDraft(e.target.value)}
+                  aria-describedby="file-elevation-target-user-help"
+                  className={`${FIELD_CONTROL_CLASS} px-1.5 py-1 font-mono text-xs`}
+                />
+                <p id="file-elevation-target-user-help" className="m-0 text-xs text-slate-300">
+                  {t("fileElevation.targetUserHelp")}
+                </p>
+                <Button size={narrow ? "md" : "sm"} type="submit" disabled={enablingElevation || !otherUserDraft.trim()}>
+                  {t("fileElevation.confirm")}
+                </Button>
+              </form>
+  );
 
   return (
     <div
@@ -1246,6 +1465,124 @@ export function FileBrowserPanel({
           {t("fileElevation.failure.sftpServerUnsafe", { path: elevationWarning })}
         </div>
       )}
+      {narrow && (
+        <div className="flex items-center gap-1.5 border-b border-slate-800 px-2 py-1.5">
+          <Button
+            className="min-h-11 min-w-11"
+            onClick={() => load(startPath)}
+            title={t("fileBrowser.toStartDirectory")}
+            aria-label={t("fileBrowser.toStartDirectory")}
+          >
+            ⌂
+          </Button>
+          <Button
+            className="min-h-11 min-w-11"
+            onClick={() => load(parentPath(path))}
+            disabled={path === "."}
+            title={t("fileBrowser.parentDirectory")}
+            aria-label={t("fileBrowser.parentDirectory")}
+          >
+            ↑
+          </Button>
+          <form
+            className="min-w-0 flex-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              load(pathInput.trim() || ".");
+            }}
+          >
+            <input
+              {...TECHNICAL_INPUT_PROPS}
+              value={pathInput}
+              onChange={(e) => setPathInput(e.target.value)}
+              aria-label={t("fileBrowser.properties.path")}
+              title={pathInput}
+              className={`${FIELD_CONTROL_CLASS} min-h-11 w-full px-2 py-1 font-mono text-xs`}
+            />
+          </form>
+          <div ref={overflowRef} className="shrink-0">
+            <Button
+              ref={overflowButtonRef}
+              className="min-h-11 min-w-11"
+              onClick={() => {
+                setElevationMenuOpen(false);
+                setOtherUserOpen(false);
+                setOverflowOpen((open) => !open);
+              }}
+              aria-haspopup="menu"
+              aria-expanded={overflowOpen}
+              aria-label={t("fileBrowser.fileActionsGroup")}
+              title={t("fileBrowser.fileActionsGroup")}
+            >
+              ⋯
+            </Button>
+            {overflowOpen && (
+              <div
+                role="menu"
+                aria-label={t("fileBrowser.fileActionsGroup")}
+                className="fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-slate-600 bg-slate-800 py-1 shadow-lg"
+              >
+                {[
+                  {
+                    key: "mkdir",
+                    label: t("fileBrowser.newFolderButton"),
+                    run: () => {
+                      setNameError(null);
+                      setMkdirOpen("");
+                    },
+                  },
+                  { key: "upload", label: t("fileBrowser.upload"), run: handleUploadButton },
+                  { key: "uploadFolder", label: t("fileBrowser.uploadFolder"), run: handleUploadFolderButton },
+                  ...(cutEntry
+                    ? [
+                        { key: "paste", label: t("fileBrowser.paste"), run: handlePaste },
+                        { key: "cancelCut", label: t("fileBrowser.cancelCut"), run: () => setCutEntry(null) },
+                      ]
+                    : []),
+                  ...(!elevated && sessionRoot !== undefined && sessionRoot !== true
+                    ? [
+                        {
+                          key: "elevate",
+                          label: enablingElevation
+                            ? t("fileElevation.enabling")
+                            : `🔓 ${t("fileElevation.toggle")}`,
+                          run: () => handleToggleElevation("root"),
+                          disabled: enablingElevation,
+                        },
+                        {
+                          key: "otherUser",
+                          label: t("fileElevation.otherUser"),
+                          run: () => {
+                            setOtherUserDraft(elevationTargetUser);
+                            setOtherUserOpen(true);
+                            setTimeout(() => otherUserInputRef.current?.focus(), 0);
+                          },
+                          disabled: enablingElevation,
+                        },
+                      ]
+                    : []),
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    role="menuitem"
+                    disabled={"disabled" in item ? item.disabled : false}
+                    className="block min-h-11 w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 focus-visible:bg-slate-700 focus-visible:outline-none disabled:opacity-50"
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      item.run();
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {otherUserForm}
+          </div>
+        </div>
+      )}
+      {!narrow && (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-slate-800 px-2 py-1.5">
         <div className="flex min-w-[12rem] flex-1 items-center gap-1.5">
         <Button
@@ -1334,7 +1671,9 @@ export function FileBrowserPanel({
             {elevationMenuOpen && (
               <div
                 role="menu"
-                className="absolute left-2 top-full z-20 mt-1 rounded border border-slate-600 bg-slate-800 p-1 shadow-lg"
+                ref={elevationMenuRef}
+                style={elevationMenuStyle}
+                className="fixed z-20 rounded border border-slate-600 bg-slate-800 p-1 shadow-lg"
               >
                 <button
                   type="button"
@@ -1352,38 +1691,7 @@ export function FileBrowserPanel({
                 </button>
               </div>
             )}
-            {otherUserOpen && (
-              <form
-                className="absolute left-2 top-full z-20 mt-1 flex w-64 flex-col gap-1.5 rounded border border-slate-600 bg-slate-800 p-2 shadow-lg"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const user = otherUserDraft.trim();
-                  if (!user) return;
-                  setElevationTargetUser(user);
-                  setOtherUserOpen(false);
-                  handleToggleElevation(user);
-                }}
-              >
-                <label className="text-xs" htmlFor="file-elevation-target-user">
-                  {t("fileElevation.targetUser")}
-                </label>
-                <input
-                  {...TECHNICAL_INPUT_PROPS}
-                  id="file-elevation-target-user"
-                  ref={otherUserInputRef}
-                  value={otherUserDraft}
-                  onChange={(e) => setOtherUserDraft(e.target.value)}
-                  aria-describedby="file-elevation-target-user-help"
-                  className={`${FIELD_CONTROL_CLASS} px-1.5 py-1 font-mono text-xs`}
-                />
-                <p id="file-elevation-target-user-help" className="m-0 text-xs text-slate-300">
-                  {t("fileElevation.targetUserHelp")}
-                </p>
-                <Button size="sm" type="submit" disabled={enablingElevation || !otherUserDraft.trim()}>
-                  {t("fileElevation.confirm")}
-                </Button>
-              </form>
-            )}
+            {otherUserForm}
           </fieldset>
         )}
         {cutEntry && (
@@ -1406,6 +1714,7 @@ export function FileBrowserPanel({
           </>
         )}
       </div>
+      )}
 
       {transfers.length > 0 && (
         <div className="space-y-1 border-b border-slate-800 bg-slate-950/60 px-2 py-1.5">
@@ -1417,6 +1726,33 @@ export function FileBrowserPanel({
                   <span className="min-w-0 flex-1 truncate text-slate-300">
                     {t("fileBrowser.transferDone", { name: transfer.fileName })}{" "}
                     <span className="text-slate-400">{t("fileBrowser.transferElevationEnded")}</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
+                    aria-label={t("common.close")}
+                    title={t("common.close")}
+                  >
+                    ✕
+                  </Button>
+                </>
+              ) : transfer.stopped ? (
+                <>
+                  <span className="text-amber-400">■</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-300">
+                    {t(
+                      transfer.stopped === "cancelled"
+                        ? "fileBrowser.transferCancelled"
+                        : "fileBrowser.transferStopped",
+                      { name: transfer.fileName },
+                    )}
+                    {transfer.incompleteRemotePath && (
+                      <span className="text-amber-300">
+                        {" "}
+                        {t("fileBrowser.transferIncomplete", { path: transfer.incompleteRemotePath })}
+                      </span>
+                    )}
                   </span>
                   <Button
                     size="sm"
@@ -1455,7 +1791,45 @@ export function FileBrowserPanel({
                       { name: transfer.fileName },
                     )}
                     {transfer.totalBytes !== null && ` (${formatBytes(transfer.totalBytes)})`}
+                    {transfer.folder &&
+                      ` — ${t("fileBrowser.transferFiles", {
+                        done: transfer.folder.filesDone,
+                        total: transfer.folder.filesTotal,
+                      })}`}
                   </span>
+                  {transfer.totalBytes !== null && transfer.totalBytes > 0 ? (
+                    <progress
+                      className="h-1.5 w-24 shrink-0"
+                      max={transfer.totalBytes}
+                      value={Math.min(transfer.bytesDone ?? 0, transfer.totalBytes)}
+                      aria-label={transfer.fileName}
+                    />
+                  ) : null}
+                  <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-slate-400">
+                    {formatBytes(transfer.bytesDone ?? 0)}
+                    {transfer.totalBytes !== null && ` / ${formatBytes(transfer.totalBytes)}`}
+                    {" · "}
+                    <span className="inline-block min-w-[5.5rem]">{formatSpeed(transfer.rate?.speed ?? null)}</span>
+                    {" · "}
+                    <span className="inline-block min-w-[6.5rem]">
+                      {transfer.rate?.etaSeconds != null
+                        ? t("fileBrowser.transferRemaining", { time: formatDuration(transfer.rate.etaSeconds) })
+                        : formatDuration(null)}
+                    </span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      sftpCancelTransfer(sessionId, transfer.id).catch((err) =>
+                        console.warn("Konnte Transfer nicht abbrechen:", err),
+                      )
+                    }
+                    aria-label={t("fileBrowser.transferCancel")}
+                    title={t("fileBrowser.transferCancel")}
+                  >
+                    ✕
+                  </Button>
                 </>
               )}
             </div>
@@ -1505,9 +1879,74 @@ export function FileBrowserPanel({
         {loading && <p className="p-3 text-xs text-slate-400">{t("fileBrowser.loading")}</p>}
         {error && <p className="p-3 text-xs text-red-400">{error}</p>}
         {!loading && !error && entries.length === 0 && (
-          <p className="p-3 text-xs text-slate-400">{t("fileBrowser.emptyDirectory")}</p>
+          <p className="p-3 text-xs text-slate-400">
+            {(knownDirModes.current.get(path) ?? 0o111) & 0o111
+              ? t("fileBrowser.emptyDirectory")
+              : t("fileBrowser.noPermissionToOpen")}
+          </p>
         )}
-        {!loading && !error && entries.length > 0 && (
+        {!loading && !error && narrow && entries.length > 0 && (
+          <ul className="m-0 list-none p-0 text-xs">
+            {entries.map((entry) => {
+              const rowMenuOpen = openMenu?.anchor === "row" && openMenu.entry.path === entry.path;
+              const details = [
+                entry.isDir ? null : formatBytes(entry.size),
+                entry.modified ? formatDateTime(entry.modified, i18n.language) : null,
+              ]
+                .filter((part): part is string => part !== null)
+                .join(" · ");
+              return (
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- mouse-only shortcut to the ⋯ menu, same as the table row
+                <li
+                  key={entry.path}
+                  className="flex min-h-11 items-center border-t border-slate-800/70 pl-2"
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDirMenu(null);
+                    setOpenMenu({ entry, anchor: "row" });
+                  }}
+                >
+                  <div className="min-w-0 flex-1 py-1">
+                    {entry.isDir ? (
+                      <button
+                        type="button"
+                        onClick={() => load(entry.path)}
+                        className="block max-w-full truncate rounded text-left text-sm text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        title={entry.name}
+                      >
+                        📁 {entry.name}
+                      </button>
+                    ) : (
+                      <span className="block truncate text-sm text-slate-200" title={entry.name}>
+                        📄 {entry.name}
+                      </span>
+                    )}
+                    <span className="block truncate text-slate-400">{details || "—"}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // Same reasoning as the wide row button: keep the click away from the
+                      // document-wide "click outside closes" listener.
+                      e.stopPropagation();
+                      setOpenMenu(rowMenuOpen ? null : { entry, anchor: "row" });
+                    }}
+                    data-menu-trigger={entry.path}
+                    aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
+                    aria-haspopup="true"
+                    aria-expanded={rowMenuOpen}
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-lg text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  >
+                    ⋯
+                  </button>
+                  {rowMenuOpen && renderEntryMenu(entry, "")}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {!loading && !error && !narrow && entries.length > 0 && (
           <table
             className="w-full table-fixed text-left text-xs"
             style={{
@@ -1659,30 +2098,8 @@ export function FileBrowserPanel({
                     >
                       ⋮
                     </button>
-                    {openMenu?.anchor === "row" && openMenu.entry.path === entry.path && (
-                      <FileEntryMenu
-                        entry={entry}
-                        className="absolute right-2 top-full z-10"
-                        onOpenLocally={handleOpenLocally}
-                        onDownloadDefault={handleDownloadDefault}
-                        onDownloadChoose={handleDownloadChoose}
-                        onCopyContent={handleCopyContent}
-                        onCopyFile={handleCopyFile}
-                        onCopyPath={handleCopyPath}
-                        onShowProperties={handleShowProperties}
-                        onRefresh={handleRefresh}
-                        onRename={(e) => {
-                          setOpenMenu(null);
-                          setRenaming({ entry: e, value: e.name });
-                        }}
-                        onCut={handleCut}
-                        onChmod={handleChmod}
-                        onDelete={(e) => {
-                          setOpenMenu(null);
-                          setDeleteTarget(e);
-                        }}
-                      />
-                    )}
+                    {openMenu?.anchor === "row" && openMenu.entry.path === entry.path &&
+                      renderEntryMenu(entry, "fixed z-10")}
                   </td>
                 </tr>
               ))}
@@ -1702,34 +2119,13 @@ export function FileBrowserPanel({
           `position: fixed` ignoriert das `overflow-auto` des umgebenden
           Tabellen-Containers (kein Portal nötig), solange kein Vorfahre
           `transform`/`filter`/`perspective` setzt — hier nicht der Fall. */}
-      {openMenu && openMenu.anchor !== "row" && (
-        <FileEntryMenu
-          entry={openMenu.entry}
-          className="fixed z-20"
-          style={{ left: openMenu.anchor.x, top: openMenu.anchor.y }}
-          onOpenLocally={handleOpenLocally}
-          onDownloadDefault={handleDownloadDefault}
-          onDownloadChoose={handleDownloadChoose}
-          onCopyContent={handleCopyContent}
-                        onCopyFile={handleCopyFile}
-          onCopyPath={handleCopyPath}
-          onShowProperties={handleShowProperties}
-          onRefresh={handleRefresh}
-          onRename={(e) => {
-            setOpenMenu(null);
-            setRenaming({ entry: e, value: e.name });
-          }}
-          onCut={handleCut}
-          onChmod={handleChmod}
-          onDelete={(e) => {
-            setOpenMenu(null);
-            setDeleteTarget(e);
-          }}
-        />
-      )}
+      {openMenu &&
+        openMenu.anchor !== "row" &&
+        renderEntryMenu(openMenu.entry, "fixed z-20", openMenu.anchor)}
 
       {dirMenu && (
         <DirectoryMenu
+          narrow={narrow}
           x={dirMenu.x}
           y={dirMenu.y}
           pasteName={cutEntry?.name ?? null}
@@ -1743,6 +2139,10 @@ export function FileBrowserPanel({
             setDirMenu(null);
             setNameError(null);
             setNewFileOpen("");
+          }}
+          onRefresh={() => {
+            setDirMenu(null);
+            handleRefresh();
           }}
           onPaste={() => {
             setDirMenu(null);
@@ -1934,23 +2334,29 @@ export function FileBrowserPanel({
           layer="sessionTab"
           size="sm"
           title={
-            elevated
+            elevated && !moveCollision.targetIsDir
               ? t("fileElevation.moveCollisionTitle", { user: elevatedUser })
               : t("fileBrowser.moveCollision.title")
           }
           onClose={() => setMoveCollision(null)}
           actions={
             <>
-              <Button onClick={() => setMoveCollision(null)}>{t("fileBrowser.cancel")}</Button>
-              <Button variant="danger" onClick={handleConfirmMoveCollision}>
-                {t("fileBrowser.overwrite")}
+              <Button onClick={() => setMoveCollision(null)}>
+                {t("fileBrowser.cancel")}
               </Button>
+              {!moveCollision.targetIsDir && (
+                <Button variant="danger" onClick={handleConfirmMoveCollision}>
+                  {t("fileBrowser.overwrite")}
+                </Button>
+              )}
             </>
           }
         >
           <p>
             <span className="font-mono text-xs break-all">{moveCollision.to}</span>{" "}
-            {t("fileBrowser.moveCollision.body")}
+            {moveCollision.targetIsDir
+              ? t("fileBrowser.moveCollision.folderBody")
+              : t("fileBrowser.moveCollision.body")}
           </p>
         </DialogFrame>
       )}
@@ -2058,6 +2464,52 @@ export function FileBrowserPanel({
         </DialogFrame>
       )}
 
+      {stopPrompt && (
+        <DialogFrame
+          layer="sessionTab"
+          size="sm"
+          title={t("fileElevation.stopTitle")}
+          onClose={() => setStopPrompt(null)}
+          actions={
+            <>
+              <Button onClick={() => setStopPrompt(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button variant="danger" onClick={confirmStopPrompt}>
+                {t("fileElevation.toggleOff")}
+              </Button>
+            </>
+          }
+        >
+          <p>{t("fileElevation.stopBody")}</p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {stopPrompt.operations.map((op) => (
+              <li key={op.id} className="break-all">
+                <span className="font-semibold">
+                  {t(
+                    {
+                      download: "fileElevation.opDownload",
+                      upload: "fileElevation.opUpload",
+                      delete: "fileElevation.opDelete",
+                      chmod: "fileElevation.opChmod",
+                    }[op.kind],
+                  )}
+                </span>{" "}
+                <span className="font-mono">{op.path}</span>
+                {op.bytesTotal !== null && op.bytesDone !== null && (
+                  <span className="text-slate-400">
+                    {" "}
+                    ({formatBytes(op.bytesDone)} / {formatBytes(op.bytesTotal)}
+                    {op.filesTotal !== null &&
+                      op.filesDone !== null &&
+                      ` — ${t("fileBrowser.transferFiles", { done: op.filesDone, total: op.filesTotal })}`}
+                    )
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </DialogFrame>
+      )}
+
       {elevationFailure && (
         <ElevationFailureDialog
           result={elevationFailure}
@@ -2069,10 +2521,15 @@ export function FileBrowserPanel({
 }
 
 /** Focuses the ⋮ button of the entry with this path (no-op for the context menu). */
-function focusMenuTrigger(path: string): void {
+function findMenuTrigger(path: string): HTMLElement | null {
   for (const el of document.querySelectorAll<HTMLElement>("[data-menu-trigger]")) {
-    if (el.dataset.menuTrigger === path) el.focus();
+    if (el.dataset.menuTrigger === path) return el;
   }
+  return null;
+}
+
+function focusMenuTrigger(path: string): void {
+  findMenuTrigger(path)?.focus();
 }
 
 /** Spec 0054, Teil 1: die EINE Aktionsliste, die sowohl vom Drei-Punkte-
@@ -2085,8 +2542,9 @@ function focusMenuTrigger(path: string): void {
  * folgen in Teil 3). */
 function FileEntryMenu({
   entry,
+  narrow,
   className,
-  style,
+  point,
   onOpenLocally,
   onDownloadDefault,
   onDownloadChoose,
@@ -2101,8 +2559,11 @@ function FileEntryMenu({
   onDelete,
 }: {
   entry: RemoteEntryDto;
+  /** Issue #584: render as a bottom sheet across the viewport width. */
+  narrow: boolean;
   className: string;
-  style?: CSSProperties;
+  /** Context menu: opens at this viewport point; otherwise anchored to the ⋮ button. */
+  point?: { x: number; y: number };
   onOpenLocally: (entry: RemoteEntryDto) => void;
   onDownloadDefault: (entry: RemoteEntryDto) => void;
   onDownloadChoose: (entry: RemoteEntryDto) => void;
@@ -2117,18 +2578,29 @@ function FileEntryMenu({
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
   const { t } = useTranslation();
+  // Issue #627: always fully inside the window (flips/shifts at the edges).
+  const menuRef = useRef<HTMLDivElement>(null);
+  const getAnchor = useCallback(
+    () => point ?? findMenuTrigger(entry.path),
+    [point?.x, point?.y, entry.path], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const style = useMenuPlacement(menuRef, getAnchor, true, { align: point ? "start" : "end", gap: point ? 0 : 4 });
   // The menu unmounts when an action runs. Focus the ⋮ button first, so a
   // dialog opened by the action remembers it and gives focus back on close.
   const act = (fn: () => void) => () => {
     focusMenuTrigger(entry.path);
     fn();
   };
-  const itemClass =
-    "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+  const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400`;
   return (
     <div
-      className={`${className} w-52 border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg`}
-      style={style}
+      ref={menuRef}
+      className={
+        narrow
+          ? "fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg"
+          : `${className} w-52 border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg`
+      }
+      style={narrow ? undefined : style}
     >
       <button type="button" onClick={act(() => onDownloadDefault(entry))} className={itemClass}>
         {t("fileBrowser.menu.download")}
@@ -2173,7 +2645,7 @@ function FileEntryMenu({
       <button
         type="button"
         onClick={act(() => onDelete(entry))}
-        className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-600/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
+        className={`block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-red-400 hover:bg-red-600/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400`}
       >
         {t("fileBrowser.menu.delete")}
       </button>
@@ -2195,7 +2667,7 @@ function FilePropertiesDialog({
   onClose: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  const octal = entry.permissionsOctal.toString(8).padStart(3, "0");
+  const octal = entry.permissionsOctal.toString(8).padStart(4, "0");
   const owner = entry.owner ?? (entry.uid !== null ? String(entry.uid) : "—");
   const group = entry.group ?? (entry.gid !== null ? String(entry.gid) : "—");
 
@@ -2262,7 +2734,7 @@ function ChmodDialog({
    * gesetzt.“ */
   modeNote: string | null;
   onCancel: () => void;
-  onConfirm: (mode: number, recursive: boolean) => void;
+  onConfirm: (mode: number, recursive: boolean, applySpecialBits: boolean) => void;
 }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState(entry.permissionsOctal);
@@ -2287,6 +2759,12 @@ function ChmodDialog({
 
   const toggleBit = (bit: number) => applyMode(mode ^ bit);
 
+  // Issue #624: a recursive apply only touches folders' special bits when
+  // the user changed them here.
+  const specialChanged = (mode & 0o7000) !== (entry.permissionsOctal & 0o7000);
+  const fileBits = mode & 0o777;
+  const folderBits = fileBits | ((fileBits & 0o444) >> 2);
+
   const handleNumericChange = (value: string) => {
     setNumericInput(value);
     if (/^[0-7]{1,4}$/.test(value)) {
@@ -2302,7 +2780,7 @@ function ChmodDialog({
       onClose={onCancel}
       onSubmit={(e) => {
         e.preventDefault();
-        onConfirm(mode, recursive);
+        onConfirm(mode, recursive, specialChanged);
       }}
       actions={
         <>
@@ -2357,6 +2835,30 @@ function ChmodDialog({
         </tbody>
       </table>
 
+      <fieldset className="mb-3 text-sm text-slate-300">
+        <legend className="sr-only">{t("fileBrowser.chmod.special")}</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {(
+            [
+              [0o4000, "setuid"],
+              [0o2000, "setgid"],
+              [0o1000, "sticky"],
+            ] as const
+          ).map(([bit, key]) => (
+            <label key={key} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={(mode & bit) !== 0}
+                onChange={() => toggleBit(bit)}
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              />
+              {t(`fileBrowser.chmod.${key}`)}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-400">{t("fileBrowser.chmod.specialHint")}</p>
+      </fieldset>
+
       <Field label={t("fileBrowser.chmod.numeric")} className="mb-3">
         {(control) => (
           <input
@@ -2383,6 +2885,14 @@ function ChmodDialog({
             {t("fileBrowser.chmod.recursiveWarning")}
           </span>
         </label>
+      )}
+      {entry.isDir && recursive && (
+        <p className="mt-2 text-xs text-slate-300">
+          {t("fileBrowser.chmod.recursiveSummary", {
+            folders: folderBits.toString(8).padStart(3, "0"),
+            files: fileBits.toString(8).padStart(3, "0"),
+          })}
+        </p>
       )}
     </DialogFrame>
   );
@@ -2466,20 +2976,24 @@ function isValidEntryName(name: string): boolean {
  * eine eigene kleine Komponente, damit `FileEntryMenu` nur Eintrags-
  * Aktionen behält. Schließen per Klick außerhalb/Escape macht der Aufrufer. */
 function DirectoryMenu({
+  narrow,
   x,
   y,
   pasteName,
   clipboardFiles,
   onNewFolder,
   onNewFile,
+  onRefresh,
   onPaste,
 }: {
+  narrow: boolean;
   x: number;
   y: number;
   pasteName: string | null;
   clipboardFiles: boolean;
   onNewFolder: () => void;
   onNewFile: () => void;
+  onRefresh: () => void;
   onPaste: () => void;
 }) {
   const { t } = useTranslation();
@@ -2487,12 +3001,20 @@ function DirectoryMenu({
   useEffect(() => {
     firstRef.current?.focus();
   }, []);
-  const itemClass =
-    "block w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+  // Issue #627: always fully inside the window (flips/shifts at the edges).
+  const menuRef = useRef<HTMLFieldSetElement>(null);
+  const getAnchor = useCallback(() => ({ x, y }), [x, y]);
+  const placed = useMenuPlacement(menuRef, getAnchor, true);
+  const itemClass = `block w-full px-3 ${narrow ? "min-h-11 py-2 text-sm" : "py-1.5"} text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400`;
   return (
     <fieldset
-      className="fixed z-20 m-0 w-52 min-w-0 border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
-      style={{ left: x, top: y }}
+      ref={menuRef}
+      className={
+        narrow
+          ? "fixed inset-x-0 bottom-0 z-30 m-0 min-w-0 rounded-t border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
+          : "fixed z-20 m-0 w-52 min-w-0 border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
+      }
+      style={narrow ? undefined : placed}
     >
       <legend className="sr-only">{t("fileBrowser.directoryMenuLabel")}</legend>
       <button ref={firstRef} type="button" onClick={onNewFolder} className={itemClass}>
@@ -2500,6 +3022,9 @@ function DirectoryMenu({
       </button>
       <button type="button" onClick={onNewFile} className={itemClass}>
         {t("fileBrowser.menu.newFile")}
+      </button>
+      <button type="button" onClick={onRefresh} className={itemClass}>
+        {t("fileBrowser.menu.refresh")}
       </button>
       {pasteName !== null && (
         <button
@@ -2579,7 +3104,7 @@ function ElevationFailureDialog({
   const copy = async () => {
     if (!failure.sudoersLine) return;
     try {
-      await navigator.clipboard.writeText(failure.sudoersLine);
+      await clipboardWriteText(failure.sudoersLine);
       setCopied(true);
     } catch (err) {
       console.warn("Konnte sudoers-Zeile nicht kopieren:", err);

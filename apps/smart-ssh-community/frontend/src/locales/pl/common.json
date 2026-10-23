@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ustawienia",
+    "backToList": "Sekcje",
     "categories": {
       "aiProvider": "Dostawca AI",
       "displayLanguage": "Wygląd i język",
@@ -130,10 +131,12 @@
     "rootDropZone": "Upuść tutaj, aby przenieść na najwyższy poziom (bez grupy)",
     "hintRoot": "→ najwyższy poziom (bez grupy)",
     "hintGroup": "→ przenieś do tej grupy",
-    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy"
+    "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
+    "moveTo": "Przenieś „{{name}}” do…"
   },
   "management": {
-    "emptyState": "Wybierz grupę lub serwer po lewej albo utwórz coś nowego przez „{{addGroup}}”/„{{addServer}}”."
+    "emptyState": "Wybierz grupę lub serwer po lewej albo utwórz coś nowego przez „{{addGroup}}”/„{{addServer}}”.",
+    "back": "Wstecz"
   },
   "groupForm": {
     "titleNew": "Nowa grupa",
@@ -149,6 +152,8 @@
     "confirmDelete": "Usuń na stałe"
   },
   "serverForm": {
+    "connect": "Połącz",
+    "connectSaveFirst": "Najpierw zapisz zmiany",
     "hostKeys": {
       "title": "Klucze hostów",
       "none": "Nie zapisano jeszcze klucza hosta. Zostanie zapisany przy pierwszym połączeniu."
@@ -175,6 +180,9 @@
       "identityFile": "Plik klucza"
     },
     "password": "Hasło",
+    "passwordOptionalHint": "(opcjonalnie – zostaw puste, jeśli serwer zezwala na logowanie bez hasła)",
+    "removeSavedPassword": "Usuń zapisane hasło",
+    "noPasswordSaved": "Nie zapisano hasła. Aplikacja najpierw próbuje zalogować się bez hasła, a potem z pustym hasłem.",
     "unchangedHint": "(puste = bez zmian)",
     "privateKeyLabel": "Klucz prywatny",
     "chooseFile": "Wybierz plik…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Katalog startowy musi być ścieżką bezwzględną (/…) lub zaczynać się od ~/.",
       "controlCharacter": "Katalog startowy nie może zawierać znaków sterujących."
+    },
+    "tabs": {
+      "label": "Ustawienia serwera",
+      "general": "Ogólne",
+      "connection": "Połączenie",
+      "security": "Bezpieczeństwo",
+      "invalid": "Zawiera błędy"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Wynik obcięto na limicie rozmiaru — może być niekompletny.",
     "liveOutputLabel": "Wynik na żywo",
     "liveOutputTruncatedNotice": "⚠ Osiągnięto limit rozmiaru — dalszy wynik nie jest już pokazywany.",
+    "autoRanLead": "Wykonano automatycznie",
+    "autoRanRule": "reguła",
+    "autoRanScopeGlobal": "globalna",
+    "autoRanScopeServer": "serwer {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Otwórz tę regułę w regułach filtrów",
     "mcpOrigin": "Narzędzie zewnętrzne (MCP): „{{name}}”",
     "mcpOriginGeneric": "narzędzie zewnętrzne (MCP)",
     "mcpOriginHint": "To działanie nie zostało zażądane przez wewnętrzny czat, lecz przez zewnętrzne narzędzie za pośrednictwem lokalnego serwera MCP."
@@ -412,6 +433,11 @@
     "overview": "Przegląd",
     "pendingAction": "Oczekiwanie na potwierdzenie",
     "closeTab": "Zamknij kartę „{{name}}”",
+    "menu": {
+      "open": "Otwórz menu nawigacji",
+      "title": "Menu nawigacji",
+      "sessions": "Otwarte sesje"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Narzędzie zewnętrzne",
@@ -429,6 +455,8 @@
     "active": "aktywny",
     "setActive": "Ustaw jako aktywny",
     "addProvider": "Dodaj dostawcę",
+    "editProvider": "Edytuj dostawcę",
+    "apiKeyUnchangedPlaceholder": "Bez zmian – wpisz nowy klucz, aby go zastąpić",
     "type": "Typ",
     "providerName": "Nazwa",
     "model": "Model",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Dostawca AI zgłosił błąd (np. konserwacja lub przeciążenie). Spróbuj później; jeśli się powtarza, sprawdź ustawienia dostawcy.",
     "AI_PROVIDER_OVERLOADED": "Dostawca AI jest teraz przeciążony. Spróbuj ponownie za chwilę.",
     "AI_PROVIDER_BILLING": "Konto dostawcy AI nie ma już środków. Sprawdź rozliczenia w konsoli dostawcy.",
+    "AI_PROVIDER_USAGE_LIMIT": "Osiągnięto limit użycia u dostawcy. Zwiększ limit w konsoli dostawcy lub wybierz innego dostawcę.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Osiągnięto limit użycia u dostawcy. Dostęp wróci: {{date}}. Zwiększ limit w konsoli dostawcy lub wybierz innego dostawcę.",
     "AI_PROVIDER_REJECTED_REQUEST": "Dostawca AI odrzucił żądanie.",
     "AI_RESPONSE_TRUNCATED": "Odpowiedź AI była zbyt długa na pełne polecenie",
     "AI_MODEL_NOT_FOUND": "Dostawca AI nie zna tego modelu. Sprawdź nazwę modelu w Ustawieniach („Wczytaj modele” pokazuje dostępne); w Ollamie najpierw pobierz go poleceniem `ollama pull <name>`.",
@@ -705,6 +735,12 @@
     "toggleTitle": "Otwórz przeglądarkę plików z podwyższonymi uprawnieniami (sudo) — wymaga reguły sudo bez hasła dla sftp-server",
     "enabling": "Sprawdzanie sudo …",
     "toggleOff": "Zakończ podwyższone uprawnienia",
+    "stopTitle": "Zakończyć podwyższone uprawnienia?",
+    "stopBody": "Te operacje nadal trwają. Zakończenie podwyższonych uprawnień je zatrzyma.",
+    "opDownload": "Pobieranie",
+    "opUpload": "Wysyłanie",
+    "opDelete": "Usuwanie",
+    "opChmod": "Zmiana uprawnień",
     "banner": "Podwyższone uprawnienia aktywne: wszystkie działania na plikach w tej przeglądarce wykonywane są jako {{user}}.",
     "deleteFileTitle": "Usunąć plik jako {{user}}?",
     "deleteDirTitle": "Usunąć folder jako {{user}}?",
@@ -797,8 +833,6 @@
     },
     "tag": {
       "literalHint": "Dosłowny tag z obcego pliku — może dokładnie pasować do reguły zezwalającej. Można odznaczyć osobno.",
-      "allowDeselectedHint": "Pasuje do istniejącej reguły zezwalającej i do żadnej odmawiającej — dlatego domyślnie odznaczony. Można zaznaczyć ponownie osobno.",
-      "autoDeselectedBadge": "odznaczono automatycznie",
       "matchesRuleHint": "pasuje do reguł filtrowania ({{count}}): {{actions}}",
       "action": {
         "allow": "Zezwól",
@@ -912,7 +946,8 @@
     "dismiss": "Odrzuć propozycję",
     "reject": "Odrzuć",
     "applying": "Stosowanie…",
-    "apply": "Zastosuj"
+    "apply": "Zastosuj",
+    "expired": "Wygasło — nie zastosowano"
   },
   "connectLog": {
     "title": "Szczegóły",
@@ -927,12 +962,15 @@
       "handshake": "Uzgadnianie SSH",
       "hostKeyCheck": "Sprawdzenie klucza hosta",
       "authentication": "Uwierzytelnianie",
-      "sessionReady": "Sesja nawiązana"
+      "sessionReady": "Sesja nawiązana",
+      "dnsSkipped": "Adres IP – rozpoznawanie nazwy niepotrzebne"
     },
     "status": {
       "ok": "OK",
       "running": "w toku",
-      "failed": "niepowodzenie ({{code}})"
+      "failed": "niepowodzenie ({{code}})",
+      "skipped": "pominięto",
+      "failedReason": "niepowodzenie: {{reason}}"
     },
     "hostKeyResult": {
       "known": "znany",
@@ -940,6 +978,7 @@
       "changed": "zmieniony"
     },
     "authMethod": {
+      "none": "none (bez uwierzytelniania)",
       "password": "Hasło",
       "privateKey": "Klucz prywatny",
       "agent": "Agent SSH",
@@ -954,6 +993,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "częściowo przyjęte, wymagane dalsze uwierzytelnianie",
       "remainingMethods": "Serwer oferuje też: {{methods}} (nie próbowano)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Przekroczono czas połączenia TCP",
+      "SSH_TIMEOUT": "Przekroczono limit czasu",
+      "SSH_CONNECTION_REFUSED": "Połączenie odrzucone",
+      "SSH_HOST_NOT_FOUND": "Nie znaleziono hosta",
+      "SSH_HOST_UNREACHABLE": "Host nieosiągalny",
+      "SSH_AUTH_FAILED": "Uwierzytelnianie nie powiodło się"
     }
   },
   "fileBrowser": {
@@ -975,7 +1022,14 @@
     "transferDownload": "Pobieranie: {{name}}",
     "transferDone": "Gotowe: {{name}}",
     "transferElevationEnded": "Tryb podwyższony został wyłączony podczas transferu.",
+    "transferCancel": "Anuluj transfer",
+    "transferCancelled": "{{name}}: anulowano",
+    "transferStopped": "{{name}}: zatrzymano",
+    "transferIncomplete": "Niekompletny plik pozostał na serwerze: {{path}}",
+    "transferFiles": "{{done}} z {{total}} plików",
+    "transferRemaining": "pozostało {{time}}",
     "loading": "Wczytywanie…",
+    "noPermissionToOpen": "Brak uprawnień do otwarcia tego folderu (brak x)",
     "emptyDirectory": "(pusty katalog)",
     "dropHint": "Upuść tutaj, aby wysłać do {{path}}",
     "cancel": "Anuluj",
@@ -1015,7 +1069,8 @@
     },
     "moveCollision": {
       "title": "Cel już istnieje",
-      "body": "już istnieje i zostałby nadpisany."
+      "body": "już istnieje i zostałby nadpisany.",
+      "folderBody": "już istnieje jako folder i nie można go zastąpić."
     },
     "folderUpload": {
       "conflictTitle": "Nadpisać pliki w folderze?",
@@ -1077,6 +1132,12 @@
       "execute": "Wykonywanie",
       "numeric": "Numerycznie",
       "recursive": "Rekurencyjnie",
+      "special": "Bity specjalne",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Przy zastosowaniu rekurencyjnym bity specjalne trafiają tylko do folderów, nigdy do plików.",
+      "recursiveSummary": "Foldery: {{folders}}, pliki: {{files}}",
       "recursiveWarning": "— zmienia uprawnienia WSZYSTKICH plików i podfolderów w tym folderze. Potężna operacja, nie można jej cofnąć.",
       "owner": "Właściciel",
       "group": "Grupa",
@@ -1103,6 +1164,7 @@
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",
+    "composerMore": "Więcej akcji pola wiadomości",
     "newChat": "Nowy czat",
     "newChatDisabledHint": "Niedostępne, gdy AI odpowiada lub otwarte jest potwierdzenie.",
     "autoContinuing": "Tryb automatyczny działa — AI samodzielnie odpowiada na ostatni wynik…",
@@ -1202,6 +1264,9 @@
     "splitHandle": "Separator paneli",
     "terminalTab": "Terminal",
     "filesTab": "Pliki",
+    "aiTab": "AI",
+    "paneTabs": "Panele sesji",
+    "moreActions": "Więcej akcji",
     "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}",
     "reconnectingAuto": "Ponowne łączenie… (próba {{attempt}})",
     "stopReconnect": "Zatrzymaj",

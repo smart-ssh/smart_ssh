@@ -105,6 +105,35 @@ describe("ChatPanel AI error card (issue #600)", () => {
     expect(screen.getByRole("button", { name: "Erneut versuchen" })).toBeInTheDocument();
   });
 
+  it("shows the usage-limit text with the date access returns (issue #631)", async () => {
+    await renderWithUserTurn();
+    act(() =>
+      handlerOf<ChatErrorEvent>(onChatError)({
+        sessionId: "session-1",
+        message: "Nutzungslimit",
+        code: "AI_PROVIDER_USAGE_LIMIT",
+        providerErrorType: "invalid_request_error",
+        accessReturns: "2026-11-01 at 00:00 UTC",
+      }),
+    );
+    expect(
+      screen.getByText(/Der Zugriff ist wieder möglich am 2026-11-01 at 00:00 UTC\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Erneut versuchen" })).toBeNull();
+  });
+
+  it("shows the usage-limit text without a date when the provider sent none (issue #631)", async () => {
+    await renderWithUserTurn();
+    act(() =>
+      handlerOf<ChatErrorEvent>(onChatError)({
+        sessionId: "session-1",
+        message: "Nutzungslimit",
+        code: "AI_PROVIDER_USAGE_LIMIT",
+      }),
+    );
+    expect(screen.getByText(/Das Nutzungslimit beim Anbieter ist erreicht\. Limit in der Konsole/)).toBeInTheDocument();
+  });
+
   it("shows 'stream' when there is no HTTP status", async () => {
     await renderWithUserTurn();
     act(() =>

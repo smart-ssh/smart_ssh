@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Setări",
+    "backToList": "Secțiuni",
     "categories": {
       "aiProvider": "Furnizor IA",
       "displayLanguage": "Afișare și limbă",
@@ -130,10 +131,12 @@
     "rootDropZone": "Plasați aici pentru a muta la nivelul superior (fără grup)",
     "hintRoot": "→ nivel superior (fără grup)",
     "hintGroup": "→ mută în acest grup",
-    "hintCycle": "Un grup nu poate fi mutat în propriul subgrup"
+    "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
+    "moveTo": "Mută „{{name}}” în…"
   },
   "management": {
-    "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”."
+    "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”.",
+    "back": "Înapoi"
   },
   "groupForm": {
     "titleNew": "Grup nou",
@@ -149,6 +152,8 @@
     "confirmDelete": "Șterge definitiv"
   },
   "serverForm": {
+    "connect": "Conectare",
+    "connectSaveFirst": "Salvați mai întâi modificările",
     "hostKeys": {
       "title": "Chei de host",
       "none": "Nicio cheie de host stocată încă. Se stochează la prima conectare."
@@ -175,6 +180,9 @@
       "identityFile": "Fișier de cheie"
     },
     "password": "Parolă",
+    "passwordOptionalHint": "(opțional – lăsați gol dacă serverul permite autentificarea fără parolă)",
+    "removeSavedPassword": "Elimină parola salvată",
+    "noPasswordSaved": "Nicio parolă salvată. Aplicația încearcă mai întâi autentificarea fără parolă, apoi cu o parolă goală.",
     "unchangedHint": "(gol = neschimbat)",
     "privateKeyLabel": "Cheie privată",
     "chooseFile": "Alegeți fișierul…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Directorul de pornire trebuie să fie o cale absolută (/…) sau să înceapă cu ~/.",
       "controlCharacter": "Directorul de pornire nu trebuie să conțină caractere de control."
+    },
+    "tabs": {
+      "label": "Setările serverului",
+      "general": "General",
+      "connection": "Conexiune",
+      "security": "Securitate",
+      "invalid": "Conține erori"
     }
   },
   "filterRules": {
@@ -349,6 +364,12 @@
     "commandTruncatedNotice": "⚠ Rezultatul a fost tăiat la limita de dimensiune — poate fi incomplet.",
     "liveOutputLabel": "Rezultat în timp real",
     "liveOutputTruncatedNotice": "⚠ Limita de dimensiune atinsă — rezultatul următor nu mai este afișat.",
+    "autoRanLead": "Rulat automat",
+    "autoRanRule": "regulă",
+    "autoRanScopeGlobal": "globală",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "etichetă {{tag}}",
+    "autoRanOpenRule": "Deschide această regulă în regulile de filtrare",
     "mcpOrigin": "Instrument extern (MCP): „{{name}}”",
     "mcpOriginGeneric": "instrument extern (MCP)",
     "mcpOriginHint": "Această acțiune nu a fost solicitată de chatul intern, ci de un instrument extern prin serverul MCP local.",
@@ -412,6 +433,11 @@
     "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",
+    "menu": {
+      "open": "Deschide meniul de navigare",
+      "title": "Meniu de navigare",
+      "sessions": "Sesiuni deschise"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Instrument extern",
@@ -429,6 +455,8 @@
     "active": "activ",
     "setActive": "Setează ca activ",
     "addProvider": "Adaugă furnizor",
+    "editProvider": "Editează furnizorul",
+    "apiKeyUnchangedPlaceholder": "Neschimbată – introdu o cheie nouă pentru a o înlocui",
     "type": "Tip",
     "providerName": "Nume",
     "model": "Model",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Furnizorul de IA a raportat o eroare (de ex. mentenanță sau suprasarcină). Încercați mai târziu; dacă persistă, verificați setările furnizorului.",
     "AI_PROVIDER_OVERLOADED": "Furnizorul de IA este supraîncărcat chiar acum. Încercați din nou într-un moment.",
     "AI_PROVIDER_BILLING": "Contul furnizorului de IA nu mai are credit. Verificați facturarea în consola furnizorului.",
+    "AI_PROVIDER_USAGE_LIMIT": "Limita de utilizare la furnizor a fost atinsă. Măriți limita în consola furnizorului sau alegeți alt furnizor.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Limita de utilizare la furnizor a fost atinsă. Accesul revine la {{date}}. Măriți limita în consola furnizorului sau alegeți alt furnizor.",
     "AI_PROVIDER_REJECTED_REQUEST": "Furnizorul de IA a respins cererea.",
     "AI_RESPONSE_TRUNCATED": "Răspunsul IA a fost prea lung pentru o comandă completă",
     "AI_MODEL_NOT_FOUND": "Furnizorul de IA nu cunoaște acest model. Verificați numele modelului în Setări („Încarcă modelele” le listează pe cele disponibile); pentru Ollama, descărcați-l mai întâi cu `ollama pull <name>`.",
@@ -700,6 +730,12 @@
     "toggleTitle": "Deschide browserul de fișiere cu drepturi ridicate (sudo) — necesită o regulă sudo fără parolă pentru sftp-server",
     "enabling": "Se verifică sudo …",
     "toggleOff": "Încheie drepturile ridicate",
+    "stopTitle": "Încheiați drepturile ridicate?",
+    "stopBody": "Aceste operații încă rulează. Încheierea drepturilor ridicate le oprește.",
+    "opDownload": "Descărcare",
+    "opUpload": "Încărcare",
+    "opDelete": "Ștergere",
+    "opChmod": "Schimbarea permisiunilor",
     "banner": "Drepturi ridicate active: toate acțiunile asupra fișierelor din acest browser rulează ca {{user}}.",
     "deleteFileTitle": "Ștergeți fișierul ca {{user}}?",
     "deleteDirTitle": "Ștergeți folderul ca {{user}}?",
@@ -792,8 +828,6 @@
     },
     "tag": {
       "literalHint": "Etichetă literală dintr-un fișier străin — se poate potrivi exact cu o regulă Permite. Poate fi deselectată individual.",
-      "allowDeselectedHint": "Se potrivește cu o regulă Permite existentă și cu nicio regulă Refuză — de aceea este deselectată implicit. Poate fi selectată din nou individual.",
-      "autoDeselectedBadge": "deselectată automat",
       "matchesRuleHint": "se potrivește cu {{count}} reguli de filtrare existente: {{actions}}",
       "action": {
         "allow": "Permite",
@@ -907,7 +941,8 @@
     "dismiss": "Închide sugestia",
     "reject": "Respinge",
     "applying": "Se aplică…",
-    "apply": "Aplică"
+    "apply": "Aplică",
+    "expired": "Expirat — neaplicat"
   },
   "connectLog": {
     "title": "Detalii",
@@ -922,12 +957,15 @@
       "handshake": "Handshake SSH",
       "hostKeyCheck": "Verificarea cheii de host",
       "authentication": "Autentificare",
-      "sessionReady": "Sesiune stabilită"
+      "sessionReady": "Sesiune stabilită",
+      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare"
     },
     "status": {
       "ok": "OK",
       "running": "în curs",
-      "failed": "eșuat ({{code}})"
+      "failed": "eșuat ({{code}})",
+      "skipped": "omis",
+      "failedReason": "eșuat: {{reason}}"
     },
     "hostKeyResult": {
       "known": "cunoscută",
@@ -935,6 +973,7 @@
       "changed": "schimbată"
     },
     "authMethod": {
+      "none": "none (fără autentificare)",
       "password": "Parolă",
       "privateKey": "Cheie privată",
       "agent": "Agent SSH",
@@ -949,6 +988,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "acceptată parțial, este necesară autentificare suplimentară",
       "remainingMethods": "Serverul oferă și: {{methods}} (neîncercate)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Conexiunea TCP a expirat",
+      "SSH_TIMEOUT": "Timp expirat",
+      "SSH_CONNECTION_REFUSED": "Conexiune refuzată",
+      "SSH_HOST_NOT_FOUND": "Gazda nu a fost găsită",
+      "SSH_HOST_UNREACHABLE": "Gazda nu poate fi contactată",
+      "SSH_AUTH_FAILED": "Autentificarea a eșuat"
     }
   },
   "fileBrowser": {
@@ -970,7 +1017,14 @@
     "transferDownload": "Se descarcă: {{name}}",
     "transferDone": "Terminat: {{name}}",
     "transferElevationEnded": "Modul cu drepturi ridicate a fost dezactivat în timpul transferului.",
+    "transferCancel": "Anulează transferul",
+    "transferCancelled": "{{name}}: anulat",
+    "transferStopped": "{{name}}: oprit",
+    "transferIncomplete": "Fișier incomplet rămas pe server: {{path}}",
+    "transferFiles": "{{done}} din {{total}} fișiere",
+    "transferRemaining": "au mai rămas {{time}}",
     "loading": "Se încarcă…",
+    "noPermissionToOpen": "Nu aveți permisiunea de a deschide acest folder (lipsește x)",
     "emptyDirectory": "(director gol)",
     "dropHint": "Plasați aici pentru a încărca în {{path}}",
     "cancel": "Anulează",
@@ -1008,7 +1062,8 @@
     },
     "moveCollision": {
       "title": "Ținta există deja",
-      "body": "există deja și ar fi suprascris."
+      "body": "există deja și ar fi suprascris.",
+      "folderBody": "există deja ca dosar și nu poate fi înlocuit."
     },
     "folderUpload": {
       "conflictTitle": "Suprascrieți fișierele din folder?",
@@ -1070,6 +1125,12 @@
       "execute": "Execuție",
       "numeric": "Numeric",
       "recursive": "Recursiv",
+      "special": "Biți speciali",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "La aplicarea recursivă, biții speciali merg doar la foldere, niciodată la fișiere.",
+      "recursiveSummary": "Foldere: {{folders}}, fișiere: {{files}}",
       "recursiveWarning": "— modifică permisiunile TUTUROR fișierelor și subfolderelor din acest folder. Acțiune puternică, ireversibilă.",
       "owner": "Proprietar",
       "group": "Grup",
@@ -1096,6 +1157,7 @@
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
+    "composerMore": "Mai multe acțiuni de introducere",
     "newChat": "Chat nou",
     "newChatDisabledHint": "Indisponibil cât timp IA răspunde sau o confirmare este deschisă.",
     "autoContinuing": "Modul automat rulează — IA răspunde singură la ultimul rezultat…",
@@ -1190,6 +1252,9 @@
     "splitHandle": "Separator de panou",
     "terminalTab": "Terminal",
     "filesTab": "Fișiere",
+    "aiTab": "IA",
+    "paneTabs": "Panourile sesiunii",
+    "moreActions": "Mai multe acțiuni",
     "terminalOpenFailed": "Terminalul nu a putut fi deschis: {{error}}",
     "connectionLostPressR": "Conexiunea a fost pierdută. Apăsați R pentru reconectare.",
     "reconnect": "Reconectare",

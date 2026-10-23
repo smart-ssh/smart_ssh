@@ -44,12 +44,28 @@ dann die server-verändernden Aktionen.
 
 Rechtsklick auf **leere Fläche** der Dateiliste (unter den Zeilen oder in einem
 leeren Verzeichnis) öffnet an der Mauszeigerposition ein eigenes Menü mit
-„Neuer Ordner“ und „Neue Datei“; das eingebaute Menü des Webviews erscheint
+„Neuer Ordner“, „Neue Datei“ und „Aktualisieren“ (lädt nur die Liste des
+aktuellen Ordners neu, wie der Eintrag im Eintragsmenü); das eingebaute Menü des Webviews erscheint
 dort nicht. Ist gerade ein Eintrag ausgeschnitten, enthält es zusätzlich
 „Einfügen“ (dieselbe Verschiebung wie die Schaltfläche in der Werkzeugleiste),
 sonst nicht. Ein Rechtsklick auf eine Zeile öffnet weiterhin das Eintragsmenü.
 Klick außerhalb und Escape schließen das Menü; es ist per Tastatur bedienbar
 und beschriftet.
+
+In der Release-Version unterdrückt die App das eingebaute Webview-Menü (mit
+„Neu laden“, das Tabs und Layout verwerfen würde) überall, außer in
+Eingabefeldern, Textbereichen und dem Terminal, wo Ausschneiden/Kopieren/
+Einfügen bzw. Kopieren der Auswahl erhalten bleiben. Entwicklungs-Builds
+behalten das Webview-Menü.
+
+Alle Menüs und Popups des Dateibrowsers (Eintragsmenü per Rechtsklick und
+Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung ▾ mit dem Formular
+„Ziel-Nutzer“) liegen immer vollständig im Fenster: Sie öffnen nach unten und
+rechts, klappen am unteren bzw. rechten Fensterrand nach oben bzw. links auf
+und werden notfalls verschoben; ist das Fenster kleiner als das Menü, scrollt
+das Menü. Beim Ändern der Fenstergröße wird neu platziert. Dasselbe gilt für
+das Dropdown der Schnellregel im Chat. Im schmalen Layout bleiben die Menüs
+unten angedockt.
 
 ## Teil 2: Lesende und lokale Aktionen (ohne Bestätigung)
 
@@ -57,6 +73,14 @@ und beschriftet.
   **Herunterladen nach…** mit Dialog in einen gewählten Pfad. Ordner werden
   rekursiv heruntergeladen und landen als `<Zielordner>/<Ordnername>/…`.
   Jede Datei erscheint als eigene Übertragung mit Fortschritt.
+- **Geschwindigkeit und Restzeit:** Jede laufende Übertragung zeigt neben dem
+  Fortschrittsbalken die übertragenen und die gesamten Bytes, die
+  Geschwindigkeit (gleitender Mittelwert der letzten ca. 5 Sekunden, in KB/s
+  oder MB/s) und die geschätzte Restzeit (`mm:ss` bzw. `h:mm:ss`). Ist die
+  Gesamtgröße unbekannt oder die Geschwindigkeit 0, steht statt der Werte „—“.
+  Bei Ordnerübertragungen gelten die Werte für den ganzen Ordner. Die Anzeige
+  aktualisiert sich höchstens etwa zweimal pro Sekunde; die Zahlen haben eine
+  feste Breite, damit die Zeile nicht springt.
 - **Dateiinhalt kopieren:** Der Text der Datei geht in die Zwischenablage.
   Binärdateien und Dateien über der Grenze aus Spec 0086 (50 MB) werden mit
   einer Meldung abgelehnt; große Dateien zeigen Fortschritt und lassen sich
@@ -86,9 +110,22 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
 
 - **Rechte bearbeiten (chmod):** Ein Dialog mit Checkbox-Matrix
   (Besitzer/Gruppe/andere × lesen/schreiben/ausführen) und numerischer
-  Eingabe. Für Ordner optional rekursiv, deutlich gekennzeichnet; die Rechte
-  werden dann auf jeden Eintrag im Baum gesetzt, Dateien und Ordner. Das
-  Ergebnis nennt die Zahl der geänderten Einträge.
+  Eingabe sowie eigenen Kästchen für setuid, setgid und sticky (mit kurzem
+  Hinweis). Für Ordner optional rekursiv, deutlich gekennzeichnet; das
+  Ergebnis nennt die Zahl der geänderten Einträge. Rekursiv arbeitet es wie
+  `chmod -R` mit großem `X`: Dateien erhalten genau die gewählten neun
+  Rechtebits; Ordner erhalten dieselben Bits plus „ausführen“ für jede
+  Klasse (Besitzer/Gruppe/andere), die „lesen“ hat, damit sie betretbar
+  bleiben. Sonderbits setzt die rekursive Anwendung nie auf Dateien; Ordner
+  behalten ihre eigenen Sonderbits, außer der Nutzer hat sie im Dialog
+  geändert – dann erhalten nur Ordner die gewählten. Bei gesetztem
+  „rekursiv“ zeigt der Dialog eine Zeile wie „Ordner: 755, Dateien: 644“.
+  Ohne „rekursiv“ wird genau der Dialogwert gesetzt. Die Eigenschaften
+  zeigen die Rechte ebenfalls vierstellig.
+- **Ordner ohne „ausführen“:** Liefert das Auflisten eines Ordners keine
+  Einträge und hat der Ordner selbst kein „ausführen“-Bit, zeigt die Liste
+  „Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)“ statt eines leeren
+  Ordners.
 - **Löschen:** Datei oder Ordner, **Bestätigung immer**. Bei Ordnern zeigt
   der Dialog vorab, wie viele Dateien und Ordner gelöscht werden (Vorschau
   wie beim zweistufigen Löschen eines Servers). Ordner werden von unten nach
@@ -111,6 +148,19 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
 - **Verschieben:** innerhalb des Servers per Ausschneiden und Einfügen.
   Existiert das Ziel schon, warnt die App. Umbenennen und Verschieben sind
   für den Server dieselbe Operation.
+- **Überschreiben bei Umbenennen und Verschieben:** Bestätigt der Nutzer in
+  der Warnung „Überschreiben“, ersetzt die Datei das vorhandene Ziel; die
+  Quelle ist danach weg, das Ziel hat ihren Inhalt. Ohne Bestätigung wird nie
+  ersetzt. Bietet der Server den atomaren Austausch an
+  (`posix-rename@openssh.com`), geschieht er in einem Schritt. Sonst wird die
+  Ziel-Datei zuerst entfernt und dann umbenannt; scheitert das Umbenennen
+  danach, sagt die Fehlermeldung, dass das Ziel bereits entfernt wurde und die
+  Quelle unverändert ist. **Ein Ordner als Ziel wird nie ersetzt:** Die
+  Warnung sagt dann, dass der Zielordner existiert und nicht ersetzt werden
+  kann, und bietet kein „Überschreiben“ an. Fehler zeigen den Grund des
+  Servers (z. B. „Zugriff verweigert“). Im erhöhten Modus läuft alles über den
+  erhöhten Kanal, mit denselben Widerrufsprüfungen und demselben Protokoll
+  wie andere erhöhte Änderungen.
 - **Dateien aus der Zwischenablage hochladen:** Liegen Dateien oder Ordner des
   Betriebssystems in der Zwischenablage (kopiert im Finder, Explorer oder
   Linux-Dateimanager, auch die Zwischendatei aus „Datei kopieren“ unter

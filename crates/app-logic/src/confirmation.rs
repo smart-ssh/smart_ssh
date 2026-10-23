@@ -154,6 +154,29 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     }
 }
 
+/// Stable error code for [`resolve_action_confirmation`] when no
+/// confirmation is waiting for the id (issue #628: expired or already
+/// answered). The frontend switches the card to its "expired" state.
+pub const ACTION_CONFIRMATION_UNKNOWN: &str = "ACTION_CONFIRMATION_UNKNOWN";
+
+/// Resolves a pending action confirmation. An unknown id (expired after the
+/// timeout, already answered, flow ended) is logged as WARN — id only, never
+/// note content — and returned with the distinct code
+/// [`ACTION_CONFIRMATION_UNKNOWN`].
+pub fn resolve_action_confirmation(
+    registry: &ConfirmationRegistry<crate::state::ActionId, crate::dto::ActionUserDecision>,
+    action_id: &crate::state::ActionId,
+    decision: crate::dto::ActionUserDecision,
+) -> Result<(), crate::error::CommandError> {
+    registry.resolve(action_id, decision).map_err(|err| {
+        tracing::warn!(
+            ?action_id,
+            "respond_to_action for an unknown or expired action confirmation"
+        );
+        crate::error::CommandError::with_code(err, ACTION_CONFIRMATION_UNKNOWN)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,5 +252,23 @@ mod tests {
         assert!(registry.cancel_if_current(&7, generation));
         assert!(!registry.contains(&7));
         assert!(registry.resolve(&7, ()).is_err());
+    }
+
+    #[test]
+    fn test_issue_628_unknown_action_id_logs_warn_and_returns_distinct_code() {
+        use crate::dto::ActionUserDecision;
+        crate::test_support::log_capture::start_recording();
+        let registry = ConfirmationRegistry::new();
+        let id = uuid::Uuid::new_v4();
+        let err = resolve_action_confirmation(&registry, &id, ActionUserDecision::Deny)
+            .expect_err("unknown id must fail");
+        assert_eq!(err.code, Some(ACTION_CONFIRMATION_UNKNOWN));
+        let text = crate::test_support::log_capture::recorded_text();
+        assert!(text.contains("WARN"), "{text}");
+        assert!(text.contains(&id.to_string()), "{text}");
+
+        // A pending id still resolves normally.
+        let _rx = registry.register(id);
+        assert!(resolve_action_confirmation(&registry, &id, ActionUserDecision::Deny).is_ok());
     }
 }

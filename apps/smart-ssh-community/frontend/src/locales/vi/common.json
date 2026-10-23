@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Cài đặt",
+    "backToList": "Mục",
     "categories": {
       "aiProvider": "Nhà cung cấp AI",
       "displayLanguage": "Hiển thị & Ngôn ngữ",
@@ -130,10 +131,12 @@
     "rootDropZone": "Thả vào đây để chuyển lên cấp cao nhất (không thuộc nhóm)",
     "hintRoot": "→ cấp cao nhất (không thuộc nhóm)",
     "hintGroup": "→ chuyển vào nhóm này",
-    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó"
+    "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
+    "moveTo": "Di chuyển “{{name}}” tới…"
   },
   "management": {
-    "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\"."
+    "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\".",
+    "back": "Quay lại"
   },
   "groupForm": {
     "titleNew": "Nhóm mới",
@@ -149,6 +152,8 @@
     "confirmDelete": "Xóa vĩnh viễn"
   },
   "serverForm": {
+    "connect": "Kết nối",
+    "connectSaveFirst": "Hãy lưu thay đổi trước",
     "hostKeys": {
       "title": "Khóa máy chủ",
       "none": "Chưa lưu khóa máy chủ nào. Khóa sẽ được lưu ở lần kết nối đầu tiên."
@@ -175,6 +180,9 @@
       "identityFile": "Tệp khóa"
     },
     "password": "Mật khẩu",
+    "passwordOptionalHint": "(không bắt buộc – để trống nếu máy chủ cho phép đăng nhập không cần mật khẩu)",
+    "removeSavedPassword": "Xóa mật khẩu đã lưu",
+    "noPasswordSaved": "Chưa lưu mật khẩu. Ứng dụng thử đăng nhập không mật khẩu trước, sau đó thử với mật khẩu trống.",
     "unchangedHint": "(để trống = giữ nguyên)",
     "privateKeyLabel": "Khóa riêng tư",
     "chooseFile": "Chọn tệp…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "Thư mục khởi đầu phải là đường dẫn tuyệt đối (/…) hoặc bắt đầu bằng ~/.",
       "controlCharacter": "Thư mục khởi đầu không được chứa ký tự điều khiển."
+    },
+    "tabs": {
+      "label": "Cài đặt máy chủ",
+      "general": "Chung",
+      "connection": "Kết nối",
+      "security": "Bảo mật",
+      "invalid": "Có lỗi"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Đầu ra bị cắt ở giới hạn kích thước — có thể chưa đầy đủ.",
     "liveOutputLabel": "Đầu ra trực tiếp",
     "liveOutputTruncatedNotice": "⚠ Đã đạt giới hạn kích thước — đầu ra tiếp theo không còn được hiển thị.",
+    "autoRanLead": "Đã chạy tự động",
+    "autoRanRule": "quy tắc",
+    "autoRanScopeGlobal": "toàn cục",
+    "autoRanScopeServer": "máy chủ {{name}}",
+    "autoRanScopeTag": "thẻ {{tag}}",
+    "autoRanOpenRule": "Mở quy tắc này trong quy tắc bộ lọc",
     "mcpOrigin": "Công cụ bên ngoài (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "công cụ bên ngoài (MCP)",
     "mcpOriginHint": "Hành động này không do cuộc trò chuyện nội bộ yêu cầu, mà do một công cụ bên ngoài yêu cầu qua máy chủ MCP cục bộ."
@@ -412,6 +433,11 @@
     "overview": "Tổng quan",
     "pendingAction": "Đang chờ xác nhận",
     "closeTab": "Đóng tab \"{{name}}\"",
+    "menu": {
+      "open": "Mở menu điều hướng",
+      "title": "Menu điều hướng",
+      "sessions": "Phiên đang mở"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "Công cụ bên ngoài",
@@ -429,6 +455,8 @@
     "active": "đang dùng",
     "setActive": "Đặt làm đang dùng",
     "addProvider": "Thêm nhà cung cấp",
+    "editProvider": "Sửa nhà cung cấp",
+    "apiKeyUnchangedPlaceholder": "Không đổi – nhập khóa mới để thay thế",
     "type": "Loại",
     "providerName": "Tên",
     "model": "Mô hình",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Nhà cung cấp AI báo lỗi (ví dụ đang bảo trì hoặc quá tải). Hãy thử lại sau; nếu vẫn lỗi, hãy kiểm tra cài đặt nhà cung cấp.",
     "AI_PROVIDER_OVERLOADED": "Nhà cung cấp AI hiện đang quá tải. Hãy thử lại sau giây lát.",
     "AI_PROVIDER_BILLING": "Tài khoản nhà cung cấp AI đã hết tín dụng. Hãy kiểm tra thanh toán trong bảng điều khiển của nhà cung cấp.",
+    "AI_PROVIDER_USAGE_LIMIT": "Đã đạt giới hạn sử dụng tại nhà cung cấp. Hãy tăng giới hạn trong bảng điều khiển của nhà cung cấp hoặc chọn nhà cung cấp khác.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Đã đạt giới hạn sử dụng tại nhà cung cấp. Quyền truy cập trở lại vào {{date}}. Hãy tăng giới hạn trong bảng điều khiển của nhà cung cấp hoặc chọn nhà cung cấp khác.",
     "AI_PROVIDER_REJECTED_REQUEST": "Nhà cung cấp AI đã từ chối yêu cầu.",
     "AI_RESPONSE_TRUNCATED": "Phản hồi của AI quá dài để tạo thành một lệnh hoàn chỉnh",
     "AI_MODEL_NOT_FOUND": "Nhà cung cấp AI không biết mô hình này. Kiểm tra tên mô hình trong Cài đặt (\"Tải danh sách mô hình\" liệt kê các mô hình có sẵn); với Ollama, hãy tải trước bằng `ollama pull <name>`.",
@@ -690,6 +720,12 @@
     "toggleTitle": "Mở trình duyệt tệp với quyền nâng cao (sudo) — cần quy tắc sudo không mật khẩu cho sftp-server",
     "enabling": "Đang kiểm tra sudo …",
     "toggleOff": "Kết thúc quyền nâng cao",
+    "stopTitle": "Kết thúc quyền nâng cao?",
+    "stopBody": "Các thao tác này vẫn đang chạy. Kết thúc quyền nâng cao sẽ dừng chúng.",
+    "opDownload": "Tải xuống",
+    "opUpload": "Tải lên",
+    "opDelete": "Xóa",
+    "opChmod": "Đổi quyền",
     "banner": "Quyền nâng cao đang hoạt động: mọi thao tác tệp trong trình duyệt này chạy với tư cách {{user}}.",
     "deleteFileTitle": "Xóa tệp với tư cách {{user}}?",
     "deleteDirTitle": "Xóa thư mục với tư cách {{user}}?",
@@ -782,8 +818,6 @@
     },
     "tag": {
       "literalHint": "Thẻ nguyên văn từ một tệp lạ — có thể khớp chính xác với một quy tắc Cho phép. Có thể bỏ chọn riêng từng mục.",
-      "allowDeselectedHint": "Khớp với một quy tắc Cho phép hiện có và không có quy tắc Từ chối — vì vậy mặc định được bỏ chọn. Có thể chọn lại riêng từng mục.",
-      "autoDeselectedBadge": "tự động bỏ chọn",
       "matchesRuleHint": "khớp với {{count}} quy tắc lọc hiện có: {{actions}}",
       "action": {
         "allow": "Cho phép",
@@ -897,7 +931,8 @@
     "dismiss": "Đóng đề xuất",
     "reject": "Từ chối",
     "applying": "Đang áp dụng…",
-    "apply": "Áp dụng"
+    "apply": "Áp dụng",
+    "expired": "Đã hết hạn — chưa áp dụng"
   },
   "connectLog": {
     "title": "Chi tiết",
@@ -912,12 +947,15 @@
       "handshake": "Bắt tay SSH",
       "hostKeyCheck": "Kiểm tra khóa máy chủ",
       "authentication": "Xác thực",
-      "sessionReady": "Đã thiết lập phiên"
+      "sessionReady": "Đã thiết lập phiên",
+      "dnsSkipped": "Địa chỉ IP – không cần phân giải"
     },
     "status": {
       "ok": "OK",
       "running": "đang tiến hành",
-      "failed": "thất bại ({{code}})"
+      "failed": "thất bại ({{code}})",
+      "skipped": "đã bỏ qua",
+      "failedReason": "thất bại: {{reason}}"
     },
     "hostKeyResult": {
       "known": "đã biết",
@@ -925,6 +963,7 @@
       "changed": "đã thay đổi"
     },
     "authMethod": {
+      "none": "none (không xác thực)",
       "password": "Mật khẩu",
       "privateKey": "Khóa riêng tư",
       "agent": "Tác nhân SSH",
@@ -939,6 +978,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "được chấp nhận một phần, cần xác thực thêm",
       "remainingMethods": "Máy chủ còn cung cấp: {{methods}} (chưa thử)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Kết nối TCP đã hết thời gian chờ",
+      "SSH_TIMEOUT": "Hết thời gian chờ",
+      "SSH_CONNECTION_REFUSED": "Kết nối bị từ chối",
+      "SSH_HOST_NOT_FOUND": "Không tìm thấy máy chủ",
+      "SSH_HOST_UNREACHABLE": "Không thể truy cập máy chủ",
+      "SSH_AUTH_FAILED": "Xác thực thất bại"
     }
   },
   "fileBrowser": {
@@ -960,7 +1007,14 @@
     "transferDownload": "Đang tải xuống: {{name}}",
     "transferDone": "Hoàn tất: {{name}}",
     "transferElevationEnded": "Chế độ nâng quyền đã bị tắt trong khi truyền.",
+    "transferCancel": "Hủy truyền",
+    "transferCancelled": "{{name}}: đã hủy",
+    "transferStopped": "{{name}}: đã dừng",
+    "transferIncomplete": "Tệp chưa hoàn chỉnh còn lại trên máy chủ: {{path}}",
+    "transferFiles": "{{done}}/{{total}} tệp",
+    "transferRemaining": "còn {{time}}",
     "loading": "Đang tải…",
+    "noPermissionToOpen": "Không có quyền mở thư mục này (thiếu x)",
     "emptyDirectory": "(thư mục trống)",
     "dropHint": "Thả vào đây để tải lên {{path}}",
     "cancel": "Hủy",
@@ -994,7 +1048,8 @@
     },
     "moveCollision": {
       "title": "Đích đã tồn tại",
-      "body": "đã tồn tại và sẽ bị ghi đè."
+      "body": "đã tồn tại và sẽ bị ghi đè.",
+      "folderBody": "đã tồn tại dưới dạng thư mục và không thể thay thế."
     },
     "folderUpload": {
       "conflictTitle": "Ghi đè các tệp trong thư mục?",
@@ -1056,6 +1111,12 @@
       "execute": "Thực thi",
       "numeric": "Dạng số",
       "recursive": "Đệ quy",
+      "special": "Bit đặc biệt",
+      "setuid": "bit setuid",
+      "setgid": "bit setgid",
+      "sticky": "bit sticky",
+      "specialHint": "Khi áp dụng đệ quy, bit đặc biệt chỉ áp cho thư mục, không bao giờ cho tệp.",
+      "recursiveSummary": "Thư mục: {{folders}}, tệp: {{files}}",
       "recursiveWarning": "— thay đổi quyền của TẤT CẢ tệp và thư mục con trong thư mục này. Thao tác mạnh, không thể hoàn tác.",
       "owner": "Chủ sở hữu",
       "group": "Nhóm",
@@ -1082,6 +1143,7 @@
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",
+    "composerMore": "Thêm thao tác nhập",
     "newChat": "Cuộc trò chuyện mới",
     "newChatDisabledHint": "Không khả dụng khi AI đang phản hồi hoặc có yêu cầu xác nhận đang mở.",
     "autoContinuing": "Chế độ tự động đang chạy — AI tự phản hồi kết quả cuối cùng…",
@@ -1178,6 +1240,9 @@
     "splitHandle": "Thanh chia khung",
     "terminalTab": "Dòng lệnh",
     "filesTab": "Tệp",
+    "aiTab": "AI",
+    "paneTabs": "Các ngăn của phiên",
+    "moreActions": "Thêm hành động",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
     "reconnectingAuto": "Đang kết nối lại… (lần thử {{attempt}})",
     "stopReconnect": "Dừng",

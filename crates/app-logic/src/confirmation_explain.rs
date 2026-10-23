@@ -14,8 +14,9 @@ use ssh_manager_core::filter::{
 };
 
 use crate::dto::{
-    pattern_from_parts, ConfirmationExplanationDto, CoveringRuleDto, ExplainedSuggestionDto,
-    RuleDto, SegmentCoverageDto, SegmentCoverageState, SuggestionVerdictDto, VerdictReasonDto,
+    pattern_from_parts, AutoExecRuleDto, ConfirmationExplanationDto, CoveringRuleDto,
+    ExplainedSuggestionDto, RuleDto, SegmentCoverageDto, SegmentCoverageState,
+    SuggestionVerdictDto, VerdictReasonDto,
 };
 use crate::rule_suggestions::suggest_rule_patterns_excluding;
 use crate::session::CommandEvaluator;
@@ -27,7 +28,7 @@ pub const REASON_RULE_DENY: &str = "FILTER_RULE_DENY";
 
 /// The traces of the top-level segments of `trace`. A command that is not
 /// split (one segment, ambiguous, empty) is its own single segment.
-fn segment_traces(trace: &EvaluationTrace) -> Vec<&EvaluationTrace> {
+pub(crate) fn segment_traces(trace: &EvaluationTrace) -> Vec<&EvaluationTrace> {
     if trace.segment_index.is_some() {
         return vec![trace];
     }
@@ -216,6 +217,44 @@ pub async fn explain(
         segments,
         suggestions,
     }
+}
+
+/// The rules that covered the segments of an auto-executed command (issue
+/// #696), one entry per distinct rule in order of first use. Built from the
+/// trace of the evaluation that made the decision; the stored rules are only
+/// looked up to name pattern and scope, nothing is evaluated again. A segment
+/// without a matched rule (or whose rule was deleted meanwhile) is omitted.
+pub async fn auto_exec_rules(
+    evaluator: &dyn CommandEvaluator,
+    ctx: &EvalContext,
+    trace: &EvaluationTrace,
+) -> Vec<AutoExecRuleDto> {
+    let segs = segment_traces(trace);
+    let ids: Vec<RuleId> = segs.iter().filter_map(|t| t.matched_rule.clone()).collect();
+    if ids.is_empty() {
+        return Vec::new();
+    }
+    let rules = evaluator.rules_by_ids(ctx, &ids).await;
+    let mut out: Vec<AutoExecRuleDto> = Vec::new();
+    for (i, t) in segs.iter().enumerate() {
+        let Some(id) = t.matched_rule.as_ref() else {
+            continue;
+        };
+        if let Some(existing) = out.iter_mut().find(|r| &r.rule_id == id) {
+            existing.segment_indices.push(i);
+            continue;
+        }
+        if let Some(rule) = rules.iter().find(|r| &r.id == id) {
+            out.push(AutoExecRuleDto {
+                rule_id: rule.id.clone(),
+                pattern_type: crate::dto::PatternType::from(&rule.pattern),
+                pattern_value: rule.pattern.display_text().to_string(),
+                scope: rule.scope.clone(),
+                segment_indices: vec![i],
+            });
+        }
+    }
+    out
 }
 
 fn covering_rule(stored: &[RuleDto], id: &RuleId) -> Option<CoveringRuleDto> {
@@ -582,5 +621,72 @@ mod tests {
         )
         .await;
         assert!(r.segments.is_empty());
+    }
+
+    async fn auto_rules(rules: Vec<Rule>, command: &str) -> (Decision, Vec<AutoExecRuleDto>) {
+        let engine = FilterEngine::new(StaticStore(rules));
+        let c = EvalContext {
+            server_id: ctx().server_id,
+            tags: vec!["web".to_string()],
+        };
+        let trace = engine.evaluate_explained(command, &c).await;
+        let out = auto_exec_rules(&engine, &c, &trace).await;
+        (trace.decision, out)
+    }
+
+    #[tokio::test]
+    async fn auto_exec_rules_name_global_server_and_tag_rules() {
+        let mut server = allow("s", "uptime");
+        server.scope = Scope::Server(ctx().server_id);
+        let mut tag = allow("t", "df *");
+        tag.scope = Scope::Tag("web".to_string());
+        let rules = vec![allow("g", "ls *"), server, tag];
+        for (cmd, id, ty, value, scope) in [
+            ("ls /tmp", "g", PatternType::Glob, "ls *", Scope::Global),
+            (
+                "uptime",
+                "s",
+                PatternType::Glob,
+                "uptime",
+                Scope::Server(ctx().server_id),
+            ),
+            (
+                "df -h",
+                "t",
+                PatternType::Glob,
+                "df *",
+                Scope::Tag("web".to_string()),
+            ),
+        ] {
+            let (decision, out) = auto_rules(rules.clone(), cmd).await;
+            assert_eq!(decision, Decision::AutoExec, "{cmd}");
+            assert_eq!(out.len(), 1, "{cmd}");
+            assert_eq!(out[0].rule_id, RuleId(id.to_string()));
+            assert_eq!(out[0].pattern_type, ty);
+            assert_eq!(out[0].pattern_value, value);
+            assert_eq!(out[0].scope, scope);
+            assert_eq!(out[0].segment_indices, vec![0]);
+        }
+    }
+
+    #[tokio::test]
+    async fn auto_exec_chain_lists_both_rules_and_dedups_shared_one() {
+        let rules = vec![allow("a", "cd *"), allow("b", "ls *")];
+        let (decision, out) = auto_rules(rules, "cd /tmp && ls /x").await;
+        assert_eq!(decision, Decision::AutoExec);
+        let ids: Vec<&str> = out.iter().map(|r| r.rule_id.0.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b"]);
+
+        let (_, out) = auto_rules(vec![allow("x", "*")], "cd /tmp && ls /x").await;
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].segment_indices, vec![0, 1]);
+    }
+
+    #[tokio::test]
+    async fn rule_gone_from_store_is_omitted() {
+        let engine = FilterEngine::new(StaticStore(vec![allow("g", "ls *")]));
+        let trace = engine.evaluate_explained("ls /tmp", &ctx()).await;
+        let empty = FilterEngine::new(StaticStore(Vec::new()));
+        assert!(auto_exec_rules(&empty, &ctx(), &trace).await.is_empty());
     }
 }

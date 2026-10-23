@@ -52,7 +52,7 @@ test.describe("command confirmation", () => {
 
     // The risk level, on both axes, in the red style.
     for (const axis of ["Server", "Data"]) {
-      const badge = card.getByText(axis, { exact: true });
+      const badge = card.getByText(new RegExp(`^${axis}ⓘ?$`));
       await expect(badge).toBeVisible();
       await expect(badge).toHaveClass(/bg-red-900/);
     }

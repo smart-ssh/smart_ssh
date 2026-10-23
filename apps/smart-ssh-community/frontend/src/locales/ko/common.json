@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "설정",
+    "backToList": "섹션",
     "categories": {
       "aiProvider": "AI 제공자",
       "displayLanguage": "화면 및 언어",
@@ -130,10 +131,12 @@
     "rootDropZone": "여기에 놓으면 최상위(그룹 없음)로 이동합니다",
     "hintRoot": "→ 최상위(그룹 없음)",
     "hintGroup": "→ 이 그룹으로 이동",
-    "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다"
+    "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다",
+    "moveTo": "“{{name}}” 이동 위치…"
   },
   "management": {
-    "emptyState": "왼쪽에서 그룹이나 서버를 선택하거나 \"{{addGroup}}\"/\"{{addServer}}\"로 새로 만드십시오."
+    "emptyState": "왼쪽에서 그룹이나 서버를 선택하거나 \"{{addGroup}}\"/\"{{addServer}}\"로 새로 만드십시오.",
+    "back": "뒤로"
   },
   "groupForm": {
     "titleNew": "새 그룹",
@@ -149,6 +152,8 @@
     "confirmDelete": "영구 삭제"
   },
   "serverForm": {
+    "connect": "연결",
+    "connectSaveFirst": "먼저 변경 사항을 저장하세요",
     "hostKeys": {
       "title": "호스트 키",
       "none": "저장된 호스트 키가 아직 없습니다. 처음 연결할 때 저장됩니다."
@@ -175,6 +180,9 @@
       "identityFile": "키 파일"
     },
     "password": "비밀번호",
+    "passwordOptionalHint": "(선택 사항 – 서버가 비밀번호 없는 로그인을 허용하면 비워 두세요)",
+    "removeSavedPassword": "저장된 비밀번호 제거",
+    "noPasswordSaved": "저장된 비밀번호가 없습니다. 앱은 먼저 비밀번호 없이 로그인을 시도한 다음 빈 비밀번호로 시도합니다.",
     "unchangedHint": "(비워 두면 변경 없음)",
     "privateKeyLabel": "개인 키",
     "chooseFile": "파일 선택…",
@@ -272,6 +280,13 @@
     "startDirectoryInvalid": {
       "notAbsolute": "시작 디렉터리는 절대 경로(/…)이거나 ~/로 시작해야 합니다.",
       "controlCharacter": "시작 디렉터리에는 제어 문자를 포함할 수 없습니다."
+    },
+    "tabs": {
+      "label": "서버 설정",
+      "general": "일반",
+      "connection": "연결",
+      "security": "보안",
+      "invalid": "오류 있음"
     }
   },
   "filterRules": {
@@ -350,6 +365,12 @@
     "commandTruncatedNotice": "⚠ 출력이 크기 제한에서 잘렸습니다. 불완전할 수 있습니다.",
     "liveOutputLabel": "실시간 출력",
     "liveOutputTruncatedNotice": "⚠ 크기 제한에 도달하여 이후 출력은 더 이상 표시되지 않습니다.",
+    "autoRanLead": "자동 실행됨",
+    "autoRanRule": "규칙",
+    "autoRanScopeGlobal": "전역",
+    "autoRanScopeServer": "서버 {{name}}",
+    "autoRanScopeTag": "태그 {{tag}}",
+    "autoRanOpenRule": "필터 규칙에서 이 규칙 열기",
     "mcpOrigin": "외부 도구(MCP): \"{{name}}\"",
     "mcpOriginGeneric": "외부 도구(MCP)",
     "mcpOriginHint": "이 동작은 내부 채팅이 아니라 로컬 MCP 서버를 통해 외부 도구가 요청한 것입니다."
@@ -412,6 +433,11 @@
     "overview": "개요",
     "pendingAction": "확인 대기 중",
     "closeTab": "탭 \"{{name}}\" 닫기",
+    "menu": {
+      "open": "탐색 메뉴 열기",
+      "title": "탐색 메뉴",
+      "sessions": "열린 세션"
+    },
     "mcp": {
       "badge": "MCP",
       "unnamedClient": "외부 도구",
@@ -429,6 +455,8 @@
     "active": "활성",
     "setActive": "활성으로 설정",
     "addProvider": "제공자 추가",
+    "editProvider": "제공자 편집",
+    "apiKeyUnchangedPlaceholder": "변경 없음 – 교체하려면 새 키를 입력하세요",
     "type": "유형",
     "providerName": "이름",
     "model": "모델",
@@ -528,6 +556,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI 제공자가 오류를 보고했습니다(예: 점검 또는 과부하). 나중에 다시 시도하십시오. 계속되면 제공자 설정을 확인하십시오.",
     "AI_PROVIDER_OVERLOADED": "AI 제공자가 현재 과부하 상태입니다. 잠시 후 다시 시도하세요.",
     "AI_PROVIDER_BILLING": "AI 제공자 계정에 남은 크레딧이 없습니다. 제공자 콘솔에서 결제를 확인하세요.",
+    "AI_PROVIDER_USAGE_LIMIT": "제공업체의 사용 한도에 도달했습니다. 제공업체 콘솔에서 한도를 올리거나 다른 제공업체를 선택하세요.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "제공업체의 사용 한도에 도달했습니다. {{date}}에 다시 이용할 수 있습니다. 제공업체 콘솔에서 한도를 올리거나 다른 제공업체를 선택하세요.",
     "AI_PROVIDER_REJECTED_REQUEST": "AI 제공자가 요청을 거부했습니다.",
     "AI_RESPONSE_TRUNCATED": "AI 응답이 너무 길어 완전한 명령을 만들 수 없었습니다",
     "AI_MODEL_NOT_FOUND": "AI 제공자가 이 모델을 알지 못합니다. 설정에서 모델 이름을 확인하십시오(\"모델 불러오기\"에 사용 가능한 모델이 표시됩니다). Ollama의 경우 먼저 `ollama pull <name>`으로 받으십시오.",
@@ -690,6 +720,12 @@
     "toggleTitle": "상승된 권한(sudo)으로 파일 브라우저 열기 — sftp-server에 대한 비밀번호 없는 sudo 규칙이 필요합니다",
     "enabling": "sudo 확인 중 …",
     "toggleOff": "상승된 권한 종료",
+    "stopTitle": "상승 권한을 종료할까요?",
+    "stopBody": "이 작업들은 아직 실행 중입니다. 상승 권한을 종료하면 중지됩니다.",
+    "opDownload": "다운로드",
+    "opUpload": "업로드",
+    "opDelete": "삭제",
+    "opChmod": "권한 변경",
     "banner": "상승된 권한 활성: 이 브라우저의 모든 파일 동작이 {{user}} 권한으로 실행됩니다.",
     "deleteFileTitle": "{{user}} 권한으로 파일을 삭제하시겠습니까?",
     "deleteDirTitle": "{{user}} 권한으로 폴더를 삭제하시겠습니까?",
@@ -782,8 +818,6 @@
     },
     "tag": {
       "literalHint": "외부 파일의 리터럴 태그 — 허용 규칙과 정확히 일치할 수 있습니다. 개별적으로 선택 해제할 수 있습니다.",
-      "allowDeselectedHint": "기존 허용 규칙과 일치하고 거부 규칙과는 일치하지 않으므로 기본적으로 선택 해제됩니다. 개별적으로 다시 선택할 수 있습니다.",
-      "autoDeselectedBadge": "자동으로 선택 해제됨",
       "matchesRuleHint": "기존 필터 규칙 {{count}}개와 일치: {{actions}}",
       "action": {
         "allow": "허용",
@@ -897,7 +931,8 @@
     "dismiss": "제안 닫기",
     "reject": "거부",
     "applying": "적용 중…",
-    "apply": "적용"
+    "apply": "적용",
+    "expired": "만료됨 — 적용되지 않음"
   },
   "connectLog": {
     "title": "상세 정보",
@@ -912,12 +947,15 @@
       "handshake": "SSH 핸드셰이크",
       "hostKeyCheck": "호스트 키 확인",
       "authentication": "인증",
-      "sessionReady": "세션 수립됨"
+      "sessionReady": "세션 수립됨",
+      "dnsSkipped": "IP 주소 – 조회 불필요"
     },
     "status": {
       "ok": "OK",
       "running": "진행 중",
-      "failed": "실패 ({{code}})"
+      "failed": "실패 ({{code}})",
+      "skipped": "건너뜀",
+      "failedReason": "실패: {{reason}}"
     },
     "hostKeyResult": {
       "known": "알려짐",
@@ -925,6 +963,7 @@
       "changed": "변경됨"
     },
     "authMethod": {
+      "none": "none (인증 없음)",
       "password": "비밀번호",
       "privateKey": "개인 키",
       "agent": "SSH 에이전트",
@@ -939,6 +978,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "부분적으로 수락됨, 추가 인증이 필요합니다",
       "remainingMethods": "서버가 추가로 제공하는 방식: {{methods}} (시도하지 않음)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP 연결 시간 초과",
+      "SSH_TIMEOUT": "시간 초과",
+      "SSH_CONNECTION_REFUSED": "연결 거부됨",
+      "SSH_HOST_NOT_FOUND": "호스트를 찾을 수 없음",
+      "SSH_HOST_UNREACHABLE": "호스트에 연결할 수 없음",
+      "SSH_AUTH_FAILED": "인증 실패"
     }
   },
   "fileBrowser": {
@@ -960,7 +1007,14 @@
     "transferDownload": "다운로드 중: {{name}}",
     "transferDone": "완료: {{name}}",
     "transferElevationEnded": "전송 중에 상승 모드가 꺼졌습니다.",
+    "transferCancel": "전송 취소",
+    "transferCancelled": "{{name}}: 취소됨",
+    "transferStopped": "{{name}}: 중지됨",
+    "transferIncomplete": "서버에 불완전한 파일이 남아 있습니다: {{path}}",
+    "transferFiles": "파일 {{total}}개 중 {{done}}개",
+    "transferRemaining": "{{time}} 남음",
     "loading": "불러오는 중…",
+    "noPermissionToOpen": "이 폴더를 열 권한이 없습니다(x 없음)",
     "emptyDirectory": "(빈 디렉터리)",
     "dropHint": "여기에 놓으면 {{path}}에 업로드합니다",
     "cancel": "취소",
@@ -994,7 +1048,8 @@
     },
     "moveCollision": {
       "title": "대상이 이미 있습니다",
-      "body": "이(가) 이미 있으며 덮어쓰게 됩니다."
+      "body": "이(가) 이미 있으며 덮어쓰게 됩니다.",
+      "folderBody": "은(는) 이미 폴더로 존재하며 대체할 수 없습니다."
     },
     "folderUpload": {
       "conflictTitle": "폴더의 파일을 덮어쓰시겠습니까?",
@@ -1056,6 +1111,12 @@
       "execute": "실행",
       "numeric": "숫자",
       "recursive": "재귀적으로",
+      "special": "특수 비트",
+      "setuid": "setuid 비트",
+      "setgid": "setgid 비트",
+      "sticky": "sticky 비트",
+      "specialHint": "재귀 적용 시 특수 비트는 폴더에만 설정되며 파일에는 설정되지 않습니다.",
+      "recursiveSummary": "폴더: {{folders}}, 파일: {{files}}",
       "recursiveWarning": "— 이 폴더의 모든 파일과 하위 폴더의 권한을 변경합니다. 강력한 동작이며 되돌릴 수 없습니다.",
       "owner": "소유자",
       "group": "그룹",
@@ -1082,6 +1143,7 @@
   },
   "chat": {
     "jumpToLatest": "최신 메시지로 이동",
+    "composerMore": "입력 추가 동작",
     "newChat": "새 채팅",
     "newChatDisabledHint": "AI가 응답하는 중이거나 확인 창이 열려 있는 동안에는 사용할 수 없습니다.",
     "autoContinuing": "자동 모드 실행 중 — AI가 마지막 결과에 스스로 응답합니다…",
@@ -1178,6 +1240,9 @@
     "splitHandle": "패널 구분선",
     "terminalTab": "터미널",
     "filesTab": "파일",
+    "aiTab": "AI",
+    "paneTabs": "세션 패널",
+    "moreActions": "더 많은 작업",
     "terminalOpenFailed": "터미널을 열 수 없습니다: {{error}}",
     "reconnectingAuto": "다시 연결하는 중… ({{attempt}}번째 시도)",
     "stopReconnect": "중지",

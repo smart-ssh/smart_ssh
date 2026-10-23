@@ -328,7 +328,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                           </div>
                         )}
 
-                        <dl className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5 pl-6 text-xs">
+                        <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] break-words gap-x-2 gap-y-0.5 pl-6 text-xs">
                           <dt className="text-slate-400">{t("sshConfigImport.field.host")}</dt>
                           <dd>
                             {e.host.value}{" "}
@@ -391,14 +391,6 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                             {e.tags.map((tag) => {
                               const dropped = st.droppedTags.has(tag.tag);
                               const flagged = tag.matchedRules.length > 0;
-                              // §9 verlangt nicht nur die Vorgabe
-                              // (`defaultTagSelected`), sondern auch, dass
-                              // dieser Fall sichtbar **anders** markiert ist
-                              // als ein Schlagwort, das nur Deny/Confirm
-                              // trifft — sonst unterscheiden sich beide nur
-                              // am Häkchen. Bewusst dieselbe Funktion wie die
-                              // Vorgabe selbst, keine zweite Ableitung.
-                              const autoDeselected = !defaultTagSelected(tag);
                               // §5.2a verlangt, die betroffene Regel zu
                               // nennen — mindestens ihre Wirkung (Allow
                               // kann Confirm→Allow heben, Deny/Confirm
@@ -418,16 +410,14 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                         : "border border-slate-600 bg-slate-900 text-slate-300"
                                   }`}
                                   title={
-                                    autoDeselected
-                                      ? t("sshConfigImport.tag.allowDeselectedHint")
-                                      : tag.isLiteral
-                                        ? t("sshConfigImport.tag.literalHint")
-                                        : flagged
-                                          ? t("sshConfigImport.tag.matchesRuleHint", {
-                                              count: tag.matchedRules.length,
-                                              actions: actionLabels,
-                                            })
-                                          : undefined
+                                    tag.isLiteral
+                                      ? t("sshConfigImport.tag.literalHint")
+                                      : flagged
+                                        ? t("sshConfigImport.tag.matchesRuleHint", {
+                                            count: tag.matchedRules.length,
+                                            actions: actionLabels,
+                                          })
+                                        : undefined
                                   }
                                 >
                                   <input
@@ -438,11 +428,6 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                   {tag.isLiteral && <span aria-hidden>⚠</span>}
                                   {tag.tag}
                                   {flagged && <span>({actionLabels})</span>}
-                                  {autoDeselected && (
-                                    <span className="font-semibold text-red-100">
-                                      · {t("sshConfigImport.tag.autoDeselectedBadge")}
-                                    </span>
-                                  )}
                                 </label>
                               );
                             })}
