@@ -180,6 +180,9 @@
       "identityFile": "Fișier de cheie"
     },
     "password": "Parolă",
+    "passwordOptionalHint": "(opțional – lăsați gol dacă serverul permite autentificarea fără parolă)",
+    "removeSavedPassword": "Elimină parola salvată",
+    "noPasswordSaved": "Nicio parolă salvată. Aplicația încearcă mai întâi autentificarea fără parolă, apoi cu o parolă goală.",
     "unchangedHint": "(gol = neschimbat)",
     "privateKeyLabel": "Cheie privată",
     "chooseFile": "Alegeți fișierul…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Furnizorul de IA a raportat o eroare (de ex. mentenanță sau suprasarcină). Încercați mai târziu; dacă persistă, verificați setările furnizorului.",
     "AI_PROVIDER_OVERLOADED": "Furnizorul de IA este supraîncărcat chiar acum. Încercați din nou într-un moment.",
     "AI_PROVIDER_BILLING": "Contul furnizorului de IA nu mai are credit. Verificați facturarea în consola furnizorului.",
+    "AI_PROVIDER_USAGE_LIMIT": "Limita de utilizare la furnizor a fost atinsă. Măriți limita în consola furnizorului sau alegeți alt furnizor.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Limita de utilizare la furnizor a fost atinsă. Accesul revine la {{date}}. Măriți limita în consola furnizorului sau alegeți alt furnizor.",
     "AI_PROVIDER_REJECTED_REQUEST": "Furnizorul de IA a respins cererea.",
     "AI_RESPONSE_TRUNCATED": "Răspunsul IA a fost prea lung pentru o comandă completă",
     "AI_MODEL_NOT_FOUND": "Furnizorul de IA nu cunoaște acest model. Verificați numele modelului în Setări („Încarcă modelele” le listează pe cele disponibile); pentru Ollama, descărcați-l mai întâi cu `ollama pull <name>`.",
@@ -943,12 +948,15 @@
       "handshake": "Handshake SSH",
       "hostKeyCheck": "Verificarea cheii de host",
       "authentication": "Autentificare",
-      "sessionReady": "Sesiune stabilită"
+      "sessionReady": "Sesiune stabilită",
+      "dnsSkipped": "Adresă IP – nu e nevoie de rezolvare"
     },
     "status": {
       "ok": "OK",
       "running": "în curs",
-      "failed": "eșuat ({{code}})"
+      "failed": "eșuat ({{code}})",
+      "skipped": "omis",
+      "failedReason": "eșuat: {{reason}}"
     },
     "hostKeyResult": {
       "known": "cunoscută",
@@ -956,6 +964,7 @@
       "changed": "schimbată"
     },
     "authMethod": {
+      "none": "none (fără autentificare)",
       "password": "Parolă",
       "privateKey": "Cheie privată",
       "agent": "Agent SSH",
@@ -970,6 +979,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "acceptată parțial, este necesară autentificare suplimentară",
       "remainingMethods": "Serverul oferă și: {{methods}} (neîncercate)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Conexiunea TCP a expirat",
+      "SSH_TIMEOUT": "Timp expirat",
+      "SSH_CONNECTION_REFUSED": "Conexiune refuzată",
+      "SSH_HOST_NOT_FOUND": "Gazda nu a fost găsită",
+      "SSH_HOST_UNREACHABLE": "Gazda nu poate fi contactată",
+      "SSH_AUTH_FAILED": "Autentificarea a eșuat"
     }
   },
   "fileBrowser": {

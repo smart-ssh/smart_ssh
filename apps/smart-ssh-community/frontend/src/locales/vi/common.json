@@ -180,6 +180,9 @@
       "identityFile": "Tệp khóa"
     },
     "password": "Mật khẩu",
+    "passwordOptionalHint": "(không bắt buộc – để trống nếu máy chủ cho phép đăng nhập không cần mật khẩu)",
+    "removeSavedPassword": "Xóa mật khẩu đã lưu",
+    "noPasswordSaved": "Chưa lưu mật khẩu. Ứng dụng thử đăng nhập không mật khẩu trước, sau đó thử với mật khẩu trống.",
     "unchangedHint": "(để trống = giữ nguyên)",
     "privateKeyLabel": "Khóa riêng tư",
     "chooseFile": "Chọn tệp…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Nhà cung cấp AI báo lỗi (ví dụ đang bảo trì hoặc quá tải). Hãy thử lại sau; nếu vẫn lỗi, hãy kiểm tra cài đặt nhà cung cấp.",
     "AI_PROVIDER_OVERLOADED": "Nhà cung cấp AI hiện đang quá tải. Hãy thử lại sau giây lát.",
     "AI_PROVIDER_BILLING": "Tài khoản nhà cung cấp AI đã hết tín dụng. Hãy kiểm tra thanh toán trong bảng điều khiển của nhà cung cấp.",
+    "AI_PROVIDER_USAGE_LIMIT": "Đã đạt giới hạn sử dụng tại nhà cung cấp. Hãy tăng giới hạn trong bảng điều khiển của nhà cung cấp hoặc chọn nhà cung cấp khác.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Đã đạt giới hạn sử dụng tại nhà cung cấp. Quyền truy cập trở lại vào {{date}}. Hãy tăng giới hạn trong bảng điều khiển của nhà cung cấp hoặc chọn nhà cung cấp khác.",
     "AI_PROVIDER_REJECTED_REQUEST": "Nhà cung cấp AI đã từ chối yêu cầu.",
     "AI_RESPONSE_TRUNCATED": "Phản hồi của AI quá dài để tạo thành một lệnh hoàn chỉnh",
     "AI_MODEL_NOT_FOUND": "Nhà cung cấp AI không biết mô hình này. Kiểm tra tên mô hình trong Cài đặt (\"Tải danh sách mô hình\" liệt kê các mô hình có sẵn); với Ollama, hãy tải trước bằng `ollama pull <name>`.",
@@ -933,12 +938,15 @@
       "handshake": "Bắt tay SSH",
       "hostKeyCheck": "Kiểm tra khóa máy chủ",
       "authentication": "Xác thực",
-      "sessionReady": "Đã thiết lập phiên"
+      "sessionReady": "Đã thiết lập phiên",
+      "dnsSkipped": "Địa chỉ IP – không cần phân giải"
     },
     "status": {
       "ok": "OK",
       "running": "đang tiến hành",
-      "failed": "thất bại ({{code}})"
+      "failed": "thất bại ({{code}})",
+      "skipped": "đã bỏ qua",
+      "failedReason": "thất bại: {{reason}}"
     },
     "hostKeyResult": {
       "known": "đã biết",
@@ -946,6 +954,7 @@
       "changed": "đã thay đổi"
     },
     "authMethod": {
+      "none": "none (không xác thực)",
       "password": "Mật khẩu",
       "privateKey": "Khóa riêng tư",
       "agent": "Tác nhân SSH",
@@ -960,6 +969,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "được chấp nhận một phần, cần xác thực thêm",
       "remainingMethods": "Máy chủ còn cung cấp: {{methods}} (chưa thử)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Kết nối TCP đã hết thời gian chờ",
+      "SSH_TIMEOUT": "Hết thời gian chờ",
+      "SSH_CONNECTION_REFUSED": "Kết nối bị từ chối",
+      "SSH_HOST_NOT_FOUND": "Không tìm thấy máy chủ",
+      "SSH_HOST_UNREACHABLE": "Không thể truy cập máy chủ",
+      "SSH_AUTH_FAILED": "Xác thực thất bại"
     }
   },
   "fileBrowser": {

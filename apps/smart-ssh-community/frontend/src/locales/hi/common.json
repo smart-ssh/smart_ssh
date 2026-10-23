@@ -180,6 +180,9 @@
       "identityFile": "कुंजी फ़ाइल"
     },
     "password": "पासवर्ड",
+    "passwordOptionalHint": "(वैकल्पिक – यदि सर्वर बिना पासवर्ड लॉगिन की अनुमति देता है तो खाली छोड़ें)",
+    "removeSavedPassword": "सहेजा गया पासवर्ड हटाएँ",
+    "noPasswordSaved": "कोई पासवर्ड सहेजा नहीं गया है। ऐप पहले बिना पासवर्ड लॉगिन आज़माता है, फिर खाली पासवर्ड से।",
     "unchangedHint": "(खाली = अपरिवर्तित)",
     "privateKeyLabel": "निजी कुंजी",
     "chooseFile": "फ़ाइल चुनें…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI प्रदाता ने त्रुटि बताई (जैसे रखरखाव या अधिभार)। बाद में फिर कोशिश करें; बनी रहे तो प्रदाता सेटिंग्स जाँचें।",
     "AI_PROVIDER_OVERLOADED": "AI प्रदाता अभी ओवरलोड है। थोड़ी देर बाद फिर कोशिश करें।",
     "AI_PROVIDER_BILLING": "AI प्रदाता के खाते में क्रेडिट नहीं बचा है। प्रदाता के कंसोल में बिलिंग जाँचें।",
+    "AI_PROVIDER_USAGE_LIMIT": "प्रदाता की उपयोग सीमा पूरी हो गई है। प्रदाता कंसोल में सीमा बढ़ाएँ या कोई दूसरा प्रदाता चुनें।",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "प्रदाता की उपयोग सीमा पूरी हो गई है। पहुँच {{date}} को फिर शुरू होगी। प्रदाता कंसोल में सीमा बढ़ाएँ या कोई दूसरा प्रदाता चुनें।",
     "AI_PROVIDER_REJECTED_REQUEST": "AI प्रदाता ने अनुरोध अस्वीकार कर दिया।",
     "AI_RESPONSE_TRUNCATED": "AI का उत्तर पूरे कमांड के लिए बहुत लंबा था",
     "AI_MODEL_NOT_FOUND": "AI प्रदाता इस मॉडल को नहीं जानता। सेटिंग्स में मॉडल का नाम जाँचें (\"मॉडल लोड करें\" उपलब्ध मॉडल दिखाता है); Ollama के लिए पहले `ollama pull <name>` से उसे लोड करें।",
@@ -938,12 +943,15 @@
       "handshake": "SSH हैंडशेक",
       "hostKeyCheck": "होस्ट कुंजी जाँच",
       "authentication": "प्रमाणीकरण",
-      "sessionReady": "सत्र स्थापित"
+      "sessionReady": "सत्र स्थापित",
+      "dnsSkipped": "IP पता – खोज की ज़रूरत नहीं"
     },
     "status": {
       "ok": "ठीक",
       "running": "जारी है",
-      "failed": "विफल ({{code}})"
+      "failed": "विफल ({{code}})",
+      "skipped": "छोड़ा गया",
+      "failedReason": "विफल: {{reason}}"
     },
     "hostKeyResult": {
       "known": "ज्ञात",
@@ -951,6 +959,7 @@
       "changed": "बदली हुई"
     },
     "authMethod": {
+      "none": "none (कोई प्रमाणीकरण नहीं)",
       "password": "पासवर्ड",
       "privateKey": "निजी कुंजी",
       "agent": "SSH एजेंट",
@@ -965,6 +974,14 @@
       "mac": "MAC (संदेश प्रमाणीकरण): {{value}}",
       "partialSuccess": "आंशिक रूप से स्वीकृत, आगे प्रमाणीकरण आवश्यक",
       "remainingMethods": "सर्वर ये भी प्रस्तावित करता है: {{methods}} (आज़माए नहीं गए)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP कनेक्शन का समय समाप्त हो गया",
+      "SSH_TIMEOUT": "समय समाप्त",
+      "SSH_CONNECTION_REFUSED": "कनेक्शन अस्वीकृत",
+      "SSH_HOST_NOT_FOUND": "होस्ट नहीं मिला",
+      "SSH_HOST_UNREACHABLE": "होस्ट तक पहुँच नहीं हो सकी",
+      "SSH_AUTH_FAILED": "प्रमाणीकरण विफल"
     }
   },
   "fileBrowser": {

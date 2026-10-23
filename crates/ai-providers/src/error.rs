@@ -64,6 +64,8 @@ pub(crate) fn map_http_status(status: reqwest::StatusCode, body: &str) -> AiErro
         // exhausted quota are billing problems, never a retry case.
         402 => AiError::Billing(parsed.detail(body)),
         429 if parsed.is_billing() => AiError::Billing(parsed.detail(body)),
+        // Issue #631: a spending/usage limit (429, or Anthropic's 400).
+        429 | 400 if parsed.is_usage_limit() => parsed.usage_limit_error(body),
         429 => AiError::RateLimited,
         400 if is_model_no_tool_support(body) => {
             AiError::ModelNoToolSupport(format!("HTTP {status}: {body}"))
@@ -153,6 +155,42 @@ impl ProviderErrorInfo {
             || self.message_lower().contains("credit balance is too low")
     }
 
+    /// Issue #631: a configured spending/usage limit was reached — the
+    /// provider says "usage limits" in an `invalid_request_error`, or (any
+    /// type) when access returns ("regain access on <date>").
+    pub(crate) fn is_usage_limit(&self) -> bool {
+        let message = self.message_lower();
+        message.contains("regain access on")
+            || (self.matches("invalid_request_error") && message.contains("usage limits"))
+    }
+
+    /// A 429 with this body is a quota problem, never a retry case.
+    pub(crate) fn is_quota_exhausted(&self) -> bool {
+        self.is_billing() || self.is_usage_limit()
+    }
+
+    /// The date text after "regain access on", verbatim up to the end of
+    /// the sentence (e.g. `2026-11-01 at 00:00 UTC`); `None` if absent.
+    fn regain_access_date(&self) -> Option<String> {
+        const MARKER: &str = "regain access on ";
+        let message = self.message.as_deref()?;
+        let at = message.to_lowercase().find(MARKER)?;
+        // Lowercasing can change byte offsets for exotic characters; fall
+        // back to "no date" rather than slicing at a wrong index.
+        let rest = message.get(at + MARKER.len()..)?;
+        let date = rest.trim().trim_end_matches('.').trim();
+        let date: String = date.chars().take(64).collect();
+        (!date.is_empty()).then_some(date)
+    }
+
+    /// [`AiError::UsageLimit`] for this info (see [`Self::is_usage_limit`]).
+    pub(crate) fn usage_limit_error(&self, fallback: &str) -> AiError {
+        AiError::UsageLimit {
+            detail: self.detail(fallback),
+            regain_access: self.regain_access_date(),
+        }
+    }
+
     /// "type: message" for the error value and the log, falling back to
     /// `fallback` when the provider sent neither.
     pub(crate) fn detail(&self, fallback: &str) -> String {
@@ -179,6 +217,9 @@ pub(crate) fn classify_provider_error(
 ) -> Option<AiError> {
     if status == Some(402) || info.is_billing() {
         return Some(AiError::Billing(info.detail("")));
+    }
+    if info.is_usage_limit() {
+        return Some(info.usage_limit_error(""));
     }
     if info
         .error_type
@@ -839,5 +880,81 @@ mod classify_tests {
         assert_eq!(provider_request_id(&headers), None);
         headers.insert("x-request-id", "req_abc".parse().unwrap());
         assert_eq!(provider_request_id(&headers).as_deref(), Some("req_abc"));
+    }
+}
+
+#[cfg(test)]
+mod usage_limit_tests {
+    use super::*;
+    use reqwest::StatusCode;
+
+    const ANTHROPIC_LIMIT: &str = r#"{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."}}"#;
+
+    #[test]
+    fn test_issue_631_anthropic_usage_limit_is_limit_error_with_date() {
+        match map_http_status(StatusCode::BAD_REQUEST, ANTHROPIC_LIMIT) {
+            AiError::UsageLimit {
+                regain_access,
+                detail,
+            } => {
+                assert_eq!(regain_access.as_deref(), Some("2026-11-01 at 00:00 UTC"));
+                assert!(detail.starts_with("invalid_request_error: "));
+            }
+            other => panic!("expected UsageLimit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_issue_631_regain_access_in_429_body_is_limit_error() {
+        let body = r#"{"error":{"type":"rate_limit_error","message":"Limit hit. Regain access on 1 Nov."}}"#;
+        match map_http_status(StatusCode::TOO_MANY_REQUESTS, body) {
+            AiError::UsageLimit { regain_access, .. } => {
+                assert_eq!(regain_access.as_deref(), Some("1 Nov"));
+            }
+            other => panic!("expected UsageLimit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_issue_631_usage_limit_without_date_has_none() {
+        let body = r#"{"error":{"type":"invalid_request_error","message":"Workspace API usage limits reached."}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::BAD_REQUEST, body),
+            AiError::UsageLimit {
+                regain_access: None,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_issue_631_in_stream_usage_limit_is_limit_error() {
+        let error: serde_json::Value = serde_json::from_str(ANTHROPIC_LIMIT).unwrap();
+        let (mapped, _) = map_stream_error_object(&error["error"]);
+        assert!(matches!(mapped, AiError::UsageLimit { .. }));
+    }
+
+    #[test]
+    fn test_issue_631_credit_balance_and_insufficient_quota_stay_billing() {
+        let credit = r#"{"error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::BAD_REQUEST, credit),
+            AiError::Billing(_)
+        ));
+        let quota = r#"{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::TOO_MANY_REQUESTS, quota),
+            AiError::Billing(_)
+        ));
+    }
+
+    #[test]
+    fn test_issue_631_unrelated_invalid_request_is_not_billing_or_limit() {
+        let body =
+            r#"{"error":{"type":"invalid_request_error","message":"messages: field required"}}"#;
+        assert!(matches!(
+            map_http_status(StatusCode::BAD_REQUEST, body),
+            AiError::RejectedRequest(_)
+        ));
     }
 }

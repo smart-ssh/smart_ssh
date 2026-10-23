@@ -1457,6 +1457,48 @@ mod tests {
         assert!(matches!(auth_of(&store, &id), AuthMethod::Agent));
     }
 
+    /// Issue #632: "Gespeichertes Passwort entfernen" speichert "kein
+    /// Passwort" und räumt den Schlüsselbund-Eintrag ab.
+    #[tokio::test]
+    async fn test_issue_632_explicit_no_password_removes_the_stored_secret() {
+        let (id, store, password_ref) = password_server();
+        let credentials = InMemoryCredentialStore::new().with_secret(&password_ref, "old-password");
+
+        update_server(
+            &store,
+            &credentials,
+            id,
+            edit_input(AuthMethodInput::NoPassword),
+        )
+        .await
+        .expect("Entfernen des Passworts muss gelingen");
+
+        assert!(matches!(auth_of(&store, &id), AuthMethod::NoPassword));
+        assert!(stored_secret(&credentials, &password_ref).is_none());
+    }
+
+    /// Issue #632: Bearbeiten eines Servers ohne Passwort mit leerem Feld
+    /// lässt ihn ohne Passwort (und schreibt nichts).
+    #[tokio::test]
+    async fn test_issue_632_empty_field_keeps_a_server_without_password() {
+        let id = ServerId::new();
+        let store =
+            InMemoryProfileStore::new().with_server(stored_server(id, AuthMethod::NoPassword));
+        let credentials = InMemoryCredentialStore::new();
+
+        update_server(
+            &store,
+            &credentials,
+            id,
+            edit_input(AuthMethodInput::Password { value: None }),
+        )
+        .await
+        .expect("leeres Feld muss gelingen");
+
+        assert!(matches!(auth_of(&store, &id), AuthMethod::NoPassword));
+        assert!(stored_secret(&credentials, &credential_ref(id, "password")).is_none());
+    }
+
     /// T9 (A5): gleiche Anmeldeart, leeres Feld — „leer = unverändert"
     /// gilt weiter.
     #[tokio::test]

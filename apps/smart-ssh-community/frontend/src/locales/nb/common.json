@@ -180,6 +180,9 @@
       "identityFile": "Nøkkelfil"
     },
     "password": "Passord",
+    "passwordOptionalHint": "(valgfritt – la stå tomt hvis serveren tillater innlogging uten passord)",
+    "removeSavedPassword": "Fjern lagret passord",
+    "noPasswordSaved": "Ingen passord lagret. Appen prøver først innlogging uten passord og deretter med tomt passord.",
     "unchangedHint": "(tomt = uendret)",
     "privateKeyLabel": "Privat nøkkel",
     "chooseFile": "Velg fil…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI-leverandøren meldte en feil (f.eks. vedlikehold eller overbelastning). Prøv igjen senere; vedvarer det, sjekk leverandørinnstillingene.",
     "AI_PROVIDER_OVERLOADED": "KI-leverandøren er overbelastet akkurat nå. Prøv igjen om et øyeblikk.",
     "AI_PROVIDER_BILLING": "KI-leverandørens konto har ikke mer kreditt. Sjekk faktureringen i leverandørens konsoll.",
+    "AI_PROVIDER_USAGE_LIMIT": "Bruksgrensen hos leverandøren er nådd. Øk grensen i leverandørens konsoll, eller velg en annen leverandør.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Bruksgrensen hos leverandøren er nådd. Tilgangen kommer tilbake {{date}}. Øk grensen i leverandørens konsoll, eller velg en annen leverandør.",
     "AI_PROVIDER_REJECTED_REQUEST": "KI-leverandøren avviste forespørselen.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var for langt for en komplett kommando",
     "AI_MODEL_NOT_FOUND": "AI-leverandøren kjenner ikke denne modellen. Sjekk modellnavnet i Innstillinger (“Last modeller” viser de tilgjengelige); for Ollama, hent den først med `ollama pull <name>`.",
@@ -938,12 +943,15 @@
       "handshake": "SSH-håndtrykk",
       "hostKeyCheck": "Sjekk av vertsnøkkel",
       "authentication": "Autentisering",
-      "sessionReady": "Økt opprettet"
+      "sessionReady": "Økt opprettet",
+      "dnsSkipped": "IP-adresse – ingen oppslag nødvendig"
     },
     "status": {
       "ok": "OK",
       "running": "pågår",
-      "failed": "mislyktes ({{code}})"
+      "failed": "mislyktes ({{code}})",
+      "skipped": "hoppet over",
+      "failedReason": "mislyktes: {{reason}}"
     },
     "hostKeyResult": {
       "known": "kjent",
@@ -951,6 +959,7 @@
       "changed": "endret"
     },
     "authMethod": {
+      "none": "none (ingen autentisering)",
       "password": "Passord",
       "privateKey": "Privat nøkkel",
       "agent": "SSH-agent",
@@ -965,6 +974,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "delvis godtatt, videre autentisering kreves",
       "remainingMethods": "Serveren tilbyr også: {{methods}} (ikke prøvd)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP-tilkoblingen fikk tidsavbrudd",
+      "SSH_TIMEOUT": "Tidsavbrudd",
+      "SSH_CONNECTION_REFUSED": "Tilkoblingen ble avvist",
+      "SSH_HOST_NOT_FOUND": "Verten ble ikke funnet",
+      "SSH_HOST_UNREACHABLE": "Verten er utilgjengelig",
+      "SSH_AUTH_FAILED": "Autentisering mislyktes"
     }
   },
   "fileBrowser": {

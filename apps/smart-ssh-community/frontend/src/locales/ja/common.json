@@ -180,6 +180,9 @@
       "identityFile": "鍵ファイル"
     },
     "password": "パスワード",
+    "passwordOptionalHint": "（任意 – サーバーがパスワードなしのログインを許可している場合は空欄のままにします）",
+    "removeSavedPassword": "保存済みのパスワードを削除",
+    "noPasswordSaved": "パスワードは保存されていません。アプリはまずパスワードなしでのログインを試し、次に空のパスワードを試します。",
     "unchangedHint": "（空欄 = 変更しない）",
     "privateKeyLabel": "秘密鍵",
     "chooseFile": "ファイルを選択…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AIプロバイダーがエラーを報告しました（例: メンテナンスや過負荷）。しばらくしてからもう一度お試しください。解消しない場合は、プロバイダーの設定を確認してください。",
     "AI_PROVIDER_OVERLOADED": "AIプロバイダーは現在過負荷です。しばらくしてからもう一度お試しください。",
     "AI_PROVIDER_BILLING": "AIプロバイダーのアカウントに残高がありません。プロバイダーのコンソールで請求を確認してください。",
+    "AI_PROVIDER_USAGE_LIMIT": "プロバイダーの利用上限に達しました。プロバイダーのコンソールで上限を引き上げるか、別のプロバイダーを選んでください。",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "プロバイダーの利用上限に達しました。{{date}}にアクセスが復旧します。プロバイダーのコンソールで上限を引き上げるか、別のプロバイダーを選んでください。",
     "AI_PROVIDER_REJECTED_REQUEST": "AIプロバイダーがリクエストを拒否しました。",
     "AI_RESPONSE_TRUNCATED": "AIの応答が長すぎて、コマンドを完全な形で受け取れませんでした",
     "AI_MODEL_NOT_FOUND": "AIプロバイダーがこのモデルを認識していません。設定でモデル名を確認してください（「モデルを読み込む」で利用可能なモデルが一覧表示されます）。Ollamaの場合は、先に `ollama pull <name>` で取得してください。",
@@ -933,12 +938,15 @@
       "handshake": "SSHハンドシェイク",
       "hostKeyCheck": "ホストキーの確認",
       "authentication": "認証",
-      "sessionReady": "セッション確立"
+      "sessionReady": "セッション確立",
+      "dnsSkipped": "IPアドレス – 名前解決は不要"
     },
     "status": {
       "ok": "OK",
       "running": "進行中",
-      "failed": "失敗（{{code}}）"
+      "failed": "失敗（{{code}}）",
+      "skipped": "スキップ",
+      "failedReason": "失敗: {{reason}}"
     },
     "hostKeyResult": {
       "known": "既知",
@@ -946,6 +954,7 @@
       "changed": "変更あり"
     },
     "authMethod": {
+      "none": "none（認証なし）",
       "password": "パスワード",
       "privateKey": "秘密鍵",
       "agent": "SSHエージェント",
@@ -960,6 +969,14 @@
       "mac": "MAC：{{value}}",
       "partialSuccess": "部分的に受理されました。さらに認証が必要です",
       "remainingMethods": "サーバーは次の方式も提示しています: {{methods}}（未試行）"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "TCP接続がタイムアウトしました",
+      "SSH_TIMEOUT": "タイムアウト",
+      "SSH_CONNECTION_REFUSED": "接続が拒否されました",
+      "SSH_HOST_NOT_FOUND": "ホストが見つかりません",
+      "SSH_HOST_UNREACHABLE": "ホストに到達できません",
+      "SSH_AUTH_FAILED": "認証に失敗しました"
     }
   },
   "fileBrowser": {
