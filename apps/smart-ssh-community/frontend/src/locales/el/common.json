@@ -988,6 +988,7 @@
     "transferStopped": "{{name}}: διακόπηκε",
     "transferIncomplete": "Ελλιπές αρχείο παρέμεινε στον διακομιστή: {{path}}",
     "transferFiles": "{{done}} από {{total}} αρχεία",
+    "transferRemaining": "απομένουν {{time}}",
     "loading": "Φόρτωση…",
     "noPermissionToOpen": "Δεν έχετε άδεια ανοίγματος αυτού του φακέλου (λείπει το x)",
     "emptyDirectory": "(κενός φάκελος)",

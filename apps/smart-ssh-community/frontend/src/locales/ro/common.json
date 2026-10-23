@@ -993,6 +993,7 @@
     "transferStopped": "{{name}}: oprit",
     "transferIncomplete": "Fișier incomplet rămas pe server: {{path}}",
     "transferFiles": "{{done}} din {{total}} fișiere",
+    "transferRemaining": "au mai rămas {{time}}",
     "loading": "Se încarcă…",
     "noPermissionToOpen": "Nu aveți permisiunea de a deschide acest folder (lipsește x)",
     "emptyDirectory": "(director gol)",

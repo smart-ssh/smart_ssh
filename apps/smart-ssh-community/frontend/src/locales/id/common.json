@@ -983,6 +983,7 @@
     "transferStopped": "{{name}}: dihentikan",
     "transferIncomplete": "File tidak lengkap tertinggal di server: {{path}}",
     "transferFiles": "{{done}} dari {{total}} file",
+    "transferRemaining": "sisa {{time}}",
     "loading": "Memuat…",
     "noPermissionToOpen": "Tidak ada izin untuk membuka folder ini (x tidak ada)",
     "emptyDirectory": "(direktori kosong)",

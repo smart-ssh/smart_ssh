@@ -998,6 +998,7 @@
     "transferStopped": "{{name}}: остановлено",
     "transferIncomplete": "Неполный файл остался на сервере: {{path}}",
     "transferFiles": "{{done}} из {{total}} файлов",
+    "transferRemaining": "осталось {{time}}",
     "loading": "Загрузка…",
     "noPermissionToOpen": "Нет прав на открытие этой папки (нет x)",
     "emptyDirectory": "(пустой каталог)",

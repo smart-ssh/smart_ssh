@@ -2094,6 +2094,76 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     expectNoGerman();
   });
 
+  describe("transfer speed and remaining time (issue #623)", () => {
+    async function setup() {
+      let started: ((event: SftpTransferStartedEvent) => void) | null = null;
+      const progress: ((event: any) => void)[] = [];
+      vi.mocked(onSftpTransferStarted).mockImplementation((handler) => {
+        started = handler;
+        return Promise.resolve(() => {});
+      });
+      vi.mocked(onSftpTransferProgress).mockImplementation((hd: any) => {
+        progress.push(hd);
+        return Promise.resolve(() => {});
+      });
+      vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+      renderEn();
+      await screen.findByText(/a\.txt/);
+      await waitFor(() => expect(started).not.toBeNull());
+      await waitFor(() => expect(progress.length).toBeGreaterThan(0));
+      return { started: started!, emit: (e: any) => act(() => progress.forEach((fn) => fn(e))) };
+    }
+    const MB = 1024 * 1024;
+
+    // Only the clock: restoreAllMocks would also reset the module mocks.
+    let dateSpy: { mockRestore: () => void } | undefined;
+    afterEach(() => dateSpy?.mockRestore());
+
+    it("a file row shows speed and remaining time from the progress events", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "f.bin", totalBytes: 10 * MB }),
+      );
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: 10 * MB });
+      now += 2000;
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 2 * MB, totalBytes: 10 * MB });
+      expect(screen.getByText("1.0 MB/s")).toBeVisible();
+      expect(screen.getByText("00:08 left")).toBeVisible();
+    });
+
+    it("a folder row shows the aggregate speed and remaining time", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "dir", totalBytes: null }),
+      );
+      const folder = (bytesDone: number) => ({ filesDone: 1, filesTotal: 3, bytesDone, bytesTotal: 20 * MB });
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: 1, folder: folder(0) });
+      now += 2000;
+      // Per-file values are tiny; only the folder aggregate may drive the row.
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 1, totalBytes: 1, folder: folder(4 * MB) });
+      expect(screen.getByText("2.0 MB/s")).toBeVisible();
+      expect(screen.getByText("00:08 left")).toBeVisible();
+    });
+
+    it("an unknown total shows a dash for the remaining time", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "upload", fileName: "u.bin", totalBytes: null }),
+      );
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: null });
+      now += 2000;
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 2 * MB, totalBytes: null });
+      expect(screen.getByText("1.0 MB/s")).toBeVisible();
+      expect(screen.queryByText(/left/)).not.toBeInTheDocument();
+    });
+  });
+
   it("the native upload dialog gets an English title", async () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(pickUploadFiles).mockResolvedValue(null);

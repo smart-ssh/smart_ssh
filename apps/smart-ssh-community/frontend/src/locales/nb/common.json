@@ -988,6 +988,7 @@
     "transferStopped": "{{name}}: stoppet",
     "transferIncomplete": "Ufullstendig fil igjen på serveren: {{path}}",
     "transferFiles": "{{done}} av {{total}} filer",
+    "transferRemaining": "{{time}} igjen",
     "loading": "Laster…",
     "noPermissionToOpen": "Ingen tillatelse til å åpne denne mappen (x mangler)",
     "emptyDirectory": "(tom katalog)",

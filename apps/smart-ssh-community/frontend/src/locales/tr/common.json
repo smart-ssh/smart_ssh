@@ -988,6 +988,7 @@
     "transferStopped": "{{name}}: durduruldu",
     "transferIncomplete": "Sunucuda eksik bir dosya kaldı: {{path}}",
     "transferFiles": "{{total}} dosyadan {{done}}",
+    "transferRemaining": "{{time}} kaldı",
     "loading": "Yükleniyor…",
     "noPermissionToOpen": "Bu klasörü açma izni yok (x eksik)",
     "emptyDirectory": "(boş dizin)",

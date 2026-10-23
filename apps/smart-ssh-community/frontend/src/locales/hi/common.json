@@ -988,6 +988,7 @@
     "transferStopped": "{{name}}: रोका गया",
     "transferIncomplete": "सर्वर पर अधूरी फ़ाइल रह गई: {{path}}",
     "transferFiles": "{{total}} में से {{done}} फ़ाइलें",
+    "transferRemaining": "{{time}} शेष",
     "loading": "लोड हो रहा है…",
     "noPermissionToOpen": "इस फ़ोल्डर को खोलने की अनुमति नहीं (x अनुपलब्ध)",
     "emptyDirectory": "(खाली डायरेक्टरी)",

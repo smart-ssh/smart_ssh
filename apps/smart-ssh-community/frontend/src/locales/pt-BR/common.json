@@ -993,6 +993,7 @@
     "transferStopped": "{{name}}: interrompido",
     "transferIncomplete": "Arquivo incompleto deixado no servidor: {{path}}",
     "transferFiles": "{{done}} de {{total}} arquivos",
+    "transferRemaining": "restam {{time}}",
     "loading": "Carregando…",
     "noPermissionToOpen": "Sem permissão para abrir esta pasta (falta x)",
     "emptyDirectory": "(diretório vazio)",

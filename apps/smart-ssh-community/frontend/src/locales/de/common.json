@@ -988,6 +988,7 @@
     "transferStopped": "{{name}}: gestoppt",
     "transferIncomplete": "Unvollständige Datei auf dem Server: {{path}}",
     "transferFiles": "{{done}} von {{total}} Dateien",
+    "transferRemaining": "noch {{time}}",
     "loading": "Lädt…",
     "noPermissionToOpen": "Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)",
     "emptyDirectory": "(leeres Verzeichnis)",

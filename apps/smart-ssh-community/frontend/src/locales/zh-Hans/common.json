@@ -983,6 +983,7 @@
     "transferStopped": "{{name}}：已停止",
     "transferIncomplete": "服务器上遗留了不完整的文件：{{path}}",
     "transferFiles": "{{done}} / {{total}} 个文件",
+    "transferRemaining": "剩余 {{time}}",
     "loading": "正在加载…",
     "noPermissionToOpen": "无权打开此文件夹（缺少 x）",
     "emptyDirectory": "（空目录）",

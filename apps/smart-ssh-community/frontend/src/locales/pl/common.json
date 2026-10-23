@@ -998,6 +998,7 @@
     "transferStopped": "{{name}}: zatrzymano",
     "transferIncomplete": "Niekompletny plik pozostał na serwerze: {{path}}",
     "transferFiles": "{{done}} z {{total}} plików",
+    "transferRemaining": "pozostało {{time}}",
     "loading": "Wczytywanie…",
     "noPermissionToOpen": "Brak uprawnień do otwarcia tego folderu (brak x)",
     "emptyDirectory": "(pusty katalog)",

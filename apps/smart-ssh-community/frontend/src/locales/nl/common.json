@@ -988,6 +988,7 @@
     "transferStopped": "{{name}}: gestopt",
     "transferIncomplete": "Onvolledig bestand achtergelaten op de server: {{path}}",
     "transferFiles": "{{done}} van {{total}} bestanden",
+    "transferRemaining": "nog {{time}}",
     "loading": "Laden…",
     "noPermissionToOpen": "Geen toestemming om deze map te openen (x ontbreekt)",
     "emptyDirectory": "(lege map)",
