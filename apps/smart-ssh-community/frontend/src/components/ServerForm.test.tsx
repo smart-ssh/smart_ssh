@@ -44,6 +44,7 @@ vi.mock("../api", () => ({
     typeof err === "object" && err !== null && "code" in err
       ? ((err as { code: string | null }).code ?? null)
       : null,
+  cancelConnect: vi.fn(() => Promise.resolve()),
   clearServerSudoPassword: vi.fn(),
   convertIdentityFileToKeychain: vi.fn(),
   createServer: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock("../api", () => ({
 
 vi.mock("../events", () => ({
   onNoteShrinkSucceeded: vi.fn(() => Promise.resolve(() => {})),
+  onConnectProgress: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 vi.mock("../fileDialog", () => ({
