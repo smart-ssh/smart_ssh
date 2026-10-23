@@ -1073,6 +1073,21 @@ impl OpenAiStreamState {
     }
 
     /// Issue #609: the usage as a public event, at most once.
+    /// Issue #617: ahead of it, the real input size as [`AiEvent::Usage`]
+    /// (chat compaction / context indicator). OpenAI-style APIs count cached
+    /// tokens inside the prompt tokens, so `input_tokens` is already the
+    /// full prompt size and the cache fields are not added again.
+    pub(crate) fn take_usage_events(&mut self) -> Vec<RawEvent> {
+        let mut events = Vec::new();
+        if let Some(total) = self.usage.input_tokens.filter(|t| *t > 0) {
+            events.push(RawEvent::Public(AiEvent::Usage {
+                input_tokens: total,
+            }));
+        }
+        events.extend(self.take_usage_event());
+        events
+    }
+
     pub(crate) fn take_usage_event(&mut self) -> Option<RawEvent> {
         let usage = std::mem::take(&mut self.usage);
         // A bare model name without any count is not a usage report.
@@ -1289,9 +1304,7 @@ impl OpenAiStreamState {
                     &call.arguments,
                 )));
             }
-            if let Some(event) = self.take_usage_event() {
-                events.push(event);
-            }
+            events.extend(self.take_usage_events());
             events.push(RawEvent::Public(if finish_reason_is_length {
                 AiEvent::TextTruncated
             } else {
@@ -1319,9 +1332,7 @@ impl OpenAiStreamState {
             if let Some(action) = result.action {
                 events.push(RawEvent::Public(AiEvent::ActionProposed(action)));
             }
-            if let Some(event) = self.take_usage_event() {
-                events.push(event);
-            }
+            events.extend(self.take_usage_events());
             events.push(RawEvent::Public(if finish_reason_is_length {
                 AiEvent::TextTruncated
             } else {

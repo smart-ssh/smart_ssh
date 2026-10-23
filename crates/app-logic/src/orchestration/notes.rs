@@ -34,8 +34,8 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
     push_history, push_history_scoped, reapply_redaction_and_seal_for_send,
-    reapply_redaction_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
-    write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
+    wait_for_ai_request_slot, wait_for_rate_limit_budget, write_ledger_entry,
+    PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
 
@@ -860,8 +860,23 @@ pub async fn suggest_note_update_on_disconnect(
         );
         return false;
     }
-    request_context.history =
-        reapply_redaction_for_send(request_context.history, session.redactor.as_ref());
+    // Issue #564: same redaction-and-sealing entry point as chat turns,
+    // compaction and the title request; a sealing failure means no request
+    // and no proposal.
+    match reapply_redaction_and_seal_for_send(
+        request_context.history,
+        session.redactor.as_ref(),
+        &session.chat_content,
+        session.extension_content_key(session_id).await,
+    ) {
+        Ok(history) => request_context.history = history,
+        Err(_) => {
+            tracing::info!(
+                "skipping note-update suggestion on disconnect: sealing the request failed"
+            );
+            return false;
+        }
+    }
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(disconnect_completion_instruction(
