@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Cài đặt",
+    "backToList": "Mục",
     "categories": {
       "aiProvider": "Nhà cung cấp AI",
       "displayLanguage": "Hiển thị & Ngôn ngữ",
@@ -982,6 +983,7 @@
     "transferStopped": "{{name}}: đã dừng",
     "transferIncomplete": "Tệp chưa hoàn chỉnh còn lại trên máy chủ: {{path}}",
     "transferFiles": "{{done}}/{{total}} tệp",
+    "transferRemaining": "còn {{time}}",
     "loading": "Đang tải…",
     "noPermissionToOpen": "Không có quyền mở thư mục này (thiếu x)",
     "emptyDirectory": "(thư mục trống)",

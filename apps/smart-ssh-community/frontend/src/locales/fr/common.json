@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Paramètres",
+    "backToList": "Rubriques",
     "categories": {
       "aiProvider": "Fournisseur d’IA",
       "displayLanguage": "Affichage et langue",
@@ -992,6 +993,7 @@
     "transferStopped": "{{name}} : arrêté",
     "transferIncomplete": "Fichier incomplet laissé sur le serveur : {{path}}",
     "transferFiles": "{{done}} fichiers sur {{total}}",
+    "transferRemaining": "{{time}} restantes",
     "loading": "Chargement…",
     "noPermissionToOpen": "Pas d'autorisation pour ouvrir ce dossier (x manquant)",
     "emptyDirectory": "(répertoire vide)",

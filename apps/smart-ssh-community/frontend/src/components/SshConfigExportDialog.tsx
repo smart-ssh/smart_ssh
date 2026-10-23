@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorMessage, exportSshConfig } from "../api";
+import { clipboardWriteText, commandErrorMessage, exportSshConfig } from "../api";
 import type { SshConfigExportResultDto } from "../types";
 import { Button, DialogFrame } from "./ui";
 
@@ -42,7 +42,7 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
   const handleCopyIncludeHint = async () => {
     if (!result) return;
     try {
-      await navigator.clipboard.writeText(result.includeHint);
+      await clipboardWriteText(result.includeHint);
       setCopyState("copied");
     } catch (err) {
       console.warn("Konnte Include-Zeile nicht in die Zwischenablage kopieren:", err);

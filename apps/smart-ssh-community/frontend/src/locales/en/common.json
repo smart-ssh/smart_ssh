@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Settings",
+    "backToList": "Sections",
     "categories": {
       "aiProvider": "AI Provider",
       "displayLanguage": "Display & Language",
@@ -987,6 +988,7 @@
     "transferStopped": "{{name}}: stopped",
     "transferIncomplete": "Incomplete file left on the server: {{path}}",
     "transferFiles": "{{done}} of {{total}} files",
+    "transferRemaining": "{{time}} left",
     "loading": "Loading…",
     "noPermissionToOpen": "No permission to open this folder (missing x)",
     "emptyDirectory": "(empty directory)",

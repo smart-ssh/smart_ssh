@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Asetukset",
+    "backToList": "Osiot",
     "categories": {
       "aiProvider": "Tekoälyn palveluntarjoaja",
       "displayLanguage": "Näyttö ja kieli",
@@ -987,6 +988,7 @@
     "transferStopped": "{{name}}: pysäytetty",
     "transferIncomplete": "Epätäydellinen tiedosto jäi palvelimelle: {{path}}",
     "transferFiles": "{{done}} / {{total}} tiedostoa",
+    "transferRemaining": "{{time}} jäljellä",
     "loading": "Ladataan…",
     "noPermissionToOpen": "Ei oikeutta avata tätä kansiota (x puuttuu)",
     "emptyDirectory": "(tyhjä hakemisto)",

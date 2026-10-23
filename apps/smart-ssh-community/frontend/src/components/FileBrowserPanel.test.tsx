@@ -19,6 +19,7 @@ import {
   claimClipboardFiles,
   claimDroppedPaths,
   clipboardHasFiles,
+  clipboardWriteText,
   closeEditSession,
   localFileMtime,
   pickUploadFiles,
@@ -99,6 +100,7 @@ vi.mock("../api", () => ({
   claimDroppedPaths: vi.fn(() => Promise.resolve(nativeDrop.paths)),
   pickUploadFiles: vi.fn(),
   clipboardHasFiles: vi.fn(() => Promise.resolve(false)),
+  clipboardWriteText: vi.fn(() => Promise.resolve()),
   claimClipboardFiles: vi.fn(),
   pickUploadFolder: vi.fn(),
   sftpLocalPathsAreFolders: vi.fn((_s: string, paths: string[]) =>
@@ -524,7 +526,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
     await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith("hallo welt"),
+      expect(clipboardWriteText).toHaveBeenCalledWith("hallo welt"),
     );
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith(
@@ -591,7 +593,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
 
-    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(big));
+    await waitFor(() => expect(clipboardWriteText).toHaveBeenCalledWith(big));
   });
 
   it("shows the translated message for a file over 50 MB, not the backend text", async () => {
@@ -631,7 +633,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
         }),
     );
     vi.mocked(showToast).mockClear();
-    vi.mocked(navigator.clipboard.writeText).mockClear();
+    vi.mocked(clipboardWriteText).mockClear();
 
     renderPanel();
     await screen.findByText(/a\.txt/);
@@ -646,7 +648,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
 
     rejectCopy({ code: "SFTP_COPY_CANCELLED", message: "cancelled" });
     await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
-    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(clipboardWriteText).not.toHaveBeenCalled();
     expect(showToast).not.toHaveBeenCalled();
   });
 
@@ -681,7 +683,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
         }),
       ),
     );
-    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(clipboardWriteText).not.toHaveBeenCalled();
   });
 
   it("shows the properties dialog with numeric and symbolic permissions", async () => {
@@ -1434,6 +1436,14 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     ).toBeVisible();
     expect(screen.getByText(/passwortlosen Dateizugriff als root/)).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    // Issue #626: the sudoers line goes through the backend clipboard path.
+    fireEvent.click(screen.getByRole("button", { name: "Kopieren" }));
+    await waitFor(() =>
+      expect(clipboardWriteText).toHaveBeenCalledWith(
+        "deploy ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server",
+      ),
+    );
   });
 
   it("shows the unsafe sftp-server message and no sudoers line", async () => {
@@ -2092,6 +2102,76 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     expect(screen.getByText("Uploading: up.bin")).toBeVisible();
     expect(screen.getByText("Downloading: down.bin")).toBeVisible();
     expectNoGerman();
+  });
+
+  describe("transfer speed and remaining time (issue #623)", () => {
+    async function setup() {
+      let started: ((event: SftpTransferStartedEvent) => void) | null = null;
+      const progress: ((event: any) => void)[] = [];
+      vi.mocked(onSftpTransferStarted).mockImplementation((handler) => {
+        started = handler;
+        return Promise.resolve(() => {});
+      });
+      vi.mocked(onSftpTransferProgress).mockImplementation((hd: any) => {
+        progress.push(hd);
+        return Promise.resolve(() => {});
+      });
+      vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+      renderEn();
+      await screen.findByText(/a\.txt/);
+      await waitFor(() => expect(started).not.toBeNull());
+      await waitFor(() => expect(progress.length).toBeGreaterThan(0));
+      return { started: started!, emit: (e: any) => act(() => progress.forEach((fn) => fn(e))) };
+    }
+    const MB = 1024 * 1024;
+
+    // Only the clock: restoreAllMocks would also reset the module mocks.
+    let dateSpy: { mockRestore: () => void } | undefined;
+    afterEach(() => dateSpy?.mockRestore());
+
+    it("a file row shows speed and remaining time from the progress events", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "f.bin", totalBytes: 10 * MB }),
+      );
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: 10 * MB });
+      now += 2000;
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 2 * MB, totalBytes: 10 * MB });
+      expect(screen.getByText("1.0 MB/s")).toBeVisible();
+      expect(screen.getByText("00:08 left")).toBeVisible();
+    });
+
+    it("a folder row shows the aggregate speed and remaining time", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "dir", totalBytes: null }),
+      );
+      const folder = (bytesDone: number) => ({ filesDone: 1, filesTotal: 3, bytesDone, bytesTotal: 20 * MB });
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: 1, folder: folder(0) });
+      now += 2000;
+      // Per-file values are tiny; only the folder aggregate may drive the row.
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 1, totalBytes: 1, folder: folder(4 * MB) });
+      expect(screen.getByText("2.0 MB/s")).toBeVisible();
+      expect(screen.getByText("00:08 left")).toBeVisible();
+    });
+
+    it("an unknown total shows a dash for the remaining time", async () => {
+      let now = 1_000_000;
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+      const h = await setup();
+      act(() =>
+        h.started({ sessionId: "session-1", transferId: "t1", kind: "upload", fileName: "u.bin", totalBytes: null }),
+      );
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 0, totalBytes: null });
+      now += 2000;
+      h.emit({ sessionId: "session-1", transferId: "t1", bytesDone: 2 * MB, totalBytes: null });
+      expect(screen.getByText("1.0 MB/s")).toBeVisible();
+      expect(screen.queryByText(/left/)).not.toBeInTheDocument();
+    });
   });
 
   it("the native upload dialog gets an English title", async () => {
@@ -2768,5 +2848,85 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       );
       expect(screen.getByText("big.bin: abgebrochen")).toBeVisible();
     });
+  });
+});
+
+describe("FileBrowserPanel menus stay inside the window (issue #627)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  const origW = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+  const origH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    window.innerWidth = 1000;
+    window.innerHeight = 600;
+    // jsdom has no layout: every measured element is 200 x 300.
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 200 });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 300 });
+  });
+  afterEach(() => {
+    if (origW) Object.defineProperty(HTMLElement.prototype, "offsetWidth", origW);
+    if (origH) Object.defineProperty(HTMLElement.prototype, "offsetHeight", origH);
+  });
+
+  const menuOf = (label: string) => screen.getByText(label).closest("div,fieldset") as HTMLElement;
+
+  it("opens the row context menu where the click is when there is room", async () => {
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    fireEvent.contextMenu(row, { clientX: 100, clientY: 100 });
+    expect(menuOf("Umbenennen")).toHaveStyle({ left: "100px", top: "100px" });
+  });
+
+  it("opens the row context menu upward at the bottom edge", async () => {
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    fireEvent.contextMenu(row, { clientX: 100, clientY: 590 });
+    expect(menuOf("Umbenennen")).toHaveStyle({ top: "290px" });
+  });
+
+  it("opens the row context menu to the left at the right edge", async () => {
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    fireEvent.contextMenu(row, { clientX: 995, clientY: 100 });
+    expect(menuOf("Umbenennen")).toHaveStyle({ left: "792px" });
+  });
+
+  it("keeps the empty-space menu inside the window in the bottom right corner", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    const scroller = container.querySelector("table")!.parentElement!;
+    fireEvent.contextMenu(scroller, { clientX: 995, clientY: 595 });
+    expect(menuOf("Neuer Ordner")).toHaveStyle({ left: "792px", top: "295px" });
+  });
+
+  it("shifts the target user form inside the window near the right edge", async () => {
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "root",
+      sftpServerPath: "",
+      failure: null,
+    });
+    // The elevation group sits at the right window edge.
+    const orig = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.tagName === "FIELDSET" && this.getAttribute("aria-label")?.includes("Rechte")) {
+        return { left: 900, top: 10, right: 990, bottom: 30, width: 90, height: 20, x: 900, y: 10, toJSON() {} } as DOMRect;
+      }
+      return orig.call(this);
+    };
+    try {
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      fireEvent.click(await screen.findByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /Als anderer Nutzer/ }));
+      const form = screen.getByLabelText("Ziel-Nutzer").closest("form") as HTMLElement;
+      // 900 + 200 would stick out; end-aligned: 990 - 200 = 790.
+      expect(form).toHaveStyle({ left: "790px" });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = orig;
+    }
   });
 });

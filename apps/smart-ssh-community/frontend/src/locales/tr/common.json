@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Ayarlar",
+    "backToList": "Bölümler",
     "categories": {
       "aiProvider": "Yapay zeka sağlayıcısı",
       "displayLanguage": "Görünüm ve dil",
@@ -987,6 +988,7 @@
     "transferStopped": "{{name}}: durduruldu",
     "transferIncomplete": "Sunucuda eksik bir dosya kaldı: {{path}}",
     "transferFiles": "{{total}} dosyadan {{done}}",
+    "transferRemaining": "{{time}} kaldı",
     "loading": "Yükleniyor…",
     "noPermissionToOpen": "Bu klasörü açma izni yok (x eksik)",
     "emptyDirectory": "(boş dizin)",

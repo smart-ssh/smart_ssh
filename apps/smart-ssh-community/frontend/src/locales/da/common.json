@@ -35,6 +35,7 @@
   },
   "settings": {
     "title": "Indstillinger",
+    "backToList": "Afsnit",
     "categories": {
       "aiProvider": "AI-udbyder",
       "displayLanguage": "Visning og sprog",
@@ -987,6 +988,7 @@
     "transferStopped": "{{name}}: stoppet",
     "transferIncomplete": "Ufuldstændig fil efterladt på serveren: {{path}}",
     "transferFiles": "{{done}} af {{total}} filer",
+    "transferRemaining": "{{time}} tilbage",
     "loading": "Indlæser…",
     "noPermissionToOpen": "Ingen tilladelse til at åbne denne mappe (x mangler)",
     "emptyDirectory": "(tom mappe)",

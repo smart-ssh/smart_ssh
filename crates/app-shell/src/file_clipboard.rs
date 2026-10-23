@@ -121,6 +121,21 @@ impl FileClipboard {
             .map_err(|e| e.to_string())
     }
 
+    /// Puts plain `text` on the system clipboard (issue #626). Used for text
+    /// that only exists after an async step, where the webview no longer
+    /// has the user gesture it needs for its own clipboard write.
+    pub(crate) fn set_text(&self, text: &str) -> Result<(), String> {
+        let mut guard = self.context.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.is_none() {
+            *guard = Some(ClipboardContext::new().map_err(|e| e.to_string())?);
+        }
+        guard
+            .as_ref()
+            .expect("context was just created")
+            .set_text(text.to_owned())
+            .map_err(|e| e.to_string())
+    }
+
     /// Reads the file references currently on the system clipboard (issue
     /// #571). Creates the clipboard context on first use. Only absolute
     /// paths of entries that exist come back; `file://` URIs (X11/Wayland)
