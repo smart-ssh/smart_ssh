@@ -152,6 +152,8 @@
     "confirmDelete": "स्थायी रूप से हटाएँ"
   },
   "serverForm": {
+    "connect": "कनेक्ट करें",
+    "connectSaveFirst": "पहले अपने बदलाव सहेजें",
     "hostKeys": {
       "title": "होस्ट कुंजियाँ",
       "none": "अभी तक कोई होस्ट कुंजी संग्रहीत नहीं है। यह पहले कनेक्शन पर संग्रहीत होती है।"
@@ -446,6 +448,8 @@
     "active": "सक्रिय",
     "setActive": "सक्रिय करें",
     "addProvider": "प्रदाता जोड़ें",
+    "editProvider": "प्रदाता संपादित करें",
+    "apiKeyUnchangedPlaceholder": "अपरिवर्तित – बदलने के लिए नई कुंजी दर्ज करें",
     "type": "प्रकार",
     "providerName": "नाम",
     "model": "मॉडल",

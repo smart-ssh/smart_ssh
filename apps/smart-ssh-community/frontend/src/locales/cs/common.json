@@ -152,6 +152,8 @@
     "confirmDelete": "Smazat trvale"
   },
   "serverForm": {
+    "connect": "Připojit",
+    "connectSaveFirst": "Nejprve uložte změny",
     "hostKeys": {
       "title": "Klíče hostitelů",
       "none": "Zatím není uložen žádný klíč hostitele. Uloží se při prvním připojení."
@@ -446,6 +448,8 @@
     "active": "aktivní",
     "setActive": "Nastavit jako aktivní",
     "addProvider": "Přidat poskytovatele",
+    "editProvider": "Upravit poskytovatele",
+    "apiKeyUnchangedPlaceholder": "Beze změny – zadejte nový klíč pro nahrazení",
     "type": "Typ",
     "providerName": "Název",
     "model": "Model",

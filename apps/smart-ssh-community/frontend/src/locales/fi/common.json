@@ -152,6 +152,8 @@
     "confirmDelete": "Poista pysyvästi"
   },
   "serverForm": {
+    "connect": "Yhdistä",
+    "connectSaveFirst": "Tallenna muutokset ensin",
     "hostKeys": {
       "title": "Isäntäavaimet",
       "none": "Isäntäavainta ei ole vielä tallennettu. Se tallennetaan ensimmäisen yhteyden yhteydessä."
@@ -446,6 +448,8 @@
     "active": "aktiivinen",
     "setActive": "Aseta aktiiviseksi",
     "addProvider": "Lisää palveluntarjoaja",
+    "editProvider": "Muokkaa palveluntarjoajaa",
+    "apiKeyUnchangedPlaceholder": "Ei muutosta – syötä uusi avain korvataksesi sen",
     "type": "Tyyppi",
     "providerName": "Nimi",
     "model": "Malli",

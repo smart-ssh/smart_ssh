@@ -152,6 +152,8 @@
     "confirmDelete": "Usuń na stałe"
   },
   "serverForm": {
+    "connect": "Połącz",
+    "connectSaveFirst": "Najpierw zapisz zmiany",
     "hostKeys": {
       "title": "Klucze hostów",
       "none": "Nie zapisano jeszcze klucza hosta. Zostanie zapisany przy pierwszym połączeniu."
@@ -446,6 +448,8 @@
     "active": "aktywny",
     "setActive": "Ustaw jako aktywny",
     "addProvider": "Dodaj dostawcę",
+    "editProvider": "Edytuj dostawcę",
+    "apiKeyUnchangedPlaceholder": "Bez zmian – wpisz nowy klucz, aby go zastąpić",
     "type": "Typ",
     "providerName": "Nazwa",
     "model": "Model",

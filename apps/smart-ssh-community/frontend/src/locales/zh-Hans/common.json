@@ -152,6 +152,8 @@
     "confirmDelete": "永久删除"
   },
   "serverForm": {
+    "connect": "连接",
+    "connectSaveFirst": "请先保存更改",
     "hostKeys": {
       "title": "主机密钥",
       "none": "尚未保存主机密钥。首次连接时会保存。"
@@ -446,6 +448,8 @@
     "active": "活动",
     "setActive": "设为活动",
     "addProvider": "添加提供商",
+    "editProvider": "编辑提供商",
+    "apiKeyUnchangedPlaceholder": "保持不变 – 输入新密钥以替换",
     "type": "类型",
     "providerName": "名称",
     "model": "模型",

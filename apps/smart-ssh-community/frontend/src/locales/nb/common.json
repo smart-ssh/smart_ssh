@@ -152,6 +152,8 @@
     "confirmDelete": "Slett permanent"
   },
   "serverForm": {
+    "connect": "Koble til",
+    "connectSaveFirst": "Lagre endringene først",
     "hostKeys": {
       "title": "Vertsnøkler",
       "none": "Ingen vertsnøkkel er lagret ennå. Den lagres ved første tilkobling."
@@ -446,6 +448,8 @@
     "active": "aktiv",
     "setActive": "Gjør aktiv",
     "addProvider": "Legg til leverandør",
+    "editProvider": "Rediger leverandør",
+    "apiKeyUnchangedPlaceholder": "Uendret – skriv inn en ny nøkkel for å erstatte den",
     "type": "Type",
     "providerName": "Navn",
     "model": "Modell",

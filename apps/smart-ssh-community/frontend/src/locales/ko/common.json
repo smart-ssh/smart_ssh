@@ -152,6 +152,8 @@
     "confirmDelete": "영구 삭제"
   },
   "serverForm": {
+    "connect": "연결",
+    "connectSaveFirst": "먼저 변경 사항을 저장하세요",
     "hostKeys": {
       "title": "호스트 키",
       "none": "저장된 호스트 키가 아직 없습니다. 처음 연결할 때 저장됩니다."
@@ -446,6 +448,8 @@
     "active": "활성",
     "setActive": "활성으로 설정",
     "addProvider": "제공자 추가",
+    "editProvider": "제공자 편집",
+    "apiKeyUnchangedPlaceholder": "변경 없음 – 교체하려면 새 키를 입력하세요",
     "type": "유형",
     "providerName": "이름",
     "model": "모델",

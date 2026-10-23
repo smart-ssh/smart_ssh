@@ -152,6 +152,8 @@
     "confirmDelete": "Supprimer définitivement"
   },
   "serverForm": {
+    "connect": "Se connecter",
+    "connectSaveFirst": "Enregistrez d'abord vos modifications",
     "hostKeys": {
       "title": "Clés d’hôte",
       "none": "Aucune clé d’hôte enregistrée. Elle est enregistrée à la première connexion."
@@ -446,6 +448,8 @@
     "active": "actif",
     "setActive": "Définir comme actif",
     "addProvider": "Ajouter un fournisseur",
+    "editProvider": "Modifier le fournisseur",
+    "apiKeyUnchangedPlaceholder": "Inchangée – saisissez une nouvelle clé pour la remplacer",
     "type": "Type",
     "providerName": "Nom",
     "model": "Modèle",

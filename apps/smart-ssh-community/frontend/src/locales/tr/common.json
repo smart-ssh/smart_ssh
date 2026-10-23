@@ -152,6 +152,8 @@
     "confirmDelete": "Kalıcı olarak sil"
   },
   "serverForm": {
+    "connect": "Bağlan",
+    "connectSaveFirst": "Önce değişikliklerinizi kaydedin",
     "hostKeys": {
       "title": "Ana makine anahtarları",
       "none": "Henüz kayıtlı ana makine anahtarı yok. İlk bağlantıda kaydedilir."
@@ -446,6 +448,8 @@
     "active": "etkin",
     "setActive": "Etkin yap",
     "addProvider": "Sağlayıcı ekle",
+    "editProvider": "Sağlayıcıyı düzenle",
+    "apiKeyUnchangedPlaceholder": "Değişmedi – değiştirmek için yeni bir anahtar girin",
     "type": "Tür",
     "providerName": "Ad",
     "model": "Model",

@@ -152,6 +152,8 @@
     "confirmDelete": "完全に削除"
   },
   "serverForm": {
+    "connect": "接続",
+    "connectSaveFirst": "先に変更を保存してください",
     "hostKeys": {
       "title": "ホストキー",
       "none": "ホストキーはまだ保存されていません。最初の接続時に保存されます。"
@@ -446,6 +448,8 @@
     "active": "有効",
     "setActive": "有効にする",
     "addProvider": "プロバイダーを追加",
+    "editProvider": "プロバイダーを編集",
+    "apiKeyUnchangedPlaceholder": "変更なし – 置き換えるには新しいキーを入力",
     "type": "種類",
     "providerName": "名前",
     "model": "モデル",

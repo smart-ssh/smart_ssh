@@ -152,6 +152,8 @@
     "confirmDelete": "Excluir permanentemente"
   },
   "serverForm": {
+    "connect": "Conectar",
+    "connectSaveFirst": "Salve suas alterações primeiro",
     "hostKeys": {
       "title": "Chaves de host",
       "none": "Nenhuma chave de host armazenada ainda. Ela é armazenada na primeira conexão."
@@ -446,6 +448,8 @@
     "active": "ativo",
     "setActive": "Definir como ativo",
     "addProvider": "Adicionar provedor",
+    "editProvider": "Editar provedor",
+    "apiKeyUnchangedPlaceholder": "Inalterada – insira uma nova chave para substituí-la",
     "type": "Tipo",
     "providerName": "Nome",
     "model": "Modelo",
