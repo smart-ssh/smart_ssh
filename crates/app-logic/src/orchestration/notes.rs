@@ -661,7 +661,7 @@ async fn request_ai_title(
             | AiEvent::Retrying { .. }
             | AiEvent::InvalidToolCall { .. } => {}
             AiEvent::Done => break,
-            AiEvent::Error(_) => {
+            AiEvent::Error(_) | AiEvent::Refused => {
                 failure = Some(TitleFailure::Error);
                 break;
             }
@@ -919,7 +919,7 @@ pub async fn suggest_note_update_on_disconnect(
             // Spec 0065, Teil 2: dieser Nebenaufruf zeigt keinen „Weiter"-
             // Hinweis an (kein sichtbarer Chat-Turn) — ein abgeschnittener
             // Vorschlag ist hier gleichbedeutend mit "kein Vorschlag".
-            AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated => break,
+            AiEvent::Done | AiEvent::Error(_) | AiEvent::TextTruncated | AiEvent::Refused => break,
             // Issue #610: passive report. The stop conditions above are
             // unchanged: usage that arrives after the loop stopped (e.g.
             // behind `ActionProposed`) is not reported and never awaited.
@@ -1278,6 +1278,8 @@ async fn summarize_note_for_shrink(
                 // eine abgeschnittene Kürzung nicht wie eine absichtliche
                 // aussehen lässt.
                 AiEvent::TextTruncated => return Some((text, true)),
+                // Issue #647: a refused summary is no summary.
+                AiEvent::Refused => return None,
                 AiEvent::Error(err) => {
                     // Spec 0094, A1.7: s. `compaction::generate_rolling_summary`
                     // — ab `warn` nur der Code, der Text auf `debug`.

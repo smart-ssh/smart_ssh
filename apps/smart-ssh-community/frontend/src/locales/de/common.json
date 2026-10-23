@@ -1173,6 +1173,7 @@
     "contextUsageTooltip": "Ältere Teile des Chats werden automatisch zusammengefasst, wenn der Kontext voll wird.",
     "webResearchUnavailable": "Web-Recherche ist für dieses Provider-Konto nicht verfügbar (die Websuche ist dort abgeschaltet). Diese Sitzung antwortet ohne Web-Recherche. Dauerhaft abschalten: Einstellungen → KI-Provider → „Web-Recherche“.",
     "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
+    "refusedResponse": "Das Modell hat diese Anfrage abgelehnt. Formuliere sie um oder starte einen neuen Chat.",
     "outputTruncated": "(gekürzt)",
     "fileWritten": "Datei '{{path}}' geschrieben.",
     "writtenWithSudoPassword": "Über hinterlegtes Sudo-Passwort geschrieben.",

@@ -1173,6 +1173,7 @@
     "contextUsageTooltip": "Oudere delen van de chat worden automatisch samengevat als de context vol raakt.",
     "webResearchUnavailable": "Webonderzoek is voor dit provideraccount niet beschikbaar (webzoeken is daar uitgeschakeld). Deze sessie antwoordt zonder webonderzoek. Om het permanent uit te schakelen: Instellingen → AI-provider → “Webonderzoek”.",
     "emptyResponse": "Het model gaf geen antwoord. Bij modellen met een denkfase helpt een hogere uitvoerlimiet in de provider-instellingen.",
+    "refusedResponse": "Het model heeft dit verzoek geweigerd. Formuleer het anders of begin een nieuwe chat.",
     "outputTruncated": "(afgekapt)",
     "fileWritten": "Bestand '{{path}}' geschreven.",
     "writtenWithSudoPassword": "Geschreven met het opgeslagen sudo-wachtwoord.",

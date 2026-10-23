@@ -1180,6 +1180,7 @@
     "contextUsageTooltip": "Las partes más antiguas del chat se resumen automáticamente cuando el contexto se llena.",
     "webResearchUnavailable": "La investigación web no está disponible para esta cuenta de proveedor (la búsqueda web está desactivada allí). Esta sesión responde sin investigación web. Para desactivarla de forma permanente: Ajustes → Proveedor de IA → “Investigación web”.",
     "emptyResponse": "El modelo no devolvió ninguna respuesta. En modelos con fase de razonamiento, ayuda un límite de salida mayor en los ajustes del proveedor.",
+    "refusedResponse": "El modelo rechazó esta solicitud. Reformúlala o inicia un chat nuevo.",
     "outputTruncated": "(truncado)",
     "fileWritten": "Archivo '{{path}}' escrito.",
     "writtenWithSudoPassword": "Escrito con la contraseña de sudo guardada.",

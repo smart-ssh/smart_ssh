@@ -1237,6 +1237,24 @@ impl AnthropicStreamState {
             fallback_action = result.action;
         }
 
+        // Issue #647: a refused turn is its own outcome — no max-tokens retry
+        // and no pending tool call is released (tightening: they are dropped).
+        if self.stop_reason.as_deref() == Some("refusal") {
+            let mut events = Vec::new();
+            if let Some(text_event) = fallback_text_event {
+                events.push(RawEvent::Public(text_event));
+            }
+            for activity in self.take_web_activities() {
+                events.push(RawEvent::Public(AiEvent::WebActivity(activity)));
+            }
+            let usage = std::mem::take(&mut self.usage);
+            if !usage.is_empty() {
+                events.push(RawEvent::Public(AiEvent::RequestUsage(usage)));
+            }
+            events.push(RawEvent::Public(AiEvent::Refused));
+            return events;
+        }
+
         let tool_call_truncated = has_open_tool_block
             || abrupt
             || (!held_tool_events.is_empty() && !stop_reason_confirms_completion)
@@ -2005,6 +2023,83 @@ mod tests {
             "ein durch max_tokens abgeschnittener Tool-Call darf nie als \
              ActionProposed/Error freigegeben werden, nur den Retry auslösen"
         );
+    }
+
+    async fn anthropic_events(frames: Vec<Result<SseFrame, reqwest::Error>>) -> Vec<RawEvent> {
+        let frames: Pin<Box<dyn Stream<Item = Result<SseFrame, reqwest::Error>> + Send>> =
+            Box::pin(futures::stream::iter(frames));
+        process_frame_stream(frames, true, Uuid::new_v4(), String::new(), None)
+            .collect()
+            .await
+    }
+
+    /// Issue #647: `refusal` without text ends as `Refused`.
+    #[tokio::test]
+    async fn test_refusal_without_text_is_refused() {
+        let events = anthropic_events(vec![
+            frame("message_delta", r#"{"delta":{"stop_reason":"refusal"}}"#),
+            frame("message_stop", "{}"),
+        ])
+        .await;
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Refused)]);
+    }
+
+    /// Issue #647: text streamed before the refusal stays; no `Done`.
+    #[tokio::test]
+    async fn test_refusal_with_text_keeps_text_then_refused() {
+        let events = anthropic_events(vec![
+            frame(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"text"}}"#,
+            ),
+            frame(
+                "content_block_delta",
+                r#"{"index":0,"delta":{"type":"text_delta","text":"No."}}"#,
+            ),
+            frame("content_block_stop", r#"{"index":0}"#),
+            frame("message_delta", r#"{"delta":{"stop_reason":"refusal"}}"#),
+            frame("message_stop", "{}"),
+        ])
+        .await;
+        assert_eq!(
+            events,
+            vec![
+                RawEvent::Public(AiEvent::TextDelta("No.".to_string())),
+                RawEvent::Public(AiEvent::Refused)
+            ]
+        );
+    }
+
+    /// Issue #647: a pending tool call in a refused turn is neither released
+    /// nor retried with higher `max_tokens`.
+    #[tokio::test]
+    async fn test_refusal_with_pending_tool_call_drops_it_without_retry() {
+        let events = anthropic_events(vec![
+            frame(
+                "content_block_start",
+                r#"{"index":0,"content_block":{"type":"tool_use","name":"suggest_command"}}"#,
+            ),
+            frame(
+                "content_block_delta",
+                r#"{"index":0,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"cat /etc/shadow\"}"}}"#,
+            ),
+            frame("content_block_stop", r#"{"index":0}"#),
+            frame("message_delta", r#"{"delta":{"stop_reason":"refusal"}}"#),
+            frame("message_stop", "{}"),
+        ])
+        .await;
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Refused)]);
+    }
+
+    /// Issue #647: `end_turn` still ends as `Done`.
+    #[tokio::test]
+    async fn test_end_turn_still_done_not_refused() {
+        let events = anthropic_events(vec![
+            frame("message_delta", r#"{"delta":{"stop_reason":"end_turn"}}"#),
+            frame("message_stop", "{}"),
+        ])
+        .await;
+        assert_eq!(events, vec![RawEvent::Public(AiEvent::Done)]);
     }
 
     /// Gegenprobe zum Test oben: identischer Tool-Call, aber `stop_reason:

@@ -1173,6 +1173,7 @@
     "contextUsageTooltip": "Keskustelun vanhemmat osat tiivistetään automaattisesti, kun konteksti täyttyy.",
     "webResearchUnavailable": "Verkkotutkimus ei ole käytettävissä tälle palveluntarjoajatilille (verkkohaku on siellä poistettu käytöstä). Tämä istunto vastaa ilman verkkotutkimusta. Poistaaksesi sen pysyvästi käytöstä: Asetukset → Tekoälyn palveluntarjoaja → “Verkkotutkimus”.",
     "emptyResponse": "Malli ei palauttanut vastausta. Ajattelujaksolla varustetuilla malleilla auttaa korkeampi tulostusraja palveluntarjoajan asetuksissa.",
+    "refusedResponse": "Malli hylkäsi pyynnön. Muotoile se uudelleen tai aloita uusi keskustelu.",
     "outputTruncated": "(katkaistu)",
     "fileWritten": "Tiedosto '{{path}}' kirjoitettu.",
     "writtenWithSudoPassword": "Kirjoitettu tallennetulla sudo-salasanalla.",
