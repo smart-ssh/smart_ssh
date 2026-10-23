@@ -152,6 +152,8 @@
     "confirmDelete": "Supprimer définitivement"
   },
   "serverForm": {
+    "connect": "Se connecter",
+    "connectSaveFirst": "Enregistrez d'abord vos modifications",
     "hostKeys": {
       "title": "Clés d’hôte",
       "none": "Aucune clé d’hôte enregistrée. Elle est enregistrée à la première connexion."
@@ -446,6 +448,8 @@
     "active": "actif",
     "setActive": "Définir comme actif",
     "addProvider": "Ajouter un fournisseur",
+    "editProvider": "Modifier le fournisseur",
+    "apiKeyUnchangedPlaceholder": "Inchangée – saisissez une nouvelle clé pour la remplacer",
     "type": "Type",
     "providerName": "Nom",
     "model": "Modèle",
@@ -946,12 +950,15 @@
       "handshake": "Négociation SSH",
       "hostKeyCheck": "Vérification de la clé d’hôte",
       "authentication": "Authentification",
-      "sessionReady": "Session établie"
+      "sessionReady": "Session établie",
+      "dnsSkipped": "Adresse IP – aucune résolution nécessaire"
     },
     "status": {
       "ok": "OK",
       "running": "en cours",
-      "failed": "échec ({{code}})"
+      "failed": "échec ({{code}})",
+      "skipped": "ignoré",
+      "failedReason": "échec : {{reason}}"
     },
     "hostKeyResult": {
       "known": "connue",
@@ -974,6 +981,14 @@
       "mac": "MAC : {{value}}",
       "partialSuccess": "partiellement accepté, authentification supplémentaire requise",
       "remainingMethods": "Le serveur propose aussi : {{methods}} (non essayé)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Délai de connexion TCP dépassé",
+      "SSH_TIMEOUT": "Délai dépassé",
+      "SSH_CONNECTION_REFUSED": "Connexion refusée",
+      "SSH_HOST_NOT_FOUND": "Hôte introuvable",
+      "SSH_HOST_UNREACHABLE": "Hôte injoignable",
+      "SSH_AUTH_FAILED": "Échec de l'authentification"
     }
   },
   "fileBrowser": {

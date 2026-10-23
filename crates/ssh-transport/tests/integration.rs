@@ -1805,8 +1805,14 @@ async fn test_issue_51_successful_connect_lists_every_step_with_duration() {
         kinds(&steps),
         ["dns", "tcp", "handshake", "hostKey", "auth", "ready"]
     );
-    for step in &steps {
-        assert_eq!(step.status, StepStatus::Ok, "{step:#?}");
+    for (i, step) in steps.iter().enumerate() {
+        // Issue #634: the host is an IP literal, so the DNS step is skipped.
+        let expected = if i == 0 {
+            StepStatus::Skipped
+        } else {
+            StepStatus::Ok
+        };
+        assert_eq!(step.status, expected, "{step:#?}");
         assert!(step.duration_ms.is_some(), "{step:#?}");
         assert_eq!(step.hop_index, 0);
         assert_eq!(
@@ -1895,7 +1901,8 @@ async fn test_issue_51_refused_port_marks_the_tcp_step() {
     match result {
         Err(SshError::ConnectionRefused(_)) => {
             assert_eq!(kinds(&steps), ["dns", "tcp"]);
-            assert_eq!(steps[0].status, StepStatus::Ok);
+            // IP literal: no lookup, the DNS step is skipped (issue #634).
+            assert_eq!(steps[0].status, StepStatus::Skipped);
             assert_eq!(
                 the_failed_step(&steps).status,
                 failed("SSH_CONNECTION_REFUSED")
@@ -1904,6 +1911,23 @@ async fn test_issue_51_refused_port_marks_the_tcp_step() {
         Err(other) => panic!("erwartet ConnectionRefused, bekam {other:?}"),
         Ok(_) => panic!("der geschlossene Port lieferte eine Verbindung"),
     }
+}
+
+/// Issue #634: a hostname gets a real (successful) DNS step.
+#[tokio::test]
+async fn test_issue_634_hostname_gets_a_real_dns_step() {
+    let target = ConnectionTarget {
+        hops: vec![password_hop("localhost", CLOSED_PORT)],
+    };
+    let (_result, steps) = connect_logged(
+        &target,
+        &TestCredentialStore::default(),
+        &NoKeyFiles,
+        std::sync::Arc::new(TestHostKeyStore::default()),
+    )
+    .await;
+    assert_eq!(kinds(&steps)[0], "dns");
+    assert_eq!(steps[0].status, StepStatus::Ok);
 }
 
 /// Timeout: der Aufrufer bricht ab und schließt den laufenden Schritt —
@@ -2223,7 +2247,8 @@ async fn test_issue_51_jump_host_attempt_lists_steps_per_hop() {
         ["dns", "tcp", "handshake", "hostKey", "auth"],
         "{steps:#?}"
     );
-    assert!(hop0.iter().all(|s| s.status == StepStatus::Ok));
+    assert_eq!(hop0[0].status, StepStatus::Skipped);
+    assert!(hop0[1..].iter().all(|s| s.status == StepStatus::Ok));
     assert_eq!(
         hop1[0].hop,
         format!("{TEST_USERNAME}@127.0.0.1:{}", target_server.addr.port())

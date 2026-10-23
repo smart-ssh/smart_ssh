@@ -152,6 +152,8 @@
     "confirmDelete": "Удалить безвозвратно"
   },
   "serverForm": {
+    "connect": "Подключиться",
+    "connectSaveFirst": "Сначала сохраните изменения",
     "hostKeys": {
       "title": "Ключи хостов",
       "none": "Ключ хоста ещё не сохранён. Он сохраняется при первом подключении."
@@ -446,6 +448,8 @@
     "active": "активен",
     "setActive": "Сделать активным",
     "addProvider": "Добавить провайдера",
+    "editProvider": "Изменить провайдера",
+    "apiKeyUnchangedPlaceholder": "Без изменений – введите новый ключ, чтобы заменить",
     "type": "Тип",
     "providerName": "Название",
     "model": "Модель",
@@ -951,12 +955,15 @@
       "handshake": "Рукопожатие SSH",
       "hostKeyCheck": "Проверка ключа хоста",
       "authentication": "Аутентификация",
-      "sessionReady": "Сеанс установлен"
+      "sessionReady": "Сеанс установлен",
+      "dnsSkipped": "IP-адрес – поиск не нужен"
     },
     "status": {
       "ok": "OK",
       "running": "выполняется",
-      "failed": "сбой ({{code}})"
+      "failed": "сбой ({{code}})",
+      "skipped": "пропущено",
+      "failedReason": "ошибка: {{reason}}"
     },
     "hostKeyResult": {
       "known": "известен",
@@ -979,6 +986,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "принято частично, нужна дополнительная аутентификация",
       "remainingMethods": "Сервер также предлагает: {{methods}} (не пробовались)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Истекло время TCP-соединения",
+      "SSH_TIMEOUT": "Время ожидания истекло",
+      "SSH_CONNECTION_REFUSED": "Соединение отклонено",
+      "SSH_HOST_NOT_FOUND": "Хост не найден",
+      "SSH_HOST_UNREACHABLE": "Хост недоступен",
+      "SSH_AUTH_FAILED": "Аутентификация не удалась"
     }
   },
   "fileBrowser": {
