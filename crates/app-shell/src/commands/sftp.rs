@@ -641,6 +641,20 @@ pub async fn clipboard_has_files(
     }
 }
 
+/// Issue #626: writes `text` to the OS clipboard from the backend. The
+/// webview refuses `navigator.clipboard.writeText` (WebKit) once the user
+/// gesture is gone, e.g. after awaiting file content.
+#[tauri::command]
+pub async fn clipboard_write_text(
+    clipboard: State<'_, crate::file_clipboard::FileClipboard>,
+    text: String,
+) -> CommandResult<()> {
+    clipboard.set_text(&text).map_err(|e| {
+        tracing::debug!(error = %e, "clipboard text write failed");
+        CommandError::from("The clipboard could not be written")
+    })
+}
+
 /// Texts of the paste confirmation dialog; the frontend supplies the
 /// localized wording, the file list and target are added by the backend.
 #[derive(Debug, Clone, serde::Deserialize)]

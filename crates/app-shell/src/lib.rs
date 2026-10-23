@@ -873,6 +873,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_upload_folder,
             commands::claim_dropped_paths,
             commands::clipboard_has_files,
+            commands::clipboard_write_text,
             commands::claim_clipboard_files,
             commands::sftp_delete,
             commands::sftp_cancel_transfer,
