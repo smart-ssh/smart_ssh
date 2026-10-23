@@ -105,6 +105,16 @@ API-Key erscheint als Authentifizierungsfehler, nicht als leere Antwort.
   (HTTP 400 `invalid_request_error`, soweit nicht Guthaben oder Kontextgröße).
   Wird nie wiederholt und nicht als „Wartung oder Überlastung" dargestellt.
 
+- **Zeitüberschreitung:** Kommt **120 Sekunden** lang kein Antwortinhalt
+  (weder Antwortkopf noch Text, Denk- oder Werkzeug-Daten), wird die Anfrage
+  abgebrochen. Keep-Alive-Zeilen, Kommentar- und Ping-Frames des Anbieters
+  zählen nicht als Inhalt und verlängern die Frist nicht. Die Meldung nennt den
+  Anbieter und die Wartezeit und bietet „Erneut versuchen" an.
+- **Gesamtfrist:** Eine einzelne KI-Anfrage läuft höchstens **10 Minuten**,
+  auch wenn laufend Inhalt eintrifft. Danach wird sie abgebrochen; bereits
+  empfangener Text bleibt erhalten, die Meldung nennt den Anbieter und bietet
+  „Erneut versuchen" an.
+
 Fehler, die der Anbieter mitten im Stream meldet, werden genauso eingeordnet
 wie HTTP-Fehler.
 

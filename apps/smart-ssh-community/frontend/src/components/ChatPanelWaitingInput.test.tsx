@@ -50,6 +50,7 @@ vi.mock("../events", () => ({
   onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
   onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),

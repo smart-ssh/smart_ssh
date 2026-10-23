@@ -956,6 +956,12 @@ pub enum AiError {
     Timeout {
         secs: u64,
     },
+    /// Issue #694: the request did not finish within the total deadline
+    /// (`secs`), even though content kept arriving. Text received so far
+    /// stays visible.
+    TotalDeadline {
+        secs: u64,
+    },
     /// Issue #169 (Spec 0105 §7): der Provider lehnt die Anfrage ab, weil
     /// sie ein Web-Werkzeug enthält, das für das Provider-Konto abgeschaltet
     /// ist. Nur gemeldet, wenn die abgelehnte Anfrage tatsächlich ein
@@ -1047,6 +1053,12 @@ impl fmt::Display for AiError {
             AiError::Timeout { secs } => {
                 write!(f, "Keine Antwort vom KI-Provider seit über {secs} Sekunden")
             }
+            AiError::TotalDeadline { secs } => {
+                write!(
+                    f,
+                    "Der KI-Provider hat nicht innerhalb von {secs} Sekunden geantwortet"
+                )
+            }
             AiError::WebResearchRejected(msg) => write!(
                 f,
                 "Der KI-Provider lehnt die Web-Recherche für dieses Konto ab: {msg}"
@@ -1085,6 +1097,7 @@ impl AiError {
             AiError::ModelNoToolSupport(_) => "AI_MODEL_NO_TOOL_SUPPORT",
             AiError::LocalProviderUnreachable(_) => "AI_LOCAL_PROVIDER_UNREACHABLE",
             AiError::Timeout { .. } => "AI_TIMEOUT",
+            AiError::TotalDeadline { .. } => "AI_TOTAL_DEADLINE",
             AiError::WebResearchRejected(_) => "AI_WEB_RESEARCH_REJECTED",
             AiError::InputUnsupported(_) => "AI_ATTACHMENT_UNSUPPORTED",
             AiError::Overloaded { .. } => "AI_PROVIDER_OVERLOADED",
@@ -1116,6 +1129,7 @@ mod ai_error_code_tests {
             AiError::ModelNoToolSupport("x".to_string()),
             AiError::LocalProviderUnreachable("x".to_string()),
             AiError::Timeout { secs: 90 },
+            AiError::TotalDeadline { secs: 600 },
             AiError::WebResearchRejected("x".to_string()),
             AiError::InputUnsupported(MediaClass::Image),
             AiError::Overloaded { retry_after: None },
