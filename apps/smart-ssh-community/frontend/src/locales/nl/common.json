@@ -363,6 +363,12 @@
     "commandTruncatedNotice": "⚠ Uitvoer is bij de groottelimiet afgekapt — mogelijk onvolledig.",
     "liveOutputLabel": "Live-uitvoer",
     "liveOutputTruncatedNotice": "⚠ Groottelimiet bereikt — verdere uitvoer wordt niet meer getoond.",
+    "autoRanLead": "Automatisch uitgevoerd",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "globaal",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "label {{tag}}",
+    "autoRanOpenRule": "Open deze regel in de filterregels",
     "mcpOrigin": "Extern hulpmiddel (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "extern hulpmiddel (MCP)",
     "mcpOriginHint": "Deze actie is niet aangevraagd door de interne chat, maar door een extern hulpmiddel via de lokale MCP-server."

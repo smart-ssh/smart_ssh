@@ -1178,6 +1178,19 @@ pub struct CoveringRuleDto {
     pub pattern_value: String,
 }
 
+/// Issue #696: a rule that let (a segment of) an auto-executed command run
+/// without confirmation. Display only. `segment_indices` lists the top-level
+/// segments the rule covered (one entry for an unsplit command).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoExecRuleDto {
+    pub rule_id: RuleId,
+    pub pattern_type: PatternType,
+    pub pattern_value: String,
+    pub scope: Scope,
+    pub segment_indices: Vec<usize>,
+}
+
 /// Ein Teilkommando mit seinem Zustand. `reasons` sind feste Codes
 /// (`FILTER_*`-Codes), keine Texte.
 #[derive(Debug, Clone, PartialEq, Serialize)]

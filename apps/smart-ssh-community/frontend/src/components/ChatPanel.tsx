@@ -91,6 +91,7 @@ import type {
   ActionResultPayload,
   ActionUserDecision,
   AiAction,
+  AutoExecRule,
   Decision,
   DocumentFormat,
   ExplainedSuggestionDto,
@@ -104,6 +105,7 @@ import type {
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button } from "./ui";
+import { AutoExecRulesLine } from "./AutoExecRulesLine";
 import { WebActivityCard } from "./WebActivityCard";
 import { QuestionCard, deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
@@ -187,6 +189,9 @@ export type ChatItem =
       /** Spec 0028, Abschnitt 6/9a: `mcp` zeigt "Angefragt über: <Client
        * oder generischer Text>" statt des internen Chat-Flows. */
       origin: ActionOrigin;
+      /** Issue #696: rules behind an automatic run (live only, not restored
+       * from a saved chat). */
+      autoExecRules?: AutoExecRule[];
     }
   | {
       type: "error";
@@ -651,6 +656,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             // `respond()` unten.
             startedAt: event.decision === "AutoExec" ? Date.now() : null,
             origin: event.origin,
+            autoExecRules: event.autoExecRules,
           },
         ]);
       }),
@@ -1990,6 +1996,9 @@ export function ChatItemView({
         >
           {command}
         </code>
+      )}
+      {item.decision === "AutoExec" && item.autoExecRules && item.autoExecRules.length > 0 && (
+        <AutoExecRulesLine rules={item.autoExecRules} />
       )}
       {item.usesStoredSudoPassword && (
         // Spec 0068, Teil 3: beim Schreiben ist Sudo ein möglicher

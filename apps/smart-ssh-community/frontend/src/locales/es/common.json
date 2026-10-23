@@ -363,6 +363,12 @@
     "commandTruncatedNotice": "⚠ La salida se cortó en el límite de tamaño: puede estar incompleta.",
     "liveOutputLabel": "Salida en directo",
     "liveOutputTruncatedNotice": "⚠ Límite de tamaño alcanzado: ya no se muestra más salida.",
+    "autoRanLead": "Ejecutado automáticamente",
+    "autoRanRule": "regla",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "servidor {{name}}",
+    "autoRanScopeTag": "etiqueta {{tag}}",
+    "autoRanOpenRule": "Abrir esta regla en las reglas de filtro",
     "mcpOrigin": "Herramienta externa (MCP): “{{name}}”",
     "mcpOriginGeneric": "herramienta externa (MCP)",
     "mcpOriginHint": "Esta acción no fue solicitada por el chat interno, sino por una herramienta externa a través del servidor MCP local."

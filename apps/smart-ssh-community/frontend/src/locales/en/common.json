@@ -363,6 +363,12 @@
     "commandTruncatedNotice": "⚠ Output was cut off at the size limit — it may be incomplete.",
     "liveOutputLabel": "Live output",
     "liveOutputTruncatedNotice": "⚠ Size limit reached — further output is no longer shown.",
+    "autoRanLead": "Ran automatically",
+    "autoRanRule": "rule",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Open this rule in the filter rules",
     "mcpOrigin": "External tool (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "external tool (MCP)",
     "mcpOriginHint": "This action was not requested by the internal chat, but by an external tool via the local MCP server."

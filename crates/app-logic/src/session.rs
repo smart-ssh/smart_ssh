@@ -200,6 +200,14 @@ pub trait CommandEvaluator: Send + Sync {
         ctx: &EvalContext,
         candidates: &[ssh_manager_core::filter::Rule],
     ) -> EvaluationTrace;
+
+    /// Resolves rule ids of a trace to the rules currently stored (display
+    /// only, issue #696). Deleted rules are absent from the result.
+    async fn rules_by_ids(
+        &self,
+        ctx: &EvalContext,
+        ids: &[ssh_manager_core::filter::RuleId],
+    ) -> Vec<ssh_manager_core::filter::Rule>;
 }
 
 #[async_trait]
@@ -215,6 +223,14 @@ impl<S: PolicyStore + Send + Sync> CommandEvaluator for FilterEngine<S> {
         candidates: &[ssh_manager_core::filter::Rule],
     ) -> EvaluationTrace {
         FilterEngine::evaluate_explained_with_candidates(self, command, ctx, candidates).await
+    }
+
+    async fn rules_by_ids(
+        &self,
+        ctx: &EvalContext,
+        ids: &[ssh_manager_core::filter::RuleId],
+    ) -> Vec<ssh_manager_core::filter::Rule> {
+        FilterEngine::rules_by_ids(self, ctx, ids).await
     }
 }
 

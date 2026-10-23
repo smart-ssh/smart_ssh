@@ -363,6 +363,12 @@
     "commandTruncatedNotice": "⚠ Tuloste katkaistiin kokorajalla – se voi olla vajaa.",
     "liveOutputLabel": "Reaaliaikainen tuloste",
     "liveOutputTruncatedNotice": "⚠ Kokoraja saavutettu – lisätulostetta ei enää näytetä.",
+    "autoRanLead": "Suoritettu automaattisesti",
+    "autoRanRule": "sääntö",
+    "autoRanScopeGlobal": "yleinen",
+    "autoRanScopeServer": "palvelin {{name}}",
+    "autoRanScopeTag": "tunniste {{tag}}",
+    "autoRanOpenRule": "Avaa tämä sääntö suodatinsäännöissä",
     "mcpOrigin": "Ulkoinen työkalu (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "ulkoinen työkalu (MCP)",
     "mcpOriginHint": "Tätä toimintoa ei pyytänyt sisäinen keskustelu vaan ulkoinen työkalu paikallisen MCP-palvelimen kautta."

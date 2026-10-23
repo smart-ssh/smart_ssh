@@ -363,6 +363,12 @@
     "commandTruncatedNotice": "⚠ Wynik obcięto na limicie rozmiaru — może być niekompletny.",
     "liveOutputLabel": "Wynik na żywo",
     "liveOutputTruncatedNotice": "⚠ Osiągnięto limit rozmiaru — dalszy wynik nie jest już pokazywany.",
+    "autoRanLead": "Wykonano automatycznie",
+    "autoRanRule": "reguła",
+    "autoRanScopeGlobal": "globalna",
+    "autoRanScopeServer": "serwer {{name}}",
+    "autoRanScopeTag": "tag {{tag}}",
+    "autoRanOpenRule": "Otwórz tę regułę w regułach filtrów",
     "mcpOrigin": "Narzędzie zewnętrzne (MCP): „{{name}}”",
     "mcpOriginGeneric": "narzędzie zewnętrzne (MCP)",
     "mcpOriginHint": "To działanie nie zostało zażądane przez wewnętrzny czat, lecz przez zewnętrzne narzędzie za pośrednictwem lokalnego serwera MCP."
