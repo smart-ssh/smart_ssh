@@ -134,7 +134,7 @@ pub async fn fetch_second_opinion_with_usage(
             // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen Nebenaufruf —
             // eine unvollständige Zweitmeinung wird einfach normal geparst
             // (parse_second_opinion liefert bei unklarem Text ohnehin None).
-            AiEvent::Done | AiEvent::TextTruncated => break,
+            AiEvent::Done | AiEvent::TextTruncated | AiEvent::Refused => break,
             // Netzwerk-/Auth-/sonstiger Providerfehler: keine Zweitmeinung
             // verfügbar, kein Absturz, kein Blockieren der (bereits
             // angezeigten) regelbasierten Einschätzung.
@@ -353,7 +353,7 @@ pub async fn fetch_injection_check_with_usage(
         match event {
             AiEvent::TextDelta(delta) => text.push_str(&delta),
             // Spec 0065, Teil 2: s. identischer Kommentar bei `fetch_second_opinion`.
-            AiEvent::Done | AiEvent::TextTruncated => break,
+            AiEvent::Done | AiEvent::TextTruncated | AiEvent::Refused => break,
             AiEvent::Error(err) => {
                 tracing::warn!(code = err.code(), "injection check provider call failed");
                 return SideCallOutcome::ProviderError { code: err.code() };
