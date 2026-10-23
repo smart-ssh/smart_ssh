@@ -611,6 +611,10 @@ impl SftpSession for BrowserSftp<'_> {
         self.operation().await?.sftp().rename(from, to).await
     }
 
+    async fn posix_rename(&mut self, from: &str, to: &str) -> Result<bool, SshError> {
+        self.operation().await?.sftp().posix_rename(from, to).await
+    }
+
     async fn create_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.operation().await?.sftp().create_dir(path).await
     }

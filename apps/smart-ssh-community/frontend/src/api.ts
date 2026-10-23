@@ -635,8 +635,13 @@ export const sftpDeletePreview = (sessionId: string, path: string, elevatedUser:
 /** Umbenennen UND Verschieben (Spec 0054, Teil 3 — SFTP `RENAME` kennt
  * keinen Unterschied). Kollisionsprüfung läuft im Frontend über
  * `sftpExists`, bevor dieser Befehl aufgerufen wird. */
-export const sftpRename = (sessionId: string, from: string, to: string, elevatedUser: string | null = null) =>
-  invoke<void>("sftp_rename", { sessionId, from, to, elevatedUser });
+export const sftpRename = (
+  sessionId: string,
+  from: string,
+  to: string,
+  elevatedUser: string | null = null,
+  overwrite = false,
+) => invoke<void>("sftp_rename", { sessionId, from, to, overwrite, elevatedUser });
 
 export const sftpMkdir = (sessionId: string, path: string, elevatedUser: string | null = null) =>
   invoke<void>("sftp_mkdir", { sessionId, path, elevatedUser });

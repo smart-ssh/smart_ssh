@@ -1184,6 +1184,46 @@ async fn chmod_recursive(
 /// liegen. Die Kollisionsprüfung (Zielname existiert schon) läuft im
 /// Frontend **vor** diesem Aufruf über `sftp_exists` — dieser Befehl führt
 /// nur noch aus, analog zu `sftp_delete`s Bestätigung.
+/// Issue #625: Umbenennen/Verschieben auf einen vorhandenen **Dateinamen**,
+/// nachdem der Nutzer „Überschreiben" bestätigt hat. SFTP `RENAME` ersetzt nie.
+///
+/// - Ziel ist ein Ordner: Fehler, nichts wird angefasst.
+/// - Server mit `posix-rename@openssh.com`: ein atomarer Austausch.
+/// - Sonst: Ziel entfernen, dann `rename`. Scheitert das `rename`, nennt der
+///   Fehler, dass das Ziel schon entfernt ist und die Quelle unverändert bleibt.
+///
+/// Ein Fehler beim `stat` des Ziels gilt als „Ziel fehlt": dann ersetzt
+/// nichts etwas, und das gewöhnliche `rename` entscheidet (es überschreibt
+/// nie, und ein Widerruf der Erhöhung schlägt dort genauso an).
+async fn rename_replacing(
+    sftp: &mut dyn SftpSession,
+    from: &str,
+    to: &str,
+) -> Result<(), SshError> {
+    if from == to {
+        return Ok(());
+    }
+    match sftp.stat(to).await {
+        Ok(entry) if entry.is_dir => {
+            return Err(SshError::ChannelError(format!(
+                "Das Ziel '{to}' ist ein Ordner und kann nicht ersetzt werden."
+            )));
+        }
+        Ok(_) => {}
+        Err(_) => return sftp.rename(from, to).await,
+    }
+    if sftp.posix_rename(from, to).await? {
+        return Ok(());
+    }
+    sftp.remove(to).await?;
+    sftp.rename(from, to).await.map_err(|e| {
+        SshError::ChannelError(format!(
+            "Das Ziel '{to}' wurde bereits entfernt, aber das Umbenennen von '{from}' ist \
+             fehlgeschlagen; die Quelle ist unverändert: {e}"
+        ))
+    })
+}
+
 #[tauri::command]
 pub async fn sftp_rename(
     state: State<'_, AppState>,
@@ -1191,8 +1231,10 @@ pub async fn sftp_rename(
     session_id: SessionId,
     from: String,
     to: String,
+    overwrite: Option<bool>,
     elevated_user: Option<String>,
 ) -> CommandResult<()> {
+    let overwrite = overwrite.unwrap_or(false);
     run_browser_command(
         &state,
         elevated.inner(),
@@ -1202,10 +1244,18 @@ pub async fn sftp_rename(
             let mut guard = lock_browser_sftp(&session, &channel).await;
             let elevated_user = guard.elevated_user();
             let mut sftp = guard.sftp().await?;
-            let result = sftp.rename(&from, &to).await;
+            let result = if overwrite {
+                rename_replacing(&mut sftp, &from, &to).await
+            } else {
+                sftp.rename(&from, &to).await
+            };
             audit_elevated_change(
                 elevated_user.as_deref(),
-                "rename",
+                if overwrite {
+                    "rename-overwrite"
+                } else {
+                    "rename"
+                },
                 &format!("{from} -> {to}"),
                 result.is_ok(),
             );
@@ -1956,6 +2006,83 @@ async fn close_edit_session_impl(
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(CommandError::from(e.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod rename_overwrite_tests {
+    use ssh_manager_core::ssh::mock::MockSftpSession;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_overwrite_uses_posix_rename_when_offered() {
+        let mut sftp = MockSftpSession::new()
+            .with_file("/a", "new")
+            .with_file("/b", "old")
+            .with_posix_rename();
+        rename_replacing(&mut sftp, "/a", "/b").await.unwrap();
+        assert_eq!(sftp.file_content("/b").unwrap(), b"new");
+        assert!(sftp.file_content("/a").is_none());
+        let calls = sftp.calls();
+        assert!(calls.contains(&"posix_rename /a -> /b".to_string()));
+        assert!(!calls.iter().any(|c| c.starts_with("remove ")));
+    }
+
+    #[tokio::test]
+    async fn test_overwrite_without_posix_rename_removes_then_renames() {
+        let mut sftp = MockSftpSession::new()
+            .with_file("/a", "new")
+            .with_file("/b", "old");
+        rename_replacing(&mut sftp, "/a", "/b").await.unwrap();
+        assert_eq!(sftp.file_content("/b").unwrap(), b"new");
+        let calls = sftp.calls();
+        let rm = calls.iter().position(|c| c == "remove /b").unwrap();
+        let mv = calls.iter().position(|c| c == "rename /a -> /b").unwrap();
+        assert!(rm < mv);
+    }
+
+    #[tokio::test]
+    async fn test_plain_rename_onto_existing_file_does_not_overwrite() {
+        // Ohne `overwrite` ruft der Befehl nur `rename`; der Mock überschreibt
+        // zwar (er kennt keinen Konflikt), entscheidend ist hier: kein
+        // `remove`, kein `posix_rename` auf diesem Pfad.
+        let mut sftp = MockSftpSession::new()
+            .with_file("/a", "new")
+            .with_posix_rename();
+        sftp.rename("/a", "/b").await.unwrap();
+        let calls = sftp.calls();
+        assert_eq!(calls, vec!["rename /a -> /b".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_overwrite_with_failing_rename_names_the_situation() {
+        let mut sftp = MockSftpSession::new()
+            .with_file("/a", "new")
+            .with_file("/b", "old")
+            .with_rename_failure("/a");
+        let err = rename_replacing(&mut sftp, "/a", "/b").await.unwrap_err();
+        let SshError::ChannelError(text) = err else {
+            panic!("unexpected error");
+        };
+        assert!(text.contains("bereits entfernt"), "{text}");
+        assert!(text.contains("Quelle ist unverändert"), "{text}");
+        assert!(sftp.file_content("/b").is_none());
+        assert_eq!(sftp.file_content("/a").unwrap(), b"new");
+    }
+
+    #[tokio::test]
+    async fn test_overwrite_onto_folder_is_refused_untouched() {
+        let mut sftp = MockSftpSession::new()
+            .with_file("/a", "new")
+            .with_dir("/d")
+            .with_posix_rename();
+        let err = rename_replacing(&mut sftp, "/a", "/d").await.unwrap_err();
+        assert!(matches!(err, SshError::ChannelError(t) if t.contains("Ordner")));
+        assert!(!sftp
+            .calls()
+            .iter()
+            .any(|c| c.starts_with("remove") || c.contains("rename")));
     }
 }
 

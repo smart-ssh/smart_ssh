@@ -1016,7 +1016,8 @@
     },
     "moveCollision": {
       "title": "目标已存在",
-      "body": "已存在，并将被覆盖。"
+      "body": "已存在，并将被覆盖。",
+      "folderBody": "已作为文件夹存在，无法替换。"
     },
     "folderUpload": {
       "conflictTitle": "覆盖文件夹中的文件？",

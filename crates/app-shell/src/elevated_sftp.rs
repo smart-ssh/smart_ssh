@@ -1225,6 +1225,13 @@ mod tests {
         ) -> Result<(), ssh_manager_core::ssh::SshError> {
             unreachable!()
         }
+        async fn posix_rename(
+            &mut self,
+            _from: &str,
+            _to: &str,
+        ) -> Result<bool, ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
         async fn create_dir(&mut self, _path: &str) -> Result<(), ssh_manager_core::ssh::SshError> {
             unreachable!()
         }
