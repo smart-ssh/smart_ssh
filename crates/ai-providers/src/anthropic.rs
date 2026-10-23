@@ -616,7 +616,7 @@ async fn connect_and_stream(
                         .await;
                 // Issue #599: a 429 that is really an exhausted quota is a
                 // billing problem — never retried.
-                if crate::error::ProviderErrorInfo::from_body(&text).is_billing() {
+                if crate::error::ProviderErrorInfo::from_body(&text).is_quota_exhausted() {
                     let mapped = map_http_response(status, &headers, &text);
                     log_provider_error_response_with_id(
                         request_id,

@@ -31,6 +31,7 @@ import type {
   NoteShrinkFailedEvent,
   NoteShrinkSucceededEvent,
   NoteShrinkSuggestedEvent,
+  NoteUpdateExpiredEvent,
   NoteUpdateSuggestedEvent,
   RiskAssessmentUpdatedEvent,
   SftpTransferFinishedEvent,
@@ -309,3 +310,10 @@ export function base64ToBytes(base64: string): Uint8Array {
   }
   return bytes;
 }
+
+/** Issue #628: the backend timed out a pending note confirmation (update or
+ * shrink suggestion); the card switches to its "expired" state. */
+export const onNoteUpdateExpired = (
+  handler: (event: NoteUpdateExpiredEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<NoteUpdateExpiredEvent>("note-update-expired", (e) => handler(e.payload));
