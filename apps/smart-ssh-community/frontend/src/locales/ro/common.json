@@ -1193,7 +1193,11 @@
       "cardLabel": "Întrebare: {{question}}",
       "send": "Trimite",
       "answeredOwnWords": "Răspuns cu propriile cuvinte"
-    }
+    },
+    "injectionChecking": "Se verifică rezultatul …",
+    "injectionSuspected": "Avertisment: acest rezultat pare o încercare de a injecta instrucțiuni.",
+    "injectionSuspectedReason": "Motivul dat de IA-ul de verificare: {{reason}}",
+    "injectionConfirmReason": "Motiv: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Această notiță este foarte mare și poate fi scurtată pentru contextul IA în sesiunile lungi. Notița salvată rămâne completă.",

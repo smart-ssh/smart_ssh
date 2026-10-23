@@ -20,6 +20,7 @@ import type {
   ChatContextCompactedEvent,
   ChatTextDeltaEvent,
   ChatWebActivityEvent,
+  ChatInjectionCheckEvent,
   ChatWebResearchUnavailableEvent,
   AutoReconnectChangedEvent,
   ChatSessionChangedEvent,
@@ -159,6 +160,12 @@ export const onChatWebActivity = (
   handler: (event: ChatWebActivityEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatWebActivityEvent>("chat-web-activity", (e) => handler(e.payload));
+
+/** Issue #693 — progress/verdict of the injection check. */
+export const onChatInjectionCheck = (
+  handler: (event: ChatInjectionCheckEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatInjectionCheckEvent>("chat-injection-check", (e) => handler(e.payload));
 
 /** Spec 0105 §7 (Issue #169) — s. `ChatWebResearchUnavailableEvent`. */
 export const onChatWebResearchUnavailable = (

@@ -472,6 +472,18 @@ export type ActionResultPayload =
    * Datei vor dem Schreiben nicht existierte. */
   | { kind: "fileWrite"; path: string; backupPath: string | null; usedSudoPassword: boolean };
 
+/** Issue #693 (Spec 0039, §5.2): state of the injection check of one
+ * checked item. `reason` is untrusted text — render as plain text only. */
+export type InjectionCheckState =
+  | { state: "running" }
+  | { state: "clean" }
+  | { state: "suspected"; reason: string }
+  | { state: "unavailable" };
+
+/** Issue #693 — `chat-injection-check`; `itemId` is the action id of a
+ * command result / file read, or the activity id of a web research card. */
+export type ChatInjectionCheckEvent = { sessionId: string; itemId: string } & InjectionCheckState;
+
 export interface ChatActionResultEvent {
   sessionId: string;
   actionId: string;
@@ -570,6 +582,8 @@ export interface WebActivityDto {
 /** Spec 0105 — `chat-web-activity`. */
 export interface ChatWebActivityEvent {
   sessionId: string;
+  /** Issue #693: binds `chat-injection-check` events to this card. */
+  activityId?: string;
   activity: WebActivityDto;
 }
 

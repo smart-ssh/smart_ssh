@@ -1177,7 +1177,11 @@
       "cardLabel": "질문: {{question}}",
       "send": "보내기",
       "answeredOwnWords": "직접 답변함"
-    }
+    },
+    "injectionChecking": "출력 확인 중 …",
+    "injectionSuspected": "경고: 이 출력은 지시를 주입하려는 시도로 보입니다.",
+    "injectionSuspectedReason": "검사한 AI가 제시한 이유: {{reason}}",
+    "injectionConfirmReason": "이유: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "이 메모는 매우 커서 긴 세션에서는 AI 컨텍스트용으로 줄어들 수 있습니다. 저장된 메모는 그대로 유지됩니다.",

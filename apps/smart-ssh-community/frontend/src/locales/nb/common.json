@@ -1185,7 +1185,11 @@
       "cardLabel": "Spørsmål: {{question}}",
       "send": "Send inn",
       "answeredOwnWords": "Besvart med egne ord"
-    }
+    },
+    "injectionChecking": "Kontrollerer utdata …",
+    "injectionSuspected": "Advarsel: denne utdataen ligner et forsøk på å injisere instruksjoner.",
+    "injectionSuspectedReason": "Begrunnelse fra den kontrollerende AI-en: {{reason}}",
+    "injectionConfirmReason": "Begrunnelse: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Dette notatet er svært stort og kan bli forkortet for AI-konteksten i lange økter. Det lagrede notatet forblir komplett.",

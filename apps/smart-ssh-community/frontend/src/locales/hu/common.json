@@ -1185,7 +1185,11 @@
       "cardLabel": "Kérdés: {{question}}",
       "send": "Küldés",
       "answeredOwnWords": "Saját szavaiddal megválaszolva"
-    }
+    },
+    "injectionChecking": "Kimenet ellenőrzése …",
+    "injectionSuspected": "Figyelem: ez a kimenet utasítások beinjektálására tett kísérletnek tűnik.",
+    "injectionSuspectedReason": "Az ellenőrző MI indoklása: {{reason}}",
+    "injectionConfirmReason": "Indok: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Ez a jegyzet nagyon nagy, ezért hosszú munkamenetekben lerövidülhet az AI-kontextusban. A mentett jegyzet teljes marad.",

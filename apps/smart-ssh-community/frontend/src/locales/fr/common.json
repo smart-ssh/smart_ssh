@@ -1193,7 +1193,11 @@
       "cardLabel": "Question : {{question}}",
       "send": "Envoyer",
       "answeredOwnWords": "Répondu avec vos propres mots"
-    }
+    },
+    "injectionChecking": "Vérification de la sortie …",
+    "injectionSuspected": "Attention : cette sortie ressemble à une tentative d’injection d’instructions.",
+    "injectionSuspectedReason": "Motif indiqué par l’IA de contrôle : {{reason}}",
+    "injectionConfirmReason": "Motif : {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Cette note est très volumineuse et peut être raccourcie dans le contexte de l’IA lors de longues sessions. La note enregistrée reste complète.",

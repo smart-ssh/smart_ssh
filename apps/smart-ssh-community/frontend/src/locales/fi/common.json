@@ -1185,7 +1185,11 @@
       "cardLabel": "Kysymys: {{question}}",
       "send": "Lähetä",
       "answeredOwnWords": "Vastattu omin sanoin"
-    }
+    },
+    "injectionChecking": "Tarkistetaan tulostetta …",
+    "injectionSuspected": "Varoitus: tämä tuloste näyttää yritykseltä syöttää ohjeita.",
+    "injectionSuspectedReason": "Tarkistavan tekoälyn antama syy: {{reason}}",
+    "injectionConfirmReason": "Syy: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Tämä muistiinpano on hyvin suuri, ja sitä voidaan lyhentää tekoälyn kontekstia varten pitkissä istunnoissa. Tallennettu muistiinpano säilyy täydellisenä.",

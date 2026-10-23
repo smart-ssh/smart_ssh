@@ -1185,7 +1185,11 @@
       "cardLabel": "Frage: {{question}}",
       "send": "Senden",
       "answeredOwnWords": "In eigenen Worten beantwortet"
-    }
+    },
+    "injectionChecking": "Ausgabe wird geprüft …",
+    "injectionSuspected": "Warnung: Diese Ausgabe sieht nach einem Versuch aus, Anweisungen einzuschleusen.",
+    "injectionSuspectedReason": "Begründung der prüfenden KI: {{reason}}",
+    "injectionConfirmReason": "Grund: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",

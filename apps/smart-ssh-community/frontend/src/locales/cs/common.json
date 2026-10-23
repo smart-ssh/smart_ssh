@@ -1201,7 +1201,11 @@
       "cardLabel": "Otázka: {{question}}",
       "send": "Odeslat",
       "answeredOwnWords": "Odpovězeno vlastními slovy"
-    }
+    },
+    "injectionChecking": "Kontrola výstupu …",
+    "injectionSuspected": "Varování: tento výstup vypadá jako pokus o vložení instrukcí.",
+    "injectionSuspectedReason": "Důvod uvedený kontrolující AI: {{reason}}",
+    "injectionConfirmReason": "Důvod: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Tato poznámka je velmi rozsáhlá a může být při dlouhých relacích zkrácena v kontextu AI. Uložená poznámka zůstane úplná.",

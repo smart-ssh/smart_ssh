@@ -1201,7 +1201,11 @@
       "cardLabel": "Вопрос: {{question}}",
       "send": "Отправить",
       "answeredOwnWords": "Отвечено своими словами"
-    }
+    },
+    "injectionChecking": "Проверка вывода …",
+    "injectionSuspected": "Предупреждение: этот вывод похож на попытку внедрить инструкции.",
+    "injectionSuspectedReason": "Причина, указанная проверяющим ИИ: {{reason}}",
+    "injectionConfirmReason": "Причина: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Эта заметка очень велика и в долгих сеансах может сокращаться для контекста ИИ. Сохранённая заметка остаётся полной.",

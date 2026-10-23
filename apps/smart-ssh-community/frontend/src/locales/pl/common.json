@@ -1201,7 +1201,11 @@
       "cardLabel": "Pytanie: {{question}}",
       "send": "Wyślij",
       "answeredOwnWords": "Odpowiedź własnymi słowami"
-    }
+    },
+    "injectionChecking": "Sprawdzanie wyniku …",
+    "injectionSuspected": "Ostrzeżenie: ten wynik wygląda na próbę wstrzyknięcia instrukcji.",
+    "injectionSuspectedReason": "Powód podany przez sprawdzające AI: {{reason}}",
+    "injectionConfirmReason": "Powód: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Ta notatka jest bardzo duża i w długich sesjach może zostać skrócona w kontekście AI. Zapisana notatka pozostaje kompletna.",

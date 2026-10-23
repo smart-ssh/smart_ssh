@@ -1201,7 +1201,11 @@
       "cardLabel": "Питання: {{question}}",
       "send": "Надіслати",
       "answeredOwnWords": "Відповідь своїми словами"
-    }
+    },
+    "injectionChecking": "Перевірка виводу …",
+    "injectionSuspected": "Попередження: цей вивід схожий на спробу підсунути інструкції.",
+    "injectionSuspectedReason": "Причина від ШІ, що перевіряє: {{reason}}",
+    "injectionConfirmReason": "Причина: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Ця нотатка дуже велика й у довгих сеансах може бути скорочена для контексту ШІ. Збережена нотатка залишається повною.",
