@@ -2802,3 +2802,122 @@ async fn test_summarize_note_for_shrink_uses_the_prompt_language_instruction() {
     };
     assert!(text.starts_with("Rewrite the following"), "{text}");
 }
+
+// --- Issue #564: disconnect note-update request goes through sealing ---
+
+/// Extension whose content cannot be resolved, so sealing fails.
+struct GoneExt;
+
+impl crate::chat_content_extension::ChatContentExtension for GoneExt {
+    fn name(&self) -> &str {
+        "files"
+    }
+    fn take_pending(
+        &self,
+        _s: Uuid,
+        _id: &str,
+    ) -> Option<crate::chat_content_extension::PendingContent> {
+        None
+    }
+    fn persist(
+        &self,
+        _s: Uuid,
+        _part_id: &str,
+        _b: Vec<ssh_manager_core::ai::RedactedBlock>,
+    ) -> Result<(), crate::chat_content_extension::ChatContentError> {
+        Ok(())
+    }
+    fn resolve(
+        &self,
+        _s: Uuid,
+        _part: &ssh_manager_core::ai::ExtensionPart,
+    ) -> Result<
+        Option<Vec<ssh_manager_core::ai::ResolvedBlock>>,
+        crate::chat_content_extension::ChatContentError,
+    > {
+        Err(crate::chat_content_extension::ChatContentError(
+            "gone".into(),
+        ))
+    }
+}
+
+/// Issue #564: when sealing fails, no provider request is made, no note
+/// update is proposed and the function returns `false`.
+#[tokio::test]
+async fn test_issue_564_disconnect_suggestion_not_sent_when_sealing_fails() {
+    let provider = MockAiProvider::new(vec![note_proposal("Neue Notiz"), AiEvent::Done]);
+    let contexts = provider.received_contexts_handle();
+    let mut session = session_with_ai_provider(provider, MockSshTransport::default());
+    session.set_chat_content_for_tests(std::sync::Arc::new(
+        crate::chat_content_extension::ChatContentRegistry::new(vec![std::sync::Arc::new(GoneExt)]),
+    ));
+    {
+        let mut ctx = session.context.lock().await;
+        ctx.history.push(command_result_message());
+        ctx.history.push(ChatMessage {
+            role: Role::User,
+            content: MessageContent::Extension(ssh_manager_core::ai::ExtensionPart {
+                extension: "files".into(),
+                kind: "doc".into(),
+                id: Uuid::new_v4().to_string(),
+                label: "a.txt".into(),
+                media: ssh_manager_core::ai::ExtensionMedia::Text,
+                estimated_tokens: 1,
+            }),
+        });
+    }
+    let emitter = TestEmitter::default();
+    let suggested = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        suggest_note_update_on_disconnect(
+            &session,
+            Uuid::new_v4(),
+            &emitter,
+            &InMemoryProfileStore::default(),
+            &ConfirmationRegistry::new(),
+        ),
+    )
+    .await
+    .expect("disconnect must complete");
+    assert!(contexts.lock().unwrap().is_empty(), "no provider request");
+    assert!(emitter.events.lock().unwrap().is_empty(), "no proposal");
+    assert!(!suggested);
+}
+
+/// Issue #564: for a plain session the request is unchanged (history plus
+/// the completion instruction) and a planted secret is absent from it.
+#[tokio::test]
+async fn test_issue_564_disconnect_request_plain_session_and_secret_absent() {
+    let provider = MockAiProvider::new(vec![AiEvent::Done]);
+    let contexts = provider.received_contexts_handle();
+    let session = session_with_ai_provider(provider, MockSshTransport::default());
+    {
+        let mut ctx = session.context.lock().await;
+        ctx.history.push(ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text(format!("prüfe password={SECRET_0096} bitte")),
+        });
+        ctx.history.push(command_result_message());
+    }
+    suggest_note_update_on_disconnect(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        &InMemoryProfileStore::default(),
+        &ConfirmationRegistry::new(),
+    )
+    .await;
+    let sent = contexts.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
+    let history = &sent[0].history;
+    assert_eq!(history.len(), 3, "user, command result, instruction");
+    assert!(matches!(
+        history[1].content,
+        MessageContent::CommandResult { .. }
+    ));
+    let MessageContent::Text(first) = &history[0].content else {
+        panic!("plain text expected");
+    };
+    assert!(first.starts_with("prüfe"));
+    assert!(!format!("{history:?}").contains(SECRET_0096));
+}
