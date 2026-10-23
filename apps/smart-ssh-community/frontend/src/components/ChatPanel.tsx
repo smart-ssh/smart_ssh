@@ -952,6 +952,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * zu Ende. */
   const handleStopAutoContinuation = () => {
     setAutoContinuing(false);
+    setAiWait(null);
     stopAutoContinuation(sessionId).catch((err) =>
       setItems((prev) => [
         ...prev,
@@ -1068,6 +1069,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 
   const runSend = async (call: () => Promise<void>) => {
     pendingSendsRef.current += 1;
+    // Issue #694: drop a stale wait line from the previous turn.
+    if (pendingSendsRef.current === 1) setAiWait(null);
     setSending(true);
     try {
       await call();
@@ -1088,6 +1091,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         setSending(false);
         setAutoContinuing(false);
         setRetrying(null);
+        setAiWait(null);
         // Läuft im Backend nichts mehr, wartet auch keine Nachricht mehr.
         setItems((prev) =>
           prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),

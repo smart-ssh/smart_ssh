@@ -131,6 +131,43 @@ describe("ChatPanel AI wait line (issue #694)", () => {
     expect(screen.queryByTestId("chat-ai-waiting")).toBeNull();
   });
 
+  it("clears the wait line when the turn ends and does not show it stale on the next send", async () => {
+    let finish: () => void = () => {};
+    vi.mocked(getChatHistory).mockResolvedValue([
+      { type: "text", role: "user", text: "check the disk" },
+    ] as never);
+    vi.mocked(sendChatMessage).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    );
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
+      </I18nextProvider>,
+    );
+    await screen.findByText("check the disk");
+    await waitFor(() => expect(onChatAiRequestStarted).toHaveBeenCalled());
+    const field = screen.getByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    fireEvent.change(field, { target: { value: "hallo" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalled());
+    act(() =>
+      handlerOf<ChatAiRequestStartedEvent>(onChatAiRequestStarted)({
+        sessionId: "session-1",
+        providerName: "Claude",
+      }),
+    );
+    expect(screen.getByTestId("chat-ai-waiting")).toBeInTheDocument();
+    await act(async () => {
+      finish();
+    });
+    expect(screen.queryByTestId("chat-ai-waiting")).toBeNull();
+    vi.mocked(sendChatMessage).mockImplementation(() => new Promise(() => {}));
+    fireEvent.change(field, { target: { value: "again" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId("chat-ai-waiting")).toBeNull();
+  });
+
   it("names the provider on a timeout and offers Try again", async () => {
     vi.mocked(getChatHistory).mockResolvedValue([
       { type: "text", role: "user", text: "check the disk" },
