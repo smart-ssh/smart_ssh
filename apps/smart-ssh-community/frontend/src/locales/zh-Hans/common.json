@@ -1166,6 +1166,7 @@
     "contextUsageTooltip": "当上下文已满时，聊天中较早的部分会被自动总结。",
     "webResearchUnavailable": "此提供商账户无法使用联网调研（网络搜索在该处已被禁用）。本会话不使用联网调研来回答。如需永久关闭：设置 → AI 提供商 →“联网调研”。",
     "emptyResponse": "模型没有返回任何回复。对于有思考阶段的模型，在提供商设置中调高输出上限会有帮助。",
+    "refusedResponse": "模型拒绝了此请求。请换一种说法，或开始新的聊天。",
     "outputTruncated": "（已截断）",
     "fileWritten": "文件“{{path}}”已写入。",
     "writtenWithSudoPassword": "已使用保存的 sudo 密码写入。",

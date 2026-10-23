@@ -1173,6 +1173,7 @@
     "contextUsageTooltip": "Äldre delar av chatten sammanfattas automatiskt när kontexten blir full.",
     "webResearchUnavailable": "Webbsökning är inte tillgänglig för det här leverantörskontot (webbsökning är avstängd där). Den här sessionen svarar utan webbsökning. Så stänger du av den permanent: Inställningar → AI-leverantör → “Webbsökning”.",
     "emptyResponse": "Modellen gav inget svar. För modeller med en tänkefas hjälper en högre utdatagräns i leverantörsinställningarna.",
+    "refusedResponse": "Modellen avvisade begäran. Formulera om den eller starta en ny chatt.",
     "outputTruncated": "(kapad)",
     "fileWritten": "Filen '{{path}}' skriven.",
     "writtenWithSudoPassword": "Skriven med det sparade sudo-lösenordet.",

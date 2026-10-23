@@ -56,7 +56,7 @@ Guthaben bedeutet, wird nicht wiederholt.
 Jede fehlgeschlagene Anfrage schreibt genau eine WARN-Zeile ins App-Log:
 eigene Request-ID, Request-ID des Anbieters (falls vorhanden), HTTP-Status
 oder „stream", Fehlertyp des Anbieters, App-Fehlercode und die redigierte
-Meldung (auf 512 Zeichen gekürzt). Keine Schlüssel, keine Nachrichteninhalte.
+Meldung (auf 512 Bytes gekürzt). Keine Schlüssel, keine Nachrichteninhalte.
 
 ## Sicherheits- und Konsistenzzusagen
 
