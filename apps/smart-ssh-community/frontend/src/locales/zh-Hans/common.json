@@ -443,6 +443,8 @@
     "active": "活动",
     "setActive": "设为活动",
     "addProvider": "添加提供商",
+    "editProvider": "编辑提供商",
+    "apiKeyUnchangedPlaceholder": "保持不变 – 输入新密钥以替换",
     "type": "类型",
     "providerName": "名称",
     "model": "模型",

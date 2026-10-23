@@ -443,6 +443,8 @@
     "active": "активний",
     "setActive": "Зробити активним",
     "addProvider": "Додати провайдера",
+    "editProvider": "Редагувати провайдера",
+    "apiKeyUnchangedPlaceholder": "Без змін – введіть новий ключ, щоб замінити",
     "type": "Тип",
     "providerName": "Назва",
     "model": "Модель",

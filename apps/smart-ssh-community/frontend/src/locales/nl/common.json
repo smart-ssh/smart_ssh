@@ -443,6 +443,8 @@
     "active": "actief",
     "setActive": "Actief maken",
     "addProvider": "Provider toevoegen",
+    "editProvider": "Provider bewerken",
+    "apiKeyUnchangedPlaceholder": "Ongewijzigd – voer een nieuwe sleutel in om te vervangen",
     "type": "Type",
     "providerName": "Naam",
     "model": "Model",

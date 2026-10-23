@@ -443,6 +443,8 @@
     "active": "actif",
     "setActive": "Définir comme actif",
     "addProvider": "Ajouter un fournisseur",
+    "editProvider": "Modifier le fournisseur",
+    "apiKeyUnchangedPlaceholder": "Inchangée – saisissez une nouvelle clé pour la remplacer",
     "type": "Type",
     "providerName": "Nom",
     "model": "Modèle",

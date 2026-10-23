@@ -2204,6 +2204,33 @@ mod tests {
         );
     }
 
+    // Issue #690: the edit dialog is prefilled from this DTO; the stored key
+    // must never be part of what reaches the frontend.
+    #[test]
+    fn ai_provider_config_dto_serializes_without_any_key_field() {
+        let dto = AiProviderConfigDto {
+            id: ProviderId::new(),
+            provider_type: ProviderType::Anthropic,
+            display_name: "Claude".into(),
+            base_url: None,
+            model: "m".into(),
+            supports_native_tool_calling: true,
+            is_active: false,
+            extra_headers: vec![],
+            attestation_url: None,
+            max_tokens_override: None,
+            web_research_enabled: true,
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        let keys: Vec<String> = json.as_object().unwrap().keys().cloned().collect();
+        assert!(
+            keys.iter().all(|k| !k.to_lowercase().contains("key")
+                && !k.to_lowercase().contains("secret")
+                && !k.to_lowercase().contains("credential")),
+            "DTO must not carry a credential field: {keys:?}"
+        );
+    }
+
     // Spec 0073, T12: Der Helfer gilt für Zugangsdaten und Endpunkte, nicht
     // für Anzeigetexte. Ein Anzeigename mit einem Zero-Width-Space bleibt
     // unverändert — auch am Rand.

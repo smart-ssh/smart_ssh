@@ -443,6 +443,8 @@
     "active": "ενεργός",
     "setActive": "Ορισμός ως ενεργού",
     "addProvider": "Προσθήκη παρόχου",
+    "editProvider": "Επεξεργασία παρόχου",
+    "apiKeyUnchangedPlaceholder": "Αμετάβλητο – εισαγάγετε νέο κλειδί για αντικατάσταση",
     "type": "Τύπος",
     "providerName": "Όνομα",
     "model": "Μοντέλο",

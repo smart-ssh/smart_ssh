@@ -443,6 +443,8 @@
     "active": "aktivní",
     "setActive": "Nastavit jako aktivní",
     "addProvider": "Přidat poskytovatele",
+    "editProvider": "Upravit poskytovatele",
+    "apiKeyUnchangedPlaceholder": "Beze změny – zadejte nový klíč pro nahrazení",
     "type": "Typ",
     "providerName": "Název",
     "model": "Model",

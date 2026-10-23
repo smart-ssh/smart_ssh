@@ -443,6 +443,8 @@
     "active": "activ",
     "setActive": "Setează ca activ",
     "addProvider": "Adaugă furnizor",
+    "editProvider": "Editează furnizorul",
+    "apiKeyUnchangedPlaceholder": "Neschimbată – introdu o cheie nouă pentru a o înlocui",
     "type": "Tip",
     "providerName": "Nume",
     "model": "Model",
