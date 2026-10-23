@@ -134,7 +134,8 @@
     "moveTo": "Flytt «{{name}}» til…"
   },
   "management": {
-    "emptyState": "Velg en gruppe eller server til venstre, eller opprett noe nytt via “{{addGroup}}”/“{{addServer}}”."
+    "emptyState": "Velg en gruppe eller server til venstre, eller opprett noe nytt via “{{addGroup}}”/“{{addServer}}”.",
+    "back": "Tilbake"
   },
   "groupForm": {
     "titleNew": "Ny gruppe",

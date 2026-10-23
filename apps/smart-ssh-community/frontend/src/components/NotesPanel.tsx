@@ -226,7 +226,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
             const expanded = expandedRevisionIds.has(r.id);
             return (
               <li key={r.id} className="text-sm">
-                <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
                   <button
                     type="button"
                     onClick={() => toggleExpanded(r.id)}

@@ -63,6 +63,13 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 - Eintragsmenü, Menü der leeren Fläche und das Menü der Werkzeugleiste öffnen sich als Blatt am unteren Rand über die ganze Fensterbreite; ihre Einträge sind mindestens 44 px hoch. Sie schließen wie im breiten Layout (Escape, Tipp außerhalb, Auswahl).
 - Die Dialoge des Dateibrowsers folgen Abschnitt 5; die Übertragungsliste passt sich der Breite an.
 
+## 5c. Verwalten-Ansicht
+
+- Die Verwalten-Ansicht zeigt zuerst die Liste (Server, Gruppen, Ansichten von Erweiterungen, „Gruppe“, „Server“, Import und Export) über die volle Breite. Die Auswahl eines Eintrags öffnet Formular oder Detail über die volle Breite, darüber steht eine Zeile mit „Zurück“. „Zurück“ führt zur Liste an derselben Scroll-Position. Wie beim Wechsel zwischen Einträgen im breiten Layout werden dabei ungespeicherte Eingaben verworfen.
+- Jede Server- und Gruppenzeile der Liste (außer dem lokalen Server) hat wie in der Verbinden-Ansicht eine Schaltfläche „⋯“ mit „Verschieben nach…“; Ziehen per Fingergeste startet keinen Vorgang.
+- Formulare haben eine Spalte, Beschriftungen stehen über den Feldern, Hinweise brechen um. Im Server-Formular bleibt „Speichern“ am unteren Rand sichtbar; Löschen steht am Ende des Formulars.
+- Notizen, Import und Export passen in die Breite. Abschnitte und Ansichten von Erweiterungen erhalten die volle Breite (siehe Abschnitt 6).
+
 ## 6. Erweiterungsbereiche
 
 - Inhalte, die eine Edition in Erweiterungsbereichen einsetzt, haben keine feste Breite. Sie passen sich der Fensterbreite an und brechen um oder kürzen, statt die Seite zu verbreitern.

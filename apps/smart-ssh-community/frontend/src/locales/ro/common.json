@@ -134,7 +134,8 @@
     "moveTo": "Mută „{{name}}” în…"
   },
   "management": {
-    "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”."
+    "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”.",
+    "back": "Înapoi"
   },
   "groupForm": {
     "titleNew": "Grup nou",

@@ -134,7 +134,8 @@
     "moveTo": "Přesunout „{{name}}“ do…"
   },
   "management": {
-    "emptyState": "Vyberte vlevo skupinu nebo server, nebo vytvořte něco nového pomocí „{{addGroup}}“/„{{addServer}}“."
+    "emptyState": "Vyberte vlevo skupinu nebo server, nebo vytvořte něco nového pomocí „{{addGroup}}“/„{{addServer}}“.",
+    "back": "Zpět"
   },
   "groupForm": {
     "titleNew": "Nová skupina",
