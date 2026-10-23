@@ -2047,11 +2047,13 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     }
     const MB = 1024 * 1024;
 
-    afterEach(() => vi.restoreAllMocks());
+    // Only the clock: restoreAllMocks would also reset the module mocks.
+    let dateSpy: { mockRestore: () => void } | undefined;
+    afterEach(() => dateSpy?.mockRestore());
 
     it("a file row shows speed and remaining time from the progress events", async () => {
       let now = 1_000_000;
-      vi.spyOn(Date, "now").mockImplementation(() => now);
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
       const h = await setup();
       act(() =>
         h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "f.bin", totalBytes: 10 * MB }),
@@ -2065,7 +2067,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
 
     it("a folder row shows the aggregate speed and remaining time", async () => {
       let now = 1_000_000;
-      vi.spyOn(Date, "now").mockImplementation(() => now);
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
       const h = await setup();
       act(() =>
         h.started({ sessionId: "session-1", transferId: "t1", kind: "download", fileName: "dir", totalBytes: null }),
@@ -2081,7 +2083,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
 
     it("an unknown total shows a dash for the remaining time", async () => {
       let now = 1_000_000;
-      vi.spyOn(Date, "now").mockImplementation(() => now);
+      dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
       const h = await setup();
       act(() =>
         h.started({ sessionId: "session-1", transferId: "t1", kind: "upload", fileName: "u.bin", totalBytes: null }),
