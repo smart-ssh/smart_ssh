@@ -178,6 +178,9 @@
       "identityFile": "Plik klucza"
     },
     "password": "Hasło",
+    "passwordOptionalHint": "(opcjonalnie – zostaw puste, jeśli serwer zezwala na logowanie bez hasła)",
+    "removeSavedPassword": "Usuń zapisane hasło",
+    "noPasswordSaved": "Nie zapisano hasła. Aplikacja najpierw próbuje zalogować się bez hasła, a potem z pustym hasłem.",
     "unchangedHint": "(puste = bez zmian)",
     "privateKeyLabel": "Klucz prywatny",
     "chooseFile": "Wybierz plik…",
@@ -964,6 +967,7 @@
       "changed": "zmieniony"
     },
     "authMethod": {
+      "none": "none (bez uwierzytelniania)",
       "password": "Hasło",
       "privateKey": "Klucz prywatny",
       "agent": "Agent SSH",

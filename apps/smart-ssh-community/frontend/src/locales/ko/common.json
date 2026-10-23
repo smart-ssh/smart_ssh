@@ -178,6 +178,9 @@
       "identityFile": "키 파일"
     },
     "password": "비밀번호",
+    "passwordOptionalHint": "(선택 사항 – 서버가 비밀번호 없는 로그인을 허용하면 비워 두세요)",
+    "removeSavedPassword": "저장된 비밀번호 제거",
+    "noPasswordSaved": "저장된 비밀번호가 없습니다. 앱은 먼저 비밀번호 없이 로그인을 시도한 다음 빈 비밀번호로 시도합니다.",
     "unchangedHint": "(비워 두면 변경 없음)",
     "privateKeyLabel": "개인 키",
     "chooseFile": "파일 선택…",
@@ -949,6 +952,7 @@
       "changed": "변경됨"
     },
     "authMethod": {
+      "none": "none (인증 없음)",
       "password": "비밀번호",
       "privateKey": "개인 키",
       "agent": "SSH 에이전트",

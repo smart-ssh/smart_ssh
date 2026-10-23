@@ -169,6 +169,14 @@ pub enum AuthMethod {
         passphrase_ref: Option<CredentialRef>,
     },
     Agent,
+    /// Issue #632: Passwortmethode **ohne** gespeichertes Passwort — für
+    /// Server, deren Daemon eine Anmeldung ohne Passwort erlaubt. Bewusst
+    /// eine eigene Variante und kein `Password` mit fehlendem Schlüsselbund-
+    /// Eintrag: Ein fehlender Eintrag bei `Password` bleibt ein Fehler
+    /// ("Secret verschwunden"), nur diese Variante ist der ausdrückliche
+    /// Wunsch "kein Passwort". Verbunden wird erst mit SSH-Methode `none`,
+    /// dann mit leerem `password`.
+    NoPassword,
     Certificate {
         cert_ref: CredentialRef,
         key_ref: CredentialRef,

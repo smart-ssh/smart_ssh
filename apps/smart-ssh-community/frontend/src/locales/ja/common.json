@@ -178,6 +178,9 @@
       "identityFile": "鍵ファイル"
     },
     "password": "パスワード",
+    "passwordOptionalHint": "（任意 – サーバーがパスワードなしのログインを許可している場合は空欄のままにします）",
+    "removeSavedPassword": "保存済みのパスワードを削除",
+    "noPasswordSaved": "パスワードは保存されていません。アプリはまずパスワードなしでのログインを試し、次に空のパスワードを試します。",
     "unchangedHint": "（空欄 = 変更しない）",
     "privateKeyLabel": "秘密鍵",
     "chooseFile": "ファイルを選択…",
@@ -949,6 +952,7 @@
       "changed": "変更あり"
     },
     "authMethod": {
+      "none": "none（認証なし）",
       "password": "パスワード",
       "privateKey": "秘密鍵",
       "agent": "SSHエージェント",

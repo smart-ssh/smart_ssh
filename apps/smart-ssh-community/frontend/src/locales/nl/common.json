@@ -178,6 +178,9 @@
       "identityFile": "Sleutelbestand"
     },
     "password": "Wachtwoord",
+    "passwordOptionalHint": "(optioneel – laat leeg als de server inloggen zonder wachtwoord toestaat)",
+    "removeSavedPassword": "Opgeslagen wachtwoord verwijderen",
+    "noPasswordSaved": "Geen wachtwoord opgeslagen. De app probeert eerst in te loggen zonder wachtwoord en daarna met een leeg wachtwoord.",
     "unchangedHint": "(leeg = ongewijzigd)",
     "privateKeyLabel": "Privésleutel",
     "chooseFile": "Bestand kiezen…",
@@ -954,6 +957,7 @@
       "changed": "gewijzigd"
     },
     "authMethod": {
+      "none": "none (geen authenticatie)",
       "password": "Wachtwoord",
       "privateKey": "Privésleutel",
       "agent": "SSH-agent",

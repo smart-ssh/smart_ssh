@@ -178,6 +178,9 @@
       "identityFile": "Berkas Kunci"
     },
     "password": "Kata sandi",
+    "passwordOptionalHint": "(opsional – biarkan kosong jika server mengizinkan login tanpa kata sandi)",
+    "removeSavedPassword": "Hapus kata sandi tersimpan",
+    "noPasswordSaved": "Tidak ada kata sandi tersimpan. Aplikasi mencoba login tanpa kata sandi terlebih dahulu, lalu dengan kata sandi kosong.",
     "unchangedHint": "(kosong = tidak berubah)",
     "privateKeyLabel": "Kunci Privat",
     "chooseFile": "Pilih berkas…",
@@ -949,6 +952,7 @@
       "changed": "berubah"
     },
     "authMethod": {
+      "none": "none (tanpa autentikasi)",
       "password": "Kata sandi",
       "privateKey": "Kunci privat",
       "agent": "Agen SSH",

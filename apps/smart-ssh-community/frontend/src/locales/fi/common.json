@@ -178,6 +178,9 @@
       "identityFile": "Avaintiedosto"
     },
     "password": "Salasana",
+    "passwordOptionalHint": "(valinnainen – jätä tyhjäksi, jos palvelin sallii kirjautumisen ilman salasanaa)",
+    "removeSavedPassword": "Poista tallennettu salasana",
+    "noPasswordSaved": "Salasanaa ei ole tallennettu. Sovellus yrittää ensin kirjautumista ilman salasanaa ja sitten tyhjällä salasanalla.",
     "unchangedHint": "(tyhjä = ei muutu)",
     "privateKeyLabel": "Yksityinen avain",
     "chooseFile": "Valitse tiedosto…",
@@ -954,6 +957,7 @@
       "changed": "muuttunut"
     },
     "authMethod": {
+      "none": "none (ei todennusta)",
       "password": "Salasana",
       "privateKey": "Yksityinen avain",
       "agent": "SSH-agentti",

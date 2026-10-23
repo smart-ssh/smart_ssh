@@ -178,6 +178,9 @@
       "identityFile": "Fișier de cheie"
     },
     "password": "Parolă",
+    "passwordOptionalHint": "(opțional – lăsați gol dacă serverul permite autentificarea fără parolă)",
+    "removeSavedPassword": "Elimină parola salvată",
+    "noPasswordSaved": "Nicio parolă salvată. Aplicația încearcă mai întâi autentificarea fără parolă, apoi cu o parolă goală.",
     "unchangedHint": "(gol = neschimbat)",
     "privateKeyLabel": "Cheie privată",
     "chooseFile": "Alegeți fișierul…",
@@ -959,6 +962,7 @@
       "changed": "schimbată"
     },
     "authMethod": {
+      "none": "none (fără autentificare)",
       "password": "Parolă",
       "privateKey": "Cheie privată",
       "agent": "Agent SSH",

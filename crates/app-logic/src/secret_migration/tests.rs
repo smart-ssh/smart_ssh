@@ -291,7 +291,7 @@ async fn test_t11_the_provider_branch_and_the_other_auth_kinds_move_too() {
             AuthMethod::IdentityFile { passphrase_ref, .. } => {
                 expected.push(passphrase_ref.as_ref().unwrap().as_str().to_string())
             }
-            AuthMethod::Agent => {}
+            AuthMethod::Agent | AuthMethod::NoPassword => {}
             AuthMethod::PrivateKey { .. } => unreachable!("in diesem Test nicht benutzt"),
         }
         let now = chrono::Utc::now();

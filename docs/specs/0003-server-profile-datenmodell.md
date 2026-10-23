@@ -43,7 +43,10 @@ Ein Server hat:
 
 Anmeldearten:
 
-- **Passwort**
+- **Passwort** (das Passwort ist optional: ein Server kann ausdrücklich
+  „ohne Passwort" gespeichert werden, getrennt vom Zustand „Passwort
+  gespeichert"; es liegt dann nichts im Schlüsselbund. Verbunden wird erst mit
+  SSH-Methode `none`, dann mit leerem Passwort — Spec 0008, Abschnitt 6)
 - **Privater Schlüssel** mit optionaler Passphrase
 - **Schlüsseldatei** auf der Platte mit optionaler Passphrase (Spec 0076); der
   Pfad wird so gespeichert, wie der Nutzer ihn eingegeben hat

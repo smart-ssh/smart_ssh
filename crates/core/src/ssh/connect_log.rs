@@ -105,6 +105,9 @@ pub enum HostKeyCheckResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AuthMethodKind {
+    /// SSH-Methode `none` (Issue #632) — nur als erster Versuch einer
+    /// Anmeldung ohne Passwort.
+    None,
     Password,
     PrivateKey,
     Agent,
@@ -115,7 +118,7 @@ pub enum AuthMethodKind {
 impl From<&AuthMethod> for AuthMethodKind {
     fn from(auth: &AuthMethod) -> Self {
         match auth {
-            AuthMethod::Password { .. } => AuthMethodKind::Password,
+            AuthMethod::Password { .. } | AuthMethod::NoPassword => AuthMethodKind::Password,
             AuthMethod::PrivateKey { .. } => AuthMethodKind::PrivateKey,
             AuthMethod::Agent => AuthMethodKind::Agent,
             AuthMethod::Certificate { .. } => AuthMethodKind::Certificate,
@@ -449,6 +452,7 @@ fn step_kind(step: &ConnectStep) -> &'static str {
 
 fn auth_method_label(kind: AuthMethodKind) -> &'static str {
     match kind {
+        AuthMethodKind::None => "none",
         AuthMethodKind::Password => "password",
         AuthMethodKind::Agent => "publickey (agent)",
         AuthMethodKind::PrivateKey | AuthMethodKind::Certificate | AuthMethodKind::IdentityFile => {
