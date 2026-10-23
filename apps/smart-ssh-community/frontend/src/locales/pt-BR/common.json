@@ -825,8 +825,6 @@
     },
     "tag": {
       "literalHint": "Tag literal de um arquivo externo — pode corresponder exatamente a uma regra de permissão. Pode ser desmarcada individualmente.",
-      "allowDeselectedHint": "Corresponde a uma regra de permissão existente e a nenhuma regra de negação — por isso desmarcada por padrão. Pode ser marcada novamente individualmente.",
-      "autoDeselectedBadge": "desmarcada automaticamente",
       "matchesRuleHint": "corresponde a {{count}} regra(s) de filtro existente(s): {{actions}}",
       "action": {
         "allow": "Permitir",

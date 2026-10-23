@@ -815,8 +815,6 @@
     },
     "tag": {
       "literalHint": "来自外部文件的字面标签——可能与某条允许规则精确匹配。可单独取消选择。",
-      "allowDeselectedHint": "与现有的某条允许规则匹配，且没有拒绝规则——因此默认取消选择。可单独重新选择。",
-      "autoDeselectedBadge": "已自动取消选择",
       "matchesRuleHint": "匹配 {{count}} 条现有的过滤规则：{{actions}}",
       "action": {
         "allow": "允许",

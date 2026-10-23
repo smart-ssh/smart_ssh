@@ -820,8 +820,6 @@
     },
     "tag": {
       "literalHint": "Yabancı bir dosyadan gelen birebir etiket — bir İzin ver kuralıyla tam eşleşebilir. Tek tek seçimi kaldırılabilir.",
-      "allowDeselectedHint": "Mevcut bir İzin ver kuralıyla eşleşiyor ve Reddet kuralı yok — bu yüzden varsayılan olarak seçilmedi. Tek tek yeniden seçilebilir.",
-      "autoDeselectedBadge": "otomatik seçilmedi",
       "matchesRuleHint": "{{count}} mevcut filtre kuralıyla eşleşiyor: {{actions}}",
       "action": {
         "allow": "İzin ver",

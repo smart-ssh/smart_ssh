@@ -825,8 +825,6 @@
     },
     "tag": {
       "literalHint": "Etiqueta literal de un archivo ajeno: puede coincidir exactamente con una regla de permiso. Se puede deseleccionar individualmente.",
-      "allowDeselectedHint": "Coincide con una regla de permiso existente y con ninguna regla de denegación, por eso está deseleccionada por defecto. Se puede volver a seleccionar individualmente.",
-      "autoDeselectedBadge": "deseleccionada automáticamente",
       "matchesRuleHint": "coincide con {{count}} regla(s) de filtro existente(s): {{actions}}",
       "action": {
         "allow": "Permitir",

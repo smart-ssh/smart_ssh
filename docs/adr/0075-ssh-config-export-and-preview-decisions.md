@@ -205,6 +205,18 @@ vorherige neutrale Vorgabe voraussetzten, wurden angepasst — einer davon
 nicht bloß in den erwarteten Werten geändert (spec-reviewer-Fund, Runde 1,
 K-4/K-5 in `.agent/BL-0216/review-05.md`, Nachbesserung in §11).
 
+### Überholt durch Issue #636
+
+Die Abwahl-Vorgabe aus diesem Abschnitt (und ihre Verfeinerung durch
+Issue #105) ist **aufgehoben**: Jedes Schlagwort startet angewählt, auch bei
+einem `Allow`-Treffer. `PlannedTag::default_selected` in `core` liefert
+immer `true` und bleibt die einzige Stelle der Vorgabe (DTO-Feld
+`defaultSelected`, `apply` ohne Wahl nutzt sie ebenfalls); `defaultTagSelected`
+im Dialog übernimmt nur den Wert. Die getroffene Regel und ihre Wirkung
+zeigt die Vorschau weiter an, sodass der Nutzer bewusst abwählen kann; die
+„automatisch abgewählt“-Markierung samt Tooltip entfällt. Die Filter-Engine
+ist unberührt: `Deny` geht weiterhin vor `Allow`.
+
 ## 10. Was aus den Review-Runden stehen bleibt
 
 **Runde 1 (11 Funde) — behoben:** Kommentar-/Wert-Ausbruch über

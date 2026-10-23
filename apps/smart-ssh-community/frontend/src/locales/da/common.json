@@ -820,8 +820,6 @@
     },
     "tag": {
       "literalHint": "Bogstaveligt tag fra en fremmed fil – kan matche en tillad-regel præcist. Kan fravælges enkeltvis.",
-      "allowDeselectedHint": "Matcher en eksisterende tillad-regel og ingen forbyd-regel – derfor fravalgt som standard. Kan vælges igen enkeltvis.",
-      "autoDeselectedBadge": "fravalgt automatisk",
       "matchesRuleHint": "matcher {{count}} eksisterende filterregel/-regler: {{actions}}",
       "action": {
         "allow": "Tillad",

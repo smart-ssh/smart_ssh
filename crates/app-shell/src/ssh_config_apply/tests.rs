@@ -582,8 +582,12 @@ async fn t_105_apply_ohne_wahl_folgt_der_vorgabe() {
         .expect("Import");
     assert_eq!(
         sorted(f.server("web1.prod.de").await.tags),
-        vec!["*.de".to_string(), "web*".to_string()],
-        "ohne EntryChoice muss das Allow-only-Schlagwort entfallen"
+        vec![
+            "*.de".to_string(),
+            "*.prod.de".to_string(),
+            "web*".to_string()
+        ],
+        "ohne EntryChoice bleibt auch das Allow-only-Schlagwort (Issue #636)"
     );
 }
 
@@ -619,12 +623,12 @@ fn t_105_dto_traegt_die_vorgabe_aus_core() {
             .find(|t| t.tag == name)
             .unwrap_or_else(|| panic!("{name} fehlt"))
     };
-    assert!(!tag("*.prod.de").default_selected);
+    assert!(tag("*.prod.de").default_selected);
     assert!(tag("*.de").default_selected);
     assert!(tag("web*").default_selected);
     // Feldname im JSON, auf den sich `types.ts` verlässt.
     let json = serde_json::to_value(tag("*.prod.de")).expect("json");
-    assert_eq!(json["defaultSelected"], serde_json::json!(false));
+    assert_eq!(json["defaultSelected"], serde_json::json!(true));
 }
 
 // ------------------------------------------- §6.3.4/5: Konflikte, zweiter Import
