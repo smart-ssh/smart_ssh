@@ -178,6 +178,9 @@
       "identityFile": "Anahtar dosyası"
     },
     "password": "Parola",
+    "passwordOptionalHint": "(isteğe bağlı – sunucu parolasız girişe izin veriyorsa boş bırakın)",
+    "removeSavedPassword": "Kayıtlı parolayı kaldır",
+    "noPasswordSaved": "Kayıtlı parola yok. Uygulama önce parolasız girişi, ardından boş parola ile girişi dener.",
     "unchangedHint": "(boş = değişmez)",
     "privateKeyLabel": "Özel anahtar",
     "chooseFile": "Dosya seç…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Yapay zeka sağlayıcısı bir hata bildirdi (örn. bakım veya aşırı yük). Daha sonra yeniden deneyin; sürerse sağlayıcı ayarlarını denetleyin.",
     "AI_PROVIDER_OVERLOADED": "Yapay zekâ sağlayıcısı şu anda aşırı yüklü. Biraz sonra tekrar deneyin.",
     "AI_PROVIDER_BILLING": "Yapay zekâ sağlayıcısı hesabında kredi kalmadı. Sağlayıcının konsolunda faturalandırmayı kontrol edin.",
+    "AI_PROVIDER_USAGE_LIMIT": "Sağlayıcıdaki kullanım sınırına ulaşıldı. Sınırı sağlayıcının konsolunda yükseltin veya başka bir sağlayıcı seçin.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Sağlayıcıdaki kullanım sınırına ulaşıldı. Erişim {{date}} tarihinde geri gelecek. Sınırı sağlayıcının konsolunda yükseltin veya başka bir sağlayıcı seçin.",
     "AI_PROVIDER_REJECTED_REQUEST": "Yapay zekâ sağlayıcısı isteği reddetti.",
     "AI_RESPONSE_TRUNCATED": "Yapay zeka yanıtı tam bir komut için çok uzundu",
     "AI_MODEL_NOT_FOUND": "Yapay zeka sağlayıcısı bu modeli tanımıyor. Ayarlar'da model adını denetleyin (\"Modelleri yükle\" kullanılabilir olanları listeler); Ollama için önce `ollama pull <name>` ile indirin.",
@@ -922,7 +927,8 @@
     "dismiss": "Öneriyi kapat",
     "reject": "Reddet",
     "applying": "Uygulanıyor…",
-    "apply": "Uygula"
+    "apply": "Uygula",
+    "expired": "Süresi doldu — uygulanmadı"
   },
   "connectLog": {
     "title": "Ayrıntılar",
@@ -950,6 +956,7 @@
       "changed": "değişti"
     },
     "authMethod": {
+      "none": "none (kimlik doğrulama yok)",
       "password": "Parola",
       "privateKey": "Özel anahtar",
       "agent": "SSH aracısı",

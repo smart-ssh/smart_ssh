@@ -178,6 +178,9 @@
       "identityFile": "Berkas Kunci"
     },
     "password": "Kata sandi",
+    "passwordOptionalHint": "(opsional – biarkan kosong jika server mengizinkan login tanpa kata sandi)",
+    "removeSavedPassword": "Hapus kata sandi tersimpan",
+    "noPasswordSaved": "Tidak ada kata sandi tersimpan. Aplikasi mencoba login tanpa kata sandi terlebih dahulu, lalu dengan kata sandi kosong.",
     "unchangedHint": "(kosong = tidak berubah)",
     "privateKeyLabel": "Kunci Privat",
     "chooseFile": "Pilih berkas…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Penyedia AI melaporkan kesalahan (mis. pemeliharaan atau kelebihan beban). Coba lagi nanti; jika berlanjut, periksa pengaturan penyedia.",
     "AI_PROVIDER_OVERLOADED": "Penyedia AI sedang kelebihan beban. Coba lagi sebentar lagi.",
     "AI_PROVIDER_BILLING": "Akun penyedia AI tidak memiliki kredit lagi. Periksa penagihan di konsol penyedia.",
+    "AI_PROVIDER_USAGE_LIMIT": "Batas penggunaan di penyedia tercapai. Naikkan batas di konsol penyedia atau pilih penyedia lain.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Batas penggunaan di penyedia tercapai. Akses kembali pada {{date}}. Naikkan batas di konsol penyedia atau pilih penyedia lain.",
     "AI_PROVIDER_REJECTED_REQUEST": "Penyedia AI menolak permintaan tersebut.",
     "AI_RESPONSE_TRUNCATED": "Respons AI terlalu panjang untuk perintah yang lengkap",
     "AI_MODEL_NOT_FOUND": "Penyedia AI tidak mengenal model ini. Periksa nama model di Pengaturan (\"Muat model\" menampilkan yang tersedia); untuk Ollama, tarik dulu dengan `ollama pull <name>`.",
@@ -917,7 +922,8 @@
     "dismiss": "Tutup saran",
     "reject": "Tolak",
     "applying": "Menerapkan…",
-    "apply": "Terapkan"
+    "apply": "Terapkan",
+    "expired": "Kedaluwarsa — tidak diterapkan"
   },
   "connectLog": {
     "title": "Detail",
@@ -945,6 +951,7 @@
       "changed": "berubah"
     },
     "authMethod": {
+      "none": "none (tanpa autentikasi)",
       "password": "Kata sandi",
       "privateKey": "Kunci privat",
       "agent": "Agen SSH",

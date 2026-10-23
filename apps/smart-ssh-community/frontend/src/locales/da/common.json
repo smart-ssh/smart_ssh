@@ -178,6 +178,9 @@
       "identityFile": "Nøglefil"
     },
     "password": "Adgangskode",
+    "passwordOptionalHint": "(valgfrit – lad feltet stå tomt, hvis serveren tillader login uden adgangskode)",
+    "removeSavedPassword": "Fjern gemt adgangskode",
+    "noPasswordSaved": "Ingen adgangskode gemt. Appen prøver først login uden adgangskode og derefter med en tom adgangskode.",
     "unchangedHint": "(tom = uændret)",
     "privateKeyLabel": "Privat nøgle",
     "chooseFile": "Vælg fil…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "AI-udbyderen meldte en fejl (f.eks. vedligeholdelse eller overbelastning). Prøv igen senere; fortsætter det, så kontrollér udbyderindstillingerne.",
     "AI_PROVIDER_OVERLOADED": "AI-udbyderen er overbelastet lige nu. Prøv igen om et øjeblik.",
     "AI_PROVIDER_BILLING": "AI-udbyderens konto har ikke mere kredit. Tjek betalingen i udbyderens konsol.",
+    "AI_PROVIDER_USAGE_LIMIT": "Forbrugsgrænsen hos udbyderen er nået. Hæv grænsen i udbyderens konsol, eller vælg en anden udbyder.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "Forbrugsgrænsen hos udbyderen er nået. Adgangen vender tilbage {{date}}. Hæv grænsen i udbyderens konsol, eller vælg en anden udbyder.",
     "AI_PROVIDER_REJECTED_REQUEST": "AI-udbyderen afviste anmodningen.",
     "AI_RESPONSE_TRUNCATED": "AI-svaret var for langt til en komplet kommando",
     "AI_MODEL_NOT_FOUND": "AI-udbyderen kender ikke denne model. Kontrollér modelnavnet i Indstillinger (\"Indlæs modeller\" viser de tilgængelige); for Ollama skal den først hentes med `ollama pull <name>`.",
@@ -922,7 +927,8 @@
     "dismiss": "Skjul forslag",
     "reject": "Afvis",
     "applying": "Anvender…",
-    "apply": "Anvend"
+    "apply": "Anvend",
+    "expired": "Udløbet — ikke anvendt"
   },
   "connectLog": {
     "title": "Detaljer",
@@ -950,6 +956,7 @@
       "changed": "ændret"
     },
     "authMethod": {
+      "none": "none (ingen godkendelse)",
       "password": "Adgangskode",
       "privateKey": "Privat nøgle",
       "agent": "SSH-agent",

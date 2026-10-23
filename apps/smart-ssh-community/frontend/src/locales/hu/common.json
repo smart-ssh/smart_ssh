@@ -178,6 +178,9 @@
       "identityFile": "Kulcsfájl"
     },
     "password": "Jelszó",
+    "passwordOptionalHint": "(nem kötelező – hagyja üresen, ha a kiszolgáló engedi a jelszó nélküli bejelentkezést)",
+    "removeSavedPassword": "Mentett jelszó eltávolítása",
+    "noPasswordSaved": "Nincs mentett jelszó. Az alkalmazás először jelszó nélkül próbál bejelentkezni, majd üres jelszóval.",
     "unchangedHint": "(üres = változatlan)",
     "privateKeyLabel": "Privát kulcs",
     "chooseFile": "Fájl kiválasztása…",
@@ -544,6 +547,8 @@
     "AI_PROVIDER_UNAVAILABLE": "Az AI-szolgáltató hibát jelzett (pl. karbantartás vagy túlterhelés). Próbálja újra később; ha tartós, ellenőrizze a szolgáltató beállításait.",
     "AI_PROVIDER_OVERLOADED": "Az AI-szolgáltató jelenleg túlterhelt. Próbálja újra egy pillanat múlva.",
     "AI_PROVIDER_BILLING": "Az AI-szolgáltatói fiókon nincs több kredit. Ellenőrizze a számlázást a szolgáltató konzolján.",
+    "AI_PROVIDER_USAGE_LIMIT": "A szolgáltatónál elérte a használati korlátot. Emelje a korlátot a szolgáltató konzoljában, vagy válasszon másik szolgáltatót.",
+    "AI_PROVIDER_USAGE_LIMIT_DATE": "A szolgáltatónál elérte a használati korlátot. A hozzáférés visszatér: {{date}}. Emelje a korlátot a szolgáltató konzoljában, vagy válasszon másik szolgáltatót.",
     "AI_PROVIDER_REJECTED_REQUEST": "Az AI-szolgáltató elutasította a kérést.",
     "AI_RESPONSE_TRUNCATED": "Az AI válasza túl hosszú volt egy teljes parancshoz",
     "AI_MODEL_NOT_FOUND": "Az AI-szolgáltató nem ismeri ezt a modellt. Ellenőrizze a modell nevét a Beállításokban (a \"Modellek betöltése\" listázza az elérhetőket); Ollamánál előbb töltse le az `ollama pull <name>` paranccsal.",
@@ -922,7 +927,8 @@
     "dismiss": "Javaslat elvetése",
     "reject": "Elutasítás",
     "applying": "Alkalmazás…",
-    "apply": "Alkalmazás"
+    "apply": "Alkalmazás",
+    "expired": "Lejárt — nem alkalmazva"
   },
   "connectLog": {
     "title": "Részletek",
@@ -950,6 +956,7 @@
       "changed": "megváltozott"
     },
     "authMethod": {
+      "none": "none (hitelesítés nélkül)",
       "password": "Jelszó",
       "privateKey": "Privát kulcs",
       "agent": "SSH-ügynök",

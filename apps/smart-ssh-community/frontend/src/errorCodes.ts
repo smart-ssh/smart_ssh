@@ -94,6 +94,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Issue #599: overload, exhausted credit, rejected request.
   "AI_PROVIDER_OVERLOADED",
   "AI_PROVIDER_BILLING",
+  // Issue #631: provider usage/spending limit reached.
+  "AI_PROVIDER_USAGE_LIMIT",
   "AI_PROVIDER_REJECTED_REQUEST",
   // Spec 0065, Teil 3 (spec-reviewer-Fund, Review dieses Schritts): fehlte
   // hier — die englische UI zeigte bislang den rohen deutschen
@@ -277,7 +279,12 @@ export function translateErrorCode(
   t: (key: string, options?: Record<string, unknown>) => string,
   code: string | null | undefined,
   fallback: string,
+  params?: Record<string, unknown>,
 ): string {
   if (!code || !KNOWN_ERROR_CODES.has(code)) return fallback;
-  return t(`errors.${code}`);
+  // Issue #631: the usage-limit text names the date access returns on.
+  if (code === "AI_PROVIDER_USAGE_LIMIT" && typeof params?.date === "string" && params.date) {
+    return t(`errors.${code}_DATE`, params);
+  }
+  return t(`errors.${code}`, params);
 }

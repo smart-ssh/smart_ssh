@@ -2140,6 +2140,10 @@ export function FileBrowserPanel({
             setNameError(null);
             setNewFileOpen("");
           }}
+          onRefresh={() => {
+            setDirMenu(null);
+            handleRefresh();
+          }}
           onPaste={() => {
             setDirMenu(null);
             if (cutEntry) handlePaste();
@@ -2979,6 +2983,7 @@ function DirectoryMenu({
   clipboardFiles,
   onNewFolder,
   onNewFile,
+  onRefresh,
   onPaste,
 }: {
   narrow: boolean;
@@ -2988,6 +2993,7 @@ function DirectoryMenu({
   clipboardFiles: boolean;
   onNewFolder: () => void;
   onNewFile: () => void;
+  onRefresh: () => void;
   onPaste: () => void;
 }) {
   const { t } = useTranslation();
@@ -3016,6 +3022,9 @@ function DirectoryMenu({
       </button>
       <button type="button" onClick={onNewFile} className={itemClass}>
         {t("fileBrowser.menu.newFile")}
+      </button>
+      <button type="button" onClick={onRefresh} className={itemClass}>
+        {t("fileBrowser.menu.refresh")}
       </button>
       {pasteName !== null && (
         <button
