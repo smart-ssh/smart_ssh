@@ -51,6 +51,15 @@ sonst nicht. Ein Rechtsklick auf eine Zeile öffnet weiterhin das Eintragsmenü.
 Klick außerhalb und Escape schließen das Menü; es ist per Tastatur bedienbar
 und beschriftet.
 
+Alle Menüs und Popups des Dateibrowsers (Eintragsmenü per Rechtsklick und
+Drei-Punkte-Menü, Menü der leeren Fläche, Rechteerhöhung ▾ mit dem Formular
+„Ziel-Nutzer“) liegen immer vollständig im Fenster: Sie öffnen nach unten und
+rechts, klappen am unteren bzw. rechten Fensterrand nach oben bzw. links auf
+und werden notfalls verschoben; ist das Fenster kleiner als das Menü, scrollt
+das Menü. Beim Ändern der Fenstergröße wird neu platziert. Dasselbe gilt für
+das Dropdown der Schnellregel im Chat. Im schmalen Layout bleiben die Menüs
+unten angedockt.
+
 ## Teil 2: Lesende und lokale Aktionen (ohne Bestätigung)
 
 - **Herunterladen** direkt in den Download-Ordner des Betriebssystems, oder
