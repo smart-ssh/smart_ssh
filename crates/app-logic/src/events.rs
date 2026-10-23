@@ -27,7 +27,7 @@ use ssh_manager_core::profiles::AiAction;
 use ssh_manager_core::risk::{RiskAssessment, RiskLevel};
 use ssh_manager_core::shared::ServerId;
 
-use crate::dto::ActionOrigin;
+use crate::dto::{ActionOrigin, AutoExecRuleDto};
 use crate::state::{ActionId, SessionId};
 
 pub trait EventEmitter: Send + Sync {
@@ -391,6 +391,10 @@ struct ChatActionProposedPayload {
     /// Bestätigungsdialog zeigt bei `Mcp` "Angefragt über: <client_name
     /// oder generischer Text>" statt des sonst gezeigten KI-Provider-Namens.
     origin: ActionOrigin,
+    /// Issue #696: only set when `decision` is `AutoExec` — the rules that
+    /// let the command run without confirmation (display only, taken from the
+    /// evaluation that made the decision). Empty otherwise.
+    auto_exec_rules: Vec<AutoExecRuleDto>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -407,6 +411,7 @@ pub fn emit_chat_action_proposed(
     target_name: Option<String>,
     risk_assessment: Option<RiskAssessment>,
     origin: ActionOrigin,
+    auto_exec_rules: Vec<AutoExecRuleDto>,
 ) {
     emit(
         emitter,
@@ -423,6 +428,7 @@ pub fn emit_chat_action_proposed(
             target_name,
             risk_assessment,
             origin,
+            auto_exec_rules,
         },
     );
 }

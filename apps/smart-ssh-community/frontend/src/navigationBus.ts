@@ -42,3 +42,18 @@ export function subscribeRequestResumeChatSession(listener: ResumeListener): () 
   resumeListeners.add(listener);
   return () => resumeListeners.delete(listener);
 }
+
+/** Issue #696: a chat card asks to open one filter rule for editing in the
+ * filter rules tab. `App` switches the tab; `FilterRulesView` selects it. */
+type OpenFilterRuleListener = (ruleId: string) => void;
+
+const openFilterRuleListeners = new Set<OpenFilterRuleListener>();
+
+export function requestOpenFilterRule(ruleId: string): void {
+  for (const listener of Array.from(openFilterRuleListeners)) listener(ruleId);
+}
+
+export function subscribeRequestOpenFilterRule(listener: OpenFilterRuleListener): () => void {
+  openFilterRuleListeners.add(listener);
+  return () => openFilterRuleListeners.delete(listener);
+}

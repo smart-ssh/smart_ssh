@@ -69,7 +69,14 @@ const ACTION_BORDER: Record<RuleAction, string> = {
  * Drag-and-Drop), Hard-Blacklist-Sektion, Regel-Formular, Testen-Panel — in
  * einer Datei wie schon `ServerForm.tsx` (Spec 0008), um das Zusammenspiel
  * von Liste/Formular/Test nicht über mehrere Dateien zu verteilen. */
-export function FilterRulesView() {
+export function FilterRulesView({
+  initialRuleId = null,
+  onInitialRuleConsumed,
+}: {
+  /** Issue #696: rule to open for editing as soon as the list is loaded. */
+  initialRuleId?: string | null;
+  onInitialRuleConsumed?: () => void;
+} = {}) {
   const { t } = useTranslation();
   const [rules, setRules] = useState<RuleDto[]>([]);
   const [servers, setServers] = useState<ServerDto[]>([]);
@@ -79,6 +86,7 @@ export function FilterRulesView() {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const reload = () => {
     Promise.all([listRules(), listServers(), listKnownTags(), listHardBlacklist()])
@@ -87,11 +95,22 @@ export function FilterRulesView() {
         setServers(s);
         setKnownTags(t);
         setHardBlacklist(b);
+        setLoaded(true);
       })
       .catch((err) => setError(commandErrorMessage(err)));
   };
 
   useEffect(reload, []);
+
+  // Issue #696: open the requested rule once the list has loaded. A rule that
+  // no longer exists is ignored (the request is consumed either way).
+  useEffect(() => {
+    if (!initialRuleId || !loaded) return;
+    if (rules.some((r) => r.id === initialRuleId)) {
+      setSelection({ kind: "rule", id: initialRuleId });
+    }
+    onInitialRuleConsumed?.();
+  }, [initialRuleId, loaded, rules, onInitialRuleConsumed]);
 
   const serverName = (id: string) => servers.find((s) => s.id === id)?.name ?? id;
 

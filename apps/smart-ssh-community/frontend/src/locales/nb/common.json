@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Utdata ble kuttet ved størrelsesgrensen – de kan være ufullstendige.",
     "liveOutputLabel": "Direkteutdata",
     "liveOutputTruncatedNotice": "⚠ Størrelsesgrensen er nådd – flere utdata vises ikke lenger.",
+    "autoRanLead": "Kjørt automatisk",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tagg {{tag}}",
+    "autoRanOpenRule": "Åpne denne regelen i filterreglene",
     "mcpOrigin": "Eksternt verktøy (MCP): “{{name}}”",
     "mcpOriginGeneric": "eksternt verktøy (MCP)",
     "mcpOriginHint": "Denne handlingen ble ikke forespurt av den interne chatten, men av et eksternt verktøy via den lokale MCP-serveren."

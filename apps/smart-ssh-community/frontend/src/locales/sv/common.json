@@ -365,6 +365,12 @@
     "commandTruncatedNotice": "⚠ Utdata kapades vid storleksgränsen — den kan vara ofullständig.",
     "liveOutputLabel": "Liveutdata",
     "liveOutputTruncatedNotice": "⚠ Storleksgränsen är nådd — ytterligare utdata visas inte längre.",
+    "autoRanLead": "Kördes automatiskt",
+    "autoRanRule": "regel",
+    "autoRanScopeGlobal": "global",
+    "autoRanScopeServer": "server {{name}}",
+    "autoRanScopeTag": "tagg {{tag}}",
+    "autoRanOpenRule": "Öppna regeln i filterreglerna",
     "mcpOrigin": "Externt verktyg (MCP): \"{{name}}\"",
     "mcpOriginGeneric": "externt verktyg (MCP)",
     "mcpOriginHint": "Åtgärden begärdes inte av den interna chatten utan av ett externt verktyg via den lokala MCP-servern."

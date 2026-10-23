@@ -262,6 +262,20 @@ impl<S: PolicyStore> FilterEngine<S> {
         self.evaluate_explained(command, ctx).await.decision
     }
 
+    /// Read-only lookup of the rules (as the policy store currently holds
+    /// them for `ctx`) whose ids are in `ids`. Not an evaluation: it only
+    /// resolves rule ids from a trace to their pattern and scope for display.
+    /// A rule deleted in the meantime is simply absent from the result.
+    pub async fn rules_by_ids(&self, ctx: &EvalContext, ids: &[RuleId]) -> Vec<Rule> {
+        let scope = EffectiveScope::from(ctx);
+        self.store
+            .rules_for(&scope)
+            .await
+            .into_iter()
+            .filter(|r| ids.contains(&r.id))
+            .collect()
+    }
+
     /// Wie [`Self::evaluate`], liefert aber zusätzlich eine nachvollziehbare
     /// [`EvaluationTrace`] (Spec 0009, Abschnitt 4). Ursprünglich
     /// ausschließlich für die Testen-Funktion im UI gedacht — wird seit Spec
