@@ -1053,7 +1053,7 @@ async fn test_t2_disabling_during_a_recursive_chmod_stops_it_immediately() {
     let command = spawn_command(
         s.session.clone(),
         s.elevated_channel(),
-        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true).await },
+        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true, false).await },
     );
     elevated.wait_until_paused().await;
     let ops_before = elevated.op_count();
@@ -1504,7 +1504,7 @@ async fn test_t7_an_aborted_elevated_change_is_audited_once_with_its_target_user
                 if action == "delete" {
                     delete_impl(&session, &channel, "/t").await
                 } else {
-                    chmod_impl(&session, &channel, "/t", 0o700, true)
+                    chmod_impl(&session, &channel, "/t", 0o700, true, false)
                         .await
                         .map(|_| ())
                 }
@@ -1571,13 +1571,16 @@ async fn test_t9_without_a_revocation_recursive_delete_and_chmod_still_succeed()
     let elevated = GatedSftp::small_tree(0);
     let s = setup(Box::new(elevated.clone())).await;
 
-    let changed = with_browser_channel(
-        s.session.clone(),
-        s.elevated_channel(),
-        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true).await },
-    )
-    .await
-    .expect("ohne Widerruf muss das rekursive chmod gelingen");
+    let changed =
+        with_browser_channel(
+            s.session.clone(),
+            s.elevated_channel(),
+            |session, channel| async move {
+                chmod_impl(&session, &channel, "/t", 0o700, true, false).await
+            },
+        )
+        .await
+        .expect("ohne Widerruf muss das rekursive chmod gelingen");
     assert_eq!(changed, 5, "Wurzel, zwei Dateien, Unterordner, Datei darin");
     assert_eq!(elevated.permissions("/t"), Some(0o700));
     assert_eq!(elevated.permissions("/t/sub/c.txt"), Some(0o700));
@@ -1654,13 +1657,16 @@ async fn test_t9_recursive_delete_and_chmod_over_the_normal_channel_behave_as_be
         .set_sftp_for_tests(Box::new(normal_tree.clone()))
         .await;
 
-    let changed = with_browser_channel(
-        s.session.clone(),
-        s.normal_channel(),
-        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true).await },
-    )
-    .await
-    .expect("rekursives chmod über den normalen Kanal muss gelingen");
+    let changed =
+        with_browser_channel(
+            s.session.clone(),
+            s.normal_channel(),
+            |session, channel| async move {
+                chmod_impl(&session, &channel, "/t", 0o700, true, false).await
+            },
+        )
+        .await
+        .expect("rekursives chmod über den normalen Kanal muss gelingen");
     assert_eq!(changed, 5);
     assert_eq!(normal_tree.permissions("/t"), Some(0o700));
     assert_eq!(normal_tree.permissions("/t/sub/c.txt"), Some(0o700));
@@ -2348,7 +2354,7 @@ async fn test_622_confirmed_stop_ends_a_recursive_chmod_at_the_next_entry() {
     let command = spawn_command(
         s.session.clone(),
         s.elevated_channel(),
-        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true).await },
+        |session, channel| async move { chmod_impl(&session, &channel, "/t", 0o700, true, false).await },
     );
     elevated.wait_until_paused().await;
     let ops_before = elevated.op_count();
