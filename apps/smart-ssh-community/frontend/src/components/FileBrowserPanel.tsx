@@ -8,6 +8,7 @@ import {
   claimClipboardFiles,
   claimDroppedPaths,
   clipboardHasFiles,
+  clipboardWriteText,
   commandErrorCode,
   commandErrorMessage,
   pickUploadFiles,
@@ -1065,7 +1066,7 @@ export function FileBrowserPanel({
           job?.requestId === requestId ? { ...job, done: p.done, total: p.total ?? job.total } : job,
         ),
       );
-      await navigator.clipboard.writeText(content);
+      await clipboardWriteText(content);
       notifyOk("fileToasts.contentCopied", { name: entry.name });
     } catch (err) {
       // Ein Abbruch durch den Nutzer ist keine Störung: nichts anzeigen.
@@ -3094,7 +3095,7 @@ function ElevationFailureDialog({
   const copy = async () => {
     if (!failure.sudoersLine) return;
     try {
-      await navigator.clipboard.writeText(failure.sudoersLine);
+      await clipboardWriteText(failure.sudoersLine);
       setCopied(true);
     } catch (err) {
       console.warn("Konnte sudoers-Zeile nicht kopieren:", err);
