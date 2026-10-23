@@ -65,7 +65,7 @@ describe("ConnectStepLog (issue #51)", () => {
     await waitFor(() => expect(screen.getByText("Kopiert")).toBeInTheDocument());
     const text = (writeText.mock.calls[0] as unknown as [string])[0];
     expect(text).toContain("Hop 2: root@target:22");
-    expect(text).toContain("✗ Anmeldung — fehlgeschlagen (SSH_AUTH_FAILED)");
+    expect(text).toContain("✗ Anmeldung — fehlgeschlagen: Anmeldung fehlgeschlagen");
   });
 
   it("says so when copying fails", async () => {

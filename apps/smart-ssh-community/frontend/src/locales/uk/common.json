@@ -951,12 +951,15 @@
       "handshake": "Рукостискання SSH",
       "hostKeyCheck": "Перевірка ключа хоста",
       "authentication": "Автентифікація",
-      "sessionReady": "Сеанс встановлено"
+      "sessionReady": "Сеанс встановлено",
+      "dnsSkipped": "IP-адреса – пошук не потрібен"
     },
     "status": {
       "ok": "OK",
       "running": "виконується",
-      "failed": "не вдалося ({{code}})"
+      "failed": "не вдалося ({{code}})",
+      "skipped": "пропущено",
+      "failedReason": "помилка: {{reason}}"
     },
     "hostKeyResult": {
       "known": "відомий",
@@ -979,6 +982,14 @@
       "mac": "MAC: {{value}}",
       "partialSuccess": "прийнято частково, потрібна подальша автентифікація",
       "remainingMethods": "Сервер також пропонує: {{methods}} (не пробувалося)"
+    },
+    "reason": {
+      "SSH_TCP_TIMEOUT": "Час очікування TCP-з'єднання минув",
+      "SSH_TIMEOUT": "Час очікування минув",
+      "SSH_CONNECTION_REFUSED": "З'єднання відхилено",
+      "SSH_HOST_NOT_FOUND": "Хост не знайдено",
+      "SSH_HOST_UNREACHABLE": "Хост недоступний",
+      "SSH_AUTH_FAILED": "Автентифікація не вдалася"
     }
   },
   "fileBrowser": {
