@@ -5,7 +5,8 @@
 //! no `I`, `L`, `O`, `U`; on input `O` reads as `0`, `I`/`L` as `1`. Case,
 //! spaces and dashes are ignored. The check characters are two sums mod 32
 //! (plain and position-weighted), so **every** single-character change and
-//! every swap of two adjacent different characters is detected.
+//! every swap of two adjacent different data characters is detected (a swap
+//! that involves a check character may go unnoticed).
 
 use std::fmt;
 
