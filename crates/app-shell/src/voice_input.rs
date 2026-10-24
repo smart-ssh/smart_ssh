@@ -145,14 +145,17 @@ pub(crate) fn microphone_plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
 /// is touched when the selected model is not ready.
 #[tauri::command(async)]
 pub fn start_voice_recording(app: AppHandle) -> CommandResult<()> {
-    #[cfg(target_os = "android")]
-    if !android_permission::ensure_granted(&app) {
-        return Err(record_error(RecordError::PermissionDenied));
-    }
     let selected = speech_models::read_selected_model(&app);
     let model = speech_models::manager(&app).ok().and_then(|m| {
         matches!(m.status(selected), ModelStatus::Ready).then(|| m.model_path(selected))
     });
+    // Ask for the microphone only once a model is ready, so the permission
+    // dialog never precedes the download consent. Without a model `start`
+    // fails with `speech_no_model` before the device is touched.
+    #[cfg(target_os = "android")]
+    if model.is_some() && !android_permission::ensure_granted(&app) {
+        return Err(record_error(RecordError::PermissionDenied));
+    }
     recorder(&app)
         .start(model, read_language(&app))
         .map_err(record_error)
