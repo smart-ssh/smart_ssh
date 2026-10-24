@@ -8,6 +8,8 @@ import {
   registerSettingsSection,
   resetRegistryForTests,
   subscribeSettingsSections,
+  listSettingsSectionsForCategory,
+  unregisterSettingsSection,
 } from "./registry";
 
 function Noop() {
@@ -100,6 +102,28 @@ describe("registry", () => {
 
     resetRegistryForTests();
     expect(listFirstRunNoticeExtensions()).toEqual([]);
+  });
+
+  describe("settings sections with a target category (#674)", () => {
+    it("filters by category and sorts by order, ties by registration", () => {
+      registerSettingsSection({ id: "top", component: Noop });
+      registerSettingsSection({ id: "c", category: "data-backup", order: 5, component: Noop });
+      registerSettingsSection({ id: "a", category: "data-backup", order: 1, component: Noop });
+      registerSettingsSection({ id: "b", category: "data-backup", order: 5, component: Noop });
+      registerSettingsSection({ id: "z", category: "other", component: Noop });
+      expect(listSettingsSectionsForCategory("data-backup").map((s) => s.id)).toEqual(["a", "c", "b"]);
+    });
+
+    it("unregister removes the section and notifies; unknown id is silent", () => {
+      registerSettingsSection({ id: "a", category: "data-backup", component: Noop });
+      const listener = vi.fn();
+      subscribeSettingsSections(listener);
+      unregisterSettingsSection("nope");
+      expect(listener).not.toHaveBeenCalled();
+      unregisterSettingsSection("a");
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listSettingsSectionsForCategory("data-backup")).toEqual([]);
+    });
   });
 
   describe("settings section subscriptions (issue #243)", () => {
