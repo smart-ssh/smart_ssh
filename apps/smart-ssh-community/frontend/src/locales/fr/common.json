@@ -429,6 +429,7 @@
     "expired": "La demande de clé d’hôte pour {{host}}:{{port}} a expiré. La connexion n’a pas été établie et la clé n’a pas été approuvée."
   },
   "sessionTabs": {
+    "newSession": "Nouvelle session",
     "overview": "Vue d’ensemble",
     "pendingAction": "En attente de confirmation",
     "closeTab": "Fermer l’onglet « {{name}} »",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Le mot de passe principal a été rejeté : au moins 12 caractères, et les deux saisies doivent correspondre.",
     "STARTUP_FAILED": "Le démarrage n’a pas abouti. Rien n’a été modifié ; le journal indique la cause.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Le trousseau contient une autre clé. Rien n’a été modifié — confirmez le remplacement si c’est ce que vous souhaitez.",
+    "ELEVATED_USER_CHANGED": "Le mode élevé s’exécute maintenant sous un autre utilisateur ; rien n’a été fait. Utilisez « Téléverser en tant que … » dans la barre d’édition.",
     "APP_LOCKED": "Smart SSH est toujours verrouillé. Déverrouillez-le d’abord avec votre mot de passe principal.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Cette opération ne correspond pas à l’endroit où la clé est actuellement conservée. Rien n’a été modifié — rouvrez les paramètres, ils indiquent le mode actif.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L’avertissement sur le mot de passe principal n’a pas été confirmé. Sans ce mot de passe, toutes les données sont perdues et il n’existe aucune récupération — cochez la case et recommencez la configuration. Rien n’a été modifié.",
@@ -740,6 +742,11 @@
     "moveCollisionTitle": "La cible existe déjà — écraser en tant que {{user}} ?",
     "chmodNote": "Les permissions seront définies en tant que {{user}}.",
     "editUploadTitle": "Téléverser les modifications locales en tant que {{user}} ?",
+    "editUploadAs": "Téléverser en tant que {{user}}",
+    "editUploadAsLogin": "Téléverser en tant qu’utilisateur de connexion",
+    "editIdentityChanged": "Ouvert en tant que {{from}}, le mode élevé s’exécute maintenant en tant que {{user}}.",
+    "editIdentityElevatedOff": "Ouvert en tant que {{from}}, le mode élevé est maintenant désactivé.",
+    "editIdentityElevatedOn": "Ouvert sans mode élevé, il s’exécute maintenant en tant que {{user}}.",
     "editOpenedAs": "(ouvert en tant que {{user}})",
     "failureTitle": "Droits élevés impossibles",
     "sudoersIntro": "Le mode élevé nécessite sur le serveur une règle sudo sans mot de passe pour sftp-server. Cette ligne correspond à ce serveur et à cette connexion :",

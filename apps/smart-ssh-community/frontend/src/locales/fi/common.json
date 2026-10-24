@@ -429,6 +429,7 @@
     "expired": "Isäntäavainpyyntö kohteelle {{host}}:{{port}} vanheni. Yhteyttä ei muodostettu, eikä avaimeen luotettu."
   },
   "sessionTabs": {
+    "newSession": "Uusi istunto",
     "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Pääsalasana hylättiin: vähintään 12 merkkiä, ja molempien syötteiden on täsmättävä.",
     "STARTUP_FAILED": "Käynnistys ei valmistunut. Mitään ei muutettu; loki mainitsee syyn.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Avainrenkaassa on eri avain. Mitään ei muutettu – vahvista korvaaminen, jos haluat sen.",
+    "ELEVATED_USER_CHANGED": "Korotettu tila toimii nyt toisena käyttäjänä; mitään ei tehty. Käytä muokkauspalkin kohtaa ”Lähetä käyttäjänä …”.",
     "APP_LOCKED": "Smart SSH on yhä lukittu. Avaa lukitus ensin pääsalasanallasi.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Tämä toiminto ei vastaa sitä, missä avainta tällä hetkellä säilytetään. Mitään ei muutettu – avaa asetukset uudelleen, ne näyttävät aktiivisen tilan.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Pääsalasanan varoitusta ei ole vahvistettu. Ilman salasanaa kaikki tiedot menetetään eikä palautusta ole – valitse ruutu ja määritä uudelleen. Mitään ei muutettu.",
@@ -735,6 +737,11 @@
     "moveCollisionTitle": "Kohde on jo olemassa – korvataanko käyttäjänä {{user}}?",
     "chmodNote": "Oikeudet asetetaan käyttäjänä {{user}}.",
     "editUploadTitle": "Lähetetäänkö paikalliset muutokset käyttäjänä {{user}}?",
+    "editUploadAs": "Lähetä käyttäjänä {{user}}",
+    "editUploadAsLogin": "Lähetä kirjautumiskäyttäjänä",
+    "editIdentityChanged": "Avattu käyttäjänä {{from}}, korotettu tila toimii nyt käyttäjänä {{user}}.",
+    "editIdentityElevatedOff": "Avattu käyttäjänä {{from}}, korotettu tila on nyt pois päältä.",
+    "editIdentityElevatedOn": "Avattu ilman korotettua tilaa, se toimii nyt käyttäjänä {{user}}.",
     "editOpenedAs": "(avattu käyttäjänä {{user}})",
     "failureTitle": "Korotetut oikeudet eivät ole mahdollisia",
     "sudoersIntro": "Korotettu tila tarvitsee palvelimella salasanattoman sudo-säännön sftp-serverille. Tämä rivi sopii tähän palvelimeen ja kirjautumiseen:",

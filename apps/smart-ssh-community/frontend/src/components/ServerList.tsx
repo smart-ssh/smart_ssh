@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
 import {
@@ -220,6 +221,13 @@ export function ServerList({
       .catch(() => setFirstRunAcknowledged(false));
   }, []);
 
+  const [newSessionMenu, setNewSessionMenu] = useState<{
+    x: number;
+    y: number;
+    server: ServerDto;
+  } | null>(null);
+  const closeNewSessionMenu = useCallback(() => setNewSessionMenu(null), []);
+
   const performConnect = async (server: ServerDto, resumeChatSessionId?: string) => {
     setError(null);
     setConnectFailure(null);
@@ -296,6 +304,16 @@ export function ServerList({
     await openSessionPickerOrConnect(server);
   };
 
+  // Issue #657: "New session" always opens an additional tab, even if the
+  // server already has one (no session picker: it is a fresh session).
+  const handleNewSession = async (server: ServerDto) => {
+    if (firstRunAcknowledged === false) {
+      setPendingConnectServer(server);
+      return;
+    }
+    await performConnect(server);
+  };
+
   const openSessionPickerOrConnect = async (server: ServerDto) => {
     setError(null);
     try {
@@ -366,6 +384,10 @@ export function ServerList({
           ? {}
           : handlersFor({ kind: "server", id: server.id, label: server.name }))}
         onClick={() => handleConnect(server)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setNewSessionMenu({ x: e.clientX, y: e.clientY, server });
+        }}
        
         style={{ paddingLeft: `${indent(depth)}px` }}
         className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 aria-disabled:opacity-60"
@@ -592,6 +614,20 @@ export function ServerList({
       )}
 
       {drag && <TreeDragGhost drag={drag} kind={dropKind} />}
+
+      {newSessionMenu && (
+        <NewSessionMenu
+          x={newSessionMenu.x}
+          y={newSessionMenu.y}
+          serverName={newSessionMenu.server.name}
+          onClose={closeNewSessionMenu}
+          onNewSession={() => {
+            const server = newSessionMenu.server;
+            setNewSessionMenu(null);
+            void handleNewSession(server);
+          }}
+        />
+      )}
 
       {pendingConnectServer && (
         <FirstRunNoticeScreen onAcknowledge={handleFirstRunNoticeAcknowledged} />

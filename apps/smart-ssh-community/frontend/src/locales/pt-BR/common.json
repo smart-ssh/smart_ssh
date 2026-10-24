@@ -429,6 +429,7 @@
     "expired": "A solicitação de chave de host para {{host}}:{{port}} expirou. A conexão não foi estabelecida e a chave não foi considerada confiável."
   },
   "sessionTabs": {
+    "newSession": "Nova sessão",
     "overview": "Visão geral",
     "pendingAction": "Aguardando confirmação",
     "closeTab": "Fechar aba \"{{name}}\"",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "A senha mestra foi rejeitada: no mínimo 12 caracteres, e as duas entradas devem coincidir.",
     "STARTUP_FAILED": "A inicialização não foi concluída. Nada foi alterado; o log indica a causa.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "O chaveiro contém uma chave diferente. Nada foi alterado — confirme a substituição se for isso que o senhor deseja.",
+    "ELEVATED_USER_CHANGED": "O modo elevado agora é executado com outro usuário; nada foi feito. Use “Enviar como …” na barra de edição.",
     "APP_LOCKED": "O Smart SSH ainda está bloqueado. Desbloqueie-o antes com a sua senha mestra.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Esta operação não corresponde a onde a chave está guardada atualmente. Nada foi alterado — reabra as configurações, que mostram o modo ativo.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "O aviso sobre a senha mestra não foi confirmado. Sem essa senha, todos os dados são perdidos e não há recuperação — marque a caixa e configure novamente. Nada foi alterado.",
@@ -740,6 +742,11 @@
     "moveCollisionTitle": "O destino já existe — sobrescrever como {{user}}?",
     "chmodNote": "As permissões serão definidas como {{user}}.",
     "editUploadTitle": "Enviar alterações locais como {{user}}?",
+    "editUploadAs": "Enviar como {{user}}",
+    "editUploadAsLogin": "Enviar como usuário de login",
+    "editIdentityChanged": "Aberto como {{from}}, o modo elevado agora é executado como {{user}}.",
+    "editIdentityElevatedOff": "Aberto como {{from}}, o modo elevado agora está desligado.",
+    "editIdentityElevatedOn": "Aberto sem modo elevado, agora ele é executado como {{user}}.",
     "editOpenedAs": "(aberto como {{user}})",
     "failureTitle": "Direitos elevados não são possíveis",
     "sudoersIntro": "O modo elevado precisa de uma regra de sudo sem senha para o sftp-server no servidor. Esta linha corresponde a este servidor e login:",

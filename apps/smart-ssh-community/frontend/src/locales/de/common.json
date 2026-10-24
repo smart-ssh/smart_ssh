@@ -429,6 +429,7 @@
     "expired": "Die Host-Key-Abfrage für {{host}}:{{port}} ist abgelaufen. Die Verbindung wurde nicht aufgebaut, dem Schlüssel wird nicht vertraut."
   },
   "sessionTabs": {
+    "newSession": "Neue Sitzung",
     "overview": "Übersicht",
     "pendingAction": "Wartet auf Bestätigung",
     "closeTab": "Tab „{{name}}“ schließen",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Das Master-Passwort wurde abgelehnt: mindestens 12 Zeichen, und beide Eingaben müssen übereinstimmen.",
     "STARTUP_FAILED": "Der Start ist nicht durchgelaufen. Es wurde nichts verändert; das Log nennt die Ursache.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Im Schlüsselbund liegt ein anderer Schlüssel. Es wurde nichts verändert — bestätige das Ersetzen, wenn du es willst.",
+    "ELEVATED_USER_CHANGED": "Der erhöhte Modus läuft als ein anderer Nutzer als beim Start dieser Aktion — es wurde nichts ausgeführt. Nutze „Hochladen als …“ in der Bearbeitungsleiste, um mit der aktuellen Identität hochzuladen.",
     "APP_LOCKED": "Smart SSH ist noch gesperrt. Entsperre es zuerst mit deinem Master-Passwort.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Dieser Vorgang passt nicht dazu, wo der Schlüssel gerade liegt. Es wurde nichts verändert — öffne die Einstellungen erneut, dort steht der aktive Modus.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind alle Daten verloren, und es gibt keine Wiederherstellung — setze das Häkchen und richte es erneut ein. Es wurde nichts verändert.",
@@ -735,6 +737,11 @@
     "moveCollisionTitle": "Ziel existiert bereits — als {{user}} überschreiben?",
     "chmodNote": "Die Rechte werden als {{user}} gesetzt.",
     "editUploadTitle": "Lokale Änderungen als {{user}} hochladen?",
+    "editUploadAs": "Als {{user}} hochladen",
+    "editUploadAsLogin": "Als Login-Nutzer hochladen",
+    "editIdentityChanged": "Als {{from}} geöffnet, der erhöhte Modus läuft jetzt als {{user}}.",
+    "editIdentityElevatedOff": "Als {{from}} geöffnet, der erhöhte Modus ist jetzt aus.",
+    "editIdentityElevatedOn": "Ohne erhöhten Modus geöffnet, er läuft jetzt als {{user}}.",
     "editOpenedAs": "(als {{user}} geöffnet)",
     "failureTitle": "Erhöhte Rechte nicht möglich",
     "sudoersIntro": "Für den erhöhten Modus braucht der Server eine sudo-Regel ohne Passwort für sftp-server. Diese Zeile passt zu diesem Server und Login:",

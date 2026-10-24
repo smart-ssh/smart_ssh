@@ -2600,3 +2600,29 @@ async fn test_622_folder_download_reports_aggregate_progress() {
         assert!(folder["bytesDone"].as_u64().unwrap() <= folder["bytesTotal"].as_u64().unwrap());
     }
 }
+
+/// Issue #656: an action that still carries the identity of an edit session
+/// opened as another user is refused with the stable `ELEVATED_USER_CHANGED`
+/// code and never touches the channel (no silent switch); the same action with
+/// the current identity passes the check.
+#[tokio::test]
+async fn test_656_stale_expected_identity_is_refused_and_explicit_current_identity_passes() {
+    let elevated = MockSftpSession::new().with_file("/t/a.txt", b"x".to_vec());
+    let s = setup(Box::new(elevated.clone())).await;
+
+    let stale = BrowserChannel::for_tests(&s.registry, s.session_id, Some("www-data".to_string()));
+    let err = delete_impl(&s.session, &stale, "/t/a.txt")
+        .await
+        .expect_err("an old expected identity must be refused");
+    assert_eq!(err.code, Some("ELEVATED_USER_CHANGED"));
+    assert!(err.message.contains("root") && err.message.contains("www-data"));
+    assert!(
+        elevated.file_content("/t/a.txt").is_some(),
+        "a refused action must not touch the elevated channel"
+    );
+
+    delete_impl(&s.session, &s.elevated_channel(), "/t/a.txt")
+        .await
+        .expect("the current identity, sent explicitly, passes");
+    assert!(!elevated.file_content("/t/a.txt").is_some());
+}

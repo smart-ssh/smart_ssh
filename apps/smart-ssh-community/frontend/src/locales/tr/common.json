@@ -429,6 +429,7 @@
     "expired": "{{host}}:{{port}} için ana makine anahtarı isteğinin süresi doldu. Bağlantı kurulmadı ve anahtara güvenilmedi."
   },
   "sessionTabs": {
+    "newSession": "Yeni oturum",
     "overview": "Genel bakış",
     "pendingAction": "Onay bekleniyor",
     "closeTab": "\"{{name}}\" sekmesini kapat",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Ana parola reddedildi: en az 12 karakter olmalı ve iki girdi eşleşmelidir.",
     "STARTUP_FAILED": "Başlatma tamamlanmadı. Hiçbir şey değiştirilmedi; günlük nedeni belirtir.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Anahtarlıkta farklı bir anahtar var. Hiçbir şey değiştirilmedi — istediğiniz buysa değiştirmeyi onaylayın.",
+    "ELEVATED_USER_CHANGED": "Yükseltilmiş mod artık başka bir kullanıcı olarak çalışıyor; hiçbir şey yapılmadı. Düzenleme çubuğundaki “… olarak yükle” seçeneğini kullanın.",
     "APP_LOCKED": "Smart SSH hâlâ kilitli. Önce ana parolanızla kilidini açın.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Bu işlem anahtarın şu an tutulduğu yerle uyuşmuyor. Hiçbir şey değiştirilmedi — ayarları yeniden açın, etkin modu gösterirler.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Ana parola uyarısı onaylanmadı. Bu parola olmadan tüm veriler kaybolur ve kurtarma yoktur — kutuyu işaretleyin ve yeniden kurun. Hiçbir şey değiştirilmedi.",
@@ -735,6 +737,11 @@
     "moveCollisionTitle": "Hedef zaten var — {{user}} olarak üzerine yazılsın mı?",
     "chmodNote": "İzinler {{user}} olarak ayarlanacak.",
     "editUploadTitle": "Yerel değişiklikler {{user}} olarak yüklensin mi?",
+    "editUploadAs": "{{user}} olarak yükle",
+    "editUploadAsLogin": "Oturum açma kullanıcısı olarak yükle",
+    "editIdentityChanged": "{{from}} olarak açıldı, yükseltilmiş mod artık {{user}} olarak çalışıyor.",
+    "editIdentityElevatedOff": "{{from}} olarak açıldı, yükseltilmiş mod artık kapalı.",
+    "editIdentityElevatedOn": "Yükseltilmiş mod olmadan açıldı, artık {{user}} olarak çalışıyor.",
     "editOpenedAs": "({{user}} olarak açıldı)",
     "failureTitle": "Yükseltilmiş haklar mümkün değil",
     "sudoersIntro": "Yükseltilmiş mod, sunucuda sftp-server için parolasız bir sudo kuralı gerektirir. Bu satır bu sunucu ve oturum açma bilgisiyle eşleşir:",

@@ -58,7 +58,9 @@ import {
 } from "../events";
 import {
   loadFileManagerColumnWidths,
+  loadFileManagerSort,
   saveFileManagerColumnWidths,
+  saveFileManagerSort,
 } from "../layoutSettings";
 import { testI18n } from "../testI18n";
 import { showToast } from "../toastBus";
@@ -196,6 +198,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 vi.mock("../layoutSettings", () => ({
   loadFileManagerColumnWidths: vi.fn(() => Promise.resolve({})),
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
+  loadFileManagerSort: vi.fn(() => Promise.resolve(null)),
+  saveFileManagerSort: vi.fn(() => Promise.resolve()),
 }));
 
 const entry: RemoteEntryDto = {
@@ -992,11 +996,8 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    // Mock liefert `[fileEntry, dirEntry]` in dieser Reihenfolge (echtes
-    // Sortieren übernimmt das Backend, nicht diese Komponente) — Zeile 0
-    // ist also a.txt.
-    const rows = screen.getAllByRole("button", { name: /^(Aktionen|Actions): / });
-    fireEvent.click(rows[0]);
+    // Ordner stehen oben (Spec 0053, Teil 3) — Zeile für a.txt gezielt wählen.
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): a\.txt/ }));
     fireEvent.click(screen.getByText("Ausschneiden"));
 
     fireEvent.click(await screen.findByText(/logs/));
@@ -1386,15 +1387,17 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
   });
 
-  const enableElevation = async () => {
+  const enableElevation = async (alreadyRendered = false) => {
     vi.mocked(sftpElevationEnable).mockResolvedValue({
       active: true,
       targetUser: "root",
       sftpServerPath: "/usr/lib/openssh/sftp-server",
       failure: null,
     });
-    renderPanel();
-    await screen.findByText(/a\.txt/);
+    if (!alreadyRendered) {
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+    }
     fireEvent.click(await screen.findByRole("button", { name: /Erhöhte Rechte/ }));
     await screen.findByRole("alert");
   };
@@ -1829,7 +1832,22 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
-  it("a file opened elevated is uploaded elevated even after the toggle is off — never silently as the normal user", async () => {
+  const openEditAndChange = async () => {
+    // Fake timers (see the ADR 0122, R7 note): the "changed" state hangs on
+    // the real 2000 ms poll interval.
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Lokal öffnen…"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  };
+  const flushChange = async () => {
+    vi.mocked(localFileMtime).mockResolvedValue("2026-01-01T00:00:09Z");
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+  };
+  const arrangeEditMocks = () => {
     vi.mocked(sftpOpenForEditing).mockResolvedValue({
       localPath: "/tmp/edit/a.txt",
       remoteModified: "2026-01-01T00:00:00Z",
@@ -1838,56 +1856,98 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     vi.mocked(readLocalTextPreview).mockResolvedValue({ text: "neu", size: 3 });
     vi.mocked(sftpReadText).mockResolvedValue("alt");
     vi.mocked(sftpStat).mockResolvedValue({ ...fileEntry, modified: "2026-01-01T00:00:00Z" });
-    vi.mocked(sftpUpload).mockRejectedValue({
-      message: "Der erhöhte Modus ist nicht mehr aktiv",
-      code: null,
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+  };
+  const confirmDialog = async (title: RegExp) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
-    await enableElevation();
+    const dialog = screen.getByText(title).closest(".fixed") as HTMLElement;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hochladen" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  };
 
-    // ADR 0122, R7: "wurde lokal geändert" hängt an einem echten
-    // Produktcode-Intervall (`POLL_INTERVAL_MS` in `useLocalEditSession`,
-    // 2000ms) — ab hier Fake-Timer, damit der Poll-Tick steuerbar ist, statt
-    // sich auf ein festes 4s-Timeout über zwei Ticks hinweg zu verlassen
-    // (das unter Last reißen kann). Testing-Library
-    // erkennt vitests Fake-Timer hier nicht (kein globales `jest`, s.
-    // `@testing-library/dom`s `jestFakeTimersAreEnabled`) — `waitFor`/
-    // `findBy*` würden also hängen bleiben; ab hier deshalb per
-    // `advanceTimersByTimeAsync` flushen und synchron (`getBy*`) prüfen.
+  it("elevated -> off (issue #656): explains the change, offers only 'Upload as login user', never uploads as the old identity without the click", async () => {
+    arrangeEditMocks();
+    await enableElevation();
     vi.useFakeTimers();
     try {
-      fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
-      fireEvent.click(screen.getByText("Lokal öffnen…"));
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0);
-      });
+      await openEditAndChange();
       expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", "root");
-      expect(screen.getByText(/als root geöffnet/)).toBeVisible();
 
-      // Modus ausschalten, danach die lokale Änderung hochladen.
       fireEvent.click(screen.getByRole("button", { name: "Erhöhte Rechte beenden" }));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-      vi.mocked(localFileMtime).mockResolvedValue("2026-01-01T00:00:09Z");
-      await act(async () => {
-        await vi.runOnlyPendingTimersAsync();
-      });
+      await flushChange();
+
       const changed = screen.getByText(/wurde lokal geändert/);
-      fireEvent.click(within(changed.parentElement!).getByRole("button", { name: "Hochladen" }));
+      const bar = changed.parentElement!;
+      expect(within(bar).getByText(/Als root geöffnet, der erhöhte Modus ist jetzt aus/)).toBeVisible();
+      // No plain upload in this state.
+      expect(within(bar).queryByRole("button", { name: "Hochladen" })).not.toBeInTheDocument();
+      expect(sftpUpload).not.toHaveBeenCalled();
+
+      fireEvent.click(within(bar).getByRole("button", { name: "Als Login-Nutzer hochladen" }));
+      await confirmDialog(/Lokale Änderungen hochladen\?/);
+
+      expect(sftpUpload).toHaveBeenCalledTimes(1);
+      expect(sftpUpload).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", null);
+      // The session now belongs to the new identity: no mismatch banner left.
+      expect(screen.queryByText(/der erhöhte Modus ist jetzt aus/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("off -> elevated (issue #656): offers 'Upload as root' and sends root explicitly", async () => {
+    arrangeEditMocks();
+    vi.mocked(sftpElevationEnable).mockResolvedValue({
+      active: true,
+      targetUser: "root",
+      sftpServerPath: "/usr/lib/openssh/sftp-server",
+      failure: null,
+    });
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    vi.useFakeTimers();
+    try {
+      await openEditAndChange();
+      expect(sftpOpenForEditing).toHaveBeenCalledWith("session-1", "a.txt", null);
+      fireEvent.click(screen.getByRole("button", { name: /Erhöhte Rechte/ }));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      const dialog = screen
-        .getByText(/Lokale Änderungen als root hochladen\?/)
-        .closest(".fixed") as HTMLElement;
-      fireEvent.click(within(dialog).getByRole("button", { name: "Hochladen" }));
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0);
-      });
+      expect(screen.getByRole("alert")).toBeVisible();
+      await flushChange();
+      const bar = screen.getByText(/wurde lokal geändert/).parentElement!;
+      expect(within(bar).getByText(/Ohne erhöhten Modus geöffnet, er läuft jetzt als root/)).toBeVisible();
+      expect(within(bar).queryByRole("button", { name: "Hochladen" })).not.toBeInTheDocument();
+      expect(sftpUpload).not.toHaveBeenCalled();
+
+      fireEvent.click(within(bar).getByRole("button", { name: "Als root hochladen" }));
+      await confirmDialog(/Lokale Änderungen als root hochladen\?/);
 
       expect(sftpUpload).toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", "root");
       expect(sftpUpload).not.toHaveBeenCalledWith("session-1", "/tmp/edit/a.txt", "a.txt", null);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("without a mismatch the plain 'Hochladen' stays (issue #656)", async () => {
+    arrangeEditMocks();
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    vi.useFakeTimers();
+    try {
+      await openEditAndChange();
+      await flushChange();
+      const bar = screen.getByText(/wurde lokal geändert/).parentElement!;
+      expect(within(bar).getByRole("button", { name: "Hochladen" })).toBeVisible();
+      expect(within(bar).queryByText(/Als .* hochladen/)).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -2540,7 +2600,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
     vi.mocked(sftpRename).mockResolvedValue(undefined);
     const { container } = renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getAllByRole("button", { name: /^(Aktionen|Actions): / })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^(Aktionen|Actions): a\.txt/ })[0]);
     fireEvent.click(screen.getByText("Ausschneiden"));
     fireEvent.click(await screen.findByText(/sub/));
     await screen.findByText("(leeres Verzeichnis)");
@@ -2942,6 +3002,50 @@ describe("FileBrowserPanel menus stay inside the window (issue #627)", () => {
     } finally {
       HTMLElement.prototype.getBoundingClientRect = orig;
     }
+  });
+});
+
+describe("FileBrowserPanel header sorting (Spec 0053, Teil 3)", () => {
+  const small = { ...entry, name: "a.txt", path: "a.txt", size: 1 };
+  const big = { ...entry, name: "b.txt", path: "b.txt", size: 999 };
+  const rowNames = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll("tbody tr td:first-child")).map((td) => td.textContent?.trim());
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(loadFileManagerSort).mockResolvedValue(null);
+    vi.mocked(sftpList).mockResolvedValue([small, big]);
+  });
+
+  it("sorts on click, reverses on second click, persists and sets aria-sort", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    expect(screen.getByTestId("column-sort-name").closest("th")).toHaveAttribute("aria-sort", "ascending");
+
+    fireEvent.click(screen.getByTestId("column-sort-size"));
+    expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "asc" });
+    expect(screen.getByTestId("column-sort-size").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(screen.getByTestId("column-sort-name").closest("th")).toHaveAttribute("aria-sort", "none");
+    expect(rowNames(container)).toEqual(["📄 a.txt", "📄 b.txt"]);
+
+    fireEvent.click(screen.getByTestId("column-sort-size"));
+    expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "desc" });
+    expect(rowNames(container)).toEqual(["📄 b.txt", "📄 a.txt"]);
+  });
+
+  it("applies the persisted sort on mount", async () => {
+    vi.mocked(loadFileManagerSort).mockResolvedValue({ column: "size", direction: "desc" });
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(rowNames(container)).toEqual(["📄 b.txt", "📄 a.txt"]));
+  });
+
+  it("a resize handle click never changes the sort", async () => {
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByTestId("column-resize-size"));
+    expect(saveFileManagerSort).not.toHaveBeenCalled();
   });
 });
 

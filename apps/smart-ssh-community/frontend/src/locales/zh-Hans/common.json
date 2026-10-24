@@ -429,6 +429,7 @@
     "expired": "针对 {{host}}:{{port}} 的主机密钥请求已过期。连接未建立，密钥也未被信任。"
   },
   "sessionTabs": {
+    "newSession": "新建会话",
     "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "主密码被拒绝：至少 12 个字符，且两次输入必须一致。",
     "STARTUP_FAILED": "启动未能完成。未做任何更改；日志中注明了原因。",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "密钥环中保存的是另一个密钥。未做任何更改——如果您确实想替换，请确认替换。",
+    "ELEVATED_USER_CHANGED": "提权模式现以其他用户运行，未执行任何操作。请使用编辑栏中的“以…身份上传”。",
     "APP_LOCKED": "Smart SSH 仍处于锁定状态。请先用您的主密码将其解锁。",
     "MASTER_PASSWORD_MODE_MISMATCH": "此操作与密钥当前的保存位置不符。未做任何更改——请重新打开设置，其中会显示当前生效的模式。",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "尚未确认主密码警告。没有该密码，所有数据都会丢失且无法恢复——请勾选复选框后重新设置。未做任何更改。",
@@ -730,6 +732,11 @@
     "moveCollisionTitle": "目标已存在——以 {{user}} 身份覆盖？",
     "chmodNote": "权限将以 {{user}} 身份设置。",
     "editUploadTitle": "以 {{user}} 身份上传本地更改？",
+    "editUploadAs": "以 {{user}} 身份上传",
+    "editUploadAsLogin": "以登录用户身份上传",
+    "editIdentityChanged": "以 {{from}} 身份打开，提权模式现以 {{user}} 身份运行。",
+    "editIdentityElevatedOff": "以 {{from}} 身份打开，提权模式现已关闭。",
+    "editIdentityElevatedOn": "未使用提权模式打开，现以 {{user}} 身份运行。",
     "editOpenedAs": "（以 {{user}} 身份打开）",
     "failureTitle": "无法提权",
     "sudoersIntro": "提权模式需要服务器上有针对 sftp-server 的免密码 sudo 规则。下面这一行适用于此服务器和此登录：",

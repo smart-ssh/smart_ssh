@@ -15,7 +15,7 @@ vi.mock("./i18n", () => ({
 }));
 
 // Import erst NACH dem Mock, damit `settingsStore` bereits ersetzt ist.
-const { loadFileManagerColumnWidths, loadAiSshSplitWidthPx } = await import("./layoutSettings");
+const { loadFileManagerColumnWidths, loadAiSshSplitWidthPx, loadFileManagerSort, saveFileManagerSort } = await import("./layoutSettings");
 
 describe("loadFileManagerColumnWidths", () => {
   it("returns an empty object when nothing is stored", async () => {
@@ -63,5 +63,22 @@ describe("loadAiSshSplitWidthPx", () => {
   it("returns null for an implausibly large stored value", async () => {
     storeGet.mockResolvedValue(Number.MAX_VALUE);
     expect(await loadAiSshSplitWidthPx()).toBeNull();
+  });
+});
+
+describe("file manager sort", () => {
+  it("returns null when nothing or something invalid is stored", async () => {
+    for (const bad of [undefined, null, [], "name", { column: "nope", direction: "asc" }, { column: "name", direction: "up" }]) {
+      storeGet.mockResolvedValue(bad);
+      expect(await loadFileManagerSort()).toBeNull();
+    }
+  });
+
+  it("round-trips a valid value", async () => {
+    storeGet.mockResolvedValue({ column: "size", direction: "desc" });
+    expect(await loadFileManagerSort()).toEqual({ column: "size", direction: "desc" });
+    await saveFileManagerSort({ column: "size", direction: "desc" });
+    expect(storeSet).toHaveBeenCalledWith("fileManagerSort", { column: "size", direction: "desc" });
+    expect(storeSave).toHaveBeenCalled();
   });
 });
