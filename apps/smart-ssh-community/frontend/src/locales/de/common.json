@@ -735,7 +735,12 @@
     "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}",
     "nothingToPaste": "Nichts einzufügen: Die Zwischenablage enthält keine Dateien",
     "createFileDone": "Datei „{{name}}“ angelegt",
-    "createFileFailed": "Datei „{{name}}“ konnte nicht angelegt werden: {{reason}}"
+    "createFileFailed": "Datei „{{name}}“ konnte nicht angelegt werden: {{reason}}",
+    "chownDone": "Besitzer von „{{name}}“ geändert",
+    "chownRecursive": "Besitzer geändert — {{count}} Einträge in „{{name}}“",
+    "chownFailed": "Besitzer von „{{name}}“ konnte nicht geändert werden: {{reason}}",
+    "chownUnknownUser": "Besitzer von „{{name}}“ nicht geändert: unbekannter Benutzer",
+    "chownUnknownGroup": "Besitzer von „{{name}}“ nicht geändert: unbekannte Gruppe"
   },
   "fileElevation": {
     "toggle": "Erhöhte Rechte",
@@ -788,7 +793,9 @@
     "otherUser": "Als anderer Nutzer …",
     "targetUser": "Ziel-Nutzer",
     "targetUserHelp": "Führt den Dateibrowser über sudo als dieser Nutzer aus. Standard: root.",
-    "confirm": "Erhöhen"
+    "confirm": "Erhöhen",
+    "opChown": "Besitzer ändern",
+    "chownNote": "Der Besitzer wird als {{user}} geändert."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importieren",
@@ -1124,7 +1131,8 @@
       "cut": "Ausschneiden",
       "delete": "Löschen",
       "newFolder": "Neuer Ordner",
-      "newFile": "Neue Datei"
+      "newFile": "Neue Datei",
+      "chown": "Besitzer ändern…"
     },
     "properties": {
       "title": "Eigenschaften",
@@ -1182,7 +1190,16 @@
       "notText": "Kein Text-Diff möglich: Die Datei ist binär (kein gültiger UTF-8-Text).",
       "permission": "Kein Text-Diff möglich: Mit den aktuellen Rechten fehlt die Leseberechtigung für diese Datei.",
       "other": "Kein Text-Diff möglich: Die Datei konnte nicht gelesen werden ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Besitzer ändern",
+      "owner": "Benutzer",
+      "group": "Gruppe",
+      "hint": "Name oder Nummer eingeben. Eine Seite, die Sie unverändert lassen, bleibt unverändert. Der Server entscheidet, ob die Änderung erlaubt ist (meist darf nur root den Besitzer ändern).",
+      "recursive": "Auf Inhalt anwenden",
+      "recursiveWarning": "— ändert den Besitzer ALLER Dateien und Unterordner in diesem Ordner. Symbolische Links werden nicht verfolgt. Nicht rückgängig zu machen."
+    },
+    "transferChown": "Besitzer ändern: {{name}}"
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",
@@ -1293,6 +1310,15 @@
     "paneTabs": "Sitzungsbereiche",
     "moreActions": "Weitere Aktionen",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
+    "extraKeys": {
+      "group": "Zusatztasten",
+      "up": "Pfeil nach oben",
+      "down": "Pfeil nach unten",
+      "left": "Pfeil nach links",
+      "right": "Pfeil nach rechts",
+      "pageUp": "Bild aufwärts",
+      "pageDown": "Bild abwärts"
+    },
     "reconnectingAuto": "Verbinde neu … (Versuch {{attempt}})",
     "stopReconnect": "Stopp",
     "reconnectGaveUp": "Die Verbindung konnte nicht wiederhergestellt werden."

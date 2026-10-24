@@ -218,6 +218,31 @@ export function useSessionTabs() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Spec 0114 §4: after the app returns from the background, events may have
+  // been missed while the webview was suspended — re-read the connection
+  // state of the open tabs from the backend.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      listSessions()
+        .then((summaries) => {
+          const byId = new Map(summaries.map((s) => [s.sessionId, s]));
+          setTabs((prev) =>
+            prev.map((t) => {
+              const s = byId.get(t.sessionId);
+              if (!s || (s.status === t.status && s.hasPendingAction === t.hasPendingAction)) {
+                return t;
+              }
+              return { ...t, status: s.status, hasPendingAction: s.hasPendingAction };
+            }),
+          );
+        })
+        .catch((err) => console.error(commandErrorMessage(err)));
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   useEffect(() => {
     const unlisten = [
       onConnectionStatusChanged((event) => {

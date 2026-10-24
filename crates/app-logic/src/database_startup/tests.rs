@@ -385,6 +385,7 @@ fn test_t3_every_field_of_the_decision_table() {
     let no_bus = Unreachable(Some(KeychainUnavailableReason::NoSessionBus));
     let no_provider = Unreachable(Some(KeychainUnavailableReason::NoSecretServiceProvider));
     let locked = Unreachable(Some(KeychainUnavailableReason::Locked));
+    let no_keystore = Unreachable(Some(KeychainUnavailableReason::NoKeystore));
 
     // Zeile „fehlt“
     assert_eq!(decide_startup(Missing, &Present), StartupPlan::CreateFresh);
@@ -439,7 +440,7 @@ fn test_t3_every_field_of_the_decision_table() {
 
     // D1 bietet das Einrichten nur bei den zwei Gründen, bei denen kein
     // erreichbarer K existieren kann — und bei Datei *sonst* nie.
-    for reason in [&no_bus, &no_provider] {
+    for reason in [&no_bus, &no_provider, &no_keystore] {
         for file in [Missing, Plaintext] {
             assert_eq!(
                 decide_startup(file, reason),

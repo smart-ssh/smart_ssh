@@ -735,7 +735,12 @@
     "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}",
     "nothingToPaste": "Ingenting å lime inn: utklippstavlen inneholder ingen filer",
     "createFileDone": "Filen «{{name}}» er opprettet",
-    "createFileFailed": "Filen «{{name}}» kunne ikke opprettes: {{reason}}"
+    "createFileFailed": "Filen «{{name}}» kunne ikke opprettes: {{reason}}",
+    "chownDone": "Eier av “{{name}}” endret",
+    "chownRecursive": "Eier endret — {{count}} oppføringer i “{{name}}”",
+    "chownFailed": "Eier av “{{name}}” kunne ikke endres: {{reason}}",
+    "chownUnknownUser": "Eier av “{{name}}” ikke endret: ukjent bruker",
+    "chownUnknownGroup": "Eier av “{{name}}” ikke endret: ukjent gruppe"
   },
   "fileElevation": {
     "toggle": "Utvidede rettigheter",
@@ -788,7 +793,9 @@
     "otherUser": "Som en annen bruker …",
     "targetUser": "Målbruker",
     "targetUserHelp": "Kjører filleseren som denne brukeren via sudo. Standard: root.",
-    "confirm": "Utvid"
+    "confirm": "Utvid",
+    "opChown": "Endring av eier",
+    "chownNote": "Eieren endres som {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -1124,7 +1131,8 @@
       "cut": "Klipp ut",
       "delete": "Slett",
       "newFolder": "Ny mappe",
-      "newFile": "Ny fil"
+      "newFile": "Ny fil",
+      "chown": "Endre eier…"
     },
     "properties": {
       "title": "Egenskaper",
@@ -1182,7 +1190,16 @@
       "notText": "Ingen tekstdiff mulig: filen er binær (ikke gyldig UTF-8-tekst).",
       "permission": "Ingen tekstdiff mulig: med de nåværende rettighetene har du ikke lesetilgang til filen.",
       "other": "Ingen tekstdiff mulig: filen kunne ikke leses ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Endre eier",
+      "owner": "Bruker",
+      "group": "Gruppe",
+      "hint": "Skriv inn et navn eller et tall. En side du lar stå som den er, forblir uendret. Serveren avgjør om endringen er tillatt (vanligvis kan bare root endre eier).",
+      "recursive": "Bruk på innholdet",
+      "recursiveWarning": "— endrer eieren av ALLE filer og undermapper i denne mappen. Symbolske lenker følges ikke. Kan ikke angres."
+    },
+    "transferChown": "Endrer eier av {{name}}"
   },
   "chat": {
     "jumpToLatest": "Gå til nyeste melding",
@@ -1293,6 +1310,15 @@
     "paneTabs": "Øktdeler",
     "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
+    "extraKeys": {
+      "group": "Ekstra taster",
+      "up": "Pil opp",
+      "down": "Pil ned",
+      "left": "Pil venstre",
+      "right": "Pil høyre",
+      "pageUp": "Side opp",
+      "pageDown": "Side ned"
+    },
     "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
     "stopReconnect": "Stopp",
     "reconnectGaveUp": "Tilkoblingen kunne ikke gjenopprettes."

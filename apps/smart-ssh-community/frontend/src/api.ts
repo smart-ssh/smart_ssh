@@ -743,6 +743,12 @@ export const sftpExists = (sessionId: string, path: string, elevatedUser: string
 export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, applySpecialBits: boolean, elevatedUser: string | null = null) =>
   invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, applySpecialBits, elevatedUser });
 
+/** Issue #654: change owner and/or group. `owner`/`group` are a name or a
+ * number; `null` leaves that side unchanged. Resolves to the number of
+ * changed entries. */
+export const sftpChown = (sessionId: string, path: string, owner: string | null, group: string | null, recursive: boolean, elevatedUser: string | null = null) =>
+  invoke<number>("sftp_chown", { sessionId, path, owner, group, recursive, elevatedUser });
+
 /** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
  * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist
  * immer gesetzt (s. `crate::commands::read_local_text_preview`). */

@@ -136,7 +136,7 @@ pub fn decide_startup(file: DatabaseFileState, key: &KeyState) -> StartupPlan {
 }
 
 /// D1, Einschränkung (A3): „Master-Passwort einrichten“ nur bei
-/// `NoSecretServiceProvider` oder `NoSessionBus`.
+/// `NoSecretServiceProvider`, `NoSessionBus` oder (Android) `NoKeystore`.
 ///
 /// Begründung aus der Spec, und sie ist der Kern dieser Einschränkung: Nur
 /// bei diesen beiden Gründen kann **kein** erreichbarer K existieren — es
@@ -152,6 +152,9 @@ fn password_setup_is_safe(reason: Option<KeychainUnavailableReason>) -> bool {
         reason,
         Some(KeychainUnavailableReason::NoSecretServiceProvider)
             | Some(KeychainUnavailableReason::NoSessionBus)
+            // Android: the Keystore store could not be initialised, so no
+            // reachable key exists (Spec 0101, Spec 0114).
+            | Some(KeychainUnavailableReason::NoKeystore)
     )
 }
 

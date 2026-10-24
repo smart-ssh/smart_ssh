@@ -53,6 +53,7 @@ struct Entry {
     is_dir: bool,
     permissions: u32,
     content: Vec<u8>,
+    symlink: bool,
 }
 
 /// Der erhöhte Kanal als Test-Double: deterministischer Verzeichnisbaum,
@@ -108,6 +109,7 @@ impl GatedSftp {
                         is_dir: *is_dir,
                         permissions: if *is_dir { 0o755 } else { 0o644 },
                         content: b"ROOT-INHALT".to_vec(),
+                        symlink: false,
                     },
                 )
             })
@@ -188,6 +190,7 @@ impl GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content,
+                symlink: false,
             },
         );
     }
@@ -255,6 +258,33 @@ impl GatedSftp {
 
     fn exists(&self, path: &str) -> bool {
         self.0.entries.lock().unwrap().contains_key(path)
+    }
+
+    fn mark_symlink(&self, path: &str) {
+        self.0
+            .entries
+            .lock()
+            .unwrap()
+            .get_mut(path)
+            .unwrap()
+            .symlink = true;
+    }
+
+    fn set_content(&self, path: &str, content: &str) {
+        self.0
+            .entries
+            .lock()
+            .unwrap()
+            .get_mut(path)
+            .unwrap()
+            .content = content.as_bytes().to_vec();
+    }
+
+    fn owner_ops(&self) -> Vec<String> {
+        self.ops()
+            .into_iter()
+            .filter(|op| op.starts_with("set_owner "))
+            .collect()
     }
 
     fn permissions(&self, path: &str) -> Option<u32> {
@@ -361,6 +391,7 @@ fn remote_entry(path: &str, entry: &Entry) -> RemoteEntry {
         gid: None,
         owner: None,
         group: None,
+        is_symlink: entry.symlink,
     }
 }
 
@@ -414,6 +445,7 @@ impl SftpSession for GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content: content.to_vec(),
+                symlink: false,
             },
         );
         Ok(())
@@ -483,6 +515,7 @@ impl SftpSession for GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content,
+                symlink: false,
             },
         );
         Ok(end)
@@ -542,6 +575,7 @@ impl SftpSession for GatedSftp {
                 is_dir: true,
                 permissions: 0o755,
                 content: Vec::new(),
+                symlink: false,
             },
         );
         Ok(())
@@ -559,6 +593,7 @@ impl SftpSession for GatedSftp {
                 is_dir: false,
                 permissions: 0o644,
                 content: Vec::new(),
+                symlink: false,
             },
         );
         Ok(())
@@ -577,6 +612,17 @@ impl SftpSession for GatedSftp {
         }
         entries.remove(path);
         Ok(())
+    }
+
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        self.record(format!("set_owner {path} {uid} {gid}")).await;
+        if self.0.entries.lock().unwrap().contains_key(path) {
+            Ok(())
+        } else {
+            Err(SshError::ChannelError(format!(
+                "Datei nicht gefunden: {path}"
+            )))
+        }
     }
 
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
@@ -686,6 +732,13 @@ impl SftpSession for CountingSftp {
     }
     async fn remove_dir(&mut self, path: &str) -> Result<(), SshError> {
         self.0.lock().unwrap().push(format!("remove_dir {path}"));
+        Ok(())
+    }
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("set_owner {path} {uid} {gid}"));
         Ok(())
     }
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
@@ -2625,4 +2678,169 @@ async fn test_656_stale_expected_identity_is_refused_and_explicit_current_identi
         .await
         .expect("the current identity, sent explicitly, passes");
     assert!(!elevated.file_content("/t/a.txt").is_some());
+}
+
+// --- Issue #654: chown ---------------------------------------------------------
+
+/// Issue #654: disabling the elevated mode in the middle of a recursive
+/// chown stops it at once, like chmod (T2): no further `set_owner`.
+#[tokio::test]
+async fn test_654_disabling_during_a_recursive_chown_stops_it_immediately() {
+    let elevated = GatedSftp::small_tree(5);
+    let s = setup(Box::new(elevated.clone())).await;
+    let slot = s.slot();
+
+    let command = spawn_command(
+        s.session.clone(),
+        s.elevated_channel(),
+        |session, channel| async move {
+            chown_impl(&session, &channel, "/t", Some("1000"), Some("100"), true).await
+        },
+    );
+    elevated.wait_until_paused().await;
+    let ops_before = elevated.op_count();
+    assert!(
+        !elevated.owner_ops().is_empty(),
+        "precondition: at least one entry was already changed"
+    );
+
+    let (sessions, registry) = (s.sessions.clone(), s.registry.clone());
+    let session_id = s.session_id;
+    let disable = tokio::spawn(async move {
+        crate::elevated_sftp::disable_now(
+            &sessions,
+            &registry,
+            session_id,
+            &crate::test_support::elevation::access(),
+        )
+        .await
+    });
+    s.wait_until_revoked(&slot).await;
+    elevated.release();
+
+    assert_inactive(join(command, &elevated).await);
+    expect_within("disabling ends", || elevated.describe(), disable)
+        .await
+        .expect("disable task must not panic")
+        .expect("disabling succeeds");
+    assert_eq!(elevated.op_count(), ops_before, "{:?}", elevated.ops());
+    assert!(
+        s.normal.calls().is_empty(),
+        "no fallback to the normal channel, was: {:?}",
+        s.normal.calls()
+    );
+}
+
+/// Issue #654: elevated mode switched off before the command starts → the
+/// inactive message, nothing changed, no fallback to the normal channel.
+#[tokio::test]
+async fn test_654_chown_after_the_elevated_mode_was_switched_off_fails_as_inactive() {
+    let elevated = GatedSftp::small_tree(0);
+    let s = setup(Box::new(elevated.clone())).await;
+    let slot = s.slot();
+    let channel = s.elevated_channel();
+    s.registry.remove_session(&s.sessions, s.session_id);
+    assert!(slot.is_revoked());
+
+    let result = with_browser_channel(s.session.clone(), channel, |session, channel| async move {
+        chown_impl(&session, &channel, "/t/a.txt", Some("1"), Some("2"), false).await
+    })
+    .await;
+    assert_inactive(result);
+    assert!(elevated.owner_ops().is_empty(), "{:?}", elevated.ops());
+    assert!(s.normal.calls().is_empty(), "{:?}", s.normal.calls());
+}
+
+/// Issue #654: recursive chown over the normal channel changes every entry
+/// of the tree (root last), reports the count, and does not touch symlinks.
+#[tokio::test]
+async fn test_654_recursive_chown_walks_the_tree_and_skips_symlinks() {
+    let tree = GatedSftp::small_tree(0);
+    tree.mark_symlink("/t/b.txt");
+    let s = setup(Box::new(GatedSftp::small_tree(0))).await;
+    s.session.set_sftp_for_tests(Box::new(tree.clone())).await;
+
+    let changed = with_browser_channel(
+        s.session.clone(),
+        s.normal_channel(),
+        |session, channel| async move {
+            chown_impl(&session, &channel, "/t", Some("1000"), Some("100"), true).await
+        },
+    )
+    .await
+    .expect("recursive chown succeeds");
+    assert_eq!(
+        changed, 4,
+        "root + a.txt + sub + sub/c.txt, not the symlink"
+    );
+    let ops = tree.owner_ops();
+    assert_eq!(ops.len(), 4, "{ops:?}");
+    assert!(ops.iter().all(|o| o.ends_with(" 1000 100")), "{ops:?}");
+    assert!(!ops.iter().any(|o| o.contains("/t/b.txt")), "{ops:?}");
+    assert_eq!(ops.last().unwrap(), "set_owner /t 1000 100", "root last");
+}
+
+/// Issue #654: names are resolved through passwd/group of the server; an
+/// unknown name fails with its own code and **nothing** is changed.
+#[tokio::test]
+async fn test_654_chown_resolves_names_and_unknown_name_changes_nothing() {
+    let tree = GatedSftp::new(
+        &[
+            ("/etc", true),
+            ("/etc/passwd", false),
+            ("/etc/group", false),
+            ("/t", true),
+            ("/t/a.txt", false),
+        ],
+        0,
+        false,
+    );
+    tree.set_content(
+        "/etc/passwd",
+        "root:x:0:0::/root:/bin/sh\nalice:x:1000:1000::/h:/bin/sh\n",
+    );
+    tree.set_content("/etc/group", "staff:x:50:\n");
+    let s = setup(Box::new(GatedSftp::small_tree(0))).await;
+    s.session.set_sftp_for_tests(Box::new(tree.clone())).await;
+
+    let changed = with_browser_channel(
+        s.session.clone(),
+        s.normal_channel(),
+        |session, channel| async move {
+            chown_impl(
+                &session,
+                &channel,
+                "/t/a.txt",
+                Some("alice"),
+                Some("staff"),
+                false,
+            )
+            .await
+        },
+    )
+    .await
+    .expect("names resolve");
+    assert_eq!(changed, 1);
+    assert_eq!(tree.owner_ops(), vec!["set_owner /t/a.txt 1000 50"]);
+
+    for (owner, group, code) in [
+        (Some("mallory"), Some("staff"), "CHOWN_UNKNOWN_USER"),
+        (Some("alice"), Some("nogroup"), "CHOWN_UNKNOWN_GROUP"),
+    ] {
+        let err = with_browser_channel(
+            s.session.clone(),
+            s.normal_channel(),
+            move |session, channel| async move {
+                chown_impl(&session, &channel, "/t", owner, group, true).await
+            },
+        )
+        .await
+        .expect_err("unknown name must fail");
+        assert_eq!(err.code, Some(code));
+    }
+    assert_eq!(
+        tree.owner_ops().len(),
+        1,
+        "nothing changed after the errors"
+    );
 }

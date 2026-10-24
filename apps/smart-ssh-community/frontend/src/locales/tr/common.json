@@ -735,7 +735,12 @@
     "uploadFailedMany": "{{name}} dosya yüklenemedi, örn.: {{reason}}",
     "nothingToPaste": "Yapıştırılacak bir şey yok: panoda dosya yok",
     "createFileDone": "“{{name}}” dosyası oluşturuldu",
-    "createFileFailed": "“{{name}}” dosyası oluşturulamadı: {{reason}}"
+    "createFileFailed": "“{{name}}” dosyası oluşturulamadı: {{reason}}",
+    "chownDone": "“{{name}}” sahibi değiştirildi",
+    "chownRecursive": "Sahip değiştirildi — “{{name}}” içinde {{count}} öğe",
+    "chownFailed": "“{{name}}” sahibi değiştirilemedi: {{reason}}",
+    "chownUnknownUser": "“{{name}}” sahibi değiştirilmedi: bilinmeyen kullanıcı",
+    "chownUnknownGroup": "“{{name}}” sahibi değiştirilmedi: bilinmeyen grup"
   },
   "fileElevation": {
     "toggle": "Yükseltilmiş haklar",
@@ -788,7 +793,9 @@
     "otherUser": "Başka bir kullanıcı olarak…",
     "targetUser": "Hedef kullanıcı",
     "targetUserHelp": "Dosya tarayıcısını sudo ile bu kullanıcı olarak çalıştırır. Varsayılan: root.",
-    "confirm": "Yükselt"
+    "confirm": "Yükselt",
+    "opChown": "Sahibi değiştirme",
+    "chownNote": "Sahip {{user}} olarak değiştirilecek."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config içe aktar",
@@ -1124,7 +1131,8 @@
       "cut": "Kes",
       "delete": "Sil",
       "newFolder": "Yeni klasör",
-      "newFile": "Yeni dosya"
+      "newFile": "Yeni dosya",
+      "chown": "Sahibi değiştir…"
     },
     "properties": {
       "title": "Özellikler",
@@ -1182,7 +1190,16 @@
       "notText": "Metin farkı mümkün değil: dosya ikili (geçerli UTF-8 metni değil).",
       "permission": "Metin farkı mümkün değil: mevcut haklarla bu dosyayı okuma izniniz yok.",
       "other": "Metin farkı mümkün değil: dosya okunamadı ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Sahibi değiştir",
+      "owner": "Kullanıcı",
+      "group": "Grup",
+      "hint": "Bir ad veya numara girin. Olduğu gibi bıraktığınız taraf değişmez. Değişikliğe izin verilip verilmeyeceğine sunucu karar verir (genellikle sahibi yalnızca root değiştirebilir).",
+      "recursive": "İçeriğe uygula",
+      "recursiveWarning": "— bu klasördeki TÜM dosya ve alt klasörlerin sahibini değiştirir. Sembolik bağlantılar izlenmez. Geri alınamaz."
+    },
+    "transferChown": "{{name}} sahibi değiştiriliyor"
   },
   "chat": {
     "jumpToLatest": "En son iletiye git",
@@ -1289,6 +1306,15 @@
     "paneTabs": "Oturum bölmeleri",
     "moreActions": "Diğer işlemler",
     "terminalOpenFailed": "Terminal açılamadı: {{error}}",
+    "extraKeys": {
+      "group": "Ek tuşlar",
+      "up": "Yukarı ok",
+      "down": "Aşağı ok",
+      "left": "Sol ok",
+      "right": "Sağ ok",
+      "pageUp": "Sayfa yukarı",
+      "pageDown": "Sayfa aşağı"
+    },
     "connectionLostPressR": "Bağlantı koptu. Yeniden bağlanmak için R'ye basın.",
     "reconnect": "Yeniden bağlan",
     "reconnectedSeparator": "— yeniden bağlanıldı —",

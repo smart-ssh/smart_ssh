@@ -129,6 +129,7 @@ pub(super) async fn download_file(
     total_bytes: Option<u64>,
     base_bytes: u64,
 ) -> CommandResult<u64> {
+    let _activity = app_logic::background_keepalive::background_activity();
     let file_name = file_name_of(remote_path);
     run.op.set_current_transfer(transfer_id);
     emit_sftp_transfer_started(
@@ -258,6 +259,7 @@ pub(super) async fn upload_file(
     remote_path: &str,
     base_bytes: u64,
 ) -> CommandResult<u64> {
+    let _activity = app_logic::background_keepalive::background_activity();
     let file_name = file_name_of(remote_path);
     run.op.set_current_transfer(transfer_id);
     let local_for_stat = local_path.to_path_buf();

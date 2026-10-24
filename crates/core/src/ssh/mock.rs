@@ -162,6 +162,7 @@ impl SftpSession for MockSftpSession {
                     gid: None,
                     owner: None,
                     group: None,
+                    is_symlink: false,
                 })
             })
             .collect())
@@ -289,6 +290,7 @@ impl SftpSession for MockSftpSession {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             });
         }
         inner
@@ -305,6 +307,7 @@ impl SftpSession for MockSftpSession {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             })
             .ok_or_else(|| Self::not_found(path))
     }
@@ -330,6 +333,7 @@ impl SftpSession for MockSftpSession {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             })
             .ok_or_else(|| Self::not_found(path))
     }
@@ -416,6 +420,12 @@ impl SftpSession for MockSftpSession {
             .unwrap()
             .calls
             .push(format!("remove_dir {path}"));
+        Ok(())
+    }
+
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.calls.push(format!("set_owner {path} {uid} {gid}"));
         Ok(())
     }
 
