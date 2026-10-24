@@ -541,8 +541,19 @@ export interface ChatErrorEvent {
   providerErrorType?: string | null;
   httpStatus?: number | null;
   providerMessage?: string | null;
+  /** Issue #694 — set for the timeout errors: provider name and the exceeded
+   * limit in seconds. */
+  providerName?: string | null;
+  timeoutSecs?: number | null;
   /** Issue #631 — when access returns after a provider usage limit. */
   accessReturns?: string | null;
+}
+
+/** Issue #694 — a request to the AI provider was sent; the chat shows the
+ * wait line until content arrives. */
+export interface ChatAiRequestStartedEvent {
+  sessionId: string;
+  providerName: string;
 }
 
 /** Issue #600 — the AI provider is overloaded; the request is repeated

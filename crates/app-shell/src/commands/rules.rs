@@ -112,10 +112,18 @@ pub async fn explain_confirmation(
     command: String,
     scope: Scope,
 ) -> CommandResult<app_logic::dto::ConfirmationExplanationDto> {
-    let session = state.sessions.get(session_id).ok_or_else(|| {
-        app_logic::error::CommandError::from(format!("unknown session {session_id:?}"))
-    })?;
-    let stored = app_logic::filter_rules::list_rules(&state.policy_store, None).await?;
+    let session = app_logic::confirmation_explain::session_for_explain(
+        &state.sessions,
+        session_id,
+        &command,
+    )?;
+    let stored = app_logic::filter_rules::list_rules(&state.policy_store, None)
+        .await
+        .map_err(|e| {
+            let err = app_logic::error::CommandError::from(e);
+            app_logic::confirmation_explain::log_explain_failure(&err, session_id, &command);
+            err
+        })?;
     Ok(app_logic::confirmation_explain::explain_confirmation(
         &session,
         state.profile_store.as_ref(),

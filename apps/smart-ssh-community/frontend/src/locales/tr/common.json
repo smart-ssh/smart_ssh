@@ -415,7 +415,8 @@
       "verdictAuto": "bir dahaki sefere otomatik çalışır",
       "verdictAsk": "yine de soracak: {{reasons}}",
       "notice": "Kural oluşturuldu. Bu komut bir dahaki sefere yine soracak: {{reasons}}",
-      "reasonOther": "başka bir güvenlik denetimi"
+      "reasonOther": "başka bir güvenlik denetimi",
+      "loadFailed": "Kural kapsamı yüklenemedi"
     }
   },
   "hostKeyDialog": {
@@ -571,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Bu model araç çağırmayı desteklemiyor. Sağlayıcı ayarlarında \"Yerel araç çağırmayı destekler\" işaretini kaldırın (o zaman istem tabanlı yedek yöntem kullanılır) veya araç destekli bir model seçin.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Yerel yapay zeka hizmeti yanıt vermiyor. Ollama'yı (veya yerel sunucunuzu) başlatın ve yeniden deneyin.",
     "AI_TIMEOUT": "Yapay zeka sağlayıcısı yanıtı çok geç verdi. Biraz bekleyip yeniden gönderin; yerel modelde makinenin meşgul olup olmadığını veya modelin çok büyük olup olmadığını denetleyin.",
+    "AI_TIMEOUT_NAMED": "{{provider}} {{seconds}} sn boyunca yanıt vermedi – istek iptal edildi. Birazdan tekrar deneyin.",
+    "AI_TOTAL_DEADLINE": "{{provider}} {{minutes}} dakika içinde bitirmedi – istek iptal edildi. Şimdiye kadar alınan metin korunur.",
     "AI_WEB_RESEARCH_REJECTED": "Yapay zeka sağlayıcısı bu hesap için web araştırmasını reddediyor. Ayarlar'da “Yapay zeka sağlayıcısı” altında bu sağlayıcı için “Web araştırması” seçeneğini kapatın.",
     "AI_ATTACHMENT_UNSUPPORTED": "Bu model ekli görseli veya PDF’yi okuyamaz. Okuyabilen bir model seçin ya da eki kaldırın.",
     "AI_NO_ACTIVE_PROVIDER": "Henüz etkin yapay zeka sağlayıcısı yok. Ayarlar → Yapay zeka sağlayıcısı altında bir tane ekleyin ve etkin yapın.",
@@ -1183,6 +1186,7 @@
     "tryAgain": "Yeniden dene",
     "errorDetails": "Ayrıntılar",
     "aiRetrying": "Yapay zekâ sağlayıcısı aşırı yüklü – {{seconds}} sn sonra yeniden denenecek (deneme {{attempt}}/{{max}})",
+    "aiWaiting": "{{provider}} yanıtı bekleniyor … {{seconds}} sn",
     "noActiveProvider": "Etkin yapay zeka sağlayıcısı yapılandırılmadı. Lütfen önce ayarlardan kurun.",
     "inputPlaceholder": "Bir soru sorun veya bir komutu tanımlayın …",
     "send": "Gönder",
