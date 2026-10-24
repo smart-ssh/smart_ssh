@@ -52,6 +52,14 @@ sonst nicht. Ein Rechtsklick auf eine Zeile öffnet weiterhin das Eintragsmenü.
 Klick außerhalb und Escape schließen das Menü; es ist per Tastatur bedienbar
 und beschriftet.
 
+Solange das Kontextmenü oder das Drei-Punkte-Menü eines Eintrags offen ist,
+bleibt dessen Zeile deutlich hervorgehoben (stärker als beim Überfahren) –
+bis das Menü schließt (Escape, Klick außerhalb, Aktion). Es ist immer höchstens
+eine Zeile so markiert. Die überfahrene Zeile ist besser sichtbar als zuvor,
+und ihr Dateiname ist unterstrichen. Tastaturfokus in einer Zeile nutzt
+dieselbe Hervorhebung wie die aktive Zeile; der Kontrast genügt im hellen und
+im dunklen Erscheinungsbild.
+
 In der Release-Version unterdrückt die App das eingebaute Webview-Menü (mit
 „Neu laden“, das Tabs und Layout verwerfen würde) überall, außer in
 Eingabefeldern, Textbereichen und dem Terminal, wo Ausschneiden/Kopieren/

@@ -469,6 +469,38 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     expect(screen.getByText("Löschen")).toBeVisible();
   });
 
+  it("marks only the row whose menu is open as active (issue #651)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry, dirEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+
+    renderPanel();
+    const row = (await screen.findByText(/a\.txt/)).closest("tr")!;
+    const other = screen.getByText(/logs/).closest("tr")!;
+    expect(row).not.toHaveAttribute("data-active");
+
+    // hover: stronger background and underlined name
+    expect(row.className).toContain("hover:bg-slate-700/60");
+    expect(row.className).toContain("group");
+    expect(screen.getByText(/a\.txt/).className).toContain("group-hover:underline");
+
+    // right-click
+    fireEvent.contextMenu(row);
+    expect(row).toHaveAttribute("data-active", "true");
+    expect(other).not.toHaveAttribute("data-active");
+    // Escape closes
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(row).not.toHaveAttribute("data-active");
+
+    // three dots on the other row: only that row is active
+    fireEvent.contextMenu(row);
+    fireEvent.click(other.querySelector("[data-menu-trigger]")!);
+    expect(other).toHaveAttribute("data-active", "true");
+    expect(row).not.toHaveAttribute("data-active");
+    // outside click closes
+    fireEvent.click(document.body);
+    expect(other).not.toHaveAttribute("data-active");
+  });
+
   it("hides content-copy for directories (Löschen/Herunterladen work for both, Spec 0054 Teil 3)", async () => {
     vi.mocked(sftpList).mockResolvedValue([dirEntry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
