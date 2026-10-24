@@ -1009,6 +1009,27 @@ mod tests {
         );
     }
 
+    /// Issue #657: Several sessions to one server are independent — an active
+    /// elevated channel belongs to its session only, and revoking another
+    /// session leaves it alone.
+    #[tokio::test]
+    async fn test_elevated_channel_of_one_session_is_invisible_to_another() {
+        let (probe, check) = working_probes();
+        let (t, _log) = transport(probe, check);
+        let f = fixture(Box::new(t));
+        enable(&f.ctx(), "deploy", None, None, false, &access())
+            .await
+            .expect("precondition: enabling succeeds");
+        let other = SessionId::new_v4();
+
+        assert!(f.registry.slot(other, &access()).is_none());
+        f.registry.revoke_session(other);
+        assert!(
+            f.registry.slot(f.session_id, &access()).is_some(),
+            "revoking another session must not touch this session's channel"
+        );
+    }
+
     /// Spec 0084, T8: Das Aktivieren steht nach den Proben, unmittelbar vor
     /// dem Eintrag, still; in diesem Moment wird die Sitzung über A2.1
     /// entfernt. Danach läuft das Aktivieren weiter und muss mit dem

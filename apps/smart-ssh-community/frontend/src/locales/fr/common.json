@@ -429,6 +429,7 @@
     "expired": "La demande de clé d’hôte pour {{host}}:{{port}} a expiré. La connexion n’a pas été établie et la clé n’a pas été approuvée."
   },
   "sessionTabs": {
+    "newSession": "Nouvelle session",
     "overview": "Vue d’ensemble",
     "pendingAction": "En attente de confirmation",
     "closeTab": "Fermer l’onglet « {{name}} »",

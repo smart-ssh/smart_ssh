@@ -429,6 +429,7 @@
     "expired": "La solicitud de clave de host para {{host}}:{{port}} ha caducado. No se estableció la conexión y no se confió en la clave."
   },
   "sessionTabs": {
+    "newSession": "Nueva sesión",
     "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
