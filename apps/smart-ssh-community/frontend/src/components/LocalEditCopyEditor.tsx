@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { readEditCopyText, writeEditCopyText } from "../api";
 import { commandErrorMessage } from "../api";
+import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 import { Button, DialogFrame, FIELD_CONTROL_CLASS } from "./ui";
 
 interface Props {
@@ -68,9 +69,7 @@ export function LocalEditCopyEditor({ sessionId, localPath, fileName, onClose }:
       )}
       <textarea
         aria-label={fileName}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
+        {...TECHNICAL_INPUT_PROPS}
         disabled={text === null}
         value={text ?? ""}
         onChange={(e) => setText(e.target.value)}
