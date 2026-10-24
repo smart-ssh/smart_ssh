@@ -1242,6 +1242,10 @@ pub fn emit_chat_auto_continuation_limit_reached(
 pub enum SftpTransferKind {
     Upload,
     Download,
+    /// Issue #658: recursive delete of a folder.
+    Delete,
+    /// Issue #658: recursive permission change.
+    Chmod,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1296,6 +1300,9 @@ struct SftpTransferFinishedPayload {
     /// Server nicht entfernt werden konnte: ihr Pfad.
     #[serde(skip_serializing_if = "Option::is_none")]
     incomplete_remote_path: Option<String>,
+    /// Issue #658: recursive delete/chmod — entries changed before the end.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entries_done: Option<u64>,
 }
 
 pub fn emit_sftp_transfer_finished(
@@ -1313,6 +1320,7 @@ pub fn emit_sftp_transfer_finished(
             error,
             stopped: None,
             incomplete_remote_path: None,
+            entries_done: None,
         },
     );
 }
@@ -1335,6 +1343,60 @@ pub fn emit_sftp_transfer_stopped(
             error: None,
             stopped: Some(stopped),
             incomplete_remote_path,
+            entries_done: None,
+        },
+    );
+}
+
+/// Issue #658: end of a recursive delete/chmod row, with the number of
+/// entries changed (also for `cancelled` / `stopped` / errors).
+pub fn emit_sftp_entries_finished(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    error: Option<String>,
+    stopped: Option<&'static str>,
+    entries_done: u64,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-finished",
+        &SftpTransferFinishedPayload {
+            session_id,
+            transfer_id,
+            error,
+            stopped,
+            incomplete_remote_path: None,
+            entries_done: Some(entries_done),
+        },
+    );
+}
+
+/// Issue #658: entries done / total of a recursive delete/chmod.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpEntriesProgress {
+    pub done: u64,
+    pub total: Option<u64>,
+}
+
+/// Issue #658: throttled progress of a recursive delete/chmod.
+pub fn emit_sftp_entries_progress(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    entries: SftpEntriesProgress,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-progress",
+        &SftpTransferProgressPayload {
+            session_id,
+            transfer_id,
+            bytes_done: 0,
+            total_bytes: None,
+            folder: None,
+            entries: Some(entries),
         },
     );
 }
@@ -1350,6 +1412,9 @@ struct SftpTransferProgressPayload {
     /// des Baums bekannt) und Byte-Summen über alle Dateien.
     #[serde(skip_serializing_if = "Option::is_none")]
     folder: Option<SftpFolderProgress>,
+    /// Issue #658: recursive delete/chmod.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entries: Option<SftpEntriesProgress>,
 }
 
 /// Issue #622: Gesamtfortschritt eines Ordner-Transfers.
@@ -1381,6 +1446,7 @@ pub fn emit_sftp_transfer_progress(
             bytes_done,
             total_bytes,
             folder,
+            entries: None,
         },
     );
 }
