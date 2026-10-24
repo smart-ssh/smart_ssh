@@ -749,6 +749,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
         .manage(crate::commands::CopyContentJobs::default())
+        .manage(crate::commands::BackupImportSlot::default())
         .manage(crate::file_clipboard::FileClipboard::default())
         // Issue #89: local paths the user granted to a session (native open
         // dialog, native drop, own edit copy). The drop paths come from the
@@ -881,6 +882,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::set_backup_passphrase,
             commands::new_backup_code,
             commands::export_encrypted_backup,
+            commands::pick_backup_import_file,
+            commands::start_backup_import,
+            commands::confirm_backup_import,
+            commands::cancel_backup_import,
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::get_data_paths,

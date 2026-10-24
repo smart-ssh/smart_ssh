@@ -56,6 +56,8 @@ pub enum ImportAbort {
     ChosenUnreadable,
     /// §3.1.4a, letzter Satz: Für die **gewählte** Datei gilt §3.1.13.
     ChosenNotSshConfig,
+    /// Spec 0109, T3: the chosen file is an encrypted backup.
+    ChosenIsBackup,
     TotalBytes,
     TotalLines,
     HostBlocks,
@@ -74,6 +76,10 @@ impl std::fmt::Display for ImportAbort {
             ImportAbort::ChosenUnreadable => {
                 write!(f, "Die gewählte Datei konnte nicht gelesen werden.")
             }
+            ImportAbort::ChosenIsBackup => write!(
+                f,
+                "Die gewählte Datei ist ein verschlüsseltes Backup, keine ssh_config. Es wurde nichts angelegt. Ein Backup wird unter Einstellungen → Daten und Backup wiederhergestellt."
+            ),
             ImportAbort::ChosenNotSshConfig => write!(
                 f,
                 "Die gewählte Datei ist keine ssh_config. Es wurde nichts angelegt."
@@ -209,6 +215,11 @@ impl Walker {
             return Err(ImportAbort::TotalLines);
         }
 
+        // Spec 0109, T3: a backup file is recognised by its magic and sent to
+        // the right function instead of being read as text.
+        if is_chosen && bytes.starts_with(ssh_manager_core::backup::MAGIC) {
+            return Err(ImportAbort::ChosenIsBackup);
+        }
         let parsed = match parse_source(&bytes) {
             Err(too_long) => {
                 return Err(ImportAbort::ValueTooLong {

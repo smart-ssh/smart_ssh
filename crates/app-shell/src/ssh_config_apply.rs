@@ -836,8 +836,12 @@ pub async fn preview_ssh_config_import(
     };
     let path = picked.into_path()?;
 
-    let read = app_logic::ssh_config_import::read_import(&path)
-        .map_err(|abort| CommandError::from(abort.to_string()))?;
+    let read = app_logic::ssh_config_import::read_import(&path).map_err(|abort| match abort {
+        app_logic::ssh_config_import::ImportAbort::ChosenIsBackup => {
+            CommandError::with_code(abort.to_string(), "SSH_CONFIG_IS_BACKUP")
+        }
+        other => CommandError::from(other.to_string()),
+    })?;
 
     // §4.1: Ohne den Bestand sind weder Konflikte noch `ProxyJump`-Ziele im
     // Bestand noch Schlagwort-Treffer bestimmbar.
