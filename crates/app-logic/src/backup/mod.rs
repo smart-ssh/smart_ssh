@@ -3,12 +3,18 @@
 //! its crypto live in `ssh_manager_core::backup`.
 
 mod export;
+mod import;
 mod key;
 mod snapshot;
 #[cfg(test)]
 mod tests;
+mod validate;
 
 pub use export::{export_backup, export_backup_with, ExportSummary};
+pub use import::{
+    complete_pending_host_keys, open_backup, start_import, ImportContext, ImportPreview,
+    ImportStart, ImportSummary, NoSessions, OpenSessions, PendingImport,
+};
 pub use key::{BackupKey, BackupKeyStatus};
 pub use snapshot::{HostKeyRow, Snapshot, SnapshotCounts, KNOWN_SECTIONS};
 
@@ -30,6 +36,11 @@ pub enum BackupOpError {
     HostKeys,
     /// The file could not be written.
     Write,
+    /// The backup file could not be read.
+    Read,
+    /// U5, U6: the file opened but its content is not acceptable. The text
+    /// never names an entry.
+    Invalid(&'static str),
     /// X4: the written file did not verify; it was removed.
     VerificationFailed,
 }
@@ -44,6 +55,8 @@ impl std::fmt::Display for BackupOpError {
             Self::Store(e) => write!(f, "{e}"),
             Self::HostKeys => f.write_str("the trusted host keys could not be read"),
             Self::Write => f.write_str("the backup file could not be written"),
+            Self::Read => f.write_str("the backup file could not be read"),
+            Self::Invalid(what) => write!(f, "the backup content is not valid: {what}"),
             Self::VerificationFailed => {
                 f.write_str("the written backup did not verify and was removed")
             }

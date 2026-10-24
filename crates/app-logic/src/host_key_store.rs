@@ -177,6 +177,24 @@ impl FileHostKeyStore {
         Ok(out)
     }
 
+    /// Issue #665: replaces every trusted entry with `entries` and writes the
+    /// file atomically (Spec 0109, I5). Memory changes only once the file is
+    /// written, so a failed write leaves the old keys in force.
+    pub fn replace_all(&self, entries: Vec<(String, u16, Vec<u8>)>) -> Result<(), SshError> {
+        let mut map: KnownHostKeys = HashMap::new();
+        for (host, port, raw) in entries {
+            let algo = algorithm_key(&raw);
+            map.insert((host, port, algo), raw);
+        }
+        let mut known = self
+            .known
+            .lock()
+            .map_err(|_| SshError::ChannelError("host-key store lock poisoned".into()))?;
+        self.persist(&map)?;
+        *known = map;
+        Ok(())
+    }
+
     fn persist(&self, known: &KnownHostKeys) -> Result<(), SshError> {
         let mut entries = Vec::new();
         for ((host, port, _algorithm), raw_key) in known {
