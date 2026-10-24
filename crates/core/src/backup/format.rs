@@ -141,6 +141,42 @@ impl SlotMaterial {
     pub fn kind(&self) -> SlotKind {
         self.kind
     }
+
+    pub fn salt(&self) -> &[u8] {
+        &self.salt
+    }
+
+    pub fn kdf_params(&self) -> KdfParams {
+        self.params
+    }
+
+    /// The derived wrapping key, for the device-local backup key store (K4).
+    /// Callers keep it in zeroizing types.
+    pub fn wrapping_key_bytes(&self) -> &[u8; KEY_LEN] {
+        &self.wrapping_key
+    }
+
+    /// Rebuilds material stored by the backup key store (K4). Rejects salts
+    /// and KDF parameters that [`seal`] would not write.
+    pub fn from_stored(
+        kind: SlotKind,
+        salt: &[u8],
+        params: KdfParams,
+        wrapping_key: [u8; KEY_LEN],
+    ) -> Result<SlotMaterial, BackupError> {
+        if !(SALT_MIN_LEN..=SALT_MAX_LEN).contains(&salt.len()) {
+            return Err(BackupError::InvalidInput("salt length"));
+        }
+        if !params.is_acceptable() {
+            return Err(BackupError::InvalidKdfParameters);
+        }
+        Ok(SlotMaterial {
+            kind,
+            salt: salt.to_vec(),
+            params,
+            wrapping_key: Zeroizing::new(wrapping_key),
+        })
+    }
 }
 
 impl fmt::Debug for SlotMaterial {
@@ -564,19 +600,26 @@ fn open_inner(
     let input = secret.kdf_input();
     for slot in parsed.slots.iter().filter(|s| s.kind == secret.kind()) {
         let wrapping = deriver.derive(&input, slot.salt, &parsed.kdf)?;
-        let aad = slot_aad(parsed.kdf, slot.kind, slot.salt);
-        let Ok(key_bytes) = decrypt(&wrapping, slot.nonce, slot.wrapped, &aad) else {
-            continue;
-        };
-        let Ok(arr) = <[u8; KEY_LEN]>::try_from(&key_bytes[..]) else {
-            continue;
-        };
-        let data_key = Zeroizing::new(arr);
-        if let Ok(sections) = decrypt_sections(parsed, &data_key) {
-            return Ok((data_key, sections));
+        if let Some(found) = try_slot(parsed, slot, &wrapping) {
+            return Ok(found);
         }
     }
     Err(BackupError::CannotOpen)
+}
+
+/// Unwraps the data key of `slot` under `wrapping` and authenticates every
+/// section with it.
+fn try_slot(
+    parsed: &Parsed<'_>,
+    slot: &ParsedSlot<'_>,
+    wrapping: &[u8; KEY_LEN],
+) -> Option<(Zeroizing<[u8; KEY_LEN]>, Vec<Section>)> {
+    let aad = slot_aad(parsed.kdf, slot.kind, slot.salt);
+    let key_bytes = decrypt(wrapping, slot.nonce, slot.wrapped, &aad).ok()?;
+    let arr = <[u8; KEY_LEN]>::try_from(&key_bytes[..]).ok()?;
+    let data_key = Zeroizing::new(arr);
+    let sections = decrypt_sections(parsed, &data_key).ok()?;
+    Some((data_key, sections))
 }
 
 fn decrypt_sections(parsed: &Parsed<'_>, key: &[u8; KEY_LEN]) -> Result<Vec<Section>, BackupError> {
@@ -624,6 +667,45 @@ pub(crate) fn open_with(
     let parsed = parse(bytes)?;
     let (_key, all) = open_inner(deriver, &parsed, secret)?;
     // Header extensions are authenticated now; v1 knows none.
+    if parsed.extensions.iter().any(|e| e.required) {
+        return Err(BackupError::UnsupportedRequired);
+    }
+    let mut sections = Vec::with_capacity(all.len());
+    let mut ignored = 0;
+    for s in all {
+        if known_sections.contains(&s.kind) {
+            sections.push(s);
+        } else if s.required {
+            return Err(BackupError::UnsupportedRequired);
+        } else {
+            ignored += 1;
+        }
+    }
+    Ok(OpenedBackup {
+        sections,
+        created_at: parsed.created_at,
+        writer_version: parsed.writer_version,
+        ignored_optional_sections: ignored,
+    })
+}
+
+/// Opens a file with already derived slot material (no KDF run): the check
+/// an export does on the file it just wrote (X4). Every section must
+/// authenticate; the same rules as [`open`] apply to unknown sections.
+pub fn open_with_slot(
+    bytes: &[u8],
+    slot: &SlotMaterial,
+    known_sections: &[u16],
+) -> Result<OpenedBackup, BackupError> {
+    let parsed = parse(bytes)?;
+    let mut found = None;
+    for s in parsed.slots.iter().filter(|s| s.kind == slot.kind) {
+        if let Some((_key, sections)) = try_slot(&parsed, s, &slot.wrapping_key) {
+            found = Some(sections);
+            break;
+        }
+    }
+    let all = found.ok_or(BackupError::CannotOpen)?;
     if parsed.extensions.iter().any(|e| e.required) {
         return Err(BackupError::UnsupportedRequired);
     }

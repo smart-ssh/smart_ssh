@@ -420,6 +420,11 @@ impl SqliteProfileStore {
         Ok(())
     }
 
+    /// Issue #664: snapshot and backup key access on the same pool.
+    pub fn backup_store(&self) -> crate::SqliteBackupStore {
+        crate::SqliteBackupStore::new(self.pool.clone())
+    }
+
     /// Wie [`Self::ai_provider_store`], für Filter-Regeln (Spec 0009).
     pub fn policy_store(&self) -> crate::SqlitePolicyStore {
         crate::SqlitePolicyStore::new(self.pool.clone())

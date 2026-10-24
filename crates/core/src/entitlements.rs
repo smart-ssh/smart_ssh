@@ -40,6 +40,10 @@ pub enum Feature {
     ServerEnvironment,
     /// Issue #469: Dateianhänge in Chat-Nachrichten (lokal, nicht dienst-gebunden).
     ChatAttachments,
+    /// Synchronisation through targets operated by the user, e.g. an own
+    /// folder or own SFTP server; not a hosted service. Local, not
+    /// service-bound.
+    SelfHostedSync,
 }
 
 impl Feature {
@@ -80,7 +84,8 @@ impl Feature {
             | Feature::Sso
             | Feature::SelfHosted
             | Feature::ServerEnvironment
-            | Feature::ChatAttachments => false,
+            | Feature::ChatAttachments
+            | Feature::SelfHostedSync => false,
         }
     }
 }
@@ -224,6 +229,18 @@ mod tests {
         assert!(!Feature::SelfHosted.is_service_bound());
         assert!(!Feature::ServerEnvironment.is_service_bound());
         assert!(!Feature::ChatAttachments.is_service_bound());
+        assert!(!Feature::SelfHostedSync.is_service_bound());
+    }
+
+    #[test]
+    fn test_self_hosted_sync_serialises_snake_case_and_is_locked_in_free() {
+        assert_eq!(
+            serde_json::to_string(&Feature::SelfHostedSync).unwrap(),
+            "\"self_hosted_sync\""
+        );
+        let free = Entitlements::free();
+        assert!(!free.has(Feature::SelfHostedSync));
+        assert!(free.require(Feature::SelfHostedSync).is_err());
     }
 
     #[test]

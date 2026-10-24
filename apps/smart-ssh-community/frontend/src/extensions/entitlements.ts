@@ -21,7 +21,8 @@ export type Feature =
   | "sso"
   | "self_hosted"
   | "server_environment"
-  | "chat_attachments";
+  | "chat_attachments"
+  | "self_hosted_sync";
 
 export interface Entitlements {
   tier: Tier;
