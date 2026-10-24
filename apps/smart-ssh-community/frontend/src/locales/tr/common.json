@@ -1149,6 +1149,12 @@
       "confirm": "Yükle",
       "cancel": "İptal",
       "menuTitle": "Panodaki dosyaları yükle"
+    },
+    "readFailure": {
+      "tooLarge": "Metin farkı mümkün değil: dosya çok büyük (256 KB üzeri).",
+      "notText": "Metin farkı mümkün değil: dosya ikili (geçerli UTF-8 metni değil).",
+      "permission": "Metin farkı mümkün değil: mevcut haklarla bu dosyayı okuma izniniz yok.",
+      "other": "Metin farkı mümkün değil: dosya okunamadı ({{message}})."
     }
   },
   "chat": {

@@ -1142,6 +1142,12 @@
       "confirm": "업로드",
       "cancel": "취소",
       "menuTitle": "클립보드의 파일 업로드"
+    },
+    "readFailure": {
+      "tooLarge": "텍스트 diff를 표시할 수 없음: 파일이 너무 큽니다(256 KB 초과).",
+      "notText": "텍스트 diff를 표시할 수 없음: 파일이 바이너리입니다(유효한 UTF-8 텍스트 아님).",
+      "permission": "텍스트 diff를 표시할 수 없음: 현재 권한으로는 이 파일을 읽을 수 없습니다.",
+      "other": "텍스트 diff를 표시할 수 없음: 파일을 읽을 수 없습니다({{message}})."
     }
   },
   "chat": {

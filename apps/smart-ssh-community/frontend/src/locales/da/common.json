@@ -1149,6 +1149,12 @@
       "confirm": "Overfør",
       "cancel": "Annuller",
       "menuTitle": "Upload filerne fra udklipsholderen"
+    },
+    "readFailure": {
+      "tooLarge": "Ingen tekstdiff mulig: filen er for stor (over 256 KB).",
+      "notText": "Ingen tekstdiff mulig: filen er binær (ikke gyldig UTF-8-tekst).",
+      "permission": "Ingen tekstdiff mulig: med de nuværende rettigheder har du ikke læseadgang til filen.",
+      "other": "Ingen tekstdiff mulig: filen kunne ikke læses ({{message}})."
     }
   },
   "chat": {

@@ -1156,6 +1156,12 @@
       "confirm": "Enviar",
       "cancel": "Cancelar",
       "menuTitle": "Enviar os arquivos da área de transferência"
+    },
+    "readFailure": {
+      "tooLarge": "Diff de texto impossível: o arquivo é grande demais (mais de 256 KB).",
+      "notText": "Diff de texto impossível: o arquivo é binário (não é texto UTF-8 válido).",
+      "permission": "Diff de texto impossível: com os direitos atuais você não tem permissão de leitura para este arquivo.",
+      "other": "Diff de texto impossível: não foi possível ler o arquivo ({{message}})."
     }
   },
   "chat": {

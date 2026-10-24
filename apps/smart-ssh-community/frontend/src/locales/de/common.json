@@ -1149,6 +1149,12 @@
       "confirm": "Hochladen",
       "cancel": "Abbrechen",
       "menuTitle": "Dateien aus der Zwischenablage hochladen"
+    },
+    "readFailure": {
+      "tooLarge": "Kein Text-Diff möglich: Die Datei ist zu groß (über 256 KB).",
+      "notText": "Kein Text-Diff möglich: Die Datei ist binär (kein gültiger UTF-8-Text).",
+      "permission": "Kein Text-Diff möglich: Mit den aktuellen Rechten fehlt die Leseberechtigung für diese Datei.",
+      "other": "Kein Text-Diff möglich: Die Datei konnte nicht gelesen werden ({{message}})."
     }
   },
   "chat": {

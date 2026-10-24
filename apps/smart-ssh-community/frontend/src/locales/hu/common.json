@@ -1149,6 +1149,12 @@
       "confirm": "Feltöltés",
       "cancel": "Mégse",
       "menuTitle": "A vágólapon lévő fájlok feltöltése"
+    },
+    "readFailure": {
+      "tooLarge": "Szövegkülönbség nem készíthető: a fájl túl nagy (256 KB felett).",
+      "notText": "Szövegkülönbség nem készíthető: a fájl bináris (nem érvényes UTF-8 szöveg).",
+      "permission": "Szövegkülönbség nem készíthető: a jelenlegi jogokkal nincs olvasási jogosultságod ehhez a fájlhoz.",
+      "other": "Szövegkülönbség nem készíthető: a fájl nem olvasható ({{message}})."
     }
   },
   "chat": {
