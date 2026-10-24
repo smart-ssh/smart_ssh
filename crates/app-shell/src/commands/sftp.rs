@@ -594,7 +594,8 @@ pub async fn sftp_upload(
         session_id,
         &local_path,
     )?;
-    run_browser_command(
+    let staged = local_path.as_path().to_path_buf();
+    let result = run_browser_command(
         &state,
         elevated.inner(),
         session_id,
@@ -611,7 +612,13 @@ pub async fn sftp_upload(
             .await
         },
     )
-    .await
+    .await;
+    // Issue #679: a copy staged from the Android picker is not needed after
+    // the upload (success or not); real files are never inside this root.
+    if let Some(root) = crate::edit_copies::picked_root() {
+        crate::edit_copies::remove_staged_pick(&staged, &root);
+    }
+    result
 }
 
 /// Issue #89: the one place where a frontend-supplied local path becomes a
