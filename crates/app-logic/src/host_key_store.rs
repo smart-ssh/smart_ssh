@@ -23,6 +23,7 @@
 //! `ssh-keygen -lf`/dem OpenSSH-Client kennen und mit einer anderen Quelle
 //! (z. B. dem Server-Betreiber) abgleichen können.
 
+use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -113,6 +114,8 @@ fn algorithm_key(raw_key: &[u8]) -> String {
 pub struct FileHostKeyStore {
     path: PathBuf,
     known: Mutex<KnownHostKeys>,
+    /// Issue #672: told after a trusted key was persisted.
+    data_changes: Option<DataChangeNotifier>,
 }
 
 impl FileHostKeyStore {
@@ -149,7 +152,14 @@ impl FileHostKeyStore {
         Ok(Self {
             path,
             known: Mutex::new(known),
+            data_changes: None,
         })
+    }
+
+    /// Issue #672: report persisted trust changes to `notifier`.
+    pub fn with_data_changes(mut self, notifier: DataChangeNotifier) -> Self {
+        self.data_changes = Some(notifier);
+        self
     }
 
     fn persist(&self, known: &KnownHostKeys) -> Result<(), SshError> {
@@ -242,7 +252,11 @@ impl HostKeyStore for FileHostKeyStore {
         let mut known = self.known.lock().unwrap();
         let algo = algorithm_key(key);
         known.insert((host.to_string(), port, algo), key.to_vec());
-        self.persist(&known)
+        self.persist(&known)?;
+        if let Some(notifier) = &self.data_changes {
+            notifier.notify(DataKind::HostKeys);
+        }
+        Ok(())
     }
 
     /// Read-only: lists `(algorithm, fingerprint)` for `(host, port)`,
@@ -529,5 +543,33 @@ mod tests {
             store.check("unseen.invalid", 22, &key),
             HostKeyDecision::Unknown { .. }
         ));
+    }
+}
+
+#[cfg(test)]
+mod data_change_tests {
+    use super::*;
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::time::Duration;
+
+    /// Issue #672: trusting a key notifies `HostKeys`; a plain check does not.
+    #[test]
+    fn test_trust_notifies_host_keys_and_check_does_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let notifier = DataChangeNotifier::with_window(Duration::from_millis(30));
+        let (tx, rx) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        notifier.subscribe(Arc::new(move |k| {
+            tx.lock().unwrap().send(k.clone()).unwrap()
+        }));
+        let store = FileHostKeyStore::load(dir.path().join("host_keys.json"))
+            .unwrap()
+            .with_data_changes(notifier);
+
+        store.check("example.invalid", 22, b"k");
+        assert!(rx.recv_timeout(Duration::from_millis(250)).is_err());
+        store.trust("example.invalid", 22, b"k").unwrap();
+        let got = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(got, std::collections::BTreeSet::from([DataKind::HostKeys]));
     }
 }

@@ -328,7 +328,7 @@ pub(crate) async fn open_and_assemble(
     // Fällen unangetastet zu lassen (s. `startup_error_messages::
     // host_key_store_failure_text`-Doc-Kommentar).
     let host_key_store = match FileHostKeyStore::load(host_key_path.clone()) {
-        Ok(store) => store,
+        Ok(store) => store.with_data_changes(profile_store.data_changes()),
         Err(err) => {
             let text = app_logic::startup_error_messages::host_key_store_failure_text(
                 &host_key_path,
@@ -350,6 +350,7 @@ pub(crate) async fn open_and_assemble(
     };
     tracing::info!("host-key store loaded");
 
+    let data_changes = profile_store.data_changes();
     let app_state = AppState {
         sessions: SessionManager::new(),
         session_extension,
@@ -365,6 +366,7 @@ pub(crate) async fn open_and_assemble(
         keychain,
         ai_provider_store: Arc::new(ai_provider_store),
         host_key_store: Arc::new(host_key_store),
+        data_changes,
         // Issue #259: Produktion baut die Verbindung real auf.
         connector: Arc::new(app_logic::test_connection::RealConnector),
         policy_store,
@@ -941,6 +943,19 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         crate::mcp_settings::autostart_if_enabled(&handle).await;
     });
+
+    // Issue #672: forward the coalesced data-changed notification.
+    {
+        let handle = app.clone();
+        app.state::<AppState>()
+            .data_changes
+            .subscribe(Arc::new(move |kinds| {
+                app_logic::events::emit_data_changed(
+                    &crate::event_emitter::TauriEventEmitter(handle.clone()),
+                    kinds,
+                );
+            }));
+    }
 
     let app = app.clone();
     // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim

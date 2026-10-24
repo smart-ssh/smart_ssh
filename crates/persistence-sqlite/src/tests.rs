@@ -467,6 +467,7 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
     let old_store = SqliteProfileStore {
         pool: old_pool.clone(),
         chat_removal: Default::default(),
+        data_changes: Default::default(),
     };
     let group = make_group("Produktion", None);
     old_store.create_group(&group).await.unwrap();

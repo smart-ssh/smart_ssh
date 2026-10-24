@@ -92,6 +92,10 @@ pub struct AppState {
     pub keychain: KeychainAvailability,
     pub ai_provider_store: Arc<SqliteAiProviderStore>,
     pub host_key_store: Arc<dyn HostKeyStore>,
+    /// Issue #672: coalesced notification after committed changes to the user
+    /// data set. Rust subscribers register here; the shell forwards it to the
+    /// frontend as `data-changed`.
+    pub data_changes: ssh_manager_core::data_change::DataChangeNotifier,
     /// Issue #259: der Verbindungsaufbau von `connect_session`. Produktion
     /// verdrahtet [`crate::test_connection::RealConnector`]; Tests setzen
     /// einen Mock ein, damit Verbinden und Fortsetzen ohne echtes Netzwerk
