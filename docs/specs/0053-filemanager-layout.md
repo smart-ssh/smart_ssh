@@ -43,6 +43,28 @@ senkrechter Ziehgriff.
   Bereich nicht mehr seine Mindestbreite lässt, wird nur die angezeigte
   Breite begrenzt.
 
+## Teil 3: Sortierung per Spaltenkopf
+
+- Die Spaltenköpfe (Name, Größe, Rechte, Änderungsdatum) sind Schaltflächen
+  und per Tastatur bedienbar. Ein Klick sortiert die Liste nach dieser
+  Spalte aufsteigend; ein zweiter Klick auf dieselbe Spalte kehrt die
+  Reihenfolge um, eine andere Spalte beginnt wieder aufsteigend.
+- Die aktive Spalte zeigt einen Pfeil (▲ aufsteigend, ▼ absteigend) und
+  trägt `aria-sort`; alle anderen Köpfe `aria-sort="none"`.
+- **Ordner stehen immer oben**; beide Gruppen werden nach der gewählten
+  Spalte sortiert. Name: natürliche Reihenfolge ohne Beachtung der
+  Groß-/Kleinschreibung („a2“ vor „a10“). Größe: numerisch (Ordner nach
+  Name). Änderungsdatum: nach Zeitstempel, Einträge ohne Zeitstempel zuerst.
+  Rechte: nach der Rechte-Zeichenfolge. Bei Gleichstand entscheidet der Name
+  aufsteigend.
+- Standard ist Name aufsteigend. Die Sortierung gilt für alle Verzeichnisse
+  und Sitzungen, bleibt beim Navigieren und über einen Neustart erhalten;
+  ein fehlender oder ungültiger gespeicherter Wert wird durch den Standard
+  ersetzt.
+- Ein Klick auf einen Ziehgriff ändert die Sortierung nie.
+- Im schmalen Layout gibt es keine Spaltenköpfe; die Liste folgt dort der
+  gespeicherten Sortierung.
+
 ## Schmales Layout
 
 - Unter 640 px Fensterbreite zeigt der Dateimanager keine Spalten, sondern zweizeilige Einträge; Spaltenbreiten sind dort nicht verstellbar und die gespeicherten Breiten bleiben unverändert (Spec 0113, Abschnitt 5b).

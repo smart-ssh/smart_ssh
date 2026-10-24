@@ -429,6 +429,7 @@
     "expired": "Yêu cầu xác nhận khóa máy chủ cho {{host}}:{{port}} đã hết hạn. Kết nối chưa được thiết lập và khóa chưa được tin cậy."
   },
   "sessionTabs": {
+    "newSession": "Phiên mới",
     "overview": "Tổng quan",
     "pendingAction": "Đang chờ xác nhận",
     "closeTab": "Đóng tab \"{{name}}\"",

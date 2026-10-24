@@ -16,7 +16,7 @@
 // (starting a real OS-level window drag) — that only happens through
 // Tauri's own runtime/webview, not through jsdom, so no test here claims
 // to cover it.
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
@@ -130,5 +130,27 @@ describe("SessionTabBar close button frame", () => {
     for (const prefix of ["hover:", "focus-visible:"]) {
       expect(close).toHaveClass(`${prefix}border-slate-500`, `${prefix}bg-slate-600/60`);
     }
+  });
+});
+
+// Issue #657: context menu "New session" on a tab; numbered labels.
+describe("SessionTabBar new session (issue #657)", () => {
+  it("offers New session for a user tab and reports its server", () => {
+    const onNewSession = vi.fn();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <SessionTabBar
+          tabs={[tabs[0]!, { ...tabs[0]!, sessionId: "s1b", serverNumber: 2 }]}
+          activeSessionId="s1"
+          onSwitch={vi.fn()}
+          onRequestClose={vi.fn()}
+          onNewSession={onNewSession}
+        />
+      </I18nextProvider>,
+    );
+    expect(screen.getByText("prod-db (2)")).toBeInTheDocument();
+    fireEvent.contextMenu(screen.getByText("prod-db (2)"));
+    fireEvent.click(screen.getByRole("button", { name: "Neue Sitzung" }));
+    expect(onNewSession).toHaveBeenCalledWith({ id: "server-1", name: "prod-db" });
   });
 });

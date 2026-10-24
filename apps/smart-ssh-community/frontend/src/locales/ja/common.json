@@ -429,6 +429,7 @@
     "expired": "{{host}}:{{port}} のホストキーの確認リクエストが期限切れになりました。接続は確立されず、鍵は信頼されていません。"
   },
   "sessionTabs": {
+    "newSession": "新しいセッション",
     "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",

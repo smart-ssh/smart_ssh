@@ -429,6 +429,7 @@
     "expired": "Isäntäavainpyyntö kohteelle {{host}}:{{port}} vanheni. Yhteyttä ei muodostettu, eikä avaimeen luotettu."
   },
   "sessionTabs": {
+    "newSession": "Uusi istunto",
     "overview": "Yleiskatsaus",
     "pendingAction": "Odottaa vahvistusta",
     "closeTab": "Sulje välilehti \"{{name}}\"",

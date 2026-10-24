@@ -429,6 +429,7 @@
     "expired": "Het verzoek voor de hostsleutel van {{host}}:{{port}} is verlopen. De verbinding is niet tot stand gebracht en de sleutel is niet vertrouwd."
   },
   "sessionTabs": {
+    "newSession": "Nieuwe sessie",
     "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",

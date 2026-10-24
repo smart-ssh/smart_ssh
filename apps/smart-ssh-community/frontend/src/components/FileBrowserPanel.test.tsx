@@ -58,7 +58,9 @@ import {
 } from "../events";
 import {
   loadFileManagerColumnWidths,
+  loadFileManagerSort,
   saveFileManagerColumnWidths,
+  saveFileManagerSort,
 } from "../layoutSettings";
 import { testI18n } from "../testI18n";
 import { showToast } from "../toastBus";
@@ -196,6 +198,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 vi.mock("../layoutSettings", () => ({
   loadFileManagerColumnWidths: vi.fn(() => Promise.resolve({})),
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
+  loadFileManagerSort: vi.fn(() => Promise.resolve(null)),
+  saveFileManagerSort: vi.fn(() => Promise.resolve()),
 }));
 
 const entry: RemoteEntryDto = {
@@ -992,11 +996,8 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
 
     renderPanel();
     await screen.findByText(/a\.txt/);
-    // Mock liefert `[fileEntry, dirEntry]` in dieser Reihenfolge (echtes
-    // Sortieren übernimmt das Backend, nicht diese Komponente) — Zeile 0
-    // ist also a.txt.
-    const rows = screen.getAllByRole("button", { name: /^(Aktionen|Actions): / });
-    fireEvent.click(rows[0]);
+    // Ordner stehen oben (Spec 0053, Teil 3) — Zeile für a.txt gezielt wählen.
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): a\.txt/ }));
     fireEvent.click(screen.getByText("Ausschneiden"));
 
     fireEvent.click(await screen.findByText(/logs/));
@@ -2599,7 +2600,7 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
     vi.mocked(sftpRename).mockResolvedValue(undefined);
     const { container } = renderPanel();
     await screen.findByText(/a\.txt/);
-    fireEvent.click(screen.getAllByRole("button", { name: /^(Aktionen|Actions): / })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^(Aktionen|Actions): a\.txt/ })[0]);
     fireEvent.click(screen.getByText("Ausschneiden"));
     fireEvent.click(await screen.findByText(/sub/));
     await screen.findByText("(leeres Verzeichnis)");
@@ -3001,6 +3002,50 @@ describe("FileBrowserPanel menus stay inside the window (issue #627)", () => {
     } finally {
       HTMLElement.prototype.getBoundingClientRect = orig;
     }
+  });
+});
+
+describe("FileBrowserPanel header sorting (Spec 0053, Teil 3)", () => {
+  const small = { ...entry, name: "a.txt", path: "a.txt", size: 1 };
+  const big = { ...entry, name: "b.txt", path: "b.txt", size: 999 };
+  const rowNames = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll("tbody tr td:first-child")).map((td) => td.textContent?.trim());
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(loadFileManagerSort).mockResolvedValue(null);
+    vi.mocked(sftpList).mockResolvedValue([small, big]);
+  });
+
+  it("sorts on click, reverses on second click, persists and sets aria-sort", async () => {
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    expect(screen.getByTestId("column-sort-name").closest("th")).toHaveAttribute("aria-sort", "ascending");
+
+    fireEvent.click(screen.getByTestId("column-sort-size"));
+    expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "asc" });
+    expect(screen.getByTestId("column-sort-size").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(screen.getByTestId("column-sort-name").closest("th")).toHaveAttribute("aria-sort", "none");
+    expect(rowNames(container)).toEqual(["📄 a.txt", "📄 b.txt"]);
+
+    fireEvent.click(screen.getByTestId("column-sort-size"));
+    expect(saveFileManagerSort).toHaveBeenLastCalledWith({ column: "size", direction: "desc" });
+    expect(rowNames(container)).toEqual(["📄 b.txt", "📄 a.txt"]);
+  });
+
+  it("applies the persisted sort on mount", async () => {
+    vi.mocked(loadFileManagerSort).mockResolvedValue({ column: "size", direction: "desc" });
+    const { container } = renderPanel();
+    await screen.findByText(/a\.txt/);
+    await waitFor(() => expect(rowNames(container)).toEqual(["📄 b.txt", "📄 a.txt"]));
+  });
+
+  it("a resize handle click never changes the sort", async () => {
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByTestId("column-resize-size"));
+    expect(saveFileManagerSort).not.toHaveBeenCalled();
   });
 });
 
