@@ -294,6 +294,13 @@
       "connection": "Conexão",
       "security": "Segurança",
       "invalid": "Contém erros"
+    },
+    "importKey": {
+      "title": "Importar a chave para o Smart SSH?",
+      "import": "Importar chave",
+      "keep": "Manter o caminho do arquivo",
+      "importHint": "A chave é armazenada criptografada no Smart SSH e acompanha os backups para seus outros dispositivos.",
+      "keepHint": "Apenas o caminho do arquivo é armazenado e vai para outros dispositivos. O arquivo precisa existir no mesmo caminho em cada dispositivo."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "A chave no chaveiro não pertence a este banco de dados. Nada foi alterado — armazená-la tornaria o banco de dados ilegível na próxima inicialização.",
     "SFTP_CONTENT_TOO_LARGE": "O arquivo é maior que 50 MB e não pode ser copiado para a área de transferência.",
     "CLIPBOARD_FILE_FAILED": "Não foi possível colocar o arquivo na área de transferência neste sistema.",
-    "SSH_SFTP_ALREADY_EXISTS": "Já existe um arquivo ou pasta com este nome"
+    "SSH_SFTP_ALREADY_EXISTS": "Já existe um arquivo ou pasta com este nome",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Arquivo de chave não encontrado neste dispositivo"
   },
   "mcpServer": {
     "hint": "Clientes MCP externos podem usá-lo para propor comandos, leituras/gravações de arquivos e atualizações de anotações em servidores da lista de permitidos — toda solicitação sempre exige confirmação no app, independentemente das regras de permissão existentes.",

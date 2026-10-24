@@ -808,9 +808,12 @@ async fn test_t6_3_6_a_failing_identity_file_names_the_hop() {
     )
     .await;
 
-    let SshError::CredentialResolutionFailed(message) = &err else {
-        panic!("erwartet CredentialResolutionFailed, bekam {err:?}");
+    // Issue #667: „Datei fehlt“ ist ein eigener Zustand, trägt aber weiter
+    // Hop und Pfad.
+    let SshError::KeyFileNotFound { .. } = &err else {
+        panic!("erwartet KeyFileNotFound, bekam {err:?}");
     };
+    let message = err.to_string();
     assert!(
         message.contains(&format!("{TEST_USERNAME}@127.0.0.1:{port}")),
         "A-8: die Meldung muss den Hop nennen — {message}"
@@ -820,7 +823,7 @@ async fn test_t6_3_6_a_failing_identity_file_names_the_hop() {
         "A-6: und den Pfad — {message}"
     );
     // Der stabile Code darf sich durch die Hop-Angabe nicht ändern.
-    assert_eq!(err.code(), "SSH_CREDENTIAL_RESOLUTION_FAILED");
+    assert_eq!(err.code(), "KEY_FILE_NOT_FOUND_ON_DEVICE");
 }
 
 /// Ein `CredentialStore`, dessen `get` mit `CredentialError::Backend`

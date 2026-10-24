@@ -327,7 +327,7 @@ async fn download_inner(
 
     let response = tokio::select! {
         _ = cancel.changed() => return Err(None),
-        r = reqwest::Client::new().get(&source.url).send() => r,
+        r = download_client().get(&source.url).send() => r,
     }
     .map_err(|_| Some(ModelErrorKey::Network))?;
     if !response.status().is_success() {
@@ -383,3 +383,22 @@ async fn download_inner(
 
 #[cfg(test)]
 mod tests;
+
+/// HTTP client for model downloads. On Android the platform certificate
+/// verifier would need JNI initialisation, so the bundled webpki roots are
+/// used there (Spec 0114, ADR 0148).
+fn download_client() -> reqwest::Client {
+    let builder = reqwest::Client::builder();
+    #[cfg(target_os = "android")]
+    let builder = {
+        let roots = rustls::RootCertStore {
+            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+        };
+        builder.tls_backend_preconfigured(
+            rustls::ClientConfig::builder()
+                .with_root_certificates(roots)
+                .with_no_client_auth(),
+        )
+    };
+    builder.build().unwrap_or_else(|_| reqwest::Client::new())
+}

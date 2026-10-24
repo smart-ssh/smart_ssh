@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+# Spec 0114, ADR 0148: Tauri-Mobile lädt die App als Bibliothek
+# (`cdylib` für Android, `staticlib` für iOS); `rlib` bleibt für das
+# Desktop-Binary und die Tests.
+name = "smart_ssh_community_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [[bin]]
 # Sichtbarer Binary-Name im .app-Bundle (Contents/MacOS/smart-ssh) — bewusst
 # vom `package.name` oben entkoppelt, s. `crates/app-shell`s früheres
@@ -25,12 +32,14 @@ tauri = { version = "2", features = [] }
 # "Permission ... not found" beim Build). Deshalb müssen dieselben
 # Tauri-Plugins, die `app-shell::run` tatsächlich registriert, hier
 # zusätzlich direkt gelistet sein.
-tauri-plugin-decoration = "3.0"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2.5.5"
 tauri-plugin-os = "2"
 tauri-plugin-store = "2"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tauri-plugin-decoration = "3.0"
 
 [dev-dependencies]
 # Issue #14: `tests/network_boundary.rs` liest die CSP aus `tauri.conf.json`.

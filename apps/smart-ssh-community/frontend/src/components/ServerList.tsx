@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
@@ -11,6 +12,7 @@ import {
   listGroups,
   listServers,
   listUnusableServers,
+  inspectKeyFile,
 } from "../api";
 import { translateErrorCode } from "../errorCodes";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
@@ -103,6 +105,32 @@ interface ServerListProps {
  * wirklich kein bekannter Code vorliegt. Als Modul-Funktion (statt einer
  * im Komponentenkörper geschlossenen Closure über `t`) definiert, damit
  * sie referenziell stabil ist und keine `useEffect`-Dependency wird. */
+/** Issue #667 / Spec 0109 C3: names the key file as missing on this device
+ * (e.g. after a backup import). A failed pre-check shows nothing — the file
+ * is checked again when connecting. */
+function KeyFileMissingNote({ path }: { path: string }) {
+  const { t } = useTranslation();
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setMissing(false);
+    inspectKeyFile(path)
+      .then((facts) => {
+        if (!cancelled) setMissing(facts.problem?.code === "KEY_FILE_NOT_FOUND");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+  if (!missing) return null;
+  return (
+    <p className="text-xs text-amber-400">
+      {t("errors.KEY_FILE_NOT_FOUND_ON_DEVICE")}
+    </p>
+  );
+}
+
 function describeError(
   t: (key: string, options?: Record<string, unknown>) => string,
   err: unknown,
@@ -473,6 +501,7 @@ export function ServerList({
               <span aria-hidden="true">🔑</span> {server.identityFilePath}
             </p>
           )}
+          {server.identityFilePath && <KeyFileMissingNote path={server.identityFilePath} />}
         </div>
         <div className="flex items-center gap-2 narrow:flex-wrap">
           {server.tags.map((tag) => (
@@ -582,7 +611,9 @@ export function ServerList({
     return <p className="text-sm text-slate-400">{t("mainScreen.loadingServers")}</p>;
   }
 
-  const localServer = servers.find((s) => s.isLocal);
+  const localServer = platformCapabilities(detectFallbackPlatform()).localServer
+    ? servers.find((s) => s.isLocal)
+    : undefined;
   const tree = buildGroupTree(groups, servers, unusableServers);
   // Spec 0069, Teil C1 (BL-0082): "leer" für den Einstiegs-Block heißt
   // ausschließlich "keine echten Server" — der lokale Pseudo-Server zählt

@@ -294,6 +294,13 @@
       "connection": "Connexion",
       "security": "Sécurité",
       "invalid": "Contient des erreurs"
+    },
+    "importKey": {
+      "title": "Importer la clé dans Smart SSH ?",
+      "import": "Importer la clé",
+      "keep": "Garder le chemin du fichier",
+      "importHint": "La clé est stockée chiffrée dans Smart SSH et suit les sauvegardes vers vos autres appareils.",
+      "keepHint": "Seul le chemin du fichier est stocké et transmis aux autres appareils. Le fichier doit exister au même chemin sur chaque appareil."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "La clé du trousseau n’appartient pas à cette base de données. Rien n’a été modifié — l’enregistrer rendrait la base illisible au prochain démarrage.",
     "SFTP_CONTENT_TOO_LARGE": "Le fichier dépasse 50 Mo et ne peut pas être copié dans le presse-papiers.",
     "CLIPBOARD_FILE_FAILED": "Le fichier n’a pas pu être placé dans le presse-papiers sur ce système.",
-    "SSH_SFTP_ALREADY_EXISTS": "Un fichier ou un dossier portant ce nom existe déjà"
+    "SSH_SFTP_ALREADY_EXISTS": "Un fichier ou un dossier portant ce nom existe déjà",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fichier de clé introuvable sur cet appareil"
   },
   "mcpServer": {
     "hint": "Des clients MCP externes peuvent l’utiliser pour proposer des commandes, des lectures/écritures de fichiers et des mises à jour de notes sur les serveurs autorisés — chaque demande exige toujours une confirmation dans l’application, indépendamment des règles d’autorisation existantes.",

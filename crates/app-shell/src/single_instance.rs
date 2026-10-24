@@ -22,18 +22,26 @@
 //! enden und die installierte nach vorn holen. Die Sperre gilt dagegen in
 //! jedem Build.
 
+#[cfg(not(target_os = "android"))]
 use tauri::Manager;
 
 /// Ob der Single-Instance-Schutz in diesem Prozess aktiv ist: nur im
 /// Release-Build und nur mit dem Standard-Datenverzeichnis (Issue #44,
 /// Entscheidung in [`app_logic::single_instance::focusing_applies`]).
+#[cfg_attr(target_os = "android", allow(dead_code))] // only the non-Android callers use it
 pub(crate) fn enabled() -> bool {
+    // Android (Spec 0114): the OS runs one instance per app; the plugin is
+    // not compiled there.
+    if cfg!(target_os = "android") {
+        return false;
+    }
     let raw_override = std::env::var(persistence_sqlite::DATA_DIR_OVERRIDE_ENV).ok();
     app_logic::single_instance::focusing_applies(raw_override.as_deref(), cfg!(debug_assertions))
 }
 
 /// Das Plugin mit dem Rückruf, der in der **laufenden** Instanz ankommt,
 /// wenn eine zweite gestartet wird: Hauptfenster zeigen und nach vorn.
+#[cfg(not(target_os = "android"))]
 pub(crate) fn plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     tauri_plugin_single_instance::init(|app, _args, _cwd| {
         tracing::info!("a second instance was started; focusing this one (issue #19)");
@@ -46,9 +54,11 @@ pub(crate) fn plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 /// `setup`, und Plugins werden in Registrierungsreihenfolge eingerichtet —
 /// eine zweite Instanz soll enden, bevor ein anderes Plugin etwas tut.
 pub(crate) fn register_on(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    #[cfg(not(target_os = "android"))]
     if enabled() {
-        builder.plugin(plugin())
-    } else {
+        return builder.plugin(plugin());
+    }
+    {
         tracing::info!(
             "single-instance focusing is off (debug build or SMART_SSH_DATA_DIR set); the data \
              directory lock still applies (issues #19, #44, ADR 0106, ADR 0121)"
@@ -71,6 +81,7 @@ pub(crate) fn register_on(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder
 /// richtet die Plugins ein, die Fenster aus der Konfiguration entstehen
 /// erst beim Starten der Ereignisschleife, die hier nie läuft. Die Datenbank
 /// wird nicht berührt.
+#[cfg(not(target_os = "android"))]
 pub(crate) fn hand_over_to_running_instance(context: tauri::Context<tauri::Wry>) {
     if !enabled() {
         return;
@@ -90,6 +101,11 @@ pub(crate) fn hand_over_to_running_instance(context: tauri::Context<tauri::Wry>)
     }
 }
 
+/// Android: nothing to hand over to (the OS keeps one instance).
+#[cfg(target_os = "android")]
+pub(crate) fn hand_over_to_running_instance(_context: tauri::Context<tauri::Wry>) {}
+
+#[cfg(not(target_os = "android"))]
 fn focus_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let Some(window) = app.get_webview_window("main") else {
         tracing::warn!("no main window to focus for the second instance");

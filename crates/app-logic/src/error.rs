@@ -331,6 +331,7 @@ mod code_tests {
             "SERVER_NOT_AN_IDENTITY_FILE",
             super::IDENTITY_FILE_ROLLBACK_LEFT_KEY_BEHIND,
             "KEY_FILE_NOT_FOUND",
+            "KEY_FILE_NOT_FOUND_ON_DEVICE",
             "KEY_FILE_NOT_READABLE",
             "KEY_FILE_PERMISSIONS_TOO_OPEN",
             "KEY_FILE_TOO_LARGE",

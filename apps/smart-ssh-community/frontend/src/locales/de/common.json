@@ -294,6 +294,13 @@
       "connection": "Verbindung",
       "security": "Sicherheit",
       "invalid": "Enthält Fehler"
+    },
+    "importKey": {
+      "title": "Schlüssel in Smart SSH importieren?",
+      "import": "Schlüssel importieren",
+      "keep": "Dateipfad behalten",
+      "importHint": "Der Schlüssel wird verschlüsselt in Smart SSH gespeichert und wandert mit Backups auf Ihre anderen Geräte.",
+      "keepHint": "Nur der Dateipfad wird gespeichert und wandert auf andere Geräte. Die Datei muss auf jedem Gerät am selben Pfad vorhanden sein."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar.",
     "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden.",
     "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
-    "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits"
+    "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden"
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",

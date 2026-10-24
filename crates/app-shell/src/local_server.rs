@@ -25,6 +25,13 @@ use ssh_manager_core::profiles::Server;
 // dieses Modul bleibt wegen `AppHandle`/`tauri-plugin-store` in `app-shell`.
 use app_logic::dto::LOCAL_SERVER_ID;
 
+/// Whether the local pseudo-server is offered on this platform. Not on
+/// Android (Spec 0114: no local shell in the technical test). Decided here
+/// at the list boundary; the security logic never branches on it.
+pub(crate) const fn offered() -> bool {
+    !cfg!(target_os = "android")
+}
+
 use crate::settings_store::{self, SETTINGS_STORE_FILE};
 
 const NOTES_KEY: &str = "localServerNotes";

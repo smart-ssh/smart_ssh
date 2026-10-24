@@ -294,6 +294,13 @@
       "connection": "Verbinding",
       "security": "Beveiliging",
       "invalid": "Bevat fouten"
+    },
+    "importKey": {
+      "title": "Sleutel importeren in Smart SSH?",
+      "import": "Sleutel importeren",
+      "keep": "Bestandspad behouden",
+      "importHint": "De sleutel wordt versleuteld opgeslagen in Smart SSH en gaat mee met back-ups naar je andere apparaten.",
+      "keepHint": "Alleen het bestandspad wordt opgeslagen en gaat mee naar andere apparaten. Het bestand moet op elk apparaat op hetzelfde pad bestaan."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken.",
     "SFTP_CONTENT_TOO_LARGE": "Het bestand is groter dan 50 MB en kan niet naar het klembord worden gekopieerd.",
     "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst.",
-    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam"
+    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat"
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",

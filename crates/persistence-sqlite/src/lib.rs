@@ -103,7 +103,9 @@ pub use field_content_decryption::{
 pub use instance_lock::{DataDirLock, DataDirLockError, DATA_DIR_LOCK_FILE_NAME};
 pub use ledger_store::{LedgerEntry, LedgerStoreError, SqliteLedgerStore};
 pub use paths::{
-    data_dir_override, data_dir_override_from, default_db_path, DATA_DIR_OVERRIDE_ENV,
+    android_cache_dir, android_cache_dir_for, android_files_dir, android_files_dir_for,
+    data_dir_override, data_dir_override_from, default_db_path, ANDROID_APP_ID,
+    DATA_DIR_OVERRIDE_ENV,
 };
 pub use policy_store::{PolicyStoreError, SqlitePolicyStore, StoredRule};
 pub use prompt_history_store::{PromptHistoryStoreError, SqlitePromptHistoryStore};

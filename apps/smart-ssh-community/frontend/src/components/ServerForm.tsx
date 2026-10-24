@@ -47,6 +47,7 @@ import type {
 } from "../types";
 import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
+import { ModalBackdrop } from "./ModalBackdrop";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 import { Button, TabPanel, Tabs, tabId, useTabsIdBase, type TabItem } from "./ui";
@@ -184,7 +185,9 @@ function IdentityFileFacts({
   facts,
   error,
   emptyPath,
+  path,
 }: {
+  path: string;
   loading: boolean;
   facts: KeyFileFactsDto | null;
   /** spec-reviewer-Fund (Review dieses Schritts): der `inspect_key_file`-
@@ -206,7 +209,12 @@ function IdentityFileFacts({
   }
 
   const problemLine = facts.problem ? (
-    <li className="text-amber-400">{translateErrorCode(t, facts.problem.code, facts.problem.message)}</li>
+    <li className="text-amber-400">
+      {/* Issue #667 / Spec 0109 C3: the file is missing on this device. */}
+      {facts.problem.code === "KEY_FILE_NOT_FOUND"
+        ? `${t("errors.KEY_FILE_NOT_FOUND_ON_DEVICE")}: ${path}`
+        : translateErrorCode(t, facts.problem.code, facts.problem.message)}
+    </li>
   ) : (
     <li className="text-emerald-400">{t("serverForm.identityFile.looksValid")}</li>
   );
@@ -388,6 +396,12 @@ export function ServerForm({
   }, []);
 
   const [saving, setSaving] = useState(false);
+  // Issue #667: dialog asking whether to import a key file on save.
+  const [importPromptOpen, setImportPromptOpen] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  // Set once the server is saved while the import is still pending/failed,
+  // so a retry never creates the server a second time.
+  const [importSavedId, setImportSavedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Issue #606: the form is split into tabs. All panels stay mounted (hidden),
@@ -712,22 +726,68 @@ export function ServerForm({
       setReportValidityPending(true);
       return;
     }
+    // Issue #667: a key-file server that is new or whose path changed asks
+    // once whether to import the key or keep using the file path.
+    if (
+      auth.kind === "identityFile" &&
+      auth.path.trim() !== "" &&
+      !(loaded?.authKind === "identity_file" && loaded.identityFilePath === auth.path)
+    ) {
+      setImportError(null);
+      setImportSavedId(null);
+      setImportPromptOpen(true);
+      return;
+    }
+    await save(false);
+  };
+
+  /** Saves the form; with `importKey` the key file is then imported through
+   * the existing conversion (`convertIdentityFileToKeychain`). */
+  const save = async (importKey: boolean) => {
     setSaving(true);
     setError(null);
+    setImportError(null);
+    let savedId = importSavedId;
     try {
-      if (isCreate) {
-        await createServer(buildInput());
-      } else if (serverId) {
-        await updateServer(serverId, buildInput());
+      if (savedId === null) {
+        if (isCreate) {
+          savedId = await createServer(buildInput());
+        } else if (serverId) {
+          await updateServer(serverId, buildInput());
+          savedId = serverId;
+        }
       }
+      if (importKey && savedId) {
+        setImportSavedId(savedId);
+        await convertIdentityFileToKeychain(savedId);
+      }
+      setImportPromptOpen(false);
+      setImportSavedId(null);
       setDirty(false);
       setInvalidTabs(new Set());
       onSaved();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      const message = translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
+      // The server itself is saved once `importSavedId` is set; only the
+      // import failed — keep the dialog open for a retry or "keep path".
+      if (importKey && savedId !== null) {
+        setImportError(message);
+      } else {
+        setError(message);
+        setImportPromptOpen(false);
+      }
     } finally {
       setSaving(false);
     }
+  };
+
+  /** "Keep file path" after the server was already saved by a failed import. */
+  const finishKeepingPath = () => {
+    setImportPromptOpen(false);
+    setImportSavedId(null);
+    setDirty(false);
+    setInvalidTabs(new Set());
+    onSaved();
   };
 
   const handleClearSudoPassword = async () => {
@@ -1399,6 +1459,7 @@ export function ServerForm({
                   facts={identityFacts}
                   error={identityFactsError}
                   emptyPath={auth.path.trim() === ""}
+                  path={auth.path}
                 />
               </div>
               <Field label={t("serverForm.passphraseOptional")}>
@@ -1416,6 +1477,62 @@ export function ServerForm({
             </div>
           )}
         </fieldset>
+
+        {/* Issue #667: shown once when a key-file server is saved with a new
+         * or changed path. */}
+        {importPromptOpen && (
+          <ModalBackdrop
+            layer="app"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          >
+            <dialog
+              open
+              aria-modal="true"
+              aria-labelledby="import-key-title"
+              className="static w-full max-w-md rounded-lg border border-slate-600 bg-slate-900 p-4 text-inherit"
+            >
+              <h2 id="import-key-title" className="mb-2 text-base font-semibold text-slate-100">
+                {t("serverForm.importKey.title")}
+              </h2>
+              <p className="mb-2 font-mono text-xs break-all text-slate-300">
+                {auth.kind === "identityFile" ? auth.path : ""}
+              </p>
+              <ul className="mb-3 space-y-1 text-sm text-slate-300">
+                <li>{t("serverForm.importKey.importHint")}</li>
+                <li>{t("serverForm.importKey.keepHint")}</li>
+              </ul>
+              {importError && (
+                <p role="alert" className="mb-2 text-xs text-red-400">
+                  {importError}
+                </p>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => {
+                    // The server may already be saved (failed import): then
+                    // cancelling cannot undo that, so it behaves like "keep".
+                    if (importSavedId !== null) finishKeepingPath();
+                    else setImportPromptOpen(false);
+                  }}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => (importSavedId !== null ? finishKeepingPath() : save(false))}
+                >
+                  {t("serverForm.importKey.keep")}
+                </Button>
+                <Button variant="primary" size="sm" autoFocus disabled={saving} onClick={() => save(true)}>
+                  {t("serverForm.importKey.import")}
+                </Button>
+              </div>
+            </dialog>
+          </ModalBackdrop>
+        )}
 
         {/* Spec 0076, C-1/C-2/C-7 (BL-0222): nur für einen bereits
          * gespeicherten Server, dessen Anmeldeart tatsächlich (nicht nur im
