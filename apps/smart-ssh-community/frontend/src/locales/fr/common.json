@@ -430,6 +430,7 @@
     "expired": "La demande de clé d’hôte pour {{host}}:{{port}} a expiré. La connexion n’a pas été établie et la clé n’a pas été approuvée."
   },
   "sessionTabs": {
+    "newSession": "Nouvelle session",
     "overview": "Vue d’ensemble",
     "pendingAction": "En attente de confirmation",
     "closeTab": "Fermer l’onglet « {{name}} »",
@@ -623,6 +624,7 @@
     "MASTER_PASSWORD_REJECTED": "Le mot de passe principal a été rejeté : au moins 12 caractères, et les deux saisies doivent correspondre.",
     "STARTUP_FAILED": "Le démarrage n’a pas abouti. Rien n’a été modifié ; le journal indique la cause.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Le trousseau contient une autre clé. Rien n’a été modifié — confirmez le remplacement si c’est ce que vous souhaitez.",
+    "ELEVATED_USER_CHANGED": "Le mode élevé s’exécute maintenant sous un autre utilisateur ; rien n’a été fait. Utilisez « Téléverser en tant que … » dans la barre d’édition.",
     "APP_LOCKED": "Smart SSH est toujours verrouillé. Déverrouillez-le d’abord avec votre mot de passe principal.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Cette opération ne correspond pas à l’endroit où la clé est actuellement conservée. Rien n’a été modifié — rouvrez les paramètres, ils indiquent le mode actif.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L’avertissement sur le mot de passe principal n’a pas été confirmé. Sans ce mot de passe, toutes les données sont perdues et il n’existe aucune récupération — cochez la case et recommencez la configuration. Rien n’a été modifié.",
@@ -743,6 +745,11 @@
     "moveCollisionTitle": "La cible existe déjà — écraser en tant que {{user}} ?",
     "chmodNote": "Les permissions seront définies en tant que {{user}}.",
     "editUploadTitle": "Téléverser les modifications locales en tant que {{user}} ?",
+    "editUploadAs": "Téléverser en tant que {{user}}",
+    "editUploadAsLogin": "Téléverser en tant qu’utilisateur de connexion",
+    "editIdentityChanged": "Ouvert en tant que {{from}}, le mode élevé s’exécute maintenant en tant que {{user}}.",
+    "editIdentityElevatedOff": "Ouvert en tant que {{from}}, le mode élevé est maintenant désactivé.",
+    "editIdentityElevatedOn": "Ouvert sans mode élevé, il s’exécute maintenant en tant que {{user}}.",
     "editOpenedAs": "(ouvert en tant que {{user}})",
     "failureTitle": "Droits élevés impossibles",
     "sudoersIntro": "Le mode élevé nécessite sur le serveur une règle sudo sans mot de passe pour sftp-server. Cette ligne correspond à ce serveur et à cette connexion :",
@@ -1022,6 +1029,10 @@
     "transferStopped": "{{name}} : arrêté",
     "transferIncomplete": "Fichier incomplet laissé sur le serveur : {{path}}",
     "transferFiles": "{{done}} fichiers sur {{total}}",
+    "transferDelete": "Suppression de {{name}}",
+    "transferChmod": "Modification des droits de {{name}}",
+    "entriesProgress": "{{done}} sur {{total}} éléments",
+    "entriesChanged": "Éléments modifiés : {{count}}",
     "transferRemaining": "{{time}} restantes",
     "loading": "Chargement…",
     "noPermissionToOpen": "Pas d'autorisation pour ouvrir ce dossier (x manquant)",
@@ -1153,6 +1164,12 @@
       "confirm": "Téléverser",
       "cancel": "Annuler",
       "menuTitle": "Téléverser les fichiers du presse-papiers"
+    },
+    "readFailure": {
+      "tooLarge": "Aucun diff texte possible : le fichier est trop volumineux (plus de 256 Ko).",
+      "notText": "Aucun diff texte possible : le fichier est binaire (texte UTF-8 non valide).",
+      "permission": "Aucun diff texte possible : vous n’avez pas le droit de lire ce fichier avec les droits actuels.",
+      "other": "Aucun diff texte possible : le fichier n’a pas pu être lu ({{message}})."
     }
   },
   "chat": {
@@ -1184,6 +1201,7 @@
     "contextUsageTooltip": "Les parties plus anciennes du chat sont résumées automatiquement lorsque le contexte est plein.",
     "webResearchUnavailable": "La recherche web n’est pas disponible pour ce compte fournisseur (la recherche web y est désactivée). Cette session répond sans recherche web. Pour la désactiver définitivement : Paramètres → Fournisseur d’IA → « Recherche web ».",
     "emptyResponse": "Le modèle n’a renvoyé aucune réponse. Pour les modèles avec phase de réflexion, une limite de sortie plus élevée dans les paramètres du fournisseur aide.",
+    "refusedResponse": "Le modèle a refusé cette demande. Reformulez-la ou démarrez un nouveau chat.",
     "outputTruncated": "(tronqué)",
     "fileWritten": "Fichier '{{path}}' écrit.",
     "writtenWithSudoPassword": "Écrit avec le mot de passe sudo enregistré.",
@@ -1220,7 +1238,11 @@
       "cardLabel": "Question : {{question}}",
       "send": "Envoyer",
       "answeredOwnWords": "Répondu avec vos propres mots"
-    }
+    },
+    "injectionChecking": "Vérification de la sortie …",
+    "injectionSuspected": "Attention : cette sortie ressemble à une tentative d’injection d’instructions.",
+    "injectionSuspectedReason": "Motif indiqué par l’IA de contrôle : {{reason}}",
+    "injectionConfirmReason": "Motif : {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Cette note est très volumineuse et peut être raccourcie dans le contexte de l’IA lors de longues sessions. La note enregistrée reste complète.",

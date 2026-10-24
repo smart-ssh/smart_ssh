@@ -978,6 +978,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             injection_check_provider,
             injection_check_budget,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_suspected_reason: std::sync::Mutex::new(None),
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(
                 second_opinion_setup_failed,
@@ -2150,11 +2151,13 @@ mod connect_flow_tests {
             .unwrap();
         let credential_store = InMemoryCredentialStore::new()
             .with_secret(&CredentialRef::new(PROVIDER_SECRET_REF), "sk-test");
+        let data_changes = main_db.data_changes();
         let state = AppState {
             sessions: app_logic::session::SessionManager::new(),
             session_extension: None,
             root_key_fingerprint: [0; 32],
             ai_provider_store: Arc::new(main_db.ai_provider_store()),
+            backup_store: main_db.backup_store(),
             policy_store: main_db.policy_store(),
             prompt_history_store: main_db.prompt_history_store(),
             chat_session_store: chat_db.chat_session_store(),
@@ -2163,7 +2166,12 @@ mod connect_flow_tests {
             credential_store: Arc::new(credential_store),
             key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
             keychain: credentials_keyring::KeychainAvailability::Available,
+            file_host_keys: Arc::new(
+                app_logic::host_key_store::FileHostKeyStore::load(dir.path().join("hk.json"))
+                    .unwrap(),
+            ),
             host_key_store: Arc::new(NoHostKeys),
+            data_changes,
             connector,
             entitlements: Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
                 ssh_manager_core::entitlements::Entitlements::free(),

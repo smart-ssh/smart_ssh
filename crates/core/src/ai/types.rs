@@ -122,6 +122,11 @@ pub enum AiEvent {
     /// übersetzt dieses Ereignis in einen Nicht-Fließtext-Hinweis samt
     /// „Weiter"-Aktion ans Frontend.
     TextTruncated,
+    /// Issue #647: the model declined the request (Anthropic `stop_reason:
+    /// refusal`, OpenAI-compatible `finish_reason: content_filter`). Ends the
+    /// turn like `Done` (never both), is not retried and never releases a
+    /// pending tool call. Text streamed before stays visible.
+    Refused,
     /// Issue #162: der Provider hat während dieser Antwort serverseitig im
     /// Web gesucht oder eine Seite gelesen (Anthropic `web_search`/
     /// `web_fetch`). Rein informativ — führt **nichts** aus, löst weder die

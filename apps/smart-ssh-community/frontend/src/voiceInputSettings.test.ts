@@ -11,6 +11,7 @@ describe("appendToDraft", () => {
   });
   it("leaves the draft alone for empty text", () => {
     expect(appendToDraft("ls", "  ")).toBe("ls");
+    expect(appendToDraft("ls", "")).toBe("ls");
   });
 });
 

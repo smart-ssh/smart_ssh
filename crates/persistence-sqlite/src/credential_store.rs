@@ -50,6 +50,7 @@
 
 use secrecy::{ExposeSecret, SecretString};
 use sqlx::sqlite::SqlitePool;
+use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
 use tokio::runtime::{Handle, RuntimeFlavor};
 
 use ssh_manager_core::profiles::{
@@ -64,11 +65,16 @@ pub struct SqliteCredentialStore {
     /// [`Handle::current`] zu holen: Im Startablauf gibt es gar keine
     /// laufende Runtime (gemessen), `Handle::current()` würde dort panicken.
     handle: Handle,
+    data_changes: DataChangeNotifier,
 }
 
 impl SqliteCredentialStore {
-    pub fn new(pool: SqlitePool, handle: Handle) -> Self {
-        Self { pool, handle }
+    pub fn new(pool: SqlitePool, handle: Handle, data_changes: DataChangeNotifier) -> Self {
+        Self {
+            pool,
+            handle,
+            data_changes,
+        }
     }
 
     /// Die Brücke aus dem Modul-Kommentar — der **einzige** Ort dieser
@@ -206,6 +212,7 @@ impl CredentialStore for SqliteCredentialStore {
             .await
         })?
         .map_err(|err| Self::backend_error("Schreiben fehlgeschlagen", &err))?;
+        self.data_changes.notify(DataKind::Secrets);
         Ok(())
     }
 
@@ -222,6 +229,7 @@ impl CredentialStore for SqliteCredentialStore {
                 .await
         })?
         .map_err(|err| Self::backend_error("Löschen fehlgeschlagen", &err))?;
+        self.data_changes.notify(DataKind::Secrets);
         Ok(())
     }
 }

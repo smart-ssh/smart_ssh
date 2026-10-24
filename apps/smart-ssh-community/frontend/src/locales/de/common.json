@@ -430,6 +430,7 @@
     "expired": "Die Host-Key-Abfrage für {{host}}:{{port}} ist abgelaufen. Die Verbindung wurde nicht aufgebaut, dem Schlüssel wird nicht vertraut."
   },
   "sessionTabs": {
+    "newSession": "Neue Sitzung",
     "overview": "Übersicht",
     "pendingAction": "Wartet auf Bestätigung",
     "closeTab": "Tab „{{name}}“ schließen",
@@ -603,7 +604,7 @@
     "SERVER_CERTIFICATE_REQUIRED": "Zertifikat ist erforderlich",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Zertifikats-Key ist erforderlich",
     "SERVER_JUMP_HOST_LOCAL": "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
-    "KEY_FILE_NOT_FOUND": "Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden.",
+    "KEY_FILE_NOT_FOUND": "Schlüsseldatei auf diesem Gerät nicht gefunden.",
     "KEY_FILE_NOT_READABLE": "Die Schlüsseldatei lässt sich mit den aktuellen Rechten nicht lesen.",
     "KEY_FILE_PERMISSIONS_TOO_OPEN": "Die Schlüsseldatei ist für Gruppe oder Welt lesbar oder beschreibbar — wie bei ssh wird die Anmeldung damit abgelehnt. Mit „chmod 600“ auf die Datei beheben.",
     "KEY_FILE_TOO_LARGE": "Die Schlüsseldatei überschreitet die zulässige Größe von 1 MiB.",
@@ -623,6 +624,7 @@
     "MASTER_PASSWORD_REJECTED": "Das Master-Passwort wurde abgelehnt: mindestens 12 Zeichen, und beide Eingaben müssen übereinstimmen.",
     "STARTUP_FAILED": "Der Start ist nicht durchgelaufen. Es wurde nichts verändert; das Log nennt die Ursache.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Im Schlüsselbund liegt ein anderer Schlüssel. Es wurde nichts verändert — bestätige das Ersetzen, wenn du es willst.",
+    "ELEVATED_USER_CHANGED": "Der erhöhte Modus läuft als ein anderer Nutzer als beim Start dieser Aktion — es wurde nichts ausgeführt. Nutze „Hochladen als …“ in der Bearbeitungsleiste, um mit der aktuellen Identität hochzuladen.",
     "APP_LOCKED": "Smart SSH ist noch gesperrt. Entsperre es zuerst mit deinem Master-Passwort.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Dieser Vorgang passt nicht dazu, wo der Schlüssel gerade liegt. Es wurde nichts verändert — öffne die Einstellungen erneut, dort steht der aktive Modus.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Die Warnung zum Master-Passwort ist nicht bestätigt. Ohne dieses Passwort sind alle Daten verloren, und es gibt keine Wiederherstellung — setze das Häkchen und richte es erneut ein. Es wurde nichts verändert.",
@@ -738,6 +740,11 @@
     "moveCollisionTitle": "Ziel existiert bereits — als {{user}} überschreiben?",
     "chmodNote": "Die Rechte werden als {{user}} gesetzt.",
     "editUploadTitle": "Lokale Änderungen als {{user}} hochladen?",
+    "editUploadAs": "Als {{user}} hochladen",
+    "editUploadAsLogin": "Als Login-Nutzer hochladen",
+    "editIdentityChanged": "Als {{from}} geöffnet, der erhöhte Modus läuft jetzt als {{user}}.",
+    "editIdentityElevatedOff": "Als {{from}} geöffnet, der erhöhte Modus ist jetzt aus.",
+    "editIdentityElevatedOn": "Ohne erhöhten Modus geöffnet, er läuft jetzt als {{user}}.",
     "editOpenedAs": "(als {{user}} geöffnet)",
     "failureTitle": "Erhöhte Rechte nicht möglich",
     "sudoersIntro": "Für den erhöhten Modus braucht der Server eine sudo-Regel ohne Passwort für sftp-server. Diese Zeile passt zu diesem Server und Login:",
@@ -1017,6 +1024,10 @@
     "transferStopped": "{{name}}: gestoppt",
     "transferIncomplete": "Unvollständige Datei auf dem Server: {{path}}",
     "transferFiles": "{{done}} von {{total}} Dateien",
+    "transferDelete": "Löschen: {{name}}",
+    "transferChmod": "Rechte ändern: {{name}}",
+    "entriesProgress": "{{done}} von {{total}} Einträgen",
+    "entriesChanged": "Geänderte Einträge: {{count}}",
     "transferRemaining": "noch {{time}}",
     "loading": "Lädt…",
     "noPermissionToOpen": "Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)",
@@ -1146,6 +1157,12 @@
       "confirm": "Hochladen",
       "cancel": "Abbrechen",
       "menuTitle": "Dateien aus der Zwischenablage hochladen"
+    },
+    "readFailure": {
+      "tooLarge": "Kein Text-Diff möglich: Die Datei ist zu groß (über 256 KB).",
+      "notText": "Kein Text-Diff möglich: Die Datei ist binär (kein gültiger UTF-8-Text).",
+      "permission": "Kein Text-Diff möglich: Mit den aktuellen Rechten fehlt die Leseberechtigung für diese Datei.",
+      "other": "Kein Text-Diff möglich: Die Datei konnte nicht gelesen werden ({{message}})."
     }
   },
   "chat": {
@@ -1177,6 +1194,7 @@
     "contextUsageTooltip": "Ältere Teile des Chats werden automatisch zusammengefasst, wenn der Kontext voll wird.",
     "webResearchUnavailable": "Web-Recherche ist für dieses Provider-Konto nicht verfügbar (die Websuche ist dort abgeschaltet). Diese Sitzung antwortet ohne Web-Recherche. Dauerhaft abschalten: Einstellungen → KI-Provider → „Web-Recherche“.",
     "emptyResponse": "Das Modell hat keine Antwort geliefert. Bei Modellen mit Denkphase hilft ein höheres Ausgabe-Limit in den Provider-Einstellungen.",
+    "refusedResponse": "Das Modell hat diese Anfrage abgelehnt. Formuliere sie um oder starte einen neuen Chat.",
     "outputTruncated": "(gekürzt)",
     "fileWritten": "Datei '{{path}}' geschrieben.",
     "writtenWithSudoPassword": "Über hinterlegtes Sudo-Passwort geschrieben.",
@@ -1212,7 +1230,11 @@
       "cardLabel": "Frage: {{question}}",
       "send": "Senden",
       "answeredOwnWords": "In eigenen Worten beantwortet"
-    }
+    },
+    "injectionChecking": "Ausgabe wird geprüft …",
+    "injectionSuspected": "Warnung: Diese Ausgabe sieht nach einem Versuch aus, Anweisungen einzuschleusen.",
+    "injectionSuspectedReason": "Begründung der prüfenden KI: {{reason}}",
+    "injectionConfirmReason": "Grund: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",

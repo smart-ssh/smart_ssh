@@ -872,3 +872,28 @@ mod attachment_tests {
             .any(|e| matches!(e, RawEvent::Public(AiEvent::Error(_)))));
     }
 }
+
+#[cfg(test)]
+mod issue_615_tests {
+    use super::*;
+
+    fn info(error_type: &str, code: &str) -> ProviderErrorInfo {
+        ProviderErrorInfo {
+            error_type: Some(error_type.into()),
+            code: Some(code.into()),
+            message: Some("m".into()),
+        }
+    }
+
+    #[test]
+    fn test_in_stream_context_length_exceeded_is_context_too_large() {
+        assert_eq!(
+            map_stream_error(&info("invalid_request_error", "context_length_exceeded")),
+            AiError::ContextTooLarge
+        );
+        assert!(matches!(
+            map_stream_error(&info("invalid_request_error", "other")),
+            AiError::RejectedRequest(_)
+        ));
+    }
+}

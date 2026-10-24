@@ -430,6 +430,7 @@
     "expired": "La richiesta della chiave host per {{host}}:{{port}} è scaduta. La connessione non è stata stabilita e la chiave non è stata considerata attendibile."
   },
   "sessionTabs": {
+    "newSession": "Nuova sessione",
     "overview": "Panoramica",
     "pendingAction": "In attesa di conferma",
     "closeTab": "Chiudi scheda \"{{name}}\"",
@@ -623,6 +624,7 @@
     "MASTER_PASSWORD_REJECTED": "La password principale è stata rifiutata: almeno 12 caratteri, e le due immissioni devono coincidere.",
     "STARTUP_FAILED": "L'avvio non è stato completato. Nulla è stato modificato; il log indica la causa.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Il portachiavi contiene una chiave diversa. Nulla è stato modificato: confermi la sostituzione se è ciò che desidera.",
+    "ELEVATED_USER_CHANGED": "La modalità elevata ora viene eseguita con un altro utente; non è stato fatto nulla. Usa «Carica come …» nella barra di modifica.",
     "APP_LOCKED": "Smart SSH è ancora bloccato. Lo sblocchi prima con la sua password principale.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Questa operazione non corrisponde a dove è attualmente conservata la chiave. Nulla è stato modificato: riapra le impostazioni, che mostrano la modalità attiva.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "L'avviso sulla password principale non è stato confermato. Senza quella password tutti i dati vanno persi e non c'è recupero: selezioni la casella e la imposti di nuovo. Nulla è stato modificato.",
@@ -743,6 +745,11 @@
     "moveCollisionTitle": "La destinazione esiste già: sovrascrivere come {{user}}?",
     "chmodNote": "I permessi verranno impostati come {{user}}.",
     "editUploadTitle": "Caricare le modifiche locali come {{user}}?",
+    "editUploadAs": "Carica come {{user}}",
+    "editUploadAsLogin": "Carica come utente di accesso",
+    "editIdentityChanged": "Aperto come {{from}}, la modalità elevata ora viene eseguita come {{user}}.",
+    "editIdentityElevatedOff": "Aperto come {{from}}, la modalità elevata ora è disattivata.",
+    "editIdentityElevatedOn": "Aperto senza modalità elevata, ora viene eseguita come {{user}}.",
     "editOpenedAs": "(aperto come {{user}})",
     "failureTitle": "Diritti elevati non possibili",
     "sudoersIntro": "La modalità elevata richiede sul server una regola sudo senza password per sftp-server. Questa riga corrisponde a questo server e accesso:",
@@ -1022,6 +1029,10 @@
     "transferStopped": "{{name}}: interrotto",
     "transferIncomplete": "File incompleto rimasto sul server: {{path}}",
     "transferFiles": "{{done}} di {{total}} file",
+    "transferDelete": "Eliminazione di {{name}}",
+    "transferChmod": "Modifica dei permessi di {{name}}",
+    "entriesProgress": "{{done}} di {{total}} elementi",
+    "entriesChanged": "Elementi modificati: {{count}}",
     "transferRemaining": "{{time}} rimanenti",
     "loading": "Caricamento…",
     "noPermissionToOpen": "Nessun permesso per aprire questa cartella (manca x)",
@@ -1153,6 +1164,12 @@
       "confirm": "Carica",
       "cancel": "Annulla",
       "menuTitle": "Carica i file dagli appunti"
+    },
+    "readFailure": {
+      "tooLarge": "Diff di testo non possibile: il file è troppo grande (oltre 256 KB).",
+      "notText": "Diff di testo non possibile: il file è binario (non è testo UTF-8 valido).",
+      "permission": "Diff di testo non possibile: con i permessi attuali non hai il permesso di lettura per questo file.",
+      "other": "Diff di testo non possibile: impossibile leggere il file ({{message}})."
     }
   },
   "chat": {
@@ -1184,6 +1201,7 @@
     "contextUsageTooltip": "Le parti più vecchie della chat vengono riassunte automaticamente quando il contesto si riempie.",
     "webResearchUnavailable": "La ricerca web non è disponibile per questo account provider (la ricerca web è disattivata lì). Questa sessione risponde senza ricerca web. Per disattivarla in modo permanente: Impostazioni → Provider IA → “Ricerca web”.",
     "emptyResponse": "Il modello non ha restituito alcuna risposta. Per i modelli con fase di ragionamento aiuta un limite di output più alto nelle impostazioni del provider.",
+    "refusedResponse": "Il modello ha rifiutato questa richiesta. Riformulala o avvia una nuova chat.",
     "outputTruncated": "(troncato)",
     "fileWritten": "File '{{path}}' scritto.",
     "writtenWithSudoPassword": "Scritto con la password sudo memorizzata.",
@@ -1220,7 +1238,11 @@
       "cardLabel": "Domanda: {{question}}",
       "send": "Invia",
       "answeredOwnWords": "Risposta con parole tue"
-    }
+    },
+    "injectionChecking": "Controllo dell’output in corso …",
+    "injectionSuspected": "Attenzione: questo output sembra un tentativo di inserire istruzioni.",
+    "injectionSuspectedReason": "Motivo indicato dall’IA di controllo: {{reason}}",
+    "injectionConfirmReason": "Motivo: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Questa nota è molto grande e potrebbe essere abbreviata per il contesto dell'IA nelle sessioni lunghe. La nota salvata resta completa.",

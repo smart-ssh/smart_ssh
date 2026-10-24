@@ -22,6 +22,7 @@
 pub mod ai_provider_factory;
 pub mod ai_usage;
 pub mod auto_reconnect;
+pub mod backup;
 pub mod chat_content_extension;
 pub mod compaction;
 pub mod confirmation;

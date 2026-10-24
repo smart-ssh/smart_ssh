@@ -929,6 +929,11 @@ pub struct SessionParts {
     /// Eskalation laut Spec auf "die auf diesem Inhalt basierende
     /// Folgeaktion" bezieht (Singular), nicht auf den Rest der Sitzung.
     pub injection_suspected: std::sync::atomic::AtomicBool,
+    /// Issue #693: the checker's (redacted, length-limited) reason for the
+    /// suspicion above. Display text only — shown in the confirmation that
+    /// consumes the flag, never sent to the AI. Cleared together with the
+    /// flag; set alongside it.
+    pub injection_suspected_reason: StdMutex<Option<String>>,
     /// Issue #102: `true`, wenn der letzte Einschleusungs-Check nicht laufen
     /// konnte (Provider-Fehler) oder kein Urteil lieferte. Wie
     /// `injection_suspected` "klebrig bis verbraucht": die nächste
@@ -2016,6 +2021,7 @@ mod tests {
             injection_check_provider: None,
             injection_check_budget: None,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_suspected_reason: std::sync::Mutex::new(None),
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
             injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),

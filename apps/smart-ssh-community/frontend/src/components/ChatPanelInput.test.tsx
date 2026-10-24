@@ -20,6 +20,7 @@ import {
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseEmpty,
+  onChatResponseRefused,
   onChatResponseTruncated,
   onChatTextDelta,
   onChatWebActivity,
@@ -87,11 +88,13 @@ vi.mock("../events", () => ({
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseRefused: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
   onChatContextUsage: () => Promise.resolve(() => {}),
   onChatContextCompacted: () => Promise.resolve(() => {}),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
+  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
   onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));
@@ -373,6 +376,26 @@ describe("ChatPanel empty/truncated response notices (Spec 0080, A3)", () => {
     // Der Hinweis bleibt unverändert als eigenes Element stehen — der neue
     // Text ist NICHT hineingerutscht.
     expect(screen.getByText(hintText)).toBeInTheDocument();
+  });
+
+  // Issue #647: `chat-response-refused` → own notice, not the empty hint.
+  it("shows the refusal notice instead of the empty-response hint", async () => {
+    let refusedHandler: ((event: { sessionId: string }) => void) | null = null;
+    vi.mocked(onChatResponseRefused).mockImplementation((h) => {
+      refusedHandler = h;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    await waitFor(() => expect(refusedHandler).not.toBeNull());
+
+    refusedHandler!({ sessionId: "session-1" });
+
+    expect(
+      await screen.findByText(
+        "Das Modell hat diese Anfrage abgelehnt. Formuliere sie um oder starte einen neuen Chat.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/keine Antwort geliefert/)).not.toBeInTheDocument();
   });
 
   // T16: `chat-response-truncated` OHNE vorherige Assistant-Nachricht (z. B.

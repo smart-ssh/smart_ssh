@@ -7,7 +7,7 @@ import { cancelConnect, connect, disconnect, resumeChatSession } from "./api";
 import { onConnectProgress } from "./events";
 import "./testI18n";
 import type { ConnectProgressEvent } from "./types";
-import { useSessionTabs } from "./useSessionTabs";
+import { sessionTabLabel, useSessionTabs } from "./useSessionTabs";
 
 vi.mock("./api", async () => {
   const actual = await vi.importActual<typeof import("./api")>("./api");
@@ -194,5 +194,47 @@ describe("resuming a saved chat session in the connecting tab (issue #568)", () 
     expect(vi.mocked(resumeChatSession).mock.calls[1].slice(0, 2)).toEqual(["srv-1", "chat-1"]);
     expect(connect).not.toHaveBeenCalled();
     expect(result.current.tabs[0]).toMatchObject({ sessionId: "session-r2", phase: "connected" });
+  });
+});
+
+describe("several sessions to one server (issue #657)", () => {
+  const open = async (id: string) => {
+    vi.mocked(connect).mockResolvedValueOnce(id);
+    await act(async () => result.current.startConnect(server));
+  };
+  let result: ReturnType<typeof renderHook<ReturnType<typeof useSessionTabs>, unknown>>["result"];
+
+  it("numbers tabs per server, reuses freed numbers only after closing", async () => {
+    vi.mocked(connect).mockReset();
+    ({ result } = renderHook(() => useSessionTabs()));
+    await open("a");
+    await open("b");
+    await open("c");
+    expect(result.current.tabs.map((t) => [t.sessionId, t.serverNumber])).toEqual([
+      ["a", 1],
+      ["b", 2],
+      ["c", 3],
+    ]);
+    expect(sessionTabLabel(result.current.tabs[1]!, "x")).toBe("prod-db (2)");
+    expect(sessionTabLabel(result.current.tabs[0]!, "x")).toBe("prod-db");
+    // Numbers are not reused while a tab with that number is open.
+    await act(async () => result.current.requestCloseTab("a"));
+    await open("d");
+    expect(result.current.tabs.map((t) => [t.sessionId, t.serverNumber])).toEqual([
+      ["b", 2],
+      ["c", 3],
+      ["d", 1],
+    ]);
+  });
+
+  it("focuses the most recently used tab of the server", async () => {
+    vi.mocked(connect).mockReset();
+    ({ result } = renderHook(() => useSessionTabs()));
+    await open("a");
+    await open("b");
+    act(() => result.current.switchTo("a"));
+    expect(result.current.findExistingSessionId("srv-1")).toBe("a");
+    act(() => result.current.switchTo("b"));
+    expect(result.current.findExistingSessionId("srv-1")).toBe("b");
   });
 });

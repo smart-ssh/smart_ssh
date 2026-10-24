@@ -488,6 +488,18 @@ export type ActionResultPayload =
    * Datei vor dem Schreiben nicht existierte. */
   | { kind: "fileWrite"; path: string; backupPath: string | null; usedSudoPassword: boolean };
 
+/** Issue #693 (Spec 0039, §5.2): state of the injection check of one
+ * checked item. `reason` is untrusted text — render as plain text only. */
+export type InjectionCheckState =
+  | { state: "running" }
+  | { state: "clean" }
+  | { state: "suspected"; reason: string }
+  | { state: "unavailable" };
+
+/** Issue #693 — `chat-injection-check`; `itemId` is the action id of a
+ * command result / file read, or the activity id of a web research card. */
+export type ChatInjectionCheckEvent = { sessionId: string; itemId: string } & InjectionCheckState;
+
 export interface ChatActionResultEvent {
   sessionId: string;
   actionId: string;
@@ -597,6 +609,8 @@ export interface WebActivityDto {
 /** Spec 0105 — `chat-web-activity`. */
 export interface ChatWebActivityEvent {
   sessionId: string;
+  /** Issue #693: binds `chat-injection-check` events to this card. */
+  activityId?: string;
   activity: WebActivityDto;
 }
 
@@ -606,6 +620,12 @@ export interface ChatWebActivityEvent {
  * ohne Export-/Notiz-Leiste — es gibt nichts, das fortgesetzt oder
  * exportiert werden könnte. */
 export interface ChatResponseEmptyEvent {
+  sessionId: string;
+}
+
+/** Issue #647 — the model declined the request (`refusal` /
+ * `content_filter`). Shows a plain notice; text streamed before stays. */
+export interface ChatResponseRefusedEvent {
   sessionId: string;
 }
 
@@ -1186,7 +1206,8 @@ export interface EditSessionDto {
   remoteModified: string | null;
 }
 
-export type SftpTransferKind = "upload" | "download";
+/** Issue #658: `delete` / `chmod` are recursive folder operations. */
+export type SftpTransferKind = "upload" | "download" | "delete" | "chmod";
 
 export interface SftpTransferStartedEvent {
   sessionId: string;
@@ -1211,6 +1232,8 @@ export interface SftpTransferFinishedEvent {
   /** Issue #622: a stopped upload whose partial remote file could not be
    * removed. */
   incompleteRemotePath?: string | null;
+  /** Issue #658: recursive delete/chmod — entries changed before the end. */
+  entriesDone?: number | null;
 }
 
 /** Issue #622: throttled progress of a running transfer. */
@@ -1226,6 +1249,8 @@ export interface SftpTransferProgressEvent {
     bytesDone: number;
     bytesTotal: number;
   };
+  /** Issue #658: recursive delete/chmod; `total` is `null` while counting. */
+  entries?: { done: number; total: number | null };
 }
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------

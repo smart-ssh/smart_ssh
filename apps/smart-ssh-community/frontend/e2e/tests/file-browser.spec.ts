@@ -62,7 +62,7 @@ test.describe("file browser", () => {
     await page.keyboard.press("Escape");
 
     await rowMenu(page, "notes.txt").click();
-    await page.getByRole("button", { name: /^Edit permissions|^Permissions/ }).click();
+    await page.getByRole("button", { name: /^Edit permissions/ }).click();
     await expectNoSeriousA11yViolations(page, "file browser: permissions");
     await page.keyboard.press("Escape");
 

@@ -130,6 +130,19 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
   der Dialog vorab, wie viele Dateien und Ordner gelöscht werden (Vorschau
   wie beim zweistufigen Löschen eines Servers). Ordner werden von unten nach
   oben geleert und entfernt.
+- **Fortschritt und Abbruch bei Ordnern:** Das rekursive Löschen eines Ordners
+  und das rekursive Ändern von Rechten erscheinen als Zeile in derselben Liste
+  wie die Übertragungen („Löschen: /tmp/gross“ bzw. „Rechte ändern: …“) mit
+  Fortschrittsbalken und „x von y Einträgen“ (bis die Gesamtzahl feststeht,
+  nur der Zähler). Die Zahlen steigen nur und werden gedrosselt aktualisiert.
+  Jede Zeile hat einen Abbrechen-Knopf: Der Vorgang stoppt vor dem nächsten
+  Eintrag, schon Gelöschtes bzw. Geändertes bleibt, und die Zeile zeigt
+  „abgebrochen“ mit der Zahl geänderter Einträge. Endet der Vorgang mit einem
+  Fehler, zeigt die Zeile den Fehler und ebenfalls die Zahl geänderter
+  Einträge. Eine einzelne Datei und ein nicht rekursives Ändern der Rechte
+  zeigen keine Zeile. Im erhöhten Modus zählen diese Vorgänge zu den laufenden
+  Operationen, die der Dialog zum Beenden der erhöhten Rechte mit
+  „x von y Einträgen“ auflistet.
 - **Umbenennen:** per Dialog. Existiert der Zielname schon, warnt die App.
 - **Neuen Ordner anlegen** im aktuellen Verzeichnis, per Werkzeugleiste oder
   über das Menü auf leerer Fläche (Teil 1).
@@ -234,7 +247,11 @@ Wie „Edit with…“ in Transfer-Clients:
    App vor dem Überschreiben. Lässt sich der Zustand der Datei nicht
    bestimmen, gilt sie nie stillschweigend als unverändert. Wurde die Datei im
    erhöhten Modus geöffnet, läuft der Upload nur über den erhöhten Kanal
-   (Spec 0067, A5).
+   (Spec 0067, A5). Kann die Remote-Seite der Vorschau nicht gelesen werden,
+   nennt der Hinweis den Grund: Datei zu groß, Binärdatei, fehlende
+   Leseberechtigung mit den aktuellen Rechten oder (mit kurzer Meldung) ein
+   anderer Lesefehler. Dasselbe gilt für die Überschreib-Vorschau beim
+   Hochladen.
 6. **Sauberes Ende:** Die Überwachung stoppt, wenn der Nutzer den Ablauf
    beendet, die Ansicht schließt oder die Sitzung getrennt wird; die
    temporäre Kopie wird dann entfernt.
@@ -249,7 +266,12 @@ Wie „Edit with…“ in Transfer-Clients:
    Pfad und Fehler, nie den Dateiinhalt.
 
 Fehlerfälle (lokales Programm nicht gefunden, Datei schon offen, Upload
-scheitert) werden sichtbar gemeldet.
+scheitert) werden sichtbar gemeldet. Scheitert der Upload einer Bearbeitung,
+erscheint die Meldung genau einmal, in der Leiste der Bearbeitung neben
+„Hochladen“, „Später“ und „Bearbeitung beenden“ — weder als Hinweis noch als
+Zeile in der Übertragungsliste. Ein erneuter Versuch ersetzt die Meldung,
+statt eine weitere hinzuzufügen. Ein erfolgreicher Upload meldet sich wie
+bisher.
 
 ## Teil 5: Standardprogramme je Dateityp
 

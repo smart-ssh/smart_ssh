@@ -430,6 +430,7 @@
     "expired": "A(z) {{host}}:{{port}} gazdakulcs-kérése lejárt. A kapcsolat nem jött létre, és a kulcsban nem bíztak meg."
   },
   "sessionTabs": {
+    "newSession": "Új munkamenet",
     "overview": "Áttekintés",
     "pendingAction": "Megerősítésre vár",
     "closeTab": "A(z) \"{{name}}\" lap bezárása",
@@ -623,6 +624,7 @@
     "MASTER_PASSWORD_REJECTED": "A mesterjelszó elutasítva: legalább 12 karakter, és a két bevitelnek egyeznie kell.",
     "STARTUP_FAILED": "Az indítás nem fejeződött be. Semmi nem változott; a napló megnevezi az okot.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "A kulcstartó másik kulcsot tartalmaz. Semmi nem változott – erősítse meg a cserét, ha ezt szeretné.",
+    "ELEVATED_USER_CHANGED": "A megemelt mód mostantól más felhasználóként fut; nem történt semmi. Használja a szerkesztősáv „Feltöltés … néven” gombját.",
     "APP_LOCKED": "A Smart SSH még zárolva van. Először oldja fel a mesterjelszavával.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Ez a művelet nem egyezik azzal, hogy a kulcs jelenleg hol van tárolva. Semmi nem változott – nyissa meg újra a beállításokat, azok mutatják az aktív módot.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "A mesterjelszó-figyelmeztetést nem erősítették meg. E jelszó nélkül minden adat elvész, és nincs helyreállítás – jelölje be a négyzetet, és állítsa be újra. Semmi nem változott.",
@@ -738,6 +740,11 @@
     "moveCollisionTitle": "A cél már létezik – felülírás {{user}} néven?",
     "chmodNote": "A jogosultságok {{user}} néven lesznek beállítva.",
     "editUploadTitle": "Helyi módosítások feltöltése {{user}} néven?",
+    "editUploadAs": "Feltöltés {{user}} néven",
+    "editUploadAsLogin": "Feltöltés a bejelentkezési felhasználóként",
+    "editIdentityChanged": "Megnyitva {{from}} néven, a megemelt mód mostantól {{user}} néven fut.",
+    "editIdentityElevatedOff": "Megnyitva {{from}} néven, a megemelt mód most ki van kapcsolva.",
+    "editIdentityElevatedOn": "Megemelt mód nélkül nyitva, mostantól {{user}} néven fut.",
     "editOpenedAs": "({{user}} néven megnyitva)",
     "failureTitle": "Az emelt jogok nem lehetségesek",
     "sudoersIntro": "Az emelt mód jelszó nélküli sudo-szabályt igényel az sftp-serverhez a szerveren. Ez a sor illik ehhez a szerverhez és bejelentkezéshez:",
@@ -1017,6 +1024,10 @@
     "transferStopped": "{{name}}: leállítva",
     "transferIncomplete": "Hiányos fájl maradt a kiszolgálón: {{path}}",
     "transferFiles": "{{done}} / {{total}} fájl",
+    "transferDelete": "{{name}} törlése",
+    "transferChmod": "{{name}} jogosultságainak módosítása",
+    "entriesProgress": "{{done}} / {{total}} elem",
+    "entriesChanged": "Módosított elemek: {{count}}",
     "transferRemaining": "{{time}} van hátra",
     "loading": "Betöltés…",
     "noPermissionToOpen": "Nincs jogosultság a mappa megnyitásához (hiányzik az x)",
@@ -1146,6 +1157,12 @@
       "confirm": "Feltöltés",
       "cancel": "Mégse",
       "menuTitle": "A vágólapon lévő fájlok feltöltése"
+    },
+    "readFailure": {
+      "tooLarge": "Szövegkülönbség nem készíthető: a fájl túl nagy (256 KB felett).",
+      "notText": "Szövegkülönbség nem készíthető: a fájl bináris (nem érvényes UTF-8 szöveg).",
+      "permission": "Szövegkülönbség nem készíthető: a jelenlegi jogokkal nincs olvasási jogosultságod ehhez a fájlhoz.",
+      "other": "Szövegkülönbség nem készíthető: a fájl nem olvasható ({{message}})."
     }
   },
   "chat": {
@@ -1177,6 +1194,7 @@
     "contextUsageTooltip": "A csevegés régebbi részeit a rendszer automatikusan összefoglalja, ha betelik a kontextus.",
     "webResearchUnavailable": "A webes kutatás ennél a szolgáltatói fióknál nem érhető el (a webkeresés ott le van tiltva). Ez a munkamenet webes kutatás nélkül válaszol. Végleges kikapcsolás: Beállítások → AI-szolgáltató → „Webes kutatás”.",
     "emptyResponse": "A modell nem adott választ. Gondolkodási fázisú modelleknél segít a szolgáltató beállításaiban magasabb kimeneti korlátot megadni.",
+    "refusedResponse": "A modell elutasította a kérést. Fogalmazza át, vagy kezdjen új csevegést.",
     "outputTruncated": "(csonkolva)",
     "fileWritten": "A(z) '{{path}}' fájl megírva.",
     "writtenWithSudoPassword": "A tárolt sudo-jelszóval megírva.",
@@ -1212,7 +1230,11 @@
       "cardLabel": "Kérdés: {{question}}",
       "send": "Küldés",
       "answeredOwnWords": "Saját szavaiddal megválaszolva"
-    }
+    },
+    "injectionChecking": "Kimenet ellenőrzése …",
+    "injectionSuspected": "Figyelem: ez a kimenet utasítások beinjektálására tett kísérletnek tűnik.",
+    "injectionSuspectedReason": "Az ellenőrző MI indoklása: {{reason}}",
+    "injectionConfirmReason": "Indok: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Ez a jegyzet nagyon nagy, ezért hosszú munkamenetekben lerövidülhet az AI-kontextusban. A mentett jegyzet teljes marad.",

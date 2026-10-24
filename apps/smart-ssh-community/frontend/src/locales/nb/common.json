@@ -430,6 +430,7 @@
     "expired": "Forespørselen om vertsnøkkel for {{host}}:{{port}} utløp. Tilkoblingen ble ikke opprettet, og nøkkelen ble ikke godkjent."
   },
   "sessionTabs": {
+    "newSession": "Ny økt",
     "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
@@ -623,6 +624,7 @@
     "MASTER_PASSWORD_REJECTED": "Hovedpassordet ble avvist: minst 12 tegn, og begge inntastingene må være like.",
     "STARTUP_FAILED": "Oppstarten ble ikke fullført. Ingenting ble endret; loggen angir årsaken.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Nøkkelringen inneholder en annen nøkkel. Ingenting ble endret – bekreft erstatningen hvis det er det du vil.",
+    "ELEVATED_USER_CHANGED": "Utvidet modus kjører nå som en annen bruker; ingenting ble utført. Bruk «Last opp som …» i redigeringslinjen.",
     "APP_LOCKED": "Smart SSH er fortsatt låst. Lås den opp med hovedpassordet først.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Denne operasjonen passer ikke med hvor nøkkelen oppbevares nå. Ingenting ble endret – åpne innstillingene på nytt, de viser den aktive modusen.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Advarselen om hovedpassordet er ikke bekreftet. Uten dette passordet går alle data tapt og det finnes ingen gjenoppretting – kryss av i boksen og sett det opp på nytt. Ingenting ble endret.",
@@ -738,6 +740,11 @@
     "moveCollisionTitle": "Målet finnes allerede – overskrive som {{user}}?",
     "chmodNote": "Tillatelsene settes som {{user}}.",
     "editUploadTitle": "Laste opp lokale endringer som {{user}}?",
+    "editUploadAs": "Last opp som {{user}}",
+    "editUploadAsLogin": "Last opp som innloggingsbruker",
+    "editIdentityChanged": "Åpnet som {{from}}, utvidet modus kjører nå som {{user}}.",
+    "editIdentityElevatedOff": "Åpnet som {{from}}, utvidet modus er nå av.",
+    "editIdentityElevatedOn": "Åpnet uten utvidet modus, den kjører nå som {{user}}.",
     "editOpenedAs": "(åpnet som {{user}})",
     "failureTitle": "Utvidede rettigheter er ikke mulig",
     "sudoersIntro": "Utvidet modus trenger en sudo-regel uten passord for sftp-server på serveren. Denne linjen passer til denne serveren og påloggingen:",
@@ -1017,6 +1024,10 @@
     "transferStopped": "{{name}}: stoppet",
     "transferIncomplete": "Ufullstendig fil igjen på serveren: {{path}}",
     "transferFiles": "{{done}} av {{total}} filer",
+    "transferDelete": "Sletter {{name}}",
+    "transferChmod": "Endrer rettigheter for {{name}}",
+    "entriesProgress": "{{done}} av {{total}} oppføringer",
+    "entriesChanged": "Endrede oppføringer: {{count}}",
     "transferRemaining": "{{time}} igjen",
     "loading": "Laster…",
     "noPermissionToOpen": "Ingen tillatelse til å åpne denne mappen (x mangler)",
@@ -1146,6 +1157,12 @@
       "confirm": "Last opp",
       "cancel": "Avbryt",
       "menuTitle": "Last opp filene fra utklippstavlen"
+    },
+    "readFailure": {
+      "tooLarge": "Ingen tekstdiff mulig: filen er for stor (over 256 KB).",
+      "notText": "Ingen tekstdiff mulig: filen er binær (ikke gyldig UTF-8-tekst).",
+      "permission": "Ingen tekstdiff mulig: med de nåværende rettighetene har du ikke lesetilgang til filen.",
+      "other": "Ingen tekstdiff mulig: filen kunne ikke leses ({{message}})."
     }
   },
   "chat": {
@@ -1177,6 +1194,7 @@
     "contextUsageTooltip": "Eldre deler av chatten oppsummeres automatisk når konteksten blir full.",
     "webResearchUnavailable": "Nettsøk er ikke tilgjengelig for denne leverandørkontoen (nettsøk er slått av der). Denne økten svarer uten nettsøk. For å slå det av permanent: Innstillinger → AI-leverandør → “Nettsøk”.",
     "emptyResponse": "Modellen ga ikke noe svar. For modeller med en tenkefase hjelper en høyere utdatagrense i leverandørinnstillingene.",
+    "refusedResponse": "Modellen avslo denne forespørselen. Omformuler den, eller start en ny chat.",
     "outputTruncated": "(avkortet)",
     "fileWritten": "Filen «{{path}}» er skrevet.",
     "writtenWithSudoPassword": "Skrevet med det lagrede sudo-passordet.",
@@ -1212,7 +1230,11 @@
       "cardLabel": "Spørsmål: {{question}}",
       "send": "Send inn",
       "answeredOwnWords": "Besvart med egne ord"
-    }
+    },
+    "injectionChecking": "Kontrollerer utdata …",
+    "injectionSuspected": "Advarsel: denne utdataen ligner et forsøk på å injisere instruksjoner.",
+    "injectionSuspectedReason": "Begrunnelse fra den kontrollerende AI-en: {{reason}}",
+    "injectionConfirmReason": "Begrunnelse: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Dette notatet er svært stort og kan bli forkortet for AI-konteksten i lange økter. Det lagrede notatet forblir komplett.",

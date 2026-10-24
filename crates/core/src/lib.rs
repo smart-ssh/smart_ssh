@@ -5,9 +5,12 @@
 //! `app-shell` und potenziell weiteren Frontends (CLI, TUI, ...) genutzt.
 
 pub mod ai;
+pub mod atomic_write;
 pub mod audit;
+pub mod backup;
 pub mod credentials;
 pub mod crypto;
+pub mod data_change;
 pub mod entitlements;
 pub mod filter;
 pub mod fs_hardening;

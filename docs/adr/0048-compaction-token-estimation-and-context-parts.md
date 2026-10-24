@@ -260,9 +260,11 @@ Die 4-Byte-Schätzung unterschätzt token-dichte Inhalte (Hex, MAC-Adressen,
 Logzeilen) deutlich; eine lange Sitzung blieb so unter dem Auslöser, während
 die echte Eingabegröße schon darüber lag. Entscheidung: Der Provider-Stream
 trägt ein eigenes Ereignis `AiEvent::Usage { input_tokens }` (Eingabe-Token
-plus Cache-Lese- und -Schreib-Anteil; aktuell vom Anthropic-Provider
-geliefert, andere Provider senden es nicht und behalten die reine
-Schätzung). Die Sitzung hält im Speicher das zuletzt gemeldete Ergebnis und
+plus Cache-Lese- und -Schreib-Anteil; vom Anthropic-Provider und –
+seit Issue #617 – von den OpenAI-kompatiblen Providern (Chat Completions,
+Responses, Ollama) geliefert, dort aus `prompt_tokens` bzw. `input_tokens`,
+die gecachte Token bereits enthalten, daher ohne Addition; Endpunkte ohne
+Usage-Angabe behalten die reine Schätzung). Die Sitzung hält im Speicher das zuletzt gemeldete Ergebnis und
 ein geglättetes Verhältnis echt/geschätzt (erste Beobachtung unverändert,
 danach Mittel aus alt und neu; nie unter 1,0). Der Auslöser vergleicht die
 Schätzung in Einheiten des Verhältnisses; eine zuletzt gemeldete Größe über

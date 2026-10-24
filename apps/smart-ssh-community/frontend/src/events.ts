@@ -16,11 +16,13 @@ import type {
   ChatQueuedMessagesSentEvent,
   ChatResponseCancelledEvent,
   ChatResponseEmptyEvent,
+  ChatResponseRefusedEvent,
   ChatResponseTruncatedEvent,
   ChatContextUsageEvent,
   ChatContextCompactedEvent,
   ChatTextDeltaEvent,
   ChatWebActivityEvent,
+  ChatInjectionCheckEvent,
   ChatWebResearchUnavailableEvent,
   AutoReconnectChangedEvent,
   ChatSessionChangedEvent,
@@ -167,6 +169,12 @@ export const onChatWebActivity = (
 ): Promise<UnlistenFn> =>
   listen<ChatWebActivityEvent>("chat-web-activity", (e) => handler(e.payload));
 
+/** Issue #693 — progress/verdict of the injection check. */
+export const onChatInjectionCheck = (
+  handler: (event: ChatInjectionCheckEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatInjectionCheckEvent>("chat-injection-check", (e) => handler(e.payload));
+
 /** Spec 0105 §7 (Issue #169) — s. `ChatWebResearchUnavailableEvent`. */
 export const onChatWebResearchUnavailable = (
   handler: (event: ChatWebResearchUnavailableEvent) => void,
@@ -180,6 +188,12 @@ export const onChatResponseEmpty = (
   handler: (event: ChatResponseEmptyEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatResponseEmptyEvent>("chat-response-empty", (e) => handler(e.payload));
+
+/** Issue #647 — s. `ChatResponseRefusedEvent`-Doc-Kommentar. */
+export const onChatResponseRefused = (
+  handler: (event: ChatResponseRefusedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatResponseRefusedEvent>("chat-response-refused", (e) => handler(e.payload));
 
 /** Spec 0066, §1 — s. `ChatResponseCancelledEvent`-Doc-Kommentar. */
 export const onChatResponseCancelled = (

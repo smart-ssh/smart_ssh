@@ -63,6 +63,22 @@ pub enum ConnectionStatus {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct DataChangedPayload<'a> {
+    kinds: &'a std::collections::BTreeSet<ssh_manager_core::data_change::DataKind>,
+}
+
+/// Issue #672: `data-changed` — one coalesced notification after committed
+/// changes to the user data set. The payload carries the entity kinds only,
+/// never content, IDs or names.
+pub fn emit_data_changed(
+    emitter: &dyn EventEmitter,
+    kinds: &std::collections::BTreeSet<ssh_manager_core::data_change::DataKind>,
+) {
+    emit(emitter, "data-changed", &DataChangedPayload { kinds });
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ConnectionStatusChangedPayload {
     session_id: SessionId,
     status: ConnectionStatus,
@@ -1058,6 +1074,8 @@ pub fn emit_chat_ai_retrying(
 #[serde(rename_all = "camelCase")]
 struct ChatWebActivityPayload {
     session_id: SessionId,
+    /// Issue #693: binds a later `chat-injection-check` event to this card.
+    activity_id: Uuid,
     activity: crate::dto::WebActivityDto,
 }
 
@@ -1069,6 +1087,7 @@ struct ChatWebActivityPayload {
 pub fn emit_chat_web_activity(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
+    activity_id: Uuid,
     activity: crate::dto::WebActivityDto,
 ) {
     emit(
@@ -1076,7 +1095,56 @@ pub fn emit_chat_web_activity(
         "chat-web-activity",
         &ChatWebActivityPayload {
             session_id,
+            activity_id,
             activity,
+        },
+    );
+}
+
+/// Issue #693: state of the optional AI check for injected instructions on
+/// one piece of fetched content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum InjectionCheckState {
+    Running,
+    Clean,
+    /// `reason` is untrusted display text: already redacted and cut to
+    /// [`INJECTION_REASON_MAX_CHARS`]; the frontend renders it as plain text.
+    Suspected {
+        reason: String,
+    },
+    Unavailable,
+}
+
+/// Issue #693: length limit for the checker's reason shown to the user.
+pub const INJECTION_REASON_MAX_CHARS: usize = 300;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatInjectionCheckPayload {
+    session_id: SessionId,
+    item_id: Uuid,
+    #[serde(flatten)]
+    state: InjectionCheckState,
+}
+
+/// Issue #693: progress/verdict of the injection check, bound to the checked
+/// item (`item_id` = action id of a command result / file read, activity id
+/// of a web research card). Display only: never persisted, never sent to
+/// the AI.
+pub fn emit_chat_injection_check(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    item_id: Uuid,
+    state: InjectionCheckState,
+) {
+    emit(
+        emitter,
+        "chat-injection-check",
+        &ChatInjectionCheckPayload {
+            session_id,
+            item_id,
+            state,
         },
     );
 }
@@ -1131,6 +1199,23 @@ pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionI
         emitter,
         "chat-response-empty",
         &ChatResponseEmptyPayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatResponseRefusedPayload {
+    session_id: SessionId,
+}
+
+/// Issue #647: the model declined the request (`refusal` /
+/// `content_filter`). Own event (not text in the content, same reason as
+/// `emit_chat_response_truncated`); the frontend shows a plain notice.
+pub fn emit_chat_response_refused(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-response-refused",
+        &ChatResponseRefusedPayload { session_id },
     );
 }
 
@@ -1208,6 +1293,10 @@ pub fn emit_chat_auto_continuation_limit_reached(
 pub enum SftpTransferKind {
     Upload,
     Download,
+    /// Issue #658: recursive delete of a folder.
+    Delete,
+    /// Issue #658: recursive permission change.
+    Chmod,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1262,6 +1351,9 @@ struct SftpTransferFinishedPayload {
     /// Server nicht entfernt werden konnte: ihr Pfad.
     #[serde(skip_serializing_if = "Option::is_none")]
     incomplete_remote_path: Option<String>,
+    /// Issue #658: recursive delete/chmod — entries changed before the end.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entries_done: Option<u64>,
 }
 
 pub fn emit_sftp_transfer_finished(
@@ -1279,6 +1371,7 @@ pub fn emit_sftp_transfer_finished(
             error,
             stopped: None,
             incomplete_remote_path: None,
+            entries_done: None,
         },
     );
 }
@@ -1301,6 +1394,60 @@ pub fn emit_sftp_transfer_stopped(
             error: None,
             stopped: Some(stopped),
             incomplete_remote_path,
+            entries_done: None,
+        },
+    );
+}
+
+/// Issue #658: end of a recursive delete/chmod row, with the number of
+/// entries changed (also for `cancelled` / `stopped` / errors).
+pub fn emit_sftp_entries_finished(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    error: Option<String>,
+    stopped: Option<&'static str>,
+    entries_done: u64,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-finished",
+        &SftpTransferFinishedPayload {
+            session_id,
+            transfer_id,
+            error,
+            stopped,
+            incomplete_remote_path: None,
+            entries_done: Some(entries_done),
+        },
+    );
+}
+
+/// Issue #658: entries done / total of a recursive delete/chmod.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpEntriesProgress {
+    pub done: u64,
+    pub total: Option<u64>,
+}
+
+/// Issue #658: throttled progress of a recursive delete/chmod.
+pub fn emit_sftp_entries_progress(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    transfer_id: Uuid,
+    entries: SftpEntriesProgress,
+) {
+    emit(
+        emitter,
+        "sftp-transfer-progress",
+        &SftpTransferProgressPayload {
+            session_id,
+            transfer_id,
+            bytes_done: 0,
+            total_bytes: None,
+            folder: None,
+            entries: Some(entries),
         },
     );
 }
@@ -1316,6 +1463,9 @@ struct SftpTransferProgressPayload {
     /// des Baums bekannt) und Byte-Summen über alle Dateien.
     #[serde(skip_serializing_if = "Option::is_none")]
     folder: Option<SftpFolderProgress>,
+    /// Issue #658: recursive delete/chmod.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entries: Option<SftpEntriesProgress>,
 }
 
 /// Issue #622: Gesamtfortschritt eines Ordner-Transfers.
@@ -1347,6 +1497,7 @@ pub fn emit_sftp_transfer_progress(
             bytes_done,
             total_bytes,
             folder,
+            entries: None,
         },
     );
 }
@@ -1445,6 +1596,23 @@ mod tests {
     //! kam im Frontend als `undefined` an (`result.exitCode`).
 
     use super::*;
+
+    /// Issue #672: the payload is exactly `{"kinds": [...]}` — kind names only.
+    #[test]
+    fn test_data_changed_payload_carries_only_kinds() {
+        use ssh_manager_core::data_change::DataKind;
+        let emitter = TestEmitter::default();
+        emit_data_changed(
+            &emitter,
+            &std::collections::BTreeSet::from([DataKind::Servers, DataKind::HostKeys]),
+        );
+        let events = emitter.events.lock().unwrap();
+        assert_eq!(events[0].0, "data-changed");
+        assert_eq!(
+            events[0].1,
+            serde_json::json!({"kinds": ["servers", "host_keys"]})
+        );
+    }
 
     /// Issue #611: `chat-session-changed` payload shape (camelCase, `null`
     /// for a session without a persisted chat).

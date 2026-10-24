@@ -59,10 +59,23 @@ pub async fn create_rule(
 ) -> Result<RuleId, RuleWriteError> {
     let id = RuleId(Uuid::new_v4().to_string());
     let now = Utc::now();
-    let stored = input.into_stored_rule(id.clone(), now, now);
-    stored.pattern.validate()?;
+    let stored = prepare_rule(input, id.clone(), now, now)?;
     policy_store.create(&stored).await?;
     Ok(id)
+}
+
+/// The validation every new rule goes through, shared by [`create_rule`] and
+/// the backup import (Spec 0109, U6): an imported rule is valid exactly when
+/// a rule the user typed in would be.
+pub fn prepare_rule(
+    input: RuleInput,
+    id: RuleId,
+    created_at: chrono::DateTime<Utc>,
+    updated_at: chrono::DateTime<Utc>,
+) -> Result<persistence_sqlite::StoredRule, PatternError> {
+    let stored = input.into_stored_rule(id, created_at, updated_at);
+    stored.pattern.validate()?;
+    Ok(stored)
 }
 
 /// Aktualisiert Regel `id` mit den Feldern aus `input` — `created_at` bleibt

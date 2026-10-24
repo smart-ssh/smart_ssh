@@ -430,6 +430,7 @@
     "expired": "Požadavek na klíč hostitele {{host}}:{{port}} vypršel. Připojení nebylo navázáno a klíč nebyl označen za důvěryhodný."
   },
   "sessionTabs": {
+    "newSession": "Nová relace",
     "overview": "Přehled",
     "pendingAction": "Čeká na potvrzení",
     "closeTab": "Zavřít kartu „{{name}}“",
@@ -623,6 +624,7 @@
     "MASTER_PASSWORD_REJECTED": "Hlavní heslo bylo odmítnuto: alespoň 12 znaků a obě zadání se musí shodovat.",
     "STARTUP_FAILED": "Spuštění nebylo dokončeno. Nic se nezměnilo; příčinu uvádí log.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Klíčenka obsahuje jiný klíč. Nic se nezměnilo — potvrďte nahrazení, pokud to chcete.",
+    "ELEVATED_USER_CHANGED": "Zvýšený režim nyní běží pod jiným uživatelem; nic se neprovedlo. Použijte „Nahrát jako …“ v liště úprav.",
     "APP_LOCKED": "Smart SSH je stále zamčen. Nejdříve jej odemkněte hlavním heslem.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Tato operace neodpovídá tomu, kde je klíč aktuálně uložen. Nic se nezměnilo — znovu otevřete nastavení, zobrazuje aktivní režim.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Varování k hlavnímu heslu nebylo potvrzeno. Bez tohoto hesla jsou všechna data ztracena a neexistuje obnova — zaškrtněte políčko a nastavte heslo znovu. Nic se nezměnilo.",
@@ -748,6 +750,11 @@
     "moveCollisionTitle": "Cíl již existuje — přepsat jako {{user}}?",
     "chmodNote": "Oprávnění budou nastavena jako {{user}}.",
     "editUploadTitle": "Nahrát lokální změny jako {{user}}?",
+    "editUploadAs": "Nahrát jako {{user}}",
+    "editUploadAsLogin": "Nahrát jako přihlašovací uživatel",
+    "editIdentityChanged": "Otevřeno jako {{from}}, zvýšený režim nyní běží jako {{user}}.",
+    "editIdentityElevatedOff": "Otevřeno jako {{from}}, zvýšený režim je nyní vypnutý.",
+    "editIdentityElevatedOn": "Otevřeno bez zvýšeného režimu, nyní běží jako {{user}}.",
     "editOpenedAs": "(otevřeno jako {{user}})",
     "failureTitle": "Zvýšená práva nejsou možná",
     "sudoersIntro": "Zvýšený režim potřebuje na serveru pravidlo sudo bez hesla pro sftp-server. Tento řádek odpovídá tomuto serveru a přihlášení:",
@@ -1027,6 +1034,10 @@
     "transferStopped": "{{name}}: zastaveno",
     "transferIncomplete": "Neúplný soubor zůstal na serveru: {{path}}",
     "transferFiles": "{{done}} z {{total}} souborů",
+    "transferDelete": "Mazání {{name}}",
+    "transferChmod": "Změna oprávnění {{name}}",
+    "entriesProgress": "{{done}} z {{total}} položek",
+    "entriesChanged": "Změněné položky: {{count}}",
     "transferRemaining": "zbývá {{time}}",
     "loading": "Načítání…",
     "noPermissionToOpen": "Nemáte oprávnění otevřít tuto složku (chybí x)",
@@ -1160,6 +1171,12 @@
       "confirm": "Nahrát",
       "cancel": "Zrušit",
       "menuTitle": "Nahrát soubory ze schránky"
+    },
+    "readFailure": {
+      "tooLarge": "Textový diff není možný: soubor je příliš velký (přes 256 KB).",
+      "notText": "Textový diff není možný: soubor je binární (neplatný text UTF-8).",
+      "permission": "Textový diff není možný: s aktuálními právy nemáte oprávnění číst tento soubor.",
+      "other": "Textový diff není možný: soubor se nepodařilo přečíst ({{message}})."
     }
   },
   "chat": {
@@ -1191,6 +1208,7 @@
     "contextUsageTooltip": "Starší části chatu se automaticky shrnou, když se kontext zaplní.",
     "webResearchUnavailable": "Webový průzkum není pro účet tohoto poskytovatele dostupný (vyhledávání na webu je tam vypnuto). Tato relace odpovídá bez webového průzkumu. Trvalé vypnutí: Nastavení → Poskytovatel AI → „Webový průzkum“.",
     "emptyResponse": "Model nevrátil žádnou odpověď. U modelů s fází přemýšlení pomůže vyšší limit výstupu v nastavení poskytovatele.",
+    "refusedResponse": "Model tuto žádost odmítl. Přeformulujte ji nebo začněte nový chat.",
     "outputTruncated": "(zkráceno)",
     "fileWritten": "Soubor '{{path}}' zapsán.",
     "writtenWithSudoPassword": "Zapsáno s použitím uloženého hesla sudo.",
@@ -1228,7 +1246,11 @@
       "cardLabel": "Otázka: {{question}}",
       "send": "Odeslat",
       "answeredOwnWords": "Odpovězeno vlastními slovy"
-    }
+    },
+    "injectionChecking": "Kontrola výstupu …",
+    "injectionSuspected": "Varování: tento výstup vypadá jako pokus o vložení instrukcí.",
+    "injectionSuspectedReason": "Důvod uvedený kontrolující AI: {{reason}}",
+    "injectionConfirmReason": "Důvod: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Tato poznámka je velmi rozsáhlá a může být při dlouhých relacích zkrácena v kontextu AI. Uložená poznámka zůstane úplná.",

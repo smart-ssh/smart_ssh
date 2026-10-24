@@ -141,6 +141,7 @@ describe("useLocalEditSession", () => {
       localText: "neu",
       localSize: 3,
       remoteText: "alt",
+      remoteReadFailure: null,
       remoteChangedSinceDownload: true,
     });
     expect(readLocalTextPreview).toHaveBeenCalledWith("session-1", "/tmp/edit/nginx.conf");

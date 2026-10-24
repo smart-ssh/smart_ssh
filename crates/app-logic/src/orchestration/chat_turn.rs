@@ -3,6 +3,7 @@
 //! Verschiebung aus `orchestration.rs`, keine Verhaltensänderung).
 
 use futures::StreamExt;
+use uuid::Uuid;
 
 use ssh_manager_core::ai::{
     AiError, AiEvent, ChatMessage, InvalidToolCallReason, MessageContent, OutputRedactor,
@@ -16,8 +17,8 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_auto_continuation_limit_reached, emit_chat_auto_continuation_started,
     emit_chat_error, emit_chat_queued_messages_sent, emit_chat_response_cancelled,
-    emit_chat_response_empty, emit_chat_response_truncated, emit_chat_text_delta,
-    emit_chat_web_activity, emit_chat_web_research_unavailable, EventEmitter,
+    emit_chat_response_empty, emit_chat_response_refused, emit_chat_response_truncated,
+    emit_chat_text_delta, emit_chat_web_activity, emit_chat_web_research_unavailable, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -1098,6 +1099,13 @@ async fn run_one_round(
                 }
                 break;
             }
+            AiEvent::Refused => {
+                // Issue #647: own outcome, distinct from done/truncated/empty.
+                // Streamed text stays; no empty-response hint.
+                flush_text_buffer(session, &mut text_buffer).await;
+                emit_chat_response_refused(emitter, session_id);
+                break;
+            }
             AiEvent::TextTruncated => {
                 trace.log_finished(session, "done");
                 // Spec 0065, Teil 2: der bis hierhin gestreamte Text bleibt
@@ -1204,9 +1212,11 @@ async fn handle_web_activity(
 ) {
     flush_text_buffer(session, text_buffer).await;
     let activity = redact_web_activity(activity, session.redactor.as_ref());
+    let activity_id = Uuid::new_v4();
     emit_chat_web_activity(
         emitter,
         session_id,
+        activity_id,
         crate::dto::WebActivityDto::from(&activity),
     );
     let check_text = injection_check_text(&activity);
@@ -1226,6 +1236,7 @@ async fn handle_web_activity(
             session,
             session_id,
             emitter,
+            activity_id,
             &check_text,
             "web_research",
         )

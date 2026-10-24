@@ -221,6 +221,7 @@ async fn test_injection_check_provider_error_notifies_and_forces_next_confirmati
         &session,
         Uuid::new_v4(),
         &emitter,
+        Uuid::new_v4(),
         "file body cat-me",
         "command_output",
     )
@@ -280,6 +281,7 @@ async fn test_injection_check_without_verdict_counts_as_unavailable() {
         &session,
         Uuid::new_v4(),
         &emitter,
+        Uuid::new_v4(),
         "content",
         "command_output",
     )
@@ -301,6 +303,7 @@ async fn test_failed_injection_check_never_clears_earlier_suspicion() {
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
+        Uuid::new_v4(),
         "x",
         "command_output",
     )
@@ -319,6 +322,7 @@ async fn test_successful_injection_check_has_no_notice() {
         &session,
         Uuid::new_v4(),
         &emitter,
+        Uuid::new_v4(),
         "content",
         "command_output",
     )
@@ -337,6 +341,7 @@ async fn test_unavailable_flag_survives_a_denied_action() {
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
+        Uuid::new_v4(),
         "x",
         "command_output",
     )
@@ -441,6 +446,7 @@ async fn test_issue_688_injection_check_logs_start_and_verdict() {
             &session,
             Uuid::new_v4(),
             &TestEmitter::default(),
+            Uuid::new_v4(),
             CONTENT,
             source,
         )
@@ -482,6 +488,7 @@ async fn test_issue_688_no_provider_logs_no_injection_check_lines() {
         &session,
         Uuid::new_v4(),
         &TestEmitter::default(),
+        Uuid::new_v4(),
         "x",
         "file_read",
     )

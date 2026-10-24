@@ -158,7 +158,8 @@ impl fmt::Display for KeyFileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             KeyFileError::NotFound { path } => {
-                write!(f, "Die Schlüsseldatei {path} wurde nicht gefunden")
+                // Spec 0109 C3: exact wording shown on the server and on connect.
+                write!(f, "Schlüsseldatei auf diesem Gerät nicht gefunden: {path}")
             }
             KeyFileError::NotReadable { path } => {
                 write!(f, "Die Schlüsseldatei {path} ist nicht lesbar")

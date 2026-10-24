@@ -153,6 +153,18 @@ pub async fn start_new_chat(
             *chat_session_id = new_id;
         }
     }
+    // Issue #648: the provider-reported size belongs to the old chat. Reset
+    // the tracker (so compaction ignores the old ratio) and tell the UI 0.
+    *session
+        .context_usage
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Default::default();
+    crate::events::emit_chat_context_usage(
+        emitter,
+        session_id,
+        0,
+        session.model_context_window_tokens as u64,
+    );
     // Per-Chat-Zustand der laufenden Verbindung; `untrusted_content_ingested`
     // bleibt bewusst unberührt (Issue #271, Entscheidung 2), ebenso
     // `injection_suspected`/`injection_check_unavailable`.
@@ -241,6 +253,33 @@ mod tests {
         assert_eq!(session.mcp_origin_flags.lock().unwrap().len(), 1);
         assert!(session.summary.lock().await.is_none());
         assert!(!session.chat_turn.lock().unwrap().running);
+    }
+
+    #[tokio::test]
+    async fn test_new_chat_resets_context_usage_and_emits_zero() {
+        let (session, _store, _old_id, _tmp) = persisted_session().await;
+        session.context_usage.lock().unwrap().record(90_000, 40_000);
+        assert!(session.context_usage.lock().unwrap().ratio() > 2.0);
+        let emitter = TestEmitter::default();
+        let sid = Uuid::new_v4();
+
+        start_new_chat(&session, sid, &emitter, None).await.unwrap();
+
+        let tracker = session.context_usage.lock().unwrap().clone();
+        assert_eq!(tracker, crate::compaction::ContextUsageTracker::default());
+        assert_eq!(tracker.last_input_tokens, None);
+        assert_eq!(tracker.ratio(), 1.0);
+        let events = emitter.events.lock().unwrap();
+        let usage: Vec<_> = events
+            .iter()
+            .filter(|(name, _)| name == "chat-context-usage")
+            .collect();
+        assert_eq!(usage.len(), 1);
+        assert_eq!(usage[0].1["inputTokens"], 0);
+        assert_eq!(
+            usage[0].1["windowTokens"],
+            session.model_context_window_tokens as u64
+        );
     }
 
     #[tokio::test]

@@ -430,6 +430,7 @@
     "expired": "针对 {{host}}:{{port}} 的主机密钥请求已过期。连接未建立，密钥也未被信任。"
   },
   "sessionTabs": {
+    "newSession": "新建会话",
     "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",
@@ -623,6 +624,7 @@
     "MASTER_PASSWORD_REJECTED": "主密码被拒绝：至少 12 个字符，且两次输入必须一致。",
     "STARTUP_FAILED": "启动未能完成。未做任何更改；日志中注明了原因。",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "密钥环中保存的是另一个密钥。未做任何更改——如果您确实想替换，请确认替换。",
+    "ELEVATED_USER_CHANGED": "提权模式现以其他用户运行，未执行任何操作。请使用编辑栏中的“以…身份上传”。",
     "APP_LOCKED": "Smart SSH 仍处于锁定状态。请先用您的主密码将其解锁。",
     "MASTER_PASSWORD_MODE_MISMATCH": "此操作与密钥当前的保存位置不符。未做任何更改——请重新打开设置，其中会显示当前生效的模式。",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "尚未确认主密码警告。没有该密码，所有数据都会丢失且无法恢复——请勾选复选框后重新设置。未做任何更改。",
@@ -733,6 +735,11 @@
     "moveCollisionTitle": "目标已存在——以 {{user}} 身份覆盖？",
     "chmodNote": "权限将以 {{user}} 身份设置。",
     "editUploadTitle": "以 {{user}} 身份上传本地更改？",
+    "editUploadAs": "以 {{user}} 身份上传",
+    "editUploadAsLogin": "以登录用户身份上传",
+    "editIdentityChanged": "以 {{from}} 身份打开，提权模式现以 {{user}} 身份运行。",
+    "editIdentityElevatedOff": "以 {{from}} 身份打开，提权模式现已关闭。",
+    "editIdentityElevatedOn": "未使用提权模式打开，现以 {{user}} 身份运行。",
     "editOpenedAs": "（以 {{user}} 身份打开）",
     "failureTitle": "无法提权",
     "sudoersIntro": "提权模式需要服务器上有针对 sftp-server 的免密码 sudo 规则。下面这一行适用于此服务器和此登录：",
@@ -1012,6 +1019,10 @@
     "transferStopped": "{{name}}：已停止",
     "transferIncomplete": "服务器上遗留了不完整的文件：{{path}}",
     "transferFiles": "{{done}} / {{total}} 个文件",
+    "transferDelete": "正在删除 {{name}}",
+    "transferChmod": "正在更改 {{name}} 的权限",
+    "entriesProgress": "{{done}} / {{total}} 项",
+    "entriesChanged": "已更改的项目：{{count}}",
     "transferRemaining": "剩余 {{time}}",
     "loading": "正在加载…",
     "noPermissionToOpen": "无权打开此文件夹（缺少 x）",
@@ -1139,6 +1150,12 @@
       "confirm": "上传",
       "cancel": "取消",
       "menuTitle": "上传剪贴板中的文件"
+    },
+    "readFailure": {
+      "tooLarge": "无法显示文本差异：文件过大（超过 256 KB）。",
+      "notText": "无法显示文本差异：文件是二进制文件（不是有效的 UTF-8 文本）。",
+      "permission": "无法显示文本差异：以当前权限无法读取此文件。",
+      "other": "无法显示文本差异：无法读取该文件（{{message}}）。"
     }
   },
   "chat": {
@@ -1170,6 +1187,7 @@
     "contextUsageTooltip": "当上下文已满时，聊天中较早的部分会被自动总结。",
     "webResearchUnavailable": "此提供商账户无法使用联网调研（网络搜索在该处已被禁用）。本会话不使用联网调研来回答。如需永久关闭：设置 → AI 提供商 →“联网调研”。",
     "emptyResponse": "模型没有返回任何回复。对于有思考阶段的模型，在提供商设置中调高输出上限会有帮助。",
+    "refusedResponse": "模型拒绝了此请求。请换一种说法，或开始新的聊天。",
     "outputTruncated": "（已截断）",
     "fileWritten": "文件“{{path}}”已写入。",
     "writtenWithSudoPassword": "已使用保存的 sudo 密码写入。",
@@ -1204,7 +1222,11 @@
       "cardLabel": "问题：{{question}}",
       "send": "发送",
       "answeredOwnWords": "已用自己的话回答"
-    }
+    },
+    "injectionChecking": "正在检查输出 …",
+    "injectionSuspected": "警告：此输出看起来像是注入指令的企图。",
+    "injectionSuspectedReason": "检查用 AI 给出的原因：{{reason}}",
+    "injectionConfirmReason": "原因：{{reason}}"
   },
   "notes": {
     "largeNoteHint": "此备注非常大，在长时间会话中可能会被缩短后再提供给 AI 作为上下文。已保存的备注保持完整。",

@@ -449,6 +449,7 @@ pub(crate) fn session_with_ai_provider(
         injection_check_provider: None,
         injection_check_budget: None,
         injection_suspected: std::sync::atomic::AtomicBool::new(false),
+        injection_suspected_reason: std::sync::Mutex::new(None),
         injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
         second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
         injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
