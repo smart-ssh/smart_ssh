@@ -294,6 +294,14 @@
       "connection": "Koneksi",
       "security": "Keamanan",
       "invalid": "Berisi kesalahan"
+    },
+    "importKey": {
+      "title": "Impor kunci ke Smart SSH?",
+      "import": "Impor kunci",
+      "keep": "Pertahankan jalur berkas",
+      "importHint": "Kunci disimpan terenkripsi di Smart SSH dan ikut tersalin lewat cadangan ke perangkat Anda yang lain.",
+      "keepHint": "Hanya jalur berkas yang disimpan dan ikut ke perangkat lain. Berkas harus ada di jalur yang sama di setiap perangkat.",
+      "importedFrom": "Diimpor dari {{path}}"
     }
   },
   "filterRules": {
@@ -638,7 +646,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya.",
     "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip.",
     "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini.",
-    "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada"
+    "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Berkas kunci tidak ditemukan di perangkat ini"
   },
   "mcpServer": {
     "hint": "Klien MCP eksternal dapat menggunakan ini untuk mengusulkan perintah, pembacaan/penulisan berkas, dan pembaruan catatan pada server yang masuk daftar izin — setiap permintaan selalu memerlukan konfirmasi di aplikasi, terlepas dari aturan izin yang ada.",

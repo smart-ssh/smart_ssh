@@ -294,6 +294,14 @@
       "connection": "Tilkobling",
       "security": "Sikkerhet",
       "invalid": "Inneholder feil"
+    },
+    "importKey": {
+      "title": "Importere nøkkelen til Smart SSH?",
+      "import": "Importer nøkkel",
+      "keep": "Behold filstien",
+      "importHint": "Nøkkelen lagres kryptert i Smart SSH og følger med sikkerhetskopier til de andre enhetene dine.",
+      "keepHint": "Bare filstien lagres og følger med til andre enheter. Filen må finnes på samme sti på hver enhet.",
+      "importedFrom": "Importert fra {{path}}"
     }
   },
   "filterRules": {
@@ -638,7 +646,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større enn 50 MB og kan ikke kopieres til utklippstavlen.",
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
-    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede"
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten"
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruke dette til å foreslå kommandoer, fillesing/-skriving og notatoppdateringer på tillatte servere – hver forespørsel krever alltid bekreftelse i appen, uavhengig av eksisterende tillat-regler.",

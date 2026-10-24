@@ -294,6 +294,14 @@
       "connection": "连接",
       "security": "安全",
       "invalid": "包含错误"
+    },
+    "importKey": {
+      "title": "将密钥导入 Smart SSH？",
+      "import": "导入密钥",
+      "keep": "保留文件路径",
+      "importHint": "密钥将加密存储在 Smart SSH 中，并随备份同步到您的其他设备。",
+      "keepHint": "仅保存文件路径并同步到其他设备。该文件必须在每台设备的相同路径下存在。",
+      "importedFrom": "已从 {{path}} 导入"
     }
   },
   "filterRules": {
@@ -638,7 +646,8 @@
     "KEYCHAIN_KEY_MISMATCH": "密钥环中的密钥不属于此数据库。未做任何更改——保存它会导致数据库在下次启动时无法读取。",
     "SFTP_CONTENT_TOO_LARGE": "文件大于 50 MB，无法复制到剪贴板。",
     "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。",
-    "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹"
+    "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件"
   },
   "mcpServer": {
     "hint": "外部 MCP 客户端可借此在允许列表中的服务器上提出命令、文件读写和备注更新的请求——无论现有的允许规则如何，每个请求始终都需要在应用中确认。",

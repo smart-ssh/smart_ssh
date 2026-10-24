@@ -294,6 +294,14 @@
       "connection": "Connection",
       "security": "Security",
       "invalid": "Contains errors"
+    },
+    "importKey": {
+      "title": "Import the key into Smart SSH?",
+      "import": "Import key",
+      "keep": "Keep file path",
+      "importHint": "The key is stored encrypted in Smart SSH and travels with backups to your other devices.",
+      "keepHint": "Only the file path is stored and travels to other devices. The file must exist at the same path on every device.",
+      "importedFrom": "Imported from {{path}}"
     }
   },
   "filterRules": {
@@ -638,7 +646,8 @@
     "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup.",
     "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard.",
     "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system.",
-    "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists"
+    "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device"
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",

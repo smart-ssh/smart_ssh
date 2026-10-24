@@ -294,6 +294,14 @@
       "connection": "Connessione",
       "security": "Sicurezza",
       "invalid": "Contiene errori"
+    },
+    "importKey": {
+      "title": "Importare la chiave in Smart SSH?",
+      "import": "Importa chiave",
+      "keep": "Mantieni il percorso del file",
+      "importHint": "La chiave viene salvata cifrata in Smart SSH e viaggia con i backup verso gli altri dispositivi.",
+      "keepHint": "Viene salvato solo il percorso del file, che viaggia verso gli altri dispositivi. Il file deve esistere nello stesso percorso su ogni dispositivo.",
+      "importedFrom": "Importata da {{path}}"
     }
   },
   "filterRules": {
@@ -638,7 +646,8 @@
     "KEYCHAIN_KEY_MISMATCH": "La chiave nel portachiavi non appartiene a questo database. Nulla è stato modificato: memorizzarla renderebbe il database illeggibile al prossimo avvio.",
     "SFTP_CONTENT_TOO_LARGE": "Il file supera i 50 MB e non può essere copiato negli appunti.",
     "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema.",
-    "SSH_SFTP_ALREADY_EXISTS": "Esiste già un file o una cartella con questo nome"
+    "SSH_SFTP_ALREADY_EXISTS": "Esiste già un file o una cartella con questo nome",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "File della chiave non trovato su questo dispositivo"
   },
   "mcpServer": {
     "hint": "I client MCP esterni possono usarlo per proporre comandi, letture/scritture di file e aggiornamenti di note sui server in elenco consentito; ogni richiesta richiede sempre conferma nell'app, indipendentemente dalle regole di consenso esistenti.",
