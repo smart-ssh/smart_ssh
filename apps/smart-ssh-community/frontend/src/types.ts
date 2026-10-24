@@ -1181,7 +1181,8 @@ export interface EditSessionDto {
   remoteModified: string | null;
 }
 
-export type SftpTransferKind = "upload" | "download";
+/** Issue #658: `delete` / `chmod` are recursive folder operations. */
+export type SftpTransferKind = "upload" | "download" | "delete" | "chmod";
 
 export interface SftpTransferStartedEvent {
   sessionId: string;
@@ -1206,6 +1207,8 @@ export interface SftpTransferFinishedEvent {
   /** Issue #622: a stopped upload whose partial remote file could not be
    * removed. */
   incompleteRemotePath?: string | null;
+  /** Issue #658: recursive delete/chmod — entries changed before the end. */
+  entriesDone?: number | null;
 }
 
 /** Issue #622: throttled progress of a running transfer. */
@@ -1221,6 +1224,8 @@ export interface SftpTransferProgressEvent {
     bytesDone: number;
     bytesTotal: number;
   };
+  /** Issue #658: recursive delete/chmod; `total` is `null` while counting. */
+  entries?: { done: number; total: number | null };
 }
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------
