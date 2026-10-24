@@ -1159,6 +1159,12 @@
       "confirm": "Prześlij",
       "cancel": "Anuluj",
       "menuTitle": "Prześlij pliki ze schowka"
+    },
+    "readFailure": {
+      "tooLarge": "Diff tekstowy niemożliwy: plik jest zbyt duży (ponad 256 KB).",
+      "notText": "Diff tekstowy niemożliwy: plik jest binarny (nieprawidłowy tekst UTF-8).",
+      "permission": "Diff tekstowy niemożliwy: przy bieżących uprawnieniach nie masz prawa odczytu tego pliku.",
+      "other": "Diff tekstowy niemożliwy: nie udało się odczytać pliku ({{message}})."
     }
   },
   "chat": {

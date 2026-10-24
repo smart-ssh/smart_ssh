@@ -1159,6 +1159,12 @@
       "confirm": "Nahrát",
       "cancel": "Zrušit",
       "menuTitle": "Nahrát soubory ze schránky"
+    },
+    "readFailure": {
+      "tooLarge": "Textový diff není možný: soubor je příliš velký (přes 256 KB).",
+      "notText": "Textový diff není možný: soubor je binární (neplatný text UTF-8).",
+      "permission": "Textový diff není možný: s aktuálními právy nemáte oprávnění číst tento soubor.",
+      "other": "Textový diff není možný: soubor se nepodařilo přečíst ({{message}})."
     }
   },
   "chat": {

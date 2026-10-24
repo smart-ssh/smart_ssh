@@ -293,6 +293,8 @@ fn assert_too_large_for_clipboard(result: CommandResult<String>) {
         err.message, TOO_LARGE_FOR_CLIPBOARD,
         "die Meldung muss wörtlich die der `stat`-Ablehnung sein (A1.1)"
     );
+    // Issue #655: the frontend names the reason from the code.
+    assert_eq!(err.code, Some("SFTP_PREVIEW_TOO_LARGE"));
 }
 
 /// Spec 0086, A1.2 / spec-reviewer Runde 1: `TOO_LARGE_FOR_EDITING` nennt

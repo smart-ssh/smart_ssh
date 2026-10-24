@@ -1152,6 +1152,12 @@
       "confirm": "Carica",
       "cancel": "Annulla",
       "menuTitle": "Carica i file dagli appunti"
+    },
+    "readFailure": {
+      "tooLarge": "Diff di testo non possibile: il file è troppo grande (oltre 256 KB).",
+      "notText": "Diff di testo non possibile: il file è binario (non è testo UTF-8 valido).",
+      "permission": "Diff di testo non possibile: con i permessi attuali non hai il permesso di lettura per questo file.",
+      "other": "Diff di testo non possibile: impossibile leggere il file ({{message}})."
     }
   },
   "chat": {

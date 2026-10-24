@@ -1152,6 +1152,12 @@
       "confirm": "Téléverser",
       "cancel": "Annuler",
       "menuTitle": "Téléverser les fichiers du presse-papiers"
+    },
+    "readFailure": {
+      "tooLarge": "Aucun diff texte possible : le fichier est trop volumineux (plus de 256 Ko).",
+      "notText": "Aucun diff texte possible : le fichier est binaire (texte UTF-8 non valide).",
+      "permission": "Aucun diff texte possible : vous n’avez pas le droit de lire ce fichier avec les droits actuels.",
+      "other": "Aucun diff texte possible : le fichier n’a pas pu être lu ({{message}})."
     }
   },
   "chat": {

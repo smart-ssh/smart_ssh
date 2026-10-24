@@ -1145,6 +1145,12 @@
       "confirm": "Last opp",
       "cancel": "Avbryt",
       "menuTitle": "Last opp filene fra utklippstavlen"
+    },
+    "readFailure": {
+      "tooLarge": "Ingen tekstdiff mulig: filen er for stor (over 256 KB).",
+      "notText": "Ingen tekstdiff mulig: filen er binær (ikke gyldig UTF-8-tekst).",
+      "permission": "Ingen tekstdiff mulig: med de nåværende rettighetene har du ikke lesetilgang til filen.",
+      "other": "Ingen tekstdiff mulig: filen kunne ikke leses ({{message}})."
     }
   },
   "chat": {

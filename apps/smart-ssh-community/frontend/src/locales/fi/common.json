@@ -1145,6 +1145,12 @@
       "confirm": "Lähetä",
       "cancel": "Peruuta",
       "menuTitle": "Lähetä leikepöydän tiedostot"
+    },
+    "readFailure": {
+      "tooLarge": "Tekstivertailu ei ole mahdollinen: tiedosto on liian suuri (yli 256 kt).",
+      "notText": "Tekstivertailu ei ole mahdollinen: tiedosto on binääritiedosto (ei kelvollista UTF-8-tekstiä).",
+      "permission": "Tekstivertailu ei ole mahdollinen: nykyisillä oikeuksilla sinulla ei ole lukuoikeutta tähän tiedostoon.",
+      "other": "Tekstivertailu ei ole mahdollinen: tiedostoa ei voitu lukea ({{message}})."
     }
   },
   "chat": {
