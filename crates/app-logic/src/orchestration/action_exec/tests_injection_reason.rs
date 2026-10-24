@@ -37,7 +37,15 @@ async fn test_suspected_emits_running_then_redacted_truncated_reason() {
     let session = session_answering(format!("ja - {long}"));
     let emitter = TestEmitter::default();
     let item = Uuid::new_v4();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, item, "body").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        item,
+        "body",
+        "file_read",
+    )
+    .await;
 
     let evs = check_events(&emitter);
     assert_eq!(evs.len(), 2, "{evs:?}");
@@ -93,6 +101,7 @@ async fn test_reason_is_not_in_ai_context() {
         &TestEmitter::default(),
         Uuid::new_v4(),
         "body",
+        "file_read",
     )
     .await;
     let history = format!("{:?}", session.context.lock().await.history);
@@ -103,7 +112,15 @@ async fn test_reason_is_not_in_ai_context() {
 async fn test_clean_emits_running_then_clean() {
     let session = session_answering("nein - fine".to_string());
     let emitter = TestEmitter::default();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, Uuid::new_v4(), "b").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        Uuid::new_v4(),
+        "b",
+        "file_read",
+    )
+    .await;
     let evs = check_events(&emitter);
     let states: Vec<_> = evs.iter().map(|e| e["state"].as_str().unwrap()).collect();
     assert_eq!(states, ["running", "clean"]);
@@ -114,7 +131,15 @@ async fn test_no_events_without_provider() {
     let session =
         test_session_allowing_everything(vec![AiEvent::Done], MockSshTransport::default());
     let emitter = TestEmitter::default();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, Uuid::new_v4(), "b").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        Uuid::new_v4(),
+        "b",
+        "file_read",
+    )
+    .await;
     assert!(check_events(&emitter).is_empty());
 }
 
@@ -127,6 +152,7 @@ async fn test_combined_variant_carries_reason() {
         &TestEmitter::default(),
         Uuid::new_v4(),
         "b",
+        "file_read",
     )
     .await;
     let (decision, payload) = proposed_decision_code(

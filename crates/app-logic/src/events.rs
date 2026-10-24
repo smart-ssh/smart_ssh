@@ -908,6 +908,12 @@ struct ChatErrorPayload {
     http_status: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     provider_message: Option<String>,
+    /// Issue #694: name of the provider and the exceeded limit in seconds
+    /// for the timeout errors (shown in the translated message).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     access_returns: Option<String>,
 }
@@ -919,6 +925,8 @@ pub struct ChatErrorDetails {
     pub provider_error_type: Option<String>,
     pub http_status: Option<u16>,
     pub provider_message: Option<String>,
+    pub provider_name: Option<String>,
+    pub timeout_secs: Option<u64>,
     /// Issue #631: when access returns after a provider usage limit.
     pub access_returns: Option<String>,
 }
@@ -973,6 +981,8 @@ pub fn emit_chat_error_with_details(
             provider_error_type: details.provider_error_type,
             http_status: details.http_status,
             provider_message: details.provider_message,
+            provider_name: details.provider_name,
+            timeout_secs: details.timeout_secs,
             access_returns: details.access_returns,
         },
     );
@@ -1001,6 +1011,31 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
         emitter,
         "chat-response-truncated",
         &ChatResponseTruncatedPayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatAiRequestStartedPayload {
+    session_id: SessionId,
+    provider_name: String,
+}
+
+/// Issue #694: a request to the AI provider was sent; the chat shows
+/// "Waiting for a response from <provider>" until content arrives. Carries
+/// no chat content.
+pub fn emit_chat_ai_request_started(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    provider_name: &str,
+) {
+    emit(
+        emitter,
+        "chat-ai-request-started",
+        &ChatAiRequestStartedPayload {
+            session_id,
+            provider_name: provider_name.to_string(),
+        },
     );
 }
 
@@ -1512,6 +1547,21 @@ pub fn emit_mcp_action_tab_requested(
 #[cfg(any(test, feature = "test-support"))]
 pub struct TestEmitter {
     pub events: std::sync::Mutex<Vec<(String, serde_json::Value)>>,
+    /// Issue #694: `chat-ai-request-started` is a pure UI hint (wait line)
+    /// that precedes every request; it is dropped unless a test asks for it,
+    /// so the many tests asserting the exact event sequence of a turn stay
+    /// about the turn.
+    pub record_request_started: bool,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl TestEmitter {
+    pub fn recording_request_started() -> Self {
+        Self {
+            record_request_started: true,
+            ..Self::default()
+        }
+    }
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -1519,6 +1569,7 @@ impl Default for TestEmitter {
     fn default() -> Self {
         Self {
             events: std::sync::Mutex::new(Vec::new()),
+            record_request_started: false,
         }
     }
 }
@@ -1526,6 +1577,9 @@ impl Default for TestEmitter {
 #[cfg(any(test, feature = "test-support"))]
 impl EventEmitter for TestEmitter {
     fn emit_event(&self, event: &str, payload: serde_json::Value) {
+        if event == "chat-ai-request-started" && !self.record_request_started {
+            return;
+        }
         self.events
             .lock()
             .unwrap()

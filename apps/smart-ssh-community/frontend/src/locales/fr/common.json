@@ -415,7 +415,8 @@
       "verdictAuto": "s'exécutera automatiquement la prochaine fois",
       "verdictAsk": "demandera encore : {{reasons}}",
       "notice": "Règle créée. Cette commande demandera encore la prochaine fois : {{reasons}}",
-      "reasonOther": "un autre contrôle de sécurité"
+      "reasonOther": "un autre contrôle de sécurité",
+      "loadFailed": "Impossible de charger la couverture des règles"
     }
   },
   "hostKeyDialog": {
@@ -571,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Ce modèle ne prend pas en charge l’appel d’outils. Dans les paramètres du fournisseur, décochez « Prend en charge l’appel d’outils natif » (la solution de repli par prompt est alors utilisée) ou choisissez un modèle compatible.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Le service d’IA local ne répond pas. Démarrez Ollama (ou votre serveur local) et réessayez.",
     "AI_TIMEOUT": "Le fournisseur d’IA a mis trop de temps à répondre. Patientez un moment et renvoyez ; avec un modèle local, vérifiez si la machine est occupée ou le modèle trop volumineux.",
+    "AI_TIMEOUT_NAMED": "Aucune réponse de {{provider}} depuis {{seconds}} s – requête annulée. Réessayez dans un instant.",
+    "AI_TOTAL_DEADLINE": "{{provider}} n’a pas terminé en {{minutes}} minutes – requête annulée. Le texte reçu jusque-là est conservé.",
     "AI_WEB_RESEARCH_REJECTED": "Le fournisseur d’IA refuse la recherche web pour ce compte. Désactivez « Recherche web » pour ce fournisseur sous « Fournisseur d’IA » dans les paramètres.",
     "AI_ATTACHMENT_UNSUPPORTED": "Ce modèle ne peut pas lire l’image ou le PDF joint. Choisissez un modèle compatible ou retirez la pièce jointe.",
     "AI_NO_ACTIVE_PROVIDER": "Aucun fournisseur d’IA actif pour l’instant. Ajoutez-en un sous Paramètres → Fournisseur d’IA et activez-le.",
@@ -1192,6 +1195,7 @@
     "tryAgain": "Réessayer",
     "errorDetails": "Détails",
     "aiRetrying": "Le fournisseur d’IA est surchargé – nouvelle tentative dans {{seconds}} s (tentative {{attempt}} sur {{max}})",
+    "aiWaiting": "En attente d’une réponse de {{provider}} … {{seconds}} s",
     "noActiveProvider": "Aucun fournisseur d’IA actif configuré. Veuillez d’abord en configurer un dans les paramètres.",
     "inputPlaceholder": "Posez une question ou décrivez une commande …",
     "send": "Envoyer",

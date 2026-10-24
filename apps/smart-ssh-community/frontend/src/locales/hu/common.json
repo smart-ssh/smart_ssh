@@ -415,7 +415,8 @@
       "verdictAuto": "legközelebb automatikusan lefut",
       "verdictAsk": "továbbra is rákérdez: {{reasons}}",
       "notice": "Szabály létrehozva. Ez a parancs legközelebb is rákérdez: {{reasons}}",
-      "reasonOther": "másik biztonsági ellenőrzés"
+      "reasonOther": "másik biztonsági ellenőrzés",
+      "loadFailed": "A szabályok lefedettségét nem sikerült betölteni"
     }
   },
   "hostKeyDialog": {
@@ -571,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Ez a modell nem támogatja az eszközhívást. A szolgáltató beállításaiban törölje a \"Támogatja a natív eszközhívást\" jelölését (ekkor a promptalapú tartalék működik), vagy válasszon eszköztámogatással rendelkező modellt.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "A helyi AI-szolgáltatás nem válaszol. Indítsa el az Ollamát (vagy a helyi szerverét), és próbálja újra.",
     "AI_TIMEOUT": "Az AI-szolgáltató túl sokáig válaszolt. Várjon egy kicsit, és küldje újra; helyi modellnél ellenőrizze, nem terhelt-e a gép, illetve nem túl nagy-e a modell.",
+    "AI_TIMEOUT_NAMED": "Nem érkezett válasz a(z) {{provider}} szolgáltatótól {{seconds}} mp-ig – a kérés megszakítva. Próbálja újra egy pillanat múlva.",
+    "AI_TOTAL_DEADLINE": "A(z) {{provider}} nem fejezte be {{minutes}} percen belül – a kérés megszakítva. Az eddig kapott szöveg megmarad.",
     "AI_WEB_RESEARCH_REJECTED": "Az AI-szolgáltató elutasítja a webes kutatást ehhez a fiókhoz. Kapcsolja ki a \"Webes kutatás\" funkciót ennél a szolgáltatónál a Beállítások \"AI-szolgáltató\" részében.",
     "AI_ATTACHMENT_UNSUPPORTED": "Ez a modell nem tudja elolvasni a csatolt képet vagy PDF-et. Válasszon olyan modellt, amely tudja, vagy távolítsa el a mellékletet.",
     "AI_NO_ACTIVE_PROVIDER": "Még nincs aktív AI-szolgáltató. Adjon hozzá egyet a Beállítások → AI-szolgáltató alatt, és tegye aktívvá.",
@@ -1185,6 +1188,7 @@
     "tryAgain": "Újrapróbálás",
     "errorDetails": "Részletek",
     "aiRetrying": "Az AI-szolgáltató túlterhelt – újrapróbálkozás {{seconds}} mp múlva ({{attempt}}. kísérlet / {{max}})",
+    "aiWaiting": "Várakozás a(z) {{provider}} válaszára … {{seconds}} mp",
     "noActiveProvider": "Nincs beállított aktív AI-szolgáltató. Először állítson be egyet a beállításokban.",
     "inputPlaceholder": "Tegyen fel kérdést, vagy írjon le egy parancsot …",
     "send": "Küldés",

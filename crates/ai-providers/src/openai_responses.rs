@@ -39,7 +39,10 @@ use crate::openai_compatible::{
     OpenAiStreamState, RawEvent, RetryKind, RetryState,
 };
 use crate::request_logging::{log_outgoing_context, log_provider_transport_error};
-use crate::sse::{build_http_client, sse_frame_stream, SseFrame, SSE_INACTIVITY_TIMEOUT};
+use crate::sse::{
+    build_http_client, frame_is_content, sse_frame_stream, SseFrame, CONTENT_TIMEOUT,
+    SSE_INACTIVITY_TIMEOUT,
+};
 
 const MAX_TOKENS_FIELD: &str = "max_output_tokens";
 
@@ -583,6 +586,7 @@ fn process_frame_stream(
         .chain(extra_headers.into_iter().map(|(_, value)| value))
         .collect();
     let state = OpenAiStreamState {
+        content_deadline: tokio::time::Instant::now() + CONTENT_TIMEOUT,
         frames,
         tool_calls: BTreeMap::new(),
         fallback_text: String::new(),
@@ -608,8 +612,11 @@ fn process_frame_stream(
                 if state.finished {
                     return None;
                 }
-                match tokio::time::timeout(SSE_INACTIVITY_TIMEOUT, state.frames.next()).await {
+                match tokio::time::timeout_at(state.content_deadline, state.frames.next()).await {
                     Ok(Some(Ok(frame))) => {
+                        if frame_is_content(&frame) {
+                            state.content_deadline = tokio::time::Instant::now() + CONTENT_TIMEOUT;
+                        }
                         // Malformed frames are skipped, like on the Chat
                         // Completions path.
                         let Ok(event) = serde_json::from_str::<Value>(&frame.data) else {
@@ -688,6 +695,59 @@ mod attachment_tests {
     use super::*;
     use crate::content::test_fixtures::{context_with_image_and_pdf, first_events};
     use ssh_manager_core::ai::{AiEvent, MediaClass};
+
+    /// Issue #694: keep-alive frames without content do not restart the
+    /// content timeout (120 s), deltas do.
+    #[tokio::test(start_paused = true)]
+    async fn test_responses_keep_alive_frames_time_out_but_deltas_do_not() {
+        use futures::StreamExt;
+        let every = std::time::Duration::from_secs(5);
+        let frames = crate::sse::periodic_frames(None, "", every);
+        let start = tokio::time::Instant::now();
+        let event = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .next()
+        .await;
+        assert!(
+            matches!(
+                event,
+                Some(RawEvent::Public(AiEvent::Error(AiError::Timeout {
+                    secs: 120
+                })))
+            ),
+            "{event:?}"
+        );
+        assert_eq!(start.elapsed(), std::time::Duration::from_secs(120));
+
+        let frames = crate::sse::periodic_frames(
+            None,
+            r#"{"type":"response.output_text.delta","delta":"x"}"#,
+            std::time::Duration::from_secs(30),
+        );
+        let collected: Vec<RawEvent> = process_frame_stream(
+            frames,
+            true,
+            Uuid::new_v4(),
+            String::new(),
+            Vec::new(),
+            None,
+        )
+        .take(6)
+        .collect()
+        .await;
+        assert!(
+            collected
+                .iter()
+                .all(|e| matches!(e, RawEvent::Public(AiEvent::TextDelta(_)))),
+            "{collected:?}"
+        );
+    }
 
     fn budget() -> std::sync::Arc<crate::rate_limit_budget::ProviderBudgetGuard> {
         std::sync::Arc::new(crate::rate_limit_budget::ProviderBudgetGuard::new())

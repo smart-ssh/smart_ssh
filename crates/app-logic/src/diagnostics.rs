@@ -80,6 +80,12 @@ const SAFE_LOG_MESSAGES: &[&str] = &[
     // Adressen/Namen)
     "session connected",
     "session disconnected",
+    // Issue #688 / Spec 0094: only kinds, the escalation code, the action
+    // kind, the injection-check verdict and byte/ms counts — no command,
+    // path, content or reason text.
+    "filter decision escalated",
+    "injection check started",
+    "injection check finished",
     "old chat sessions cleaned up",
     // Persistenz-/Hintergrund-Fehler (nur `error`-Feld, kein Nutzerinhalt)
     "chat message persistence failed",
@@ -429,6 +435,37 @@ mod tests {
             stale.is_empty(),
             "SAFE_LOG_MESSAGES-Eintraege ohne Emissionsstelle: {stale:?}"
         );
+    }
+
+    /// Issue #688: the new escalation and injection-check lines are in the
+    /// bundle and carry only their metadata fields.
+    #[test]
+    fn test_issue_688_escalation_and_injection_check_lines_are_bundled() {
+        let log_lines = vec![
+            json_log_line(
+                "filter decision escalated",
+                r#","code":"FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM","final_decision":"Confirm","command_len":21"#,
+            ),
+            json_log_line(
+                "injection check started",
+                r#","source":"file_read","content_len":9"#,
+            ),
+            json_log_line(
+                "injection check finished",
+                r#","verdict":"clean","duration_ms":3"#,
+            ),
+        ];
+        let bundle =
+            build_diagnostics_bundle(&base_input(), &log_lines, &DefaultOutputRedactor::new());
+        for needle in [
+            "filter decision escalated",
+            "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM",
+            "injection check started",
+            "injection check finished",
+            "\"verdict\":\"clean\"",
+        ] {
+            assert!(bundle.contains(needle), "{needle}: {bundle}");
+        }
     }
 
     /// Fail-closed-Gegenprobe: eine unbekannte/nicht gelistete `message`

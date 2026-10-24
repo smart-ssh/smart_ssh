@@ -62,6 +62,21 @@ SSH-Fehlers. Was jede Zeile behält:
 - A1.7 Wo ein KI- oder SSH-Fehler ab `info` geloggt wird — direkt, über einen
   String oder über einen Typ, der ihn enthält —, steht der Fehlercode statt
   des Fehlertexts.
+- A1.8 Eskalation einer Filter-Entscheidung: Wird aus einer
+  Engine-Entscheidung `AutoExec` durch einen der späteren Schritte
+  (Secret-Pfad, `sftp-server`, rotes Risiko, Sitzungs-Richtlinie nach
+  eingelesenem Serverinhalt, Injection-Verdacht, nicht gelaufene
+  Injection-Prüfung, MCP-Herkunft, Sudo-Passwort, frühere Ablehnung) ein
+  `Confirm`, steht genau eine Zeile „filter decision escalated" mit
+  Engine- und Endentscheidung, dem Code des Schritts, der die Entscheidung
+  gesetzt hat (dem Code, den auch der Nutzer sieht), Art der Aktion,
+  Sitzungs-Kennung und Kommandolänge. Keine Zeile bei unveränderter
+  Entscheidung. Kein Kommando, kein Pfad, kein Begründungstext.
+- A1.9 Injection-Prüfung: je eine Zeile bei Start („injection check started":
+  Sitzungs-Kennung, Quelle Kommando-Ausgabe/Dateilesen/Web-Recherche,
+  Länge des geprüften Inhalts) und Ende („injection check finished": dazu
+  Urteil `suspected`/`clean`/`no_verdict`/`provider_error` und Dauer in ms).
+  Der Begründungstext der Prüfung steht nur auf `debug`, redigiert (A2).
 
 **A2 — Inhalt nur auf `debug`, redigiert.** Für jede Stelle, deren Inhalt A1
 entfernt, gibt es eine `debug`-Zeile mit dem Inhalt, der vorher durch den

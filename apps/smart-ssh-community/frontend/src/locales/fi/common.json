@@ -415,7 +415,8 @@
       "verdictAuto": "suoritetaan ensi kerralla automaattisesti",
       "verdictAsk": "kysyy edelleen: {{reasons}}",
       "notice": "Sääntö luotu. Tämä komento kysyy ensi kerrallakin: {{reasons}}",
-      "reasonOther": "toinen turvatarkistus"
+      "reasonOther": "toinen turvatarkistus",
+      "loadFailed": "Sääntöjen kattavuutta ei voitu ladata"
     }
   },
   "hostKeyDialog": {
@@ -571,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Tämä malli ei tue työkalukutsuja. Poista palveluntarjoajan asetuksista valinta \"Tukee natiivia työkalukutsua\" (silloin käytetään kehotepohjaista varatapaa) tai valitse malli, jolla on työkalutuki.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Paikallinen tekoälypalvelu ei vastaa. Käynnistä Ollama (tai paikallinen palvelimesi) ja yritä uudelleen.",
     "AI_TIMEOUT": "Tekoälyn palveluntarjoajan vastaus kesti liian kauan. Odota hetki ja lähetä uudelleen; paikallisella mallilla tarkista, onko kone kuormitettu tai malli liian suuri.",
+    "AI_TIMEOUT_NAMED": "Ei vastausta palvelusta {{provider}} {{seconds}} sekuntiin – pyyntö peruttiin. Yritä hetken kuluttua uudelleen.",
+    "AI_TOTAL_DEADLINE": "{{provider}} ei valmistunut {{minutes}} minuutissa – pyyntö peruttiin. Tähän mennessä saatu teksti säilytetään.",
     "AI_WEB_RESEARCH_REJECTED": "Tekoälyn palveluntarjoaja hylkää verkkotutkimuksen tälle tilille. Poista \"Verkkotutkimus\" käytöstä tältä palveluntarjoajalta asetusten kohdassa \"Tekoälyn palveluntarjoaja\".",
     "AI_ATTACHMENT_UNSUPPORTED": "Tämä malli ei osaa lukea liitettyä kuvaa tai PDF-tiedostoa. Valitse malli, joka osaa, tai poista liite.",
     "AI_NO_ACTIVE_PROVIDER": "Aktiivista tekoälyn palveluntarjoajaa ei ole vielä. Lisää sellainen kohdassa Asetukset → Tekoälyn palveluntarjoaja ja aseta se aktiiviseksi.",
@@ -1185,6 +1188,7 @@
     "tryAgain": "Yritä uudelleen",
     "errorDetails": "Tiedot",
     "aiRetrying": "Tekoälypalvelu on ylikuormitettu – yritetään uudelleen {{seconds}} s kuluttua (yritys {{attempt}}/{{max}})",
+    "aiWaiting": "Odotetaan vastausta palvelulta {{provider}} … {{seconds}} s",
     "noActiveProvider": "Aktiivista tekoälyn palveluntarjoajaa ei ole määritetty. Määritä sellainen ensin asetuksissa.",
     "inputPlaceholder": "Esitä kysymys tai kuvaile komento …",
     "send": "Lähetä",

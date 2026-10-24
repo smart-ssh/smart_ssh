@@ -415,7 +415,8 @@
       "verdictAuto": "příště se spustí automaticky",
       "verdictAsk": "bude se stále ptát: {{reasons}}",
       "notice": "Pravidlo vytvořeno. Tento příkaz se příště stále bude ptát: {{reasons}}",
-      "reasonOther": "jiná bezpečnostní kontrola"
+      "reasonOther": "jiná bezpečnostní kontrola",
+      "loadFailed": "Pokrytí pravidly se nepodařilo načíst"
     }
   },
   "hostKeyDialog": {
@@ -571,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Tento model nepodporuje volání nástrojů. V nastavení poskytovatele zrušte zaškrtnutí „Podporuje nativní volání nástrojů“ (pak se použije záložní řešení založené na promptu) nebo vyberte model s podporou nástrojů.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Lokální služba AI neodpovídá. Spusťte Ollamu (nebo svůj lokální server) a zkuste to znovu.",
     "AI_TIMEOUT": "Poskytovatel AI odpovídal příliš dlouho. Chvíli počkejte a odešlete znovu; u lokálního modelu zkontrolujte, zda počítač není vytížený nebo model příliš velký.",
+    "AI_TIMEOUT_NAMED": "Žádná odpověď od {{provider}} po dobu {{seconds}} s – požadavek zrušen. Zkuste to za okamžik znovu.",
+    "AI_TOTAL_DEADLINE": "{{provider}} nedokončil do {{minutes}} minut – požadavek zrušen. Dosud přijatý text zůstává zachován.",
     "AI_WEB_RESEARCH_REJECTED": "Poskytovatel AI webový průzkum pro tento účet odmítá. Vypněte „Webový průzkum“ pro tohoto poskytovatele v nastavení v části „Poskytovatel AI“.",
     "AI_ATTACHMENT_UNSUPPORTED": "Tento model nedokáže přečíst přiložený obrázek ani PDF. Zvolte model, který to umí, nebo přílohu odeberte.",
     "AI_NO_ACTIVE_PROVIDER": "Zatím není aktivní žádný poskytovatel AI. Přidejte jej v Nastavení → Poskytovatel AI a nastavte jej jako aktivní.",
@@ -1199,6 +1202,7 @@
     "tryAgain": "Zkusit znovu",
     "errorDetails": "Podrobnosti",
     "aiRetrying": "Poskytovatel AI je přetížen – nový pokus za {{seconds}} s (pokus {{attempt}} z {{max}})",
+    "aiWaiting": "Čekání na odpověď od {{provider}} … {{seconds}} s",
     "noActiveProvider": "Není nastaven žádný aktivní poskytovatel AI. Nejdříve jej nastavte v nastavení.",
     "inputPlaceholder": "Zeptejte se nebo popište příkaz …",
     "send": "Odeslat",

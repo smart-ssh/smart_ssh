@@ -116,6 +116,11 @@ umgewandelten Befehl noch einmal **nur gegen die Hard-Blacklist** (Spec 0002,
 Abschnitt 3; mit denselben Normalisierungen wie dort, ohne Nutzerregeln und
 ohne Längenlimit). Trifft sie, wird abgelehnt: Nichts wird gesendet, die KI
 bekommt eine allgemeine Meldung, die den umgewandelten Text nicht zitiert.
+Das gilt nur, wenn der freigegebene Originaltext die Hard-Blacklist **nicht**
+getroffen hat. Hat er sie getroffen, hat die Nutzerin oder der Nutzer ihn
+ausdrücklich bestätigt (die Hard-Blacklist führt zu „Bestätigen“); dann wird
+der umgewandelte Text gesendet, auch wenn er einen anderen Blacklist-Eintrag
+trifft – die Umwandlung ist vertrauenswürdiger Code der Edition.
 Darüber hinaus wertet der Kern den umgewandelten Text nicht erneut aus; der
 ausgewertete und freigegebene Text bleibt die Grundlage jeder Entscheidung.
 Die Umwandlung kann keine Prüfung umgehen oder abschwächen. Für Dateiinhalt

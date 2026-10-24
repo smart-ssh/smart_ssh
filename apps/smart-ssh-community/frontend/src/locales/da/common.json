@@ -415,7 +415,8 @@
       "verdictAuto": "kører automatisk næste gang",
       "verdictAsk": "spørger stadig: {{reasons}}",
       "notice": "Regel oprettet. Denne kommando spørger stadig næste gang: {{reasons}}",
-      "reasonOther": "endnu en sikkerhedskontrol"
+      "reasonOther": "endnu en sikkerhedskontrol",
+      "loadFailed": "Regeldækningen kunne ikke indlæses"
     }
   },
   "hostKeyDialog": {
@@ -571,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Denne model understøtter ikke værktøjskald. Fjern markeringen af \"Understøtter native værktøjskald\" i udbyderindstillingerne (så bruges den promptbaserede reserveløsning), eller vælg en model med værktøjsunderstøttelse.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Den lokale AI-tjeneste svarer ikke. Start Ollama (eller din lokale server), og prøv igen.",
     "AI_TIMEOUT": "AI-udbyderen brugte for lang tid på at svare. Vent lidt, og send igen; ved en lokal model, kontrollér om maskinen er optaget, eller modellen er for stor.",
+    "AI_TIMEOUT_NAMED": "Intet svar fra {{provider}} i {{seconds}} s – anmodningen blev afbrudt. Prøv igen om lidt.",
+    "AI_TOTAL_DEADLINE": "{{provider}} blev ikke færdig inden for {{minutes}} minutter – anmodningen blev afbrudt. Den hidtil modtagne tekst bevares.",
     "AI_WEB_RESEARCH_REJECTED": "AI-udbyderen afviser webresearch for denne konto. Slå \"Webresearch\" fra for denne udbyder under \"AI-udbyder\" i indstillingerne.",
     "AI_ATTACHMENT_UNSUPPORTED": "Denne model kan ikke læse det vedhæftede billede eller den vedhæftede PDF. Vælg en model, der kan, eller fjern vedhæftningen.",
     "AI_NO_ACTIVE_PROVIDER": "Ingen aktiv AI-udbyder endnu. Tilføj en under Indstillinger → AI-udbyder, og gør den aktiv.",
@@ -1185,6 +1188,7 @@
     "tryAgain": "Prøv igen",
     "errorDetails": "Detaljer",
     "aiRetrying": "AI-udbyderen er overbelastet – nyt forsøg om {{seconds}} s (forsøg {{attempt}} af {{max}})",
+    "aiWaiting": "Venter på svar fra {{provider}} … {{seconds}} s",
     "noActiveProvider": "Ingen aktiv AI-udbyder konfigureret. Opsæt en i indstillingerne først.",
     "inputPlaceholder": "Stil et spørgsmål, eller beskriv en kommando …",
     "send": "Send",

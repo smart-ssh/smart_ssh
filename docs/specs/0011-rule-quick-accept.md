@@ -132,7 +132,15 @@ der Reihenfolge des Kommandos mit seinem Zustand:
   eine Regel verbietet es.
 
 Bei einem einzelnen Teilkommando erscheint diese Zeile nur, wenn ein
-regelunabhängiger Grund greift. Die Zustände stammen aus der Auswertung der
+regelunabhängiger Grund greift. Dazu zählt auch eine Eskalation nach der
+Engine (z. B. Lesen einer Datei mit Zugangsdaten, `sftp-server`, rotes
+Risiko, eingelesener Serverinhalt, nicht prüfbares Kommando): Sie wird dem
+Teilkommando zugeordnet, auf das sie zutrifft (in `cd /etc && cat shadow`
+dem lesenden Teilkommando); lässt sie sich keinem zuordnen, trägt jedes sonst
+abgedeckte Teilkommando den Grund. Die Karte zeigt ein Teilkommando nie als
+abgedeckt, wenn der Ausführungsweg nachfragen würde. Lässt sich die Liste
+nicht laden, steht an ihrer Stelle die gedämpfte Zeile „Regelabdeckung konnte
+nicht geladen werden"; Ausführen und Ablehnen bleiben bedienbar. Die Zustände stammen aus der Auswertung der
 Filter-Engine (Spec 0002, §4.8), nicht aus einem eigenen Abgleich.
 
 **Nur unabgedeckte Teilkommandos.** Die Vorschläge (Abschnitt 2) enthalten

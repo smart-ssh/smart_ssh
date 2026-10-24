@@ -246,6 +246,7 @@ async fn test_injection_check_reports_its_purpose() {
         &TestEmitter::default(),
         Uuid::new_v4(),
         "x",
+        "command_output",
     )
     .await;
 
