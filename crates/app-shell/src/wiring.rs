@@ -1,6 +1,6 @@
 //! `Wiring`/`Edition` (Spec 0038, Abschnitt 2): definiert, welche
 //! Implementierungen (Entitlements, KI-Provider, Policy-Quellen,
-//! Sync-Backends, Plugins) ein konkretes Binary in [`crate::run`]
+//! Plugins) ein konkretes Binary in [`crate::run`]
 //! einspeist. Community- und ein künftiges Official-Binary unterscheiden
 //! sich nur im übergebenen `Wiring`.
 
@@ -9,7 +9,6 @@ use std::sync::Arc;
 use ssh_manager_core::ai::AiProvider;
 use ssh_manager_core::entitlements::{EntitlementProvider, Entitlements, FixedEntitlements};
 use ssh_manager_core::filter::PolicySource;
-use ssh_manager_core::session::SyncBackend;
 use tauri::{Builder, Wry};
 
 /// Nur für Anzeige/Updater relevant (Spec 0038, Abschnitt 2) — keine
@@ -32,7 +31,6 @@ pub struct Wiring {
     pub entitlements: Arc<dyn EntitlementProvider>,
     pub ai_providers: Vec<Arc<dyn AiProvider>>,
     pub policy_sources: Vec<Arc<dyn PolicySource>>,
-    pub sync_backends: Vec<Arc<dyn SyncBackend>>,
     /// Zusätzliche Tauri-Plugins.
     ///
     /// **Im Passwort-Modus** (Master-Passwort, Spec 0101) dürfen Hooks, die
@@ -44,6 +42,11 @@ pub struct Wiring {
     /// core migrations and **only after unlock** (never while the app is
     /// locked in master-password mode).
     pub db_extensions: Vec<crate::db_extensions::DbExtension>,
+    /// Issue #669 (Spec 0038, section 2): background services. Started once
+    /// per unlock after the database extensions are ready, stopped on lock
+    /// and on exit (5 s timeout each). A failing service is skipped.
+    /// Community registers none.
+    pub services: Vec<Arc<dyn crate::services::BackgroundService>>,
     pub edition: Edition,
     /// Issue #16: zusätzliche Datenpfade einer Edition (z. B. eine
     /// Lizenzdatei), die die Einstellungen neben den eingebauten Pfaden
@@ -94,8 +97,7 @@ impl Wiring {
             entitlements: Arc::new(FixedEntitlements(Entitlements::free())),
             ai_providers: Vec::new(),
             policy_sources: Vec::new(),
-            // Spec 0037, Abschnitt 6: kein Git-Sync-Backend in dieser Spec.
-            sync_backends: Vec::new(),
+            services: Vec::new(),
             plugins: Vec::new(),
             db_extensions: Vec::new(),
             edition: Edition::Community,
