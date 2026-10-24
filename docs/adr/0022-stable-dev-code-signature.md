@@ -98,3 +98,8 @@ explizit `./scripts/tauri-dev.sh` aufruft.
 - Nur für macOS relevant (`scripts/tauri-dev.sh` fällt auf anderen
   Plattformen auf ein normales `cargo tauri dev` zurück) — Windows/Linux
   kennen dieses Ad-hoc-Signatur-Problem nicht.
+
+## Nachtrag 2026-10-24
+
+Release-Builds werden nicht mehr von der CI dieses Repositorys erzeugt;
+`release.yml` wurde entfernt.

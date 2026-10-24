@@ -9,8 +9,8 @@ name: Community
 # `push` nur auf `main`: Commits eines PR-Branches laufen über
 # `pull_request`. Vorher lief jeder PR-Commit zweimal unter denselben
 # Check-Namen, und ein roter Lauf von beiden blockierte den Merge (#26).
-# `workflow_call`: `release.yml` ruft denselben Workflow als Gate vor dem
-# Release-Build auf, damit die Prüfschritte nur an dieser Stelle stehen.
+# Dieser Workflow führt nur Prüfungen aus; er baut und veröffentlicht keine
+# Release-Artefakte.
 # Push-Läufe auf den langlebigen Branches des Versionszyklus: `main`
 # (Live-Version), `develop` (nächste Version) sowie `release/*` und
 # `hotfix/*`. Der Merge-Schritt wertet den letzten Push-Lauf des
@@ -19,7 +19,6 @@ on:
   push:
     branches: [main, develop, "release/**", "hotfix/**"]
   pull_request:
-  workflow_call:
 
 # Ein neuer Push auf denselben PR bricht den noch laufenden Lauf ab.
 # Jeder Push-Lauf (`main`, `develop`, `release/*`, `hotfix/*`) bekommt eine eigene Gruppe (`run_id`): Eine
@@ -54,22 +53,12 @@ jobs:
 
       # Nur auf Linux nötig: Tauri (genauer `wry`) linkt gegen WebKitGTK,
       # ohne diese System-Pakete schlägt bereits `cargo build`/`clippy` für
-      # `apps/smart-ssh-community` fehl — dieselben Pakete wie in
-      # `release.yml`s Linux-Leg.
+      # `apps/smart-ssh-community` fehl. Die Paketliste, der .deb-Cache und
+      # der Wiederholungsversuch stehen in `.github/actions/linux-deps`.
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev \
-            libasound2-dev \
-            cmake \
-            libclang-dev \
-            xvfb
+        timeout-minutes: 22
+        uses: ./.github/actions/linux-deps
 
       - name: cargo fmt --check
         run: cargo fmt --all --check
@@ -380,7 +369,7 @@ jobs:
           fi
           git fetch --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
           files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
-          if echo "$files" | grep -E '^(crates/app-shell/|crates/app-logic/src/database_startup|crates/app-logic/src/master_password|crates/real-app-tests/|apps/smart-ssh-community/frontend/src/main\.tsx$|apps/smart-ssh-community/frontend/src/.*StartupGate\.tsx$|\.github/workflows/community\.yml$)'; then
+          if echo "$files" | grep -E '^(crates/app-shell/|crates/app-logic/src/database_startup|crates/app-logic/src/master_password|crates/real-app-tests/|apps/smart-ssh-community/frontend/src/main\.tsx$|apps/smart-ssh-community/frontend/src/.*StartupGate\.tsx$|\.github/workflows/community\.yml$|\.github/actions/linux-deps/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -391,7 +380,10 @@ jobs:
     needs: real-app-changes
     if: needs.real-app-changes.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # A slow apt mirror once used up the whole job budget during the
+    # package install; the install has its own step timeout, so this only
+    # has to leave room for the build and the tests.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -410,21 +402,10 @@ jobs:
           cache-dependency-path: apps/smart-ssh-community/frontend/package-lock.json
 
       - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev \
-            libasound2-dev \
-            cmake \
-            libclang-dev \
-            webkit2gtk-driver \
-            xvfb \
-            gnome-keyring \
-            dbus-x11
+        timeout-minutes: 22
+        uses: ./.github/actions/linux-deps
+        with:
+          extra-packages: webkit2gtk-driver gnome-keyring dbus-x11
 
       - name: Install tauri-driver
         run: cargo install tauri-driver --locked
@@ -440,6 +421,7 @@ jobs:
         run: cargo build -p smart-ssh-community --features tauri/custom-protocol
 
       - name: Real app startup tests
+        timeout-minutes: 15
         env:
           SMART_SSH_REAL_APP_LOG_DIR: ${{ runner.temp }}/real-app-logs
         run: |
