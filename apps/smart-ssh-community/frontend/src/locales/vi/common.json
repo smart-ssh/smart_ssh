@@ -294,6 +294,13 @@
       "connection": "Kết nối",
       "security": "Bảo mật",
       "invalid": "Có lỗi"
+    },
+    "importKey": {
+      "title": "Nhập khóa vào Smart SSH?",
+      "import": "Nhập khóa",
+      "keep": "Giữ đường dẫn tệp",
+      "importHint": "Khóa được lưu mã hóa trong Smart SSH và đi cùng bản sao lưu sang các thiết bị khác của bạn.",
+      "keepHint": "Chỉ đường dẫn tệp được lưu và chuyển sang thiết bị khác. Tệp phải tồn tại ở cùng đường dẫn trên mọi thiết bị."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo.",
     "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm.",
     "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này.",
-    "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này"
+    "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này"
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",
@@ -722,7 +730,12 @@
     "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}",
     "nothingToPaste": "Không có gì để dán: bộ nhớ tạm không chứa tệp",
     "createFileDone": "Đã tạo tệp “{{name}}”",
-    "createFileFailed": "Không thể tạo tệp “{{name}}”: {{reason}}"
+    "createFileFailed": "Không thể tạo tệp “{{name}}”: {{reason}}",
+    "chownDone": "Đã đổi chủ sở hữu của “{{name}}”",
+    "chownRecursive": "Đã đổi chủ sở hữu — {{count}} mục trong “{{name}}”",
+    "chownFailed": "Không thể đổi chủ sở hữu của “{{name}}”: {{reason}}",
+    "chownUnknownUser": "Chưa đổi chủ sở hữu của “{{name}}”: người dùng không xác định",
+    "chownUnknownGroup": "Chưa đổi chủ sở hữu của “{{name}}”: nhóm không xác định"
   },
   "fileElevation": {
     "toggle": "Quyền nâng cao",
@@ -775,7 +788,9 @@
     "otherUser": "Với tư cách người dùng khác…",
     "targetUser": "Người dùng đích",
     "targetUserHelp": "Chạy trình duyệt tệp với tư cách người dùng này qua sudo. Mặc định: root.",
-    "confirm": "Nâng quyền"
+    "confirm": "Nâng quyền",
+    "opChown": "Đổi chủ sở hữu",
+    "chownNote": "Chủ sở hữu sẽ được đổi với tư cách {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Nhập ssh_config",
@@ -1109,7 +1124,8 @@
       "cut": "Cắt",
       "delete": "Xóa",
       "newFolder": "Thư mục mới",
-      "newFile": "Tệp mới"
+      "newFile": "Tệp mới",
+      "chown": "Đổi chủ sở hữu…"
     },
     "properties": {
       "title": "Thuộc tính",
@@ -1167,7 +1183,16 @@
       "notText": "Không thể so sánh văn bản: tệp là nhị phân (không phải văn bản UTF-8 hợp lệ).",
       "permission": "Không thể so sánh văn bản: với quyền hiện tại, bạn không có quyền đọc tệp này.",
       "other": "Không thể so sánh văn bản: không đọc được tệp ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Đổi chủ sở hữu",
+      "owner": "Người dùng",
+      "group": "Nhóm",
+      "hint": "Nhập tên hoặc số. Phần bạn để nguyên sẽ không thay đổi. Máy chủ quyết định có cho phép thay đổi hay không (thường chỉ root được đổi chủ sở hữu).",
+      "recursive": "Áp dụng cho nội dung",
+      "recursiveWarning": "— đổi chủ sở hữu của TẤT CẢ tệp và thư mục con trong thư mục này. Liên kết tượng trưng không được theo. Không thể hoàn tác."
+    },
+    "transferChown": "Đang đổi chủ sở hữu của {{name}}"
   },
   "chat": {
     "jumpToLatest": "Đến tin nhắn mới nhất",

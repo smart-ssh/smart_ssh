@@ -206,6 +206,7 @@ fn remote_entry(name: String, path: String, metadata: &FileAttributes) -> Remote
         gid: metadata.gid,
         owner: metadata.user.clone(),
         group: metadata.group.clone(),
+        is_symlink: metadata.is_symlink(),
     }
 }
 
@@ -458,6 +459,18 @@ impl SftpSession for RusshSftpSession {
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
         let attrs = FileAttributes {
             permissions: Some(mode),
+            ..Default::default()
+        };
+        self.inner
+            .set_metadata(path, attrs)
+            .await
+            .map_err(|e| self.map_error(path, e))
+    }
+
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        let attrs = FileAttributes {
+            uid: Some(uid),
+            gid: Some(gid),
             ..Default::default()
         };
         self.inner

@@ -926,6 +926,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_exists,
             commands::sftp_stat,
             commands::sftp_chmod,
+            commands::sftp_chown,
             commands::sftp_elevation_enable,
             commands::sftp_elevation_disable,
             commands::sftp_elevation_status,
