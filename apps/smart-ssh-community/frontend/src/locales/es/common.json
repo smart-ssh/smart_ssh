@@ -1151,6 +1151,12 @@
       "confirm": "Subir",
       "cancel": "Cancelar",
       "menuTitle": "Subir los archivos del portapapeles"
+    },
+    "readFailure": {
+      "tooLarge": "No es posible un diff de texto: el archivo es demasiado grande (más de 256 KB).",
+      "notText": "No es posible un diff de texto: el archivo es binario (no es texto UTF-8 válido).",
+      "permission": "No es posible un diff de texto: no tienes permiso de lectura sobre este archivo con los derechos actuales.",
+      "other": "No es posible un diff de texto: no se pudo leer el archivo ({{message}})."
     }
   },
   "chat": {

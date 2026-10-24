@@ -1144,6 +1144,12 @@
       "confirm": "Ladda upp",
       "cancel": "Avbryt",
       "menuTitle": "Ladda upp filerna från urklipp"
+    },
+    "readFailure": {
+      "tooLarge": "Ingen textdiff möjlig: filen är för stor (över 256 KB).",
+      "notText": "Ingen textdiff möjlig: filen är binär (ingen giltig UTF-8-text).",
+      "permission": "Ingen textdiff möjlig: med de nuvarande rättigheterna saknar du läsbehörighet för filen.",
+      "other": "Ingen textdiff möjlig: filen kunde inte läsas ({{message}})."
     }
   },
   "chat": {

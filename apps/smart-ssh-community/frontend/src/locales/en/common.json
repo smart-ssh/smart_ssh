@@ -1144,6 +1144,12 @@
       "confirm": "Upload",
       "cancel": "Cancel",
       "menuTitle": "Upload the files from the clipboard"
+    },
+    "readFailure": {
+      "tooLarge": "No text diff possible: the file is too large (over 256 KB).",
+      "notText": "No text diff possible: the file is binary (not valid UTF-8 text).",
+      "permission": "No text diff possible: you have no read permission for this file with the current rights.",
+      "other": "No text diff possible: the file could not be read ({{message}})."
     }
   },
   "chat": {

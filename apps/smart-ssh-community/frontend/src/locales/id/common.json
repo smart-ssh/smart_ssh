@@ -1137,6 +1137,12 @@
       "confirm": "Unggah",
       "cancel": "Batal",
       "menuTitle": "Unggah berkas dari papan klip"
+    },
+    "readFailure": {
+      "tooLarge": "Diff teks tidak mungkin: berkas terlalu besar (lebih dari 256 KB).",
+      "notText": "Diff teks tidak mungkin: berkas bersifat biner (bukan teks UTF-8 yang valid).",
+      "permission": "Diff teks tidak mungkin: dengan hak akses saat ini Anda tidak punya izin baca untuk berkas ini.",
+      "other": "Diff teks tidak mungkin: berkas tidak dapat dibaca ({{message}})."
     }
   },
   "chat": {
