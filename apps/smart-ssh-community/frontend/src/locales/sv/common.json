@@ -1285,6 +1285,15 @@
     "paneTabs": "Sessionsdelar",
     "moreActions": "Fler åtgärder",
     "terminalOpenFailed": "Det gick inte att öppna terminalen: {{error}}",
+    "extraKeys": {
+      "group": "Extra tangenter",
+      "up": "Uppil",
+      "down": "Nedpil",
+      "left": "Vänsterpil",
+      "right": "Högerpil",
+      "pageUp": "Sida upp",
+      "pageDown": "Sida ned"
+    },
     "reconnectingAuto": "Återansluter… (försök {{attempt}})",
     "stopReconnect": "Avbryt",
     "reconnectGaveUp": "Anslutningen kunde inte återställas."

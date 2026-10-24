@@ -1285,6 +1285,15 @@
     "paneTabs": "Sessionsdele",
     "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Terminalen kunne ikke åbnes: {{error}}",
+    "extraKeys": {
+      "group": "Ekstra taster",
+      "up": "Pil op",
+      "down": "Pil ned",
+      "left": "Pil venstre",
+      "right": "Pil højre",
+      "pageUp": "Side op",
+      "pageDown": "Side ned"
+    },
     "reconnectingAuto": "Genopretter forbindelsen… (forsøg {{attempt}})",
     "stopReconnect": "Afbryd",
     "reconnectGaveUp": "Forbindelsen kunne ikke genoprettes."

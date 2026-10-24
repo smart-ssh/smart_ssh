@@ -1293,6 +1293,15 @@
     "paneTabs": "Paneles de la sesión",
     "moreActions": "Más acciones",
     "terminalOpenFailed": "No se pudo abrir el terminal: {{error}}",
+    "extraKeys": {
+      "group": "Teclas adicionales",
+      "up": "Flecha arriba",
+      "down": "Flecha abajo",
+      "left": "Flecha izquierda",
+      "right": "Flecha derecha",
+      "pageUp": "Retroceder página",
+      "pageDown": "Avanzar página"
+    },
     "reconnectingAuto": "Reconectando… (intento {{attempt}})",
     "stopReconnect": "Detener",
     "reconnectGaveUp": "No se pudo restablecer la conexión."

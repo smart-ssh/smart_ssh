@@ -1301,6 +1301,15 @@
     "paneTabs": "Části relace",
     "moreActions": "Další akce",
     "terminalOpenFailed": "Terminál se nepodařilo otevřít: {{error}}",
+    "extraKeys": {
+      "group": "Další klávesy",
+      "up": "Šipka nahoru",
+      "down": "Šipka dolů",
+      "left": "Šipka vlevo",
+      "right": "Šipka vpravo",
+      "pageUp": "Stránka nahoru",
+      "pageDown": "Stránka dolů"
+    },
     "reconnectingAuto": "Znovu se připojuji… (pokus {{attempt}})",
     "stopReconnect": "Zastavit",
     "reconnectGaveUp": "Připojení se nepodařilo obnovit."

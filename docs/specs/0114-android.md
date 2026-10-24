@@ -19,6 +19,14 @@ Bezüge: Spec 0113 (Schmales Layout), Spec 0101 (Master-Passwort), Spec 0049 (Ti
 - **Mehrfachstart:** Das System hält höchstens eine Instanz; eine Prüfung wie auf dem Desktop entfällt.
 - **Startfehler:** Ein Fehler beim Start erscheint nicht in einem System-Dialog, sondern wird ins Log geschrieben, danach beendet sich die App. Rückfragen beim Start gelten als „Abbrechen“.
 
+## 2a. Terminal mit Zusatztastenreihe
+
+- Auf Touch-Geräten (Android sowie jedes Gerät mit grobem Zeiger) zeigt der Terminal-Tab unter dem Terminal eine Tastenreihe: `Esc`, `Ctrl`, `Alt`, `Tab`, `↑ ↓ ← →`, `Home`, `End`, `PgUp`, `PgDn`, `|`, `~`, `/`, `-`. Auf dem Desktop mit Maus fehlt sie. Jede Taste ist mindestens 44 × 44 px groß und hat in allen Sprachen eine Beschriftung für Screenreader.
+- Die Tasten senden dieselben Zeichenfolgen wie die entsprechenden physischen Tasten im Terminal (Pfeiltasten und `Home`/`End` folgen dem Anwendungsmodus der Programme, z. B. in `vim`).
+- `Ctrl` und `Alt` sind einrastend für genau eine Eingabe: Nach dem Antippen (die Taste erscheint gedrückt) wirken sie auf die nächste Taste der Bildschirmtastatur oder der Reihe und lösen sich danach. `Ctrl` + `c` sendet `Ctrl+C`, `Alt` + `b` sendet `Esc b`. Eingaben aus mehreren Zeichen (Einfügen, Diktat) bleiben unverändert.
+- Die Tasten der Reihe nehmen der Bildschirmtastatur den Fokus nicht weg.
+- Öffnet sich die Bildschirmtastatur, schrumpft die App auf den sichtbaren Bereich, das Terminal passt seine Größe an und die Cursorzeile bleibt sichtbar; beim Schließen wächst es zurück.
+
 ## 3. Ablage
 
 - Datenbank, Logs, Bearbeitungskopien und Downloads liegen im app-privaten Speicher der App; kein Pfad hängt vom Heimverzeichnis ab, ein fehlendes `HOME` verursacht keinen Absturz.

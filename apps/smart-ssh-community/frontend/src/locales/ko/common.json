@@ -1277,6 +1277,15 @@
     "paneTabs": "세션 패널",
     "moreActions": "더 많은 작업",
     "terminalOpenFailed": "터미널을 열 수 없습니다: {{error}}",
+    "extraKeys": {
+      "group": "추가 키",
+      "up": "위쪽 화살표",
+      "down": "아래쪽 화살표",
+      "left": "왼쪽 화살표",
+      "right": "오른쪽 화살표",
+      "pageUp": "페이지 위로",
+      "pageDown": "페이지 아래로"
+    },
     "reconnectingAuto": "다시 연결하는 중… ({{attempt}}번째 시도)",
     "stopReconnect": "중지",
     "reconnectGaveUp": "연결을 복구하지 못했습니다."

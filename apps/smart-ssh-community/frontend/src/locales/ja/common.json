@@ -1277,6 +1277,15 @@
     "paneTabs": "セッションのパネル",
     "moreActions": "その他の操作",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
+    "extraKeys": {
+      "group": "追加キー",
+      "up": "上矢印",
+      "down": "下矢印",
+      "left": "左矢印",
+      "right": "右矢印",
+      "pageUp": "ページアップ",
+      "pageDown": "ページダウン"
+    },
     "reconnectingAuto": "再接続中… ({{attempt}} 回目)",
     "stopReconnect": "停止",
     "reconnectGaveUp": "接続を復旧できませんでした。"

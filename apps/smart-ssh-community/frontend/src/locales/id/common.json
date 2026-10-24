@@ -1277,6 +1277,15 @@
     "paneTabs": "Panel sesi",
     "moreActions": "Tindakan lainnya",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
+    "extraKeys": {
+      "group": "Tombol tambahan",
+      "up": "Panah atas",
+      "down": "Panah bawah",
+      "left": "Panah kiri",
+      "right": "Panah kanan",
+      "pageUp": "Halaman atas",
+      "pageDown": "Halaman bawah"
+    },
     "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
     "stopReconnect": "Berhenti",
     "reconnectGaveUp": "Koneksi tidak dapat dipulihkan."

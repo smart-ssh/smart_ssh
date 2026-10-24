@@ -1285,6 +1285,15 @@
     "paneTabs": "Øktdeler",
     "moreActions": "Flere handlinger",
     "terminalOpenFailed": "Kunne ikke åpne terminal: {{error}}",
+    "extraKeys": {
+      "group": "Ekstra taster",
+      "up": "Pil opp",
+      "down": "Pil ned",
+      "left": "Pil venstre",
+      "right": "Pil høyre",
+      "pageUp": "Side opp",
+      "pageDown": "Side ned"
+    },
     "reconnectingAuto": "Kobler til på nytt… (forsøk {{attempt}})",
     "stopReconnect": "Stopp",
     "reconnectGaveUp": "Tilkoblingen kunne ikke gjenopprettes."

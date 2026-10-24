@@ -1285,6 +1285,15 @@
     "paneTabs": "Sitzungsbereiche",
     "moreActions": "Weitere Aktionen",
     "terminalOpenFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
+    "extraKeys": {
+      "group": "Zusatztasten",
+      "up": "Pfeil nach oben",
+      "down": "Pfeil nach unten",
+      "left": "Pfeil nach links",
+      "right": "Pfeil nach rechts",
+      "pageUp": "Bild aufwärts",
+      "pageDown": "Bild abwärts"
+    },
     "reconnectingAuto": "Verbinde neu … (Versuch {{attempt}})",
     "stopReconnect": "Stopp",
     "reconnectGaveUp": "Die Verbindung konnte nicht wiederhergestellt werden."
