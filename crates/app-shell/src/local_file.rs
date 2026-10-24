@@ -397,10 +397,16 @@ mod tests {
             LocalFileHandle::from_dialog(FilePath::Url(u)).unwrap(),
             LocalFileHandle::Uri("content://x/doc/1".into())
         );
-        let f: tauri::Url = "file:///tmp/a.txt".parse().unwrap();
+        // A `file://` URL needs a drive letter on Windows.
+        let (file_url, file_path) = if cfg!(windows) {
+            ("file:///C:/tmp/a.txt", "C:\\tmp\\a.txt")
+        } else {
+            ("file:///tmp/a.txt", "/tmp/a.txt")
+        };
+        let f: tauri::Url = file_url.parse().unwrap();
         assert_eq!(
             LocalFileHandle::from_dialog(FilePath::Url(f)).unwrap(),
-            LocalFileHandle::Path(PathBuf::from("/tmp/a.txt"))
+            LocalFileHandle::Path(PathBuf::from(file_path))
         );
         assert_eq!(
             LocalFileHandle::from_dialog(FilePath::Path("/a".into())).unwrap(),
