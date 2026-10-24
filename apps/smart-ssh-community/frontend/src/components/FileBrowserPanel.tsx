@@ -1,5 +1,5 @@
 import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
@@ -52,9 +52,12 @@ import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
 import {
   loadFileManagerColumnWidths,
+  loadFileManagerSort,
   saveFileManagerColumnWidths,
+  saveFileManagerSort,
   type FileManagerColumnWidths,
 } from "../layoutSettings";
+import { DEFAULT_FILE_SORT, nextFileSort, sortEntries, type FileSort, type FileSortColumn } from "../fileSort";
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
 import { notifyMissingStartDirectory } from "../startDirectory";
 import { showToast } from "../toastBus";
@@ -70,6 +73,11 @@ import type {
 } from "../types";
 import { useDragResize } from "../useDragResize";
 import { useLocalEditSession, type UploadOffer } from "../useLocalEditSession";
+import {
+  classifyPreviewReadFailure,
+  previewReadFailureHint,
+  type PreviewReadFailure,
+} from "../previewReadFailure";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useMenuPlacement } from "../hooks/useMenuPlacement";
@@ -177,6 +185,11 @@ interface FileBrowserPanelProps {
  * Tab-Wechsel gemountet (s. `SessionView`), ihr `path`-State lebt daher
  * automatisch pro Tab getrennt, ohne zusätzliche Buchführung.
  */
+// Header cells (not the thead) are sticky with their own opaque background and
+// the table uses `border-separate`: a sticky thead under `border-collapse`
+// leaves a seam in WebKit through which scrolled rows showed (#650).
+const STICKY_TH = "sticky top-0 z-10 bg-slate-900";
+
 export function FileBrowserPanel({
   sessionId,
   isVisible,
@@ -187,7 +200,10 @@ export function FileBrowserPanel({
   // Spec 0102: Startpfad dieser Sitzung (`"."` = Home), Ziel von „Zum
   // Startverzeichnis". Kommt einmalig vom Backend (`sftp_start_directory`).
   const [startPath, setStartPath] = useState(".");
-  const [entries, setEntries] = useState<RemoteEntryDto[]>([]);
+  const [rawEntries, setEntries] = useState<RemoteEntryDto[]>([]);
+  // Spec 0053, Teil 3: app-weite Sortierung der Dateiliste (Frontend-seitig).
+  const [fileSort, setFileSort] = useState<FileSort>(DEFAULT_FILE_SORT);
+  const entries = useMemo(() => sortEntries(rawEntries, fileSort), [rawEntries, fileSort]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Spec 0054, Teil 1: EIN gemeinsamer State für Drei-Punkte-Menü UND
@@ -247,6 +263,8 @@ export function FileBrowserPanel({
     remotePath: string;
     localPreview: LocalFilePreviewDto;
     remoteText: string | null;
+    /** Issue #655: why `remoteText` is `null`. */
+    remoteReadFailure: PreviewReadFailure | null;
     remoteSize: number;
   } | null>(null);
   // Issue #128: folder upload. `folderConfirm` = the list of existing remote
@@ -629,6 +647,20 @@ export function FileBrowserPanel({
     [clampColumnWidth],
   );
 
+  useEffect(() => {
+    loadFileManagerSort()
+      .then((stored) => {
+        if (stored) setFileSort(stored);
+      })
+      .catch((err) => console.warn("Konnte Sortierung nicht laden:", err));
+  }, []);
+
+  const handleSortClick = (column: FileSortColumn) => {
+    const next = nextFileSort(fileSort, column);
+    setFileSort(next);
+    saveFileManagerSort(next).catch((err) => console.warn("Konnte Sortierung nicht speichern:", err));
+  };
+
   const handleColumnDragEnd = useCallback(() => {
     saveFileManagerColumnWidths(columnWidthsRef.current).catch((err) =>
       console.warn("Konnte Spaltenbreiten nicht speichern:", err),
@@ -730,10 +762,21 @@ export function FileBrowserPanel({
   channelUserRef.current = channelUser;
   const loadRef = useRef(load);
   loadRef.current = load;
+  // Issue #655: file name of the edit upload in flight (matches the transfer
+  // events of that upload) and the ids of its hidden transfers.
+  const editUploadingNameRef = useRef<string | null>(null);
+  const editTransferIdsRef = useRef(new Set<string>());
   useEffect(() => {
     const unlisten = [
       onSftpTransferStarted((event) => {
         if (event.sessionId !== sessionId) return;
+        // Issue #655: an upload of the edit flow reports its errors only in
+        // the edit footer — no transfer row for it.
+        const editName = editUploadingNameRef.current;
+        if (editName !== null && event.kind === "upload" && event.fileName === editName) {
+          editTransferIdsRef.current.add(event.transferId);
+          return;
+        }
         setTransfers((prev) => [
           ...prev,
           {
@@ -748,6 +791,7 @@ export function FileBrowserPanel({
       }),
       onSftpTransferProgress((event) => {
         if (event.sessionId !== sessionId) return;
+        if (editTransferIdsRef.current.has(event.transferId)) return;
         if (event.entries) {
           // Issue #658: recursive delete/chmod count entries, monotonically.
           const entries = event.entries;
@@ -788,6 +832,11 @@ export function FileBrowserPanel({
       }),
       onSftpTransferFinished((event) => {
         if (event.sessionId !== sessionId) return;
+        if (editTransferIdsRef.current.delete(event.transferId)) {
+          // Issue #655: hidden edit-flow transfer; the footer shows errors,
+          // `handleConfirmEditUpload` reloads the listing.
+          return;
+        }
         if (event.stopped) {
           // Issue #622: cancelled / stopped — a final state, not an error.
           const stopped = event.stopped;
@@ -909,12 +958,23 @@ export function FileBrowserPanel({
         await sftpUpload(sessionId, localPath, remotePath, channelUser);
         return "uploaded";
       }
-      const [localPreview, remoteText] = await Promise.all([
+      const [localPreview, remoteRead] = await Promise.all([
         readLocalTextPreview(sessionId, localPath),
-        sftpReadText(sessionId, remotePath, channelUser).catch(() => null),
+        sftpReadText(sessionId, remotePath, channelUser).then(
+          (text) => ({ text, failure: null as PreviewReadFailure | null }),
+          (err) => ({ text: null as string | null, failure: classifyPreviewReadFailure(err) }),
+        ),
       ]);
+      const remoteText = remoteRead.text;
       const remoteSize = entries.find((e) => e.path === remotePath)?.size ?? 0;
-      setUploadConflict({ localPath, remotePath, localPreview, remoteText, remoteSize });
+      setUploadConflict({
+        localPath,
+        remotePath,
+        localPreview,
+        remoteText,
+        remoteReadFailure: remoteRead.failure,
+        remoteSize,
+      });
       return "conflict";
     } catch (err) {
       if (reportFailure) notifyFailed("fileToasts.uploadFailed", localBaseName(localPath), err);
@@ -1169,9 +1229,19 @@ export function FileBrowserPanel({
   /** Spec 0054, Teil 4, Punkt 5: baut die Diff-/Konflikt-Daten und öffnet
    * den Bestätigungsdialog — der eigentliche Upload passiert erst nach
    * Bestätigung in `handleConfirmEditUpload`. */
-  const handleOfferEditUpload = () => {
+  // Issue #656: the identity of the edit session differs from the active one
+  // (other target user, or elevated mode switched on/off). Plain "Upload" is
+  // not offered then; the explicit "Upload as <user>" click is the only way
+  // to send the current identity.
+  const editIdentityMismatch =
+    localEdit.session !== null && localEdit.session.elevatedUser !== channelUser;
+  // Identity chosen by that click, held until the offer dialog is confirmed.
+  const [editUploadAs, setEditUploadAs] = useState<{ user: string | null } | null>(null);
+  const handleOfferEditUpload = (asOther = false) => {
+    const target = asOther ? { user: channelUser } : null;
+    setEditUploadAs(target);
     localEdit
-      .buildUploadOffer()
+      .buildUploadOffer(target ? target.user : undefined)
       .then((offer) => setEditUploadOffer(offer))
       .catch((err) => setError(commandErrorMessage(err)));
   };
@@ -1181,16 +1251,16 @@ export function FileBrowserPanel({
     const name = localEdit.session?.entry.name ?? "";
     // Spec-Reviewer-Fund: der Modus-Zusatz kommt von der Bearbeitung (so
     // wurde hochgeladen), nicht vom aktuellen Modus der Ansicht.
-    const editUser = localEdit.session?.elevatedUser ?? null;
+    const editUser = editUploadAs ? editUploadAs.user : (localEdit.session?.elevatedUser ?? null);
+    const asOther = editUploadAs;
+    setEditUploadAs(null);
     const editSuffix = editUser ? t("fileToasts.asElevated", { user: editUser }) : "";
-    localEdit.confirmUpload().then((error) => {
+    editUploadingNameRef.current = name;
+    localEdit.confirmUpload(asOther ? asOther.user : undefined).then((error) => {
+      editUploadingNameRef.current = null;
+      // Issue #655: a failure is shown only in the edit footer (no toast).
       if (error === null) {
         showToast({ kind: "success", message: t("fileToasts.editUploaded", { name }) + editSuffix });
-      } else {
-        showToast({
-          kind: "error",
-          message: t("fileToasts.editUploadFailed", { name, reason: error }) + editSuffix,
-        });
       }
       load(path);
     });
@@ -1468,6 +1538,22 @@ export function FileBrowserPanel({
                   {t("fileElevation.confirm")}
                 </Button>
               </form>
+  );
+
+  const sortAria = (column: FileSortColumn): "ascending" | "descending" | "none" =>
+    fileSort.column !== column ? "none" : fileSort.direction === "asc" ? "ascending" : "descending";
+  const sortButton = (column: FileSortColumn) => (
+    <button
+      type="button"
+      onClick={() => handleSortClick(column)}
+      data-testid={`column-sort-${column}`}
+      className="inline-flex max-w-full items-center gap-1 rounded font-normal hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+    >
+      <span className="truncate">{t(`fileBrowser.column.${column}`)}</span>
+      {fileSort.column === column && (
+        <span aria-hidden="true">{fileSort.direction === "asc" ? "▲" : "▼"}</span>
+      )}
+    </button>
   );
 
   return (
@@ -2011,7 +2097,7 @@ export function FileBrowserPanel({
         )}
         {!loading && !error && !narrow && entries.length > 0 && (
           <table
-            className="w-full table-fixed text-left text-xs"
+            className="w-full table-fixed border-separate border-spacing-0 text-left text-xs"
             style={{
               // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts):
               // ohne diese `min-width` konnte die Name-Spalte unter
@@ -2047,34 +2133,34 @@ export function FileBrowserPanel({
               <col style={{ width: columnWidths.modified }} />
               <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
             </colgroup>
-            <thead className="sticky top-0 bg-slate-900 text-slate-400">
+            <thead className="text-slate-400">
               <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
-                <th>{t("fileBrowser.column.name")}</th>
-                <th className="relative">
-                  {t("fileBrowser.column.size")}
+                <th className={STICKY_TH} aria-sort={sortAria("name")}>{sortButton("name")}</th>
+                <th className={`relative ${STICKY_TH}`} aria-sort={sortAria("size")}>
+                  {sortButton("size")}
                   <ColumnResizeHandle
                     testId="column-resize-size"
                     onDrag={handleColumnDrag("size")}
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th className="relative">
-                  {t("fileBrowser.column.permissions")}
+                <th className={`relative ${STICKY_TH}`} aria-sort={sortAria("permissions")}>
+                  {sortButton("permissions")}
                   <ColumnResizeHandle
                     testId="column-resize-permissions"
                     onDrag={handleColumnDrag("permissions")}
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th className="relative">
-                  {t("fileBrowser.column.modified")}
+                <th className={`relative ${STICKY_TH}`} aria-sort={sortAria("modified")}>
+                  {sortButton("modified")}
                   <ColumnResizeHandle
                     testId="column-resize-modified"
                     onDrag={handleColumnDrag("modified")}
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th>
+                <th className={STICKY_TH}>
                   <span className="sr-only">{t("fileBrowser.actionsColumn")}</span>
                 </th>
               </tr>
@@ -2083,7 +2169,7 @@ export function FileBrowserPanel({
               {entries.map((entry) => (
                 <tr
                   key={entry.path}
-                  className="border-t border-slate-800/70 hover:bg-slate-800/40"
+                  className="hover:bg-slate-800/40 [&>td]:border-t [&>td]:border-slate-800/70"
                   // Spec 0054, Teil 1: Rechtsklick öffnet dasselbe Menü wie
                   // das Drei-Punkte-Symbol, nur an der Klickposition statt
                   // in der Aktionsspalte verankert (s. `openMenu`-Doc-
@@ -2231,9 +2317,17 @@ export function FileBrowserPanel({
               <span className="flex-1 text-amber-300">
                 {t("fileBrowser.localEdit.changed", { name: localEdit.session.entry.name })}
               </span>
-              <Button size="sm" variant="primary" onClick={handleOfferEditUpload}>
-                {t("fileBrowser.upload")}
-              </Button>
+              {editIdentityMismatch ? (
+                <Button size="sm" variant="primary" onClick={() => handleOfferEditUpload(true)}>
+                  {channelUser
+                    ? t("fileElevation.editUploadAs", { user: channelUser })
+                    : t("fileElevation.editUploadAsLogin")}
+                </Button>
+              ) : (
+                <Button size="sm" variant="primary" onClick={() => handleOfferEditUpload()}>
+                  {t("fileBrowser.upload")}
+                </Button>
+              )}
               <Button size="sm" onClick={localEdit.dismissChange}>
                 {t("fileBrowser.localEdit.later")}
               </Button>
@@ -2251,6 +2345,20 @@ export function FileBrowserPanel({
           <Button size="sm" onClick={localEdit.endSession}>
             {t("fileBrowser.localEdit.end")}
           </Button>
+          {editIdentityMismatch && (
+            <span className="w-full text-amber-300">
+              {localEdit.session.elevatedUser
+                ? channelUser
+                  ? t("fileElevation.editIdentityChanged", {
+                      from: localEdit.session.elevatedUser,
+                      user: channelUser,
+                    })
+                  : t("fileElevation.editIdentityElevatedOff", {
+                      from: localEdit.session.elevatedUser,
+                    })
+                : t("fileElevation.editIdentityElevatedOn", { user: channelUser })}
+            </span>
+          )}
           {localEdit.session.error && (
             <span className="w-full text-red-300">{localEdit.session.error}</span>
           )}
@@ -2261,14 +2369,16 @@ export function FileBrowserPanel({
         <DialogFrame
           layer="sessionTab"
           title={
-            localEdit.session?.elevatedUser
-              ? t("fileElevation.editUploadTitle", { user: localEdit.session.elevatedUser })
+            (editUploadAs ? editUploadAs.user : localEdit.session?.elevatedUser)
+              ? t("fileElevation.editUploadTitle", {
+                  user: editUploadAs ? editUploadAs.user : localEdit.session?.elevatedUser,
+                })
               : t("fileBrowser.localEdit.uploadTitle")
           }
-          onClose={() => setEditUploadOffer(null)}
+          onClose={() => { setEditUploadOffer(null); setEditUploadAs(null); }}
           actions={
             <>
-              <Button onClick={() => setEditUploadOffer(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button onClick={() => { setEditUploadOffer(null); setEditUploadAs(null); }}>{t("fileBrowser.cancel")}</Button>
               <Button variant="primary" onClick={handleConfirmEditUpload}>
                 {t("fileBrowser.upload")}
               </Button>
@@ -2287,7 +2397,12 @@ export function FileBrowserPanel({
             />
           ) : (
             <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-              {t("fileBrowser.localEdit.noDiff", { size: formatBytes(editUploadOffer.localSize) })}
+              {editUploadOffer.remoteReadFailure
+                ? t(
+                    previewReadFailureHint(editUploadOffer.remoteReadFailure).key,
+                    previewReadFailureHint(editUploadOffer.remoteReadFailure).options,
+                  )
+                : t("fileBrowser.localEdit.noDiff", { size: formatBytes(editUploadOffer.localSize) })}
             </p>
           )}
         </DialogFrame>
@@ -2449,10 +2564,15 @@ export function FileBrowserPanel({
             />
           ) : (
             <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-              {t("fileBrowser.uploadConflict.noDiff", {
-                remoteSize: formatBytes(uploadConflict.remoteSize),
-                localSize: formatBytes(uploadConflict.localPreview.size),
-              })}
+              {uploadConflict.remoteReadFailure
+                ? t(
+                    previewReadFailureHint(uploadConflict.remoteReadFailure).key,
+                    previewReadFailureHint(uploadConflict.remoteReadFailure).options,
+                  )
+                : t("fileBrowser.uploadConflict.noDiff", {
+                    remoteSize: formatBytes(uploadConflict.remoteSize),
+                    localSize: formatBytes(uploadConflict.localPreview.size),
+                  })}
             </p>
           )}
         </DialogFrame>

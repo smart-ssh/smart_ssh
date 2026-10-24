@@ -429,6 +429,7 @@
     "expired": "{{host}}:{{port}} のホストキーの確認リクエストが期限切れになりました。接続は確立されず、鍵は信頼されていません。"
   },
   "sessionTabs": {
+    "newSession": "新しいセッション",
     "overview": "概要",
     "pendingAction": "確認待ち",
     "closeTab": "タブ「{{name}}」を閉じる",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "マスターパスワードが受け付けられませんでした。12文字以上で、2回の入力が一致している必要があります。",
     "STARTUP_FAILED": "起動が完了しませんでした。何も変更されていません。原因はログに記録されています。",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "キーチェーンには別の鍵が保存されています。何も変更されていません。置き換えたい場合は、置き換えを確認してください。",
+    "ELEVATED_USER_CHANGED": "昇格モードが別のユーザーで動作しているため、何も実行されませんでした。編集バーの「…としてアップロード」を使ってください。",
     "APP_LOCKED": "Smart SSHはまだロックされています。先にマスターパスワードでロックを解除してください。",
     "MASTER_PASSWORD_MODE_MISMATCH": "この操作は、鍵が現在保管されている場所と一致しません。何も変更されていません。設定を開き直してください。現在のモードが表示されます。",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "マスターパスワードに関する警告が確認されていません。このパスワードがないとすべてのデータが失われ、復旧はできません。チェックボックスをオンにして、もう一度設定してください。何も変更されていません。",
@@ -730,6 +732,11 @@
     "moveCollisionTitle": "移動先がすでに存在します — {{user}} として上書きしますか？",
     "chmodNote": "権限は {{user}} として設定されます。",
     "editUploadTitle": "ローカルの変更を {{user}} としてアップロードしますか？",
+    "editUploadAs": "{{user}} としてアップロード",
+    "editUploadAsLogin": "ログインユーザーとしてアップロード",
+    "editIdentityChanged": "{{from}} として開きました。昇格モードは現在 {{user}} として動作しています。",
+    "editIdentityElevatedOff": "{{from}} として開きました。昇格モードは現在オフです。",
+    "editIdentityElevatedOn": "昇格モードなしで開きました。現在は {{user}} として動作しています。",
     "editOpenedAs": "（{{user}} として開きました）",
     "failureTitle": "昇格した権限を利用できません",
     "sudoersIntro": "昇格モードには、サーバー上でsftp-serverに対するパスワードなしのsudoルールが必要です。次の行は、このサーバーとログインに対応しています:",
@@ -1140,6 +1147,12 @@
       "confirm": "アップロード",
       "cancel": "キャンセル",
       "menuTitle": "クリップボードのファイルをアップロード"
+    },
+    "readFailure": {
+      "tooLarge": "テキスト差分を表示できません：ファイルが大きすぎます（256 KB 超）。",
+      "notText": "テキスト差分を表示できません：ファイルはバイナリです（有効な UTF-8 テキストではありません）。",
+      "permission": "テキスト差分を表示できません：現在の権限ではこのファイルの読み取り権限がありません。",
+      "other": "テキスト差分を表示できません：ファイルを読み取れませんでした（{{message}}）。"
     }
   },
   "chat": {
@@ -1205,7 +1218,11 @@
       "cardLabel": "質問: {{question}}",
       "send": "送信",
       "answeredOwnWords": "自分の言葉で回答済み"
-    }
+    },
+    "injectionChecking": "出力を確認中 …",
+    "injectionSuspected": "警告：この出力は指示を注入しようとする試みに見えます。",
+    "injectionSuspectedReason": "確認したAIが示した理由：{{reason}}",
+    "injectionConfirmReason": "理由：{{reason}}"
   },
   "notes": {
     "largeNoteHint": "このメモは非常に大きいため、長いセッションではAIのコンテキスト用に短縮されることがあります。保存されたメモは完全なまま残ります。",

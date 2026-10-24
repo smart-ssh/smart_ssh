@@ -429,6 +429,7 @@
     "expired": "La solicitud de clave de host para {{host}}:{{port}} ha caducado. No se estableció la conexión y no se confió en la clave."
   },
   "sessionTabs": {
+    "newSession": "Nueva sesión",
     "overview": "Resumen",
     "pendingAction": "Esperando confirmación",
     "closeTab": "Cerrar la pestaña “{{name}}”",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Se rechazó la contraseña maestra: mínimo 12 caracteres y ambas entradas deben coincidir.",
     "STARTUP_FAILED": "El inicio no se completó. No se cambió nada; el registro indica la causa.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "El llavero contiene una clave distinta. No se cambió nada: confirme la sustitución si eso es lo que desea.",
+    "ELEVATED_USER_CHANGED": "El modo elevado ahora se ejecuta con otro usuario; no se hizo nada. Usa «Subir como …» en la barra de edición.",
     "APP_LOCKED": "Smart SSH sigue bloqueado. Desbloquéelo primero con su contraseña maestra.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Esta operación no corresponde a dónde se guarda actualmente la clave. No se cambió nada: vuelva a abrir los ajustes, que muestran el modo activo.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "No se confirmó la advertencia de la contraseña maestra. Sin esa contraseña se pierden todos los datos y no hay recuperación: marque la casilla y vuelva a configurarla. No se cambió nada.",
@@ -740,6 +742,11 @@
     "moveCollisionTitle": "El destino ya existe: ¿sobrescribir como {{user}}?",
     "chmodNote": "Los permisos se establecerán como {{user}}.",
     "editUploadTitle": "¿Subir los cambios locales como {{user}}?",
+    "editUploadAs": "Subir como {{user}}",
+    "editUploadAsLogin": "Subir como usuario de inicio de sesión",
+    "editIdentityChanged": "Abierto como {{from}}, el modo elevado ahora se ejecuta como {{user}}.",
+    "editIdentityElevatedOff": "Abierto como {{from}}, el modo elevado ahora está desactivado.",
+    "editIdentityElevatedOn": "Abierto sin modo elevado, ahora se ejecuta como {{user}}.",
     "editOpenedAs": "(abierto como {{user}})",
     "failureTitle": "Derechos elevados no posibles",
     "sudoersIntro": "El modo elevado necesita una regla de sudo sin contraseña para sftp-server en el servidor. Esta línea corresponde a este servidor y a este inicio de sesión:",
@@ -1154,6 +1161,12 @@
       "confirm": "Subir",
       "cancel": "Cancelar",
       "menuTitle": "Subir los archivos del portapapeles"
+    },
+    "readFailure": {
+      "tooLarge": "No es posible un diff de texto: el archivo es demasiado grande (más de 256 KB).",
+      "notText": "No es posible un diff de texto: el archivo es binario (no es texto UTF-8 válido).",
+      "permission": "No es posible un diff de texto: no tienes permiso de lectura sobre este archivo con los derechos actuales.",
+      "other": "No es posible un diff de texto: no se pudo leer el archivo ({{message}})."
     }
   },
   "chat": {
@@ -1221,7 +1234,11 @@
       "cardLabel": "Pregunta: {{question}}",
       "send": "Enviar",
       "answeredOwnWords": "Respondida con tus propias palabras"
-    }
+    },
+    "injectionChecking": "Comprobando la salida …",
+    "injectionSuspected": "Advertencia: esta salida parece un intento de inyectar instrucciones.",
+    "injectionSuspectedReason": "Motivo indicado por la IA de comprobación: {{reason}}",
+    "injectionConfirmReason": "Motivo: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Esta nota es muy grande y puede acortarse para el contexto de la IA en sesiones largas. La nota guardada permanece completa.",

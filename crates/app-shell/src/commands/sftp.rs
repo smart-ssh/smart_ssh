@@ -28,7 +28,9 @@ use app_logic::dto::{sort_remote_entries, EditSessionDto, RemoteEntryDto};
 use app_logic::error::ssh_command_error;
 use app_logic::error::CommandError;
 use app_logic::error::CommandResult;
-use app_logic::error::{SFTP_CONTENT_TOO_LARGE, SFTP_COPY_CANCELLED};
+use app_logic::error::{
+    SFTP_CONTENT_TOO_LARGE, SFTP_COPY_CANCELLED, SFTP_PREVIEW_NOT_TEXT, SFTP_PREVIEW_TOO_LARGE,
+};
 use app_logic::events::{
     emit_sftp_entries_finished, emit_sftp_entries_progress, emit_sftp_transfer_started,
     EventEmitter, SftpEntriesProgress, SftpTransferKind,
@@ -1586,10 +1588,13 @@ const MAX_TEXT_PREVIEW_BYTES: u64 = 256 * 1024;
 /// welcher der beiden Prüfungen es lag (und zwei Formatierungen wären
 /// auseinandergelaufen).
 fn too_large_for_clipboard() -> CommandError {
-    CommandError::from(format!(
-        "Datei ist größer als {} KB — zu groß zum Kopieren in die Zwischenablage",
-        MAX_TEXT_PREVIEW_BYTES / 1024
-    ))
+    CommandError::with_code(
+        format!(
+            "Datei ist größer als {} KB — zu groß zum Kopieren in die Zwischenablage",
+            MAX_TEXT_PREVIEW_BYTES / 1024
+        ),
+        SFTP_PREVIEW_TOO_LARGE,
+    )
 }
 
 /// Spec 0054, Teil 2: "Dateiinhalt kopieren" — liest eine Remote-Datei als
@@ -1650,8 +1655,12 @@ async fn read_text_impl(
     if bytes.len() as u64 > MAX_TEXT_PREVIEW_BYTES {
         return Err(too_large_for_clipboard());
     }
-    String::from_utf8(bytes)
-        .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))
+    String::from_utf8(bytes).map_err(|_| {
+        CommandError::with_code(
+            "Datei ist keine Textdatei (kein gültiges UTF-8)",
+            SFTP_PREVIEW_NOT_TEXT,
+        )
+    })
 }
 
 /// Issue #357, Spec 0086 A1.1: Obergrenze für „Dateiinhalt kopieren"
@@ -1839,8 +1848,12 @@ async fn copy_content_read(
     report: &mut (dyn FnMut(CopyContentProgress) + Send),
 ) -> CommandResult<String> {
     let bytes = copy_content_read_bytes(session, channel, path, limit, report).await?;
-    String::from_utf8(bytes)
-        .map_err(|_| CommandError::from("Datei ist keine Textdatei (kein gültiges UTF-8)"))
+    String::from_utf8(bytes).map_err(|_| {
+        CommandError::with_code(
+            "Datei ist keine Textdatei (kein gültiges UTF-8)",
+            SFTP_PREVIEW_NOT_TEXT,
+        )
+    })
 }
 
 /// Issue #358: "Copy file" — reads a remote file (any type) up to 50 MB with

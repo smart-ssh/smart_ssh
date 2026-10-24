@@ -429,6 +429,7 @@
     "expired": "Het verzoek voor de hostsleutel van {{host}}:{{port}} is verlopen. De verbinding is niet tot stand gebracht en de sleutel is niet vertrouwd."
   },
   "sessionTabs": {
+    "newSession": "Nieuwe sessie",
     "overview": "Overzicht",
     "pendingAction": "Wacht op bevestiging",
     "closeTab": "Tabblad \"{{name}}\" sluiten",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Het hoofdwachtwoord is afgewezen: minimaal 12 tekens, en beide invoeren moeten overeenkomen.",
     "STARTUP_FAILED": "De start is niet voltooid. Er is niets gewijzigd; het logboek noemt de oorzaak.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "De sleutelhanger bevat een andere sleutel. Er is niets gewijzigd — bevestig de vervanging als u dat wilt.",
+    "ELEVATED_USER_CHANGED": "De verhoogde modus draait nu als een andere gebruiker; er is niets uitgevoerd. Gebruik ‘Uploaden als …’ in de bewerkbalk.",
     "APP_LOCKED": "Smart SSH is nog vergrendeld. Ontgrendel het eerst met uw hoofdwachtwoord.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Deze handeling past niet bij de plek waar de sleutel nu wordt bewaard. Er is niets gewijzigd — open de instellingen opnieuw, daar staat de actieve modus.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "De waarschuwing over het hoofdwachtwoord is niet bevestigd. Zonder dat wachtwoord gaan alle gegevens verloren en is herstel onmogelijk — vink het vakje aan en stel het opnieuw in. Er is niets gewijzigd.",
@@ -735,6 +737,11 @@
     "moveCollisionTitle": "Doel bestaat al — overschrijven als {{user}}?",
     "chmodNote": "Rechten worden ingesteld als {{user}}.",
     "editUploadTitle": "Lokale wijzigingen uploaden als {{user}}?",
+    "editUploadAs": "Uploaden als {{user}}",
+    "editUploadAsLogin": "Uploaden als aanmeldgebruiker",
+    "editIdentityChanged": "Geopend als {{from}}, de verhoogde modus draait nu als {{user}}.",
+    "editIdentityElevatedOff": "Geopend als {{from}}, de verhoogde modus is nu uit.",
+    "editIdentityElevatedOn": "Geopend zonder verhoogde modus, die draait nu als {{user}}.",
     "editOpenedAs": "(geopend als {{user}})",
     "failureTitle": "Verhoogde rechten niet mogelijk",
     "sudoersIntro": "De verhoogde modus vereist op de server een sudo-regel zonder wachtwoord voor sftp-server. Deze regel past bij deze server en aanmelding:",
@@ -1147,6 +1154,12 @@
       "confirm": "Uploaden",
       "cancel": "Annuleren",
       "menuTitle": "Bestanden van het klembord uploaden"
+    },
+    "readFailure": {
+      "tooLarge": "Geen tekstdiff mogelijk: het bestand is te groot (meer dan 256 KB).",
+      "notText": "Geen tekstdiff mogelijk: het bestand is binair (geen geldige UTF-8-tekst).",
+      "permission": "Geen tekstdiff mogelijk: met de huidige rechten heb je geen leesrechten voor dit bestand.",
+      "other": "Geen tekstdiff mogelijk: het bestand kon niet worden gelezen ({{message}})."
     }
   },
   "chat": {
@@ -1213,7 +1226,11 @@
       "cardLabel": "Vraag: {{question}}",
       "send": "Verzenden",
       "answeredOwnWords": "In eigen woorden beantwoord"
-    }
+    },
+    "injectionChecking": "Uitvoer wordt gecontroleerd …",
+    "injectionSuspected": "Waarschuwing: deze uitvoer lijkt een poging om instructies in te voegen.",
+    "injectionSuspectedReason": "Reden van de controlerende AI: {{reason}}",
+    "injectionConfirmReason": "Reden: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Deze notitie is erg groot en kan in lange sessies worden ingekort voor de AI-context. De opgeslagen notitie blijft compleet.",

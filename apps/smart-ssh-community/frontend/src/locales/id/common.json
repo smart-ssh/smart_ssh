@@ -429,6 +429,7 @@
     "expired": "Permintaan kunci host untuk {{host}}:{{port}} kedaluwarsa. Koneksi tidak dibuat dan kunci tidak dipercaya."
   },
   "sessionTabs": {
+    "newSession": "Sesi baru",
     "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Kata sandi utama ditolak: minimal 12 karakter, dan kedua entri harus sama.",
     "STARTUP_FAILED": "Proses mulai tidak selesai. Tidak ada yang diubah; log menyebutkan penyebabnya.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Keychain menyimpan kunci yang berbeda. Tidak ada yang diubah — konfirmasi penggantian jika itu yang Anda inginkan.",
+    "ELEVATED_USER_CHANGED": "Mode tinggi kini berjalan sebagai pengguna lain; tidak ada yang dilakukan. Gunakan “Unggah sebagai …” di bilah edit.",
     "APP_LOCKED": "Smart SSH masih terkunci. Buka kuncinya terlebih dahulu dengan kata sandi utama Anda.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Operasi ini tidak sesuai dengan tempat kunci disimpan saat ini. Tidak ada yang diubah — buka kembali pengaturan, di sana ditampilkan mode yang aktif.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Peringatan kata sandi utama belum dikonfirmasi. Tanpa kata sandi itu semua data hilang dan tidak ada pemulihan — centang kotaknya dan atur lagi. Tidak ada yang diubah.",
@@ -730,6 +732,11 @@
     "moveCollisionTitle": "Target sudah ada — timpa sebagai {{user}}?",
     "chmodNote": "Izin akan diatur sebagai {{user}}.",
     "editUploadTitle": "Unggah perubahan lokal sebagai {{user}}?",
+    "editUploadAs": "Unggah sebagai {{user}}",
+    "editUploadAsLogin": "Unggah sebagai pengguna login",
+    "editIdentityChanged": "Dibuka sebagai {{from}}, mode tinggi kini berjalan sebagai {{user}}.",
+    "editIdentityElevatedOff": "Dibuka sebagai {{from}}, mode tinggi kini nonaktif.",
+    "editIdentityElevatedOn": "Dibuka tanpa mode tinggi, kini berjalan sebagai {{user}}.",
     "editOpenedAs": "(dibuka sebagai {{user}})",
     "failureTitle": "Hak tinggi tidak dimungkinkan",
     "sudoersIntro": "Mode hak tinggi memerlukan aturan sudo tanpa kata sandi untuk sftp-server di server. Baris ini cocok dengan server dan login ini:",
@@ -1140,6 +1147,12 @@
       "confirm": "Unggah",
       "cancel": "Batal",
       "menuTitle": "Unggah berkas dari papan klip"
+    },
+    "readFailure": {
+      "tooLarge": "Diff teks tidak mungkin: berkas terlalu besar (lebih dari 256 KB).",
+      "notText": "Diff teks tidak mungkin: berkas bersifat biner (bukan teks UTF-8 yang valid).",
+      "permission": "Diff teks tidak mungkin: dengan hak akses saat ini Anda tidak punya izin baca untuk berkas ini.",
+      "other": "Diff teks tidak mungkin: berkas tidak dapat dibaca ({{message}})."
     }
   },
   "chat": {
@@ -1205,7 +1218,11 @@
       "cardLabel": "Pertanyaan: {{question}}",
       "send": "Kirim",
       "answeredOwnWords": "Dijawab dengan kata-kata sendiri"
-    }
+    },
+    "injectionChecking": "Memeriksa keluaran …",
+    "injectionSuspected": "Peringatan: keluaran ini tampak seperti upaya menyisipkan instruksi.",
+    "injectionSuspectedReason": "Alasan dari AI pemeriksa: {{reason}}",
+    "injectionConfirmReason": "Alasan: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Catatan ini sangat besar dan dapat dipersingkat untuk konteks AI dalam sesi panjang. Catatan yang tersimpan tetap lengkap.",

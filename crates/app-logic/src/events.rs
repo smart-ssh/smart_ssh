@@ -1023,6 +1023,8 @@ pub fn emit_chat_ai_retrying(
 #[serde(rename_all = "camelCase")]
 struct ChatWebActivityPayload {
     session_id: SessionId,
+    /// Issue #693: binds a later `chat-injection-check` event to this card.
+    activity_id: Uuid,
     activity: crate::dto::WebActivityDto,
 }
 
@@ -1034,6 +1036,7 @@ struct ChatWebActivityPayload {
 pub fn emit_chat_web_activity(
     emitter: &dyn EventEmitter,
     session_id: SessionId,
+    activity_id: Uuid,
     activity: crate::dto::WebActivityDto,
 ) {
     emit(
@@ -1041,7 +1044,56 @@ pub fn emit_chat_web_activity(
         "chat-web-activity",
         &ChatWebActivityPayload {
             session_id,
+            activity_id,
             activity,
+        },
+    );
+}
+
+/// Issue #693: state of the optional AI check for injected instructions on
+/// one piece of fetched content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum InjectionCheckState {
+    Running,
+    Clean,
+    /// `reason` is untrusted display text: already redacted and cut to
+    /// [`INJECTION_REASON_MAX_CHARS`]; the frontend renders it as plain text.
+    Suspected {
+        reason: String,
+    },
+    Unavailable,
+}
+
+/// Issue #693: length limit for the checker's reason shown to the user.
+pub const INJECTION_REASON_MAX_CHARS: usize = 300;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatInjectionCheckPayload {
+    session_id: SessionId,
+    item_id: Uuid,
+    #[serde(flatten)]
+    state: InjectionCheckState,
+}
+
+/// Issue #693: progress/verdict of the injection check, bound to the checked
+/// item (`item_id` = action id of a command result / file read, activity id
+/// of a web research card). Display only: never persisted, never sent to
+/// the AI.
+pub fn emit_chat_injection_check(
+    emitter: &dyn EventEmitter,
+    session_id: SessionId,
+    item_id: Uuid,
+    state: InjectionCheckState,
+) {
+    emit(
+        emitter,
+        "chat-injection-check",
+        &ChatInjectionCheckPayload {
+            session_id,
+            item_id,
+            state,
         },
     );
 }

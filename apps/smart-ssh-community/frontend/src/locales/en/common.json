@@ -429,6 +429,7 @@
     "expired": "The host key request for {{host}}:{{port}} expired. The connection was not established and the key was not trusted."
   },
   "sessionTabs": {
+    "newSession": "New session",
     "overview": "Overview",
     "pendingAction": "Waiting for confirmation",
     "closeTab": "Close tab \"{{name}}\"",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "The master password was rejected: at least 12 characters, and both entries must match.",
     "STARTUP_FAILED": "The startup did not complete. Nothing was changed; the log names the cause.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "The keychain holds a different key. Nothing was changed — confirm the replacement if that is what you want.",
+    "ELEVATED_USER_CHANGED": "The elevated mode runs as a different user than when this action was started — nothing was done. Use “Upload as …” in the edit bar to upload with the current identity.",
     "APP_LOCKED": "Smart SSH is still locked. Unlock it with your master password first.",
     "MASTER_PASSWORD_MODE_MISMATCH": "This operation does not match where the key is currently kept. Nothing was changed — reopen the settings, they show the active mode.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "The master password warning has not been confirmed. Without that password all data is lost and there is no recovery — tick the box and set it up again. Nothing was changed.",
@@ -735,6 +737,11 @@
     "moveCollisionTitle": "Target already exists — overwrite as {{user}}?",
     "chmodNote": "Permissions will be set as {{user}}.",
     "editUploadTitle": "Upload local changes as {{user}}?",
+    "editUploadAs": "Upload as {{user}}",
+    "editUploadAsLogin": "Upload as login user",
+    "editIdentityChanged": "Opened as {{from}}, elevated mode now runs as {{user}}.",
+    "editIdentityElevatedOff": "Opened as {{from}}, elevated mode is now off.",
+    "editIdentityElevatedOn": "Opened without elevated mode, it now runs as {{user}}.",
     "editOpenedAs": "(opened as {{user}})",
     "failureTitle": "Elevated rights not possible",
     "sudoersIntro": "Elevated mode needs a sudo rule without password for sftp-server on the server. This line matches this server and login:",
@@ -1147,6 +1154,12 @@
       "confirm": "Upload",
       "cancel": "Cancel",
       "menuTitle": "Upload the files from the clipboard"
+    },
+    "readFailure": {
+      "tooLarge": "No text diff possible: the file is too large (over 256 KB).",
+      "notText": "No text diff possible: the file is binary (not valid UTF-8 text).",
+      "permission": "No text diff possible: you have no read permission for this file with the current rights.",
+      "other": "No text diff possible: the file could not be read ({{message}})."
     }
   },
   "chat": {
@@ -1213,7 +1226,11 @@
       "cardLabel": "Question: {{question}}",
       "send": "Send",
       "answeredOwnWords": "Answered in your own words"
-    }
+    },
+    "injectionChecking": "Checking output …",
+    "injectionSuspected": "Warning: this output looks like an attempt to inject instructions.",
+    "injectionSuspectedReason": "Reason given by the checking AI: {{reason}}",
+    "injectionConfirmReason": "Reason: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "This note is very large and may be shortened for the AI context in long sessions. The saved note stays complete.",

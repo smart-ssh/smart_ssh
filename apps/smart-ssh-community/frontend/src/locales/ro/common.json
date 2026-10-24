@@ -429,6 +429,7 @@
     "expired": "Solicitarea pentru cheia de host {{host}}:{{port}} a expirat. Conexiunea nu a fost stabilită, iar cheia nu a fost acceptată."
   },
   "sessionTabs": {
+    "newSession": "Sesiune nouă",
     "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",
@@ -620,6 +621,7 @@
     "MASTER_PASSWORD_REJECTED": "Parola principală a fost respinsă: cel puțin 12 caractere, iar cele două introduceri trebuie să coincidă.",
     "STARTUP_FAILED": "Pornirea nu s-a finalizat. Nimic nu a fost modificat; jurnalul indică cauza.",
     "KEYCHAIN_HOLDS_ANOTHER_KEY": "Portchei-ul conține o altă cheie. Nimic nu a fost modificat — confirmați înlocuirea dacă aceasta este intenția dvs.",
+    "ELEVATED_USER_CHANGED": "Modul ridicat rulează acum ca alt utilizator; nu s-a făcut nimic. Folosește „Încarcă ca …” din bara de editare.",
     "APP_LOCKED": "Smart SSH este încă blocat. Deblocați-l mai întâi cu parola principală.",
     "MASTER_PASSWORD_MODE_MISMATCH": "Această operațiune nu corespunde locului în care este păstrată cheia în prezent. Nimic nu a fost modificat — redeschideți setările, ele arată modul activ.",
     "MASTER_PASSWORD_WARNING_NOT_CONFIRMED": "Avertismentul privind parola principală nu a fost confirmat. Fără această parolă toate datele se pierd și nu există recuperare — bifați caseta și configurați din nou. Nimic nu a fost modificat.",
@@ -740,6 +742,11 @@
     "moveCollisionTitle": "Ținta există deja — suprascrieți ca {{user}}?",
     "chmodNote": "Permisiunile vor fi setate ca {{user}}.",
     "editUploadTitle": "Încărcați modificările locale ca {{user}}?",
+    "editUploadAs": "Încarcă ca {{user}}",
+    "editUploadAsLogin": "Încarcă ca utilizator de autentificare",
+    "editIdentityChanged": "Deschis ca {{from}}, modul ridicat rulează acum ca {{user}}.",
+    "editIdentityElevatedOff": "Deschis ca {{from}}, modul ridicat este acum dezactivat.",
+    "editIdentityElevatedOn": "Deschis fără mod ridicat, acum rulează ca {{user}}.",
     "editOpenedAs": "(deschis ca {{user}})",
     "failureTitle": "Drepturile ridicate nu sunt posibile",
     "sudoersIntro": "Modul cu drepturi ridicate necesită pe server o regulă sudo fără parolă pentru sftp-server. Această linie corespunde acestui server și acestei autentificări:",
@@ -1154,6 +1161,12 @@
       "confirm": "Încarcă",
       "cancel": "Anulează",
       "menuTitle": "Încarcă fișierele din clipboard"
+    },
+    "readFailure": {
+      "tooLarge": "Diferență de text imposibilă: fișierul este prea mare (peste 256 KB).",
+      "notText": "Diferență de text imposibilă: fișierul este binar (nu este text UTF-8 valid).",
+      "permission": "Diferență de text imposibilă: cu drepturile curente nu ai permisiunea de citire pentru acest fișier.",
+      "other": "Diferență de text imposibilă: fișierul nu a putut fi citit ({{message}})."
     }
   },
   "chat": {
@@ -1221,7 +1234,11 @@
       "cardLabel": "Întrebare: {{question}}",
       "send": "Trimite",
       "answeredOwnWords": "Răspuns cu propriile cuvinte"
-    }
+    },
+    "injectionChecking": "Se verifică rezultatul …",
+    "injectionSuspected": "Avertisment: acest rezultat pare o încercare de a injecta instrucțiuni.",
+    "injectionSuspectedReason": "Motivul dat de IA-ul de verificare: {{reason}}",
+    "injectionConfirmReason": "Motiv: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Această notiță este foarte mare și poate fi scurtată pentru contextul IA în sesiunile lungi. Notița salvată rămâne completă.",

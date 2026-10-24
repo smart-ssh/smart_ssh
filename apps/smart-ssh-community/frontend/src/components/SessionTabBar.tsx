@@ -1,6 +1,7 @@
-import { useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useCallback, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { type SessionTab } from "../useSessionTabs";
+import { numberedServerName, type SessionTab } from "../useSessionTabs";
+import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
 
 const FOCUS_RING =
@@ -11,6 +12,8 @@ interface SessionTabBarProps {
   activeSessionId: string | null;
   onSwitch: (sessionId: string | null) => void;
   onRequestClose: (sessionId: string) => void;
+  /** Issue #657: opens an additional session to the tab's server. */
+  onNewSession?: (server: { id: string; name: string }) => void;
 }
 
 /**
@@ -31,12 +34,14 @@ interface SessionTabBarProps {
  * "Loch" machen, sobald mindestens ein Tab existiert — nicht nur die
  * Buttons selbst.
  */
-export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose }: SessionTabBarProps) {
+export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose, onNewSession }: SessionTabBarProps) {
   const { t } = useTranslation();
   // Roving Tab stop (docs/ui-guidelines.md, "Keyboard"): the strip is one Tab
   // stop; arrow keys, Home and End move between the tabs. `focused` follows the
   // keyboard focus, otherwise the active tab is the stop.
   const [focused, setFocused] = useState<string | null | undefined>(undefined);
+  const [menu, setMenu] = useState<{ x: number; y: number; tab: SessionTab } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
   if (tabs.length === 0) return null;
   const stopId = focused !== undefined && (focused === null || tabs.some((x) => x.sessionId === focused)) ? focused : activeSessionId;
 
@@ -104,6 +109,14 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
           <div
             key={tab.sessionId}
             data-tauri-drag-region
+            onContextMenu={
+              onNewSession && !tab.mcp
+                ? (e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY, tab });
+                  }
+                : undefined
+            }
             className={`group flex shrink-0 items-center gap-1.5 border px-2 py-1 text-xs ${
               active
                 ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-300"
@@ -120,7 +133,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
                 tab.mcp
                   ? `${label} — ${t("sessionTabs.mcp.tabHint")}`
                   : tab.phase === "connected"
-                    ? tab.serverName
+                    ? numberedServerName(tab)
                     : label
               }
             >
@@ -145,6 +158,18 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose 
           </div>
         );
       })}
+      {menu && onNewSession && (
+        <NewSessionMenu
+          x={menu.x}
+          y={menu.y}
+          serverName={menu.tab.serverName}
+          onClose={closeMenu}
+          onNewSession={() => {
+            setMenu(null);
+            onNewSession({ id: menu.tab.serverId, name: menu.tab.serverName });
+          }}
+        />
+      )}
     </div>
   );
 }
