@@ -31,7 +31,57 @@
 //! `crate::run`, dieser Dialog ist die zusätzliche, sichtbare Ergänzung,
 //! nicht der Ersatz.
 
+#[cfg(not(target_os = "android"))]
 use rfd::{MessageButtons, MessageDialog, MessageLevel};
+
+// Android (Spec 0114): `rfd` has no Android backend. Fatal errors are logged
+// (the log names the cause) and the process exits; warnings and notices are
+// logged only; a choice dialog answers "cancel", the conservative option
+// (no file is renamed or replaced without consent).
+#[cfg(target_os = "android")]
+pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
+    tracing::error!(
+        title,
+        message,
+        "fatal startup error (no native dialog on Android)"
+    );
+    std::process::exit(1);
+}
+
+#[cfg(target_os = "android")]
+#[allow(dead_code)]
+pub fn show_warning(title: &str, message: &str) {
+    tracing::warn!(
+        title,
+        message,
+        "startup warning (no native dialog on Android)"
+    );
+}
+
+#[cfg(target_os = "android")]
+pub fn ask(
+    title: &str,
+    message: &str,
+    _confirm: &str,
+    _cancel: &str,
+    _extra: Option<&str>,
+) -> DialogAnswer {
+    tracing::warn!(
+        title,
+        message,
+        "startup choice answered with cancel (no native dialog on Android)"
+    );
+    DialogAnswer::Cancel
+}
+
+#[cfg(target_os = "android")]
+pub fn show_info(title: &str, message: &str) {
+    tracing::info!(
+        title,
+        message,
+        "startup notice (no native dialog on Android)"
+    );
+}
 
 /// Zeigt einen fatalen Fehlerdialog und beendet den Prozess danach sauber
 /// — nie ein Zurückkehren in einen halb aufgebauten/kaputten Zustand (Spec
@@ -43,6 +93,7 @@ use rfd::{MessageButtons, MessageDialog, MessageLevel};
 /// undiagnostizierbare, technische "Aufblitzen", das dieser Mechanismus
 /// gerade ersetzen soll. Exit-Code `1`: dieselbe Konvention wie ein
 /// fehlgeschlagener `.run(context).expect(...)` am Ende von `crate::run`.
+#[cfg(not(target_os = "android"))]
 pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
     tracing::error!(title, message, "showing fatal startup error dialog");
     MessageDialog::new()
@@ -85,6 +136,7 @@ pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
 /// Die Funktion bleibt stehen, weil Etappe 3 (A11.1, A17) wieder
 /// nicht-fatale Hinweise beim Start braucht — und ein zweites Mal denselben
 /// `rfd`-Aufruf zu schreiben wäre die schlechtere Lösung als ein `allow`.
+#[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub fn show_warning(title: &str, message: &str) {
     tracing::warn!(title, message, "showing non-fatal startup warning dialog");
@@ -119,6 +171,7 @@ pub enum DialogAnswer {
 /// Richtung: `Cancel` heißt an jeder Aufrufstelle „nichts anfassen". Ein
 /// Rückfall auf `Confirm` würde eine Datei umbenennen oder einen Schlüssel
 /// ersetzen, ohne dass jemand zugestimmt hat.
+#[cfg(not(target_os = "android"))]
 pub fn ask(
     title: &str,
     message: &str,
@@ -155,6 +208,7 @@ pub fn ask(
 /// Spec 0101, A5: meldet nach dem Umbenennen den neuen Dateinamen. Reine
 /// Mitteilung, kein Fehler — deshalb `MessageLevel::Info` statt des
 /// Warn-Stils von [`show_warning`].
+#[cfg(not(target_os = "android"))]
 pub fn show_info(title: &str, message: &str) {
     tracing::info!(title, message, "showing startup info dialog");
     MessageDialog::new()

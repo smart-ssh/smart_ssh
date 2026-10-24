@@ -45,22 +45,12 @@ pub async fn pick_upload_folder(
     session_id: SessionId,
     title: String,
 ) -> CommandResult<Option<String>> {
-    use tauri_plugin_dialog::DialogExt;
-
     if state.sessions.get(session_id).is_none() {
         return Err(CommandError::from("Session nicht gefunden"));
     }
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_title(&title)
-        .pick_folder(move |path| {
-            let _ = tx.send(path);
-        });
-    let Some(picked) = rx.await.ok().flatten() else {
+    let Some(path) = super::pick_folder_dialog(&app, &title).await? else {
         return Ok(None);
     };
-    let path = picked.into_path()?;
     Ok(
         grant_for_live_session(&state.sessions, grants.inner(), session_id, vec![path])
             .into_iter()

@@ -1,3 +1,4 @@
+import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -186,11 +187,14 @@ interface FileBrowserPanelProps {
 // leaves a seam in WebKit through which scrolled rows showed (#650).
 const STICKY_TH = "sticky top-0 z-10 bg-slate-900";
 
+const currentCaps = () => platformCapabilities(detectFallbackPlatform());
+
 export function FileBrowserPanel({
   sessionId,
   isVisible,
   onElevationChange,
 }: FileBrowserPanelProps) {
+  const caps = currentCaps();
   const [path, setPath] = useState(".");
   const [pathInput, setPathInput] = useState(".");
   // Spec 0102: Startpfad dieser Sitzung (`"."` = Home), Ziel von „Zum
@@ -1618,7 +1622,9 @@ export function FileBrowserPanel({
                     },
                   },
                   { key: "upload", label: t("fileBrowser.upload"), run: handleUploadButton },
-                  { key: "uploadFolder", label: t("fileBrowser.uploadFolder"), run: handleUploadFolderButton },
+                  ...(caps.folderPicker
+                    ? [{ key: "uploadFolder", label: t("fileBrowser.uploadFolder"), run: handleUploadFolderButton }]
+                    : []),
                   ...(cutEntry
                     ? [
                         { key: "paste", label: t("fileBrowser.paste"), run: handlePaste },
@@ -1721,9 +1727,11 @@ export function FileBrowserPanel({
         <Button size="sm" onClick={handleUploadButton}>
           {t("fileBrowser.upload")}
         </Button>
-        <Button size="sm" onClick={handleUploadFolderButton}>
-          {t("fileBrowser.uploadFolder")}
-        </Button>
+        {caps.folderPicker && (
+          <Button size="sm" onClick={handleUploadFolderButton}>
+            {t("fileBrowser.uploadFolder")}
+          </Button>
+        )}
         </fieldset>
         {!elevated && sessionRoot !== undefined && sessionRoot !== true && (
           <fieldset
@@ -1955,7 +1963,7 @@ export function FileBrowserPanel({
           setOpenMenu(null);
           setClipboardFiles(false);
           setDirMenu({ x: e.clientX, y: e.clientY });
-          if (!cutEntry) {
+          if (!cutEntry && caps.fileClipboard) {
             clipboardHasFiles()
               .then(setClipboardFiles)
               .catch(() => setClipboardFiles(false));
@@ -2697,6 +2705,7 @@ function FileEntryMenu({
   onChmod: (entry: RemoteEntryDto) => void;
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
+  const caps = currentCaps();
   const { t } = useTranslation();
   // Issue #627: always fully inside the window (flips/shifts at the edges).
   const menuRef = useRef<HTMLDivElement>(null);
@@ -2725,15 +2734,17 @@ function FileEntryMenu({
       <button type="button" onClick={act(() => onDownloadDefault(entry))} className={itemClass}>
         {t("fileBrowser.menu.download")}
       </button>
-      <button type="button" onClick={act(() => onDownloadChoose(entry))} className={itemClass}>
-        {t("fileBrowser.menu.downloadTo")}
-      </button>
+      {(caps.folderPicker || !entry.isDir) && (
+        <button type="button" onClick={act(() => onDownloadChoose(entry))} className={itemClass}>
+          {t("fileBrowser.menu.downloadTo")}
+        </button>
+      )}
       {!entry.isDir && (
         <button type="button" onClick={act(() => onCopyContent(entry))} className={itemClass}>
           {t("fileBrowser.menu.copyContent")}
         </button>
       )}
-      {!entry.isDir && (
+      {!entry.isDir && caps.fileClipboard && (
         <button type="button" onClick={act(() => onCopyFile(entry))} className={itemClass}>
           {t("fileBrowser.menu.copyFile")}
         </button>

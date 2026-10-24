@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
@@ -515,7 +516,9 @@ export function ServerList({
     return <p className="text-sm text-slate-400">{t("mainScreen.loadingServers")}</p>;
   }
 
-  const localServer = servers.find((s) => s.isLocal);
+  const localServer = platformCapabilities(detectFallbackPlatform()).localServer
+    ? servers.find((s) => s.isLocal)
+    : undefined;
   const tree = buildGroupTree(groups, servers, unusableServers);
   // Spec 0069, Teil C1 (BL-0082): "leer" für den Einstiegs-Block heißt
   // ausschließlich "keine echten Server" — der lokale Pseudo-Server zählt

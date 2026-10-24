@@ -7,7 +7,30 @@ import { invoke } from "@tauri-apps/api/core";
  * der Entsperrung, Issue #163) — damit die Freiräume für Ampel bzw.
  * Minimieren/Maximieren/Schließen an genau einer Stelle stehen. */
 
-export type Platform = "macos" | "windows" | "linux" | "unknown";
+export type Platform = "macos" | "windows" | "linux" | "android" | "unknown";
+
+/** Spec 0114: what the platform offers beyond the shared UI. Android has no
+ * local shell, no folder picker and no system file clipboard. */
+export interface PlatformCapabilities {
+  /** The local pseudo-server entry in the server list. */
+  localServer: boolean;
+  /** "Upload folder" and "Download to…" for folders (native folder picker). */
+  folderPicker: boolean;
+  /** "Copy file" and pasting local files from the system clipboard. */
+  fileClipboard: boolean;
+  /** Always the narrow (phone) layout, whatever the window width. */
+  alwaysNarrow: boolean;
+}
+
+export function platformCapabilities(platform: Platform): PlatformCapabilities {
+  const android = platform === "android";
+  return {
+    localServer: !android,
+    folderPicker: !android,
+    fileClipboard: !android,
+    alwaysNarrow: android,
+  };
+}
 
 /** Spec 0049, Fund 3/4: `create_overlay_titlebar` liefert zurück, ob die
  * plattformspezifische Overlay-Titelleiste des Plugins tatsächlich aktiv
@@ -36,6 +59,8 @@ const EDGE_PADDING = "16px";
 export function detectFallbackPlatform(): Platform {
   if (typeof navigator === "undefined") return "unknown";
   const ua = navigator.userAgent.toLowerCase();
+  // Android WebViews also say "linux": test android first.
+  if (ua.includes("android")) return "android";
   if (ua.includes("mac")) return "macos";
   if (ua.includes("win")) return "windows";
   if (ua.includes("linux")) return "linux";
@@ -52,7 +77,7 @@ export function usePlatform(): Platform {
     invoke<string>("get_platform")
       .then((p) => {
         if (cancelled) return;
-        if (p === "macos" || p === "windows" || p === "linux") {
+        if (p === "macos" || p === "windows" || p === "linux" || p === "android") {
           setPlatform(p);
         }
       })
@@ -72,7 +97,7 @@ export function titlebarPaddingStyle(
   platform: Platform,
   decorationMode: DecorationMode,
 ): { paddingLeft: string; paddingRight: string } {
-  if (decorationMode === "native") {
+  if (decorationMode === "native" || platform === "android") {
     return { paddingLeft: EDGE_PADDING, paddingRight: EDGE_PADDING };
   }
   return platform === "macos"
@@ -87,7 +112,7 @@ export function titlebarDragInsetStyle(
   platform: Platform,
   decorationMode: DecorationMode,
 ): { left: string; right: string } {
-  if (decorationMode === "native") return { left: "0px", right: "0px" };
+  if (decorationMode === "native" || platform === "android") return { left: "0px", right: "0px" };
   return platform === "macos"
     ? { left: MAC_CONTROLS_CLEARANCE, right: "0px" }
     : { left: "0px", right: OTHER_CONTROLS_CLEARANCE };

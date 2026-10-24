@@ -1,0 +1,29 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Capability für das Hauptfenster unter Android (Spec 0114): dieselben Rechte wie `default`, aber ohne die Fensterrahmen-Rechte (`decoration:default`, Fenster ziehen, Maximieren), die es dort nicht gibt.",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "android",
+    "iOS"
+  ],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "dialog:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "$CACHE/smart-ssh/edit-sessions/**",
+          "app": true
+        }
+      ]
+    },
+    "store:default",
+    "os:default"
+  ]
+}
