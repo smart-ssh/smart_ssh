@@ -162,6 +162,21 @@ impl FileHostKeyStore {
         self
     }
 
+    /// Issue #664: every trusted entry as `(host, port, raw key)`, sorted, for
+    /// the backup snapshot (Spec 0109, C1).
+    pub fn entries(&self) -> Result<Vec<(String, u16, Vec<u8>)>, SshError> {
+        let known = self
+            .known
+            .lock()
+            .map_err(|_| SshError::ChannelError("host-key store lock poisoned".into()))?;
+        let mut out: Vec<(String, u16, Vec<u8>)> = known
+            .iter()
+            .map(|((host, port, _), raw)| (host.clone(), *port, raw.clone()))
+            .collect();
+        out.sort();
+        Ok(out)
+    }
+
     fn persist(&self, known: &KnownHostKeys) -> Result<(), SshError> {
         let mut entries = Vec::new();
         for ((host, port, _algorithm), raw_key) in known {

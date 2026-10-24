@@ -12,6 +12,7 @@
 
 mod ai_providers;
 mod app_meta;
+mod backup;
 mod chat;
 mod connect;
 mod diagnostics_export;
@@ -30,6 +31,7 @@ mod test_support;
 
 pub(crate) use ai_providers::*;
 pub(crate) use app_meta::*;
+pub(crate) use backup::*;
 pub(crate) use chat::*;
 pub(crate) use connect::*;
 pub(crate) use diagnostics_export::*;

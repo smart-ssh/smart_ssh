@@ -7,6 +7,7 @@
 //! I/O-Abhängigkeiten, austauschbare Storage-Details gehören hierher.
 
 mod ai_provider_store;
+mod backup_store;
 mod chat_session_store;
 /// Spec 0101, A9: der produktive `CredentialStore` — Secrets in der
 /// verschlüsselten Datenbank statt im Schlüsselbund.
@@ -17,6 +18,8 @@ mod encryption;
 mod error;
 /// Issue #462: extension-owned tables and migrations (Spec 0038, 2a).
 mod extension_db;
+/// Issue #673: namespaced key-value and secret store.
+mod extension_store;
 /// Issue #113: einmalige Umstellung der früher feldweise verschlüsselten
 /// Spalten auf Klartext in der verschlüsselten Datei.
 mod field_content_decryption;
@@ -36,6 +39,8 @@ pub mod test_support;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
 /// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
 #[cfg(test)]
@@ -48,6 +53,8 @@ mod tests_data_changes;
 mod tests_encryption;
 #[cfg(test)]
 mod tests_extension_db;
+#[cfg(test)]
+mod tests_extension_store;
 /// Issue #113: die Umstellung der feldweise verschlüsselten Spalten.
 #[cfg(test)]
 mod tests_field_content_decryption;
@@ -68,6 +75,10 @@ mod tests_release_chain;
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
 };
+pub use backup_store::{
+    AiProviderRow, BackupStoreError, DatabaseSnapshot, GroupRow, NoteRevisionRow, RuleRow,
+    SecretRow, ServerRow, SqliteBackupStore, TagRow, BACKUP_KEY_REF,
+};
 pub use chat_session_store::{
     ChatSessionRemovalObserver, ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore,
 };
@@ -80,6 +91,10 @@ pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
 pub use extension_db::{
     validate_prefix, validate_unique_prefixes, ExtensionDb, ExtensionMigration,
     ExtensionMigrationError, ExtensionRegistration,
+};
+pub use extension_store::{
+    ExtensionStore, ExtensionStoreError, NamespacedStore, MAX_KEYS_PER_NAMESPACE, MAX_KEY_BYTES,
+    MAX_VALUE_BYTES,
 };
 pub use field_content_decryption::{
     ColumnCounts, FieldContentDecryption, FieldContentDecryptionReport,

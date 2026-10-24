@@ -33,7 +33,8 @@ use zeroize::Zeroizing;
 
 pub use code::RecoveryCode;
 pub use format::{
-    open, rewrap, seal, HeaderExtension, OpenedBackup, SealInput, Section, SlotMaterial,
+    open, open_with_slot, rewrap, seal, HeaderExtension, OpenedBackup, SealInput, Section,
+    SlotMaterial,
 };
 #[cfg(test)]
 pub(crate) use format::{open_with, rewrap_with};
