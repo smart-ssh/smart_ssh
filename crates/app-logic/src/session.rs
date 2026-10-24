@@ -675,6 +675,8 @@ pub struct Session {
     /// Issue #544: result of the connect-time `id -u` probe. `Some(true)` =
     /// uid 0, `None` = unknown (probe failed or not run). UI hint only.
     is_root: Option<bool>,
+    /// Issue #653: uid/gid → name maps, read once per session on first use.
+    id_names: tokio::sync::OnceCell<crate::owner_names::IdNames>,
     /// Issue #610: where completed AI requests are reported (observers an
     /// edition registered). `None` = nobody listens. Private: set at build.
     usage_reporting: Option<crate::ai_usage::AiUsageReporting>,
@@ -1018,6 +1020,7 @@ impl Session {
             sftp: NormalSftpChannel::default(),
             start_directory: Default::default(),
             is_root: None,
+            id_names: tokio::sync::OnceCell::new(),
             usage_reporting: None,
         }
     }
@@ -1067,6 +1070,16 @@ impl Session {
     pub fn with_is_root(mut self, is_root: Option<bool>) -> Self {
         self.is_root = is_root;
         self
+    }
+
+    /// Issue #653: the session's uid/gid name maps; `load` runs only for the
+    /// first caller, later calls reuse the result (even an empty one).
+    pub async fn id_names_or_init<F, Fut>(&self, load: F) -> &crate::owner_names::IdNames
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = crate::owner_names::IdNames>,
+    {
+        self.id_names.get_or_init(load).await
     }
 
     /// Issue #544: `Some(true)` if the login user is root, `None` if unknown.

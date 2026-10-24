@@ -62,6 +62,8 @@ pub mod mcp_sessions;
 /// Spec 0101, A12: das MCP-Server-Token im Secret-Speicher.
 pub mod mcp_token;
 pub mod orchestration;
+/// Spec 0102: Startverzeichnis für Terminal und Dateibrowser.
+pub mod owner_names;
 /// Spec 0088, A2.1/A2.2: crate-intern, weil es eine Implementierungs-
 /// Entscheidung über die Sperren dieser Crate ist und keine Schnittstelle.
 mod poison;
@@ -86,7 +88,6 @@ pub mod session;
 pub mod session_extension;
 pub mod single_instance;
 pub mod ssh_config_import;
-/// Spec 0102: Startverzeichnis für Terminal und Dateibrowser.
 pub mod start_directory;
 /// Spec 0101, A3/A5: Texte der Startdialoge mit Wahl (D1–D4 und die
 /// zweiten Bestätigungen).

@@ -1050,8 +1050,10 @@
       "name": "Név",
       "size": "Méret",
       "permissions": "Jogosultságok",
-      "modified": "Módosítva"
+      "modified": "Módosítva",
+      "owner": "Tulajdonos"
     },
+    "columnsMenu": "Oszlopok megjelenítése vagy elrejtése",
     "localEdit": {
       "uploading": "„{{name}}” feltöltése…",
       "changed": "A(z) „{{name}}” helyben módosult. Feltölti a szerverre?",

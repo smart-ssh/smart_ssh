@@ -276,6 +276,6 @@ test.describe("file browser, narrow layout @phone", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator("table")).toBeVisible();
     const widths = await page.locator("col").evaluateAll((cols) => cols.map((c) => (c as HTMLElement).style.width));
-    expect(widths).toEqual(["", "90px", "90px", "150px", "36px"]);
+    expect(widths).toEqual(["", "90px", "90px", "130px", "150px", "36px"]);
   });
 });
