@@ -178,6 +178,11 @@ interface FileBrowserPanelProps {
  * Tab-Wechsel gemountet (s. `SessionView`), ihr `path`-State lebt daher
  * automatisch pro Tab getrennt, ohne zusätzliche Buchführung.
  */
+// Header cells (not the thead) are sticky with their own opaque background and
+// the table uses `border-separate`: a sticky thead under `border-collapse`
+// leaves a seam in WebKit through which scrolled rows showed (#650).
+const STICKY_TH = "sticky top-0 z-10 bg-slate-900";
+
 export function FileBrowserPanel({
   sessionId,
   isVisible,
@@ -1981,7 +1986,7 @@ export function FileBrowserPanel({
         )}
         {!loading && !error && !narrow && entries.length > 0 && (
           <table
-            className="w-full table-fixed text-left text-xs"
+            className="w-full table-fixed border-separate border-spacing-0 text-left text-xs"
             style={{
               // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts):
               // ohne diese `min-width` konnte die Name-Spalte unter
@@ -2017,10 +2022,10 @@ export function FileBrowserPanel({
               <col style={{ width: columnWidths.modified }} />
               <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
             </colgroup>
-            <thead className="sticky top-0 bg-slate-900 text-slate-400">
+            <thead className="text-slate-400">
               <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
-                <th>{t("fileBrowser.column.name")}</th>
-                <th className="relative">
+                <th className={STICKY_TH}>{t("fileBrowser.column.name")}</th>
+                <th className={STICKY_TH}>
                   {t("fileBrowser.column.size")}
                   <ColumnResizeHandle
                     testId="column-resize-size"
@@ -2028,7 +2033,7 @@ export function FileBrowserPanel({
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th className="relative">
+                <th className={STICKY_TH}>
                   {t("fileBrowser.column.permissions")}
                   <ColumnResizeHandle
                     testId="column-resize-permissions"
@@ -2036,7 +2041,7 @@ export function FileBrowserPanel({
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th className="relative">
+                <th className={STICKY_TH}>
                   {t("fileBrowser.column.modified")}
                   <ColumnResizeHandle
                     testId="column-resize-modified"
@@ -2044,7 +2049,7 @@ export function FileBrowserPanel({
                     onDragEnd={handleColumnDragEnd}
                   />
                 </th>
-                <th>
+                <th className={STICKY_TH}>
                   <span className="sr-only">{t("fileBrowser.actionsColumn")}</span>
                 </th>
               </tr>
@@ -2053,7 +2058,7 @@ export function FileBrowserPanel({
               {entries.map((entry) => (
                 <tr
                   key={entry.path}
-                  className="border-t border-slate-800/70 hover:bg-slate-800/40"
+                  className="hover:bg-slate-800/40 [&>td]:border-t [&>td]:border-slate-800/70"
                   // Spec 0054, Teil 1: Rechtsklick öffnet dasselbe Menü wie
                   // das Drei-Punkte-Symbol, nur an der Klickposition statt
                   // in der Aktionsspalte verankert (s. `openMenu`-Doc-
