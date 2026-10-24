@@ -287,6 +287,14 @@
       "connection": "Kết nối",
       "security": "Bảo mật",
       "invalid": "Có lỗi"
+    },
+    "importKey": {
+      "title": "Nhập khóa vào Smart SSH?",
+      "import": "Nhập khóa",
+      "keep": "Giữ đường dẫn tệp",
+      "importHint": "Khóa được lưu mã hóa trong Smart SSH và đi cùng bản sao lưu sang các thiết bị khác của bạn.",
+      "keepHint": "Chỉ đường dẫn tệp được lưu và chuyển sang thiết bị khác. Tệp phải tồn tại ở cùng đường dẫn trên mọi thiết bị.",
+      "importedFrom": "Đã nhập từ {{path}}"
     }
   },
   "filterRules": {
@@ -628,7 +636,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo.",
     "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm.",
     "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này.",
-    "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này"
+    "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này"
   },
   "mcpServer": {
     "hint": "Các ứng dụng khách MCP bên ngoài có thể dùng mục này để đề xuất lệnh, đọc/ghi tệp và cập nhật ghi chú trên các máy chủ trong danh sách cho phép — mọi yêu cầu luôn cần xác nhận trong ứng dụng, bất kể các quy tắc cho phép hiện có.",

@@ -287,6 +287,14 @@
       "connection": "Forbindelse",
       "security": "Sikkerhed",
       "invalid": "Indeholder fejl"
+    },
+    "importKey": {
+      "title": "Importér nøglen til Smart SSH?",
+      "import": "Importér nøgle",
+      "keep": "Behold filsti",
+      "importHint": "Nøglen gemmes krypteret i Smart SSH og følger med sikkerhedskopier til dine andre enheder.",
+      "keepHint": "Kun filstien gemmes og følger med til andre enheder. Filen skal findes på samme sti på hver enhed.",
+      "importedFrom": "Importeret fra {{path}}"
     }
   },
   "filterRules": {
@@ -628,7 +636,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nøglen i nøgleringen hører ikke til denne database. Intet blev ændret – at gemme den ville gøre databasen ulæselig ved næste opstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større end 50 MB og kan ikke kopieres til udklipsholderen.",
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system.",
-    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede"
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed"
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruge dette til at foreslå kommandoer, fillæsninger/-skrivninger og noteopdateringer på servere på tilladelseslisten – hver anmodning kræver altid bekræftelse i appen, uanset eksisterende tillad-regler.",

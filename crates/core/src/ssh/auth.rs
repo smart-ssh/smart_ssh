@@ -302,9 +302,12 @@ pub fn resolve_auth(
             // A-4: `enforce_permissions: true` — auf dem **Anmelde**-Pfad
             // lehnt eine zu weit geöffnete Datei ab. Die Überführung (C-3)
             // ruft dieselbe Methode mit `false`.
-            let content = key_files
-                .read(path, true)
-                .map_err(|e| SshError::CredentialResolutionFailed(e.to_string()))?;
+            let content = key_files.read(path, true).map_err(|e| match e {
+                // Issue #667: eigener Zustand statt allgemeinem
+                // Auflösungsfehler; kein Rückfall auf eine andere Methode.
+                KeyFileError::NotFound { path } => SshError::KeyFileNotFound { path, hop: None },
+                other => SshError::CredentialResolutionFailed(other.to_string()),
+            })?;
             let passphrase = passphrase_ref
                 .as_ref()
                 .map(|r| credentials.get(r))

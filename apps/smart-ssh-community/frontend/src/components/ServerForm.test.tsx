@@ -25,6 +25,7 @@ import {
   listStoredHostKeys,
   testConnection,
   trustHostKey,
+  updateServer,
 } from "../api";
 import { pickFilePath } from "../fileDialog";
 import { testI18n } from "../testI18n";
@@ -381,8 +382,10 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       // Der übersetzte, generische Text — NICHT der deutsche Backend-Fallback
       // mit dem konkreten Pfad — belegt, dass der Code (nicht nur die
       // Nachricht) durchgereicht wird (Spec 0024, Abschnitt 5).
+      // Issue #667: a missing file is shown as "not found on this device",
+      // with the path.
       expect(
-        screen.getByText("Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden."),
+        screen.getByText("Schlüsseldatei auf diesem Gerät nicht gefunden: /tmp/nope"),
       ).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
@@ -918,5 +921,112 @@ describe("ServerForm — gespeicherte Host-Keys (Spec 0008)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Anlegen|Create/ })).toBeInTheDocument());
     expect(screen.queryByText("Host-Keys")).not.toBeInTheDocument();
     expect(listStoredHostKeys).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #667: ask once whether to import a key file or keep the path.
+describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)", () => {
+  const NEW_PATH = "/home/deploy/.ssh/new_key";
+
+  async function renderEditWithNewPath(onSaved = vi.fn()) {
+    vi.mocked(updateServer).mockResolvedValue(undefined);
+    vi.mocked(convertIdentityFileToKeychain).mockResolvedValue(serverDto());
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={onSaved}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    openTab("Verbindung");
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), { target: { value: NEW_PATH } });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    return onSaved;
+  }
+
+  it("asks on save and imports the key when 'Schlüssel importieren' is chosen", async () => {
+    const onSaved = await renderEditWithNewPath();
+    const dialog = await screen.findByRole("dialog");
+    expect(updateServer).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Schlüssel importieren" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).toHaveBeenCalledWith(SERVER_ID);
+  });
+
+  it("saves exactly as before when 'Dateipfad behalten' is chosen", async () => {
+    const onSaved = await renderEditWithNewPath();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Dateipfad behalten" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+  });
+
+  it("returns to the form without saving on cancel", async () => {
+    const onSaved = await renderEditWithNewPath();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Abbrechen" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(updateServer).not.toHaveBeenCalled();
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("does not ask when the key-file path is unchanged", async () => {
+    vi.mocked(getServer).mockResolvedValue(
+      serverDto({ authKind: "identity_file", identityFilePath: IDENTITY_PATH }),
+    );
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    vi.mocked(updateServer).mockResolvedValue(undefined);
+    const onSaved = vi.fn();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={onSaved}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    fireEvent.change(screen.getByDisplayValue("web-01"), { target: { value: "web-02" } });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+  });
+
+  it("keeps the dialog open and does not save twice when the import fails", async () => {
+    const onSaved = await renderEditWithNewPath();
+    vi.mocked(convertIdentityFileToKeychain).mockRejectedValueOnce({
+      code: "KEY_FILE_INVALID_KEY",
+      message: "x",
+    });
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Schlüssel importieren" }));
+
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Schlüssel importieren" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(updateServer).toHaveBeenCalledTimes(1);
+    expect(convertIdentityFileToKeychain).toHaveBeenCalledTimes(2);
   });
 });

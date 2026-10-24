@@ -133,6 +133,16 @@ pub enum SshError {
         /// `ssh_transport::auth::name_hop` (Spec 0076, A-8).
         hop: Option<HopLabel>,
     },
+    /// Issue #667 (Spec 0076/0109 C3): Die Schlüsseldatei einer
+    /// `IdentityFile`-Anmeldung gibt es auf diesem Gerät nicht (z. B. nach
+    /// einem Backup-Import). Eigene Variante, damit die Oberfläche den
+    /// Zustand „Schlüsseldatei auf diesem Gerät nicht gefunden“ mit dem Pfad
+    /// zeigt und nicht „Credential-Auflösung fehlgeschlagen“. Kein
+    /// Rückfall auf eine andere Anmeldeart.
+    KeyFileNotFound {
+        path: String,
+        hop: Option<HopLabel>,
+    },
 }
 
 impl fmt::Display for SshError {
@@ -178,6 +188,12 @@ impl fmt::Display for SshError {
                     secret.label()
                 )
             }
+            SshError::KeyFileNotFound { path, hop } => {
+                if let Some(hop) = hop {
+                    write!(f, "{hop}: ")?;
+                }
+                write!(f, "Schlüsseldatei auf diesem Gerät nicht gefunden: {path}")
+            }
         }
     }
 }
@@ -219,6 +235,7 @@ impl SshError {
             // entfallen. `core` vergibt den Code damit endgültig, und keine
             // Schicht darüber kann ihn noch verändern.
             SshError::CredentialStoreFailed { .. } => SECRET_STORE_FAILED,
+            SshError::KeyFileNotFound { .. } => "KEY_FILE_NOT_FOUND_ON_DEVICE",
         }
     }
 
@@ -266,6 +283,14 @@ impl SshError {
                     }),
                 }
             }
+            SshError::KeyFileNotFound { path, hop: None } => SshError::KeyFileNotFound {
+                path,
+                hop: Some(HopLabel {
+                    username: username.to_string(),
+                    host: host.to_string(),
+                    port,
+                }),
+            },
             other => other,
         }
     }
@@ -299,6 +324,11 @@ mod code_tests {
             // Spec 0098, A4.
             SshError::CredentialStoreFailed {
                 secret: SecretKind::Password,
+                hop: None,
+            },
+            // Issue #667.
+            SshError::KeyFileNotFound {
+                path: "/x".to_string(),
                 hop: None,
             },
         ];
