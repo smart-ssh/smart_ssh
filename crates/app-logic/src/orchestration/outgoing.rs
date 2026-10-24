@@ -57,9 +57,19 @@ pub(crate) async fn prepare_for_send(
     // re-checks a transformed command so a faulty transform cannot produce a
     // blacklisted command from an approved one. A hit rejects; the message is
     // generic and the prepared text appears nowhere.
+    //
+    // Issue #697: an original that itself matches the hard blacklist reached
+    // this point only because the user explicitly confirmed it (the filter
+    // turns a hit into `Confirm`). Rejecting its prepared form would make that
+    // confirmation lead nowhere, so the re-check applies only when the
+    // original did NOT match. Decision: a confirmed blacklisted command that
+    // the (trusted, edition) transform turns into another blacklisted command
+    // is sent as well.
     if kind == OutgoingKind::Command {
         use secrecy::ExposeSecret;
-        if matches_hard_blacklist(prepared.text().expose_secret()).await {
+        if matches_hard_blacklist(prepared.text().expose_secret()).await
+            && !matches_hard_blacklist(text).await
+        {
             return Err(PREPARED_BLOCKED_MESSAGE.to_string());
         }
     }

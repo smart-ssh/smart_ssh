@@ -423,6 +423,57 @@ async fn test_prepared_command_on_the_hard_blacklist_is_rejected_without_quoting
     assert!(!shown.contains("rm -rf"), "{shown}");
 }
 
+/// Identity transform: returns the text unchanged.
+struct Identity;
+
+#[async_trait]
+impl OutgoingTransform for Identity {
+    async fn prepare_outgoing(
+        &self,
+        _scope: &ServerScope,
+        _kind: OutgoingKind,
+        text: &str,
+    ) -> Result<Prepared, Rejection> {
+        Ok(Prepared::new(text.to_string(), Vec::new()))
+    }
+}
+
+// Issue #697: a confirmed, already blacklisted original is sent.
+#[tokio::test]
+async fn test_confirmed_blacklisted_original_is_sent_with_identity_transform() {
+    let transport = MockSshTransport::default().with_response("rm -rf /tmp/x", output("done"));
+    let executed = transport.executed_handle();
+    let mut session = test_session_allowing_everything(propose("rm -rf /tmp/x"), transport);
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Identity)));
+    let emitter = TestEmitter::default();
+
+    run_approved_turn(&session, &emitter).await;
+
+    assert_eq!(*executed.lock().unwrap(), vec!["rm -rf /tmp/x".to_string()]);
+    assert!(!all_event_text(&emitter).contains("hard blacklist"));
+}
+
+#[tokio::test]
+async fn test_confirmed_blacklisted_original_turned_into_other_blacklisted_is_sent() {
+    let transport = MockSshTransport::default().with_response("rm -rf /", output("done"));
+    let executed = transport.executed_handle();
+    let mut session = test_session_allowing_everything(propose("rm -rf /tmp/x"), transport);
+    session.set_outgoing_transform_for_tests(Some(Arc::new(TurnsIntoBlacklisted)));
+    let emitter = TestEmitter::default();
+
+    run_approved_turn(&session, &emitter).await;
+
+    assert_eq!(*executed.lock().unwrap(), vec!["rm -rf /".to_string()]);
+    // The prepared text appears in no event or history entry.
+    let shown = format!(
+        "{} {:?}",
+        all_event_text(&emitter),
+        session.context.lock().await.history
+    );
+    assert!(!shown.contains(r#"rm -rf /""#), "{shown}");
+    assert!(!shown.contains("rm -rf / "), "{shown}");
+}
+
 #[tokio::test]
 async fn test_without_a_transform_the_text_is_sent_unchanged() {
     let transport = MockSshTransport::default().with_response("echo X", output("done"));

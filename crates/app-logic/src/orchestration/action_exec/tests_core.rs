@@ -1329,6 +1329,7 @@ async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
         &emitter,
         Uuid::new_v4(),
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
     assert!(
@@ -1382,6 +1383,7 @@ async fn test_injection_check_no_does_not_change_followup_decision() {
         &emitter,
         Uuid::new_v4(),
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
     assert!(
@@ -1425,6 +1427,7 @@ async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_fla
         &emitter,
         Uuid::new_v4(),
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
 
@@ -1482,6 +1485,7 @@ async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_conten
         &emitter,
         Uuid::new_v4(),
         &huge_content,
+        "command_output",
     )
     .await;
     let elapsed = before.elapsed();

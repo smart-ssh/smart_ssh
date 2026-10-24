@@ -106,6 +106,8 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "AI_MODEL_NO_TOOL_SUPPORT",
   "AI_LOCAL_PROVIDER_UNREACHABLE",
   "AI_TIMEOUT",
+  // Issue #694: total deadline of one AI request.
+  "AI_TOTAL_DEADLINE",
   // Spec 0105 §7 (Issue #169):
   "AI_WEB_RESEARCH_REJECTED",
   // Spec 0006 (Issue #470): model cannot read an attached image/PDF.
@@ -267,6 +269,7 @@ const RETRYABLE_AI_CODES = new Set<string>([
   "AI_PROVIDER_UNAVAILABLE",
   "AI_RATE_LIMITED",
   "AI_TIMEOUT",
+  "AI_TOTAL_DEADLINE",
   "AI_NETWORK_ERROR",
 ]);
 

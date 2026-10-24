@@ -415,7 +415,8 @@
       "verdictAuto": "wordt de volgende keer automatisch uitgevoerd",
       "verdictAsk": "vraagt nog steeds: {{reasons}}",
       "notice": "Regel aangemaakt. Dit commando vraagt de volgende keer nog steeds: {{reasons}}",
-      "reasonOther": "een andere veiligheidscontrole"
+      "reasonOther": "een andere veiligheidscontrole",
+      "loadFailed": "Regeldekking kon niet worden geladen"
     }
   },
   "hostKeyDialog": {
@@ -571,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Dit model ondersteunt geen toolaanroepen. Schakel in de provider-instellingen \"Ondersteunt native toolaanroepen\" uit (dan wordt de promptgebaseerde terugval gebruikt) of kies een model met toolondersteuning.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "De lokale AI-service reageert niet. Start Ollama (of uw lokale server) en probeer het opnieuw.",
     "AI_TIMEOUT": "De AI-provider deed er te lang over om te antwoorden. Wacht even en verstuur opnieuw; controleer bij een lokaal model of de computer bezig is of het model te groot is.",
+    "AI_TIMEOUT_NAMED": "Geen antwoord van {{provider}} gedurende {{seconds}} s – verzoek geannuleerd. Probeer het zo opnieuw.",
+    "AI_TOTAL_DEADLINE": "{{provider}} was niet klaar binnen {{minutes}} minuten – verzoek geannuleerd. De tot nu toe ontvangen tekst blijft behouden.",
     "AI_WEB_RESEARCH_REJECTED": "De AI-provider weigert webonderzoek voor dit account. Schakel \"Webonderzoek\" voor deze provider uit onder \"AI-provider\" in de instellingen.",
     "AI_ATTACHMENT_UNSUPPORTED": "Dit model kan de bijgevoegde afbeelding of pdf niet lezen. Kies een model dat dat wel kan of verwijder de bijlage.",
     "AI_NO_ACTIVE_PROVIDER": "Nog geen actieve AI-provider. Voeg er een toe onder Instellingen → AI-provider en maak die actief.",
@@ -1183,6 +1186,7 @@
     "tryAgain": "Opnieuw proberen",
     "errorDetails": "Details",
     "aiRetrying": "De AI-provider is overbelast – nieuwe poging over {{seconds}} s (poging {{attempt}} van {{max}})",
+    "aiWaiting": "Wachten op antwoord van {{provider}} … {{seconds}} s",
     "noActiveProvider": "Geen actieve AI-provider ingesteld. Stel er eerst een in bij de instellingen.",
     "inputPlaceholder": "Stel een vraag of beschrijf een opdracht …",
     "send": "Verzenden",
