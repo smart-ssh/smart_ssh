@@ -78,6 +78,24 @@ In **beiden** Bäumen — der Verbinden-Liste und der Verwalten-Sidebar:
   ihr.
 - Liegt das Element schon am Ziel, wird nichts geschrieben.
 
+## 3a. Kopie-Markierung
+
+Server und Gruppen, die der Backup-Import in den Ordner „Alter Stand"
+verschoben hat (Spec 0109, I4), tragen die Markierung „Kopie".
+
+- Die Serverliste zeigt an jedem solchen Server und an jeder solchen Gruppe
+  ein Kennzeichen „Kopie". Sein Hinweistext sagt: Kopie, nicht Teil des
+  aktuellen Bestands, eigene ID, unabhängig von den importierten Einträgen.
+  Der Ordner „Alter Stand" selbst und importierte Einträge tragen es nicht.
+- Im Kontextmenü eines markierten Servers oder einer markierten Gruppe
+  steht „Als normalen Eintrag behalten". Beim Server entfernt es die
+  Markierung sofort. Bei der Gruppe fragt die App zuerst nach und nennt, wie
+  viele Gruppen und Server betroffen sind; nach der Bestätigung verlieren die
+  Gruppe, alle Untergruppen und alle Server darin die Markierung.
+- Nichts außer dem Backup-Import setzt die Markierung. Sie hat keinen
+  Einfluss auf Verbinden, Filterregeln, Risikoeinstufung oder Notizen und
+  bleibt beim Verschieben und Bearbeiten erhalten.
+
 ## 4. Plattformen
 
 Das Ziehen nutzt Zeigerereignisse statt des HTML5-Drag-and-drop. Die App
