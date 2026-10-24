@@ -13,3 +13,9 @@ path = "src/lib.rs"
 keyring = "4.1.6"
 secrecy = "0.10.3"
 ssh-manager-core = { version = "0.7.0", path = "../core" }
+
+# `keyring` has no Android backend; on Android the Keystore store is used
+# directly through `keyring-core` (Spec 0101, Spec 0114).
+[target.'cfg(target_os = "android")'.dependencies]
+android-native-keyring-store = "1.0.0"
+keyring-core = "1"

@@ -31,6 +31,10 @@
 //! verifizieren.
 
 pub mod availability;
+mod backend;
+
+#[cfg(target_os = "android")]
+pub use backend::set_forced_unavailable;
 
 pub use availability::{
     classify_store_failure, probe_keychain_availability, session_bus_present, store_failure_of,
@@ -68,8 +72,8 @@ impl KeyringCredentialStore {
         Self
     }
 
-    fn entry(r: &CredentialRef) -> CredentialResult<keyring::Entry> {
-        keyring::Entry::new(SERVICE_NAME, r.as_str())
+    fn entry(r: &CredentialRef) -> CredentialResult<backend::Entry> {
+        backend::Entry::new(SERVICE_NAME, r.as_str())
             .map_err(|e| CredentialError::Backend(e.to_string()))
     }
 }

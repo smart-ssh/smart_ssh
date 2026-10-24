@@ -64,14 +64,29 @@ pub fn ask(
     message: &str,
     _confirm: &str,
     _cancel: &str,
-    _extra: Option<&str>,
+    extra: Option<&str>,
 ) -> DialogAnswer {
+    let answer = android_answer(extra);
     tracing::warn!(
         title,
         message,
-        "startup choice answered with cancel (no native dialog on Android)"
+        ?answer,
+        "startup choice answered without a native dialog on Android"
     );
-    DialogAnswer::Cancel
+    answer
+}
+
+/// Android answer to a startup choice. A third button is only offered for
+/// "set up a master password" (Spec 0101, D1), which is non-destructive and
+/// continues in the window; it is the way forward when the Android keystore
+/// is unavailable. Every other choice stays the conservative "cancel".
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn android_answer(extra: Option<&str>) -> DialogAnswer {
+    if extra.is_some() {
+        DialogAnswer::Extra
+    } else {
+        DialogAnswer::Cancel
+    }
 }
 
 #[cfg(target_os = "android")]
@@ -219,4 +234,15 @@ pub fn show_info(title: &str, message: &str) {
         .set_level(MessageLevel::Info)
         .set_buttons(MessageButtons::Ok)
         .show();
+}
+
+#[cfg(test)]
+mod android_answer_tests {
+    use super::*;
+
+    #[test]
+    fn test_android_takes_the_master_password_button_only_when_offered() {
+        assert_eq!(android_answer(Some("Set up")), DialogAnswer::Extra);
+        assert_eq!(android_answer(None), DialogAnswer::Cancel);
+    }
 }
