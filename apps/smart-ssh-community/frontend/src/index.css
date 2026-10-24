@@ -4,7 +4,16 @@
 /* Narrow (phone-like) layout, Spec 0113: below 640 px. Keep in sync with
    `NARROW_QUERY` in `hooks/useIsNarrow.ts`. The wide layout stays the
    unprefixed default; `narrow:` only adds the exception. */
-@custom-variant narrow (@media (max-width: 639.98px));
+@custom-variant narrow {
+  @media (max-width: 639.98px) {
+    @slot;
+  }
+  /* Spec 0114: Android always uses the narrow layout (`data-platform` is set
+     on <html> in main.tsx). */
+  &:where([data-platform="android"] *) {
+    @slot;
+  }
+}
 
 /* No elastic "rubber-band" overscroll (WKWebView on macOS) on the document or
    on any scroll container, and no scroll chaining to the surrounding layout.

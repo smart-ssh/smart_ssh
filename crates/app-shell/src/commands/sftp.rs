@@ -249,15 +249,56 @@ async fn download_impl(
     }))
 }
 
+/// Folder picker. Desktop only: `tauri-plugin-dialog` offers no folder
+/// picker on Android (Spec 0114); there the UI does not show the actions and
+/// a direct call is refused. `None` = the user cancelled.
+#[cfg(not(target_os = "android"))]
+async fn pick_folder_dialog(
+    app: &AppHandle,
+    title: &str,
+) -> CommandResult<Option<std::path::PathBuf>> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title(title)
+        .pick_folder(move |path| {
+            let _ = tx.send(path);
+        });
+    match rx.await.ok().flatten() {
+        Some(picked) => Ok(Some(picked.into_path()?)),
+        None => Ok(None),
+    }
+}
+
+#[cfg(target_os = "android")]
+async fn pick_folder_dialog(
+    _app: &AppHandle,
+    _title: &str,
+) -> CommandResult<Option<std::path::PathBuf>> {
+    Err(CommandError::from(
+        "Folder selection is not available on Android",
+    ))
+}
+
 /// Ermittelt das Standard-Downloadverzeichnis des Betriebssystems (Spec
 /// 0054, Teil 2: "Standard-Downloadverzeichnis ODER präziser Pfad per
 /// Dialog") — `directories::UserDirs` ist bereits Projektabhängigkeit (s.
 /// `logging.rs`).
 fn default_downloads_dir() -> CommandResult<std::path::PathBuf> {
-    directories::UserDirs::new()
-        .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
-        .ok_or("Kein Standard-Downloadverzeichnis gefunden")
-        .map_err(CommandError::from)
+    // Android (Spec 0114): kein `HOME`; app-privater Ordner als Ersatz.
+    #[cfg(target_os = "android")]
+    {
+        Ok(persistence_sqlite::android_files_dir().join("downloads"))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        directories::UserDirs::new()
+            .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
+            .ok_or("Kein Standard-Downloadverzeichnis gefunden")
+            .map_err(CommandError::from)
+    }
 }
 
 /// Rekursiver Ordner-Download (Spec 0054, Teil 2: "Ordner rekursiv"):
@@ -445,19 +486,9 @@ pub async fn sftp_download_dir(
         session_id,
         elevated_user,
         |session, channel| async move {
-            use tauri_plugin_dialog::DialogExt;
-
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            app.dialog()
-                .file()
-                .set_title(&title)
-                .pick_folder(move |path| {
-                    let _ = tx.send(path);
-                });
-            let Some(local_dir) = rx.await.ok().flatten() else {
+            let Some(local_dir) = pick_folder_dialog(&app, &title).await? else {
                 return Ok(None); // Abbrechen ist kein Fehler.
             };
-            let local_dir = local_dir.into_path()?;
 
             download_entry_to(
                 &TauriEventEmitter(app.clone()),

@@ -48,15 +48,18 @@ async fn list_servers_impl<R: tauri::Runtime>(
     // Spec 0032, Abschnitt 3: der lokale Pseudo-Server ist immer das erste
     // Element, unabhängig von `group_id` — er gehört nie einer Gruppe an,
     // ein Gruppenfilter kann ihn also nie sinnvoll ausschließen.
-    let local = ServerDto::from_server(
-        &crate::local_server::synthetic_server(app),
-        credential_store,
-    );
+    // Android (Spec 0114): no local shell; the entry is not offered there.
+    let local = crate::local_server::offered().then(|| {
+        ServerDto::from_server(
+            &crate::local_server::synthetic_server(app),
+            credential_store,
+        )
+    });
     let rest = servers
         .iter()
         .filter(|s| group_id.is_none() || s.group_id == group_id)
         .map(|s| ServerDto::from_server(s, credential_store));
-    Ok(std::iter::once(local).chain(rest).collect())
+    Ok(local.into_iter().chain(rest).collect())
 }
 
 /// Spec 0058, Teil 2 (spec-reviewer-Fund, Review des Politur-Pakets):

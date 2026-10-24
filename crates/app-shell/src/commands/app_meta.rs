@@ -7,7 +7,7 @@ use app_logic::dto::AppInfoDto;
 use app_logic::error::CommandResult;
 use app_logic::state::AppState;
 
-/// Liefert das aktuelle Betriebssystem ("macos", "windows", "linux", "unknown")
+/// Liefert das aktuelle Betriebssystem ("macos", "windows", "linux", "android", "unknown")
 /// zur plattformspezifischen Anpassung des UI-Paddings im Frontend (Spec 0014, Abschnitt 4).
 #[tauri::command]
 pub fn get_platform() -> &'static str {
@@ -23,7 +23,16 @@ pub fn get_platform() -> &'static str {
     {
         "linux"
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    #[cfg(target_os = "android")]
+    {
+        "android"
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux",
+        target_os = "android"
+    )))]
     {
         "unknown"
     }
@@ -197,6 +206,23 @@ pub fn get_entitlements(
 /// zu ignorieren.
 #[tauri::command]
 pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandResult<&'static str> {
+    // Android (Spec 0114): no overlay title bar; the command stays registered
+    // so the frontend call does not fail, and reports the native frame.
+    #[cfg(target_os = "android")]
+    {
+        let _ = window;
+        Ok("native")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        create_overlay_titlebar_desktop(window).await
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+async fn create_overlay_titlebar_desktop(
+    window: tauri::WebviewWindow,
+) -> CommandResult<&'static str> {
     use tauri_plugin_decoration::WebviewWindowExt;
 
     if let Err(error) = window.activate_decoration().await {
@@ -236,6 +262,7 @@ pub async fn create_overlay_titlebar(window: tauri::WebviewWindow) -> CommandRes
 /// (nicht verschluckt) — der Startpunkt, um ein künftiges Windows-/
 /// Linux-Problem tatsächlich diagnostizieren zu können, statt wie bisher
 /// zu raten.
+#[cfg(not(target_os = "android"))]
 async fn restore_native_decoration(
     window: &tauri::WebviewWindow,
     activation_error: impl std::fmt::Display,
