@@ -521,6 +521,16 @@ fn t_3_1_4a_gewaehlte_datei_ist_keine_ssh_config() {
     assert_eq!(expect_abort(&c), ImportAbort::ChosenNotSshConfig);
 }
 
+#[test]
+fn t_0109_t3_backup_file_is_rejected_as_ssh_config() {
+    let d = tempfile::tempdir().unwrap();
+    let mut content = ssh_manager_core::backup::MAGIC.to_vec();
+    content.extend_from_slice(b"Host evil\n  HostName example.org\n");
+    let c = d.path().join("config");
+    std::fs::write(&c, content).unwrap();
+    assert_eq!(expect_abort(&c), ImportAbort::ChosenIsBackup);
+}
+
 // ------------------------------------------- §6.4.9 Fremdinhalt
 
 /// §6.4.9: Vier Fälle, je mit `Include` auf eine Datei, die keine

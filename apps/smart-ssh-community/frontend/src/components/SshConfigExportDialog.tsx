@@ -106,6 +106,8 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
             </div>
 
             <p className="text-xs text-slate-400">{t("sshConfigExport.result.notRepresentedHint")}</p>
+            {/* Spec 0109, T2: this is not a backup. */}
+            <p className="text-xs text-slate-300">{t("sshConfigExport.backupHint")}</p>
           </div>
         )}
 

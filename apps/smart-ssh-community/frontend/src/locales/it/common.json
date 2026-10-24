@@ -45,7 +45,8 @@
       "chatRetention": "Sessioni e dati",
       "mcpServer": "Server MCP",
       "masterPassword": "Password principale",
-      "voiceInput": "Input vocale"
+      "voiceInput": "Input vocale",
+      "dataAndBackup": "Dati e backup"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ sposta in questo gruppo",
     "hintCycle": "Un gruppo non può essere spostato nel proprio sottogruppo",
     "moveTo": "Sposta «{{name}}» in…"
+  },
+  "copyMarker": {
+    "badge": "Copia",
+    "badgeHint": "Copia: non fa parte dei dati attuali. Ha un proprio ID ed è indipendente dalle voci importate.",
+    "keep": "Mantieni come voce normale",
+    "groupConfirmBody": "Rimuove il contrassegno di copia da questo gruppo e da tutto il suo contenuto (gruppi: {{groups}}, server: {{servers}})."
   },
   "management": {
     "emptyState": "Selezioni un gruppo o un server a sinistra, oppure crei qualcosa di nuovo con \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -872,7 +879,8 @@
       "success": "{{created}} server creati, {{groups}} cartelle, {{skipped}} conflitti saltati.",
       "fallbacksDetail": "{{count}} file di chiave non hanno potuto essere letti, il percorso è stato mantenuto: {{detail}}.",
       "encryptedDetail": "{{count}} chiavi sono state acquisite cifrate: aggiunga la passphrase prima della prima connessione: {{detail}}."
-    }
+    },
+    "isBackup": "Questo file è un backup cifrato, non un ssh_config. Non è stato creato nulla. Ripristinalo in Impostazioni → Dati e backup."
   },
   "sshConfigExport": {
     "dialogTitle": "Esporta in ssh_config",
@@ -882,7 +890,8 @@
       "includeHintLabel": "Come includere questo file nel suo ~/.ssh/config:",
       "copy": "Copia",
       "notRepresentedHint": "Gruppi, tag, note, regole di filtro e impostazioni di sicurezza non sono in questo file: ciò che manca per un dato server è annotato come commento sopra la sua voce."
-    }
+    },
+    "backupHint": "Non contiene credenziali, regole o note. Per un backup completo usa il backup cifrato (Impostazioni → Dati e backup)."
   },
   "startup": {
     "stateUnknown": "Smart SSH non ha potuto leggere il proprio stato di avvio. Nulla è stato modificato. Riprovi; se persiste, il log indica la causa.",
@@ -1358,5 +1367,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "completato",
     "resultFailed": "non riuscito"
+  },
+  "backup": {
+    "title": "Backup cifrato",
+    "intro": "Salva tutti i tuoi dati di Smart SSH in un unico file cifrato e li ripristina in seguito, ad esempio su un nuovo computer.",
+    "included": "Inclusi: server, cartelle, tag, regole di filtro, note dei server, provider AI, credenziali salvate (cifrate) e chiavi host attendibili.",
+    "excluded": "Non inclusi: cronologia chat, registri di utilizzo, impostazioni del dispositivo e file di chiavi su disco.",
+    "restoreInfo": "Il ripristino sostituisce tutti i dati su questo dispositivo. I dati attuali vengono prima salvati e i tuoi server vanno in una cartella con data.",
+    "export": "Esporta backup…",
+    "restore": "Ripristina da backup…",
+    "newCode": "Nuovo codice di recupero",
+    "setPassphrase": "Imposta passphrase",
+    "exportDone": "Backup salvato in {{path}}.",
+    "exportCounts": "{{servers}} server, {{rules}} regole, {{notes}} note.",
+    "setup": {
+      "title": "Proteggi i tuoi backup",
+      "intro": "I backup sono cifrati. Per leggerli serve un codice di recupero o una passphrase, quindi scegline uno ora.",
+      "useCode": "Crea un codice di recupero",
+      "usePassphrase": "Usa invece una passphrase"
+    },
+    "code": {
+      "title": "Il tuo codice di recupero",
+      "warning": "Annota questo codice e conservalo con cura. Viene mostrato una sola volta e non può essere mostrato di nuovo. Senza, i tuoi backup non si possono leggere.",
+      "copy": "Copia",
+      "copyFailed": "Copia non riuscita.",
+      "confirm": "Ho annotato il codice",
+      "continue": "Continua"
+    },
+    "passphrase": {
+      "title": "Imposta una passphrase",
+      "warning": "Senza la passphrase i tuoi backup non si possono leggere. Non esiste recupero.",
+      "label": "Passphrase",
+      "help": "Almeno {{count}} caratteri.",
+      "tooShort": "Troppo corta: almeno {{count}} caratteri.",
+      "repeat": "Ripeti la passphrase",
+      "mismatch": "Le passphrase non coincidono.",
+      "save": "Salva passphrase"
+    },
+    "import": {
+      "title": "Ripristina da backup",
+      "pickTitle": "Scegli un file di backup",
+      "file": "Nome file: {{name}}",
+      "kind": "Cosa apre questo backup",
+      "useCode": "Codice di recupero",
+      "usePassphrase": "Passphrase",
+      "codeLabel": "Codice di recupero",
+      "passphraseLabel": "Passphrase",
+      "open": "Apri backup"
+    },
+    "confirm": {
+      "title": "Sostituire i tuoi dati?",
+      "intro": "Il ripristino sostituisce i dati su questo dispositivo. Finora non è cambiato nulla.",
+      "what": "Dati",
+      "local": "Ora",
+      "file": "Copia",
+      "sessions": "Sessioni aperte che verranno chiuse: {{count}}",
+      "safety": "I tuoi dati attuali vengono prima salvati in {{dir}}. I tuoi server vanno in una nuova cartella “Previous data” con la data di oggi.",
+      "replace": "Sostituisci dati"
+    },
+    "counts": {
+      "servers": "Server",
+      "groups": "Cartelle",
+      "rules": "Regole",
+      "notes": "Note",
+      "aiProviders": "Provider AI"
+    },
+    "summary": {
+      "title": "Backup ripristinato",
+      "counts": "Ripristinati: {{servers}} server, {{groups}} cartelle, {{rules}} regole, {{notes}} note, {{aiProviders}} provider AI.",
+      "safety": "Backup di sicurezza dei dati precedenti: {{path}}",
+      "folder": "I tuoi server precedenti sono nella cartella “{{name}}”.",
+      "hostKeysPending": "Le chiavi host attendibili vengono completate al prossimo avvio.",
+      "done": "Fatto"
+    },
+    "errors": {
+      "cannotOpen": "Codice o passphrase errati, oppure il file è danneggiato.",
+      "typo": "Il codice contiene un errore di battitura.",
+      "notBackup": "Questo non è un file di backup di Smart SSH. Gli elenchi di server in formato ssh_config si importano dall’elenco dei server.",
+      "newerVersion": "Questo backup è stato creato da una versione più recente di Smart SSH. Aggiorna l’app e riprova.",
+      "failed": "Operazione non riuscita. Non è stato modificato nulla."
+    }
   }
 }

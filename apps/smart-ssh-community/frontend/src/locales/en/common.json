@@ -45,7 +45,8 @@
       "chatRetention": "Sessions & Data",
       "mcpServer": "MCP Server",
       "masterPassword": "Master password",
-      "voiceInput": "Voice input"
+      "voiceInput": "Voice input",
+      "dataAndBackup": "Data and backup"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ move into this group",
     "hintCycle": "A group cannot be moved into its own subgroup",
     "moveTo": "Move “{{name}}” to…"
+  },
+  "copyMarker": {
+    "badge": "Copy",
+    "badgeHint": "Copy – not part of the current data. It has its own ID and is independent of the imported entries.",
+    "keep": "Keep as regular entry",
+    "groupConfirmBody": "Removes the copy marker from this group and everything inside it (groups: {{groups}}, servers: {{servers}})."
   },
   "management": {
     "emptyState": "Select a group or server on the left, or create something new via \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -867,7 +874,8 @@
       "success": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped.",
       "fallbacksDetail": "{{count}} key file(s) could not be read, the path was kept instead: {{detail}}.",
       "encryptedDetail": "{{count}} key(s) were taken over encrypted — add the passphrase before the first connection: {{detail}}."
-    }
+    },
+    "isBackup": "This file is an encrypted backup, not an ssh_config. Nothing was created. Restore it under Settings → Data and backup."
   },
   "sshConfigExport": {
     "dialogTitle": "Export to ssh_config",
@@ -877,7 +885,8 @@
       "includeHintLabel": "How to include this file in your own ~/.ssh/config:",
       "copy": "Copy",
       "notRepresentedHint": "Groups, tags, notes, filter rules and security settings aren't in this file — what's missing for a given server is noted as a comment above its entry."
-    }
+    },
+    "backupHint": "Contains no credentials, rules or notes. For a complete backup, use the encrypted backup (Settings → Data and backup)."
   },
   "startup": {
     "stateUnknown": "Smart SSH could not read its startup state. Nothing was changed. Try again; if it persists, the log names the cause.",
@@ -1350,5 +1359,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "done",
     "resultFailed": "failed"
+  },
+  "backup": {
+    "title": "Encrypted backup",
+    "intro": "Saves all your Smart SSH data in one encrypted file and restores it later, for example on a new computer.",
+    "included": "Included: servers, folders, tags, filter rules, server notes, AI providers, saved credentials (encrypted) and trusted host keys.",
+    "excluded": "Not included: chat history, usage records, device settings and key files on disk.",
+    "restoreInfo": "Restoring replaces all data on this device. Your current data is saved first, and your current servers move to a dated folder.",
+    "export": "Export backup…",
+    "restore": "Restore from backup…",
+    "newCode": "New recovery code",
+    "setPassphrase": "Set passphrase",
+    "exportDone": "Backup saved to {{path}}.",
+    "exportCounts": "{{servers}} servers, {{rules}} rules, {{notes}} notes.",
+    "setup": {
+      "title": "Protect your backups",
+      "intro": "Backups are encrypted. You need a recovery code or a passphrase to read them, so choose one now.",
+      "useCode": "Create a recovery code",
+      "usePassphrase": "Use a passphrase instead"
+    },
+    "code": {
+      "title": "Your recovery code",
+      "warning": "Write this code down and keep it safe. It is shown only once and cannot be shown again. Without it, your backups cannot be read.",
+      "copy": "Copy",
+      "copyFailed": "Could not copy.",
+      "confirm": "I have noted the code",
+      "continue": "Continue"
+    },
+    "passphrase": {
+      "title": "Set a passphrase",
+      "warning": "Without the passphrase, your backups cannot be read. There is no recovery.",
+      "label": "Passphrase",
+      "help": "At least {{count}} characters.",
+      "tooShort": "Too short: at least {{count}} characters.",
+      "repeat": "Repeat passphrase",
+      "mismatch": "The passphrases do not match.",
+      "save": "Save passphrase"
+    },
+    "import": {
+      "title": "Restore from backup",
+      "pickTitle": "Choose a backup file",
+      "file": "File: {{name}}",
+      "kind": "What opens this backup",
+      "useCode": "Recovery code",
+      "usePassphrase": "Passphrase",
+      "codeLabel": "Recovery code",
+      "passphraseLabel": "Passphrase",
+      "open": "Open backup"
+    },
+    "confirm": {
+      "title": "Replace your data?",
+      "intro": "Restoring replaces the data on this device. Nothing has changed yet.",
+      "what": "Data",
+      "local": "Now",
+      "file": "Backup",
+      "sessions": "Open sessions that will be closed: {{count}}",
+      "safety": "Your current data is saved first to {{dir}}. Your current servers move to a new folder named “Previous data” with today’s date.",
+      "replace": "Replace data"
+    },
+    "counts": {
+      "servers": "Servers",
+      "groups": "Folders",
+      "rules": "Rules",
+      "notes": "Notes",
+      "aiProviders": "AI providers"
+    },
+    "summary": {
+      "title": "Backup restored",
+      "counts": "Restored: {{servers}} servers, {{groups}} folders, {{rules}} rules, {{notes}} notes, {{aiProviders}} AI providers.",
+      "safety": "Safety backup of your previous data: {{path}}",
+      "folder": "Your previous servers are in the folder “{{name}}”.",
+      "hostKeysPending": "The trusted host keys are completed at the next start.",
+      "done": "Done"
+    },
+    "errors": {
+      "cannotOpen": "Wrong code or passphrase, or the file is damaged.",
+      "typo": "The code contains a typo.",
+      "notBackup": "This is not a Smart SSH backup file. Server lists in ssh_config format are imported from the server list.",
+      "newerVersion": "This backup was made by a newer version of Smart SSH. Update the app and try again.",
+      "failed": "The operation failed. Nothing was changed."
+    }
   }
 }
