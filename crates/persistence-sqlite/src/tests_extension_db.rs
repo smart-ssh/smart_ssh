@@ -40,7 +40,7 @@ async fn core_snapshot(store: &SqliteProfileStore) -> Vec<(String, String)> {
     schema(store)
         .await
         .into_iter()
-        .filter(|(n, _)| !n.starts_with("ext_"))
+        .filter(|(n, _)| !n.starts_with("ext_") || n.starts_with("ext_kv"))
         .collect()
 }
 
@@ -140,7 +140,7 @@ async fn test_no_extension_leaves_the_schema_untouched() {
     assert!(schema(&store)
         .await
         .iter()
-        .all(|(n, _)| !n.starts_with("ext_")));
+        .all(|(n, _)| !n.starts_with("ext_") || n.starts_with("ext_kv")));
     let before = schema(&store).await;
     // an empty registration is the only thing that creates objects: its
     // history table, in the extension's own namespace

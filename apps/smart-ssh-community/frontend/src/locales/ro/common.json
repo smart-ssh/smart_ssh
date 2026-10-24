@@ -45,7 +45,8 @@
       "chatRetention": "Sesiuni și date",
       "mcpServer": "Server MCP",
       "masterPassword": "Parolă principală",
-      "voiceInput": "Intrare vocală"
+      "voiceInput": "Intrare vocală",
+      "dataAndBackup": "Date și copii de rezervă"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ mută în acest grup",
     "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
     "moveTo": "Mută „{{name}}” în…"
+  },
+  "copyMarker": {
+    "badge": "Copie",
+    "badgeHint": "Copie – nu face parte din datele curente. Are propriul ID și este independentă de intrările importate.",
+    "keep": "Păstrează ca intrare obișnuită",
+    "groupConfirmBody": "Elimină marcajul de copie de la acest grup și de la tot ce conține (grupuri: {{groups}}, servere: {{servers}})."
   },
   "management": {
     "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”.",
@@ -869,7 +876,8 @@
       "success": "Servere create: {{created}}, foldere: {{groups}}, conflicte omise: {{skipped}}.",
       "fallbacksDetail": "{{count}} fișier(e) de cheie nu au putut fi citite, calea a fost păstrată în schimb: {{detail}}.",
       "encryptedDetail": "{{count}} cheie/chei au fost preluate criptate — adăugați fraza-parolă înainte de prima conectare: {{detail}}."
-    }
+    },
+    "isBackup": "Acest fișier este o copie de rezervă criptată, nu un ssh_config. Nu s-a creat nimic. Restaurați-o din Setări → Date și copii de rezervă."
   },
   "sshConfigExport": {
     "dialogTitle": "Exportă în ssh_config",
@@ -879,7 +887,8 @@
       "includeHintLabel": "Cum includeți acest fișier în propriul ~/.ssh/config:",
       "copy": "Copiază",
       "notRepresentedHint": "Grupurile, etichetele, notițele, regulile de filtrare și setările de securitate nu se află în acest fișier — ce lipsește pentru un anumit server este notat ca comentariu deasupra intrării sale."
-    }
+    },
+    "backupHint": "Nu conține credențiale, reguli sau notițe. Pentru o copie completă, folosiți copia de rezervă criptată (Setări → Date și copii de rezervă)."
   },
   "startup": {
     "stateUnknown": "Smart SSH nu a putut citi starea de pornire. Nimic nu a fost modificat. Încercați din nou; dacă persistă, jurnalul indică cauza.",
@@ -1026,6 +1035,10 @@
     "transferStopped": "{{name}}: oprit",
     "transferIncomplete": "Fișier incomplet rămas pe server: {{path}}",
     "transferFiles": "{{done}} din {{total}} fișiere",
+    "transferDelete": "Se șterge {{name}}",
+    "transferChmod": "Se modifică permisiunile pentru {{name}}",
+    "entriesProgress": "{{done}} din {{total}} elemente",
+    "entriesChanged": "Elemente modificate: {{count}}",
     "transferRemaining": "au mai rămas {{time}}",
     "loading": "Se încarcă…",
     "noPermissionToOpen": "Nu aveți permisiunea de a deschide acest folder (lipsește x)",
@@ -1230,7 +1243,11 @@
       "cardLabel": "Întrebare: {{question}}",
       "send": "Trimite",
       "answeredOwnWords": "Răspuns cu propriile cuvinte"
-    }
+    },
+    "injectionChecking": "Se verifică rezultatul …",
+    "injectionSuspected": "Avertisment: acest rezultat pare o încercare de a injecta instrucțiuni.",
+    "injectionSuspectedReason": "Motivul dat de IA-ul de verificare: {{reason}}",
+    "injectionConfirmReason": "Motiv: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Această notiță este foarte mare și poate fi scurtată pentru contextul IA în sesiunile lungi. Notița salvată rămâne completă.",
@@ -1346,5 +1363,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "gata",
     "resultFailed": "eșuat"
+  },
+  "backup": {
+    "title": "Copie de rezervă criptată",
+    "intro": "Salvează toate datele dvs. Smart SSH într-un singur fișier criptat și le restaurează ulterior, de exemplu pe un calculator nou.",
+    "included": "Incluse: servere, foldere, etichete, reguli de filtrare, notițe despre servere, furnizori AI, credențiale salvate (criptate) și chei de gazdă de încredere.",
+    "excluded": "Neincluse: istoricul conversațiilor, evidența utilizării, setările dispozitivului și fișierele de chei de pe disc.",
+    "restoreInfo": "Restaurarea înlocuiește toate datele de pe acest dispozitiv. Datele curente se salvează mai întâi, iar serverele dvs. se mută într-un folder cu dată.",
+    "export": "Exportă copia de rezervă…",
+    "restore": "Restaurează din copie…",
+    "newCode": "Cod de recuperare nou",
+    "setPassphrase": "Setează fraza de acces",
+    "exportDone": "Copia de rezervă a fost salvată în {{path}}.",
+    "exportCounts": "{{servers}} servere, {{rules}} reguli, {{notes}} notițe.",
+    "setup": {
+      "title": "Protejați-vă copiile de rezervă",
+      "intro": "Copiile sunt criptate. Pentru a le citi aveți nevoie de un cod de recuperare sau de o frază de acces, deci alegeți una acum.",
+      "useCode": "Creează un cod de recuperare",
+      "usePassphrase": "Folosește o frază de acces"
+    },
+    "code": {
+      "title": "Codul dvs. de recuperare",
+      "warning": "Notați codul și păstrați-l în siguranță. Se afișează o singură dată și nu mai poate fi afișat din nou. Fără el, copiile nu pot fi citite.",
+      "copy": "Copiază",
+      "copyFailed": "Nu s-a putut copia.",
+      "confirm": "Am notat codul",
+      "continue": "Continuă"
+    },
+    "passphrase": {
+      "title": "Setați o frază de acces",
+      "warning": "Fără fraza de acces, copiile nu pot fi citite. Nu există recuperare.",
+      "label": "Frază de acces",
+      "help": "Cel puțin {{count}} caractere.",
+      "tooShort": "Prea scurtă: cel puțin {{count}} caractere.",
+      "repeat": "Repetați fraza de acces",
+      "mismatch": "Frazele de acces nu se potrivesc.",
+      "save": "Salvează fraza de acces"
+    },
+    "import": {
+      "title": "Restaurează din copie",
+      "pickTitle": "Alegeți un fișier de copie",
+      "file": "Fișier: {{name}}",
+      "kind": "Ce deschide această copie",
+      "useCode": "Cod de recuperare",
+      "usePassphrase": "Frază de acces",
+      "codeLabel": "Cod de recuperare",
+      "passphraseLabel": "Frază de acces",
+      "open": "Deschide copia"
+    },
+    "confirm": {
+      "title": "Înlocuiți datele?",
+      "intro": "Restaurarea înlocuiește datele de pe acest dispozitiv. Încă nu s-a schimbat nimic.",
+      "what": "Date",
+      "local": "Acum",
+      "file": "Copie",
+      "sessions": "Sesiuni deschise care vor fi închise: {{count}}",
+      "safety": "Datele curente se salvează mai întâi în {{dir}}. Serverele dvs. se mută într-un folder nou numit “Previous data”, cu data de azi.",
+      "replace": "Înlocuiește datele"
+    },
+    "counts": {
+      "servers": "Servere",
+      "groups": "Foldere",
+      "rules": "Reguli",
+      "notes": "Notițe",
+      "aiProviders": "Furnizori AI"
+    },
+    "summary": {
+      "title": "Copie restaurată",
+      "counts": "Restaurat: {{servers}} servere, {{groups}} foldere, {{rules}} reguli, {{notes}} notițe, {{aiProviders}} furnizori AI.",
+      "safety": "Copie de siguranță a datelor anterioare: {{path}}",
+      "folder": "Serverele dvs. anterioare sunt în folderul “{{name}}”.",
+      "hostKeysPending": "Cheile de gazdă de încredere se completează la următoarea pornire.",
+      "done": "Gata"
+    },
+    "errors": {
+      "cannotOpen": "Cod sau frază de acces greșite, ori fișierul este deteriorat.",
+      "typo": "Codul conține o greșeală de scriere.",
+      "notBackup": "Acesta nu este un fișier de copie Smart SSH. Listele de servere în format ssh_config se importă din lista de servere.",
+      "newerVersion": "Această copie a fost creată de o versiune mai nouă a Smart SSH. Actualizați aplicația și încercați din nou.",
+      "failed": "Operația a eșuat. Nu s-a schimbat nimic."
+    }
   }
 }

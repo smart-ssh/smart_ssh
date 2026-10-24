@@ -3,6 +3,7 @@ import type { FeatureLockedPayload } from "./extensions/entitlements";
 import { publishFeatureLocked } from "./extensions/featureLockedBus";
 import type {
   ActionUserDecision,
+  KeepGroupResult,
   AiProviderConfigDto,
   AiProviderConfigInput,
   AppInfoDto,
@@ -310,6 +311,15 @@ export const updateGroup = (id: string, name: string, parentId: string | null) =
  * `GROUP_SELF_PARENT`/`GROUP_CYCLE_DETECTED` ab. */
 export const moveGroup = (id: string, parentId: string | null) =>
   invoke<void>("move_group", { id, parentId });
+
+/** Spec 0103: "Keep as regular entry" for a server. */
+export const keepServerAsRegularEntry = (id: string) =>
+  invoke<void>("keep_server_as_regular_entry", { id });
+
+/** Spec 0103: without `confirm` only the counts; with it clears the group
+ * and everything inside. */
+export const keepGroupAsRegularEntry = (id: string, confirm: boolean) =>
+  invoke<KeepGroupResult>("keep_group_as_regular_entry", { id, confirm });
 
 export const deleteGroup = (id: string, confirmCascade: boolean) =>
   invoke<DeleteGroupResult>("delete_group", { id, confirmCascade });
@@ -905,3 +915,61 @@ export const changeMasterPassword = (current: string, password: string, repeated
  * aufrufen. Ohne Bestätigung bleibt alles, wie es war. */
 export const switchToOsKeychain = (current: string, replaceAnotherKey: boolean) =>
   invoke<"password" | "keychain">("switch_to_os_keychain", { current, replaceAnotherKey });
+
+// --- Spec 0109, Issue #666: encrypted backup -------------------------------
+
+export interface BackupKeyStatusDto {
+  exists: boolean;
+  hasCode: boolean;
+  hasPassphrase: boolean;
+}
+export interface BackupCountsDto {
+  servers: number;
+  groups: number;
+  rules: number;
+  notes: number;
+  aiProviders: number;
+}
+export interface BackupExportDto {
+  path: string;
+  servers: number;
+  groups: number;
+  rules: number;
+  notes: number;
+  aiProviders: number;
+  secrets: number;
+  hostKeys: number;
+}
+export interface BackupImportPreviewDto {
+  local: BackupCountsDto;
+  file: BackupCountsDto;
+  openSessions: number;
+  safetyBackupDir: string;
+}
+export interface BackupImportSummaryDto {
+  counts: BackupCountsDto;
+  safetyBackup: string | null;
+  previousDataFolder: string | null;
+  hostKeysPending: boolean;
+}
+export interface BackupImportStartDto {
+  imported: BackupImportSummaryDto | null;
+  preview: BackupImportPreviewDto | null;
+}
+
+export const backupKeyStatus = () => invoke<BackupKeyStatusDto>("backup_key_status");
+/** K2: creates the backup key; the code is returned once and not retrievable later. */
+export const createBackupKeyWithCode = () => invoke<string>("create_backup_key_with_code");
+export const setBackupPassphrase = (passphrase: string) =>
+  invoke<void>("set_backup_passphrase", { passphrase });
+/** K6: replaces the recovery code; returned once. */
+export const newBackupCode = () => invoke<string>("new_backup_code");
+/** Opens the system save dialog in the backend; `null` when cancelled. */
+export const exportEncryptedBackup = () => invoke<BackupExportDto | null>("export_encrypted_backup");
+/** Opens the system file picker in the backend; returns the file name, `null` when cancelled. */
+export const pickBackupImportFile = (title: string) =>
+  invoke<string | null>("pick_backup_import_file", { title });
+export const startBackupImport = (kind: "code" | "passphrase", secret: string) =>
+  invoke<BackupImportStartDto>("start_backup_import", { kind, secret });
+export const confirmBackupImport = () => invoke<BackupImportSummaryDto>("confirm_backup_import");
+export const cancelBackupImport = () => invoke<void>("cancel_backup_import");

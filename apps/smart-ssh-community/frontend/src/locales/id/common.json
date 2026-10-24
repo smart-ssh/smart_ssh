@@ -45,7 +45,8 @@
       "chatRetention": "Sesi & Data",
       "mcpServer": "Server MCP",
       "masterPassword": "Kata sandi utama",
-      "voiceInput": "Input suara"
+      "voiceInput": "Input suara",
+      "dataAndBackup": "Data dan cadangan"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ pindahkan ke grup ini",
     "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri",
     "moveTo": "Pindahkan “{{name}}” ke…"
+  },
+  "copyMarker": {
+    "badge": "Salinan",
+    "badgeHint": "Salinan – bukan bagian dari data saat ini. Memiliki ID sendiri dan terpisah dari entri yang diimpor.",
+    "keep": "Pertahankan sebagai entri biasa",
+    "groupConfirmBody": "Menghapus tanda salinan dari grup ini dan semua isinya (grup: {{groups}}, server: {{servers}})."
   },
   "management": {
     "emptyState": "Pilih grup atau server di sebelah kiri, atau buat yang baru melalui \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -859,7 +866,8 @@
       "success": "{{created}} server dibuat, {{groups}} folder, {{skipped}} konflik dilewati.",
       "fallbacksDetail": "{{count}} berkas kunci tidak dapat dibaca, jalurnya dipertahankan: {{detail}}.",
       "encryptedDetail": "{{count}} kunci diambil alih dalam keadaan terenkripsi — tambahkan frasa sandi sebelum koneksi pertama: {{detail}}."
-    }
+    },
+    "isBackup": "File ini adalah cadangan terenkripsi, bukan ssh_config. Tidak ada yang dibuat. Pulihkan di Pengaturan → Data dan cadangan."
   },
   "sshConfigExport": {
     "dialogTitle": "Ekspor ke ssh_config",
@@ -869,7 +877,8 @@
       "includeHintLabel": "Cara menyertakan berkas ini di ~/.ssh/config Anda sendiri:",
       "copy": "Salin",
       "notRepresentedHint": "Grup, tag, catatan, aturan filter, dan pengaturan keamanan tidak ada di berkas ini — yang tidak disertakan untuk server tertentu dicatat sebagai komentar di atas entrinya."
-    }
+    },
+    "backupHint": "Tidak berisi kredensial, aturan, atau catatan. Untuk cadangan lengkap, gunakan cadangan terenkripsi (Pengaturan → Data dan cadangan)."
   },
   "startup": {
     "stateUnknown": "Smart SSH tidak dapat membaca status startup-nya. Tidak ada yang diubah. Coba lagi; jika berlanjut, log menyebutkan penyebabnya.",
@@ -1016,6 +1025,10 @@
     "transferStopped": "{{name}}: dihentikan",
     "transferIncomplete": "File tidak lengkap tertinggal di server: {{path}}",
     "transferFiles": "{{done}} dari {{total}} file",
+    "transferDelete": "Menghapus {{name}}",
+    "transferChmod": "Mengubah izin {{name}}",
+    "entriesProgress": "{{done}} dari {{total}} entri",
+    "entriesChanged": "Entri diubah: {{count}}",
     "transferRemaining": "sisa {{time}}",
     "loading": "Memuat…",
     "noPermissionToOpen": "Tidak ada izin untuk membuka folder ini (x tidak ada)",
@@ -1214,7 +1227,11 @@
       "cardLabel": "Pertanyaan: {{question}}",
       "send": "Kirim",
       "answeredOwnWords": "Dijawab dengan kata-kata sendiri"
-    }
+    },
+    "injectionChecking": "Memeriksa keluaran …",
+    "injectionSuspected": "Peringatan: keluaran ini tampak seperti upaya menyisipkan instruksi.",
+    "injectionSuspectedReason": "Alasan dari AI pemeriksa: {{reason}}",
+    "injectionConfirmReason": "Alasan: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Catatan ini sangat besar dan dapat dipersingkat untuk konteks AI dalam sesi panjang. Catatan yang tersimpan tetap lengkap.",
@@ -1330,5 +1347,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "selesai",
     "resultFailed": "gagal"
+  },
+  "backup": {
+    "title": "Cadangan terenkripsi",
+    "intro": "Menyimpan semua data Smart SSH Anda dalam satu file terenkripsi dan memulihkannya nanti, misalnya di komputer baru.",
+    "included": "Termasuk: server, folder, tag, aturan filter, catatan server, penyedia AI, kredensial tersimpan (terenkripsi), dan kunci host tepercaya.",
+    "excluded": "Tidak termasuk: riwayat obrolan, catatan penggunaan, pengaturan perangkat, dan file kunci di disk.",
+    "restoreInfo": "Pemulihan mengganti semua data di perangkat ini. Data Anda saat ini disimpan dulu, dan server Anda dipindahkan ke folder bertanggal.",
+    "export": "Ekspor cadangan…",
+    "restore": "Pulihkan dari cadangan…",
+    "newCode": "Kode pemulihan baru",
+    "setPassphrase": "Atur frasa sandi",
+    "exportDone": "Cadangan disimpan ke {{path}}.",
+    "exportCounts": "{{servers}} server, {{rules}} aturan, {{notes}} catatan.",
+    "setup": {
+      "title": "Lindungi cadangan Anda",
+      "intro": "Cadangan terenkripsi. Anda memerlukan kode pemulihan atau frasa sandi untuk membacanya, jadi pilih salah satu sekarang.",
+      "useCode": "Buat kode pemulihan",
+      "usePassphrase": "Gunakan frasa sandi saja"
+    },
+    "code": {
+      "title": "Kode pemulihan Anda",
+      "warning": "Tulis kode ini dan simpan dengan aman. Kode hanya ditampilkan sekali dan tidak bisa ditampilkan lagi. Tanpanya, cadangan Anda tidak bisa dibaca.",
+      "copy": "Salin",
+      "copyFailed": "Gagal menyalin.",
+      "confirm": "Saya sudah mencatat kodenya",
+      "continue": "Lanjutkan"
+    },
+    "passphrase": {
+      "title": "Atur frasa sandi",
+      "warning": "Tanpa frasa sandi, cadangan Anda tidak bisa dibaca. Tidak ada pemulihan.",
+      "label": "Frasa sandi",
+      "help": "Minimal {{count}} karakter.",
+      "tooShort": "Terlalu pendek: minimal {{count}} karakter.",
+      "repeat": "Ulangi frasa sandi",
+      "mismatch": "Frasa sandi tidak cocok.",
+      "save": "Simpan frasa sandi"
+    },
+    "import": {
+      "title": "Pulihkan dari cadangan",
+      "pickTitle": "Pilih file cadangan",
+      "file": "Berkas: {{name}}",
+      "kind": "Yang membuka cadangan ini",
+      "useCode": "Kode pemulihan",
+      "usePassphrase": "Frasa sandi",
+      "codeLabel": "Kode pemulihan",
+      "passphraseLabel": "Frasa sandi",
+      "open": "Buka cadangan"
+    },
+    "confirm": {
+      "title": "Ganti data Anda?",
+      "intro": "Pemulihan mengganti data di perangkat ini. Belum ada yang berubah.",
+      "what": "Isi",
+      "local": "Sekarang",
+      "file": "Cadangan",
+      "sessions": "Sesi terbuka yang akan ditutup: {{count}}",
+      "safety": "Data Anda saat ini disimpan dulu ke {{dir}}. Server Anda dipindahkan ke folder baru bernama “Previous data” dengan tanggal hari ini.",
+      "replace": "Ganti data"
+    },
+    "counts": {
+      "servers": "Server",
+      "groups": "Folder",
+      "rules": "Aturan",
+      "notes": "Catatan",
+      "aiProviders": "Penyedia AI"
+    },
+    "summary": {
+      "title": "Cadangan dipulihkan",
+      "counts": "Dipulihkan: {{servers}} server, {{groups}} folder, {{rules}} aturan, {{notes}} catatan, {{aiProviders}} penyedia AI.",
+      "safety": "Cadangan pengaman data sebelumnya: {{path}}",
+      "folder": "Server Anda sebelumnya ada di folder “{{name}}”.",
+      "hostKeysPending": "Kunci host tepercaya dilengkapi pada awal berikutnya.",
+      "done": "Selesai"
+    },
+    "errors": {
+      "cannotOpen": "Kode atau frasa sandi salah, atau file rusak.",
+      "typo": "Kode mengandung salah ketik.",
+      "notBackup": "Ini bukan file cadangan Smart SSH. Daftar server berformat ssh_config diimpor dari daftar server.",
+      "newerVersion": "Cadangan ini dibuat oleh Smart SSH versi lebih baru. Perbarui aplikasi dan coba lagi.",
+      "failed": "Operasi gagal. Tidak ada yang diubah."
+    }
   }
 }

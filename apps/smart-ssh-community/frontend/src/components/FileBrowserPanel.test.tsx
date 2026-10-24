@@ -2954,6 +2954,45 @@ describe("FileBrowserPanel context menu on empty space (issue #570)", () => {
       );
       expect(screen.getByText("big.bin: abgebrochen")).toBeVisible();
     });
+
+    it("a recursive delete row shows entries of total, cancels, and ends with the count (issue #658)", async () => {
+      const h = subscribe();
+      const progress: Handler<any>[] = [];
+      vi.mocked(onSftpTransferProgress).mockImplementation((hd: any) => {
+        progress.push(hd);
+        return Promise.resolve(() => {});
+      });
+      renderPanel();
+      await screen.findByText(/a\.txt/);
+      await waitFor(() => expect(h.finished.length).toBe(1));
+      act(() =>
+        h.started.forEach((fn) =>
+          fn({ sessionId: "session-1", transferId: "d1", kind: "delete", fileName: "/tmp/gross", totalBytes: null }),
+        ),
+      );
+      const emit = (done: number, total: number | null) =>
+        act(() =>
+          progress.forEach((fn) =>
+            fn({ sessionId: "session-1", transferId: "d1", bytesDone: 0, totalBytes: null, entries: { done, total } }),
+          ),
+        );
+      emit(4120, 10951);
+      expect(screen.getByText(/Löschen: \/tmp\/gross/)).toBeVisible();
+      expect(screen.getByText("4120 von 10951 Einträgen")).toBeVisible();
+      expect(screen.getByRole("progressbar", { name: "/tmp/gross" })).toHaveAttribute("value", "4120");
+      emit(100, 10951); // stale event: counts never go backwards
+      expect(screen.getByText("4120 von 10951 Einträgen")).toBeVisible();
+
+      fireEvent.click(screen.getByRole("button", { name: "Übertragung abbrechen" }));
+      expect(sftpCancelTransfer).toHaveBeenCalledWith("session-1", "d1");
+      act(() =>
+        h.finished.forEach((fn) =>
+          fn({ sessionId: "session-1", transferId: "d1", error: null, stopped: "cancelled", entriesDone: 4200 }),
+        ),
+      );
+      expect(screen.getByText(/\/tmp\/gross: abgebrochen/)).toBeVisible();
+      expect(screen.getByText(/Geänderte Einträge: 4200/)).toBeVisible();
+    });
   });
 });
 

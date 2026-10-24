@@ -21,6 +21,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqlitePool;
 use sqlx::Row;
+use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
 
 use ssh_manager_core::ai::{ProviderId, ProviderType};
 use ssh_manager_core::profiles::CredentialRef;
@@ -186,6 +187,7 @@ fn row_to_config(row: &sqlx::sqlite::SqliteRow) -> Result<AiProviderConfig, AiPr
 
 pub struct SqliteAiProviderStore {
     pool: SqlitePool,
+    data_changes: DataChangeNotifier,
 }
 
 impl SqliteAiProviderStore {
@@ -195,8 +197,8 @@ impl SqliteAiProviderStore {
     /// auf, um nicht versehentlich eine zweite, gegen `:memory:` isolierte
     /// Datenbank aufzumachen (s. Modul-Kommentar von
     /// `crate::store::SqliteProfileStore::connect_with`).
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pool: SqlitePool, data_changes: DataChangeNotifier) -> Self {
+        Self { pool, data_changes }
     }
 
     pub async fn list(&self) -> Result<Vec<AiProviderConfig>, AiProviderStoreError> {
@@ -265,6 +267,7 @@ impl SqliteAiProviderStore {
         .execute(&self.pool)
         .await
         .map_err(backend_err)?;
+        self.data_changes.notify(DataKind::AiProviders);
         Ok(())
     }
 
@@ -299,6 +302,7 @@ impl SqliteAiProviderStore {
         if result.rows_affected() == 0 {
             return Err(AiProviderStoreError::NotFound(update.id));
         }
+        self.data_changes.notify(DataKind::AiProviders);
         Ok(())
     }
 
@@ -343,6 +347,7 @@ impl SqliteAiProviderStore {
         }
 
         tx.commit().await.map_err(backend_err)?;
+        self.data_changes.notify(DataKind::AiProviders);
         Ok(())
     }
 
@@ -374,6 +379,7 @@ impl SqliteAiProviderStore {
                     .execute(&self.pool)
                     .await
                     .map_err(backend_err)?;
+                self.data_changes.notify(DataKind::AiProviders);
                 Ok(())
             }
         }

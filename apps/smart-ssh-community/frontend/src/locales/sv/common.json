@@ -45,7 +45,8 @@
       "chatRetention": "Sessioner och data",
       "mcpServer": "MCP-server",
       "masterPassword": "Huvudlösenord",
-      "voiceInput": "Röstinmatning"
+      "voiceInput": "Röstinmatning",
+      "dataAndBackup": "Data och säkerhetskopia"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ flytta in i den här gruppen",
     "hintCycle": "En grupp kan inte flyttas in i sin egen undergrupp",
     "moveTo": "Flytta ”{{name}}” till…"
+  },
+  "copyMarker": {
+    "badge": "Kopia",
+    "badgeHint": "Kopia – ingår inte i de aktuella data. Den har ett eget ID och är oberoende av de importerade posterna.",
+    "keep": "Behåll som vanlig post",
+    "groupConfirmBody": "Tar bort kopiamarkeringen från den här gruppen och allt i den (grupper: {{groups}}, servrar: {{servers}})."
   },
   "management": {
     "emptyState": "Välj en grupp eller server till vänster, eller skapa något nytt via \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -864,7 +871,8 @@
       "success": "{{created}} servrar skapade, {{groups}} mappar, {{skipped}} konflikt(er) överhoppade.",
       "fallbacksDetail": "{{count}} nyckelfil(er) kunde inte läsas, sökvägen behölls i stället: {{detail}}.",
       "encryptedDetail": "{{count}} nyckel/nycklar togs med krypterade — lägg till lösenfrasen före första anslutningen: {{detail}}."
-    }
+    },
+    "isBackup": "Den här filen är en krypterad säkerhetskopia, inte en ssh_config. Inget skapades. Återställ den under Inställningar → Data och säkerhetskopia."
   },
   "sshConfigExport": {
     "dialogTitle": "Exportera till ssh_config",
@@ -874,7 +882,8 @@
       "includeHintLabel": "Så inkluderar du den här filen i din egen ~/.ssh/config:",
       "copy": "Kopiera",
       "notRepresentedHint": "Grupper, taggar, anteckningar, filterregler och säkerhetsinställningar finns inte i den här filen — det som saknas för en viss server noteras som kommentar ovanför dess post."
-    }
+    },
+    "backupHint": "Innehåller inga inloggningsuppgifter, regler eller anteckningar. För en fullständig kopia, använd den krypterade säkerhetskopian (Inställningar → Data och säkerhetskopia)."
   },
   "startup": {
     "stateUnknown": "Smart SSH kunde inte läsa sitt startläge. Inget ändrades. Försök igen; om det består anger loggen orsaken.",
@@ -1021,6 +1030,10 @@
     "transferStopped": "{{name}}: stoppad",
     "transferIncomplete": "Ofullständig fil kvar på servern: {{path}}",
     "transferFiles": "{{done}} av {{total}} filer",
+    "transferDelete": "Tar bort {{name}}",
+    "transferChmod": "Ändrar behörigheter för {{name}}",
+    "entriesProgress": "{{done}} av {{total}} poster",
+    "entriesChanged": "Ändrade poster: {{count}}",
     "transferRemaining": "{{time}} kvar",
     "loading": "Laddar…",
     "noPermissionToOpen": "Ingen behörighet att öppna mappen (x saknas)",
@@ -1222,7 +1235,11 @@
       "cardLabel": "Fråga: {{question}}",
       "send": "Skicka",
       "answeredOwnWords": "Besvarad med egna ord"
-    }
+    },
+    "injectionChecking": "Kontrollerar utdata …",
+    "injectionSuspected": "Varning: den här utdatan ser ut som ett försök att injicera instruktioner.",
+    "injectionSuspectedReason": "Skäl från den kontrollerande AI:n: {{reason}}",
+    "injectionConfirmReason": "Skäl: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Anteckningen är mycket stor och kan förkortas i AI-kontexten under långa sessioner. Den sparade anteckningen förblir komplett.",
@@ -1338,5 +1355,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "klart",
     "resultFailed": "misslyckades"
+  },
+  "backup": {
+    "title": "Krypterad säkerhetskopia",
+    "intro": "Sparar alla dina Smart SSH-data i en krypterad fil och återställer dem senare, till exempel på en ny dator.",
+    "included": "Ingår: servrar, mappar, taggar, filterregler, serveranteckningar, AI-leverantörer, sparade inloggningsuppgifter (krypterade) och betrodda värdnycklar.",
+    "excluded": "Ingår inte: chatthistorik, användningsposter, enhetsinställningar och nyckelfiler på disken.",
+    "restoreInfo": "Återställning ersätter all data på den här enheten. Dina nuvarande data sparas först, och dina servrar flyttas till en daterad mapp.",
+    "export": "Exportera säkerhetskopia…",
+    "restore": "Återställ från säkerhetskopia…",
+    "newCode": "Ny återställningskod",
+    "setPassphrase": "Ange lösenfras",
+    "exportDone": "Säkerhetskopian sparades i {{path}}.",
+    "exportCounts": "{{servers}} servrar, {{rules}} regler, {{notes}} anteckningar.",
+    "setup": {
+      "title": "Skydda dina säkerhetskopior",
+      "intro": "Säkerhetskopior är krypterade. Du behöver en återställningskod eller en lösenfras för att läsa dem, så välj en nu.",
+      "useCode": "Skapa en återställningskod",
+      "usePassphrase": "Använd en lösenfras i stället"
+    },
+    "code": {
+      "title": "Din återställningskod",
+      "warning": "Skriv ner koden och förvara den säkert. Den visas bara en gång och kan inte visas igen. Utan den går säkerhetskopiorna inte att läsa.",
+      "copy": "Kopiera",
+      "copyFailed": "Det gick inte att kopiera.",
+      "confirm": "Jag har antecknat koden",
+      "continue": "Fortsätt"
+    },
+    "passphrase": {
+      "title": "Ange en lösenfras",
+      "warning": "Utan lösenfrasen går dina säkerhetskopior inte att läsa. Det finns ingen återställning.",
+      "label": "Lösenfras",
+      "help": "Minst {{count}} tecken.",
+      "tooShort": "För kort: minst {{count}} tecken.",
+      "repeat": "Upprepa lösenfras",
+      "mismatch": "Lösenfraserna stämmer inte överens.",
+      "save": "Spara lösenfras"
+    },
+    "import": {
+      "title": "Återställ från säkerhetskopia",
+      "pickTitle": "Välj en säkerhetskopia",
+      "file": "Fil: {{name}}",
+      "kind": "Vad som öppnar den här säkerhetskopian",
+      "useCode": "Återställningskod",
+      "usePassphrase": "Lösenfras",
+      "codeLabel": "Återställningskod",
+      "passphraseLabel": "Lösenfras",
+      "open": "Öppna säkerhetskopia"
+    },
+    "confirm": {
+      "title": "Ersätta dina data?",
+      "intro": "Återställning ersätter data på den här enheten. Inget har ändrats än.",
+      "what": "Innehåll",
+      "local": "Nu",
+      "file": "Säkerhetskopia",
+      "sessions": "Öppna sessioner som stängs: {{count}}",
+      "safety": "Dina nuvarande data sparas först i {{dir}}. Dina servrar flyttas till en ny mapp med namnet “Previous data” med dagens datum.",
+      "replace": "Ersätt data"
+    },
+    "counts": {
+      "servers": "Servrar",
+      "groups": "Mappar",
+      "rules": "Regler",
+      "notes": "Anteckningar",
+      "aiProviders": "AI-leverantörer"
+    },
+    "summary": {
+      "title": "Säkerhetskopia återställd",
+      "counts": "Återställt: {{servers}} servrar, {{groups}} mappar, {{rules}} regler, {{notes}} anteckningar, {{aiProviders}} AI-leverantörer.",
+      "safety": "Säkerhetskopia av dina tidigare data: {{path}}",
+      "folder": "Dina tidigare servrar finns i mappen “{{name}}”.",
+      "hostKeysPending": "De betrodda värdnycklarna kompletteras vid nästa start.",
+      "done": "Klart"
+    },
+    "errors": {
+      "cannotOpen": "Fel kod eller lösenfras, eller så är filen skadad.",
+      "typo": "Koden innehåller ett skrivfel.",
+      "notBackup": "Det här är inte en Smart SSH-säkerhetskopia. Serverlistor i ssh_config-format importeras från serverlistan.",
+      "newerVersion": "Den här säkerhetskopian skapades av en nyare version av Smart SSH. Uppdatera appen och försök igen.",
+      "failed": "Åtgärden misslyckades. Inget ändrades."
+    }
   }
 }

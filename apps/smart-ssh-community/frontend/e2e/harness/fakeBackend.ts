@@ -118,6 +118,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
   };
 
   const store = model.settings;
+  let backupKey = { exists: false, hasCode: false, hasPassphrase: false };
   const handlers: Record<string, Handler> = {
     // --- Tauri plumbing --------------------------------------------------
     "plugin:event|listen": ({ event, handler }) => {
@@ -205,6 +206,31 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       return null;
     },
 
+    keep_server_as_regular_entry: ({ id }) => {
+      findServer(id).isCopy = false;
+      persist();
+      return null;
+    },
+    keep_group_as_regular_entry: ({ id, confirm }) => {
+      const inside = new Set<string>([String(id)]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const g of model.groups) {
+          if (g.parentId && inside.has(g.parentId) && !inside.has(g.id)) {
+            inside.add(g.id);
+            grew = true;
+          }
+        }
+      }
+      const groups = model.groups.filter((g) => inside.has(g.id) && g.isCopy);
+      const servers = model.servers.filter((s) => s.groupId && inside.has(s.groupId) && s.isCopy);
+      if (confirm) {
+        for (const x of [...groups, ...servers]) x.isCopy = false;
+        persist();
+      }
+      return { applied: Boolean(confirm), groups: groups.length, servers: servers.length };
+    },
+
     large_note_dialog_threshold_chars: () => 4000,
     test_connection: () => ({ kind: "success", steps: [] }),
 
@@ -221,6 +247,59 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     ],
     get_keychain_status: () => ({ available: true, reason: null }),
     get_master_password_mode: () => "keychain",
+    // --- Encrypted backup (Spec 0109, #666) ------------------------------
+    // Stateful enough for export -> import: the key exists after setup, a
+    // "TYPO" secret reports a typo, "wrong" cannot open, anything else opens.
+    backup_key_status: () => ({ ...backupKey }),
+    create_backup_key_with_code: () => {
+      backupKey = { exists: true, hasCode: true, hasPassphrase: backupKey.hasPassphrase };
+      return "ABCDE-FGHJK-MNPQR-STVWX-YZ234-56789-ABCDE";
+    },
+    new_backup_code: () => {
+      backupKey = { ...backupKey, exists: true, hasCode: true };
+      return "23456-789AB-CDEFG-HJKMN-PQRST-VWXYZ-23456";
+    },
+    set_backup_passphrase: () => {
+      backupKey = { ...backupKey, exists: true, hasPassphrase: true };
+      return null;
+    },
+    export_encrypted_backup: () => {
+      if (!backupKey.exists) throw commandError("no key", "BACKUP_KEY_REQUIRED");
+      return {
+        path: "/home/e2e/backups/smart-ssh-backup.sshbackup",
+        servers: model.servers.length,
+        groups: model.groups.length,
+        rules: 0,
+        notes: 0,
+        aiProviders: model.aiProviders.length,
+        secrets: 0,
+        hostKeys: 0,
+      };
+    },
+    pick_backup_import_file: () => "smart-ssh-backup.sshbackup",
+    start_backup_import: ({ secret }) => {
+      if (String(secret).startsWith("TYPO")) throw commandError("typo", "BACKUP_CODE_TYPO");
+      if (String(secret).startsWith("wrong")) throw commandError("cannot open", "BACKUP_CANNOT_OPEN");
+      return {
+        imported: null,
+        preview: {
+          local: { servers: model.servers.length, groups: model.groups.length, rules: 0, notes: 0, aiProviders: 0 },
+          file: { servers: 15, groups: 2, rules: 42, notes: 11, aiProviders: 1 },
+          openSessions: model.sessions.length,
+          safetyBackupDir: "/home/e2e/Documents/Smart SSH backups",
+        },
+      };
+    },
+    confirm_backup_import: () => {
+      if (!backupKey.exists) throw commandError("no key", "BACKUP_KEY_REQUIRED");
+      return {
+        counts: { servers: 15, groups: 2, rules: 42, notes: 11, aiProviders: 1 },
+        safetyBackup: "/home/e2e/Documents/Smart SSH backups/smart-ssh-before-import.sshbackup",
+        previousDataFolder: "Previous data 2026-01-01",
+        hostKeysPending: false,
+      };
+    },
+    cancel_backup_import: () => null,
     get_chat_session_retention_days: () => null,
     get_mcp_server_settings: () => MCP_SETTINGS,
     // The timeout field commits on blur, so tabbing through it calls this.

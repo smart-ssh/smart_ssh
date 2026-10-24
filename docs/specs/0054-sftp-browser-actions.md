@@ -138,6 +138,19 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
   der Dialog vorab, wie viele Dateien und Ordner gelöscht werden (Vorschau
   wie beim zweistufigen Löschen eines Servers). Ordner werden von unten nach
   oben geleert und entfernt.
+- **Fortschritt und Abbruch bei Ordnern:** Das rekursive Löschen eines Ordners
+  und das rekursive Ändern von Rechten erscheinen als Zeile in derselben Liste
+  wie die Übertragungen („Löschen: /tmp/gross“ bzw. „Rechte ändern: …“) mit
+  Fortschrittsbalken und „x von y Einträgen“ (bis die Gesamtzahl feststeht,
+  nur der Zähler). Die Zahlen steigen nur und werden gedrosselt aktualisiert.
+  Jede Zeile hat einen Abbrechen-Knopf: Der Vorgang stoppt vor dem nächsten
+  Eintrag, schon Gelöschtes bzw. Geändertes bleibt, und die Zeile zeigt
+  „abgebrochen“ mit der Zahl geänderter Einträge. Endet der Vorgang mit einem
+  Fehler, zeigt die Zeile den Fehler und ebenfalls die Zahl geänderter
+  Einträge. Eine einzelne Datei und ein nicht rekursives Ändern der Rechte
+  zeigen keine Zeile. Im erhöhten Modus zählen diese Vorgänge zu den laufenden
+  Operationen, die der Dialog zum Beenden der erhöhten Rechte mit
+  „x von y Einträgen“ auflistet.
 - **Umbenennen:** per Dialog. Existiert der Zielname schon, warnt die App.
 - **Neuen Ordner anlegen** im aktuellen Verzeichnis, per Werkzeugleiste oder
   über das Menü auf leerer Fläche (Teil 1).

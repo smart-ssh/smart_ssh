@@ -131,7 +131,7 @@ type MoveKind = "rename" | "move";
 
 interface Transfer {
   id: string;
-  kind: "upload" | "download";
+  kind: "upload" | "download" | "delete" | "chmod";
   fileName: string;
   totalBytes: number | null;
   error: string | null;
@@ -149,6 +149,10 @@ interface Transfer {
   /** Issue #622: ended without error — `cancelled` (cancel button) or `stopped`
    * (elevated rights ended). */
   stopped?: "cancelled" | "stopped";
+  /** Issue #658: recursive delete/chmod — entries done / total (`null` while counting). */
+  entries?: { done: number; total: number | null };
+  /** Issue #658: entries changed when the row ended (cancelled / stopped / failed). */
+  entriesDone?: number;
   /** Issue #622: a stopped upload left this incomplete remote file behind. */
   incompleteRemotePath?: string;
 }
@@ -788,6 +792,24 @@ export function FileBrowserPanel({
       onSftpTransferProgress((event) => {
         if (event.sessionId !== sessionId) return;
         if (editTransferIdsRef.current.has(event.transferId)) return;
+        if (event.entries) {
+          // Issue #658: recursive delete/chmod count entries, monotonically.
+          const entries = event.entries;
+          setTransfers((prev) =>
+            prev.map((row) =>
+              row.id === event.transferId
+                ? {
+                    ...row,
+                    entries: {
+                      done: Math.max(row.entries?.done ?? 0, entries.done),
+                      total: entries.total ?? row.entries?.total ?? null,
+                    },
+                  }
+                : row,
+            ),
+          );
+          return;
+        }
         // Issue #623: folder transfers show the aggregate over all files.
         const done = event.folder ? event.folder.bytesDone : event.bytesDone;
         const total = event.folder ? event.folder.bytesTotal : event.totalBytes;
@@ -821,13 +843,22 @@ export function FileBrowserPanel({
           setTransfers((prev) =>
             prev.map((row) =>
               row.id === event.transferId
-                ? { ...row, stopped, incompleteRemotePath: event.incompleteRemotePath ?? undefined }
+                ? {
+                    ...row,
+                    stopped,
+                    incompleteRemotePath: event.incompleteRemotePath ?? undefined,
+                    entriesDone: event.entriesDone ?? undefined,
+                  }
                 : row,
             ),
           );
         } else if (event.error) {
           setTransfers((prev) =>
-            prev.map((t) => (t.id === event.transferId ? { ...t, error: event.error } : t)),
+            prev.map((t) =>
+              t.id === event.transferId
+                ? { ...t, error: event.error, entriesDone: event.entriesDone ?? undefined }
+                : t,
+            ),
           );
         } else {
           const elevationEnded = channelUserRef.current === null;
@@ -1833,6 +1864,12 @@ export function FileBrowserPanel({
                         : "fileBrowser.transferStopped",
                       { name: transfer.fileName },
                     )}
+                    {transfer.entriesDone !== undefined && (
+                      <span className="text-slate-400">
+                        {" — "}
+                        {t("fileBrowser.entriesChanged", { count: transfer.entriesDone })}
+                      </span>
+                    )}
                     {transfer.incompleteRemotePath && (
                       <span className="text-amber-300">
                         {" "}
@@ -1855,6 +1892,8 @@ export function FileBrowserPanel({
                   <span className="text-red-400">✗</span>
                   <span className="min-w-0 flex-1 truncate text-red-300">
                     {transfer.fileName}: {transfer.error}
+                    {transfer.entriesDone !== undefined &&
+                      ` — ${t("fileBrowser.entriesChanged", { count: transfer.entriesDone })}`}
                   </span>
                   <Button
                     size="sm"
@@ -1871,9 +1910,12 @@ export function FileBrowserPanel({
                   <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-indigo-400" />
                   <span className="min-w-0 flex-1 truncate text-slate-300">
                     {t(
-                      transfer.kind === "upload"
-                        ? "fileBrowser.transferUpload"
-                        : "fileBrowser.transferDownload",
+                      {
+                        upload: "fileBrowser.transferUpload",
+                        download: "fileBrowser.transferDownload",
+                        delete: "fileBrowser.transferDelete",
+                        chmod: "fileBrowser.transferChmod",
+                      }[transfer.kind],
                       { name: transfer.fileName },
                     )}
                     {transfer.totalBytes !== null && ` (${formatBytes(transfer.totalBytes)})`}
@@ -1883,7 +1925,26 @@ export function FileBrowserPanel({
                         total: transfer.folder.filesTotal,
                       })}`}
                   </span>
-                  {transfer.totalBytes !== null && transfer.totalBytes > 0 ? (
+                  {transfer.kind === "delete" || transfer.kind === "chmod" ? (
+                    <>
+                      {transfer.entries?.total != null && transfer.entries.total > 0 ? (
+                        <progress
+                          className="h-1.5 w-24 shrink-0"
+                          max={transfer.entries.total}
+                          value={Math.min(transfer.entries.done, transfer.entries.total)}
+                          aria-label={transfer.fileName}
+                        />
+                      ) : null}
+                      <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-slate-400">
+                        {transfer.entries?.total != null
+                          ? t("fileBrowser.entriesProgress", {
+                              done: transfer.entries.done,
+                              total: transfer.entries.total,
+                            })
+                          : (transfer.entries?.done ?? 0)}
+                      </span>
+                    </>
+                  ) : transfer.totalBytes !== null && transfer.totalBytes > 0 ? (
                     <progress
                       className="h-1.5 w-24 shrink-0"
                       max={transfer.totalBytes}
@@ -1891,6 +1952,7 @@ export function FileBrowserPanel({
                       aria-label={transfer.fileName}
                     />
                   ) : null}
+                  {transfer.kind !== "delete" && transfer.kind !== "chmod" && (
                   <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-slate-400">
                     {formatBytes(transfer.bytesDone ?? 0)}
                     {transfer.totalBytes !== null && ` / ${formatBytes(transfer.totalBytes)}`}
@@ -1903,6 +1965,7 @@ export function FileBrowserPanel({
                         : formatDuration(null)}
                     </span>
                   </span>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -2616,7 +2679,7 @@ export function FileBrowserPanel({
                   )}
                 </span>{" "}
                 <span className="font-mono">{op.path}</span>
-                {op.bytesTotal !== null && op.bytesDone !== null && (
+                {op.bytesTotal !== null && op.bytesDone !== null ? (
                   <span className="text-slate-400">
                     {" "}
                     ({formatBytes(op.bytesDone)} / {formatBytes(op.bytesTotal)}
@@ -2625,6 +2688,14 @@ export function FileBrowserPanel({
                       ` — ${t("fileBrowser.transferFiles", { done: op.filesDone, total: op.filesTotal })}`}
                     )
                   </span>
+                ) : (
+                  op.filesTotal !== null &&
+                  op.filesDone !== null && (
+                    <span className="text-slate-400">
+                      {" "}
+                      ({t("fileBrowser.entriesProgress", { done: op.filesDone, total: op.filesTotal })})
+                    </span>
+                  )
                 )}
               </li>
             ))}

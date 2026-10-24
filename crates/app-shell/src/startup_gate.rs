@@ -109,6 +109,16 @@ mod tests {
             "send_chat_message",
             "get_mcp_server_settings",
             "set_mcp_server_enabled",
+            // Issue #664: the backup commands need the unlocked database.
+            "backup_key_status",
+            "create_backup_key_with_code",
+            "set_backup_passphrase",
+            "new_backup_code",
+            "export_encrypted_backup",
+            "pick_backup_import_file",
+            "start_backup_import",
+            "confirm_backup_import",
+            "cancel_backup_import",
             // Die beiden ohne `AppState` — ohne das Tor liefen sie.
             "get_app_info",
             "create_overlay_titlebar",

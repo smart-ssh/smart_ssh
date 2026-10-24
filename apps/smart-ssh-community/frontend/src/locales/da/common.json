@@ -45,7 +45,8 @@
       "chatRetention": "Sessioner og data",
       "mcpServer": "MCP-server",
       "masterPassword": "Hovedadgangskode",
-      "voiceInput": "Stemmeinput"
+      "voiceInput": "Stemmeinput",
+      "dataAndBackup": "Data og sikkerhedskopi"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ flyt ind i denne gruppe",
     "hintCycle": "En gruppe kan ikke flyttes ind i sin egen undergruppe",
     "moveTo": "Flyt “{{name}}” til…"
+  },
+  "copyMarker": {
+    "badge": "Kopi",
+    "badgeHint": "Kopi – er ikke en del af de aktuelle data. Den har sit eget ID og er uafhængig af de importerede poster.",
+    "keep": "Behold som almindelig post",
+    "groupConfirmBody": "Fjerner kopimarkeringen fra denne gruppe og alt i den (grupper: {{groups}}, servere: {{servers}})."
   },
   "management": {
     "emptyState": "Vælg en gruppe eller server til venstre, eller opret noget nyt via \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -864,7 +871,8 @@
       "success": "{{created}} servere oprettet, {{groups}} mapper, {{skipped}} konflikt(er) sprunget over.",
       "fallbacksDetail": "{{count}} nøglefil(er) kunne ikke læses, stien blev beholdt i stedet: {{detail}}.",
       "encryptedDetail": "{{count}} nøgle(r) blev overtaget krypteret – tilføj adgangsfrasen før den første forbindelse: {{detail}}."
-    }
+    },
+    "isBackup": "Denne fil er en krypteret sikkerhedskopi, ikke en ssh_config. Der blev ikke oprettet noget. Gendan den under Indstillinger → Data og sikkerhedskopi."
   },
   "sshConfigExport": {
     "dialogTitle": "Eksportér til ssh_config",
@@ -874,7 +882,8 @@
       "includeHintLabel": "Sådan inkluderes denne fil i din egen ~/.ssh/config:",
       "copy": "Kopiér",
       "notRepresentedHint": "Grupper, tags, noter, filterregler og sikkerhedsindstillinger er ikke i denne fil – det, der mangler for en given server, er noteret som kommentar over dens post."
-    }
+    },
+    "backupHint": "Indeholder ingen legitimationsoplysninger, regler eller noter. Brug den krypterede sikkerhedskopi (Indstillinger → Data og sikkerhedskopi) for en komplet kopi."
   },
   "startup": {
     "stateUnknown": "Smart SSH kunne ikke læse sin starttilstand. Intet blev ændret. Prøv igen; fortsætter det, nævner loggen årsagen.",
@@ -1021,6 +1030,10 @@
     "transferStopped": "{{name}}: stoppet",
     "transferIncomplete": "Ufuldstændig fil efterladt på serveren: {{path}}",
     "transferFiles": "{{done}} af {{total}} filer",
+    "transferDelete": "Sletter {{name}}",
+    "transferChmod": "Ændrer rettigheder for {{name}}",
+    "entriesProgress": "{{done}} af {{total}} poster",
+    "entriesChanged": "Ændrede poster: {{count}}",
     "transferRemaining": "{{time}} tilbage",
     "loading": "Indlæser…",
     "noPermissionToOpen": "Ingen tilladelse til at åbne denne mappe (x mangler)",
@@ -1222,7 +1235,11 @@
       "cardLabel": "Spørgsmål: {{question}}",
       "send": "Send afsted",
       "answeredOwnWords": "Besvaret med egne ord"
-    }
+    },
+    "injectionChecking": "Kontrollerer output …",
+    "injectionSuspected": "Advarsel: dette output ligner et forsøg på at indsprøjte instruktioner.",
+    "injectionSuspectedReason": "Begrundelse fra den kontrollerende AI: {{reason}}",
+    "injectionConfirmReason": "Begrundelse: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Denne note er meget stor og kan blive forkortet i AI-konteksten i lange sessioner. Den gemte note forbliver komplet.",
@@ -1338,5 +1355,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "færdig",
     "resultFailed": "mislykkedes"
+  },
+  "backup": {
+    "title": "Krypteret sikkerhedskopi",
+    "intro": "Gemmer alle dine Smart SSH-data i én krypteret fil og gendanner dem senere, f.eks. på en ny computer.",
+    "included": "Indeholder: servere, mapper, tags, filterregler, servernoter, AI-udbydere, gemte legitimationsoplysninger (krypteret) og betroede værtsnøgler.",
+    "excluded": "Indeholder ikke: chathistorik, forbrugsdata, enhedsindstillinger og nøglefiler på disken.",
+    "restoreInfo": "Gendannelse erstatter alle data på denne enhed. Dine nuværende data gemmes først, og dine servere flyttes til en mappe med dato.",
+    "export": "Eksportér sikkerhedskopi…",
+    "restore": "Gendan fra sikkerhedskopi…",
+    "newCode": "Ny gendannelseskode",
+    "setPassphrase": "Angiv adgangssætning",
+    "exportDone": "Sikkerhedskopi gemt i {{path}}.",
+    "exportCounts": "{{servers}} servere, {{rules}} regler, {{notes}} noter.",
+    "setup": {
+      "title": "Beskyt dine sikkerhedskopier",
+      "intro": "Sikkerhedskopier er krypterede. Du skal bruge en gendannelseskode eller en adgangssætning for at læse dem, så vælg en nu.",
+      "useCode": "Opret en gendannelseskode",
+      "usePassphrase": "Brug i stedet en adgangssætning"
+    },
+    "code": {
+      "title": "Din gendannelseskode",
+      "warning": "Skriv koden ned, og opbevar den sikkert. Den vises kun én gang og kan ikke vises igen. Uden den kan dine sikkerhedskopier ikke læses.",
+      "copy": "Kopiér",
+      "copyFailed": "Kunne ikke kopiere.",
+      "confirm": "Jeg har noteret koden",
+      "continue": "Fortsæt"
+    },
+    "passphrase": {
+      "title": "Angiv en adgangssætning",
+      "warning": "Uden adgangssætningen kan dine sikkerhedskopier ikke læses. Der er ingen gendannelse.",
+      "label": "Adgangssætning",
+      "help": "Mindst {{count}} tegn.",
+      "tooShort": "For kort: mindst {{count}} tegn.",
+      "repeat": "Gentag adgangssætning",
+      "mismatch": "Adgangssætningerne er ikke ens.",
+      "save": "Gem adgangssætning"
+    },
+    "import": {
+      "title": "Gendan fra sikkerhedskopi",
+      "pickTitle": "Vælg en sikkerhedskopi",
+      "file": "Fil: {{name}}",
+      "kind": "Hvad åbner denne sikkerhedskopi",
+      "useCode": "Gendannelseskode",
+      "usePassphrase": "Adgangssætning",
+      "codeLabel": "Gendannelseskode",
+      "passphraseLabel": "Adgangssætning",
+      "open": "Åbn sikkerhedskopi"
+    },
+    "confirm": {
+      "title": "Erstat dine data?",
+      "intro": "Gendannelse erstatter data på denne enhed. Intet er ændret endnu.",
+      "what": "Indhold",
+      "local": "Nu",
+      "file": "Sikkerhedskopi",
+      "sessions": "Åbne sessioner, der lukkes: {{count}}",
+      "safety": "Dine nuværende data gemmes først i {{dir}}. Dine servere flyttes til en ny mappe med navnet “Previous data” med dagens dato.",
+      "replace": "Erstat data"
+    },
+    "counts": {
+      "servers": "Servere",
+      "groups": "Mapper",
+      "rules": "Regler",
+      "notes": "Noter",
+      "aiProviders": "AI-udbydere"
+    },
+    "summary": {
+      "title": "Sikkerhedskopi gendannet",
+      "counts": "Gendannet: {{servers}} servere, {{groups}} mapper, {{rules}} regler, {{notes}} noter, {{aiProviders}} AI-udbydere.",
+      "safety": "Sikkerhedskopi af dine tidligere data: {{path}}",
+      "folder": "Dine tidligere servere ligger i mappen “{{name}}”.",
+      "hostKeysPending": "De betroede værtsnøgler fuldføres ved næste start.",
+      "done": "Færdig"
+    },
+    "errors": {
+      "cannotOpen": "Forkert kode eller adgangssætning, eller filen er beskadiget.",
+      "typo": "Koden indeholder en tastefejl.",
+      "notBackup": "Dette er ikke en Smart SSH-sikkerhedskopi. Serverlister i ssh_config-format importeres fra serverlisten.",
+      "newerVersion": "Denne sikkerhedskopi er lavet af en nyere version af Smart SSH. Opdater appen, og prøv igen.",
+      "failed": "Handlingen mislykkedes. Intet blev ændret."
+    }
   }
 }
