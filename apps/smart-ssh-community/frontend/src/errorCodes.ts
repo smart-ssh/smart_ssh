@@ -254,6 +254,9 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // Issue #357, Spec 0086 A1.1: „Dateiinhalt kopieren" (der Abbruch-Code
   // SFTP_COPY_CANCELLED wird nie angezeigt).
   "SFTP_CONTENT_TOO_LARGE",
+  // Issue #656: an action carried the identity of an earlier elevated-mode
+  // state; the backend refused it instead of switching silently.
+  "ELEVATED_USER_CHANGED",
   // Issue #358: „Datei kopieren" konnte die Zwischenablage nicht belegen.
   "CLIPBOARD_FILE_FAILED",
 ]);
