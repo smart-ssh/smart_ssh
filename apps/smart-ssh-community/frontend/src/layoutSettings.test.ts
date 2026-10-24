@@ -15,7 +15,7 @@ vi.mock("./i18n", () => ({
 }));
 
 // Import erst NACH dem Mock, damit `settingsStore` bereits ersetzt ist.
-const { loadFileManagerColumnWidths, loadAiSshSplitWidthPx, loadFileManagerSort, saveFileManagerSort } = await import("./layoutSettings");
+const { loadFileManagerColumnWidths, loadAiSshSplitWidthPx, loadHiddenFileColumns, saveHiddenFileColumns, loadFileManagerSort, saveFileManagerSort } = await import("./layoutSettings");
 
 describe("loadFileManagerColumnWidths", () => {
   it("returns an empty object when nothing is stored", async () => {
@@ -63,6 +63,31 @@ describe("loadAiSshSplitWidthPx", () => {
   it("returns null for an implausibly large stored value", async () => {
     storeGet.mockResolvedValue(Number.MAX_VALUE);
     expect(await loadAiSshSplitWidthPx()).toBeNull();
+  });
+});
+
+describe("hidden file columns (issue #653)", () => {
+  it("defaults to nothing hidden", async () => {
+    storeGet.mockResolvedValue(undefined);
+    expect(await loadHiddenFileColumns()).toEqual([]);
+  });
+
+  it("keeps only known hideable columns, so Name can never be hidden", async () => {
+    storeGet.mockResolvedValue(["name", "owner", "bogus", 3, "size"]);
+    expect(await loadHiddenFileColumns()).toEqual(["size", "owner"]);
+  });
+
+  it("treats a non-array as nothing hidden", async () => {
+    storeGet.mockResolvedValue({ owner: true });
+    expect(await loadHiddenFileColumns()).toEqual([]);
+  });
+
+  it("persists the list and saves the store", async () => {
+    storeSet.mockClear();
+    storeSave.mockClear();
+    await saveHiddenFileColumns(["modified"]);
+    expect(storeSet).toHaveBeenCalledWith("fileManagerHiddenColumns", ["modified"]);
+    expect(storeSave).toHaveBeenCalled();
   });
 });
 

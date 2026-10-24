@@ -1058,8 +1058,10 @@
       "name": "Naam",
       "size": "Grootte",
       "permissions": "Rechten",
-      "modified": "Gewijzigd"
+      "modified": "Gewijzigd",
+      "owner": "Eigenaar"
     },
+    "columnsMenu": "Kolommen tonen of verbergen",
     "localEdit": {
       "uploading": "“{{name}}” uploaden…",
       "changed": "“{{name}}” is lokaal gewijzigd. Naar de server uploaden?",

@@ -340,7 +340,7 @@ fn test_the_deferred_plugins_are_registered_in_exactly_those_two_places() {
         .collect();
     assert_eq!(
         elsewhere,
-        vec![".plugin(tauri_plugin_decoration::init())"],
+        vec![".plugin(tauri_plugin_decoration::init());"],
         "A16: Außerhalb der beiden Funktionen darf nur das Plugin registriert werden, das den \
          Fensterrahmen gestaltet und keine Datei, Einstellung und keinen Zustand des \
          Betriebssystems liest. Kommt hier eines dazu, gehört es in \

@@ -1053,8 +1053,10 @@
       "name": "Nama",
       "size": "Ukuran",
       "permissions": "Izin",
-      "modified": "Diubah"
+      "modified": "Diubah",
+      "owner": "Pemilik"
     },
+    "columnsMenu": "Tampilkan atau sembunyikan kolom",
     "localEdit": {
       "uploading": "Mengunggah “{{name}}”…",
       "changed": "“{{name}}” diubah secara lokal. Unggah ke server?",

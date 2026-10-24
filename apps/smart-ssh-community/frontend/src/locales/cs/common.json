@@ -1068,8 +1068,10 @@
       "name": "Název",
       "size": "Velikost",
       "permissions": "Oprávnění",
-      "modified": "Změněno"
+      "modified": "Změněno",
+      "owner": "Vlastník"
     },
+    "columnsMenu": "Zobrazit nebo skrýt sloupce",
     "localEdit": {
       "uploading": "Nahrávání „{{name}}“…",
       "changed": "„{{name}}“ byl lokálně změněn. Nahrát jej na server?",

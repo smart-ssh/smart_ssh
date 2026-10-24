@@ -83,6 +83,7 @@ dependencies = [
  "chrono",
  "futures",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "ssh-manager-core",
@@ -90,6 +91,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "webpki-roots",
  "wiremock",
 ]
 
@@ -6083,11 +6085,13 @@ dependencies = [
  "cpal",
  "futures",
  "reqwest",
+ "rustls",
  "serde",
  "sha2 0.11.0",
  "tempfile",
  "tokio",
  "tracing",
+ "webpki-roots",
  "whisper-rs",
 ]
 

@@ -7,6 +7,10 @@ import { StartupGate } from './components/StartupGate.tsx'
 import { initI18n } from './i18n.ts'
 import { installContextMenuSuppression } from './contextMenu.ts'
 import type { StartupStateDto } from './types.ts'
+import { detectFallbackPlatform } from './titlebarLayout.ts'
+
+// Spec 0114: CSS hook for the Android-only narrow layout (`narrow:` variant).
+document.documentElement.dataset.platform = detectFallbackPlatform()
 
 // Spec 0101, A16: **Der Startzustand steht vor dem ersten Render.**
 //

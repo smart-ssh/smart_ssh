@@ -1058,8 +1058,10 @@
       "name": "Name",
       "size": "Size",
       "permissions": "Permissions",
-      "modified": "Modified"
+      "modified": "Modified",
+      "owner": "Owner"
     },
+    "columnsMenu": "Show or hide columns",
     "localEdit": {
       "uploading": "Uploading “{{name}}”…",
       "changed": "“{{name}}” was changed locally. Upload it to the server?",

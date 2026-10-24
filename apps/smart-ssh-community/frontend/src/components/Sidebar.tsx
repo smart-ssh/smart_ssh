@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { useTranslation } from "react-i18next";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
 import { folderForNewItem } from "../newItemFolder";
@@ -89,7 +90,9 @@ export function Sidebar({
   const { t, i18n } = useTranslation();
   const manageViews = useManageViews();
   const tree = buildGroupTree(groups, servers, unusableServers);
-  const localServer = servers.find((s) => s.isLocal);
+  const localServer = platformCapabilities(detectFallbackPlatform()).localServer
+    ? servers.find((s) => s.isLocal)
+    : undefined;
   const narrow = useIsNarrow();
   // Issue #585: row whose "Move to…" dialog is open (narrow layout).
   const [moveItem, setMoveItem] = useState<DragItem | null>(null);

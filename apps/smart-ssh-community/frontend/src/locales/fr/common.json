@@ -1063,8 +1063,10 @@
       "name": "Nom",
       "size": "Taille",
       "permissions": "Permissions",
-      "modified": "Modifié"
+      "modified": "Modifié",
+      "owner": "Propriétaire"
     },
+    "columnsMenu": "Afficher ou masquer les colonnes",
     "localEdit": {
       "uploading": "Téléversement de « {{name}} »…",
       "changed": "« {{name}} » a été modifié localement. Le téléverser vers le serveur ?",
