@@ -1999,6 +1999,8 @@ async fn execute_suggested_command(
                 None => command.as_str(),
             },
         };
+        // Spec 0114 §4: keep the device awake while the command runs.
+        let _activity = crate::background_keepalive::background_activity();
         let mut transport = session.transport.lock().await;
         match transport.start_exec(run_command, stdin.as_deref()).await? {
             Some(running) => {
