@@ -244,20 +244,54 @@ async fn download_impl(
     let Some(local_path) = rx.await.ok().flatten() else {
         return Ok(None); // Abbrechen ist kein Fehler, s. `export_document`.
     };
-    let local_path = local_path.into_path()?;
+    // Issue #679: a `content://` URI (Android) is never a path. The file is
+    // downloaded into an app-private staging copy and then written through
+    // the URI; progress and cancellation work as for any download.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(local_path)?;
+    let (target, staging) = match handle.as_path() {
+        Some(p) => (p.to_path_buf(), None),
+        None => {
+            let dir = crate::edit_copies::picked_root()
+                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .join(Uuid::new_v4().to_string());
+            (dir.join(&file_name), Some(dir))
+        }
+    };
+    if let Some(dir) = &staging {
+        std::fs::create_dir_all(dir)?;
+    }
 
-    download_one_file(
+    let downloaded = download_one_file(
         &TauriEventEmitter(app.clone()),
         session,
         channel,
         session_id,
         remote_path,
-        local_path.clone(),
+        target.clone(),
         total_bytes,
     )
-    .await?;
+    .await;
+    let copied = match (&staging, &downloaded) {
+        (Some(_), Ok(())) => {
+            let opener = crate::local_file::platform_opener(app);
+            let from = target.clone();
+            let h = handle.clone();
+            tokio::task::spawn_blocking(move || h.copy_from(opener.as_ref(), &from))
+                .await
+                .map_err(|e| CommandError::from(e.to_string()))
+                .and_then(|r| r.map(|_| ()).map_err(CommandError::from))
+        }
+        _ => Ok(()),
+    };
+    if let Some(dir) = &staging {
+        if let Err(err) = std::fs::remove_dir_all(dir) {
+            tracing::warn!(error = %err, "could not remove the staged download");
+        }
+    }
+    downloaded?;
+    copied?;
     Ok(Some(app_logic::dto::DownloadResultDto {
-        local_path: local_path.to_string_lossy().into_owned(),
+        local_path: handle.display(),
         is_dir: false,
         file_count: 1,
     }))
@@ -632,10 +666,29 @@ pub async fn pick_upload_files(
     let Some(picked) = rx.await.ok().flatten() else {
         return Ok(None); // Abbrechen ist kein Fehler.
     };
-    let paths = picked
-        .into_iter()
-        .map(|p| p.into_path())
-        .collect::<Result<Vec<_>, _>>()?;
+    // Issue #679: `content://` URIs (Android) are copied into an app-private
+    // staging directory; the copies are what gets granted and uploaded.
+    let staging = crate::edit_copies::picked_root().map(|r| r.join(Uuid::new_v4().to_string()));
+    let mut paths = Vec::with_capacity(picked.len());
+    for item in picked {
+        let handle = crate::local_file::LocalFileHandle::from_dialog(item)?;
+        let path = match handle.as_path() {
+            Some(p) => p.to_path_buf(),
+            None => {
+                let dir = staging
+                    .as_deref()
+                    .ok_or_else(|| CommandError::from("No cache directory available"))?;
+                // Same display name twice: keep both copies apart.
+                let dir = dir.join(paths.len().to_string());
+                let h = handle.clone();
+                let o = crate::local_file::platform_opener(&app);
+                tokio::task::spawn_blocking(move || h.stage_into(o.as_ref(), &dir))
+                    .await
+                    .map_err(|e| CommandError::from(e.to_string()))??
+            }
+        };
+        paths.push(path);
+    }
     Ok(Some(grant_for_live_session(
         &state.sessions,
         grants.inner(),
@@ -2243,6 +2296,106 @@ pub(super) async fn local_file_mtime_impl(
     .flatten()
     .map(chrono::DateTime::<chrono::Utc>::from)
     .map(|dt| dt.to_rfc3339())
+}
+
+/// Issue #679: upper bound for the in-app editor of an edit copy (Android has
+/// no external editor to hand the copy to). Larger files are refused.
+const MAX_IN_APP_EDIT_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Resolves `local_path` to a file inside this session's own edit-copy
+/// directory (nothing else — not any other granted path), canonicalised.
+fn in_app_edit_copy(
+    sessions: &SessionManager,
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+    local_path: &str,
+) -> CommandResult<std::path::PathBuf> {
+    if sessions.get(session_id).is_none() {
+        return Err(CommandError::from(LOCAL_PATH_NOT_GRANTED));
+    }
+    let dir = edit_session_dir_in(edit_root, session_id)?
+        .canonicalize()
+        .map_err(|_| CommandError::from(LOCAL_PATH_NOT_GRANTED))?;
+    let canonical = std::path::Path::new(local_path)
+        .canonicalize()
+        .map_err(|_| CommandError::from(LOCAL_PATH_NOT_GRANTED))?;
+    if canonical.starts_with(&dir) && canonical.is_file() {
+        Ok(canonical)
+    } else {
+        Err(CommandError::from(LOCAL_PATH_NOT_GRANTED))
+    }
+}
+
+pub(super) fn read_edit_copy_text_impl(
+    sessions: &SessionManager,
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+    local_path: &str,
+    max: u64,
+) -> CommandResult<String> {
+    use std::io::Read;
+    let path = in_app_edit_copy(sessions, edit_root, session_id, local_path)?;
+    let mut text = String::new();
+    std::fs::File::open(path)?
+        .take(max + 1)
+        .read_to_string(&mut text)
+        .map_err(|_| CommandError::from("The file is not valid UTF-8 text"))?;
+    if text.len() as u64 > max {
+        return Err(CommandError::from("The file is too large to edit here"));
+    }
+    Ok(text)
+}
+
+pub(super) fn write_edit_copy_text_impl(
+    sessions: &SessionManager,
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+    local_path: &str,
+    content: &str,
+    max: u64,
+) -> CommandResult<()> {
+    if content.len() as u64 > max {
+        return Err(CommandError::from("The text is too large to save here"));
+    }
+    let path = in_app_edit_copy(sessions, edit_root, session_id, local_path)?;
+    std::fs::write(path, content)?;
+    Ok(())
+}
+
+/// Issue #679: text of an edit copy for the in-app editor (Android). Only a
+/// file inside this session's edit-copy directory is accepted.
+#[tauri::command]
+pub async fn read_edit_copy_text(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    local_path: String,
+) -> CommandResult<String> {
+    read_edit_copy_text_impl(
+        &state.sessions,
+        crate::edit_copies::instance_root().as_deref(),
+        session_id,
+        &local_path,
+        MAX_IN_APP_EDIT_BYTES,
+    )
+}
+
+/// Issue #679: saves the in-app editor's text into the edit copy. The
+/// existing change detection then offers the upload as for any edit.
+#[tauri::command]
+pub async fn write_edit_copy_text(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    local_path: String,
+    content: String,
+) -> CommandResult<()> {
+    write_edit_copy_text_impl(
+        &state.sessions,
+        crate::edit_copies::instance_root().as_deref(),
+        session_id,
+        &local_path,
+        &content,
+        MAX_IN_APP_EDIT_BYTES,
+    )
 }
 
 /// Spec 0054, Teil 4, Punkt 6: "Watcher stoppt, wenn der Nutzer den Flow

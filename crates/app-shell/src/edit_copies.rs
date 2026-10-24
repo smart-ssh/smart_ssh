@@ -106,6 +106,16 @@ pub(crate) fn clipboard_root() -> Option<PathBuf> {
     Some(cache_smart_ssh.join("clipboard-files").join(scope))
 }
 
+/// Issue #679: root of the staging area for files picked through the Android
+/// system picker (`<cache>/smart-ssh/picked-files/<scope>`), a sibling of the
+/// edit-copy root with the same scope. Swept at startup with the edit copies.
+pub(crate) fn picked_root() -> Option<PathBuf> {
+    let root = instance_root()?;
+    let scope = root.file_name()?.to_owned();
+    let cache_smart_ssh = root.parent()?.parent()?;
+    Some(cache_smart_ssh.join("picked-files").join(scope))
+}
+
 /// What a sweep did. Only counts — the paths of failures go to the log.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct SweepReport {
@@ -215,6 +225,9 @@ pub(crate) fn sweep_at_startup(locked_data_dir: &Path) {
         return;
     }
     let report = sweep_instance(cache, locked_data_dir);
+    if let Some(picked) = picked_root() {
+        let _ = sweep_dir(&picked);
+    }
     tracing::info!(
         removed = report.removed,
         failed = report.failed,
