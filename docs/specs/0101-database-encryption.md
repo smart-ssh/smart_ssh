@@ -396,6 +396,15 @@ Adversarial (ERHÖHT):
 
 ## 8. Grenzen
 
+- **Android:** Der Schlüsselbund ist der Android-Schlüsselspeicher (Keystore).
+  Der Startablauf ist derselbe wie auf dem Desktop: Beim ersten Start wird K
+  dort abgelegt, danach öffnet sich die Datenbank ohne Eingabe. Fehlt der
+  Eintrag (z. B. gelöscht), gilt derselbe Wiederherstellungsweg wie bei einem
+  fehlenden Schlüsselbund-Eintrag auf dem Desktop (Tabelle A3). Lässt sich der
+  Schlüsselspeicher nicht öffnen, gilt er als nicht verfügbar; Dialog D1 bietet
+  dann „Master-Passwort einrichten“ an (wie bei fehlendem Secret-Service unter
+  Linux), die Eingabe erfolgt im Fenster. Der Master-Passwort-Modus bleibt
+  jederzeit verfügbar.
 - Wer Zugriff auf das entsperrte Benutzerkonto hat, kann die Daten lesen.
 - Ohne Master-Passwort oder Schlüsselbund-Schlüssel gibt es keine
   Wiederherstellung (E10).
