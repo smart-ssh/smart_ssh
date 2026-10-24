@@ -408,7 +408,8 @@
       "verdictAuto": "läuft beim nächsten Mal automatisch",
       "verdictAsk": "fragt weiterhin nach: {{reasons}}",
       "notice": "Regel angelegt. Dieses Kommando fragt beim nächsten Mal weiterhin nach: {{reasons}}",
-      "reasonOther": "eine andere Sicherheitsprüfung"
+      "reasonOther": "eine andere Sicherheitsprüfung",
+      "loadFailed": "Regelabdeckung konnte nicht geladen werden"
     }
   },
   "hostKeyDialog": {
@@ -564,6 +565,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Dieses Modell unterstützt keine Tool-Aufrufe. Beim Provider in den Einstellungen „Natives Tool-Calling unterstützt“ abwählen (dann läuft der Textmodus) oder ein Modell mit Tool-Unterstützung wählen.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Der lokale KI-Dienst antwortet nicht. Ollama (bzw. deinen lokalen Server) starten und erneut versuchen.",
     "AI_TIMEOUT": "Der KI-Provider hat zu lange nicht geantwortet. Kurz warten und erneut senden; bei einem lokalen Modell: ist der Rechner ausgelastet oder das Modell zu groß?",
+    "AI_TIMEOUT_NAMED": "Keine Antwort von {{provider}} seit {{seconds}} s – Anfrage abgebrochen. Gleich noch einmal versuchen.",
+    "AI_TOTAL_DEADLINE": "{{provider}} wurde nicht innerhalb von {{minutes}} Minuten fertig – Anfrage abgebrochen. Der bisher empfangene Text bleibt erhalten.",
     "AI_WEB_RESEARCH_REJECTED": "Der KI-Provider lehnt die Web-Recherche für dieses Konto ab. In den Einstellungen unter „KI-Provider“ die „Web-Recherche“ für diesen Provider ausschalten.",
     "AI_ATTACHMENT_UNSUPPORTED": "Dieses Modell kann das angehängte Bild oder PDF nicht lesen. Ein Modell wählen, das es kann, oder den Anhang entfernen.",
     "AI_NO_ACTIVE_PROVIDER": "Noch kein aktiver KI-Provider. In den Einstellungen unter „KI-Provider“ einen Provider hinzufügen und aktiv setzen.",
@@ -1174,6 +1177,7 @@
     "tryAgain": "Erneut versuchen",
     "errorDetails": "Details",
     "aiRetrying": "Der KI-Anbieter ist überlastet – neuer Versuch in {{seconds}} s (Versuch {{attempt}} von {{max}})",
+    "aiWaiting": "Warte auf Antwort von {{provider}} … {{seconds}} s",
     "noActiveProvider": "Kein aktiver AI-Provider konfiguriert. Bitte zuerst in den Einstellungen einrichten.",
     "inputPlaceholder": "Frage stellen oder Kommando beschreiben …",
     "send": "Senden",

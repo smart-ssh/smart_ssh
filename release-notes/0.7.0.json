@@ -7,7 +7,7 @@
       "Automatic reconnect after a connection loss, with chat history and AI context kept.",
       "Whole-folder upload in the file browser, plus copying remote files to the clipboard.",
       "Commands now show their output live in the chat, and a hung command can be stopped.",
-      "Keyboard use and focus handling were improved across the whole interface."
+      "The AI can ask clarifying questions with answer options, and connecting shows its steps live in its own tab."
     ],
     "de": [
       "Spracheingabe im KI-Chat mit lokaler Erkennung; das Audio bleibt auf deinem Rechner.",
@@ -15,7 +15,7 @@
       "Automatisches Neuverbinden nach einem Verbindungsabbruch, Chatverlauf und KI-Kontext bleiben erhalten.",
       "Ganze Ordner im Dateibrowser hochladen und Remote-Dateien in die Zwischenablage kopieren.",
       "Befehle zeigen ihre Ausgabe live im Chat, und ein hängender Befehl lässt sich stoppen.",
-      "Tastaturbedienung und Fokusführung wurden in der gesamten Oberfläche verbessert."
+      "Die KI kann Rückfragen mit Antwortoptionen stellen, und beim Verbinden zeigt ein eigener Tab die Schritte live."
     ],
     "fr": [
       "Saisie vocale dans le chat IA avec reconnaissance locale ; l'audio reste sur votre ordinateur.",
@@ -23,7 +23,7 @@
       "Reconnexion automatique après une perte de connexion, avec conservation de l'historique du chat et du contexte IA.",
       "Envoi de dossiers entiers dans l'explorateur de fichiers et copie de fichiers distants dans le presse-papiers.",
       "Les commandes affichent leur sortie en direct dans le chat, et une commande bloquée peut être arrêtée.",
-      "Meilleure utilisation au clavier et meilleure gestion du focus dans toute l'interface."
+      "L'IA peut poser des questions de clarification avec des choix de réponse, et la connexion affiche ses étapes en direct dans son propre onglet."
     ],
     "es": [
       "Entrada de voz en el chat de IA con reconocimiento local; el audio permanece en tu equipo.",
@@ -31,7 +31,7 @@
       "Reconexión automática tras perder la conexión, conservando el historial del chat y el contexto de la IA.",
       "Subida de carpetas completas en el explorador de archivos y copia de archivos remotos al portapapeles.",
       "Los comandos muestran su salida en directo en el chat, y un comando bloqueado puede detenerse.",
-      "Mejor uso con el teclado y mejor gestión del foco en toda la interfaz."
+      "La IA puede hacer preguntas aclaratorias con opciones de respuesta, y al conectar una pestaña propia muestra los pasos en directo."
     ]
   }
 }

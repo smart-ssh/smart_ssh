@@ -5,6 +5,7 @@ import {
   type KeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -44,6 +45,7 @@ import {
   onChatQuestionAsked,
   onChatError,
   onChatAiRetrying,
+  onChatAiRequestStarted,
   onChatQueuedMessagesSent,
   onChatResponseCancelled,
   onChatResponseEmpty,
@@ -204,7 +206,14 @@ export type ChatItem =
       code: string | null;
       /** Issue #600 — provider details (backend-redacted) and whether
        * "Try again" is offered. */
-      details?: { providerErrorType?: string | null; httpStatus?: number | null; providerMessage?: string | null; accessReturns?: string | null };
+      details?: {
+        providerErrorType?: string | null;
+        httpStatus?: number | null;
+        providerMessage?: string | null;
+        providerName?: string | null;
+        timeoutSecs?: number | null;
+        accessReturns?: string | null;
+      };
       retryable?: boolean;
     }
   // Issue #596: a rule was created from the confirmation card but the
@@ -484,6 +493,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // Issue #600: provider overloaded, automatic retry pending.
   const [retrying, setRetrying] = useState<{ attempt: number; max: number; deadline: number } | null>(null);
   const [retryNow, setRetryNow] = useState(() => Date.now());
+  // Issue #694: a request is out; `since` is the last sign of life (request
+  // sent / last content) and drives the "Waiting for a response" line.
+  const [aiWait, setAiWait] = useState<{ provider: string; since: number; gotContent: boolean } | null>(null);
+  const [waitNow, setWaitNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!aiWait) return;
+    const id = window.setInterval(() => setWaitNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [aiWait]);
   useEffect(() => {
     if (!retrying) return;
     const id = window.setInterval(() => setRetryNow(Date.now()), 250);
@@ -522,6 +540,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
   // Historien-Navigationslogik unten bleibt unverändert.
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const jumpButtonRef = useRef<HTMLButtonElement>(null);
+  // Issue #758: the jump button hides once the column is at the bottom. A
+  // hidden element drops focus to <body>, so hand focus to the chat input
+  // first when the button still has it.
+  useLayoutEffect(() => {
+    if (atBottom && jumpButtonRef.current && document.activeElement === jumpButtonRef.current) {
+      inputRef.current?.focus();
+    }
+  }, [atBottom]);
   // Spec 0108: Spracheingabe an/aus (Standard an); der erkannte Text geht
   // über `handleDraftChange` in den Entwurf, nie direkt an die KI.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -638,9 +665,16 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     // dürfen beim Session-Wechsel/Unmount nicht weiterlaufen.
     const pendingBudgetTimers: number[] = [];
     const unlisten = [
+      onChatAiRequestStarted((event) => {
+        if (event.sessionId !== sessionId) return;
+        const now = Date.now();
+        setWaitNow(now);
+        setAiWait({ provider: event.providerName, since: now, gotContent: false });
+      }),
       onChatTextDelta((event) => {
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
+        setAiWait((w) => (w ? { ...w, since: Date.now(), gotContent: true } : w));
         setItems((prev) => {
           const last = prev[prev.length - 1];
           if (last?.type === "assistant") {
@@ -652,6 +686,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       onChatActionProposed((event) => {
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
+        setAiWait(null);
         // Spec 0026, Abschnitt 3/4: eine Zweitmeinung ist nur zu erwarten,
         // wenn sie aktiviert ist UND die Regel-Einschätzung überhaupt noch
         // Raum nach oben hat (ein bereits regelbasiertes "red" kann nicht
@@ -779,6 +814,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       onChatError((event) => {
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
+        setAiWait(null);
         setItems((prev) => {
           // Issue #600: "Try again" only when nothing but the user's own
           // message came since the last user turn (no reply, command or
@@ -805,6 +841,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 providerErrorType: event.providerErrorType,
                 httpStatus: event.httpStatus,
                 providerMessage: event.providerMessage,
+                providerName: event.providerName,
+                timeoutSecs: event.timeoutSecs,
                 accessReturns: event.accessReturns,
               },
               retryable,
@@ -989,6 +1027,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * zu Ende. */
   const handleStopAutoContinuation = () => {
     setAutoContinuing(false);
+    setAiWait(null);
     stopAutoContinuation(sessionId).catch((err) =>
       setItems((prev) => [
         ...prev,
@@ -1105,6 +1144,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 
   const runSend = async (call: () => Promise<void>) => {
     pendingSendsRef.current += 1;
+    // Issue #694: drop a stale wait line from the previous turn.
+    if (pendingSendsRef.current === 1) setAiWait(null);
     setSending(true);
     try {
       await call();
@@ -1125,6 +1166,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         setSending(false);
         setAutoContinuing(false);
         setRetrying(null);
+        setAiWait(null);
         // Läuft im Backend nichts mehr, wartet auch keine Nachricht mehr.
         setItems((prev) =>
           prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
@@ -1476,6 +1518,24 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               {t("chat.stop")}
             </Button>
           </output>
+        ) : aiWait &&
+          (sending || autoContinuing) &&
+          (!aiWait.gotContent || waitNow - aiWait.since > 10_000) ? (
+          <output
+            data-testid="chat-ai-waiting"
+            className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300"
+          >
+            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
+            <span className="flex-1">
+              {t("chat.aiWaiting", {
+                provider: aiWait.provider,
+                seconds: Math.max(0, Math.floor((waitNow - aiWait.since) / 1000)),
+              })}
+            </span>
+            <Button size="sm" onClick={handleStopAutoContinuation}>
+              {t("chat.stop")}
+            </Button>
+          </output>
         ) : autoContinuing ? (
           <div className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300">
             <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
@@ -1500,14 +1560,23 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         )}
       </div>
       </div>
-      {!atBottom && (
+      {/* Always mounted: the late scroll event that flips `atBottom` must never
+          unmount a focused button (focus would fall back to <body>). While at
+          the bottom it is invisible, aria-hidden and out of the Tab order. */}
+      {(
         <button
           type="button"
-          onClick={scrollToBottom}
+          ref={jumpButtonRef}
+          onClick={() => {
+            scrollToBottom();
+            inputRef.current?.focus();
+          }}
+          aria-hidden={atBottom ? true : undefined}
+          tabIndex={atBottom ? -1 : undefined}
           aria-label={t("chat.jumpToLatest")}
           title={t("chat.jumpToLatest")}
           data-testid="chat-jump-to-latest"
-          className="absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-100 shadow-lg hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+          className={`absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-100 shadow-lg hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400${atBottom ? " invisible" : ""}`}
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10 4v12M5 11l5 5 5-5" />
@@ -1756,6 +1825,26 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
 // genutzt.
 /** Issue #600: "Details" (collapsed, copyable) and "Try again" below the
  * translated text of an AI error card. */
+/** Issue #694: timeout errors name the provider and the limit. */
+function errorCardText(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  item: Extract<ChatItem, { type: "error" }>,
+): string {
+  const d = item.details;
+  if (d?.providerName && d.timeoutSecs) {
+    if (item.code === "AI_TIMEOUT") {
+      return t("errors.AI_TIMEOUT_NAMED", { provider: d.providerName, seconds: d.timeoutSecs });
+    }
+    if (item.code === "AI_TOTAL_DEADLINE") {
+      return t("errors.AI_TOTAL_DEADLINE", {
+        provider: d.providerName,
+        minutes: Math.round(d.timeoutSecs / 60),
+      });
+    }
+  }
+  return translateErrorCode(t, item.code, item.message, { date: d?.accessReturns });
+}
+
 function ErrorCardExtras({
   item,
   onRetryTurn,
@@ -1895,7 +1984,7 @@ export function ChatItemView({
   if (item.type === "error") {
     return (
       <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
-        ⚠ {translateErrorCode(t, item.code, item.message, { date: item.details?.accessReturns })}
+        ⚠ {errorCardText(t, item)}
         {(item.details || item.retryable) && (
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
         )}
@@ -2349,24 +2438,36 @@ function reasonList(
 
 /** Issue #596, Spec 0011: which segments of the pending command existing
  * rules already cover, which need a rule and which ask regardless of rules.
- * Renders nothing while loading, on failure, or when the backend returns no
- * segments (single segment without a rule-independent reason). */
+ * Renders nothing while loading or when the backend returns no
+ * segments (single segment without a rule-independent reason); a muted
+ * line on failure. */
 function CoverageList({ sessionId, command }: { sessionId: string; command: string }) {
   const { t } = useTranslation();
   const [explanation, setExplanation] = useState<ConfirmationExplanationDto | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let stale = false;
     explainConfirmation(sessionId, command, "Global")
       .then((r) => {
-        if (!stale) setExplanation(r);
+        if (!stale) {
+          setExplanation(r);
+          setFailed(false);
+        }
       })
       .catch(() => {
-        if (!stale) setExplanation(null);
+        // The backend logs the error; the card says the lookup failed.
+        if (!stale) {
+          setExplanation(null);
+          setFailed(true);
+        }
       });
     return () => {
       stale = true;
     };
   }, [sessionId, command]);
+  if (failed) {
+    return <div className="text-xs text-slate-400">{t("confirmDialog.explain.loadFailed")}</div>;
+  }
   if (!explanation || explanation.segments.length === 0) return null;
   return (
     <div className="space-y-1 text-xs">

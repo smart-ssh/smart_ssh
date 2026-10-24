@@ -9,7 +9,7 @@ Features that are only available in a paid edition are marked with
 
 ## [Unreleased]
 
-## [0.7.0] — 2026-10-14
+## [0.7.0] — 2026-10-23
 
 ### Highlights
 - Voice input in the AI chat with local speech recognition; audio stays on your computer.
@@ -17,7 +17,7 @@ Features that are only available in a paid edition are marked with
 - Automatic reconnect after a connection loss, with chat history and AI context kept.
 - Whole-folder upload in the file browser, plus copying remote files to the clipboard.
 - Commands now show their output live in the chat, and a hung command can be stopped.
-- Keyboard use and focus handling were improved across the whole interface.
+- The AI can ask clarifying questions with answer options, and connecting shows its steps live in its own tab.
 
 ### Added
 - Voice input in the AI chat: a microphone button next to “Send” (or
@@ -49,6 +49,26 @@ Features that are only available in a paid edition are marked with
   (“Web research” switch in the AI settings).
 - The server settings show the stored host keys (algorithm and fingerprint)
   so they can be compared against a second source.
+- The AI can ask one clarifying question with 2–4 answer options. The chat
+  shows a question card: click an option, tick several and send, or type your
+  own answer.
+- Connecting to a server, or resuming a saved chat, opens a tab right away
+  that shows the connection steps live. On failure it keeps the failed step,
+  the reason, and “Retry” and “Close”; closing it cancels the attempt.
+- Right-click on empty space in the file browser opens a menu with “New
+  folder”, “New file” and “Paste”. Paste uploads files copied in your file
+  manager after you confirm them; existing names are never overwritten.
+- “Accept + Rule” suggests rules for each part of a pipeline or chain, bare
+  subcommands and git-style global options, plus rules limited to the same
+  directory or leaving only the last argument open. Labels are translated.
+- The confirmation card for chained commands shows which parts existing rules
+  already cover, offers rules only for the rest, and says whether a rule makes
+  the command run automatically next time, or why a command still asks.
+- AI errors in the chat have a collapsible “Details” section with the
+  provider's original message and a “Try again” button for temporary errors;
+  while the provider is overloaded, a countdown shows the next automatic retry.
+- The log records why an automatically allowed command asked for confirmation,
+  and the verdict of the injected-instructions check, without any content.
 
 ### Changed
 - macOS 10.15 (Catalina) or later is now required.
@@ -86,6 +106,21 @@ Features that are only available in a paid edition are marked with
   into two groups and wraps in small windows.
 - Notifications appear at the top right instead of the bottom left and no
   longer cover the chat input field in small windows.
+- Chats in which nothing was exchanged are no longer kept in the saved chat
+  list when you disconnect or start a new chat.
+- The file browser no longer offers “Elevated rights” when you are logged in
+  as root; the target user choice moved into a labelled menu next to the button.
+- Connection errors appear in the connection tab instead of above the server list.
+- Redirections that write nothing (`2>/dev/null`, `>/dev/null`, `&>/dev/null`,
+  `2>&1`, `>&2`) no longer force a confirmation. Other redirections still do.
+- The rule test panel shows, for each part of a chained or piped command,
+  which rule matched and which checks require confirmation.
+- Voice input shows the recognised words in the chat input while you speak;
+  stopping replaces them with the final, more accurate text.
+- Long chats compact earlier when the AI provider reports a larger context
+  than estimated. The chat shows the context size and when parts were summarized.
+- While waiting for an AI reply, the chat shows which provider it waits for
+  and for how long, with a Stop button.
 
 ### Fixed
 - Settings close with Escape again on macOS after a category was clicked.
@@ -133,6 +168,34 @@ Features that are only available in a paid edition are marked with
   database is stored there and that the database cannot be opened without it.
 - Unusable servers (unreadable login method) count as existing servers when
   importing an SSH configuration and appear in a group's delete preview.
+- On macOS the window content no longer bounces on a two-finger swipe, and
+  scrollable areas stop at their ends.
+- The chat no longer jumps to the bottom while an answer streams in if you
+  have scrolled up; a “Jump to latest message” button brings you back.
+- The text line in the AI chat input is vertically centred with the buttons.
+- Chat sessions get a title right after the first AI answer instead of staying
+  “Untitled conversation”; older untitled sessions are titled once at start.
+- After an automatic reconnect the terminal opens a new shell again, and a
+  later connection loss is detected and handled like the first one.
+- The file browser's elevation menu and target user form close when you click
+  elsewhere, switch the elevation or leave the Files view.
+- Files dragged into the window go only to the area under the pointer (file
+  browser or chat), and only that area is highlighted. Dropping files onto the
+  file browser works again on macOS Retina displays.
+- AI provider overload is retried automatically, and exhausted credit or a
+  rejected request shows its own message. An AI request that never answers
+  stops after 120 s of silence or 10 min in total, with a “Try again” button.
+- An unknown or invalid tool call from the AI no longer ends the chat turn
+  with “Unexpected response”; valid calls in the same answer still run.
+- Attachments in a chat are available again after the app restarts and the
+  saved chat is resumed.
+- A file transfer no longer stays at “Downloading” when elevated rights are
+  switched off during it; the row shows the result.
+- Reading a public SSH key (`id_*.pub`) no longer shows a red data-risk badge
+  or asks for confirmation under an allow rule. All private SSH keys (e.g.
+  `id_ecdsa`, `id_deploy`, host keys) are rated red.
+- A command you confirmed despite a hard-blacklist warning is now sent instead
+  of being dropped when a command-preparation extension is active.
 
 ### Security
 - If the optional AI second opinion or the AI check for injected instructions

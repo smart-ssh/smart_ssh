@@ -408,7 +408,8 @@
       "verdictAuto": "kjører automatisk neste gang",
       "verdictAsk": "spør fortsatt: {{reasons}}",
       "notice": "Regel opprettet. Denne kommandoen spør fortsatt neste gang: {{reasons}}",
-      "reasonOther": "en annen sikkerhetskontroll"
+      "reasonOther": "en annen sikkerhetskontroll",
+      "loadFailed": "Regeldekningen kunne ikke lastes"
     }
   },
   "hostKeyDialog": {
@@ -564,6 +565,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Denne modellen støtter ikke verktøykall. Fjern avkryssingen for “Støtter innebygd verktøykall” i leverandørinnstillingene (da brukes den promptbaserte reserveløsningen) eller velg en modell med verktøystøtte.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Den lokale AI-tjenesten svarer ikke. Start Ollama (eller din lokale server) og prøv igjen.",
     "AI_TIMEOUT": "AI-leverandøren brukte for lang tid på å svare. Vent litt og send på nytt; med en lokal modell, sjekk om maskinen er opptatt eller modellen for stor.",
+    "AI_TIMEOUT_NAMED": "Ingen svar fra {{provider}} på {{seconds}} s – forespørselen ble avbrutt. Prøv igjen om litt.",
+    "AI_TOTAL_DEADLINE": "{{provider}} ble ikke ferdig innen {{minutes}} minutter – forespørselen ble avbrutt. Teksten mottatt så langt beholdes.",
     "AI_WEB_RESEARCH_REJECTED": "AI-leverandøren avviser nettsøk for denne kontoen. Slå av “Nettsøk” for denne leverandøren under “AI-leverandør” i innstillingene.",
     "AI_ATTACHMENT_UNSUPPORTED": "Denne modellen kan ikke lese det vedlagte bildet eller PDF-en. Velg en modell som kan det, eller fjern vedlegget.",
     "AI_NO_ACTIVE_PROVIDER": "Ingen aktiv AI-leverandør ennå. Legg til en under Innstillinger → AI-leverandør og gjør den aktiv.",
@@ -1174,6 +1177,7 @@
     "tryAgain": "Prøv igjen",
     "errorDetails": "Detaljer",
     "aiRetrying": "AI-leverandøren er overbelastet – nytt forsøk om {{seconds}} s (forsøk {{attempt}} av {{max}})",
+    "aiWaiting": "Venter på svar fra {{provider}} … {{seconds}} s",
     "noActiveProvider": "Ingen aktiv AI-leverandør er satt opp. Sett opp en i innstillingene først.",
     "inputPlaceholder": "Still et spørsmål eller beskriv en kommando …",
     "send": "Send",

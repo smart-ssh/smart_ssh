@@ -117,7 +117,17 @@ Manueller Test: Modell mit Denkphase, kleines Override-Limit (z. B. 300),
 längere Frage → Antwort nach dem Retry oder sichtbarer Hinweis, nie
 nichts.
 
-## 8. Klarstellungen
+## 8. Wartezustand
+
+Sobald eine Anfrage an den KI-Anbieter gesendet ist und noch keine Antwort
+eintrifft, zeigt der Chat eine Zeile „Warte auf Antwort von <Anbieter> … N s"
+mit hochzählenden Sekunden und einem Stopp-Knopf. Die Zeile verschwindet mit
+dem ersten Antwortinhalt, erscheint wieder, wenn danach mehr als 10 Sekunden
+kein Inhalt eintrifft, und endet bei Aktionsvorschlag oder Fehler. So ist ein
+Hängen nie stumm; nach spätestens 120 Sekunden ohne Inhalt folgt die
+Zeitüberschreitung aus Spec 0006.
+
+## 9. Klarstellungen
 
 - **Budget für unbekannte Modelle:** An Endpunkten außer der offiziellen
   OpenAI-API gilt für unbekannte Modelle ein Maximum von **16 384** und ein
