@@ -92,6 +92,11 @@ pub struct AppState {
     pub keychain: KeychainAvailability,
     pub ai_provider_store: Arc<SqliteAiProviderStore>,
     pub host_key_store: Arc<dyn HostKeyStore>,
+    /// Issue #664: the same store as `host_key_store`, concretely typed so the
+    /// backup snapshot can list the trusted keys (Spec 0109, C1).
+    pub file_host_keys: Arc<crate::host_key_store::FileHostKeyStore>,
+    /// Issue #664: consistent snapshot and backup key access (Spec 0109).
+    pub backup_store: persistence_sqlite::SqliteBackupStore,
     /// Issue #259: der Verbindungsaufbau von `connect_session`. Produktion
     /// verdrahtet [`crate::test_connection::RealConnector`]; Tests setzen
     /// einen Mock ein, damit Verbinden und Fortsetzen ohne echtes Netzwerk

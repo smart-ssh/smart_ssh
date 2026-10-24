@@ -181,6 +181,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-normalization",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -4370,14 +4371,17 @@ dependencies = [
  "directories",
  "libsqlite3-sys",
  "secrecy",
+ "serde",
  "serde_json",
  "sqlx",
  "ssh-manager-core",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]

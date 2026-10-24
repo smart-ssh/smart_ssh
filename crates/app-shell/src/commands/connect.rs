@@ -2156,6 +2156,7 @@ mod connect_flow_tests {
             session_extension: None,
             root_key_fingerprint: [0; 32],
             ai_provider_store: Arc::new(main_db.ai_provider_store()),
+            backup_store: main_db.backup_store(),
             policy_store: main_db.policy_store(),
             prompt_history_store: main_db.prompt_history_store(),
             chat_session_store: chat_db.chat_session_store(),
@@ -2164,6 +2165,10 @@ mod connect_flow_tests {
             credential_store: Arc::new(credential_store),
             key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
             keychain: credentials_keyring::KeychainAvailability::Available,
+            file_host_keys: Arc::new(
+                app_logic::host_key_store::FileHostKeyStore::load(dir.path().join("hk.json"))
+                    .unwrap(),
+            ),
             host_key_store: Arc::new(NoHostKeys),
             connector,
             entitlements: Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
