@@ -54,3 +54,10 @@ zusätzlich die Frontend-Kopie ab.
   verweist; der Hinweis steht im Skript neben `MARKER` und in diesem ADR.
   Ein Verweis-Kommentar im Workflow wäre eine reine Ergänzung ohne
   Verhaltensänderung.
+
+## Nachtrag 2026-10-24
+
+Release-Builds werden nicht mehr von der CI dieses Repositorys erzeugt;
+`release.yml` wurde entfernt. `thirdPartyNoticesMarker.test.ts` prüft statt der
+Release-Prüfung jetzt, dass kein Workflow unter `.github/` eine abweichende
+Kopie der Kennzeile trägt.

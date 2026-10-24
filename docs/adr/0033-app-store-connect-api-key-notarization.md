@@ -99,3 +99,8 @@ hier für die Release-Signatur, mit demselben Prinzip.
   gibt den privaten Schlüssel nach der ersten Erzeugung nicht erneut
   heraus) — dokumentiert in `README_DEV.md`, Abschnitt 6 ("niemals
   committen").
+
+## Nachtrag 2026-10-24
+
+Release-Builds werden nicht mehr von der CI dieses Repositorys erzeugt;
+`release.yml` wurde entfernt.
