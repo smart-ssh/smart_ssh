@@ -20,6 +20,8 @@ async function tabStops(page: Page, count: number) {
   const stops: { name: string; top: number; left: number; ring: boolean }[] = [];
   for (let i = 0; i < count; i++) {
     await page.keyboard.press("Tab");
+    const lost = await page.evaluate(() => document.activeElement === document.body);
+    expect(lost, `focus was lost after Tab ${i + 1}`).toBe(false);
     stops.push(
       await page.evaluate(() => {
         const el = document.activeElement as HTMLElement;
@@ -118,6 +120,16 @@ test.describe("chat panel review", () => {
 
   test("Tab order of the message area and the input", async ({ app }) => {
     await openChatWithMessages(app);
+    // Settled state: column at the bottom, jump button hidden.
+    await expect(app.page.getByTestId("chat-jump-to-latest")).toBeHidden();
+    await expect
+      .poll(() =>
+        app.page.evaluate(() => {
+          const el = document.querySelector("div.overflow-y-auto.flex-1") as HTMLElement;
+          return el.scrollHeight - el.scrollTop - el.clientHeight <= 16;
+        }),
+      )
+      .toBe(true);
     await app.page.getByRole("button", { name: "New chat" }).focus();
     const stops = await tabStops(app.page, 6);
     expectVisualOrder(stops);

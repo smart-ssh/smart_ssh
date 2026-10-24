@@ -3,6 +3,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -491,6 +492,15 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
   // Historien-Navigationslogik unten bleibt unverändert.
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const jumpButtonRef = useRef<HTMLButtonElement>(null);
+  // Issue #758: the jump button hides once the column is at the bottom. A
+  // hidden element drops focus to <body>, so hand focus to the chat input
+  // first when the button still has it.
+  useLayoutEffect(() => {
+    if (atBottom && jumpButtonRef.current && document.activeElement === jumpButtonRef.current) {
+      inputRef.current?.focus();
+    }
+  }, [atBottom]);
   // Spec 0108: Spracheingabe an/aus (Standard an); der erkannte Text geht
   // über `handleDraftChange` in den Entwurf, nie direkt an die KI.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -1476,14 +1486,23 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         )}
       </div>
       </div>
-      {!atBottom && (
+      {/* Always mounted: the late scroll event that flips `atBottom` must never
+          unmount a focused button (focus would fall back to <body>). While at
+          the bottom it is invisible, aria-hidden and out of the Tab order. */}
+      {(
         <button
           type="button"
-          onClick={scrollToBottom}
+          ref={jumpButtonRef}
+          onClick={() => {
+            scrollToBottom();
+            inputRef.current?.focus();
+          }}
+          aria-hidden={atBottom ? true : undefined}
+          tabIndex={atBottom ? -1 : undefined}
           aria-label={t("chat.jumpToLatest")}
           title={t("chat.jumpToLatest")}
           data-testid="chat-jump-to-latest"
-          className="absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-100 shadow-lg hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+          className={`absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-100 shadow-lg hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400${atBottom ? " invisible" : ""}`}
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10 4v12M5 11l5 5 5-5" />
