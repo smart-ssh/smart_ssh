@@ -139,7 +139,16 @@ Prüfungen aus A1–A3 bleiben unverändert.
   geöffnet, läuft der spätere Upload **über denselben erhöhten Kanal**; die
   Bearbeitung merkt sich den Modus. Ist der Kanal inzwischen geschlossen,
   erscheint eine verständliche Meldung, nie ein stiller Upload als normaler
-  Nutzer. Die Bearbeitungskopie ist nur für den Nutzer lesbar (0600), weil
+  Nutzer.
+  Weicht die Identität der Bearbeitung von der aktuellen ab (anderer
+  Ziel-Nutzer, erhöhter Modus inzwischen an oder aus), sagt die
+  Bearbeitungsleiste das („Als www-data geöffnet, der erhöhte Modus läuft
+  jetzt als root.“) und bietet statt „Hochladen“ nur „Als root hochladen“
+  (bzw. „Als Login-Nutzer hochladen“, wenn der erhöhte Modus aus ist) an.
+  Erst dieser bewusste Klick lädt einmal mit der aktuellen Identität hoch;
+  danach gehört die Bearbeitung dieser Identität. Ein Upload mit der alten
+  Identität wird weiterhin abgelehnt, nie still umgestellt. Die
+  Bearbeitungskopie ist nur für den Nutzer lesbar (0600), weil
   Root-Dateien sensibel sein können.
 - Es ist kein Passwort im Spiel, also nichts zu redigieren. Die
   Fehlerausgabe von sudo gelangt trotzdem nie ungefiltert in Chat oder

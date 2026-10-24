@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import i18next from "i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
   closeEditSession,
+  commandErrorCode,
   commandErrorMessage,
   localFileMtime,
   readLocalTextPreview,
@@ -10,6 +12,7 @@ import {
   sftpStat,
   sftpUpload,
 } from "./api";
+import { translateErrorCode } from "./errorCodes";
 import { appForFileName, loadFileTypeApps } from "./fileTypeSettings";
 import { classifyPreviewReadFailure, type PreviewReadFailure } from "./previewReadFailure";
 import type { RemoteEntryDto } from "./types";
@@ -142,12 +145,16 @@ export function useLocalEditSession(sessionId: string) {
    * Remote-Änderungs-Konflikt-Prüfung) — zeigt selbst keinen Dialog, das
    * übernimmt der Aufrufer (`FileBrowserPanel`), damit dieser Hook UI-frei
    * bleibt. */
-  const buildUploadOffer = useCallback(async (): Promise<UploadOffer | null> => {
+  const buildUploadOffer = useCallback(
+    async (asUser?: string | null): Promise<UploadOffer | null> => {
     if (!session) return null;
+    // Issue #656: `asUser` is the identity the user explicitly chose for this
+    // upload (see `confirmUpload`); `undefined` keeps the session's own.
+    const user = asUser === undefined ? session.elevatedUser : asUser;
     const [localPreview, remoteEntry, remoteRead] = await Promise.all([
       readLocalTextPreview(sessionId, session.localPath),
-      sftpStat(sessionId, session.entry.path, session.elevatedUser).catch(() => null),
-      sftpReadText(sessionId, session.entry.path, session.elevatedUser).then(
+      sftpStat(sessionId, session.entry.path, user).catch(() => null),
+      sftpReadText(sessionId, session.entry.path, user).then(
         (text) => ({ text, failure: null as PreviewReadFailure | null }),
         (err) => ({ text: null as string | null, failure: classifyPreviewReadFailure(err) }),
       ),
@@ -173,29 +180,45 @@ export function useLocalEditSession(sessionId: string) {
       remoteReadFailure: remoteRead.failure,
       remoteChangedSinceDownload,
     };
-  }, [session, sessionId]);
+    },
+    [session, sessionId],
+  );
 
   /** Liefert `null` bei Erfolg, sonst die Fehlermeldung (Spec 0067, Teil B:
    * der Aufrufer zeigt daraus eine Meldung). */
-  const confirmUpload = useCallback(async (): Promise<string | null> => {
+  const confirmUpload = useCallback(
+    async (asUser?: string | null): Promise<string | null> => {
     if (!session) return null;
+    // Issue #656: after an identity change the caller passes the CURRENT
+    // identity explicitly (the "Upload as <user>" click). Without it the
+    // session's old identity is sent and the backend refuses on a mismatch.
+    const user = asUser === undefined ? session.elevatedUser : asUser;
     // Issue #655: a retry replaces the previous error, it never stacks.
     setSession((prev) => (prev ? { ...prev, status: "uploading", error: null } : prev));
     try {
-      await sftpUpload(sessionId, session.localPath, session.entry.path, session.elevatedUser);
+      await sftpUpload(sessionId, session.localPath, session.entry.path, user);
       const uploadedMtime = await localFileMtime(sessionId, session.localPath);
       lastSeenMtimeRef.current = uploadedMtime;
-      remoteModifiedAtDownloadRef.current = await sftpStat(sessionId, session.entry.path, session.elevatedUser)
+      remoteModifiedAtDownloadRef.current = await sftpStat(sessionId, session.entry.path, user)
         .then((e) => e.modified)
         .catch(() => remoteModifiedAtDownloadRef.current);
-      setSession((prev) => (prev ? { ...prev, status: "editing", error: null } : prev));
+      // The edit session now belongs to the identity it was uploaded with.
+      setSession((prev) =>
+        prev ? { ...prev, status: "editing", error: null, elevatedUser: user } : prev,
+      );
       return null;
     } catch (err) {
-      const message = commandErrorMessage(err);
+      const message = translateErrorCode(
+        (key, options) => i18next.t(key, options),
+        commandErrorCode(err),
+        commandErrorMessage(err),
+      );
       setSession((prev) => (prev ? { ...prev, status: "changed", error: message } : prev));
       return message;
     }
-  }, [session, sessionId]);
+    },
+    [session, sessionId],
+  );
 
   /** "Später" — die Änderung wird nicht jetzt hochgeladen, der Watcher
    * beobachtet weiter (nächste Änderung fragt erneut). */
