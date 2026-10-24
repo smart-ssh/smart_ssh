@@ -2,6 +2,7 @@
 //! backup key, the typed snapshot and the export itself. The file format and
 //! its crypto live in `ssh_manager_core::backup`.
 
+mod changes;
 mod export;
 mod import;
 mod key;
@@ -10,6 +11,9 @@ mod snapshot;
 mod tests;
 mod validate;
 
+pub use changes::{
+    apply_changes, apply_changes_with, read_snapshot, ApplySummary, Change, ChangeSet,
+};
 pub use export::{export_backup, export_backup_with, ExportSummary};
 pub use import::{
     complete_pending_host_keys, open_backup, start_import, ImportContext, ImportPreview,
