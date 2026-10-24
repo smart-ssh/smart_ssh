@@ -3,6 +3,7 @@
 //! Verschiebung aus `orchestration.rs`, keine Verhaltensänderung).
 
 use futures::StreamExt;
+use uuid::Uuid;
 
 use ssh_manager_core::ai::{
     AiError, AiEvent, ChatMessage, InvalidToolCallReason, MessageContent, OutputRedactor,
@@ -1174,9 +1175,11 @@ async fn handle_web_activity(
 ) {
     flush_text_buffer(session, text_buffer).await;
     let activity = redact_web_activity(activity, session.redactor.as_ref());
+    let activity_id = Uuid::new_v4();
     emit_chat_web_activity(
         emitter,
         session_id,
+        activity_id,
         crate::dto::WebActivityDto::from(&activity),
     );
     let check_text = injection_check_text(&activity);
@@ -1196,6 +1199,7 @@ async fn handle_web_activity(
             session,
             session_id,
             emitter,
+            activity_id,
             &check_text,
         )
         .await;

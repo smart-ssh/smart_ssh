@@ -1230,7 +1230,11 @@
       "cardLabel": "Domanda: {{question}}",
       "send": "Invia",
       "answeredOwnWords": "Risposta con parole tue"
-    }
+    },
+    "injectionChecking": "Controllo dell’output in corso …",
+    "injectionSuspected": "Attenzione: questo output sembra un tentativo di inserire istruzioni.",
+    "injectionSuspectedReason": "Motivo indicato dall’IA di controllo: {{reason}}",
+    "injectionConfirmReason": "Motivo: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Questa nota è molto grande e potrebbe essere abbreviata per il contesto dell'IA nelle sessioni lunghe. La nota salvata resta completa.",

@@ -1214,7 +1214,11 @@
       "cardLabel": "问题：{{question}}",
       "send": "发送",
       "answeredOwnWords": "已用自己的话回答"
-    }
+    },
+    "injectionChecking": "正在检查输出 …",
+    "injectionSuspected": "警告：此输出看起来像是注入指令的企图。",
+    "injectionSuspectedReason": "检查用 AI 给出的原因：{{reason}}",
+    "injectionConfirmReason": "原因：{{reason}}"
   },
   "notes": {
     "largeNoteHint": "此备注非常大，在长时间会话中可能会被缩短后再提供给 AI 作为上下文。已保存的备注保持完整。",
