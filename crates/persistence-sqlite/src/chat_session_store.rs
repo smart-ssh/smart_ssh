@@ -1437,7 +1437,7 @@ mod tests {
         let m0023 = include_str!("../migrations/0023_chat_messages_drop_attachments.sql");
         assert!(m0023.contains("'extension'") && !m0023.contains("'attachments',"));
         let versions: Vec<i64> = sqlx::migrate!().iter().map(|m| m.version).collect();
-        assert_eq!(versions, (1..=24).collect::<Vec<i64>>());
+        assert_eq!(versions, (1..=26).collect::<Vec<i64>>());
     }
 
     /// Observer recording the removed ids.

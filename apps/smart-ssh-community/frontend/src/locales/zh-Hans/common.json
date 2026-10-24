@@ -45,7 +45,8 @@
       "chatRetention": "会话与数据",
       "mcpServer": "MCP 服务器",
       "masterPassword": "主密码",
-      "voiceInput": "语音输入"
+      "voiceInput": "语音输入",
+      "dataAndBackup": "数据与备份"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ 移入此分组",
     "hintCycle": "分组不能移入其自身的子分组",
     "moveTo": "将“{{name}}”移动到…"
+  },
+  "copyMarker": {
+    "badge": "副本",
+    "badgeHint": "副本 – 不属于当前数据。它有自己的 ID，与导入的条目相互独立。",
+    "keep": "保留为普通条目",
+    "groupConfirmBody": "移除此分组及其中所有内容的副本标记（分组：{{groups}}，服务器：{{servers}}）。"
   },
   "management": {
     "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。",
@@ -859,7 +866,8 @@
       "success": "已创建 {{created}} 台服务器、{{groups}} 个文件夹，跳过 {{skipped}} 个冲突。",
       "fallbacksDetail": "有 {{count}} 个密钥文件无法读取，已改为保留路径：{{detail}}。",
       "encryptedDetail": "有 {{count}} 个密钥以加密形式导入——首次连接前请补充口令短语：{{detail}}。"
-    }
+    },
+    "isBackup": "此文件是加密备份，不是 ssh_config。未创建任何内容。请在设置 → 数据与备份中恢复。"
   },
   "sshConfigExport": {
     "dialogTitle": "导出为 ssh_config",
@@ -869,7 +877,8 @@
       "includeHintLabel": "如何在您自己的 ~/.ssh/config 中引入此文件：",
       "copy": "复制",
       "notRepresentedHint": "分组、标签、备注、过滤规则和安全设置不在此文件中——某台服务器缺少的内容，会以注释形式注明在其条目上方。"
-    }
+    },
+    "backupHint": "不包含凭据、规则或备注。如需完整备份，请使用加密备份（设置 → 数据与备份）。"
   },
   "startup": {
     "stateUnknown": "Smart SSH 无法读取其启动状态。未做任何更改。请重试；如果持续出现，日志中注明了原因。",
@@ -1016,6 +1025,10 @@
     "transferStopped": "{{name}}：已停止",
     "transferIncomplete": "服务器上遗留了不完整的文件：{{path}}",
     "transferFiles": "{{done}} / {{total}} 个文件",
+    "transferDelete": "正在删除 {{name}}",
+    "transferChmod": "正在更改 {{name}} 的权限",
+    "entriesProgress": "{{done}} / {{total}} 项",
+    "entriesChanged": "已更改的项目：{{count}}",
     "transferRemaining": "剩余 {{time}}",
     "loading": "正在加载…",
     "noPermissionToOpen": "无权打开此文件夹（缺少 x）",
@@ -1216,7 +1229,11 @@
       "cardLabel": "问题：{{question}}",
       "send": "发送",
       "answeredOwnWords": "已用自己的话回答"
-    }
+    },
+    "injectionChecking": "正在检查输出 …",
+    "injectionSuspected": "警告：此输出看起来像是注入指令的企图。",
+    "injectionSuspectedReason": "检查用 AI 给出的原因：{{reason}}",
+    "injectionConfirmReason": "原因：{{reason}}"
   },
   "notes": {
     "largeNoteHint": "此备注非常大，在长时间会话中可能会被缩短后再提供给 AI 作为上下文。已保存的备注保持完整。",
@@ -1332,5 +1349,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "完成",
     "resultFailed": "失败"
+  },
+  "backup": {
+    "title": "加密备份",
+    "intro": "将你的所有 Smart SSH 数据保存到一个加密文件中，之后可恢复，例如在新电脑上。",
+    "included": "包含：服务器、文件夹、标签、过滤规则、服务器备注、AI 提供商、已保存的凭据（已加密）和受信任的主机密钥。",
+    "excluded": "不包含：聊天记录、使用记录、设备设置和磁盘上的密钥文件。",
+    "restoreInfo": "恢复会替换此设备上的所有数据。当前数据会先被保存，你的服务器会移到带日期的文件夹。",
+    "export": "导出备份…",
+    "restore": "从备份恢复…",
+    "newCode": "新的恢复码",
+    "setPassphrase": "设置密码短语",
+    "exportDone": "备份已保存到 {{path}}。",
+    "exportCounts": "{{servers}} 台服务器、{{rules}} 条规则、{{notes}} 条备注。",
+    "setup": {
+      "title": "保护你的备份",
+      "intro": "备份已加密。读取它们需要恢复码或密码短语，请现在选择一种。",
+      "useCode": "创建恢复码",
+      "usePassphrase": "改用密码短语"
+    },
+    "code": {
+      "title": "你的恢复码",
+      "warning": "请记下此码并妥善保管。它只显示一次，无法再次显示。没有它，你的备份将无法读取。",
+      "copy": "复制",
+      "copyFailed": "无法复制。",
+      "confirm": "我已记下恢复码",
+      "continue": "继续"
+    },
+    "passphrase": {
+      "title": "设置密码短语",
+      "warning": "没有密码短语，你的备份将无法读取。无法找回。",
+      "label": "密码短语",
+      "help": "至少 {{count}} 个字符。",
+      "tooShort": "太短：至少 {{count}} 个字符。",
+      "repeat": "再次输入密码短语",
+      "mismatch": "两次输入的密码短语不一致。",
+      "save": "保存密码短语"
+    },
+    "import": {
+      "title": "从备份恢复",
+      "pickTitle": "选择备份文件",
+      "file": "文件：{{name}}",
+      "kind": "用什么打开此备份",
+      "useCode": "恢复码",
+      "usePassphrase": "密码短语",
+      "codeLabel": "恢复码",
+      "passphraseLabel": "密码短语",
+      "open": "打开备份"
+    },
+    "confirm": {
+      "title": "替换你的数据？",
+      "intro": "恢复会替换此设备上的数据。目前尚未更改任何内容。",
+      "what": "数据",
+      "local": "当前",
+      "file": "备份",
+      "sessions": "将被关闭的打开会话：{{count}}",
+      "safety": "当前数据会先保存到 {{dir}}。你的服务器会移到带今天日期的新文件夹“Previous data”中。",
+      "replace": "替换数据"
+    },
+    "counts": {
+      "servers": "服务器",
+      "groups": "文件夹",
+      "rules": "规则",
+      "notes": "备注",
+      "aiProviders": "AI 提供商"
+    },
+    "summary": {
+      "title": "备份已恢复",
+      "counts": "已恢复：{{servers}} 台服务器、{{groups}} 个文件夹、{{rules}} 条规则、{{notes}} 条备注、{{aiProviders}} 个 AI 提供商。",
+      "safety": "原有数据的安全备份：{{path}}",
+      "folder": "你原有的服务器在文件夹“{{name}}”中。",
+      "hostKeysPending": "受信任的主机密钥将在下次启动时补全。",
+      "done": "完成"
+    },
+    "errors": {
+      "cannotOpen": "恢复码或密码短语错误，或文件已损坏。",
+      "typo": "恢复码中有拼写错误。",
+      "notBackup": "这不是 Smart SSH 备份文件。ssh_config 格式的服务器列表请从服务器列表导入。",
+      "newerVersion": "此备份由更新版本的 Smart SSH 创建。请更新应用后重试。",
+      "failed": "操作失败。未更改任何内容。"
+    }
   }
 }

@@ -45,7 +45,8 @@
       "chatRetention": "Munkamenetek és adatok",
       "mcpServer": "MCP-szerver",
       "masterPassword": "Mesterjelszó",
-      "voiceInput": "Hangbevitel"
+      "voiceInput": "Hangbevitel",
+      "dataAndBackup": "Adatok és biztonsági mentés"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ áthelyezés ebbe a csoportba",
     "hintCycle": "A csoport nem helyezhető a saját alcsoportjába",
     "moveTo": "„{{name}}” áthelyezése ide…"
+  },
+  "copyMarker": {
+    "badge": "Másolat",
+    "badgeHint": "Másolat – nem része a jelenlegi adatoknak. Saját azonosítója van, és független az importált bejegyzésektől.",
+    "keep": "Megtartás rendes bejegyzésként",
+    "groupConfirmBody": "Eltávolítja a másolatjelölést erről a csoportról és mindenről, ami benne van (csoport: {{groups}}, szerver: {{servers}})."
   },
   "management": {
     "emptyState": "Válasszon ki egy csoportot vagy szervert balra, vagy hozzon létre újat a(z) \"{{addGroup}}\"/\"{{addServer}}\" gombbal.",
@@ -864,7 +871,8 @@
       "success": "{{created}} szerver létrehozva, {{groups}} mappa, {{skipped}} ütközés kihagyva.",
       "fallbacksDetail": "{{count}} kulcsfájl nem volt olvasható, helyette az útvonal maradt meg: {{detail}}.",
       "encryptedDetail": "{{count}} kulcs titkosítva lett átvéve – az első csatlakozás előtt adja hozzá a jelmondatot: {{detail}}."
-    }
+    },
+    "isBackup": "Ez a fájl titkosított mentés, nem ssh_config. Semmi sem jött létre. Állítsd vissza itt: Beállítások → Adatok és biztonsági mentés."
   },
   "sshConfigExport": {
     "dialogTitle": "Exportálás ssh_configba",
@@ -874,7 +882,8 @@
       "includeHintLabel": "Így építheti be ezt a fájlt a saját ~/.ssh/config fájljába:",
       "copy": "Másolás",
       "notRepresentedHint": "A csoportok, címkék, jegyzetek, szűrőszabályok és biztonsági beállítások nincsenek ebben a fájlban – ami egy szervernél hiányzik, azt megjegyzés jelzi a bejegyzése felett."
-    }
+    },
+    "backupHint": "Nem tartalmaz hitelesítő adatokat, szabályokat és jegyzeteket. Teljes mentéshez használd a titkosított mentést (Beállítások → Adatok és biztonsági mentés)."
   },
   "startup": {
     "stateUnknown": "A Smart SSH nem tudta beolvasni az indítási állapotát. Semmi nem változott. Próbálja újra; ha tartós, a napló megnevezi az okot.",
@@ -1021,6 +1030,10 @@
     "transferStopped": "{{name}}: leállítva",
     "transferIncomplete": "Hiányos fájl maradt a kiszolgálón: {{path}}",
     "transferFiles": "{{done}} / {{total}} fájl",
+    "transferDelete": "{{name}} törlése",
+    "transferChmod": "{{name}} jogosultságainak módosítása",
+    "entriesProgress": "{{done}} / {{total}} elem",
+    "entriesChanged": "Módosított elemek: {{count}}",
     "transferRemaining": "{{time}} van hátra",
     "loading": "Betöltés…",
     "noPermissionToOpen": "Nincs jogosultság a mappa megnyitásához (hiányzik az x)",
@@ -1224,7 +1237,11 @@
       "cardLabel": "Kérdés: {{question}}",
       "send": "Küldés",
       "answeredOwnWords": "Saját szavaiddal megválaszolva"
-    }
+    },
+    "injectionChecking": "Kimenet ellenőrzése …",
+    "injectionSuspected": "Figyelem: ez a kimenet utasítások beinjektálására tett kísérletnek tűnik.",
+    "injectionSuspectedReason": "Az ellenőrző MI indoklása: {{reason}}",
+    "injectionConfirmReason": "Indok: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Ez a jegyzet nagyon nagy, ezért hosszú munkamenetekben lerövidülhet az AI-kontextusban. A mentett jegyzet teljes marad.",
@@ -1340,5 +1357,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "kész",
     "resultFailed": "sikertelen"
+  },
+  "backup": {
+    "title": "Titkosított mentés",
+    "intro": "Egyetlen titkosított fájlba menti az összes Smart SSH-adatodat, és később visszaállítja, pl. új számítógépen.",
+    "included": "Tartalma: szerverek, mappák, címkék, szűrőszabályok, szerverjegyzetek, AI-szolgáltatók, mentett hitelesítő adatok (titkosítva) és megbízható gazdakulcsok.",
+    "excluded": "Nem tartalmaz: csevegési előzményeket, használati adatokat, eszközbeállításokat és a lemezen lévő kulcsfájlokat.",
+    "restoreInfo": "A visszaállítás felülírja az eszköz összes adatát. A jelenlegi adatok előbb mentésre kerülnek, a szerverek pedig egy dátumozott mappába kerülnek.",
+    "export": "Mentés exportálása…",
+    "restore": "Visszaállítás mentésből…",
+    "newCode": "Új helyreállítási kód",
+    "setPassphrase": "Jelmondat beállítása",
+    "exportDone": "A mentés ide lett mentve: {{path}}.",
+    "exportCounts": "{{servers}} szerver, {{rules}} szabály, {{notes}} jegyzet.",
+    "setup": {
+      "title": "Védd a mentéseidet",
+      "intro": "A mentések titkosítottak. Az olvasásukhoz helyreállítási kód vagy jelmondat kell, ezért válassz most egyet.",
+      "useCode": "Helyreállítási kód létrehozása",
+      "usePassphrase": "Inkább jelmondat használata"
+    },
+    "code": {
+      "title": "A helyreállítási kódod",
+      "warning": "Írd le a kódot, és tartsd biztonságban. Csak egyszer jelenik meg, később nem mutatható újra. Nélküle a mentéseid nem olvashatók.",
+      "copy": "Másolás",
+      "copyFailed": "Nem sikerült másolni.",
+      "confirm": "Feljegyeztem a kódot",
+      "continue": "Tovább"
+    },
+    "passphrase": {
+      "title": "Jelmondat beállítása",
+      "warning": "A jelmondat nélkül a mentéseid nem olvashatók. Nincs helyreállítás.",
+      "label": "Jelmondat",
+      "help": "Legalább {{count}} karakter.",
+      "tooShort": "Túl rövid: legalább {{count}} karakter.",
+      "repeat": "Jelmondat ismét",
+      "mismatch": "A jelmondatok nem egyeznek.",
+      "save": "Jelmondat mentése"
+    },
+    "import": {
+      "title": "Visszaállítás mentésből",
+      "pickTitle": "Válassz mentésfájlt",
+      "file": "Fájl: {{name}}",
+      "kind": "Mivel nyitható meg ez a mentés",
+      "useCode": "Helyreállítási kód",
+      "usePassphrase": "Jelmondat",
+      "codeLabel": "Helyreállítási kód",
+      "passphraseLabel": "Jelmondat",
+      "open": "Mentés megnyitása"
+    },
+    "confirm": {
+      "title": "Felülírod az adataidat?",
+      "intro": "A visszaállítás felülírja az eszköz adatait. Egyelőre semmi sem változott.",
+      "what": "Adatok",
+      "local": "Most",
+      "file": "Mentés",
+      "sessions": "Bezárásra kerülő nyitott munkamenetek: {{count}}",
+      "safety": "A jelenlegi adatok előbb ide kerülnek: {{dir}}. A szerverek egy új, “Previous data” nevű, mai dátumú mappába kerülnek.",
+      "replace": "Adatok felülírása"
+    },
+    "counts": {
+      "servers": "Szerverek",
+      "groups": "Mappák",
+      "rules": "Szabályok",
+      "notes": "Jegyzetek",
+      "aiProviders": "AI-szolgáltatók"
+    },
+    "summary": {
+      "title": "Mentés visszaállítva",
+      "counts": "Visszaállítva: {{servers}} szerver, {{groups}} mappa, {{rules}} szabály, {{notes}} jegyzet, {{aiProviders}} AI-szolgáltató.",
+      "safety": "Az előző adatok biztonsági mentése: {{path}}",
+      "folder": "A korábbi szervereid a(z) “{{name}}” mappában vannak.",
+      "hostKeysPending": "A megbízható gazdakulcsok a következő indításkor egészülnek ki.",
+      "done": "Kész"
+    },
+    "errors": {
+      "cannotOpen": "Hibás kód vagy jelmondat, vagy a fájl sérült.",
+      "typo": "A kód elírást tartalmaz.",
+      "notBackup": "Ez nem Smart SSH mentésfájl. Az ssh_config formátumú szerverlistákat a szerverlistából importálhatod.",
+      "newerVersion": "Ezt a mentést a Smart SSH újabb verziója készítette. Frissítsd az alkalmazást, és próbáld újra.",
+      "failed": "A művelet sikertelen. Semmi sem változott."
+    }
   }
 }

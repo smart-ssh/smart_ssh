@@ -45,7 +45,8 @@
       "chatRetention": "Sitzungen & Daten",
       "mcpServer": "MCP-Server",
       "masterPassword": "Master-Passwort",
-      "voiceInput": "Spracheingabe"
+      "voiceInput": "Spracheingabe",
+      "dataAndBackup": "Daten und Backup"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ in diese Gruppe verschieben",
     "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden",
     "moveTo": "„{{name}}“ verschieben nach…"
+  },
+  "copyMarker": {
+    "badge": "Kopie",
+    "badgeHint": "Kopie – nicht Teil des aktuellen Bestands. Sie hat eine eigene ID und ist unabhängig von den importierten Einträgen.",
+    "keep": "Als normalen Eintrag behalten",
+    "groupConfirmBody": "Entfernt die Kopie-Markierung von dieser Gruppe und allem darin (Gruppen: {{groups}}, Server: {{servers}})."
   },
   "management": {
     "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen.",
@@ -601,7 +608,7 @@
     "SERVER_CERTIFICATE_REQUIRED": "Zertifikat ist erforderlich",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Zertifikats-Key ist erforderlich",
     "SERVER_JUMP_HOST_LOCAL": "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
-    "KEY_FILE_NOT_FOUND": "Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden.",
+    "KEY_FILE_NOT_FOUND": "Schlüsseldatei auf diesem Gerät nicht gefunden.",
     "KEY_FILE_NOT_READABLE": "Die Schlüsseldatei lässt sich mit den aktuellen Rechten nicht lesen.",
     "KEY_FILE_PERMISSIONS_TOO_OPEN": "Die Schlüsseldatei ist für Gruppe oder Welt lesbar oder beschreibbar — wie bei ssh wird die Anmeldung damit abgelehnt. Mit „chmod 600“ auf die Datei beheben.",
     "KEY_FILE_TOO_LARGE": "Die Schlüsseldatei überschreitet die zulässige Größe von 1 MiB.",
@@ -864,7 +871,8 @@
       "success": "{{created}} Server angelegt, {{groups}} Ordner, {{skipped}} Konflikt(e) übersprungen.",
       "fallbacksDetail": "{{count}} Schlüsseldatei(en) konnten nicht eingelesen werden, der Pfad wurde stattdessen übernommen: {{detail}}.",
       "encryptedDetail": "{{count}} Schlüssel wurden verschlüsselt übernommen — Passphrase nachtragen, bevor die erste Verbindung gelingt: {{detail}}."
-    }
+    },
+    "isBackup": "Diese Datei ist ein verschlüsseltes Backup, keine ssh_config. Es wurde nichts angelegt. Stelle es unter Einstellungen → Daten und Backup wieder her."
   },
   "sshConfigExport": {
     "dialogTitle": "Nach ssh_config exportieren",
@@ -874,7 +882,8 @@
       "includeHintLabel": "So bindest du die Datei in deine eigene ~/.ssh/config ein:",
       "copy": "Kopieren",
       "notRepresentedHint": "Gruppen, Schlagworte, Notizen, Filterregeln und Sicherheitseinstellungen stehen nicht in dieser Datei — was für einen einzelnen Server fehlt, steht als Kommentar über seinem Eintrag."
-    }
+    },
+    "backupHint": "Enthält keine Zugangsdaten, Regeln oder Notizen. Für ein vollständiges Backup nutze das verschlüsselte Backup (Einstellungen → Daten und Backup)."
   },
   "startup": {
     "stateUnknown": "Smart SSH konnte seinen Startzustand nicht lesen. Es ist nichts verändert. Versuche es erneut; bleibt es dabei, nennt das Log die Ursache.",
@@ -1021,6 +1030,10 @@
     "transferStopped": "{{name}}: gestoppt",
     "transferIncomplete": "Unvollständige Datei auf dem Server: {{path}}",
     "transferFiles": "{{done}} von {{total}} Dateien",
+    "transferDelete": "Löschen: {{name}}",
+    "transferChmod": "Rechte ändern: {{name}}",
+    "entriesProgress": "{{done}} von {{total}} Einträgen",
+    "entriesChanged": "Geänderte Einträge: {{count}}",
     "transferRemaining": "noch {{time}}",
     "loading": "Lädt…",
     "noPermissionToOpen": "Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)",
@@ -1224,7 +1237,11 @@
       "cardLabel": "Frage: {{question}}",
       "send": "Senden",
       "answeredOwnWords": "In eigenen Worten beantwortet"
-    }
+    },
+    "injectionChecking": "Ausgabe wird geprüft …",
+    "injectionSuspected": "Warnung: Diese Ausgabe sieht nach einem Versuch aus, Anweisungen einzuschleusen.",
+    "injectionSuspectedReason": "Begründung der prüfenden KI: {{reason}}",
+    "injectionConfirmReason": "Grund: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Diese Notiz ist sehr groß und kann bei langen Sitzungen für den KI-Kontext gekürzt werden. Die gespeicherte Notiz bleibt vollständig erhalten.",
@@ -1340,5 +1357,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "erledigt",
     "resultFailed": "fehlgeschlagen"
+  },
+  "backup": {
+    "title": "Verschlüsseltes Backup",
+    "intro": "Sichert alle deine Smart SSH-Daten in einer verschlüsselten Datei und stellt sie später wieder her, z. B. auf einem neuen Computer.",
+    "included": "Enthalten: Server, Ordner, Tags, Filterregeln, Servernotizen, KI-Anbieter, gespeicherte Zugangsdaten (verschlüsselt) und vertraute Host-Keys.",
+    "excluded": "Nicht enthalten: Chatverlauf, Nutzungsdaten, Geräteeinstellungen und Schlüsseldateien auf der Festplatte.",
+    "restoreInfo": "Beim Wiederherstellen werden alle Daten auf diesem Gerät ersetzt. Deine aktuellen Daten werden vorher gesichert, deine Server kommen in einen Ordner mit Datum.",
+    "export": "Backup exportieren…",
+    "restore": "Aus Backup wiederherstellen…",
+    "newCode": "Neuer Wiederherstellungscode",
+    "setPassphrase": "Passphrase festlegen",
+    "exportDone": "Backup gespeichert unter {{path}}.",
+    "exportCounts": "{{servers}} Server, {{rules}} Regeln, {{notes}} Notizen.",
+    "setup": {
+      "title": "Backups schützen",
+      "intro": "Backups sind verschlüsselt. Zum Lesen brauchst du einen Wiederherstellungscode oder eine Passphrase, wähle also jetzt eines.",
+      "useCode": "Wiederherstellungscode erstellen",
+      "usePassphrase": "Stattdessen Passphrase verwenden"
+    },
+    "code": {
+      "title": "Dein Wiederherstellungscode",
+      "warning": "Schreib diesen Code auf und bewahre ihn sicher auf. Er wird nur einmal angezeigt und nie wieder. Ohne ihn sind deine Backups nicht lesbar.",
+      "copy": "Kopieren",
+      "copyFailed": "Kopieren fehlgeschlagen.",
+      "confirm": "Ich habe den Code notiert",
+      "continue": "Weiter"
+    },
+    "passphrase": {
+      "title": "Passphrase festlegen",
+      "warning": "Ohne die Passphrase sind deine Backups nicht lesbar. Es gibt keine Wiederherstellung.",
+      "label": "Passphrase",
+      "help": "Mindestens {{count}} Zeichen.",
+      "tooShort": "Zu kurz: mindestens {{count}} Zeichen.",
+      "repeat": "Passphrase wiederholen",
+      "mismatch": "Die Passphrasen stimmen nicht überein.",
+      "save": "Passphrase speichern"
+    },
+    "import": {
+      "title": "Aus Backup wiederherstellen",
+      "pickTitle": "Backup-Datei auswählen",
+      "file": "Datei: {{name}}",
+      "kind": "Womit sich das Backup öffnet",
+      "useCode": "Wiederherstellungscode",
+      "usePassphrase": "Passphrase",
+      "codeLabel": "Wiederherstellungscode",
+      "passphraseLabel": "Passphrase",
+      "open": "Backup öffnen"
+    },
+    "confirm": {
+      "title": "Daten ersetzen?",
+      "intro": "Beim Wiederherstellen werden die Daten auf diesem Gerät ersetzt. Noch wurde nichts geändert.",
+      "what": "Daten",
+      "local": "Jetzt",
+      "file": "Sicherung",
+      "sessions": "Offene Sitzungen, die geschlossen werden: {{count}}",
+      "safety": "Deine aktuellen Daten werden zuerst unter {{dir}} gesichert. Deine Server kommen in einen neuen Ordner “Previous data” mit dem heutigen Datum.",
+      "replace": "Daten ersetzen"
+    },
+    "counts": {
+      "servers": "Server",
+      "groups": "Ordner",
+      "rules": "Regeln",
+      "notes": "Notizen",
+      "aiProviders": "KI-Anbieter"
+    },
+    "summary": {
+      "title": "Backup wiederhergestellt",
+      "counts": "Wiederhergestellt: {{servers}} Server, {{groups}} Ordner, {{rules}} Regeln, {{notes}} Notizen, {{aiProviders}} KI-Anbieter.",
+      "safety": "Sicherung deiner bisherigen Daten: {{path}}",
+      "folder": "Deine bisherigen Server liegen im Ordner “{{name}}”.",
+      "hostKeysPending": "Die vertrauten Host-Keys werden beim nächsten Start ergänzt.",
+      "done": "Fertig"
+    },
+    "errors": {
+      "cannotOpen": "Falscher Code oder falsche Passphrase, oder die Datei ist beschädigt.",
+      "typo": "Der Code enthält einen Tippfehler.",
+      "notBackup": "Das ist keine Smart SSH-Backup-Datei. Serverlisten im ssh_config-Format importierst du über die Serverliste.",
+      "newerVersion": "Dieses Backup stammt aus einer neueren Version von Smart SSH. Aktualisiere die App und versuche es erneut.",
+      "failed": "Der Vorgang ist fehlgeschlagen. Es wurde nichts geändert."
+    }
   }
 }

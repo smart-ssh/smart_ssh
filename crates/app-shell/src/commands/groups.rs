@@ -6,7 +6,7 @@ use tauri::State;
 
 use ssh_manager_core::profiles::{Group, GroupId};
 
-use app_logic::dto::{DeleteGroupResult, GroupDto};
+use app_logic::dto::{DeleteGroupResult, GroupDto, KeepGroupResult};
 use app_logic::error::CommandResult;
 use app_logic::groups::{move_group as move_group_impl, validate_no_cycle};
 use app_logic::state::AppState;
@@ -16,7 +16,41 @@ use app_logic::state::AppState;
 #[tauri::command]
 pub async fn list_groups(state: State<'_, AppState>) -> CommandResult<Vec<GroupDto>> {
     let groups = state.profile_store.list_groups().await?;
-    Ok(groups.iter().map(GroupDto::from).collect())
+    let marked = copy_marked(&state).await?;
+    Ok(groups
+        .iter()
+        .map(|g| {
+            let mut dto = GroupDto::from(g);
+            dto.is_copy = marked.groups.contains(&g.id.0);
+            dto
+        })
+        .collect())
+}
+
+/// The ids carrying the copy marker (Spec 0103).
+pub(super) async fn copy_marked(state: &AppState) -> CommandResult<persistence_sqlite::CopyMarked> {
+    Ok(state.backup_store.copy_marked().await?)
+}
+
+/// Spec 0103: "Keep as regular entry" for a group. Without `confirm` only
+/// reports how many groups and servers would be cleared; with it clears
+/// the group, its sub-groups and every server inside.
+#[tauri::command]
+pub async fn keep_group_as_regular_entry(
+    state: State<'_, AppState>,
+    id: GroupId,
+    confirm: bool,
+) -> CommandResult<KeepGroupResult> {
+    let scope = if confirm {
+        state.backup_store.clear_group_copy_marker(id.0).await
+    } else {
+        state.backup_store.group_copy_marker_scope(id.0).await
+    }?;
+    Ok(KeepGroupResult {
+        applied: confirm,
+        groups: scope.groups,
+        servers: scope.servers,
+    })
 }
 
 #[tauri::command]

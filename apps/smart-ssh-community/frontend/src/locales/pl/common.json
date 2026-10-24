@@ -45,7 +45,8 @@
       "chatRetention": "Sesje i dane",
       "mcpServer": "Serwer MCP",
       "masterPassword": "Hasło główne",
-      "voiceInput": "Wprowadzanie głosowe"
+      "voiceInput": "Wprowadzanie głosowe",
+      "dataAndBackup": "Dane i kopia zapasowa"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ przenieś do tej grupy",
     "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
     "moveTo": "Przenieś „{{name}}” do…"
+  },
+  "copyMarker": {
+    "badge": "Kopia",
+    "badgeHint": "Kopia – nie należy do bieżących danych. Ma własny identyfikator i jest niezależna od zaimportowanych wpisów.",
+    "keep": "Zachowaj jako zwykły wpis",
+    "groupConfirmBody": "Usuwa oznaczenie kopii z tej grupy i wszystkiego, co w niej jest (grupy: {{groups}}, serwery: {{servers}})."
   },
   "management": {
     "emptyState": "Wybierz grupę lub serwer po lewej albo utwórz coś nowego przez „{{addGroup}}”/„{{addServer}}”.",
@@ -874,7 +881,8 @@
       "success": "Utworzono serwerów: {{created}}, folderów: {{groups}}, pominięto konfliktów: {{skipped}}.",
       "fallbacksDetail": "Nie udało się odczytać plików kluczy ({{count}}), zachowano ścieżkę: {{detail}}.",
       "encryptedDetail": "Przejęto zaszyfrowane klucze ({{count}}) — dodaj hasło klucza przed pierwszym połączeniem: {{detail}}."
-    }
+    },
+    "isBackup": "Ten plik to szyfrowana kopia zapasowa, a nie ssh_config. Nic nie utworzono. Przywróć ją w Ustawienia → Dane i kopia zapasowa."
   },
   "sshConfigExport": {
     "dialogTitle": "Eksportuj do ssh_config",
@@ -884,7 +892,8 @@
       "includeHintLabel": "Jak dołączyć ten plik do własnego ~/.ssh/config:",
       "copy": "Kopiuj",
       "notRepresentedHint": "Grup, tagów, notatek, reguł filtrowania i ustawień bezpieczeństwa nie ma w tym pliku — to, czego brakuje dla danego serwera, jest zapisane jako komentarz nad jego wpisem."
-    }
+    },
+    "backupHint": "Nie zawiera danych logowania, reguł ani notatek. Pełną kopię wykonasz za pomocą szyfrowanej kopii zapasowej (Ustawienia → Dane i kopia zapasowa)."
   },
   "startup": {
     "stateUnknown": "Smart SSH nie mógł odczytać stanu uruchamiania. Nic nie zmieniono. Spróbuj ponownie; jeśli się powtarza, dziennik wskazuje przyczynę.",
@@ -1031,6 +1040,10 @@
     "transferStopped": "{{name}}: zatrzymano",
     "transferIncomplete": "Niekompletny plik pozostał na serwerze: {{path}}",
     "transferFiles": "{{done}} z {{total}} plików",
+    "transferDelete": "Usuwanie {{name}}",
+    "transferChmod": "Zmiana uprawnień {{name}}",
+    "entriesProgress": "{{done}} z {{total}} elementów",
+    "entriesChanged": "Zmienione elementy: {{count}}",
     "transferRemaining": "pozostało {{time}}",
     "loading": "Wczytywanie…",
     "noPermissionToOpen": "Brak uprawnień do otwarcia tego folderu (brak x)",
@@ -1240,7 +1253,11 @@
       "cardLabel": "Pytanie: {{question}}",
       "send": "Wyślij",
       "answeredOwnWords": "Odpowiedź własnymi słowami"
-    }
+    },
+    "injectionChecking": "Sprawdzanie wyniku …",
+    "injectionSuspected": "Ostrzeżenie: ten wynik wygląda na próbę wstrzyknięcia instrukcji.",
+    "injectionSuspectedReason": "Powód podany przez sprawdzające AI: {{reason}}",
+    "injectionConfirmReason": "Powód: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Ta notatka jest bardzo duża i w długich sesjach może zostać skrócona w kontekście AI. Zapisana notatka pozostaje kompletna.",
@@ -1356,5 +1373,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "gotowe",
     "resultFailed": "niepowodzenie"
+  },
+  "backup": {
+    "title": "Szyfrowana kopia zapasowa",
+    "intro": "Zapisuje wszystkie dane Smart SSH w jednym zaszyfrowanym pliku i przywraca je później, np. na nowym komputerze.",
+    "included": "Zawiera: serwery, foldery, tagi, reguły filtrów, notatki o serwerach, dostawców AI, zapisane dane logowania (szyfrowane) i zaufane klucze hostów.",
+    "excluded": "Nie zawiera: historii czatu, zapisów użycia, ustawień urządzenia i plików kluczy na dysku.",
+    "restoreInfo": "Przywracanie zastępuje wszystkie dane na tym urządzeniu. Bieżące dane są najpierw zapisywane, a serwery trafiają do folderu z datą.",
+    "export": "Eksportuj kopię…",
+    "restore": "Przywróć z kopii…",
+    "newCode": "Nowy kod odzyskiwania",
+    "setPassphrase": "Ustaw hasło",
+    "exportDone": "Kopię zapisano w {{path}}.",
+    "exportCounts": "Serwery: {{servers}}, reguły: {{rules}}, notatki: {{notes}}.",
+    "setup": {
+      "title": "Zabezpiecz kopie zapasowe",
+      "intro": "Kopie są szyfrowane. Do ich odczytu potrzebny jest kod odzyskiwania lub hasło, więc wybierz jedno teraz.",
+      "useCode": "Utwórz kod odzyskiwania",
+      "usePassphrase": "Użyj zamiast tego hasła"
+    },
+    "code": {
+      "title": "Twój kod odzyskiwania",
+      "warning": "Zapisz ten kod i przechowuj go bezpiecznie. Pokazuje się tylko raz i nie można go wyświetlić ponownie. Bez niego kopii nie da się odczytać.",
+      "copy": "Kopiuj",
+      "copyFailed": "Nie udało się skopiować.",
+      "confirm": "Zapisałem kod",
+      "continue": "Kontynuuj"
+    },
+    "passphrase": {
+      "title": "Ustaw hasło",
+      "warning": "Bez hasła kopii nie da się odczytać. Nie ma odzyskiwania.",
+      "label": "Hasło",
+      "help": "Co najmniej {{count}} znaków.",
+      "tooShort": "Za krótkie: co najmniej {{count}} znaków.",
+      "repeat": "Powtórz hasło",
+      "mismatch": "Hasła nie są zgodne.",
+      "save": "Zapisz hasło"
+    },
+    "import": {
+      "title": "Przywróć z kopii",
+      "pickTitle": "Wybierz plik kopii",
+      "file": "Plik: {{name}}",
+      "kind": "Czym otworzyć tę kopię",
+      "useCode": "Kod odzyskiwania",
+      "usePassphrase": "Hasło",
+      "codeLabel": "Kod odzyskiwania",
+      "passphraseLabel": "Hasło",
+      "open": "Otwórz kopię"
+    },
+    "confirm": {
+      "title": "Zastąpić dane?",
+      "intro": "Przywracanie zastępuje dane na tym urządzeniu. Nic jeszcze nie zmieniono.",
+      "what": "Dane",
+      "local": "Teraz",
+      "file": "Kopia",
+      "sessions": "Otwarte sesje do zamknięcia: {{count}}",
+      "safety": "Bieżące dane są najpierw zapisywane w {{dir}}. Serwery trafiają do nowego folderu “Previous data” z dzisiejszą datą.",
+      "replace": "Zastąp dane"
+    },
+    "counts": {
+      "servers": "Serwery",
+      "groups": "Foldery",
+      "rules": "Reguły",
+      "notes": "Notatki",
+      "aiProviders": "Dostawcy AI"
+    },
+    "summary": {
+      "title": "Kopię przywrócono",
+      "counts": "Przywrócono: serwery {{servers}}, foldery {{groups}}, reguły {{rules}}, notatki {{notes}}, dostawcy AI {{aiProviders}}.",
+      "safety": "Kopia bezpieczeństwa poprzednich danych: {{path}}",
+      "folder": "Poprzednie serwery są w folderze “{{name}}”.",
+      "hostKeysPending": "Zaufane klucze hostów zostaną uzupełnione przy następnym uruchomieniu.",
+      "done": "Gotowe"
+    },
+    "errors": {
+      "cannotOpen": "Zły kod lub hasło albo plik jest uszkodzony.",
+      "typo": "Kod zawiera literówkę.",
+      "notBackup": "To nie jest plik kopii Smart SSH. Listy serwerów w formacie ssh_config importuje się z listy serwerów.",
+      "newerVersion": "Tę kopię utworzyła nowsza wersja Smart SSH. Zaktualizuj aplikację i spróbuj ponownie.",
+      "failed": "Operacja nie powiodła się. Nic nie zmieniono."
+    }
   }
 }

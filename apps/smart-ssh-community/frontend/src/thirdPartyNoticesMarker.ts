@@ -4,6 +4,6 @@
 // Dies ist die einzige Kopie im Frontend — App und Tests importieren sie
 // von hier. Sie bleibt eine Kopie statt eines Imports, damit die App keine
 // Abhängigkeit auf ein Build-Skript außerhalb des Frontends bekommt;
-// `thirdPartyNoticesMarker.test.ts` prüft sie (und die Prüfung in
-// `.github/workflows/release.yml`) gegen das Skript.
+// `thirdPartyNoticesMarker.test.ts` prüft sie (und jede Kopie in den
+// Workflows unter `.github/`) gegen das Skript.
 export const THIRD_PARTY_NOTICES_MARKER = "SMART-SSH-THIRD-PARTY-NOTICES-V1";

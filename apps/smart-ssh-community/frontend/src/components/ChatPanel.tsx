@@ -54,6 +54,7 @@ import {
   onChatContextCompacted,
   onChatTextDelta,
   onChatWebActivity,
+  onChatInjectionCheck,
   onRiskAssessmentUpdated,
 } from "../events";
 import { isRetryableAiError, translateErrorCode } from "../errorCodes";
@@ -102,12 +103,14 @@ import type {
   RiskAssessment,
   Scope,
   WebActivityDto,
+  InjectionCheckState,
   QuestionOption,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button, Tooltip } from "./ui";
 import { AutoExecRulesLine } from "./AutoExecRulesLine";
 import { WebActivityCard } from "./WebActivityCard";
+import { InjectionCheckStatus } from "./InjectionCheckStatus";
 import { QuestionCard, deriveQuestionStates, type QuestionState } from "./QuestionCard";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
@@ -254,7 +257,7 @@ export type ChatItem =
   // Spec 0105: serverseitige Web-Recherche des Providers — live
   // (`chat-web-activity`) und aus einer fortgesetzten Historie gleich
   // dargestellt.
-  | { type: "webActivity"; id: string; activity: WebActivityDto }
+  | { type: "webActivity"; id: string; activity: WebActivityDto; activityId?: string }
   // Issue #471 (Spec 0110, §5): Anhänge einer fortgesetzten Nutzer-Nachricht.
   | {
       type: "historyAttachments";
@@ -303,6 +306,26 @@ function describeAction(
 /// Als ein durchgehender Satz mit Semikola wirkt das bei mehreren Gründen
 /// unübersichtlich — hier stattdessen als kompakte, durch " · " getrennte
 /// Liste dargestellt.
+const INJECTION_REASON_MARKER = "\nReason: ";
+
+/** Issue #693: splits the checker's reason off a confirmation reason of
+ * code `FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM` (the backend appends it
+ * after the last marker; the reason itself has no newline). */
+export function splitInjectionReason(
+  code: string | null | undefined,
+  reason: string,
+): { text: string; injectionReason: string | null } {
+  if (code !== "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM") {
+    return { text: reason, injectionReason: null };
+  }
+  const at = reason.lastIndexOf(INJECTION_REASON_MARKER);
+  if (at < 0) return { text: reason, injectionReason: null };
+  return {
+    text: reason.slice(0, at),
+    injectionReason: reason.slice(at + INJECTION_REASON_MARKER.length),
+  };
+}
+
 function formatReason(reason: string): string {
   return reason
     .split("; ")
@@ -490,6 +513,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * that its updates (up to ten per second) do not trigger the chat's
    * jump-to-the-end effect below. Removed when the result arrives. */
   const [liveOutputs, setLiveOutputs] = useState<Record<string, LiveOutput>>({});
+  // Issue #693: injection check state per checked item (action / web card id).
+  const [injectionChecks, setInjectionChecks] = useState<Record<string, InjectionCheckState>>({});
   // Issue #327: actions whose command is probably waiting for input.
   const [waitingActions, setWaitingActions] = useState<Record<string, true>>({});
   // Spec 0055, Teil 1: `<textarea>` statt `<input type="text">` für die
@@ -816,11 +841,21 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           return [...prev, { type: "assistant", id: freshId(), text: "", truncated: true }];
         });
       }),
+      onChatInjectionCheck((event) => {
+        if (event.sessionId !== sessionId) return;
+        const { sessionId: _s, itemId, ...state } = event;
+        setInjectionChecks((prev) => ({ ...prev, [itemId]: state as InjectionCheckState }));
+      }),
       onChatWebActivity((event) => {
         if (event.sessionId !== sessionId) return;
         setItems((prev) => [
           ...prev,
-          { type: "webActivity", id: freshId(), activity: event.activity },
+          {
+            type: "webActivity",
+            id: freshId(),
+            activity: event.activity,
+            activityId: event.activityId,
+          },
         ]);
       }),
       onChatResponseEmpty((event) => {
@@ -1402,6 +1437,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             item={item}
             liveOutput={item.type === "action" ? liveOutputs[item.actionId] : undefined}
             waitingForInput={item.type === "action" && item.actionId in waitingActions}
+            injectionCheck={
+              item.type === "action"
+                ? injectionChecks[item.actionId]
+                : item.type === "webActivity" && item.activityId
+                  ? injectionChecks[item.activityId]
+                  : undefined
+            }
             onRespond={respond}
             onAcceptWithRule={acceptWithRule}
             onExport={handleExport}
@@ -1766,6 +1808,7 @@ export function ChatItemView({
   item,
   liveOutput,
   waitingForInput = false,
+  injectionCheck,
   onRespond,
   onAcceptWithRule,
   onExport,
@@ -1784,6 +1827,8 @@ export function ChatItemView({
   /** Issue #327: the backend marked the running command as probably
    * waiting for input. */
   waitingForInput?: boolean;
+  /** Issue #693: state of the injection check of this item, if any. */
+  injectionCheck?: InjectionCheckState;
   onRespond: (actionId: string, decision: ActionUserDecision) => void;
   onAcceptWithRule: (
     actionId: string,
@@ -1950,7 +1995,12 @@ export function ChatItemView({
     );
   }
   if (item.type === "webActivity") {
-    return <WebActivityCard activity={item.activity} />;
+    return (
+      <div className="space-y-1">
+        <WebActivityCard activity={item.activity} />
+        <InjectionCheckStatus check={injectionCheck} />
+      </div>
+    );
   }
   if (item.type === "historyRejected") {
     return (
@@ -2085,11 +2135,24 @@ export function ChatItemView({
            * `code` unbekannt/nicht gesetzt ist — keine Regression. */}
           {typeof item.decision === "object" && "Confirm" in item.decision && (
             <p className="mt-1 text-xs text-slate-400">
-              {translateErrorCode(
-                t,
-                item.decision.Confirm.code,
-                formatReason(item.decision.Confirm.reason),
-              )}
+              {(() => {
+                // Issue #693: the injection-suspicion confirmation carries the
+                // checking AI's reason after a fixed marker; shown as plain text.
+                const { text, injectionReason } = splitInjectionReason(
+                  item.decision.Confirm.code,
+                  item.decision.Confirm.reason,
+                );
+                return (
+                  <>
+                    {translateErrorCode(t, item.decision.Confirm.code, formatReason(text))}
+                    {injectionReason !== null && (
+                      <span className="mt-0.5 block" data-testid="injection-confirm-reason">
+                        {t("chat.injectionConfirmReason", { reason: injectionReason })}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </p>
           )}
           {typeof item.decision === "object" && "Deny" in item.decision && (
@@ -2126,6 +2189,7 @@ export function ChatItemView({
       )}
 
       {item.result && <ActionResultView result={item.result} sessionId={sessionId} />}
+      {item.result && <InjectionCheckStatus check={injectionCheck} />}
     </div>
   );
 }

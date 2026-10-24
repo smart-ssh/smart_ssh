@@ -175,7 +175,7 @@ fn test_check_finding_confirm_always_confirms() {
     ] {
         for match_code in [SECRET, SFTP] {
             for injection in [false, true] {
-                let decision = check_finding_confirm(finding, match_code, injection);
+                let decision = check_finding_confirm(finding, match_code, injection, None);
                 let Decision::Confirm { code, reason } = decision else {
                     panic!("{finding:?}/{match_code}/{injection}: {decision:?}");
                 };
@@ -237,13 +237,13 @@ fn test_overlong_command_maps_to_not_assessable_code() {
     ));
     let finding = ssh_manager_core::risk::secret_path_read_reason(&command)
         .expect("Überlänge muss eskalieren");
-    let Decision::Confirm { code, .. } = check_finding_confirm(finding, SECRET, false) else {
+    let Decision::Confirm { code, .. } = check_finding_confirm(finding, SECRET, false, None) else {
         panic!("muss Confirm sein");
     };
     assert_eq!(code, NOT_ASSESSABLE);
     let finding = ssh_manager_core::risk::sftp_server_invocation_reason(&command)
         .expect("Überlänge muss eskalieren");
-    let Decision::Confirm { code, .. } = check_finding_confirm(finding, SFTP, false) else {
+    let Decision::Confirm { code, .. } = check_finding_confirm(finding, SFTP, false, None) else {
         panic!("muss Confirm sein");
     };
     assert_eq!(code, NOT_ASSESSABLE);

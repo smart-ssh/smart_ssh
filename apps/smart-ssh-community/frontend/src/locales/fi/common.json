@@ -45,7 +45,8 @@
       "chatRetention": "Istunnot ja tiedot",
       "mcpServer": "MCP-palvelin",
       "masterPassword": "Pääsalasana",
-      "voiceInput": "Puhesyöte"
+      "voiceInput": "Puhesyöte",
+      "dataAndBackup": "Tiedot ja varmuuskopio"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ siirrä tähän ryhmään",
     "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
     "moveTo": "Siirrä ”{{name}}” kohteeseen…"
+  },
+  "copyMarker": {
+    "badge": "Kopio",
+    "badgeHint": "Kopio – ei kuulu nykyisiin tietoihin. Sillä on oma tunnus, ja se on riippumaton tuoduista kohteista.",
+    "keep": "Säilytä tavallisena kohteena",
+    "groupConfirmBody": "Poistaa kopiomerkinnän tästä ryhmästä ja kaikesta sen sisällä (ryhmiä: {{groups}}, palvelimia: {{servers}})."
   },
   "management": {
     "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -864,7 +871,8 @@
       "success": "{{created}} palvelinta luotu, {{groups}} kansiota, {{skipped}} ristiriitaa ohitettu.",
       "fallbacksDetail": "{{count}} avaintiedostoa ei voitu lukea, polku säilytettiin sen sijaan: {{detail}}.",
       "encryptedDetail": "{{count}} avainta otettiin mukaan salattuina – lisää salalause ennen ensimmäistä yhteyttä: {{detail}}."
-    }
+    },
+    "isBackup": "Tämä tiedosto on salattu varmuuskopio, ei ssh_config. Mitään ei luotu. Palauta se kohdassa Asetukset → Tiedot ja varmuuskopio."
   },
   "sshConfigExport": {
     "dialogTitle": "Vie ssh_config-tiedostoon",
@@ -874,7 +882,8 @@
       "includeHintLabel": "Näin otat tämän tiedoston mukaan omaan ~/.ssh/config-tiedostoosi:",
       "copy": "Kopioi",
       "notRepresentedHint": "Ryhmät, tunnisteet, muistiinpanot, suodatussäännöt ja turva-asetukset eivät ole tässä tiedostossa – palvelimen puuttuvat tiedot merkitään kommenttina sen merkinnän yläpuolelle."
-    }
+    },
+    "backupHint": "Ei sisällä tunnistetietoja, sääntöjä eikä muistiinpanoja. Täydellistä varmuuskopiota varten käytä salattua varmuuskopiota (Asetukset → Tiedot ja varmuuskopio)."
   },
   "startup": {
     "stateUnknown": "Smart SSH ei voinut lukea käynnistystilaansa. Mitään ei muutettu. Yritä uudelleen; jos ongelma jatkuu, loki mainitsee syyn.",
@@ -1021,6 +1030,10 @@
     "transferStopped": "{{name}}: pysäytetty",
     "transferIncomplete": "Epätäydellinen tiedosto jäi palvelimelle: {{path}}",
     "transferFiles": "{{done}} / {{total}} tiedostoa",
+    "transferDelete": "Poistetaan {{name}}",
+    "transferChmod": "Muutetaan kohteen {{name}} oikeuksia",
+    "entriesProgress": "{{done}} / {{total}} kohdetta",
+    "entriesChanged": "Muutetut kohteet: {{count}}",
     "transferRemaining": "{{time}} jäljellä",
     "loading": "Ladataan…",
     "noPermissionToOpen": "Ei oikeutta avata tätä kansiota (x puuttuu)",
@@ -1224,7 +1237,11 @@
       "cardLabel": "Kysymys: {{question}}",
       "send": "Lähetä",
       "answeredOwnWords": "Vastattu omin sanoin"
-    }
+    },
+    "injectionChecking": "Tarkistetaan tulostetta …",
+    "injectionSuspected": "Varoitus: tämä tuloste näyttää yritykseltä syöttää ohjeita.",
+    "injectionSuspectedReason": "Tarkistavan tekoälyn antama syy: {{reason}}",
+    "injectionConfirmReason": "Syy: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Tämä muistiinpano on hyvin suuri, ja sitä voidaan lyhentää tekoälyn kontekstia varten pitkissä istunnoissa. Tallennettu muistiinpano säilyy täydellisenä.",
@@ -1340,5 +1357,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "valmis",
     "resultFailed": "epäonnistui"
+  },
+  "backup": {
+    "title": "Salattu varmuuskopio",
+    "intro": "Tallentaa kaikki Smart SSH -tietosi yhteen salattuun tiedostoon ja palauttaa ne myöhemmin, esim. uudelle tietokoneelle.",
+    "included": "Mukana: palvelimet, kansiot, tunnisteet, suodatussäännöt, palvelinmuistiinpanot, tekoälypalvelut, tallennetut tunnistetiedot (salattu) ja luotetut isäntäavaimet.",
+    "excluded": "Ei mukana: keskusteluhistoria, käyttötiedot, laiteasetukset ja levyllä olevat avaintiedostot.",
+    "restoreInfo": "Palautus korvaa kaikki tämän laitteen tiedot. Nykyiset tiedot tallennetaan ensin ja palvelimesi siirtyvät päivättyyn kansioon.",
+    "export": "Vie varmuuskopio…",
+    "restore": "Palauta varmuuskopiosta…",
+    "newCode": "Uusi palautuskoodi",
+    "setPassphrase": "Aseta salalause",
+    "exportDone": "Varmuuskopio tallennettu: {{path}}.",
+    "exportCounts": "{{servers}} palvelinta, {{rules}} sääntöä, {{notes}} muistiinpanoa.",
+    "setup": {
+      "title": "Suojaa varmuuskopiosi",
+      "intro": "Varmuuskopiot on salattu. Niiden lukemiseen tarvitaan palautuskoodi tai salalause, joten valitse toinen nyt.",
+      "useCode": "Luo palautuskoodi",
+      "usePassphrase": "Käytä salalausetta"
+    },
+    "code": {
+      "title": "Palautuskoodisi",
+      "warning": "Kirjoita koodi muistiin ja säilytä se turvallisesti. Se näytetään vain kerran, eikä sitä voi näyttää uudelleen. Ilman sitä varmuuskopioita ei voi lukea.",
+      "copy": "Kopioi",
+      "copyFailed": "Kopiointi epäonnistui.",
+      "confirm": "Olen kirjoittanut koodin muistiin",
+      "continue": "Jatka"
+    },
+    "passphrase": {
+      "title": "Aseta salalause",
+      "warning": "Ilman salalausetta varmuuskopioita ei voi lukea. Palautusta ei ole.",
+      "label": "Salalause",
+      "help": "Vähintään {{count}} merkkiä.",
+      "tooShort": "Liian lyhyt: vähintään {{count}} merkkiä.",
+      "repeat": "Toista salalause",
+      "mismatch": "Salalauseet eivät täsmää.",
+      "save": "Tallenna salalause"
+    },
+    "import": {
+      "title": "Palauta varmuuskopiosta",
+      "pickTitle": "Valitse varmuuskopiotiedosto",
+      "file": "Tiedosto: {{name}}",
+      "kind": "Millä varmuuskopio avataan",
+      "useCode": "Palautuskoodi",
+      "usePassphrase": "Salalause",
+      "codeLabel": "Palautuskoodi",
+      "passphraseLabel": "Salalause",
+      "open": "Avaa varmuuskopio"
+    },
+    "confirm": {
+      "title": "Korvataanko tietosi?",
+      "intro": "Palautus korvaa tämän laitteen tiedot. Mitään ei ole vielä muutettu.",
+      "what": "Tiedot",
+      "local": "Nyt",
+      "file": "Varmuuskopio",
+      "sessions": "Suljettavat avoimet istunnot: {{count}}",
+      "safety": "Nykyiset tiedot tallennetaan ensin kohteeseen {{dir}}. Palvelimesi siirtyvät uuteen kansioon “Previous data” tämän päivän päiväyksellä.",
+      "replace": "Korvaa tiedot"
+    },
+    "counts": {
+      "servers": "Palvelimet",
+      "groups": "Kansiot",
+      "rules": "Säännöt",
+      "notes": "Muistiinpanot",
+      "aiProviders": "Tekoälypalvelut"
+    },
+    "summary": {
+      "title": "Varmuuskopio palautettu",
+      "counts": "Palautettu: {{servers}} palvelinta, {{groups}} kansiota, {{rules}} sääntöä, {{notes}} muistiinpanoa, {{aiProviders}} tekoälypalvelua.",
+      "safety": "Aiempien tietojen turvakopio: {{path}}",
+      "folder": "Aiemmat palvelimesi ovat kansiossa “{{name}}”.",
+      "hostKeysPending": "Luotetut isäntäavaimet täydennetään seuraavassa käynnistyksessä.",
+      "done": "Valmis"
+    },
+    "errors": {
+      "cannotOpen": "Väärä koodi tai salalause, tai tiedosto on vioittunut.",
+      "typo": "Koodissa on kirjoitusvirhe.",
+      "notBackup": "Tämä ei ole Smart SSH -varmuuskopiotiedosto. ssh_config-muotoiset palvelinluettelot tuodaan palvelinluettelosta.",
+      "newerVersion": "Tämän varmuuskopion on tehnyt uudempi Smart SSH -versio. Päivitä sovellus ja yritä uudelleen.",
+      "failed": "Toiminto epäonnistui. Mitään ei muutettu."
+    }
   }
 }

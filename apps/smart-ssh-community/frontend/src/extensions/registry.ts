@@ -68,6 +68,14 @@ export interface SettingsSectionContribution {
    * geladenen Sprachpaket existiert.
    */
   label?: string;
+  /** Optional target category. When set (e.g. `"data-backup"`), the
+   * contribution is NOT a top-level category but renders as a section inside
+   * that built-in category, after its built-in content. Without it the
+   * contribution is a top-level category as before. */
+  category?: string;
+  /** Sort position among sections of the same `category` (ascending; ties
+   * keep registration order). Default 0. Ignored without `category`. */
+  order?: number;
 }
 
 /** Kontext, den `ChatPanel`s Dokument-Karte (Spec 0012) einer registrierten
@@ -257,6 +265,25 @@ const registry: Registry = {
 export function registerSettingsSection(section: SettingsSectionContribution): void {
   registry.settingsSections.set(section.id, section);
   notifySettingsSectionsChanged();
+}
+
+/** Removes a settings section; no-op for an unknown `id`. */
+export function unregisterSettingsSection(id: string): void {
+  if (registry.settingsSections.delete(id)) {
+    notifySettingsSectionsChanged();
+  }
+}
+
+/** Sections registered for the given built-in category, sorted by `order`
+ * (stable). */
+export function listSettingsSectionsForCategory(
+  category: string,
+): SettingsSectionContribution[] {
+  return settingsSectionsSnapshot
+    .filter((s) => s.category === category)
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => (a.s.order ?? 0) - (b.s.order ?? 0) || a.i - b.i)
+    .map(({ s }) => s);
 }
 
 type SettingsSectionsListener = () => void;
