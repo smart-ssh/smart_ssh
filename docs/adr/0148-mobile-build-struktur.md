@@ -16,5 +16,5 @@ Die App war ein reines Desktop-Binary. Tauri-Mobile lädt die App als Bibliothek
 
 ## Offen (muss auf Gerät/Emulator geprüft werden)
 
-- **TLS:** `reqwest` mit `rustls` nutzt `rustls-platform-verifier`, das unter Android eine JNI-Initialisierung samt Kotlin-Komponente braucht. Entscheidung (Plattform-Verifier einrichten oder webpki-Wurzeln unter Android) ist noch nicht umgesetzt, da der Android-Build in der Entwicklungsumgebung nicht möglich war.
+- **TLS:** `reqwest` mit `rustls` nutzt `rustls-platform-verifier`, das unter Android eine JNI-Initialisierung samt Kotlin-Komponente braucht. Entscheidung: unter Android (`cfg(target_os = "android")`) bauen `ai-providers` und `speech` ihre HTTP-Clients mit einer vorkonfigurierten rustls-Konfiguration auf Basis der eingebauten `webpki-roots`; Desktop bleibt unverändert beim Plattform-Verifier. Begründung: kein Kotlin-/JNI-Code, auf dem Host ohne Gerät übersetzbar und testbar. Nachteil: Wurzelzertifikate, die der Nutzer im Android-Zertifikatsspeicher installiert hat (z. B. Firmen-CA), werden nicht berücksichtigt; ein späteres Issue kann den Plattform-Verifier nachrüsten.
 - **Build-Ausgabe von `tauri android init`** (`gen/android`) ist noch nicht eingecheckt.

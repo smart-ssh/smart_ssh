@@ -28,6 +28,7 @@ use tauri::Manager;
 /// Ob der Single-Instance-Schutz in diesem Prozess aktiv ist: nur im
 /// Release-Build und nur mit dem Standard-Datenverzeichnis (Issue #44,
 /// Entscheidung in [`app_logic::single_instance::focusing_applies`]).
+#[cfg_attr(target_os = "android", allow(dead_code))] // only the non-Android callers use it
 pub(crate) fn enabled() -> bool {
     // Android (Spec 0114): the OS runs one instance per app; the plugin is
     // not compiled there.

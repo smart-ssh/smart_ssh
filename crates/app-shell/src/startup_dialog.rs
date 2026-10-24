@@ -157,6 +157,8 @@ pub enum DialogAnswer {
     /// Der Knopf, der nichts tut — **und jeder andere Ausgang**, s. [`ask`].
     Cancel,
     /// Der dritte Knopf, falls der Dialog einen hatte.
+    #[cfg_attr(target_os = "android", allow(dead_code))]
+    // the rfd dialogs that produce it are not compiled on Android
     Extra,
 }
 
