@@ -691,6 +691,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // Betriebssystems — und die Entsperrmaske braucht denselben Rahmen
         // wie die App, sonst springt das Fenster beim Entsperren.
         .plugin(tauri_plugin_decoration::init());
+    // Android (Spec 0108, 5.7): runtime request for RECORD_AUDIO.
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(crate::voice_input::microphone_plugin());
     builder
         .setup(|app| {
             use tauri::Manager;
