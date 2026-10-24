@@ -135,6 +135,12 @@
     "hintCycle": "グループを自分自身のサブグループへ移動することはできません",
     "moveTo": "「{{name}}」の移動先…"
   },
+  "copyMarker": {
+    "badge": "コピー",
+    "badgeHint": "コピー – 現在のデータには含まれません。独自のIDを持ち、インポートされた項目とは独立しています。",
+    "keep": "通常の項目として保持",
+    "groupConfirmBody": "このグループとその中のすべてからコピーの印を外します（グループ: {{groups}}、サーバー: {{servers}}）。"
+  },
   "management": {
     "emptyState": "左側でグループまたはサーバーを選択するか、「{{addGroup}}」／「{{addServer}}」から新規作成してください。",
     "back": "戻る"

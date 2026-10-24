@@ -825,6 +825,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::create_group,
             commands::update_group,
             commands::move_group,
+            commands::keep_group_as_regular_entry,
+            commands::keep_server_as_regular_entry,
             commands::delete_group,
             commands::get_server,
             commands::create_server,
