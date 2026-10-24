@@ -74,6 +74,8 @@ vi.mock("../layoutSettings", () => ({
   saveFileManagerColumnWidths: vi.fn(() => Promise.resolve()),
   loadHiddenFileColumns: vi.fn(() => Promise.resolve([])),
   saveHiddenFileColumns: vi.fn(() => Promise.resolve()),
+  loadFileManagerSort: vi.fn(() => Promise.resolve(null)),
+  saveFileManagerSort: vi.fn(() => Promise.resolve()),
 }));
 
 function dirEntry(path: string): RemoteEntryDto {

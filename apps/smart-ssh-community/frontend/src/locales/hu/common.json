@@ -429,6 +429,7 @@
     "expired": "A(z) {{host}}:{{port}} gazdakulcs-kérése lejárt. A kapcsolat nem jött létre, és a kulcsban nem bíztak meg."
   },
   "sessionTabs": {
+    "newSession": "Új munkamenet",
     "overview": "Áttekintés",
     "pendingAction": "Megerősítésre vár",
     "closeTab": "A(z) \"{{name}}\" lap bezárása",

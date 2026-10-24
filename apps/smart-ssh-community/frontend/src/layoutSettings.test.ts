@@ -15,7 +15,7 @@ vi.mock("./i18n", () => ({
 }));
 
 // Import erst NACH dem Mock, damit `settingsStore` bereits ersetzt ist.
-const { loadFileManagerColumnWidths, loadAiSshSplitWidthPx, loadHiddenFileColumns, saveHiddenFileColumns } = await import("./layoutSettings");
+const { loadFileManagerColumnWidths, loadAiSshSplitWidthPx, loadHiddenFileColumns, saveHiddenFileColumns, loadFileManagerSort, saveFileManagerSort } = await import("./layoutSettings");
 
 describe("loadFileManagerColumnWidths", () => {
   it("returns an empty object when nothing is stored", async () => {
@@ -87,6 +87,23 @@ describe("hidden file columns (issue #653)", () => {
     storeSave.mockClear();
     await saveHiddenFileColumns(["modified"]);
     expect(storeSet).toHaveBeenCalledWith("fileManagerHiddenColumns", ["modified"]);
+    expect(storeSave).toHaveBeenCalled();
+  });
+});
+
+describe("file manager sort", () => {
+  it("returns null when nothing or something invalid is stored", async () => {
+    for (const bad of [undefined, null, [], "name", { column: "nope", direction: "asc" }, { column: "name", direction: "up" }]) {
+      storeGet.mockResolvedValue(bad);
+      expect(await loadFileManagerSort()).toBeNull();
+    }
+  });
+
+  it("round-trips a valid value", async () => {
+    storeGet.mockResolvedValue({ column: "size", direction: "desc" });
+    expect(await loadFileManagerSort()).toEqual({ column: "size", direction: "desc" });
+    await saveFileManagerSort({ column: "size", direction: "desc" });
+    expect(storeSet).toHaveBeenCalledWith("fileManagerSort", { column: "size", direction: "desc" });
     expect(storeSave).toHaveBeenCalled();
   });
 });

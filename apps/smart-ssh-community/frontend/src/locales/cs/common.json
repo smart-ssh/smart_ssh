@@ -429,6 +429,7 @@
     "expired": "Požadavek na klíč hostitele {{host}}:{{port}} vypršel. Připojení nebylo navázáno a klíč nebyl označen za důvěryhodný."
   },
   "sessionTabs": {
+    "newSession": "Nová relace",
     "overview": "Přehled",
     "pendingAction": "Čeká na potvrzení",
     "closeTab": "Zavřít kartu „{{name}}“",

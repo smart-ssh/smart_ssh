@@ -1,4 +1,5 @@
 import { settingsStore } from "./i18n";
+import { FILE_SORT_COLUMNS, type FileSort, type FileSortColumn } from "./fileSort";
 
 /** Spec 0053: UI-Layout-Präferenzen (Spaltenbreiten im Dateimanager,
  * KI-/SSH-Bereichsaufteilung) — derselbe `tauri-plugin-store`-Ablageort
@@ -99,5 +100,30 @@ export async function loadAiSshSplitWidthPx(): Promise<number | null> {
 export async function saveAiSshSplitWidthPx(widthPx: number): Promise<void> {
   const store = await settingsStore();
   await store.set(AI_SSH_SPLIT_WIDTH_KEY, widthPx);
+  await store.save();
+}
+
+const FILE_MANAGER_SORT_KEY = "fileManagerSort";
+
+/** Spec 0053, Teil 3: nur gültige Werte gelten, sonst `null` (Default:
+ * Name aufsteigend). */
+export async function loadFileManagerSort(): Promise<FileSort | null> {
+  const store = await settingsStore();
+  const stored = await store.get<unknown>(FILE_MANAGER_SORT_KEY);
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return null;
+  const { column, direction } = stored as Record<string, unknown>;
+  if (
+    typeof column !== "string" ||
+    !(FILE_SORT_COLUMNS as readonly string[]).includes(column) ||
+    (direction !== "asc" && direction !== "desc")
+  ) {
+    return null;
+  }
+  return { column: column as FileSortColumn, direction };
+}
+
+export async function saveFileManagerSort(sort: FileSort): Promise<void> {
+  const store = await settingsStore();
+  await store.set(FILE_MANAGER_SORT_KEY, sort);
   await store.save();
 }

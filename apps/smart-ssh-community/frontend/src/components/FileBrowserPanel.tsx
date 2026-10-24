@@ -1,5 +1,5 @@
 import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
@@ -52,12 +52,15 @@ import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
 import {
   loadFileManagerColumnWidths,
+  loadFileManagerSort,
   saveFileManagerColumnWidths,
   loadHiddenFileColumns,
   saveHiddenFileColumns,
   type HideableFileColumn,
+  saveFileManagerSort,
   type FileManagerColumnWidths,
 } from "../layoutSettings";
+import { DEFAULT_FILE_SORT, nextFileSort, sortEntries, type FileSort, type FileSortColumn } from "../fileSort";
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
 import { notifyMissingStartDirectory } from "../startDirectory";
 import { showToast } from "../toastBus";
@@ -201,7 +204,10 @@ export function FileBrowserPanel({
   // Spec 0102: Startpfad dieser Sitzung (`"."` = Home), Ziel von „Zum
   // Startverzeichnis". Kommt einmalig vom Backend (`sftp_start_directory`).
   const [startPath, setStartPath] = useState(".");
-  const [entries, setEntries] = useState<RemoteEntryDto[]>([]);
+  const [rawEntries, setEntries] = useState<RemoteEntryDto[]>([]);
+  // Spec 0053, Teil 3: app-weite Sortierung der Dateiliste (Frontend-seitig).
+  const [fileSort, setFileSort] = useState<FileSort>(DEFAULT_FILE_SORT);
+  const entries = useMemo(() => sortEntries(rawEntries, fileSort), [rawEntries, fileSort]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Spec 0054, Teil 1: EIN gemeinsamer State für Drei-Punkte-Menü UND
@@ -664,6 +670,20 @@ export function FileBrowserPanel({
     },
     [clampColumnWidth],
   );
+
+  useEffect(() => {
+    loadFileManagerSort()
+      .then((stored) => {
+        if (stored) setFileSort(stored);
+      })
+      .catch((err) => console.warn("Konnte Sortierung nicht laden:", err));
+  }, []);
+
+  const handleSortClick = (column: FileSortColumn) => {
+    const next = nextFileSort(fileSort, column);
+    setFileSort(next);
+    saveFileManagerSort(next).catch((err) => console.warn("Konnte Sortierung nicht speichern:", err));
+  };
 
   const handleColumnDragEnd = useCallback(() => {
     saveFileManagerColumnWidths(columnWidthsRef.current).catch((err) =>
@@ -1505,6 +1525,22 @@ export function FileBrowserPanel({
               </form>
   );
 
+  const sortAria = (column: FileSortColumn): "ascending" | "descending" | "none" =>
+    fileSort.column !== column ? "none" : fileSort.direction === "asc" ? "ascending" : "descending";
+  const sortButton = (column: FileSortColumn) => (
+    <button
+      type="button"
+      onClick={() => handleSortClick(column)}
+      data-testid={`column-sort-${column}`}
+      className="inline-flex max-w-full items-center gap-1 rounded font-normal hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+    >
+      <span className="truncate">{t(`fileBrowser.column.${column}`)}</span>
+      {fileSort.column === column && (
+        <span aria-hidden="true">{fileSort.direction === "asc" ? "▲" : "▼"}</span>
+      )}
+    </button>
+  );
+
   return (
     <div
       ref={panelRef}
@@ -2062,10 +2098,14 @@ export function FileBrowserPanel({
                   setColumnsMenu({ x: e.clientX, y: e.clientY });
                 }}
               >
-                <th className={STICKY_TH}>{t("fileBrowser.column.name")}</th>
+                <th className={STICKY_TH} aria-sort={sortAria("name")}>{sortButton("name")}</th>
                 {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
-                  <th key={c} className={STICKY_TH}>
-                    {t(`fileBrowser.column.${c}`)}
+                  <th
+                    key={c}
+                    className={`relative ${STICKY_TH}`}
+                    aria-sort={c === "owner" ? undefined : sortAria(c)}
+                  >
+                    {c === "owner" ? t("fileBrowser.column.owner") : sortButton(c)}
                     <ColumnResizeHandle
                       testId={`column-resize-${c}`}
                       onDrag={handleColumnDrag(c)}

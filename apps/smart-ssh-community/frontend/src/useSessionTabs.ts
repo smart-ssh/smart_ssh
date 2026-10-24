@@ -79,6 +79,9 @@ export interface SessionTab {
    * externen Clients — eigener Tab je Server und Client, ohne Chat-Eingabe
    * und Terminal, nie Ziel von `findExistingSessionId`. */
   mcp: McpSessionInfo | null;
+  /** Issue #657: ordinal among the open user tabs of the same server
+   * (1 = the first one); `undefined` for MCP tabs. */
+  serverNumber?: number;
   /** Issue #548. */
   phase: TabPhase;
   /** Issue #548: id of the running connect attempt (`connecting` only). */
@@ -92,12 +95,51 @@ export interface SessionTab {
   failure: ConnectFailure | null;
 }
 
+/** Issue #657: "name", "name (2)", "name (3)" for several tabs of one server. */
+export function numberedServerName(tab: Pick<SessionTab, "serverName" | "serverNumber">): string {
+  return tab.serverNumber && tab.serverNumber > 1
+    ? `${tab.serverName} (${tab.serverNumber})`
+    : tab.serverName;
+}
+
+/** Issue #657: smallest number >= 1 not used by an open user tab of the server. */
+export function nextServerNumber(
+  tabs: readonly Pick<SessionTab, "serverId" | "mcp" | "serverNumber">[],
+  serverId: string,
+): number {
+  const used = new Set(
+    tabs.filter((t) => t.serverId === serverId && !t.mcp).map((t) => t.serverNumber),
+  );
+  let n = 1;
+  while (used.has(n)) n++;
+  return n;
+}
+
+/** Issue #657: among `candidates`, the tab used most recently; `mru` lists
+ * session ids, most recent first. Tabs not in `mru` rank last (first wins). */
+export function mostRecentlyUsed<T extends { sessionId: string }>(
+  candidates: readonly T[],
+  mru: readonly string[],
+): T | undefined {
+  let best: T | undefined;
+  let bestRank = Infinity;
+  for (const c of candidates) {
+    const i = mru.indexOf(c.sessionId);
+    const rank = i < 0 ? Number.MAX_SAFE_INTEGER : i;
+    if (best === undefined || rank < bestRank) {
+      best = c;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
 /** Spec 0104: Beschriftung "<Client> @ <Server>" für MCP-Tabs. */
 export function sessionTabLabel(
-  tab: Pick<SessionTab, "serverName" | "mcp">,
+  tab: Pick<SessionTab, "serverName" | "mcp" | "serverNumber">,
   unnamedClientLabel: string,
 ): string {
-  if (!tab.mcp) return tab.serverName;
+  if (!tab.mcp) return numberedServerName(tab);
   return `${tab.mcp.clientName ?? unnamedClientLabel} @ ${tab.serverName}`;
 }
 
@@ -134,6 +176,12 @@ export function useSessionTabs() {
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
+  // Issue #657: session ids, most recently focused first.
+  const mruRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (activeSessionId === null) return;
+    mruRef.current = [activeSessionId, ...mruRef.current.filter((id) => id !== activeSessionId)];
+  }, [activeSessionId]);
 
   // Spec 0017, Abschnitt 2: Backend ist die maßgebliche Quelle offener
   // Sessions — beim Start (bzw. Dev-Modus-Hot-Reload) wird die Tab-Leiste
@@ -143,8 +191,9 @@ export function useSessionTabs() {
       .then((summaries) => {
         if (summaries.length === 0) return;
         for (const s of summaries) setChatSessionId(s.sessionId, s.chatSessionId ?? null);
-        setTabs(
-          summaries.map((s) => ({
+        const restored: SessionTab[] = [];
+        for (const s of summaries) {
+          restored.push({
             sessionId: s.sessionId,
             serverId: s.serverId,
             serverName: s.serverName,
@@ -155,9 +204,11 @@ export function useSessionTabs() {
             // — nach einem Reload ist sie verloren, s. `SessionTab`-Doc.
             pendingActionId: null,
             mcp: s.mcp ?? null,
+            ...(s.mcp ? {} : { serverNumber: nextServerNumber(restored, s.serverId) }),
             ...CONNECTED_FIELDS,
-          })),
-        );
+          });
+        }
+        setTabs(restored);
         // Spec 0104, §3: ein MCP-Tab wird nie von selbst aktiv — gibt es
         // nur MCP-Tabs, bleibt die Übersicht aktiv.
         const firstUserTab = summaries.find((s) => !s.mcp);
@@ -280,6 +331,7 @@ export function useSessionTabs() {
           hasPendingAction: false,
           pendingActionId: null,
           mcp: null,
+          serverNumber: nextServerNumber(prev, serverId),
           ...CONNECTED_FIELDS,
         },
       ];
@@ -365,6 +417,7 @@ export function useSessionTabs() {
       hasPendingAction: false,
       pendingActionId: null,
       mcp: null,
+      serverNumber: nextServerNumber(tabsRef.current, server.id),
       phase: "connecting",
       attemptId,
       ...(resumeChatSessionId ? { resumeChatSessionId } : {}),
@@ -401,7 +454,11 @@ export function useSessionTabs() {
   /** Spec 0104: nur Nutzer-Tabs — ein MCP-Tab desselben Servers ist nie
    * der Tab des Nutzers für diesen Server. */
   const findExistingSessionId = (serverId: string): string | undefined =>
-    tabs.find((t) => t.serverId === serverId && !t.mcp)?.sessionId;
+    // Issue #657: with several tabs, the most recently used one.
+    mostRecentlyUsed(
+      tabs.filter((t) => t.serverId === serverId && !t.mcp),
+      mruRef.current,
+    )?.sessionId;
 
   const switchTo = (sessionId: string | null) => setActiveSessionId(sessionId);
 

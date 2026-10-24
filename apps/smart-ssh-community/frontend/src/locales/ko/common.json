@@ -429,6 +429,7 @@
     "expired": "{{host}}:{{port}}에 대한 호스트 키 요청이 만료되었습니다. 연결이 이루어지지 않았으며 키도 신뢰되지 않았습니다."
   },
   "sessionTabs": {
+    "newSession": "새 세션",
     "overview": "개요",
     "pendingAction": "확인 대기 중",
     "closeTab": "탭 \"{{name}}\" 닫기",

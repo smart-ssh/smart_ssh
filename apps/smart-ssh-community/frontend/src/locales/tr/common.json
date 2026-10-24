@@ -429,6 +429,7 @@
     "expired": "{{host}}:{{port}} için ana makine anahtarı isteğinin süresi doldu. Bağlantı kurulmadı ve anahtara güvenilmedi."
   },
   "sessionTabs": {
+    "newSession": "Yeni oturum",
     "overview": "Genel bakış",
     "pendingAction": "Onay bekleniyor",
     "closeTab": "\"{{name}}\" sekmesini kapat",

@@ -429,6 +429,7 @@
     "expired": "Solicitarea pentru cheia de host {{host}}:{{port}} a expirat. Conexiunea nu a fost stabilită, iar cheia nu a fost acceptată."
   },
   "sessionTabs": {
+    "newSession": "Sesiune nouă",
     "overview": "Prezentare generală",
     "pendingAction": "Se așteaptă confirmarea",
     "closeTab": "Închide fila „{{name}}”",

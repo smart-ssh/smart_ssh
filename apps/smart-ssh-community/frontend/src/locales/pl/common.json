@@ -429,6 +429,7 @@
     "expired": "Żądanie potwierdzenia klucza hosta dla {{host}}:{{port}} wygasło. Połączenie nie zostało nawiązane, a klucz nie został uznany za zaufany."
   },
   "sessionTabs": {
+    "newSession": "Nowa sesja",
     "overview": "Przegląd",
     "pendingAction": "Oczekiwanie na potwierdzenie",
     "closeTab": "Zamknij kartę „{{name}}”",

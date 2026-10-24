@@ -429,6 +429,7 @@
     "expired": "Forespørgslen om værtsnøglen for {{host}}:{{port}} udløb. Forbindelsen blev ikke oprettet, og nøglen blev ikke betroet."
   },
   "sessionTabs": {
+    "newSession": "Ny session",
     "overview": "Oversigt",
     "pendingAction": "Venter på bekræftelse",
     "closeTab": "Luk fanen \"{{name}}\"",

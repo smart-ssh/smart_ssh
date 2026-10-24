@@ -429,6 +429,7 @@
     "expired": "Die Host-Key-Abfrage für {{host}}:{{port}} ist abgelaufen. Die Verbindung wurde nicht aufgebaut, dem Schlüssel wird nicht vertraut."
   },
   "sessionTabs": {
+    "newSession": "Neue Sitzung",
     "overview": "Übersicht",
     "pendingAction": "Wartet auf Bestätigung",
     "closeTab": "Tab „{{name}}“ schließen",

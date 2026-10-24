@@ -429,6 +429,7 @@
     "expired": "The host key request for {{host}}:{{port}} expired. The connection was not established and the key was not trusted."
   },
   "sessionTabs": {
+    "newSession": "New session",
     "overview": "Overview",
     "pendingAction": "Waiting for confirmation",
     "closeTab": "Close tab \"{{name}}\"",
