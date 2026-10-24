@@ -382,7 +382,7 @@ describe("ServerForm — Anmeldeart Schlüsseldatei (Spec 0076, B-1..B-4)", () =
       // mit dem konkreten Pfad — belegt, dass der Code (nicht nur die
       // Nachricht) durchgereicht wird (Spec 0024, Abschnitt 5).
       expect(
-        screen.getByText("Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden."),
+        screen.getByText("Schlüsseldatei auf diesem Gerät nicht gefunden."),
       ).toBeInTheDocument();
     } finally {
       vi.useRealTimers();

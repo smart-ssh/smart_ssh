@@ -17,6 +17,17 @@ use sqlx::Row;
 use uuid::Uuid;
 use zeroize::Zeroize;
 
+/// The reserved `secrets` entry that holds the host keys of an import whose
+/// database transaction has committed but whose host-key file is not yet
+/// written (Spec 0109, I5). Device state: never part of a snapshot.
+pub const PENDING_HOST_KEYS_REF: &str = "app:pending_host_keys";
+
+/// Whether a `secrets` reference belongs to the backup content (C1): the
+/// credentials of servers and AI providers.
+pub fn is_content_secret_ref(owner_ref: &str) -> bool {
+    owner_ref.starts_with("server:") || owner_ref.starts_with("ai-provider:")
+}
+
 /// The reserved `secrets` entry that holds the backup key (K4).
 pub const BACKUP_KEY_REF: &str = "app:backup_key";
 
@@ -197,11 +208,26 @@ impl SqliteBackupStore {
         Fut: std::future::Future<Output = ()>,
     {
         let mut tx = self.pool.begin().await.map_err(|e| kind(&e))?;
+        let snap = read_in(&mut tx, &mut between).await?;
+        Ok(snap)
+    }
+}
+
+/// The snapshot read, on an open transaction's connection.
+async fn read_in<F, Fut>(
+    conn: &mut sqlx::SqliteConnection,
+    between: &mut F,
+) -> Result<DatabaseSnapshot, BackupStoreError>
+where
+    F: FnMut(&'static str) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    {
         let mut snap = DatabaseSnapshot::default();
         let nil = Uuid::nil();
 
         let rows = sqlx::query("SELECT * FROM groups ORDER BY id")
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| kind(&e))?;
         for r in &rows {
@@ -217,7 +243,7 @@ impl SqliteBackupStore {
         between("groups").await;
 
         let rows = sqlx::query("SELECT * FROM servers ORDER BY id")
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| kind(&e))?;
         for r in &rows {
@@ -247,7 +273,7 @@ impl SqliteBackupStore {
         between("servers").await;
 
         let rows = sqlx::query("SELECT * FROM server_tags ORDER BY server_id, tag")
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| kind(&e))?;
         for r in &rows {
@@ -262,7 +288,7 @@ impl SqliteBackupStore {
         between("server_tags").await;
 
         let rows = sqlx::query("SELECT * FROM filter_rules ORDER BY id")
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| kind(&e))?;
         for r in &rows {
@@ -287,7 +313,7 @@ impl SqliteBackupStore {
         between("filter_rules").await;
 
         let rows = sqlx::query("SELECT * FROM note_revisions ORDER BY id")
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| kind(&e))?;
         for r in &rows {
@@ -309,7 +335,7 @@ impl SqliteBackupStore {
         between("note_revisions").await;
 
         let rows = sqlx::query("SELECT * FROM ai_provider_configs ORDER BY id")
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| kind(&e))?;
         for r in &rows {
@@ -335,16 +361,15 @@ impl SqliteBackupStore {
         // C2: the backup key (and the database root key's reference) are not
         // content. Of the rest, the local pseudo-server's slots are skipped.
         let local_prefix = format!("server:{nil}:");
-        let rows = sqlx::query("SELECT ref, value FROM secrets WHERE ref <> ? ORDER BY ref")
-            .bind(BACKUP_KEY_REF)
-            .fetch_all(&mut *tx)
+        let rows = sqlx::query("SELECT ref, value FROM secrets ORDER BY ref")
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| kind(&e))?;
         for r in &rows {
             let owner_ref: String = r.get("ref");
-            if owner_ref.starts_with(&local_prefix)
-                || owner_ref == ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF
-            {
+            // Positive list: only credentials of servers and AI providers are
+            // content. `app:` and `mcp:` entries are device state (C2, I9).
+            if owner_ref.starts_with(&local_prefix) || !is_content_secret_ref(&owner_ref) {
                 continue;
             }
             snap.secrets.push(SecretRow {
@@ -354,7 +379,450 @@ impl SqliteBackupStore {
         }
         between("secrets").await;
 
-        tx.rollback().await.map_err(|e| kind(&e))?;
         Ok(snap)
     }
+}
+
+/// What an import writes (Spec 0109, I4, I5). The content is already
+/// validated by the caller.
+pub struct ImportPlan {
+    /// The content to import, with the IDs from the file.
+    pub data: DatabaseSnapshot,
+    /// Base name of the "Previous data" folder (the store appends ` (2)`,
+    /// ` (3)` … when a top-level folder of that name exists); `None` when the local data is empty
+    /// (I2) and nothing has to be kept.
+    pub archive_folder: Option<String>,
+    /// Timestamp (RFC 3339) for the rows created for the archive.
+    pub now: String,
+    /// JSON of the host keys to write after the commit (I5).
+    pub pending_host_keys: String,
+}
+
+/// Counts of what the archive step moved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ArchiveCounts {
+    pub servers: usize,
+    pub groups: usize,
+}
+
+/// What the archive step reports back.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ArchiveOutcome {
+    pub counts: ArchiveCounts,
+    /// The folder name actually used.
+    pub folder_name: Option<String>,
+}
+
+fn new_id() -> Uuid {
+    Uuid::new_v4()
+}
+
+impl SqliteBackupStore {
+    /// The host keys of an import that committed but did not reach their
+    /// file yet (I5), if any.
+    pub async fn pending_host_keys(&self) -> Result<Option<String>, BackupStoreError> {
+        sqlx::query_scalar("SELECT value FROM secrets WHERE ref = ?")
+            .bind(PENDING_HOST_KEYS_REF)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| kind(&e))
+    }
+
+    /// Removes the pending marker once the host-key file is written.
+    pub async fn clear_pending_host_keys(&self) -> Result<(), BackupStoreError> {
+        sqlx::query("DELETE FROM secrets WHERE ref = ?")
+            .bind(PENDING_HOST_KEYS_REF)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| kind(&e))?;
+        Ok(())
+    }
+
+    /// Replaces the local data with `plan.data` in **one** transaction (I5).
+    pub async fn apply_import(
+        &self,
+        plan: &ImportPlan,
+    ) -> Result<ArchiveOutcome, BackupStoreError> {
+        self.apply_import_with(plan, &mut |_| false).await
+    }
+
+    /// As [`Self::apply_import`]; `abort_after` is asked after each step
+    /// ("archive", "replace") and aborts the transaction when it returns
+    /// `true` (tests inject a failure there).
+    pub async fn apply_import_with(
+        &self,
+        plan: &ImportPlan,
+        abort_after: &mut (dyn FnMut(&'static str) -> bool + Send),
+    ) -> Result<ArchiveOutcome, BackupStoreError> {
+        let mut tx = self.pool.begin().await.map_err(|e| kind(&e))?;
+        let conn = &mut *tx;
+        // References are checked at commit: rows go in file order.
+        sqlx::query("PRAGMA defer_foreign_keys = ON")
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| kind(&e))?;
+        let current = read_in(&mut *conn, &mut |_| async {}).await?;
+        let mut outcome = ArchiveOutcome::default();
+        let mut moved = DatabaseSnapshot::default();
+
+        if let Some(folder) = &plan.archive_folder {
+            let name = unique_folder_name(&current, folder);
+            outcome.counts = archive(&mut *conn, &current, &name, &plan.now, &mut moved).await?;
+            outcome.folder_name = Some(name);
+        }
+        // Old servers and groups go (their copies exist); then everything
+        // that is replaced wholesale.
+        for s in &current.servers {
+            exec_id(&mut *conn, "DELETE FROM servers WHERE id = ?", s.id).await?;
+        }
+        for g in &current.groups {
+            exec_id(&mut *conn, "DELETE FROM groups WHERE id = ?", g.id).await?;
+        }
+        if abort_after("archive") {
+            return Err(BackupStoreError::Database("aborted"));
+        }
+        let nil = Uuid::nil();
+        sqlx::query("DELETE FROM note_revisions WHERE target_id <> ?")
+            .bind(nil.to_string())
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| kind(&e))?;
+        sqlx::query(
+            "DELETE FROM filter_rules WHERE NOT (scope_type = 'server' AND scope_value = ?)",
+        )
+        .bind(nil.to_string())
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+        sqlx::query("DELETE FROM ai_provider_configs")
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| kind(&e))?;
+        for s in &current.secrets {
+            sqlx::query("DELETE FROM secrets WHERE ref = ?")
+                .bind(&s.owner_ref)
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| kind(&e))?;
+        }
+
+        // The moved copies (new IDs), then the file's content (its IDs).
+        insert_owned_rows(&mut *conn, &moved).await?;
+        insert_all(&mut *conn, &plan.data).await?;
+
+        sqlx::query(
+            "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
+             ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
+             updated_at = excluded.updated_at",
+        )
+        .bind(PENDING_HOST_KEYS_REF)
+        .bind(&plan.pending_host_keys)
+        .bind(&plan.now)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+        if abort_after("replace") {
+            return Err(BackupStoreError::Database("aborted"));
+        }
+        tx.commit().await.map_err(|e| kind(&e))?;
+        Ok(outcome)
+    }
+}
+
+fn unique_folder_name(current: &DatabaseSnapshot, base: &str) -> String {
+    let taken = |name: &str| {
+        current
+            .groups
+            .iter()
+            .any(|g| g.parent_id.is_none() && g.name == name)
+    };
+    if !taken(base) {
+        return base.to_string();
+    }
+    (2u32..)
+        .map(|n| format!("{base} ({n})"))
+        .find(|name| !taken(name))
+        .unwrap_or_else(|| base.to_string())
+}
+
+async fn exec_id(
+    conn: &mut sqlx::SqliteConnection,
+    sql: &'static str,
+    id: Uuid,
+) -> Result<(), BackupStoreError> {
+    sqlx::query(sql)
+        .bind(id.to_string())
+        .execute(conn)
+        .await
+        .map_err(|e| kind(&e))?;
+    Ok(())
+}
+
+/// Step 2 of I4: puts copies of the current servers and groups, with new IDs,
+/// under a new folder and re-points what belongs to them. Rows that are
+/// deleted and re-inserted afterwards (notes, rules, secrets) are collected
+/// in `moved` instead of being written here.
+async fn archive(
+    conn: &mut sqlx::SqliteConnection,
+    current: &DatabaseSnapshot,
+    folder: &str,
+    now: &str,
+    moved: &mut DatabaseSnapshot,
+) -> Result<ArchiveCounts, BackupStoreError> {
+    use std::collections::HashMap;
+    let folder_id = new_id();
+    let group_map: HashMap<Uuid, Uuid> = current.groups.iter().map(|g| (g.id, new_id())).collect();
+    let server_map: HashMap<Uuid, Uuid> =
+        current.servers.iter().map(|s| (s.id, new_id())).collect();
+
+    let mut groups = vec![GroupRow {
+        id: folder_id,
+        name: folder.to_string(),
+        parent_id: None,
+        notes: String::new(),
+        created_at: now.to_string(),
+        updated_at: now.to_string(),
+    }];
+    for g in &current.groups {
+        let mut g = g.clone();
+        g.id = group_map[&g.id];
+        g.parent_id = Some(
+            g.parent_id
+                .and_then(|p| group_map.get(&p).copied())
+                .unwrap_or(folder_id),
+        );
+        groups.push(g);
+    }
+    let mut servers = Vec::new();
+    for s in &current.servers {
+        let mut copy = s.clone();
+        let new = server_map[&s.id];
+        copy.id = new;
+        copy.group_id = Some(
+            s.group_id
+                .and_then(|g| group_map.get(&g).copied())
+                .unwrap_or(folder_id),
+        );
+        // The nil (local) server cannot be a jump host target in a snapshot;
+        // an unknown target keeps its value.
+        copy.jump_host_id = s
+            .jump_host_id
+            .map(|j| server_map.get(&j).copied().unwrap_or(j));
+        copy.auth_method = s.auth_method.replace(&s.id.to_string(), &new.to_string());
+        servers.push(copy);
+    }
+    let tags: Vec<TagRow> = current
+        .tags
+        .iter()
+        .filter_map(|t| {
+            server_map.get(&t.server_id).map(|n| TagRow {
+                server_id: *n,
+                tag: t.tag.clone(),
+            })
+        })
+        .collect();
+    // Groups first (servers refer to them), then servers and tags.
+    let head = DatabaseSnapshot {
+        groups,
+        servers,
+        tags,
+        ..Default::default()
+    };
+    insert_all(&mut *conn, &head).await?;
+    // History follows its server to the copy.
+    for (old, new) in &server_map {
+        for sql in [
+            "UPDATE chat_sessions SET server_id = ? WHERE server_id = ?",
+            "UPDATE prompt_history SET server_id = ? WHERE server_id = ?",
+        ] {
+            sqlx::query(sql)
+                .bind(new.to_string())
+                .bind(old.to_string())
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| kind(&e))?;
+        }
+    }
+
+    for n in &current.notes {
+        let target = match n.target_type.as_str() {
+            "server" => server_map.get(&n.target_id),
+            "group" => group_map.get(&n.target_id),
+            _ => None,
+        };
+        if let Some(t) = target {
+            let mut n = n.clone();
+            n.id = new_id();
+            n.target_id = *t;
+            moved.notes.push(n);
+        }
+    }
+    for r in &current.rules {
+        if r.scope_type == "server" {
+            let moved_to = r
+                .scope_value
+                .as_deref()
+                .and_then(|v| Uuid::parse_str(v).ok())
+                .and_then(|v| server_map.get(&v));
+            if let Some(n) = moved_to {
+                let mut r = r.clone();
+                r.id = new_id();
+                r.scope_value = Some(n.to_string());
+                moved.rules.push(r);
+            }
+        }
+    }
+    for s in &current.secrets {
+        for (old, new) in &server_map {
+            let prefix = format!("server:{old}:");
+            if let Some(rest) = s.owner_ref.strip_prefix(&prefix) {
+                moved.secrets.push(SecretRow {
+                    owner_ref: format!("server:{new}:{rest}"),
+                    value: s.value.clone(),
+                });
+            }
+        }
+    }
+    Ok(ArchiveCounts {
+        servers: current.servers.len(),
+        groups: current.groups.len(),
+    })
+}
+
+/// Notes, rules and secrets (the rows that need no ordering).
+async fn insert_owned_rows(
+    conn: &mut sqlx::SqliteConnection,
+    d: &DatabaseSnapshot,
+) -> Result<(), BackupStoreError> {
+    for n in &d.notes {
+        sqlx::query(
+            "INSERT INTO note_revisions (id, target_type, target_id, content, editor_type, \
+             ai_provider, ai_model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(n.id.to_string())
+        .bind(&n.target_type)
+        .bind(n.target_id.to_string())
+        .bind(&n.content)
+        .bind(&n.editor_type)
+        .bind(&n.ai_provider)
+        .bind(&n.ai_model)
+        .bind(&n.created_at)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+    }
+    for r in &d.rules {
+        sqlx::query(
+            "INSERT INTO filter_rules (id, pattern_type, pattern_value, action, scope_type, \
+             scope_value, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(r.id.to_string())
+        .bind(&r.pattern_type)
+        .bind(&r.pattern_value)
+        .bind(&r.action)
+        .bind(&r.scope_type)
+        .bind(&r.scope_value)
+        .bind(r.priority)
+        .bind(&r.created_at)
+        .bind(&r.updated_at)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+    }
+    for s in &d.secrets {
+        sqlx::query(
+            "INSERT INTO secrets (ref, value, updated_at) VALUES (?, ?, ?) \
+             ON CONFLICT(ref) DO UPDATE SET value = excluded.value, \
+             updated_at = excluded.updated_at",
+        )
+        .bind(&s.owner_ref)
+        .bind(&s.value)
+        .bind(chrono::Utc::now().to_rfc3339())
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+    }
+    Ok(())
+}
+
+async fn insert_all(
+    conn: &mut sqlx::SqliteConnection,
+    d: &DatabaseSnapshot,
+) -> Result<(), BackupStoreError> {
+    for g in &d.groups {
+        sqlx::query(
+            "INSERT INTO groups (id, name, parent_id, notes, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(g.id.to_string())
+        .bind(&g.name)
+        .bind(g.parent_id.map(|p| p.to_string()))
+        .bind(&g.notes)
+        .bind(&g.created_at)
+        .bind(&g.updated_at)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+    }
+    for s in &d.servers {
+        sqlx::query(
+            "INSERT INTO servers (id, name, host, port, username, group_id, auth_method, notes, \
+             jump_host_id, created_at, updated_at, post_ingest_policy, \
+             ai_injection_check_enabled, sftp_server_path, start_directory) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(s.id.to_string())
+        .bind(&s.name)
+        .bind(&s.host)
+        .bind(i64::from(s.port))
+        .bind(&s.username)
+        .bind(s.group_id.map(|p| p.to_string()))
+        .bind(&s.auth_method)
+        .bind(&s.notes)
+        .bind(s.jump_host_id.map(|p| p.to_string()))
+        .bind(&s.created_at)
+        .bind(&s.updated_at)
+        .bind(&s.post_ingest_policy)
+        .bind(s.ai_injection_check_enabled)
+        .bind(&s.sftp_server_path)
+        .bind(&s.start_directory)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+    }
+    for t in &d.tags {
+        sqlx::query("INSERT INTO server_tags (server_id, tag) VALUES (?, ?)")
+            .bind(t.server_id.to_string())
+            .bind(&t.tag)
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| kind(&e))?;
+    }
+    insert_owned_rows(&mut *conn, d).await?;
+    for a in &d.ai_providers {
+        sqlx::query(
+            "INSERT INTO ai_provider_configs (id, provider_type, display_name, base_url, model, \
+             supports_native_tool_calling, credential_ref, is_active, created_at, updated_at, \
+             extra_headers, attestation_url, max_tokens_override, web_research_enabled) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(a.id.to_string())
+        .bind(&a.provider_type)
+        .bind(&a.display_name)
+        .bind(&a.base_url)
+        .bind(&a.model)
+        .bind(a.supports_native_tool_calling)
+        .bind(&a.credential_ref)
+        .bind(a.is_active)
+        .bind(&a.created_at)
+        .bind(&a.updated_at)
+        .bind(&a.extra_headers)
+        .bind(&a.attestation_url)
+        .bind(a.max_tokens_override)
+        .bind(a.web_research_enabled)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| kind(&e))?;
+    }
+    Ok(())
 }

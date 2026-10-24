@@ -601,7 +601,7 @@
     "SERVER_CERTIFICATE_REQUIRED": "Zertifikat ist erforderlich",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Zertifikats-Key ist erforderlich",
     "SERVER_JUMP_HOST_LOCAL": "Der lokale Pseudo-Server kann nicht als Jump-Host verwendet werden",
-    "KEY_FILE_NOT_FOUND": "Die Schlüsseldatei wurde unter dem angegebenen Pfad nicht gefunden.",
+    "KEY_FILE_NOT_FOUND": "Schlüsseldatei auf diesem Gerät nicht gefunden.",
     "KEY_FILE_NOT_READABLE": "Die Schlüsseldatei lässt sich mit den aktuellen Rechten nicht lesen.",
     "KEY_FILE_PERMISSIONS_TOO_OPEN": "Die Schlüsseldatei ist für Gruppe oder Welt lesbar oder beschreibbar — wie bei ssh wird die Anmeldung damit abgelehnt. Mit „chmod 600“ auf die Datei beheben.",
     "KEY_FILE_TOO_LARGE": "Die Schlüsseldatei überschreitet die zulässige Größe von 1 MiB.",

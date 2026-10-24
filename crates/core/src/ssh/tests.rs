@@ -499,6 +499,25 @@ fn test_resolve_auth_identity_file_missing_file_yields_credential_resolution_fai
     );
 }
 
+/// Spec 0109 C3: a missing key file fails the connect with exactly the
+/// "not found on this device" message and the path; no fallback.
+#[test]
+fn test_resolve_auth_missing_key_file_reports_not_found_on_this_device() {
+    let store = MockCredentialStore::new();
+    let key_files = MockKeyFileReader::new();
+    let auth = AuthMethod::IdentityFile {
+        path: IDENTITY_PATH.to_string(),
+        passphrase_ref: None,
+    };
+    match resolve_auth(&auth, &store, &key_files) {
+        Err(SshError::CredentialResolutionFailed(msg)) => assert_eq!(
+            msg,
+            format!("Schlüsseldatei auf diesem Gerät nicht gefunden: {IDENTITY_PATH}")
+        ),
+        other => panic!("expected CredentialResolutionFailed, got {other:?}"),
+    }
+}
+
 /// §6.1.5: Jeder Fehlerfall aus A-6 ist **eine unterscheidbare Variante**,
 /// geprüft gegen die Variante statt gegen den Meldungstext. Ein Test gegen
 /// Zeichenketten wäre kaum zum Scheitern zu bringen und würde beim

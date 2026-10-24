@@ -355,6 +355,17 @@ pub(crate) async fn open_and_assemble(
     let data_changes = profile_store.data_changes();
     let file_host_keys = Arc::new(host_key_store);
     let backup_store = profile_store.backup_store();
+    // Spec 0109, I5: finish an import whose database transaction committed
+    // before the host-key file was written — before any connection exists.
+    if let Err(err) =
+        app_logic::backup::complete_pending_host_keys(&backup_store, &file_host_keys).await
+    {
+        tracing::error!(error = %err, "fatal: pending host keys could not be completed");
+        return Err(app_logic::database_startup::StartupAbort::Fatal {
+            kind: persistence_sqlite::ConnectFailureKind::HostKeyStoreFailed,
+            detail: err.to_string(),
+        });
+    }
     let app_state = AppState {
         sessions: SessionManager::new(),
         session_extension,
