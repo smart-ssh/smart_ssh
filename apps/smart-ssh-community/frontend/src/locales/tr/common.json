@@ -1143,6 +1143,12 @@
       "confirm": "Yükle",
       "cancel": "İptal",
       "menuTitle": "Panodaki dosyaları yükle"
+    },
+    "readFailure": {
+      "tooLarge": "Metin farkı mümkün değil: dosya çok büyük (256 KB üzeri).",
+      "notText": "Metin farkı mümkün değil: dosya ikili (geçerli UTF-8 metni değil).",
+      "permission": "Metin farkı mümkün değil: mevcut haklarla bu dosyayı okuma izniniz yok.",
+      "other": "Metin farkı mümkün değil: dosya okunamadı ({{message}})."
     }
   },
   "chat": {
@@ -1173,6 +1179,7 @@
     "contextUsageTooltip": "Bağlam dolduğunda sohbetin eski bölümleri otomatik olarak özetlenir.",
     "webResearchUnavailable": "Web araştırması bu sağlayıcı hesabı için kullanılamıyor (orada web araması devre dışı). Bu oturum web araştırması olmadan yanıt verir. Kalıcı olarak kapatmak için: Ayarlar → Yapay zeka sağlayıcısı → “Web araştırması”.",
     "emptyResponse": "Model yanıt döndürmedi. Düşünme aşamalı modellerde sağlayıcı ayarlarında daha yüksek bir çıktı sınırı yardımcı olur.",
+    "refusedResponse": "Model bu isteği reddetti. İsteği yeniden ifade edin veya yeni bir sohbet başlatın.",
     "outputTruncated": "(kesildi)",
     "fileWritten": "'{{path}}' dosyası yazıldı.",
     "writtenWithSudoPassword": "Kayıtlı sudo parolasıyla yazıldı.",

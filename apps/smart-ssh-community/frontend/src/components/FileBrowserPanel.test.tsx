@@ -252,6 +252,20 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     });
   });
 
+  it("header cells are sticky with an opaque background and the table has no collapsed borders (#650)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([entry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    const { container } = renderPanel();
+    await screen.findByText(/readme\.md/);
+    const ths = container.querySelectorAll("thead th");
+    expect(ths.length).toBe(5);
+    ths.forEach((th) => {
+      expect(th).toHaveClass("sticky", "top-0", "bg-slate-900");
+    });
+    const table = container.querySelector("table");
+    expect(table).toHaveClass("border-separate", "border-spacing-0");
+  });
+
   it("dragging a column handle grows the column and persists the width on drag end", async () => {
     vi.mocked(sftpList).mockResolvedValue([entry]);
     vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
@@ -2339,7 +2353,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     vi.mocked(sftpList).mockResolvedValue([fileEntry]);
     vi.mocked(sftpExists).mockResolvedValue(true);
     vi.mocked(readLocalTextPreview).mockResolvedValue({ text: null, size: 2048 });
-    vi.mocked(sftpReadText).mockRejectedValue("binary");
+    vi.mocked(sftpReadText).mockRejectedValue({ message: "x", code: "SFTP_PREVIEW_NOT_TEXT" });
     vi.mocked(pickUploadFiles).mockResolvedValue(["/local/a.txt"]);
 
     renderEn();
@@ -2349,7 +2363,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     expect(await screen.findByRole("heading", { name: "Overwrite file?" })).toBeVisible();
     expect(screen.getByText(/already exists on the server\./)).toBeVisible();
     expect(
-      screen.getByText(/^No text diff possible \(binary file or too large\)\. Current size: .+, new size: .+\.$/),
+      screen.getByText(/^No text diff possible: the file is binary \(not valid UTF-8 text\)\.$/),
     ).toBeVisible();
     expectNoGerman();
   });
@@ -2366,7 +2380,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
       .mockResolvedValue("2026-01-01T00:00:09Z");
     vi.mocked(readLocalTextPreview).mockResolvedValue({ text: null, size: 10 });
     vi.mocked(sftpStat).mockResolvedValue({ ...fileEntry, modified: "2026-01-01T00:00:05Z" });
-    vi.mocked(sftpReadText).mockRejectedValue("binary");
+    vi.mocked(sftpReadText).mockRejectedValue({ message: "x", code: "SFTP_PREVIEW_NOT_TEXT" });
 
     renderEn();
     await screen.findByText(/a\.txt/);
@@ -2391,7 +2405,7 @@ describe("FileBrowserPanel UI language (issue #91)", () => {
     expect(
       screen.getByText("The remote file was changed since the download — uploading would overwrite that other change."),
     ).toBeVisible();
-    expect(screen.getByText(/^No text diff possible \(binary file or too large\)\. New size: .+\.$/)).toBeVisible();
+    expect(screen.getByText(/^No text diff possible: the file is binary \(not valid UTF-8 text\)\.$/)).toBeVisible();
     expectNoGerman();
   });
 
@@ -2973,5 +2987,125 @@ describe("FileBrowserPanel header sorting (Spec 0053, Teil 3)", () => {
     await screen.findByText(/a\.txt/);
     fireEvent.click(screen.getByTestId("column-resize-size"));
     expect(saveFileManagerSort).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #655: errors of the edit flow's upload show only in the edit footer.
+describe("FileBrowserPanel edit flow errors (issue #655)", () => {
+  const fileEntry: RemoteEntryDto = { ...entry, name: "a.txt", path: "a.txt" };
+  type Handler<T> = ((event: T) => void) | null;
+  let started: Handler<SftpTransferStartedEvent> = null;
+  let finished: Handler<any> = null;
+
+  async function openChangedEdit(readText: () => Promise<string>) {
+    started = null;
+    finished = null;
+    vi.mocked(onSftpTransferStarted).mockImplementation((h: any) => {
+      started = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onSftpTransferFinished).mockImplementation((h: any) => {
+      finished = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpOpenForEditing).mockResolvedValue({
+      localPath: "/tmp/edit/a.txt",
+      remoteModified: "2026-01-01T00:00:00Z",
+    });
+    vi.mocked(localFileMtime)
+      .mockResolvedValueOnce("2026-01-01T00:00:01Z")
+      .mockResolvedValue("2026-01-01T00:00:09Z");
+    vi.mocked(readLocalTextPreview).mockResolvedValue({ text: "neu", size: 3 });
+    vi.mocked(sftpStat).mockResolvedValue({ ...entry, modified: "2026-01-01T00:00:00Z" });
+    vi.mocked(sftpReadText).mockImplementation(readText);
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Lokal öffnen…"));
+    // The poll runs every 2 s and sees the changed mtime.
+    await screen.findByText(/wurde lokal geändert/, undefined, { timeout: 5000 });
+  }
+
+  /** The upload fails after the backend announced a transfer (as it does). */
+  function failingUpload(message: string) {
+    vi.mocked(sftpUpload).mockImplementation(async () => {
+      const transferId = `t-${Math.random()}`;
+      act(() => {
+        started?.({ sessionId: "session-1", transferId, kind: "upload", fileName: "a.txt", totalBytes: 3 });
+        finished?.({ sessionId: "session-1", transferId, error: message, stopped: null });
+      });
+      throw { message };
+    });
+  }
+
+  async function uploadFromFooter() {
+    const footer = screen.getByText(/wurde lokal geändert/).parentElement!;
+    fireEvent.click(within(footer).getByText("Hochladen"));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByText("Hochladen"));
+  }
+
+  it("a failed edit upload shows exactly one error, in the footer; a retry replaces it", async () => {
+    await openChangedEdit(() => Promise.resolve("alt"));
+    failingUpload("Zugriff verweigert");
+
+    await uploadFromFooter();
+    await waitFor(() => expect(screen.getAllByText(/Zugriff verweigert/)).toHaveLength(1));
+    expect(showToast).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "error" }));
+    // No transfer row ("a.txt: <error>") for the edit upload.
+    expect(screen.queryByText(/a\.txt: Zugriff verweigert/)).not.toBeInTheDocument();
+
+    await uploadFromFooter();
+    await waitFor(() => expect(sftpUpload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getAllByText(/Zugriff verweigert/)).toHaveLength(1));
+    expect(showToast).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "error" }));
+  }, 15000);
+
+  it("a normal upload keeps its transfer row", async () => {
+    await openChangedEdit(() => Promise.resolve("alt"));
+    // A different file is uploaded while the edit session is idle.
+    act(() => {
+      started!({ sessionId: "session-1", transferId: "n1", kind: "upload", fileName: "other.txt", totalBytes: 3 });
+      finished!({ sessionId: "session-1", transferId: "n1", error: "kaputt", stopped: null });
+    });
+    expect(screen.getByText(/other\.txt: kaputt/)).toBeVisible();
+  }, 15000);
+
+  it("a successful edit upload still shows the success toast", async () => {
+    await openChangedEdit(() => Promise.resolve("alt"));
+    vi.mocked(sftpUpload).mockResolvedValue(undefined);
+    await uploadFromFooter();
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "success" })),
+    );
+  }, 15000);
+
+  it.each([
+    [{ message: "x", code: "SSH_SFTP_PERMISSION_DENIED" }, /Leseberechtigung/],
+    [{ message: "x", code: "SFTP_PREVIEW_TOO_LARGE" }, /zu groß \(über 256 KB\)/],
+    [{ message: "x", code: "SFTP_PREVIEW_NOT_TEXT" }, /Datei ist binär/],
+    [{ message: "Verbindung weg" }, /nicht gelesen werden \(Verbindung weg\)/],
+  ])("the diff hint names the read error %#", async (err, hint) => {
+    await openChangedEdit(() => Promise.reject(err));
+    const footer = screen.getByText(/wurde lokal geändert/).parentElement!;
+    fireEvent.click(within(footer).getByText("Hochladen"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(hint)).toBeVisible();
+  }, 15000);
+
+  it("the upload-conflict dialog names a permission error too", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(loadFileManagerColumnWidths).mockResolvedValue({});
+    vi.mocked(sftpExists).mockResolvedValue(true);
+    vi.mocked(readLocalTextPreview).mockResolvedValue({ text: "neu", size: 3 });
+    vi.mocked(sftpReadText).mockRejectedValue({ message: "x", code: "SSH_SFTP_PERMISSION_DENIED" });
+    vi.mocked(pickUploadFiles).mockResolvedValue(["/local/a.txt"]);
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByText("Hochladen"));
+    expect(await screen.findByText(/Leseberechtigung/)).toBeVisible();
   });
 });

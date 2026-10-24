@@ -1143,6 +1143,12 @@
       "confirm": "Lähetä",
       "cancel": "Peruuta",
       "menuTitle": "Lähetä leikepöydän tiedostot"
+    },
+    "readFailure": {
+      "tooLarge": "Tekstivertailu ei ole mahdollinen: tiedosto on liian suuri (yli 256 kt).",
+      "notText": "Tekstivertailu ei ole mahdollinen: tiedosto on binääritiedosto (ei kelvollista UTF-8-tekstiä).",
+      "permission": "Tekstivertailu ei ole mahdollinen: nykyisillä oikeuksilla sinulla ei ole lukuoikeutta tähän tiedostoon.",
+      "other": "Tekstivertailu ei ole mahdollinen: tiedostoa ei voitu lukea ({{message}})."
     }
   },
   "chat": {
@@ -1173,6 +1179,7 @@
     "contextUsageTooltip": "Keskustelun vanhemmat osat tiivistetään automaattisesti, kun konteksti täyttyy.",
     "webResearchUnavailable": "Verkkotutkimus ei ole käytettävissä tälle palveluntarjoajatilille (verkkohaku on siellä poistettu käytöstä). Tämä istunto vastaa ilman verkkotutkimusta. Poistaaksesi sen pysyvästi käytöstä: Asetukset → Tekoälyn palveluntarjoaja → “Verkkotutkimus”.",
     "emptyResponse": "Malli ei palauttanut vastausta. Ajattelujaksolla varustetuilla malleilla auttaa korkeampi tulostusraja palveluntarjoajan asetuksissa.",
+    "refusedResponse": "Malli hylkäsi pyynnön. Muotoile se uudelleen tai aloita uusi keskustelu.",
     "outputTruncated": "(katkaistu)",
     "fileWritten": "Tiedosto '{{path}}' kirjoitettu.",
     "writtenWithSudoPassword": "Kirjoitettu tallennetulla sudo-salasanalla.",

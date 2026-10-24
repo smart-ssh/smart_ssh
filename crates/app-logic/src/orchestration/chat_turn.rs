@@ -16,8 +16,8 @@ use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_chat_auto_continuation_limit_reached, emit_chat_auto_continuation_started,
     emit_chat_error, emit_chat_queued_messages_sent, emit_chat_response_cancelled,
-    emit_chat_response_empty, emit_chat_response_truncated, emit_chat_text_delta,
-    emit_chat_web_activity, emit_chat_web_research_unavailable, EventEmitter,
+    emit_chat_response_empty, emit_chat_response_refused, emit_chat_response_truncated,
+    emit_chat_text_delta, emit_chat_web_activity, emit_chat_web_research_unavailable, EventEmitter,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -1075,6 +1075,13 @@ async fn run_one_round(
                 if check_for_empty_response && !round_had_content {
                     emit_chat_response_empty(emitter, session_id);
                 }
+                break;
+            }
+            AiEvent::Refused => {
+                // Issue #647: own outcome, distinct from done/truncated/empty.
+                // Streamed text stays; no empty-response hint.
+                flush_text_buffer(session, &mut text_buffer).await;
+                emit_chat_response_refused(emitter, session_id);
                 break;
             }
             AiEvent::TextTruncated => {
