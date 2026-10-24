@@ -1143,6 +1143,12 @@
       "confirm": "Upload",
       "cancel": "Cancel",
       "menuTitle": "Upload the files from the clipboard"
+    },
+    "readFailure": {
+      "tooLarge": "No text diff possible: the file is too large (over 256 KB).",
+      "notText": "No text diff possible: the file is binary (not valid UTF-8 text).",
+      "permission": "No text diff possible: you have no read permission for this file with the current rights.",
+      "other": "No text diff possible: the file could not be read ({{message}})."
     }
   },
   "chat": {
@@ -1173,6 +1179,7 @@
     "contextUsageTooltip": "Older parts of this chat are summarized automatically when the context gets full.",
     "webResearchUnavailable": "Web research is not available for this provider account (web search is disabled there). This session answers without web research. To turn it off permanently: Settings → AI Provider → “Web research”.",
     "emptyResponse": "The model returned no response. For models with a thinking phase, a higher output limit in the provider settings helps.",
+    "refusedResponse": "The model declined this request. Rephrase it or start a new chat.",
     "outputTruncated": "(truncated)",
     "fileWritten": "File '{{path}}' written.",
     "writtenWithSudoPassword": "Written using the stored sudo password.",

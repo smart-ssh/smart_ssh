@@ -1150,6 +1150,12 @@
       "confirm": "Téléverser",
       "cancel": "Annuler",
       "menuTitle": "Téléverser les fichiers du presse-papiers"
+    },
+    "readFailure": {
+      "tooLarge": "Aucun diff texte possible : le fichier est trop volumineux (plus de 256 Ko).",
+      "notText": "Aucun diff texte possible : le fichier est binaire (texte UTF-8 non valide).",
+      "permission": "Aucun diff texte possible : vous n’avez pas le droit de lire ce fichier avec les droits actuels.",
+      "other": "Aucun diff texte possible : le fichier n’a pas pu être lu ({{message}})."
     }
   },
   "chat": {
@@ -1180,6 +1186,7 @@
     "contextUsageTooltip": "Les parties plus anciennes du chat sont résumées automatiquement lorsque le contexte est plein.",
     "webResearchUnavailable": "La recherche web n’est pas disponible pour ce compte fournisseur (la recherche web y est désactivée). Cette session répond sans recherche web. Pour la désactiver définitivement : Paramètres → Fournisseur d’IA → « Recherche web ».",
     "emptyResponse": "Le modèle n’a renvoyé aucune réponse. Pour les modèles avec phase de réflexion, une limite de sortie plus élevée dans les paramètres du fournisseur aide.",
+    "refusedResponse": "Le modèle a refusé cette demande. Reformulez-la ou démarrez un nouveau chat.",
     "outputTruncated": "(tronqué)",
     "fileWritten": "Fichier '{{path}}' écrit.",
     "writtenWithSudoPassword": "Écrit avec le mot de passe sudo enregistré.",

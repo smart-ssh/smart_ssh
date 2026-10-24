@@ -612,6 +612,12 @@ export interface ChatResponseEmptyEvent {
   sessionId: string;
 }
 
+/** Issue #647 — the model declined the request (`refusal` /
+ * `content_filter`). Shows a plain notice; text streamed before stays. */
+export interface ChatResponseRefusedEvent {
+  sessionId: string;
+}
+
 /** Spec 0105 §7 (Issue #169) — das Provider-Konto hat die Web-Werkzeuge
  * abgeschaltet; die Sitzung fragt ab jetzt ohne Web-Recherche weiter. Trägt
  * bewusst keinen Fehlertext des Providers. */

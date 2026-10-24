@@ -181,6 +181,12 @@ Logs nennen höchstens Dauer und Ergebnis.
   `base`/`small` mit Zustand, Herunterladen/Abbrechen/Löschen, und die
   Erkennungssprache (automatisch oder eine feste Sprache). Alle Werte bleiben
   über Neustarts erhalten.
+- Erkannte Nicht-Sprach-Marker (z. B. „[BLANK_AUDIO]“, „(Musik)“,
+  „[silence]“, „*music*“, „♪“) erscheinen weder im Live-Text noch im
+  Endergebnis: ganze Segmente aus solchen Markern entfallen, Marker mitten im
+  Satz werden entfernt. Nur bekannte Geräusch-Wörter zählen als Marker; vom
+  Nutzer Gesagtes mit Klammern („array [0]“) bleibt erhalten. Bei reiner
+  Stille bleibt der Entwurf unverändert.
 
 ## 6. Sicherheitszusagen
 

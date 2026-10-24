@@ -1136,6 +1136,12 @@
       "confirm": "Tải lên",
       "cancel": "Hủy",
       "menuTitle": "Tải lên các tệp từ bộ nhớ tạm"
+    },
+    "readFailure": {
+      "tooLarge": "Không thể so sánh văn bản: tệp quá lớn (trên 256 KB).",
+      "notText": "Không thể so sánh văn bản: tệp là nhị phân (không phải văn bản UTF-8 hợp lệ).",
+      "permission": "Không thể so sánh văn bản: với quyền hiện tại, bạn không có quyền đọc tệp này.",
+      "other": "Không thể so sánh văn bản: không đọc được tệp ({{message}})."
     }
   },
   "chat": {
@@ -1166,6 +1172,7 @@
     "contextUsageTooltip": "Các phần cũ hơn của cuộc trò chuyện được tự động tóm tắt khi ngữ cảnh đầy.",
     "webResearchUnavailable": "Tra cứu web không khả dụng cho tài khoản nhà cung cấp này (tìm kiếm web bị tắt ở đó). Phiên này trả lời mà không tra cứu web. Để tắt vĩnh viễn: Cài đặt → Nhà cung cấp AI → “Tra cứu web”.",
     "emptyResponse": "Mô hình không trả về phản hồi nào. Với các mô hình có giai đoạn suy nghĩ, nên tăng giới hạn đầu ra trong cài đặt nhà cung cấp.",
+    "refusedResponse": "Mô hình đã từ chối yêu cầu này. Hãy diễn đạt lại hoặc bắt đầu cuộc trò chuyện mới.",
     "outputTruncated": "(đã cắt bớt)",
     "fileWritten": "Đã ghi tệp '{{path}}'.",
     "writtenWithSudoPassword": "Đã ghi bằng mật khẩu sudo đã lưu.",

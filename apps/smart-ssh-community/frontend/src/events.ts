@@ -15,6 +15,7 @@ import type {
   ChatQueuedMessagesSentEvent,
   ChatResponseCancelledEvent,
   ChatResponseEmptyEvent,
+  ChatResponseRefusedEvent,
   ChatResponseTruncatedEvent,
   ChatContextUsageEvent,
   ChatContextCompactedEvent,
@@ -180,6 +181,12 @@ export const onChatResponseEmpty = (
   handler: (event: ChatResponseEmptyEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatResponseEmptyEvent>("chat-response-empty", (e) => handler(e.payload));
+
+/** Issue #647 — s. `ChatResponseRefusedEvent`-Doc-Kommentar. */
+export const onChatResponseRefused = (
+  handler: (event: ChatResponseRefusedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatResponseRefusedEvent>("chat-response-refused", (e) => handler(e.payload));
 
 /** Spec 0066, §1 — s. `ChatResponseCancelledEvent`-Doc-Kommentar. */
 export const onChatResponseCancelled = (

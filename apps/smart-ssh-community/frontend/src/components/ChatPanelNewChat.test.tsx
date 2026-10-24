@@ -5,7 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendChatMessage, startNewChat } from "../api";
-import { onChatActionProposed } from "../events";
+import { onChatActionProposed, onChatContextUsage } from "../events";
 import type { ChatActionProposedEvent } from "../types";
 import { testI18n } from "../testI18n";
 import { ChatPanel } from "./ChatPanel";
@@ -64,8 +64,9 @@ vi.mock("../events", () => ({
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseRefused: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
-  onChatContextUsage: () => Promise.resolve(() => {}),
+  onChatContextUsage: vi.fn(() => Promise.resolve(() => {})),
   onChatContextCompacted: () => Promise.resolve(() => {}),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
@@ -128,6 +129,26 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
 
     await waitFor(() => expect(startNewChat).toHaveBeenCalledWith("session-1"));
     await waitFor(() => expect(screen.queryByText("hallo Welt")).not.toBeInTheDocument());
+  });
+
+  it("resets the context usage indicator to 0 after a new chat (issue #648)", async () => {
+    renderChatPanel();
+    await screen.findByPlaceholderText(PLACEHOLDER);
+    await waitFor(() => expect(onChatContextUsage).toHaveBeenCalled());
+    const handler = vi.mocked(onChatContextUsage).mock.calls[0][0];
+    act(() => handler({ sessionId: "session-1", inputTokens: 90_000, windowTokens: 200_000 }));
+    const indicator = await screen.findByTestId("context-usage");
+    expect(indicator.textContent).toContain("90");
+
+    const button = await screen.findByRole("button", { name: "Neuer Chat" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByTestId("context-usage").textContent).not.toContain("90"));
+    expect(screen.getByTestId("context-usage").textContent).toContain("200");
+
+    act(() => handler({ sessionId: "session-1", inputTokens: 5_000, windowTokens: 200_000 }));
+    expect(screen.getByTestId("context-usage").textContent).toContain("5");
   });
 
   it("keeps the text in the input when the backend rejects a message during the swap", async () => {

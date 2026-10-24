@@ -94,6 +94,12 @@ pub const FILTER_RULE_PATTERN_INVALID: &str = "FILTER_RULE_PATTERN_INVALID";
 /// ist nur der Fallback.
 pub const SFTP_CONTENT_TOO_LARGE: &str = "SFTP_CONTENT_TOO_LARGE";
 
+/// Issue #655: the text preview (`sftp_read_text`) refused a file for its
+/// size / because it is not valid UTF-8. The frontend names the reason in the
+/// "no diff" hint; the message stays the fallback.
+pub const SFTP_PREVIEW_TOO_LARGE: &str = "SFTP_PREVIEW_TOO_LARGE";
+pub const SFTP_PREVIEW_NOT_TEXT: &str = "SFTP_PREVIEW_NOT_TEXT";
+
 /// Issue #357, Spec 0086 A1.5: der Nutzer hat „Dateiinhalt kopieren"
 /// abgebrochen. Kein Fehler im eigentlichen Sinn; das Frontend zeigt dazu
 /// nichts an.
@@ -336,6 +342,9 @@ mod code_tests {
             // Issue #357, Spec 0086 A1.1/A1.5.
             super::SFTP_CONTENT_TOO_LARGE,
             super::SFTP_COPY_CANCELLED,
+            // Issue #655.
+            super::SFTP_PREVIEW_TOO_LARGE,
+            super::SFTP_PREVIEW_NOT_TEXT,
             // Issue #358.
             super::CLIPBOARD_FILE_FAILED,
         ];

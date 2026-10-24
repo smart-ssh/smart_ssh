@@ -1136,6 +1136,12 @@
       "confirm": "업로드",
       "cancel": "취소",
       "menuTitle": "클립보드의 파일 업로드"
+    },
+    "readFailure": {
+      "tooLarge": "텍스트 diff를 표시할 수 없음: 파일이 너무 큽니다(256 KB 초과).",
+      "notText": "텍스트 diff를 표시할 수 없음: 파일이 바이너리입니다(유효한 UTF-8 텍스트 아님).",
+      "permission": "텍스트 diff를 표시할 수 없음: 현재 권한으로는 이 파일을 읽을 수 없습니다.",
+      "other": "텍스트 diff를 표시할 수 없음: 파일을 읽을 수 없습니다({{message}})."
     }
   },
   "chat": {
@@ -1166,6 +1172,7 @@
     "contextUsageTooltip": "컨텍스트가 가득 차면 채팅의 오래된 부분이 자동으로 요약됩니다.",
     "webResearchUnavailable": "이 제공자 계정에서는 웹 조사를 사용할 수 없습니다(웹 검색이 비활성화되어 있음). 이 세션은 웹 조사 없이 답변합니다. 영구적으로 끄려면 설정 → AI 제공자 → “웹 조사”를 사용하십시오.",
     "emptyResponse": "모델이 응답을 반환하지 않았습니다. 사고 단계가 있는 모델에서는 제공자 설정의 출력 제한을 높이면 도움이 됩니다.",
+    "refusedResponse": "모델이 이 요청을 거부했습니다. 표현을 바꾸거나 새 채팅을 시작하세요.",
     "outputTruncated": "(잘림)",
     "fileWritten": "파일 '{{path}}'을(를) 썼습니다.",
     "writtenWithSudoPassword": "저장된 sudo 비밀번호를 사용하여 썼습니다.",

@@ -1153,6 +1153,23 @@ pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionI
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ChatResponseRefusedPayload {
+    session_id: SessionId,
+}
+
+/// Issue #647: the model declined the request (`refusal` /
+/// `content_filter`). Own event (not text in the content, same reason as
+/// `emit_chat_response_truncated`); the frontend shows a plain notice.
+pub fn emit_chat_response_refused(emitter: &dyn EventEmitter, session_id: SessionId) {
+    emit(
+        emitter,
+        "chat-response-refused",
+        &ChatResponseRefusedPayload { session_id },
+    );
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ChatResponseCancelledPayload {
     session_id: SessionId,
 }

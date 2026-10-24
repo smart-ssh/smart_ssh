@@ -236,6 +236,11 @@ pub(crate) fn classify_provider_error(
     if info.matches("rate_limit_error") || info.matches("rate_limit_exceeded") {
         return Some(AiError::RateLimited);
     }
+    // Issue #615: OpenAI sends this code together with
+    // `invalid_request_error`; it must not become a generic rejection.
+    if info.matches("context_length_exceeded") {
+        return Some(AiError::ContextTooLarge);
+    }
     if info.matches("invalid_request_error") {
         if info.message_lower().contains("prompt is too long") {
             return Some(AiError::ContextTooLarge);
@@ -836,6 +841,26 @@ mod classify_tests {
             stream_err("invalid_request_error", "prompt is too long: 1 > 0"),
             AiError::ContextTooLarge
         );
+    }
+
+    #[test]
+    fn test_issue_615_context_length_exceeded_code_is_context_too_large() {
+        let info = ProviderErrorInfo {
+            error_type: Some("invalid_request_error".into()),
+            code: Some("context_length_exceeded".into()),
+            message: Some("too many tokens".into()),
+        };
+        assert_eq!(
+            classify_provider_error(None, &info),
+            Some(AiError::ContextTooLarge)
+        );
+        let body = r#"{"error":{"type":"invalid_request_error","code":"context_length_exceeded","message":"too long"}}"#;
+        assert_eq!(http(400, body), AiError::ContextTooLarge);
+        // Other codes and billing keep their mapping.
+        let other = r#"{"error":{"type":"invalid_request_error","code":"foo","message":"x"}}"#;
+        assert!(matches!(http(400, other), AiError::RejectedRequest(_)));
+        let bill = r#"{"error":{"type":"invalid_request_error","code":"insufficient_quota","message":"x"}}"#;
+        assert!(matches!(http(400, bill), AiError::Billing(_)));
     }
 
     #[test]

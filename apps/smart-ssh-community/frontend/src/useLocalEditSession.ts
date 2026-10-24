@@ -11,6 +11,7 @@ import {
   sftpUpload,
 } from "./api";
 import { appForFileName, loadFileTypeApps } from "./fileTypeSettings";
+import { classifyPreviewReadFailure, type PreviewReadFailure } from "./previewReadFailure";
 import type { RemoteEntryDto } from "./types";
 
 /** Spec 0054, Teil 4: wie oft auf eine lokale Änderung der Bearbeitungskopie
@@ -38,6 +39,8 @@ export interface UploadOffer {
   localText: string | null;
   localSize: number;
   remoteText: string | null;
+  /** Issue #655: why `remoteText` is `null` (`null` if it is not). */
+  remoteReadFailure: PreviewReadFailure | null;
   /** `true`, wenn sich die Remote-Datei laut `modified`-Zeitstempel seit
    * dem Download für diese Bearbeitung geändert hat — Spec 0054, Teil 4,
    * Punkt 5: "Warnung vor dem Überschreiben (Datenverlust vermeiden)".
@@ -141,11 +144,15 @@ export function useLocalEditSession(sessionId: string) {
    * bleibt. */
   const buildUploadOffer = useCallback(async (): Promise<UploadOffer | null> => {
     if (!session) return null;
-    const [localPreview, remoteEntry, remoteText] = await Promise.all([
+    const [localPreview, remoteEntry, remoteRead] = await Promise.all([
       readLocalTextPreview(sessionId, session.localPath),
       sftpStat(sessionId, session.entry.path, session.elevatedUser).catch(() => null),
-      sftpReadText(sessionId, session.entry.path, session.elevatedUser).catch(() => null),
+      sftpReadText(sessionId, session.entry.path, session.elevatedUser).then(
+        (text) => ({ text, failure: null as PreviewReadFailure | null }),
+        (err) => ({ text: null as string | null, failure: classifyPreviewReadFailure(err) }),
+      ),
     ]);
+    const remoteText = remoteRead.text;
     const remoteModifiedNow = remoteEntry?.modified ?? null;
     const baseline = remoteModifiedAtDownloadRef.current;
     // Spec-Reviewer-Fund (Spec 0054, Review des Gesamtpakets): die
@@ -163,6 +170,7 @@ export function useLocalEditSession(sessionId: string) {
       localText: localPreview.text,
       localSize: localPreview.size,
       remoteText,
+      remoteReadFailure: remoteRead.failure,
       remoteChangedSinceDownload,
     };
   }, [session, sessionId]);
@@ -171,7 +179,8 @@ export function useLocalEditSession(sessionId: string) {
    * der Aufrufer zeigt daraus eine Meldung). */
   const confirmUpload = useCallback(async (): Promise<string | null> => {
     if (!session) return null;
-    setSession((prev) => (prev ? { ...prev, status: "uploading" } : prev));
+    // Issue #655: a retry replaces the previous error, it never stacks.
+    setSession((prev) => (prev ? { ...prev, status: "uploading", error: null } : prev));
     try {
       await sftpUpload(sessionId, session.localPath, session.entry.path, session.elevatedUser);
       const uploadedMtime = await localFileMtime(sessionId, session.localPath);
