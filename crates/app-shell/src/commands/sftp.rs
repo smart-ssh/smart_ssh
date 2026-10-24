@@ -2551,6 +2551,7 @@ mod sftp_mutation_tests {
         assert!(root.exists(), "the rest stays");
     }
 
+    #[cfg(unix)] // LocalFileSession cannot chmod on Windows
     #[tokio::test]
     async fn test_recursive_chmod_reports_progress_and_cancel_count() {
         let (_keep, root) = tree(10);
