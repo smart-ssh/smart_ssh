@@ -531,11 +531,11 @@ fn test_resolve_auth_missing_key_file_reports_not_found_on_this_device() {
         passphrase_ref: None,
     };
     match resolve_auth(&auth, &store, &key_files) {
-        Err(SshError::CredentialResolutionFailed(msg)) => assert_eq!(
-            msg,
+        Err(err @ SshError::KeyFileNotFound { .. }) => assert_eq!(
+            err.to_string(),
             format!("Schlüsseldatei auf diesem Gerät nicht gefunden: {IDENTITY_PATH}")
         ),
-        other => panic!("expected CredentialResolutionFailed, got {other:?}"),
+        other => panic!("expected KeyFileNotFound, got {other:?}"),
     }
 }
 
