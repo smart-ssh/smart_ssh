@@ -1063,3 +1063,400 @@ async fn copy_marker_round_trips_and_is_optional_in_the_file() {
     let row: ServerRow = serde_json::from_str(&json).unwrap();
     assert!(!row.is_copy);
 }
+
+// ---- Issue #670: read_snapshot and apply_changes -------------------------
+
+async fn seeded_fixture() -> (Fixture, Snapshot) {
+    let f = empty_fixture().await;
+    let snap = build("C", 3, 3, 3);
+    seed(&f, &snap).await;
+    (f, snap)
+}
+
+/// `read_snapshot` holds exactly what the export holds.
+#[tokio::test(flavor = "multi_thread")]
+async fn read_snapshot_equals_the_export_content() {
+    let (f, seeded) = seeded_fixture().await;
+    let code = BackupKey::create_with_code(&f.backup).await.unwrap();
+    let file = export_to(&f, "a.sshbackup").await;
+    let exported = open_file(&file, &code_secret(&code)).unwrap();
+    let read = read_snapshot(&f.backup, &f.host_keys).await.unwrap();
+    assert_eq!(sorted(read.clone()), sorted(exported));
+    assert_eq!(sorted(read), sorted(seeded));
+}
+
+/// Inserts, updates and deletes across all entity types give exactly the
+/// expected state and fire the data-change notification.
+#[tokio::test(flavor = "multi_thread")]
+async fn apply_changes_inserts_updates_and_deletes_across_all_types() {
+    let (f, base) = seeded_fixture().await;
+    let (tx, rx) = std::sync::mpsc::channel();
+    let tx = std::sync::Mutex::new(tx);
+    f.db.data_changes().subscribe(std::sync::Arc::new(move |k| {
+        tx.lock().unwrap().send(k.clone()).unwrap();
+    }));
+
+    let t = now();
+    let mut expected = base.clone();
+    let mut cs = ChangeSet::default();
+
+    // groups: update g2's name, add g3, delete nothing (g1 has children).
+    let mut g2 = expected.groups[1].clone();
+    g2.name = "renamed".into();
+    let g3 = GroupRow {
+        id: Uuid::new_v4(),
+        name: "g3".into(),
+        parent_id: None,
+        notes: String::new(),
+        is_copy: false,
+        created_at: t.clone(),
+        updated_at: t.clone(),
+    };
+    cs.groups = vec![Change::Upsert(g2.clone()), Change::Upsert(g3.clone())];
+    expected.groups[1] = g2;
+    expected.groups.push(g3.clone());
+
+    // servers: update s2, delete s1 (cascade), insert s4 in g3.
+    let s1 = expected.servers[1].clone();
+    let mut s2 = expected.servers[2].clone();
+    s2.name = "s2-new".into();
+    let id4 = Uuid::new_v4();
+    let mut s4 = s2.clone();
+    s4.id = id4;
+    s4.group_id = Some(g3.id);
+    s4.auth_method = serde_json::to_string(&AuthMethod::Agent).unwrap();
+    cs.servers = vec![
+        Change::Delete(s1.id),
+        Change::Upsert(s2.clone()),
+        Change::Upsert(s4.clone()),
+    ];
+    expected.servers.retain(|s| s.id != s1.id);
+    expected.servers.iter_mut().for_each(|s| {
+        if s.id == s2.id {
+            *s = s2.clone();
+        }
+    });
+    expected.servers.push(s4.clone());
+    expected.tags.retain(|x| x.server_id != s1.id);
+    expected
+        .secrets
+        .retain(|x| !x.owner_ref.contains(&s1.id.to_string()));
+    expected.notes.retain(|n| n.target_id != s1.id);
+
+    // tags: add one, remove one.
+    let new_tag = TagRow {
+        server_id: id4,
+        tag: "new".into(),
+    };
+    let removed_tag = (expected.tags[0].server_id, expected.tags[0].tag.clone());
+    cs.tags = vec![
+        Change::Upsert(new_tag.clone()),
+        Change::Delete(removed_tag.clone()),
+    ];
+    expected.tags.push(new_tag);
+    expected
+        .tags
+        .retain(|x| (x.server_id, x.tag.clone()) != removed_tag);
+
+    // rules: update one, insert one, delete one.
+    let mut r_up = expected.rules[1].clone();
+    r_up.pattern_value = "shutdown*".into();
+    let r_new = RuleRow {
+        id: Uuid::new_v4(),
+        pattern_type: "glob".into(),
+        pattern_value: "reboot*".into(),
+        action: "confirm".into(),
+        scope_type: "global".into(),
+        scope_value: None,
+        priority: 9,
+        created_at: t.clone(),
+        updated_at: t.clone(),
+    };
+    let r_del = expected.rules[2].id;
+    cs.rules = vec![
+        Change::Upsert(r_up.clone()),
+        Change::Upsert(r_new.clone()),
+        Change::Delete(r_del),
+    ];
+    expected.rules.iter_mut().for_each(|r| {
+        if r.id == r_up.id {
+            *r = r_up.clone();
+        }
+    });
+    expected.rules.push(r_new);
+    expected.rules.retain(|r| r.id != r_del);
+    // the rule bound to s0 stays; none was bound to s1.
+
+    // notes: add a revision, delete one of s0/s2.
+    let n_new = NoteRevisionRow {
+        id: Uuid::new_v4(),
+        target_type: "group".into(),
+        target_id: g3.id,
+        content: "hello".into(),
+        editor_type: "user".into(),
+        ai_provider: None,
+        ai_model: None,
+        created_at: t.clone(),
+    };
+    let n_del = expected
+        .notes
+        .iter()
+        .find(|n| n.target_id == s2.id)
+        .map(|n| n.id);
+    cs.notes = vec![Change::Upsert(n_new.clone())];
+    if let Some(id) = n_del {
+        cs.notes.push(Change::Delete(id));
+        expected.notes.retain(|n| n.id != id);
+    }
+    expected.notes.push(n_new);
+
+    // AI provider: update, plus a new one with its secret; secret update.
+    let mut ai = expected.ai_providers[0].clone();
+    ai.display_name = "ai-new".into();
+    let ai2_id = Uuid::new_v4();
+    let mut ai2 = ai.clone();
+    ai2.id = ai2_id;
+    ai2.credential_ref = format!("ai-provider:{ai2_id}");
+    ai2.is_active = false;
+    let sec_ai2 = SecretRow {
+        owner_ref: format!("ai-provider:{ai2_id}"),
+        value: "k2".into(),
+    };
+    let sec_s4 = SecretRow {
+        owner_ref: format!("server:{id4}:password"),
+        value: "pw4".into(),
+    };
+    cs.ai_providers = vec![Change::Upsert(ai.clone()), Change::Upsert(ai2.clone())];
+    cs.secrets = vec![
+        Change::Upsert(sec_ai2.clone()),
+        Change::Upsert(sec_s4.clone()),
+    ];
+    expected.ai_providers[0] = ai;
+    expected.ai_providers.push(ai2);
+    expected.secrets.push(sec_ai2);
+    expected.secrets.push(sec_s4);
+    // s4 uses the agent method, so its extra credential would be orphaned
+    // by the validation of own references only if it were referenced; it is
+    // an owned credential of an existing server and therefore valid.
+
+    // host keys: add one, delete the existing one.
+    let hk_new = HostKeyRow {
+        host: "new.example.invalid".into(),
+        port: 2222,
+        raw_key: base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            ed25519_blob(9),
+        ),
+    };
+    let hk_old = (base.host_keys[0].host.clone(), base.host_keys[0].port);
+    cs.host_keys = vec![Change::Upsert(hk_new.clone()), Change::Delete(hk_old)];
+    expected.host_keys = vec![hk_new];
+
+    let summary = apply_changes(&f.backup, &f.host_keys, &cs).await.unwrap();
+    assert!(!summary.host_keys_pending);
+    let after = state(&f).await;
+    assert_eq!(sorted(after), sorted(expected));
+    assert_eq!(f.backup.pending_host_keys().await.unwrap(), None);
+    assert_eq!(f.host_keys.entries().unwrap().len(), 1);
+    let kinds = rx
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("views are told to reload");
+    assert!(kinds.contains(&ssh_manager_core::data_change::DataKind::Servers));
+    assert!(kinds.contains(&ssh_manager_core::data_change::DataKind::Rules));
+}
+
+fn first_server_change(base: &Snapshot, edit: impl FnOnce(&mut ServerRow)) -> ChangeSet {
+    let mut s = base.servers[2].clone();
+    edit(&mut s);
+    ChangeSet {
+        servers: vec![Change::Upsert(s)],
+        ..Default::default()
+    }
+}
+
+/// An invalid rule, a dangling reference or a jump-host cycle anywhere in
+/// the set changes nothing, even when other entries of the set are fine.
+#[tokio::test(flavor = "multi_thread")]
+async fn invalid_change_sets_change_nothing() {
+    let (f, base) = seeded_fixture().await;
+    let before = state(&f).await;
+    let t = now();
+    let good_group = Change::Upsert(GroupRow {
+        id: Uuid::new_v4(),
+        name: "fine".into(),
+        parent_id: None,
+        notes: String::new(),
+        is_copy: false,
+        created_at: t.clone(),
+        updated_at: t.clone(),
+    });
+    let rule = |pattern_type: &str, pattern: &str, scope: &str, value: Option<String>| RuleRow {
+        id: Uuid::new_v4(),
+        pattern_type: pattern_type.into(),
+        pattern_value: pattern.into(),
+        action: "deny".into(),
+        scope_type: scope.into(),
+        scope_value: value,
+        priority: 1,
+        created_at: t.clone(),
+        updated_at: t.clone(),
+    };
+    let mut sets: Vec<(&str, ChangeSet)> = Vec::new();
+    // invalid regex (U6)
+    sets.push((
+        "invalid rule",
+        ChangeSet {
+            rules: vec![Change::Upsert(rule("regex", "^(unclosed", "global", None))],
+            ..Default::default()
+        },
+    ));
+    // unknown action: a downgraded rule must not slip in either
+    let mut bad_action = rule("glob", "x", "global", None);
+    bad_action.action = "ignore".into();
+    sets.push((
+        "unknown action",
+        ChangeSet {
+            rules: vec![Change::Upsert(bad_action)],
+            ..Default::default()
+        },
+    ));
+    // rule for a missing server
+    sets.push((
+        "dangling rule",
+        ChangeSet {
+            rules: vec![Change::Upsert(rule(
+                "glob",
+                "x",
+                "server",
+                Some(Uuid::new_v4().to_string()),
+            ))],
+            ..Default::default()
+        },
+    ));
+    // dangling group and jump host
+    let ghost = Uuid::new_v4();
+    sets.push((
+        "dangling folder",
+        first_server_change(&base, |s| s.group_id = Some(ghost)),
+    ));
+    sets.push((
+        "dangling jump host",
+        first_server_change(&base, |s| s.jump_host_id = Some(ghost)),
+    ));
+    // cycle: s0 -> s1 while s1 -> s0
+    let mut s0 = base.servers[0].clone();
+    s0.jump_host_id = Some(base.servers[1].id);
+    sets.push((
+        "jump host cycle",
+        ChangeSet {
+            servers: vec![Change::Upsert(s0)],
+            ..Default::default()
+        },
+    ));
+    // deleting a jump host that is still used
+    sets.push((
+        "deleted jump host still in use",
+        ChangeSet {
+            servers: vec![Change::Delete(base.servers[0].id)],
+            ..Default::default()
+        },
+    ));
+    // credential of another owner
+    sets.push((
+        "foreign credential",
+        ChangeSet {
+            secrets: vec![Change::Upsert(SecretRow {
+                owner_ref: format!("server:{ghost}:password"),
+                value: "x".into(),
+            })],
+            ..Default::default()
+        },
+    ));
+    for (name, mut cs) in sets {
+        cs.groups.push(good_group.clone());
+        cs.host_keys.push(Change::Delete((
+            base.host_keys[0].host.clone(),
+            base.host_keys[0].port,
+        )));
+        let err = apply_changes(&f.backup, &f.host_keys, &cs)
+            .await
+            .expect_err(name);
+        assert!(matches!(err, BackupOpError::Invalid(_)), "{name}: {err:?}");
+        assert_eq!(state(&f).await, before, "{name}");
+        assert_eq!(f.host_keys.entries().unwrap().len(), 1, "{name}");
+        assert_eq!(f.backup.pending_host_keys().await.unwrap(), None, "{name}");
+    }
+}
+
+/// A failure in the middle of the transaction changes nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn failure_inside_the_transaction_changes_nothing() {
+    let (f, base) = seeded_fixture().await;
+    let before = state(&f).await;
+    let mut s2 = base.servers[2].clone();
+    s2.name = "changed".into();
+    let cs = ChangeSet {
+        servers: vec![Change::Upsert(s2), Change::Delete(base.servers[1].id)],
+        host_keys: vec![Change::Delete((
+            base.host_keys[0].host.clone(),
+            base.host_keys[0].port,
+        ))],
+        ..Default::default()
+    };
+    for step in ["upsert", "delete"] {
+        let err = apply_changes_with(&f.backup, &f.host_keys, &cs, &mut |s| s == step)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, BackupOpError::Store(_)), "{err:?}");
+        assert_eq!(state(&f).await, before, "after failing at {step}");
+        assert_eq!(f.backup.pending_host_keys().await.unwrap(), None);
+    }
+    apply_changes(&f.backup, &f.host_keys, &cs).await.unwrap();
+    assert_ne!(state(&f).await, before);
+}
+
+/// Deleting a server removes the same dependent rows as the UI delete:
+/// tags, notes with revisions, credentials and server-bound rules.
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_server_removes_its_dependents() {
+    let (f, base) = seeded_fixture().await;
+    let victim = base.servers[2].id;
+    let bound = RuleRow {
+        id: Uuid::new_v4(),
+        pattern_type: "glob".into(),
+        pattern_value: "ls*".into(),
+        action: "allow".into(),
+        scope_type: "server".into(),
+        scope_value: Some(victim.to_string()),
+        priority: 5,
+        created_at: now(),
+        updated_at: now(),
+    };
+    let add = ChangeSet {
+        rules: vec![Change::Upsert(bound.clone())],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &add).await.unwrap();
+    let before = state(&f).await;
+    assert!(before.notes.iter().any(|n| n.target_id == victim));
+    assert!(before.tags.iter().any(|t| t.server_id == victim));
+
+    let del = ChangeSet {
+        servers: vec![Change::Delete(victim)],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &del).await.unwrap();
+    let after = state(&f).await;
+    assert!(!after.servers.iter().any(|s| s.id == victim));
+    assert!(!after.tags.iter().any(|t| t.server_id == victim));
+    assert!(!after.notes.iter().any(|n| n.target_id == victim));
+    assert!(!after.rules.iter().any(|r| r.id == bound.id));
+    assert!(!after
+        .secrets
+        .iter()
+        .any(|s| s.owner_ref.starts_with(&format!("server:{victim}:"))));
+    // Everything else is untouched.
+    assert_eq!(after.servers.len(), before.servers.len() - 1);
+    assert_eq!(after.groups, before.groups);
+    assert_eq!(after.ai_providers, before.ai_providers);
+}
