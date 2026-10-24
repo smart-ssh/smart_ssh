@@ -97,3 +97,8 @@ mit dem im Auftrag benannten Rechte-Vorbehalt für den App-Start bei T12.
 Der Bericht nennt die genauen Befehle (inkl. der Reproduktion des
 `sqlx`-Fehlers) für eine Person mit Display-Zugriff und einer sauberen
 `target/`-Kompilierung.
+
+## Nachtrag 2026-10-24
+
+Release-Builds werden nicht mehr von der CI dieses Repositorys erzeugt;
+`release.yml` wurde entfernt.
