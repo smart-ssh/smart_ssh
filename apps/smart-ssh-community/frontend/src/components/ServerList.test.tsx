@@ -586,3 +586,43 @@ describe("ServerList resume request (Issue #611)", () => {
     expect(startConnectMock).not.toHaveBeenCalled();
   });
 });
+
+// Issue #657: "New session" in the context menu opens an additional session
+// even when the server already has a tab; a normal click still focuses it.
+describe("ServerList new session (issue #657)", () => {
+  const renderWithTab = (onSwitch = vi.fn()) =>
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerList
+          onStartConnect={startConnectMock}
+          connectingServerIds={new Set()}
+          findExistingSessionId={(id) => (id === "remote-1" ? "tab-1" : undefined)}
+          onSwitchToExistingTab={onSwitch}
+          collapsedGroupIds={new Set()}
+          onToggleGroup={vi.fn()}
+          onCreateFirstServer={vi.fn()}
+          onCreateServerInGroup={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+
+  it("opens an additional session from the context menu although a tab exists", async () => {
+    startConnectMock.mockClear();
+    renderWithTab();
+    const row = (await screen.findByText("prod-1")).closest("button")!;
+    fireEvent.contextMenu(row);
+    fireEvent.click(await screen.findByRole("button", { name: "Neue Sitzung" }));
+    await waitFor(() =>
+      expect(startConnectMock).toHaveBeenCalledWith({ id: "remote-1", name: "prod-1" }),
+    );
+  });
+
+  it("a normal click still focuses the existing tab", async () => {
+    startConnectMock.mockClear();
+    const onSwitch = vi.fn();
+    renderWithTab(onSwitch);
+    fireEvent.click((await screen.findByText("prod-1")).closest("button")!);
+    await waitFor(() => expect(onSwitch).toHaveBeenCalledWith("tab-1"));
+    expect(startConnectMock).not.toHaveBeenCalled();
+  });
+});

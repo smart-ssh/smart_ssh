@@ -429,6 +429,7 @@
     "expired": "Värdnyckelbegäran för {{host}}:{{port}} har gått ut. Anslutningen upprättades inte och nyckeln godkändes inte."
   },
   "sessionTabs": {
+    "newSession": "Ny session",
     "overview": "Översikt",
     "pendingAction": "Väntar på bekräftelse",
     "closeTab": "Stäng fliken \"{{name}}\"",

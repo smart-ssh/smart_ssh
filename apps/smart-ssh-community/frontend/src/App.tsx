@@ -224,6 +224,7 @@ function App() {
             activeSessionId={activeSessionId}
             onSwitch={switchTo}
             onRequestClose={requestCloseTab}
+            onNewSession={startConnect}
           />
         )}
       </AppHeader>

@@ -2,7 +2,7 @@
 // menu (issue #579), so label, state indicator and badges stay identical.
 import type { TFunction } from "i18next";
 import { Spinner } from "./ui";
-import { sessionTabLabel, type SessionTab } from "../useSessionTabs";
+import { numberedServerName, sessionTabLabel, type SessionTab } from "../useSessionTabs";
 
 const STATUS_DOT: Record<SessionTab["status"], string> = {
   connected: "bg-emerald-500",
@@ -14,9 +14,9 @@ const STATUS_DOT: Record<SessionTab["status"], string> = {
 /** The visible label of a tab, including connecting/failed wording. */
 export function tabDisplayLabel(tab: SessionTab, t: TFunction): string {
   return tab.phase === "connecting"
-    ? t("connectTab.connecting", { name: tab.serverName })
+    ? t("connectTab.connecting", { name: numberedServerName(tab) })
     : tab.phase === "failed"
-      ? t("connectTab.failed", { name: tab.serverName })
+      ? t("connectTab.failed", { name: numberedServerName(tab) })
       : sessionTabLabel(tab, t("sessionTabs.mcp.unnamedClient"));
 }
 
