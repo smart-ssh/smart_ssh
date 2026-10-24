@@ -10,6 +10,8 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+#[cfg(target_os = "android")]
+mod android_service;
 mod auto_reconnect;
 /// Issue #462: extension-owned database tables.
 mod chat_content;
@@ -980,6 +982,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 /// gibt also keinen zweiten Pfad, der auseinanderlaufen könnte.
 pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     use tauri::Manager;
+
+    // Spec 0114 §4: keep sessions alive in the background on Android.
+    #[cfg(target_os = "android")]
+    android_service::start(app);
 
     // Issue #669: background services start here — only reached once the
     // state exists (after unlock in master-password mode), and after the

@@ -1705,6 +1705,8 @@ pub struct SessionSnapshotEntry {
 #[derive(Default)]
 pub struct SessionManager {
     sessions: StdMutex<HashMap<SessionId, Arc<Session>>>,
+    /// Spec 0114 §4: number of open sessions, for the background keep-alive.
+    count_tx: tokio::sync::watch::Sender<usize>,
     /// Spec 0017, Abschnitt 2: Verbindungsversuche, die aktuell auf
     /// `confirm_host_key` warten (`app_shell::commands::connect`) — diese
     /// Sessions existieren noch nicht in `sessions` (s. dortiger
@@ -1823,7 +1825,14 @@ impl SessionManager {
     }
 
     pub fn insert(&self, id: SessionId, session: Arc<Session>) {
-        self.sessions.lock().unwrap().insert(id, session);
+        let mut sessions = self.sessions.lock().unwrap();
+        sessions.insert(id, session);
+        self.count_tx.send_replace(sessions.len());
+    }
+
+    /// Watches the number of open sessions (Spec 0114 §4).
+    pub fn subscribe_count(&self) -> tokio::sync::watch::Receiver<usize> {
+        self.count_tx.subscribe()
     }
 
     pub fn get(&self, id: SessionId) -> Option<Arc<Session>> {
@@ -1831,7 +1840,10 @@ impl SessionManager {
     }
 
     pub fn remove(&self, id: SessionId) -> Option<Arc<Session>> {
-        self.sessions.lock().unwrap().remove(&id)
+        let mut sessions = self.sessions.lock().unwrap();
+        let removed = sessions.remove(&id);
+        self.count_tx.send_replace(sessions.len());
+        removed
     }
 
     /// Spec 0040, Abschnitt 7: Grundlage für `commands::delete_chat_session`s
@@ -2520,6 +2532,22 @@ mod tests {
 
         manager.clear_pending_connection(pending_id);
         assert!(manager.snapshot().is_empty());
+    }
+
+    #[test]
+    fn test_session_count_watch_follows_insert_and_remove() {
+        let manager = SessionManager::new();
+        let rx = manager.subscribe_count();
+        assert_eq!(*rx.borrow(), 0);
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        manager.insert(a, Arc::new(dummy_session(ServerId(Uuid::new_v4()))));
+        manager.insert(b, Arc::new(dummy_session(ServerId(Uuid::new_v4()))));
+        assert_eq!(*rx.borrow(), 2);
+        manager.remove(a);
+        assert_eq!(*rx.borrow(), 1);
+        manager.remove(a);
+        manager.remove(b);
+        assert_eq!(*rx.borrow(), 0);
     }
 
     #[test]
