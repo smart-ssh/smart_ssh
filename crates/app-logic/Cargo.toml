@@ -54,6 +54,7 @@ tracing-appender = "0.2.5"
 # selbst hier liegt (nicht nur Test-Infrastruktur).
 tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
+zeroize = "1.9.0"
 
 [dev-dependencies]
 # Issue #104: Eigenschaftstest gegen den Fallback-Parser. Nur hier.

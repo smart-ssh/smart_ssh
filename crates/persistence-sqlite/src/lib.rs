@@ -7,6 +7,7 @@
 //! I/O-Abhängigkeiten, austauschbare Storage-Details gehören hierher.
 
 mod ai_provider_store;
+mod backup_store;
 mod chat_session_store;
 /// Spec 0101, A9: der produktive `CredentialStore` — Secrets in der
 /// verschlüsselten Datenbank statt im Schlüsselbund.
@@ -36,6 +37,8 @@ pub mod test_support;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_backup_store;
 /// Spec 0101 — eigene Datei: T10 (Vertrag des
 /// Datenbank-`CredentialStore`) und die drei Aufruforte aus §2 Frage 2.
 #[cfg(test)]
@@ -65,6 +68,10 @@ mod tests_release_chain;
 
 pub use ai_provider_store::{
     AiProviderConfig, AiProviderConfigUpdate, AiProviderStoreError, SqliteAiProviderStore,
+};
+pub use backup_store::{
+    AiProviderRow, BackupStoreError, DatabaseSnapshot, GroupRow, NoteRevisionRow, RuleRow,
+    SecretRow, ServerRow, SqliteBackupStore, TagRow, BACKUP_KEY_REF,
 };
 pub use chat_session_store::{
     ChatSessionRemovalObserver, ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore,
