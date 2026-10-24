@@ -134,6 +134,12 @@
     "hintCycle": "Eine Gruppe kann nicht in ihre eigene Untergruppe verschoben werden",
     "moveTo": "„{{name}}“ verschieben nach…"
   },
+  "copyMarker": {
+    "badge": "Kopie",
+    "badgeHint": "Kopie – nicht Teil des aktuellen Bestands. Sie hat eine eigene ID und ist unabhängig von den importierten Einträgen.",
+    "keep": "Als normalen Eintrag behalten",
+    "groupConfirmBody": "Entfernt die Kopie-Markierung von dieser Gruppe und allem darin (Gruppen: {{groups}}, Server: {{servers}})."
+  },
   "management": {
     "emptyState": "Links eine Gruppe oder einen Server auswählen, oder über \"{{addGroup}}\"/\"{{addServer}}\" etwas Neues anlegen.",
     "back": "Zurück"

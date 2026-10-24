@@ -134,6 +134,12 @@
     "hintCycle": "Un grup nu poate fi mutat în propriul subgrup",
     "moveTo": "Mută „{{name}}” în…"
   },
+  "copyMarker": {
+    "badge": "Copie",
+    "badgeHint": "Copie – nu face parte din datele curente. Are propriul ID și este independentă de intrările importate.",
+    "keep": "Păstrează ca intrare obișnuită",
+    "groupConfirmBody": "Elimină marcajul de copie de la acest grup și de la tot ce conține (grupuri: {{groups}}, servere: {{servers}})."
+  },
   "management": {
     "emptyState": "Selectați un grup sau un server din stânga ori creați ceva nou prin „{{addGroup}}”/„{{addServer}}”.",
     "back": "Înapoi"

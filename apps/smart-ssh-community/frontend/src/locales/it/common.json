@@ -134,6 +134,12 @@
     "hintCycle": "Un gruppo non può essere spostato nel proprio sottogruppo",
     "moveTo": "Sposta «{{name}}» in…"
   },
+  "copyMarker": {
+    "badge": "Copia",
+    "badgeHint": "Copia: non fa parte dei dati attuali. Ha un proprio ID ed è indipendente dalle voci importate.",
+    "keep": "Mantieni come voce normale",
+    "groupConfirmBody": "Rimuove il contrassegno di copia da questo gruppo e da tutto il suo contenuto (gruppi: {{groups}}, server: {{servers}})."
+  },
   "management": {
     "emptyState": "Selezioni un gruppo o un server a sinistra, oppure crei qualcosa di nuovo con \"{{addGroup}}\"/\"{{addServer}}\".",
     "back": "Indietro"

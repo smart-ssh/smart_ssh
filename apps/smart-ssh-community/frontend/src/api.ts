@@ -3,6 +3,7 @@ import type { FeatureLockedPayload } from "./extensions/entitlements";
 import { publishFeatureLocked } from "./extensions/featureLockedBus";
 import type {
   ActionUserDecision,
+  KeepGroupResult,
   AiProviderConfigDto,
   AiProviderConfigInput,
   AppInfoDto,
@@ -310,6 +311,15 @@ export const updateGroup = (id: string, name: string, parentId: string | null) =
  * `GROUP_SELF_PARENT`/`GROUP_CYCLE_DETECTED` ab. */
 export const moveGroup = (id: string, parentId: string | null) =>
   invoke<void>("move_group", { id, parentId });
+
+/** Spec 0103: "Keep as regular entry" for a server. */
+export const keepServerAsRegularEntry = (id: string) =>
+  invoke<void>("keep_server_as_regular_entry", { id });
+
+/** Spec 0103: without `confirm` only the counts; with it clears the group
+ * and everything inside. */
+export const keepGroupAsRegularEntry = (id: string, confirm: boolean) =>
+  invoke<KeepGroupResult>("keep_group_as_regular_entry", { id, confirm });
 
 export const deleteGroup = (id: string, confirmCascade: boolean) =>
   invoke<DeleteGroupResult>("delete_group", { id, confirmCascade });

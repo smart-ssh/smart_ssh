@@ -134,6 +134,12 @@
     "hintCycle": "Un grupo no puede moverse a su propio subgrupo",
     "moveTo": "Mover «{{name}}» a…"
   },
+  "copyMarker": {
+    "badge": "Copia",
+    "badgeHint": "Copia: no forma parte de los datos actuales. Tiene su propio ID y es independiente de las entradas importadas.",
+    "keep": "Conservar como entrada normal",
+    "groupConfirmBody": "Quita la marca de copia de este grupo y de todo su contenido (grupos: {{groups}}, servidores: {{servers}})."
+  },
   "management": {
     "emptyState": "Seleccione un grupo o servidor a la izquierda, o cree algo nuevo con “{{addGroup}}”/“{{addServer}}”.",
     "back": "Atrás"

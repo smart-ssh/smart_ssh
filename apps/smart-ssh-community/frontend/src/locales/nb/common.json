@@ -134,6 +134,12 @@
     "hintCycle": "En gruppe kan ikke flyttes inn i sin egen undergruppe",
     "moveTo": "Flytt «{{name}}» til…"
   },
+  "copyMarker": {
+    "badge": "Kopi",
+    "badgeHint": "Kopi – er ikke en del av gjeldende data. Den har sin egen ID og er uavhengig av de importerte oppføringene.",
+    "keep": "Behold som vanlig oppføring",
+    "groupConfirmBody": "Fjerner kopimerkingen fra denne gruppen og alt i den (grupper: {{groups}}, servere: {{servers}})."
+  },
   "management": {
     "emptyState": "Velg en gruppe eller server til venstre, eller opprett noe nytt via “{{addGroup}}”/“{{addServer}}”.",
     "back": "Tilbake"

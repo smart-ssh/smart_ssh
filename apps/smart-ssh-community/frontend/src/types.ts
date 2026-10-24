@@ -27,6 +27,8 @@ export interface StoredHostKeyDto {
 
 export interface ServerDto {
   id: string;
+  /** Spec 0103: moved into "Previous data" by a backup import. */
+  isCopy?: boolean;
   name: string;
   host: string;
   port: number;
@@ -653,6 +655,15 @@ export interface GroupDto {
   name: string;
   parentId: string | null;
   notes: string;
+  /** Spec 0103: moved into "Previous data" by a backup import. */
+  isCopy?: boolean;
+}
+
+/** Spec 0103: result of `keep_group_as_regular_entry` (counts include the group itself). */
+export interface KeepGroupResult {
+  applied: boolean;
+  groups: number;
+  servers: number;
 }
 
 export interface DeleteGroupResult {

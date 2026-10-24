@@ -134,6 +134,12 @@
     "hintCycle": "Skupinu nelze přesunout do její vlastní podskupiny",
     "moveTo": "Přesunout „{{name}}“ do…"
   },
+  "copyMarker": {
+    "badge": "Kopie",
+    "badgeHint": "Kopie – není součástí aktuálních dat. Má vlastní ID a je nezávislá na importovaných položkách.",
+    "keep": "Ponechat jako běžnou položku",
+    "groupConfirmBody": "Odstraní označení kopie z této skupiny a ze všeho v ní (skupiny: {{groups}}, servery: {{servers}})."
+  },
   "management": {
     "emptyState": "Vyberte vlevo skupinu nebo server, nebo vytvořte něco nového pomocí „{{addGroup}}“/„{{addServer}}“.",
     "back": "Zpět"

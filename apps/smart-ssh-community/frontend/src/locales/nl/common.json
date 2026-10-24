@@ -134,6 +134,12 @@
     "hintCycle": "Een groep kan niet naar een eigen subgroep worden verplaatst",
     "moveTo": "“{{name}}” verplaatsen naar…"
   },
+  "copyMarker": {
+    "badge": "Kopie",
+    "badgeHint": "Kopie – maakt geen deel uit van de huidige gegevens. Ze heeft een eigen ID en staat los van de geïmporteerde items.",
+    "keep": "Behouden als gewoon item",
+    "groupConfirmBody": "Verwijdert de kopiemarkering van deze groep en alles erin (groepen: {{groups}}, servers: {{servers}})."
+  },
   "management": {
     "emptyState": "Selecteer links een groep of server, of maak iets nieuws aan via \"{{addGroup}}\"/\"{{addServer}}\".",
     "back": "Terug"

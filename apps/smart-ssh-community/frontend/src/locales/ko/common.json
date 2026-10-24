@@ -134,6 +134,12 @@
     "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다",
     "moveTo": "“{{name}}” 이동 위치…"
   },
+  "copyMarker": {
+    "badge": "사본",
+    "badgeHint": "사본 – 현재 데이터에 속하지 않습니다. 고유한 ID가 있으며 가져온 항목과 독립적입니다.",
+    "keep": "일반 항목으로 유지",
+    "groupConfirmBody": "이 그룹과 그 안의 모든 항목에서 사본 표시를 제거합니다(그룹: {{groups}}, 서버: {{servers}})."
+  },
   "management": {
     "emptyState": "왼쪽에서 그룹이나 서버를 선택하거나 \"{{addGroup}}\"/\"{{addServer}}\"로 새로 만드십시오.",
     "back": "뒤로"
