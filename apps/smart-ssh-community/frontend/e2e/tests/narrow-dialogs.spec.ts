@@ -208,8 +208,9 @@ test("toasts stay inside the viewport and do not cover the composer @phone", asy
   await expectUsable(page.getByRole("button", { name: "Undo", exact: true }));
   // Toasts sit at the top; the chat composer (bottom of the session) is never covered.
   const composer = page.locator("form textarea").first();
+  await expect(composer, "chat composer is on screen").toBeVisible();
   const [t, c] = await Promise.all([status.boundingBox(), composer.boundingBox()]);
-  if (c) expect(t!.y + t!.height, "toasts end above the composer").toBeLessThanOrEqual(c.y + 0.5);
+  expect(t!.y + t!.height, "toasts end above the composer").toBeLessThanOrEqual(c!.y + 0.5);
   await noHorizontalScroll(page);
   await captureScreen(page, "narrow-toasts");
 });
