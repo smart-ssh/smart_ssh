@@ -56,6 +56,7 @@ vi.mock("../events", () => ({
   onChatContextCompacted: () => Promise.resolve(() => {}),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
+  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
   onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));

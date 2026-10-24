@@ -1230,7 +1230,11 @@
       "cardLabel": "Pergunta: {{question}}",
       "send": "Enviar",
       "answeredOwnWords": "Respondida com suas próprias palavras"
-    }
+    },
+    "injectionChecking": "Verificando a saída …",
+    "injectionSuspected": "Aviso: esta saída parece uma tentativa de injetar instruções.",
+    "injectionSuspectedReason": "Motivo informado pela IA de verificação: {{reason}}",
+    "injectionConfirmReason": "Motivo: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Esta anotação é muito grande e pode ser encurtada para o contexto da IA em sessões longas. A anotação salva permanece completa.",
