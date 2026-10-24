@@ -276,13 +276,26 @@ enum ElevatedAccessError {
     UserChanged { active: String, expected: String },
 }
 
+/// Stabiler Fehlercode für `UserChanged`; das Frontend übersetzt ihn
+/// (`errors.ELEVATED_USER_CHANGED`) und bietet „Upload as <user>" an.
+const ELEVATED_USER_CHANGED_CODE: &str = "ELEVATED_USER_CHANGED";
+
 impl ElevatedAccessError {
+    fn into_command_error(self) -> CommandError {
+        match self {
+            Self::UserChanged { .. } => {
+                CommandError::with_code(self.message(), ELEVATED_USER_CHANGED_CODE)
+            }
+            Self::Revoked => CommandError::from(self.message()),
+        }
+    }
+
     fn message(&self) -> String {
         match self {
             Self::Revoked => ELEVATED_CHANNEL_INACTIVE.to_string(),
             Self::UserChanged { active, expected } => format!(
-                "Der erhöhte Modus läuft inzwischen als „{active}“, nicht als „{expected}“ — die \
-                 Aktion wurde nicht ausgeführt."
+                "Elevated mode now runs as \"{active}\", not as \"{expected}\" — the action was \
+                 not performed."
             ),
         }
     }
@@ -454,7 +467,7 @@ impl BrowserSftpGuard<'_> {
                         if matches!(err, ElevatedAccessError::Revoked) {
                             revoked_mid_command.store(true, Ordering::SeqCst);
                         }
-                        Err(CommandError::from(err.message()))
+                        Err(err.into_command_error())
                     }
                 }
             }

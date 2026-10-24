@@ -1138,9 +1138,19 @@ export function FileBrowserPanel({
   /** Spec 0054, Teil 4, Punkt 5: baut die Diff-/Konflikt-Daten und öffnet
    * den Bestätigungsdialog — der eigentliche Upload passiert erst nach
    * Bestätigung in `handleConfirmEditUpload`. */
-  const handleOfferEditUpload = () => {
+  // Issue #656: the identity of the edit session differs from the active one
+  // (other target user, or elevated mode switched on/off). Plain "Upload" is
+  // not offered then; the explicit "Upload as <user>" click is the only way
+  // to send the current identity.
+  const editIdentityMismatch =
+    localEdit.session !== null && localEdit.session.elevatedUser !== channelUser;
+  // Identity chosen by that click, held until the offer dialog is confirmed.
+  const [editUploadAs, setEditUploadAs] = useState<{ user: string | null } | null>(null);
+  const handleOfferEditUpload = (asOther = false) => {
+    const target = asOther ? { user: channelUser } : null;
+    setEditUploadAs(target);
     localEdit
-      .buildUploadOffer()
+      .buildUploadOffer(target ? target.user : undefined)
       .then((offer) => setEditUploadOffer(offer))
       .catch((err) => setError(commandErrorMessage(err)));
   };
@@ -1150,9 +1160,11 @@ export function FileBrowserPanel({
     const name = localEdit.session?.entry.name ?? "";
     // Spec-Reviewer-Fund: der Modus-Zusatz kommt von der Bearbeitung (so
     // wurde hochgeladen), nicht vom aktuellen Modus der Ansicht.
-    const editUser = localEdit.session?.elevatedUser ?? null;
+    const editUser = editUploadAs ? editUploadAs.user : (localEdit.session?.elevatedUser ?? null);
+    const asOther = editUploadAs;
+    setEditUploadAs(null);
     const editSuffix = editUser ? t("fileToasts.asElevated", { user: editUser }) : "";
-    localEdit.confirmUpload().then((error) => {
+    localEdit.confirmUpload(asOther ? asOther.user : undefined).then((error) => {
       if (error === null) {
         showToast({ kind: "success", message: t("fileToasts.editUploaded", { name }) + editSuffix });
       } else {
@@ -2168,9 +2180,17 @@ export function FileBrowserPanel({
               <span className="flex-1 text-amber-300">
                 {t("fileBrowser.localEdit.changed", { name: localEdit.session.entry.name })}
               </span>
-              <Button size="sm" variant="primary" onClick={handleOfferEditUpload}>
-                {t("fileBrowser.upload")}
-              </Button>
+              {editIdentityMismatch ? (
+                <Button size="sm" variant="primary" onClick={() => handleOfferEditUpload(true)}>
+                  {channelUser
+                    ? t("fileElevation.editUploadAs", { user: channelUser })
+                    : t("fileElevation.editUploadAsLogin")}
+                </Button>
+              ) : (
+                <Button size="sm" variant="primary" onClick={() => handleOfferEditUpload()}>
+                  {t("fileBrowser.upload")}
+                </Button>
+              )}
               <Button size="sm" onClick={localEdit.dismissChange}>
                 {t("fileBrowser.localEdit.later")}
               </Button>
@@ -2188,6 +2208,20 @@ export function FileBrowserPanel({
           <Button size="sm" onClick={localEdit.endSession}>
             {t("fileBrowser.localEdit.end")}
           </Button>
+          {editIdentityMismatch && (
+            <span className="w-full text-amber-300">
+              {localEdit.session.elevatedUser
+                ? channelUser
+                  ? t("fileElevation.editIdentityChanged", {
+                      from: localEdit.session.elevatedUser,
+                      user: channelUser,
+                    })
+                  : t("fileElevation.editIdentityElevatedOff", {
+                      from: localEdit.session.elevatedUser,
+                    })
+                : t("fileElevation.editIdentityElevatedOn", { user: channelUser })}
+            </span>
+          )}
           {localEdit.session.error && (
             <span className="w-full text-red-300">{localEdit.session.error}</span>
           )}
@@ -2198,14 +2232,16 @@ export function FileBrowserPanel({
         <DialogFrame
           layer="sessionTab"
           title={
-            localEdit.session?.elevatedUser
-              ? t("fileElevation.editUploadTitle", { user: localEdit.session.elevatedUser })
+            (editUploadAs ? editUploadAs.user : localEdit.session?.elevatedUser)
+              ? t("fileElevation.editUploadTitle", {
+                  user: editUploadAs ? editUploadAs.user : localEdit.session?.elevatedUser,
+                })
               : t("fileBrowser.localEdit.uploadTitle")
           }
-          onClose={() => setEditUploadOffer(null)}
+          onClose={() => { setEditUploadOffer(null); setEditUploadAs(null); }}
           actions={
             <>
-              <Button onClick={() => setEditUploadOffer(null)}>{t("fileBrowser.cancel")}</Button>
+              <Button onClick={() => { setEditUploadOffer(null); setEditUploadAs(null); }}>{t("fileBrowser.cancel")}</Button>
               <Button variant="primary" onClick={handleConfirmEditUpload}>
                 {t("fileBrowser.upload")}
               </Button>
