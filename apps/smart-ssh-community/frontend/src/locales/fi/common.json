@@ -135,6 +135,12 @@
     "hintCycle": "Ryhmää ei voi siirtää omaan aliryhmäänsä",
     "moveTo": "Siirrä ”{{name}}” kohteeseen…"
   },
+  "copyMarker": {
+    "badge": "Kopio",
+    "badgeHint": "Kopio – ei kuulu nykyisiin tietoihin. Sillä on oma tunnus, ja se on riippumaton tuoduista kohteista.",
+    "keep": "Säilytä tavallisena kohteena",
+    "groupConfirmBody": "Poistaa kopiomerkinnän tästä ryhmästä ja kaikesta sen sisällä (ryhmiä: {{groups}}, palvelimia: {{servers}})."
+  },
   "management": {
     "emptyState": "Valitse vasemmalta ryhmä tai palvelin tai luo uusi toiminnolla \"{{addGroup}}\"/\"{{addServer}}\".",
     "back": "Takaisin"

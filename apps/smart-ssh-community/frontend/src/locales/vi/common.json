@@ -135,6 +135,12 @@
     "hintCycle": "Không thể chuyển một nhóm vào nhóm con của chính nó",
     "moveTo": "Di chuyển “{{name}}” tới…"
   },
+  "copyMarker": {
+    "badge": "Bản sao",
+    "badgeHint": "Bản sao – không thuộc dữ liệu hiện tại. Có ID riêng và độc lập với các mục đã nhập.",
+    "keep": "Giữ làm mục thông thường",
+    "groupConfirmBody": "Gỡ dấu bản sao khỏi nhóm này và mọi thứ bên trong (nhóm: {{groups}}, máy chủ: {{servers}})."
+  },
   "management": {
     "emptyState": "Chọn một nhóm hoặc máy chủ ở bên trái, hoặc tạo mới qua \"{{addGroup}}\"/\"{{addServer}}\".",
     "back": "Quay lại"

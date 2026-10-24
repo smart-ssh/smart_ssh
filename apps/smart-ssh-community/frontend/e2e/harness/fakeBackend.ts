@@ -206,6 +206,31 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       return null;
     },
 
+    keep_server_as_regular_entry: ({ id }) => {
+      findServer(id).isCopy = false;
+      persist();
+      return null;
+    },
+    keep_group_as_regular_entry: ({ id, confirm }) => {
+      const inside = new Set<string>([String(id)]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const g of model.groups) {
+          if (g.parentId && inside.has(g.parentId) && !inside.has(g.id)) {
+            inside.add(g.id);
+            grew = true;
+          }
+        }
+      }
+      const groups = model.groups.filter((g) => inside.has(g.id) && g.isCopy);
+      const servers = model.servers.filter((s) => s.groupId && inside.has(s.groupId) && s.isCopy);
+      if (confirm) {
+        for (const x of [...groups, ...servers]) x.isCopy = false;
+        persist();
+      }
+      return { applied: Boolean(confirm), groups: groups.length, servers: servers.length };
+    },
+
     large_note_dialog_threshold_chars: () => 4000,
     test_connection: () => ({ kind: "success", steps: [] }),
 

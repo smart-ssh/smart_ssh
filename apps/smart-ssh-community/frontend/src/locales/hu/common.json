@@ -135,6 +135,12 @@
     "hintCycle": "A csoport nem helyezhető a saját alcsoportjába",
     "moveTo": "„{{name}}” áthelyezése ide…"
   },
+  "copyMarker": {
+    "badge": "Másolat",
+    "badgeHint": "Másolat – nem része a jelenlegi adatoknak. Saját azonosítója van, és független az importált bejegyzésektől.",
+    "keep": "Megtartás rendes bejegyzésként",
+    "groupConfirmBody": "Eltávolítja a másolatjelölést erről a csoportról és mindenről, ami benne van (csoport: {{groups}}, szerver: {{servers}})."
+  },
   "management": {
     "emptyState": "Válasszon ki egy csoportot vagy szervert balra, vagy hozzon létre újat a(z) \"{{addGroup}}\"/\"{{addServer}}\" gombbal.",
     "back": "Vissza"

@@ -135,6 +135,12 @@
     "hintCycle": "Bir grup kendi alt grubuna taşınamaz",
     "moveTo": "“{{name}}” öğesini taşı…"
   },
+  "copyMarker": {
+    "badge": "Kopya",
+    "badgeHint": "Kopya – geçerli verilerin parçası değildir. Kendi kimliği vardır ve içe aktarılan girdilerden bağımsızdır.",
+    "keep": "Normal girdi olarak tut",
+    "groupConfirmBody": "Bu gruptan ve içindeki her şeyden kopya işaretini kaldırır (grup: {{groups}}, sunucu: {{servers}})."
+  },
   "management": {
     "emptyState": "Solda bir grup veya sunucu seçin ya da \"{{addGroup}}\"/\"{{addServer}}\" ile yeni bir şey oluşturun.",
     "back": "Geri"

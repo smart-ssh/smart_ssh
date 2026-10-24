@@ -135,6 +135,12 @@
     "hintCycle": "Grup tidak dapat dipindahkan ke subgrupnya sendiri",
     "moveTo": "Pindahkan “{{name}}” ke…"
   },
+  "copyMarker": {
+    "badge": "Salinan",
+    "badgeHint": "Salinan – bukan bagian dari data saat ini. Memiliki ID sendiri dan terpisah dari entri yang diimpor.",
+    "keep": "Pertahankan sebagai entri biasa",
+    "groupConfirmBody": "Menghapus tanda salinan dari grup ini dan semua isinya (grup: {{groups}}, server: {{servers}})."
+  },
   "management": {
     "emptyState": "Pilih grup atau server di sebelah kiri, atau buat yang baru melalui \"{{addGroup}}\"/\"{{addServer}}\".",
     "back": "Kembali"

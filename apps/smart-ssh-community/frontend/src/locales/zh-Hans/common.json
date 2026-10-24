@@ -135,6 +135,12 @@
     "hintCycle": "分组不能移入其自身的子分组",
     "moveTo": "将“{{name}}”移动到…"
   },
+  "copyMarker": {
+    "badge": "副本",
+    "badgeHint": "副本 – 不属于当前数据。它有自己的 ID，与导入的条目相互独立。",
+    "keep": "保留为普通条目",
+    "groupConfirmBody": "移除此分组及其中所有内容的副本标记（分组：{{groups}}，服务器：{{servers}}）。"
+  },
   "management": {
     "emptyState": "请在左侧选择一个分组或服务器，或通过“{{addGroup}}”/“{{addServer}}”新建。",
     "back": "返回"

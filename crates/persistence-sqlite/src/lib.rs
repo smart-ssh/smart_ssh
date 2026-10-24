@@ -77,8 +77,8 @@ pub use ai_provider_store::{
 };
 pub use backup_store::{
     is_content_secret_ref, AiProviderRow, ArchiveCounts, ArchiveOutcome, BackupStoreError,
-    DatabaseSnapshot, GroupRow, ImportPlan, NoteRevisionRow, RuleRow, SecretRow, ServerRow,
-    SqliteBackupStore, TagRow, BACKUP_KEY_REF, PENDING_HOST_KEYS_REF,
+    CopyMarked, CopyMarkerScope, DatabaseSnapshot, GroupRow, ImportPlan, NoteRevisionRow, RuleRow,
+    SecretRow, ServerRow, SqliteBackupStore, TagRow, BACKUP_KEY_REF, PENDING_HOST_KEYS_REF,
 };
 pub use chat_session_store::{
     ChatSessionRemovalObserver, ChatSessionStoreError, ChatSessionSummary, SqliteChatSessionStore,

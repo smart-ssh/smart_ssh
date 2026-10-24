@@ -135,6 +135,12 @@
     "hintCycle": "Grupy nie można przenieść do jej własnej podgrupy",
     "moveTo": "Przenieś „{{name}}” do…"
   },
+  "copyMarker": {
+    "badge": "Kopia",
+    "badgeHint": "Kopia – nie należy do bieżących danych. Ma własny identyfikator i jest niezależna od zaimportowanych wpisów.",
+    "keep": "Zachowaj jako zwykły wpis",
+    "groupConfirmBody": "Usuwa oznaczenie kopii z tej grupy i wszystkiego, co w niej jest (grupy: {{groups}}, serwery: {{servers}})."
+  },
   "management": {
     "emptyState": "Wybierz grupę lub serwer po lewej albo utwórz coś nowego przez „{{addGroup}}”/„{{addServer}}”.",
     "back": "Wstecz"

@@ -109,6 +109,10 @@ pub struct ServerDto {
     pub sftp_server_path: Option<String>,
     /// Spec 0102: `None` = Home des Login-Nutzers.
     pub start_directory: Option<String>,
+    /// Spec 0103: the server was moved into "Previous data" by a backup
+    /// import. Not part of `Server` (no effect on connecting, rules or the
+    /// filter engine); the list commands fill it from the marker store.
+    pub is_copy: bool,
 }
 
 impl ServerDto {
@@ -145,6 +149,7 @@ impl ServerDto {
             ai_injection_check_enabled: server.ai_injection_check_enabled,
             sftp_server_path: server.sftp_server_path.clone(),
             start_directory: server.start_directory.clone(),
+            is_copy: false,
         }
     }
 }
@@ -543,6 +548,19 @@ pub struct GroupDto {
     pub name: String,
     pub parent_id: Option<String>,
     pub notes: String,
+    /// Spec 0103: see [`ServerDto::is_copy`].
+    pub is_copy: bool,
+}
+
+/// Result of "Keep as regular entry" on a group (Spec 0103): without
+/// `confirm` only the counts of what would be cleared, with it the counts
+/// of what was cleared.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeepGroupResult {
+    pub applied: bool,
+    pub groups: usize,
+    pub servers: usize,
 }
 
 impl From<&Group> for GroupDto {
@@ -552,6 +570,7 @@ impl From<&Group> for GroupDto {
             name: group.name.clone(),
             parent_id: group.parent_id.map(|p| p.0.to_string()),
             notes: group.notes.clone(),
+            is_copy: false,
         }
     }
 }
