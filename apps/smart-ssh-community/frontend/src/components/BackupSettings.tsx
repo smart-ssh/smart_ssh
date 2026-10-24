@@ -73,9 +73,9 @@ export function BackupSettings({ onRestored = () => window.location.reload() }: 
       </div>
       {error && <p role="alert" className="rounded border border-red-700 bg-red-950/50 p-2 text-sm text-red-300">{error}</p>}
       {result && (
-        <p role="status" className="break-words rounded border border-emerald-800 bg-emerald-950/30 p-2 text-sm text-emerald-200">
+        <output className="block break-words rounded border border-emerald-800 bg-emerald-950/30 p-2 text-sm text-emerald-200">
           {t("backup.exportDone", { path: result.path })} {t("backup.exportCounts", { ...result })}
-        </p>
+        </output>
       )}
       {setup && (
         <BackupKeySetup

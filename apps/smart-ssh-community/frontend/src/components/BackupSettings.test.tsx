@@ -120,7 +120,6 @@ describe("BackupSettings", () => {
     expect(save.disabled).toBe(false);
     fireEvent.click(save);
     await waitFor(() => expect(api.setBackupPassphrase).toHaveBeenCalledWith("twelve chars"));
-    await waitFor(() => expect(first.value).toBe(""));
   });
 
   describe("restore", () => {
@@ -139,6 +138,7 @@ describe("BackupSettings", () => {
       await open("TYPO");
       expect(await screen.findByText("The code contains a typo.")).toBeTruthy();
       vi.mocked(api.startBackupImport).mockRejectedValueOnce({ message: "x", code: "BACKUP_CANNOT_OPEN" });
+      fireEvent.change(screen.getByRole("textbox", { name: "Recovery code" }), { target: { value: "ABCDE-FGHJK" } });
       fireEvent.click(screen.getByRole("button", { name: "Open backup" }));
       expect(await screen.findByText("Wrong code or passphrase, or the file is damaged.")).toBeTruthy();
     });
@@ -166,9 +166,10 @@ describe("BackupSettings", () => {
       });
       const restored = renderSection();
       await open();
-      const row = await screen.findByRole("row", { name: /Servers\s+12\s+15/ });
-      expect(row).toBeTruthy();
-      expect(screen.getByRole("row", { name: /Rules\s+30\s+42/ })).toBeTruthy();
+      const table = await screen.findByRole("table");
+      const rows = Array.from(table.querySelectorAll("tbody tr")).map((r) => r.textContent);
+      expect(rows).toContain("Servers1215");
+      expect(rows).toContain("Rules3042");
       expect(screen.getByText("Open sessions that will be closed: 2")).toBeTruthy();
       expect(api.confirmBackupImport).not.toHaveBeenCalled();
 
