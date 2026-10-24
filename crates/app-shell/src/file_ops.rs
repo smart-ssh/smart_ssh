@@ -41,6 +41,7 @@ pub(crate) enum OpKind {
     Upload,
     Delete,
     Chmod,
+    Chown,
 }
 
 impl OpKind {
@@ -50,6 +51,7 @@ impl OpKind {
             Self::Upload => "upload",
             Self::Delete => "delete",
             Self::Chmod => "chmod",
+            Self::Chown => "chown",
         }
     }
 }
