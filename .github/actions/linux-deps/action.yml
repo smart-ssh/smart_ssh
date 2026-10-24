@@ -1,0 +1,95 @@
+name: Install Linux dependencies
+description: >
+  Installs the system packages Tauri (wry/WebKitGTK) needs on Ubuntu, plus
+  optional extra packages. The downloaded .deb files are cached between runs,
+  apt retries slow downloads, and a failed or timed-out install is retried
+  once against archive.ubuntu.com.
+
+inputs:
+  extra-packages:
+    description: Additional apt packages, separated by spaces or newlines.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Compute package list and cache key
+      id: pkgs
+      shell: bash
+      env:
+        EXTRA_PACKAGES: ${{ inputs.extra-packages }}
+      run: |
+        set -euo pipefail
+        base="libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libasound2-dev cmake libclang-dev xvfb"
+        # shellcheck disable=SC2086
+        list="$(printf '%s\n' $base $EXTRA_PACKAGES | sort -u | tr '\n' ' ')"
+        # ImageOS/ImageVersion are runner environment variables, not part
+        # of the `env` expression context.
+        {
+          echo "list=$list"
+          echo "hash=$(printf '%s' "$list" | sha256sum | cut -c1-16)"
+          echo "image-os=${ImageOS:-unknown}"
+          echo "image-version=${ImageVersion:-unknown}"
+          echo "dir=$HOME/.cache/linux-deps-debs"
+        } >> "$GITHUB_OUTPUT"
+
+    # The image version is part of the key, so the cache is refreshed when
+    # the runner image (and with it the package index) changes; the restore
+    # key falls back to the debs of an earlier image for the same list.
+    - name: Restore cached .deb files
+      id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.pkgs.outputs.dir }}
+        key: linux-deps-${{ runner.os }}-${{ steps.pkgs.outputs.image-os }}-${{ steps.pkgs.outputs.hash }}-${{ steps.pkgs.outputs.image-version }}
+        restore-keys: |
+          linux-deps-${{ runner.os }}-${{ steps.pkgs.outputs.image-os }}-${{ steps.pkgs.outputs.hash }}-
+
+    - name: Install packages
+      shell: bash
+      env:
+        PACKAGES: ${{ steps.pkgs.outputs.list }}
+        DEB_DIR: ${{ steps.pkgs.outputs.dir }}
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        set -euo pipefail
+        mkdir -p "$DEB_DIR"
+        if compgen -G "$DEB_DIR/*.deb" > /dev/null; then
+          echo "Using $(find "$DEB_DIR" -maxdepth 1 -name '*.deb' | wc -l) cached .deb files"
+          sudo cp "$DEB_DIR"/*.deb /var/cache/apt/archives/
+        fi
+
+        apt_opts=(-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o APT::Keep-Downloaded-Packages=true)
+
+        read -r -a packages <<< "$PACKAGES"
+
+        attempt() {
+          sudo timeout 180 apt-get "${apt_opts[@]}" update &&
+            sudo -E timeout 480 apt-get "${apt_opts[@]}" install -y "${packages[@]}"
+        }
+
+        if ! attempt; then
+          echo "::warning::apt install failed or timed out; retrying once against archive.ubuntu.com"
+          # Leave dpkg in a consistent state after an interrupted run.
+          sudo dpkg --configure -a || true
+          for f in /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt; do
+            [ -f "$f" ] && sudo sed -i 's#https\?://azure\.archive\.ubuntu\.com#http://archive.ubuntu.com#g' "$f"
+          done
+          attempt
+        fi
+
+        # Keep only debs that are still current, then mirror them into the
+        # user-writable cache directory.
+        sudo apt-get autoclean -y
+        find "$DEB_DIR" -maxdepth 1 -name '*.deb' -delete
+        if compgen -G "/var/cache/apt/archives/*.deb" > /dev/null; then
+          cp /var/cache/apt/archives/*.deb "$DEB_DIR"/
+        fi
+
+    - name: Save .deb files to the cache
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.pkgs.outputs.dir }}
+        key: linux-deps-${{ runner.os }}-${{ steps.pkgs.outputs.image-os }}-${{ steps.pkgs.outputs.hash }}-${{ steps.pkgs.outputs.image-version }}
