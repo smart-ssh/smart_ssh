@@ -1222,7 +1222,11 @@
       "cardLabel": "Ερώτηση: {{question}}",
       "send": "Αποστολή",
       "answeredOwnWords": "Απαντήθηκε με δικά σας λόγια"
-    }
+    },
+    "injectionChecking": "Έλεγχος εξόδου …",
+    "injectionSuspected": "Προειδοποίηση: αυτή η έξοδος μοιάζει με απόπειρα έγχυσης εντολών.",
+    "injectionSuspectedReason": "Αιτιολογία του AI ελέγχου: {{reason}}",
+    "injectionConfirmReason": "Αιτία: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Αυτή η σημείωση είναι πολύ μεγάλη και μπορεί να συντμηθεί για το περιβάλλον του AI σε μεγάλες συνεδρίες. Η αποθηκευμένη σημείωση παραμένει πλήρης.",
