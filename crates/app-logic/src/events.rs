@@ -63,6 +63,22 @@ pub enum ConnectionStatus {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct DataChangedPayload<'a> {
+    kinds: &'a std::collections::BTreeSet<ssh_manager_core::data_change::DataKind>,
+}
+
+/// Issue #672: `data-changed` — one coalesced notification after committed
+/// changes to the user data set. The payload carries the entity kinds only,
+/// never content, IDs or names.
+pub fn emit_data_changed(
+    emitter: &dyn EventEmitter,
+    kinds: &std::collections::BTreeSet<ssh_manager_core::data_change::DataKind>,
+) {
+    emit(emitter, "data-changed", &DataChangedPayload { kinds });
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ConnectionStatusChangedPayload {
     session_id: SessionId,
     status: ConnectionStatus,
@@ -1526,6 +1542,23 @@ mod tests {
     //! kam im Frontend als `undefined` an (`result.exitCode`).
 
     use super::*;
+
+    /// Issue #672: the payload is exactly `{"kinds": [...]}` — kind names only.
+    #[test]
+    fn test_data_changed_payload_carries_only_kinds() {
+        use ssh_manager_core::data_change::DataKind;
+        let emitter = TestEmitter::default();
+        emit_data_changed(
+            &emitter,
+            &std::collections::BTreeSet::from([DataKind::Servers, DataKind::HostKeys]),
+        );
+        let events = emitter.events.lock().unwrap();
+        assert_eq!(events[0].0, "data-changed");
+        assert_eq!(
+            events[0].1,
+            serde_json::json!({"kinds": ["servers", "host_keys"]})
+        );
+    }
 
     /// Issue #611: `chat-session-changed` payload shape (camelCase, `null`
     /// for a session without a persisted chat).

@@ -20,6 +20,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqlitePool;
 use sqlx::Row;
+use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
 
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -195,14 +196,15 @@ fn row_to_stored_rule(row: &sqlx::sqlite::SqliteRow) -> Result<StoredRule, Polic
 #[derive(Clone)]
 pub struct SqlitePolicyStore {
     pool: SqlitePool,
+    data_changes: DataChangeNotifier,
 }
 
 impl SqlitePolicyStore {
     /// Teilt sich `pool` mit einem bereits verbundenen [`crate::SqliteProfileStore`]
     /// (dessen `connect()` die Migrationen — inkl. `0003_filter_rules.sql` —
     /// bereits ausgeführt hat), analog zu [`crate::SqliteAiProviderStore::new`].
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pool: SqlitePool, data_changes: DataChangeNotifier) -> Self {
+        Self { pool, data_changes }
     }
 
     /// Alle gespeicherten Regeln, unabhängig vom Scope — Grundlage sowohl
@@ -284,6 +286,7 @@ impl SqlitePolicyStore {
             .map_err(backend_err)?;
         }
         tx.commit().await.map_err(backend_err)?;
+        self.data_changes.notify(DataKind::Rules);
         Ok(())
     }
 
@@ -319,6 +322,7 @@ impl SqlitePolicyStore {
         .execute(&self.pool)
         .await
         .map_err(backend_err)?;
+        self.data_changes.notify(DataKind::Rules);
         Ok(())
     }
 
@@ -353,6 +357,7 @@ impl SqlitePolicyStore {
         if result.rows_affected() == 0 {
             return Err(PolicyStoreError::NotFound(rule.id.clone()));
         }
+        self.data_changes.notify(DataKind::Rules);
         Ok(())
     }
 
@@ -398,7 +403,9 @@ impl SqlitePolicyStore {
         }
 
         // Wird `tx` vorher durch `?` verworfen, rollt sqlx zurück.
-        tx.commit().await.map_err(backend_err)
+        tx.commit().await.map_err(backend_err)?;
+        self.data_changes.notify(DataKind::Rules);
+        Ok(())
     }
 
     pub async fn delete(&self, id: &RuleId) -> Result<(), PolicyStoreError> {
@@ -411,6 +418,7 @@ impl SqlitePolicyStore {
         if result.rows_affected() == 0 {
             return Err(PolicyStoreError::NotFound(id.clone()));
         }
+        self.data_changes.notify(DataKind::Rules);
         Ok(())
     }
 }

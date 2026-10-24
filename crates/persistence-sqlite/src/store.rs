@@ -6,6 +6,7 @@ use sqlx::Row;
 
 use uuid::Uuid;
 
+use ssh_manager_core::data_change::{DataChangeNotifier, DataKind};
 use ssh_manager_core::profiles::{
     Group, GroupId, NoteEditor, NoteRevision, NoteTarget, ProfileError, ProfileResult,
     ProfileStore, Server, ServerListing, UnusableReason, UnusableServer,
@@ -69,6 +70,9 @@ pub struct SqliteProfileStore {
     /// Issue #504: observer for removed chat sessions (shared with every
     /// chat store made from this store).
     pub(crate) chat_removal: crate::chat_session_store::RemovalHook,
+    /// Issue #672: coalesced "data changed" notification, shared with the
+    /// policy, AI-provider and credential stores made from this store.
+    pub(crate) data_changes: DataChangeNotifier,
 }
 
 impl SqliteProfileStore {
@@ -320,6 +324,7 @@ impl SqliteProfileStore {
         Ok(Self {
             pool,
             chat_removal: Default::default(),
+            data_changes: Default::default(),
         })
     }
 
@@ -337,6 +342,12 @@ impl SqliteProfileStore {
             .map(|m| m.version)
             .max()
             .unwrap_or(0)
+    }
+
+    /// Issue #672: the notifier that fires after committed changes to the
+    /// user data set. Subscribe here to react to them.
+    pub fn data_changes(&self) -> DataChangeNotifier {
+        self.data_changes.clone()
     }
 
     /// Schließt den Pool und wartet, bis alle Verbindungen zu sind.
@@ -357,7 +368,7 @@ impl SqliteProfileStore {
     /// das ein eigener Store statt einer Erweiterung von
     /// `SqliteProfileStore` ist.
     pub fn ai_provider_store(&self) -> crate::SqliteAiProviderStore {
-        crate::SqliteAiProviderStore::new(self.pool.clone())
+        crate::SqliteAiProviderStore::new(self.pool.clone(), self.data_changes.clone())
     }
 
     /// Spec 0101, A9: der produktive [`CredentialStore`] auf **demselben**
@@ -372,7 +383,7 @@ impl SqliteProfileStore {
     ///
     /// [`CredentialStore`]: ssh_manager_core::profiles::CredentialStore
     pub fn credential_store(&self, handle: tokio::runtime::Handle) -> crate::SqliteCredentialStore {
-        crate::SqliteCredentialStore::new(self.pool.clone(), handle)
+        crate::SqliteCredentialStore::new(self.pool.clone(), handle, self.data_changes.clone())
     }
 
     /// Spec 0101, A10: der festgehaltene Zustand des Secret-Umzugs —
@@ -427,7 +438,7 @@ impl SqliteProfileStore {
 
     /// Wie [`Self::ai_provider_store`], für Filter-Regeln (Spec 0009).
     pub fn policy_store(&self) -> crate::SqlitePolicyStore {
-        crate::SqlitePolicyStore::new(self.pool.clone())
+        crate::SqlitePolicyStore::new(self.pool.clone(), self.data_changes.clone())
     }
 
     /// Wie [`Self::ai_provider_store`], für die Chat-Prompt-Historie (Spec
@@ -697,6 +708,7 @@ impl ProfileStore for SqliteProfileStore {
         .execute(&self.pool)
         .await
         .map_err(backend_err)?;
+        self.data_changes.notify(DataKind::Groups);
         Ok(())
     }
 
@@ -716,6 +728,7 @@ impl ProfileStore for SqliteProfileStore {
         if result.rows_affected() == 0 {
             return Err(ProfileError::GroupNotFound(group.id));
         }
+        self.data_changes.notify(DataKind::Groups);
         Ok(())
     }
 
@@ -731,6 +744,9 @@ impl ProfileStore for SqliteProfileStore {
         if result.rows_affected() == 0 {
             return Err(ProfileError::GroupNotFound(*id));
         }
+        // Child groups cascade; servers of the group move to the root.
+        self.data_changes
+            .notify_many(&[DataKind::Groups, DataKind::Servers]);
         Ok(())
     }
 
@@ -773,6 +789,8 @@ impl ProfileStore for SqliteProfileStore {
         }
 
         tx.commit().await.map_err(backend_err)?;
+        self.data_changes
+            .notify_many(&[DataKind::Servers, DataKind::Tags]);
         Ok(())
     }
 
@@ -825,6 +843,8 @@ impl ProfileStore for SqliteProfileStore {
         }
 
         tx.commit().await.map_err(backend_err)?;
+        self.data_changes
+            .notify_many(&[DataKind::Servers, DataKind::Tags]);
         Ok(())
     }
 
@@ -850,6 +870,8 @@ impl ProfileStore for SqliteProfileStore {
         if result.rows_affected() == 0 {
             return Err(ProfileError::ServerNotFound(*id));
         }
+        self.data_changes
+            .notify_many(&[DataKind::Servers, DataKind::Tags]);
         crate::chat_session_store::notify_removed(&self.chat_removal, &session_ids);
         Ok(())
     }
@@ -919,6 +941,12 @@ impl ProfileStore for SqliteProfileStore {
         }
 
         tx.commit().await.map_err(backend_err)?;
+        let target_kind = match revision.target {
+            NoteTarget::Server(_) => DataKind::Servers,
+            NoteTarget::Group(_) => DataKind::Groups,
+        };
+        self.data_changes
+            .notify_many(&[DataKind::Notes, target_kind]);
         Ok(())
     }
 

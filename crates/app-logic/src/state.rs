@@ -92,6 +92,10 @@ pub struct AppState {
     pub keychain: KeychainAvailability,
     pub ai_provider_store: Arc<SqliteAiProviderStore>,
     pub host_key_store: Arc<dyn HostKeyStore>,
+    /// Issue #672: coalesced notification after committed changes to the user
+    /// data set. Rust subscribers register here; the shell forwards it to the
+    /// frontend as `data-changed`.
+    pub data_changes: ssh_manager_core::data_change::DataChangeNotifier,
     /// Issue #664: the same store as `host_key_store`, concretely typed so the
     /// backup snapshot can list the trusted keys (Spec 0109, C1).
     pub file_host_keys: Arc<crate::host_key_store::FileHostKeyStore>,

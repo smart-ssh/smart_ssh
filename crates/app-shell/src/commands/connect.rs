@@ -2151,6 +2151,7 @@ mod connect_flow_tests {
             .unwrap();
         let credential_store = InMemoryCredentialStore::new()
             .with_secret(&CredentialRef::new(PROVIDER_SECRET_REF), "sk-test");
+        let data_changes = main_db.data_changes();
         let state = AppState {
             sessions: app_logic::session::SessionManager::new(),
             session_extension: None,
@@ -2170,6 +2171,7 @@ mod connect_flow_tests {
                     .unwrap(),
             ),
             host_key_store: Arc::new(NoHostKeys),
+            data_changes,
             connector,
             entitlements: Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
                 ssh_manager_core::entitlements::Entitlements::free(),
