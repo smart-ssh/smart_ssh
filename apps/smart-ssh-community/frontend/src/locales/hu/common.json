@@ -294,6 +294,13 @@
       "connection": "Kapcsolat",
       "security": "Biztonság",
       "invalid": "Hibákat tartalmaz"
+    },
+    "importKey": {
+      "title": "Importálja a kulcsot a Smart SSH-ba?",
+      "import": "Kulcs importálása",
+      "keep": "Fájlútvonal megtartása",
+      "importHint": "A kulcs titkosítva tárolódik a Smart SSH-ban, és a biztonsági mentésekkel együtt eljut a többi eszközére.",
+      "keepHint": "Csak a fájl útvonala tárolódik és kerül át a többi eszközre. A fájlnak minden eszközön ugyanazon az útvonalon kell lennie."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "A kulcstartóban lévő kulcs nem ehhez az adatbázishoz tartozik. Semmi nem változott – a tárolása olvashatatlanná tenné az adatbázist a következő indításkor.",
     "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra.",
     "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren.",
-    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa"
+    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön"
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
