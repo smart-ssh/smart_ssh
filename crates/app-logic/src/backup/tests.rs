@@ -360,6 +360,7 @@ fn build(tag: &str, servers: usize, rules: usize, notes: usize) -> Snapshot {
         notes: String::new(),
         created_at: t.clone(),
         updated_at: t.clone(),
+        is_copy: false,
     };
     let mut snap = Snapshot {
         groups: vec![group(g1, "g1", None), group(g2, "g2", Some(g1))],
@@ -386,6 +387,7 @@ fn build(tag: &str, servers: usize, rules: usize, notes: usize) -> Snapshot {
             ai_injection_check_enabled: false,
             sftp_server_path: None,
             start_directory: None,
+            is_copy: false,
         });
         snap.secrets.push(SecretRow {
             owner_ref: format!("server:{id}:password"),
@@ -626,6 +628,29 @@ async fn confirmed_import_moves_old_servers_into_a_dated_folder() {
         .find(|g| g.name == folder_name)
         .expect("folder");
     assert_eq!(folder.parent_id, None);
+    // Spec 0103: everything moved into the folder is marked as a copy;
+    // the folder itself and the imported entries are not.
+    assert!(!folder.is_copy);
+    assert!(after
+        .groups
+        .iter()
+        .filter(|g| g.name.starts_with("L-"))
+        .all(|g| g.is_copy));
+    assert!(after
+        .servers
+        .iter()
+        .filter(|s| s.name.starts_with("L-"))
+        .all(|s| s.is_copy));
+    assert!(after
+        .servers
+        .iter()
+        .filter(|s| s.name.starts_with("F-"))
+        .all(|s| !s.is_copy));
+    assert!(after
+        .groups
+        .iter()
+        .filter(|g| g.name.starts_with("F-"))
+        .all(|g| !g.is_copy));
 
     // The 15 imported servers carry the file's IDs and rows.
     for s in &file_snap.servers {
@@ -984,4 +1009,57 @@ async fn key_file_paths_are_not_opened_by_the_import() {
     };
     assert_eq!(err, KeyFileError::NotFound { path: missing });
     assert_eq!(err.code(), "KEY_FILE_NOT_FOUND");
+}
+
+/// Spec 0103: "Keep as regular entry" clears one server, or a group with
+/// everything inside it; nothing outside the group changes.
+#[tokio::test(flavor = "multi_thread")]
+async fn clearing_the_copy_marker_works_for_a_server_and_recursively_for_a_group() {
+    let fx = empty_fixture().await;
+    let mut snap = build("C", 3, 0, 0);
+    for g in &mut snap.groups {
+        g.is_copy = true;
+    }
+    for s in &mut snap.servers {
+        s.is_copy = true;
+    }
+    seed(&fx, &snap).await;
+    let g1 = snap.groups[0].id;
+    let single = snap.servers[2].id; // directly under no group
+    let store = &fx.backup;
+
+    let marked = store.copy_marked().await.unwrap();
+    assert_eq!((marked.servers.len(), marked.groups.len()), (3, 2));
+
+    assert!(store.clear_server_copy_marker(single).await.unwrap());
+    assert!(!store.clear_server_copy_marker(single).await.unwrap());
+    assert_eq!(store.copy_marked().await.unwrap().servers.len(), 2);
+
+    // g1 contains g2, which contains server 0 and (via it) nothing else.
+    let scope = store.group_copy_marker_scope(g1).await.unwrap();
+    assert_eq!((scope.groups, scope.servers), (2, 1));
+    let cleared = store.clear_group_copy_marker(g1).await.unwrap();
+    assert_eq!((cleared.groups, cleared.servers), (2, 1));
+    let marked = store.copy_marked().await.unwrap();
+    assert!(marked.groups.is_empty());
+    assert_eq!(marked.servers, vec![snap.servers[1].id]);
+}
+
+/// Spec 0109 F7: the marker survives export and import; a file without the
+/// field (and a group without marker in the sections) reads as `false`.
+#[tokio::test(flavor = "multi_thread")]
+async fn copy_marker_round_trips_and_is_optional_in_the_file() {
+    let mut snap = build("R", 2, 0, 0);
+    snap.servers[0].is_copy = true;
+    snap.groups[1].is_copy = true;
+    let sections = snap.to_sections().unwrap();
+    let back = Snapshot::from_sections(&sections).unwrap();
+    assert!(back.servers[0].is_copy && !back.servers[1].is_copy);
+    assert!(back.groups[1].is_copy && !back.groups[0].is_copy);
+
+    let plain = build("P", 1, 0, 0);
+    let json = serde_json::to_string(&plain.servers[0]).unwrap();
+    assert!(!json.contains("is_copy"), "unmarked rows stay unchanged");
+    let row: ServerRow = serde_json::from_str(&json).unwrap();
+    assert!(!row.is_copy);
 }

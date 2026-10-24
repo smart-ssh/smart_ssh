@@ -65,21 +65,51 @@ macro_rules! rows {
     )*};
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// Row of `groups`. `is_copy` is an optional field (Spec 0109, F7): absent
+/// means `false`, and it is only written when set.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GroupRow {
+    pub id: Uuid,
+    pub name: String,
+    pub parent_id: Option<Uuid>,
+    pub notes: String,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_copy: bool,
+}
+
+/// Row of `servers`. `auth_method` is the stored JSON text, as is (C3:
+/// a key file is exported as the path the record holds). `is_copy` as for
+/// [`GroupRow`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServerRow {
+    pub id: Uuid,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub group_id: Option<Uuid>,
+    pub auth_method: String,
+    pub notes: String,
+    pub jump_host_id: Option<Uuid>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub post_ingest_policy: String,
+    pub ai_injection_check_enabled: bool,
+    pub sftp_server_path: Option<String>,
+    pub start_directory: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_copy: bool,
+}
+
 rows! {
-    /// Row of `groups`.
-    GroupRow {
-        id: Uuid, name: String, parent_id: Option<Uuid>, notes: String,
-        created_at: String, updated_at: String,
-    }
-    /// Row of `servers`. `auth_method` is the stored JSON text, as is (C3:
-    /// a key file is exported as the path the record holds).
-    ServerRow {
-        id: Uuid, name: String, host: String, port: u16, username: String,
-        group_id: Option<Uuid>, auth_method: String, notes: String,
-        jump_host_id: Option<Uuid>, created_at: String, updated_at: String,
-        post_ingest_policy: String, ai_injection_check_enabled: bool,
-        sftp_server_path: Option<String>, start_directory: Option<String>,
-    }
     /// Row of `server_tags`.
     TagRow { server_id: Uuid, tag: String }
     /// Row of `filter_rules`. `scope_value` is a server id or a tag name.
@@ -238,6 +268,7 @@ where
                 notes: r.get("notes"),
                 created_at: r.get("created_at"),
                 updated_at: r.get("updated_at"),
+                is_copy: r.get("is_copy"),
             });
         }
         between("groups").await;
@@ -268,6 +299,7 @@ where
                 ai_injection_check_enabled: r.get("ai_injection_check_enabled"),
                 sftp_server_path: r.get("sftp_server_path"),
                 start_directory: r.get("start_directory"),
+                is_copy: r.get("is_copy"),
             });
         }
         between("servers").await;
@@ -529,6 +561,119 @@ impl SqliteBackupStore {
     }
 }
 
+/// Ids of the entries that carry the copy marker (Spec 0103).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CopyMarked {
+    pub servers: Vec<Uuid>,
+    pub groups: Vec<Uuid>,
+}
+
+/// What "Keep as regular entry" on a group affects.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CopyMarkerScope {
+    pub servers: usize,
+    pub groups: usize,
+}
+
+/// Static SQL over the group and all its descendants (`?1` is the group id).
+macro_rules! tree_sql {
+    ($rest:literal) => {
+        concat!(
+            "WITH RECURSIVE tree(id) AS ( SELECT id FROM groups WHERE id = ?1 \
+             UNION SELECT g.id FROM groups g JOIN tree t ON g.parent_id = t.id ) ",
+            $rest
+        )
+    };
+}
+
+impl SqliteBackupStore {
+    /// Every server and group that carries the copy marker.
+    pub async fn copy_marked(&self) -> Result<CopyMarked, BackupStoreError> {
+        let mut out = CopyMarked::default();
+        for (sql, target) in [
+            (
+                "SELECT id FROM servers WHERE is_copy <> 0",
+                &mut out.servers,
+            ),
+            ("SELECT id FROM groups WHERE is_copy <> 0", &mut out.groups),
+        ] {
+            let ids: Vec<String> = sqlx::query_scalar(sql)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| kind(&e))?;
+            for id in ids {
+                target.push(uuid(&id)?);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Clears the marker of one server. Returns whether a row changed.
+    pub async fn clear_server_copy_marker(&self, id: Uuid) -> Result<bool, BackupStoreError> {
+        let res = sqlx::query("UPDATE servers SET is_copy = 0 WHERE id = ? AND is_copy <> 0")
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| kind(&e))?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    /// How many marked servers and groups a group action would clear.
+    pub async fn group_copy_marker_scope(
+        &self,
+        id: Uuid,
+    ) -> Result<CopyMarkerScope, BackupStoreError> {
+        let groups: i64 = sqlx::query_scalar(tree_sql!(
+            "SELECT COUNT(*) FROM groups WHERE id IN (SELECT id FROM tree) AND is_copy <> 0"
+        ))
+        .bind(id.to_string())
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| kind(&e))?;
+        let servers: i64 = sqlx::query_scalar(tree_sql!(
+            "SELECT COUNT(*) FROM servers WHERE group_id IN (SELECT id FROM tree) AND is_copy <> 0"
+        ))
+        .bind(id.to_string())
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| kind(&e))?;
+        Ok(CopyMarkerScope {
+            servers: usize::try_from(servers).unwrap_or(0),
+            groups: usize::try_from(groups).unwrap_or(0),
+        })
+    }
+
+    /// Clears the marker of a group, its sub-groups and all servers inside,
+    /// in one transaction.
+    pub async fn clear_group_copy_marker(
+        &self,
+        id: Uuid,
+    ) -> Result<CopyMarkerScope, BackupStoreError> {
+        let mut tx = self.pool.begin().await.map_err(|e| kind(&e))?;
+        let mut out = CopyMarkerScope::default();
+        let servers = sqlx::query(tree_sql!(
+            "UPDATE servers SET is_copy = 0 \
+             WHERE group_id IN (SELECT id FROM tree) AND is_copy <> 0"
+        ))
+        .bind(id.to_string())
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| kind(&e))?;
+        let groups = sqlx::query(tree_sql!(
+            "UPDATE groups SET is_copy = 0 \
+             WHERE id IN (SELECT id FROM tree) AND is_copy <> 0"
+        ))
+        .bind(id.to_string())
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| kind(&e))?;
+        out.servers = usize::try_from(servers.rows_affected()).unwrap_or(0);
+        out.groups = usize::try_from(groups.rows_affected()).unwrap_or(0);
+        tx.commit().await.map_err(|e| kind(&e))?;
+        Ok(out)
+    }
+}
+
 fn unique_folder_name(current: &DatabaseSnapshot, base: &str) -> String {
     let taken = |name: &str| {
         current
@@ -582,10 +727,13 @@ async fn archive(
         notes: String::new(),
         created_at: now.to_string(),
         updated_at: now.to_string(),
+        // The folder is created by the import; only what it moved is a copy.
+        is_copy: false,
     }];
     for g in &current.groups {
         let mut g = g.clone();
         g.id = group_map[&g.id];
+        g.is_copy = true;
         g.parent_id = Some(
             g.parent_id
                 .and_then(|p| group_map.get(&p).copied())
@@ -598,6 +746,7 @@ async fn archive(
         let mut copy = s.clone();
         let new = server_map[&s.id];
         copy.id = new;
+        copy.is_copy = true;
         copy.group_id = Some(
             s.group_id
                 .and_then(|g| group_map.get(&g).copied())
@@ -751,8 +900,8 @@ async fn insert_all(
 ) -> Result<(), BackupStoreError> {
     for g in &d.groups {
         sqlx::query(
-            "INSERT INTO groups (id, name, parent_id, notes, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO groups (id, name, parent_id, notes, created_at, updated_at, is_copy) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(g.id.to_string())
         .bind(&g.name)
@@ -760,6 +909,7 @@ async fn insert_all(
         .bind(&g.notes)
         .bind(&g.created_at)
         .bind(&g.updated_at)
+        .bind(g.is_copy)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;
@@ -768,8 +918,8 @@ async fn insert_all(
         sqlx::query(
             "INSERT INTO servers (id, name, host, port, username, group_id, auth_method, notes, \
              jump_host_id, created_at, updated_at, post_ingest_policy, \
-             ai_injection_check_enabled, sftp_server_path, start_directory) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             ai_injection_check_enabled, sftp_server_path, start_directory, is_copy) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(s.id.to_string())
         .bind(&s.name)
@@ -786,6 +936,7 @@ async fn insert_all(
         .bind(s.ai_injection_check_enabled)
         .bind(&s.sftp_server_path)
         .bind(&s.start_directory)
+        .bind(s.is_copy)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;
