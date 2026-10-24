@@ -217,7 +217,14 @@ async fn test_injection_check_provider_error_notifies_and_forces_next_confirmati
     let session = session_with_injection_check(FailingProvider);
     let emitter = TestEmitter::default();
 
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, "file body cat-me").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        Uuid::new_v4(),
+        "file body cat-me",
+    )
+    .await;
 
     let events = emitter.events.lock().unwrap().clone();
     let notice = find(&events, "chat-error").expect("a session notice must be shown");
@@ -269,7 +276,14 @@ async fn test_injection_check_provider_error_notifies_and_forces_next_confirmati
 async fn test_injection_check_without_verdict_counts_as_unavailable() {
     let session = session_with_injection_check(TextProvider("hmm"));
     let emitter = TestEmitter::default();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, "content").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        Uuid::new_v4(),
+        "content",
+    )
+    .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_some());
     assert!(session
         .injection_check_unavailable
@@ -283,7 +297,14 @@ async fn test_failed_injection_check_never_clears_earlier_suspicion() {
     session
         .injection_suspected
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    check_for_injected_instructions(&session, Uuid::new_v4(), &TestEmitter::default(), "x").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        Uuid::new_v4(),
+        "x",
+    )
+    .await;
     assert!(session
         .injection_suspected
         .load(std::sync::atomic::Ordering::SeqCst));
@@ -294,7 +315,14 @@ async fn test_failed_injection_check_never_clears_earlier_suspicion() {
 async fn test_successful_injection_check_has_no_notice() {
     let session = session_with_injection_check(TextProvider("VERDICT: no\nfine"));
     let emitter = TestEmitter::default();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, "content").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        Uuid::new_v4(),
+        "content",
+    )
+    .await;
     assert!(find(&emitter.events.lock().unwrap().clone(), "chat-error").is_none());
     assert!(!session
         .injection_check_unavailable
@@ -305,7 +333,14 @@ async fn test_successful_injection_check_has_no_notice() {
 #[tokio::test]
 async fn test_unavailable_flag_survives_a_denied_action() {
     let session = session_with_injection_check(FailingProvider);
-    check_for_injected_instructions(&session, Uuid::new_v4(), &TestEmitter::default(), "x").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        Uuid::new_v4(),
+        "x",
+    )
+    .await;
     let (decision, _) = proposed_decision_code(
         &session,
         AiAction::SuggestCommand {

@@ -1214,7 +1214,11 @@
       "cardLabel": "Pertanyaan: {{question}}",
       "send": "Kirim",
       "answeredOwnWords": "Dijawab dengan kata-kata sendiri"
-    }
+    },
+    "injectionChecking": "Memeriksa keluaran …",
+    "injectionSuspected": "Peringatan: keluaran ini tampak seperti upaya menyisipkan instruksi.",
+    "injectionSuspectedReason": "Alasan dari AI pemeriksa: {{reason}}",
+    "injectionConfirmReason": "Alasan: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Catatan ini sangat besar dan dapat dipersingkat untuk konteks AI dalam sesi panjang. Catatan yang tersimpan tetap lengkap.",

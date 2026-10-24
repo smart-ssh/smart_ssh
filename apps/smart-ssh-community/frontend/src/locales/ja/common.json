@@ -1214,7 +1214,11 @@
       "cardLabel": "質問: {{question}}",
       "send": "送信",
       "answeredOwnWords": "自分の言葉で回答済み"
-    }
+    },
+    "injectionChecking": "出力を確認中 …",
+    "injectionSuspected": "警告：この出力は指示を注入しようとする試みに見えます。",
+    "injectionSuspectedReason": "確認したAIが示した理由：{{reason}}",
+    "injectionConfirmReason": "理由：{{reason}}"
   },
   "notes": {
     "largeNoteHint": "このメモは非常に大きいため、長いセッションではAIのコンテキスト用に短縮されることがあります。保存されたメモは完全なまま残ります。",

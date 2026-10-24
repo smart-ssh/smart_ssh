@@ -187,3 +187,5 @@ Pflicht, weil ERHÖHT. Kennungen sind stabil.
 
 - Die Wahl der Verfahren (Argon2id, XChaCha20-Poly1305) und der Aufbau (Datenschlüssel + Schlüsselplätze) sind im ADR 0134 begründet; die Spec legt Verhalten und Prüfpunkte fest.
 - „Alle Zugangsdaten" heißt: alles, was die Datenbank als Geheimnis führt, mit Ausnahme des Backup-Schlüssels selbst.
+- Umsetzungsstand: Das Dateiformat und die Kryptografie nach §4 (Kopf, Schlüsselplätze, Abschnitte, Wiederherstellungscode K3, Umverpacken K7, strenges Lesen U1–U4, Grenzen F12 soweit sie das Format betreffen) setzt das Modul `crates/core/src/backup/` um, das atomare Schreiben nach X3 der Helfer `crates/core/src/atomic_write.rs`. Die typisierten Abschnittsinhalte (F10), Export, Import und Oberfläche folgen; der Status bleibt „angenommen“, bis Export und Import gemergt sind.
+- Eine Datei hat mindestens einen Abschnitt: Erst die Abschnitte authentifizieren den Kopfkern.
