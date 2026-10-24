@@ -86,6 +86,7 @@ import { NoteDiffPreview } from "./NoteDiffPreview";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useMenuPlacement } from "../hooks/useMenuPlacement";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { LocalEditCopyEditor } from "./LocalEditCopyEditor";
 import { formatOwner } from "../fileOwner";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
@@ -590,11 +591,15 @@ export function FileBrowserPanel({
   };
 
   const notifyDownloaded = (entryName: string, result: DownloadResultDto) => {
-    const reveal = () => {
-      revealItemInDir(result.localPath).catch((err) =>
-        console.warn("Konnte Download nicht im Dateimanager zeigen:", err),
-      );
-    };
+    // Issue #679: no file manager window on Android (and the result is a
+    // content URI there).
+    const reveal = currentCaps().revealInFolder
+      ? () => {
+          revealItemInDir(result.localPath).catch((err) =>
+            console.warn("Konnte Download nicht im Dateimanager zeigen:", err),
+          );
+        }
+      : undefined;
     if (result.isDir) {
       notifyOk("fileToasts.downloadedDir", { name: entryName, count: result.fileCount }, reveal);
     } else {
@@ -924,7 +929,8 @@ export function FileBrowserPanel({
   // (unsichtbar) gemountete Dateibrowser-Instanzen anderer Tabs denselben
   // Drop ebenfalls als Upload in ihr jeweiliges Verzeichnis interpretieren.
   useEffect(() => {
-    if (!isVisible) return;
+    // Issue #679: no OS drag and drop on Android.
+    if (!isVisible || !currentCaps().dragDrop) return;
     let unlisten: (() => void) | undefined;
     let cancelled = false;
     getCurrentWebview()
@@ -1138,6 +1144,12 @@ export function FileBrowserPanel({
    * Downloadverzeichnis, ohne Dialog. Datei oder Ordner (rekursiv, Backend
    * entscheidet anhand `entry.isDir`, s. `sftp_download_default`). */
   const handleDownloadDefault = (entry: RemoteEntryDto) => {
+    // Issue #679: Android has no default folder to write into; files go
+    // through the system save picker (which offers Downloads).
+    if (!currentCaps().downloadWithoutPicker && !entry.isDir) {
+      handleDownloadChoose(entry);
+      return;
+    }
     setOpenMenu(null);
     sftpDownloadDefault(sessionId, entry.path, channelUser)
       .then((result) => notifyDownloaded(entry.name, result))
@@ -1250,11 +1262,16 @@ export function FileBrowserPanel({
    * Öffnen mit dem konfigurierten (oder OS-Standard-)Programm. Fehler
    * (Download gescheitert, Programm nicht gefunden) landen in der
    * bestehenden `error`-Anzeige — der Hook selbst zeigt keine UI. */
+  // Issue #679: the app's own editor on the edit copy (no external program).
+  const [inAppEditorOpen, setInAppEditorOpen] = useState(false);
   const handleOpenLocally = (entry: RemoteEntryDto) => {
     setOpenMenu(null);
     localEdit
       .startEditing(entry, elevated ? elevatedUser : null)
-      .then(() => notifyOk("fileToasts.openedLocally", { name: entry.name }))
+      .then(() => {
+        if (currentCaps().externalEditor) notifyOk("fileToasts.openedLocally", { name: entry.name });
+        else setInAppEditorOpen(true);
+      })
       .catch((err) => notifyFailed("fileToasts.openLocallyFailed", entry.name, err));
   };
 
@@ -2392,6 +2409,11 @@ export function FileBrowserPanel({
               )}
             </span>
           )}
+          {!caps.externalEditor && localEdit.session.status === "editing" && (
+            <Button size="sm" onClick={() => setInAppEditorOpen(true)}>
+              {t("common.edit")}
+            </Button>
+          )}
           <Button size="sm" onClick={localEdit.endSession}>
             {t("fileBrowser.localEdit.end")}
           </Button>
@@ -2413,6 +2435,15 @@ export function FileBrowserPanel({
             <span className="w-full text-red-300">{localEdit.session.error}</span>
           )}
         </div>
+      )}
+
+      {inAppEditorOpen && localEdit.session && !caps.externalEditor && (
+        <LocalEditCopyEditor
+          sessionId={sessionId}
+          localPath={localEdit.session.localPath}
+          fileName={localEdit.session.entry.name}
+          onClose={() => setInAppEditorOpen(false)}
+        />
       )}
 
       {editUploadOffer && (
