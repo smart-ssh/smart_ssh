@@ -133,17 +133,35 @@ pub async fn explain(
     let texts = segment_texts(command, seg_traces.len());
     let multi = seg_traces.len() > 1;
 
+    // Post-engine escalation, attributed per segment text; if no segment
+    // hits but the whole command does, it applies to every covered segment.
+    let mut esc: Vec<Option<&'static str>> = texts.iter().map(|t| escalation(t)).collect();
+    if esc.iter().all(Option::is_none) {
+        if let Some(code) = escalation(command) {
+            esc = vec![Some(code); texts.len()];
+        }
+    }
+
     let mut segments = Vec::new();
     let mut covered_texts = Vec::new();
     for (i, t) in seg_traces.iter().enumerate() {
-        let (state, reasons) = classify(t);
+        let (mut state, mut reasons) = classify(t);
         let text = texts.get(i).cloned().unwrap_or_default();
+        let escalated = if state == SegmentCoverageState::Covered {
+            esc.get(i).copied().flatten()
+        } else {
+            None
+        };
         let rule = t
             .matched_rule
             .as_ref()
             .and_then(|id| covering_rule(stored, id));
         if state == SegmentCoverageState::Covered {
             covered_texts.push(text.clone());
+        }
+        if let Some(code) = escalated {
+            state = SegmentCoverageState::Blocked;
+            reasons.push(code.to_string());
         }
         if multi || state == SegmentCoverageState::Blocked {
             segments.push(SegmentCoverageDto {
@@ -247,6 +265,38 @@ fn covering_rule(stored: &[RuleDto], id: &RuleId) -> Option<CoveringRuleDto> {
             pattern_type: r.pattern_type,
             pattern_value: r.pattern_value.clone(),
         })
+}
+
+/// Issue #689: logs a failed coverage lookup. Never contains the command
+/// text — only its length, the error code and the session id.
+pub fn log_explain_failure(
+    err: &crate::error::CommandError,
+    session_id: crate::state::SessionId,
+    command: &str,
+) {
+    tracing::warn!(
+        error_code = err.code.unwrap_or("none"),
+        session_id = ?session_id,
+        command_len = command.len(),
+        "explain_confirmation failed"
+    );
+}
+
+/// Looks up the session for a coverage lookup; an unknown session is logged
+/// (see [`log_explain_failure`]) and returned as an error.
+pub fn session_for_explain(
+    sessions: &crate::session::SessionManager,
+    session_id: crate::state::SessionId,
+    command: &str,
+) -> Result<std::sync::Arc<crate::session::Session>, crate::error::CommandError> {
+    sessions.get(session_id).ok_or_else(|| {
+        let err = crate::error::CommandError::with_code(
+            format!("unknown session {session_id:?}"),
+            "SESSION_NOT_FOUND",
+        );
+        log_explain_failure(&err, session_id, command);
+        err
+    })
 }
 
 /// Explanation for a pending confirmation of `command` on `session`.
@@ -491,6 +541,86 @@ mod tests {
         let seg = &r.segments[1];
         assert_eq!(seg.state, SegmentCoverageState::Blocked);
         assert!(seg.reasons.contains(&REASON_RULE_CONFIRM.to_string()));
+    }
+
+    #[test]
+    fn unknown_session_logs_one_warn_without_command_text() {
+        use crate::test_support::log_capture;
+        log_capture::start_recording();
+        let sessions = crate::session::SessionManager::new();
+        let id = uuid::Uuid::from_u128(7);
+        let command = "cat /etc/secret-marker-xyz";
+        assert!(session_for_explain(&sessions, id, command).is_err());
+        let lines = log_capture::recorded_lines_at_info_or_above();
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].contains("\"WARN\""), "{}", lines[0]);
+        assert!(lines[0].contains("SESSION_NOT_FOUND"));
+        assert!(lines[0].contains("command_len"));
+        assert!(!lines[0].contains("secret-marker-xyz"));
+    }
+
+    const SECRET: &str = "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM";
+
+    #[tokio::test]
+    async fn single_covered_command_with_escalation_is_blocked() {
+        let esc = |c: &str| c.contains("shadow").then_some(SECRET);
+        let r = run(
+            vec![allow("r1", "cat *")],
+            "cat /etc//shadow",
+            Scope::Global,
+            &esc,
+        )
+        .await;
+        assert_eq!(r.segments.len(), 1);
+        assert_eq!(r.segments[0].state, SegmentCoverageState::Blocked);
+        assert_eq!(r.segments[0].reasons, vec![SECRET.to_string()]);
+        assert!(r.segments[0].rule.is_none());
+    }
+
+    #[tokio::test]
+    async fn escalation_is_attributed_to_the_reading_segment() {
+        let esc = |c: &str| c.contains("shadow").then_some(SECRET);
+        let r = run(
+            vec![allow("r1", "cat *")],
+            "cd /etc && cat shadow",
+            Scope::Global,
+            &esc,
+        )
+        .await;
+        assert_eq!(r.segments.len(), 2);
+        assert_eq!(r.segments[0].text, "cd /etc");
+        assert_eq!(r.segments[0].state, SegmentCoverageState::NeedsRule);
+        assert_eq!(r.segments[1].state, SegmentCoverageState::Blocked);
+        assert_eq!(r.segments[1].reasons, vec![SECRET.to_string()]);
+    }
+
+    #[tokio::test]
+    async fn whole_command_escalation_falls_back_to_covered_segments() {
+        let esc = |c: &str| (c.contains("&&")).then_some(SECRET);
+        let r = run(
+            vec![allow("r1", "cat *"), allow("r2", "cd *")],
+            "cd /etc && cat shadow",
+            Scope::Global,
+            &esc,
+        )
+        .await;
+        assert_eq!(r.segments.len(), 2);
+        for seg in &r.segments {
+            assert_eq!(seg.state, SegmentCoverageState::Blocked);
+            assert_eq!(seg.reasons, vec![SECRET.to_string()]);
+        }
+    }
+
+    #[tokio::test]
+    async fn single_covered_command_without_escalation_has_no_segments() {
+        let r = run(
+            vec![allow("r1", "cat *")],
+            "cat /tmp/a",
+            Scope::Global,
+            &none,
+        )
+        .await;
+        assert!(r.segments.is_empty());
     }
 
     async fn auto_rules(rules: Vec<Rule>, command: &str) -> (Decision, Vec<AutoExecRuleDto>) {

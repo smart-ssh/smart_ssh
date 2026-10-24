@@ -22,7 +22,8 @@ use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_action_decision_escalated, emit_chat_action_proposed, emit_chat_action_result,
-    emit_chat_error, emit_risk_assessment_updated, ActionResultPayload, EventEmitter,
+    emit_chat_error, emit_chat_injection_check, emit_risk_assessment_updated, ActionResultPayload,
+    EventEmitter, InjectionCheckState,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -69,6 +70,10 @@ mod tests_red_risk_second_opinion;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_not_assessable;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_escalation_log;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
@@ -158,6 +163,7 @@ pub(crate) async fn handle_action_proposed(
     let evaluation = evaluate_action(session, &action, profile_store).await;
     let matched_rule = evaluation.matched_rule.clone();
     let matched_rule_origin = evaluation.matched_rule_origin;
+    let engine_decision = evaluation.decision.clone();
     let mut decision = evaluation.decision.clone();
 
     // Vorgezogen (war vorher erst nach der Eskalationskette berechnet, s.
@@ -192,6 +198,7 @@ pub(crate) async fn handle_action_proposed(
                 session
                     .injection_suspected
                     .load(std::sync::atomic::Ordering::SeqCst),
+                peek_injection_reason(session).as_deref(),
             );
         }
     }
@@ -213,6 +220,7 @@ pub(crate) async fn handle_action_proposed(
                 session
                     .injection_suspected
                     .load(std::sync::atomic::Ordering::SeqCst),
+                peek_injection_reason(session).as_deref(),
             );
         }
     }
@@ -239,9 +247,12 @@ pub(crate) async fn handle_action_proposed(
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
                 Decision::Confirm {
-                    reason: format!(
-                        "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                         erkannt; außerdem: {reason} – erfordert Bestätigung"
+                    reason: with_injection_reason(
+                        format!(
+                            "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
+                             erkannt; außerdem: {reason} – erfordert Bestätigung"
+                        ),
+                        peek_injection_reason(session).as_deref(),
                     ),
                     code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
                 }
@@ -328,9 +339,12 @@ pub(crate) async fn handle_action_proposed(
             .swap(false, std::sync::atomic::Ordering::SeqCst)
     {
         decision = Decision::Confirm {
-            reason: "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, erkannt – \
-                     erfordert Bestätigung"
-                .to_string(),
+            reason: with_injection_reason(
+                "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, erkannt – \
+                 erfordert Bestätigung"
+                    .to_string(),
+                take_injection_reason(session).as_deref(),
+            ),
             code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
         };
     }
@@ -395,6 +409,12 @@ pub(crate) async fn handle_action_proposed(
             code: "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM".to_string(),
         };
     }
+
+    // Issue #688: one default-level line when the chain above turned the
+    // engine's `AutoExec` into something stricter. Logging only; the
+    // decision is not touched. Compared once after the chain so a new step
+    // cannot forget it; the code is that of the step that set the decision.
+    log_filter_escalation(session_id, &action, &engine_decision, &decision);
 
     // Spec 0088, A1.2/A1.4: Die Registrierung liegt weiterhin VOR den
     // `await`s für Vorschau und Zweitmeinung (s. Kommentar weiter unten:
@@ -970,6 +990,55 @@ fn pseudo_command_for_risk_classification(action: &AiAction) -> Option<String> {
     }
 }
 
+/// Issue #688 / Spec 0094: name of a decision's kind, for log lines.
+fn decision_kind(decision: &Decision) -> &'static str {
+    match decision {
+        Decision::AutoExec => "AutoExec",
+        Decision::Confirm { .. } => "Confirm",
+        Decision::Deny { .. } => "Deny",
+    }
+}
+
+/// Issue #688: logs `filter decision escalated` when the post-engine chain
+/// changed the engine decision. Only kinds, the escalation code, the action
+/// kind, the session id and the byte length — no command, path or reason.
+fn log_filter_escalation(
+    session_id: SessionId,
+    action: &AiAction,
+    engine_decision: &Decision,
+    final_decision: &Decision,
+) {
+    if matches!(engine_decision, Decision::AutoExec) && matches!(final_decision, Decision::AutoExec)
+    {
+        return;
+    }
+    // The chain only ever turns `AutoExec` into `Confirm`.
+    if !matches!(engine_decision, Decision::AutoExec) {
+        return;
+    }
+    let code = match final_decision {
+        Decision::Confirm { code, .. } | Decision::Deny { code, .. } => code.as_str(),
+        Decision::AutoExec => return,
+    };
+    let action_kind = match action {
+        AiAction::SuggestCommand { .. } => "command",
+        AiAction::ReadRemoteFile { .. } => "file_read",
+        AiAction::WriteRemoteFile { .. } => "file_write",
+        AiAction::ProposeNoteUpdate { .. } => "note_update",
+        AiAction::GenerateDocument { .. } => "document",
+        AiAction::AskUser { .. } => "ask_user",
+    };
+    tracing::info!(
+        session_id = %session_id,
+        engine_decision = decision_kind(engine_decision),
+        final_decision = decision_kind(final_decision),
+        code,
+        action_kind,
+        command_len = pseudo_command_for_risk_classification(action).map_or(0, |c| c.len()),
+        "filter decision escalated",
+    );
+}
+
 /// `Confirm`-Entscheidung für einen Treffer der Secret-Pfad- bzw.
 /// `sftp-server`-Prüfung (Spec 0068 Teil 2, ADR 0058 §8). Reine Eskalation;
 /// der Aufrufer ruft das nur bei `AutoExec` auf.
@@ -982,13 +1051,17 @@ fn check_finding_confirm(
     finding: ssh_manager_core::risk::CommandCheckFinding,
     match_code: &str,
     injection_suspected: bool,
+    injection_reason: Option<&str>,
 ) -> Decision {
     let reason = finding.reason();
     if injection_suspected {
         Decision::Confirm {
-            reason: format!(
-                "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                 erkannt; außerdem: {reason} – erfordert Bestätigung"
+            reason: with_injection_reason(
+                format!(
+                    "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
+                     erkannt; außerdem: {reason} – erfordert Bestätigung"
+                ),
+                injection_reason,
             ),
             code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
         }
@@ -1003,6 +1076,55 @@ fn check_finding_confirm(
             code: match_code.to_string(),
         }
     }
+}
+
+/// Issue #693: separator between the confirmation text and the checker's
+/// reason; the frontend splits on the last occurrence. The reason itself
+/// never contains a newline (see [`sanitize_injection_reason`]).
+pub(crate) const INJECTION_REASON_MARKER: &str = "\nReason: ";
+
+/// Issue #693: appends the checker's reason (if any) to a confirmation text.
+fn with_injection_reason(text: String, reason: Option<&str>) -> String {
+    match reason {
+        Some(r) if !r.is_empty() => format!("{text}{INJECTION_REASON_MARKER}{r}"),
+        _ => text,
+    }
+}
+
+/// Issue #693: the checker's reason is derived from untrusted content, so
+/// before it is stored or shown it is redacted, stripped of control
+/// characters (newlines become spaces) and cut to
+/// `INJECTION_REASON_MAX_CHARS`. Redaction runs first so a cut can never
+/// split a secret into an unrecognisable fragment.
+pub(crate) fn sanitize_injection_reason(session: &Session, raw: &str) -> String {
+    let redacted = session.redactor.redact_text(raw);
+    let cleaned: String = redacted
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    cleaned
+        .trim()
+        .chars()
+        .take(crate::events::INJECTION_REASON_MAX_CHARS)
+        .collect()
+}
+
+/// Issue #693: current suspicion reason, without consuming it.
+fn peek_injection_reason(session: &Session) -> Option<String> {
+    session
+        .injection_suspected_reason
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+}
+
+/// Issue #693: takes the suspicion reason out together with the flag.
+fn take_injection_reason(session: &Session) -> Option<String> {
+    session
+        .injection_suspected_reason
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take())
 }
 
 /// Issue #596: the post-engine escalations that do not depend on the user's
@@ -1996,7 +2118,15 @@ async fn execute_suggested_command(
             session
                 .untrusted_content_ingested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
-            check_for_injected_instructions(session, session_id, emitter, &combined_output).await;
+            check_for_injected_instructions(
+                session,
+                session_id,
+                emitter,
+                action_id,
+                &combined_output,
+                "command_output",
+            )
+            .await;
             true
         }
         Err(err) => {
@@ -2172,11 +2302,15 @@ pub(crate) async fn check_for_injected_instructions(
     session: &Session,
     session_id: SessionId,
     emitter: &dyn EventEmitter,
+    item_id: Uuid,
     content: &str,
+    source: &'static str,
 ) {
     let Some(provider) = session.injection_check_provider.as_deref() else {
         return;
     };
+    // Issue #693: progress under the checked result (display only).
+    emit_chat_injection_check(emitter, session_id, item_id, InjectionCheckState::Running);
     wait_for_ai_request_slot(session).await;
     if let Some(budget) = session.injection_check_budget.as_deref() {
         // Estimate on the content as it will ACTUALLY be sent, not the raw
@@ -2196,8 +2330,15 @@ pub(crate) async fn check_for_injected_instructions(
         )
         .await;
     }
+    tracing::info!(
+        session_id = %session_id,
+        source,
+        content_len = content.len(),
+        "injection check started",
+    );
+    let started = std::time::Instant::now();
     let mut request_usage = None;
-    let check = crate::second_opinion::fetch_injection_check_with_usage(
+    let outcome = crate::second_opinion::fetch_injection_check_with_usage(
         provider,
         content,
         &mut request_usage,
@@ -2208,15 +2349,52 @@ pub(crate) async fn check_for_injected_instructions(
             .report_ai_usage(crate::ai_usage::AiUsagePurpose::InjectionCheck, usage)
             .await;
     }
-    match check {
-        crate::second_opinion::SideCallOutcome::Verdict(true, _reason) => {
+    let verdict = match &outcome {
+        crate::second_opinion::SideCallOutcome::Verdict(true, _) => "suspected",
+        crate::second_opinion::SideCallOutcome::Verdict(false, _) => "clean",
+        crate::second_opinion::SideCallOutcome::NoVerdict => "no_verdict",
+        crate::second_opinion::SideCallOutcome::ProviderError { .. } => "provider_error",
+    };
+    tracing::info!(
+        session_id = %session_id,
+        source,
+        content_len = content.len(),
+        verdict,
+        duration_ms = started.elapsed().as_millis() as u64,
+        "injection check finished",
+    );
+    if let crate::second_opinion::SideCallOutcome::Verdict(_, reason) = &outcome {
+        // Spec 0094 A2: reason text only at debug, through the log redactor.
+        tracing::debug!(
+            session_id = %session_id,
+            reason = %ssh_manager_core::ai::default_log_redactor().redact_text(reason),
+            "injection check reason",
+        );
+    }
+    match outcome {
+        crate::second_opinion::SideCallOutcome::Verdict(true, reason) => {
+            // Issue #693: carry the reason along with the flag (display
+            // only; the decision logic is unchanged). Reason first, flag
+            // second, so a consumer that sees the flag also sees the reason.
+            let reason = sanitize_injection_reason(session, &reason);
+            if let Ok(mut slot) = session.injection_suspected_reason.lock() {
+                *slot = Some(reason.clone());
+            }
             session
                 .injection_suspected
                 .store(true, std::sync::atomic::Ordering::SeqCst);
+            emit_chat_injection_check(
+                emitter,
+                session_id,
+                item_id,
+                InjectionCheckState::Suspected { reason },
+            );
         }
         // Geprüft, unauffällig: ändert nichts (löscht insbesondere einen
         // früheren Verdacht nicht).
-        crate::second_opinion::SideCallOutcome::Verdict(false, _) => {}
+        crate::second_opinion::SideCallOutcome::Verdict(false, _) => {
+            emit_chat_injection_check(emitter, session_id, item_id, InjectionCheckState::Clean);
+        }
         // Issue #102 (Maintainer-Entscheidung: fail closed, pro Aktion): Der
         // Check konnte nicht laufen (Provider-Fehler) oder lieferte kein
         // erkennbares Urteil. `injection_suspected` bleibt unberührt, aber
@@ -2235,6 +2413,12 @@ pub(crate) async fn check_for_injected_instructions(
                  action requires confirmation."
                     .to_string(),
                 Some("AI_INJECTION_CHECK_UNAVAILABLE"),
+            );
+            emit_chat_injection_check(
+                emitter,
+                session_id,
+                item_id,
+                InjectionCheckState::Unavailable,
             );
         }
     }
@@ -2286,3 +2470,7 @@ pub(crate) fn announce_second_opinion_setup_failure(
 fn empty_store() -> &'static crate::test_support::InMemoryProfileStore {
     Box::leak(Box::default())
 }
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_injection_reason;

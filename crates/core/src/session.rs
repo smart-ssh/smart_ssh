@@ -7,11 +7,7 @@
 //! möglichen eigenen Folge-Spec. Diese Typen bleiben deshalb bewusst
 //! (noch) nirgends im Code verwendet — das ist beabsichtigt, kein
 //! übersehener Anschluss.
-//!
-//! Ergänzt um [`SyncBackend`] (Spec 0037, Abschnitt 6) — ebenfalls reines
-//! Vokabular, keine Git-/Cloud-Sync-Implementierung in dieser Spec.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -145,45 +141,4 @@ pub struct Session {
     pub ledger: Vec<LedgerEntry>,
     pub summary: Option<Summary>,
     pub compaction: CompactionState,
-}
-
-/// Ein Ende-zu-Ende-verschlüsseltes Datenpaket für [`SyncBackend`] (Spec
-/// 0037, Abschnitt 6) — Aufbau von der Spec nicht weiter festgelegt;
-/// bewusst nur Ciphertext + Nonce, als bündel-weiter Typ, da ein
-/// Sync-Bündel mehrere Sitzungen/Notizen auf einmal transportieren können
-/// soll.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EncryptedBundle {
-    pub ciphertext: Vec<u8>,
-    pub nonce: Vec<u8>,
-}
-
-/// Bestätigung eines erfolgreichen [`SyncBackend::push`] (Spec 0037,
-/// Abschnitt 6) — Aufbau von der Spec nicht weiter festgelegt; minimal
-/// gehalten (Zeitpunkt der Bestätigung).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SyncReceipt {
-    pub synced_at: DateTime<Utc>,
-}
-
-/// Fehler aus [`SyncBackend`]. Analog zu `filter::PolicySourceError`/
-/// `profiles::ProfileError::Backend`: `core` selbst darf keine
-/// Netzwerk-/Backend-Abhängigkeit bekommen, daher nur eine
-/// `String`-Nachricht statt eines strukturierten Zugriffs auf den
-/// jeweiligen Original-Fehlertyp.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
-#[error("sync backend error: {0}")]
-pub struct SyncError(pub String);
-
-pub type SyncResult<T> = Result<T, SyncError>;
-
-/// Vokabular für ein Ende-zu-Ende-verschlüsseltes Sync-Backend (Spec 0037,
-/// Abschnitt 6) — **keine** Implementierung in dieser Spec (kein
-/// Git-/Cloud-Sync). Eine konkrete Implementierung (privates Repo) würde
-/// `push`/`pull` gegen ein tatsächliches Backend (z. B. ein Git-Repository
-/// oder einen Cloud-Speicher) umsetzen.
-#[async_trait]
-pub trait SyncBackend: Send + Sync {
-    async fn push(&self, bundle: EncryptedBundle) -> SyncResult<SyncReceipt>;
-    async fn pull(&self) -> SyncResult<Option<EncryptedBundle>>;
 }

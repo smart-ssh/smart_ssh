@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import {
   commandErrorCode,
   commandErrorMessage,
+  keepGroupAsRegularEntry,
+  keepServerAsRegularEntry,
   listChatSessions,
   listGroups,
   listServers,
@@ -26,6 +28,7 @@ import type {
   ChatSessionSummaryDto,
   ConnectStepRecord,
   GroupDto,
+  KeepGroupResult,
   ServerDto,
   UnusableServerDto,
 } from "../types";
@@ -36,7 +39,23 @@ import { MoveToDialog } from "./MoveToDialog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../unusableServer";
-import { Button } from "./ui";
+import { Button, DialogFrame } from "./ui";
+
+/** Spec 0103: marks a server or group that the backup import moved into
+ * "Previous data"; the tooltip (and screen-reader text) explains it. */
+function CopyBadge() {
+  const { t } = useTranslation();
+  return (
+    <span
+      data-testid="copy-badge"
+      title={t("copyMarker.badgeHint")}
+      className="shrink-0 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200"
+    >
+      {t("copyMarker.badge")}
+      <span className="sr-only">. {t("copyMarker.badgeHint")}</span>
+    </span>
+  );
+}
 
 interface ServerListProps {
   /** Issue #548: opens a "Connecting to …" tab and runs the attempt there.
@@ -228,6 +247,44 @@ export function ServerList({
     server: ServerDto;
   } | null>(null);
   const closeNewSessionMenu = useCallback(() => setNewSessionMenu(null), []);
+
+  // Spec 0103: "Keep as regular entry" for a copy group — context menu, then
+  // a confirmation that names what is cleared.
+  const [groupMenu, setGroupMenu] = useState<{ x: number; y: number; group: GroupDto } | null>(
+    null,
+  );
+  const closeGroupMenu = useCallback(() => setGroupMenu(null), []);
+  const [keepGroup, setKeepGroup] = useState<{ group: GroupDto; scope: KeepGroupResult } | null>(
+    null,
+  );
+  const handleKeepServer = async (server: ServerDto) => {
+    setError(null);
+    try {
+      await keepServerAsRegularEntry(server.id);
+    } catch (err) {
+      setError(describeError(t, err));
+    }
+    await loadTree();
+  };
+  const askKeepGroup = async (group: GroupDto) => {
+    setError(null);
+    try {
+      setKeepGroup({ group, scope: await keepGroupAsRegularEntry(group.id, false) });
+    } catch (err) {
+      setError(describeError(t, err));
+    }
+  };
+  const confirmKeepGroup = async () => {
+    if (!keepGroup) return;
+    const { group } = keepGroup;
+    setKeepGroup(null);
+    try {
+      await keepGroupAsRegularEntry(group.id, true);
+    } catch (err) {
+      setError(describeError(t, err));
+    }
+    await loadTree();
+  };
 
   const performConnect = async (server: ServerDto, resumeChatSessionId?: string) => {
     setError(null);
@@ -424,6 +481,7 @@ export function ServerList({
               {tag}
             </span>
           ))}
+          {server.isCopy && <CopyBadge />}
           {connectingServerIds.has(server.id) && (
             <span className="text-xs text-indigo-300">{t("mainScreen.connecting")}</span>
           )}
@@ -480,6 +538,14 @@ export function ServerList({
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
             title={node.group.name}
+            onContextMenu={
+              node.group.isCopy
+                ? (e) => {
+                    e.preventDefault();
+                    setGroupMenu({ x: e.clientX, y: e.clientY, group: node.group });
+                  }
+                : undefined
+            }
             style={{ paddingLeft: `${indent(depth)}px` }}
             className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
           >
@@ -487,6 +553,7 @@ export function ServerList({
             <span className="truncate" title={node.group.name}>
               📁 {node.group.name}
             </span>
+            {node.group.isCopy && <CopyBadge />}
           </button>
           <Button variant="ghost" size="sm"
             onClick={() => onCreateServerInGroup(node.group.id)}
@@ -629,7 +696,54 @@ export function ServerList({
             setNewSessionMenu(null);
             void handleNewSession(server);
           }}
+          onKeepAsRegular={
+            newSessionMenu.server.isCopy
+              ? () => {
+                  const server = newSessionMenu.server;
+                  setNewSessionMenu(null);
+                  void handleKeepServer(server);
+                }
+              : undefined
+          }
         />
+      )}
+
+      {groupMenu && (
+        <NewSessionMenu
+          x={groupMenu.x}
+          y={groupMenu.y}
+          serverName={groupMenu.group.name}
+          onClose={closeGroupMenu}
+          onKeepAsRegular={() => {
+            const group = groupMenu.group;
+            setGroupMenu(null);
+            void askKeepGroup(group);
+          }}
+        />
+      )}
+
+      {keepGroup && (
+        <DialogFrame
+          layer="app"
+          title={<span className="break-words">{t("copyMarker.keep")}</span>}
+          onClose={() => setKeepGroup(null)}
+          actions={
+            <>
+              <Button onClick={() => setKeepGroup(null)}>{t("common.cancel")}</Button>
+              <Button variant="primary" onClick={() => void confirmKeepGroup()}>
+                {t("copyMarker.keep")}
+              </Button>
+            </>
+          }
+        >
+          <p className="break-words text-sm text-slate-200">📁 {keepGroup.group.name}</p>
+          <p className="mt-2 text-sm text-slate-300">
+            {t("copyMarker.groupConfirmBody", {
+              groups: keepGroup.scope.groups,
+              servers: keepGroup.scope.servers,
+            })}
+          </p>
+        </DialogFrame>
       )}
 
       {pendingConnectServer && (

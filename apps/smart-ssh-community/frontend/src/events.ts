@@ -12,6 +12,7 @@ import type {
   ChatQuestionAskedEvent,
   ChatErrorEvent,
   ChatAiRetryingEvent,
+  ChatAiRequestStartedEvent,
   ChatQueuedMessagesSentEvent,
   ChatResponseCancelledEvent,
   ChatResponseEmptyEvent,
@@ -21,6 +22,7 @@ import type {
   ChatContextCompactedEvent,
   ChatTextDeltaEvent,
   ChatWebActivityEvent,
+  ChatInjectionCheckEvent,
   ChatWebResearchUnavailableEvent,
   AutoReconnectChangedEvent,
   ChatSessionChangedEvent,
@@ -131,6 +133,12 @@ export const onChatActionWaitingInput = (
 export const onChatError = (handler: (event: ChatErrorEvent) => void): Promise<UnlistenFn> =>
   listen<ChatErrorEvent>("chat-error", (e) => handler(e.payload));
 
+/** Issue #694 — a request to the AI provider was sent (wait line). */
+export const onChatAiRequestStarted = (
+  handler: (event: ChatAiRequestStartedEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatAiRequestStartedEvent>("chat-ai-request-started", (e) => handler(e.payload));
+
 /** Issue #600 — automatic retry after a provider overload. */
 export const onChatAiRetrying = (
   handler: (event: ChatAiRetryingEvent) => void,
@@ -160,6 +168,12 @@ export const onChatWebActivity = (
   handler: (event: ChatWebActivityEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<ChatWebActivityEvent>("chat-web-activity", (e) => handler(e.payload));
+
+/** Issue #693 — progress/verdict of the injection check. */
+export const onChatInjectionCheck = (
+  handler: (event: ChatInjectionCheckEvent) => void,
+): Promise<UnlistenFn> =>
+  listen<ChatInjectionCheckEvent>("chat-injection-check", (e) => handler(e.payload));
 
 /** Spec 0105 §7 (Issue #169) — s. `ChatWebResearchUnavailableEvent`. */
 export const onChatWebResearchUnavailable = (

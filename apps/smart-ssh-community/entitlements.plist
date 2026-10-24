@@ -23,7 +23,7 @@
     liefert macOS unter Hardened Runtime nur Stille.
 
   Kein App-Sandbox-Entitlement (`com.apple.security.app-sandbox`): die
-  App wird nicht über den Mac App Store vertrieben (s. release.yml,
+  App wird nicht über den Mac App Store vertrieben (Vertrieb über
   GitHub-Releases), Hardened Runtime + Notarisierung allein genügen für
   Gatekeeper — App Sandbox ist ein separates, hier nicht angefordertes
   Schutzniveau und würde zusätzliche Entitlements für Dateizugriff/

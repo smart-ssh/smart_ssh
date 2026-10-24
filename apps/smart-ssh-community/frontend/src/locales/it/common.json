@@ -45,7 +45,8 @@
       "chatRetention": "Sessioni e dati",
       "mcpServer": "Server MCP",
       "masterPassword": "Password principale",
-      "voiceInput": "Input vocale"
+      "voiceInput": "Input vocale",
+      "dataAndBackup": "Dati e backup"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ sposta in questo gruppo",
     "hintCycle": "Un gruppo non può essere spostato nel proprio sottogruppo",
     "moveTo": "Sposta «{{name}}» in…"
+  },
+  "copyMarker": {
+    "badge": "Copia",
+    "badgeHint": "Copia: non fa parte dei dati attuali. Ha un proprio ID ed è indipendente dalle voci importate.",
+    "keep": "Mantieni come voce normale",
+    "groupConfirmBody": "Rimuove il contrassegno di copia da questo gruppo e da tutto il suo contenuto (gruppi: {{groups}}, server: {{servers}})."
   },
   "management": {
     "emptyState": "Selezioni un gruppo o un server a sinistra, oppure crei qualcosa di nuovo con \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -408,7 +415,8 @@
       "verdictAuto": "verrà eseguito automaticamente la prossima volta",
       "verdictAsk": "chiederà ancora: {{reasons}}",
       "notice": "Regola creata. Questo comando chiederà ancora la prossima volta: {{reasons}}",
-      "reasonOther": "un altro controllo di sicurezza"
+      "reasonOther": "un altro controllo di sicurezza",
+      "loadFailed": "Impossibile caricare la copertura delle regole"
     }
   },
   "hostKeyDialog": {
@@ -564,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Questo modello non supporta il tool calling. Nelle impostazioni del provider deselezioni \"Supporta il tool calling nativo\" (verrà usata l'alternativa basata sul prompt) o scelga un modello con supporto agli strumenti.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Il servizio IA locale non risponde. Avvii Ollama (o il suo server locale) e riprovi.",
     "AI_TIMEOUT": "Il provider IA ha impiegato troppo tempo a rispondere. Attenda un momento e invii di nuovo; con un modello locale verifichi se la macchina è occupata o il modello troppo grande.",
+    "AI_TIMEOUT_NAMED": "Nessuna risposta da {{provider}} per {{seconds}} s – richiesta annullata. Riprova tra un attimo.",
+    "AI_TOTAL_DEADLINE": "{{provider}} non ha terminato entro {{minutes}} minuti – richiesta annullata. Il testo ricevuto finora viene mantenuto.",
     "AI_WEB_RESEARCH_REJECTED": "Il provider IA rifiuta la ricerca web per questo account. Disattivi \"Ricerca web\" per questo provider in \"Provider IA\" nelle impostazioni.",
     "AI_ATTACHMENT_UNSUPPORTED": "Questo modello non può leggere l’immagine o il PDF allegato. Scelga un modello che possa farlo o rimuova l’allegato.",
     "AI_NO_ACTIVE_PROVIDER": "Nessun provider IA attivo. Ne aggiunga uno in Impostazioni → Provider IA e lo imposti come attivo.",
@@ -869,7 +879,8 @@
       "success": "{{created}} server creati, {{groups}} cartelle, {{skipped}} conflitti saltati.",
       "fallbacksDetail": "{{count}} file di chiave non hanno potuto essere letti, il percorso è stato mantenuto: {{detail}}.",
       "encryptedDetail": "{{count}} chiavi sono state acquisite cifrate: aggiunga la passphrase prima della prima connessione: {{detail}}."
-    }
+    },
+    "isBackup": "Questo file è un backup cifrato, non un ssh_config. Non è stato creato nulla. Ripristinalo in Impostazioni → Dati e backup."
   },
   "sshConfigExport": {
     "dialogTitle": "Esporta in ssh_config",
@@ -879,7 +890,8 @@
       "includeHintLabel": "Come includere questo file nel suo ~/.ssh/config:",
       "copy": "Copia",
       "notRepresentedHint": "Gruppi, tag, note, regole di filtro e impostazioni di sicurezza non sono in questo file: ciò che manca per un dato server è annotato come commento sopra la sua voce."
-    }
+    },
+    "backupHint": "Non contiene credenziali, regole o note. Per un backup completo usa il backup cifrato (Impostazioni → Dati e backup)."
   },
   "startup": {
     "stateUnknown": "Smart SSH non ha potuto leggere il proprio stato di avvio. Nulla è stato modificato. Riprovi; se persiste, il log indica la causa.",
@@ -1026,6 +1038,10 @@
     "transferStopped": "{{name}}: interrotto",
     "transferIncomplete": "File incompleto rimasto sul server: {{path}}",
     "transferFiles": "{{done}} di {{total}} file",
+    "transferDelete": "Eliminazione di {{name}}",
+    "transferChmod": "Modifica dei permessi di {{name}}",
+    "entriesProgress": "{{done}} di {{total}} elementi",
+    "entriesChanged": "Elementi modificati: {{count}}",
     "transferRemaining": "{{time}} rimanenti",
     "loading": "Caricamento…",
     "noPermissionToOpen": "Nessun permesso per aprire questa cartella (manca x)",
@@ -1177,6 +1193,7 @@
     "tryAgain": "Riprova",
     "errorDetails": "Dettagli",
     "aiRetrying": "Il provider IA è sovraccarico – nuovo tentativo tra {{seconds}} s (tentativo {{attempt}} di {{max}})",
+    "aiWaiting": "In attesa di una risposta da {{provider}} … {{seconds}} s",
     "noActiveProvider": "Nessun provider IA attivo configurato. La preghiamo di configurarne prima uno nelle impostazioni.",
     "inputPlaceholder": "Faccia una domanda o descriva un comando …",
     "send": "Invia",
@@ -1230,7 +1247,11 @@
       "cardLabel": "Domanda: {{question}}",
       "send": "Invia",
       "answeredOwnWords": "Risposta con parole tue"
-    }
+    },
+    "injectionChecking": "Controllo dell’output in corso …",
+    "injectionSuspected": "Attenzione: questo output sembra un tentativo di inserire istruzioni.",
+    "injectionSuspectedReason": "Motivo indicato dall’IA di controllo: {{reason}}",
+    "injectionConfirmReason": "Motivo: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Questa nota è molto grande e potrebbe essere abbreviata per il contesto dell'IA nelle sessioni lunghe. La nota salvata resta completa.",
@@ -1346,5 +1367,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "completato",
     "resultFailed": "non riuscito"
+  },
+  "backup": {
+    "title": "Backup cifrato",
+    "intro": "Salva tutti i tuoi dati di Smart SSH in un unico file cifrato e li ripristina in seguito, ad esempio su un nuovo computer.",
+    "included": "Inclusi: server, cartelle, tag, regole di filtro, note dei server, provider AI, credenziali salvate (cifrate) e chiavi host attendibili.",
+    "excluded": "Non inclusi: cronologia chat, registri di utilizzo, impostazioni del dispositivo e file di chiavi su disco.",
+    "restoreInfo": "Il ripristino sostituisce tutti i dati su questo dispositivo. I dati attuali vengono prima salvati e i tuoi server vanno in una cartella con data.",
+    "export": "Esporta backup…",
+    "restore": "Ripristina da backup…",
+    "newCode": "Nuovo codice di recupero",
+    "setPassphrase": "Imposta passphrase",
+    "exportDone": "Backup salvato in {{path}}.",
+    "exportCounts": "{{servers}} server, {{rules}} regole, {{notes}} note.",
+    "setup": {
+      "title": "Proteggi i tuoi backup",
+      "intro": "I backup sono cifrati. Per leggerli serve un codice di recupero o una passphrase, quindi scegline uno ora.",
+      "useCode": "Crea un codice di recupero",
+      "usePassphrase": "Usa invece una passphrase"
+    },
+    "code": {
+      "title": "Il tuo codice di recupero",
+      "warning": "Annota questo codice e conservalo con cura. Viene mostrato una sola volta e non può essere mostrato di nuovo. Senza, i tuoi backup non si possono leggere.",
+      "copy": "Copia",
+      "copyFailed": "Copia non riuscita.",
+      "confirm": "Ho annotato il codice",
+      "continue": "Continua"
+    },
+    "passphrase": {
+      "title": "Imposta una passphrase",
+      "warning": "Senza la passphrase i tuoi backup non si possono leggere. Non esiste recupero.",
+      "label": "Passphrase",
+      "help": "Almeno {{count}} caratteri.",
+      "tooShort": "Troppo corta: almeno {{count}} caratteri.",
+      "repeat": "Ripeti la passphrase",
+      "mismatch": "Le passphrase non coincidono.",
+      "save": "Salva passphrase"
+    },
+    "import": {
+      "title": "Ripristina da backup",
+      "pickTitle": "Scegli un file di backup",
+      "file": "Nome file: {{name}}",
+      "kind": "Cosa apre questo backup",
+      "useCode": "Codice di recupero",
+      "usePassphrase": "Passphrase",
+      "codeLabel": "Codice di recupero",
+      "passphraseLabel": "Passphrase",
+      "open": "Apri backup"
+    },
+    "confirm": {
+      "title": "Sostituire i tuoi dati?",
+      "intro": "Il ripristino sostituisce i dati su questo dispositivo. Finora non è cambiato nulla.",
+      "what": "Dati",
+      "local": "Ora",
+      "file": "Copia",
+      "sessions": "Sessioni aperte che verranno chiuse: {{count}}",
+      "safety": "I tuoi dati attuali vengono prima salvati in {{dir}}. I tuoi server vanno in una nuova cartella “Previous data” con la data di oggi.",
+      "replace": "Sostituisci dati"
+    },
+    "counts": {
+      "servers": "Server",
+      "groups": "Cartelle",
+      "rules": "Regole",
+      "notes": "Note",
+      "aiProviders": "Provider AI"
+    },
+    "summary": {
+      "title": "Backup ripristinato",
+      "counts": "Ripristinati: {{servers}} server, {{groups}} cartelle, {{rules}} regole, {{notes}} note, {{aiProviders}} provider AI.",
+      "safety": "Backup di sicurezza dei dati precedenti: {{path}}",
+      "folder": "I tuoi server precedenti sono nella cartella “{{name}}”.",
+      "hostKeysPending": "Le chiavi host attendibili vengono completate al prossimo avvio.",
+      "done": "Fatto"
+    },
+    "errors": {
+      "cannotOpen": "Codice o passphrase errati, oppure il file è danneggiato.",
+      "typo": "Il codice contiene un errore di battitura.",
+      "notBackup": "Questo non è un file di backup di Smart SSH. Gli elenchi di server in formato ssh_config si importano dall’elenco dei server.",
+      "newerVersion": "Questo backup è stato creato da una versione più recente di Smart SSH. Aggiorna l’app e riprova.",
+      "failed": "Operazione non riuscita. Non è stato modificato nulla."
+    }
   }
 }

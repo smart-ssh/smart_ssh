@@ -1327,7 +1327,9 @@ async fn test_injection_check_yes_escalates_followup_action_to_confirm() {
         &session,
         Uuid::new_v4(),
         &emitter,
+        Uuid::new_v4(),
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
     assert!(
@@ -1379,7 +1381,9 @@ async fn test_injection_check_no_does_not_change_followup_decision() {
         &session,
         Uuid::new_v4(),
         &emitter,
+        Uuid::new_v4(),
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
     assert!(
@@ -1421,7 +1425,9 @@ async fn test_injection_check_provider_error_does_not_panic_or_set_suspected_fla
         &session,
         Uuid::new_v4(),
         &emitter,
+        Uuid::new_v4(),
         "aus der Datei gelesener Inhalt",
+        "command_output",
     )
     .await;
 
@@ -1473,7 +1479,15 @@ async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_conten
     let emitter = TestEmitter::default();
 
     let before = tokio::time::Instant::now();
-    check_for_injected_instructions(&session, Uuid::new_v4(), &emitter, &huge_content).await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &emitter,
+        Uuid::new_v4(),
+        &huge_content,
+        "command_output",
+    )
+    .await;
     let elapsed = before.elapsed();
 
     assert!(
@@ -1481,7 +1495,12 @@ async fn test_injection_check_gate_estimates_on_truncated_content_not_raw_conten
         "muss auf dem gekürzten Inhalt schätzen und darf deshalb nicht warten, wartete {elapsed:?}"
     );
     assert!(
-        emitter.events.lock().unwrap().is_empty(),
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(name, _)| name == "chat-injection-check"),
         "kein Warte-Event, wenn (korrekt) gar nicht gewartet wurde"
     );
 }

@@ -61,6 +61,7 @@ vi.mock("../events", () => ({
   onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
   onChatError: vi.fn(() => Promise.resolve(() => {})),
   onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
   onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
@@ -70,6 +71,7 @@ vi.mock("../events", () => ({
   onChatContextCompacted: () => Promise.resolve(() => {}),
   onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
   onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
+  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
   onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
   onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
 }));

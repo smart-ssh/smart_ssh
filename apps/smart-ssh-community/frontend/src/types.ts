@@ -27,6 +27,8 @@ export interface StoredHostKeyDto {
 
 export interface ServerDto {
   id: string;
+  /** Spec 0103: moved into "Previous data" by a backup import. */
+  isCopy?: boolean;
   name: string;
   host: string;
   port: number;
@@ -488,6 +490,18 @@ export type ActionResultPayload =
    * Datei vor dem Schreiben nicht existierte. */
   | { kind: "fileWrite"; path: string; backupPath: string | null; usedSudoPassword: boolean };
 
+/** Issue #693 (Spec 0039, §5.2): state of the injection check of one
+ * checked item. `reason` is untrusted text — render as plain text only. */
+export type InjectionCheckState =
+  | { state: "running" }
+  | { state: "clean" }
+  | { state: "suspected"; reason: string }
+  | { state: "unavailable" };
+
+/** Issue #693 — `chat-injection-check`; `itemId` is the action id of a
+ * command result / file read, or the activity id of a web research card. */
+export type ChatInjectionCheckEvent = { sessionId: string; itemId: string } & InjectionCheckState;
+
 export interface ChatActionResultEvent {
   sessionId: string;
   actionId: string;
@@ -527,8 +541,19 @@ export interface ChatErrorEvent {
   providerErrorType?: string | null;
   httpStatus?: number | null;
   providerMessage?: string | null;
+  /** Issue #694 — set for the timeout errors: provider name and the exceeded
+   * limit in seconds. */
+  providerName?: string | null;
+  timeoutSecs?: number | null;
   /** Issue #631 — when access returns after a provider usage limit. */
   accessReturns?: string | null;
+}
+
+/** Issue #694 — a request to the AI provider was sent; the chat shows the
+ * wait line until content arrives. */
+export interface ChatAiRequestStartedEvent {
+  sessionId: string;
+  providerName: string;
 }
 
 /** Issue #600 — the AI provider is overloaded; the request is repeated
@@ -586,6 +611,8 @@ export interface WebActivityDto {
 /** Spec 0105 — `chat-web-activity`. */
 export interface ChatWebActivityEvent {
   sessionId: string;
+  /** Issue #693: binds `chat-injection-check` events to this card. */
+  activityId?: string;
   activity: WebActivityDto;
 }
 
@@ -639,6 +666,15 @@ export interface GroupDto {
   name: string;
   parentId: string | null;
   notes: string;
+  /** Spec 0103: moved into "Previous data" by a backup import. */
+  isCopy?: boolean;
+}
+
+/** Spec 0103: result of `keep_group_as_regular_entry` (counts include the group itself). */
+export interface KeepGroupResult {
+  applied: boolean;
+  groups: number;
+  servers: number;
 }
 
 export interface DeleteGroupResult {
@@ -1181,7 +1217,8 @@ export interface EditSessionDto {
   remoteModified: string | null;
 }
 
-export type SftpTransferKind = "upload" | "download";
+/** Issue #658: `delete` / `chmod` are recursive folder operations. */
+export type SftpTransferKind = "upload" | "download" | "delete" | "chmod";
 
 export interface SftpTransferStartedEvent {
   sessionId: string;
@@ -1206,6 +1243,8 @@ export interface SftpTransferFinishedEvent {
   /** Issue #622: a stopped upload whose partial remote file could not be
    * removed. */
   incompleteRemotePath?: string | null;
+  /** Issue #658: recursive delete/chmod — entries changed before the end. */
+  entriesDone?: number | null;
 }
 
 /** Issue #622: throttled progress of a running transfer. */
@@ -1221,6 +1260,8 @@ export interface SftpTransferProgressEvent {
     bytesDone: number;
     bytesTotal: number;
   };
+  /** Issue #658: recursive delete/chmod; `total` is `null` while counting. */
+  entries?: { done: number; total: number | null };
 }
 
 // --- Spec 0028: MCP-Server-Integration -----------------------------------

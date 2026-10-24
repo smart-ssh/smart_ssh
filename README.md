@@ -1,7 +1,6 @@
 # Smart SSH 🚀
 
 [![CI](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml/badge.svg)](https://github.com/brokoskokoli/smart_ssh/actions/workflows/community.yml)
-[![Release](https://github.com/brokoskokoli/smart_ssh/actions/workflows/release.yml/badge.svg)](https://github.com/brokoskokoli/smart_ssh/actions/workflows/release.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8.svg)](https://tauri.app/)
@@ -64,7 +63,7 @@ smart_ssh/
 ├── docs/
 │   ├── adr/                   # Architecture Decision Records (0001–0019)
 │   └── specs/                 # Feature-Spezifikationen (0001–0014)
-└── .github/workflows/         # CI/CD & Multi-Platform Release Workflows
+└── .github/workflows/         # CI
 ```
 
 ---

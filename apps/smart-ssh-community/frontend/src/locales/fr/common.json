@@ -45,7 +45,8 @@
       "chatRetention": "Sessions et données",
       "mcpServer": "Serveur MCP",
       "masterPassword": "Mot de passe principal",
-      "voiceInput": "Saisie vocale"
+      "voiceInput": "Saisie vocale",
+      "dataAndBackup": "Données et sauvegarde"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ déplacer dans ce groupe",
     "hintCycle": "Un groupe ne peut pas être déplacé dans son propre sous-groupe",
     "moveTo": "Déplacer « {{name}} » vers…"
+  },
+  "copyMarker": {
+    "badge": "Copie",
+    "badgeHint": "Copie – ne fait pas partie des données actuelles. Elle a son propre ID et est indépendante des entrées importées.",
+    "keep": "Conserver comme entrée normale",
+    "groupConfirmBody": "Retire le marquage de copie de ce groupe et de tout son contenu (groupes : {{groups}}, serveurs : {{servers}})."
   },
   "management": {
     "emptyState": "Sélectionnez un groupe ou un serveur à gauche, ou créez un élément via « {{addGroup}} »/« {{addServer}} ».",
@@ -408,7 +415,8 @@
       "verdictAuto": "s'exécutera automatiquement la prochaine fois",
       "verdictAsk": "demandera encore : {{reasons}}",
       "notice": "Règle créée. Cette commande demandera encore la prochaine fois : {{reasons}}",
-      "reasonOther": "un autre contrôle de sécurité"
+      "reasonOther": "un autre contrôle de sécurité",
+      "loadFailed": "Impossible de charger la couverture des règles"
     }
   },
   "hostKeyDialog": {
@@ -564,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Ce modèle ne prend pas en charge l’appel d’outils. Dans les paramètres du fournisseur, décochez « Prend en charge l’appel d’outils natif » (la solution de repli par prompt est alors utilisée) ou choisissez un modèle compatible.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "Le service d’IA local ne répond pas. Démarrez Ollama (ou votre serveur local) et réessayez.",
     "AI_TIMEOUT": "Le fournisseur d’IA a mis trop de temps à répondre. Patientez un moment et renvoyez ; avec un modèle local, vérifiez si la machine est occupée ou le modèle trop volumineux.",
+    "AI_TIMEOUT_NAMED": "Aucune réponse de {{provider}} depuis {{seconds}} s – requête annulée. Réessayez dans un instant.",
+    "AI_TOTAL_DEADLINE": "{{provider}} n’a pas terminé en {{minutes}} minutes – requête annulée. Le texte reçu jusque-là est conservé.",
     "AI_WEB_RESEARCH_REJECTED": "Le fournisseur d’IA refuse la recherche web pour ce compte. Désactivez « Recherche web » pour ce fournisseur sous « Fournisseur d’IA » dans les paramètres.",
     "AI_ATTACHMENT_UNSUPPORTED": "Ce modèle ne peut pas lire l’image ou le PDF joint. Choisissez un modèle compatible ou retirez la pièce jointe.",
     "AI_NO_ACTIVE_PROVIDER": "Aucun fournisseur d’IA actif pour l’instant. Ajoutez-en un sous Paramètres → Fournisseur d’IA et activez-le.",
@@ -869,7 +879,8 @@
       "success": "{{created}} serveurs créés, {{groups}} dossiers, {{skipped}} conflit(s) ignoré(s).",
       "fallbacksDetail": "{{count}} fichier(s) de clé n’ont pas pu être lus, le chemin a été conservé à la place : {{detail}}.",
       "encryptedDetail": "{{count}} clé(s) ont été reprises chiffrées — ajoutez la phrase secrète avant la première connexion : {{detail}}."
-    }
+    },
+    "isBackup": "Ce fichier est une sauvegarde chiffrée, pas un ssh_config. Rien n’a été créé. Restaurez-la dans Paramètres → Données et sauvegarde."
   },
   "sshConfigExport": {
     "dialogTitle": "Exporter vers ssh_config",
@@ -879,7 +890,8 @@
       "includeHintLabel": "Comment inclure ce fichier dans votre propre ~/.ssh/config :",
       "copy": "Copier",
       "notRepresentedHint": "Les groupes, étiquettes, notes, règles de filtrage et paramètres de sécurité ne figurent pas dans ce fichier — ce qui manque pour un serveur donné est indiqué en commentaire au-dessus de son entrée."
-    }
+    },
+    "backupHint": "Ne contient ni identifiants, ni règles, ni notes. Pour une sauvegarde complète, utilisez la sauvegarde chiffrée (Paramètres → Données et sauvegarde)."
   },
   "startup": {
     "stateUnknown": "Smart SSH n’a pas pu lire son état de démarrage. Rien n’a été modifié. Réessayez ; si le problème persiste, le journal indique la cause.",
@@ -1026,6 +1038,10 @@
     "transferStopped": "{{name}} : arrêté",
     "transferIncomplete": "Fichier incomplet laissé sur le serveur : {{path}}",
     "transferFiles": "{{done}} fichiers sur {{total}}",
+    "transferDelete": "Suppression de {{name}}",
+    "transferChmod": "Modification des droits de {{name}}",
+    "entriesProgress": "{{done}} sur {{total}} éléments",
+    "entriesChanged": "Éléments modifiés : {{count}}",
     "transferRemaining": "{{time}} restantes",
     "loading": "Chargement…",
     "noPermissionToOpen": "Pas d'autorisation pour ouvrir ce dossier (x manquant)",
@@ -1177,6 +1193,7 @@
     "tryAgain": "Réessayer",
     "errorDetails": "Détails",
     "aiRetrying": "Le fournisseur d’IA est surchargé – nouvelle tentative dans {{seconds}} s (tentative {{attempt}} sur {{max}})",
+    "aiWaiting": "En attente d’une réponse de {{provider}} … {{seconds}} s",
     "noActiveProvider": "Aucun fournisseur d’IA actif configuré. Veuillez d’abord en configurer un dans les paramètres.",
     "inputPlaceholder": "Posez une question ou décrivez une commande …",
     "send": "Envoyer",
@@ -1230,7 +1247,11 @@
       "cardLabel": "Question : {{question}}",
       "send": "Envoyer",
       "answeredOwnWords": "Répondu avec vos propres mots"
-    }
+    },
+    "injectionChecking": "Vérification de la sortie …",
+    "injectionSuspected": "Attention : cette sortie ressemble à une tentative d’injection d’instructions.",
+    "injectionSuspectedReason": "Motif indiqué par l’IA de contrôle : {{reason}}",
+    "injectionConfirmReason": "Motif : {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Cette note est très volumineuse et peut être raccourcie dans le contexte de l’IA lors de longues sessions. La note enregistrée reste complète.",
@@ -1346,5 +1367,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "terminé",
     "resultFailed": "échec"
+  },
+  "backup": {
+    "title": "Sauvegarde chiffrée",
+    "intro": "Enregistre toutes vos données Smart SSH dans un fichier chiffré et les restaure plus tard, par exemple sur un nouvel ordinateur.",
+    "included": "Inclus : serveurs, dossiers, étiquettes, règles de filtre, notes de serveur, fournisseurs d’IA, identifiants enregistrés (chiffrés) et clés d’hôte approuvées.",
+    "excluded": "Non inclus : historique des conversations, relevés d’usage, réglages de l’appareil et fichiers de clés sur le disque.",
+    "restoreInfo": "La restauration remplace toutes les données de cet appareil. Vos données actuelles sont d’abord enregistrées et vos serveurs vont dans un dossier daté.",
+    "export": "Exporter la sauvegarde…",
+    "restore": "Restaurer depuis une sauvegarde…",
+    "newCode": "Nouveau code de récupération",
+    "setPassphrase": "Définir la phrase secrète",
+    "exportDone": "Sauvegarde enregistrée dans {{path}}.",
+    "exportCounts": "{{servers}} serveurs, {{rules}} règles, {{notes}} notes.",
+    "setup": {
+      "title": "Protégez vos sauvegardes",
+      "intro": "Les sauvegardes sont chiffrées. Il faut un code de récupération ou une phrase secrète pour les lire, choisissez-en un maintenant.",
+      "useCode": "Créer un code de récupération",
+      "usePassphrase": "Utiliser une phrase secrète"
+    },
+    "code": {
+      "title": "Votre code de récupération",
+      "warning": "Notez ce code et conservez-le en lieu sûr. Il n’est affiché qu’une fois et ne pourra plus l’être. Sans lui, vos sauvegardes sont illisibles.",
+      "copy": "Copier",
+      "copyFailed": "Copie impossible.",
+      "confirm": "J’ai noté le code",
+      "continue": "Continuer"
+    },
+    "passphrase": {
+      "title": "Définir une phrase secrète",
+      "warning": "Sans la phrase secrète, vos sauvegardes sont illisibles. Aucune récupération n’est possible.",
+      "label": "Phrase secrète",
+      "help": "Au moins {{count}} caractères.",
+      "tooShort": "Trop court : au moins {{count}} caractères.",
+      "repeat": "Répétez la phrase secrète",
+      "mismatch": "Les phrases secrètes ne correspondent pas.",
+      "save": "Enregistrer la phrase secrète"
+    },
+    "import": {
+      "title": "Restaurer depuis une sauvegarde",
+      "pickTitle": "Choisir un fichier de sauvegarde",
+      "file": "Fichier : {{name}}",
+      "kind": "Ce qui ouvre cette sauvegarde",
+      "useCode": "Code de récupération",
+      "usePassphrase": "Phrase secrète",
+      "codeLabel": "Code de récupération",
+      "passphraseLabel": "Phrase secrète",
+      "open": "Ouvrir la sauvegarde"
+    },
+    "confirm": {
+      "title": "Remplacer vos données ?",
+      "intro": "La restauration remplace les données de cet appareil. Rien n’a encore changé.",
+      "what": "Données",
+      "local": "Actuel",
+      "file": "Sauvegarde",
+      "sessions": "Sessions ouvertes qui seront fermées : {{count}}",
+      "safety": "Vos données actuelles sont d’abord enregistrées dans {{dir}}. Vos serveurs vont dans un nouveau dossier « Previous data » portant la date du jour.",
+      "replace": "Remplacer les données"
+    },
+    "counts": {
+      "servers": "Serveurs",
+      "groups": "Dossiers",
+      "rules": "Règles",
+      "notes": "Notes",
+      "aiProviders": "Fournisseurs d’IA"
+    },
+    "summary": {
+      "title": "Sauvegarde restaurée",
+      "counts": "Restauré : {{servers}} serveurs, {{groups}} dossiers, {{rules}} règles, {{notes}} notes, {{aiProviders}} fournisseurs d’IA.",
+      "safety": "Sauvegarde de sécurité de vos données précédentes : {{path}}",
+      "folder": "Vos anciens serveurs sont dans le dossier « {{name}} ».",
+      "hostKeysPending": "Les clés d’hôte approuvées sont complétées au prochain démarrage.",
+      "done": "Terminé"
+    },
+    "errors": {
+      "cannotOpen": "Code ou phrase secrète incorrect, ou fichier endommagé.",
+      "typo": "Le code contient une faute de frappe.",
+      "notBackup": "Ce n’est pas un fichier de sauvegarde Smart SSH. Les listes de serveurs au format ssh_config s’importent depuis la liste des serveurs.",
+      "newerVersion": "Cette sauvegarde provient d’une version plus récente de Smart SSH. Mettez l’application à jour et réessayez.",
+      "failed": "L’opération a échoué. Rien n’a été modifié."
+    }
   }
 }

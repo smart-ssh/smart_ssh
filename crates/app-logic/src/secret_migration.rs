@@ -147,7 +147,7 @@ async fn refs_in_database(store: &SqliteProfileStore) -> Result<Vec<CredentialRe
 /// hineinfällt. Eine Abweichung wird **übersprungen und geloggt**, nicht
 /// zum Startfehler: Sie heißt nicht, dass etwas kaputt ist, sondern dass
 /// etwas nicht hierher gehört.
-fn is_migratable(reference: &CredentialRef) -> bool {
+pub(crate) fn is_migratable(reference: &CredentialRef) -> bool {
     let raw = reference.as_str();
     let ok = (raw.starts_with("server:") || raw.starts_with("ai-provider:"))
         && raw != ssh_manager_core::crypto::CHAT_CONTENT_ENCRYPTION_KEY_REF;

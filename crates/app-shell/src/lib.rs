@@ -34,6 +34,7 @@ mod risk_second_opinion;
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
+mod services;
 mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
@@ -68,6 +69,7 @@ mod window_prompt;
 mod wiring;
 
 pub use db_extensions::DbExtension;
+pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
 pub use wiring::{Edition, Wiring};
 
 /// Spec 0038, section 2a: asks the core to rebuild the redactor of every open
@@ -328,7 +330,7 @@ pub(crate) async fn open_and_assemble(
     // Fällen unangetastet zu lassen (s. `startup_error_messages::
     // host_key_store_failure_text`-Doc-Kommentar).
     let host_key_store = match FileHostKeyStore::load(host_key_path.clone()) {
-        Ok(store) => store,
+        Ok(store) => store.with_data_changes(profile_store.data_changes()),
         Err(err) => {
             let text = app_logic::startup_error_messages::host_key_store_failure_text(
                 &host_key_path,
@@ -350,6 +352,20 @@ pub(crate) async fn open_and_assemble(
     };
     tracing::info!("host-key store loaded");
 
+    let data_changes = profile_store.data_changes();
+    let file_host_keys = Arc::new(host_key_store);
+    let backup_store = profile_store.backup_store();
+    // Spec 0109, I5: finish an import whose database transaction committed
+    // before the host-key file was written — before any connection exists.
+    if let Err(err) =
+        app_logic::backup::complete_pending_host_keys(&backup_store, &file_host_keys).await
+    {
+        tracing::error!(error = %err, "fatal: pending host keys could not be completed");
+        return Err(app_logic::database_startup::StartupAbort::Fatal {
+            kind: persistence_sqlite::ConnectFailureKind::HostKeyStoreFailed,
+            detail: err.to_string(),
+        });
+    }
     let app_state = AppState {
         sessions: SessionManager::new(),
         session_extension,
@@ -364,7 +380,10 @@ pub(crate) async fn open_and_assemble(
         key_file_reader: Arc::new(app_logic::key_files::OsKeyFileReader::new()),
         keychain,
         ai_provider_store: Arc::new(ai_provider_store),
-        host_key_store: Arc::new(host_key_store),
+        data_changes,
+        backup_store,
+        host_key_store: file_host_keys.clone(),
+        file_host_keys,
         // Issue #259: Produktion baut die Verbindung real auf.
         connector: Arc::new(app_logic::test_connection::RealConnector),
         policy_store,
@@ -613,6 +632,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             .with_db_extensions(db_extensions)
             .with_chat_content(chat_content);
     let plugins = wiring.plugins;
+    let service_host = ServiceHost::new(std::mem::take(&mut wiring.services));
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.
     let builder = crate::single_instance::register_on(tauri::Builder::default());
@@ -717,6 +737,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         })
         .manage(gate.clone())
         .manage(pending)
+        .manage(service_host)
         // Spec 0101, A16 / Klarstellung 9: Der Merkzettel ist **nur** da,
         // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
         // hängt daran, ob es etwas nachzuholen gibt.
@@ -733,6 +754,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wenn die übrige Anwendungslogik in einen Tauri-freien Crate zieht.
         .manage(crate::elevated_sftp::ElevatedSftpRegistry::default())
         .manage(crate::commands::CopyContentJobs::default())
+        .manage(crate::commands::BackupImportSlot::default())
         .manage(crate::file_clipboard::FileClipboard::default())
         // Issue #89: local paths the user granted to a session (native open
         // dialog, native drop, own edit copy). The drop paths come from the
@@ -808,6 +830,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::create_group,
             commands::update_group,
             commands::move_group,
+            commands::keep_group_as_regular_entry,
+            commands::keep_server_as_regular_entry,
             commands::delete_group,
             commands::get_server,
             commands::create_server,
@@ -860,6 +884,15 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_prompt_history,
             commands::open_log_directory,
             commands::get_keychain_status,
+            commands::backup_key_status,
+            commands::create_backup_key_with_code,
+            commands::set_backup_passphrase,
+            commands::new_backup_code,
+            commands::export_encrypted_backup,
+            commands::pick_backup_import_file,
+            commands::start_backup_import,
+            commands::confirm_backup_import,
+            commands::cancel_backup_import,
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::get_data_paths,
@@ -919,9 +952,17 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         ]))
         .build(context)
         .expect("Fehler beim Starten der Tauri-App")
-        .run(|_app, event| {
+        .run(|app, event| {
             // Issue #358: staged "Copy file" files are removed at exit.
             if matches!(event, tauri::RunEvent::Exit) {
+                // Issue #669: stop background services; bounded by the
+                // per-service timeout, so a hanging one cannot block exit.
+                {
+                    use tauri::Manager;
+                    if let Some(host) = app.try_state::<ServiceHost>() {
+                        tauri::async_runtime::block_on(host.stop_all());
+                    }
+                }
                 file_clipboard::cleanup_at_exit();
             }
         });
@@ -939,6 +980,19 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     use tauri::Manager;
 
+    // Issue #669: background services start here — only reached once the
+    // state exists (after unlock in master-password mode), and after the
+    // database extensions were started in `open_and_assemble`.
+    let services_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Some(host) = services_app.try_state::<ServiceHost>() {
+            host.start_all(ServiceContext {
+                app: services_app.clone(),
+            })
+            .await;
+        }
+    });
+
     // Spec 0028, Abschnitt 9: ein beim letzten Beenden aktivierter
     // MCP-Server bleibt über einen Neustart hinweg aktiv, ohne manuelles
     // erneutes Anschalten.
@@ -946,6 +1000,19 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         crate::mcp_settings::autostart_if_enabled(&handle).await;
     });
+
+    // Issue #672: forward the coalesced data-changed notification.
+    {
+        let handle = app.clone();
+        app.state::<AppState>()
+            .data_changes
+            .subscribe(Arc::new(move |kinds| {
+                app_logic::events::emit_data_changed(
+                    &crate::event_emitter::TauriEventEmitter(handle.clone()),
+                    kinds,
+                );
+            }));
+    }
 
     let app = app.clone();
     // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim

@@ -45,7 +45,8 @@
       "chatRetention": "세션 및 데이터",
       "mcpServer": "MCP 서버",
       "masterPassword": "마스터 비밀번호",
-      "voiceInput": "음성 입력"
+      "voiceInput": "음성 입력",
+      "dataAndBackup": "데이터 및 백업"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ 이 그룹으로 이동",
     "hintCycle": "그룹을 자신의 하위 그룹으로 이동할 수 없습니다",
     "moveTo": "“{{name}}” 이동 위치…"
+  },
+  "copyMarker": {
+    "badge": "사본",
+    "badgeHint": "사본 – 현재 데이터에 속하지 않습니다. 고유한 ID가 있으며 가져온 항목과 독립적입니다.",
+    "keep": "일반 항목으로 유지",
+    "groupConfirmBody": "이 그룹과 그 안의 모든 항목에서 사본 표시를 제거합니다(그룹: {{groups}}, 서버: {{servers}})."
   },
   "management": {
     "emptyState": "왼쪽에서 그룹이나 서버를 선택하거나 \"{{addGroup}}\"/\"{{addServer}}\"로 새로 만드십시오.",
@@ -408,7 +415,8 @@
       "verdictAuto": "다음부터 자동으로 실행됩니다",
       "verdictAsk": "계속 확인합니다: {{reasons}}",
       "notice": "규칙을 만들었습니다. 이 명령은 다음에도 확인이 필요합니다: {{reasons}}",
-      "reasonOther": "다른 보안 검사"
+      "reasonOther": "다른 보안 검사",
+      "loadFailed": "규칙 적용 범위를 불러올 수 없습니다"
     }
   },
   "hostKeyDialog": {
@@ -564,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "이 모델은 도구 호출을 지원하지 않습니다. 제공자 설정에서 \"네이티브 도구 호출 지원\"을 해제하거나(그러면 프롬프트 기반 대체 방식이 사용됩니다) 도구를 지원하는 모델을 선택하십시오.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "로컬 AI 서비스가 응답하지 않습니다. Ollama(또는 로컬 서버)를 시작한 후 다시 시도하십시오.",
     "AI_TIMEOUT": "AI 제공자의 응답이 너무 오래 걸렸습니다. 잠시 기다린 후 다시 보내십시오. 로컬 모델이라면 컴퓨터가 바쁜지, 모델이 너무 큰지 확인하십시오.",
+    "AI_TIMEOUT_NAMED": "{{provider}}에서 {{seconds}}초 동안 응답이 없습니다 – 요청이 취소되었습니다. 잠시 후 다시 시도하세요.",
+    "AI_TOTAL_DEADLINE": "{{provider}}이(가) {{minutes}}분 안에 끝나지 않았습니다 – 요청이 취소되었습니다. 지금까지 받은 텍스트는 유지됩니다.",
     "AI_WEB_RESEARCH_REJECTED": "AI 제공자가 이 계정의 웹 조사를 거부합니다. 설정의 “AI 제공자”에서 이 제공자의 “웹 조사”를 끄십시오.",
     "AI_ATTACHMENT_UNSUPPORTED": "이 모델은 첨부된 이미지나 PDF를 읽을 수 없습니다. 읽을 수 있는 모델을 선택하거나 첨부 파일을 제거하세요.",
     "AI_NO_ACTIVE_PROVIDER": "아직 활성 AI 제공자가 없습니다. 설정 → AI 제공자에서 추가하고 활성으로 설정하십시오.",
@@ -859,7 +869,8 @@
       "success": "서버 {{created}}개, 폴더 {{groups}}개를 만들었고, 충돌 {{skipped}}개를 건너뛰었습니다.",
       "fallbacksDetail": "키 파일 {{count}}개를 읽을 수 없어 대신 경로를 유지했습니다: {{detail}}.",
       "encryptedDetail": "키 {{count}}개를 암호화된 상태로 가져왔습니다 — 첫 연결 전에 암호문을 추가하십시오: {{detail}}."
-    }
+    },
+    "isBackup": "이 파일은 암호화된 백업이며 ssh_config가 아닙니다. 아무것도 만들어지지 않았습니다. 설정 → 데이터 및 백업에서 복원하세요."
   },
   "sshConfigExport": {
     "dialogTitle": "ssh_config로 내보내기",
@@ -869,7 +880,8 @@
       "includeHintLabel": "이 파일을 직접 만든 ~/.ssh/config에 포함하는 방법:",
       "copy": "복사",
       "notRepresentedHint": "그룹, 태그, 메모, 필터 규칙, 보안 설정은 이 파일에 포함되지 않습니다. 서버별로 빠진 내용은 해당 항목 위에 주석으로 표시됩니다."
-    }
+    },
+    "backupHint": "자격 증명, 규칙, 메모는 포함되지 않습니다. 전체 백업이 필요하면 암호화 백업(설정 → 데이터 및 백업)을 사용하세요."
   },
   "startup": {
     "stateUnknown": "Smart SSH가 시작 상태를 읽을 수 없습니다. 아무것도 변경되지 않았습니다. 다시 시도하십시오. 계속되면 로그에 원인이 표시됩니다.",
@@ -1016,6 +1028,10 @@
     "transferStopped": "{{name}}: 중지됨",
     "transferIncomplete": "서버에 불완전한 파일이 남아 있습니다: {{path}}",
     "transferFiles": "파일 {{total}}개 중 {{done}}개",
+    "transferDelete": "{{name}} 삭제 중",
+    "transferChmod": "{{name}} 권한 변경 중",
+    "entriesProgress": "{{total}}개 중 {{done}}개 항목",
+    "entriesChanged": "변경된 항목: {{count}}",
     "transferRemaining": "{{time}} 남음",
     "loading": "불러오는 중…",
     "noPermissionToOpen": "이 폴더를 열 권한이 없습니다(x 없음)",
@@ -1163,6 +1179,7 @@
     "tryAgain": "다시 시도",
     "errorDetails": "상세 정보",
     "aiRetrying": "AI 제공업체가 과부하 상태입니다 – {{seconds}}초 후 재시도합니다 ({{attempt}}/{{max}}번째 시도)",
+    "aiWaiting": "{{provider}}의 응답을 기다리는 중 … {{seconds}}초",
     "noActiveProvider": "활성 AI 제공자가 설정되지 않았습니다. 먼저 설정에서 지정하십시오.",
     "inputPlaceholder": "질문하거나 명령을 설명하십시오 …",
     "send": "보내기",
@@ -1214,7 +1231,11 @@
       "cardLabel": "질문: {{question}}",
       "send": "보내기",
       "answeredOwnWords": "직접 답변함"
-    }
+    },
+    "injectionChecking": "출력 확인 중 …",
+    "injectionSuspected": "경고: 이 출력은 지시를 주입하려는 시도로 보입니다.",
+    "injectionSuspectedReason": "검사한 AI가 제시한 이유: {{reason}}",
+    "injectionConfirmReason": "이유: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "이 메모는 매우 커서 긴 세션에서는 AI 컨텍스트용으로 줄어들 수 있습니다. 저장된 메모는 그대로 유지됩니다.",
@@ -1330,5 +1351,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "완료",
     "resultFailed": "실패"
+  },
+  "backup": {
+    "title": "암호화 백업",
+    "intro": "모든 Smart SSH 데이터를 암호화된 파일 하나에 저장하고, 나중에 새 컴퓨터 등에서 복원합니다.",
+    "included": "포함: 서버, 폴더, 태그, 필터 규칙, 서버 메모, AI 제공자, 저장된 자격 증명(암호화), 신뢰하는 호스트 키.",
+    "excluded": "미포함: 채팅 기록, 사용 기록, 기기 설정, 디스크의 키 파일.",
+    "restoreInfo": "복원하면 이 기기의 모든 데이터가 교체됩니다. 현재 데이터는 먼저 저장되고, 현재 서버는 날짜가 붙은 폴더로 이동합니다.",
+    "export": "백업 내보내기…",
+    "restore": "백업에서 복원…",
+    "newCode": "새 복구 코드",
+    "setPassphrase": "암호문 설정",
+    "exportDone": "백업을 {{path}}에 저장했습니다.",
+    "exportCounts": "서버 {{servers}}개, 규칙 {{rules}}개, 메모 {{notes}}개.",
+    "setup": {
+      "title": "백업 보호",
+      "intro": "백업은 암호화됩니다. 읽으려면 복구 코드나 암호문이 필요하므로 지금 하나를 선택하세요.",
+      "useCode": "복구 코드 만들기",
+      "usePassphrase": "대신 암호문 사용"
+    },
+    "code": {
+      "title": "복구 코드",
+      "warning": "이 코드를 적어 안전하게 보관하세요. 한 번만 표시되며 다시 볼 수 없습니다. 이 코드가 없으면 백업을 읽을 수 없습니다.",
+      "copy": "복사",
+      "copyFailed": "복사하지 못했습니다.",
+      "confirm": "코드를 적어 두었습니다",
+      "continue": "계속"
+    },
+    "passphrase": {
+      "title": "암호문 설정",
+      "warning": "암호문이 없으면 백업을 읽을 수 없습니다. 복구 방법이 없습니다.",
+      "label": "암호문",
+      "help": "{{count}}자 이상.",
+      "tooShort": "너무 짧습니다: {{count}}자 이상이어야 합니다.",
+      "repeat": "암호문 다시 입력",
+      "mismatch": "암호문이 일치하지 않습니다.",
+      "save": "암호문 저장"
+    },
+    "import": {
+      "title": "백업에서 복원",
+      "pickTitle": "백업 파일 선택",
+      "file": "파일: {{name}}",
+      "kind": "이 백업을 여는 방법",
+      "useCode": "복구 코드",
+      "usePassphrase": "암호문",
+      "codeLabel": "복구 코드",
+      "passphraseLabel": "암호문",
+      "open": "백업 열기"
+    },
+    "confirm": {
+      "title": "데이터를 교체할까요?",
+      "intro": "복원하면 이 기기의 데이터가 교체됩니다. 아직 아무것도 변경되지 않았습니다.",
+      "what": "데이터",
+      "local": "현재",
+      "file": "백업",
+      "sessions": "닫히는 열린 세션: {{count}}",
+      "safety": "현재 데이터는 먼저 {{dir}}에 저장됩니다. 현재 서버는 오늘 날짜가 붙은 새 폴더 “Previous data”로 이동합니다.",
+      "replace": "데이터 교체"
+    },
+    "counts": {
+      "servers": "서버",
+      "groups": "폴더",
+      "rules": "규칙",
+      "notes": "메모",
+      "aiProviders": "AI 제공자"
+    },
+    "summary": {
+      "title": "백업 복원됨",
+      "counts": "복원됨: 서버 {{servers}}개, 폴더 {{groups}}개, 규칙 {{rules}}개, 메모 {{notes}}개, AI 제공자 {{aiProviders}}개.",
+      "safety": "이전 데이터의 안전 백업: {{path}}",
+      "folder": "이전 서버는 “{{name}}” 폴더에 있습니다.",
+      "hostKeysPending": "신뢰하는 호스트 키는 다음 시작 때 보완됩니다.",
+      "done": "완료"
+    },
+    "errors": {
+      "cannotOpen": "코드나 암호문이 틀렸거나 파일이 손상되었습니다.",
+      "typo": "코드에 오타가 있습니다.",
+      "notBackup": "Smart SSH 백업 파일이 아닙니다. ssh_config 형식의 서버 목록은 서버 목록에서 가져옵니다.",
+      "newerVersion": "이 백업은 더 최신 버전의 Smart SSH에서 만들어졌습니다. 앱을 업데이트한 후 다시 시도하세요.",
+      "failed": "작업에 실패했습니다. 아무것도 변경되지 않았습니다."
+    }
   }
 }

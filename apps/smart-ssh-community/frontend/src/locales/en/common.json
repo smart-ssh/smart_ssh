@@ -45,7 +45,8 @@
       "chatRetention": "Sessions & Data",
       "mcpServer": "MCP Server",
       "masterPassword": "Master password",
-      "voiceInput": "Voice input"
+      "voiceInput": "Voice input",
+      "dataAndBackup": "Data and backup"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ move into this group",
     "hintCycle": "A group cannot be moved into its own subgroup",
     "moveTo": "Move “{{name}}” to…"
+  },
+  "copyMarker": {
+    "badge": "Copy",
+    "badgeHint": "Copy – not part of the current data. It has its own ID and is independent of the imported entries.",
+    "keep": "Keep as regular entry",
+    "groupConfirmBody": "Removes the copy marker from this group and everything inside it (groups: {{groups}}, servers: {{servers}})."
   },
   "management": {
     "emptyState": "Select a group or server on the left, or create something new via \"{{addGroup}}\"/\"{{addServer}}\".",
@@ -408,7 +415,8 @@
       "verdictAuto": "runs automatically next time",
       "verdictAsk": "will still ask: {{reasons}}",
       "notice": "Rule created. This command will still ask next time: {{reasons}}",
-      "reasonOther": "another safety check"
+      "reasonOther": "another safety check",
+      "loadFailed": "Rule coverage could not be loaded"
     }
   },
   "hostKeyDialog": {
@@ -564,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "This model does not support tool calling. In the provider settings, untick \"Supports native tool calling\" (the prompt-based fallback is used then) or pick a model with tool support.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "The local AI service isn't responding. Start Ollama (or your local server) and try again.",
     "AI_TIMEOUT": "The AI provider took too long to respond. Wait a moment and send again; with a local model, check whether the machine is busy or the model too large.",
+    "AI_TIMEOUT_NAMED": "No answer from {{provider}} for {{seconds}} s – request cancelled. Try again in a moment.",
+    "AI_TOTAL_DEADLINE": "{{provider}} did not finish within {{minutes}} minutes – request cancelled. The text received so far is kept.",
     "AI_WEB_RESEARCH_REJECTED": "The AI provider rejects web research for this account. Turn off “Web research” for this provider under “AI Provider” in the settings.",
     "AI_ATTACHMENT_UNSUPPORTED": "This model cannot read the attached image or PDF. Choose a model that can, or remove the attachment.",
     "AI_NO_ACTIVE_PROVIDER": "No active AI provider yet. Add one under Settings → AI provider and set it active.",
@@ -601,7 +611,7 @@
     "SERVER_CERTIFICATE_REQUIRED": "Certificate is required",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Certificate key is required",
     "SERVER_JUMP_HOST_LOCAL": "The local pseudo-server cannot be used as a jump host",
-    "KEY_FILE_NOT_FOUND": "The key file was not found at the given path.",
+    "KEY_FILE_NOT_FOUND": "Key file not found on this device.",
     "KEY_FILE_NOT_READABLE": "The key file cannot be read with the current permissions.",
     "KEY_FILE_PERMISSIONS_TOO_OPEN": "The key file is readable or writable by group or others — like ssh, this rejects the login. Fix it with \"chmod 600\" on the file.",
     "KEY_FILE_TOO_LARGE": "The key file exceeds the allowed size of 1 MiB.",
@@ -864,7 +874,8 @@
       "success": "{{created}} servers created, {{groups}} folders, {{skipped}} conflict(s) skipped.",
       "fallbacksDetail": "{{count}} key file(s) could not be read, the path was kept instead: {{detail}}.",
       "encryptedDetail": "{{count}} key(s) were taken over encrypted — add the passphrase before the first connection: {{detail}}."
-    }
+    },
+    "isBackup": "This file is an encrypted backup, not an ssh_config. Nothing was created. Restore it under Settings → Data and backup."
   },
   "sshConfigExport": {
     "dialogTitle": "Export to ssh_config",
@@ -874,7 +885,8 @@
       "includeHintLabel": "How to include this file in your own ~/.ssh/config:",
       "copy": "Copy",
       "notRepresentedHint": "Groups, tags, notes, filter rules and security settings aren't in this file — what's missing for a given server is noted as a comment above its entry."
-    }
+    },
+    "backupHint": "Contains no credentials, rules or notes. For a complete backup, use the encrypted backup (Settings → Data and backup)."
   },
   "startup": {
     "stateUnknown": "Smart SSH could not read its startup state. Nothing was changed. Try again; if it persists, the log names the cause.",
@@ -1021,6 +1033,10 @@
     "transferStopped": "{{name}}: stopped",
     "transferIncomplete": "Incomplete file left on the server: {{path}}",
     "transferFiles": "{{done}} of {{total}} files",
+    "transferDelete": "Deleting {{name}}",
+    "transferChmod": "Changing permissions of {{name}}",
+    "entriesProgress": "{{done}} of {{total}} entries",
+    "entriesChanged": "Entries changed: {{count}}",
     "transferRemaining": "{{time}} left",
     "loading": "Loading…",
     "noPermissionToOpen": "No permission to open this folder (missing x)",
@@ -1170,6 +1186,7 @@
     "tryAgain": "Try again",
     "errorDetails": "Details",
     "aiRetrying": "The AI provider is overloaded – retrying in {{seconds}} s (attempt {{attempt}} of {{max}})",
+    "aiWaiting": "Waiting for a response from {{provider}} … {{seconds}} s",
     "noActiveProvider": "No active AI provider configured. Please set one up in the settings first.",
     "inputPlaceholder": "Ask a question or describe a command …",
     "send": "Send",
@@ -1222,7 +1239,11 @@
       "cardLabel": "Question: {{question}}",
       "send": "Send",
       "answeredOwnWords": "Answered in your own words"
-    }
+    },
+    "injectionChecking": "Checking output …",
+    "injectionSuspected": "Warning: this output looks like an attempt to inject instructions.",
+    "injectionSuspectedReason": "Reason given by the checking AI: {{reason}}",
+    "injectionConfirmReason": "Reason: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "This note is very large and may be shortened for the AI context in long sessions. The saved note stays complete.",
@@ -1338,5 +1359,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "done",
     "resultFailed": "failed"
+  },
+  "backup": {
+    "title": "Encrypted backup",
+    "intro": "Saves all your Smart SSH data in one encrypted file and restores it later, for example on a new computer.",
+    "included": "Included: servers, folders, tags, filter rules, server notes, AI providers, saved credentials (encrypted) and trusted host keys.",
+    "excluded": "Not included: chat history, usage records, device settings and key files on disk.",
+    "restoreInfo": "Restoring replaces all data on this device. Your current data is saved first, and your current servers move to a dated folder.",
+    "export": "Export backup…",
+    "restore": "Restore from backup…",
+    "newCode": "New recovery code",
+    "setPassphrase": "Set passphrase",
+    "exportDone": "Backup saved to {{path}}.",
+    "exportCounts": "{{servers}} servers, {{rules}} rules, {{notes}} notes.",
+    "setup": {
+      "title": "Protect your backups",
+      "intro": "Backups are encrypted. You need a recovery code or a passphrase to read them, so choose one now.",
+      "useCode": "Create a recovery code",
+      "usePassphrase": "Use a passphrase instead"
+    },
+    "code": {
+      "title": "Your recovery code",
+      "warning": "Write this code down and keep it safe. It is shown only once and cannot be shown again. Without it, your backups cannot be read.",
+      "copy": "Copy",
+      "copyFailed": "Could not copy.",
+      "confirm": "I have noted the code",
+      "continue": "Continue"
+    },
+    "passphrase": {
+      "title": "Set a passphrase",
+      "warning": "Without the passphrase, your backups cannot be read. There is no recovery.",
+      "label": "Passphrase",
+      "help": "At least {{count}} characters.",
+      "tooShort": "Too short: at least {{count}} characters.",
+      "repeat": "Repeat passphrase",
+      "mismatch": "The passphrases do not match.",
+      "save": "Save passphrase"
+    },
+    "import": {
+      "title": "Restore from backup",
+      "pickTitle": "Choose a backup file",
+      "file": "File: {{name}}",
+      "kind": "What opens this backup",
+      "useCode": "Recovery code",
+      "usePassphrase": "Passphrase",
+      "codeLabel": "Recovery code",
+      "passphraseLabel": "Passphrase",
+      "open": "Open backup"
+    },
+    "confirm": {
+      "title": "Replace your data?",
+      "intro": "Restoring replaces the data on this device. Nothing has changed yet.",
+      "what": "Data",
+      "local": "Now",
+      "file": "Backup",
+      "sessions": "Open sessions that will be closed: {{count}}",
+      "safety": "Your current data is saved first to {{dir}}. Your current servers move to a new folder named “Previous data” with today’s date.",
+      "replace": "Replace data"
+    },
+    "counts": {
+      "servers": "Servers",
+      "groups": "Folders",
+      "rules": "Rules",
+      "notes": "Notes",
+      "aiProviders": "AI providers"
+    },
+    "summary": {
+      "title": "Backup restored",
+      "counts": "Restored: {{servers}} servers, {{groups}} folders, {{rules}} rules, {{notes}} notes, {{aiProviders}} AI providers.",
+      "safety": "Safety backup of your previous data: {{path}}",
+      "folder": "Your previous servers are in the folder “{{name}}”.",
+      "hostKeysPending": "The trusted host keys are completed at the next start.",
+      "done": "Done"
+    },
+    "errors": {
+      "cannotOpen": "Wrong code or passphrase, or the file is damaged.",
+      "typo": "The code contains a typo.",
+      "notBackup": "This is not a Smart SSH backup file. Server lists in ssh_config format are imported from the server list.",
+      "newerVersion": "This backup was made by a newer version of Smart SSH. Update the app and try again.",
+      "failed": "The operation failed. Nothing was changed."
+    }
   }
 }

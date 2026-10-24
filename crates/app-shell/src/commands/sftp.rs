@@ -31,7 +31,10 @@ use app_logic::error::CommandResult;
 use app_logic::error::{
     SFTP_CONTENT_TOO_LARGE, SFTP_COPY_CANCELLED, SFTP_PREVIEW_NOT_TEXT, SFTP_PREVIEW_TOO_LARGE,
 };
-use app_logic::events::EventEmitter;
+use app_logic::events::{
+    emit_sftp_entries_finished, emit_sftp_entries_progress, emit_sftp_transfer_started,
+    EventEmitter, SftpEntriesProgress, SftpTransferKind,
+};
 use app_logic::local_path_grants::{GrantedLocalPath, LocalPathGrants, LOCAL_PATH_NOT_GRANTED};
 use app_logic::session::{Session, SessionManager};
 use app_logic::state::{AppState, SessionId};
@@ -40,7 +43,7 @@ use super::elevation::{
     audit_elevated_change, file_name_of, lock_browser_sftp, run_browser_command,
     safe_local_segment, BrowserChannel,
 };
-use crate::file_ops::{OpHandle, OpKind};
+use crate::file_ops::{OpHandle, OpKind, StopReason};
 
 /// Spec 0085, A1 (T1–T9): Widerruf des erhöhten Modus innerhalb eines schon
 /// laufenden Browser-Befehls. Eigene Datei, weil der Aufbau (Test-Double mit
@@ -884,6 +887,97 @@ async fn walk_dirs_and_count_files(
     Ok((dirs, file_count))
 }
 
+/// Issue #658: the row of a recursive delete/chmod. A ticker reads the
+/// operation's entry counters (monotonic, only ever increasing) and emits
+/// throttled progress; the row appears once the recursion found a folder, so
+/// a single file or a non-recursive chmod never gets one.
+struct EntryRows<'a> {
+    sink: Option<(&'a dyn EventEmitter, SessionId)>,
+    kind: SftpTransferKind,
+    op: OpHandle,
+    path: String,
+    started: bool,
+}
+
+impl<'a> EntryRows<'a> {
+    fn new(
+        sink: Option<(&'a dyn EventEmitter, SessionId)>,
+        kind: SftpTransferKind,
+        op: &OpHandle,
+        path: &str,
+    ) -> Self {
+        Self {
+            sink,
+            kind,
+            op: op.clone(),
+            path: path.to_string(),
+            started: false,
+        }
+    }
+
+    /// Emits `started` (once) and the current counts, if the row exists.
+    fn sync(&mut self) {
+        let (Some((emitter, session_id)), Some((done, total))) = (self.sink, self.op.entries())
+        else {
+            return;
+        };
+        if !self.started {
+            self.started = true;
+            emit_sftp_transfer_started(
+                emitter,
+                session_id,
+                self.op.id(),
+                self.kind,
+                self.path.clone(),
+                None,
+            );
+        }
+        emit_sftp_entries_progress(
+            emitter,
+            session_id,
+            self.op.id(),
+            SftpEntriesProgress { done, total },
+        );
+    }
+
+    async fn run<T>(&mut self, work: impl std::future::Future<Output = T>) -> T {
+        if self.sink.is_none() {
+            return work.await;
+        }
+        tokio::pin!(work);
+        let mut tick = tokio::time::interval(crate::file_ops::PROGRESS_MIN_INTERVAL);
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                r = &mut work => return r,
+                _ = tick.tick() => self.sync(),
+            }
+        }
+    }
+
+    /// Final state: done / cancelled / stopped / failed, with the number of
+    /// entries changed. `Ok(false)` = stopped before the end.
+    fn finish(&mut self, outcome: Result<bool, String>) {
+        self.sync();
+        let (Some((emitter, session_id)), true) = (self.sink, self.started) else {
+            return;
+        };
+        let done = self.op.entries().map_or(0, |(d, _)| d);
+        let (error, stopped) = match outcome {
+            Ok(true) => (None, None),
+            Ok(false) => (
+                None,
+                Some(match self.op.stop_reason() {
+                    Some(StopReason::Cancelled) => "cancelled",
+                    _ => "stopped",
+                }),
+            ),
+            Err(e) => (Some(e), None),
+        };
+        emit_sftp_entries_finished(emitter, session_id, self.op.id(), error, stopped, done);
+    }
+}
+
 /// Spec 0054, Teil 3: Vorschau vor dem eigentlichen Löschen, analog zum
 /// zweistufigen `delete_server` — bei einem Ordner zeigt das Frontend damit
 /// "X Dateien, Y Ordner werden gelöscht" statt einer inhaltslosen
@@ -947,6 +1041,7 @@ async fn delete_preview_impl(
 /// nachdem alles darunter bereits weg ist.
 #[tauri::command]
 pub async fn sftp_delete(
+    app: AppHandle,
     state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
@@ -958,12 +1053,27 @@ pub async fn sftp_delete(
         elevated.inner(),
         session_id,
         elevated_user,
-        |session, channel| async move { delete_impl(&session, &channel, &path).await },
+        |session, channel| async move {
+            let emitter = TauriEventEmitter(app);
+            delete_impl_reporting(Some((&emitter, session_id)), &session, &channel, &path).await
+        },
     )
     .await
 }
 
+#[cfg(test)]
 async fn delete_impl(session: &Session, channel: &BrowserChannel, path: &str) -> CommandResult<()> {
+    delete_impl_reporting(None, session, channel, path).await
+}
+
+/// Issue #658: a recursive delete of a folder shows a row (events
+/// `sftp-transfer-*` with kind `delete`); `progress: None` runs silently.
+async fn delete_impl_reporting(
+    progress: Option<(&dyn EventEmitter, SessionId)>,
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+) -> CommandResult<()> {
     let mut guard = lock_browser_sftp(session, channel).await;
     // Spec 0085, A1.4: **vor** den Operationen abfragen — nach einem Widerruf
     // mitten in der Rekursion fehlte die Audit-Zeile sonst ganz, obwohl schon
@@ -972,7 +1082,16 @@ async fn delete_impl(session: &Session, channel: &BrowserChannel, path: &str) ->
     let mut sftp = guard.sftp().await?;
     // Issue #622: als laufende Operation eingetragen (Bestätigungsdialog).
     let op = channel.register_op(Uuid::new_v4(), OpKind::Delete, path);
-    let result = delete_recursive(&mut sftp, path, op.handle()).await;
+    let mut rows = EntryRows::new(progress, SftpTransferKind::Delete, op.handle(), path);
+    let result = rows
+        .run(delete_recursive(&mut sftp, path, op.handle()))
+        .await;
+    rows.finish(
+        result
+            .as_ref()
+            .map(|r| r.is_some())
+            .map_err(|e| e.to_string()),
+    );
     audit_elevated_change(
         elevated_user.as_deref(),
         "delete",
@@ -1016,7 +1135,10 @@ async fn delete_recursive(
         return Ok(Some(()));
     }
 
-    let (dirs, _file_count) = walk_dirs_and_count_files(sftp, path).await?;
+    // Issue #658: from here on the operation counts entries (row + progress).
+    op.begin_entries();
+    let (dirs, file_count) = walk_dirs_and_count_files(sftp, path).await?;
+    op.set_files(0, Some(dirs.len() as u64 + file_count));
     // Alle Dateien im Baum entfernen — dafür noch einmal denselben Baum
     // ablaufen statt die Pfade aus `walk_dirs_and_count_files` zu sammeln:
     // deren Rückgabe zählt Dateien nur, trägt ihre Pfade aber bewusst nicht
@@ -1035,6 +1157,7 @@ async fn delete_recursive(
                     return Ok(None);
                 }
                 sftp.remove(&entry.path).await?;
+                op.add_files_done();
             }
         }
     }
@@ -1043,6 +1166,7 @@ async fn delete_recursive(
             return Ok(None);
         }
         sftp.remove_dir(&dir).await?;
+        op.add_files_done();
     }
     Ok(Some(()))
 }
@@ -1126,6 +1250,7 @@ pub async fn sftp_stat(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // one argument per IPC parameter
 pub async fn sftp_chmod(
+    app: AppHandle,
     state: State<'_, AppState>,
     elevated: State<'_, ElevatedSftpRegistry>,
     session_id: SessionId,
@@ -1141,7 +1266,9 @@ pub async fn sftp_chmod(
         session_id,
         elevated_user,
         |session, channel| async move {
-            chmod_impl(
+            let emitter = TauriEventEmitter(app);
+            chmod_impl_reporting(
+                Some((&emitter, session_id)),
                 &session,
                 &channel,
                 &path,
@@ -1155,7 +1282,30 @@ pub async fn sftp_chmod(
     .await
 }
 
+#[cfg(test)]
 async fn chmod_impl(
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    mode: u32,
+    recursive: bool,
+    apply_special_bits: bool,
+) -> CommandResult<u64> {
+    chmod_impl_reporting(
+        None,
+        session,
+        channel,
+        path,
+        mode,
+        recursive,
+        apply_special_bits,
+    )
+    .await
+}
+
+/// Issue #658: s. `delete_impl_reporting` (kind `chmod`).
+async fn chmod_impl_reporting(
+    progress: Option<(&dyn EventEmitter, SessionId)>,
     session: &Session,
     channel: &BrowserChannel,
     path: &str,
@@ -1168,15 +1318,23 @@ async fn chmod_impl(
     let elevated_user = guard.elevated_user();
     let mut sftp = guard.sftp().await?;
     let op = channel.register_op(Uuid::new_v4(), OpKind::Chmod, path);
-    let result = chmod_recursive(
-        &mut sftp,
-        path,
-        mode,
-        recursive,
-        apply_special_bits,
-        op.handle(),
-    )
-    .await;
+    let mut rows = EntryRows::new(progress, SftpTransferKind::Chmod, op.handle(), path);
+    let result = rows
+        .run(chmod_recursive(
+            &mut sftp,
+            path,
+            mode,
+            recursive,
+            apply_special_bits,
+            op.handle(),
+        ))
+        .await;
+    rows.finish(
+        result
+            .as_ref()
+            .map(|r| r.is_some())
+            .map_err(|e| e.to_string()),
+    );
     audit_elevated_change(
         elevated_user.as_deref(),
         "chmod",
@@ -1237,6 +1395,7 @@ async fn chmod_recursive(
     // eigene weitere Traversierung blockieren (ein Verzeichnis ohne `x` für
     // den eigenen Owner lässt sich unter Unix selbst vom Owner-Prozess
     // nicht mehr auflisten), sobald es als Nächstes an der Reihe wäre.
+    op.begin_entries();
     let mut all_paths = vec![(
         path.to_string(),
         recursive_entry_mode(&root_entry, mode, apply_special_bits),
@@ -1262,11 +1421,13 @@ async fn chmod_recursive(
     // kein Pfad *unter* ihr mehr auflösen, auch nicht nur für ein weiteres
     // `set_permissions` (Pfadauflösung braucht `x` auf jedem Vorfahren).
     let count = all_paths.len() as u64;
+    op.set_files(0, Some(count));
     for (entry_path, entry_mode) in all_paths.into_iter().rev() {
         if op.is_user_stopped() {
             return Ok(None);
         }
         sftp.set_permissions(&entry_path, entry_mode).await?;
+        op.add_files_done();
     }
     Ok(Some(count))
 }
@@ -2195,6 +2356,323 @@ mod sftp_mutation_tests {
     use ssh_transport::LocalFileSession;
 
     use super::*;
+
+    // --- Issue #658: rows with progress and cancel for recursive delete/chmod ---
+
+    use std::sync::Arc;
+
+    use app_logic::events::TestEmitter;
+    use async_trait::async_trait;
+    use ssh_manager_core::ssh::{ChunkControl, ChunkSource, TransferEnd};
+
+    use crate::file_ops::FileOps;
+
+    /// Wraps a real local session and cancels the operation (as the row's
+    /// cancel button does) after `after` changing calls.
+    struct CancelAfter {
+        inner: LocalFileSession,
+        ops: Arc<FileOps>,
+        session_id: SessionId,
+        op_id: Uuid,
+        after: usize,
+        calls: usize,
+    }
+
+    impl CancelAfter {
+        fn tick(&mut self) {
+            self.calls += 1;
+            if self.calls == self.after {
+                assert!(self.ops.cancel(self.session_id, self.op_id));
+            }
+        }
+    }
+
+    #[async_trait]
+    impl SftpSession for CancelAfter {
+        async fn list_dir(&mut self, p: &str) -> Result<Vec<RemoteEntry>, SshError> {
+            self.inner.list_dir(p).await
+        }
+        async fn read_file(&mut self, p: &str) -> Result<Vec<u8>, SshError> {
+            self.inner.read_file(p).await
+        }
+        async fn read_file_capped(
+            &mut self,
+            p: &str,
+            max: u64,
+            progress: &mut (dyn FnMut(u64) + Send),
+        ) -> Result<Vec<u8>, SshError> {
+            self.inner.read_file_capped(p, max, progress).await
+        }
+        async fn write_file(&mut self, p: &str, c: &[u8]) -> Result<(), SshError> {
+            self.inner.write_file(p, c).await
+        }
+        async fn read_file_chunked(
+            &mut self,
+            p: &str,
+            n: usize,
+            f: &mut (dyn for<'a> FnMut(&'a [u8]) -> ChunkControl + Send),
+        ) -> Result<TransferEnd, SshError> {
+            self.inner.read_file_chunked(p, n, f).await
+        }
+        async fn write_file_chunked(
+            &mut self,
+            p: &str,
+            n: usize,
+            f: &mut (dyn for<'a> FnMut(&'a mut [u8]) -> ChunkSource + Send),
+        ) -> Result<TransferEnd, SshError> {
+            self.inner.write_file_chunked(p, n, f).await
+        }
+        async fn stat(&mut self, p: &str) -> Result<RemoteEntry, SshError> {
+            self.inner.stat(p).await
+        }
+        async fn lstat(&mut self, p: &str) -> Result<RemoteEntry, SshError> {
+            self.inner.lstat(p).await
+        }
+        async fn remove(&mut self, p: &str) -> Result<(), SshError> {
+            self.inner.remove(p).await?;
+            self.tick();
+            Ok(())
+        }
+        async fn rename(&mut self, a: &str, b: &str) -> Result<(), SshError> {
+            self.inner.rename(a, b).await
+        }
+        async fn posix_rename(&mut self, a: &str, b: &str) -> Result<bool, SshError> {
+            self.inner.posix_rename(a, b).await
+        }
+        async fn create_dir(&mut self, p: &str) -> Result<(), SshError> {
+            self.inner.create_dir(p).await
+        }
+        async fn create_file_exclusive(&mut self, p: &str) -> Result<(), SshError> {
+            self.inner.create_file_exclusive(p).await
+        }
+        async fn remove_dir(&mut self, p: &str) -> Result<(), SshError> {
+            self.inner.remove_dir(p).await?;
+            self.tick();
+            Ok(())
+        }
+        async fn set_permissions(&mut self, p: &str, m: u32) -> Result<(), SshError> {
+            self.inner.set_permissions(p, m).await?;
+            self.tick();
+            Ok(())
+        }
+    }
+
+    fn tree(files: usize) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("big");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        for i in 0..files {
+            std::fs::write(root.join(format!("f{i}.txt")), b"x").unwrap();
+        }
+        std::fs::write(root.join("sub/g.txt"), b"x").unwrap();
+        (dir, root)
+    }
+
+    fn rows_of(emitter: &TestEmitter) -> Vec<(String, serde_json::Value)> {
+        emitter.events.lock().unwrap().clone()
+    }
+
+    /// Runs `delete_recursive` the way `delete_impl_reporting` does.
+    async fn delete_with_rows(
+        emitter: &TestEmitter,
+        sftp: &mut dyn SftpSession,
+        ops: &Arc<FileOps>,
+        sid: SessionId,
+        guard: &crate::file_ops::OpGuard,
+        path: &str,
+    ) -> Result<Option<()>, SshError> {
+        let _ = ops;
+        let mut rows = EntryRows::new(
+            Some((emitter, sid)),
+            SftpTransferKind::Delete,
+            guard.handle(),
+            path,
+        );
+        let result = rows.run(delete_recursive(sftp, path, guard.handle())).await;
+        rows.finish(
+            result
+                .as_ref()
+                .map(|r| r.is_some())
+                .map_err(|e| e.to_string()),
+        );
+        result
+    }
+
+    #[tokio::test]
+    async fn test_recursive_delete_reports_monotonic_throttled_progress_with_total() {
+        let (_keep, root) = tree(200);
+        let emitter = TestEmitter::default();
+        let ops = Arc::new(FileOps::default());
+        let sid = Uuid::new_v4();
+        let guard = ops.register(sid, Uuid::new_v4(), OpKind::Delete, "p", false);
+        let mut sftp = LocalFileSession::new();
+
+        delete_with_rows(
+            &emitter,
+            &mut sftp,
+            &ops,
+            sid,
+            &guard,
+            root.to_str().unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let events = rows_of(&emitter);
+        assert_eq!(events[0].0, "sftp-transfer-started");
+        assert_eq!(events[0].1["kind"], "delete");
+        let progress: Vec<_> = events
+            .iter()
+            .filter(|(n, _)| n == "sftp-transfer-progress")
+            .map(|(_, p)| p["entries"].clone())
+            .collect();
+        // 201 files + 2 folders; far fewer events than entries (throttled).
+        assert!(progress.len() < 20, "not throttled: {}", progress.len());
+        let mut last = 0;
+        for e in &progress {
+            let done = e["done"].as_u64().unwrap();
+            assert!(done >= last, "counts must be monotonic");
+            last = done;
+            if let Some(t) = e["total"].as_u64() {
+                assert_eq!(t, 203);
+            }
+        }
+        assert_eq!(progress.last().unwrap()["done"], 203);
+        assert_eq!(progress.last().unwrap()["total"], 203);
+        let (name, fin) = events.last().unwrap();
+        assert_eq!(name, "sftp-transfer-finished");
+        assert_eq!(fin["entriesDone"], 203);
+        assert!(fin["error"].is_null() && fin.get("stopped").is_none());
+        assert!(!root.exists());
+    }
+
+    #[tokio::test]
+    async fn test_recursive_delete_cancel_stops_within_one_entry_and_reports_count() {
+        let (_keep, root) = tree(20);
+        let emitter = TestEmitter::default();
+        let ops = Arc::new(FileOps::default());
+        let sid = Uuid::new_v4();
+        let op_id = Uuid::new_v4();
+        let guard = ops.register(sid, op_id, OpKind::Delete, "p", false);
+        let mut sftp = CancelAfter {
+            inner: LocalFileSession::new(),
+            ops: ops.clone(),
+            session_id: sid,
+            op_id,
+            after: 5,
+            calls: 0,
+        };
+
+        let result = delete_with_rows(
+            &emitter,
+            &mut sftp,
+            &ops,
+            sid,
+            &guard,
+            root.to_str().unwrap(),
+        )
+        .await;
+
+        assert!(result.unwrap().is_none(), "stopped by the user");
+        assert_eq!(sftp.calls, 5, "no further entry after the cancel");
+        let events = rows_of(&emitter);
+        let (_, fin) = events.last().unwrap();
+        assert_eq!(fin["stopped"], "cancelled");
+        assert_eq!(fin["entriesDone"], 5);
+        assert!(root.exists(), "the rest stays");
+    }
+
+    #[cfg(unix)] // LocalFileSession cannot chmod on Windows
+    #[tokio::test]
+    async fn test_recursive_chmod_reports_progress_and_cancel_count() {
+        let (_keep, root) = tree(10);
+        let emitter = TestEmitter::default();
+        let ops = Arc::new(FileOps::default());
+        let sid = Uuid::new_v4();
+        let op_id = Uuid::new_v4();
+        let guard = ops.register(sid, op_id, OpKind::Chmod, "p", false);
+        let mut sftp = CancelAfter {
+            inner: LocalFileSession::new(),
+            ops: ops.clone(),
+            session_id: sid,
+            op_id,
+            after: 4,
+            calls: 0,
+        };
+        let path = root.to_str().unwrap();
+        let mut rows = EntryRows::new(
+            Some((&emitter, sid)),
+            SftpTransferKind::Chmod,
+            guard.handle(),
+            path,
+        );
+        let result = rows
+            .run(chmod_recursive(
+                &mut sftp,
+                path,
+                0o755,
+                true,
+                false,
+                guard.handle(),
+            ))
+            .await;
+        rows.finish(
+            result
+                .as_ref()
+                .map(|r| r.is_some())
+                .map_err(|e| e.to_string()),
+        );
+
+        assert!(result.unwrap().is_none());
+        assert_eq!(sftp.calls, 4);
+        let events = rows_of(&emitter);
+        assert_eq!(events[0].1["kind"], "chmod");
+        let (_, fin) = events.last().unwrap();
+        assert_eq!(fin["stopped"], "cancelled");
+        assert_eq!(fin["entriesDone"], 4);
+        // total is the whole tree: root + sub + 11 files
+        let total = events
+            .iter()
+            .filter_map(|(_, p)| p["entries"]["total"].as_u64())
+            .next_back();
+        assert_eq!(total, Some(13));
+    }
+
+    #[tokio::test]
+    async fn test_single_file_delete_and_non_recursive_chmod_show_no_row() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("one.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let emitter = TestEmitter::default();
+        let ops = Arc::new(FileOps::default());
+        let sid = Uuid::new_v4();
+        let guard = ops.register(sid, Uuid::new_v4(), OpKind::Delete, "p", false);
+        let mut sftp = LocalFileSession::new();
+        let path = file.to_str().unwrap();
+
+        delete_with_rows(&emitter, &mut sftp, &ops, sid, &guard, path)
+            .await
+            .unwrap();
+        let mut rows = EntryRows::new(
+            Some((&emitter, sid)),
+            SftpTransferKind::Chmod,
+            guard.handle(),
+            path,
+        );
+        let r = rows
+            .run(chmod_recursive(
+                &mut sftp,
+                path,
+                0o600,
+                false,
+                false,
+                guard.handle(),
+            ))
+            .await;
+        rows.finish(r.as_ref().map(|r| r.is_some()).map_err(|e| e.to_string()));
+
+        assert!(rows_of(&emitter).is_empty());
+    }
 
     #[tokio::test]
     async fn test_delete_recursive_removes_nested_files_and_dirs() {

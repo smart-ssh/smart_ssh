@@ -45,7 +45,8 @@
       "chatRetention": "Sesiones y datos",
       "mcpServer": "Servidor MCP",
       "masterPassword": "Contraseña maestra",
-      "voiceInput": "Entrada de voz"
+      "voiceInput": "Entrada de voz",
+      "dataAndBackup": "Datos y copia de seguridad"
     }
   },
   "about": {
@@ -133,6 +134,12 @@
     "hintGroup": "→ mover a este grupo",
     "hintCycle": "Un grupo no puede moverse a su propio subgrupo",
     "moveTo": "Mover «{{name}}» a…"
+  },
+  "copyMarker": {
+    "badge": "Copia",
+    "badgeHint": "Copia: no forma parte de los datos actuales. Tiene su propio ID y es independiente de las entradas importadas.",
+    "keep": "Conservar como entrada normal",
+    "groupConfirmBody": "Quita la marca de copia de este grupo y de todo su contenido (grupos: {{groups}}, servidores: {{servers}})."
   },
   "management": {
     "emptyState": "Seleccione un grupo o servidor a la izquierda, o cree algo nuevo con “{{addGroup}}”/“{{addServer}}”.",
@@ -408,7 +415,8 @@
       "verdictAuto": "se ejecutará automáticamente la próxima vez",
       "verdictAsk": "seguirá preguntando: {{reasons}}",
       "notice": "Regla creada. Este comando seguirá preguntando la próxima vez: {{reasons}}",
-      "reasonOther": "otra comprobación de seguridad"
+      "reasonOther": "otra comprobación de seguridad",
+      "loadFailed": "No se pudo cargar la cobertura de reglas"
     }
   },
   "hostKeyDialog": {
@@ -564,6 +572,8 @@
     "AI_MODEL_NO_TOOL_SUPPORT": "Este modelo no admite llamadas a herramientas. En los ajustes del proveedor, desmarque “Admite llamadas nativas a herramientas” (se usará entonces la alternativa basada en prompt) o elija un modelo compatible.",
     "AI_LOCAL_PROVIDER_UNREACHABLE": "El servicio de IA local no responde. Inicie Ollama (o su servidor local) e inténtelo de nuevo.",
     "AI_TIMEOUT": "El proveedor de IA tardó demasiado en responder. Espere un momento y vuelva a enviar; con un modelo local, compruebe si el equipo está ocupado o si el modelo es demasiado grande.",
+    "AI_TIMEOUT_NAMED": "Sin respuesta de {{provider}} durante {{seconds}} s: solicitud cancelada. Inténtalo de nuevo en un momento.",
+    "AI_TOTAL_DEADLINE": "{{provider}} no terminó en {{minutes}} minutos: solicitud cancelada. Se conserva el texto recibido hasta ahora.",
     "AI_WEB_RESEARCH_REJECTED": "El proveedor de IA rechaza la investigación web para esta cuenta. Desactive “Investigación web” para este proveedor en “Proveedor de IA”, dentro de los ajustes.",
     "AI_ATTACHMENT_UNSUPPORTED": "Este modelo no puede leer la imagen o el PDF adjunto. Elija un modelo que pueda hacerlo o quite el adjunto.",
     "AI_NO_ACTIVE_PROVIDER": "Aún no hay ningún proveedor de IA activo. Añada uno en Ajustes → Proveedor de IA y actívelo.",
@@ -869,7 +879,8 @@
       "success": "{{created}} servidores creados, {{groups}} carpetas, {{skipped}} conflicto(s) omitido(s).",
       "fallbacksDetail": "No se pudieron leer {{count}} archivo(s) de clave; se conservó la ruta: {{detail}}.",
       "encryptedDetail": "Se incorporaron {{count}} clave(s) cifrada(s): añada la frase de contraseña antes de la primera conexión: {{detail}}."
-    }
+    },
+    "isBackup": "Este archivo es una copia de seguridad cifrada, no un ssh_config. No se creó nada. Restáurala en Ajustes → Datos y copia de seguridad."
   },
   "sshConfigExport": {
     "dialogTitle": "Exportar a ssh_config",
@@ -879,7 +890,8 @@
       "includeHintLabel": "Cómo incluir este archivo en su propio ~/.ssh/config:",
       "copy": "Copiar",
       "notRepresentedHint": "Los grupos, etiquetas, notas, reglas de filtro y ajustes de seguridad no están en este archivo: lo que falta en cada servidor se indica como comentario sobre su entrada."
-    }
+    },
+    "backupHint": "No incluye credenciales, reglas ni notas. Para una copia completa, usa la copia cifrada (Ajustes → Datos y copia de seguridad)."
   },
   "startup": {
     "stateUnknown": "Smart SSH no pudo leer su estado de inicio. No se cambió nada. Inténtelo de nuevo; si persiste, el registro indica la causa.",
@@ -1026,6 +1038,10 @@
     "transferStopped": "{{name}}: detenido",
     "transferIncomplete": "Archivo incompleto en el servidor: {{path}}",
     "transferFiles": "{{done}} de {{total}} archivos",
+    "transferDelete": "Eliminando {{name}}",
+    "transferChmod": "Cambiando permisos de {{name}}",
+    "entriesProgress": "{{done}} de {{total}} elementos",
+    "entriesChanged": "Elementos modificados: {{count}}",
     "transferRemaining": "quedan {{time}}",
     "loading": "Cargando…",
     "noPermissionToOpen": "Sin permiso para abrir esta carpeta (falta x)",
@@ -1177,6 +1193,7 @@
     "tryAgain": "Reintentar",
     "errorDetails": "Detalles",
     "aiRetrying": "El proveedor de IA está sobrecargado – reintentando en {{seconds}} s (intento {{attempt}} de {{max}})",
+    "aiWaiting": "Esperando respuesta de {{provider}} … {{seconds}} s",
     "noActiveProvider": "No hay ningún proveedor de IA activo configurado. Configure uno primero en los ajustes.",
     "inputPlaceholder": "Haga una pregunta o describa un comando …",
     "send": "Enviar",
@@ -1230,7 +1247,11 @@
       "cardLabel": "Pregunta: {{question}}",
       "send": "Enviar",
       "answeredOwnWords": "Respondida con tus propias palabras"
-    }
+    },
+    "injectionChecking": "Comprobando la salida …",
+    "injectionSuspected": "Advertencia: esta salida parece un intento de inyectar instrucciones.",
+    "injectionSuspectedReason": "Motivo indicado por la IA de comprobación: {{reason}}",
+    "injectionConfirmReason": "Motivo: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Esta nota es muy grande y puede acortarse para el contexto de la IA en sesiones largas. La nota guardada permanece completa.",
@@ -1346,5 +1367,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "hecho",
     "resultFailed": "fallido"
+  },
+  "backup": {
+    "title": "Copia de seguridad cifrada",
+    "intro": "Guarda todos tus datos de Smart SSH en un archivo cifrado y los restaura después, por ejemplo en un equipo nuevo.",
+    "included": "Incluye: servidores, carpetas, etiquetas, reglas de filtro, notas de servidores, proveedores de IA, credenciales guardadas (cifradas) y claves de host de confianza.",
+    "excluded": "No incluye: historial de chat, registros de uso, ajustes del dispositivo ni archivos de claves en disco.",
+    "restoreInfo": "Restaurar reemplaza todos los datos de este dispositivo. Tus datos actuales se guardan antes y tus servidores pasan a una carpeta con fecha.",
+    "export": "Exportar copia…",
+    "restore": "Restaurar desde copia…",
+    "newCode": "Nuevo código de recuperación",
+    "setPassphrase": "Establecer frase de contraseña",
+    "exportDone": "Copia guardada en {{path}}.",
+    "exportCounts": "{{servers}} servidores, {{rules}} reglas, {{notes}} notas.",
+    "setup": {
+      "title": "Protege tus copias",
+      "intro": "Las copias están cifradas. Necesitas un código de recuperación o una frase de contraseña para leerlas, así que elige uno ahora.",
+      "useCode": "Crear un código de recuperación",
+      "usePassphrase": "Usar una frase de contraseña"
+    },
+    "code": {
+      "title": "Tu código de recuperación",
+      "warning": "Anota este código y guárdalo bien. Solo se muestra una vez y no se puede volver a mostrar. Sin él, tus copias no se pueden leer.",
+      "copy": "Copiar",
+      "copyFailed": "No se pudo copiar.",
+      "confirm": "He anotado el código",
+      "continue": "Continuar"
+    },
+    "passphrase": {
+      "title": "Establecer una frase de contraseña",
+      "warning": "Sin la frase de contraseña, tus copias no se pueden leer. No hay recuperación.",
+      "label": "Frase de contraseña",
+      "help": "Al menos {{count}} caracteres.",
+      "tooShort": "Demasiado corta: al menos {{count}} caracteres.",
+      "repeat": "Repetir frase de contraseña",
+      "mismatch": "Las frases de contraseña no coinciden.",
+      "save": "Guardar frase de contraseña"
+    },
+    "import": {
+      "title": "Restaurar desde copia",
+      "pickTitle": "Elige un archivo de copia",
+      "file": "Archivo: {{name}}",
+      "kind": "Qué abre esta copia",
+      "useCode": "Código de recuperación",
+      "usePassphrase": "Frase de contraseña",
+      "codeLabel": "Código de recuperación",
+      "passphraseLabel": "Frase de contraseña",
+      "open": "Abrir copia"
+    },
+    "confirm": {
+      "title": "¿Reemplazar tus datos?",
+      "intro": "Restaurar reemplaza los datos de este dispositivo. Todavía no se ha cambiado nada.",
+      "what": "Datos",
+      "local": "Ahora",
+      "file": "Copia",
+      "sessions": "Sesiones abiertas que se cerrarán: {{count}}",
+      "safety": "Tus datos actuales se guardan antes en {{dir}}. Tus servidores pasan a una carpeta nueva llamada “Previous data” con la fecha de hoy.",
+      "replace": "Reemplazar datos"
+    },
+    "counts": {
+      "servers": "Servidores",
+      "groups": "Carpetas",
+      "rules": "Reglas",
+      "notes": "Notas",
+      "aiProviders": "Proveedores de IA"
+    },
+    "summary": {
+      "title": "Copia restaurada",
+      "counts": "Restaurado: {{servers}} servidores, {{groups}} carpetas, {{rules}} reglas, {{notes}} notas, {{aiProviders}} proveedores de IA.",
+      "safety": "Copia de seguridad de tus datos anteriores: {{path}}",
+      "folder": "Tus servidores anteriores están en la carpeta “{{name}}”.",
+      "hostKeysPending": "Las claves de host de confianza se completan en el próximo inicio.",
+      "done": "Listo"
+    },
+    "errors": {
+      "cannotOpen": "Código o frase de contraseña incorrectos, o el archivo está dañado.",
+      "typo": "El código contiene un error tipográfico.",
+      "notBackup": "Este no es un archivo de copia de Smart SSH. Las listas de servidores en formato ssh_config se importan desde la lista de servidores.",
+      "newerVersion": "Esta copia fue creada por una versión más reciente de Smart SSH. Actualiza la app e inténtalo de nuevo.",
+      "failed": "La operación falló. No se cambió nada."
+    }
   }
 }

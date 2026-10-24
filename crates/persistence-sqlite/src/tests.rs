@@ -467,6 +467,7 @@ async fn test_migration_from_earlier_schema_with_real_data_preserves_all_rows() 
     let old_store = SqliteProfileStore {
         pool: old_pool.clone(),
         chat_removal: Default::default(),
+        data_changes: Default::default(),
     };
     let group = make_group("Produktion", None);
     old_store.create_group(&group).await.unwrap();
@@ -953,4 +954,29 @@ async fn test_deleting_the_group_of_an_unusable_server_keeps_its_stored_auth_met
     assert_eq!(listing.unusable.len(), 1);
     assert_eq!(listing.unusable[0].id, id);
     assert_eq!(listing.unusable[0].group_id, None);
+}
+
+/// Spec 0103: the migration adds `is_copy` with default `false`; ordinary
+/// writes neither set nor clear the marker.
+#[tokio::test]
+async fn test_copy_marker_defaults_to_false_and_survives_updates() {
+    let store = in_memory_store().await;
+    let group = make_group("g", None);
+    store.create_group(&group).await.unwrap();
+    let mut server = make_server("s", Some(group.id), vec![]);
+    store.create_server(&server).await.unwrap();
+    let backup = store.backup_store();
+    assert_eq!(backup.copy_marked().await.unwrap(), Default::default());
+
+    let snap = backup.read_snapshot().await.unwrap();
+    assert!(snap.servers.iter().all(|s| !s.is_copy));
+    assert!(snap.groups.iter().all(|g| !g.is_copy));
+    // Mark directly (the import does it in its transaction), then edit normally.
+    sqlx::query("UPDATE servers SET is_copy = 1")
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    server.name = "renamed".into();
+    store.update_server(&server).await.unwrap();
+    assert_eq!(backup.copy_marked().await.unwrap().servers.len(), 1);
 }

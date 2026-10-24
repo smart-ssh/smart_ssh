@@ -24,7 +24,7 @@ workspace version, otherwise the workspace does not build.
 
 ## 2. Version Bump & Release Process
 
-Follow these steps to bump the version and trigger automated multi-platform release builds:
+Follow these steps to bump the version, update the changelog and tag the release:
 
 ### Step 1: Update Version Numbers
 Update the version string (e.g. from `0.1.0` to `0.2.0`) everywhere listed
@@ -52,18 +52,14 @@ git push origin main --tags
 
 ---
 
-## 3. Automated CI/CD & Executable Builds
+## 3. Continuous Integration
 
-### Release Workflow ([`.github/workflows/release.yml`](./.github/workflows/release.yml))
-When a `v*` tag is pushed (or triggered manually via **Workflow Dispatch** in GitHub Actions):
-- Builds native bundles across:
-  - **macOS** (`macos-latest`): Universal binary (`.dmg`, `.app` for both Apple Silicon and Intel; minimum macOS 10.15 Catalina)
-  - **Windows** (`windows-latest`): `.msi` and `.exe` installers
-  - **Linux** (`ubuntu-22.04`): `.deb` and `.AppImage` packages
-- Automatically creates a GitHub Draft Release under the **Releases** section with all installers and binaries attached for download.
+This repository's CI only runs the checks (`community.yml`, below). It does
+not build or publish release artifacts. Version bump, changelog and tagging
+stay as described in section 2.
 
 ### Branches
-`main` is the released version. Work happens on `develop` (the default branch, base of every pull request). A version under test lives on `release/X.Y.0`, an urgent fix of the released version on `hotfix/X.Y.Z`; both are merged into `main` and tagged when they ship.
+`main` is the released version. Work happens on `develop` (the default branch, base of every pull request). A version under test lives on `release/X.Y.0` and is merged into `main` and tagged when it ships. The release branch `release/X.Y.Z` is kept after the release: urgent fixes of that released version land on it with a patch milestone (X.Y.Z+1) and are tagged from there.
 
 ### CI Workflow ([`.github/workflows/community.yml`](./.github/workflows/community.yml))
 Runs on every pull request and on every push to `main`, `develop`, `release/*` and `hotfix/*`, from a fresh clone
@@ -79,9 +75,10 @@ with no secrets (Spec 0090). Every step blocks:
 - On Ubuntu only, a separate job: `cargo deny check licenses sources bans`,
   `cargo audit`, and a check that every exemption in `.cargo/audit.toml`
   still matches a current finding.
-
-The release workflow runs this same workflow as its gate before it builds
-anything.
+- On Ubuntu only, browser tests (Playwright) and the real app startup tests
+  (tauri-driver). The Linux system packages are installed by the local
+  action `.github/actions/linux-deps`, which caches the downloaded `.deb`
+  files and retries a slow or failed install once.
 
 ---
 
