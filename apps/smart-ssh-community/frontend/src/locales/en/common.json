@@ -601,7 +601,7 @@
     "SERVER_CERTIFICATE_REQUIRED": "Certificate is required",
     "SERVER_CERTIFICATE_KEY_REQUIRED": "Certificate key is required",
     "SERVER_JUMP_HOST_LOCAL": "The local pseudo-server cannot be used as a jump host",
-    "KEY_FILE_NOT_FOUND": "The key file was not found at the given path.",
+    "KEY_FILE_NOT_FOUND": "Key file not found on this device.",
     "KEY_FILE_NOT_READABLE": "The key file cannot be read with the current permissions.",
     "KEY_FILE_PERMISSIONS_TOO_OPEN": "The key file is readable or writable by group or others — like ssh, this rejects the login. Fix it with \"chmod 600\" on the file.",
     "KEY_FILE_TOO_LARGE": "The key file exceeds the allowed size of 1 MiB.",
