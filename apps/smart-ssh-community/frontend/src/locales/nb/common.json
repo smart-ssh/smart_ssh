@@ -45,7 +45,8 @@
       "chatRetention": "Økter og data",
       "mcpServer": "MCP-server",
       "masterPassword": "Hovedpassord",
-      "voiceInput": "Taleinndata"
+      "voiceInput": "Taleinndata",
+      "dataAndBackup": "Data og sikkerhetskopi"
     }
   },
   "about": {
@@ -864,7 +865,8 @@
       "success": "{{created}} servere opprettet, {{groups}} mapper, {{skipped}} konflikt(er) hoppet over.",
       "fallbacksDetail": "{{count}} nøkkelfil(er) kunne ikke leses, stien ble beholdt i stedet: {{detail}}.",
       "encryptedDetail": "{{count}} nøkkel/nøkler ble tatt med kryptert – legg til passfrasen før første tilkobling: {{detail}}."
-    }
+    },
+    "isBackup": "Denne filen er en kryptert sikkerhetskopi, ikke en ssh_config. Ingenting ble opprettet. Gjenopprett den under Innstillinger → Data og sikkerhetskopi."
   },
   "sshConfigExport": {
     "dialogTitle": "Eksporter til ssh_config",
@@ -874,7 +876,8 @@
       "includeHintLabel": "Slik tar du med denne filen i din egen ~/.ssh/config:",
       "copy": "Kopier",
       "notRepresentedHint": "Grupper, merkelapper, notater, filterregler og sikkerhetsinnstillinger finnes ikke i denne filen – det som mangler for en gitt server, er notert som kommentar over oppføringen."
-    }
+    },
+    "backupHint": "Inneholder ingen legitimasjon, regler eller notater. For en fullstendig kopi, bruk den krypterte sikkerhetskopien (Innstillinger → Data og sikkerhetskopi)."
   },
   "startup": {
     "stateUnknown": "Smart SSH kunne ikke lese oppstartstilstanden sin. Ingenting ble endret. Prøv igjen; vedvarer det, angir loggen årsaken.",
@@ -1346,5 +1349,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "ferdig",
     "resultFailed": "mislyktes"
+  },
+  "backup": {
+    "title": "Kryptert sikkerhetskopi",
+    "intro": "Lagrer alle Smart SSH-dataene dine i én kryptert fil og gjenoppretter dem senere, for eksempel på en ny datamaskin.",
+    "included": "Inkludert: servere, mapper, merkelapper, filterregler, servernotater, AI-leverandører, lagret legitimasjon (kryptert) og klarerte vertsnøkler.",
+    "excluded": "Ikke inkludert: chathistorikk, bruksdata, enhetsinnstillinger og nøkkelfiler på disken.",
+    "restoreInfo": "Gjenoppretting erstatter alle data på denne enheten. Dine nåværende data lagres først, og serverne dine flyttes til en mappe med dato.",
+    "export": "Eksporter sikkerhetskopi…",
+    "restore": "Gjenopprett fra sikkerhetskopi…",
+    "newCode": "Ny gjenopprettingskode",
+    "setPassphrase": "Angi passfrase",
+    "exportDone": "Sikkerhetskopi lagret i {{path}}.",
+    "exportCounts": "{{servers}} servere, {{rules}} regler, {{notes}} notater.",
+    "setup": {
+      "title": "Beskytt sikkerhetskopiene dine",
+      "intro": "Sikkerhetskopier er kryptert. Du trenger en gjenopprettingskode eller en passfrase for å lese dem, så velg en nå.",
+      "useCode": "Opprett en gjenopprettingskode",
+      "usePassphrase": "Bruk en passfrase i stedet"
+    },
+    "code": {
+      "title": "Gjenopprettingskoden din",
+      "warning": "Skriv ned koden og oppbevar den trygt. Den vises bare én gang og kan ikke vises igjen. Uten den kan ikke sikkerhetskopiene leses.",
+      "copy": "Kopier",
+      "copyFailed": "Kunne ikke kopiere.",
+      "confirm": "Jeg har notert koden",
+      "continue": "Fortsett"
+    },
+    "passphrase": {
+      "title": "Angi en passfrase",
+      "warning": "Uten passfrasen kan ikke sikkerhetskopiene leses. Det finnes ingen gjenoppretting.",
+      "label": "Passfrase",
+      "help": "Minst {{count}} tegn.",
+      "tooShort": "For kort: minst {{count}} tegn.",
+      "repeat": "Gjenta passfrase",
+      "mismatch": "Passfrasene stemmer ikke overens.",
+      "save": "Lagre passfrase"
+    },
+    "import": {
+      "title": "Gjenopprett fra sikkerhetskopi",
+      "pickTitle": "Velg en sikkerhetskopifil",
+      "file": "Fil: {{name}}",
+      "kind": "Hva som åpner denne sikkerhetskopien",
+      "useCode": "Gjenopprettingskode",
+      "usePassphrase": "Passfrase",
+      "codeLabel": "Gjenopprettingskode",
+      "passphraseLabel": "Passfrase",
+      "open": "Åpne sikkerhetskopi"
+    },
+    "confirm": {
+      "title": "Erstatte dataene dine?",
+      "intro": "Gjenoppretting erstatter dataene på denne enheten. Ingenting er endret ennå.",
+      "what": "Innhold",
+      "local": "Nå",
+      "file": "Sikkerhetskopi",
+      "sessions": "Åpne økter som lukkes: {{count}}",
+      "safety": "Dine nåværende data lagres først i {{dir}}. Serverne dine flyttes til en ny mappe kalt “Previous data” med dagens dato.",
+      "replace": "Erstatt data"
+    },
+    "counts": {
+      "servers": "Servere",
+      "groups": "Mapper",
+      "rules": "Regler",
+      "notes": "Notater",
+      "aiProviders": "AI-leverandører"
+    },
+    "summary": {
+      "title": "Sikkerhetskopi gjenopprettet",
+      "counts": "Gjenopprettet: {{servers}} servere, {{groups}} mapper, {{rules}} regler, {{notes}} notater, {{aiProviders}} AI-leverandører.",
+      "safety": "Sikkerhetskopi av tidligere data: {{path}}",
+      "folder": "De tidligere serverne dine ligger i mappen “{{name}}”.",
+      "hostKeysPending": "De klarerte vertsnøklene fullføres ved neste oppstart.",
+      "done": "Ferdig"
+    },
+    "errors": {
+      "cannotOpen": "Feil kode eller passfrase, eller filen er skadet.",
+      "typo": "Koden inneholder en skrivefeil.",
+      "notBackup": "Dette er ikke en Smart SSH-sikkerhetskopi. Serverlister i ssh_config-format importeres fra serverlisten.",
+      "newerVersion": "Denne sikkerhetskopien er laget av en nyere versjon av Smart SSH. Oppdater appen og prøv igjen.",
+      "failed": "Handlingen mislyktes. Ingenting ble endret."
+    }
   }
 }

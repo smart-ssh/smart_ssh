@@ -6,6 +6,7 @@ import { listSettingsSections, subscribeSettingsSections } from "../extensions/r
 import { resolveSectionLabel } from "../resolveSectionLabel";
 import { AboutSettings } from "./AboutSettings";
 import { AiProviderSettings } from "./AiProviderSettings";
+import { BackupSettings } from "./BackupSettings";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
 import { FileTypeSettings } from "./FileTypeSettings";
 import { LanguageSettings } from "./LanguageSettings";
@@ -28,6 +29,8 @@ const DIAGNOSTICS_CATEGORY_ID = "diagnostics";
 const FILE_TYPES_CATEGORY_ID = "file-types";
 /** Spec 0101, A18: Wo der Schlüssel zur verschlüsselten Datenbank liegt. */
 const MASTER_PASSWORD_CATEGORY_ID = "master-password";
+/** Spec 0109, T1. */
+const DATA_BACKUP_CATEGORY_ID = "data-backup";
 const VOICE_INPUT_CATEGORY_ID = "voice-input";
 const ABOUT_CATEGORY_ID = "about";
 
@@ -81,6 +84,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
     // eingebauter Eintrag, nicht strikt nach einer eventuellen
     // Lizenz-Sektion; eine vollständige Neuordnung dafür wäre für diese
     // reine Anzeige-Ergänzung unverhältnismäßig.
+    { id: DATA_BACKUP_CATEGORY_ID, label: t("settings.categories.dataAndBackup") },
     { id: VOICE_INPUT_CATEGORY_ID, label: t("settings.categories.voiceInput") },
     { id: ABOUT_CATEGORY_ID, label: t("settings.categories.about") },
   ];
@@ -268,6 +272,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             {active?.id === DIAGNOSTICS_CATEGORY_ID && <DiagnosticsSettings />}
             {active?.id === FILE_TYPES_CATEGORY_ID && <FileTypeSettings />}
             {active?.id === MASTER_PASSWORD_CATEGORY_ID && <MasterPasswordSettings />}
+            {active?.id === DATA_BACKUP_CATEGORY_ID && <BackupSettings />}
             {active?.id === VOICE_INPUT_CATEGORY_ID && <VoiceInputSettings />}
             {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
             {registeredSections.map(
