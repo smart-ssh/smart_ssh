@@ -1310,6 +1310,15 @@
     "paneTabs": "Sessiedelen",
     "moreActions": "Meer acties",
     "terminalOpenFailed": "Terminal kon niet worden geopend: {{error}}",
+    "extraKeys": {
+      "group": "Extra toetsen",
+      "up": "Pijl omhoog",
+      "down": "Pijl omlaag",
+      "left": "Pijl links",
+      "right": "Pijl rechts",
+      "pageUp": "Pagina omhoog",
+      "pageDown": "Pagina omlaag"
+    },
     "reconnectingAuto": "Opnieuw verbinden… (poging {{attempt}})",
     "stopReconnect": "Stoppen",
     "reconnectGaveUp": "De verbinding kon niet worden hersteld."

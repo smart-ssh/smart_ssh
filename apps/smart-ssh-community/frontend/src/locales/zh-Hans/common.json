@@ -1302,6 +1302,15 @@
     "paneTabs": "会话面板",
     "moreActions": "更多操作",
     "terminalOpenFailed": "无法打开终端：{{error}}",
+    "extraKeys": {
+      "group": "附加按键",
+      "up": "上箭头",
+      "down": "下箭头",
+      "left": "左箭头",
+      "right": "右箭头",
+      "pageUp": "向上翻页",
+      "pageDown": "向下翻页"
+    },
     "reconnectingAuto": "正在重新连接…（第 {{attempt}} 次尝试）",
     "stopReconnect": "停止",
     "reconnectGaveUp": "无法恢复连接。"

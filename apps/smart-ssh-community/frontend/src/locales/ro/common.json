@@ -1314,6 +1314,15 @@
     "paneTabs": "Panourile sesiunii",
     "moreActions": "Mai multe acțiuni",
     "terminalOpenFailed": "Terminalul nu a putut fi deschis: {{error}}",
+    "extraKeys": {
+      "group": "Taste suplimentare",
+      "up": "Săgeată sus",
+      "down": "Săgeată jos",
+      "left": "Săgeată stânga",
+      "right": "Săgeată dreapta",
+      "pageUp": "Pagină sus",
+      "pageDown": "Pagină jos"
+    },
     "connectionLostPressR": "Conexiunea a fost pierdută. Apăsați R pentru reconectare.",
     "reconnect": "Reconectare",
     "reconnectedSeparator": "— reconectat —",

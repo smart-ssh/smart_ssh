@@ -1310,6 +1310,15 @@
     "paneTabs": "सत्र पैनल",
     "moreActions": "अधिक क्रियाएँ",
     "terminalOpenFailed": "टर्मिनल नहीं खुल सका: {{error}}",
+    "extraKeys": {
+      "group": "अतिरिक्त कुंजियाँ",
+      "up": "ऊपर तीर",
+      "down": "नीचे तीर",
+      "left": "बायाँ तीर",
+      "right": "दायाँ तीर",
+      "pageUp": "पेज ऊपर",
+      "pageDown": "पेज नीचे"
+    },
     "reconnectingAuto": "फिर से कनेक्ट हो रहा है… (प्रयास {{attempt}})",
     "stopReconnect": "रोकें",
     "reconnectGaveUp": "कनेक्शन बहाल नहीं हो सका।"

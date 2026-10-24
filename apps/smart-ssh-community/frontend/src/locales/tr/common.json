@@ -1306,6 +1306,15 @@
     "paneTabs": "Oturum bölmeleri",
     "moreActions": "Diğer işlemler",
     "terminalOpenFailed": "Terminal açılamadı: {{error}}",
+    "extraKeys": {
+      "group": "Ek tuşlar",
+      "up": "Yukarı ok",
+      "down": "Aşağı ok",
+      "left": "Sol ok",
+      "right": "Sağ ok",
+      "pageUp": "Sayfa yukarı",
+      "pageDown": "Sayfa aşağı"
+    },
     "connectionLostPressR": "Bağlantı koptu. Yeniden bağlanmak için R'ye basın.",
     "reconnect": "Yeniden bağlan",
     "reconnectedSeparator": "— yeniden bağlanıldı —",

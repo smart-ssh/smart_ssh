@@ -1302,6 +1302,15 @@
     "paneTabs": "Các ngăn của phiên",
     "moreActions": "Thêm hành động",
     "terminalOpenFailed": "Không thể mở terminal: {{error}}",
+    "extraKeys": {
+      "group": "Phím bổ sung",
+      "up": "Mũi tên lên",
+      "down": "Mũi tên xuống",
+      "left": "Mũi tên trái",
+      "right": "Mũi tên phải",
+      "pageUp": "Trang lên",
+      "pageDown": "Trang xuống"
+    },
     "reconnectingAuto": "Đang kết nối lại… (lần thử {{attempt}})",
     "stopReconnect": "Dừng",
     "reconnectGaveUp": "Không thể khôi phục kết nối."

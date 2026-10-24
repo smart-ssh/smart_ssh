@@ -1318,6 +1318,15 @@
     "paneTabs": "Aree della sessione",
     "moreActions": "Altre azioni",
     "terminalOpenFailed": "Impossibile aprire il terminale: {{error}}",
+    "extraKeys": {
+      "group": "Tasti aggiuntivi",
+      "up": "Freccia su",
+      "down": "Freccia giù",
+      "left": "Freccia sinistra",
+      "right": "Freccia destra",
+      "pageUp": "Pagina su",
+      "pageDown": "Pagina giù"
+    },
     "reconnectingAuto": "Riconnessione… (tentativo {{attempt}})",
     "stopReconnect": "Interrompi",
     "reconnectGaveUp": "Impossibile ripristinare la connessione."

@@ -1310,6 +1310,15 @@
     "paneTabs": "Istunnon osat",
     "moreActions": "Lisää toimintoja",
     "terminalOpenFailed": "Päätettä ei voitu avata: {{error}}",
+    "extraKeys": {
+      "group": "Lisänäppäimet",
+      "up": "Nuoli ylös",
+      "down": "Nuoli alas",
+      "left": "Nuoli vasemmalle",
+      "right": "Nuoli oikealle",
+      "pageUp": "Sivu ylös",
+      "pageDown": "Sivu alas"
+    },
     "reconnectingAuto": "Yhdistetään uudelleen… (yritys {{attempt}})",
     "stopReconnect": "Pysäytä",
     "reconnectGaveUp": "Yhteyttä ei voitu palauttaa."

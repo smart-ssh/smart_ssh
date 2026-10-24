@@ -1318,6 +1318,15 @@
     "paneTabs": "Zones de la session",
     "moreActions": "Plus d’actions",
     "terminalOpenFailed": "Impossible d’ouvrir le terminal : {{error}}",
+    "extraKeys": {
+      "group": "Touches supplémentaires",
+      "up": "Flèche haut",
+      "down": "Flèche bas",
+      "left": "Flèche gauche",
+      "right": "Flèche droite",
+      "pageUp": "Page précédente",
+      "pageDown": "Page suivante"
+    },
     "reconnectingAuto": "Reconnexion… (tentative {{attempt}})",
     "stopReconnect": "Arrêter",
     "reconnectGaveUp": "La connexion n’a pas pu être rétablie."

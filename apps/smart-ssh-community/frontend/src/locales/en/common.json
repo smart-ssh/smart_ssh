@@ -1310,6 +1310,15 @@
     "paneTabs": "Session panes",
     "moreActions": "More actions",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
+    "extraKeys": {
+      "group": "Extra keys",
+      "up": "Up arrow",
+      "down": "Down arrow",
+      "left": "Left arrow",
+      "right": "Right arrow",
+      "pageUp": "Page up",
+      "pageDown": "Page down"
+    },
     "reconnectingAuto": "Reconnecting… (attempt {{attempt}})",
     "stopReconnect": "Stop",
     "reconnectGaveUp": "Connection could not be restored."

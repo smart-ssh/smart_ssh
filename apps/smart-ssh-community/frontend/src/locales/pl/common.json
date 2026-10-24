@@ -1326,6 +1326,15 @@
     "paneTabs": "Panele sesji",
     "moreActions": "Więcej akcji",
     "terminalOpenFailed": "Nie udało się otworzyć terminala: {{error}}",
+    "extraKeys": {
+      "group": "Dodatkowe klawisze",
+      "up": "Strzałka w górę",
+      "down": "Strzałka w dół",
+      "left": "Strzałka w lewo",
+      "right": "Strzałka w prawo",
+      "pageUp": "Strona w górę",
+      "pageDown": "Strona w dół"
+    },
     "reconnectingAuto": "Ponowne łączenie… (próba {{attempt}})",
     "stopReconnect": "Zatrzymaj",
     "reconnectGaveUp": "Nie udało się przywrócić połączenia."
