@@ -727,7 +727,12 @@
     "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}",
     "nothingToPaste": "Nothing to paste: the clipboard holds no files",
     "createFileDone": "File “{{name}}” created",
-    "createFileFailed": "File “{{name}}” could not be created: {{reason}}"
+    "createFileFailed": "File “{{name}}” could not be created: {{reason}}",
+    "chownDone": "Owner of “{{name}}” changed",
+    "chownRecursive": "Owner changed — {{count}} entries in “{{name}}”",
+    "chownFailed": "Owner of “{{name}}” could not be changed: {{reason}}",
+    "chownUnknownUser": "Owner of “{{name}}” not changed: unknown user",
+    "chownUnknownGroup": "Owner of “{{name}}” not changed: unknown group"
   },
   "fileElevation": {
     "toggle": "Elevated rights",
@@ -780,7 +785,9 @@
     "otherUser": "As another user…",
     "targetUser": "Target user",
     "targetUserHelp": "Runs the file browser as this user via sudo. Default: root.",
-    "confirm": "Elevate"
+    "confirm": "Elevate",
+    "opChown": "Change owner",
+    "chownNote": "The owner will be changed as {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Import ssh_config",
@@ -1116,7 +1123,8 @@
       "cut": "Cut",
       "delete": "Delete",
       "newFolder": "New folder",
-      "newFile": "New file"
+      "newFile": "New file",
+      "chown": "Change owner…"
     },
     "properties": {
       "title": "Properties",
@@ -1174,7 +1182,16 @@
       "notText": "No text diff possible: the file is binary (not valid UTF-8 text).",
       "permission": "No text diff possible: you have no read permission for this file with the current rights.",
       "other": "No text diff possible: the file could not be read ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Change owner",
+      "owner": "User",
+      "group": "Group",
+      "hint": "Enter a name or a number. A side you leave as it is stays unchanged. The server decides whether the change is allowed (usually only root may change the owner).",
+      "recursive": "Apply to contents",
+      "recursiveWarning": "— changes the owner of ALL files and subfolders in this folder. Symbolic links are not followed. Cannot be undone."
+    },
+    "transferChown": "Changing owner of {{name}}"
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",

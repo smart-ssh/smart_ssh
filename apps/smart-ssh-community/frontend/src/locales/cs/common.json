@@ -737,7 +737,12 @@
     "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}",
     "nothingToPaste": "Není co vložit: schránka neobsahuje žádné soubory",
     "createFileDone": "Soubor „{{name}}“ vytvořen",
-    "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}"
+    "createFileFailed": "Soubor „{{name}}“ se nepodařilo vytvořit: {{reason}}",
+    "chownDone": "Vlastník „{{name}}“ změněn",
+    "chownRecursive": "Vlastník změněn — {{count}} položek v „{{name}}“",
+    "chownFailed": "Vlastníka „{{name}}“ se nepodařilo změnit: {{reason}}",
+    "chownUnknownUser": "Vlastník „{{name}}“ nezměněn: neznámý uživatel",
+    "chownUnknownGroup": "Vlastník „{{name}}“ nezměněn: neznámá skupina"
   },
   "fileElevation": {
     "toggle": "Zvýšená práva",
@@ -790,7 +795,9 @@
     "otherUser": "Jako jiný uživatel…",
     "targetUser": "Cílový uživatel",
     "targetUserHelp": "Spustí správce souborů jako tento uživatel přes sudo. Výchozí: root.",
-    "confirm": "Zvýšit"
+    "confirm": "Zvýšit",
+    "opChown": "Změna vlastníka",
+    "chownNote": "Vlastník bude změněn jako {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importovat ssh_config",
@@ -1130,7 +1137,8 @@
       "cut": "Vyjmout",
       "delete": "Smazat",
       "newFolder": "Nová složka",
-      "newFile": "Nový soubor"
+      "newFile": "Nový soubor",
+      "chown": "Změnit vlastníka…"
     },
     "properties": {
       "title": "Vlastnosti",
@@ -1188,7 +1196,16 @@
       "notText": "Textový diff není možný: soubor je binární (neplatný text UTF-8).",
       "permission": "Textový diff není možný: s aktuálními právy nemáte oprávnění číst tento soubor.",
       "other": "Textový diff není možný: soubor se nepodařilo přečíst ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Změna vlastníka",
+      "owner": "Uživatel",
+      "group": "Skupina",
+      "hint": "Zadejte jméno nebo číslo. Strana, kterou ponecháte beze změny, zůstane nezměněna. O povolení změny rozhoduje server (obvykle smí vlastníka měnit jen root).",
+      "recursive": "Použít na obsah",
+      "recursiveWarning": "— změní vlastníka VŠECH souborů a podsložek v této složce. Symbolické odkazy se nenásledují. Nelze vrátit zpět."
+    },
+    "transferChown": "Změna vlastníka {{name}}"
   },
   "chat": {
     "jumpToLatest": "Přejít na nejnovější zprávu",

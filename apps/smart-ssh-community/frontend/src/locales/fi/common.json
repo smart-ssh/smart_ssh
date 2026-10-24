@@ -727,7 +727,12 @@
     "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}",
     "nothingToPaste": "Ei liitettävää: leikepöydällä ei ole tiedostoja",
     "createFileDone": "Tiedosto ”{{name}}” luotu",
-    "createFileFailed": "Tiedostoa ”{{name}}” ei voitu luoda: {{reason}}"
+    "createFileFailed": "Tiedostoa ”{{name}}” ei voitu luoda: {{reason}}",
+    "chownDone": "Kohteen “{{name}}” omistaja vaihdettu",
+    "chownRecursive": "Omistaja vaihdettu — {{count}} kohdetta kansiossa “{{name}}”",
+    "chownFailed": "Kohteen “{{name}}” omistajaa ei voitu vaihtaa: {{reason}}",
+    "chownUnknownUser": "Kohteen “{{name}}” omistajaa ei vaihdettu: tuntematon käyttäjä",
+    "chownUnknownGroup": "Kohteen “{{name}}” omistajaa ei vaihdettu: tuntematon ryhmä"
   },
   "fileElevation": {
     "toggle": "Korotetut oikeudet",
@@ -780,7 +785,9 @@
     "otherUser": "Toisena käyttäjänä…",
     "targetUser": "Kohdekäyttäjä",
     "targetUserHelp": "Suorittaa tiedostoselaimen tänä käyttäjänä sudon kautta. Oletus: root.",
-    "confirm": "Korota"
+    "confirm": "Korota",
+    "opChown": "Omistajan vaihto",
+    "chownNote": "Omistaja vaihdetaan käyttäjänä {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Tuo ssh_config",
@@ -1116,7 +1123,8 @@
       "cut": "Leikkaa",
       "delete": "Poista",
       "newFolder": "Uusi kansio",
-      "newFile": "Uusi tiedosto"
+      "newFile": "Uusi tiedosto",
+      "chown": "Vaihda omistaja…"
     },
     "properties": {
       "title": "Ominaisuudet",
@@ -1174,7 +1182,16 @@
       "notText": "Tekstivertailu ei ole mahdollinen: tiedosto on binääritiedosto (ei kelvollista UTF-8-tekstiä).",
       "permission": "Tekstivertailu ei ole mahdollinen: nykyisillä oikeuksilla sinulla ei ole lukuoikeutta tähän tiedostoon.",
       "other": "Tekstivertailu ei ole mahdollinen: tiedostoa ei voitu lukea ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Vaihda omistaja",
+      "owner": "Käyttäjä",
+      "group": "Ryhmä",
+      "hint": "Anna nimi tai numero. Puoli, jonka jätät ennalleen, pysyy muuttumattomana. Palvelin päättää, sallitaanko muutos (yleensä vain root saa vaihtaa omistajan).",
+      "recursive": "Käytä sisältöön",
+      "recursiveWarning": "— vaihtaa KAIKKIEN tämän kansion tiedostojen ja alikansioiden omistajan. Symbolisia linkkejä ei seurata. Ei voi perua."
+    },
+    "transferChown": "Vaihdetaan kohteen {{name}} omistajaa"
   },
   "chat": {
     "jumpToLatest": "Siirry uusimpaan viestiin",

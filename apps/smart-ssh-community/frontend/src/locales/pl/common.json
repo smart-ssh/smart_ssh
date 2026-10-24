@@ -737,7 +737,12 @@
     "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}",
     "nothingToPaste": "Nic do wklejenia: schowek nie zawiera plików",
     "createFileDone": "Utworzono plik „{{name}}”",
-    "createFileFailed": "Nie można utworzyć pliku „{{name}}”: {{reason}}"
+    "createFileFailed": "Nie można utworzyć pliku „{{name}}”: {{reason}}",
+    "chownDone": "Zmieniono właściciela „{{name}}”",
+    "chownRecursive": "Zmieniono właściciela — {{count}} pozycji w „{{name}}”",
+    "chownFailed": "Nie udało się zmienić właściciela „{{name}}”: {{reason}}",
+    "chownUnknownUser": "Nie zmieniono właściciela „{{name}}”: nieznany użytkownik",
+    "chownUnknownGroup": "Nie zmieniono właściciela „{{name}}”: nieznana grupa"
   },
   "fileElevation": {
     "toggle": "Podwyższone uprawnienia",
@@ -790,7 +795,9 @@
     "otherUser": "Jako inny użytkownik…",
     "targetUser": "Użytkownik docelowy",
     "targetUserHelp": "Uruchamia przeglądarkę plików jako ten użytkownik przez sudo. Domyślnie: root.",
-    "confirm": "Podnieś"
+    "confirm": "Podnieś",
+    "opChown": "Zmiana właściciela",
+    "chownNote": "Właściciel zostanie zmieniony jako {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importuj ssh_config",
@@ -1130,7 +1137,8 @@
       "cut": "Wytnij",
       "delete": "Usuń",
       "newFolder": "Nowy folder",
-      "newFile": "Nowy plik"
+      "newFile": "Nowy plik",
+      "chown": "Zmień właściciela…"
     },
     "properties": {
       "title": "Właściwości",
@@ -1188,7 +1196,16 @@
       "notText": "Diff tekstowy niemożliwy: plik jest binarny (nieprawidłowy tekst UTF-8).",
       "permission": "Diff tekstowy niemożliwy: przy bieżących uprawnieniach nie masz prawa odczytu tego pliku.",
       "other": "Diff tekstowy niemożliwy: nie udało się odczytać pliku ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Zmiana właściciela",
+      "owner": "Użytkownik",
+      "group": "Grupa",
+      "hint": "Podaj nazwę lub numer. Strona pozostawiona bez zmian nie zostanie zmieniona. O zezwoleniu na zmianę decyduje serwer (zwykle tylko root może zmienić właściciela).",
+      "recursive": "Zastosuj do zawartości",
+      "recursiveWarning": "— zmienia właściciela WSZYSTKICH plików i podfolderów w tym folderze. Dowiązania symboliczne nie są śledzone. Nie można cofnąć."
+    },
+    "transferChown": "Zmiana właściciela {{name}}"
   },
   "chat": {
     "jumpToLatest": "Przejdź do najnowszej wiadomości",

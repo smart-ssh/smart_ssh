@@ -732,7 +732,12 @@
     "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}",
     "nothingToPaste": "Rien à coller : le presse-papiers ne contient aucun fichier",
     "createFileDone": "Fichier « {{name}} » créé",
-    "createFileFailed": "Impossible de créer le fichier « {{name}} » : {{reason}}"
+    "createFileFailed": "Impossible de créer le fichier « {{name}} » : {{reason}}",
+    "chownDone": "Propriétaire de « {{name}} » modifié",
+    "chownRecursive": "Propriétaire modifié — {{count}} éléments dans « {{name}} »",
+    "chownFailed": "Impossible de changer le propriétaire de « {{name}} » : {{reason}}",
+    "chownUnknownUser": "Propriétaire de « {{name}} » inchangé : utilisateur inconnu",
+    "chownUnknownGroup": "Propriétaire de « {{name}} » inchangé : groupe inconnu"
   },
   "fileElevation": {
     "toggle": "Droits élevés",
@@ -785,7 +790,9 @@
     "otherUser": "En tant qu’autre utilisateur…",
     "targetUser": "Utilisateur cible",
     "targetUserHelp": "Exécute le navigateur de fichiers sous cet utilisateur via sudo. Par défaut : root.",
-    "confirm": "Élever"
+    "confirm": "Élever",
+    "opChown": "Changement du propriétaire",
+    "chownNote": "Le propriétaire sera modifié en tant que {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importer ssh_config",
@@ -1123,7 +1130,8 @@
       "cut": "Couper",
       "delete": "Supprimer",
       "newFolder": "Nouveau dossier",
-      "newFile": "Nouveau fichier"
+      "newFile": "Nouveau fichier",
+      "chown": "Changer le propriétaire…"
     },
     "properties": {
       "title": "Propriétés",
@@ -1181,7 +1189,16 @@
       "notText": "Aucun diff texte possible : le fichier est binaire (texte UTF-8 non valide).",
       "permission": "Aucun diff texte possible : vous n’avez pas le droit de lire ce fichier avec les droits actuels.",
       "other": "Aucun diff texte possible : le fichier n’a pas pu être lu ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Changer le propriétaire",
+      "owner": "Utilisateur",
+      "group": "Groupe",
+      "hint": "Saisissez un nom ou un numéro. Un côté laissé tel quel reste inchangé. Le serveur décide si la modification est autorisée (en général, seul root peut changer le propriétaire).",
+      "recursive": "Appliquer au contenu",
+      "recursiveWarning": "— change le propriétaire de TOUS les fichiers et sous-dossiers de ce dossier. Les liens symboliques ne sont pas suivis. Irréversible."
+    },
+    "transferChown": "Changement du propriétaire de {{name}}"
   },
   "chat": {
     "jumpToLatest": "Aller au dernier message",

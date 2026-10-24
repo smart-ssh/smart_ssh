@@ -732,7 +732,12 @@
     "uploadFailedMany": "{{name}} arquivos não puderam ser enviados, p. ex.: {{reason}}",
     "nothingToPaste": "Nada para colar: a área de transferência não contém arquivos",
     "createFileDone": "Arquivo “{{name}}” criado",
-    "createFileFailed": "Não foi possível criar o arquivo “{{name}}”: {{reason}}"
+    "createFileFailed": "Não foi possível criar o arquivo “{{name}}”: {{reason}}",
+    "chownDone": "Proprietário de “{{name}}” alterado",
+    "chownRecursive": "Proprietário alterado — {{count}} itens em “{{name}}”",
+    "chownFailed": "Não foi possível alterar o proprietário de “{{name}}”: {{reason}}",
+    "chownUnknownUser": "Proprietário de “{{name}}” não alterado: usuário desconhecido",
+    "chownUnknownGroup": "Proprietário de “{{name}}” não alterado: grupo desconhecido"
   },
   "fileElevation": {
     "toggle": "Direitos elevados",
@@ -785,7 +790,9 @@
     "otherUser": "Como outro usuário…",
     "targetUser": "Usuário de destino",
     "targetUserHelp": "Executa o navegador de arquivos como este usuário via sudo. Padrão: root.",
-    "confirm": "Elevar"
+    "confirm": "Elevar",
+    "opChown": "Alteração de proprietário",
+    "chownNote": "O proprietário será alterado como {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -1123,7 +1130,8 @@
       "cut": "Recortar",
       "delete": "Excluir",
       "newFolder": "Nova pasta",
-      "newFile": "Novo arquivo"
+      "newFile": "Novo arquivo",
+      "chown": "Alterar proprietário…"
     },
     "properties": {
       "title": "Propriedades",
@@ -1181,7 +1189,16 @@
       "notText": "Diff de texto impossível: o arquivo é binário (não é texto UTF-8 válido).",
       "permission": "Diff de texto impossível: com os direitos atuais você não tem permissão de leitura para este arquivo.",
       "other": "Diff de texto impossível: não foi possível ler o arquivo ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Alterar proprietário",
+      "owner": "Usuário",
+      "group": "Grupo",
+      "hint": "Informe um nome ou um número. Um lado deixado como está permanece inalterado. O servidor decide se a alteração é permitida (geralmente só o root pode alterar o proprietário).",
+      "recursive": "Aplicar ao conteúdo",
+      "recursiveWarning": "— altera o proprietário de TODOS os arquivos e subpastas desta pasta. Links simbólicos não são seguidos. Não pode ser desfeito."
+    },
+    "transferChown": "Alterando proprietário de {{name}}"
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",
