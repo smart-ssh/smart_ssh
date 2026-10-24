@@ -30,3 +30,10 @@ Nutzer wollen ihren gesamten Datenbestand auf eine neue Installation oder einen 
 - Offen für die Umsetzung (im Rahmen der Spec): Wahl der serialisierten Darstellung von Kopf und Abschnitten (strikt typisiert, Duplikate und unbekannte Felder verboten) und ihre Bibliothek.
 
 9. **Wiederhergestellte Einstellungen.** Ein Import übernimmt auch pro Server gewählte Einstellungen (etwa Risiko- oder Bestätigungsoptionen), weil sie zu einem rechtmäßig wiederhergestellten Stand gehören. Sie werden gegen bekannte gültige Werte geprüft (U6); Regeln werden wie vom Nutzer angelegte Regeln validiert.
+
+## Umsetzung des Formats (Issue #663)
+
+13. **Binärer Container, kein serialisiertes Objekt.** Kopfkern, Schlüsselplätze und Abschnittsrahmen sind feste Little-Endian-Felder mit Längenpräfix; jedes Feld hat eine Obergrenze, die vor jeder Speicherreservierung gegen die restliche Datei geprüft wird. Das schließt doppelte Schlüssel und unbekannte Felder in bekannten Strukturen aus. Die Abschnittsnutzdaten sind in dieser Stufe opake Bytes.
+14. **Wiederherstellungscode:** 28 zufällige Zeichen (140 Bit) aus einem 32er-Alphabet ohne I, L, O, U plus zwei Prüfzeichen (einfache und positionsgewichtete Summe mod 32), in sechs Fünfergruppen. Anders als ein Hash-Prüfwert erkennt das **jede** Einzelzeichenänderung und jeden Tausch benachbarter Zeichen sicher. Bei der Eingabe lesen sich O als 0 und I/L als 1.
+15. **Mindestens ein Abschnitt je Datei.** Nur die Abschnitte authentifizieren den Kopfkern (F5); eine Datei ohne Abschnitt hätte einen ungeschützten Kopfkern und wird weder geschrieben noch gelesen.
+16. **Ein Schlüsselplatz je Art beim Schreiben** (K5); beim Lesen sind bis zu 8 beliebige Plätze erlaubt. Unbekannte erforderliche Abschnitte und Kopffelder werden erst nach der Authentifizierung geprüft, damit eine manipulierte Datei denselben Fehler wie ein falscher Code liefert.
