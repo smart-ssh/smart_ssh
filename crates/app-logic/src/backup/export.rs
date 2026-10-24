@@ -38,7 +38,7 @@ pub async fn export_backup_with(
     host_keys: &FileHostKeyStore,
     target: &Path,
     writer_version: &str,
-    after_write: &mut dyn FnMut(&Path),
+    after_write: &mut (dyn FnMut(&Path) + Send),
 ) -> Result<ExportSummary, BackupOpError> {
     let result = run(store, host_keys, target, writer_version, after_write).await;
     match &result {
@@ -62,7 +62,7 @@ async fn run(
     host_keys: &FileHostKeyStore,
     target: &Path,
     writer_version: &str,
-    after_write: &mut dyn FnMut(&Path),
+    after_write: &mut (dyn FnMut(&Path) + Send),
 ) -> Result<ExportSummary, BackupOpError> {
     let slots = BackupKey::active_slots(store).await?;
     let snapshot = Snapshot::read(store, host_keys).await?;

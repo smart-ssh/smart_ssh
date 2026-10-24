@@ -350,6 +350,8 @@ pub(crate) async fn open_and_assemble(
     };
     tracing::info!("host-key store loaded");
 
+    let file_host_keys = Arc::new(host_key_store);
+    let backup_store = profile_store.backup_store();
     let app_state = AppState {
         sessions: SessionManager::new(),
         session_extension,
@@ -364,7 +366,9 @@ pub(crate) async fn open_and_assemble(
         key_file_reader: Arc::new(app_logic::key_files::OsKeyFileReader::new()),
         keychain,
         ai_provider_store: Arc::new(ai_provider_store),
-        host_key_store: Arc::new(host_key_store),
+        backup_store,
+        host_key_store: file_host_keys.clone(),
+        file_host_keys,
         // Issue #259: Produktion baut die Verbindung real auf.
         connector: Arc::new(app_logic::test_connection::RealConnector),
         policy_store,
@@ -855,6 +859,11 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_prompt_history,
             commands::open_log_directory,
             commands::get_keychain_status,
+            commands::backup_key_status,
+            commands::create_backup_key_with_code,
+            commands::set_backup_passphrase,
+            commands::new_backup_code,
+            commands::export_encrypted_backup,
             commands::generate_diagnostics_bundle,
             commands::save_diagnostics_bundle,
             commands::get_data_paths,
