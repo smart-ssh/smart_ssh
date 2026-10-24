@@ -294,6 +294,13 @@
       "connection": "Anslutning",
       "security": "Säkerhet",
       "invalid": "Innehåller fel"
+    },
+    "importKey": {
+      "title": "Importera nyckeln till Smart SSH?",
+      "import": "Importera nyckel",
+      "keep": "Behåll filsökvägen",
+      "importHint": "Nyckeln lagras krypterad i Smart SSH och följer med säkerhetskopior till dina andra enheter.",
+      "keepHint": "Bara filsökvägen lagras och följer med till andra enheter. Filen måste finnas på samma sökväg på varje enhet."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nyckeln i nyckelringen hör inte till den här databasen. Inget ändrades — att spara den skulle göra databasen oläsbar vid nästa start.",
     "SFTP_CONTENT_TOO_LARGE": "Filen är större än 50 MB och kan inte kopieras till urklipp.",
     "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet.",
-    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan"
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nyckelfilen hittades inte på den här enheten"
   },
   "mcpServer": {
     "hint": "Externa MCP-klienter kan använda detta för att föreslå kommandon, filläsningar/filskrivningar och anteckningsuppdateringar på tillåtlistade servrar — varje begäran kräver alltid bekräftelse i appen, oavsett befintliga tillåtregler.",
@@ -727,7 +735,12 @@
     "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}",
     "nothingToPaste": "Inget att klistra in: urklipp innehåller inga filer",
     "createFileDone": "Filen ”{{name}}” skapades",
-    "createFileFailed": "Filen ”{{name}}” kunde inte skapas: {{reason}}"
+    "createFileFailed": "Filen ”{{name}}” kunde inte skapas: {{reason}}",
+    "chownDone": "Ägare för “{{name}}” ändrad",
+    "chownRecursive": "Ägare ändrad — {{count}} poster i “{{name}}”",
+    "chownFailed": "Ägare för “{{name}}” kunde inte ändras: {{reason}}",
+    "chownUnknownUser": "Ägare för “{{name}}” inte ändrad: okänd användare",
+    "chownUnknownGroup": "Ägare för “{{name}}” inte ändrad: okänd grupp"
   },
   "fileElevation": {
     "toggle": "Förhöjda rättigheter",
@@ -780,7 +793,9 @@
     "otherUser": "Som annan användare …",
     "targetUser": "Målanvändare",
     "targetUserHelp": "Kör filläsaren som denna användare via sudo. Standard: root.",
-    "confirm": "Utöka"
+    "confirm": "Utöka",
+    "opChown": "Ändring av ägare",
+    "chownNote": "Ägaren ändras som {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importera ssh_config",
@@ -1116,7 +1131,8 @@
       "cut": "Klipp ut",
       "delete": "Ta bort",
       "newFolder": "Ny mapp",
-      "newFile": "Ny fil"
+      "newFile": "Ny fil",
+      "chown": "Ändra ägare…"
     },
     "properties": {
       "title": "Egenskaper",
@@ -1174,7 +1190,16 @@
       "notText": "Ingen textdiff möjlig: filen är binär (ingen giltig UTF-8-text).",
       "permission": "Ingen textdiff möjlig: med de nuvarande rättigheterna saknar du läsbehörighet för filen.",
       "other": "Ingen textdiff möjlig: filen kunde inte läsas ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Ändra ägare",
+      "owner": "Användare",
+      "group": "Grupp",
+      "hint": "Ange ett namn eller ett nummer. En sida som du lämnar som den är förblir oförändrad. Servern avgör om ändringen tillåts (vanligtvis får bara root ändra ägare).",
+      "recursive": "Tillämpa på innehållet",
+      "recursiveWarning": "— ändrar ägare för ALLA filer och undermappar i den här mappen. Symboliska länkar följs inte. Kan inte ångras."
+    },
+    "transferChown": "Ändrar ägare för {{name}}"
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",

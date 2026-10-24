@@ -1141,7 +1141,7 @@ export interface ElevationResultDto {
  * dialog before elevated rights end. */
 export interface RunningOperationDto {
   id: string;
-  kind: "download" | "upload" | "delete" | "chmod";
+  kind: "download" | "upload" | "delete" | "chmod" | "chown";
   path: string;
   bytesDone: number | null;
   bytesTotal: number | null;
@@ -1218,7 +1218,7 @@ export interface EditSessionDto {
 }
 
 /** Issue #658: `delete` / `chmod` are recursive folder operations. */
-export type SftpTransferKind = "upload" | "download" | "delete" | "chmod";
+export type SftpTransferKind = "upload" | "download" | "delete" | "chmod" | "chown";
 
 export interface SftpTransferStartedEvent {
   sessionId: string;

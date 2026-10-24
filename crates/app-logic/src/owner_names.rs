@@ -62,6 +62,38 @@ pub async fn load_id_names(sftp: &mut dyn SftpSession) -> IdNames {
     }
 }
 
+/// Why a typed user or group could not be turned into a numeric id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IdLookupError {
+    UnknownUser(String),
+    UnknownGroup(String),
+}
+
+fn resolve_id(map: &HashMap<u32, String>, text: &str) -> Option<u32> {
+    let text = text.trim();
+    if !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()) {
+        return text.parse::<u32>().ok();
+    }
+    // Several ids may carry one name; the lowest wins, deterministically.
+    map.iter()
+        .filter(|(_, n)| n.as_str() == text)
+        .map(|(id, _)| *id)
+        .min()
+}
+
+/// Issue #654: a typed user is a number or a name from `/etc/passwd`.
+/// An unknown name is an error (nothing may be changed on a guess).
+pub fn resolve_user(names: &IdNames, text: &str) -> Result<u32, IdLookupError> {
+    resolve_id(&names.users, text)
+        .ok_or_else(|| IdLookupError::UnknownUser(text.trim().to_string()))
+}
+
+/// Like [`resolve_user`], for groups (`/etc/group`).
+pub fn resolve_group(names: &IdNames, text: &str) -> Result<u32, IdLookupError> {
+    resolve_id(&names.groups, text)
+        .ok_or_else(|| IdLookupError::UnknownGroup(text.trim().to_string()))
+}
+
 /// Fills in missing owner/group names from the maps; names the server
 /// already sent are kept.
 pub fn apply_id_names(names: &IdNames, entries: &mut [RemoteEntry]) {
@@ -91,6 +123,7 @@ mod tests {
             gid,
             owner: owner.map(String::from),
             group: None,
+            is_symlink: false,
         }
     }
 
@@ -119,6 +152,27 @@ mod tests {
         assert_eq!(v[0].group.as_deref(), Some("wheel"));
         assert_eq!(v[1].owner.as_deref(), Some("srv"));
         assert_eq!(v[1].group, None);
+    }
+
+    #[test]
+    fn resolves_names_and_numbers_and_rejects_unknown() {
+        let names = IdNames {
+            users: HashMap::from([(0, "root".to_string()), (1000, "alice".to_string())]),
+            groups: HashMap::from([(5, "adm".to_string()), (6, "adm".to_string())]),
+        };
+        assert_eq!(resolve_user(&names, "alice"), Ok(1000));
+        assert_eq!(resolve_user(&names, " 42 "), Ok(42));
+        assert_eq!(resolve_group(&names, "adm"), Ok(5));
+        assert_eq!(
+            resolve_user(&names, "mallory"),
+            Err(IdLookupError::UnknownUser("mallory".into()))
+        );
+        assert_eq!(
+            resolve_group(&names, "-1"),
+            Err(IdLookupError::UnknownGroup("-1".into()))
+        );
+        assert!(resolve_user(&names, "99999999999").is_err());
+        assert!(resolve_user(&names, "").is_err());
     }
 
     #[test]

@@ -294,6 +294,13 @@
       "connection": "Kapcsolat",
       "security": "Biztonság",
       "invalid": "Hibákat tartalmaz"
+    },
+    "importKey": {
+      "title": "Importálja a kulcsot a Smart SSH-ba?",
+      "import": "Kulcs importálása",
+      "keep": "Fájlútvonal megtartása",
+      "importHint": "A kulcs titkosítva tárolódik a Smart SSH-ban, és a biztonsági mentésekkel együtt eljut a többi eszközére.",
+      "keepHint": "Csak a fájl útvonala tárolódik és kerül át a többi eszközre. A fájlnak minden eszközön ugyanazon az útvonalon kell lennie."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "A kulcstartóban lévő kulcs nem ehhez az adatbázishoz tartozik. Semmi nem változott – a tárolása olvashatatlanná tenné az adatbázist a következő indításkor.",
     "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra.",
     "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren.",
-    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa"
+    "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön"
   },
   "mcpServer": {
     "hint": "Külső MCP-kliensek ezzel parancsokat, fájlolvasást/-írást és jegyzetfrissítéseket javasolhatnak az engedélyezett szervereken – minden kérés az alkalmazásban mindig megerősítést igényel, a meglévő engedélyező szabályoktól függetlenül.",
@@ -727,7 +735,12 @@
     "uploadFailedMany": "{{name}} fájl nem tölthető fel, pl.: {{reason}}",
     "nothingToPaste": "Nincs mit beilleszteni: a vágólapon nincsenek fájlok",
     "createFileDone": "A(z) „{{name}}” fájl létrehozva",
-    "createFileFailed": "A(z) „{{name}}” fájl nem hozható létre: {{reason}}"
+    "createFileFailed": "A(z) „{{name}}” fájl nem hozható létre: {{reason}}",
+    "chownDone": "A(z) „{{name}}” tulajdonosa módosítva",
+    "chownRecursive": "Tulajdonos módosítva — {{count}} elem a(z) „{{name}}” mappában",
+    "chownFailed": "A(z) „{{name}}” tulajdonosát nem sikerült módosítani: {{reason}}",
+    "chownUnknownUser": "A(z) „{{name}}” tulajdonosa nem változott: ismeretlen felhasználó",
+    "chownUnknownGroup": "A(z) „{{name}}” tulajdonosa nem változott: ismeretlen csoport"
   },
   "fileElevation": {
     "toggle": "Emelt jogok",
@@ -780,7 +793,9 @@
     "otherUser": "Másik felhasználóként…",
     "targetUser": "Cél felhasználó",
     "targetUserHelp": "A fájlböngészőt ezen felhasználóként futtatja sudo-val. Alapértelmezés: root.",
-    "confirm": "Emelés"
+    "confirm": "Emelés",
+    "opChown": "Tulajdonos módosítása",
+    "chownNote": "A tulajdonos {{user}} néven lesz módosítva."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importálása",
@@ -1116,7 +1131,8 @@
       "cut": "Kivágás",
       "delete": "Törlés",
       "newFolder": "Új mappa",
-      "newFile": "Új fájl"
+      "newFile": "Új fájl",
+      "chown": "Tulajdonos módosítása…"
     },
     "properties": {
       "title": "Tulajdonságok",
@@ -1174,7 +1190,16 @@
       "notText": "Szövegkülönbség nem készíthető: a fájl bináris (nem érvényes UTF-8 szöveg).",
       "permission": "Szövegkülönbség nem készíthető: a jelenlegi jogokkal nincs olvasási jogosultságod ehhez a fájlhoz.",
       "other": "Szövegkülönbség nem készíthető: a fájl nem olvasható ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Tulajdonos módosítása",
+      "owner": "Felhasználó",
+      "group": "Csoport",
+      "hint": "Adjon meg nevet vagy számot. Az érintetlenül hagyott oldal nem változik. A módosítás engedélyezéséről a kiszolgáló dönt (általában csak a root módosíthatja a tulajdonost).",
+      "recursive": "Alkalmazás a tartalomra",
+      "recursiveWarning": "— a mappa ÖSSZES fájljának és almappájának tulajdonosát módosítja. A szimbolikus hivatkozásokat nem követi. Nem vonható vissza."
+    },
+    "transferChown": "{{name}} tulajdonosának módosítása"
   },
   "chat": {
     "jumpToLatest": "Ugrás a legújabb üzenethez",

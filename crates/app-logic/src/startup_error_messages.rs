@@ -722,6 +722,22 @@ pub fn keychain_unavailable_text(
         ),
 
         // ── Außerhalb von Linux ────────────────────────────────────────
+        // ── Android: Keystore not usable (Spec 0101, Spec 0114) ────────
+        (_, KeychainUnavailableReason::NoKeystore, Language::De) => (
+            "Android-Schlüsselspeicher nicht verfügbar",
+            "Der Schlüssel, der die Datenbank von Smart SSH schützt, wird im \
+             Android-Schlüsselspeicher aufbewahrt. Dieser konnte nicht geöffnet werden.",
+            "Nächster Schritt — Smart SSH neu starten. Hilft das nicht, kann ein \
+             Master-Passwort eingerichtet werden, wenn die App das anbietet.",
+        ),
+        (_, KeychainUnavailableReason::NoKeystore, Language::En) => (
+            "Android keystore unavailable",
+            "The key that protects Smart SSH's database is kept in the Android keystore. \
+             It could not be opened.",
+            "Next step — restart Smart SSH. If that does not help, a master password can \
+             be set up when the app offers it.",
+        ),
+
         // A8/T9: kein Linux-Paketname, kein `apt`, kein "Secret Service".
         (false, _, Language::De) => (
             "Systemschlüsselbund nicht verfügbar",
@@ -808,7 +824,8 @@ mod tests {
         );
     }
 
-    const REASONS: [KeychainUnavailableReason; 4] = [
+    const REASONS: [KeychainUnavailableReason; 5] = [
+        KeychainUnavailableReason::NoKeystore,
         KeychainUnavailableReason::NoSessionBus,
         KeychainUnavailableReason::NoSecretServiceProvider,
         KeychainUnavailableReason::Locked,
@@ -849,7 +866,7 @@ mod tests {
                 host_key_store_failure_text(host_keys, language),
             ),
         ];
-        for os in ["linux", "macos", "windows"] {
+        for os in ["linux", "macos", "windows", "android"] {
             for reason in REASONS {
                 texts.push((
                     format!("keychain:{os}:{reason:?}"),

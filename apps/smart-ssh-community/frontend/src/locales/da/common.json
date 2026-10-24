@@ -294,6 +294,13 @@
       "connection": "Forbindelse",
       "security": "Sikkerhed",
       "invalid": "Indeholder fejl"
+    },
+    "importKey": {
+      "title": "Importér nøglen til Smart SSH?",
+      "import": "Importér nøgle",
+      "keep": "Behold filsti",
+      "importHint": "Nøglen gemmes krypteret i Smart SSH og følger med sikkerhedskopier til dine andre enheder.",
+      "keepHint": "Kun filstien gemmes og følger med til andre enheder. Filen skal findes på samme sti på hver enhed."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nøglen i nøgleringen hører ikke til denne database. Intet blev ændret – at gemme den ville gøre databasen ulæselig ved næste opstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større end 50 MB og kan ikke kopieres til udklipsholderen.",
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system.",
-    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede"
+    "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed"
   },
   "mcpServer": {
     "hint": "Eksterne MCP-klienter kan bruge dette til at foreslå kommandoer, fillæsninger/-skrivninger og noteopdateringer på servere på tilladelseslisten – hver anmodning kræver altid bekræftelse i appen, uanset eksisterende tillad-regler.",
@@ -727,7 +735,12 @@
     "uploadFailedMany": "{{name}} filer kunne ikke uploades, f.eks.: {{reason}}",
     "nothingToPaste": "Intet at indsætte: udklipsholderen indeholder ingen filer",
     "createFileDone": "Filen “{{name}}” er oprettet",
-    "createFileFailed": "Filen “{{name}}” kunne ikke oprettes: {{reason}}"
+    "createFileFailed": "Filen “{{name}}” kunne ikke oprettes: {{reason}}",
+    "chownDone": "Ejer af “{{name}}” skiftet",
+    "chownRecursive": "Ejer skiftet — {{count}} poster i “{{name}}”",
+    "chownFailed": "Ejer af “{{name}}” kunne ikke skiftes: {{reason}}",
+    "chownUnknownUser": "Ejer af “{{name}}” ikke skiftet: ukendt bruger",
+    "chownUnknownGroup": "Ejer af “{{name}}” ikke skiftet: ukendt gruppe"
   },
   "fileElevation": {
     "toggle": "Forhøjede rettigheder",
@@ -780,7 +793,9 @@
     "otherUser": "Som en anden bruger …",
     "targetUser": "Målbruger",
     "targetUserHelp": "Kører filbrowseren som denne bruger via sudo. Standard: root.",
-    "confirm": "Udvid"
+    "confirm": "Udvid",
+    "opChown": "Skift af ejer",
+    "chownNote": "Ejeren skiftes som {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importér ssh_config",
@@ -1116,7 +1131,8 @@
       "cut": "Klip",
       "delete": "Slet",
       "newFolder": "Ny mappe",
-      "newFile": "Ny fil"
+      "newFile": "Ny fil",
+      "chown": "Skift ejer…"
     },
     "properties": {
       "title": "Egenskaber",
@@ -1174,7 +1190,16 @@
       "notText": "Ingen tekstdiff mulig: filen er binær (ikke gyldig UTF-8-tekst).",
       "permission": "Ingen tekstdiff mulig: med de nuværende rettigheder har du ikke læseadgang til filen.",
       "other": "Ingen tekstdiff mulig: filen kunne ikke læses ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Skift ejer",
+      "owner": "Bruger",
+      "group": "Gruppe",
+      "hint": "Angiv et navn eller et tal. En side, du lader stå som den er, forbliver uændret. Serveren afgør, om ændringen er tilladt (normalt må kun root skifte ejer).",
+      "recursive": "Anvend på indhold",
+      "recursiveWarning": "— skifter ejer på ALLE filer og undermapper i denne mappe. Symbolske links følges ikke. Kan ikke fortrydes."
+    },
+    "transferChown": "Skifter ejer af {{name}}"
   },
   "chat": {
     "jumpToLatest": "Gå til seneste besked",

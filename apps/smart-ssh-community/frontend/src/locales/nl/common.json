@@ -294,6 +294,13 @@
       "connection": "Verbinding",
       "security": "Beveiliging",
       "invalid": "Bevat fouten"
+    },
+    "importKey": {
+      "title": "Sleutel importeren in Smart SSH?",
+      "import": "Sleutel importeren",
+      "keep": "Bestandspad behouden",
+      "importHint": "De sleutel wordt versleuteld opgeslagen in Smart SSH en gaat mee met back-ups naar je andere apparaten.",
+      "keepHint": "Alleen het bestandspad wordt opgeslagen en gaat mee naar andere apparaten. Het bestand moet op elk apparaat op hetzelfde pad bestaan."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken.",
     "SFTP_CONTENT_TOO_LARGE": "Het bestand is groter dan 50 MB en kan niet naar het klembord worden gekopieerd.",
     "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst.",
-    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam"
+    "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat"
   },
   "mcpServer": {
     "hint": "Externe MCP-clients kunnen hiermee opdrachten, bestandsleesacties/-schrijfacties en notitiewijzigingen voorstellen op servers op de toelatingslijst — elk verzoek vereist altijd bevestiging in de app, ongeacht bestaande toestaan-regels.",
@@ -727,7 +735,12 @@
     "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}",
     "nothingToPaste": "Niets om te plakken: het klembord bevat geen bestanden",
     "createFileDone": "Bestand “{{name}}” aangemaakt",
-    "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}"
+    "createFileFailed": "Bestand “{{name}}” kon niet worden aangemaakt: {{reason}}",
+    "chownDone": "Eigenaar van “{{name}}” gewijzigd",
+    "chownRecursive": "Eigenaar gewijzigd — {{count}} items in “{{name}}”",
+    "chownFailed": "Eigenaar van “{{name}}” kon niet worden gewijzigd: {{reason}}",
+    "chownUnknownUser": "Eigenaar van “{{name}}” niet gewijzigd: onbekende gebruiker",
+    "chownUnknownGroup": "Eigenaar van “{{name}}” niet gewijzigd: onbekende groep"
   },
   "fileElevation": {
     "toggle": "Verhoogde rechten",
@@ -780,7 +793,9 @@
     "otherUser": "Als andere gebruiker…",
     "targetUser": "Doelgebruiker",
     "targetUserHelp": "Voert de bestandsbrowser via sudo uit als deze gebruiker. Standaard: root.",
-    "confirm": "Verhogen"
+    "confirm": "Verhogen",
+    "opChown": "Eigenaar wijzigen",
+    "chownNote": "De eigenaar wordt gewijzigd als {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importeren",
@@ -1116,7 +1131,8 @@
       "cut": "Knippen",
       "delete": "Verwijderen",
       "newFolder": "Nieuwe map",
-      "newFile": "Nieuw bestand"
+      "newFile": "Nieuw bestand",
+      "chown": "Eigenaar wijzigen…"
     },
     "properties": {
       "title": "Eigenschappen",
@@ -1174,7 +1190,16 @@
       "notText": "Geen tekstdiff mogelijk: het bestand is binair (geen geldige UTF-8-tekst).",
       "permission": "Geen tekstdiff mogelijk: met de huidige rechten heb je geen leesrechten voor dit bestand.",
       "other": "Geen tekstdiff mogelijk: het bestand kon niet worden gelezen ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Eigenaar wijzigen",
+      "owner": "Gebruiker",
+      "group": "Groep",
+      "hint": "Voer een naam of nummer in. Een kant die u ongewijzigd laat, blijft ongewijzigd. De server bepaalt of de wijziging is toegestaan (meestal mag alleen root de eigenaar wijzigen).",
+      "recursive": "Toepassen op inhoud",
+      "recursiveWarning": "— wijzigt de eigenaar van ALLE bestanden en submappen in deze map. Symbolische koppelingen worden niet gevolgd. Kan niet ongedaan worden gemaakt."
+    },
+    "transferChown": "Eigenaar wijzigen van {{name}}"
   },
   "chat": {
     "jumpToLatest": "Naar het laatste bericht",

@@ -155,6 +155,7 @@ impl SftpSession for LocalFileSession {
                 gid,
                 owner: None,
                 group: None,
+                is_symlink: metadata.file_type().is_symlink(),
             });
         }
         Ok(entries)
@@ -267,6 +268,7 @@ impl SftpSession for LocalFileSession {
             gid,
             owner: None,
             group: None,
+            is_symlink: false,
         })
     }
 
@@ -290,6 +292,7 @@ impl SftpSession for LocalFileSession {
             gid,
             owner: None,
             group: None,
+            is_symlink: metadata.file_type().is_symlink(),
         })
     }
 
@@ -360,6 +363,25 @@ impl SftpSession for LocalFileSession {
         tokio::fs::remove_dir(self.resolve(path))
             .await
             .map_err(|e| io_err(path, e))
+    }
+
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::lchown(self.resolve(path), Some(uid), Some(gid))
+                .map_err(|e| io_err(path, e))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (uid, gid);
+            Err(io_err(
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "Owner change is not supported on this operating system",
+                ),
+            ))
+        }
     }
 
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError> {
@@ -603,6 +625,33 @@ mod tests {
         session.create_dir("made-dir-2").await.unwrap();
         session.remove("./made-dir-2").await.unwrap();
         assert!(!home.path().join("made-dir-2").exists());
+    }
+
+    /// Issue #654: `set_owner` acts under the home directory and changes a
+    /// symlink itself, not its target. An unprivileged test can only set its
+    /// own ids, which still proves the call reaches the file.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_set_owner_acts_on_the_link_not_the_target() {
+        use std::os::unix::fs::MetadataExt;
+        let home = tempfile::tempdir().unwrap();
+        tokio::fs::write(home.path().join("o.txt"), b"x")
+            .await
+            .unwrap();
+        std::os::unix::fs::symlink("o.txt", home.path().join("link")).unwrap();
+        let meta = std::fs::metadata(home.path().join("o.txt")).unwrap();
+        let mut session = LocalFileSession::with_home(Some(home.path().to_path_buf()));
+        session
+            .set_owner("o.txt", meta.uid(), meta.gid())
+            .await
+            .unwrap();
+        session
+            .set_owner("link", meta.uid(), meta.gid())
+            .await
+            .unwrap();
+        assert!(session.lstat("link").await.unwrap().is_symlink);
+        assert!(!session.lstat("o.txt").await.unwrap().is_symlink);
+        assert!(session.set_owner("missing", 0, 0).await.is_err());
     }
 
     #[cfg(unix)]
