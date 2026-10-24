@@ -64,10 +64,38 @@ pub(crate) fn frame_is_content(frame: &SseFrame) -> bool {
 /// — behebt nicht zwingend die volle Ursache, verkleinert aber das
 /// Zeitfenster für dieses Verhalten erheblich.
 pub(crate) fn build_http_client() -> reqwest::Client {
-    reqwest::Client::builder()
+    new_client_builder()
         .tcp_keepalive(Duration::from_secs(15))
         .build()
+        .unwrap_or_else(|_| new_client())
+}
+
+/// `reqwest::Client::builder()` with the platform's TLS roots (see
+/// [`android_tls_config`]).
+pub(crate) fn new_client_builder() -> reqwest::ClientBuilder {
+    let builder = reqwest::Client::builder();
+    #[cfg(target_os = "android")]
+    let builder = builder.tls_backend_preconfigured(android_tls_config());
+    builder
+}
+
+/// Replacement for `reqwest::Client::new()` that honours [`new_client_builder`].
+pub(crate) fn new_client() -> reqwest::Client {
+    new_client_builder()
+        .build()
         .unwrap_or_else(|_| reqwest::Client::new())
+}
+
+/// Spec 0114 / ADR 0148: on Android the platform certificate verifier would
+/// need JNI initialisation, so TLS uses the bundled webpki roots there.
+#[cfg(target_os = "android")]
+pub(crate) fn android_tls_config() -> rustls::ClientConfig {
+    let roots = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    rustls::ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth()
 }
 
 /// Ein einzelner geparster SSE-Frame.

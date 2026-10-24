@@ -677,7 +677,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         None => builder,
     };
 
-    builder
+    // Android (Spec 0114): no window frame to restyle, the plugin is not
+    // compiled there.
+    #[cfg(not(target_os = "android"))]
+    let builder = builder
         // Entscheidung für tauri-plugin-decoration statt tauri-plugin-decorum:
         // tauri-plugin-decorum (v0.1.6) wird nicht mehr aktiv gepflegt und wirft Build-Fehler
         // bei modernen Rust-Toolchains/macOS-SDKs. tauri-plugin-decoration (v3.0.5) ist aktiv
@@ -687,10 +690,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // keine Datei, keine Einstellung und keinen Zustand des
         // Betriebssystems — und die Entsperrmaske braucht denselben Rahmen
         // wie die App, sonst springt das Fenster beim Entsperren.
-        .plugin(tauri_plugin_decoration::init())
+        .plugin(tauri_plugin_decoration::init());
+    builder
         .setup(|app| {
             use tauri::Manager;
-            use tauri_plugin_decoration::WebviewWindowExt;
 
             // Spec 0047, Fund B1: letzter Startschritt — steht dieser
             // Eintrag im Log, ist die App bis zum Fenster durchgestartet;
@@ -701,7 +704,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
                 "app setup complete, creating main window"
             );
 
+            #[cfg(not(target_os = "android"))]
             if let Some(window) = app.get_webview_window("main") {
+                use tauri_plugin_decoration::WebviewWindowExt;
                 let window_clone = window.clone();
                 tauri::async_runtime::spawn(async move {
                     let _ = window_clone.activate_decoration().await;

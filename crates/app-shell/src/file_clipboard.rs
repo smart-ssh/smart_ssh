@@ -13,7 +13,34 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+#[cfg(not(target_os = "android"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
+#[cfg(target_os = "android")]
+use unsupported::ClipboardContext;
+
+/// Android (Spec 0114): `clipboard-rs` has no Android backend, so system
+/// clipboard access (file references, native text write) is unavailable. The
+/// context can never be created; every caller already handles that `Err`.
+/// Text copy in the UI goes through the WebView and is unaffected.
+#[cfg(target_os = "android")]
+mod unsupported {
+    pub struct ClipboardContext;
+
+    impl ClipboardContext {
+        pub fn new() -> Result<Self, String> {
+            Err("the system clipboard is not available on Android".to_string())
+        }
+        pub fn set_files(&self, _files: Vec<String>) -> Result<(), String> {
+            Err("not supported on Android".to_string())
+        }
+        pub fn set_text(&self, _text: String) -> Result<(), String> {
+            Err("not supported on Android".to_string())
+        }
+        pub fn get_files(&self) -> Result<Vec<String>, String> {
+            Err("not supported on Android".to_string())
+        }
+    }
+}
 
 use crate::edit_copies::{clipboard_root, sweep_dir};
 

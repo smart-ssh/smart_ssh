@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+#[cfg(not(target_os = "android"))]
 use directories::BaseDirs;
 
 /// Überschreibt sowohl den Standard-Datenpfad als auch den Debug-Build-
@@ -54,6 +55,47 @@ fn resolve_data_dir() -> PathBuf {
         return override_dir;
     }
 
+    // Android (Spec 0114, ADR 0148): `BaseDirs::new()` liefert dort `None`,
+    // sobald `HOME` fehlt — der Normalfall. Der app-private Ordner ist fest.
+    #[cfg(target_os = "android")]
+    {
+        android_files_dir()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        resolve_desktop_data_dir()
+    }
+}
+
+/// Bezeichner der App (identisch mit `identifier` in `tauri.conf.json`,
+/// per Test abgesichert) — bestimmt den app-privaten Ordner auf Android.
+pub const ANDROID_APP_ID: &str = "com.smartssh.desktop";
+
+/// App-privates `files`-Verzeichnis unter Android (`/data/data/<id>/files`,
+/// entspricht `Context.getFilesDir()` / Tauris `app_data_dir`). Rein
+/// berechnet, damit es auf jedem Host testbar ist; kein Aufruf von
+/// `directories`.
+pub fn android_files_dir_for(app_id: &str) -> PathBuf {
+    PathBuf::from("/data/data").join(app_id).join("files")
+}
+
+/// App-privates Cache-Verzeichnis unter Android (`Context.getCacheDir()`).
+pub fn android_cache_dir_for(app_id: &str) -> PathBuf {
+    PathBuf::from("/data/data").join(app_id).join("cache")
+}
+
+/// [`android_files_dir_for`] mit [`ANDROID_APP_ID`].
+pub fn android_files_dir() -> PathBuf {
+    android_files_dir_for(ANDROID_APP_ID)
+}
+
+/// [`android_cache_dir_for`] mit [`ANDROID_APP_ID`].
+pub fn android_cache_dir() -> PathBuf {
+    android_cache_dir_for(ANDROID_APP_ID)
+}
+
+#[cfg(not(target_os = "android"))]
+fn resolve_desktop_data_dir() -> PathBuf {
     let base = BaseDirs::new()
         .expect("kein Home-Verzeichnis gefunden – kann App-Datenordner nicht ermitteln");
 
@@ -111,6 +153,23 @@ pub fn default_db_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_android_files_dir_is_app_private_and_needs_no_home() {
+        assert_eq!(
+            android_files_dir_for("dev.example.app"),
+            PathBuf::from("/data/data/dev.example.app/files")
+        );
+    }
+
+    #[test]
+    fn test_android_app_id_matches_tauri_identifier() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../apps/smart-ssh-community/tauri.conf.json"
+        ))
+        .unwrap();
+        assert_eq!(conf["identifier"], ANDROID_APP_ID);
+    }
 
     /// Serialisiert alle Tests dieses Moduls — sie mutieren einen
     /// Prozess-globalen Zustand (Umgebungsvariablen), parallele

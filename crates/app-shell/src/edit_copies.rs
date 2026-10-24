@@ -60,6 +60,19 @@ pub(crate) fn instance_root_for(cache_dir: &Path, data_dir: &Path) -> PathBuf {
     shared_root(cache_dir).join(scope_name(data_dir))
 }
 
+/// The OS cache directory. On Android there is no `HOME`, so the app-private
+/// cache directory is used (Spec 0114).
+fn platform_cache_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "android")]
+    {
+        Some(persistence_sqlite::android_cache_dir())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Some(directories::BaseDirs::new()?.cache_dir().to_path_buf())
+    }
+}
+
 /// The edit-copy root of this process; `None` if the OS reports no cache
 /// directory (the caller turns that into its error, as before issue #93).
 pub(crate) fn instance_root() -> Option<PathBuf> {
@@ -68,7 +81,7 @@ pub(crate) fn instance_root() -> Option<PathBuf> {
             // Fallback for tests only: in the app, `sweep_at_startup` has
             // already set the value from the locked data directory before
             // any session can ask for it.
-            let cache = directories::BaseDirs::new()?.cache_dir().to_path_buf();
+            let cache = platform_cache_dir()?;
             let db_path = persistence_sqlite::default_db_path();
             let data_dir = db_path.parent()?;
             // Same form as `DataDirLock::dir()` (canonical), so the lazy and
@@ -189,11 +202,11 @@ pub(crate) fn sweep_instance(cache_dir: &Path, data_dir: &Path) -> SweepReport {
 /// instance left behind. Never fails — a problem is logged and the start
 /// goes on.
 pub(crate) fn sweep_at_startup(locked_data_dir: &Path) {
-    let Some(base) = directories::BaseDirs::new() else {
+    let Some(cache) = platform_cache_dir() else {
         tracing::warn!("edit-copy sweep skipped: no cache directory");
         return;
     };
-    let cache = base.cache_dir();
+    let cache = cache.as_path();
     let root = instance_root_for(cache, locked_data_dir);
     if INSTANCE_ROOT.set(Some(root.clone())).is_err() && instance_root() != Some(root) {
         // Cannot happen in the app (this runs once, before any session);
