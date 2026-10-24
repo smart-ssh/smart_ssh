@@ -1157,6 +1157,12 @@
       "confirm": "Nahrát",
       "cancel": "Zrušit",
       "menuTitle": "Nahrát soubory ze schránky"
+    },
+    "readFailure": {
+      "tooLarge": "Textový diff není možný: soubor je příliš velký (přes 256 KB).",
+      "notText": "Textový diff není možný: soubor je binární (neplatný text UTF-8).",
+      "permission": "Textový diff není možný: s aktuálními právy nemáte oprávnění číst tento soubor.",
+      "other": "Textový diff není možný: soubor se nepodařilo přečíst ({{message}})."
     }
   },
   "chat": {
@@ -1187,6 +1193,7 @@
     "contextUsageTooltip": "Starší části chatu se automaticky shrnou, když se kontext zaplní.",
     "webResearchUnavailable": "Webový průzkum není pro účet tohoto poskytovatele dostupný (vyhledávání na webu je tam vypnuto). Tato relace odpovídá bez webového průzkumu. Trvalé vypnutí: Nastavení → Poskytovatel AI → „Webový průzkum“.",
     "emptyResponse": "Model nevrátil žádnou odpověď. U modelů s fází přemýšlení pomůže vyšší limit výstupu v nastavení poskytovatele.",
+    "refusedResponse": "Model tuto žádost odmítl. Přeformulujte ji nebo začněte nový chat.",
     "outputTruncated": "(zkráceno)",
     "fileWritten": "Soubor '{{path}}' zapsán.",
     "writtenWithSudoPassword": "Zapsáno s použitím uloženého hesla sudo.",

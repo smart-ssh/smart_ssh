@@ -1150,6 +1150,12 @@
       "confirm": "Carica",
       "cancel": "Annulla",
       "menuTitle": "Carica i file dagli appunti"
+    },
+    "readFailure": {
+      "tooLarge": "Diff di testo non possibile: il file è troppo grande (oltre 256 KB).",
+      "notText": "Diff di testo non possibile: il file è binario (non è testo UTF-8 valido).",
+      "permission": "Diff di testo non possibile: con i permessi attuali non hai il permesso di lettura per questo file.",
+      "other": "Diff di testo non possibile: impossibile leggere il file ({{message}})."
     }
   },
   "chat": {
@@ -1180,6 +1186,7 @@
     "contextUsageTooltip": "Le parti più vecchie della chat vengono riassunte automaticamente quando il contesto si riempie.",
     "webResearchUnavailable": "La ricerca web non è disponibile per questo account provider (la ricerca web è disattivata lì). Questa sessione risponde senza ricerca web. Per disattivarla in modo permanente: Impostazioni → Provider IA → “Ricerca web”.",
     "emptyResponse": "Il modello non ha restituito alcuna risposta. Per i modelli con fase di ragionamento aiuta un limite di output più alto nelle impostazioni del provider.",
+    "refusedResponse": "Il modello ha rifiutato questa richiesta. Riformulala o avvia una nuova chat.",
     "outputTruncated": "(troncato)",
     "fileWritten": "File '{{path}}' scritto.",
     "writtenWithSudoPassword": "Scritto con la password sudo memorizzata.",

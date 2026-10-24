@@ -242,7 +242,11 @@ Wie „Edit with…“ in Transfer-Clients:
    App vor dem Überschreiben. Lässt sich der Zustand der Datei nicht
    bestimmen, gilt sie nie stillschweigend als unverändert. Wurde die Datei im
    erhöhten Modus geöffnet, läuft der Upload nur über den erhöhten Kanal
-   (Spec 0067, A5).
+   (Spec 0067, A5). Kann die Remote-Seite der Vorschau nicht gelesen werden,
+   nennt der Hinweis den Grund: Datei zu groß, Binärdatei, fehlende
+   Leseberechtigung mit den aktuellen Rechten oder (mit kurzer Meldung) ein
+   anderer Lesefehler. Dasselbe gilt für die Überschreib-Vorschau beim
+   Hochladen.
 6. **Sauberes Ende:** Die Überwachung stoppt, wenn der Nutzer den Ablauf
    beendet, die Ansicht schließt oder die Sitzung getrennt wird; die
    temporäre Kopie wird dann entfernt.
@@ -257,7 +261,12 @@ Wie „Edit with…“ in Transfer-Clients:
    Pfad und Fehler, nie den Dateiinhalt.
 
 Fehlerfälle (lokales Programm nicht gefunden, Datei schon offen, Upload
-scheitert) werden sichtbar gemeldet.
+scheitert) werden sichtbar gemeldet. Scheitert der Upload einer Bearbeitung,
+erscheint die Meldung genau einmal, in der Leiste der Bearbeitung neben
+„Hochladen“, „Später“ und „Bearbeitung beenden“ — weder als Hinweis noch als
+Zeile in der Übertragungsliste. Ein erneuter Versuch ersetzt die Meldung,
+statt eine weitere hinzuzufügen. Ein erfolgreicher Upload meldet sich wie
+bisher.
 
 ## Teil 5: Standardprogramme je Dateityp
 
