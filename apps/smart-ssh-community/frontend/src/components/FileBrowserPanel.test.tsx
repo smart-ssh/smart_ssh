@@ -28,6 +28,7 @@ import {
   sftpUploadFolderPreview,
   readLocalTextPreview,
   sftpChmod,
+  sftpChown,
   sftpDelete,
   sftpDeletePreview,
   sftpDownload,
@@ -98,6 +99,7 @@ vi.mock("../api", () => ({
   sftpUpload: vi.fn(),
   sftpExists: vi.fn(),
   sftpChmod: vi.fn(),
+  sftpChown: vi.fn(),
   readLocalTextPreview: vi.fn(),
   // Issue #89: the backend hands out the paths of the native drop it
   // captured — here the paths of the last simulated drop event.
@@ -1444,6 +1446,55 @@ describe("FileBrowserPanel result toasts (Spec 0067, Teil B)", () => {
       expect(lastToast()).toMatchObject({ kind: "success", message: "3 Dateien hochgeladen" }),
     );
     expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it("chown dialog sends only the changed side, recursive for folders (issue #654)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([{ ...dirEntry, owner: "alice", group: "staff" }]);
+    vi.mocked(sftpChown).mockResolvedValue(4);
+
+    renderPanel();
+    await screen.findByText(/logs/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Besitzer ändern…"));
+
+    const user = await screen.findByLabelText("Benutzer");
+    expect(user).toHaveValue("alice");
+    expect(screen.getByLabelText("Gruppe")).toHaveValue("staff");
+    // Nothing changed yet: Apply is disabled.
+    expect(screen.getByText("Übernehmen").closest("button")).toBeDisabled();
+    fireEvent.change(user, { target: { value: "bob" } });
+    const recursiveLabel = screen.getByText("Auf Inhalt anwenden");
+    fireEvent.click(recursiveLabel.closest("label")!.querySelector("input")!);
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() =>
+      expect(sftpChown).toHaveBeenCalledWith("session-1", "logs", "bob", null, true, null),
+    );
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({
+        kind: "success",
+        message: "Besitzer geändert — 4 Einträge in „logs“",
+      }),
+    );
+  });
+
+  it("chown reports an unknown user with its own message (issue #654)", async () => {
+    vi.mocked(sftpList).mockResolvedValue([fileEntry]);
+    vi.mocked(sftpChown).mockRejectedValue({ message: "Unknown user: x", code: "CHOWN_UNKNOWN_USER" });
+
+    renderPanel();
+    await screen.findByText(/a\.txt/);
+    fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
+    fireEvent.click(screen.getByText("Besitzer ändern…"));
+    fireEvent.change(await screen.findByLabelText("Benutzer"), { target: { value: "x" } });
+    fireEvent.click(screen.getByText("Übernehmen"));
+
+    await waitFor(() =>
+      expect(lastToast()).toMatchObject({
+        kind: "error",
+        message: "Besitzer von „a.txt“ nicht geändert: unbekannter Benutzer",
+      }),
+    );
   });
 
   it("recursive chmod reports how many entries were changed", async () => {

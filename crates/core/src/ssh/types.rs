@@ -116,6 +116,9 @@ pub struct RemoteEntry {
     pub gid: Option<u32>,
     pub owner: Option<String>,
     pub group: Option<String>,
+    /// Issue #654: the entry is itself a symbolic link (lstat view). A
+    /// recursive owner change skips these so it never reaches outside the tree.
+    pub is_symlink: bool,
 }
 
 /// Ergebnis einer Host-Key-Prüfung, Trust-on-First-Use (Spec 0005,

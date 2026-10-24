@@ -1443,6 +1443,224 @@ async fn chmod_recursive(
     Ok(Some(count))
 }
 
+/// Issue #654: change owner and/or group. `owner`/`group` are a name (looked
+/// up in the server's `/etc/passwd`/`/etc/group`) or a number; `None` or an
+/// empty text leaves that side unchanged. Names are resolved **before**
+/// anything is changed: an unknown name fails with nothing touched.
+/// `recursive` applies to folders only and never follows symlinks.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // one argument per IPC parameter
+pub async fn sftp_chown(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
+    session_id: SessionId,
+    path: String,
+    owner: Option<String>,
+    group: Option<String>,
+    recursive: bool,
+    elevated_user: Option<String>,
+) -> CommandResult<u64> {
+    run_browser_command(
+        &state,
+        elevated.inner(),
+        session_id,
+        elevated_user,
+        |session, channel| async move {
+            let emitter = TauriEventEmitter(app);
+            chown_impl_reporting(
+                Some((&emitter, session_id)),
+                &session,
+                &channel,
+                &path,
+                owner.as_deref(),
+                group.as_deref(),
+                recursive,
+            )
+            .await
+        },
+    )
+    .await
+}
+
+#[cfg(test)]
+async fn chown_impl(
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    owner: Option<&str>,
+    group: Option<&str>,
+    recursive: bool,
+) -> CommandResult<u64> {
+    chown_impl_reporting(None, session, channel, path, owner, group, recursive).await
+}
+
+pub(crate) const CHOWN_UNKNOWN_USER: &str = "CHOWN_UNKNOWN_USER";
+pub(crate) const CHOWN_UNKNOWN_GROUP: &str = "CHOWN_UNKNOWN_GROUP";
+pub(crate) const CHOWN_NOTHING_TO_CHANGE: &str = "CHOWN_NOTHING_TO_CHANGE";
+
+fn non_empty(text: Option<&str>) -> Option<&str> {
+    text.map(str::trim).filter(|t| !t.is_empty())
+}
+
+fn is_numeric_id(text: &str) -> bool {
+    text.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Resolves the typed owner/group to ids. Numbers need no lookup; a name is
+/// looked up on the server through the **same channel** as the change (so an
+/// elevated change reads the files with the elevated rights and a revoked
+/// channel is noticed).
+async fn resolve_chown_ids(
+    sftp: &mut dyn SftpSession,
+    owner: Option<&str>,
+    group: Option<&str>,
+) -> CommandResult<(Option<u32>, Option<u32>)> {
+    use app_logic::owner_names::{load_id_names, resolve_group, resolve_user, IdLookupError};
+    let (owner, group) = (non_empty(owner), non_empty(group));
+    if owner.is_none() && group.is_none() {
+        return Err(CommandError::with_code(
+            "Neither owner nor group was given.",
+            CHOWN_NOTHING_TO_CHANGE,
+        ));
+    }
+    let needs_lookup =
+        owner.is_some_and(|o| !is_numeric_id(o)) || group.is_some_and(|g| !is_numeric_id(g));
+    let names = if needs_lookup {
+        load_id_names(sftp).await
+    } else {
+        app_logic::owner_names::IdNames::default()
+    };
+    let map_err = |e: IdLookupError| match e {
+        IdLookupError::UnknownUser(n) => {
+            CommandError::with_code(format!("Unknown user: {n}"), CHOWN_UNKNOWN_USER)
+        }
+        IdLookupError::UnknownGroup(n) => {
+            CommandError::with_code(format!("Unknown group: {n}"), CHOWN_UNKNOWN_GROUP)
+        }
+    };
+    let uid = owner
+        .map(|o| resolve_user(&names, o))
+        .transpose()
+        .map_err(map_err)?;
+    let gid = group
+        .map(|g| resolve_group(&names, g))
+        .transpose()
+        .map_err(map_err)?;
+    Ok((uid, gid))
+}
+
+async fn chown_impl_reporting(
+    progress: Option<(&dyn EventEmitter, SessionId)>,
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    owner: Option<&str>,
+    group: Option<&str>,
+    recursive: bool,
+) -> CommandResult<u64> {
+    let mut guard = lock_browser_sftp(session, channel).await;
+    // Spec 0085, A1.4 — s. `delete_impl`.
+    let elevated_user = guard.elevated_user();
+    let mut sftp = guard.sftp().await?;
+    let (uid, gid) = resolve_chown_ids(&mut sftp, owner, group).await?;
+    let op = channel.register_op(Uuid::new_v4(), OpKind::Chown, path);
+    let mut rows = EntryRows::new(progress, SftpTransferKind::Chown, op.handle(), path);
+    let result = rows
+        .run(chown_recursive(
+            &mut sftp,
+            path,
+            uid,
+            gid,
+            recursive,
+            op.handle(),
+        ))
+        .await;
+    rows.finish(
+        result
+            .as_ref()
+            .map(|r| r.is_some())
+            .map_err(|e| e.to_string()),
+    );
+    audit_elevated_change(
+        elevated_user.as_deref(),
+        "chown",
+        path,
+        matches!(result, Ok(Some(_))),
+    );
+    result?.ok_or_else(stopped_error)
+}
+
+/// SFTP `SETSTAT` takes uid and gid as a pair: the side that stays gets the
+/// entry's current id. Without a known current id nothing is guessed.
+fn chown_target(
+    entry: &RemoteEntry,
+    uid: Option<u32>,
+    gid: Option<u32>,
+) -> Result<(u32, u32), SshError> {
+    let missing = || {
+        SshError::ChannelError(format!(
+            "{}: the server did not report the current owner/group",
+            entry.path
+        ))
+    };
+    Ok((
+        uid.or(entry.uid).ok_or_else(missing)?,
+        gid.or(entry.gid).ok_or_else(missing)?,
+    ))
+}
+
+/// Core of `sftp_chown`; mirrors `chmod_recursive` (read the whole tree
+/// first, then change deepest-first). Entries that are symlinks are skipped
+/// below the root so a link can never lead the change outside the tree.
+/// Returns the number of changed entries.
+async fn chown_recursive(
+    sftp: &mut dyn SftpSession,
+    path: &str,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    recursive: bool,
+    op: &OpHandle,
+) -> Result<Option<u64>, SshError> {
+    if op.is_user_stopped() {
+        return Ok(None);
+    }
+    // `lstat`: same symlink reasoning as `delete_recursive`.
+    let root_entry = sftp.lstat(path).await?;
+    if !recursive || !root_entry.is_dir {
+        let (u, g) = chown_target(&root_entry, uid, gid)?;
+        sftp.set_owner(path, u, g).await?;
+        return Ok(Some(1));
+    }
+    op.begin_entries();
+    let mut targets = vec![(path.to_string(), chown_target(&root_entry, uid, gid)?)];
+    let mut queue = vec![path.to_string()];
+    while let Some(dir) = queue.pop() {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
+        for entry in sftp.list_dir(&dir).await? {
+            if entry.is_symlink {
+                continue;
+            }
+            targets.push((entry.path.clone(), chown_target(&entry, uid, gid)?));
+            if entry.is_dir {
+                queue.push(entry.path);
+            }
+        }
+    }
+    let count = targets.len() as u64;
+    op.set_files(0, Some(count));
+    for (entry_path, (u, g)) in targets.into_iter().rev() {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
+        sftp.set_owner(&entry_path, u, g).await?;
+        op.add_files_done();
+    }
+    Ok(Some(count))
+}
+
 /// Spec 0054, Teil 3: "Umbenennen" UND "Verschieben" laufen über denselben
 /// Befehl — SFTP `RENAME` unterscheidet nicht zwischen beidem, `to` kann im
 /// selben Verzeichnis (Umbenennen) oder einem anderen (Verschieben)
@@ -2460,6 +2678,9 @@ mod sftp_mutation_tests {
             self.inner.remove_dir(p).await?;
             self.tick();
             Ok(())
+        }
+        async fn set_owner(&mut self, _: &str, _: u32, _: u32) -> Result<(), SshError> {
+            unreachable!()
         }
         async fn set_permissions(&mut self, p: &str, m: u32) -> Result<(), SshError> {
             self.inner.set_permissions(p, m).await?;

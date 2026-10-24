@@ -651,6 +651,14 @@ impl SftpSession for BrowserSftp<'_> {
             .set_permissions(path, mode)
             .await
     }
+
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError> {
+        self.operation()
+            .await?
+            .sftp()
+            .set_owner(path, uid, gid)
+            .await
+    }
 }
 
 /// Spec 0067, A5 (baut auf der Audit-Erfassbarkeit aus 0054 auf): jede

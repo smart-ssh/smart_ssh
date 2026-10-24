@@ -12,7 +12,7 @@ Bezüge: Spec 0113 (Schmales Layout), Spec 0101 (Master-Passwort), Spec 0049 (Ti
 ## 2. Was anders ist
 
 - **Layout:** Es gilt immer das schmale Layout (Spec 0113), unabhängig von der Breite. Es gibt keine Titelleiste mit Fenster-Steuerung und kein Ziehen oder Maximieren des Fensters; die Kopfzeile reserviert dafür keinen Platz.
-- **Schlüsselspeicher:** Bis der Android-Schlüsselspeicher angebunden ist, startet die App im Master-Passwort-Modus (Spec 0101).
+- **Schlüsselspeicher:** Der Datenbankschlüssel liegt standardmäßig im Android-Schlüsselspeicher (Keystore); die Datenbank öffnet sich nach einem Neustart ohne Eingabe. Lässt sich der Schlüsselspeicher nicht öffnen, bietet die App den Master-Passwort-Modus an (Spec 0101, Abschnitt 8). Das Master-Passwort kann auch sonst gewählt werden.
 - **Lokaler Pseudo-Server:** Er erscheint nicht in der Serverliste.
 - **Ordner:** „Ordner hochladen“ und „Herunterladen nach …“ für Ordner werden nicht angeboten.
 - **Dateien in die Zwischenablage:** „Datei kopieren“ und das Einfügen lokaler Dateien aus der Zwischenablage werden nicht angeboten. Text kopieren funktioniert.

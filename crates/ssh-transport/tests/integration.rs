@@ -808,9 +808,12 @@ async fn test_t6_3_6_a_failing_identity_file_names_the_hop() {
     )
     .await;
 
-    let SshError::CredentialResolutionFailed(message) = &err else {
-        panic!("erwartet CredentialResolutionFailed, bekam {err:?}");
+    // Issue #667: „Datei fehlt“ ist ein eigener Zustand, trägt aber weiter
+    // Hop und Pfad.
+    let SshError::KeyFileNotFound { .. } = &err else {
+        panic!("erwartet KeyFileNotFound, bekam {err:?}");
     };
+    let message = err.to_string();
     assert!(
         message.contains(&format!("{TEST_USERNAME}@127.0.0.1:{port}")),
         "A-8: die Meldung muss den Hop nennen — {message}"
@@ -820,7 +823,7 @@ async fn test_t6_3_6_a_failing_identity_file_names_the_hop() {
         "A-6: und den Pfad — {message}"
     );
     // Der stabile Code darf sich durch die Hop-Angabe nicht ändern.
-    assert_eq!(err.code(), "SSH_CREDENTIAL_RESOLUTION_FAILED");
+    assert_eq!(err.code(), "KEY_FILE_NOT_FOUND_ON_DEVICE");
 }
 
 /// Ein `CredentialStore`, dessen `get` mit `CredentialError::Backend`
@@ -1288,6 +1291,21 @@ async fn test_sftp_set_permissions() {
         let entry = sftp.stat("/chmod-me.txt").await.unwrap();
         assert_eq!(entry.permissions, 0o640);
     }
+}
+
+/// Issue #654 (chown): `set_owner` sends uid and gid as a pair in one
+/// `setstat`, and no permission bits.
+#[tokio::test]
+async fn test_sftp_set_owner_sends_uid_and_gid() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport.open_sftp().await.expect("open_sftp()");
+    sftp.write_file("/chown-me.txt", b"x").await.unwrap();
+    sftp.set_owner("/chown-me.txt", 1234, 5678)
+        .await
+        .expect("set_owner() should succeed");
+    assert_eq!(server.setstat_mode.last_ids(), Some((1234, 5678)));
+    assert_eq!(server.setstat_mode.last_mode(), None);
 }
 
 /// Stat: Größe und Verzeichnis-Flag einer existierenden Datei korrekt

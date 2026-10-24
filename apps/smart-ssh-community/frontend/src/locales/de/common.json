@@ -294,6 +294,13 @@
       "connection": "Verbindung",
       "security": "Sicherheit",
       "invalid": "Enthält Fehler"
+    },
+    "importKey": {
+      "title": "Schlüssel in Smart SSH importieren?",
+      "import": "Schlüssel importieren",
+      "keep": "Dateipfad behalten",
+      "importHint": "Der Schlüssel wird verschlüsselt in Smart SSH gespeichert und wandert mit Backups auf Ihre anderen Geräte.",
+      "keepHint": "Nur der Dateipfad wird gespeichert und wandert auf andere Geräte. Die Datei muss auf jedem Gerät am selben Pfad vorhanden sein."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar.",
     "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden.",
     "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
-    "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits"
+    "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden"
   },
   "mcpServer": {
     "hint": "Externe MCP-Clients können darüber Kommandos, Datei-Lese-/Schreibzugriffe und Notiz-Aktualisierungen auf freigegebenen Servern vorschlagen — jede Anfrage landet immer bei einer Bestätigung in der App, unabhängig von bestehenden Allow-Regeln.",
@@ -727,7 +735,12 @@
     "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}",
     "nothingToPaste": "Nichts einzufügen: Die Zwischenablage enthält keine Dateien",
     "createFileDone": "Datei „{{name}}“ angelegt",
-    "createFileFailed": "Datei „{{name}}“ konnte nicht angelegt werden: {{reason}}"
+    "createFileFailed": "Datei „{{name}}“ konnte nicht angelegt werden: {{reason}}",
+    "chownDone": "Besitzer von „{{name}}“ geändert",
+    "chownRecursive": "Besitzer geändert — {{count}} Einträge in „{{name}}“",
+    "chownFailed": "Besitzer von „{{name}}“ konnte nicht geändert werden: {{reason}}",
+    "chownUnknownUser": "Besitzer von „{{name}}“ nicht geändert: unbekannter Benutzer",
+    "chownUnknownGroup": "Besitzer von „{{name}}“ nicht geändert: unbekannte Gruppe"
   },
   "fileElevation": {
     "toggle": "Erhöhte Rechte",
@@ -780,7 +793,9 @@
     "otherUser": "Als anderer Nutzer …",
     "targetUser": "Ziel-Nutzer",
     "targetUserHelp": "Führt den Dateibrowser über sudo als dieser Nutzer aus. Standard: root.",
-    "confirm": "Erhöhen"
+    "confirm": "Erhöhen",
+    "opChown": "Besitzer ändern",
+    "chownNote": "Der Besitzer wird als {{user}} geändert."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config importieren",
@@ -1116,7 +1131,8 @@
       "cut": "Ausschneiden",
       "delete": "Löschen",
       "newFolder": "Neuer Ordner",
-      "newFile": "Neue Datei"
+      "newFile": "Neue Datei",
+      "chown": "Besitzer ändern…"
     },
     "properties": {
       "title": "Eigenschaften",
@@ -1174,7 +1190,16 @@
       "notText": "Kein Text-Diff möglich: Die Datei ist binär (kein gültiger UTF-8-Text).",
       "permission": "Kein Text-Diff möglich: Mit den aktuellen Rechten fehlt die Leseberechtigung für diese Datei.",
       "other": "Kein Text-Diff möglich: Die Datei konnte nicht gelesen werden ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Besitzer ändern",
+      "owner": "Benutzer",
+      "group": "Gruppe",
+      "hint": "Name oder Nummer eingeben. Eine Seite, die Sie unverändert lassen, bleibt unverändert. Der Server entscheidet, ob die Änderung erlaubt ist (meist darf nur root den Besitzer ändern).",
+      "recursive": "Auf Inhalt anwenden",
+      "recursiveWarning": "— ändert den Besitzer ALLER Dateien und Unterordner in diesem Ordner. Symbolische Links werden nicht verfolgt. Nicht rückgängig zu machen."
+    },
+    "transferChown": "Besitzer ändern: {{name}}"
   },
   "chat": {
     "jumpToLatest": "Zur neuesten Nachricht",

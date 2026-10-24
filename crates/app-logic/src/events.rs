@@ -1297,6 +1297,8 @@ pub enum SftpTransferKind {
     Delete,
     /// Issue #658: recursive permission change.
     Chmod,
+    /// Issue #654: recursive owner/group change.
+    Chown,
 }
 
 #[derive(Debug, Clone, Serialize)]
