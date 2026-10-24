@@ -429,6 +429,7 @@
     "expired": "Permintaan kunci host untuk {{host}}:{{port}} kedaluwarsa. Koneksi tidak dibuat dan kunci tidak dipercaya."
   },
   "sessionTabs": {
+    "newSession": "Sesi baru",
     "overview": "Ikhtisar",
     "pendingAction": "Menunggu konfirmasi",
     "closeTab": "Tutup tab \"{{name}}\"",
