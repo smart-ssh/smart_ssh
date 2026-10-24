@@ -1222,7 +1222,11 @@
       "cardLabel": "Fråga: {{question}}",
       "send": "Skicka",
       "answeredOwnWords": "Besvarad med egna ord"
-    }
+    },
+    "injectionChecking": "Kontrollerar utdata …",
+    "injectionSuspected": "Varning: den här utdatan ser ut som ett försök att injicera instruktioner.",
+    "injectionSuspectedReason": "Skäl från den kontrollerande AI:n: {{reason}}",
+    "injectionConfirmReason": "Skäl: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Anteckningen är mycket stor och kan förkortas i AI-kontexten under långa sessioner. Den sparade anteckningen förblir komplett.",

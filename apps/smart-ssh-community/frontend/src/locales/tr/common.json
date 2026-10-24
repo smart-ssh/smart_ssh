@@ -1222,7 +1222,11 @@
       "cardLabel": "Soru: {{question}}",
       "send": "Gönder",
       "answeredOwnWords": "Kendi sözlerinizle yanıtlandı"
-    }
+    },
+    "injectionChecking": "Çıktı denetleniyor …",
+    "injectionSuspected": "Uyarı: bu çıktı talimat enjekte etme girişimine benziyor.",
+    "injectionSuspectedReason": "Denetleyen yapay zekanın gerekçesi: {{reason}}",
+    "injectionConfirmReason": "Gerekçe: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Bu not çok büyük ve uzun oturumlarda yapay zeka bağlamı için kısaltılabilir. Kaydedilen not eksiksiz kalır.",

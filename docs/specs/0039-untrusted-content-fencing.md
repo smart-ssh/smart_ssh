@@ -117,6 +117,23 @@ eingeschleuste Anweisungen" in den erweiterten Server-Einstellungen.
   in dieser Sitzung nicht aktiv ist und warum. Es bleibt bei dem Hinweis:
   keine erzwungene Bestätigung. Ist die Prüfung am Server aus, erscheint
   kein Hinweis; ebenso nicht, wenn ein Provider verfügbar ist.
+- **Fortschritt und Urteil stehen direkt unter dem geprüften Ergebnis**
+  (Kommando-Ergebnis, gelesene Datei, Web-Recherche-Ergebnis): Solange die
+  Prüfung läuft, erscheint dort ein kleiner Spinner mit „Ausgabe wird
+  geprüft …". Bei „nein" verschwindet er ohne Rest. Bei „ja" bleibt dort
+  eine gelbe Warnung („Diese Ausgabe sieht nach einem Versuch aus,
+  Anweisungen einzuschleusen") mit der Begründung der prüfenden KI. Bei
+  „nicht verfügbar" steht dort der Hinweis aus dem vorigen Punkt (zusätzlich
+  zur Sitzungsmeldung). Der Status ist eine Live-Anzeige und wird beim
+  Wiederöffnen eines gespeicherten Chats nicht wiederhergestellt.
+- **Die Begründung ist unvertrauenswürdiger Anzeigetext**: Sie wird als
+  reiner Text gezeigt (kein Markdown, keine Links, kein HTML), durch den
+  Ausgabe-Redaktor geschickt und auf 300 Zeichen gekürzt. Sie gelangt nie in
+  den Kontext der Haupt-KI. Die Bestätigung, die den Verdacht verbraucht,
+  nennt dieselbe Begründung („Grund: …") — auch in den kombinierten
+  Varianten (rotes Risiko, Secret-Pfad, `sftp-server`). Sie wird mit dem
+  Verdacht gespeichert und mit ihm verbraucht: eine spätere Bestätigung ohne
+  neuen Verdacht zeigt keine alte Begründung.
 - Der Hinweistext benennt die Prüfung ehrlich als zusätzliche Hürde, die
   selbst täuschbar ist, nicht als zuverlässige Erkennung.
 

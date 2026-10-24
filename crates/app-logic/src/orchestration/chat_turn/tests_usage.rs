@@ -240,7 +240,14 @@ async fn test_injection_check_reports_its_purpose() {
         AiEvent::Done,
     ]))));
 
-    check_for_injected_instructions(&session, Uuid::new_v4(), &TestEmitter::default(), "x").await;
+    check_for_injected_instructions(
+        &session,
+        Uuid::new_v4(),
+        &TestEmitter::default(),
+        Uuid::new_v4(),
+        "x",
+    )
+    .await;
 
     let record = next(&rx);
     assert_eq!(record.purpose, AiUsagePurpose::InjectionCheck);
