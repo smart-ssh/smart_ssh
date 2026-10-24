@@ -125,7 +125,18 @@ async fn list_impl(
     let entries = {
         let mut guard = lock_browser_sftp(session, channel).await;
         let mut sftp = guard.sftp().await?;
-        sftp.list_dir(path).await?
+        let mut entries = sftp.list_dir(path).await?;
+        // Issue #653: SFTP v3 servers often send only uid/gid; resolve names
+        // once per session from /etc/passwd and /etc/group (SFTP reads only).
+        if entries.iter().any(|e| {
+            (e.owner.is_none() && e.uid.is_some()) || (e.group.is_none() && e.gid.is_some())
+        }) {
+            let names = session
+                .id_names_or_init(|| app_logic::owner_names::load_id_names(&mut sftp))
+                .await;
+            app_logic::owner_names::apply_id_names(names, &mut entries);
+        }
+        entries
     };
     let mut dtos: Vec<RemoteEntryDto> = entries.iter().map(RemoteEntryDto::from).collect();
     sort_remote_entries(&mut dtos);

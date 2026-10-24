@@ -1039,8 +1039,10 @@
       "name": "Nombre",
       "size": "Tamaño",
       "permissions": "Permisos",
-      "modified": "Modificado"
+      "modified": "Modificado",
+      "owner": "Propietario"
     },
+    "columnsMenu": "Mostrar u ocultar columnas",
     "localEdit": {
       "uploading": "Subiendo “{{name}}”…",
       "changed": "“{{name}}” se modificó localmente. ¿Subirlo al servidor?",

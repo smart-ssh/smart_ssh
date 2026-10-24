@@ -1044,8 +1044,10 @@
       "name": "Nazwa",
       "size": "Rozmiar",
       "permissions": "Uprawnienia",
-      "modified": "Zmieniono"
+      "modified": "Zmieniono",
+      "owner": "Właściciel"
     },
+    "columnsMenu": "Pokaż lub ukryj kolumny",
     "localEdit": {
       "uploading": "Wysyłanie „{{name}}”…",
       "changed": "„{{name}}” zmieniono lokalnie. Wysłać na serwer?",

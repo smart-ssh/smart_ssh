@@ -1034,8 +1034,10 @@
       "name": "Navn",
       "size": "Størrelse",
       "permissions": "Rettigheder",
-      "modified": "Ændret"
+      "modified": "Ændret",
+      "owner": "Ejer"
     },
+    "columnsMenu": "Vis eller skjul kolonner",
     "localEdit": {
       "uploading": "Uploader “{{name}}”…",
       "changed": "“{{name}}” blev ændret lokalt. Skal den uploades til serveren?",

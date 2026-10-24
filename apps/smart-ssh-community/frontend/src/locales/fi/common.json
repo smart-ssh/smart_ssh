@@ -1034,8 +1034,10 @@
       "name": "Nimi",
       "size": "Koko",
       "permissions": "Oikeudet",
-      "modified": "Muokattu"
+      "modified": "Muokattu",
+      "owner": "Omistaja"
     },
+    "columnsMenu": "Näytä tai piilota sarakkeet",
     "localEdit": {
       "uploading": "Lähetetään “{{name}}”…",
       "changed": "“{{name}}” muutettiin paikallisesti. Lähetetäänkö se palvelimelle?",

@@ -1039,8 +1039,10 @@
       "name": "Nume",
       "size": "Dimensiune",
       "permissions": "Permisiuni",
-      "modified": "Modificat"
+      "modified": "Modificat",
+      "owner": "Proprietar"
     },
+    "columnsMenu": "Afișează sau ascunde coloanele",
     "localEdit": {
       "uploading": "Se încarcă „{{name}}”…",
       "changed": "„{{name}}” a fost modificat local. Îl încărcați pe server?",

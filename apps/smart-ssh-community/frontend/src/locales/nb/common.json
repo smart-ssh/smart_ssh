@@ -1034,8 +1034,10 @@
       "name": "Navn",
       "size": "Størrelse",
       "permissions": "Tillatelser",
-      "modified": "Endret"
+      "modified": "Endret",
+      "owner": "Eier"
     },
+    "columnsMenu": "Vis eller skjul kolonner",
     "localEdit": {
       "uploading": "Laster opp “{{name}}”…",
       "changed": "“{{name}}” ble endret lokalt. Laste den opp til serveren?",
