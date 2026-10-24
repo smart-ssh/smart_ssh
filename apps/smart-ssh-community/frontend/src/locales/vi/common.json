@@ -45,7 +45,8 @@
       "chatRetention": "Phiên & Dữ liệu",
       "mcpServer": "Máy chủ MCP",
       "masterPassword": "Mật khẩu chính",
-      "voiceInput": "Nhập bằng giọng nói"
+      "voiceInput": "Nhập bằng giọng nói",
+      "dataAndBackup": "Dữ liệu và sao lưu"
     }
   },
   "about": {
@@ -865,7 +866,8 @@
       "success": "Đã tạo {{created}} máy chủ, {{groups}} thư mục, bỏ qua {{skipped}} xung đột.",
       "fallbacksDetail": "Không thể đọc {{count}} tệp khóa, đường dẫn được giữ lại thay thế: {{detail}}.",
       "encryptedDetail": "{{count}} khóa được tiếp nhận ở dạng mã hóa — hãy thêm cụm mật khẩu trước lần kết nối đầu tiên: {{detail}}."
-    }
+    },
+    "isBackup": "Tệp này là bản sao lưu mã hóa, không phải ssh_config. Chưa có gì được tạo. Hãy khôi phục tại Cài đặt → Dữ liệu và sao lưu."
   },
   "sshConfigExport": {
     "dialogTitle": "Xuất sang ssh_config",
@@ -875,7 +877,8 @@
       "includeHintLabel": "Cách đưa tệp này vào ~/.ssh/config của bạn:",
       "copy": "Sao chép",
       "notRepresentedHint": "Nhóm, thẻ, ghi chú, quy tắc lọc và cài đặt bảo mật không có trong tệp này — phần còn thiếu của từng máy chủ được ghi chú dưới dạng bình luận phía trên mục của nó."
-    }
+    },
+    "backupHint": "Không gồm thông tin xác thực, quy tắc hay ghi chú. Để sao lưu đầy đủ, hãy dùng bản sao lưu mã hóa (Cài đặt → Dữ liệu và sao lưu)."
   },
   "startup": {
     "stateUnknown": "Smart SSH không đọc được trạng thái khởi động. Không có gì bị thay đổi. Hãy thử lại; nếu vẫn lỗi, nhật ký nêu rõ nguyên nhân.",
@@ -1344,5 +1347,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "xong",
     "resultFailed": "thất bại"
+  },
+  "backup": {
+    "title": "Sao lưu mã hóa",
+    "intro": "Lưu toàn bộ dữ liệu Smart SSH của bạn vào một tệp mã hóa và khôi phục sau, ví dụ trên máy tính mới.",
+    "included": "Bao gồm: máy chủ, thư mục, thẻ, quy tắc bộ lọc, ghi chú máy chủ, nhà cung cấp AI, thông tin xác thực đã lưu (mã hóa) và khóa máy chủ tin cậy.",
+    "excluded": "Không bao gồm: lịch sử trò chuyện, bản ghi sử dụng, cài đặt thiết bị và tệp khóa trên đĩa.",
+    "restoreInfo": "Khôi phục sẽ thay thế toàn bộ dữ liệu trên thiết bị này. Dữ liệu hiện tại được lưu trước, và máy chủ của bạn chuyển vào thư mục có ngày.",
+    "export": "Xuất bản sao lưu…",
+    "restore": "Khôi phục từ bản sao lưu…",
+    "newCode": "Mã khôi phục mới",
+    "setPassphrase": "Đặt cụm mật khẩu",
+    "exportDone": "Đã lưu bản sao lưu vào {{path}}.",
+    "exportCounts": "{{servers}} máy chủ, {{rules}} quy tắc, {{notes}} ghi chú.",
+    "setup": {
+      "title": "Bảo vệ bản sao lưu của bạn",
+      "intro": "Bản sao lưu được mã hóa. Bạn cần mã khôi phục hoặc cụm mật khẩu để đọc chúng, vì vậy hãy chọn một cái ngay bây giờ.",
+      "useCode": "Tạo mã khôi phục",
+      "usePassphrase": "Dùng cụm mật khẩu thay thế"
+    },
+    "code": {
+      "title": "Mã khôi phục của bạn",
+      "warning": "Hãy ghi lại mã này và cất giữ an toàn. Mã chỉ hiện một lần và không thể hiện lại. Không có nó, bản sao lưu không thể đọc được.",
+      "copy": "Sao chép",
+      "copyFailed": "Không thể sao chép.",
+      "confirm": "Tôi đã ghi lại mã",
+      "continue": "Tiếp tục"
+    },
+    "passphrase": {
+      "title": "Đặt cụm mật khẩu",
+      "warning": "Không có cụm mật khẩu, bản sao lưu không thể đọc được. Không có cách khôi phục.",
+      "label": "Cụm mật khẩu",
+      "help": "Tối thiểu {{count}} ký tự.",
+      "tooShort": "Quá ngắn: tối thiểu {{count}} ký tự.",
+      "repeat": "Nhập lại cụm mật khẩu",
+      "mismatch": "Các cụm mật khẩu không khớp.",
+      "save": "Lưu cụm mật khẩu"
+    },
+    "import": {
+      "title": "Khôi phục từ bản sao lưu",
+      "pickTitle": "Chọn tệp sao lưu",
+      "file": "Tệp: {{name}}",
+      "kind": "Cách mở bản sao lưu này",
+      "useCode": "Mã khôi phục",
+      "usePassphrase": "Cụm mật khẩu",
+      "codeLabel": "Mã khôi phục",
+      "passphraseLabel": "Cụm mật khẩu",
+      "open": "Mở bản sao lưu"
+    },
+    "confirm": {
+      "title": "Thay thế dữ liệu của bạn?",
+      "intro": "Khôi phục sẽ thay thế dữ liệu trên thiết bị này. Chưa có gì thay đổi.",
+      "what": "Dữ liệu",
+      "local": "Hiện tại",
+      "file": "Sao lưu",
+      "sessions": "Phiên đang mở sẽ bị đóng: {{count}}",
+      "safety": "Dữ liệu hiện tại được lưu trước vào {{dir}}. Máy chủ của bạn chuyển vào thư mục mới “Previous data” kèm ngày hôm nay.",
+      "replace": "Thay thế dữ liệu"
+    },
+    "counts": {
+      "servers": "Máy chủ",
+      "groups": "Thư mục",
+      "rules": "Quy tắc",
+      "notes": "Ghi chú",
+      "aiProviders": "Nhà cung cấp AI"
+    },
+    "summary": {
+      "title": "Đã khôi phục bản sao lưu",
+      "counts": "Đã khôi phục: {{servers}} máy chủ, {{groups}} thư mục, {{rules}} quy tắc, {{notes}} ghi chú, {{aiProviders}} nhà cung cấp AI.",
+      "safety": "Bản sao lưu an toàn của dữ liệu trước đó: {{path}}",
+      "folder": "Các máy chủ trước đây của bạn nằm trong thư mục “{{name}}”.",
+      "hostKeysPending": "Khóa máy chủ tin cậy sẽ được bổ sung ở lần khởi động tiếp theo.",
+      "done": "Xong"
+    },
+    "errors": {
+      "cannotOpen": "Sai mã hoặc cụm mật khẩu, hoặc tệp bị hỏng.",
+      "typo": "Mã có lỗi chính tả.",
+      "notBackup": "Đây không phải tệp sao lưu Smart SSH. Danh sách máy chủ định dạng ssh_config được nhập từ danh sách máy chủ.",
+      "newerVersion": "Bản sao lưu này do phiên bản Smart SSH mới hơn tạo ra. Hãy cập nhật ứng dụng rồi thử lại.",
+      "failed": "Thao tác thất bại. Không có gì thay đổi."
+    }
   }
 }

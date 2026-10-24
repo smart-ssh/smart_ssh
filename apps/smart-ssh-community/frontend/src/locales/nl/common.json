@@ -45,7 +45,8 @@
       "chatRetention": "Sessies en gegevens",
       "mcpServer": "MCP Server",
       "masterPassword": "Hoofdwachtwoord",
-      "voiceInput": "Spraakinvoer"
+      "voiceInput": "Spraakinvoer",
+      "dataAndBackup": "Gegevens en back-up"
     }
   },
   "about": {
@@ -870,7 +871,8 @@
       "success": "{{created}} servers aangemaakt, {{groups}} mappen, {{skipped}} conflict(en) overgeslagen.",
       "fallbacksDetail": "{{count}} sleutelbestand(en) konden niet worden gelezen, het pad is in plaats daarvan behouden: {{detail}}.",
       "encryptedDetail": "{{count}} sleutel(s) zijn versleuteld overgenomen — voeg de wachtzin toe vóór de eerste verbinding: {{detail}}."
-    }
+    },
+    "isBackup": "Dit bestand is een versleutelde back-up, geen ssh_config. Er is niets aangemaakt. Herstel het via Instellingen → Gegevens en back-up."
   },
   "sshConfigExport": {
     "dialogTitle": "Exporteren naar ssh_config",
@@ -880,7 +882,8 @@
       "includeHintLabel": "Zo neemt u dit bestand op in uw eigen ~/.ssh/config:",
       "copy": "Kopiëren",
       "notRepresentedHint": "Groepen, labels, notities, filterregels en beveiligingsinstellingen staan niet in dit bestand — wat voor een bepaalde server ontbreekt, staat als commentaar boven de vermelding."
-    }
+    },
+    "backupHint": "Bevat geen inloggegevens, regels of notities. Gebruik voor een volledige back-up de versleutelde back-up (Instellingen → Gegevens en back-up)."
   },
   "startup": {
     "stateUnknown": "Smart SSH kon de opstartstatus niet lezen. Er is niets gewijzigd. Probeer het opnieuw; blijft het probleem bestaan, dan noemt het logboek de oorzaak.",
@@ -1352,5 +1355,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "klaar",
     "resultFailed": "mislukt"
+  },
+  "backup": {
+    "title": "Versleutelde back-up",
+    "intro": "Slaat al je Smart SSH-gegevens op in één versleuteld bestand en herstelt ze later, bijvoorbeeld op een nieuwe computer.",
+    "included": "Inbegrepen: servers, mappen, labels, filterregels, servernotities, AI-providers, opgeslagen inloggegevens (versleuteld) en vertrouwde hostsleutels.",
+    "excluded": "Niet inbegrepen: chatgeschiedenis, gebruiksgegevens, apparaatinstellingen en sleutelbestanden op schijf.",
+    "restoreInfo": "Herstellen vervangt alle gegevens op dit apparaat. Je huidige gegevens worden eerst opgeslagen en je servers gaan naar een map met datum.",
+    "export": "Back-up exporteren…",
+    "restore": "Herstellen uit back-up…",
+    "newCode": "Nieuwe herstelcode",
+    "setPassphrase": "Wachtzin instellen",
+    "exportDone": "Back-up opgeslagen in {{path}}.",
+    "exportCounts": "{{servers}} servers, {{rules}} regels, {{notes}} notities.",
+    "setup": {
+      "title": "Bescherm je back-ups",
+      "intro": "Back-ups zijn versleuteld. Je hebt een herstelcode of wachtzin nodig om ze te lezen, kies er dus nu een.",
+      "useCode": "Herstelcode aanmaken",
+      "usePassphrase": "In plaats daarvan een wachtzin gebruiken"
+    },
+    "code": {
+      "title": "Je herstelcode",
+      "warning": "Schrijf deze code op en bewaar hem veilig. Hij wordt maar één keer getoond en kan niet opnieuw worden getoond. Zonder de code zijn je back-ups onleesbaar.",
+      "copy": "Kopiëren",
+      "copyFailed": "Kopiëren mislukt.",
+      "confirm": "Ik heb de code genoteerd",
+      "continue": "Doorgaan"
+    },
+    "passphrase": {
+      "title": "Een wachtzin instellen",
+      "warning": "Zonder de wachtzin zijn je back-ups onleesbaar. Herstel is niet mogelijk.",
+      "label": "Wachtzin",
+      "help": "Minimaal {{count}} tekens.",
+      "tooShort": "Te kort: minimaal {{count}} tekens.",
+      "repeat": "Wachtzin herhalen",
+      "mismatch": "De wachtzinnen komen niet overeen.",
+      "save": "Wachtzin opslaan"
+    },
+    "import": {
+      "title": "Herstellen uit back-up",
+      "pickTitle": "Kies een back-upbestand",
+      "file": "Bestand: {{name}}",
+      "kind": "Waarmee deze back-up opent",
+      "useCode": "Herstelcode",
+      "usePassphrase": "Wachtzin",
+      "codeLabel": "Herstelcode",
+      "passphraseLabel": "Wachtzin",
+      "open": "Back-up openen"
+    },
+    "confirm": {
+      "title": "Je gegevens vervangen?",
+      "intro": "Herstellen vervangt de gegevens op dit apparaat. Er is nog niets gewijzigd.",
+      "what": "Gegevens",
+      "local": "Nu",
+      "file": "Back-up",
+      "sessions": "Open sessies die worden gesloten: {{count}}",
+      "safety": "Je huidige gegevens worden eerst opgeslagen in {{dir}}. Je servers gaan naar een nieuwe map “Previous data” met de datum van vandaag.",
+      "replace": "Gegevens vervangen"
+    },
+    "counts": {
+      "servers": "Servers",
+      "groups": "Mappen",
+      "rules": "Regels",
+      "notes": "Notities",
+      "aiProviders": "AI-providers"
+    },
+    "summary": {
+      "title": "Back-up hersteld",
+      "counts": "Hersteld: {{servers}} servers, {{groups}} mappen, {{rules}} regels, {{notes}} notities, {{aiProviders}} AI-providers.",
+      "safety": "Veiligheidsback-up van je vorige gegevens: {{path}}",
+      "folder": "Je vorige servers staan in de map “{{name}}”.",
+      "hostKeysPending": "De vertrouwde hostsleutels worden bij de volgende start aangevuld.",
+      "done": "Klaar"
+    },
+    "errors": {
+      "cannotOpen": "Onjuiste code of wachtzin, of het bestand is beschadigd.",
+      "typo": "De code bevat een typefout.",
+      "notBackup": "Dit is geen Smart SSH-back-upbestand. Serverlijsten in ssh_config-indeling importeer je via de serverlijst.",
+      "newerVersion": "Deze back-up is gemaakt met een nieuwere versie van Smart SSH. Werk de app bij en probeer het opnieuw.",
+      "failed": "De bewerking is mislukt. Er is niets gewijzigd."
+    }
   }
 }

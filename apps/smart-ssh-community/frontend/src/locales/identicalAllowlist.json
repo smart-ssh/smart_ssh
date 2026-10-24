@@ -28,7 +28,8 @@
     "fileBrowser.column.permissions": "same word in this language",
     "fileBrowser.properties.type": "same word in this language",
     "session.terminalTab": "same word in this language",
-    "actionCard.autoRanScopeTag": "same word in this language"
+    "actionCard.autoRanScopeTag": "same word in this language",
+    "backup.counts.notes": "same word in this language"
   },
   "es": {
     "common.ok": "same word in this language",
@@ -83,7 +84,10 @@
     "fileBrowser.properties.typeFile": "same word in this language",
     "unusableServer.host": "same word in this language",
     "actionCard.autoRanScopeServer": "same word in this language",
-    "actionCard.autoRanScopeTag": "same word in this language"
+    "actionCard.autoRanScopeTag": "same word in this language",
+    "backup.passphrase.label": "same word in this language",
+    "backup.import.usePassphrase": "same word in this language",
+    "backup.import.passphraseLabel": "same word in this language"
   },
   "pl": {
     "common.ok": "same word in this language",

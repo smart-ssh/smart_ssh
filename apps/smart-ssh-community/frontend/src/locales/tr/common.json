@@ -45,7 +45,8 @@
       "chatRetention": "Oturumlar ve veriler",
       "mcpServer": "MCP sunucusu",
       "masterPassword": "Ana parola",
-      "voiceInput": "Sesli giriş"
+      "voiceInput": "Sesli giriş",
+      "dataAndBackup": "Veri ve yedek"
     }
   },
   "about": {
@@ -870,7 +871,8 @@
       "success": "{{created}} sunucu oluşturuldu, {{groups}} klasör, {{skipped}} çakışma atlandı.",
       "fallbacksDetail": "{{count}} anahtar dosyası okunamadı, bunun yerine yol korundu: {{detail}}.",
       "encryptedDetail": "{{count}} anahtar şifreli olarak devralındı — ilk bağlantıdan önce parola ifadesini ekleyin: {{detail}}."
-    }
+    },
+    "isBackup": "Bu dosya şifreli bir yedektir, ssh_config değildir. Hiçbir şey oluşturulmadı. Ayarlar → Veri ve yedek bölümünden geri yükleyin."
   },
   "sshConfigExport": {
     "dialogTitle": "ssh_config olarak dışa aktar",
@@ -880,7 +882,8 @@
       "includeHintLabel": "Bu dosyayı kendi ~/.ssh/config dosyanıza nasıl dahil edersiniz:",
       "copy": "Kopyala",
       "notRepresentedHint": "Gruplar, etiketler, notlar, filtre kuralları ve güvenlik ayarları bu dosyada yok — bir sunucuda eksik olanlar girdisinin üstünde yorum olarak belirtilir."
-    }
+    },
+    "backupHint": "Kimlik bilgileri, kurallar veya notlar içermez. Tam yedek için şifreli yedeği kullanın (Ayarlar → Veri ve yedek)."
   },
   "startup": {
     "stateUnknown": "Smart SSH başlangıç durumunu okuyamadı. Hiçbir şey değiştirilmedi. Yeniden deneyin; sürerse günlük nedeni belirtir.",
@@ -1352,5 +1355,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "tamam",
     "resultFailed": "başarısız"
+  },
+  "backup": {
+    "title": "Şifreli yedek",
+    "intro": "Tüm Smart SSH verilerinizi tek bir şifreli dosyaya kaydeder ve daha sonra, örneğin yeni bir bilgisayarda geri yükler.",
+    "included": "Dahil: sunucular, klasörler, etiketler, filtre kuralları, sunucu notları, yapay zekâ sağlayıcıları, kayıtlı kimlik bilgileri (şifreli) ve güvenilen ana makine anahtarları.",
+    "excluded": "Dahil değil: sohbet geçmişi, kullanım kayıtları, cihaz ayarları ve diskteki anahtar dosyaları.",
+    "restoreInfo": "Geri yükleme bu cihazdaki tüm verilerin yerine geçer. Mevcut verileriniz önce kaydedilir, sunucularınız tarihli bir klasöre taşınır.",
+    "export": "Yedeği dışa aktar…",
+    "restore": "Yedekten geri yükle…",
+    "newCode": "Yeni kurtarma kodu",
+    "setPassphrase": "Parola ifadesi belirle",
+    "exportDone": "Yedek {{path}} konumuna kaydedildi.",
+    "exportCounts": "{{servers}} sunucu, {{rules}} kural, {{notes}} not.",
+    "setup": {
+      "title": "Yedeklerinizi koruyun",
+      "intro": "Yedekler şifrelidir. Okumak için bir kurtarma koduna veya parola ifadesine ihtiyacınız var, bu yüzden şimdi birini seçin.",
+      "useCode": "Kurtarma kodu oluştur",
+      "usePassphrase": "Bunun yerine parola ifadesi kullan"
+    },
+    "code": {
+      "title": "Kurtarma kodunuz",
+      "warning": "Bu kodu yazın ve güvenli saklayın. Yalnızca bir kez gösterilir, tekrar gösterilemez. Bu kod olmadan yedekleriniz okunamaz.",
+      "copy": "Kopyala",
+      "copyFailed": "Kopyalanamadı.",
+      "confirm": "Kodu not ettim",
+      "continue": "Devam"
+    },
+    "passphrase": {
+      "title": "Parola ifadesi belirleyin",
+      "warning": "Parola ifadesi olmadan yedekleriniz okunamaz. Kurtarma yoktur.",
+      "label": "Parola ifadesi",
+      "help": "En az {{count}} karakter.",
+      "tooShort": "Çok kısa: en az {{count}} karakter.",
+      "repeat": "Parola ifadesini tekrarla",
+      "mismatch": "Parola ifadeleri eşleşmiyor.",
+      "save": "Parola ifadesini kaydet"
+    },
+    "import": {
+      "title": "Yedekten geri yükle",
+      "pickTitle": "Bir yedek dosyası seçin",
+      "file": "Dosya: {{name}}",
+      "kind": "Bu yedeği ne açar",
+      "useCode": "Kurtarma kodu",
+      "usePassphrase": "Parola ifadesi",
+      "codeLabel": "Kurtarma kodu",
+      "passphraseLabel": "Parola ifadesi",
+      "open": "Yedeği aç"
+    },
+    "confirm": {
+      "title": "Verileriniz değiştirilsin mi?",
+      "intro": "Geri yükleme bu cihazdaki verilerin yerine geçer. Henüz hiçbir şey değişmedi.",
+      "what": "Veri",
+      "local": "Şimdi",
+      "file": "Yedek",
+      "sessions": "Kapatılacak açık oturumlar: {{count}}",
+      "safety": "Mevcut verileriniz önce {{dir}} konumuna kaydedilir. Sunucularınız bugünün tarihli yeni bir “Previous data” klasörüne taşınır.",
+      "replace": "Verileri değiştir"
+    },
+    "counts": {
+      "servers": "Sunucular",
+      "groups": "Klasörler",
+      "rules": "Kurallar",
+      "notes": "Notlar",
+      "aiProviders": "Yapay zekâ sağlayıcıları"
+    },
+    "summary": {
+      "title": "Yedek geri yüklendi",
+      "counts": "Geri yüklendi: {{servers}} sunucu, {{groups}} klasör, {{rules}} kural, {{notes}} not, {{aiProviders}} yapay zekâ sağlayıcısı.",
+      "safety": "Önceki verilerinizin güvenlik yedeği: {{path}}",
+      "folder": "Önceki sunucularınız “{{name}}” klasöründe.",
+      "hostKeysPending": "Güvenilen ana makine anahtarları bir sonraki başlatmada tamamlanır.",
+      "done": "Bitti"
+    },
+    "errors": {
+      "cannotOpen": "Kod veya parola ifadesi yanlış ya da dosya bozuk.",
+      "typo": "Kodda yazım hatası var.",
+      "notBackup": "Bu bir Smart SSH yedek dosyası değil. ssh_config biçimindeki sunucu listeleri sunucu listesinden içe aktarılır.",
+      "newerVersion": "Bu yedek Smart SSH’nin daha yeni bir sürümüyle oluşturuldu. Uygulamayı güncelleyip tekrar deneyin.",
+      "failed": "İşlem başarısız oldu. Hiçbir şey değişmedi."
+    }
   }
 }

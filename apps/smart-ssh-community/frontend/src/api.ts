@@ -915,3 +915,61 @@ export const changeMasterPassword = (current: string, password: string, repeated
  * aufrufen. Ohne Bestätigung bleibt alles, wie es war. */
 export const switchToOsKeychain = (current: string, replaceAnotherKey: boolean) =>
   invoke<"password" | "keychain">("switch_to_os_keychain", { current, replaceAnotherKey });
+
+// --- Spec 0109, Issue #666: encrypted backup -------------------------------
+
+export interface BackupKeyStatusDto {
+  exists: boolean;
+  hasCode: boolean;
+  hasPassphrase: boolean;
+}
+export interface BackupCountsDto {
+  servers: number;
+  groups: number;
+  rules: number;
+  notes: number;
+  aiProviders: number;
+}
+export interface BackupExportDto {
+  path: string;
+  servers: number;
+  groups: number;
+  rules: number;
+  notes: number;
+  aiProviders: number;
+  secrets: number;
+  hostKeys: number;
+}
+export interface BackupImportPreviewDto {
+  local: BackupCountsDto;
+  file: BackupCountsDto;
+  openSessions: number;
+  safetyBackupDir: string;
+}
+export interface BackupImportSummaryDto {
+  counts: BackupCountsDto;
+  safetyBackup: string | null;
+  previousDataFolder: string | null;
+  hostKeysPending: boolean;
+}
+export interface BackupImportStartDto {
+  imported: BackupImportSummaryDto | null;
+  preview: BackupImportPreviewDto | null;
+}
+
+export const backupKeyStatus = () => invoke<BackupKeyStatusDto>("backup_key_status");
+/** K2: creates the backup key; the code is returned once and not retrievable later. */
+export const createBackupKeyWithCode = () => invoke<string>("create_backup_key_with_code");
+export const setBackupPassphrase = (passphrase: string) =>
+  invoke<void>("set_backup_passphrase", { passphrase });
+/** K6: replaces the recovery code; returned once. */
+export const newBackupCode = () => invoke<string>("new_backup_code");
+/** Opens the system save dialog in the backend; `null` when cancelled. */
+export const exportEncryptedBackup = () => invoke<BackupExportDto | null>("export_encrypted_backup");
+/** Opens the system file picker in the backend; returns the file name, `null` when cancelled. */
+export const pickBackupImportFile = (title: string) =>
+  invoke<string | null>("pick_backup_import_file", { title });
+export const startBackupImport = (kind: "code" | "passphrase", secret: string) =>
+  invoke<BackupImportStartDto>("start_backup_import", { kind, secret });
+export const confirmBackupImport = () => invoke<BackupImportSummaryDto>("confirm_backup_import");
+export const cancelBackupImport = () => invoke<void>("cancel_backup_import");

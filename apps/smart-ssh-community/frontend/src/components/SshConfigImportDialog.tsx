@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { applySshConfigImport, commandErrorMessage, previewSshConfigImport } from "../api";
+import { applySshConfigImport, commandErrorCode, commandErrorMessage, previewSshConfigImport } from "../api";
 import { showToast } from "../toastBus";
 import type {
   SshConfigEntryChoice,
@@ -93,7 +93,12 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
         for (const e of dto.entries) initial[e.index] = initialEntryState(e);
         setEntryState(initial);
       })
-      .catch((err) => !cancelled && setError(commandErrorMessage(err)))
+      .catch(
+        (err) =>
+          !cancelled &&
+          // Spec 0109, T3: a backup file belongs to "Data and backup".
+          setError(commandErrorCode(err) === "SSH_CONFIG_IS_BACKUP" ? t("sshConfigImport.isBackup") : commandErrorMessage(err)),
+      )
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;

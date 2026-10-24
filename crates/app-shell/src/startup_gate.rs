@@ -115,6 +115,10 @@ mod tests {
             "set_backup_passphrase",
             "new_backup_code",
             "export_encrypted_backup",
+            "pick_backup_import_file",
+            "start_backup_import",
+            "confirm_backup_import",
+            "cancel_backup_import",
             // Die beiden ohne `AppState` — ohne das Tor liefen sie.
             "get_app_info",
             "create_overlay_titlebar",

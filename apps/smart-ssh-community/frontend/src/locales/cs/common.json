@@ -45,7 +45,8 @@
       "chatRetention": "Relace a data",
       "mcpServer": "Server MCP",
       "masterPassword": "Hlavní heslo",
-      "voiceInput": "Hlasový vstup"
+      "voiceInput": "Hlasový vstup",
+      "dataAndBackup": "Data a záloha"
     }
   },
   "about": {
@@ -880,7 +881,8 @@
       "success": "Vytvořeno serverů: {{created}}, složek: {{groups}}, přeskočených konfliktů: {{skipped}}.",
       "fallbacksDetail": "Souborů klíčů, které nešlo přečíst, a cesta byla ponechána (počet: {{count}}): {{detail}}.",
       "encryptedDetail": "Klíčů převzatých šifrovaných (počet: {{count}}) — před prvním připojením doplňte přístupovou frázi: {{detail}}."
-    }
+    },
+    "isBackup": "Tento soubor je šifrovaná záloha, ne ssh_config. Nic nebylo vytvořeno. Obnovte ji v Nastavení → Data a záloha."
   },
   "sshConfigExport": {
     "dialogTitle": "Exportovat do ssh_config",
@@ -890,7 +892,8 @@
       "includeHintLabel": "Jak tento soubor zahrnout do vlastního ~/.ssh/config:",
       "copy": "Kopírovat",
       "notRepresentedHint": "Skupiny, štítky, poznámky, pravidla filtru a nastavení zabezpečení v tomto souboru nejsou — co u daného serveru chybí, je uvedeno jako komentář nad jeho záznamem."
-    }
+    },
+    "backupHint": "Neobsahuje přihlašovací údaje, pravidla ani poznámky. Pro úplnou zálohu použijte šifrovanou zálohu (Nastavení → Data a záloha)."
   },
   "startup": {
     "stateUnknown": "Smart SSH nemohl přečíst svůj stav spuštění. Nic se nezměnilo. Zkuste to znovu; pokud přetrvává, příčinu uvádí log.",
@@ -1368,5 +1371,85 @@
     "announce": "{{step}}: {{result}}",
     "resultOk": "hotovo",
     "resultFailed": "selhalo"
+  },
+  "backup": {
+    "title": "Šifrovaná záloha",
+    "intro": "Uloží všechna vaše data Smart SSH do jednoho šifrovaného souboru a později je obnoví, např. na novém počítači.",
+    "included": "Obsahuje: servery, složky, štítky, pravidla filtru, poznámky k serverům, poskytovatele AI, uložené přihlašovací údaje (šifrované) a důvěryhodné klíče hostitelů.",
+    "excluded": "Neobsahuje: historii chatu, záznamy o využití, nastavení zařízení a soubory klíčů na disku.",
+    "restoreInfo": "Obnovení nahradí všechna data v tomto zařízení. Aktuální data se nejprve uloží a vaše servery se přesunou do složky s datem.",
+    "export": "Exportovat zálohu…",
+    "restore": "Obnovit ze zálohy…",
+    "newCode": "Nový kód pro obnovení",
+    "setPassphrase": "Nastavit heslovou frázi",
+    "exportDone": "Záloha uložena do {{path}}.",
+    "exportCounts": "Serverů: {{servers}}, pravidel: {{rules}}, poznámek: {{notes}}.",
+    "setup": {
+      "title": "Chraňte své zálohy",
+      "intro": "Zálohy jsou šifrované. K jejich přečtení potřebujete kód pro obnovení nebo heslovou frázi, vyberte si proto jednu hned.",
+      "useCode": "Vytvořit kód pro obnovení",
+      "usePassphrase": "Raději použít heslovou frázi"
+    },
+    "code": {
+      "title": "Váš kód pro obnovení",
+      "warning": "Zapište si tento kód a dobře ho uschovejte. Zobrazí se jen jednou a už ho nepůjde zobrazit znovu. Bez něj nelze zálohy přečíst.",
+      "copy": "Kopírovat",
+      "copyFailed": "Nelze zkopírovat.",
+      "confirm": "Kód mám zapsaný",
+      "continue": "Pokračovat"
+    },
+    "passphrase": {
+      "title": "Nastavit heslovou frázi",
+      "warning": "Bez heslové fráze nelze zálohy přečíst. Obnovení není možné.",
+      "label": "Heslová fráze",
+      "help": "Alespoň {{count}} znaků.",
+      "tooShort": "Příliš krátké: alespoň {{count}} znaků.",
+      "repeat": "Zopakujte heslovou frázi",
+      "mismatch": "Heslové fráze se neshodují.",
+      "save": "Uložit heslovou frázi"
+    },
+    "import": {
+      "title": "Obnovit ze zálohy",
+      "pickTitle": "Vyberte soubor zálohy",
+      "file": "Soubor: {{name}}",
+      "kind": "Čím se záloha otevře",
+      "useCode": "Kód pro obnovení",
+      "usePassphrase": "Heslová fráze",
+      "codeLabel": "Kód pro obnovení",
+      "passphraseLabel": "Heslová fráze",
+      "open": "Otevřít zálohu"
+    },
+    "confirm": {
+      "title": "Nahradit vaše data?",
+      "intro": "Obnovení nahradí data v tomto zařízení. Zatím se nic nezměnilo.",
+      "what": "Údaje",
+      "local": "Nyní",
+      "file": "Záloha",
+      "sessions": "Otevřené relace, které budou zavřeny: {{count}}",
+      "safety": "Aktuální data se nejprve uloží do {{dir}}. Vaše servery se přesunou do nové složky “Previous data” s dnešním datem.",
+      "replace": "Nahradit data"
+    },
+    "counts": {
+      "servers": "Servery",
+      "groups": "Složky",
+      "rules": "Pravidla",
+      "notes": "Poznámky",
+      "aiProviders": "Poskytovatelé AI"
+    },
+    "summary": {
+      "title": "Záloha obnovena",
+      "counts": "Obnoveno: serverů {{servers}}, složek {{groups}}, pravidel {{rules}}, poznámek {{notes}}, poskytovatelů AI {{aiProviders}}.",
+      "safety": "Záloha předchozích dat: {{path}}",
+      "folder": "Vaše předchozí servery jsou ve složce “{{name}}”.",
+      "hostKeysPending": "Důvěryhodné klíče hostitelů se doplní při příštím spuštění.",
+      "done": "Hotovo"
+    },
+    "errors": {
+      "cannotOpen": "Špatný kód nebo heslová fráze, nebo je soubor poškozen.",
+      "typo": "Kód obsahuje překlep.",
+      "notBackup": "Toto není záložní soubor Smart SSH. Seznamy serverů ve formátu ssh_config se importují ze seznamu serverů.",
+      "newerVersion": "Tuto zálohu vytvořila novější verze Smart SSH. Aktualizujte aplikaci a zkuste to znovu.",
+      "failed": "Operace selhala. Nic se nezměnilo."
+    }
   }
 }
