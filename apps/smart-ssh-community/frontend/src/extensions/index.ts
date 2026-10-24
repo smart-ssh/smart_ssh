@@ -2,6 +2,8 @@ export {
   registerSettingsSection,
   registerDocumentAction,
   listSettingsSections,
+  listSettingsSectionsForCategory,
+  unregisterSettingsSection,
   listDocumentActions,
   registerFirstRunNoticeExtension,
   listFirstRunNoticeExtensions,
