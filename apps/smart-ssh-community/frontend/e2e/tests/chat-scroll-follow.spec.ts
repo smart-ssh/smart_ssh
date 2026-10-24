@@ -2,7 +2,7 @@
 // bottom; a scrolled-up position is kept, and the jump button returns.
 import { expect, test } from "../support/app";
 import { populated } from "../support/data";
-import { openSession } from "../support/session";
+import { chatInput, openSession } from "../support/session";
 
 test("a scrolled-up position is kept while an answer streams; the button returns to the bottom", async ({
   app,
@@ -35,7 +35,7 @@ test("a scrolled-up position is kept while an answer streams; the button returns
 
   await page.getByTestId("chat-jump-to-latest").focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator("textarea").last()).toBeFocused();
+  await expect(chatInput(page)).toBeFocused();
   await expect.poll(async () => (await metrics()).gap).toBeLessThanOrEqual(16);
   await expect(page.getByTestId("chat-jump-to-latest")).toBeHidden();
   await stream(60, 70);
