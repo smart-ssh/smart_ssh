@@ -429,6 +429,7 @@
     "expired": "针对 {{host}}:{{port}} 的主机密钥请求已过期。连接未建立，密钥也未被信任。"
   },
   "sessionTabs": {
+    "newSession": "新建会话",
     "overview": "概览",
     "pendingAction": "等待确认",
     "closeTab": "关闭标签页“{{name}}”",

@@ -53,9 +53,20 @@ ein Warten hinweg gehalten.
   zählt als der Tab dieses Servers: ein Klick auf den Server wechselt zu ihm.
 - Ein Klick auf einen Server in der Serverliste öffnet einen **neuen** Tab. Ist
   für diesen Server schon ein Nutzer-Tab offen, wird stattdessen zu ihm
-  gewechselt, bevor irgendeine Verbindung aufgebaut wird. Das gilt auch für
-  einen getrennten Tab: er muss erst geschlossen werden, bevor man neu
-  verbinden kann.
+  gewechselt, bevor irgendeine Verbindung aufgebaut wird; sind mehrere offen,
+  zu dem, der zuletzt in Benutzung war. Das gilt auch für einen getrennten
+  Tab: er muss erst geschlossen werden, bevor man neu verbinden kann.
+- **Weitere Sitzung zum selben Server.** Das Kontextmenü (Rechtsklick) eines
+  Servers in der Serverliste und das eines Nutzer-Tabs enthalten den Eintrag
+  „Neue Sitzung“. Er öffnet einen zusätzlichen Tab mit eigener Verbindung, auch
+  wenn der Server schon einen Tab hat (ohne Auswahl einer gespeicherten
+  Konversation; die neue Sitzung beginnt leer). Jede Sitzung ist unabhängig:
+  Terminal, Dateibrowser (auch der erhöhte Modus) und Chat teilen nichts mit
+  den anderen Sitzungen des Servers.
+- **Nummerierung.** Der erste Tab eines Servers heißt „Name“, weitere „Name (2)“,
+  „Name (3)“ usw. Eine Nummer wird nicht neu vergeben, solange ein Tab mit
+  dieser Nummer offen ist; wird ein Tab geschlossen, ist seine Nummer für die
+  nächste neue Sitzung wieder frei (die kleinste freie Nummer wird genommen).
 - **Ausnahme MCP (Spec 0104).** Ein externer MCP-Client bekommt je Server und
   Client einen eigenen Tab „Client @ Server" mit MCP-Abzeichen und
   eigener Verbindung, zusätzlich zu einem eventuell offenen Nutzer-Tab
@@ -142,10 +153,9 @@ Schließen-Schaltfläche und `Cmd`/`Ctrl+W` trennen die Sitzung. Dabei:
 
 ## 8. Grenzen
 
-- **Ein Nutzer-Tab je Server.** Zwei parallele Shells zum selben Server als
-  Nutzer-Tabs gibt es nicht; die Frage, ob sie Kontext und Prompt-Historie
-  teilen würden, ist bewusst nicht entschieden. Nur MCP-Clients bekommen einen
-  zusätzlichen Tab je Server.
+- **Mehrere Nutzer-Tabs je Server nur über „Neue Sitzung“.** Ein normaler Klick
+  auf den Server öffnet nie einen zweiten Tab. Zusätzlich bekommen MCP-Clients
+  einen Tab je Server (Spec 0104).
 - **Keine Wiederherstellung nach App-Neustart.** Offene Tabs überstehen einen
   Neustart nicht (die Verbindungen enden mit der App); es gibt keinen
   automatischen Wiederaufbau mehrerer Server beim Start.

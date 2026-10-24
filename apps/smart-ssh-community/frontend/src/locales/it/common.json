@@ -429,6 +429,7 @@
     "expired": "La richiesta della chiave host per {{host}}:{{port}} è scaduta. La connessione non è stata stabilita e la chiave non è stata considerata attendibile."
   },
   "sessionTabs": {
+    "newSession": "Nuova sessione",
     "overview": "Panoramica",
     "pendingAction": "In attesa di conferma",
     "closeTab": "Chiudi scheda \"{{name}}\"",

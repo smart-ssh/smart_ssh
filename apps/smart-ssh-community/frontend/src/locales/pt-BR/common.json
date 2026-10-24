@@ -429,6 +429,7 @@
     "expired": "A solicitação de chave de host para {{host}}:{{port}} expirou. A conexão não foi estabelecida e a chave não foi considerada confiável."
   },
   "sessionTabs": {
+    "newSession": "Nova sessão",
     "overview": "Visão geral",
     "pendingAction": "Aguardando confirmação",
     "closeTab": "Fechar aba \"{{name}}\"",

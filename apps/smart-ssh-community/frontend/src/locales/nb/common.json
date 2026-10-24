@@ -429,6 +429,7 @@
     "expired": "Forespørselen om vertsnøkkel for {{host}}:{{port}} utløp. Tilkoblingen ble ikke opprettet, og nøkkelen ble ikke godkjent."
   },
   "sessionTabs": {
+    "newSession": "Ny økt",
     "overview": "Oversikt",
     "pendingAction": "Venter på bekreftelse",
     "closeTab": "Lukk fanen “{{name}}”",
