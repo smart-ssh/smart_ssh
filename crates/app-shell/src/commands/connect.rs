@@ -978,6 +978,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             injection_check_provider,
             injection_check_budget,
             injection_suspected: std::sync::atomic::AtomicBool::new(false),
+            injection_suspected_reason: std::sync::Mutex::new(None),
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(
                 second_opinion_setup_failed,

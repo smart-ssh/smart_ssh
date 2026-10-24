@@ -1222,7 +1222,11 @@
       "cardLabel": "प्रश्न: {{question}}",
       "send": "भेजें",
       "answeredOwnWords": "अपने शब्दों में उत्तर दिया"
-    }
+    },
+    "injectionChecking": "आउटपुट की जाँच हो रही है …",
+    "injectionSuspected": "चेतावनी: यह आउटपुट निर्देश इंजेक्ट करने के प्रयास जैसा लगता है।",
+    "injectionSuspectedReason": "जाँच करने वाले AI का कारण: {{reason}}",
+    "injectionConfirmReason": "कारण: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "यह नोट बहुत बड़ा है और लंबे सत्रों में AI संदर्भ के लिए छोटा किया जा सकता है। सहेजा गया नोट पूरा रहता है।",

@@ -1214,7 +1214,11 @@
       "cardLabel": "Câu hỏi: {{question}}",
       "send": "Gửi",
       "answeredOwnWords": "Đã trả lời bằng lời của bạn"
-    }
+    },
+    "injectionChecking": "Đang kiểm tra đầu ra …",
+    "injectionSuspected": "Cảnh báo: đầu ra này có vẻ là nỗ lực chèn chỉ dẫn.",
+    "injectionSuspectedReason": "Lý do từ AI kiểm tra: {{reason}}",
+    "injectionConfirmReason": "Lý do: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Ghi chú này rất lớn và có thể bị rút gọn trong ngữ cảnh AI ở các phiên dài. Ghi chú đã lưu vẫn đầy đủ.",

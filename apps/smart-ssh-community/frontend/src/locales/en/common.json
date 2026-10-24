@@ -1222,7 +1222,11 @@
       "cardLabel": "Question: {{question}}",
       "send": "Send",
       "answeredOwnWords": "Answered in your own words"
-    }
+    },
+    "injectionChecking": "Checking output …",
+    "injectionSuspected": "Warning: this output looks like an attempt to inject instructions.",
+    "injectionSuspectedReason": "Reason given by the checking AI: {{reason}}",
+    "injectionConfirmReason": "Reason: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "This note is very large and may be shortened for the AI context in long sessions. The saved note stays complete.",

@@ -1222,7 +1222,11 @@
       "cardLabel": "Vraag: {{question}}",
       "send": "Verzenden",
       "answeredOwnWords": "In eigen woorden beantwoord"
-    }
+    },
+    "injectionChecking": "Uitvoer wordt gecontroleerd …",
+    "injectionSuspected": "Waarschuwing: deze uitvoer lijkt een poging om instructies in te voegen.",
+    "injectionSuspectedReason": "Reden van de controlerende AI: {{reason}}",
+    "injectionConfirmReason": "Reden: {{reason}}"
   },
   "notes": {
     "largeNoteHint": "Deze notitie is erg groot en kan in lange sessies worden ingekort voor de AI-context. De opgeslagen notitie blijft compleet.",
