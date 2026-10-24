@@ -24,13 +24,28 @@ pub async fn list_servers(
     state: State<'_, AppState>,
     group_id: Option<GroupId>,
 ) -> CommandResult<Vec<ServerDto>> {
-    list_servers_impl(
+    let mut servers = list_servers_impl(
         &app,
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
         group_id,
     )
-    .await
+    .await?;
+    let marked = super::groups::copy_marked(&state).await?;
+    for dto in &mut servers {
+        dto.is_copy = marked.servers.iter().any(|id| id.to_string() == dto.id);
+    }
+    Ok(servers)
+}
+
+/// Spec 0103: "Keep as regular entry" for one server.
+#[tauri::command]
+pub async fn keep_server_as_regular_entry(
+    state: State<'_, AppState>,
+    id: ServerId,
+) -> CommandResult<()> {
+    state.backup_store.clear_server_copy_marker(id.0).await?;
+    Ok(())
 }
 
 /// Kern von [`list_servers`], herausgelöst aus dem `#[tauri::command]`-
