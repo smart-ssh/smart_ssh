@@ -294,6 +294,13 @@
       "connection": "Connection",
       "security": "Security",
       "invalid": "Contains errors"
+    },
+    "importKey": {
+      "title": "Import the key into Smart SSH?",
+      "import": "Import key",
+      "keep": "Keep file path",
+      "importHint": "The key is stored encrypted in Smart SSH and travels with backups to your other devices.",
+      "keepHint": "Only the file path is stored and travels to other devices. The file must exist at the same path on every device."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup.",
     "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard.",
     "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system.",
-    "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists"
+    "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device"
   },
   "mcpServer": {
     "hint": "External MCP clients can use this to propose commands, file reads/writes, and note updates on allow-listed servers — every request always requires confirmation in the app, regardless of existing allow rules.",
@@ -727,7 +735,12 @@
     "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}",
     "nothingToPaste": "Nothing to paste: the clipboard holds no files",
     "createFileDone": "File “{{name}}” created",
-    "createFileFailed": "File “{{name}}” could not be created: {{reason}}"
+    "createFileFailed": "File “{{name}}” could not be created: {{reason}}",
+    "chownDone": "Owner of “{{name}}” changed",
+    "chownRecursive": "Owner changed — {{count}} entries in “{{name}}”",
+    "chownFailed": "Owner of “{{name}}” could not be changed: {{reason}}",
+    "chownUnknownUser": "Owner of “{{name}}” not changed: unknown user",
+    "chownUnknownGroup": "Owner of “{{name}}” not changed: unknown group"
   },
   "fileElevation": {
     "toggle": "Elevated rights",
@@ -780,7 +793,9 @@
     "otherUser": "As another user…",
     "targetUser": "Target user",
     "targetUserHelp": "Runs the file browser as this user via sudo. Default: root.",
-    "confirm": "Elevate"
+    "confirm": "Elevate",
+    "opChown": "Change owner",
+    "chownNote": "The owner will be changed as {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Import ssh_config",
@@ -1116,7 +1131,8 @@
       "cut": "Cut",
       "delete": "Delete",
       "newFolder": "New folder",
-      "newFile": "New file"
+      "newFile": "New file",
+      "chown": "Change owner…"
     },
     "properties": {
       "title": "Properties",
@@ -1174,7 +1190,16 @@
       "notText": "No text diff possible: the file is binary (not valid UTF-8 text).",
       "permission": "No text diff possible: you have no read permission for this file with the current rights.",
       "other": "No text diff possible: the file could not be read ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Change owner",
+      "owner": "User",
+      "group": "Group",
+      "hint": "Enter a name or a number. A side you leave as it is stays unchanged. The server decides whether the change is allowed (usually only root may change the owner).",
+      "recursive": "Apply to contents",
+      "recursiveWarning": "— changes the owner of ALL files and subfolders in this folder. Symbolic links are not followed. Cannot be undone."
+    },
+    "transferChown": "Changing owner of {{name}}"
   },
   "chat": {
     "jumpToLatest": "Jump to latest message",
@@ -1285,6 +1310,15 @@
     "paneTabs": "Session panes",
     "moreActions": "More actions",
     "terminalOpenFailed": "Could not open terminal: {{error}}",
+    "extraKeys": {
+      "group": "Extra keys",
+      "up": "Up arrow",
+      "down": "Down arrow",
+      "left": "Left arrow",
+      "right": "Right arrow",
+      "pageUp": "Page up",
+      "pageDown": "Page down"
+    },
     "reconnectingAuto": "Reconnecting… (attempt {{attempt}})",
     "stopReconnect": "Stop",
     "reconnectGaveUp": "Connection could not be restored."

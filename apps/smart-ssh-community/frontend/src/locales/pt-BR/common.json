@@ -294,6 +294,13 @@
       "connection": "Conexão",
       "security": "Segurança",
       "invalid": "Contém erros"
+    },
+    "importKey": {
+      "title": "Importar a chave para o Smart SSH?",
+      "import": "Importar chave",
+      "keep": "Manter o caminho do arquivo",
+      "importHint": "A chave é armazenada criptografada no Smart SSH e acompanha os backups para seus outros dispositivos.",
+      "keepHint": "Apenas o caminho do arquivo é armazenado e vai para outros dispositivos. O arquivo precisa existir no mesmo caminho em cada dispositivo."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "A chave no chaveiro não pertence a este banco de dados. Nada foi alterado — armazená-la tornaria o banco de dados ilegível na próxima inicialização.",
     "SFTP_CONTENT_TOO_LARGE": "O arquivo é maior que 50 MB e não pode ser copiado para a área de transferência.",
     "CLIPBOARD_FILE_FAILED": "Não foi possível colocar o arquivo na área de transferência neste sistema.",
-    "SSH_SFTP_ALREADY_EXISTS": "Já existe um arquivo ou pasta com este nome"
+    "SSH_SFTP_ALREADY_EXISTS": "Já existe um arquivo ou pasta com este nome",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Arquivo de chave não encontrado neste dispositivo"
   },
   "mcpServer": {
     "hint": "Clientes MCP externos podem usá-lo para propor comandos, leituras/gravações de arquivos e atualizações de anotações em servidores da lista de permitidos — toda solicitação sempre exige confirmação no app, independentemente das regras de permissão existentes.",
@@ -732,7 +740,12 @@
     "uploadFailedMany": "{{name}} arquivos não puderam ser enviados, p. ex.: {{reason}}",
     "nothingToPaste": "Nada para colar: a área de transferência não contém arquivos",
     "createFileDone": "Arquivo “{{name}}” criado",
-    "createFileFailed": "Não foi possível criar o arquivo “{{name}}”: {{reason}}"
+    "createFileFailed": "Não foi possível criar o arquivo “{{name}}”: {{reason}}",
+    "chownDone": "Proprietário de “{{name}}” alterado",
+    "chownRecursive": "Proprietário alterado — {{count}} itens em “{{name}}”",
+    "chownFailed": "Não foi possível alterar o proprietário de “{{name}}”: {{reason}}",
+    "chownUnknownUser": "Proprietário de “{{name}}” não alterado: usuário desconhecido",
+    "chownUnknownGroup": "Proprietário de “{{name}}” não alterado: grupo desconhecido"
   },
   "fileElevation": {
     "toggle": "Direitos elevados",
@@ -785,7 +798,9 @@
     "otherUser": "Como outro usuário…",
     "targetUser": "Usuário de destino",
     "targetUserHelp": "Executa o navegador de arquivos como este usuário via sudo. Padrão: root.",
-    "confirm": "Elevar"
+    "confirm": "Elevar",
+    "opChown": "Alteração de proprietário",
+    "chownNote": "O proprietário será alterado como {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -1123,7 +1138,8 @@
       "cut": "Recortar",
       "delete": "Excluir",
       "newFolder": "Nova pasta",
-      "newFile": "Novo arquivo"
+      "newFile": "Novo arquivo",
+      "chown": "Alterar proprietário…"
     },
     "properties": {
       "title": "Propriedades",
@@ -1181,7 +1197,16 @@
       "notText": "Diff de texto impossível: o arquivo é binário (não é texto UTF-8 válido).",
       "permission": "Diff de texto impossível: com os direitos atuais você não tem permissão de leitura para este arquivo.",
       "other": "Diff de texto impossível: não foi possível ler o arquivo ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Alterar proprietário",
+      "owner": "Usuário",
+      "group": "Grupo",
+      "hint": "Informe um nome ou um número. Um lado deixado como está permanece inalterado. O servidor decide se a alteração é permitida (geralmente só o root pode alterar o proprietário).",
+      "recursive": "Aplicar ao conteúdo",
+      "recursiveWarning": "— altera o proprietário de TODOS os arquivos e subpastas desta pasta. Links simbólicos não são seguidos. Não pode ser desfeito."
+    },
+    "transferChown": "Alterando proprietário de {{name}}"
   },
   "chat": {
     "jumpToLatest": "Ir para a mensagem mais recente",
@@ -1293,6 +1318,15 @@
     "paneTabs": "Painéis da sessão",
     "moreActions": "Mais ações",
     "terminalOpenFailed": "Não foi possível abrir o terminal: {{error}}",
+    "extraKeys": {
+      "group": "Teclas extras",
+      "up": "Seta para cima",
+      "down": "Seta para baixo",
+      "left": "Seta para a esquerda",
+      "right": "Seta para a direita",
+      "pageUp": "Página acima",
+      "pageDown": "Página abaixo"
+    },
     "reconnectingAuto": "Reconectando… (tentativa {{attempt}})",
     "stopReconnect": "Parar",
     "reconnectGaveUp": "Não foi possível restabelecer a conexão."

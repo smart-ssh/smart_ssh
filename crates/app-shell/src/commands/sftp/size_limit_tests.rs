@@ -168,6 +168,7 @@ impl SftpSession for MismatchSftp {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             }),
             StatResult::Fails => Err(SshError::ChannelError("stat nicht möglich".to_string())),
         }
@@ -200,6 +201,9 @@ impl SftpSession for MismatchSftp {
         unreachable!("diese Tests löschen kein Verzeichnis")
     }
 
+    async fn set_owner(&mut self, _path: &str, _uid: u32, _gid: u32) -> Result<(), SshError> {
+        unreachable!()
+    }
     async fn set_permissions(&mut self, _path: &str, _mode: u32) -> Result<(), SshError> {
         unreachable!("diese Tests ändern keine Rechte")
     }

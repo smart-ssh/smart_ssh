@@ -1272,6 +1272,14 @@ mod tests {
         ) -> Result<(), ssh_manager_core::ssh::SshError> {
             unreachable!()
         }
+        async fn set_owner(
+            &mut self,
+            _path: &str,
+            _uid: u32,
+            _gid: u32,
+        ) -> Result<(), ssh_manager_core::ssh::SshError> {
+            unreachable!()
+        }
     }
 
     /// Spec 0085, T15 (A2.2): Nach dem Ausschalten hält **kein** Zustand den

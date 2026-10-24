@@ -19,6 +19,7 @@ import {
   sftpUploadFolderPreview,
   readLocalTextPreview,
   sftpChmod,
+  sftpChown,
   sftpDelete,
   sftpDeletePreview,
   sftpDownload,
@@ -140,7 +141,7 @@ type MoveKind = "rename" | "move";
 
 interface Transfer {
   id: string;
-  kind: "upload" | "download" | "delete" | "chmod";
+  kind: "upload" | "download" | "delete" | "chmod" | "chown";
   fileName: string;
   totalBytes: number | null;
   error: string | null;
@@ -251,6 +252,7 @@ export function FileBrowserPanel({
   const [clipboardFiles, setClipboardFiles] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [chmodTarget, setChmodTarget] = useState<RemoteEntryDto | null>(null);
+  const [chownTarget, setChownTarget] = useState<RemoteEntryDto | null>(null);
   // Spec 0054, Teil 3: "Verschieben" per Ausschneiden/Einfügen (die Spec
   // erlaubt ausdrücklich Cut/Paste ODER Drag-and-Drop als Alternativen —
   // Cut/Paste deckt die Anforderung bereits vollständig ab, ein
@@ -1510,6 +1512,41 @@ export function FileBrowserPanel({
       .catch((err) => notifyFailed("fileToasts.chmodFailed", target.name, err));
   };
 
+  const handleChown = (entry: RemoteEntryDto) => {
+    setOpenMenu(null);
+    setChownTarget(entry);
+  };
+
+  // Issue #654: a side the user did not touch arrives as `null` (unchanged).
+  const handleConfirmChown = (owner: string | null, group: string | null, recursive: boolean) => {
+    if (!chownTarget) return;
+    const target = chownTarget;
+    setChownTarget(null);
+    sftpChown(sessionId, target.path, owner, group, recursive, channelUser)
+      .then((count) => {
+        if (recursive && target.isDir) {
+          notifyOk("fileToasts.chownRecursive", { name: target.name, count });
+        } else {
+          notifyOk("fileToasts.chownDone", { name: target.name });
+        }
+        load(path);
+      })
+      .catch((err) => {
+        const code = commandErrorCode(err);
+        if (code === "CHOWN_UNKNOWN_USER" || code === "CHOWN_UNKNOWN_GROUP") {
+          showToast({
+            kind: "error",
+            message: t(
+              code === "CHOWN_UNKNOWN_USER" ? "fileToasts.chownUnknownUser" : "fileToasts.chownUnknownGroup",
+              { name: target.name },
+            ) + modeSuffix,
+          });
+          return;
+        }
+        notifyFailed("fileToasts.chownFailed", target.name, err);
+      });
+  };
+
   const renderEntryMenu = (entry: RemoteEntryDto, className: string, point?: { x: number; y: number }) => (
     <FileEntryMenu
       entry={entry}
@@ -1530,6 +1567,7 @@ export function FileBrowserPanel({
       }}
       onCut={handleCut}
       onChmod={handleChmod}
+      onChown={handleChown}
       onDelete={(e) => {
         setOpenMenu(null);
         setDeleteTarget(e);
@@ -1951,6 +1989,7 @@ export function FileBrowserPanel({
                         download: "fileBrowser.transferDownload",
                         delete: "fileBrowser.transferDelete",
                         chmod: "fileBrowser.transferChmod",
+                        chown: "fileBrowser.transferChown",
                       }[transfer.kind],
                       { name: transfer.fileName },
                     )}
@@ -1961,7 +2000,7 @@ export function FileBrowserPanel({
                         total: transfer.folder.filesTotal,
                       })}`}
                   </span>
-                  {transfer.kind === "delete" || transfer.kind === "chmod" ? (
+                  {transfer.kind === "delete" || transfer.kind === "chmod" || transfer.kind === "chown" ? (
                     <>
                       {transfer.entries?.total != null && transfer.entries.total > 0 ? (
                         <progress
@@ -1988,7 +2027,7 @@ export function FileBrowserPanel({
                       aria-label={transfer.fileName}
                     />
                   ) : null}
-                  {transfer.kind !== "delete" && transfer.kind !== "chmod" && (
+                  {transfer.kind !== "delete" && transfer.kind !== "chmod" && transfer.kind !== "chown" && (
                   <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-slate-400">
                     {formatBytes(transfer.bytesDone ?? 0)}
                     {transfer.totalBytes !== null && ` / ${formatBytes(transfer.totalBytes)}`}
@@ -2557,6 +2596,15 @@ export function FileBrowserPanel({
         />
       )}
 
+      {chownTarget && (
+        <ChownDialog
+          entry={chownTarget}
+          modeNote={elevated ? t("fileElevation.chownNote", { user: elevatedUser }) : null}
+          onCancel={() => setChownTarget(null)}
+          onConfirm={handleConfirmChown}
+        />
+      )}
+
       {moveCollision && (
         <DialogFrame
           layer="sessionTab"
@@ -2723,6 +2771,7 @@ export function FileBrowserPanel({
                       upload: "fileElevation.opUpload",
                       delete: "fileElevation.opDelete",
                       chmod: "fileElevation.opChmod",
+                      chown: "fileElevation.opChown",
                     }[op.kind],
                   )}
                 </span>{" "}
@@ -2797,6 +2846,7 @@ function FileEntryMenu({
   onRename,
   onCut,
   onChmod,
+  onChown,
   onDelete,
 }: {
   entry: RemoteEntryDto;
@@ -2816,6 +2866,7 @@ function FileEntryMenu({
   onRename: (entry: RemoteEntryDto) => void;
   onCut: (entry: RemoteEntryDto) => void;
   onChmod: (entry: RemoteEntryDto) => void;
+  onChown: (entry: RemoteEntryDto) => void;
   onDelete: (entry: RemoteEntryDto) => void;
 }) {
   const caps = currentCaps();
@@ -2879,6 +2930,9 @@ function FileEntryMenu({
       <div className="my-1 border-t border-slate-800" />
       <button type="button" onClick={act(() => onChmod(entry))} className={itemClass}>
         {t("fileBrowser.menu.chmod")}
+      </button>
+      <button type="button" onClick={act(() => onChown(entry))} className={itemClass}>
+        {t("fileBrowser.menu.chown")}
       </button>
       <button type="button" onClick={act(() => onRename(entry))} className={itemClass}>
         {t("fileBrowser.menu.rename")}
@@ -3196,6 +3250,103 @@ function ChmodDialog({
             files: fileBits.toString(8).padStart(3, "0"),
           })}
         </p>
+      )}
+    </DialogFrame>
+  );
+}
+
+/** Issue #654: "Change owner…" dialog. User and group are prefilled with the
+ * current name (or number); a field the user leaves as it was is sent as
+ * `null` so that side stays untouched. Names or numbers are accepted. */
+function ChownDialog({
+  entry,
+  modeNote,
+  onCancel,
+  onConfirm,
+}: {
+  entry: RemoteEntryDto;
+  modeNote: string | null;
+  onCancel: () => void;
+  onConfirm: (owner: string | null, group: string | null, recursive: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const initialOwner = entry.owner ?? (entry.uid !== null ? String(entry.uid) : "");
+  const initialGroup = entry.group ?? (entry.gid !== null ? String(entry.gid) : "");
+  const [owner, setOwner] = useState(initialOwner);
+  const [group, setGroup] = useState(initialGroup);
+  const [recursive, setRecursive] = useState(false);
+  const ownerRef = useRef<HTMLInputElement>(null);
+  const side = (value: string, initial: string) => {
+    const v = value.trim();
+    return v === "" || v === initial ? null : v;
+  };
+  const ownerChange = side(owner, initialOwner);
+  const groupChange = side(group, initialGroup);
+  const nothingToChange = ownerChange === null && groupChange === null;
+
+  return (
+    <DialogFrame
+      layer="sessionTab"
+      size="sm"
+      title={t("fileBrowser.chown.title")}
+      onClose={onCancel}
+      initialFocusRef={ownerRef}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (nothingToChange) return;
+        onConfirm(ownerChange, groupChange, recursive && entry.isDir);
+      }}
+      actions={
+        <>
+          <Button onClick={onCancel}>{t("fileBrowser.cancel")}</Button>
+          <Button type="submit" variant="primary" disabled={nothingToChange}>
+            {t("fileBrowser.apply")}
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-3 font-mono text-xs break-all text-slate-400">{entry.path}</p>
+      {modeNote && (
+        <p className="mb-3 border border-amber-600/60 bg-amber-950/40 px-2 py-1 text-xs text-amber-300">
+          ⚠ {modeNote}
+        </p>
+      )}
+      <Field label={t("fileBrowser.chown.owner")} className="mb-3">
+        {(control) => (
+          <input
+            {...TECHNICAL_INPUT_PROPS}
+            {...control}
+            ref={ownerRef}
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            className={`${FIELD_CONTROL_CLASS} font-mono`}
+          />
+        )}
+      </Field>
+      <Field label={t("fileBrowser.chown.group")} className="mb-3">
+        {(control) => (
+          <input
+            {...TECHNICAL_INPUT_PROPS}
+            {...control}
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            className={`${FIELD_CONTROL_CLASS} font-mono`}
+          />
+        )}
+      </Field>
+      <p className="mb-3 text-xs text-slate-400">{t("fileBrowser.chown.hint")}</p>
+      {entry.isDir && (
+        <label className="flex items-start gap-2 text-sm text-amber-300">
+          <input
+            type="checkbox"
+            checked={recursive}
+            onChange={(e) => setRecursive(e.target.checked)}
+            className="mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          />
+          <span>
+            <strong>{t("fileBrowser.chown.recursive")}</strong> {t("fileBrowser.chown.recursiveWarning")}
+          </span>
+        </label>
       )}
     </DialogFrame>
   );

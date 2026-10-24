@@ -294,6 +294,13 @@
       "connection": "接続",
       "security": "セキュリティ",
       "invalid": "エラーがあります"
+    },
+    "importKey": {
+      "title": "キーを Smart SSH にインポートしますか？",
+      "import": "キーをインポート",
+      "keep": "ファイルパスを保持",
+      "importHint": "キーは暗号化されて Smart SSH に保存され、バックアップとともに他のデバイスへ引き継がれます。",
+      "keepHint": "保存され他のデバイスへ引き継がれるのはファイルパスのみです。ファイルはすべてのデバイスで同じパスに存在する必要があります。"
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "キーチェーンの鍵は、このデータベースのものではありません。何も変更されていません。保存すると、次回の起動時にデータベースを読み取れなくなります。",
     "SFTP_CONTENT_TOO_LARGE": "ファイルが 50 MB を超えているため、クリップボードにコピーできません。",
     "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
-    "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します"
+    "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません"
   },
   "mcpServer": {
     "hint": "外部のMCPクライアントは、許可リストに登録されたサーバーに対して、コマンド、ファイルの読み書き、メモの更新を提案できます。既存の許可ルールにかかわらず、すべてのリクエストでアプリ内の確認が常に必要です。",
@@ -722,7 +730,12 @@
     "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}",
     "nothingToPaste": "貼り付けるものがありません：クリップボードにファイルがありません",
     "createFileDone": "ファイル「{{name}}」を作成しました",
-    "createFileFailed": "ファイル「{{name}}」を作成できませんでした: {{reason}}"
+    "createFileFailed": "ファイル「{{name}}」を作成できませんでした: {{reason}}",
+    "chownDone": "「{{name}}」の所有者を変更しました",
+    "chownRecursive": "所有者を変更しました — 「{{name}}」内の {{count}} 件",
+    "chownFailed": "「{{name}}」の所有者を変更できませんでした: {{reason}}",
+    "chownUnknownUser": "「{{name}}」の所有者は変更されませんでした: 不明なユーザー",
+    "chownUnknownGroup": "「{{name}}」の所有者は変更されませんでした: 不明なグループ"
   },
   "fileElevation": {
     "toggle": "昇格した権限",
@@ -775,7 +788,9 @@
     "otherUser": "別のユーザーとして…",
     "targetUser": "対象ユーザー",
     "targetUserHelp": "sudo を使って、このユーザーとしてファイルブラウザを実行します。既定値: root。",
-    "confirm": "昇格"
+    "confirm": "昇格",
+    "opChown": "所有者の変更",
+    "chownNote": "所有者は {{user}} として変更されます。"
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_configをインポート",
@@ -1109,7 +1124,8 @@
       "cut": "切り取り",
       "delete": "削除",
       "newFolder": "新しいフォルダー",
-      "newFile": "新しいファイル"
+      "newFile": "新しいファイル",
+      "chown": "所有者を変更…"
     },
     "properties": {
       "title": "プロパティ",
@@ -1167,7 +1183,16 @@
       "notText": "テキスト差分を表示できません：ファイルはバイナリです（有効な UTF-8 テキストではありません）。",
       "permission": "テキスト差分を表示できません：現在の権限ではこのファイルの読み取り権限がありません。",
       "other": "テキスト差分を表示できません：ファイルを読み取れませんでした（{{message}}）。"
-    }
+    },
+    "chown": {
+      "title": "所有者の変更",
+      "owner": "ユーザー",
+      "group": "グループ",
+      "hint": "名前または番号を入力してください。そのままにした側は変更されません。変更が許可されるかはサーバーが判断します(通常は root のみ所有者を変更できます)。",
+      "recursive": "内容にも適用",
+      "recursiveWarning": "— このフォルダー内のすべてのファイルとサブフォルダーの所有者を変更します。シンボリックリンクはたどりません。元に戻せません。"
+    },
+    "transferChown": "{{name}} の所有者を変更中"
   },
   "chat": {
     "jumpToLatest": "最新のメッセージへ",
@@ -1277,6 +1302,15 @@
     "paneTabs": "セッションのパネル",
     "moreActions": "その他の操作",
     "terminalOpenFailed": "ターミナルを開けませんでした: {{error}}",
+    "extraKeys": {
+      "group": "追加キー",
+      "up": "上矢印",
+      "down": "下矢印",
+      "left": "左矢印",
+      "right": "右矢印",
+      "pageUp": "ページアップ",
+      "pageDown": "ページダウン"
+    },
     "reconnectingAuto": "再接続中… ({{attempt}} 回目)",
     "stopReconnect": "停止",
     "reconnectGaveUp": "接続を復旧できませんでした。"

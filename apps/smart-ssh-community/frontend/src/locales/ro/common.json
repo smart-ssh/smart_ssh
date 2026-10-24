@@ -294,6 +294,13 @@
       "connection": "Conexiune",
       "security": "Securitate",
       "invalid": "Conține erori"
+    },
+    "importKey": {
+      "title": "Importați cheia în Smart SSH?",
+      "import": "Importă cheia",
+      "keep": "Păstrează calea fișierului",
+      "importHint": "Cheia este stocată criptat în Smart SSH și ajunge odată cu copiile de rezervă pe celelalte dispozitive.",
+      "keepHint": "Doar calea fișierului este stocată și ajunge pe alte dispozitive. Fișierul trebuie să existe la aceeași cale pe fiecare dispozitiv."
     }
   },
   "filterRules": {
@@ -638,7 +645,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Cheia din portchei nu aparține acestei baze de date. Nimic nu a fost modificat — stocarea ei ar face baza de date ilizibilă la următoarea pornire.",
     "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard.",
     "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem.",
-    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume"
+    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv"
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
@@ -732,7 +740,12 @@
     "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}",
     "nothingToPaste": "Nimic de lipit: clipboardul nu conține fișiere",
     "createFileDone": "Fișierul „{{name}}” a fost creat",
-    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}"
+    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}",
+    "chownDone": "Proprietarul pentru „{{name}}” a fost schimbat",
+    "chownRecursive": "Proprietar schimbat — {{count}} elemente în „{{name}}”",
+    "chownFailed": "Proprietarul pentru „{{name}}” nu a putut fi schimbat: {{reason}}",
+    "chownUnknownUser": "Proprietarul pentru „{{name}}” nu a fost schimbat: utilizator necunoscut",
+    "chownUnknownGroup": "Proprietarul pentru „{{name}}” nu a fost schimbat: grup necunoscut"
   },
   "fileElevation": {
     "toggle": "Drepturi ridicate",
@@ -785,7 +798,9 @@
     "otherUser": "Ca alt utilizator…",
     "targetUser": "Utilizator țintă",
     "targetUserHelp": "Rulează browserul de fișiere ca acest utilizator prin sudo. Implicit: root.",
-    "confirm": "Ridică"
+    "confirm": "Ridică",
+    "opChown": "Schimbarea proprietarului",
+    "chownNote": "Proprietarul va fi schimbat ca {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",
@@ -1123,7 +1138,8 @@
       "cut": "Taie",
       "delete": "Șterge",
       "newFolder": "Dosar nou",
-      "newFile": "Fișier nou"
+      "newFile": "Fișier nou",
+      "chown": "Schimbă proprietarul…"
     },
     "properties": {
       "title": "Proprietăți",
@@ -1181,7 +1197,16 @@
       "notText": "Diferență de text imposibilă: fișierul este binar (nu este text UTF-8 valid).",
       "permission": "Diferență de text imposibilă: cu drepturile curente nu ai permisiunea de citire pentru acest fișier.",
       "other": "Diferență de text imposibilă: fișierul nu a putut fi citit ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Schimbare proprietar",
+      "owner": "Utilizator",
+      "group": "Grup",
+      "hint": "Introduceți un nume sau un număr. O parte lăsată neschimbată rămâne neschimbată. Serverul decide dacă modificarea este permisă (de obicei doar root poate schimba proprietarul).",
+      "recursive": "Aplică pe conținut",
+      "recursiveWarning": "— schimbă proprietarul TUTUROR fișierelor și subfolderelor din acest folder. Legăturile simbolice nu sunt urmate. Nu poate fi anulat."
+    },
+    "transferChown": "Se schimbă proprietarul pentru {{name}}"
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",
@@ -1289,6 +1314,15 @@
     "paneTabs": "Panourile sesiunii",
     "moreActions": "Mai multe acțiuni",
     "terminalOpenFailed": "Terminalul nu a putut fi deschis: {{error}}",
+    "extraKeys": {
+      "group": "Taste suplimentare",
+      "up": "Săgeată sus",
+      "down": "Săgeată jos",
+      "left": "Săgeată stânga",
+      "right": "Săgeată dreapta",
+      "pageUp": "Pagină sus",
+      "pageDown": "Pagină jos"
+    },
     "connectionLostPressR": "Conexiunea a fost pierdută. Apăsați R pentru reconectare.",
     "reconnect": "Reconectare",
     "reconnectedSeparator": "— reconectat —",

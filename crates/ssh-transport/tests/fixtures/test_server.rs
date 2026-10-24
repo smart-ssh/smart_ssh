@@ -121,11 +121,23 @@ impl FirstLineSentWatch {
 #[derive(Default)]
 pub struct SetstatModeWatch {
     last_mode: std::sync::Mutex<Option<u32>>,
+    /// Issue #654: last `(uid, gid)` pair sent by `setstat`.
+    last_ids: std::sync::Mutex<Option<(u32, u32)>>,
 }
 
 impl SetstatModeWatch {
     pub fn last_mode(&self) -> Option<u32> {
         *self.last_mode.lock().expect("Mutex nicht vergiftet")
+    }
+
+    pub fn last_ids(&self) -> Option<(u32, u32)> {
+        *self.last_ids.lock().expect("Mutex nicht vergiftet")
+    }
+
+    fn record_ids(&self, uid: Option<u32>, gid: Option<u32>) {
+        if let (Some(uid), Some(gid)) = (uid, gid) {
+            *self.last_ids.lock().expect("Mutex nicht vergiftet") = Some((uid, gid));
+        }
     }
 
     fn record(&self, mode: Option<u32>) {
@@ -839,6 +851,7 @@ impl russh_sftp::server::Handler for SftpTestHandler {
         // was der Client tatsächlich sendet — unabhängig davon, ob dieser
         // Testserver es anwendet.
         self.setstat_mode.record(attrs.permissions);
+        self.setstat_mode.record_ids(attrs.uid, attrs.gid);
         // Windows kennt keine Unix-`mode`-Bits; `path` bliebe dort sonst
         // unbenutzt (ADR 0122, R1) — der Testserver wendet dort schlicht
         // keine Rechte an, unverändert für Unix (Spec 0054, Teil 3).
