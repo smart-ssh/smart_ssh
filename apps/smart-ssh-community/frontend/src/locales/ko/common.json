@@ -1045,8 +1045,10 @@
       "name": "이름",
       "size": "크기",
       "permissions": "권한",
-      "modified": "수정한 날짜"
+      "modified": "수정한 날짜",
+      "owner": "소유자"
     },
+    "columnsMenu": "열 표시 또는 숨기기",
     "localEdit": {
       "uploading": "“{{name}}” 업로드 중…",
       "changed": "“{{name}}”이(가) 로컬에서 변경되었습니다. 서버에 업로드하시겠습니까?",

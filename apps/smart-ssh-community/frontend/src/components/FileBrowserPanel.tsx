@@ -55,6 +55,9 @@ import {
   loadFileManagerColumnWidths,
   loadFileManagerSort,
   saveFileManagerColumnWidths,
+  loadHiddenFileColumns,
+  saveHiddenFileColumns,
+  type HideableFileColumn,
   saveFileManagerSort,
   type FileManagerColumnWidths,
 } from "../layoutSettings";
@@ -83,6 +86,7 @@ import { NoteDiffPreview } from "./NoteDiffPreview";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useMenuPlacement } from "../hooks/useMenuPlacement";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
+import { formatOwner } from "../fileOwner";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
 /** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
@@ -96,13 +100,17 @@ const DEFAULT_COLUMN_WIDTHS: FileManagerColumnWidths = {
   size: 90,
   permissions: 90,
   modified: 150,
+  owner: 130,
 };
 const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
   size: 56,
   permissions: 64,
   modified: 90,
+  owner: 80,
 };
 const NAME_MIN_WIDTH = 120;
+/** Issue #653: display order of the hideable columns (Name comes first). */
+const COLUMN_ORDER: readonly HideableFileColumn[] = ["size", "permissions", "owner", "modified"];
 
 /** Issue #357: ab dieser Größe zeigt "Dateiinhalt kopieren" Fortschritt. */
 const COPY_PROGRESS_FROM_BYTES = 5 * 1024 * 1024;
@@ -282,6 +290,9 @@ export function FileBrowserPanel({
   const [folderSummary, setFolderSummary] = useState<FolderUploadSummaryDto | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  // Issue #653: hidden columns (app-wide) and the header's right-click menu.
+  const [hiddenColumns, setHiddenColumns] = useState<HideableFileColumn[]>([]);
+  const [columnsMenu, setColumnsMenu] = useState<{ x: number; y: number } | null>(null);
   const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -606,6 +617,20 @@ export function FileBrowserPanel({
       .catch((err) => console.warn("Konnte Spaltenbreiten nicht laden:", err));
   }, []);
 
+  useEffect(() => {
+    loadHiddenFileColumns()
+      .then(setHiddenColumns)
+      .catch((err) => console.warn("Could not load hidden columns:", err));
+  }, []);
+
+  const toggleColumn = useCallback((column: HideableFileColumn) => {
+    setHiddenColumns((prev) => {
+      const next = prev.includes(column) ? prev.filter((c) => c !== column) : [...prev, column];
+      saveHiddenFileColumns(next).catch((err) => console.warn("Could not save hidden columns:", err));
+      return next;
+    });
+  }, []);
+
   /** Klemmt eine vorgeschlagene Breite für `column` auf ihre Mindestbreite
    * UND darauf, dass die Name-Spalte (die den Rest der verfügbaren Breite
    * einnimmt, s. `<colgroup>` unten) nie unter `NAME_MIN_WIDTH` fällt —
@@ -613,18 +638,21 @@ export function FileBrowserPanel({
    * Tabellen-Containers, nicht von einem festen Annahmewert. */
   const clampColumnWidth = useCallback(
     (column: keyof FileManagerColumnWidths, proposed: number, widths: FileManagerColumnWidths) => {
+      const hidden = hiddenColumnsRef.current;
       const min = MIN_COLUMN_WIDTHS[column];
       const containerWidth = tableContainerRef.current?.clientWidth ?? Infinity;
       const otherColumnsTotal =
         ACTIONS_COLUMN_WIDTH +
         (Object.keys(widths) as (keyof FileManagerColumnWidths)[])
-          .filter((key) => key !== column)
+          .filter((key) => key !== column && !hidden.includes(key))
           .reduce((sum, key) => sum + widths[key], 0);
       const maxForThisColumn = containerWidth - otherColumnsTotal - NAME_MIN_WIDTH;
       return Math.min(Math.max(proposed, min), Math.max(min, maxForThisColumn));
     },
     [],
   );
+  const hiddenColumnsRef = useRef(hiddenColumns);
+  hiddenColumnsRef.current = hiddenColumns;
 
   // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): der
   // Persistenz-Aufruf lief vorher als Seiteneffekt *innerhalb* eines
@@ -2056,7 +2084,8 @@ export function FileBrowserPanel({
                 // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- mouse-only shortcut to the ⋯ menu, same as the table row
                 <li
                   key={entry.path}
-                  className="flex min-h-11 items-center border-t border-slate-800/70 pl-2"
+                  data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
+                  className="group flex min-h-11 items-center border-t border-slate-800/70 pl-2 hover:bg-slate-700/60 focus-within:bg-slate-700/80 data-[active=true]:bg-slate-700/80"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -2069,13 +2098,13 @@ export function FileBrowserPanel({
                       <button
                         type="button"
                         onClick={() => load(entry.path)}
-                        className="block max-w-full truncate rounded text-left text-sm text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="block max-w-full truncate rounded text-left text-sm text-indigo-300 group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         title={entry.name}
                       >
                         📁 {entry.name}
                       </button>
                     ) : (
-                      <span className="block truncate text-sm text-slate-200" title={entry.name}>
+                      <span className="block truncate text-sm text-slate-200 group-hover:underline" title={entry.name}>
                         📄 {entry.name}
                       </span>
                     )}
@@ -2120,9 +2149,10 @@ export function FileBrowserPanel({
               // und der umgebende `overflow-auto`-Container (s. oben)
               // scrollt horizontal statt die Name-Spalte zu verschlucken.
               minWidth:
-                columnWidths.size +
-                columnWidths.permissions +
-                columnWidths.modified +
+                COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).reduce(
+                  (sum, c) => sum + columnWidths[c],
+                  0,
+                ) +
                 ACTIONS_COLUMN_WIDTH +
                 NAME_MIN_WIDTH,
             }}
@@ -2136,38 +2166,37 @@ export function FileBrowserPanel({
                 Spec verlangte "flexibler Rest"-Verhalten. */}
             <colgroup>
               <col />
-              <col style={{ width: columnWidths.size }} />
-              <col style={{ width: columnWidths.permissions }} />
-              <col style={{ width: columnWidths.modified }} />
+              {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
+                <col key={c} style={{ width: columnWidths[c] }} />
+              ))}
               <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
             </colgroup>
             <thead className="text-slate-400">
-              <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
+              <tr
+                className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setOpenMenu(null);
+                  setDirMenu(null);
+                  setColumnsMenu({ x: e.clientX, y: e.clientY });
+                }}
+              >
                 <th className={STICKY_TH} aria-sort={sortAria("name")}>{sortButton("name")}</th>
-                <th className={`relative ${STICKY_TH}`} aria-sort={sortAria("size")}>
-                  {sortButton("size")}
-                  <ColumnResizeHandle
-                    testId="column-resize-size"
-                    onDrag={handleColumnDrag("size")}
-                    onDragEnd={handleColumnDragEnd}
-                  />
-                </th>
-                <th className={`relative ${STICKY_TH}`} aria-sort={sortAria("permissions")}>
-                  {sortButton("permissions")}
-                  <ColumnResizeHandle
-                    testId="column-resize-permissions"
-                    onDrag={handleColumnDrag("permissions")}
-                    onDragEnd={handleColumnDragEnd}
-                  />
-                </th>
-                <th className={`relative ${STICKY_TH}`} aria-sort={sortAria("modified")}>
-                  {sortButton("modified")}
-                  <ColumnResizeHandle
-                    testId="column-resize-modified"
-                    onDrag={handleColumnDrag("modified")}
-                    onDragEnd={handleColumnDragEnd}
-                  />
-                </th>
+                {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
+                  <th
+                    key={c}
+                    className={`relative ${STICKY_TH}`}
+                    aria-sort={c === "owner" ? undefined : sortAria(c)}
+                  >
+                    {c === "owner" ? t("fileBrowser.column.owner") : sortButton(c)}
+                    <ColumnResizeHandle
+                      testId={`column-resize-${c}`}
+                      onDrag={handleColumnDrag(c)}
+                      onDragEnd={handleColumnDragEnd}
+                    />
+                  </th>
+                ))}
                 <th className={STICKY_TH}>
                   <span className="sr-only">{t("fileBrowser.actionsColumn")}</span>
                 </th>
@@ -2177,7 +2206,8 @@ export function FileBrowserPanel({
               {entries.map((entry) => (
                 <tr
                   key={entry.path}
-                  className="hover:bg-slate-800/40 [&>td]:border-t [&>td]:border-slate-800/70"
+                  data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
+                  className="group hover:bg-slate-700/60 focus-within:bg-slate-700/80 data-[active=true]:bg-slate-700/80 [&>td]:border-t [&>td]:border-slate-800/70"
                   // Spec 0054, Teil 1: Rechtsklick öffnet dasselbe Menü wie
                   // das Drei-Punkte-Symbol, nur an der Klickposition statt
                   // in der Aktionsspalte verankert (s. `openMenu`-Doc-
@@ -2195,26 +2225,30 @@ export function FileBrowserPanel({
                       <button
                         type="button"
                         onClick={() => load(entry.path)}
-                        className="block max-w-full truncate rounded text-left text-indigo-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="block max-w-full truncate rounded text-left text-indigo-300 hover:underline group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         title={entry.name}
                       >
                         📁 {entry.name}
                       </button>
                     ) : (
-                      <span className="block truncate text-slate-200" title={entry.name}>
+                      <span className="block truncate text-slate-200 group-hover:underline" title={entry.name}>
                         📄 {entry.name}
                       </span>
                     )}
                   </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-slate-400">
-                    {entry.isDir ? "—" : formatBytes(entry.size)}
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap font-mono text-slate-400">
-                    {entry.permissions}
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-slate-400">
-                    {entry.modified ? formatDateTime(entry.modified, i18n.language) : "—"}
-                  </td>
+                  {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
+                    <td
+                      key={c}
+                      className={`px-2 py-1 whitespace-nowrap text-slate-400${c === "permissions" ? " font-mono" : ""}${c === "owner" ? " truncate" : ""}`}
+                      title={c === "owner" ? formatOwner(entry) : undefined}
+                    >
+                      {c === "size" && (entry.isDir ? "—" : formatBytes(entry.size))}
+                      {c === "permissions" && entry.permissions}
+                      {c === "owner" && formatOwner(entry)}
+                      {c === "modified" &&
+                        (entry.modified ? formatDateTime(entry.modified, i18n.language) : "—")}
+                    </td>
+                  ))}
                   <td className="relative px-2 py-1 text-right">
                     <button
                       type="button"
@@ -2262,6 +2296,14 @@ export function FileBrowserPanel({
               ))}
             </tbody>
           </table>
+        )}
+        {columnsMenu && (
+          <ColumnsMenu
+            point={columnsMenu}
+            hidden={hiddenColumns}
+            onToggle={toggleColumn}
+            onClose={() => setColumnsMenu(null)}
+          />
         )}
         {dragOver && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center border-2 border-dashed border-indigo-500 bg-indigo-950/30 text-sm text-indigo-200">
@@ -2917,6 +2959,65 @@ const CHMOD_ROWS: { key: "owner" | "group" | "other"; read: number; write: numbe
   { key: "group", read: 0o040, write: 0o020, execute: 0o010 },
   { key: "other", read: 0o004, write: 0o002, execute: 0o001 },
 ];
+
+/** Issue #653: right-click menu on the header row — one checkbox per
+ * column except Name, which cannot be hidden. */
+function ColumnsMenu({
+  point,
+  hidden,
+  onToggle,
+  onClose,
+}: {
+  point: { x: number; y: number };
+  hidden: readonly HideableFileColumn[];
+  onToggle: (column: HideableFileColumn) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const getAnchor = useCallback(() => point, [point.x, point.y]); // eslint-disable-line react-hooks/exhaustive-deps
+  const style = useMenuPlacement(menuRef, getAnchor, true, { align: "start", gap: 0 });
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+  useEffect(() => {
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitemcheckbox"]')?.focus();
+  }, []);
+  return (
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label={t("fileBrowser.columnsMenu")}
+      style={style}
+      className="fixed z-10 rounded border border-slate-700 bg-slate-900 py-1 text-left text-xs shadow-lg"
+    >
+      {COLUMN_ORDER.map((c) => (
+        <button
+          key={c}
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={!hidden.includes(c)}
+          onClick={() => onToggle(c)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
+        >
+          <span aria-hidden="true" className="w-3">{hidden.includes(c) ? "" : "✓"}</span>
+          {t(`fileBrowser.column.${c}`)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** Spec 0054, Teil 3: chmod-Dialog — Checkbox-Matrix (owner/group/other ×
  * r/w/x) UND eine numerische Eingabe, bidirektional synchron über
