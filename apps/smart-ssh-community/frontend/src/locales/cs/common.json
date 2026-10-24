@@ -287,6 +287,14 @@
       "connection": "Připojení",
       "security": "Zabezpečení",
       "invalid": "Obsahuje chyby"
+    },
+    "importKey": {
+      "title": "Importovat klíč do Smart SSH?",
+      "import": "Importovat klíč",
+      "keep": "Ponechat cestu k souboru",
+      "importHint": "Klíč se uloží šifrovaně v Smart SSH a s zálohami putuje na vaše další zařízení.",
+      "keepHint": "Ukládá se a na další zařízení putuje jen cesta k souboru. Soubor musí na každém zařízení existovat na stejné cestě.",
+      "importedFrom": "Importováno z {{path}}"
     }
   },
   "filterRules": {
@@ -628,7 +636,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Klíč v klíčence nepatří k této databázi. Nic se nezměnilo — jeho uložení by databázi při dalším spuštění učinilo nečitelnou.",
     "SFTP_CONTENT_TOO_LARGE": "Soubor je větší než 50 MB a nelze jej zkopírovat do schránky.",
     "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky.",
-    "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje"
+    "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen"
   },
   "mcpServer": {
     "hint": "Externí klienti MCP mohou prostřednictvím toho navrhovat příkazy, čtení/zápisy souborů a aktualizace poznámek na povolených serverech — každý požadavek vždy vyžaduje potvrzení v aplikaci, bez ohledu na stávající pravidla povolení.",

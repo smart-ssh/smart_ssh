@@ -287,6 +287,14 @@
       "connection": "Połączenie",
       "security": "Bezpieczeństwo",
       "invalid": "Zawiera błędy"
+    },
+    "importKey": {
+      "title": "Zaimportować klucz do Smart SSH?",
+      "import": "Importuj klucz",
+      "keep": "Zachowaj ścieżkę pliku",
+      "importHint": "Klucz jest przechowywany w Smart SSH w postaci zaszyfrowanej i trafia z kopiami zapasowymi na inne urządzenia.",
+      "keepHint": "Zapisywana i przenoszona na inne urządzenia jest tylko ścieżka pliku. Plik musi istnieć pod tą samą ścieżką na każdym urządzeniu.",
+      "importedFrom": "Zaimportowano z {{path}}"
     }
   },
   "filterRules": {
@@ -628,7 +636,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Klucz w magazynie kluczy nie należy do tej bazy danych. Nic nie zmieniono — zapisanie go uniemożliwiłoby odczyt bazy przy następnym uruchomieniu.",
     "SFTP_CONTENT_TOO_LARGE": "Plik jest większy niż 50 MB i nie można go skopiować do schowka.",
     "CLIPBOARD_FILE_FAILED": "Nie udało się umieścić pliku w schowku w tym systemie.",
-    "SSH_SFTP_ALREADY_EXISTS": "Plik lub folder o tej nazwie już istnieje"
+    "SSH_SFTP_ALREADY_EXISTS": "Plik lub folder o tej nazwie już istnieje",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nie znaleziono pliku klucza na tym urządzeniu"
   },
   "mcpServer": {
     "hint": "Zewnętrzni klienci MCP mogą przez niego proponować polecenia, odczyty/zapisy plików i aktualizacje notatek na serwerach z listy dozwolonych — każde żądanie zawsze wymaga potwierdzenia w aplikacji, niezależnie od istniejących reguł zezwalających.",

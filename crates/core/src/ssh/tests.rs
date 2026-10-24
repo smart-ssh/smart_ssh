@@ -447,6 +447,23 @@ fn test_resolve_auth_encrypted_identity_file_with_stored_passphrase_resolves() {
     );
 }
 
+/// Issue #667 / Spec 0109 C3: fehlt die Datei auf diesem Gerät, ist das ein
+/// eigener Zustand mit Pfad (`KEY_FILE_NOT_FOUND_ON_DEVICE`) — kein Rückfall.
+#[test]
+fn test_resolve_auth_missing_identity_file_is_not_found_on_device() {
+    let store = MockCredentialStore::new();
+    let key_files = MockKeyFileReader::new();
+    let auth = AuthMethod::IdentityFile {
+        path: IDENTITY_PATH.to_string(),
+        passphrase_ref: None,
+    };
+
+    let err = resolve_auth(&auth, &store, &key_files).unwrap_err();
+
+    assert_eq!(err.code(), "KEY_FILE_NOT_FOUND_ON_DEVICE");
+    assert!(err.to_string().contains(IDENTITY_PATH), "{err}");
+}
+
 /// A-5/A-6: **ohne** hinterlegte Passphrase ergibt derselbe Schlüssel eine
 /// Meldung, die genau das sagt — und den Pfad nennt (nur `resolve_auth`
 /// kennt ihn, §4.2). Nicht „Anmeldung fehlgeschlagen".
@@ -480,12 +497,16 @@ fn test_resolve_auth_encrypted_identity_file_without_passphrase_names_path_and_r
 }
 
 /// §6.1.3: Ein Lesefehler wird zu [`SshError::CredentialResolutionFailed`]
-/// — kein neuer Fehlertyp, kein Panic (A-7).
+/// — kein Panic (A-7). Ausnahme „Datei fehlt“ (Issue #667): eigener Zustand.
 #[test]
-fn test_resolve_auth_identity_file_missing_file_yields_credential_resolution_failed() {
+fn test_resolve_auth_identity_file_unreadable_file_yields_credential_resolution_failed() {
     let store = MockCredentialStore::new();
-    // Die Attrappe kennt den Pfad gar nicht → „nicht gefunden".
-    let key_files = MockKeyFileReader::new();
+    let key_files = MockKeyFileReader::new().with_error(
+        IDENTITY_PATH,
+        KeyFileError::NotARegularFile {
+            path: IDENTITY_PATH.to_string(),
+        },
+    );
     let auth = AuthMethod::IdentityFile {
         path: IDENTITY_PATH.to_string(),
         passphrase_ref: None,
@@ -585,6 +606,14 @@ fn test_each_key_file_error_reaches_resolve_auth_as_a_failure() {
         };
 
         let result = resolve_auth(&auth, &store, &key_files);
+        // Issue #667: „nicht gefunden“ ist ein eigener Zustand mit Pfad.
+        if matches!(case, KeyFileError::NotFound { .. }) {
+            let Err(err @ SshError::KeyFileNotFound { .. }) = result else {
+                panic!("{case:?} muss zu KeyFileNotFound führen, bekam {result:?}");
+            };
+            assert!(err.to_string().contains(IDENTITY_PATH), "{err}");
+            continue;
+        }
         let Err(SshError::CredentialResolutionFailed(message)) = result else {
             panic!("{case:?} muss zu CredentialResolutionFailed führen, bekam {result:?}");
         };

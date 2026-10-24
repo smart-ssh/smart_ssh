@@ -161,6 +161,7 @@ const KNOWN_ERROR_CODES = new Set<string>([
   // auth.rs) — Vorab-Befund (B-3), Überführungsknopf (C-7) und
   // Überführung selbst (C-1) können jeden dieser Codes zurückgeben.
   "KEY_FILE_NOT_FOUND",
+  "KEY_FILE_NOT_FOUND_ON_DEVICE",
   "KEY_FILE_NOT_READABLE",
   "KEY_FILE_PERMISSIONS_TOO_OPEN",
   "KEY_FILE_TOO_LARGE",

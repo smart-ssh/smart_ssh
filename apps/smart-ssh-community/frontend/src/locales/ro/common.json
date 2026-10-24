@@ -287,6 +287,14 @@
       "connection": "Conexiune",
       "security": "Securitate",
       "invalid": "Conține erori"
+    },
+    "importKey": {
+      "title": "Importați cheia în Smart SSH?",
+      "import": "Importă cheia",
+      "keep": "Păstrează calea fișierului",
+      "importHint": "Cheia este stocată criptat în Smart SSH și ajunge odată cu copiile de rezervă pe celelalte dispozitive.",
+      "keepHint": "Doar calea fișierului este stocată și ajunge pe alte dispozitive. Fișierul trebuie să existe la aceeași cale pe fiecare dispozitiv.",
+      "importedFrom": "Importată din {{path}}"
     }
   },
   "filterRules": {
@@ -628,7 +636,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Cheia din portchei nu aparține acestei baze de date. Nimic nu a fost modificat — stocarea ei ar face baza de date ilizibilă la următoarea pornire.",
     "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard.",
     "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem.",
-    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume"
+    "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume",
+    "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv"
   },
   "mcpServer": {
     "hint": "Clienții MCP externi îl pot folosi pentru a propune comenzi, citiri/scrieri de fișiere și actualizări de notițe pe servere din lista de permise — fiecare cerere necesită întotdeauna confirmare în aplicație, indiferent de regulile de permitere existente.",
