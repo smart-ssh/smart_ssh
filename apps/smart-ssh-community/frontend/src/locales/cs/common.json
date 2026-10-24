@@ -300,8 +300,7 @@
       "import": "Importovat klíč",
       "keep": "Ponechat cestu k souboru",
       "importHint": "Klíč se uloží šifrovaně v Smart SSH a s zálohami putuje na vaše další zařízení.",
-      "keepHint": "Ukládá se a na další zařízení putuje jen cesta k souboru. Soubor musí na každém zařízení existovat na stejné cestě.",
-      "importedFrom": "Importováno z {{path}}"
+      "keepHint": "Ukládá se a na další zařízení putuje jen cesta k souboru. Soubor musí na každém zařízení existovat na stejné cestě."
     }
   },
   "filterRules": {

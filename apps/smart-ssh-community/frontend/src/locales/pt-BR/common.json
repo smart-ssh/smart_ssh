@@ -300,8 +300,7 @@
       "import": "Importar chave",
       "keep": "Manter o caminho do arquivo",
       "importHint": "A chave é armazenada criptografada no Smart SSH e acompanha os backups para seus outros dispositivos.",
-      "keepHint": "Apenas o caminho do arquivo é armazenado e vai para outros dispositivos. O arquivo precisa existir no mesmo caminho em cada dispositivo.",
-      "importedFrom": "Importada de {{path}}"
+      "keepHint": "Apenas o caminho do arquivo é armazenado e vai para outros dispositivos. O arquivo precisa existir no mesmo caminho em cada dispositivo."
     }
   },
   "filterRules": {

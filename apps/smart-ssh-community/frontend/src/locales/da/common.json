@@ -300,8 +300,7 @@
       "import": "Importér nøgle",
       "keep": "Behold filsti",
       "importHint": "Nøglen gemmes krypteret i Smart SSH og følger med sikkerhedskopier til dine andre enheder.",
-      "keepHint": "Kun filstien gemmes og følger med til andre enheder. Filen skal findes på samme sti på hver enhed.",
-      "importedFrom": "Importeret fra {{path}}"
+      "keepHint": "Kun filstien gemmes og følger med til andre enheder. Filen skal findes på samme sti på hver enhed."
     }
   },
   "filterRules": {

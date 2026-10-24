@@ -300,8 +300,7 @@
       "import": "Importuj klucz",
       "keep": "Zachowaj ścieżkę pliku",
       "importHint": "Klucz jest przechowywany w Smart SSH w postaci zaszyfrowanej i trafia z kopiami zapasowymi na inne urządzenia.",
-      "keepHint": "Zapisywana i przenoszona na inne urządzenia jest tylko ścieżka pliku. Plik musi istnieć pod tą samą ścieżką na każdym urządzeniu.",
-      "importedFrom": "Zaimportowano z {{path}}"
+      "keepHint": "Zapisywana i przenoszona na inne urządzenia jest tylko ścieżka pliku. Plik musi istnieć pod tą samą ścieżką na każdym urządzeniu."
     }
   },
   "filterRules": {

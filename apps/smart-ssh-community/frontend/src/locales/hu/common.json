@@ -300,8 +300,7 @@
       "import": "Kulcs importálása",
       "keep": "Fájlútvonal megtartása",
       "importHint": "A kulcs titkosítva tárolódik a Smart SSH-ban, és a biztonsági mentésekkel együtt eljut a többi eszközére.",
-      "keepHint": "Csak a fájl útvonala tárolódik és kerül át a többi eszközre. A fájlnak minden eszközön ugyanazon az útvonalon kell lennie.",
-      "importedFrom": "Importálva innen: {{path}}"
+      "keepHint": "Csak a fájl útvonala tárolódik és kerül át a többi eszközre. A fájlnak minden eszközön ugyanazon az útvonalon kell lennie."
     }
   },
   "filterRules": {

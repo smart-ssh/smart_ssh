@@ -300,8 +300,7 @@
       "import": "Importar clave",
       "keep": "Mantener la ruta del archivo",
       "importHint": "La clave se guarda cifrada en Smart SSH y viaja con las copias de seguridad a tus otros dispositivos.",
-      "keepHint": "Solo se guarda la ruta del archivo y viaja a otros dispositivos. El archivo debe existir en la misma ruta en cada dispositivo.",
-      "importedFrom": "Importada desde {{path}}"
+      "keepHint": "Solo se guarda la ruta del archivo y viaja a otros dispositivos. El archivo debe existir en la misma ruta en cada dispositivo."
     }
   },
   "filterRules": {

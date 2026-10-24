@@ -300,8 +300,7 @@
       "import": "Importer la clé",
       "keep": "Garder le chemin du fichier",
       "importHint": "La clé est stockée chiffrée dans Smart SSH et suit les sauvegardes vers vos autres appareils.",
-      "keepHint": "Seul le chemin du fichier est stocké et transmis aux autres appareils. Le fichier doit exister au même chemin sur chaque appareil.",
-      "importedFrom": "Importée depuis {{path}}"
+      "keepHint": "Seul le chemin du fichier est stocké et transmis aux autres appareils. Le fichier doit exister au même chemin sur chaque appareil."
     }
   },
   "filterRules": {

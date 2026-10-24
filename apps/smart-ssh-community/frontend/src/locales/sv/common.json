@@ -300,8 +300,7 @@
       "import": "Importera nyckel",
       "keep": "Behåll filsökvägen",
       "importHint": "Nyckeln lagras krypterad i Smart SSH och följer med säkerhetskopior till dina andra enheter.",
-      "keepHint": "Bara filsökvägen lagras och följer med till andra enheter. Filen måste finnas på samma sökväg på varje enhet.",
-      "importedFrom": "Importerad från {{path}}"
+      "keepHint": "Bara filsökvägen lagras och följer med till andra enheter. Filen måste finnas på samma sökväg på varje enhet."
     }
   },
   "filterRules": {

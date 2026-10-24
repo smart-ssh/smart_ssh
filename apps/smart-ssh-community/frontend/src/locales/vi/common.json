@@ -300,8 +300,7 @@
       "import": "Nhập khóa",
       "keep": "Giữ đường dẫn tệp",
       "importHint": "Khóa được lưu mã hóa trong Smart SSH và đi cùng bản sao lưu sang các thiết bị khác của bạn.",
-      "keepHint": "Chỉ đường dẫn tệp được lưu và chuyển sang thiết bị khác. Tệp phải tồn tại ở cùng đường dẫn trên mọi thiết bị.",
-      "importedFrom": "Đã nhập từ {{path}}"
+      "keepHint": "Chỉ đường dẫn tệp được lưu và chuyển sang thiết bị khác. Tệp phải tồn tại ở cùng đường dẫn trên mọi thiết bị."
     }
   },
   "filterRules": {

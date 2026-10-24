@@ -300,8 +300,7 @@
       "import": "Sleutel importeren",
       "keep": "Bestandspad behouden",
       "importHint": "De sleutel wordt versleuteld opgeslagen in Smart SSH en gaat mee met back-ups naar je andere apparaten.",
-      "keepHint": "Alleen het bestandspad wordt opgeslagen en gaat mee naar andere apparaten. Het bestand moet op elk apparaat op hetzelfde pad bestaan.",
-      "importedFrom": "Geïmporteerd uit {{path}}"
+      "keepHint": "Alleen het bestandspad wordt opgeslagen en gaat mee naar andere apparaten. Het bestand moet op elk apparaat op hetzelfde pad bestaan."
     }
   },
   "filterRules": {

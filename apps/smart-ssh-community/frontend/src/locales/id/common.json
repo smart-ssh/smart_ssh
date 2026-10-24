@@ -300,8 +300,7 @@
       "import": "Impor kunci",
       "keep": "Pertahankan jalur berkas",
       "importHint": "Kunci disimpan terenkripsi di Smart SSH dan ikut tersalin lewat cadangan ke perangkat Anda yang lain.",
-      "keepHint": "Hanya jalur berkas yang disimpan dan ikut ke perangkat lain. Berkas harus ada di jalur yang sama di setiap perangkat.",
-      "importedFrom": "Diimpor dari {{path}}"
+      "keepHint": "Hanya jalur berkas yang disimpan dan ikut ke perangkat lain. Berkas harus ada di jalur yang sama di setiap perangkat."
     }
   },
   "filterRules": {

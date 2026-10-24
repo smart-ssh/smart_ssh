@@ -300,8 +300,7 @@
       "import": "Import key",
       "keep": "Keep file path",
       "importHint": "The key is stored encrypted in Smart SSH and travels with backups to your other devices.",
-      "keepHint": "Only the file path is stored and travels to other devices. The file must exist at the same path on every device.",
-      "importedFrom": "Imported from {{path}}"
+      "keepHint": "Only the file path is stored and travels to other devices. The file must exist at the same path on every device."
     }
   },
   "filterRules": {

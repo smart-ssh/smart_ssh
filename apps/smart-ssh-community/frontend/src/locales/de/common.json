@@ -300,8 +300,7 @@
       "import": "Schlüssel importieren",
       "keep": "Dateipfad behalten",
       "importHint": "Der Schlüssel wird verschlüsselt in Smart SSH gespeichert und wandert mit Backups auf Ihre anderen Geräte.",
-      "keepHint": "Nur der Dateipfad wird gespeichert und wandert auf andere Geräte. Die Datei muss auf jedem Gerät am selben Pfad vorhanden sein.",
-      "importedFrom": "Importiert von {{path}}"
+      "keepHint": "Nur der Dateipfad wird gespeichert und wandert auf andere Geräte. Die Datei muss auf jedem Gerät am selben Pfad vorhanden sein."
     }
   },
   "filterRules": {

@@ -402,7 +402,6 @@ export function ServerForm({
   // Set once the server is saved while the import is still pending/failed,
   // so a retry never creates the server a second time.
   const [importSavedId, setImportSavedId] = useState<string | null>(null);
-  const [importedFromPath, setImportedFromPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Issue #606: the form is split into tabs. All panels stay mounted (hidden),
@@ -761,7 +760,6 @@ export function ServerForm({
       if (importKey && savedId) {
         setImportSavedId(savedId);
         await convertIdentityFileToKeychain(savedId);
-        if (auth.kind === "identityFile") setImportedFromPath(auth.path);
       }
       setImportPromptOpen(false);
       setImportSavedId(null);
@@ -1482,11 +1480,6 @@ export function ServerForm({
 
         {/* Issue #667: shown once when a key-file server is saved with a new
          * or changed path. */}
-        {importedFromPath !== null && auth.kind !== "identityFile" && (
-          <p className="text-xs text-slate-400">
-            {t("serverForm.importKey.importedFrom", { path: importedFromPath })}
-          </p>
-        )}
         {importPromptOpen && (
           <ModalBackdrop
             layer="app"

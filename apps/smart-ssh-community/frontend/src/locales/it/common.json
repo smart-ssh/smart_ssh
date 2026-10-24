@@ -300,8 +300,7 @@
       "import": "Importa chiave",
       "keep": "Mantieni il percorso del file",
       "importHint": "La chiave viene salvata cifrata in Smart SSH e viaggia con i backup verso gli altri dispositivi.",
-      "keepHint": "Viene salvato solo il percorso del file, che viaggia verso gli altri dispositivi. Il file deve esistere nello stesso percorso su ogni dispositivo.",
-      "importedFrom": "Importata da {{path}}"
+      "keepHint": "Viene salvato solo il percorso del file, che viaggia verso gli altri dispositivi. Il file deve esistere nello stesso percorso su ogni dispositivo."
     }
   },
   "filterRules": {

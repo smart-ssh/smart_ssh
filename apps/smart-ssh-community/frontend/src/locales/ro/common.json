@@ -300,8 +300,7 @@
       "import": "Importă cheia",
       "keep": "Păstrează calea fișierului",
       "importHint": "Cheia este stocată criptat în Smart SSH și ajunge odată cu copiile de rezervă pe celelalte dispozitive.",
-      "keepHint": "Doar calea fișierului este stocată și ajunge pe alte dispozitive. Fișierul trebuie să existe la aceeași cale pe fiecare dispozitiv.",
-      "importedFrom": "Importată din {{path}}"
+      "keepHint": "Doar calea fișierului este stocată și ajunge pe alte dispozitive. Fișierul trebuie să existe la aceeași cale pe fiecare dispozitiv."
     }
   },
   "filterRules": {

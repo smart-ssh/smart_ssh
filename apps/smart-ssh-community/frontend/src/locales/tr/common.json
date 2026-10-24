@@ -300,8 +300,7 @@
       "import": "Anahtarı içe aktar",
       "keep": "Dosya yolunu koru",
       "importHint": "Anahtar Smart SSH'de şifreli saklanır ve yedeklerle diğer cihazlarınıza taşınır.",
-      "keepHint": "Yalnızca dosya yolu saklanır ve diğer cihazlara taşınır. Dosya her cihazda aynı yolda bulunmalıdır.",
-      "importedFrom": "{{path}} konumundan içe aktarıldı"
+      "keepHint": "Yalnızca dosya yolu saklanır ve diğer cihazlara taşınır. Dosya her cihazda aynı yolda bulunmalıdır."
     }
   },
   "filterRules": {

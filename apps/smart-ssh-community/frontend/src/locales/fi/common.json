@@ -300,8 +300,7 @@
       "import": "Tuo avain",
       "keep": "Säilytä tiedostopolku",
       "importHint": "Avain tallennetaan salattuna Smart SSH:hon ja siirtyy varmuuskopioiden mukana muille laitteillesi.",
-      "keepHint": "Vain tiedostopolku tallennetaan ja siirtyy muille laitteille. Tiedoston on oltava samassa polussa jokaisella laitteella.",
-      "importedFrom": "Tuotu polusta {{path}}"
+      "keepHint": "Vain tiedostopolku tallennetaan ja siirtyy muille laitteille. Tiedoston on oltava samassa polussa jokaisella laitteella."
     }
   },
   "filterRules": {
