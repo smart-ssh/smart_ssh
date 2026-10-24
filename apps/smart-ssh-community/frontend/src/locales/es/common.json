@@ -740,7 +740,12 @@
     "uploadFailedMany": "No se pudieron subir {{name}} archivos, p. ej.: {{reason}}",
     "nothingToPaste": "Nada que pegar: el portapapeles no contiene archivos",
     "createFileDone": "Archivo «{{name}}» creado",
-    "createFileFailed": "No se pudo crear el archivo «{{name}}»: {{reason}}"
+    "createFileFailed": "No se pudo crear el archivo «{{name}}»: {{reason}}",
+    "chownDone": "Propietario de “{{name}}” cambiado",
+    "chownRecursive": "Propietario cambiado — {{count}} elementos en “{{name}}”",
+    "chownFailed": "No se pudo cambiar el propietario de “{{name}}”: {{reason}}",
+    "chownUnknownUser": "Propietario de “{{name}}” sin cambios: usuario desconocido",
+    "chownUnknownGroup": "Propietario de “{{name}}” sin cambios: grupo desconocido"
   },
   "fileElevation": {
     "toggle": "Derechos elevados",
@@ -793,7 +798,9 @@
     "otherUser": "Como otro usuario…",
     "targetUser": "Usuario de destino",
     "targetUserHelp": "Ejecuta el explorador de archivos como este usuario mediante sudo. Predeterminado: root.",
-    "confirm": "Elevar"
+    "confirm": "Elevar",
+    "opChown": "Cambio de propietario",
+    "chownNote": "El propietario se cambiará como {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importar ssh_config",
@@ -1131,7 +1138,8 @@
       "cut": "Cortar",
       "delete": "Eliminar",
       "newFolder": "Nueva carpeta",
-      "newFile": "Nuevo archivo"
+      "newFile": "Nuevo archivo",
+      "chown": "Cambiar propietario…"
     },
     "properties": {
       "title": "Propiedades",
@@ -1189,7 +1197,16 @@
       "notText": "No es posible un diff de texto: el archivo es binario (no es texto UTF-8 válido).",
       "permission": "No es posible un diff de texto: no tienes permiso de lectura sobre este archivo con los derechos actuales.",
       "other": "No es posible un diff de texto: no se pudo leer el archivo ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Cambiar propietario",
+      "owner": "Usuario",
+      "group": "Grupo",
+      "hint": "Introduzca un nombre o un número. Un lado que deje como está no se modifica. El servidor decide si se permite el cambio (normalmente solo root puede cambiar el propietario).",
+      "recursive": "Aplicar al contenido",
+      "recursiveWarning": "— cambia el propietario de TODOS los archivos y subcarpetas de esta carpeta. No se siguen los enlaces simbólicos. No se puede deshacer."
+    },
+    "transferChown": "Cambiando propietario de {{name}}"
   },
   "chat": {
     "jumpToLatest": "Ir al mensaje más reciente",

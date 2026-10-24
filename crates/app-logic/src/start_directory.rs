@@ -259,6 +259,7 @@ pub(crate) mod test_stubs {
                 gid: None,
                 owner: None,
                 group: None,
+                is_symlink: false,
             })
         }
         async fn lstat(&mut self, _: &str) -> Result<RemoteEntry, SshError> {
@@ -280,6 +281,9 @@ pub(crate) mod test_stubs {
             unreachable!()
         }
         async fn remove_dir(&mut self, _: &str) -> Result<(), SshError> {
+            unreachable!()
+        }
+        async fn set_owner(&mut self, _: &str, _: u32, _: u32) -> Result<(), SshError> {
             unreachable!()
         }
         async fn set_permissions(&mut self, _: &str, _: u32) -> Result<(), SshError> {

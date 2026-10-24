@@ -305,6 +305,11 @@ pub trait SftpSession: Send {
     /// `SETSTAT` könnte das, aber der chmod-Dialog braucht nur dieses eine
     /// Feld).
     async fn set_permissions(&mut self, path: &str, mode: u32) -> Result<(), SshError>;
+    /// Sets owner and group by numeric id (issue #654, chown): SFTP `SETSTAT`
+    /// with uid and gid, which the protocol only accepts as a pair. The
+    /// caller resolves names and fills in the side it does not change. The
+    /// server decides whether the change is allowed.
+    async fn set_owner(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), SshError>;
 }
 
 /// Offene PTY-Shell für den interaktiven Modus (Terminal-Tab, xterm.js im

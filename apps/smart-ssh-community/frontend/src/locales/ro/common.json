@@ -740,7 +740,12 @@
     "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}",
     "nothingToPaste": "Nimic de lipit: clipboardul nu conține fișiere",
     "createFileDone": "Fișierul „{{name}}” a fost creat",
-    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}"
+    "createFileFailed": "Fișierul „{{name}}” nu a putut fi creat: {{reason}}",
+    "chownDone": "Proprietarul pentru „{{name}}” a fost schimbat",
+    "chownRecursive": "Proprietar schimbat — {{count}} elemente în „{{name}}”",
+    "chownFailed": "Proprietarul pentru „{{name}}” nu a putut fi schimbat: {{reason}}",
+    "chownUnknownUser": "Proprietarul pentru „{{name}}” nu a fost schimbat: utilizator necunoscut",
+    "chownUnknownGroup": "Proprietarul pentru „{{name}}” nu a fost schimbat: grup necunoscut"
   },
   "fileElevation": {
     "toggle": "Drepturi ridicate",
@@ -793,7 +798,9 @@
     "otherUser": "Ca alt utilizator…",
     "targetUser": "Utilizator țintă",
     "targetUserHelp": "Rulează browserul de fișiere ca acest utilizator prin sudo. Implicit: root.",
-    "confirm": "Ridică"
+    "confirm": "Ridică",
+    "opChown": "Schimbarea proprietarului",
+    "chownNote": "Proprietarul va fi schimbat ca {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importă ssh_config",
@@ -1131,7 +1138,8 @@
       "cut": "Taie",
       "delete": "Șterge",
       "newFolder": "Dosar nou",
-      "newFile": "Fișier nou"
+      "newFile": "Fișier nou",
+      "chown": "Schimbă proprietarul…"
     },
     "properties": {
       "title": "Proprietăți",
@@ -1189,7 +1197,16 @@
       "notText": "Diferență de text imposibilă: fișierul este binar (nu este text UTF-8 valid).",
       "permission": "Diferență de text imposibilă: cu drepturile curente nu ai permisiunea de citire pentru acest fișier.",
       "other": "Diferență de text imposibilă: fișierul nu a putut fi citit ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Schimbare proprietar",
+      "owner": "Utilizator",
+      "group": "Grup",
+      "hint": "Introduceți un nume sau un număr. O parte lăsată neschimbată rămâne neschimbată. Serverul decide dacă modificarea este permisă (de obicei doar root poate schimba proprietarul).",
+      "recursive": "Aplică pe conținut",
+      "recursiveWarning": "— schimbă proprietarul TUTUROR fișierelor și subfolderelor din acest folder. Legăturile simbolice nu sunt urmate. Nu poate fi anulat."
+    },
+    "transferChown": "Se schimbă proprietarul pentru {{name}}"
   },
   "chat": {
     "jumpToLatest": "Mergi la cel mai recent mesaj",

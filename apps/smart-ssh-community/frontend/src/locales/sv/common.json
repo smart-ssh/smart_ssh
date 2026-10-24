@@ -735,7 +735,12 @@
     "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}",
     "nothingToPaste": "Inget att klistra in: urklipp innehåller inga filer",
     "createFileDone": "Filen ”{{name}}” skapades",
-    "createFileFailed": "Filen ”{{name}}” kunde inte skapas: {{reason}}"
+    "createFileFailed": "Filen ”{{name}}” kunde inte skapas: {{reason}}",
+    "chownDone": "Ägare för “{{name}}” ändrad",
+    "chownRecursive": "Ägare ändrad — {{count}} poster i “{{name}}”",
+    "chownFailed": "Ägare för “{{name}}” kunde inte ändras: {{reason}}",
+    "chownUnknownUser": "Ägare för “{{name}}” inte ändrad: okänd användare",
+    "chownUnknownGroup": "Ägare för “{{name}}” inte ändrad: okänd grupp"
   },
   "fileElevation": {
     "toggle": "Förhöjda rättigheter",
@@ -788,7 +793,9 @@
     "otherUser": "Som annan användare …",
     "targetUser": "Målanvändare",
     "targetUserHelp": "Kör filläsaren som denna användare via sudo. Standard: root.",
-    "confirm": "Utöka"
+    "confirm": "Utöka",
+    "opChown": "Ändring av ägare",
+    "chownNote": "Ägaren ändras som {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importera ssh_config",
@@ -1124,7 +1131,8 @@
       "cut": "Klipp ut",
       "delete": "Ta bort",
       "newFolder": "Ny mapp",
-      "newFile": "Ny fil"
+      "newFile": "Ny fil",
+      "chown": "Ändra ägare…"
     },
     "properties": {
       "title": "Egenskaper",
@@ -1182,7 +1190,16 @@
       "notText": "Ingen textdiff möjlig: filen är binär (ingen giltig UTF-8-text).",
       "permission": "Ingen textdiff möjlig: med de nuvarande rättigheterna saknar du läsbehörighet för filen.",
       "other": "Ingen textdiff möjlig: filen kunde inte läsas ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Ändra ägare",
+      "owner": "Användare",
+      "group": "Grupp",
+      "hint": "Ange ett namn eller ett nummer. En sida som du lämnar som den är förblir oförändrad. Servern avgör om ändringen tillåts (vanligtvis får bara root ändra ägare).",
+      "recursive": "Tillämpa på innehållet",
+      "recursiveWarning": "— ändrar ägare för ALLA filer och undermappar i den här mappen. Symboliska länkar följs inte. Kan inte ångras."
+    },
+    "transferChown": "Ändrar ägare för {{name}}"
   },
   "chat": {
     "jumpToLatest": "Gå till senaste meddelandet",

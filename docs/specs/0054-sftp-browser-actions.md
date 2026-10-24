@@ -130,6 +130,27 @@ Kein Filter- oder KI-Gate; Bestätigung bei Irreversiblem.
   „rekursiv“ zeigt der Dialog eine Zeile wie „Ordner: 755, Dateien: 644“.
   Ohne „rekursiv“ wird genau der Dialogwert gesetzt. Die Eigenschaften
   zeigen die Rechte ebenfalls vierstellig.
+- **Besitzer ändern (chown):** Der Menüeintrag „Besitzer ändern…“ (Dateien und
+  Ordner) öffnet einen Dialog mit Benutzer und Gruppe, vorbelegt mit dem
+  aktuellen Namen (oder der Nummer, wenn der Name unbekannt ist). Eingabe ist
+  ein Name oder eine Nummer. Namen werden über `/etc/passwd` und `/etc/group`
+  des Servers (wie die Besitzer-Spalte) in Nummern aufgelöst; ein unbekannter
+  Name bricht mit einer klaren Meldung ab, ohne etwas zu ändern. Eine Seite,
+  die der Nutzer nicht verändert (oder leer lässt), bleibt unverändert; sind
+  beide unverändert, ist „Übernehmen“ gesperrt. Für Ordner optional „auf den
+  Inhalt anwenden“ mit Warnhinweis: Es läuft denselben Baum ab wie das
+  rekursive chmod (erst lesen, dann von unten nach oben ändern), folgt
+  symbolischen Links nicht (Links unterhalb des Ordners bleiben unberührt),
+  zeigt eine Fortschrittszeile mit Abbrechen-Knopf („Besitzer ändern: …“)
+  und meldet am Ende die Zahl geänderter Einträge; bei einem Fehler mitten
+  im Baum bleibt Geändertes geändert und der Fehler wird gezeigt. Ohne erhöhte
+  Rechte entscheidet der Server (meist darf nur root den Besitzer ändern); ein
+  Rechtefehler wird klar angezeigt. Im erhöhten Modus (Spec 0067/0085) läuft
+  die Änderung über den erhöhten Kanal mit denselben Prüfungen wie die
+  anderen Aktionen (Vermerk im Dialog, Protokollzeile als erhöhte Änderung,
+  Hinweis „(als <Nutzer>)“ am Ende der Meldung); wurde der erhöhte Modus vor
+  dem Start ausgeschaltet, scheitert die Aktion mit der Meldung zum
+  inaktiven erhöhten Modus und ändert nichts.
 - **Ordner ohne „ausführen“:** Liefert das Auflisten eines Ordners keine
   Einträge und hat der Ordner selbst kein „ausführen“-Bit, zeigt die Liste
   „Keine Berechtigung, diesen Ordner zu öffnen (x fehlt)“ statt eines leeren
