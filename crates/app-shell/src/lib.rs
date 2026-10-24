@@ -34,6 +34,7 @@ mod risk_second_opinion;
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
 #[cfg(test)]
 mod runtime_assumptions;
+mod services;
 mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
@@ -68,6 +69,7 @@ mod window_prompt;
 mod wiring;
 
 pub use db_extensions::DbExtension;
+pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
 pub use wiring::{Edition, Wiring};
 
 /// Spec 0038, section 2a: asks the core to rebuild the redactor of every open
@@ -617,6 +619,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             .with_db_extensions(db_extensions)
             .with_chat_content(chat_content);
     let plugins = wiring.plugins;
+    let service_host = ServiceHost::new(std::mem::take(&mut wiring.services));
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.
     let builder = crate::single_instance::register_on(tauri::Builder::default());
@@ -716,6 +719,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         })
         .manage(gate.clone())
         .manage(pending)
+        .manage(service_host)
         // Spec 0101, A16 / Klarstellung 9: Der Merkzettel ist **nur** da,
         // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
         // hängt daran, ob es etwas nachzuholen gibt.
@@ -923,9 +927,17 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         ]))
         .build(context)
         .expect("Fehler beim Starten der Tauri-App")
-        .run(|_app, event| {
+        .run(|app, event| {
             // Issue #358: staged "Copy file" files are removed at exit.
             if matches!(event, tauri::RunEvent::Exit) {
+                // Issue #669: stop background services; bounded by the
+                // per-service timeout, so a hanging one cannot block exit.
+                {
+                    use tauri::Manager;
+                    if let Some(host) = app.try_state::<ServiceHost>() {
+                        tauri::async_runtime::block_on(host.stop_all());
+                    }
+                }
                 file_clipboard::cleanup_at_exit();
             }
         });
@@ -942,6 +954,19 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 /// gibt also keinen zweiten Pfad, der auseinanderlaufen könnte.
 pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     use tauri::Manager;
+
+    // Issue #669: background services start here — only reached once the
+    // state exists (after unlock in master-password mode), and after the
+    // database extensions were started in `open_and_assemble`.
+    let services_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Some(host) = services_app.try_state::<ServiceHost>() {
+            host.start_all(ServiceContext {
+                app: services_app.clone(),
+            })
+            .await;
+        }
+    });
 
     // Spec 0028, Abschnitt 9: ein beim letzten Beenden aktivierter
     // MCP-Server bleibt über einen Neustart hinweg aktiv, ohne manuelles
