@@ -117,4 +117,61 @@ mod tests {
             (0, 1, 0)
         );
     }
+
+    // Issue #785: the handle given to `on_ready` reaches the namespaced store.
+    #[tokio::test]
+    async fn test_kv_store_from_on_ready_is_bound_to_own_namespace() {
+        use secrecy::{ExposeSecret, SecretSlice};
+        use std::sync::Mutex;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+            .await
+            .unwrap();
+        let got: Arc<Mutex<Vec<ExtensionDb>>> = Arc::default();
+        let mk = |prefix: &str, table: &str| {
+            let got = got.clone();
+            DbExtension {
+                registration: ExtensionRegistration {
+                    prefix: prefix.to_owned(),
+                    migrations: vec![ExtensionMigration {
+                        version: 1,
+                        description: "init".into(),
+                        sql: format!("CREATE TABLE {table} (id INTEGER);"),
+                    }],
+                },
+                on_ready: Arc::new(move |db| got.lock().unwrap().push(db)),
+            }
+        };
+        let started = start_db_extensions(
+            &store,
+            &[mk("ext_one_", "ext_one_t"), mk("ext_two_", "ext_two_t")],
+        )
+        .await;
+        assert_eq!(started.len(), 2);
+        let dbs = got.lock().unwrap().clone();
+        let (a, b) = (dbs[0].kv_store(), dbs[1].kv_store());
+
+        a.set("plain", b"v").await.unwrap();
+        a.set_secret("tok", &SecretSlice::from(b"s3cret".to_vec()))
+            .await
+            .unwrap();
+        assert_eq!(a.get("plain").await.unwrap(), Some(b"v".to_vec()));
+        assert_eq!(
+            a.get_secret("tok").await.unwrap().unwrap().expose_secret(),
+            b"s3cret"
+        );
+        // Secrets: not returned by get, not listed, not in Debug.
+        assert_eq!(a.get("tok").await.unwrap(), None);
+        assert_eq!(a.list_keys("").await.unwrap(), vec!["plain".to_owned()]);
+        assert!(!format!("{a:?}").contains("s3cret"));
+
+        // The other namespace sees nothing and cannot delete our rows.
+        assert_eq!(b.get("plain").await.unwrap(), None);
+        assert!(b.get_secret("tok").await.unwrap().is_none());
+        assert!(b.list_keys("").await.unwrap().is_empty());
+        assert!(!b.delete("plain").await.unwrap());
+        assert!(a.delete("plain").await.unwrap());
+        assert!(a.delete("tok").await.unwrap());
+    }
 }
