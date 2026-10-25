@@ -90,6 +90,57 @@ pub fn set_speech_language(app: AppHandle, language: String) -> CommandResult<()
     })
 }
 
+/// Android: asks for the `RECORD_AUDIO` runtime permission through a small
+/// native plugin (Spec 0108, 5.7). The system dialog appears on the first
+/// start; a denial surfaces as `speech_permission_denied`, never a crash.
+#[cfg(target_os = "android")]
+mod android_permission {
+    use serde::Deserialize;
+    use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
+    use tauri::{AppHandle, Manager, Runtime};
+
+    struct Handle<R: Runtime>(PluginHandle<R>);
+
+    #[derive(Deserialize)]
+    struct PermissionResult {
+        granted: bool,
+    }
+
+    pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
+        Builder::new("microphone")
+            .setup(|app, api| {
+                let handle =
+                    api.register_android_plugin("com.smartssh.desktop", "MicrophonePlugin")?;
+                app.manage(Handle(handle));
+                Ok(())
+            })
+            .build()
+    }
+
+    /// `Ok(true)` when the permission is granted (asking if needed).
+    /// Any failure to ask counts as not granted (fail closed).
+    pub fn ensure_granted<R: Runtime>(app: &AppHandle<R>) -> bool {
+        let Some(handle) = app.try_state::<Handle<R>>() else {
+            return false;
+        };
+        match handle
+            .0
+            .run_mobile_plugin::<PermissionResult>("requestMicrophone", ())
+        {
+            Ok(r) => r.granted,
+            Err(e) => {
+                tracing::warn!(error = %e, "microphone permission request failed");
+                false
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn microphone_plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    android_permission::plugin()
+}
+
 /// Starts recording. Errors with `speech_no_model` before the input device
 /// is touched when the selected model is not ready.
 #[tauri::command(async)]
@@ -98,6 +149,13 @@ pub fn start_voice_recording(app: AppHandle) -> CommandResult<()> {
     let model = speech_models::manager(&app).ok().and_then(|m| {
         matches!(m.status(selected), ModelStatus::Ready).then(|| m.model_path(selected))
     });
+    // Ask for the microphone only once a model is ready, so the permission
+    // dialog never precedes the download consent. Without a model `start`
+    // fails with `speech_no_model` before the device is touched.
+    #[cfg(target_os = "android")]
+    if model.is_some() && !android_permission::ensure_granted(&app) {
+        return Err(record_error(RecordError::PermissionDenied));
+    }
     recorder(&app)
         .start(model, read_language(&app))
         .map_err(record_error)
