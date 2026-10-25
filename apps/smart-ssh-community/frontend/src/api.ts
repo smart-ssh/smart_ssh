@@ -772,6 +772,15 @@ export const sftpOpenForEditing = (sessionId: string, remotePath: string, elevat
 export const localFileMtime = (sessionId: string, localPath: string) =>
   invoke<string | null>("local_file_mtime", { sessionId, localPath });
 
+/** Issue #679: text of this session's edit copy for the in-app editor
+ * (Android). Refuses any file outside the session's edit-copy folder. */
+export const readEditCopyText = (sessionId: string, localPath: string) =>
+  invoke<string>("read_edit_copy_text", { sessionId, localPath });
+
+/** Issue #679: saves the in-app editor's text into the edit copy. */
+export const writeEditCopyText = (sessionId: string, localPath: string, content: string) =>
+  invoke<void>("write_edit_copy_text", { sessionId, localPath, content });
+
 /** Spec 0054, Teil 4, Punkt 6: Watcher beenden + Temp-Datei aufräumen.
  * `sessionId` schränkt den Befehl auf den Editier-Temp-Ordner GENAU dieser
  * Session ein (Spec-Reviewer-Fund: sonst könnte der Befehl jeden

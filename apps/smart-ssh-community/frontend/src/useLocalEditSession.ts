@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import i18next from "i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { detectFallbackPlatform, platformCapabilities } from "./titlebarLayout";
 import {
   closeEditSession,
   commandErrorCode,
@@ -119,7 +120,11 @@ export function useLocalEditSession(sessionId: string) {
 
         const apps = await loadFileTypeApps().catch(() => ({}));
         const appPath = appForFileName(apps, entry.name) ?? undefined;
-        await openPath(editSession.localPath, appPath);
+        // Issue #679: no external program on Android — the panel shows the
+        // app's own editor on the edit copy instead.
+        if (platformCapabilities(detectFallbackPlatform()).externalEditor) {
+          await openPath(editSession.localPath, appPath);
+        }
 
         lastSeenMtimeRef.current = await localFileMtime(sessionId, editSession.localPath);
 

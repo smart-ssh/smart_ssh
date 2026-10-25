@@ -57,14 +57,16 @@ pub async fn export_document(
     let Some(path) = rx.await.ok().flatten() else {
         return Ok(());
     };
-    let path = path.into_path()?;
+    // Issue #679: path on the desktop, `content://` URI on Android.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(path)?;
+    let opener = crate::local_file::platform_opener(&app);
 
-    // `std::fs::write` statt `tokio::fs`: Letzteres bräuchte das
-    // ungenutzte `fs`-Feature nur für diesen einen, durch eine explizite
-    // Nutzeraktion ausgelösten Einzelschreibvorgang — für eine
-    // Analyse-Dokumentgröße unkritisch blockierend.
+    // Blocking write instead of `tokio::fs`: a single write triggered by an
+    // explicit user action, small document.
     match format {
-        DocumentFormat::Markdown => std::fs::write(path, content_markdown)?,
+        DocumentFormat::Markdown => {
+            handle.write_all(opener.as_ref(), content_markdown.as_bytes())?
+        }
     }
 
     Ok(())
@@ -340,8 +342,11 @@ pub async fn save_diagnostics_bundle(app: AppHandle, content: String) -> Command
     let Some(path) = rx.await.ok().flatten() else {
         return Ok(());
     };
-    let path = path.into_path()?;
-    std::fs::write(path, content)?;
+    let handle = crate::local_file::LocalFileHandle::from_dialog(path)?;
+    handle.write_all(
+        crate::local_file::platform_opener(&app).as_ref(),
+        content.as_bytes(),
+    )?;
 
     Ok(())
 }
@@ -396,8 +401,13 @@ pub async fn read_credential_file(app: AppHandle, title: String) -> CommandResul
     let Some(path) = rx.await.ok().flatten() else {
         return Ok(None);
     };
-    let path = path.into_path()?;
-    let content = std::fs::read_to_string(path)?;
+    // Issue #679: a `content://` URI on Android is read through the platform
+    // opener, never as a path.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(path)?;
+    let content = handle.read_to_string(
+        crate::local_file::platform_opener(&app).as_ref(),
+        crate::local_file::MAX_TEXT_FILE_BYTES,
+    )?;
     Ok(Some(content))
 }
 
