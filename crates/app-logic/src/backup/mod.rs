@@ -16,8 +16,8 @@ pub use changes::{
 };
 pub use export::{export_backup, export_backup_with, ExportSummary};
 pub use import::{
-    complete_pending_host_keys, open_backup, start_import, ImportContext, ImportPreview,
-    ImportStart, ImportSummary, NoSessions, OpenSessions, PendingImport,
+    complete_pending_host_keys, open_backup, start_import, start_import_snapshot, ImportContext,
+    ImportPreview, ImportStart, ImportSummary, NoSessions, OpenSessions, PendingImport,
 };
 pub use key::{BackupKey, BackupKeyStatus};
 pub use snapshot::{HostKeyRow, Snapshot, SnapshotCounts, KNOWN_SECTIONS};
