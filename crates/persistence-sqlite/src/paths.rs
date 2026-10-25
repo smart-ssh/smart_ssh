@@ -84,14 +84,84 @@ pub fn android_cache_dir_for(app_id: &str) -> PathBuf {
     PathBuf::from("/data/data").join(app_id).join("cache")
 }
 
-/// [`android_files_dir_for`] mit [`ANDROID_APP_ID`].
-pub fn android_files_dir() -> PathBuf {
-    android_files_dir_for(ANDROID_APP_ID)
+/// Fehler von [`set_android_app_id`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum AndroidAppIdError {
+    /// Leer, mit Pfadtrenner oder `..` — würde aus `/data/data` ausbrechen.
+    #[error("invalid Android application id: {0:?}")]
+    Invalid(String),
+    /// Es wurde schon ein Pfad aufgelöst; die Ordner dürfen sich im
+    /// Prozess nicht mehr ändern.
+    #[error("Android application id can no longer be changed: a path was already resolved")]
+    AlreadyResolved,
+    /// Ein anderer Wert wurde schon gesetzt.
+    #[error("Android application id already set to {0:?}")]
+    Conflict(String),
 }
 
-/// [`android_cache_dir_for`] mit [`ANDROID_APP_ID`].
+/// Set-once-Zustand der Application-ID (Prozess-global in [`APP_ID_STATE`]).
+#[derive(Default)]
+struct AppIdState {
+    inner: std::sync::Mutex<AppIdInner>,
+}
+
+#[derive(Default)]
+struct AppIdInner {
+    id: Option<String>,
+    resolved: bool,
+}
+
+impl AppIdState {
+    fn set(&self, app_id: &str) -> Result<(), AndroidAppIdError> {
+        if app_id.is_empty()
+            || app_id == "."
+            || app_id.contains(['/', '\\', '\0'])
+            || app_id.contains("..")
+        {
+            return Err(AndroidAppIdError::Invalid(app_id.to_owned()));
+        }
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if g.resolved {
+            return Err(AndroidAppIdError::AlreadyResolved);
+        }
+        match &g.id {
+            Some(existing) if existing != app_id => {
+                Err(AndroidAppIdError::Conflict(existing.clone()))
+            }
+            _ => {
+                g.id = Some(app_id.to_owned());
+                Ok(())
+            }
+        }
+    }
+
+    /// Liefert die wirksame ID und sperrt weitere Änderungen.
+    fn resolve(&self) -> String {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.resolved = true;
+        g.id.clone().unwrap_or_else(|| ANDROID_APP_ID.to_owned())
+    }
+}
+
+static APP_ID_STATE: std::sync::LazyLock<AppIdState> =
+    std::sync::LazyLock::new(AppIdState::default);
+
+/// Überschreibt die Application-ID für die app-privaten Ordner (einmalig,
+/// vor dem ersten Pfad-Lookup). Ohne Aufruf gilt [`ANDROID_APP_ID`].
+/// Abgelehnt wird: ungültige ID, Aufruf nach dem ersten Lookup, abweichender
+/// zweiter Wert. Kein Effekt auf Desktop-Plattformen.
+pub fn set_android_app_id(app_id: &str) -> Result<(), AndroidAppIdError> {
+    APP_ID_STATE.set(app_id)
+}
+
+/// [`android_files_dir_for`] mit der wirksamen Application-ID.
+pub fn android_files_dir() -> PathBuf {
+    android_files_dir_for(&APP_ID_STATE.resolve())
+}
+
+/// [`android_cache_dir_for`] mit der wirksamen Application-ID.
 pub fn android_cache_dir() -> PathBuf {
-    android_cache_dir_for(ANDROID_APP_ID)
+    android_cache_dir_for(&APP_ID_STATE.resolve())
 }
 
 #[cfg(not(target_os = "android"))]
@@ -159,6 +229,60 @@ mod tests {
         assert_eq!(
             android_files_dir_for("dev.example.app"),
             PathBuf::from("/data/data/dev.example.app/files")
+        );
+    }
+
+    #[test]
+    fn test_app_id_override_applies_and_rejects_changes() {
+        let st = AppIdState::default();
+        assert_eq!(st.resolve(), ANDROID_APP_ID);
+        let st = AppIdState::default();
+        st.set("dev.example.app").unwrap();
+        assert_eq!(
+            st.set("dev.other.app"),
+            Err(AndroidAppIdError::Conflict("dev.example.app".into()))
+        );
+        let id = st.resolve();
+        assert_eq!(
+            android_files_dir_for(&id),
+            PathBuf::from("/data/data/dev.example.app/files")
+        );
+        assert_eq!(
+            android_cache_dir_for(&id),
+            PathBuf::from("/data/data/dev.example.app/cache")
+        );
+        assert_eq!(
+            st.set("dev.example.app"),
+            Err(AndroidAppIdError::AlreadyResolved)
+        );
+        assert_eq!(st.resolve(), "dev.example.app");
+    }
+
+    #[test]
+    fn test_app_id_rejects_invalid() {
+        let st = AppIdState::default();
+        for bad in ["", ".", "..", "a/b", "a\\b", "../x", "a..b", "/abs"] {
+            assert!(
+                matches!(st.set(bad), Err(AndroidAppIdError::Invalid(_))),
+                "{bad}"
+            );
+        }
+        assert_eq!(st.resolve(), ANDROID_APP_ID);
+    }
+
+    #[test]
+    fn test_global_default_and_set_after_lookup_rejected() {
+        assert_eq!(
+            android_files_dir(),
+            PathBuf::from(format!("/data/data/{ANDROID_APP_ID}/files"))
+        );
+        assert_eq!(
+            set_android_app_id("dev.example.app"),
+            Err(AndroidAppIdError::AlreadyResolved)
+        );
+        assert_eq!(
+            android_cache_dir(),
+            PathBuf::from(format!("/data/data/{ANDROID_APP_ID}/cache"))
         );
     }
 
