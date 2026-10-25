@@ -1460,3 +1460,80 @@ async fn deleting_a_server_removes_its_dependents() {
     assert_eq!(after.groups, before.groups);
     assert_eq!(after.ai_providers, before.ai_providers);
 }
+
+#[tokio::test]
+async fn change_set_persists_copy_marker_on_insert_and_update() {
+    let (f, base) = seeded_fixture().await;
+    let t = now();
+    let mk_group = |copy: bool| GroupRow {
+        id: Uuid::new_v4(),
+        name: "g-new".into(),
+        parent_id: None,
+        notes: String::new(),
+        is_copy: copy,
+        created_at: t.clone(),
+        updated_at: t.clone(),
+    };
+    let g_copy = mk_group(true);
+    let g_plain = mk_group(false);
+    let mut s_copy = base.servers[2].clone();
+    s_copy.id = Uuid::new_v4();
+    s_copy.group_id = Some(g_copy.id);
+    s_copy.auth_method = serde_json::to_string(&AuthMethod::Agent).unwrap();
+    s_copy.is_copy = true;
+    let mut s_plain = s_copy.clone();
+    s_plain.id = Uuid::new_v4();
+    s_plain.is_copy = false;
+    let cs = ChangeSet {
+        groups: vec![
+            Change::Upsert(g_copy.clone()),
+            Change::Upsert(g_plain.clone()),
+        ],
+        servers: vec![
+            Change::Upsert(s_copy.clone()),
+            Change::Upsert(s_plain.clone()),
+        ],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &cs).await.unwrap();
+    let after = state(&f).await;
+    let g = |id| after.groups.iter().find(|g| g.id == id).unwrap().is_copy;
+    let s = |id| after.servers.iter().find(|s| s.id == id).unwrap().is_copy;
+    assert!(g(g_copy.id) && s(s_copy.id));
+    assert!(!g(g_plain.id) && !s(s_plain.id));
+    // Existing unmarked rows stay unmarked when upserted unchanged-marker.
+    assert!(after
+        .servers
+        .iter()
+        .filter(|x| base.servers.iter().any(|b| b.id == x.id))
+        .all(|x| !x.is_copy));
+
+    // Update: the upserted row is authoritative for the marker.
+    let mut g_up = g_plain.clone();
+    g_up.is_copy = true;
+    let mut s_up = s_copy.clone();
+    s_up.is_copy = false;
+    let cs = ChangeSet {
+        groups: vec![Change::Upsert(g_up.clone())],
+        servers: vec![Change::Upsert(s_up.clone())],
+        ..Default::default()
+    };
+    apply_changes(&f.backup, &f.host_keys, &cs).await.unwrap();
+    let after = state(&f).await;
+    assert!(
+        after
+            .groups
+            .iter()
+            .find(|g| g.id == g_up.id)
+            .unwrap()
+            .is_copy
+    );
+    assert!(
+        !after
+            .servers
+            .iter()
+            .find(|s| s.id == s_up.id)
+            .unwrap()
+            .is_copy
+    );
+}
