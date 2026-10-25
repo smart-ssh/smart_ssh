@@ -150,12 +150,35 @@ pub async fn start_import(
     result
 }
 
+/// Like [`start_import`] for a [`Snapshot`] the caller already holds in
+/// memory: validates it, then imports directly into empty local data or
+/// returns [`ImportStart::NeedsConfirmation`]. Nothing is written to disk
+/// by this function itself; a rejected snapshot changes no local data.
+pub async fn start_import_snapshot(
+    ctx: &ImportContext<'_>,
+    snapshot: Snapshot,
+) -> Result<ImportStart, BackupOpError> {
+    let result = start_snapshot(ctx, snapshot).await;
+    if let Err(err) = &result {
+        tracing::warn!(result = ?err, "backup import rejected");
+    }
+    result
+}
+
 async fn start(
     ctx: &ImportContext<'_>,
     file: &Path,
     secret: BackupSecret,
 ) -> Result<ImportStart, BackupOpError> {
     let snapshot = open_backup(file, secret).await?;
+    start_snapshot(ctx, snapshot).await
+}
+
+async fn start_snapshot(
+    ctx: &ImportContext<'_>,
+    snapshot: Snapshot,
+) -> Result<ImportStart, BackupOpError> {
+    validate(&snapshot)?;
     let local = Snapshot::read(ctx.store, ctx.host_keys).await?.counts();
     let preview = ImportPreview {
         local,

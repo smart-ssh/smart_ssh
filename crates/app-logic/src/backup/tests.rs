@@ -1537,3 +1537,75 @@ async fn change_set_persists_copy_marker_on_insert_and_update() {
             .is_copy
     );
 }
+
+/// `start_import_snapshot`: an invalid snapshot is rejected with the same
+/// error as for a file and changes nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshot_entry_rejects_invalid_content_and_changes_nothing() {
+    let local = empty_fixture().await;
+    seed(&local, &build("L", 2, 2, 2)).await;
+    let before = state(&local).await;
+    let safety = local.dir.path().join("safety");
+    let mut bad = build("F", 2, 2, 2);
+    bad.rules[1].pattern_type = "regex".into();
+    bad.rules[1].pattern_value = "(".into();
+    let err = start_import_snapshot(&ctx(&local, &safety), bad)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, BackupOpError::Invalid(_)), "{err:?}");
+    assert_eq!(state(&local).await, before);
+    assert!(!safety.exists());
+}
+
+/// `start_import_snapshot`: empty local data imports at once.
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshot_entry_imports_directly_into_empty_data() {
+    let snap = build("F", 3, 4, 5);
+    let b = empty_fixture().await;
+    let safety = b.dir.path().join("safety");
+    let start = start_import_snapshot(&ctx(&b, &safety), snap.clone())
+        .await
+        .unwrap();
+    let ImportStart::Imported(summary) = start else {
+        panic!("empty local data imports without asking");
+    };
+    assert_eq!(summary.safety_backup, None);
+    assert_eq!(summary.previous_data_folder, None);
+    assert!(!safety.exists());
+    assert_eq!(sorted(state(&b).await), sorted(snap));
+}
+
+/// `start_import_snapshot`: non-empty local data needs the confirmation;
+/// only `confirm` replaces data, with safety backup and "Previous data" folder.
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshot_entry_over_data_asks_and_confirm_replaces() {
+    let local = empty_fixture().await;
+    let old = build("L", 12, 30, 8);
+    seed(&local, &old).await;
+    let device_code = BackupKey::create_with_code(&local.backup).await.unwrap();
+    let before = state(&local).await;
+    let safety = local.dir.path().join("safety");
+    let c = ctx(&local, &safety);
+    let p = pending(
+        start_import_snapshot(&c, build("F", 15, 42, 11))
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        (p.preview().file.servers, p.preview().local.servers),
+        (15, 12)
+    );
+    assert_eq!(state(&local).await, before);
+    assert!(!safety.exists());
+
+    let summary = p.confirm(&c).await.unwrap();
+    let path = summary.safety_backup.unwrap();
+    assert!(path.starts_with(&safety));
+    assert_eq!(
+        sorted(open_file(&path, &code_secret(&device_code)).unwrap()),
+        sorted(old)
+    );
+    let folder_name = format!("{LABEL} {}", chrono::Local::now().format("%Y-%m-%d"));
+    assert_eq!(summary.previous_data_folder.as_deref(), Some(&*folder_name));
+    assert_ne!(state(&local).await, before);
+}
