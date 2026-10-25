@@ -655,10 +655,11 @@ async fn write_difference(
     }
     for g in changed(&current.groups, &target.groups, |g| g.id) {
         sqlx::query(
-            "INSERT INTO groups (id, name, parent_id, notes, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
+            "INSERT INTO groups (id, name, parent_id, notes, created_at, updated_at, is_copy) \
+             VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
              parent_id = excluded.parent_id, notes = excluded.notes, \
-             created_at = excluded.created_at, updated_at = excluded.updated_at",
+             created_at = excluded.created_at, updated_at = excluded.updated_at, \
+             is_copy = excluded.is_copy",
         )
         .bind(g.id.to_string())
         .bind(&g.name)
@@ -666,6 +667,7 @@ async fn write_difference(
         .bind(&g.notes)
         .bind(&g.created_at)
         .bind(&g.updated_at)
+        .bind(g.is_copy)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;
@@ -674,8 +676,8 @@ async fn write_difference(
         sqlx::query(
             "INSERT INTO servers (id, name, host, port, username, group_id, auth_method, notes, \
              jump_host_id, created_at, updated_at, post_ingest_policy, \
-             ai_injection_check_enabled, sftp_server_path, start_directory) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+             ai_injection_check_enabled, sftp_server_path, start_directory, is_copy) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
              ON CONFLICT(id) DO UPDATE SET name = excluded.name, host = excluded.host, \
              port = excluded.port, username = excluded.username, group_id = excluded.group_id, \
              auth_method = excluded.auth_method, notes = excluded.notes, \
@@ -683,7 +685,7 @@ async fn write_difference(
              updated_at = excluded.updated_at, post_ingest_policy = excluded.post_ingest_policy, \
              ai_injection_check_enabled = excluded.ai_injection_check_enabled, \
              sftp_server_path = excluded.sftp_server_path, \
-             start_directory = excluded.start_directory",
+             start_directory = excluded.start_directory, is_copy = excluded.is_copy",
         )
         .bind(s.id.to_string())
         .bind(&s.name)
@@ -700,6 +702,7 @@ async fn write_difference(
         .bind(s.ai_injection_check_enabled)
         .bind(&s.sftp_server_path)
         .bind(&s.start_directory)
+        .bind(s.is_copy)
         .execute(&mut *conn)
         .await
         .map_err(|e| kind(&e))?;
