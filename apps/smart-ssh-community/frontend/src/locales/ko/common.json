@@ -730,7 +730,12 @@
     "uploadFailedMany": "파일 {{name}}개를 업로드할 수 없습니다. 예: {{reason}}",
     "nothingToPaste": "붙여넣을 항목이 없습니다: 클립보드에 파일이 없습니다",
     "createFileDone": "파일 “{{name}}”을(를) 만들었습니다",
-    "createFileFailed": "파일 “{{name}}”을(를) 만들 수 없습니다: {{reason}}"
+    "createFileFailed": "파일 “{{name}}”을(를) 만들 수 없습니다: {{reason}}",
+    "chownDone": "“{{name}}”의 소유자를 변경했습니다",
+    "chownRecursive": "소유자 변경됨 — “{{name}}” 안의 항목 {{count}}개",
+    "chownFailed": "“{{name}}”의 소유자를 변경할 수 없습니다: {{reason}}",
+    "chownUnknownUser": "“{{name}}”의 소유자가 변경되지 않음: 알 수 없는 사용자",
+    "chownUnknownGroup": "“{{name}}”의 소유자가 변경되지 않음: 알 수 없는 그룹"
   },
   "fileElevation": {
     "toggle": "상승된 권한",
@@ -783,7 +788,9 @@
     "otherUser": "다른 사용자로…",
     "targetUser": "대상 사용자",
     "targetUserHelp": "sudo를 통해 이 사용자로 파일 브라우저를 실행합니다. 기본값: root.",
-    "confirm": "상승"
+    "confirm": "상승",
+    "opChown": "소유자 변경",
+    "chownNote": "소유자는 {{user}} 권한으로 변경됩니다."
   },
   "sshConfigImport": {
     "dialogTitle": "ssh_config 가져오기",
@@ -1117,7 +1124,8 @@
       "cut": "잘라내기",
       "delete": "삭제",
       "newFolder": "새 폴더",
-      "newFile": "새 파일"
+      "newFile": "새 파일",
+      "chown": "소유자 변경…"
     },
     "properties": {
       "title": "속성",
@@ -1175,7 +1183,16 @@
       "notText": "텍스트 diff를 표시할 수 없음: 파일이 바이너리입니다(유효한 UTF-8 텍스트 아님).",
       "permission": "텍스트 diff를 표시할 수 없음: 현재 권한으로는 이 파일을 읽을 수 없습니다.",
       "other": "텍스트 diff를 표시할 수 없음: 파일을 읽을 수 없습니다({{message}})."
-    }
+    },
+    "chown": {
+      "title": "소유자 변경",
+      "owner": "사용자",
+      "group": "그룹",
+      "hint": "이름 또는 숫자를 입력하세요. 그대로 둔 쪽은 변경되지 않습니다. 변경 허용 여부는 서버가 결정합니다(보통 root만 소유자를 변경할 수 있습니다).",
+      "recursive": "내용에도 적용",
+      "recursiveWarning": "— 이 폴더의 모든 파일과 하위 폴더의 소유자를 변경합니다. 심볼릭 링크는 따라가지 않습니다. 되돌릴 수 없습니다."
+    },
+    "transferChown": "{{name}} 소유자 변경 중"
   },
   "chat": {
     "jumpToLatest": "최신 메시지로 이동",
@@ -1285,6 +1302,15 @@
     "paneTabs": "세션 패널",
     "moreActions": "더 많은 작업",
     "terminalOpenFailed": "터미널을 열 수 없습니다: {{error}}",
+    "extraKeys": {
+      "group": "추가 키",
+      "up": "위쪽 화살표",
+      "down": "아래쪽 화살표",
+      "left": "왼쪽 화살표",
+      "right": "오른쪽 화살표",
+      "pageUp": "페이지 위로",
+      "pageDown": "페이지 아래로"
+    },
     "reconnectingAuto": "다시 연결하는 중… ({{attempt}}번째 시도)",
     "stopReconnect": "중지",
     "reconnectGaveUp": "연결을 복구하지 못했습니다."

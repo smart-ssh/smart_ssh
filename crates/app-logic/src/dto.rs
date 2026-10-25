@@ -253,7 +253,11 @@ impl From<KeychainAvailability> for KeychainStatusDto {
                         KeychainUnavailableReasonDto::NoSecretServiceProvider
                     }
                     KeychainUnavailableReason::Locked => KeychainUnavailableReasonDto::Locked,
-                    KeychainUnavailableReason::Unknown => KeychainUnavailableReasonDto::Unknown,
+                    // Android has no dedicated settings text yet; the generic
+                    // "cause unknown" line applies there.
+                    KeychainUnavailableReason::NoKeystore | KeychainUnavailableReason::Unknown => {
+                        KeychainUnavailableReasonDto::Unknown
+                    }
                 }),
             },
         }

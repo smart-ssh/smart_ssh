@@ -730,7 +730,12 @@
     "uploadFailedMany": "有 {{name}} 个文件无法上传，例如：{{reason}}",
     "nothingToPaste": "没有可粘贴的内容：剪贴板中没有文件",
     "createFileDone": "已创建文件“{{name}}”",
-    "createFileFailed": "无法创建文件“{{name}}”：{{reason}}"
+    "createFileFailed": "无法创建文件“{{name}}”：{{reason}}",
+    "chownDone": "“{{name}}”的所有者已更改",
+    "chownRecursive": "所有者已更改 — “{{name}}”中共 {{count}} 项",
+    "chownFailed": "无法更改“{{name}}”的所有者:{{reason}}",
+    "chownUnknownUser": "未更改“{{name}}”的所有者:未知用户",
+    "chownUnknownGroup": "未更改“{{name}}”的所有者:未知组"
   },
   "fileElevation": {
     "toggle": "提权",
@@ -783,7 +788,9 @@
     "otherUser": "以其他用户身份…",
     "targetUser": "目标用户",
     "targetUserHelp": "通过 sudo 以该用户身份运行文件浏览器。默认：root。",
-    "confirm": "提权"
+    "confirm": "提权",
+    "opChown": "更改所有者",
+    "chownNote": "所有者将以 {{user}} 身份更改。"
   },
   "sshConfigImport": {
     "dialogTitle": "导入 ssh_config",
@@ -1117,7 +1124,8 @@
       "cut": "剪切",
       "delete": "删除",
       "newFolder": "新建文件夹",
-      "newFile": "新建文件"
+      "newFile": "新建文件",
+      "chown": "更改所有者…"
     },
     "properties": {
       "title": "属性",
@@ -1175,7 +1183,16 @@
       "notText": "无法显示文本差异：文件是二进制文件（不是有效的 UTF-8 文本）。",
       "permission": "无法显示文本差异：以当前权限无法读取此文件。",
       "other": "无法显示文本差异：无法读取该文件（{{message}}）。"
-    }
+    },
+    "chown": {
+      "title": "更改所有者",
+      "owner": "用户",
+      "group": "组",
+      "hint": "输入名称或数字。保持原样的一项不会更改。是否允许更改由服务器决定(通常只有 root 可以更改所有者)。",
+      "recursive": "应用到内容",
+      "recursiveWarning": "— 更改此文件夹中所有文件和子文件夹的所有者。不会跟随符号链接。无法撤销。"
+    },
+    "transferChown": "正在更改 {{name}} 的所有者"
   },
   "chat": {
     "jumpToLatest": "跳转到最新消息",
@@ -1285,6 +1302,15 @@
     "paneTabs": "会话面板",
     "moreActions": "更多操作",
     "terminalOpenFailed": "无法打开终端：{{error}}",
+    "extraKeys": {
+      "group": "附加按键",
+      "up": "上箭头",
+      "down": "下箭头",
+      "left": "左箭头",
+      "right": "右箭头",
+      "pageUp": "向上翻页",
+      "pageDown": "向下翻页"
+    },
     "reconnectingAuto": "正在重新连接…（第 {{attempt}} 次尝试）",
     "stopReconnect": "停止",
     "reconnectGaveUp": "无法恢复连接。"

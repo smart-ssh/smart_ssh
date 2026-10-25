@@ -31,6 +31,7 @@ vi.mock("../api", () => ({
   sftpUpload: vi.fn(),
   sftpExists: vi.fn(),
   sftpChmod: vi.fn(),
+  sftpChown: vi.fn(),
   readLocalTextPreview: vi.fn(),
   sftpStat: vi.fn(),
   sftpOpenForEditing: vi.fn(),

@@ -106,6 +106,38 @@ pub(crate) fn clipboard_root() -> Option<PathBuf> {
     Some(cache_smart_ssh.join("clipboard-files").join(scope))
 }
 
+/// Issue #679: root of the staging area for files picked through the Android
+/// system picker (`<cache>/smart-ssh/picked-files/<scope>`), a sibling of the
+/// edit-copy root with the same scope. Swept at startup with the edit copies.
+pub(crate) fn picked_root() -> Option<PathBuf> {
+    let root = instance_root()?;
+    let scope = root.file_name()?.to_owned();
+    let cache_smart_ssh = root.parent()?.parent()?;
+    Some(cache_smart_ssh.join("picked-files").join(scope))
+}
+
+/// Issue #679: removes the staging copy of a picked upload (and its now empty
+/// numbered/per-pick directories) once the upload is over. Only paths inside
+/// `root` are touched; any other path (a real file the user picked on
+/// desktop) is never deleted. Failures are logged, never fatal.
+pub(crate) fn remove_staged_pick(path: &Path, root: &Path) {
+    if !path.starts_with(root) || path == root {
+        return;
+    }
+    if let Err(err) = std::fs::remove_file(path) {
+        tracing::warn!(path = %path.display(), error = %err, "could not remove staged upload copy");
+        return;
+    }
+    // `<root>/<pick>/<index>/<name>`: drop the empty parents up to `root`.
+    let mut dir = path.parent();
+    while let Some(d) = dir {
+        if d == root || !d.starts_with(root) || std::fs::remove_dir(d).is_err() {
+            break;
+        }
+        dir = d.parent();
+    }
+}
+
 /// What a sweep did. Only counts — the paths of failures go to the log.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct SweepReport {
@@ -215,6 +247,9 @@ pub(crate) fn sweep_at_startup(locked_data_dir: &Path) {
         return;
     }
     let report = sweep_instance(cache, locked_data_dir);
+    if let Some(picked) = picked_root() {
+        let _ = sweep_dir(&picked);
+    }
     tracing::info!(
         removed = report.removed,
         failed = report.failed,
@@ -491,5 +526,26 @@ mod tests {
             "an edit copy of an earlier version must stay byte for byte"
         );
         assert!(foreign.exists());
+    }
+
+    /// Issue #679: a staged pick is removed after the upload, with its empty
+    /// directories; a file outside the staging root is never removed.
+    #[test]
+    fn test_remove_staged_pick_removes_only_inside_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("picked");
+        let staged = root.join("pick").join("0").join("a.txt");
+        std::fs::create_dir_all(staged.parent().unwrap()).unwrap();
+        std::fs::write(&staged, b"x").unwrap();
+        let outside = tmp.path().join("real.txt");
+        std::fs::write(&outside, b"y").unwrap();
+
+        remove_staged_pick(&outside, &root);
+        assert!(outside.exists());
+
+        remove_staged_pick(&staged, &root);
+        assert!(!staged.exists());
+        assert!(!root.join("pick").exists());
+        assert!(root.exists());
     }
 }

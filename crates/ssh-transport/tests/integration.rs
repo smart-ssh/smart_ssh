@@ -1293,6 +1293,21 @@ async fn test_sftp_set_permissions() {
     }
 }
 
+/// Issue #654 (chown): `set_owner` sends uid and gid as a pair in one
+/// `setstat`, and no permission bits.
+#[tokio::test]
+async fn test_sftp_set_owner_sends_uid_and_gid() {
+    let server = RunningTestServer::start().await;
+    let mut transport = connect_trusted(&server).await;
+    let mut sftp = transport.open_sftp().await.expect("open_sftp()");
+    sftp.write_file("/chown-me.txt", b"x").await.unwrap();
+    sftp.set_owner("/chown-me.txt", 1234, 5678)
+        .await
+        .expect("set_owner() should succeed");
+    assert_eq!(server.setstat_mode.last_ids(), Some((1234, 5678)));
+    assert_eq!(server.setstat_mode.last_mode(), None);
+}
+
 /// Stat: Größe und Verzeichnis-Flag einer existierenden Datei korrekt
 /// gemeldet; ein nicht existierender Pfad liefert einen Fehler statt eines
 /// Platzhalter-Ergebnisses.

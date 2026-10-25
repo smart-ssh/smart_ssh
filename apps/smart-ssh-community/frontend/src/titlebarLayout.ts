@@ -20,6 +20,18 @@ export interface PlatformCapabilities {
   fileClipboard: boolean;
   /** Always the narrow (phone) layout, whatever the window width. */
   alwaysNarrow: boolean;
+  /** "Reveal in folder" after a download (a file manager window). */
+  revealInFolder: boolean;
+  /** Dropping files from the OS onto the file browser to upload them. */
+  dragDrop: boolean;
+  /** Opening an edit copy in an external program; without it the app's own
+   * editor view is used (issue #679). */
+  externalEditor: boolean;
+  /** Download straight into the default folder; without it every download
+   * goes through the system save picker (issue #679). */
+  downloadWithoutPicker: boolean;
+  /** Keeping the path of a key file instead of importing the key. */
+  keyFilePath: boolean;
 }
 
 export function platformCapabilities(platform: Platform): PlatformCapabilities {
@@ -29,6 +41,11 @@ export function platformCapabilities(platform: Platform): PlatformCapabilities {
     folderPicker: !android,
     fileClipboard: !android,
     alwaysNarrow: android,
+    revealInFolder: !android,
+    dragDrop: !android,
+    externalEditor: !android,
+    downloadWithoutPicker: !android,
+    keyFilePath: !android,
   };
 }
 

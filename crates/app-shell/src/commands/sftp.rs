@@ -244,20 +244,54 @@ async fn download_impl(
     let Some(local_path) = rx.await.ok().flatten() else {
         return Ok(None); // Abbrechen ist kein Fehler, s. `export_document`.
     };
-    let local_path = local_path.into_path()?;
+    // Issue #679: a `content://` URI (Android) is never a path. The file is
+    // downloaded into an app-private staging copy and then written through
+    // the URI; progress and cancellation work as for any download.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(local_path)?;
+    let (target, staging) = match handle.as_path() {
+        Some(p) => (p.to_path_buf(), None),
+        None => {
+            let dir = crate::edit_copies::picked_root()
+                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .join(Uuid::new_v4().to_string());
+            (dir.join(&file_name), Some(dir))
+        }
+    };
+    if let Some(dir) = &staging {
+        std::fs::create_dir_all(dir)?;
+    }
 
-    download_one_file(
+    let downloaded = download_one_file(
         &TauriEventEmitter(app.clone()),
         session,
         channel,
         session_id,
         remote_path,
-        local_path.clone(),
+        target.clone(),
         total_bytes,
     )
-    .await?;
+    .await;
+    let copied = match (&staging, &downloaded) {
+        (Some(_), Ok(())) => {
+            let opener = crate::local_file::platform_opener(app);
+            let from = target.clone();
+            let h = handle.clone();
+            tokio::task::spawn_blocking(move || h.copy_from(opener.as_ref(), &from))
+                .await
+                .map_err(|e| CommandError::from(e.to_string()))
+                .and_then(|r| r.map(|_| ()).map_err(CommandError::from))
+        }
+        _ => Ok(()),
+    };
+    if let Some(dir) = &staging {
+        if let Err(err) = std::fs::remove_dir_all(dir) {
+            tracing::warn!(error = %err, "could not remove the staged download");
+        }
+    }
+    downloaded?;
+    copied?;
     Ok(Some(app_logic::dto::DownloadResultDto {
-        local_path: local_path.to_string_lossy().into_owned(),
+        local_path: handle.display(),
         is_dir: false,
         file_count: 1,
     }))
@@ -560,7 +594,8 @@ pub async fn sftp_upload(
         session_id,
         &local_path,
     )?;
-    run_browser_command(
+    let staged = local_path.as_path().to_path_buf();
+    let result = run_browser_command(
         &state,
         elevated.inner(),
         session_id,
@@ -577,7 +612,13 @@ pub async fn sftp_upload(
             .await
         },
     )
-    .await
+    .await;
+    // Issue #679: a copy staged from the Android picker is not needed after
+    // the upload (success or not); real files are never inside this root.
+    if let Some(root) = crate::edit_copies::picked_root() {
+        crate::edit_copies::remove_staged_pick(&staged, &root);
+    }
+    result
 }
 
 /// Issue #89: the one place where a frontend-supplied local path becomes a
@@ -632,10 +673,29 @@ pub async fn pick_upload_files(
     let Some(picked) = rx.await.ok().flatten() else {
         return Ok(None); // Abbrechen ist kein Fehler.
     };
-    let paths = picked
-        .into_iter()
-        .map(|p| p.into_path())
-        .collect::<Result<Vec<_>, _>>()?;
+    // Issue #679: `content://` URIs (Android) are copied into an app-private
+    // staging directory; the copies are what gets granted and uploaded.
+    let staging = crate::edit_copies::picked_root().map(|r| r.join(Uuid::new_v4().to_string()));
+    let mut paths = Vec::with_capacity(picked.len());
+    for item in picked {
+        let handle = crate::local_file::LocalFileHandle::from_dialog(item)?;
+        let path = match handle.as_path() {
+            Some(p) => p.to_path_buf(),
+            None => {
+                let dir = staging
+                    .as_deref()
+                    .ok_or_else(|| CommandError::from("No cache directory available"))?;
+                // Same display name twice: keep both copies apart.
+                let dir = dir.join(paths.len().to_string());
+                let h = handle.clone();
+                let o = crate::local_file::platform_opener(&app);
+                tokio::task::spawn_blocking(move || h.stage_into(o.as_ref(), &dir))
+                    .await
+                    .map_err(|e| CommandError::from(e.to_string()))??
+            }
+        };
+        paths.push(path);
+    }
     Ok(Some(grant_for_live_session(
         &state.sessions,
         grants.inner(),
@@ -1443,6 +1503,224 @@ async fn chmod_recursive(
     Ok(Some(count))
 }
 
+/// Issue #654: change owner and/or group. `owner`/`group` are a name (looked
+/// up in the server's `/etc/passwd`/`/etc/group`) or a number; `None` or an
+/// empty text leaves that side unchanged. Names are resolved **before**
+/// anything is changed: an unknown name fails with nothing touched.
+/// `recursive` applies to folders only and never follows symlinks.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // one argument per IPC parameter
+pub async fn sftp_chown(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    elevated: State<'_, ElevatedSftpRegistry>,
+    session_id: SessionId,
+    path: String,
+    owner: Option<String>,
+    group: Option<String>,
+    recursive: bool,
+    elevated_user: Option<String>,
+) -> CommandResult<u64> {
+    run_browser_command(
+        &state,
+        elevated.inner(),
+        session_id,
+        elevated_user,
+        |session, channel| async move {
+            let emitter = TauriEventEmitter(app);
+            chown_impl_reporting(
+                Some((&emitter, session_id)),
+                &session,
+                &channel,
+                &path,
+                owner.as_deref(),
+                group.as_deref(),
+                recursive,
+            )
+            .await
+        },
+    )
+    .await
+}
+
+#[cfg(test)]
+async fn chown_impl(
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    owner: Option<&str>,
+    group: Option<&str>,
+    recursive: bool,
+) -> CommandResult<u64> {
+    chown_impl_reporting(None, session, channel, path, owner, group, recursive).await
+}
+
+pub(crate) const CHOWN_UNKNOWN_USER: &str = "CHOWN_UNKNOWN_USER";
+pub(crate) const CHOWN_UNKNOWN_GROUP: &str = "CHOWN_UNKNOWN_GROUP";
+pub(crate) const CHOWN_NOTHING_TO_CHANGE: &str = "CHOWN_NOTHING_TO_CHANGE";
+
+fn non_empty(text: Option<&str>) -> Option<&str> {
+    text.map(str::trim).filter(|t| !t.is_empty())
+}
+
+fn is_numeric_id(text: &str) -> bool {
+    text.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Resolves the typed owner/group to ids. Numbers need no lookup; a name is
+/// looked up on the server through the **same channel** as the change (so an
+/// elevated change reads the files with the elevated rights and a revoked
+/// channel is noticed).
+async fn resolve_chown_ids(
+    sftp: &mut dyn SftpSession,
+    owner: Option<&str>,
+    group: Option<&str>,
+) -> CommandResult<(Option<u32>, Option<u32>)> {
+    use app_logic::owner_names::{load_id_names, resolve_group, resolve_user, IdLookupError};
+    let (owner, group) = (non_empty(owner), non_empty(group));
+    if owner.is_none() && group.is_none() {
+        return Err(CommandError::with_code(
+            "Neither owner nor group was given.",
+            CHOWN_NOTHING_TO_CHANGE,
+        ));
+    }
+    let needs_lookup =
+        owner.is_some_and(|o| !is_numeric_id(o)) || group.is_some_and(|g| !is_numeric_id(g));
+    let names = if needs_lookup {
+        load_id_names(sftp).await
+    } else {
+        app_logic::owner_names::IdNames::default()
+    };
+    let map_err = |e: IdLookupError| match e {
+        IdLookupError::UnknownUser(n) => {
+            CommandError::with_code(format!("Unknown user: {n}"), CHOWN_UNKNOWN_USER)
+        }
+        IdLookupError::UnknownGroup(n) => {
+            CommandError::with_code(format!("Unknown group: {n}"), CHOWN_UNKNOWN_GROUP)
+        }
+    };
+    let uid = owner
+        .map(|o| resolve_user(&names, o))
+        .transpose()
+        .map_err(map_err)?;
+    let gid = group
+        .map(|g| resolve_group(&names, g))
+        .transpose()
+        .map_err(map_err)?;
+    Ok((uid, gid))
+}
+
+async fn chown_impl_reporting(
+    progress: Option<(&dyn EventEmitter, SessionId)>,
+    session: &Session,
+    channel: &BrowserChannel,
+    path: &str,
+    owner: Option<&str>,
+    group: Option<&str>,
+    recursive: bool,
+) -> CommandResult<u64> {
+    let mut guard = lock_browser_sftp(session, channel).await;
+    // Spec 0085, A1.4 — s. `delete_impl`.
+    let elevated_user = guard.elevated_user();
+    let mut sftp = guard.sftp().await?;
+    let (uid, gid) = resolve_chown_ids(&mut sftp, owner, group).await?;
+    let op = channel.register_op(Uuid::new_v4(), OpKind::Chown, path);
+    let mut rows = EntryRows::new(progress, SftpTransferKind::Chown, op.handle(), path);
+    let result = rows
+        .run(chown_recursive(
+            &mut sftp,
+            path,
+            uid,
+            gid,
+            recursive,
+            op.handle(),
+        ))
+        .await;
+    rows.finish(
+        result
+            .as_ref()
+            .map(|r| r.is_some())
+            .map_err(|e| e.to_string()),
+    );
+    audit_elevated_change(
+        elevated_user.as_deref(),
+        "chown",
+        path,
+        matches!(result, Ok(Some(_))),
+    );
+    result?.ok_or_else(stopped_error)
+}
+
+/// SFTP `SETSTAT` takes uid and gid as a pair: the side that stays gets the
+/// entry's current id. Without a known current id nothing is guessed.
+fn chown_target(
+    entry: &RemoteEntry,
+    uid: Option<u32>,
+    gid: Option<u32>,
+) -> Result<(u32, u32), SshError> {
+    let missing = || {
+        SshError::ChannelError(format!(
+            "{}: the server did not report the current owner/group",
+            entry.path
+        ))
+    };
+    Ok((
+        uid.or(entry.uid).ok_or_else(missing)?,
+        gid.or(entry.gid).ok_or_else(missing)?,
+    ))
+}
+
+/// Core of `sftp_chown`; mirrors `chmod_recursive` (read the whole tree
+/// first, then change deepest-first). Entries that are symlinks are skipped
+/// below the root so a link can never lead the change outside the tree.
+/// Returns the number of changed entries.
+async fn chown_recursive(
+    sftp: &mut dyn SftpSession,
+    path: &str,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    recursive: bool,
+    op: &OpHandle,
+) -> Result<Option<u64>, SshError> {
+    if op.is_user_stopped() {
+        return Ok(None);
+    }
+    // `lstat`: same symlink reasoning as `delete_recursive`.
+    let root_entry = sftp.lstat(path).await?;
+    if !recursive || !root_entry.is_dir {
+        let (u, g) = chown_target(&root_entry, uid, gid)?;
+        sftp.set_owner(path, u, g).await?;
+        return Ok(Some(1));
+    }
+    op.begin_entries();
+    let mut targets = vec![(path.to_string(), chown_target(&root_entry, uid, gid)?)];
+    let mut queue = vec![path.to_string()];
+    while let Some(dir) = queue.pop() {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
+        for entry in sftp.list_dir(&dir).await? {
+            if entry.is_symlink {
+                continue;
+            }
+            targets.push((entry.path.clone(), chown_target(&entry, uid, gid)?));
+            if entry.is_dir {
+                queue.push(entry.path);
+            }
+        }
+    }
+    let count = targets.len() as u64;
+    op.set_files(0, Some(count));
+    for (entry_path, (u, g)) in targets.into_iter().rev() {
+        if op.is_user_stopped() {
+            return Ok(None);
+        }
+        sftp.set_owner(&entry_path, u, g).await?;
+        op.add_files_done();
+    }
+    Ok(Some(count))
+}
+
 /// Spec 0054, Teil 3: "Umbenennen" UND "Verschieben" laufen über denselben
 /// Befehl — SFTP `RENAME` unterscheidet nicht zwischen beidem, `to` kann im
 /// selben Verzeichnis (Umbenennen) oder einem anderen (Verschieben)
@@ -2245,6 +2523,106 @@ pub(super) async fn local_file_mtime_impl(
     .map(|dt| dt.to_rfc3339())
 }
 
+/// Issue #679: upper bound for the in-app editor of an edit copy (Android has
+/// no external editor to hand the copy to). Larger files are refused.
+const MAX_IN_APP_EDIT_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Resolves `local_path` to a file inside this session's own edit-copy
+/// directory (nothing else — not any other granted path), canonicalised.
+fn in_app_edit_copy(
+    sessions: &SessionManager,
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+    local_path: &str,
+) -> CommandResult<std::path::PathBuf> {
+    if sessions.get(session_id).is_none() {
+        return Err(CommandError::from(LOCAL_PATH_NOT_GRANTED));
+    }
+    let dir = edit_session_dir_in(edit_root, session_id)?
+        .canonicalize()
+        .map_err(|_| CommandError::from(LOCAL_PATH_NOT_GRANTED))?;
+    let canonical = std::path::Path::new(local_path)
+        .canonicalize()
+        .map_err(|_| CommandError::from(LOCAL_PATH_NOT_GRANTED))?;
+    if canonical.starts_with(&dir) && canonical.is_file() {
+        Ok(canonical)
+    } else {
+        Err(CommandError::from(LOCAL_PATH_NOT_GRANTED))
+    }
+}
+
+pub(super) fn read_edit_copy_text_impl(
+    sessions: &SessionManager,
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+    local_path: &str,
+    max: u64,
+) -> CommandResult<String> {
+    use std::io::Read;
+    let path = in_app_edit_copy(sessions, edit_root, session_id, local_path)?;
+    let mut text = String::new();
+    std::fs::File::open(path)?
+        .take(max + 1)
+        .read_to_string(&mut text)
+        .map_err(|_| CommandError::from("The file is not valid UTF-8 text"))?;
+    if text.len() as u64 > max {
+        return Err(CommandError::from("The file is too large to edit here"));
+    }
+    Ok(text)
+}
+
+pub(super) fn write_edit_copy_text_impl(
+    sessions: &SessionManager,
+    edit_root: Option<&std::path::Path>,
+    session_id: SessionId,
+    local_path: &str,
+    content: &str,
+    max: u64,
+) -> CommandResult<()> {
+    if content.len() as u64 > max {
+        return Err(CommandError::from("The text is too large to save here"));
+    }
+    let path = in_app_edit_copy(sessions, edit_root, session_id, local_path)?;
+    std::fs::write(path, content)?;
+    Ok(())
+}
+
+/// Issue #679: text of an edit copy for the in-app editor (Android). Only a
+/// file inside this session's edit-copy directory is accepted.
+#[tauri::command]
+pub async fn read_edit_copy_text(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    local_path: String,
+) -> CommandResult<String> {
+    read_edit_copy_text_impl(
+        &state.sessions,
+        crate::edit_copies::instance_root().as_deref(),
+        session_id,
+        &local_path,
+        MAX_IN_APP_EDIT_BYTES,
+    )
+}
+
+/// Issue #679: saves the in-app editor's text into the edit copy. The
+/// existing change detection then offers the upload as for any edit.
+#[tauri::command]
+pub async fn write_edit_copy_text(
+    state: State<'_, AppState>,
+    session_id: SessionId,
+    local_path: String,
+    content: String,
+) -> CommandResult<()> {
+    write_edit_copy_text_impl(
+        &state.sessions,
+        crate::edit_copies::instance_root().as_deref(),
+        session_id,
+        &local_path,
+        &content,
+        MAX_IN_APP_EDIT_BYTES,
+    )
+}
+
 /// Spec 0054, Teil 4, Punkt 6: "Watcher stoppt, wenn der Nutzer den Flow
 /// beendet; Temp-Datei aufräumen." Best-effort — eine bereits vom Nutzer
 /// oder dem externen Programm gelöschte Datei ist kein Fehlerfall.
@@ -2460,6 +2838,9 @@ mod sftp_mutation_tests {
             self.inner.remove_dir(p).await?;
             self.tick();
             Ok(())
+        }
+        async fn set_owner(&mut self, _: &str, _: u32, _: u32) -> Result<(), SshError> {
+            unreachable!()
         }
         async fn set_permissions(&mut self, p: &str, m: u32) -> Result<(), SshError> {
             self.inner.set_permissions(p, m).await?;

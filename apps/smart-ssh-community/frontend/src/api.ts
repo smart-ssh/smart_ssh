@@ -743,6 +743,12 @@ export const sftpExists = (sessionId: string, path: string, elevatedUser: string
 export const sftpChmod = (sessionId: string, path: string, mode: number, recursive: boolean, applySpecialBits: boolean, elevatedUser: string | null = null) =>
   invoke<number>("sftp_chmod", { sessionId, path, mode, recursive, applySpecialBits, elevatedUser });
 
+/** Issue #654: change owner and/or group. `owner`/`group` are a name or a
+ * number; `null` leaves that side unchanged. Resolves to the number of
+ * changed entries. */
+export const sftpChown = (sessionId: string, path: string, owner: string | null, group: string | null, recursive: boolean, elevatedUser: string | null = null) =>
+  invoke<number>("sftp_chown", { sessionId, path, owner, group, recursive, elevatedUser });
+
 /** Spec 0054, Teil 3: die lokale Seite der Upload-Überschreib-Diff-
  * Vorschau — `text: null` bei einer zu großen/nicht-Text-Datei, `size` ist
  * immer gesetzt (s. `crate::commands::read_local_text_preview`). */
@@ -765,6 +771,15 @@ export const sftpOpenForEditing = (sessionId: string, remotePath: string, elevat
  * (Issue #89). */
 export const localFileMtime = (sessionId: string, localPath: string) =>
   invoke<string | null>("local_file_mtime", { sessionId, localPath });
+
+/** Issue #679: text of this session's edit copy for the in-app editor
+ * (Android). Refuses any file outside the session's edit-copy folder. */
+export const readEditCopyText = (sessionId: string, localPath: string) =>
+  invoke<string>("read_edit_copy_text", { sessionId, localPath });
+
+/** Issue #679: saves the in-app editor's text into the edit copy. */
+export const writeEditCopyText = (sessionId: string, localPath: string, content: string) =>
+  invoke<void>("write_edit_copy_text", { sessionId, localPath, content });
 
 /** Spec 0054, Teil 4, Punkt 6: Watcher beenden + Temp-Datei aufräumen.
  * `sessionId` schränkt den Befehl auf den Editier-Temp-Ordner GENAU dieser

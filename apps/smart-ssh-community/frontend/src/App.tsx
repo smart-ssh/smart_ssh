@@ -203,7 +203,7 @@ function App() {
     // Notizbereich unmarkierbar gemacht. `AppHeader` trägt bereits sein
     // eigenes, korrekt auf die Titelleisten-Drag-Region begrenztes
     // `select-none` (Spec 0014).
-    <div className="flex h-screen flex-col bg-slate-900 text-slate-100 overflow-hidden">
+    <div className="flex h-[var(--app-vh,100vh)] flex-col bg-slate-900 text-slate-100 overflow-hidden">
       <AppHeader>
         {narrow ? (
           <NarrowHeaderNav

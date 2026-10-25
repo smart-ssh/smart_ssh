@@ -39,9 +39,9 @@ pub struct ExportResultDto {
     pub include_hint: String,
 }
 
-fn build_result_dto(plan: &ExportPlan, path: &Path) -> ExportResultDto {
+fn build_result_dto(plan: &ExportPlan, path: &str) -> ExportResultDto {
     ExportResultDto {
-        path: path.display().to_string(),
+        path: path.to_string(),
         exported: plan
             .exported
             .iter()
@@ -56,7 +56,7 @@ fn build_result_dto(plan: &ExportPlan, path: &Path) -> ExportResultDto {
         // `ssh` läse sie am ersten Leerzeichen ab als „garbage at end of
         // line". Dieselbe Quoting-Regel wie im Schreiber selbst (§4.3),
         // nicht neu erfunden.
-        include_hint: format!("Include {}", quote_value(&path.display().to_string())),
+        include_hint: format!("Include {}", quote_value(path)),
     }
 }
 
@@ -203,9 +203,10 @@ pub async fn export_ssh_config(
     let Some(picked) = rx.await.ok().flatten() else {
         return Ok(None);
     };
-    let path = picked.into_path()?;
+    // Issue #679: path on the desktop, `content://` URI on Android.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
 
-    if resolves_to_user_ssh_config(&path) {
+    if handle.as_path().is_some_and(resolves_to_user_ssh_config) {
         return Err(CommandError::from(
             "Die eigene ~/.ssh/config wird nicht überschrieben. Bitte einen anderen Dateinamen oder Ort wählen.".to_string(),
         ));
@@ -217,9 +218,12 @@ pub async fn export_ssh_config(
     // Nutzeraktion ausgelöste Einzelschreibvorgang wie bei
     // `commands::export_document` — für eine `ssh_config`-Größe unkritisch
     // blockierend.
-    std::fs::write(&path, &plan.text)?;
+    handle.write_all(
+        crate::local_file::platform_opener(&app).as_ref(),
+        plan.text.as_bytes(),
+    )?;
 
-    Ok(Some(build_result_dto(&plan, &path)))
+    Ok(Some(build_result_dto(&plan, &handle.display())))
 }
 
 /// Lädt Server und Gruppen und baut daraus den Exportplan. Aus dem

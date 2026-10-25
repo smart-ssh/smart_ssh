@@ -48,6 +48,7 @@ import type {
 import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
 import { ModalBackdrop } from "./ModalBackdrop";
+import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 import { Button, TabPanel, Tabs, tabId, useTabsIdBase, type TabItem } from "./ui";
@@ -1277,7 +1278,14 @@ export function ServerForm({
             <option value="privateKey">{AUTH_KIND_LABELS.privateKey}</option>
             <option value="agent">{AUTH_KIND_LABELS.agent}</option>
             <option value="certificate">{AUTH_KIND_LABELS.certificate}</option>
-            <option value="identityFile">{AUTH_KIND_LABELS.identityFile}</option>
+            {/* Issue #679: a file path cannot be kept on Android (the picker
+             * returns a content URI), so "Key file" is only offered for a
+             * server that already uses it; new keys go in via "Private key",
+             * which imports the picked content. */}
+            {(platformCapabilities(detectFallbackPlatform()).keyFilePath ||
+              auth.kind === "identityFile") && (
+              <option value="identityFile">{AUTH_KIND_LABELS.identityFile}</option>
+            )}
           </select>
 
           {auth.kind === "password" && (
@@ -1499,7 +1507,9 @@ export function ServerForm({
               </p>
               <ul className="mb-3 space-y-1 text-sm text-slate-300">
                 <li>{t("serverForm.importKey.importHint")}</li>
-                <li>{t("serverForm.importKey.keepHint")}</li>
+                {platformCapabilities(detectFallbackPlatform()).keyFilePath && (
+                  <li>{t("serverForm.importKey.keepHint")}</li>
+                )}
               </ul>
               {importError && (
                 <p role="alert" className="mb-2 text-xs text-red-400">
@@ -1519,13 +1529,15 @@ export function ServerForm({
                 >
                   {t("common.cancel")}
                 </Button>
-                <Button
-                  size="sm"
-                  disabled={saving}
-                  onClick={() => (importSavedId !== null ? finishKeepingPath() : save(false))}
-                >
-                  {t("serverForm.importKey.keep")}
-                </Button>
+                {platformCapabilities(detectFallbackPlatform()).keyFilePath && (
+                  <Button
+                    size="sm"
+                    disabled={saving}
+                    onClick={() => (importSavedId !== null ? finishKeepingPath() : save(false))}
+                  >
+                    {t("serverForm.importKey.keep")}
+                  </Button>
+                )}
                 <Button variant="primary" size="sm" autoFocus disabled={saving} onClick={() => save(true)}>
                   {t("serverForm.importKey.import")}
                 </Button>

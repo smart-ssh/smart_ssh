@@ -730,7 +730,12 @@
     "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}",
     "nothingToPaste": "Tidak ada yang ditempel: papan klip tidak berisi berkas",
     "createFileDone": "File “{{name}}” dibuat",
-    "createFileFailed": "File “{{name}}” tidak dapat dibuat: {{reason}}"
+    "createFileFailed": "File “{{name}}” tidak dapat dibuat: {{reason}}",
+    "chownDone": "Pemilik “{{name}}” diubah",
+    "chownRecursive": "Pemilik diubah — {{count}} entri di “{{name}}”",
+    "chownFailed": "Pemilik “{{name}}” tidak dapat diubah: {{reason}}",
+    "chownUnknownUser": "Pemilik “{{name}}” tidak diubah: pengguna tidak dikenal",
+    "chownUnknownGroup": "Pemilik “{{name}}” tidak diubah: grup tidak dikenal"
   },
   "fileElevation": {
     "toggle": "Hak tinggi",
@@ -783,7 +788,9 @@
     "otherUser": "Sebagai pengguna lain…",
     "targetUser": "Pengguna target",
     "targetUserHelp": "Menjalankan peramban berkas sebagai pengguna ini melalui sudo. Bawaan: root.",
-    "confirm": "Tingkatkan"
+    "confirm": "Tingkatkan",
+    "opChown": "Perubahan pemilik",
+    "chownNote": "Pemilik akan diubah sebagai {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Impor ssh_config",
@@ -1117,7 +1124,8 @@
       "cut": "Potong",
       "delete": "Hapus",
       "newFolder": "Folder baru",
-      "newFile": "File baru"
+      "newFile": "File baru",
+      "chown": "Ubah pemilik…"
     },
     "properties": {
       "title": "Properti",
@@ -1175,7 +1183,16 @@
       "notText": "Diff teks tidak mungkin: berkas bersifat biner (bukan teks UTF-8 yang valid).",
       "permission": "Diff teks tidak mungkin: dengan hak akses saat ini Anda tidak punya izin baca untuk berkas ini.",
       "other": "Diff teks tidak mungkin: berkas tidak dapat dibaca ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Ubah pemilik",
+      "owner": "Pengguna",
+      "group": "Grup",
+      "hint": "Masukkan nama atau angka. Sisi yang dibiarkan apa adanya tidak berubah. Server menentukan apakah perubahan diizinkan (biasanya hanya root yang boleh mengubah pemilik).",
+      "recursive": "Terapkan ke isi",
+      "recursiveWarning": "— mengubah pemilik SEMUA file dan subfolder di folder ini. Tautan simbolik tidak diikuti. Tidak dapat dibatalkan."
+    },
+    "transferChown": "Mengubah pemilik {{name}}"
   },
   "chat": {
     "jumpToLatest": "Ke pesan terbaru",
@@ -1285,6 +1302,15 @@
     "paneTabs": "Panel sesi",
     "moreActions": "Tindakan lainnya",
     "terminalOpenFailed": "Tidak dapat membuka terminal: {{error}}",
+    "extraKeys": {
+      "group": "Tombol tambahan",
+      "up": "Panah atas",
+      "down": "Panah bawah",
+      "left": "Panah kiri",
+      "right": "Panah kanan",
+      "pageUp": "Halaman atas",
+      "pageDown": "Halaman bawah"
+    },
     "reconnectingAuto": "Menyambung ulang… (percobaan {{attempt}})",
     "stopReconnect": "Berhenti",
     "reconnectGaveUp": "Koneksi tidak dapat dipulihkan."

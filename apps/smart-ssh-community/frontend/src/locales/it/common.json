@@ -740,7 +740,12 @@
     "uploadFailedMany": "Impossibile caricare {{name}} file, ad es.: {{reason}}",
     "nothingToPaste": "Niente da incollare: gli appunti non contengono file",
     "createFileDone": "File «{{name}}» creato",
-    "createFileFailed": "Impossibile creare il file «{{name}}»: {{reason}}"
+    "createFileFailed": "Impossibile creare il file «{{name}}»: {{reason}}",
+    "chownDone": "Proprietario di “{{name}}” cambiato",
+    "chownRecursive": "Proprietario cambiato — {{count}} elementi in “{{name}}”",
+    "chownFailed": "Impossibile cambiare il proprietario di “{{name}}”: {{reason}}",
+    "chownUnknownUser": "Proprietario di “{{name}}” non cambiato: utente sconosciuto",
+    "chownUnknownGroup": "Proprietario di “{{name}}” non cambiato: gruppo sconosciuto"
   },
   "fileElevation": {
     "toggle": "Diritti elevati",
@@ -793,7 +798,9 @@
     "otherUser": "Come altro utente…",
     "targetUser": "Utente di destinazione",
     "targetUserHelp": "Esegue il browser di file come questo utente tramite sudo. Predefinito: root.",
-    "confirm": "Eleva"
+    "confirm": "Eleva",
+    "opChown": "Cambio del proprietario",
+    "chownNote": "Il proprietario verrà cambiato come {{user}}."
   },
   "sshConfigImport": {
     "dialogTitle": "Importa ssh_config",
@@ -1131,7 +1138,8 @@
       "cut": "Taglia",
       "delete": "Elimina",
       "newFolder": "Nuova cartella",
-      "newFile": "Nuovo file"
+      "newFile": "Nuovo file",
+      "chown": "Cambia proprietario…"
     },
     "properties": {
       "title": "Proprietà",
@@ -1189,7 +1197,16 @@
       "notText": "Diff di testo non possibile: il file è binario (non è testo UTF-8 valido).",
       "permission": "Diff di testo non possibile: con i permessi attuali non hai il permesso di lettura per questo file.",
       "other": "Diff di testo non possibile: impossibile leggere il file ({{message}})."
-    }
+    },
+    "chown": {
+      "title": "Cambia proprietario",
+      "owner": "Utente",
+      "group": "Gruppo",
+      "hint": "Inserisci un nome o un numero. Un lato lasciato com’è resta invariato. Il server decide se la modifica è consentita (di solito solo root può cambiare il proprietario).",
+      "recursive": "Applica al contenuto",
+      "recursiveWarning": "— cambia il proprietario di TUTTI i file e le sottocartelle di questa cartella. I collegamenti simbolici non vengono seguiti. Non annullabile."
+    },
+    "transferChown": "Cambio del proprietario di {{name}}"
   },
   "chat": {
     "jumpToLatest": "Vai al messaggio più recente",
@@ -1301,6 +1318,15 @@
     "paneTabs": "Aree della sessione",
     "moreActions": "Altre azioni",
     "terminalOpenFailed": "Impossibile aprire il terminale: {{error}}",
+    "extraKeys": {
+      "group": "Tasti aggiuntivi",
+      "up": "Freccia su",
+      "down": "Freccia giù",
+      "left": "Freccia sinistra",
+      "right": "Freccia destra",
+      "pageUp": "Pagina su",
+      "pageDown": "Pagina giù"
+    },
     "reconnectingAuto": "Riconnessione… (tentativo {{attempt}})",
     "stopReconnect": "Interrompi",
     "reconnectGaveUp": "Impossibile ripristinare la connessione."

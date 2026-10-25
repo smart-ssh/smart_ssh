@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
@@ -6,6 +6,11 @@ import "@xterm/xterm/css/xterm.css";
 import { commandErrorMessage, openTerminal, terminalInput, terminalResize } from "../api";
 import { base64ToBytes, onTerminalOutput } from "../events";
 import { notifyMissingStartDirectory } from "../startDirectory";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useSoftKeyboardViewport } from "../hooks/useSoftKeyboardViewport";
+import { detectFallbackPlatform } from "../titlebarLayout";
+import { applyModifiers, keySequence, type TerminalKeyId } from "../terminalKeys";
+import { TerminalKeyRow } from "./TerminalKeyRow";
 
 /** Issue #355: Verbindungszustand, den `SessionView` dem Terminal meldet. */
 export type TerminalLink = "live" | "lost" | "reconnecting";
@@ -31,6 +36,14 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
   const linkRef = useRef(link);
   const onReconnectRef = useRef(onReconnect);
   const lostShownRef = useRef(false);
+  // Issue #678: touch key row and sticky one-shot Ctrl/Alt (Spec 0114).
+  const coarse = useMediaQuery("(pointer: coarse)");
+  const showKeyRow = coarse || detectFallbackPlatform() === "android";
+  useSoftKeyboardViewport(showKeyRow);
+  const [mods, setMods] = useState({ ctrl: false, alt: false });
+  const modsRef = useRef(mods);
+  modsRef.current = mods;
+  const sendRef = useRef<(data: string) => void>(() => {});
   linkRef.current = link;
   onReconnectRef.current = onReconnect;
 
@@ -80,16 +93,28 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
       fitAddon.fit();
     }
 
-    const dataSubscription = term.onData((data) => {
+    const send = (raw: string) => {
       // Issue #355: im toten Terminal geht nichts an den Server; nur R
       // (oder r) löst den Reconnect aus.
       if (linkRef.current !== "live") {
-        if (data === "r" || data === "R") onReconnectRef.current?.();
+        if (raw === "r" || raw === "R") onReconnectRef.current?.();
         return;
       }
-      terminalInput(sessionId, new TextEncoder().encode(data)).catch((err) =>
+      terminalInput(sessionId, new TextEncoder().encode(raw)).catch((err) =>
         console.error(commandErrorMessage(err)),
       );
+    };
+    sendRef.current = send;
+    const dataSubscription = term.onData((data) => {
+      // Issue #678: a pending sticky Ctrl/Alt applies to this key, then clears.
+      const m = modsRef.current;
+      if (m.ctrl || m.alt) {
+        modsRef.current = { ctrl: false, alt: false };
+        setMods(modsRef.current);
+        send(applyModifiers(data, m));
+        return;
+      }
+      send(data);
     });
 
     const startShell = () => {
@@ -159,5 +184,27 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [link]);
 
-  return <div ref={containerRef} className="h-full w-full overflow-hidden" />;
+  const onRowKey = useCallback((key: TerminalKeyId) => {
+    const m = modsRef.current;
+    modsRef.current = { ctrl: false, alt: false };
+    setMods(modsRef.current);
+    const appCursor = termRef.current?.modes?.applicationCursorKeysMode ?? false;
+    sendRef.current(keySequence(key, m, appCursor));
+    termRef.current?.focus();
+  }, []);
+
+  return (
+    <div className="flex h-full w-full flex-col">
+      <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
+      {showKeyRow && (
+        <TerminalKeyRow
+          ctrl={mods.ctrl}
+          alt={mods.alt}
+          onToggleCtrl={() => setMods((m) => ({ ...m, ctrl: !m.ctrl }))}
+          onToggleAlt={() => setMods((m) => ({ ...m, alt: !m.alt }))}
+          onKey={onRowKey}
+        />
+      )}
+    </div>
+  );
 }

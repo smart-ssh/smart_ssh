@@ -10,6 +10,8 @@
 //! zurückgeben, keine fachliche Logik hier (Spec 0007, Abschnitt 3) — diese
 //! Abgrenzung gilt unverändert, nur die Crate-Grenze hat sich verschoben.
 
+#[cfg(target_os = "android")]
+mod android_service;
 mod auto_reconnect;
 /// Issue #462: extension-owned database tables.
 mod chat_content;
@@ -26,6 +28,7 @@ mod event_emitter;
 mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
+mod local_file;
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
@@ -912,6 +915,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::claim_dropped_paths,
             commands::clipboard_has_files,
             commands::clipboard_write_text,
+            commands::read_edit_copy_text,
+            commands::write_edit_copy_text,
             commands::claim_clipboard_files,
             commands::sftp_delete,
             commands::sftp_cancel_transfer,
@@ -926,6 +931,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::sftp_exists,
             commands::sftp_stat,
             commands::sftp_chmod,
+            commands::sftp_chown,
             commands::sftp_elevation_enable,
             commands::sftp_elevation_disable,
             commands::sftp_elevation_status,
@@ -979,6 +985,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
 /// gibt also keinen zweiten Pfad, der auseinanderlaufen könnte.
 pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     use tauri::Manager;
+
+    // Spec 0114 §4: keep sessions alive in the background on Android.
+    #[cfg(target_os = "android")]
+    android_service::start(app);
 
     // Issue #669: background services start here — only reached once the
     // state exists (after unlock in master-password mode), and after the
@@ -1067,6 +1077,11 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
 /// dieselbe Liste registrieren. Zwei Listen wären zwei Gelegenheiten, dass
 /// eine davon ein Plugin behält oder verliert.
 fn register_unlocked_plugins_on(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    // Issue #679: Android only — `tauri_plugin_fs` resolves the `content://`
+    // URIs of the system picker for `local_file`. No `fs:*` permission is
+    // granted to the webview, so it adds no frontend surface.
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_fs::init());
     builder
         // Für die Key-/Zertifikat-Datei-Auswahl im Server-Formular (Spec
         // 0008, Abschnitt 6): der native Dialog läuft im Backend
@@ -1097,6 +1112,9 @@ fn register_unlocked_plugins_on(builder: tauri::Builder<tauri::Wry>) -> tauri::B
         // Entsperrung gibt es nichts zu melden — der MCP-Server läuft dort
         // ohnehin nicht (A16).
         .plugin(tauri_plugin_notification::init())
+        // Android (Spec 0108, 5.7): runtime request for RECORD_AUDIO; it has
+        // no command the webview may call, and only a recording start uses it.
+        .plugin(microphone_plugin())
 }
 
 /// Dasselbe wie [`register_unlocked_plugins_on`], nur nach `build()`
@@ -1117,11 +1135,14 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
         _ => return,
     }
     let results: Vec<Result<(), tauri::Error>> = vec![
+        #[cfg(target_os = "android")]
+        app.plugin(tauri_plugin_fs::init()),
         app.plugin(tauri_plugin_dialog::init()),
         app.plugin(tauri_plugin_opener::init()),
         app.plugin(tauri_plugin_store::Builder::new().build()),
         app.plugin(tauri_plugin_os::init()),
         app.plugin(tauri_plugin_notification::init()),
+        app.plugin(microphone_plugin()),
     ];
     for result in results {
         if let Err(err) = result {
@@ -1178,4 +1199,13 @@ where
         }
         inner(invoke)
     }
+}
+
+/// Android: the microphone permission plugin; elsewhere a plugin that does
+/// nothing (keeps both registration chains identical on every platform).
+fn microphone_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    #[cfg(target_os = "android")]
+    return crate::voice_input::microphone_plugin::<R>();
+    #[cfg(not(target_os = "android"))]
+    return tauri::plugin::Builder::new("microphone").build();
 }
