@@ -1112,6 +1112,9 @@ fn register_unlocked_plugins_on(builder: tauri::Builder<tauri::Wry>) -> tauri::B
         // Entsperrung gibt es nichts zu melden — der MCP-Server läuft dort
         // ohnehin nicht (A16).
         .plugin(tauri_plugin_notification::init())
+        // Android (Spec 0108, 5.7): runtime request for RECORD_AUDIO; it has
+        // no command the webview may call, and only a recording start uses it.
+        .plugin(microphone_plugin())
 }
 
 /// Dasselbe wie [`register_unlocked_plugins_on`], nur nach `build()`
@@ -1139,6 +1142,7 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
         app.plugin(tauri_plugin_store::Builder::new().build()),
         app.plugin(tauri_plugin_os::init()),
         app.plugin(tauri_plugin_notification::init()),
+        app.plugin(microphone_plugin()),
     ];
     for result in results {
         if let Err(err) = result {
@@ -1195,4 +1199,13 @@ where
         }
         inner(invoke)
     }
+}
+
+/// Android: the microphone permission plugin; elsewhere a plugin that does
+/// nothing (keeps both registration chains identical on every platform).
+fn microphone_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    #[cfg(target_os = "android")]
+    return crate::voice_input::microphone_plugin::<R>();
+    #[cfg(not(target_os = "android"))]
+    return tauri::plugin::Builder::new("microphone").build();
 }

@@ -257,6 +257,7 @@ const PLUGINS_DEFERRED_WHILE_LOCKED: &[&str] = &[
     "tauri_plugin_store::Builder::new().build()",
     "tauri_plugin_os::init()",
     "tauri_plugin_notification::init()",
+    "microphone_plugin()",
 ];
 
 /// Der Rumpf einer Funktion in `lib.rs` als **Bereich** — von ihrem Kopf

@@ -142,6 +142,9 @@ Logs nennen höchstens Dauer und Ergebnis.
   `speech_permission_denied`, `speech_transcription_failed`.
 - macOS: Der Systemdialog für den Mikrofonzugriff erscheint erst beim ersten
   Start; der Hinweistext erklärt, dass die Erkennung lokal läuft.
+- Android: Die Berechtigung „Mikrofon“ wird beim ersten Start abgefragt, bevor
+  das Mikrofon geöffnet wird. Verweigert → `speech_permission_denied` (Hinweis
+  auf die Systemeinstellungen), keine Aufnahme (Spec 0114).
 
 **5.8** Oberfläche im Einzelnen:
 - Der Knopf erscheint nur, wo das Eingabefeld sichtbar ist (nicht ohne

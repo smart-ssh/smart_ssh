@@ -1,6 +1,6 @@
 # Spec 0114 — Android (technischer Test)
 
-Status: Grundlage umgesetzt, Dateiauswahl und Hintergrundsitzungen umgesetzt; Bedienung per Touch, Schlüsselspeicher und Spracheingabe folgen in eigenen Änderungen
+Status: Grundlage umgesetzt, Dateiauswahl, Hintergrundsitzungen und Spracheingabe umgesetzt; Bedienung per Touch und Schlüsselspeicher folgen in eigenen Änderungen
 Zweck: Die App läuft als Android-App (APK) auf Telefonen und im Emulator. Dieser Stand ist ein technischer Test: Entsperren, Serverliste, SSH-Verbindung, KI-Chat und Terminal funktionieren; nicht alles vom Desktop ist vorhanden.
 Bezüge: Spec 0113 (Schmales Layout), Spec 0101 (Master-Passwort), Spec 0049 (Titelleiste).
 
@@ -23,6 +23,7 @@ Bezüge: Spec 0113 (Schmales Layout), Spec 0101 (Master-Passwort), Spec 0049 (Ti
 - **SSH-Konfiguration:** Beim Import aus einer gewählten Datei werden `Include`-Verweise nicht verfolgt.
 - **Mehrfachstart:** Das System hält höchstens eine Instanz; eine Prüfung wie auf dem Desktop entfällt.
 - **Startfehler:** Ein Fehler beim Start erscheint nicht in einem System-Dialog, sondern wird ins Log geschrieben, danach beendet sich die App. Rückfragen beim Start gelten als „Abbrechen“.
+- **Spracheingabe:** Sie arbeitet wie auf dem Desktop (Spec 0108), vollständig lokal: Der Mikrofon-Knopf nimmt auf, der Live-Text erscheint, „Stopp“ fügt den endgültigen Text ein. Die Modelle liegen im app-privaten Speicher; die Größenwarnung vor dem Download gilt unverändert. Die Android-Berechtigung „Mikrofon“ wird beim ersten Start einer Aufnahme (nach dem Modell-Download) abgefragt. Wird sie verweigert, erscheint der Hinweis „Zugriff auf das Mikrofon verweigert“ mit dem Verweis auf die Systemeinstellungen; die App stürzt nicht ab und die Aufnahme beginnt nicht. Die nächste Aufnahme fragt erneut bzw. folgt der Systemeinstellung.
 
 ## 2a. Terminal mit Zusatztastenreihe
 
