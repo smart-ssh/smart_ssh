@@ -68,6 +68,16 @@ impl ExtensionDb {
     pub fn prefix(&self) -> &str {
         &self.prefix
     }
+
+    /// The encrypted key-value and secret store, bound to exactly this
+    /// extension's prefix as namespace (issue #785). Creates no table; the
+    /// handle cannot reach another namespace.
+    pub fn kv_store(&self) -> crate::extension_store::NamespacedStore {
+        crate::extension_store::NamespacedStore::for_validated_prefix(
+            self.pool.clone(),
+            &self.prefix,
+        )
+    }
 }
 
 impl std::fmt::Debug for ExtensionDb {
@@ -488,5 +498,42 @@ mod permitted_tests {
             Some("ext_demo_a")
         ));
         assert!(!permitted(P, FUNCTION, None, Some("load_extension")));
+    }
+}
+
+#[cfg(test)]
+mod kv_store_tests {
+    use super::*;
+
+    // Issue #785: the default path (no extension) leaves `ext_kv` empty, and
+    // an extension that never uses its store creates no rows either.
+    #[tokio::test]
+    async fn kv_store_creates_no_rows_until_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteProfileStore::connect_plaintext(&dir.path().join("t.db"))
+            .await
+            .unwrap();
+        let count = |pool: SqlitePool| async move {
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ext_kv")
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        };
+        let db = store
+            .run_extension_migrations(&ExtensionRegistration {
+                prefix: "ext_demo_".into(),
+                migrations: vec![ExtensionMigration {
+                    version: 1,
+                    description: "init".into(),
+                    sql: "CREATE TABLE ext_demo_t (id INTEGER);".into(),
+                }],
+            })
+            .await
+            .unwrap();
+        assert_eq!(count(db.pool().clone()).await, 0);
+        let kv = db.kv_store();
+        kv.set("k", b"v").await.unwrap();
+        assert_eq!(count(db.pool().clone()).await, 1);
+        assert!(format!("{kv:?}").contains("ext_demo_"));
     }
 }
