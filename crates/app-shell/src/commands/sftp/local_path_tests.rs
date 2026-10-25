@@ -869,3 +869,71 @@ fn test_paste_dialog_lists_files_and_target() {
     assert!(m.contains("/x/f0") && m.contains("/x/f11") && !m.contains("/x/f12"));
     assert!(m.contains("and 2 more") && m.contains("Target: /srv/www"));
 }
+
+// Issue #679: the in-app editor (Android) reads and writes only a file inside
+// this session's own edit-copy directory.
+
+#[tokio::test]
+async fn in_app_edit_copy_round_trips_inside_the_edit_dir() {
+    let s = setup().await;
+    let dir = s.edit_dir(s.session_id);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("a.conf");
+    std::fs::write(&file, "old").unwrap();
+    let p = file.to_str().unwrap();
+    assert_eq!(
+        read_edit_copy_text_impl(&s.sessions, s.edit_root(), s.session_id, p, 100).unwrap(),
+        "old"
+    );
+    write_edit_copy_text_impl(&s.sessions, s.edit_root(), s.session_id, p, "new", 100).unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+}
+
+#[tokio::test]
+async fn in_app_edit_copy_refuses_other_paths_and_sizes() {
+    let s = setup().await;
+    let dir = s.edit_dir(s.session_id);
+    std::fs::create_dir_all(&dir).unwrap();
+    let inside = dir.join("a.conf");
+    std::fs::write(&inside, "0123456789").unwrap();
+    // A file elsewhere, even one the session was granted, is refused.
+    let outside_dir = tempfile::tempdir().unwrap();
+    let outside = outside_dir.path().join("b.txt");
+    std::fs::write(&outside, "x").unwrap();
+    s.grants.grant(s.session_id, vec![outside.clone()]);
+    let o = outside.to_str().unwrap();
+    assert!(read_edit_copy_text_impl(&s.sessions, s.edit_root(), s.session_id, o, 100).is_err());
+    assert!(
+        write_edit_copy_text_impl(&s.sessions, s.edit_root(), s.session_id, o, "y", 100).is_err()
+    );
+    assert_eq!(std::fs::read_to_string(&outside).unwrap(), "x");
+    // `..` out of the edit dir, and another session's directory.
+    let escape = format!("{}/../../b", dir.display());
+    assert!(
+        read_edit_copy_text_impl(&s.sessions, s.edit_root(), s.session_id, &escape, 100).is_err()
+    );
+    let other = s.edit_dir(SessionId::new_v4());
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join("c"), "z").unwrap();
+    assert!(read_edit_copy_text_impl(
+        &s.sessions,
+        s.edit_root(),
+        s.session_id,
+        other.join("c").to_str().unwrap(),
+        100
+    )
+    .is_err());
+    // Size limits, both directions.
+    let i = inside.to_str().unwrap();
+    assert!(read_edit_copy_text_impl(&s.sessions, s.edit_root(), s.session_id, i, 5).is_err());
+    assert!(write_edit_copy_text_impl(
+        &s.sessions,
+        s.edit_root(),
+        s.session_id,
+        i,
+        "0123456789",
+        5
+    )
+    .is_err());
+    assert_eq!(std::fs::read_to_string(&inside).unwrap(), "0123456789");
+}

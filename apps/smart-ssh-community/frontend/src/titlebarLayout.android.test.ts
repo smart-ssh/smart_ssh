@@ -23,6 +23,11 @@ describe("Android (Spec 0114)", () => {
       folderPicker: false,
       fileClipboard: false,
       alwaysNarrow: true,
+      revealInFolder: false,
+      dragDrop: false,
+      externalEditor: false,
+      downloadWithoutPicker: false,
+      keyFilePath: false,
     });
   });
 
@@ -33,6 +38,11 @@ describe("Android (Spec 0114)", () => {
         folderPicker: true,
         fileClipboard: true,
         alwaysNarrow: false,
+        revealInFolder: true,
+        dragDrop: true,
+        externalEditor: true,
+        downloadWithoutPicker: true,
+        keyFilePath: true,
       });
     }
   });

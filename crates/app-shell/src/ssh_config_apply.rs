@@ -834,9 +834,33 @@ pub async fn preview_ssh_config_import(
     let Some(picked) = rx.await.ok().flatten() else {
         return Ok(None);
     };
-    let path = picked.into_path()?;
-
-    let read = app_logic::ssh_config_import::read_import(&path).map_err(|abort| match abort {
+    // Issue #679: a `content://` URI (Android) is copied into an app-private
+    // staging directory first (`read_import` works on paths); the copy is
+    // removed right after reading. `Include`s next to the chosen file are not
+    // reachable through a URI and are reported as not found.
+    let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
+    let staging = match handle.as_path() {
+        Some(_) => None,
+        None => Some(
+            crate::edit_copies::picked_root()
+                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .join(uuid::Uuid::new_v4().to_string()),
+        ),
+    };
+    let path = match &staging {
+        Some(dir) => handle.stage_into(crate::local_file::platform_opener(&app).as_ref(), dir)?,
+        None => handle
+            .as_path()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default(),
+    };
+    let read_result = app_logic::ssh_config_import::read_import(&path);
+    if let Some(dir) = &staging {
+        if let Err(err) = std::fs::remove_dir_all(dir) {
+            tracing::warn!(error = %err, "could not remove the staged ssh_config copy");
+        }
+    }
+    let read = read_result.map_err(|abort| match abort {
         app_logic::ssh_config_import::ImportAbort::ChosenIsBackup => {
             CommandError::with_code(abort.to_string(), "SSH_CONFIG_IS_BACKUP")
         }

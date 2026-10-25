@@ -45,6 +45,11 @@ uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 # Desktop-only dependencies (Spec 0114, ADR 0148): these crates have no
 # Android backend or are empty there, so they are not compiled for it.
+[target.'cfg(target_os = "android")'.dependencies]
+# Issue #679: opens `content://` URIs from the system file picker as file
+# descriptors (already in the tree through `tauri-plugin-dialog`).
+tauri-plugin-fs = "2"
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 # Issue #358: file references on the system clipboard (macOS/Windows/X11/Wayland).
 clipboard-rs = { version = "0.3.5", default-features = false }
