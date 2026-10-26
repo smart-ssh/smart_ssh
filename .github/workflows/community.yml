@@ -160,6 +160,14 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm run lint
 
+      # Issue #841: allowlist entries of the file-size ratchet may only go
+      # down. Needs the base branch, which the shallow checkout lacks.
+      - name: File-size allowlist vs. base branch
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        run: |
+          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          node scripts/check-file-size.mjs --base FETCH_HEAD
+
       # Spec 0090, A5: ein fehlschlagender vitest-Fall färbt den Job rot.
       - name: Frontend tests
         working-directory: apps/smart-ssh-community/frontend

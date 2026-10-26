@@ -76,6 +76,16 @@ registered (issue #101). Then it runs `npm run check-a11y-rules`
 upgrade that adds a rule, add it there. CI runs both through the same
 `npm run lint` step.
 
+`npm run lint` also runs `npm run check-file-size`
+(`scripts/check-file-size.mjs`, issue #841): tracked `*.rs`, `*.ts`, `*.tsx`,
+`*.mjs` and `*.kt` files may have at most 1,200 lines (test files: 2,000).
+Files above their limit are listed in `scripts/file-size-allowlist.json` with
+their maximum size; such a file may not grow past its entry, and an entry for a
+file that is now within the limit or deleted fails as stale. `node
+scripts/check-file-size.mjs --update` lowers or removes entries (never raises
+or adds). On pull requests CI also compares with the base branch (`--base`),
+so entries can only go down: split the file instead of raising an entry.
+
 Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
 if formatting is off, clippy and test never even execute, so a red CI run
 that only shows a `fmt` failure tells you nothing about whether the actual
