@@ -1435,6 +1435,8 @@
     "import": {
       "title": "Yedekten geri yükle",
       "pickTitle": "Bir yedek dosyası seçin",
+      "pickFailed": "Dosya seçilen konumdan açılamadı.",
+      "chooseAgain": "Dosyayı yeniden seç",
       "file": "Dosya: {{name}}",
       "kind": "Bu yedeği ne açar",
       "useCode": "Kurtarma kodu",

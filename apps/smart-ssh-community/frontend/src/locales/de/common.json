@@ -1435,6 +1435,8 @@
     "import": {
       "title": "Aus Backup wiederherstellen",
       "pickTitle": "Backup-Datei auswählen",
+      "pickFailed": "Die Datei konnte vom gewählten Ort nicht geöffnet werden.",
+      "chooseAgain": "Datei erneut wählen",
       "file": "Datei: {{name}}",
       "kind": "Womit sich das Backup öffnet",
       "useCode": "Wiederherstellungscode",

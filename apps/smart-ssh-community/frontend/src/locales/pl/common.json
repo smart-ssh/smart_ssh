@@ -1451,6 +1451,8 @@
     "import": {
       "title": "Przywróć z kopii",
       "pickTitle": "Wybierz plik kopii",
+      "pickFailed": "Nie udało się otworzyć pliku z wybranej lokalizacji.",
+      "chooseAgain": "Wybierz plik ponownie",
       "file": "Plik: {{name}}",
       "kind": "Czym otworzyć tę kopię",
       "useCode": "Kod odzyskiwania",

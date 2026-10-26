@@ -1435,6 +1435,8 @@
     "import": {
       "title": "Gjenopprett fra sikkerhetskopi",
       "pickTitle": "Velg en sikkerhetskopifil",
+      "pickFailed": "Filen kunne ikke åpnes fra det valgte stedet.",
+      "chooseAgain": "Velg filen på nytt",
       "file": "Fil: {{name}}",
       "kind": "Hva som åpner denne sikkerhetskopien",
       "useCode": "Gjenopprettingskode",

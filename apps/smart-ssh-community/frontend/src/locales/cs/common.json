@@ -1451,6 +1451,8 @@
     "import": {
       "title": "Obnovit ze zálohy",
       "pickTitle": "Vyberte soubor zálohy",
+      "pickFailed": "Soubor se nepodařilo otevřít z vybraného umístění.",
+      "chooseAgain": "Vybrat soubor znovu",
       "file": "Soubor: {{name}}",
       "kind": "Čím se záloha otevře",
       "useCode": "Kód pro obnovení",
