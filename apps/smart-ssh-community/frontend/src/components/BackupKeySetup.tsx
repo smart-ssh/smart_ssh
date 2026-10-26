@@ -94,7 +94,7 @@ export function BackupKeySetup({ mode, onDone, onCancel }: Props) {
   if (mode === "newCode") {
     return error ? (
       <DialogFrame layer="app" title={t("backup.code.title")} onClose={onCancel} actions={<Button onClick={onCancel}>{t("common.close")}</Button>}>
-        <p role="alert" className="text-red-300">{error}</p>
+        <p role="alert" className="text-danger-fg-soft">{error}</p>
       </DialogFrame>
     ) : null;
   }
@@ -119,7 +119,7 @@ export function BackupKeySetup({ mode, onDone, onCancel }: Props) {
             {t("backup.setup.usePassphrase")}
           </Button>
         </div>
-        {error && <p role="alert" className="text-red-300">{error}</p>}
+        {error && <p role="alert" className="text-danger-fg-soft">{error}</p>}
       </div>
     </DialogFrame>
   );

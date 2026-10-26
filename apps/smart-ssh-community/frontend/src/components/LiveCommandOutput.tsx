@@ -35,12 +35,12 @@ export function LiveCommandOutput({ output }: { output: LiveOutput }) {
       aria-live="off"
       aria-label={t("actionCard.liveOutputLabel")}
       data-testid="live-command-output"
-      className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded bg-slate-950 p-2 font-mono text-xs"
+      className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded bg-surface-sunken p-2 font-mono text-xs"
     >
-      {output.stdout && <pre className="whitespace-pre-wrap text-slate-300">{output.stdout}</pre>}
-      {output.stderr && <pre className="whitespace-pre-wrap text-red-300">{output.stderr}</pre>}
+      {output.stdout && <pre className="whitespace-pre-wrap text-fg-muted">{output.stdout}</pre>}
+      {output.stderr && <pre className="whitespace-pre-wrap text-danger-fg-soft">{output.stderr}</pre>}
       {output.truncated && (
-        <p className="font-sans text-amber-300">{t("actionCard.liveOutputTruncatedNotice")}</p>
+        <p className="font-sans text-warning-fg-soft">{t("actionCard.liveOutputTruncatedNotice")}</p>
       )}
     </div>
   );

@@ -128,13 +128,13 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
     >
       <p className="mb-3">{t("firstRunNotice.responsibilityText")}</p>
       <p className="mb-3">{t("firstRunNotice.encryptionText")}</p>
-      <label className="flex items-start gap-2 text-slate-200">
+      <label className="flex items-start gap-2 text-fg-soft">
         <input
           ref={checkboxRef}
           type="checkbox"
           checked={checked}
           onChange={(e) => setChecked(e.target.checked)}
-          className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+          className="mt-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-fg"
         />
         {t("firstRunNotice.checkboxLabel")}
       </label>
@@ -142,7 +142,7 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
         <ExtensionBoundary key={id} id={id} onError={onExtensionError}>
           <section
             data-testid={`first-run-notice-extension-${id}`}
-            className="mt-3 min-w-0 max-w-full break-words border-t border-slate-700 pt-3 text-slate-300"
+            className="mt-3 min-w-0 max-w-full break-words border-t border-border pt-3 text-fg-muted"
           >
             <Component {...context} />
           </section>

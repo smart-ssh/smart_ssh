@@ -7,9 +7,7 @@ opacity modifiers such as `bg-accent/16` work). `src/index.css` maps each token
 to a Tailwind utility (`@theme inline { --color-surface: var(--surface); … }`).
 The guard test `src/theme/colourGuard.test.ts` fails on palette classes
 (`text-slate-400`), `bg-black/white`, hex and `rgb()/hsl()` colours in
-non-test `src/**/*.{ts,tsx}`, except for files in
-`src/theme/colourAllowlist.json` (not yet migrated). The allowlist may only
-shrink: the test also fails when a listed file is already clean — remove it.
+non-test `src/**/*.{ts,tsx}`. There is no allowlist: every component is migrated.
 
 ## Naming scheme
 
@@ -95,14 +93,12 @@ Applies to every utility prefix (`bg-`, `text-`, `border-`, `ring-`,
 | `fuchsia-500` | `local` |
 | `fuchsia-300` | `local-fg` |
 | `steel-600` | `info` |
-| `steel-400` | `info-fg` || `white` | `fg-bright` |
+| `steel-400` | `info-fg` |
+| `white` | `fg-bright` |
 | `black` | `overlay` |
 
 Example: `text-slate-400` → `text-fg-subtle`; `border-red-800` →
 `border-danger-border`; `bg-indigo-600/16` → `bg-accent/16`.
-Until a file is migrated its palette classes keep working through a legacy
-`--color-<palette>-<shade>` alias block in `index.css` (values still from
-`dark.css`); that block is deleted with the last allowlisted file.
 
 ## Add a token
 

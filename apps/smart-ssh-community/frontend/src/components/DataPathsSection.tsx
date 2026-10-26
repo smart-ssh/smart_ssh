@@ -57,25 +57,25 @@ export function DataPathsSection() {
 
   return (
     <div
-      className="space-y-2 rounded border border-slate-700 px-3 py-2 text-sm text-slate-300"
+      className="space-y-2 rounded border border-border px-3 py-2 text-sm text-fg-muted"
       data-testid="data-paths"
     >
-      <p className="text-slate-400">{t("diagnostics.dataPaths.title")}</p>
-      <p className="text-xs text-slate-400">{t("diagnostics.dataPaths.hint")}</p>
-      {loadFailed && <p className="text-xs text-red-300">{t("diagnostics.dataPaths.loadFailed")}</p>}
+      <p className="text-fg-subtle">{t("diagnostics.dataPaths.title")}</p>
+      <p className="text-xs text-fg-subtle">{t("diagnostics.dataPaths.hint")}</p>
+      {loadFailed && <p className="text-xs text-danger-fg-soft">{t("diagnostics.dataPaths.loadFailed")}</p>}
       {message && (
-        <output className={`block text-xs ${message.error ? "text-red-300" : "text-slate-400"}`}>
+        <output className={`block text-xs ${message.error ? "text-danger-fg-soft" : "text-fg-subtle"}`}>
           {message.text}
         </output>
       )}
       <ul className="space-y-2">
         {entries?.map((entry) => (
           <li key={entry.id} data-testid={`data-path-${entry.id}`}>
-            <div className="text-xs text-slate-400">{labelFor(entry)}</div>
+            <div className="text-xs text-fg-subtle">{labelFor(entry)}</div>
             <div className="flex items-center gap-2">
               <code
                 title={entry.path}
-                className="min-w-0 flex-1 select-text break-all font-mono text-xs text-slate-100"
+                className="min-w-0 flex-1 select-text break-all font-mono text-xs text-fg"
               >
                 {entry.path}
               </code>
@@ -99,8 +99,8 @@ export function DataPathsSection() {
           </li>
         ))}
         <li data-testid="data-path-sessions">
-          <div className="text-xs text-slate-400">{t("diagnostics.dataPaths.sessions")}</div>
-          <div className="text-xs text-slate-100">{t("diagnostics.dataPaths.sessionsInDatabase")}</div>
+          <div className="text-xs text-fg-subtle">{t("diagnostics.dataPaths.sessions")}</div>
+          <div className="text-xs text-fg">{t("diagnostics.dataPaths.sessionsInDatabase")}</div>
         </li>
       </ul>
     </div>

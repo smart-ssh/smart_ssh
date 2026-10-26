@@ -28,7 +28,7 @@ export function ConnectingTabView({ tab, isActiveTab, onRetry, onClose }: Props)
     <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8 narrow:px-3 narrow:py-4">
       <h2 className="flex items-center gap-2 break-words text-lg font-semibold">
         {failed ? (
-          <span aria-hidden="true" className="text-red-400">
+          <span aria-hidden="true" className="text-danger-fg">
             ✗
           </span>
         ) : (
@@ -39,17 +39,17 @@ export function ConnectingTabView({ tab, isActiveTab, onRetry, onClose }: Props)
       {tab.progress.length > 0 ? (
         <ConnectProgressList steps={tab.progress} />
       ) : (
-        !failed && <p className="text-sm text-slate-400">{t("connectTab.stepsRunning")}</p>
+        !failed && <p className="text-sm text-fg-subtle">{t("connectTab.stepsRunning")}</p>
       )}
       {failed && tab.failure && (
         <div>
-          <p role="alert" className="break-words text-sm text-red-400">
+          <p role="alert" className="break-words text-sm text-danger-fg">
             {tab.failure.message}
           </p>
           <ConnectStepLog steps={tab.failure.steps} />
         </div>
       )}
-      <div className="flex flex-wrap gap-2 narrow:sticky narrow:bottom-0 narrow:-mx-3 narrow:border-t narrow:border-slate-800 narrow:bg-slate-900 narrow:px-3 narrow:py-2">
+      <div className="flex flex-wrap gap-2 narrow:sticky narrow:bottom-0 narrow:-mx-3 narrow:border-t narrow:border-surface-raised narrow:bg-surface narrow:px-3 narrow:py-2">
         {failed ? (
           <>
             <Button ref={retryRef} variant="primary" onClick={onRetry}>
