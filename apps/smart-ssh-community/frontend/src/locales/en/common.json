@@ -1435,6 +1435,8 @@
     "import": {
       "title": "Restore from backup",
       "pickTitle": "Choose a backup file",
+      "pickFailed": "The file could not be opened from the chosen location.",
+      "chooseAgain": "Choose file again",
       "file": "File: {{name}}",
       "kind": "What opens this backup",
       "useCode": "Recovery code",
