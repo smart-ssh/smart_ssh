@@ -53,7 +53,7 @@ export function DialogFrame({
 
   const content = (
     <>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto text-sm text-slate-300">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto text-sm text-fg-muted">
         {children}
       </div>
       {actions ? (
@@ -65,7 +65,7 @@ export function DialogFrame({
   return (
     <ModalBackdrop
       layer={layer}
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 narrow:items-stretch ${
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 narrow:items-stretch ${
         reserveTitlebar ? "px-4 pb-4 pt-13 narrow:px-0 narrow:pb-0" : "p-4 narrow:p-0 narrow:pt-9"
       }`}
     >
@@ -78,11 +78,11 @@ export function DialogFrame({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded border border-slate-600 bg-slate-900 p-6 shadow-xl narrow:max-h-none narrow:max-w-none narrow:rounded-none narrow:border-0 narrow:p-4 focus:outline-none`}
+        className={`flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded border border-border-strong bg-surface p-6 shadow-xl narrow:max-h-none narrow:max-w-none narrow:rounded-none narrow:border-0 narrow:p-4 focus:outline-none`}
       >
         <h2
           id={titleId}
-          className="font-heading mb-3 shrink-0 text-lg break-words font-semibold text-slate-100"
+          className="font-heading mb-3 shrink-0 text-lg break-words font-semibold text-fg"
         >
           {title}
         </h2>

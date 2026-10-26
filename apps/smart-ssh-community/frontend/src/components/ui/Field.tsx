@@ -33,7 +33,7 @@ export function Field({ label, help, error, children, className }: FieldProps) {
     <div
       className={["flex flex-col gap-1", className].filter(Boolean).join(" ")}
     >
-      <label htmlFor={id} className="text-sm font-medium text-slate-200">
+      <label htmlFor={id} className="text-sm font-medium text-fg-soft">
         {label}
       </label>
       {children({
@@ -42,12 +42,12 @@ export function Field({ label, help, error, children, className }: FieldProps) {
         "aria-invalid": error ? true : undefined,
       })}
       {help ? (
-        <p id={helpId} className="text-xs text-slate-400">
+        <p id={helpId} className="text-xs text-fg-subtle">
           {help}
         </p>
       ) : null}
       {error ? (
-        <p id={errorId} role="alert" className="text-xs text-red-300">
+        <p id={errorId} role="alert" className="text-xs text-danger-fg-soft">
           {error}
         </p>
       ) : null}
@@ -57,6 +57,6 @@ export function Field({ label, help, error, children, className }: FieldProps) {
 
 /** Class string for text inputs/selects/textareas, so fields look alike. */
 export const FIELD_CONTROL_CLASS =
-  "rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 " +
-  "placeholder:text-slate-500 focus:outline-2 focus:outline-indigo-400 " +
-  "aria-[invalid=true]:border-red-500 disabled:opacity-50";
+  "rounded border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg " +
+  "placeholder:text-fg-faint focus:outline-2 focus:outline-focus " +
+  "aria-[invalid=true]:border-danger-strong disabled:opacity-50";

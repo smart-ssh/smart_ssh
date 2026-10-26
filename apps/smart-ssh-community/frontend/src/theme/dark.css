@@ -1,0 +1,153 @@
+/* Dark theme — the ONLY file with colour values (Spec 0055, issue #805).
+   Layer 1: palette primitives (--palette-*). Layer 2: semantic tokens that
+   components use via Tailwind utilities (bg-surface, text-fg-muted, …).
+   A new theme is another file that overrides the layer-2 variables under its
+   own [data-theme="…"] selector. See ../THEMING.md. */
+:root,
+[data-theme="dark"] {
+  --palette-slate-950: #090c14;
+  --palette-slate-900: #0f1420;
+  --palette-slate-800: #131a29;
+  --palette-slate-700: #232a3d;
+  --palette-slate-600: #3a4257;
+  --palette-slate-500: #8a93aa;
+  --palette-slate-400: #9aa3b8;
+  --palette-slate-300: #aab1c4;
+  --palette-slate-200: #c4cadb;
+  --palette-slate-100: #dfe3ee;
+  --palette-slate-50: #e6e9f2;
+  --palette-indigo-950: #171b3f;
+  --palette-indigo-900: #202759;
+  --palette-indigo-800: #2b3277;
+  --palette-indigo-700: #3b45a8;
+  --palette-indigo-600: #6c7cf5;
+  --palette-indigo-500: #7f8ef7;
+  --palette-indigo-400: #a5b0ff;
+  --palette-indigo-300: #b6bfff;
+  --palette-indigo-200: #c9d0ff;
+  --palette-indigo-100: #dde2ff;
+  --palette-indigo-50: #eef0ff;
+  --palette-emerald-950: #06130a;
+  --palette-emerald-900: #132015;
+  --palette-emerald-800: #1a2e1f;
+  --palette-emerald-700: #256b37;
+  --palette-emerald-600: #3fb950;
+  --palette-emerald-500: #57cf68;
+  --palette-emerald-400: #7ddb8a;
+  --palette-emerald-300: #8fd79a;
+  --palette-emerald-200: #b8ecc0;
+  --palette-emerald-100: #ddf5e1;
+  --palette-amber-950: #1f1608;
+  --palette-amber-900: #2a2013;
+  --palette-amber-800: #4a3818;
+  --palette-amber-700: #8a651f;
+  --palette-amber-600: #e0a12c;
+  --palette-amber-500: #ecb653;
+  --palette-amber-400: #f0c46b;
+  --palette-amber-300: #f3d187;
+  --palette-amber-200: #f8e2b3;
+  --palette-amber-100: #fbf0d8;
+  --palette-red-950: #170a0b;
+  --palette-red-900: #2a1315;
+  --palette-red-800: #481d20;
+  --palette-red-700: #8a2c2f;
+  --palette-red-600: #e5484d;
+  --palette-red-500: #f2605f;
+  --palette-red-400: #f0918f;
+  --palette-red-300: #ff9d9b;
+  --palette-red-200: #ffc2c0;
+  --palette-red-100: #ffe1e0;
+  --palette-steel-600: #5980a6;
+  --palette-steel-400: #9fc0dd;
+
+  /* Semantic tokens */
+  --surface-sunken: var(--palette-slate-950);
+  --surface: var(--palette-slate-900);
+  --surface-raised: var(--palette-slate-800);
+  --border: var(--palette-slate-700);
+  --border-strong: var(--palette-slate-600);
+  --fg-faint: var(--palette-slate-500);
+  --fg-subtle: var(--palette-slate-400);
+  --fg-muted: var(--palette-slate-300);
+  --fg-soft: var(--palette-slate-200);
+  --fg: var(--palette-slate-100);
+  --fg-strong: var(--palette-slate-50);
+  --accent-subtle: var(--palette-indigo-950);
+  --accent-subtle-hover: var(--palette-indigo-900);
+  --accent-border: var(--palette-indigo-800);
+  --accent-border-strong: var(--palette-indigo-700);
+  --accent: var(--palette-indigo-600);
+  --accent-strong: var(--palette-indigo-500);
+  --accent-fg: var(--palette-indigo-400);
+  --accent-fg-soft: var(--palette-indigo-300);
+  --accent-fg-softer: var(--palette-indigo-200);
+  --accent-fg-faint: var(--palette-indigo-100);
+  --accent-fg-faintest: var(--palette-indigo-50);
+  --danger-subtle: var(--palette-red-950);
+  --danger-subtle-hover: var(--palette-red-900);
+  --danger-border: var(--palette-red-800);
+  --danger-border-strong: var(--palette-red-700);
+  --danger: var(--palette-red-600);
+  --danger-strong: var(--palette-red-500);
+  --danger-fg: var(--palette-red-400);
+  --danger-fg-soft: var(--palette-red-300);
+  --danger-fg-softer: var(--palette-red-200);
+  --danger-fg-faint: var(--palette-red-100);
+  --warning-subtle: var(--palette-amber-950);
+  --warning-subtle-hover: var(--palette-amber-900);
+  --warning-border: var(--palette-amber-800);
+  --warning-border-strong: var(--palette-amber-700);
+  --warning: var(--palette-amber-600);
+  --warning-strong: var(--palette-amber-500);
+  --warning-fg: var(--palette-amber-400);
+  --warning-fg-soft: var(--palette-amber-300);
+  --warning-fg-softer: var(--palette-amber-200);
+  --warning-fg-faint: var(--palette-amber-100);
+  --success-subtle: var(--palette-emerald-950);
+  --success-subtle-hover: var(--palette-emerald-900);
+  --success-border: var(--palette-emerald-800);
+  --success-border-strong: var(--palette-emerald-700);
+  --success: var(--palette-emerald-600);
+  --success-strong: var(--palette-emerald-500);
+  --success-fg: var(--palette-emerald-400);
+  --success-fg-soft: var(--palette-emerald-300);
+  --success-fg-softer: var(--palette-emerald-200);
+  --success-fg-faint: var(--palette-emerald-100);
+  --info: var(--palette-steel-600);
+  --info-fg: var(--palette-steel-400);
+  --on-accent: var(--palette-slate-950); /* text on a solid accent fill */
+  --surface-hover: var(--palette-slate-700); /* hover fill on raised surfaces */
+  --fg-bright: #ffffff; /* was `white` */
+  --overlay: #000000; /* modal scrim base colour (use with /70) */
+  --focus: var(--palette-indigo-400);
+  --selection: rgba(108, 124, 245, 0.35);
+
+  /* Window controls (tauri-plugin-decoration) */
+  --decoration-fg: #f5f5f5;
+  --decoration-hover-bg: rgba(255, 255, 255, 0.1);
+  --decoration-icon-bg: rgba(255, 255, 255, 0.18);
+  --decoration-icon-active-bg: rgba(255, 255, 255, 0.32);
+
+  /* Terminal */
+  --term-bg: #0c1120;
+  --term-fg: #dfe3ee;
+  --term-cursor: #6c7cf5;
+  --term-cursor-accent: #0c1120;
+  --term-selection: rgba(108, 124, 245, 0.35);
+  --term-ansi-black: #0c1120;
+  --term-ansi-red: #e5484d;
+  --term-ansi-green: #3fb950;
+  --term-ansi-yellow: #e0a12c;
+  --term-ansi-blue: #6c7cf5;
+  --term-ansi-magenta: #a5b0ff;
+  --term-ansi-cyan: #5980a6;
+  --term-ansi-white: #8b93a8;
+  --term-ansi-bright-black: #4f596e;
+  --term-ansi-bright-red: #f0918f;
+  --term-ansi-bright-green: #8fd79a;
+  --term-ansi-bright-yellow: #f0c46b;
+  --term-ansi-bright-blue: #a5b0ff;
+  --term-ansi-bright-magenta: #c9d0ff;
+  --term-ansi-bright-cyan: #9fc0dd;
+  --term-ansi-bright-white: #e6e9f2;
+}

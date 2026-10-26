@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./theme/dark.css";
 @plugin "@tailwindcss/typography";
 
 /* Narrow (phone-like) layout, Spec 0113: below 640 px. Keep in sync with
@@ -101,7 +102,9 @@ body,
   src: url("./assets/fonts/jetbrains-mono-variable.woff2") format("woff2");
 }
 
-/* Design-Tokens aus dem Claude-Design-Entwurf, als Tailwind-v4-Theme-
+/* Colours: see theme/dark.css (values) and THEMING.md. The block below maps
+   the tokens to Tailwind utilities. Original note on the design import:
+   Design-Tokens aus dem Claude-Design-Entwurf, als Tailwind-v4-Theme-
    Erweiterung (CSS-`@theme`, nicht `tailwind.config.*` — dieses Projekt
    nutzt Tailwind v4 über `@tailwindcss/vite`). Bewusst als *Überschreibung*
    der bereits durchgängig verwendeten Tailwind-Paletten (`slate`, `indigo`,
@@ -112,80 +115,150 @@ body,
    Entwurf auf jede bestehende Komponente an, ohne eine einzige Klassen-
    zeichenkette anfassen zu müssen, und ohne das Risiko, beim manuellen
    Durchgehen aller ~15 Komponenten-Dateien eine Stelle zu übersehen. */
-@theme {
+@theme inline {
   --font-sans: "Barlow", system-ui, "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", sans-serif;
   --font-heading: "Barlow Condensed", "Barlow", system-ui, "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", monospace;
 
-  /* slate: dunkles Navy-Grundflächen-/Textsystem (Entwurf: #090c14 Fenster-
-     grund, #0f1420 Oberflächen, #e6e9f2 hellster Text). */
-  --color-slate-950: #090c14;
-  --color-slate-900: #0f1420;
-  --color-slate-800: #131a29;
-  --color-slate-700: #232a3d;
-  --color-slate-600: #3a4257;
-  --color-slate-500: #8a93aa; /* Fließtext-Kontrast >= 4.5:1 (WCAG AA) auf slate-950..700 */
-  --color-slate-400: #9aa3b8;
-  --color-slate-300: #aab1c4;
-  --color-slate-200: #c4cadb;
-  --color-slate-100: #dfe3ee;
-  --color-slate-50: #e6e9f2;
+  /* Semantic tokens (values: theme/dark.css) */
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg-faint: var(--fg-faint);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg: var(--fg);
+  --color-fg-strong: var(--fg-strong);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-subtle-hover: var(--accent-subtle-hover);
+  --color-accent-border: var(--accent-border);
+  --color-accent-border-strong: var(--accent-border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-fg-soft: var(--accent-fg-soft);
+  --color-accent-fg-softer: var(--accent-fg-softer);
+  --color-accent-fg-faint: var(--accent-fg-faint);
+  --color-accent-fg-faintest: var(--accent-fg-faintest);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-subtle-hover: var(--danger-subtle-hover);
+  --color-danger-border: var(--danger-border);
+  --color-danger-border-strong: var(--danger-border-strong);
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-fg-soft: var(--danger-fg-soft);
+  --color-danger-fg-softer: var(--danger-fg-softer);
+  --color-danger-fg-faint: var(--danger-fg-faint);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-subtle-hover: var(--warning-subtle-hover);
+  --color-warning-border: var(--warning-border);
+  --color-warning-border-strong: var(--warning-border-strong);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-fg-soft: var(--warning-fg-soft);
+  --color-warning-fg-softer: var(--warning-fg-softer);
+  --color-warning-fg-faint: var(--warning-fg-faint);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-hover: var(--success-subtle-hover);
+  --color-success-border: var(--success-border);
+  --color-success-border-strong: var(--success-border-strong);
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-fg: var(--success-fg);
+  --color-success-fg-soft: var(--success-fg-soft);
+  --color-success-fg-softer: var(--success-fg-softer);
+  --color-success-fg-faint: var(--success-fg-faint);
+  --color-info: var(--info);
+  --color-info-fg: var(--info-fg);
+  --color-fg-bright: var(--fg-bright);
+  --color-on-accent: var(--on-accent);
+  --color-surface-hover: var(--surface-hover);
+  --color-overlay: var(--overlay);
+  --color-focus: var(--focus);
+  --color-selection: var(--selection);
+  --color-term-bg: var(--term-bg);
+  --color-term-fg: var(--term-fg);
+  --color-term-cursor: var(--term-cursor);
+  --color-term-cursor-accent: var(--term-cursor-accent);
+  --color-term-selection: var(--term-selection);
+  --color-term-ansi-black: var(--term-ansi-black);
+  --color-term-ansi-red: var(--term-ansi-red);
+  --color-term-ansi-green: var(--term-ansi-green);
+  --color-term-ansi-yellow: var(--term-ansi-yellow);
+  --color-term-ansi-blue: var(--term-ansi-blue);
+  --color-term-ansi-magenta: var(--term-ansi-magenta);
+  --color-term-ansi-cyan: var(--term-ansi-cyan);
+  --color-term-ansi-white: var(--term-ansi-white);
+  --color-term-ansi-bright-black: var(--term-ansi-bright-black);
+  --color-term-ansi-bright-red: var(--term-ansi-bright-red);
+  --color-term-ansi-bright-green: var(--term-ansi-bright-green);
+  --color-term-ansi-bright-yellow: var(--term-ansi-bright-yellow);
+  --color-term-ansi-bright-blue: var(--term-ansi-bright-blue);
+  --color-term-ansi-bright-magenta: var(--term-ansi-bright-magenta);
+  --color-term-ansi-bright-cyan: var(--term-ansi-bright-cyan);
+  --color-term-ansi-bright-white: var(--term-ansi-bright-white);
 
-  /* indigo: KI-/Interaktions-Akzent (Entwurf: `C.accent` #6c7cf5 — deckt
-     sich bereits mit dem hier durchgängig für Primäraktionen genutzten
-     `indigo-600`). */
-  --color-indigo-950: #171b3f;
-  --color-indigo-900: #202759;
-  --color-indigo-800: #2b3277;
-  --color-indigo-700: #3b45a8;
-  --color-indigo-600: #6c7cf5;
-  --color-indigo-500: #7f8ef7;
-  --color-indigo-400: #a5b0ff;
-  --color-indigo-300: #b6bfff;
-  --color-indigo-200: #c9d0ff;
-  --color-indigo-100: #dde2ff;
-  --color-indigo-50: #eef0ff;
-
-  /* emerald: ALLOW (Spec 0009). */
-  --color-emerald-950: #06130a;
-  --color-emerald-900: #132015;
-  --color-emerald-800: #1a2e1f;
-  --color-emerald-700: #256b37;
-  --color-emerald-600: #3fb950;
-  --color-emerald-500: #57cf68;
-  --color-emerald-400: #7ddb8a;
-  --color-emerald-300: #8fd79a;
-  --color-emerald-200: #b8ecc0;
-  --color-emerald-100: #ddf5e1;
-
-  /* amber: CONFIRM (Spec 0009). */
-  --color-amber-950: #1f1608;
-  --color-amber-900: #2a2013;
-  --color-amber-800: #4a3818;
-  --color-amber-700: #8a651f;
-  --color-amber-600: #e0a12c;
-  --color-amber-500: #ecb653;
-  --color-amber-400: #f0c46b;
-  --color-amber-300: #f3d187;
-  --color-amber-200: #f8e2b3;
-  --color-amber-100: #fbf0d8;
-
-  /* red: DENY (Spec 0009). */
-  --color-red-950: #170a0b;
-  --color-red-900: #2a1315;
-  --color-red-800: #481d20;
-  --color-red-700: #8a2c2f;
-  --color-red-600: #e5484d;
-  --color-red-500: #f2605f;
-  --color-red-400: #f0918f;
-  --color-red-300: #ff9d9b;
-  --color-red-200: #ffc2c0;
-  --color-red-100: #ffe1e0;
-
-  /* Zweitakzent aus dem Entwurf (Provider-Version-Badge u. ä.), bislang
-     kein eigenes Tailwind-Paletten-Äquivalent im Bestand. */
-  --color-steel-600: #5980a6;
-  --color-steel-400: #9fc0dd;
+  /* Legacy palette classes of not-yet-migrated files (allowlist in
+     src/theme/colourGuard.test.ts). Remove with the last allowlisted file. */
+  --color-slate-950: var(--palette-slate-950);
+  --color-slate-900: var(--palette-slate-900);
+  --color-slate-800: var(--palette-slate-800);
+  --color-slate-700: var(--palette-slate-700);
+  --color-slate-600: var(--palette-slate-600);
+  --color-slate-500: var(--palette-slate-500);
+  --color-slate-400: var(--palette-slate-400);
+  --color-slate-300: var(--palette-slate-300);
+  --color-slate-200: var(--palette-slate-200);
+  --color-slate-100: var(--palette-slate-100);
+  --color-slate-50: var(--palette-slate-50);
+  --color-indigo-950: var(--palette-indigo-950);
+  --color-indigo-900: var(--palette-indigo-900);
+  --color-indigo-800: var(--palette-indigo-800);
+  --color-indigo-700: var(--palette-indigo-700);
+  --color-indigo-600: var(--palette-indigo-600);
+  --color-indigo-500: var(--palette-indigo-500);
+  --color-indigo-400: var(--palette-indigo-400);
+  --color-indigo-300: var(--palette-indigo-300);
+  --color-indigo-200: var(--palette-indigo-200);
+  --color-indigo-100: var(--palette-indigo-100);
+  --color-indigo-50: var(--palette-indigo-50);
+  --color-emerald-950: var(--palette-emerald-950);
+  --color-emerald-900: var(--palette-emerald-900);
+  --color-emerald-800: var(--palette-emerald-800);
+  --color-emerald-700: var(--palette-emerald-700);
+  --color-emerald-600: var(--palette-emerald-600);
+  --color-emerald-500: var(--palette-emerald-500);
+  --color-emerald-400: var(--palette-emerald-400);
+  --color-emerald-300: var(--palette-emerald-300);
+  --color-emerald-200: var(--palette-emerald-200);
+  --color-emerald-100: var(--palette-emerald-100);
+  --color-amber-950: var(--palette-amber-950);
+  --color-amber-900: var(--palette-amber-900);
+  --color-amber-800: var(--palette-amber-800);
+  --color-amber-700: var(--palette-amber-700);
+  --color-amber-600: var(--palette-amber-600);
+  --color-amber-500: var(--palette-amber-500);
+  --color-amber-400: var(--palette-amber-400);
+  --color-amber-300: var(--palette-amber-300);
+  --color-amber-200: var(--palette-amber-200);
+  --color-amber-100: var(--palette-amber-100);
+  --color-red-950: var(--palette-red-950);
+  --color-red-900: var(--palette-red-900);
+  --color-red-800: var(--palette-red-800);
+  --color-red-700: var(--palette-red-700);
+  --color-red-600: var(--palette-red-600);
+  --color-red-500: var(--palette-red-500);
+  --color-red-400: var(--palette-red-400);
+  --color-red-300: var(--palette-red-300);
+  --color-red-200: var(--palette-red-200);
+  --color-red-100: var(--palette-red-100);
+  --color-steel-600: var(--palette-steel-600);
+  --color-steel-400: var(--palette-steel-400);
 
   /* Der Entwurf ist fast durchgehend eckig — "Cards, figures and buttons
      framed as blueprint objects: square-cornered" (s. Industry-
@@ -245,16 +318,16 @@ body,
    bereits über CSS-Variablen (s. `--decoration-tb-actions-icon(-active)?-
    bg`), die hier einfach auf denselben hellen Kontrast gesetzt werden. */
 [data-tauri-plugin-decoration-root] [data-tauri-decoration-control] {
-  color: #f5f5f5 !important;
+  color: var(--decoration-fg) !important;
 }
 [data-tauri-plugin-decoration-root] [data-tauri-decoration-control]:hover,
 [data-tauri-plugin-decoration-root]
   [data-tauri-decoration-control][data-tauri-decoration-hover] {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: var(--decoration-hover-bg) !important;
 }
 :root {
-  --decoration-tb-actions-icon-bg: rgba(255, 255, 255, 0.18);
-  --decoration-tb-actions-icon-active-bg: rgba(255, 255, 255, 0.32);
+  --decoration-tb-actions-icon-bg: var(--decoration-icon-bg);
+  --decoration-tb-actions-icon-active-bg: var(--decoration-icon-active-bg);
 }
 
 /* CJK-Text hat keine Leerzeichen zwischen Wörtern: Zeilen dürfen an
