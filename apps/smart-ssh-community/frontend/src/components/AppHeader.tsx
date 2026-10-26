@@ -88,7 +88,7 @@ export function AppHeader({ children }: AppHeaderProps) {
       <header
         data-tauri-drag-region
         style={paddingStyle}
-        className={`flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-slate-800/80 bg-slate-950/90 text-slate-300 text-xs backdrop-blur-sm transition-all`}
+        className={`flex ${TITLEBAR_HEIGHT_CLASS} select-none items-center justify-between border-b border-surface-raised/80 bg-surface-sunken/90 text-fg-muted text-xs backdrop-blur-sm transition-all`}
       >
         {/* Linker Bereich: App-Icon + Schriftzug — Marke aus dem Claude-
             Design-Entwurf (Abschnitt 1a, "Terminal-Cursor mit Spark"):
@@ -105,15 +105,15 @@ export function AppHeader({ children }: AppHeaderProps) {
           >
             <path
               d="M20 20 L31 32 L20 44"
-              stroke="var(--color-indigo-600)"
+              stroke="var(--color-accent)"
               strokeWidth="7"
               strokeLinecap="square"
             />
-            <rect x="34" y="38" width="16" height="7" fill="var(--color-indigo-600)" />
+            <rect x="34" y="38" width="16" height="7" fill="var(--color-accent)" />
           </svg>
           <span
             data-tauri-drag-region
-            className="font-heading font-semibold tracking-wide text-slate-100"
+            className="font-heading font-semibold tracking-wide text-fg"
           >
             Smart SSH
             {SHOW_EARLY_ACCESS_TITLEBAR_INFO && appInfo && (
@@ -125,7 +125,7 @@ export function AppHeader({ children }: AppHeaderProps) {
                 <span
                   data-tauri-drag-region
                   data-testid="titlebar-version-full"
-                  className="ml-1.5 hidden font-normal tracking-normal text-slate-400 lg:inline"
+                  className="ml-1.5 hidden font-normal tracking-normal text-fg-subtle lg:inline"
                 >
                   {appInfo.versionDisplay}
                   {appInfo.edition && ` · ${appInfo.edition}`}
@@ -137,7 +137,7 @@ export function AppHeader({ children }: AppHeaderProps) {
                   <span
                     data-tauri-drag-region
                     data-testid="titlebar-dev-marker"
-                    className="ml-1.5 font-normal tracking-normal text-slate-400 lg:hidden"
+                    className="ml-1.5 font-normal tracking-normal text-fg-subtle lg:hidden"
                   >
                     · Dev
                   </span>
