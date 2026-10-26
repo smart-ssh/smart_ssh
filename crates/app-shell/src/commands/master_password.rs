@@ -325,7 +325,9 @@ fn decide_startup_screen(
     match health {
         // Keine Verpackungsdatei: Schlüsselbund-Modus. Dass der Zustand
         // trotzdem nicht steht, heißt, dass der Start in D1 gelandet ist
-        // (§2 Frage 3).
+        // (§2 Frage 3) — oder, auf Android (Issue #944), dass der ganze
+        // Start im Fenster läuft: Die Maske setzt ihn dann fort, und jede
+        // Wahl kommt vom Nutzer.
         H::Absent => StartupScreenDecision {
             screen: StartupScreen::SetUpMasterPassword,
             offers_start_over: false,

@@ -23,7 +23,7 @@ Bezüge: Spec 0113 (Schmales Layout), Spec 0101 (Master-Passwort), Spec 0049 (Ti
 - **Lokal öffnen:** Es gibt kein externes Programm; die Datei öffnet sich in einem Editor der App (Textdateien bis 2 MiB). Beim Speichern gilt der übliche Ablauf mit Vergleich und Bestätigung.
 - **SSH-Konfiguration:** Beim Import aus einer gewählten Datei werden `Include`-Verweise nicht verfolgt.
 - **Mehrfachstart:** Das System hält höchstens eine Instanz; eine Prüfung wie auf dem Desktop entfällt.
-- **Startfehler:** Ein Fehler beim Start erscheint nicht in einem System-Dialog, sondern wird ins Log geschrieben, danach beendet sich die App. Rückfragen beim Start gelten als „Abbrechen“.
+- **Startfehler:** Ein Fehler beim Start erscheint nicht in einem System-Dialog, sondern wird ins Log geschrieben, danach beendet sich die App. Rückfragen beim Start (Dialoge D1–D4, die zweiten Bestätigungen und die Hinweise, Spec 0101) erscheinen im Fenster, genau wie auf dem Desktop; die App wählt nie selbst eine Antwort und beendet sich nicht von allein.
 - **Spracheingabe:** Sie arbeitet wie auf dem Desktop (Spec 0108), vollständig lokal: Der Mikrofon-Knopf nimmt auf, der Live-Text erscheint, „Stopp“ fügt den endgültigen Text ein. Die Modelle liegen im app-privaten Speicher; die Größenwarnung vor dem Download gilt unverändert. Die Android-Berechtigung „Mikrofon“ wird beim ersten Start einer Aufnahme (nach dem Modell-Download) abgefragt. Wird sie verweigert, erscheint der Hinweis „Zugriff auf das Mikrofon verweigert“ mit dem Verweis auf die Systemeinstellungen; die App stürzt nicht ab und die Aufnahme beginnt nicht. Die nächste Aufnahme fragt erneut bzw. folgt der Systemeinstellung.
 
 ## 2a. Terminal mit Zusatztastenreihe
