@@ -196,5 +196,21 @@ describe("BackupSettings", () => {
       expect(await screen.findByText("Backup restored")).toBeTruthy();
       expect(api.confirmBackupImport).not.toHaveBeenCalled();
     });
+
+    it("keeps a failed file choice visible across code/passphrase and re-opens the picker", async () => {
+      renderSection();
+      vi.mocked(api.pickBackupImportFile).mockRejectedValueOnce({ message: "no path" });
+      fireEvent.click(screen.getByRole("button", { name: "Restore from backup…" }));
+      const msg = "The file could not be opened from the chosen location.";
+      expect(await screen.findByText(msg)).toBeTruthy();
+      fireEvent.click(screen.getByRole("radio", { name: "Passphrase" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Recovery code" }));
+      expect(screen.getByText(msg)).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Open backup" }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name: "Choose file again" }));
+      await waitFor(() => expect(screen.queryByText(msg)).toBeNull());
+      expect(api.pickBackupImportFile).toHaveBeenCalledTimes(2);
+      expect(await screen.findByText("File: b.sshbackup")).toBeTruthy();
+    });
   });
 });

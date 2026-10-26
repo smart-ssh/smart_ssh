@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "サーバーの内容を通じて指示をインジェクションしようとする試みの可能性を検出しました – 確認が必要です",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP経由でリクエストされました – 常に確認が必要です",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "保存済みのsudoパスワードを使用します – 常に確認が必要です",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "送信前に保存済みの秘密の値を挿入します – 常に確認が必要です",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "認証情報を含むファイル（例: SSH鍵、.env、/etc/shadow）を読み取ります – 常に確認が必要です",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "この応答内の以前の操作が拒否されました – 確認が必要です",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "sftp-serverを起動します（sudoの場合: root権限でのファイルアクセス）– 常に確認が必要です",
@@ -1427,6 +1428,8 @@
     "import": {
       "title": "バックアップから復元",
       "pickTitle": "バックアップファイルを選択",
+      "pickFailed": "選択した場所からファイルを開けませんでした。",
+      "chooseAgain": "ファイルを選び直す",
       "file": "ファイル：{{name}}",
       "kind": "このバックアップを開く方法",
       "useCode": "リカバリーコード",

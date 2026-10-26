@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Possible attempt to inject instructions via server content detected – requires confirmation",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Requested via MCP – always requires confirmation",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Uses the stored sudo password – always requires confirmation",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Inserts a stored secret value before sending – always requires confirmation",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Reads a file with credentials (e.g. SSH key, .env, /etc/shadow) – always requires confirmation",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "An earlier action in this response was rejected – requires confirmation",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Starts sftp-server (with sudo: file access with root privileges) – always requires confirmation",
@@ -1435,6 +1436,8 @@
     "import": {
       "title": "Restore from backup",
       "pickTitle": "Choose a backup file",
+      "pickFailed": "The file could not be opened from the chosen location.",
+      "chooseAgain": "Choose file again",
       "file": "File: {{name}}",
       "kind": "What opens this backup",
       "useCode": "Recovery code",
