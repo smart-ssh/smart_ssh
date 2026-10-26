@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Repository conventions guard (issue #858, AGENTS.md "Testing conventions"):
 //  1. No new `*_tests.rs` files; the built-in list of existing ones may only shrink.
 //  2. `LOCAL_SERVER_ID` / `local_server` must not appear in core/filter or core/risk.
