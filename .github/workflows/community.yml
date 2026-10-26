@@ -519,6 +519,28 @@ jobs:
         working-directory: apps/smart-ssh-community
         run: cargo tauri android build --debug --apk --target aarch64 --target x86_64 --ci
 
+      # Android 15+ with 16 KB pages needs every .so aligned to 0x4000+.
+      - name: Check 16 KB page alignment of native libraries
+        run: |
+          READELF="$ANDROID_HOME/ndk/${NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          rm -rf "$RUNNER_TEMP/apk-check" && mkdir -p "$RUNNER_TEMP/apk-check"
+          fail=0; count=0
+          for apk in $(find apps/smart-ssh-community/gen/android/app/build/outputs/apk -name '*.apk'); do
+            d="$RUNNER_TEMP/apk-check/$(basename "$apk" .apk)"
+            mkdir -p "$d" && unzip -q -o "$apk" 'lib/*.so' -d "$d"
+          done
+          while IFS= read -r so; do
+            count=$((count+1))
+            while read -r align; do
+              if [ $((align)) -lt 16384 ]; then
+                echo "::error::$so has LOAD alignment $align (< 0x4000)"; fail=1
+              fi
+            done < <("$READELF" -lW "$so" | awk '$1=="LOAD"{print $NF}')
+          done < <(find "$RUNNER_TEMP/apk-check" -name '*.so')
+          echo "checked $count libraries"
+          [ "$count" -gt 0 ] || { echo "::error::no .so found in APK"; exit 1; }
+          exit $fail
+
       - name: Upload APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

@@ -28,6 +28,8 @@ cargo build -p smart-ssh-community --target x86_64-linux-android
 cargo tauri android build --debug --apk --target aarch64 --ci
 ```
 
+16-KB-Seiten: Android 15+ verlangt für alle `.so` eine LOAD-Ausrichtung von mindestens 0x4000. NDK 27 (`27.3.13750724`, in CI gepinnt) linkt standardmäßig mit 4 KB; `.cargo/config.toml` setzt deshalb je Android-Target `-Wl,-z,max-page-size=16384` (gilt auch für OpenSSL/whisper.cpp, die statisch in die Bibliothek gelinkt werden). CI prüft das im Job `android-build` mit `llvm-readelf -lW` für jede `.so` im APK. Lokal: `$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf -lW <lib>.so | grep LOAD` (letzte Spalte `0x4000`). Wird die NDK-Version geändert, in Workflow und hier gemeinsam.
+
 Mindest-SDK ist 26. Siehe Spec 0114 und ADR 0148.
 
 TLS: Unter Android nutzen die HTTP-Clients (KI-Anbieter, Modell-Download) die eingebauten webpki-Wurzeln statt des Plattform-Verifiers (ADR 0148). Emulator-/Geräteprüfung ist manuell.
