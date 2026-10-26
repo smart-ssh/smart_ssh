@@ -311,7 +311,7 @@ export function AddAiProviderDialog({
     >
       <div className="space-y-4 p-0.5">
         {error && (
-          <p role="alert" className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">
+          <p role="alert" className="rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
             {error}
           </p>
         )}
@@ -415,11 +415,11 @@ export function AddAiProviderDialog({
               ))}
             </datalist>
             {modelsEmpty && (
-              <p className="mt-1 text-xs text-slate-400">{t("aiProvider.modelDiscoveryEmptyHint")}</p>
+              <p className="mt-1 text-xs text-fg-subtle">{t("aiProvider.modelDiscoveryEmptyHint")}</p>
             )}
             {modelsFailed && (
               <>
-                <p className="mt-1 text-xs text-slate-400">{t("aiProvider.modelDiscoveryFailedHint")}</p>
+                <p className="mt-1 text-xs text-fg-subtle">{t("aiProvider.modelDiscoveryFailedHint")}</p>
                 {/* Spec 0069, Teil A5: zusätzlich der übersetzte Grund,
                  * wenn der Fehler einen bekannten Code trägt (z. B.
                  * AI_MODEL_NOT_FOUND, AI_LOCAL_PROVIDER_UNREACHABLE) —
@@ -429,7 +429,7 @@ export function AddAiProviderDialog({
                  * hier explizit unterdrücken statt eine leere Box zu
                  * zeigen. */}
                 {modelsFailedCode && translateErrorCode(t, modelsFailedCode, "") && (
-                  <p className="mt-0.5 text-xs text-slate-400">
+                  <p className="mt-0.5 text-xs text-fg-subtle">
                     {translateErrorCode(t, modelsFailedCode, "")}
                   </p>
                 )}
@@ -461,7 +461,7 @@ export function AddAiProviderDialog({
               {t("aiProvider.apiKey")}
               {/* Spec 0069, Teil B5: Ollama braucht keinen Key. */}
               {form.providerType === "ollama" && (
-                <span className="ml-1 font-normal text-slate-400">
+                <span className="ml-1 font-normal text-fg-subtle">
                   {t("aiProvider.apiKeyNotNeededForOllama")}
                 </span>
               )}
@@ -492,7 +492,7 @@ export function AddAiProviderDialog({
           {modelsAuthFailed && (
             <p
               role="alert"
-              className="rounded border border-red-800 bg-red-950/40 px-2.5 py-1.5 text-xs text-red-400"
+              className="rounded border border-danger-border bg-danger-subtle/40 px-2.5 py-1.5 text-xs text-danger-fg"
             >
               {t("aiProvider.modelDiscoveryAuthFailed")}
             </p>
@@ -507,7 +507,7 @@ export function AddAiProviderDialog({
            * Hinweis optisch kaum vom Rest des Formulars unterscheidbar
            * unter. */}
           {apiKeyWarning && (
-            <p className="rounded border border-amber-800 bg-amber-950/40 px-2.5 py-1.5 text-xs text-amber-300">
+            <p className="rounded border border-warning-border bg-warning-subtle/40 px-2.5 py-1.5 text-xs text-warning-fg-soft">
               {t("aiProvider.apiKeyFormatHint", {
                 providerLabel: t(`aiProvider.providerTypes.${form.providerType}`),
                 expectedPrefix: apiKeyWarning.expectedPrefix,
@@ -549,8 +549,8 @@ export function AddAiProviderDialog({
               <p
                 className={`mt-1.5 rounded border px-2.5 py-1.5 text-xs ${
                   credentialTestResult.kind === "valid"
-                    ? "border-emerald-800 bg-emerald-950/40 text-emerald-400"
-                    : "border-red-800 bg-red-950/40 text-red-400"
+                    ? "border-success-border bg-success-subtle/40 text-success-fg"
+                    : "border-danger-border bg-danger-subtle/40 text-danger-fg"
                 }`}
               >
                 {credentialTestResult.kind === "valid" && t("aiProvider.testResultValid")}
@@ -575,7 +575,7 @@ export function AddAiProviderDialog({
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-fg-muted">
             <input
               type="checkbox"
               checked={form.supportsNativeToolCalling}
@@ -588,7 +588,7 @@ export function AddAiProviderDialog({
 
           {supportsWebResearch(form.providerType, form.baseUrl) && (
             <div>
-              <label className="flex items-center gap-2 text-sm text-slate-300">
+              <label className="flex items-center gap-2 text-sm text-fg-muted">
                 <input
                   type="checkbox"
                   checked={form.webResearchEnabled}
@@ -596,7 +596,7 @@ export function AddAiProviderDialog({
                 />
                 {t("aiProvider.webResearch")}
               </label>
-              <p className="mt-1 text-xs text-slate-400">{t("aiProvider.webResearchHint")}</p>
+              <p className="mt-1 text-xs text-fg-subtle">{t("aiProvider.webResearchHint")}</p>
             </div>
           )}
 
@@ -608,7 +608,7 @@ export function AddAiProviderDialog({
            * macht sichtbar, dass das eine verschachtelte, optionale
            * Untergruppe ist, nicht gleichrangig mit den Kernfeldern
            * darüber. */}
-          <div className="border-t border-slate-700/60 pt-3">
+          <div className="border-t border-border/60 pt-3">
             <Button
               variant="ghost"
               size="sm"
@@ -621,10 +621,10 @@ export function AddAiProviderDialog({
             </Button>
 
             {showAdvanced && (
-              <div className="mt-3 space-y-3 rounded-md border border-slate-800 bg-slate-950/30 p-3">
+              <div className="mt-3 space-y-3 rounded-md border border-surface-raised bg-surface-sunken/30 p-3">
                 <div>
-                  <p className="text-sm text-slate-300">{t("aiProvider.extraHeadersLabel")}</p>
-                  <p className="mt-0.5 text-xs text-slate-400">{t("aiProvider.extraHeadersHint")}</p>
+                  <p className="text-sm text-fg-muted">{t("aiProvider.extraHeadersLabel")}</p>
+                  <p className="mt-0.5 text-xs text-fg-subtle">{t("aiProvider.extraHeadersHint")}</p>
                   <div className="mt-2 space-y-2">
                     {form.extraHeaders.map(([key, value], index) => (
                       <div key={index} className="flex gap-2">
@@ -697,11 +697,11 @@ export function AddAiProviderDialog({
                     }}
                     className={`mt-1 w-full ${FIELD_CLASS}`}
                   />
-                  <p className="mt-0.5 text-xs text-slate-400">
+                  <p className="mt-0.5 text-xs text-fg-subtle">
                     {t("aiProvider.maxTokensOverrideHint")}
                   </p>
                   {form.maxTokensOverride !== null && form.maxTokensOverride <= 0 && (
-                    <p className="mt-0.5 text-xs text-red-400">
+                    <p className="mt-0.5 text-xs text-danger-fg">
                       {t("aiProvider.maxTokensOverrideMustBePositive")}
                     </p>
                   )}
@@ -714,7 +714,7 @@ export function AddAiProviderDialog({
         {/* Spec 0069, Teil B6: Hinweis vor dem Speichern, nur solange kein
             Provider aktiv ist. */}
         {!editing && willActivate && (
-          <p className="text-xs text-slate-400">{t("aiProvider.addHintWillActivate")}</p>
+          <p className="text-xs text-fg-subtle">{t("aiProvider.addHintWillActivate")}</p>
         )}
       </div>
     </DialogFrame>

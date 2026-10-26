@@ -23,7 +23,7 @@ shrink: the test also fails when a listed file is already clean — remove it.
 | Roles `accent`, `danger`, `warning`, `success` | `<role>-subtle` (tinted fill), `-subtle-hover`, `-border`, `-border-strong`, `<role>` (solid), `-strong` (hover/brighter solid), `-fg` (text), `-fg-soft`, `-fg-softer`, `-fg-faint`, `-fg-faintest` (`danger` has `-fg-faintest` for text on a solid danger fill) |
 | Info | `info`, `info-fg` |
 | Local session | `local-border`, `local`, `local-fg` (badge and header of a local-shell session) |
-| Misc | `on-accent` (text on a solid accent fill), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`) |
+| Misc | `on-accent` (text on a solid accent fill), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`), `web-border` / `web-fg` (web activity card), `mcp-subtle` / `mcp-fg` (external-tool origin badge) |
 | Terminal | `term-bg`, `term-fg`, `term-cursor`, `term-cursor-accent`, `term-selection`, `term-ansi-{black,red,green,yellow,blue,magenta,cyan,white,bright-*}` |
 
 Preferences when migrating: focus rings/outlines → `ring-focus`/`outline-focus`

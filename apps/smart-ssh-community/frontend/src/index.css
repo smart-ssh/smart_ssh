@@ -185,6 +185,10 @@ body,
   --color-overlay: var(--overlay);
   --color-focus: var(--focus);
   --color-selection: var(--selection);
+  --color-web-border: var(--web-border);
+  --color-web-fg: var(--web-fg);
+  --color-mcp-subtle: var(--mcp-subtle);
+  --color-mcp-fg: var(--mcp-fg);
   --color-term-bg: var(--term-bg);
   --color-term-fg: var(--term-fg);
   --color-term-cursor: var(--term-cursor);

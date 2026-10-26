@@ -38,32 +38,32 @@ export function WebActivityCard({ activity }: { activity: WebActivityDto }) {
 
   return (
     <div
-      className="rounded border border-sky-800/50 bg-slate-900 px-3 py-2 text-xs text-slate-300"
+      className="rounded border border-web-border/50 bg-surface px-3 py-2 text-xs text-fg-muted"
       data-testid="web-activity-card"
     >
-      <p className="font-medium break-all text-sky-300">🌐 {title}</p>
-      {errorText !== null && <p className="mt-1 text-amber-300">⚠ {errorText}</p>}
+      <p className="font-medium break-all text-web-fg">🌐 {title}</p>
+      {errorText !== null && <p className="mt-1 text-warning-fg-soft">⚠ {errorText}</p>}
       {errorText === null && activity.cited.length > 0 && (
         <div className="mt-1">
-          <p className="text-slate-400">{t("chat.webCitedSources")}</p>
+          <p className="text-fg-subtle">{t("chat.webCitedSources")}</p>
           <ul className="mt-0.5 list-disc pl-4">
             {activity.cited.map((source) => (
               <li key={source.url} className="break-all">
-                {source.title} <span className="text-slate-400">— {source.url}</span>
+                {source.title} <span className="text-fg-subtle">— {source.url}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
       {errorText === null && activity.cited.length === 0 && (
-        <p className="mt-1 text-slate-400">
+        <p className="mt-1 text-fg-subtle">
           {activity.kind === "search"
             ? t("chat.webNoCitedSearch", { count: activity.results.length })
             : t("chat.webNoCitedFetch")}
         </p>
       )}
       {activity.contentTruncated && (
-        <p className="mt-1 text-slate-400">{t("chat.webContentTruncated")}</p>
+        <p className="mt-1 text-fg-subtle">{t("chat.webContentTruncated")}</p>
       )}
     </div>
   );
