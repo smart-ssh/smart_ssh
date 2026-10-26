@@ -89,13 +89,8 @@ pub(crate) fn new_client() -> reqwest::Client {
 /// Spec 0114 / ADR 0148: on Android the platform certificate verifier would
 /// need JNI initialisation, so TLS uses the bundled webpki roots there.
 #[cfg(target_os = "android")]
-pub(crate) fn android_tls_config() -> rustls::ClientConfig {
-    let roots = rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    };
-    rustls::ClientConfig::builder()
-        .with_root_certificates(roots)
-        .with_no_client_auth()
+pub(crate) fn android_tls_config() -> tls_config::ClientConfig {
+    tls_config::webpki_client_config()
 }
 
 /// Ein einzelner geparster SSE-Frame.

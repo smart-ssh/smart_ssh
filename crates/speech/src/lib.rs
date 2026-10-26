@@ -390,15 +390,6 @@ mod tests;
 fn download_client() -> reqwest::Client {
     let builder = reqwest::Client::builder();
     #[cfg(target_os = "android")]
-    let builder = {
-        let roots = rustls::RootCertStore {
-            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-        };
-        builder.tls_backend_preconfigured(
-            rustls::ClientConfig::builder()
-                .with_root_certificates(roots)
-                .with_no_client_auth(),
-        )
-    };
+    let builder = builder.tls_backend_preconfigured(tls_config::webpki_client_config());
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
