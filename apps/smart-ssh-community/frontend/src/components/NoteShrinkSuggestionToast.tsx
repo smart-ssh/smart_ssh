@@ -121,10 +121,10 @@ export function NoteShrinkSuggestionToast() {
       {suggestions.map((suggestion) => (
         <div
           key={suggestion.serverId}
-          className="rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm shadow-lg"
+          className="rounded-lg border border-border bg-surface-raised p-3 text-sm shadow-lg"
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold text-slate-100">
+            <p className="font-semibold text-fg">
               {t("noteShrink.title", { name: suggestion.serverName })}
             </p>
             {/* Spec 0079, A1: gestaltet wie der ✕-Knopf der Fehler-Karten
@@ -139,7 +139,7 @@ export function NoteShrinkSuggestionToast() {
               ✕
             </Button>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-fg-subtle">
             {t("noteShrink.body")}
           </p>
           {/* Spec 0079, A2: dritter Knopf ("Später") zusätzlich zu den
@@ -163,9 +163,9 @@ export function NoteShrinkSuggestionToast() {
       {failures.map((failure) => (
         <div
           key={failure.id}
-          className="flex items-start justify-between gap-2 rounded-lg border border-red-900 bg-red-950 p-3 text-sm shadow-lg"
+          className="flex items-start justify-between gap-2 rounded-lg border border-danger-subtle-hover bg-danger-subtle p-3 text-sm shadow-lg"
         >
-          <p role="alert" className="min-w-0 break-words text-red-200">
+          <p role="alert" className="min-w-0 break-words text-danger-fg-softer">
             {failure.message}
           </p>
           <Button
