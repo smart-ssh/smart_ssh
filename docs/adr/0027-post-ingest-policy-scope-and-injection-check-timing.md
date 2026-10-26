@@ -1,7 +1,7 @@
 # 0027-post-ingest-policy-scope-and-injection-check-timing
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

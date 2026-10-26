@@ -1,7 +1,7 @@
 # 0031-chat-messages-document-content-type-unused
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

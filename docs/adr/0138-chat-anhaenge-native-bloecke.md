@@ -1,6 +1,8 @@
 # ADR 0138 — Chat-Anhänge als native Inhaltsblöcke, Fähigkeitstabelle
 
-Status: angenommen · Issue: #470 · Spec 0006, Spec 0110
+## Status
+
+Accepted · Issue: #470 · Spec 0006, Spec 0110
 
 ## Kontext
 

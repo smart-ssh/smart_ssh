@@ -1,6 +1,8 @@
 # ADR 0147 — Dateibrowser: Übertragungen in Stücken, Bestätigung vor dem Stoppen erhöhter Operationen
 
-Status: angenommen · Issue: #622 · Spec 0085 A1.3, Spec 0086 A5
+## Status
+
+Accepted · Issue: #622 · Spec 0085 A1.3, Spec 0086 A5
 
 ## Kontext
 

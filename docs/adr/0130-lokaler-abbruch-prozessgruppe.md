@@ -1,6 +1,9 @@
 # ADR 0130 — Abbruch lokaler Kommandos über Prozessgruppe bzw. Prozessbaum
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #324, Spec 0027 (3.4), Spec 0032, Spec 0044
 
 ## Entscheidung

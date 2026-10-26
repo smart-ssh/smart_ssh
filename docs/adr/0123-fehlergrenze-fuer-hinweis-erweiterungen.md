@@ -1,6 +1,9 @@
 # ADR 0123 — Fehlergrenze nur für Erweiterungen des Erststart-Hinweises
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #159, Spec 0031 (Abschnitt 6), Spec 0045 (Abschnitt 9), Issue #157
 
 ## Problem

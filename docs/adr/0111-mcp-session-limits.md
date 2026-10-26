@@ -1,6 +1,9 @@
 # ADR 0111 — Grenzen für MCP-Client-Namen und MCP-Sitzungen je Server
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0104 (Abschnitt 2), ADR 0109, Issue #68
 
 ## Problem

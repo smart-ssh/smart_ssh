@@ -1,7 +1,7 @@
 # 0032-dev-data-dir-separation-vs-d2
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

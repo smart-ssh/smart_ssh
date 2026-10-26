@@ -1,7 +1,7 @@
 # 0023-model-discovery-and-attestation-design
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

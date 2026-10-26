@@ -1,6 +1,8 @@
 # ADR 0090 — Drittlizenz-Liste: Verpackung, Quelle der erlaubten Lizenzen, Grenzen der Hand-Prüfung
 
-Status: akzeptiert · Spec: `docs/specs/0099-third-party-licenses.md`
+## Status
+
+Accepted · Spec: `docs/specs/0099-third-party-licenses.md`
 
 Spec 0099, Abschnitt 5 ("Design") überlässt drei Fragen ausdrücklich dem
 Coder: den Weg der Datei ins Paket (A2.3), ob die Release-Matrix selbst

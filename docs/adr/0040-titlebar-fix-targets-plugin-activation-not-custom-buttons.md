@@ -1,7 +1,7 @@
 # 0040-titlebar-fix-targets-plugin-activation-not-custom-buttons
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

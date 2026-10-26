@@ -3,7 +3,7 @@ Kompaktierungs-Zusammenspiel
 
 ## Status
 
-Angenommen
+Accepted
 
 ## Kontext
 

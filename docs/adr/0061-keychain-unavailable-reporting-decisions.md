@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — gehört zu Spec 0071.
+Proposed · gehört zu Spec 0071.
 
 ## Kontext
 

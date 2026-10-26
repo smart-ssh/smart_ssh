@@ -1,6 +1,9 @@
 # ADR 0120 — Browser-Tests mit gefälschtem Tauri-Backend
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #166
 
 ## Kontext

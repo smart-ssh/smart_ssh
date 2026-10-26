@@ -1,6 +1,9 @@
 # ADR 0077 — Entscheidungen beim Auslagern von `app-logic` (Spec 0084)
 
-Status: angenommen · 2026-09-28 · Spec: `docs/specs/0084-app-logic-crate.md`
+## Status
+
+Accepted · 2026-09-28 · Spec: `docs/specs/0084-app-logic-crate.md`
+
 Betrifft: `crates/app-shell/`, neu `crates/app-logic/`
 
 ## 1. Verworfene Wege (Spec §4, letzter Punkt)

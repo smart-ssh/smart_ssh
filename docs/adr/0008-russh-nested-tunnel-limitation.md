@@ -1,7 +1,7 @@
 # 0008-russh-nested-tunnel-limitation
 
 ## Status
-Superseded / obsolet. Die hier dokumentierte Einschränkung existiert nicht:
+Deprecated · Superseded / obsolet. Die hier dokumentierte Einschränkung existiert nicht:
 Der Fehler lag in der Test-Fixture, nicht in `russh`.
 
 **Update 2026-10-09:** Die Analyse unten ist widerlegt. Jump-Hosts und SFTP

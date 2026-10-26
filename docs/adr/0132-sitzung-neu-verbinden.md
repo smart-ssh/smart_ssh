@@ -1,6 +1,9 @@
 # ADR 0132 — Neu verbinden: Transport in der Sitzung austauschen
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #355, Spec 0107, Spec 0085/0086 (gekapselter Transport)
 
 ## Kontext

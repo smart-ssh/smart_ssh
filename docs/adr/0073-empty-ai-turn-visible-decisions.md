@@ -1,6 +1,9 @@
 # ADR 0073: Entscheidungen bei der Umsetzung von Spec 0080 (leere KI-Runde)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0080-empty-ai-turn-visible.md, Commits `5a58622`,
 `908605e`, `e4d2a5a` (Spec-Klarstellung), `74ac9c7` (A2) plus
 Review-Nacharbeit (dieser Commit)

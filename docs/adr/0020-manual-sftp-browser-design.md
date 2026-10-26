@@ -1,7 +1,7 @@
 # 0020-manual-sftp-browser-design
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

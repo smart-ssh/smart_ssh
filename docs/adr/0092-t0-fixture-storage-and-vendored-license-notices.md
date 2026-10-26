@@ -1,6 +1,8 @@
 # ADR 0092 — T0-Fixture als eingecheckte Binärdatei; vendorte Lizenztexte explizit zugeordnet
 
-Status: akzeptiert · Spec: `docs/specs/0101-database-encryption.md`
+## Status
+
+Accepted · Spec: `docs/specs/0101-database-encryption.md`
 
 Spec 0101 benennt T0 ("Fixture, vor A1") und A1 ("die erzeugten
 Drittlizenzen enthalten die Lizenztexte von SQLCipher und OpenSSL") als
