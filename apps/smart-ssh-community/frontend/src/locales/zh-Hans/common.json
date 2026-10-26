@@ -1427,6 +1427,8 @@
     "import": {
       "title": "从备份恢复",
       "pickTitle": "选择备份文件",
+      "pickFailed": "无法从所选位置打开该文件。",
+      "chooseAgain": "重新选择文件",
       "file": "文件：{{name}}",
       "kind": "用什么打开此备份",
       "useCode": "恢复码",

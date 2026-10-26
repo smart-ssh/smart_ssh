@@ -1427,6 +1427,8 @@
     "import": {
       "title": "Pulihkan dari cadangan",
       "pickTitle": "Pilih file cadangan",
+      "pickFailed": "Berkas tidak dapat dibuka dari lokasi yang dipilih.",
+      "chooseAgain": "Pilih berkas lagi",
       "file": "Berkas: {{name}}",
       "kind": "Yang membuka cadangan ini",
       "useCode": "Kode pemulihan",
