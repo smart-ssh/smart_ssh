@@ -52,7 +52,7 @@ export function LanguageSettings() {
       <p id="language-heading" className="mb-2 text-sm font-semibold text-slate-200">
         {t("appearance.language")}
       </p>
-      <div role="group" aria-labelledby="language-heading" className="flex flex-wrap gap-2">
+      <fieldset aria-labelledby="language-heading" className="m-0 flex min-w-0 flex-wrap gap-2 border-0 p-0">
         {languagesForPicker().map(({ code: language, endonym }) => (
           <Button
             lang={language}
@@ -64,7 +64,7 @@ export function LanguageSettings() {
             {endonym}
           </Button>
         ))}
-      </div>
+      </fieldset>
     </div>
   );
 }
