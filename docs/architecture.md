@@ -149,7 +149,7 @@ dem Startablauf hängen, bleiben aus dem jeweils genannten Grund hier:
 
 Alle übrigen Module in `app-shell` erfüllen die Regel direkt —
 `tauri::`/`tauri_plugin_*::`/`AppHandle`/`#[tauri::command]` im eigenen
-Code, oder (bei `startup_dialog`) das Paket `rfd`: `android_service`,
+Code, oder das Paket `rfd` (bei dem Dialogmodul): `android_service`,
 `auto_reconnect`, `chat_retention`, `commands`/`commands/*`,
 `first_run_notice`, `lib.rs`, `local_file`, `local_server`, `mcp_backend`,
 `mcp_settings`, `risk_second_opinion`, `runtime_assumptions` (Test der
