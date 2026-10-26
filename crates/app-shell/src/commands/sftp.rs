@@ -2321,7 +2321,7 @@ pub(super) async fn read_local_text_preview_impl(
 /// Issue #93: liegt im Editier-Kopien-Ordner **dieser Instanz** (je
 /// Datenverzeichnis, s. [`crate::edit_copies`]), den der Start von
 /// Überbleibseln eines abgestürzten Prozesses befreit.
-pub(super) fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path::PathBuf> {
+pub(crate) fn edit_session_dir(session_id: SessionId) -> CommandResult<std::path::PathBuf> {
     edit_session_dir_in(crate::edit_copies::instance_root().as_deref(), session_id)
 }
 

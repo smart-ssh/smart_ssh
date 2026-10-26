@@ -57,9 +57,7 @@ fn disconnect_all(app: &AppHandle) {
             .map(|entry| entry.session_id)
             .collect();
         for id in ids {
-            let result =
-                crate::commands::disconnect(app.clone(), app.state(), app.state(), app.state(), id)
-                    .await;
+            let result = crate::commands::disconnect(app.clone(), id).await;
             if let Err(error) = result {
                 tracing::warn!(session_id = %id, ?error, "disconnect all: session not closed");
             }

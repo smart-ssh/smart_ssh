@@ -47,6 +47,15 @@ Garantie wäre weg, es bliebe nur noch eine Konvention. Mit der Registry in
 Verstoß wäre ein Kompilierfehler (`unresolved import`), keine stille
 Möglichkeit.
 
+Sitzungen schließt ausschließlich `app_shell::sessions::close_session`
+(Issue #816, Spec 0084 A2.1): sie widerruft den erhöhten Kanal, entfernt
+die Pfadfreigaben, lehnt die wartende Bestätigung ab, bricht einen
+laufenden KI-Befehl ab, trennt und meldet den Status. `disconnect`, der
+Backup-Import (`AppOpenSessions`) und einbettende App-Crates bzw.
+Erweiterungen nutzen nur diesen Weg; die Registry selbst bleibt
+`pub(crate)`. Ein Wächtertest verbietet andere Aufrufe von
+`SessionManager::remove`.
+
 Dieselbe Ausnahme gilt für die zugehörigen Testhilfen: `app-shell::
 test_support::elevation` (Fixtures, `interleave_hook`) und die beiden
 Regressionstests `test_ai_and_mcp_file_actions_never_use_the_elevated_
