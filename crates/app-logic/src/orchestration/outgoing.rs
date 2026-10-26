@@ -10,7 +10,7 @@
 use secrecy::SecretString;
 
 use ssh_manager_core::ai::OutputRedactor;
-use ssh_manager_core::filter::matches_hard_blacklist;
+use ssh_manager_core::filter::{matches_hard_blacklist, split_top_level_segments};
 use ssh_manager_core::outgoing::{OutgoingKind, ServerScope};
 use ssh_manager_core::profiles::ProfileStore;
 
@@ -22,6 +22,46 @@ use crate::session_extension::scope_for_id;
 /// not quote the prepared text.
 pub(crate) const PREPARED_BLOCKED_MESSAGE: &str =
     "The command was not sent: after preparation it matched the hard blacklist.";
+
+/// Scope handed to the transform. Same lookup as the session extension
+/// (`scope_for_id`), built at call time so a server moved to another group
+/// gets its current chain. A failing group lookup leaves the chain empty
+/// (logged there); a server that no longer exists falls back to the
+/// session's own data.
+pub(crate) async fn outgoing_scope(
+    session: &Session,
+    profile_store: &dyn ProfileStore,
+) -> ServerScope {
+    let local_tags = is_local(session.server_id).then(|| session.tags.clone());
+    scope_for_id(profile_store, session.server_id, local_tags)
+        .await
+        .unwrap_or_else(|| ServerScope {
+            server_id: session.server_id,
+            group_chain: Vec::new(),
+            tags: session.tags.clone(),
+        })
+}
+
+/// Shown to the AI when the prepared command has another number of top-level
+/// segments than the approved one. Does not quote the prepared text.
+pub(crate) const PREPARED_STRUCTURE_MESSAGE: &str =
+    "The command was not sent: after preparation its structure differed from the approved command.";
+
+/// Defence in depth: a prepared command must keep the top-level structure of
+/// the approved one. Uses the filter engine's own parser. Command
+/// substitutions are deliberately not counted (the scanner ignores quotes).
+pub(crate) fn same_segment_structure(original: &str, prepared: &str) -> bool {
+    if original == prepared {
+        return true;
+    }
+    match (
+        split_top_level_segments(original),
+        split_top_level_segments(prepared),
+    ) {
+        (Some(a), Some(b)) => a.len() == b.len(),
+        _ => false,
+    }
+}
 
 /// `Ok(None)`: no transform registered, send the original text unchanged.
 /// `Ok(Some(text))`: send this text instead. `Err(message)`: send nothing;
@@ -35,18 +75,7 @@ pub(crate) async fn prepare_for_send(
     let Some(transform) = session.outgoing_transform.as_ref() else {
         return Ok(None);
     };
-    // Same lookup as the session extension (`scope_for_id`), built at send
-    // time so a server moved to another group gets its current chain. A
-    // failing group lookup leaves the chain empty (logged there); a server
-    // that no longer exists falls back to the session's own data.
-    let local_tags = is_local(session.server_id).then(|| session.tags.clone());
-    let scope = scope_for_id(profile_store, session.server_id, local_tags)
-        .await
-        .unwrap_or_else(|| ServerScope {
-            server_id: session.server_id,
-            group_chain: Vec::new(),
-            tags: session.tags.clone(),
-        });
+    let scope = outgoing_scope(session, profile_store).await;
     let prepared = match transform.prepare_outgoing(&scope, kind, text).await {
         Ok(prepared) => prepared,
         // The extension is trusted, but its message still goes through the
@@ -71,6 +100,9 @@ pub(crate) async fn prepare_for_send(
             && !matches_hard_blacklist(text).await
         {
             return Err(PREPARED_BLOCKED_MESSAGE.to_string());
+        }
+        if !same_segment_structure(text, prepared.text().expose_secret()) {
+            return Err(PREPARED_STRUCTURE_MESSAGE.to_string());
         }
     }
     // Before the command starts, so its own output is already masked.

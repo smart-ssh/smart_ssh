@@ -317,6 +317,11 @@ pub async fn explain_confirmation(
         server_id: session.server_id,
         tags,
     };
+    let transform_scope = if session.outgoing_transform.is_some() {
+        Some(crate::orchestration::outgoing_scope(session, profile_store).await)
+    } else {
+        None
+    };
     explain(
         session.filter_engine.as_ref(),
         &ctx,
@@ -324,7 +329,13 @@ pub async fn explain_confirmation(
         stored,
         scope,
         priority,
-        &|cmd| crate::orchestration::state_independent_escalation_code(session, cmd),
+        &|cmd| {
+            crate::orchestration::state_independent_escalation_code(
+                session,
+                cmd,
+                transform_scope.as_ref(),
+            )
+        },
     )
     .await
 }

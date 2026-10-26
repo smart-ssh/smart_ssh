@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Utasítások szervertartalomon keresztüli beinjektálásának lehetséges kísérlete észlelve – megerősítés szükséges",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP-n keresztül kérve – mindig megerősítés szükséges",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "A tárolt sudo-jelszót használja – mindig megerősítés szükséges",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Küldés előtt egy tárolt titkos értéket szúr be – mindig megerősítés szükséges",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Hitelesítő adatokat tartalmazó fájlt olvas (pl. SSH-kulcs, .env, /etc/shadow) – mindig megerősítés szükséges",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "A válasz egy korábbi műveletét elutasították – megerősítés szükséges",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Elindítja az sftp-servert (sudóval: fájlhozzáférés root jogokkal) – mindig megerősítés szükséges",
