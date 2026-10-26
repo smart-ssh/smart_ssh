@@ -73,7 +73,12 @@ registered (issue #101). Then it runs `npm run check-a11y-rules`
 (`scripts/check-a11y-lint-rules.mjs`, issue #146): it fails when a
 `jsx-a11y` rule that the installed oxlint enables is not listed with
 `error` in `.oxlintrc.json` (Spec 0100 A6.1, ADR 0116) — after an oxlint
-upgrade that adds a rule, add it there. CI runs both through the same
+upgrade that adds a rule, add it there. Finally `npm run check-conventions`
+(`scripts/check-conventions.mjs`, issue #858) fails on a new `*_tests.rs` file
+(see "Testing conventions"), on a stale entry in its list of the existing
+ones, and on `LOCAL_SERVER_ID` / `local_server` anywhere under
+`crates/core/src/filter/` or `crates/core/src/risk/` (see "No special-casing
+the local pseudo-server"). CI runs all of them through the same
 `npm run lint` step.
 
 Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
@@ -263,12 +268,21 @@ not by hand-editing, so the lockfile stays consistent).
 
 ## Testing conventions
 
-- Rust: tests live in `#[cfg(test)] mod tests` next to the code, using
-  trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
+- Rust: small test modules stay inline (`#[cfg(test)] mod tests { … }`).
+  Larger ones go in `<module>/tests.rs` or `<module>/tests_<topic>.rs` next
+  to `<module>.rs`, declared with `#[cfg(test)] mod tests;`. Cross-crate or
+  real-connection tests live in the crate's `tests/` directory
+  (`crates/ssh-transport/tests/integration.rs` is the one place real
+  test-fixture SSH connections are exercised). Shared helpers live in
+  `test_support.rs` behind `cfg(any(test, feature = "test-support"))`. Tests
+  use trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
   in-memory `ProfileStore`/`CredentialStore` in
   `crates/app-logic/src/test_support.rs`) — no real network/SSH/keychain
-  access in unit tests. `crates/ssh-transport/tests/integration.rs` is the
-  one place real (test-fixture) SSH connections are exercised.
+  access in unit tests. **No new `*_tests.rs` files**: seven exist
+  (listed in `scripts/check-conventions.mjs`) and stay until they are
+  touched anyway; when one is renamed or removed, drop it from that list.
+  Note that `crates/app-logic/src/test_connection.rs` is production code (the
+  "test connection" feature), not a test file.
 - Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
   gets its own `*.test.ts` via Vitest; component tests exist for the
   trickier interactive pieces, not for every component.
