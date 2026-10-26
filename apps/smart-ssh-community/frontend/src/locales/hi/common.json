@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "सर्वर सामग्री के ज़रिए निर्देश इंजेक्ट करने का संभावित प्रयास मिला – पुष्टि आवश्यक",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP के ज़रिए माँगा गया – हमेशा पुष्टि आवश्यक",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "संग्रहीत sudo पासवर्ड उपयोग करता है – हमेशा पुष्टि आवश्यक",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "भेजने से पहले संग्रहीत गुप्त मान डालता है – हमेशा पुष्टि आवश्यक",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "क्रेडेंशियल वाली फ़ाइल पढ़ता है (जैसे SSH कुंजी, .env, /etc/shadow) – हमेशा पुष्टि आवश्यक",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "इस उत्तर की एक पिछली कार्रवाई अस्वीकृत हुई थी – पुष्टि आवश्यक",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "sftp-server शुरू करता है (sudo के साथ: root अधिकारों से फ़ाइल एक्सेस) – हमेशा पुष्टि आवश्यक",

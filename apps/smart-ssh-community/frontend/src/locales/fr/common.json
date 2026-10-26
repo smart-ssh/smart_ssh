@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Tentative possible d’injection d’instructions via le contenu du serveur détectée – confirmation requise",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Demandée via MCP – exige toujours une confirmation",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Utilise le mot de passe sudo enregistré – exige toujours une confirmation",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Insère une valeur secrète enregistrée avant l'envoi – exige toujours une confirmation",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Lit un fichier contenant des identifiants (p. ex. clé SSH, .env, /etc/shadow) – exige toujours une confirmation",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Une action précédente de cette réponse a été rejetée – confirmation requise",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Démarre sftp-server (avec sudo : accès aux fichiers avec les privilèges root) – exige toujours une confirmation",

@@ -398,6 +398,24 @@ pub(crate) async fn handle_action_proposed(
         };
     }
 
+    // Issue #815 (Spec 0038): a registered outgoing transform that will change
+    // this text (insert stored secret values) always needs a confirmation,
+    // like the stored sudo password. Escalation only.
+    let transform_scope = if session.outgoing_transform.is_some() {
+        Some(super::outgoing::outgoing_scope(session, profile_store).await)
+    } else {
+        None
+    };
+    if matches!(decision, Decision::AutoExec)
+        && transform_requires_confirmation(session, transform_scope.as_ref(), &action)
+    {
+        decision = Decision::Confirm {
+            reason: "Fügt vor dem Senden einen gespeicherten geheimen Wert ein – erfordert immer Bestätigung"
+                .to_string(),
+            code: "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM".to_string(),
+        };
+    }
+
     // Spec 0068, Teil 4 (Review-Fund): nach einer Ablehnung in derselben
     // Antwort nie mehr ohne Rückfrage — nur Eskalation.
     if matches!(decision, Decision::AutoExec)
@@ -1138,6 +1156,7 @@ fn take_injection_reason(session: &Session) -> Option<String> {
 pub(crate) fn state_independent_escalation_code(
     session: &Session,
     command: &str,
+    transform_scope: Option<&ssh_manager_core::outgoing::ServerScope>,
 ) -> Option<&'static str> {
     use std::sync::atomic::Ordering::SeqCst;
     let action = AiAction::SuggestCommand {
@@ -1192,7 +1211,32 @@ pub(crate) fn state_independent_escalation_code(
     if uses_stored_sudo_password(session, &action) {
         return Some("FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM");
     }
+    if transform_requires_confirmation(session, transform_scope, &action) {
+        return Some("FILTER_INSERTED_SECRET_REQUIRES_CONFIRM");
+    }
     None
+}
+
+/// Issue #815: asks the registered outgoing transform (pure query) whether it
+/// will change the text of `action`. `false` without a transform or scope.
+fn transform_requires_confirmation(
+    session: &Session,
+    scope: Option<&ssh_manager_core::outgoing::ServerScope>,
+    action: &AiAction,
+) -> bool {
+    use ssh_manager_core::outgoing::OutgoingKind;
+    let (Some(transform), Some(scope)) = (session.outgoing_transform.as_ref(), scope) else {
+        return false;
+    };
+    match action {
+        AiAction::SuggestCommand { command } => {
+            transform.requires_confirmation(scope, OutgoingKind::Command, command)
+        }
+        AiAction::WriteRemoteFile { content, .. } => {
+            transform.requires_confirmation(scope, OutgoingKind::FileContent, content)
+        }
+        _ => false,
+    }
 }
 
 fn risk_assessment_for_action(action: &AiAction) -> Option<RiskAssessment> {

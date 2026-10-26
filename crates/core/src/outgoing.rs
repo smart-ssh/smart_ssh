@@ -89,6 +89,19 @@ pub trait OutgoingTransform: Send + Sync {
         kind: OutgoingKind,
         text: &str,
     ) -> Result<Prepared, Rejection>;
+
+    /// Pure query: will `prepare_outgoing` change `text` (e.g. insert stored
+    /// secret values)? `true` makes the core require a confirmation for an
+    /// action that would otherwise run without one. No side effects; must
+    /// neither see nor return secret values. Default: `false` (never asks).
+    fn requires_confirmation(
+        &self,
+        _scope: &ServerScope,
+        _kind: OutgoingKind,
+        _text: &str,
+    ) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

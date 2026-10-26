@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Posibilă încercare de a injecta instrucțiuni prin conținutul serverului detectată – necesită confirmare",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Solicitată prin MCP – necesită întotdeauna confirmare",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Folosește parola sudo stocată – necesită întotdeauna confirmare",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Inserează o valoare secretă stocată înainte de trimitere – necesită întotdeauna confirmare",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Citește un fișier cu date de autentificare (de ex. cheie SSH, .env, /etc/shadow) – necesită întotdeauna confirmare",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "O acțiune anterioară din acest răspuns a fost respinsă – necesită confirmare",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Pornește sftp-server (cu sudo: acces la fișiere cu privilegii root) – necesită întotdeauna confirmare",

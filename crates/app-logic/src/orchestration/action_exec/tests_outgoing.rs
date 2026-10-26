@@ -651,3 +651,192 @@ mod group_chain_scope {
         assert!(!log.contains("group_chain failed"), "{log}");
     }
 }
+
+// --- Issue #815: confirmation query and structural re-check ---
+
+/// Marks every text as changed (`marks`) and rewrites `X` to `to`.
+struct Marking {
+    marks: bool,
+    to: &'static str,
+}
+
+#[async_trait]
+impl OutgoingTransform for Marking {
+    async fn prepare_outgoing(
+        &self,
+        _scope: &ServerScope,
+        _kind: OutgoingKind,
+        text: &str,
+    ) -> Result<Prepared, Rejection> {
+        Ok(Prepared::new(text.replace('X', self.to), Vec::new()))
+    }
+
+    fn requires_confirmation(&self, _: &ServerScope, _: OutgoingKind, _: &str) -> bool {
+        self.marks
+    }
+}
+
+/// Runs a turn until the first `chat-action-proposed` and returns its payload.
+async fn first_proposal(session: &Session, emitter: &TestEmitter) -> serde_json::Value {
+    let profile_store = InMemoryProfileStore::default();
+    let confirmations = ConfirmationRegistry::new();
+    let turn = run_chat_turn(
+        session,
+        Uuid::new_v4(),
+        emitter,
+        &profile_store,
+        &confirmations,
+    );
+    tokio::pin!(turn);
+    let watcher = async {
+        loop {
+            let found = emitter
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|(n, _)| n == "chat-action-proposed")
+                .map(|(_, p)| p.clone());
+            if let Some(p) = found {
+                return p;
+            }
+            tokio::task::yield_now().await;
+        }
+    };
+    tokio::select! {
+        p = watcher => p,
+        _ = &mut turn => panic!("turn ended without a proposal"),
+    }
+}
+
+const INSERTED: &str = "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM";
+
+#[tokio::test]
+async fn test_marked_command_under_allow_rule_needs_confirmation() {
+    let mut session =
+        test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: true,
+        to: "Y",
+    })));
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert_eq!(p["decision"]["Confirm"]["code"], INSERTED, "{p}");
+}
+
+#[tokio::test]
+async fn test_unmarked_command_stays_auto_exec() {
+    let mut session =
+        test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: false,
+        to: "Y",
+    })));
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert_eq!(p["decision"], "AutoExec", "{p}");
+}
+
+#[tokio::test]
+async fn test_no_transform_stays_auto_exec() {
+    let session = test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert_eq!(p["decision"], "AutoExec", "{p}");
+}
+
+#[tokio::test]
+async fn test_marking_never_weakens_an_existing_confirm() {
+    // Hard-blacklisted command: the engine already answers Confirm.
+    let mut session =
+        test_session_allowing_everything(propose("rm -rf /tmp/x"), MockSshTransport::default());
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: true,
+        to: "Y",
+    })));
+    let p = first_proposal(&session, &TestEmitter::default()).await;
+    assert!(p["decision"]["Confirm"].is_object(), "{p}");
+    assert_ne!(p["decision"]["Confirm"]["code"], INSERTED, "{p}");
+}
+
+#[tokio::test]
+async fn test_mcp_style_default_trait_method_returns_false() {
+    // The default implementation keeps existing transforms unchanged.
+    let scope = ServerScope {
+        server_id: ssh_manager_core::filter::ServerId(Uuid::new_v4()),
+        group_chain: Vec::new(),
+        tags: Vec::new(),
+    };
+    assert!(!Identity.requires_confirmation(&scope, OutgoingKind::Command, "echo X"));
+}
+
+#[tokio::test]
+async fn test_state_independent_escalation_code_follows_the_transform() {
+    let mut session =
+        test_session_allowing_everything(propose("echo X"), MockSshTransport::default());
+    let scope = ServerScope {
+        server_id: session.server_id,
+        group_chain: Vec::new(),
+        tags: Vec::new(),
+    };
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: true,
+        to: "Y",
+    })));
+    assert_eq!(
+        state_independent_escalation_code(&session, "echo X", Some(&scope)),
+        Some(INSERTED)
+    );
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking {
+        marks: false,
+        to: "Y",
+    })));
+    assert_eq!(
+        state_independent_escalation_code(&session, "echo X", Some(&scope)),
+        None
+    );
+}
+
+async fn sent_with(to: &'static str, original: &str) -> (Vec<String>, String) {
+    let transport = MockSshTransport::default().with_response(original, output("done"));
+    let executed = transport.executed_handle();
+    let mut session = test_session_allowing_everything(propose(original), transport);
+    session.set_outgoing_transform_for_tests(Some(Arc::new(Marking { marks: false, to })));
+    let emitter = TestEmitter::default();
+    run_approved_turn(&session, &emitter).await;
+    let shown = format!(
+        "{} {:?}",
+        all_event_text(&emitter),
+        session.context.lock().await.history
+    );
+    let sent = executed.lock().unwrap().clone();
+    (sent, shown)
+}
+
+#[tokio::test]
+async fn test_prepared_command_with_more_segments_is_rejected_without_quoting_it() {
+    let (sent, shown) = sent_with("a; touch /tmp/pwned", "echo X").await;
+    assert!(sent.is_empty(), "{sent:?}");
+    assert!(shown.contains("structure"), "{shown}");
+    assert!(!shown.contains("pwned"), "{shown}");
+}
+
+#[tokio::test]
+async fn test_prepared_command_with_quoted_word_keeps_structure_and_is_sent() {
+    let (sent, _) = sent_with("'a; b && c'", "echo X").await;
+    assert_eq!(sent, vec!["echo 'a; b && c'".to_string()]);
+}
+
+#[tokio::test]
+async fn test_prepared_command_the_parser_cannot_split_is_rejected() {
+    let (sent, _) = sent_with("'unterminated", "echo X").await;
+    assert!(sent.is_empty(), "{sent:?}");
+}
+
+#[test]
+fn test_same_segment_structure_helper() {
+    use crate::orchestration::outgoing::same_segment_structure;
+    assert!(same_segment_structure("echo X", "echo X"));
+    assert!(same_segment_structure("echo X", "echo 'a;b'"));
+    assert!(!same_segment_structure("echo X", "echo a; id"));
+    assert!(!same_segment_structure("echo X", "echo 'oops"));
+    assert!(same_segment_structure("echo 'oops", "echo 'oops"));
+    assert!(!same_segment_structure("echo 'oops", "echo a"));
+}
