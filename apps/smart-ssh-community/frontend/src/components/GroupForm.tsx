@@ -145,12 +145,12 @@ export function GroupForm({
 
   return (
     <div className="max-w-xl space-y-6 p-4">
-      <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
+      <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">
         {isCreate ? t("groupForm.titleNew") : t("groupForm.titleExisting", { name: existing?.name ?? "" })}
       </h2>
 
       <form onSubmit={handleSubmit} onChange={() => setDirty(true)} className="space-y-3">
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-fg-muted">
           {t("common.name")}
           <input
             {...TECHNICAL_INPUT_PROPS}
@@ -158,16 +158,16 @@ export function GroupForm({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 text-fg"
           />
         </label>
 
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-fg-muted">
           {t("groupForm.parent")}
           <select
             value={parentId ?? ""}
             onChange={(e) => setParentId(e.target.value || null)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 text-fg"
           >
             <option value="">{t("groupForm.noParent")}</option>
             {availableParents.map((option) => (
@@ -178,7 +178,7 @@ export function GroupForm({
           </select>
         </label>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger-fg">{error}</p>}
 
         <Button variant="primary"
           type="submit"
@@ -194,7 +194,7 @@ export function GroupForm({
           <GroupFormSections groupId={groupId} dirty={dirty} />
           <NotesPanel target={{ Group: groupId }} currentNotes={existing.notes} onNotesChanged={onSaved} />
 
-          <div className="border-t border-slate-700 pt-4">
+          <div className="border-t border-border pt-4">
             <Button variant="danger" size="sm"
               onClick={handleDeleteClick}
             >
@@ -202,14 +202,14 @@ export function GroupForm({
             </Button>
 
             {deletePreview && (
-              <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
-                <p className="mb-2 font-medium text-red-200">{t("groupForm.deleteImpactTitle")}</p>
+              <div className="mt-3 rounded border border-danger-border bg-danger-subtle p-3 text-sm">
+                <p className="mb-2 font-medium text-danger-fg-softer">{t("groupForm.deleteImpactTitle")}</p>
                 {deletePreview.childGroupsToDelete.length === 0 &&
                 deletePreview.serversToUnassign.length === 0 &&
                 deletePreview.unusableServersToUnassign.length === 0 ? (
-                  <p className="text-red-200">{t("groupForm.deleteNoImpact")}</p>
+                  <p className="text-danger-fg-softer">{t("groupForm.deleteNoImpact")}</p>
                 ) : (
-                  <ul className="mb-2 space-y-1 text-red-200">
+                  <ul className="mb-2 space-y-1 text-danger-fg-softer">
                     {deletePreview.childGroupsToDelete.map((g) => (
                       <li key={g.id}>{t("groupForm.childGroupWillBeDeleted", { name: g.name })}</li>
                     ))}

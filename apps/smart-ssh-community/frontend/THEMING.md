@@ -20,8 +20,9 @@ shrink: the test also fails when a listed file is already clean — remove it.
 | Neutral surfaces | `surface-sunken` (inputs, window ground), `surface`, `surface-raised`, `surface-hover` |
 | Lines | `border`, `border-strong` |
 | Text | `fg-strong`, `fg`, `fg-soft`, `fg-muted`, `fg-subtle`, `fg-faint`, `fg-bright` (pure white) |
-| Roles `accent`, `danger`, `warning`, `success` | `<role>-subtle` (tinted fill), `-subtle-hover`, `-border`, `-border-strong`, `<role>` (solid), `-strong` (hover/brighter solid), `-fg` (text), `-fg-soft`, `-fg-softer`, `-fg-faint`, `-fg-faintest` |
+| Roles `accent`, `danger`, `warning`, `success` | `<role>-subtle` (tinted fill), `-subtle-hover`, `-border`, `-border-strong`, `<role>` (solid), `-strong` (hover/brighter solid), `-fg` (text), `-fg-soft`, `-fg-softer`, `-fg-faint`, `-fg-faintest` (`danger` has `-fg-faintest` for text on a solid danger fill) |
 | Info | `info`, `info-fg` |
+| Local session | `local-border`, `local`, `local-fg` (badge and header of a local-shell session) |
 | Misc | `on-accent` (text on a solid accent fill), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`) |
 | Terminal | `term-bg`, `term-fg`, `term-cursor`, `term-cursor-accent`, `term-selection`, `term-ansi-{black,red,green,yellow,blue,magenta,cyan,white,bright-*}` |
 
@@ -69,6 +70,7 @@ Applies to every utility prefix (`bg-`, `text-`, `border-`, `ring-`,
 | `red-300` | `danger-fg-soft` |
 | `red-200` | `danger-fg-softer` |
 | `red-100` | `danger-fg-faint` |
+| `red-50` | `danger-fg-faintest` |
 | `amber-950` | `warning-subtle` |
 | `amber-900` | `warning-subtle-hover` |
 | `amber-800` | `warning-border` |
@@ -89,6 +91,9 @@ Applies to every utility prefix (`bg-`, `text-`, `border-`, `ring-`,
 | `emerald-300` | `success-fg-soft` |
 | `emerald-200` | `success-fg-softer` |
 | `emerald-100` | `success-fg-faint` |
+| `fuchsia-900` | `local-border` |
+| `fuchsia-500` | `local` |
+| `fuchsia-300` | `local-fg` |
 | `steel-600` | `info` |
 | `steel-400` | `info-fg` || `white` | `fg-bright` |
 | `black` | `overlay` |
