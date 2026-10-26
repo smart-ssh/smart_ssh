@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Se detectó un posible intento de inyectar instrucciones mediante contenido del servidor: requiere confirmación",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Solicitado mediante MCP: siempre requiere confirmación",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Usa la contraseña de sudo guardada: siempre requiere confirmación",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Inserta un valor secreto guardado antes de enviar: siempre requiere confirmación",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Lee un archivo con credenciales (p. ej. clave SSH, .env, /etc/shadow): siempre requiere confirmación",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Se rechazó una acción anterior de esta respuesta: requiere confirmación",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Inicia sftp-server (con sudo: acceso a archivos con privilegios de root): siempre requiere confirmación",
@@ -1443,6 +1444,8 @@
     "import": {
       "title": "Restaurar desde copia",
       "pickTitle": "Elige un archivo de copia",
+      "pickFailed": "No se pudo abrir el archivo desde la ubicación elegida.",
+      "chooseAgain": "Elegir el archivo de nuevo",
       "file": "Archivo: {{name}}",
       "kind": "Qué abre esta copia",
       "useCode": "Código de recuperación",

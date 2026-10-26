@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Εντοπίστηκε πιθανή απόπειρα έγχυσης εντολών μέσω περιεχομένου διακομιστή – απαιτείται επιβεβαίωση",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Ζητήθηκε μέσω MCP – απαιτεί πάντα επιβεβαίωση",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Χρησιμοποιεί τον αποθηκευμένο κωδικό sudo – απαιτεί πάντα επιβεβαίωση",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Εισάγει μια αποθηκευμένη μυστική τιμή πριν από την αποστολή – απαιτεί πάντα επιβεβαίωση",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Διαβάζει αρχείο με διαπιστευτήρια (π.χ. κλειδί SSH, .env, /etc/shadow) – απαιτεί πάντα επιβεβαίωση",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Μια προηγούμενη ενέργεια σε αυτή την απάντηση απορρίφθηκε – απαιτείται επιβεβαίωση",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Εκκινεί sftp-server (με sudo: πρόσβαση αρχείων με δικαιώματα root) – απαιτεί πάντα επιβεβαίωση",
@@ -1435,6 +1436,8 @@
     "import": {
       "title": "Επαναφορά από αντίγραφο",
       "pickTitle": "Επιλογή αρχείου αντιγράφου",
+      "pickFailed": "Δεν ήταν δυνατό το άνοιγμα του αρχείου από την επιλεγμένη θέση.",
+      "chooseAgain": "Επιλογή αρχείου ξανά",
       "file": "Αρχείο: {{name}}",
       "kind": "Τι ανοίγει αυτό το αντίγραφο",
       "useCode": "Κωδικός ανάκτησης",

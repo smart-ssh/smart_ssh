@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Виявлено можливу спробу підсунути інструкції через вміст сервера – потрібне підтвердження",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Запит через MCP – завжди потрібне підтвердження",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Використовує збережений пароль sudo – завжди потрібне підтвердження",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Вставляє збережене секретне значення перед надсиланням – завжди потрібне підтвердження",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Читає файл з обліковими даними (напр. ключ SSH, .env, /etc/shadow) – завжди потрібне підтвердження",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Попередню дію в цій відповіді відхилено – потрібне підтвердження",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Запускає sftp-server (із sudo: доступ до файлів із правами root) – завжди потрібне підтвердження",
@@ -1451,6 +1452,8 @@
     "import": {
       "title": "Відновлення з копії",
       "pickTitle": "Виберіть файл копії",
+      "pickFailed": "Не вдалося відкрити файл у вибраному розташуванні.",
+      "chooseAgain": "Вибрати файл ще раз",
       "file": "Файл: {{name}}",
       "kind": "Чим відкривається ця копія",
       "useCode": "Код відновлення",

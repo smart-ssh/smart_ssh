@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Sunucu içeriği üzerinden talimat enjekte etme girişimi olasılığı algılandı – onay gerektirir",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP üzerinden istendi – her zaman onay gerektirir",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Kayıtlı sudo parolasını kullanır – her zaman onay gerektirir",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Göndermeden önce kayıtlı bir gizli değer ekler – her zaman onay gerektirir",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Kimlik bilgileri içeren bir dosyayı okur (örn. SSH anahtarı, .env, /etc/shadow) – her zaman onay gerektirir",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Bu yanıttaki önceki bir eylem reddedildi – onay gerektirir",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "sftp-server'ı başlatır (sudo ile: root yetkisiyle dosya erişimi) – her zaman onay gerektirir",
@@ -1435,6 +1436,8 @@
     "import": {
       "title": "Yedekten geri yükle",
       "pickTitle": "Bir yedek dosyası seçin",
+      "pickFailed": "Dosya seçilen konumdan açılamadı.",
+      "chooseAgain": "Dosyayı yeniden seç",
       "file": "Dosya: {{name}}",
       "kind": "Bu yedeği ne açar",
       "useCode": "Kurtarma kodu",
