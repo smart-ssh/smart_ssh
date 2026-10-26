@@ -1443,6 +1443,8 @@
     "import": {
       "title": "Ripristina da backup",
       "pickTitle": "Scegli un file di backup",
+      "pickFailed": "Impossibile aprire il file dalla posizione scelta.",
+      "chooseAgain": "Scegli di nuovo il file",
       "file": "Nome file: {{name}}",
       "kind": "Cosa apre questo backup",
       "useCode": "Codice di recupero",
