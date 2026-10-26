@@ -351,7 +351,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   return (
     <div>
       {error && (
-        <p className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
+        <p className="mb-4 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>
       )}
 
       {/* Spec 0056, Teil 3: eigene Karte statt freistehender Liste — macht
@@ -362,29 +362,29 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
        * (`slate-950/40`) als die Karte (`slate-900/40`), damit sich Karte
        * und Listeninhalt trotz gleicher Rahmenfarbe voneinander abheben. */}
       <section className={`mb-6 ${CARD_CLASS}`}>
-        <h3 className="font-heading mb-3 text-sm font-semibold tracking-wide text-slate-200">
+        <h3 className="font-heading mb-3 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.configuredProvidersTitle")}
         </h3>
-        <ul className="divide-y divide-slate-700 rounded-md border border-slate-700 bg-slate-950/40">
+        <ul className="divide-y divide-border rounded-md border border-border bg-surface-sunken/40">
           {providers.length === 0 && (
-            <li className="px-4 py-3 text-sm text-slate-400">{t("aiProvider.noProviders")}</li>
+            <li className="px-4 py-3 text-sm text-fg-subtle">{t("aiProvider.noProviders")}</li>
           )}
           {providers.map((provider) => (
             <li key={provider.id} className="px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="flex items-center font-medium text-slate-100">
+                  <p className="flex items-center font-medium text-fg">
                     <span className="truncate" title={provider.displayName}>
                       {provider.displayName}
                     </span>
                     {provider.isActive && (
-                      <span className="ml-2 shrink-0 rounded bg-emerald-900 px-2 py-0.5 text-xs text-emerald-300">
+                      <span className="ml-2 shrink-0 rounded bg-success-subtle-hover px-2 py-0.5 text-xs text-success-fg-soft">
                         {t("aiProvider.active")}
                       </span>
                     )}
                   </p>
                   <p
-                    className="truncate text-sm text-slate-400"
+                    className="truncate text-sm text-fg-subtle"
                     title={`${t(`aiProvider.providerTypes.${provider.providerType}`)} · ${provider.model}`}
                   >
                     {t(`aiProvider.providerTypes.${provider.providerType}`)} · {provider.model}
@@ -409,7 +409,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
               </div>
 
               {supportsWebResearch(provider.providerType, provider.baseUrl) && (
-                <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
+                <label className="mt-2 flex items-center gap-2 text-sm text-fg-muted">
                   <input
                     type="checkbox"
                     checked={provider.webResearchEnabled}
@@ -431,19 +431,19 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                       : t("aiProvider.attestationFetch")}
                   </Button>
                   {attestationErrors[provider.id] && (
-                    <p className="text-xs text-red-400">{attestationErrors[provider.id]}</p>
+                    <p className="text-xs text-danger-fg">{attestationErrors[provider.id]}</p>
                   )}
                   {attestationResults[provider.id] && (
                     <div className="space-y-1">
-                      <p className="text-xs text-amber-300">
+                      <p className="text-xs text-warning-fg-soft">
                         {t("aiProvider.attestationDisclaimerBeforeNot")}
                         <strong>{t("aiProvider.attestationDisclaimerNot")}</strong>
                         {t("aiProvider.attestationDisclaimerAfterNot")}
                       </p>
-                      <p className="text-xs font-semibold text-slate-400">
+                      <p className="text-xs font-semibold text-fg-subtle">
                         {t("aiProvider.attestationResultLabel")}
                       </p>
-                      <pre className="max-h-40 overflow-auto rounded border border-slate-700 bg-slate-950 p-2 text-xs whitespace-pre-wrap text-slate-300">
+                      <pre className="max-h-40 overflow-auto rounded border border-border bg-surface-sunken p-2 text-xs whitespace-pre-wrap text-fg-muted">
                         {attestationResults[provider.id]}
                       </pre>
                     </div>
@@ -471,11 +471,11 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
        * einer bloßen oberen Trennlinie — bislang lief dieser Bereich
        * optisch nahtlos in die Provider-Liste über. */}
       <section className={`mb-6 ${CARD_CLASS}`}>
-        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.riskClassifierTitle")}
         </h3>
-        <p className="mb-2 text-xs text-slate-400">{t("aiProvider.riskClassifierHint")}</p>
-        <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+        <p className="mb-2 text-xs text-fg-subtle">{t("aiProvider.riskClassifierHint")}</p>
+        <label className="mb-2 flex items-center gap-2 text-sm text-fg-muted">
           <input
             type="checkbox"
             checked={riskClassifierEnabled}
@@ -511,11 +511,11 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
        * Einstellung ohne aktivierte Zweitmeinung genauso wirkt
        * (regelbasiertes Rot). */}
       <section className={`mb-6 ${CARD_CLASS}`}>
-        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-slate-200">
+        <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-fg-soft">
           {t("aiProvider.redRiskAlwaysConfirmTitle")}
         </h3>
-        <p className="mb-2 text-xs text-slate-400">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
-        <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+        <p className="mb-2 text-xs text-fg-subtle">{t("aiProvider.redRiskAlwaysConfirmHint")}</p>
+        <label className="mb-2 flex items-center gap-2 text-sm text-fg-muted">
           <input
             type="checkbox"
             checked={redRiskAlwaysConfirm}
@@ -535,12 +535,12 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       {showOllamaCard && ollamaProbe && (
         <section className={`mb-6 ${CARD_CLASS}`}>
           {ollamaProbe.status === "loading" && (
-            <p className="text-sm text-slate-400">{t("aiProvider.ollamaProbeSearching")}</p>
+            <p className="text-sm text-fg-subtle">{t("aiProvider.ollamaProbeSearching")}</p>
           )}
 
           {ollamaProbe.status === "found" && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-100">
+              <p className="text-sm font-medium text-fg">
                 {t("aiProvider.ollamaProbeFoundHeading")}
               </p>
               <label className={LABEL_CLASS}>
@@ -557,7 +557,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
                   ))}
                 </select>
               </label>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-fg-subtle">
                 {providers.some((p) => p.isActive)
                   ? t("aiProvider.ollamaProbeFoundHintInactive")
                   : t("aiProvider.ollamaProbeFoundHintWillActivate")}
@@ -579,10 +579,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
 
           {ollamaProbe.status === "empty" && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-100">
+              <p className="text-sm font-medium text-fg">
                 {t("aiProvider.ollamaProbeEmptyHeading")}
               </p>
-              <p className="text-xs text-slate-400">{t("aiProvider.ollamaProbePullHint")}</p>
+              <p className="text-xs text-fg-subtle">{t("aiProvider.ollamaProbePullHint")}</p>
               <Button size="sm" onClick={runOllamaProbe} >
                 {t("aiProvider.ollamaProbeRetry")}
               </Button>
@@ -596,10 +596,10 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
           {ollamaProbe.status === "unreachable" &&
             providers.length === 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-100">
+                <p className="text-sm font-medium text-fg">
                   {t("aiProvider.ollamaProbeNotFoundHeading")}
                 </p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-fg-subtle">
                   {t("aiProvider.ollamaProbeNotFoundInstructions")}
                 </p>
                 <Button size="sm" onClick={runOllamaProbe} >

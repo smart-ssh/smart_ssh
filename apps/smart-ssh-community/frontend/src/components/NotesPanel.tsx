@@ -160,7 +160,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
   return (
     <div className="space-y-2">
       {isLarge && (
-        <div className="rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+        <div className="rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
           <p>
             {t("notes.largeNoteHint")}
           </p>
@@ -176,7 +176,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                 {shrinkRequesting ? t("notes.summarizeRequesting") : t("notes.summarizeNow")}
               </Button>
               {shrinkError && (
-                <p role="alert" className="mt-1 text-red-300">
+                <p role="alert" className="mt-1 text-danger-fg-soft">
                   {shrinkError}
                 </p>
               )}
@@ -185,7 +185,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
         </div>
       )}
 
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-fg-muted">
         {t("notes.noteLabel")}
         <textarea
           ref={textareaRef}
@@ -197,7 +197,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       </label>
 
       {error && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-danger-fg-soft">
           {error}
         </p>
       )}
@@ -212,9 +212,9 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       </div>
 
       {showHistory && (
-        <ul className="divide-y divide-slate-700 rounded border border-slate-700">
+        <ul className="divide-y divide-border rounded border border-border">
           {revisions.length === 0 && (
-            <li className="px-3 py-2 text-sm text-slate-400">{t("notes.noHistory")}</li>
+            <li className="px-3 py-2 text-sm text-fg-subtle">{t("notes.noHistory")}</li>
           )}
           {revisions.map((r, index) => {
             // Spec 0030, Abschnitt 3: `revisions` kommt chronologisch
@@ -231,7 +231,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                     type="button"
                     onClick={() => toggleExpanded(r.id)}
                     aria-expanded={expanded}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-xs text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-xs text-fg-subtle hover:text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
                   >
                     <span className="select-none">{expanded ? "▾" : "▸"}</span>
                     {formatDateTime(r.createdAt, i18n.language)} ·{" "}
@@ -250,10 +250,10 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
                   <div className="px-3 pb-2">
                     {previous === null ? (
                       <div>
-                        <p className="mb-1 text-xs font-semibold text-slate-400">
+                        <p className="mb-1 text-xs font-semibold text-fg-subtle">
                           {t("notes.originalVersion")}
                         </p>
-                        <p className="whitespace-pre-wrap text-slate-300">{r.content}</p>
+                        <p className="whitespace-pre-wrap text-fg-muted">{r.content}</p>
                       </div>
                     ) : (
                       <NoteDiffPreview previousContent={previous.content} newContent={r.content} />

@@ -29,7 +29,7 @@ export function NoteDiffPreview({
   if (isDiffTooLargeToCompute(before, newContent)) {
     const byteLength = (s: string) => new TextEncoder().encode(s).length;
     return (
-      <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+      <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
         {t("confirmDialog.diffTooLargeHint", {
           oldSize: formatBytes(byteLength(before)),
           newSize: formatBytes(byteLength(newContent)),
@@ -41,18 +41,18 @@ export function NoteDiffPreview({
   const lines = shortNoteDiff(previousContent, newContent);
 
   if (lines.length === 0) {
-    return <p className="text-xs text-slate-400">{t("confirmDialog.noContentChange")}</p>;
+    return <p className="text-xs text-fg-subtle">{t("confirmDialog.noContentChange")}</p>;
   }
 
   return (
-    <div className="space-y-0.5 border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono text-xs">
+    <div className="space-y-0.5 border border-border bg-surface-sunken px-2 py-1.5 font-mono text-xs">
       {lines.map((line, i) => (
         <div
           key={i}
           className={`flex ${
             line.type === "added"
-              ? "text-emerald-400"
-              : "text-red-400 line-through decoration-red-500/60"
+              ? "text-success-fg"
+              : "text-danger-fg line-through decoration-danger-strong/60"
           }`}
         >
           <span className="mr-2 w-8 shrink-0 select-none text-right opacity-50">

@@ -1181,7 +1181,7 @@ describe("AiProviderSettings automatic model discovery on blur (Spec 0025, Absch
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/Zugangsdaten abgelehnt/);
-    expect(alert.className).toMatch(/text-red-400/);
+    expect(alert.className).toMatch(/text-danger-fg/);
     expect(
       screen.queryByText(/Modelle konnten nicht automatisch geladen werden/),
     ).not.toBeInTheDocument();

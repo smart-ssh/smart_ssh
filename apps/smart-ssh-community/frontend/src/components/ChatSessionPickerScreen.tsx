@@ -83,10 +83,10 @@ export function ChatSessionPickerScreen({
       initialFocusRef={newConversationRef}
       actions={<Button onClick={onCancel}>{t("chatSessionPicker.cancel")}</Button>}
     >
-      <p className="mb-4 text-sm text-slate-400">{t("chatSessionPicker.subtitle")}</p>
+      <p className="mb-4 text-sm text-fg-subtle">{t("chatSessionPicker.subtitle")}</p>
 
       {error && (
-        <p role="alert" className="mb-3 text-sm text-red-400">
+        <p role="alert" className="mb-3 text-sm text-danger-fg">
           {error}
         </p>
       )}
@@ -95,17 +95,17 @@ export function ChatSessionPickerScreen({
         {t("chatSessionPicker.newConversation")}
       </Button>
 
-      <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
+      <p className="mb-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
         {t("chatSessionPicker.pastSessions")}
       </p>
-      <ul className="max-h-72 narrow:max-h-none divide-y divide-slate-700 overflow-y-auto rounded border border-slate-700">
+      <ul className="max-h-72 narrow:max-h-none divide-y divide-border overflow-y-auto rounded border border-border">
         {sessions.map((session) => (
           <li key={session.sessionId} className="flex items-center gap-2 px-3 py-2">
             <button
               type="button"
               onClick={() => onResume(session.sessionId)}
               disabled={busySessionId === session.sessionId}
-              className="min-w-0 flex-1 rounded text-left narrow:min-h-11 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 rounded text-left narrow:min-h-11 focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:outline-none disabled:opacity-50"
             >
               {renamingId === session.sessionId ? (
                 <input
@@ -126,14 +126,14 @@ export function ChatSessionPickerScreen({
                       setRenamingId(null);
                     }
                   }}
-                  className="w-full rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 text-sm text-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none"
+                  className="w-full rounded border border-border-strong bg-surface px-1.5 py-0.5 text-sm text-fg focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:outline-none"
                 />
               ) : (
-                <p className="truncate text-sm text-slate-100" title={session.title ?? undefined}>
+                <p className="truncate text-sm text-fg" title={session.title ?? undefined}>
                   {session.title ?? t("chatSessionPicker.untitled")}
                 </p>
               )}
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-fg-subtle">
                 {formatDateTime(session.startedAt, i18n.language)} ·{" "}
                 {t("chatSessionPicker.messageCount", { count: session.messageCount })}
               </p>
