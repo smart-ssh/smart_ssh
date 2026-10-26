@@ -136,25 +136,26 @@ direkt gebraucht") nicht offensichtlich erfüllt, steht hier mit Grund:
 | `event_emitter.rs` | Trägt `impl EventEmitter for TauriEventEmitter` — ein Newtype um `tauri::AppHandle`, nötig weil die Orphan-Rule `impl EventEmitter for tauri::AppHandle` in `app-logic` verbietet (weder Trait noch Typ sind dort definiert). |
 | `test_support.rs`s `MockAiProvider` (die undifferenzierte Variante) | Nur von `commands::ai_providers`s eigenem Test gebraucht, kein Cross-Crate-Bedarf — bleibt deshalb lokal statt hinter `test-support`. |
 
-Weitere Module (`test_support.rs`, die Testhilfen, die bewusst nicht hinter `test-support` liegen, s. o.), die ohne eigenes `tauri::` auskommen oder nur an `Wiring`/
+Weitere Module, die ohne eigenes `tauri::` auskommen oder nur an `Wiring`/
 dem Startablauf hängen, bleiben aus dem jeweils genannten Grund hier:
 
 | Modul | Grund |
 |---|---|
 | `chat_content.rs`, `db_extensions.rs` | Wenden die Erweiterungen aus `Wiring` an (Spec 0038 Abschnitt 2a), aufgerufen aus dem Start-/Entsperrablauf in `app-shell`. |
-| `services.rs` | Startet/stoppt die Hintergrunddienste aus `Wiring` je Entsperrung; nimmt dafür `AppHandle`. |
 | `edit_copies.rs`, `file_clipboard.rs` | Ablage und Aufräumen lokaler Dateien des Dateibrowsers (Spec 0054), vom Command-Layer und vom Start-/Beenden-Ablauf benutzt. |
 | `file_ops.rs` | Laufende Datei-Operationen des erhöhten Kanals; hängt an `ElevatedSftpRegistry` (s. o.) und bleibt deshalb bei ihr. |
 | `startup_gate.rs` | Torliste vor dem `generate_handler!`-Verteiler (Spec 0101 A16); selbst Tauri-frei, gehört zum Tor, das die Verdrahtung einhängt. |
 | `startup_prompt.rs` | Zuordnung Fall → Dialog für die nativen Startdialoge (Spec 0101 A3/A5), arbeitet mit dem nativen Fehlerdialog zusammen. |
-| `runtime_assumptions.rs` | Test der Tauri-Async-Runtime-Annahme (Spec 0101 §2 Frage 2); braucht `tauri::async_runtime`. |
 
 Alle übrigen Module in `app-shell` erfüllen die Regel direkt —
 `tauri::`/`tauri_plugin_*::`/`AppHandle`/`#[tauri::command]` im eigenen
-Code, oder (`startup_dialog.rs`) das Paket `rfd`: `android_service`,
+Code, oder (bei `startup_dialog`) das Paket `rfd`: `android_service`,
 `auto_reconnect`, `chat_retention`, `commands`/`commands/*`,
 `first_run_notice`, `lib.rs`, `local_file`, `local_server`, `mcp_backend`,
-`mcp_settings`, `risk_second_opinion`, `settings_store`, `single_instance`,
+`mcp_settings`, `risk_second_opinion`, `runtime_assumptions` (Test der
+Tauri-Async-Runtime-Annahme, Spec 0101 §2 Frage 2), `services` (startet/stoppt
+die Hintergrunddienste aus `Wiring` je Entsperrung), `settings_store`,
+`single_instance`,
 `speech_models`, `ssh_config_apply`/`ssh_config_export`, `startup_dialog`,
 `startup_gate_wiring`, `ui_language`, `voice_input`, `window_prompt`,
 `wiring`.
