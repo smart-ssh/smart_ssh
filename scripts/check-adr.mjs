@@ -107,7 +107,7 @@ export function findAdrProblems(files, index) {
 function readDir(dir, indexPath) {
   const files = new Map();
   for (const name of fs.readdirSync(dir)) {
-    if (name.endsWith(".md") && name !== "INDEX.md" && path.resolve(dir, name) !== path.resolve(indexPath)) files.set(name, fs.readFileSync(path.join(dir, name), "utf8"));
+    if (name.endsWith(".md") && name !== "INDEX.md" && path.resolve(dir, name) !== path.resolve(indexPath)) files.set(name, fs.readFileSync(path.join(dir, name), "utf8").replace(/\r\n/g, "\n"));
   }
   return files;
 }
@@ -117,7 +117,7 @@ export function checkAdr({ dir = path.join(REPO_ROOT, "docs", "adr"), index, wri
   const indexPath = index ?? path.join(dir, "INDEX.md");
   const files = readDir(dir, indexPath);
   if (writeIndex) fs.writeFileSync(indexPath, buildIndex(files));
-  const current = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, "utf8") : null;
+  const current = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, "utf8").replace(/\r\n/g, "\n") : null;
   return findAdrProblems(files, current);
 }
 
