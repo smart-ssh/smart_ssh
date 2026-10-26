@@ -360,12 +360,12 @@ function decisionBadge(
   decision: Decision,
 ): { text: string; className: string } {
   if (decision === "AutoExec") {
-    return { text: t("actionCard.autoExecuted"), className: "bg-emerald-900 text-emerald-300" };
+    return { text: t("actionCard.autoExecuted"), className: "bg-success-subtle-hover text-success-fg-soft" };
   }
   if ("Confirm" in decision) {
-    return { text: t("actionCard.confirmationNeeded"), className: "bg-amber-900 text-amber-300" };
+    return { text: t("actionCard.confirmationNeeded"), className: "bg-warning-subtle-hover text-warning-fg-soft" };
   }
-  return { text: t("actionCard.blocked"), className: "bg-red-900 text-red-300" };
+  return { text: t("actionCard.blocked"), className: "bg-danger-subtle-hover text-danger-fg-soft" };
 }
 
 /** Ampel-Kartenrahmen passend zur `Decision` (Spec 0009: Allow/Confirm/Deny
@@ -373,9 +373,9 @@ function decisionBadge(
  * ÜBERALL GLEICH CODIERT": derselbe Statuscode gilt für Kartenrahmen,
  * Badge und Dot durchgängig, nicht nur für die Badge wie zuvor. */
 function decisionCardTone(decision: Decision): string {
-  if (decision === "AutoExec") return "border-emerald-700/40 bg-emerald-950/20";
-  if ("Confirm" in decision) return "border-amber-700/45 bg-amber-950/15";
-  return "border-red-700/45 bg-red-950/15";
+  if (decision === "AutoExec") return "border-success-border-strong/40 bg-success-subtle/20";
+  if ("Confirm" in decision) return "border-warning-border-strong/45 bg-warning-subtle/15";
+  return "border-danger-border-strong/45 bg-danger-subtle/15";
 }
 
 let nextId = 0;
@@ -1446,13 +1446,13 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       {hasDropHandler && dropOver && (
         <div
           data-testid="chat-drop-highlight"
-          className="pointer-events-none absolute inset-0 z-10 border-2 border-dashed border-indigo-500 bg-indigo-950/30"
+          className="pointer-events-none absolute inset-0 z-10 border-2 border-dashed border-accent-strong bg-accent-subtle/30"
         />
       )}
       {readOnlyHint === undefined && (
-        <div className="flex items-center justify-end gap-2 border-b border-slate-700 px-3 py-1.5">
+        <div className="flex items-center justify-end gap-2 border-b border-border px-3 py-1.5">
           {newChatError !== null && (
-            <span role="alert" className="flex-1 text-xs text-red-300">
+            <span role="alert" className="flex-1 text-xs text-danger-fg-soft">
               {newChatError}
             </span>
           )}
@@ -1505,7 +1505,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         {retrying ? (
           <output
             data-testid="chat-ai-retrying"
-            className="flex items-center gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200"
+            className="flex items-center gap-2 rounded-lg border border-warning-border-strong/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
           >
             <span className="flex-1">
               {t("chat.aiRetrying", {
@@ -1523,9 +1523,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           (!aiWait.gotContent || waitNow - aiWait.since > 10_000) ? (
           <output
             data-testid="chat-ai-waiting"
-            className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300"
+            className="flex items-center gap-2 rounded-lg border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft"
           >
-            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
+            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
             <span className="flex-1">
               {t("chat.aiWaiting", {
                 provider: aiWait.provider,
@@ -1537,8 +1537,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             </Button>
           </output>
         ) : autoContinuing ? (
-          <div className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300">
-            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
+          <div className="flex items-center gap-2 rounded-lg border border-accent-border-strong/50 bg-accent-subtle/40 px-3 py-2 text-xs text-accent-fg-soft">
+            <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
             <span className="flex-1">
               🤖 {t("chat.autoContinuing")}
             </span>
@@ -1548,8 +1548,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           </div>
         ) : (
           sending && (
-            <div className="flex items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2 text-xs text-indigo-300">
-              <span className="inline-block h-2 w-2 animate-ping rounded-full bg-indigo-400" />
+            <div className="flex items-center gap-2 rounded-lg bg-surface-raised/80 px-3 py-2 text-xs text-accent-fg-soft">
+              <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-fg" />
               <span className="flex-1">{t("chat.generating")}</span>
               {/* Spec 0066, §1: bricht den laufenden KI-Request sofort ab. */}
               <Button size="sm" onClick={handleStopAutoContinuation}>
@@ -1576,7 +1576,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           aria-label={t("chat.jumpToLatest")}
           title={t("chat.jumpToLatest")}
           data-testid="chat-jump-to-latest"
-          className={`absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-100 shadow-lg hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400${atBottom ? " invisible" : ""}`}
+          className={`absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-fg shadow-lg hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-fg${atBottom ? " invisible" : ""}`}
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10 4v12M5 11l5 5 5-5" />
@@ -1586,17 +1586,17 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       </div>
 
       {readOnlyHint !== undefined ? (
-        <div className="border-t border-slate-700 bg-slate-800 p-3 text-xs text-slate-400">
+        <div className="border-t border-border bg-surface-raised p-3 text-xs text-fg-subtle">
           {readOnlyHint}
         </div>
       ) : hasActiveProvider === false ? (
-        <div className="border-t border-slate-700 p-4 text-sm text-amber-300">
+        <div className="border-t border-border p-4 text-sm text-warning-fg-soft">
           {t("chat.noActiveProvider")}
         </div>
       ) : (
-        <div className="border-t border-slate-700 bg-slate-800">
+        <div className="border-t border-border bg-surface-raised">
           {composerError !== null && (
-            <p role="alert" className="px-3 pt-2 text-xs text-red-400">
+            <p role="alert" className="px-3 pt-2 text-xs text-danger-fg">
               {composerError}
             </p>
           )}
@@ -1605,19 +1605,19 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
               {attachments.map((a) => (
                 <li
                   key={a.id}
-                  className="flex items-center gap-2 rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-100"
+                  className="flex items-center gap-2 rounded border border-border-strong bg-border px-2 py-1 text-xs text-fg"
                 >
                   <span>
                     {a.name} · {formatBytes(a.size)}
                   </span>
                   {a.unredactedHint && (
-                    <span className="text-amber-300">{t("chat.attachmentUnredacted")}</span>
+                    <span className="text-warning-fg-soft">{t("chat.attachmentUnredacted")}</span>
                   )}
                   <button
                     type="button"
                     aria-label={t("chat.attachmentRemove", { name: a.name })}
                     onClick={() => composerCtx.removeAttachment(a.id)}
-                    className="text-slate-300 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    className="text-fg-muted hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
                   >
                     ×
                   </button>
@@ -1632,7 +1632,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           />
         )}
         <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 p-3 narrow:[&>textarea]:order-first narrow:[&>textarea]:basis-full">
-          <span className="self-start narrow:hidden py-1.5 font-mono text-sm leading-5 text-indigo-500">&gt;</span>
+          <span className="self-start narrow:hidden py-1.5 font-mono text-sm leading-5 text-accent-strong">&gt;</span>
           {/* Spec 0055, Teil 1: Enter sendet, Shift+Enter fügt einen
               Zeilenumbruch ein (s. `handleInputKeyDown`); `rows={1}` +
               `resize-none` + die Höhen-Effekt oben ergeben das
@@ -1647,7 +1647,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             onChange={(e) => handleDraftChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={t("chat.inputPlaceholder")}
-            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-slate-400" : "text-slate-100"} placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
+            className={`max-h-40 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 ${voiceLocked ? "italic text-fg-subtle" : "text-fg"} placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg`}
           />
           {narrow ? (
             composerActions.length > 0 && (
@@ -1661,7 +1661,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                   +
                 </Button>
                 {composerMenuOpen && (
-                  <div className="absolute bottom-full left-0 z-20 mb-1 flex w-56 max-w-[calc(100vw-1.5rem)] flex-col gap-1 rounded border border-slate-700 bg-slate-900 p-2 shadow-lg">
+                  <div className="absolute bottom-full left-0 z-20 mb-1 flex w-56 max-w-[calc(100vw-1.5rem)] flex-col gap-1 rounded border border-border bg-surface p-2 shadow-lg">
                     {composerActions.map((action) => (
                       <Button
                         key={action.id}
@@ -1690,7 +1690,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
                 disabled={action.disabled}
                 onClick={() => invokeComposerAction(action)}
-                className="rounded p-1.5 text-slate-300 hover:bg-slate-700 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+                className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:opacity-50"
               >
                 {action.icon}
               </button>
@@ -1719,8 +1719,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
 }
 
 const RISK_LEVEL_BADGE_CLASS: Record<Exclude<RiskAssessment["serverRisk"], "none">, string> = {
-  yellow: "bg-amber-900 text-amber-300",
-  red: "bg-red-900 text-red-300",
+  yellow: "bg-warning-subtle-hover text-warning-fg-soft",
+  red: "bg-danger-subtle-hover text-danger-fg-soft",
 };
 
 /** Spec 0026, Abschnitt 4: zwei getrennte Badges ("Server"/"Daten"), nur
@@ -1790,7 +1790,7 @@ function RiskBadges({
       {unavailable && (
         <output
           title={t("actionCard.riskSecondOpinionUnavailableHint")}
-          className="font-sans text-xs text-amber-300"
+          className="font-sans text-xs text-warning-fg-soft"
         >
           {t("actionCard.riskSecondOpinionUnavailable")}
         </output>
@@ -1798,9 +1798,9 @@ function RiskBadges({
       {pending && (
         <span
           title={t("actionCard.riskSecondOpinionPending")}
-          className="inline-flex items-center gap-1 text-xs text-slate-400"
+          className="inline-flex items-center gap-1 text-xs text-fg-subtle"
         >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-500" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-fg-faint" />
         </span>
       )}
     </span>
@@ -1817,7 +1817,7 @@ function RiskHintFootnote({ assessment }: { assessment: RiskAssessment | null })
   const { t } = useTranslation();
   if (!assessment) return null;
   if (assessment.serverRisk === "none" && assessment.dataRisk === "none") return null;
-  return <p className="mb-1 text-right text-xs text-slate-400">{t("actionCard.riskHint")}</p>;
+  return <p className="mb-1 text-right text-xs text-fg-subtle">{t("actionCard.riskHint")}</p>;
 }
 
 // Exportiert für Komponententests (Spec 0029, Abschnitt 4: strukturelle
@@ -1875,8 +1875,8 @@ function ErrorCardExtras({
     <div className="mt-2 space-y-2 text-xs">
       {lines.length > 0 && (
         <details data-testid="chat-error-details">
-          <summary className="cursor-pointer select-none text-red-200">{t("chat.errorDetails")}</summary>
-          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-red-950/60 p-2 text-red-200">{text}</pre>
+          <summary className="cursor-pointer select-none text-danger-fg-softer">{t("chat.errorDetails")}</summary>
+          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-danger-subtle/60 p-2 text-danger-fg-softer">{text}</pre>
           <Button size="sm" onClick={copy}>
             {t("about.copyButton")}
           </Button>
@@ -1957,15 +1957,15 @@ export function ChatItemView({
   }
   if (item.type === "user") {
     return (
-      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] break-words border border-indigo-500/60 bg-indigo-700 px-3 py-2 text-sm text-indigo-50">
+      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] break-words border border-accent-strong/60 bg-accent-border-strong px-3 py-2 text-sm text-accent-fg-faintest">
         {item.text}
         {item.attachments && item.attachments.length > 0 && (
-          <p className="mt-1 text-xs text-indigo-200/80">
+          <p className="mt-1 text-xs text-accent-fg-softer/80">
             {t("chat.historyAttached", { files: attachmentLine(t, item.attachments) })}
           </p>
         )}
         {item.queued && (
-          <p className="mt-1 text-xs text-indigo-200/80">⏳ {t("chat.queued")}</p>
+          <p className="mt-1 text-xs text-accent-fg-softer/80">⏳ {t("chat.queued")}</p>
         )}
       </div>
     );
@@ -1983,7 +1983,7 @@ export function ChatItemView({
   }
   if (item.type === "error") {
     return (
-      <div className="border border-red-700/50 bg-red-950 px-3 py-2 text-sm text-red-300">
+      <div className="border border-danger-border-strong/50 bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
         ⚠ {errorCardText(t, item)}
         {(item.details || item.retryable) && (
           <ErrorCardExtras item={item} onRetryTurn={onRetryTurn} retryDisabled={retryDisabled} />
@@ -1993,7 +1993,7 @@ export function ChatItemView({
   }
   if (item.type === "ruleNotice") {
     return (
-      <output className="block border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+      <output className="block border border-border-strong/50 bg-surface-raised px-3 py-2 text-sm text-fg-muted">
         {t("confirmDialog.explain.notice", { reasons: reasonList(t, item.reasons) })}
       </output>
     );
@@ -2002,16 +2002,16 @@ export function ChatItemView({
     // Spec 0021, Abschnitt 4 / ADR 0021: weicher Stopp, kein Fehler — eigener,
     // neutraler Ton statt der roten Fehler-Karte oben.
     return (
-      <div className="border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+      <div className="border border-border-strong/50 bg-surface-raised px-3 py-2 text-sm text-fg-muted">
         {t("actionCard.autoContinuationLimitReached", { limit: item.limit })}
       </div>
     );
   }
   if (item.type === "contextCompacted") {
-    return <div className="px-1 text-xs text-slate-400">{t("chat.contextCompactedNotice")}</div>;
+    return <div className="px-1 text-xs text-fg-subtle">{t("chat.contextCompactedNotice")}</div>;
   }
   if (item.type === "responseCancelled") {
-    return <div className="px-1 text-xs text-slate-400">⏹ {t("chat.responseCancelled")}</div>;
+    return <div className="px-1 text-xs text-fg-subtle">⏹ {t("chat.responseCancelled")}</div>;
   }
   if (item.type === "emptyResponse") {
     // Spec 0080, A3: kein „Weiter"-Knopf (der Fortsetzungstext meint eine
@@ -2020,14 +2020,14 @@ export function ChatItemView({
     // Kürzungs-Karte unten (`AssistantMessageView`, `truncated`) bewusst
     // kein eigenständiges Element mit Aktionen, nur ein Hinweis.
     return (
-      <div className="border border-amber-700/40 bg-slate-800 px-3 py-2 text-sm text-amber-200">
+      <div className="border border-warning-border-strong/40 bg-surface-raised px-3 py-2 text-sm text-warning-fg-softer">
         {t("chat.emptyResponse")}
       </div>
     );
   }
   if (item.type === "refusedResponse") {
     return (
-      <div className="border border-amber-700/40 bg-slate-800 px-3 py-2 text-sm text-amber-200">
+      <div className="border border-warning-border-strong/40 bg-surface-raised px-3 py-2 text-sm text-warning-fg-softer">
         {t("chat.refusedResponse")}
       </div>
     );
@@ -2036,7 +2036,7 @@ export function ChatItemView({
     // Spec 0105 §7: Hinweis, kein Fehler — die Antwort folgt ohne
     // Web-Recherche. Neutraler Ton wie bei "autoContinuationLimitReached".
     return (
-      <div className="border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+      <div className="border border-border-strong/50 bg-surface-raised px-3 py-2 text-sm text-fg-muted">
         {t("chat.webResearchUnavailable")}
       </div>
     );
@@ -2045,7 +2045,7 @@ export function ChatItemView({
     // Spec 0061, Abschnitt 4: rein informativ, kein Button — der Request
     // geht nach `waitSeconds` automatisch raus.
     return (
-      <div className="border border-slate-600/50 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+      <div className="border border-border-strong/50 bg-surface-raised px-3 py-2 text-sm text-fg-muted">
         {t("actionCard.aiBudgetWaiting", { seconds: item.waitSeconds })}
       </div>
     );
@@ -2055,30 +2055,30 @@ export function ChatItemView({
       .filter(Boolean)
       .join("\n");
     return (
-      <div className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs">
+      <div className="rounded border border-border bg-surface px-3 py-2 text-xs">
         <div className="flex items-start justify-between gap-2">
-          <p className="font-mono text-slate-300">$ {item.command}</p>
+          <p className="font-mono text-fg-muted">$ {item.command}</p>
           <TakeIntoNoteButton sessionId={sessionId} content={noteContent} />
         </div>
         {item.cancelled && (
-          <p className="mt-1 font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
+          <p className="mt-1 font-sans text-warning-fg-soft">{t("actionCard.commandCancelledNotice")}</p>
         )}
         {item.truncated && (
-          <p className="mt-1 font-sans text-amber-300">{t("actionCard.commandTruncatedNotice")}</p>
+          <p className="mt-1 font-sans text-warning-fg-soft">{t("actionCard.commandTruncatedNotice")}</p>
         )}
         {item.stdout && (
-          <pre className="mt-1 whitespace-pre-wrap text-slate-400">{item.stdout}</pre>
+          <pre className="mt-1 whitespace-pre-wrap text-fg-subtle">{item.stdout}</pre>
         )}
-        {item.stderr && <pre className="mt-1 whitespace-pre-wrap text-red-400">{item.stderr}</pre>}
+        {item.stderr && <pre className="mt-1 whitespace-pre-wrap text-danger-fg">{item.stderr}</pre>}
         {!item.cancelled && (
-          <p className="mt-1 text-slate-400">exit code: {item.exitCode ?? "—"}</p>
+          <p className="mt-1 text-fg-subtle">exit code: {item.exitCode ?? "—"}</p>
         )}
       </div>
     );
   }
   if (item.type === "historyAttachments") {
     return (
-      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] border border-indigo-500/40 bg-indigo-800/60 px-3 py-1 text-xs text-indigo-100">
+      <div className="ml-auto max-w-[80%] narrow:max-w-[95%] border border-accent-strong/40 bg-accent-border/60 px-3 py-1 text-xs text-accent-fg-faint">
         {t("chat.historyAttached", { files: attachmentLine(t, item.items) })}
       </div>
     );
@@ -2093,7 +2093,7 @@ export function ChatItemView({
   }
   if (item.type === "historyRejected") {
     return (
-      <div className="rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+      <div className="rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
         <p className="font-mono">$ {item.command}</p>
         <p className="mt-1">{item.reason}</p>
       </div>
@@ -2110,10 +2110,10 @@ export function ChatItemView({
   const rejectedByUser = item.responded && item.userDecision === "deny";
   const blockedByFilter = typeof item.decision === "object" && "Deny" in item.decision;
   const badge = rejectedByUser
-    ? { text: t("actionCard.rejected"), className: "bg-red-900 text-red-300" }
+    ? { text: t("actionCard.rejected"), className: "bg-danger-subtle-hover text-danger-fg-soft" }
     : decisionBadge(t, item.decision);
   const cardTone = rejectedByUser
-    ? "border-red-700/45 bg-red-950/15"
+    ? "border-danger-border-strong/45 bg-danger-subtle/15"
     : decisionCardTone(item.decision);
   const needsConfirmation = !item.responded && typeof item.decision === "object" && "Confirm" in item.decision;
 
@@ -2126,11 +2126,11 @@ export function ChatItemView({
        * aber sinngemäß vor die Risiko-Badges ein — der Entscheidungs-Badge
        * bleibt so, wie von der Spec verlangt, das letzte Element. */}
       <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className="font-heading font-semibold tracking-wide text-slate-100">{label}</span>
+        <span className="font-heading font-semibold tracking-wide text-fg">{label}</span>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {item.origin.kind === "mcp" && (
             <span
-              className="font-heading rounded-sm bg-purple-950 px-2 py-0.5 text-xs font-semibold tracking-wide text-purple-300"
+              className="font-heading rounded-sm bg-mcp-subtle px-2 py-0.5 text-xs font-semibold tracking-wide text-mcp-fg"
               title={t("actionCard.mcpOriginHint")}
             >
               {t("actionCard.mcpOrigin", {
@@ -2163,10 +2163,10 @@ export function ChatItemView({
       <RiskHintFootnote assessment={item.riskAssessment} />
       {command && (
         <code
-          className={`block border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs break-words whitespace-pre-wrap ${
+          className={`block border border-border bg-surface-sunken px-2 py-1 font-mono text-xs break-words whitespace-pre-wrap ${
             rejectedByUser || blockedByFilter
-              ? "text-slate-400 line-through decoration-red-500/60"
-              : "text-slate-200"
+              ? "text-fg-subtle line-through decoration-danger-strong/60"
+              : "text-fg-soft"
           }`}
         >
           {command}
@@ -2178,7 +2178,7 @@ export function ChatItemView({
       {item.usesStoredSudoPassword && (
         // Spec 0068, Teil 3: beim Schreiben ist Sudo ein möglicher
         // Fallback nach einem Rechte-Fehler — vorab angekündigt, nie still.
-        <p className="mt-1 text-xs text-amber-300">
+        <p className="mt-1 text-xs text-warning-fg-soft">
           {"WriteRemoteFile" in item.action
             ? t("actionCard.writeMayUseStoredSudoPassword")
             : t("actionCard.usesStoredSudoPassword")}
@@ -2212,7 +2212,7 @@ export function ChatItemView({
         </div>
       )}
       {rejectedByUser ? (
-        <p className="mt-1 text-xs text-red-300">{t("actionCard.rejectedByUser")}</p>
+        <p className="mt-1 text-xs text-danger-fg-soft">{t("actionCard.rejectedByUser")}</p>
       ) : (
         <>
           {/* Unabhängiger Review-Pass (Spec 0024, Abschnitt 5): der stabile
@@ -2223,7 +2223,7 @@ export function ChatItemView({
            * Fällt auf den bisherigen (formatierten) Rohtext zurück, wenn
            * `code` unbekannt/nicht gesetzt ist — keine Regression. */}
           {typeof item.decision === "object" && "Confirm" in item.decision && (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-fg-subtle">
               {(() => {
                 // Issue #693: the injection-suspicion confirmation carries the
                 // checking AI's reason after a fixed marker; shown as plain text.
@@ -2245,7 +2245,7 @@ export function ChatItemView({
             </p>
           )}
           {typeof item.decision === "object" && "Deny" in item.decision && (
-            <p className="mt-1 text-xs text-red-300">
+            <p className="mt-1 text-xs text-danger-fg-soft">
               {translateErrorCode(t, item.decision.Deny.code, formatReason(item.decision.Deny.reason))}
             </p>
           )}
@@ -2319,8 +2319,8 @@ function RunningCommandIndicator({
   };
 
   return (
-    <div className="mt-2 flex items-center gap-2 border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
-      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400" />
+    <div className="mt-2 flex items-center gap-2 border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
+      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-warning-fg" />
       <span className="flex-1">
         {waitingForInput
           ? t("actionCard.waitingForInputHint")
@@ -2372,7 +2372,7 @@ function ConfirmActionForm({
         // accessible name (without it screen readers announce an unnamed
         // text field in the confirmation dialog).
         <label className="flex flex-col gap-1">
-          <span className="font-heading text-xs font-semibold tracking-wide text-slate-400 uppercase">
+          <span className="font-heading text-xs font-semibold tracking-wide text-fg-subtle uppercase">
             {t("confirmDialog.editableCommand")}
           </span>
           <textarea
@@ -2380,7 +2380,7 @@ function ConfirmActionForm({
             value={edited}
             onChange={(e) => setEdited(e.target.value)}
             rows={2}
-            className="w-full border border-amber-700/50 bg-slate-950 px-3 py-2 font-mono text-sm break-all text-slate-100"
+            className="w-full border border-warning-border-strong/50 bg-surface-sunken px-3 py-2 font-mono text-sm break-all text-fg"
           />
         </label>
       )}
@@ -2397,7 +2397,7 @@ function ConfirmActionForm({
         <button
           type="button"
           onClick={handleApprove}
-          className="font-heading bg-emerald-600 px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-emerald-950 hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900"
+          className="font-heading bg-success px-4 py-1.5 narrow:min-h-11 text-xs font-semibold tracking-wide text-success-subtle hover:bg-success-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
         >
           {t("confirmDialog.execute")}
         </button>
@@ -2466,20 +2466,20 @@ function CoverageList({ sessionId, command }: { sessionId: string; command: stri
     };
   }, [sessionId, command]);
   if (failed) {
-    return <div className="text-xs text-slate-400">{t("confirmDialog.explain.loadFailed")}</div>;
+    return <div className="text-xs text-fg-subtle">{t("confirmDialog.explain.loadFailed")}</div>;
   }
   if (!explanation || explanation.segments.length === 0) return null;
   return (
     <div className="space-y-1 text-xs">
-      <div className="font-heading font-semibold tracking-wide text-slate-400 uppercase">
+      <div className="font-heading font-semibold tracking-wide text-fg-subtle uppercase">
         {t("confirmDialog.explain.heading")}
       </div>
       <ul className="space-y-0.5">
         {explanation.segments.map((segment) => (
           <li key={segment.index} className="flex flex-wrap gap-x-2">
-            <code className="font-mono break-all text-slate-200">{segment.text}</code>
+            <code className="font-mono break-all text-fg-soft">{segment.text}</code>
             {segment.state === "covered" && (
-              <span className="text-emerald-300">
+              <span className="text-success-fg-soft">
                 ✓{" "}
                 {segment.rule
                   ? t("confirmDialog.explain.covered", { rule: segment.rule.patternValue })
@@ -2487,10 +2487,10 @@ function CoverageList({ sessionId, command }: { sessionId: string; command: stri
               </span>
             )}
             {segment.state === "needsRule" && (
-              <span className="text-amber-300">{t("confirmDialog.explain.needsRule")}</span>
+              <span className="text-warning-fg-soft">{t("confirmDialog.explain.needsRule")}</span>
             )}
             {segment.state === "blocked" && (
-              <span className="text-amber-300">
+              <span className="text-warning-fg-soft">
                 {t("confirmDialog.explain.blocked", { reasons: reasonList(t, segment.reasons) })}
               </span>
             )}
@@ -2617,7 +2617,7 @@ export function QuickRuleButton({
   return (
     <div
       ref={quickRuleWrapRef}
-      className="relative ml-auto inline-flex border border-indigo-600/50 narrow:static narrow:ml-0 narrow:w-full"
+      className="relative ml-auto inline-flex border border-accent/50 narrow:static narrow:ml-0 narrow:w-full"
     >
       <Button variant="ghost" size="sm" className="rounded-none px-3 narrow:min-h-11 narrow:flex-1" onClick={toggleOpen}>
         {t("confirmDialog.quickRule")}
@@ -2629,16 +2629,16 @@ export function QuickRuleButton({
         onClick={toggleOpen}
         aria-label={t("confirmDialog.quickRuleDropdownAria")}
         aria-expanded={open}
-        className="rounded-none border-l border-indigo-600/40 px-2 font-mono narrow:min-h-11 narrow:min-w-11"
+        className="rounded-none border-l border-accent/40 px-2 font-mono narrow:min-h-11 narrow:min-w-11"
       >
         ▾
       </Button>
       {open && (
-        <div ref={quickRuleMenuRef} style={quickRuleMenuStyle} className="fixed z-10 w-72 space-y-2 border border-indigo-600/35 bg-slate-900 p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:top-auto narrow:bottom-0 narrow:mt-0 narrow:max-h-[70vh] narrow:w-auto narrow:overflow-y-auto narrow:p-3">
-          <div className="font-heading border-b border-slate-800 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
+        <div ref={quickRuleMenuRef} style={quickRuleMenuStyle} className="fixed z-10 w-72 space-y-2 border border-accent/35 bg-surface p-2 shadow-lg narrow:fixed narrow:inset-x-0 narrow:top-auto narrow:bottom-0 narrow:mt-0 narrow:max-h-[70vh] narrow:w-auto narrow:overflow-y-auto narrow:p-3">
+          <div className="font-heading border-b border-surface-raised pb-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
             {t("confirmDialog.newRulePatternHeading")}
           </div>
-          <div className="flex gap-3 text-xs text-slate-300">
+          <div className="flex gap-3 text-xs text-fg-muted">
             <label className="flex items-center gap-1">
               <input
                 type="radio"
@@ -2671,13 +2671,13 @@ export function QuickRuleButton({
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder={t("confirmDialog.tagNamePlaceholder")}
-              className="w-full border border-slate-600 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
+              className="w-full border border-border-strong bg-surface px-2 py-1 font-mono text-xs text-fg"
             />
           )}
-          {loading && <p className="text-xs text-slate-400">{t("confirmDialog.loadingSuggestions")}</p>}
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {loading && <p className="text-xs text-fg-subtle">{t("confirmDialog.loadingSuggestions")}</p>}
+          {error && <p className="text-xs text-danger-fg">{error}</p>}
           {!loading && !error && suggestions.length === 0 && (
-            <p className="text-xs text-slate-400">{t("confirmDialog.noSuggestions")}</p>
+            <p className="text-xs text-fg-subtle">{t("confirmDialog.noSuggestions")}</p>
           )}
           <ul className="space-y-1">
             {suggestions.map((suggestion) => (
@@ -2686,7 +2686,7 @@ export function QuickRuleButton({
                   variant="ghost"
                   size="sm"
                   onClick={() => handlePick(suggestion)}
-                  className="w-full justify-start text-left font-mono break-all text-slate-200 narrow:min-h-11 narrow:h-auto"
+                  className="w-full justify-start text-left font-mono break-all text-fg-soft narrow:min-h-11 narrow:h-auto"
                 >
                   {t(`confirmDialog.quickRuleLabel.${suggestion.kind}`, {
                     names: suggestion.names.join(", "),
@@ -2694,7 +2694,7 @@ export function QuickRuleButton({
                   })}
                 </Button>
                 <p
-                  className={`px-3 pb-1 text-xs ${suggestion.verdict.autoExec ? "text-emerald-300" : "text-amber-300"}`}
+                  className={`px-3 pb-1 text-xs ${suggestion.verdict.autoExec ? "text-success-fg-soft" : "text-warning-fg-soft"}`}
                 >
                   {suggestion.verdict.autoExec
                     ? t("confirmDialog.explain.verdictAuto")
@@ -2722,7 +2722,7 @@ function BinaryFileChangeHint({ oldSize, newContent }: { oldSize: number; newCon
   const { t } = useTranslation();
   const newSize = new TextEncoder().encode(newContent).length;
   return (
-    <p className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-400">
+    <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
       {t("confirmDialog.binaryFileHint", {
         oldSize: formatBytes(oldSize),
         newSize: formatBytes(newSize),
@@ -2740,42 +2740,42 @@ function ActionResultView({
 }) {
   const { t } = useTranslation();
   if (result.kind === "noteUpdate") {
-    return <p className="mt-2 text-xs text-emerald-300">{result.summary}</p>;
+    return <p className="mt-2 text-xs text-success-fg-soft">{result.summary}</p>;
   }
   const truncate = (s: string, max = 2000) =>
     s.length > max ? `${s.slice(0, max)}\n… ${t("chat.outputTruncated")}` : s;
   if (result.kind === "fileRead") {
     return (
-      <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
+      <div className="mt-2 space-y-1 rounded bg-surface-sunken p-2 font-mono text-xs">
         <div className="flex items-start justify-between gap-2 font-sans">
           <TakeIntoNoteButton sessionId={sessionId} content={result.content} />
         </div>
-        <pre className="whitespace-pre-wrap text-slate-300">{truncate(result.content)}</pre>
+        <pre className="whitespace-pre-wrap text-fg-muted">{truncate(result.content)}</pre>
       </div>
     );
   }
   if (result.kind === "fileWrite") {
     return (
-      <div className="mt-2 space-y-1 text-xs text-emerald-300">
+      <div className="mt-2 space-y-1 text-xs text-success-fg-soft">
         <p>✓ {t("chat.fileWritten", { path: result.path })}</p>
-        {result.backupPath && <p className="text-slate-400">Backup: {result.backupPath}</p>}
+        {result.backupPath && <p className="text-fg-subtle">Backup: {result.backupPath}</p>}
         {result.usedSudoPassword && (
-          <p className="text-amber-300">🔑 {t("chat.writtenWithSudoPassword")}</p>
+          <p className="text-warning-fg-soft">🔑 {t("chat.writtenWithSudoPassword")}</p>
         )}
       </div>
     );
   }
   const noteContent = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return (
-    <div className="mt-2 space-y-1 rounded bg-slate-950 p-2 font-mono text-xs">
+    <div className="mt-2 space-y-1 rounded bg-surface-sunken p-2 font-mono text-xs">
       {/* Spec 0027, Abschnitt 4: bei Abbruch statt "exit code: —" ein
        * expliziter Hinweis — ein fehlender Exit-Code allein sähe sonst wie
        * eine Störung statt eines bewussten Nutzer-Abbruchs aus. */}
       {result.cancelled ? (
-        <p className="font-sans text-amber-300">{t("actionCard.commandCancelledNotice")}</p>
+        <p className="font-sans text-warning-fg-soft">{t("actionCard.commandCancelledNotice")}</p>
       ) : null}
       {result.truncated ? (
-        <p className="font-sans text-amber-300">{t("actionCard.commandTruncatedNotice")}</p>
+        <p className="font-sans text-warning-fg-soft">{t("actionCard.commandTruncatedNotice")}</p>
       ) : null}
       {noteContent && (
         <div className="flex items-start justify-between gap-2 font-sans">
@@ -2783,12 +2783,12 @@ function ActionResultView({
         </div>
       )}
       {result.stdout && (
-        <pre className="whitespace-pre-wrap text-slate-300">{truncate(result.stdout)}</pre>
+        <pre className="whitespace-pre-wrap text-fg-muted">{truncate(result.stdout)}</pre>
       )}
       {result.stderr && (
-        <pre className="whitespace-pre-wrap text-red-300">{truncate(result.stderr)}</pre>
+        <pre className="whitespace-pre-wrap text-danger-fg-soft">{truncate(result.stderr)}</pre>
       )}
-      {!result.cancelled && <p className="text-slate-400">exit code: {result.exitCode ?? "—"}</p>}
+      {!result.cancelled && <p className="text-fg-subtle">exit code: {result.exitCode ?? "—"}</p>}
     </div>
   );
 }
@@ -2884,17 +2884,17 @@ function DocumentCard({
   };
 
   return (
-    <div className="rounded-lg border border-indigo-700/60 bg-slate-800/80 p-3.5 text-sm shadow-md">
+    <div className="rounded-lg border border-accent-border-strong/60 bg-surface-raised/80 p-3.5 text-sm shadow-md">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-base">📄</span>
-          <span className="min-w-0 break-words font-semibold text-slate-100">{title}</span>
+          <span className="min-w-0 break-words font-semibold text-fg">{title}</span>
         </div>
-        <span className="rounded bg-indigo-950/80 px-2 py-0.5 text-xs text-indigo-300 border border-indigo-800/50">
+        <span className="rounded bg-accent-subtle/80 px-2 py-0.5 text-xs text-accent-fg-soft border border-accent-border/50">
           {t("chat.documentGenerated")}
         </span>
       </div>
-      <div className="prose prose-sm prose-invert max-w-none rounded bg-slate-950 p-3 prose-pre:bg-slate-900 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+      <div className="prose prose-sm prose-invert max-w-none rounded bg-surface-sunken p-3 prose-pre:bg-surface prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{contentMarkdown}</ReactMarkdown>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 narrow:[&_button]:min-h-11">
@@ -2906,7 +2906,7 @@ function DocumentCard({
         >
           {exporting === "markdown" ? t("common.saving") : t("chat.saveAsMarkdown")}
         </Button>
-        {savedFormat && <span className="text-xs text-emerald-400">✓ {t("chat.exportedAsMarkdown")}</span>}
+        {savedFormat && <span className="text-xs text-success-fg">✓ {t("chat.exportedAsMarkdown")}</span>}
         {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
          * Export — der bestehende Export-Button bleibt unverändert an
          * seinem Platz, die Registry-Aktionen kommen daneben, nicht statt. */}
@@ -2996,8 +2996,8 @@ function AssistantMessageView({
   const forceVisible = exporting !== null || savedFormat !== null || noteState !== "idle";
 
   return (
-    <div className="group max-w-[85%] narrow:max-w-[95%] min-w-0 space-y-2 rounded-lg bg-slate-800 p-3 text-sm text-slate-100 shadow-sm">
-      <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-slate-950 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
+    <div className="group max-w-[85%] narrow:max-w-[95%] min-w-0 space-y-2 rounded-lg bg-surface-raised p-3 text-sm text-fg shadow-sm">
+      <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-surface-sunken prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{text}</ReactMarkdown>
       </div>
       {/* Spec 0080, A3, zweiter Punkt: keine Export-/Notiz-Leiste bei
@@ -3010,12 +3010,12 @@ function AssistantMessageView({
        * oder in eine Notiz übernommen werden könnte. */}
       {text.trim().length > 0 && (
         <div
-          className={`flex flex-wrap items-center gap-2 border-t border-slate-700/60 pt-2 text-xs transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 ${
+          className={`flex flex-wrap items-center gap-2 border-t border-border/60 pt-2 text-xs transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 ${
             forceVisible ? "opacity-100" : "opacity-0"
           }`}
         >
           <TakeIntoNoteButton sessionId={sessionId} content={text} onStateChange={setNoteState} />
-          <span className="text-slate-400">Export:</span>
+          <span className="text-fg-subtle">Export:</span>
           <Button
             size="sm"
             disabled={exporting !== null}
@@ -3023,7 +3023,7 @@ function AssistantMessageView({
           >
             {exporting === "markdown" ? t("common.saving") : `📄 ${t("chat.exportAsMarkdown")}`}
           </Button>
-          {savedFormat && <span className="text-xs text-emerald-400">✓ {t("chat.exportedAsMarkdown")}</span>}
+          {savedFormat && <span className="text-xs text-success-fg">✓ {t("chat.exportedAsMarkdown")}</span>}
         </div>
       )}
       {truncated ? (
@@ -3032,7 +3032,7 @@ function AssistantMessageView({
         // beiläufige Zusatzfunktion, sondern der Grund, warum die Antwort
         // gerade unvollständig endet. Reines UI-Element aus dem `truncated`-
         // Flag, nicht Teil von `text` (nicht fälschbar, s. Feld-Kommentar).
-        <div className="flex flex-wrap items-center gap-2 border-t border-amber-700/40 pt-2 text-xs text-amber-300">
+        <div className="flex flex-wrap items-center gap-2 border-t border-warning-border-strong/40 pt-2 text-xs text-warning-fg-soft">
           <span>✂ {t("chat.responseTruncated")}</span>
           <Button size="sm" onClick={onContinue}>
             {t("chat.continue")}

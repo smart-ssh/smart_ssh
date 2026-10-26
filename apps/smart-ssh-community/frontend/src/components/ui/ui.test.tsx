@@ -24,7 +24,7 @@ describe("Button", () => {
       </Button>,
     );
     const b = screen.getByRole("button", { name: "Delete" });
-    expect(b.className).toContain("text-red-300");
+    expect(b.className).toContain("text-danger-fg-soft");
     expect(b.className).toContain("text-xs");
     fireEvent.click(b);
     expect(onClick).toHaveBeenCalledTimes(1);

@@ -23,7 +23,7 @@ const registerTestSettingsSection = (id: string, label: string) =>
         "div",
         { "data-testid": "ext-section" },
         createElement("p", null, "Extension section content ".repeat(8)),
-        createElement("button", { type: "button", className: "rounded border px-3 py-1 text-slate-100" }, "Extension action"),
+        createElement("button", { type: "button", className: "rounded border px-3 py-1 text-fg" }, "Extension action"),
       ),
   });
 (window as unknown as { __e2eExtensions: unknown }).__e2eExtensions = {

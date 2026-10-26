@@ -72,7 +72,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
   // diesen Dialog für die Test-Verbindung aus seinem eigenen (ausblendbaren)
   // Teilbaum heraus.
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
       {/* A6.3: begründete `jsx-a11y`-Ausnahme, zeilengenau statt global —
        * `role` ist hier zweigabhängig (`alertdialog`/`dialog`, A1) und
        * damit kein String-Literal; die statische Analyse von
@@ -94,7 +94,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
         tabIndex={-1}
         onKeyDown={onKeyDown}
         className={`flex max-h-[85vh] w-full max-w-md flex-col border p-0 shadow-xl narrow:max-h-none narrow:max-w-none narrow:border-0 focus:outline-none ${
-          isMismatch ? "border-red-600 bg-red-950/95" : "border-slate-600 bg-slate-800"
+          isMismatch ? "border-danger bg-danger-subtle/95" : "border-border-strong bg-surface-raised"
         }`}
       >
         {isMismatch ? (
@@ -106,41 +106,41 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
               className="h-3 shrink-0"
               style={{
                 background:
-                  "repeating-linear-gradient(135deg, var(--color-red-600) 0 10px, var(--color-red-950) 10px 20px)",
+                  "repeating-linear-gradient(135deg, var(--color-danger) 0 10px, var(--color-danger-subtle) 10px 20px)",
               }}
             />
             <div className="flex min-h-0 flex-1 flex-col p-6">
               <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="font-mono text-xs tracking-[0.18em] text-red-400 uppercase">
+              <div className="font-mono text-xs tracking-[0.18em] text-danger-fg uppercase">
                 {t("hostKeyDialog.mismatchLabel")}
               </div>
-              <h2 id={headingId} className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-red-100">
+              <h2 id={headingId} className="font-heading mt-1 mb-2 text-2xl leading-tight font-bold text-danger-fg-faint">
                 {t("hostKeyDialog.mismatchHeading")}
               </h2>
-              <p id={descriptionId} className="mb-4 text-sm text-red-200/90">
+              <p id={descriptionId} className="mb-4 text-sm text-danger-fg-softer/90">
                 {t("hostKeyDialog.mismatchBodyBeforeHost")}
                 <strong className="break-all">{event.host}:{event.port}</strong>
                 {t("hostKeyDialog.mismatchBodyAfterHost")}
               </p>
               {event.keyType ? (
-                <p className="mb-4 text-sm text-red-200/90" data-testid="host-key-type">
+                <p className="mb-4 text-sm text-danger-fg-softer/90" data-testid="host-key-type">
                   {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
                 </p>
               ) : null}
-              <div className="mb-4 grid grid-cols-2 gap-px narrow:grid-cols-1 border border-red-700/40 bg-red-700/25">
-                <div className="flex flex-col gap-1 bg-red-950 p-3">
-                  <span className="font-heading text-xs font-semibold tracking-wide text-red-300 uppercase">
+              <div className="mb-4 grid grid-cols-2 gap-px narrow:grid-cols-1 border border-danger-border-strong/40 bg-danger-border-strong/25">
+                <div className="flex flex-col gap-1 bg-danger-subtle p-3">
+                  <span className="font-heading text-xs font-semibold tracking-wide text-danger-fg-soft uppercase">
                     {t("hostKeyDialog.known")}
                   </span>
-                  <span className="font-mono text-xs break-all text-emerald-300">
+                  <span className="font-mono text-xs break-all text-success-fg-soft">
                     {event.expectedFingerprint}
                   </span>
                 </div>
-                <div className="flex flex-col gap-1 bg-red-950 p-3">
-                  <span className="font-heading text-xs font-semibold tracking-wide text-red-300 uppercase">
+                <div className="flex flex-col gap-1 bg-danger-subtle p-3">
+                  <span className="font-heading text-xs font-semibold tracking-wide text-danger-fg-soft uppercase">
                     {t("hostKeyDialog.offeredNow")}
                   </span>
-                  <span className="font-mono text-xs break-all text-red-300">
+                  <span className="font-mono text-xs break-all text-danger-fg-soft">
                     {event.fingerprint}
                   </span>
                 </div>
@@ -148,19 +148,19 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
 
               </div>
 
-              <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-red-700/30 pt-4">
+              <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-danger-border-strong/30 pt-4">
                 <button
                   ref={rejectButtonRef}
                   type="button"
                   onClick={() => decide("reject")}
-                  className="font-heading bg-red-700 px-3 py-2 text-sm font-bold tracking-wide text-red-50 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
+                  className="font-heading bg-danger-border-strong px-3 py-2 text-sm font-bold tracking-wide text-danger-fg-faintest hover:bg-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-danger-subtle"
                 >
                   {t("hostKeyDialog.cancelConnection")}
                 </button>
                 <button
                   type="button"
                   onClick={() => decide("trust")}
-                  className="font-heading border border-ink/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-ink/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
+                  className="font-heading border border-fg-bright/15 px-3 py-2 text-sm font-semibold tracking-wide text-danger-fg-softer hover:bg-fg-bright/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-danger-subtle"
                 >
                   {t("hostKeyDialog.trustAnyway")}
                 </button>
@@ -169,21 +169,21 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
           </>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col p-6">
-            <h2 id={headingId} className="font-heading mb-2 text-lg font-semibold text-slate-100">
+            <h2 id={headingId} className="font-heading mb-2 text-lg font-semibold text-fg">
               {t("hostKeyDialog.unknownHeading")}
             </h2>
             <div className="min-h-0 flex-1 overflow-y-auto">
-            <p id={descriptionId} className="mb-4 text-sm text-slate-300">
+            <p id={descriptionId} className="mb-4 text-sm text-fg-muted">
               {t("hostKeyDialog.unknownBodyBeforeHost")}
               <strong className="break-all">{event.host}:{event.port}</strong>
               {t("hostKeyDialog.unknownBodyAfterHost")}
             </p>
             {event.keyType ? (
-              <p className="mb-2 text-sm text-slate-300" data-testid="host-key-type">
+              <p className="mb-2 text-sm text-fg-muted" data-testid="host-key-type">
                 {t("hostKeyDialog.keyType")}: <span className="font-mono">{event.keyType}</span>
               </p>
             ) : null}
-            <div className="mb-4 border border-slate-700 bg-slate-950 p-2 font-mono text-xs break-all text-slate-300">
+            <div className="mb-4 border border-border bg-surface-sunken p-2 font-mono text-xs break-all text-fg-muted">
               {event.fingerprint}
             </div>
 

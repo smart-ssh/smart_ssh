@@ -134,10 +134,10 @@ export function MasterPasswordSettings() {
   return (
     <section className="space-y-6">
       <div>
-        <h4 className="font-heading mb-1 text-sm font-semibold tracking-wide text-slate-200">
+        <h4 className="font-heading mb-1 text-sm font-semibold tracking-wide text-fg-soft">
           {t("masterPassword.modeHeading")}
         </h4>
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-fg-muted">
           {mode === null
             ? t("common.loading")
             : mode === "password"
@@ -148,7 +148,7 @@ export function MasterPasswordSettings() {
 
       {mode === "keychain" && (
         <form
-          className="space-y-3 border-t border-slate-700 pt-4"
+          className="space-y-3 border-t border-border pt-4"
           onSubmit={(e) => {
             e.preventDefault();
             const chosen = password;
@@ -167,10 +167,10 @@ export function MasterPasswordSettings() {
             ).catch(() => clearSecrets());
           }}
         >
-          <h4 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
+          <h4 className="font-heading text-sm font-semibold tracking-wide text-fg-soft">
             {t("masterPassword.setUpHeading")}
           </h4>
-          <p className="text-sm text-slate-300">{t("masterPassword.setUpIntro")}</p>
+          <p className="text-sm text-fg-muted">{t("masterPassword.setUpIntro")}</p>
           <PasswordField
             label={t("masterPassword.newPasswordLabel")}
             value={password}
@@ -182,14 +182,14 @@ export function MasterPasswordSettings() {
             onChange={setRepeated}
           />
           {password.length > 0 && characterCount(password) < MINIMUM_PASSWORD_LENGTH && (
-            <p role="alert" className="text-sm text-amber-300">
+            <p role="alert" className="text-sm text-warning-fg-soft">
               {t("masterPassword.passwordTooShort", { minimum: MINIMUM_PASSWORD_LENGTH })}
             </p>
           )}
           {repeated.length > 0 && password !== repeated && (
-            <p role="alert" className="text-sm text-amber-300">{t("masterPassword.passwordsDiffer")}</p>
+            <p role="alert" className="text-sm text-warning-fg-soft">{t("masterPassword.passwordsDiffer")}</p>
           )}
-          <label className="flex items-start gap-2 text-sm text-slate-200">
+          <label className="flex items-start gap-2 text-sm text-fg-soft">
             <input
               type="checkbox"
               checked={acknowledged}
@@ -207,7 +207,7 @@ export function MasterPasswordSettings() {
       {mode === "password" && (
         <>
           <form
-            className="space-y-3 border-t border-slate-700 pt-4"
+            className="space-y-3 border-t border-border pt-4"
             onSubmit={(e) => {
               e.preventDefault();
               const currentPassword = current;
@@ -222,7 +222,7 @@ export function MasterPasswordSettings() {
               ).catch(() => clearSecrets());
             }}
           >
-            <h4 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
+            <h4 className="font-heading text-sm font-semibold tracking-wide text-fg-soft">
               {t("masterPassword.changeHeading")}
             </h4>
             <PasswordField
@@ -250,11 +250,11 @@ export function MasterPasswordSettings() {
           </Button>
           </form>
 
-          <div className="space-y-3 border-t border-slate-700 pt-4">
-            <h4 className="font-heading text-sm font-semibold tracking-wide text-slate-200">
+          <div className="space-y-3 border-t border-border pt-4">
+            <h4 className="font-heading text-sm font-semibold tracking-wide text-fg-soft">
               {t("masterPassword.switchHeading")}
             </h4>
-            <p className="text-sm text-slate-300">{t("masterPassword.switchIntro")}</p>
+            <p className="text-sm text-fg-muted">{t("masterPassword.switchIntro")}</p>
             <PasswordField
               label={t("masterPassword.confirmPasswordLabel")}
               value={switchCurrent}
@@ -304,13 +304,13 @@ export function MasterPasswordSettings() {
       {error && (
         <p
           role="alert"
-          className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200"
+          className="rounded border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-softer"
         >
           {error}
         </p>
       )}
       {done && (
-        <p className="rounded border border-emerald-800 bg-emerald-950 px-3 py-2 text-sm text-emerald-200">
+        <p className="rounded border border-success-border bg-success-subtle px-3 py-2 text-sm text-success-fg-softer">
           {done}
         </p>
       )}

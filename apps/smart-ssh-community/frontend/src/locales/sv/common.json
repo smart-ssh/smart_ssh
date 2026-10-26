@@ -606,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Möjligt försök att injicera instruktioner via serverinnehåll upptäcktes – kräver bekräftelse",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Begärt via MCP – kräver alltid bekräftelse",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Använder det sparade sudo-lösenordet – kräver alltid bekräftelse",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Infogar ett sparat hemligt värde före sändning – kräver alltid bekräftelse",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Läser en fil med inloggningsuppgifter (t.ex. SSH-nyckel, .env, /etc/shadow) – kräver alltid bekräftelse",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "En tidigare åtgärd i det här svaret avvisades – kräver bekräftelse",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Startar sftp-server (med sudo: filåtkomst med root-rättigheter) – kräver alltid bekräftelse",
@@ -1442,6 +1443,8 @@
     "import": {
       "title": "Återställ från säkerhetskopia",
       "pickTitle": "Välj en säkerhetskopia",
+      "pickFailed": "Filen kunde inte öppnas från den valda platsen.",
+      "chooseAgain": "Välj fil igen",
       "file": "Fil: {{name}}",
       "kind": "Vad som öppnar den här säkerhetskopian",
       "useCode": "Återställningskod",

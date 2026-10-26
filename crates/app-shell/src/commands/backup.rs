@@ -6,8 +6,7 @@ use tauri::{AppHandle, State};
 
 use app_logic::backup::{
     export_backup, start_import, BackupKey, BackupKeyStatus, BackupOpError, ExportSummary,
-    ImportContext, ImportPreview, ImportStart, ImportSummary, OpenSessions, PendingImport,
-    SnapshotCounts,
+    ImportContext, ImportPreview, ImportStart, ImportSummary, PendingImport, SnapshotCounts,
 };
 use app_logic::error::{CommandError, CommandResult};
 use app_logic::state::AppState;
@@ -114,18 +113,30 @@ pub async fn export_encrypted_backup(
     let Some(path) = rx.await.ok().flatten() else {
         return Ok(None);
     };
-    let path = path.into_path()?;
+    let handle = crate::local_file::LocalFileHandle::from_dialog(path)?;
 
-    let ExportSummary { counts } = export_backup(
-        &state.backup_store,
-        &state.file_host_keys,
-        &path,
-        env!("CARGO_PKG_VERSION"),
-    )
-    .await
-    .map_err(command_error)?;
+    let ExportSummary { counts } = match handle.as_path() {
+        Some(path) => export_backup(
+            &state.backup_store,
+            &state.file_host_keys,
+            path,
+            env!("CARGO_PKG_VERSION"),
+        )
+        .await
+        .map_err(command_error)?,
+        None => {
+            // `content://` target (Android): write and verify in an
+            // app-private directory, then copy through the handle.
+            let dir = crate::edit_copies::picked_root()
+                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .join(uuid::Uuid::new_v4().to_string());
+            let result = export_via_staging(&state, &handle, &app, &dir, &file_name).await;
+            remove_staging(&dir);
+            result?
+        }
+    };
     Ok(Some(BackupExportDto {
-        path: path.to_string_lossy().into_owned(),
+        path: handle.display(),
         servers: counts.servers,
         groups: counts.groups,
         rules: counts.rules,
@@ -136,14 +147,68 @@ pub async fn export_encrypted_backup(
     }))
 }
 
+async fn export_via_staging(
+    state: &AppState,
+    handle: &crate::local_file::LocalFileHandle,
+    app: &AppHandle,
+    dir: &std::path::Path,
+    file_name: &str,
+) -> CommandResult<ExportSummary> {
+    std::fs::create_dir_all(dir).map_err(CommandError::from)?;
+    let staged = dir.join(file_name);
+    let summary = export_backup(
+        &state.backup_store,
+        &state.file_host_keys,
+        &staged,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .await
+    .map_err(command_error)?;
+    let opener = crate::local_file::platform_opener(app);
+    handle.copy_from(opener.as_ref(), &staged).map_err(|err| {
+        tracing::warn!(io_kind = ?err.kind(), "backup file could not be written to the chosen location");
+        command_error(BackupOpError::Write)
+    })?;
+    Ok(summary)
+}
+
 // ---------------------------------------------------------------- import
 
 /// The file chosen in the backend's own dialog (the path never comes from the
 /// frontend) and the validated import waiting for the user's confirmation.
 #[derive(Default)]
 pub struct BackupImportSlot {
-    file: std::sync::Mutex<Option<std::path::PathBuf>>,
+    file: std::sync::Mutex<Option<ChosenFile>>,
     pending: tokio::sync::Mutex<Option<PendingImport>>,
+}
+
+/// The file to import and, when it is an app-private copy of a `content://`
+/// document (Android), the directory holding that copy.
+struct ChosenFile {
+    path: std::path::PathBuf,
+    staging: Option<std::path::PathBuf>,
+}
+
+impl BackupImportSlot {
+    /// Forgets the chosen file and deletes its staged copy, if any (the copy
+    /// holds encrypted credentials and must not outlive the import).
+    fn clear_file(&self) {
+        let taken = self.file.lock().unwrap().take();
+        if let Some(ChosenFile {
+            staging: Some(dir), ..
+        }) = taken
+        {
+            remove_staging(&dir);
+        }
+    }
+}
+
+fn remove_staging(dir: &std::path::Path) {
+    if let Err(err) = std::fs::remove_dir_all(dir) {
+        if err.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(error = %err, "could not remove the staged backup copy");
+        }
+    }
 }
 
 /// I3 numbers, never content.
@@ -214,54 +279,6 @@ fn summary_dto(s: ImportSummary) -> BackupImportSummaryDto {
     }
 }
 
-/// I8: closes the sessions an import replaces, like the close command does.
-struct ShellSessions {
-    app: AppHandle,
-}
-
-#[async_trait::async_trait]
-impl OpenSessions for ShellSessions {
-    fn affected(&self) -> usize {
-        use tauri::Manager;
-        self.app.state::<AppState>().sessions.affected()
-    }
-    async fn close_affected(&self) {
-        use tauri::Manager;
-        let state = self.app.state::<AppState>();
-        let elevated = self
-            .app
-            .state::<crate::elevated_sftp::ElevatedSftpRegistry>();
-        for entry in state.sessions.snapshot() {
-            if entry.server_id.0.is_nil() {
-                continue;
-            }
-            let Some(session) = elevated.remove_session(&state.sessions, entry.session_id) else {
-                continue;
-            };
-            session.auto_reconnect.stop();
-            app_logic::session::reject_pending_confirmation_on_close(
-                entry.session_id,
-                Some(session.as_ref()),
-                &state.mcp.sessions,
-                &state.pending_action_confirmations,
-            );
-            session.transport.mark_closed();
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                session.transport.lock().await.disconnect(),
-            )
-            .await;
-            *session.terminal.lock().unwrap() = None;
-            app_logic::events::emit_connection_status_changed(
-                &crate::event_emitter::TauriEventEmitter(self.app.clone()),
-                entry.session_id,
-                app_logic::events::ConnectionStatus::Disconnected,
-                None,
-            );
-        }
-    }
-}
-
 fn default_safety_dir(app: &AppHandle) -> std::path::PathBuf {
     use tauri::Manager;
     let base = app
@@ -282,22 +299,45 @@ pub async fn pick_backup_import_file(
 ) -> CommandResult<Option<String>> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_title(&title)
-        .add_filter("Smart SSH backup", &["sshbackup"])
-        .pick_file(move |path| {
-            let _ = tx.send(path);
-        });
+    let builder = app.dialog().file().set_title(&title);
+    // Android maps a custom extension to no MIME type, which greys the file
+    // out in the system picker; there the file is validated after picking.
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.add_filter("Smart SSH backup", &["sshbackup"]);
+    builder.pick_file(move |path| {
+        let _ = tx.send(path);
+    });
     let Some(picked) = rx.await.ok().flatten() else {
         return Ok(None);
     };
-    let path = picked.into_path()?;
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    *slot.file.lock().unwrap() = Some(path);
+    let handle = crate::local_file::LocalFileHandle::from_dialog(picked)?;
+    let name = handle.file_name();
+    // A `content://` URI is copied into an app-private directory (removed
+    // after the import or on cancel); a path is used as it is.
+    let chosen = match handle.as_path() {
+        Some(p) => ChosenFile {
+            path: p.to_path_buf(),
+            staging: None,
+        },
+        None => {
+            let dir = crate::edit_copies::picked_root()
+                .ok_or_else(|| CommandError::from("No cache directory available"))?
+                .join(uuid::Uuid::new_v4().to_string());
+            let opener = crate::local_file::platform_opener(&app);
+            match handle.stage_into(opener.as_ref(), &dir) {
+                Ok(path) => ChosenFile {
+                    path,
+                    staging: Some(dir),
+                },
+                Err(err) => {
+                    remove_staging(&dir);
+                    return Err(CommandError::from(err));
+                }
+            }
+        }
+    };
+    slot.clear_file();
+    *slot.file.lock().unwrap() = Some(chosen);
     *slot.pending.lock().await = None;
     Ok(Some(name))
 }
@@ -313,7 +353,7 @@ pub async fn start_backup_import(
     secret: String,
 ) -> CommandResult<BackupImportStartDto> {
     use ssh_manager_core::backup::{BackupSecret, RecoveryCode};
-    let Some(file) = slot.file.lock().unwrap().clone() else {
+    let Some(file) = slot.file.lock().unwrap().as_ref().map(|c| c.path.clone()) else {
         return Err(CommandError::with_code(
             "no backup file chosen",
             "BACKUP_FILE_REQUIRED",
@@ -330,7 +370,7 @@ pub async fn start_backup_import(
         BackupSecret::Passphrase(secret)
     };
     let safety_dir = default_safety_dir(&app);
-    let sessions = ShellSessions { app: app.clone() };
+    let sessions = crate::sessions::AppOpenSessions::new(app.clone());
     let ctx = ImportContext {
         store: &state.backup_store,
         host_keys: &state.file_host_keys,
@@ -344,7 +384,7 @@ pub async fn start_backup_import(
         .map_err(command_error)?
     {
         ImportStart::Imported(summary) => {
-            *slot.file.lock().unwrap() = None;
+            slot.clear_file();
             Ok(BackupImportStartDto {
                 imported: Some(summary_dto(summary)),
                 preview: None,
@@ -383,9 +423,10 @@ pub async fn confirm_backup_import(
             "BACKUP_FAILED",
         ));
     };
-    *slot.file.lock().unwrap() = None;
+    // The pending import holds the decrypted content; the staged file is done.
+    slot.clear_file();
     let safety_dir = default_safety_dir(&app);
-    let sessions = ShellSessions { app: app.clone() };
+    let sessions = crate::sessions::AppOpenSessions::new(app.clone());
     let ctx = ImportContext {
         store: &state.backup_store,
         host_keys: &state.file_host_keys,
@@ -402,6 +443,75 @@ pub async fn confirm_backup_import(
 #[tauri::command]
 pub async fn cancel_backup_import(slot: State<'_, BackupImportSlot>) -> CommandResult<()> {
     *slot.pending.lock().await = None;
-    *slot.file.lock().unwrap() = None;
+    slot.clear_file();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn slot_with(dir: &std::path::Path, staged: bool) -> (BackupImportSlot, std::path::PathBuf) {
+        let file = dir.join("a.sshbackup");
+        std::fs::write(&file, b"x").unwrap();
+        let slot = BackupImportSlot::default();
+        *slot.file.lock().unwrap() = Some(ChosenFile {
+            path: file.clone(),
+            staging: staged.then(|| dir.to_path_buf()),
+        });
+        (slot, file)
+    }
+
+    #[test]
+    fn clearing_removes_the_staged_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("stage");
+        std::fs::create_dir_all(&staging).unwrap();
+        let (slot, file) = slot_with(&staging, true);
+        slot.clear_file();
+        assert!(!file.exists());
+        assert!(!staging.exists());
+        assert!(slot.file.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn clearing_never_deletes_a_picked_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (slot, file) = slot_with(tmp.path(), false);
+        slot.clear_file();
+        assert!(file.exists());
+        assert!(slot.file.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn staging_a_uri_copies_and_clearing_removes_it() {
+        // `content://` handle → private copy → removed with the slot.
+        struct Opener(std::path::PathBuf);
+        impl crate::local_file::UriOpener for Opener {
+            fn open(
+                &self,
+                _uri: &str,
+                _a: crate::local_file::Access,
+            ) -> std::io::Result<std::fs::File> {
+                std::fs::File::open(&self.0)
+            }
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        std::fs::write(&src, b"data").unwrap();
+        let handle = crate::local_file::LocalFileHandle::Uri(
+            "content://x/document/primary%3ADownload%2Fb.sshbackup".into(),
+        );
+        let dir = tmp.path().join("stage");
+        let path = handle.stage_into(&Opener(src), &dir).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"data");
+        assert_eq!(path.file_name().unwrap(), "b.sshbackup");
+        let slot = BackupImportSlot::default();
+        *slot.file.lock().unwrap() = Some(ChosenFile {
+            path,
+            staging: Some(dir.clone()),
+        });
+        slot.clear_file();
+        assert!(!dir.exists());
+    }
 }

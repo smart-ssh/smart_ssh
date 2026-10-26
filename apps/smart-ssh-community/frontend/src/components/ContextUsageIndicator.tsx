@@ -16,7 +16,7 @@ export function ContextUsageIndicator({
       data-testid="context-usage"
       data-near-limit={near ? "true" : "false"}
       title={t("chat.contextUsageTooltip")}
-      className={`px-3 pt-2 text-xs ${near ? "text-amber-300" : "text-slate-400"}`}
+      className={`px-3 pt-2 text-xs ${near ? "text-warning-fg-soft" : "text-fg-subtle"}`}
     >
       {t("chat.contextUsage", {
         used: formatTokensK(inputTokens),

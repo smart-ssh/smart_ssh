@@ -128,8 +128,8 @@ describe("ChatPanel live command output (issue #325)", () => {
 
     const live = await screen.findByTestId("live-command-output");
     const stderr = within(live).getByText("warn");
-    expect(stderr).toHaveClass("text-red-300");
-    expect(within(live).getByText("ok")).toHaveClass("text-slate-300");
+    expect(stderr).toHaveClass("text-danger-fg-soft");
+    expect(within(live).getByText("ok")).toHaveClass("text-fg-muted");
   });
 
   it("shows the size-limit notice in the live view", async () => {

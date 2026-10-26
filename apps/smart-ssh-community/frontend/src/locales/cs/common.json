@@ -606,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Zjištěn možný pokus o vložení pokynů přes obsah serveru – vyžaduje potvrzení",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Vyžádáno přes MCP – vždy vyžaduje potvrzení",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Používá uložené heslo sudo – vždy vyžaduje potvrzení",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Před odesláním vloží uloženou tajnou hodnotu – vždy vyžaduje potvrzení",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Čte soubor s přihlašovacími údaji (např. klíč SSH, .env, /etc/shadow) – vždy vyžaduje potvrzení",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Dřívější akce v této odpovědi byla zamítnuta – vyžaduje potvrzení",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Spouští sftp-server (se sudo: přístup k souborům s právy roota) – vždy vyžaduje potvrzení",
@@ -1458,6 +1459,8 @@
     "import": {
       "title": "Obnovit ze zálohy",
       "pickTitle": "Vyberte soubor zálohy",
+      "pickFailed": "Soubor se nepodařilo otevřít z vybraného umístění.",
+      "chooseAgain": "Vybrat soubor znovu",
       "file": "Soubor: {{name}}",
       "kind": "Čím se záloha otevře",
       "useCode": "Kód pro obnovení",

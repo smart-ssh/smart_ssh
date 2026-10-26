@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./theme/dark.css";
+@import "./theme/light.css";
 @plugin "@tailwindcss/typography";
 
 /* Narrow (phone-like) layout, Spec 0113: below 640 px. Keep in sync with
@@ -101,7 +103,9 @@ body,
   src: url("./assets/fonts/jetbrains-mono-variable.woff2") format("woff2");
 }
 
-/* Design-Tokens aus dem Claude-Design-Entwurf, als Tailwind-v4-Theme-
+/* Colours: see theme/dark.css (values) and THEMING.md. The block below maps
+   the tokens to Tailwind utilities. Original note on the design import:
+   Design-Tokens aus dem Claude-Design-Entwurf, als Tailwind-v4-Theme-
    Erweiterung (CSS-`@theme`, nicht `tailwind.config.*` — dieses Projekt
    nutzt Tailwind v4 über `@tailwindcss/vite`). Bewusst als *Überschreibung*
    der bereits durchgängig verwendeten Tailwind-Paletten (`slate`, `indigo`,
@@ -112,85 +116,102 @@ body,
    Entwurf auf jede bestehende Komponente an, ohne eine einzige Klassen-
    zeichenkette anfassen zu müssen, und ohne das Risiko, beim manuellen
    Durchgehen aller ~15 Komponenten-Dateien eine Stelle zu übersehen. */
-@theme {
+@theme inline {
   --font-sans: "Barlow", system-ui, "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", sans-serif;
   --font-heading: "Barlow Condensed", "Barlow", system-ui, "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK KR", monospace;
 
-  /* slate: dunkles Navy-Grundflächen-/Textsystem (Entwurf: #090c14 Fenster-
-     grund, #0f1420 Oberflächen, #e6e9f2 hellster Text). */
-  --color-slate-950: #090c14;
-  --color-slate-900: #0f1420;
-  --color-slate-800: #131a29;
-  --color-slate-700: #232a3d;
-  --color-slate-600: #3a4257;
-  --color-slate-500: #8a93aa; /* Fließtext-Kontrast >= 4.5:1 (WCAG AA) auf slate-950..700 */
-  --color-slate-400: #9aa3b8;
-  --color-slate-300: #aab1c4;
-  --color-slate-200: #c4cadb;
-  --color-slate-100: #dfe3ee;
-  --color-slate-50: #e6e9f2;
-
-  /* indigo: KI-/Interaktions-Akzent (Entwurf: `C.accent` #6c7cf5 — deckt
-     sich bereits mit dem hier durchgängig für Primäraktionen genutzten
-     `indigo-600`). */
-  --color-indigo-950: #171b3f;
-  --color-indigo-900: #202759;
-  --color-indigo-800: #2b3277;
-  --color-indigo-700: #3b45a8;
-  --color-indigo-600: #6c7cf5;
-  --color-indigo-500: #7f8ef7;
-  --color-indigo-400: #a5b0ff;
-  --color-indigo-300: #b6bfff;
-  --color-indigo-200: #c9d0ff;
-  --color-indigo-100: #dde2ff;
-  --color-indigo-50: #eef0ff;
-
-  /* emerald: ALLOW (Spec 0009). */
-  --color-emerald-950: #06130a;
-  --color-emerald-900: #132015;
-  --color-emerald-800: #1a2e1f;
-  --color-emerald-700: #256b37;
-  --color-emerald-600: #3fb950;
-  --color-emerald-500: #57cf68;
-  --color-emerald-400: #7ddb8a;
-  --color-emerald-300: #8fd79a;
-  --color-emerald-200: #b8ecc0;
-  --color-emerald-100: #ddf5e1;
-
-  /* amber: CONFIRM (Spec 0009). */
-  --color-amber-950: #1f1608;
-  --color-amber-900: #2a2013;
-  --color-amber-800: #4a3818;
-  --color-amber-700: #8a651f;
-  --color-amber-600: #e0a12c;
-  --color-amber-500: #ecb653;
-  --color-amber-400: #f0c46b;
-  --color-amber-300: #f3d187;
-  --color-amber-200: #f8e2b3;
-  --color-amber-100: #fbf0d8;
-
-  /* red: DENY (Spec 0009). */
-  --color-red-950: #170a0b;
-  --color-red-900: #2a1315;
-  --color-red-800: #481d20;
-  --color-red-700: #8a2c2f;
-  --color-red-600: #e5484d;
-  --color-red-500: #f2605f;
-  --color-red-400: #f0918f;
-  --color-red-300: #ff9d9b;
-  --color-red-200: #ffc2c0;
-  --color-red-100: #ffe1e0;
-
-  /* Zweitakzent aus dem Entwurf (Provider-Version-Badge u. ä.), bislang
-     kein eigenes Tailwind-Paletten-Äquivalent im Bestand. */
-  --color-steel-600: #5980a6;
-  --color-steel-400: #9fc0dd;
-
-  /* Issue #804: `ink` is the strongest foreground (white in dark, near-black
-     in light); `red-50` is the light text on solid red surfaces. */
-  --color-ink: #ffffff;
-  --color-red-50: #fef2f2;
+  /* Semantic tokens (values: theme/dark.css) */
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg-faint: var(--fg-faint);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg: var(--fg);
+  --color-fg-strong: var(--fg-strong);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-subtle-hover: var(--accent-subtle-hover);
+  --color-accent-border: var(--accent-border);
+  --color-accent-border-strong: var(--accent-border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-fg-soft: var(--accent-fg-soft);
+  --color-accent-fg-softer: var(--accent-fg-softer);
+  --color-accent-fg-faint: var(--accent-fg-faint);
+  --color-accent-fg-faintest: var(--accent-fg-faintest);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-subtle-hover: var(--danger-subtle-hover);
+  --color-danger-border: var(--danger-border);
+  --color-danger-border-strong: var(--danger-border-strong);
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-fg-soft: var(--danger-fg-soft);
+  --color-danger-fg-softer: var(--danger-fg-softer);
+  --color-danger-fg-faint: var(--danger-fg-faint);
+  --color-danger-fg-faintest: var(--danger-fg-faintest);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-subtle-hover: var(--warning-subtle-hover);
+  --color-warning-border: var(--warning-border);
+  --color-warning-border-strong: var(--warning-border-strong);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-fg-soft: var(--warning-fg-soft);
+  --color-warning-fg-softer: var(--warning-fg-softer);
+  --color-warning-fg-faint: var(--warning-fg-faint);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-hover: var(--success-subtle-hover);
+  --color-success-border: var(--success-border);
+  --color-success-border-strong: var(--success-border-strong);
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-fg: var(--success-fg);
+  --color-success-fg-soft: var(--success-fg-soft);
+  --color-success-fg-softer: var(--success-fg-softer);
+  --color-success-fg-faint: var(--success-fg-faint);
+  --color-info: var(--info);
+  --color-info-fg: var(--info-fg);
+  --color-fg-bright: var(--fg-bright);
+  --color-local-border: var(--local-border);
+  --color-local: var(--local);
+  --color-local-fg: var(--local-fg);
+  --color-on-accent: var(--on-accent);
+  --color-on-solid: var(--on-solid);
+  --color-surface-hover: var(--surface-hover);
+  --color-overlay: var(--overlay);
+  --color-focus: var(--focus);
+  --color-selection: var(--selection);
+  --color-web-border: var(--web-border);
+  --color-web-fg: var(--web-fg);
+  --color-mcp-subtle: var(--mcp-subtle);
+  --color-mcp-fg: var(--mcp-fg);
+  --color-term-bg: var(--term-bg);
+  --color-term-fg: var(--term-fg);
+  --color-term-cursor: var(--term-cursor);
+  --color-term-cursor-accent: var(--term-cursor-accent);
+  --color-term-selection: var(--term-selection);
+  --color-term-ansi-black: var(--term-ansi-black);
+  --color-term-ansi-red: var(--term-ansi-red);
+  --color-term-ansi-green: var(--term-ansi-green);
+  --color-term-ansi-yellow: var(--term-ansi-yellow);
+  --color-term-ansi-blue: var(--term-ansi-blue);
+  --color-term-ansi-magenta: var(--term-ansi-magenta);
+  --color-term-ansi-cyan: var(--term-ansi-cyan);
+  --color-term-ansi-white: var(--term-ansi-white);
+  --color-term-ansi-bright-black: var(--term-ansi-bright-black);
+  --color-term-ansi-bright-red: var(--term-ansi-bright-red);
+  --color-term-ansi-bright-green: var(--term-ansi-bright-green);
+  --color-term-ansi-bright-yellow: var(--term-ansi-bright-yellow);
+  --color-term-ansi-bright-blue: var(--term-ansi-bright-blue);
+  --color-term-ansi-bright-magenta: var(--term-ansi-bright-magenta);
+  --color-term-ansi-bright-cyan: var(--term-ansi-bright-cyan);
+  --color-term-ansi-bright-white: var(--term-ansi-bright-white);
 
   /* Der Entwurf ist fast durchgehend eckig — "Cards, figures and buttons
      framed as blueprint objects: square-cornered" (s. Industry-
@@ -203,119 +224,39 @@ body,
   --radius-xl: 3px;
 }
 
-/* Issue #804: light appearance. Same variable names as the dark scale above,
-   inverted: the "950..700" steps are the light surfaces, "50..500" the dark
-   foregrounds, the solid "600" steps stay mid-strong so the existing
-   `bg-x-600 text-slate-950` pairings keep their contrast. Selected by
-   `html[data-theme="light"]` (set before the first paint, see
-   `public/theme-init.js` and `src/theme.ts`); dark stays the default.
-   Contrast of the text pairings is checked in `themeContrast.test.ts`. */
-html[data-theme="light"] {
-  --color-slate-950: #f4f6fa;
-  --color-slate-900: #ffffff;
-  --color-slate-800: #eceff6;
-  --color-slate-700: #d9deea;
-  --color-slate-600: #b7bfd0;
-  --color-slate-500: #566079;
-  --color-slate-400: #4a5368;
-  --color-slate-300: #3d455a;
-  --color-slate-200: #2c3346;
-  --color-slate-100: #1c2233;
-  --color-slate-50: #0f1420;
-
-  --color-indigo-950: #eceeff;
-  --color-indigo-900: #e0e4ff;
-  --color-indigo-800: #cdd3ff;
-  --color-indigo-700: #aeb8fb;
-  --color-indigo-600: #4c5bd4;
-  --color-indigo-500: #3f4cb8;
-  --color-indigo-400: #3541a3;
-  --color-indigo-300: #2b3589;
-  --color-indigo-200: #202767;
-  --color-indigo-100: #171b4a;
-  --color-indigo-50: #10133a;
-
-  --color-emerald-950: #e8f6ea;
-  --color-emerald-900: #d9efdd;
-  --color-emerald-800: #c3e6ca;
-  --color-emerald-700: #8fcf9c;
-  --color-emerald-600: #1e7a35;
-  --color-emerald-500: #19692d;
-  --color-emerald-400: #145a26;
-  --color-emerald-300: #104a1f;
-  --color-emerald-200: #0c3a18;
-  --color-emerald-100: #082b12;
-
-  --color-amber-950: #fdf4e0;
-  --color-amber-900: #faebc8;
-  --color-amber-800: #f4dba0;
-  --color-amber-700: #e0b860;
-  --color-amber-600: #a85f00;
-  --color-amber-500: #8f4f00;
-  --color-amber-400: #7a4300;
-  --color-amber-300: #653800;
-  --color-amber-200: #502d00;
-  --color-amber-100: #3b2100;
-
-  --color-red-950: #fdecec;
-  --color-red-900: #fbdcdc;
-  --color-red-800: #f6c4c4;
-  --color-red-700: #e89a9a;
-  --color-red-600: #c62f34;
-  --color-red-500: #b3262b;
-  --color-red-400: #9c1f24;
-  --color-red-300: #861a1f;
-  --color-red-200: #6b1519;
-  --color-red-100: #4f1012;
-  --color-red-50: #330a0c;
-
-  --color-steel-600: #3d6486;
-  --color-steel-400: #2f5675;
-
-  --color-ink: #0f1420;
-
-  /* Accent hues used outside the main scales (web activity, MCP badges). */
-  --color-sky-300: #0b5d86;
-  --color-sky-800: #7cb7d6;
-  --color-fuchsia-300: #8a1f8a;
-  --color-fuchsia-500: #a43aa4;
-  --color-fuchsia-900: #d9a3d9;
-  --color-purple-300: #5b2a9a;
-  --color-purple-950: #efe6fb;
-}
-
-/* `prose-invert` ships fixed light-on-dark colours; in the light appearance
-   map the typography colours to the theme tokens instead. */
-html[data-theme="light"] .prose-invert {
-  --tw-prose-body: var(--color-slate-200);
-  --tw-prose-headings: var(--color-slate-50);
-  --tw-prose-lead: var(--color-slate-300);
-  --tw-prose-links: var(--color-indigo-400);
-  --tw-prose-bold: var(--color-slate-50);
-  --tw-prose-counters: var(--color-slate-400);
-  --tw-prose-bullets: var(--color-slate-500);
-  --tw-prose-hr: var(--color-slate-600);
-  --tw-prose-quotes: var(--color-slate-100);
-  --tw-prose-quote-borders: var(--color-slate-600);
-  --tw-prose-captions: var(--color-slate-400);
-  --tw-prose-kbd: var(--color-slate-50);
-  --tw-prose-code: var(--color-slate-50);
-  --tw-prose-pre-code: var(--color-slate-200);
-  --tw-prose-pre-bg: var(--color-slate-800);
-  --tw-prose-th-borders: var(--color-slate-600);
-  --tw-prose-td-borders: var(--color-slate-700);
-}
-
-/* Native scrollbars and form controls follow the appearance; the page
-   background is set before React renders (no flash on the startup screens). */
+/* Issue #804: the page ground is set on <html> so the startup screens and
+   overscroll areas already show the theme; native scrollbars and form
+   controls follow the appearance. */
 html {
-  background-color: var(--color-slate-950);
+  background-color: var(--surface-sunken);
 }
 html[data-theme="light"] {
   color-scheme: light;
 }
 html[data-theme="dark"] {
   color-scheme: dark;
+}
+
+/* `prose-invert` ships fixed light-on-dark colours; in the light theme the
+   typography colours come from the theme tokens instead. */
+html[data-theme="light"] .prose-invert {
+  --tw-prose-body: var(--fg-soft);
+  --tw-prose-headings: var(--fg-strong);
+  --tw-prose-lead: var(--fg-muted);
+  --tw-prose-links: var(--accent-fg);
+  --tw-prose-bold: var(--fg-strong);
+  --tw-prose-counters: var(--fg-subtle);
+  --tw-prose-bullets: var(--fg-faint);
+  --tw-prose-hr: var(--border-strong);
+  --tw-prose-quotes: var(--fg);
+  --tw-prose-quote-borders: var(--border-strong);
+  --tw-prose-captions: var(--fg-subtle);
+  --tw-prose-kbd: var(--fg-strong);
+  --tw-prose-code: var(--fg-strong);
+  --tw-prose-pre-code: var(--fg-soft);
+  --tw-prose-pre-bg: var(--surface-raised);
+  --tw-prose-th-borders: var(--border-strong);
+  --tw-prose-td-borders: var(--border);
 }
 
 /* Spec 0014/0049: `tauri-plugin-decoration`s eigene Fenster-Controls
@@ -347,7 +288,7 @@ html[data-theme="dark"] {
    HELLE native Titelleiste gedacht. Auf HELL schaltet das Plugin nur
    über `@media (prefers-color-scheme: dark)` um (dann `#f5f5f5` +
    `rgba(255, 255, 255, 0.1)`) — das spiegelt aber die **OS-Einstellung**
-   wider, nicht unser eigenes, fest dunkles App-Theme (`--color-slate-950`
+   wider, nicht unser eigenes, fest dunkles App-Theme (`--color-surface-sunken`
    u. a., s. `@theme` oben). Bei einem Windows-System im hellen Modus
    (Standard bei vielen Installationen) rendert das Plugin also
    dunkelgraue Icons auf unserer fast schwarzen Titelleiste — exakt das
@@ -365,31 +306,16 @@ html[data-theme="dark"] {
    bereits über CSS-Variablen (s. `--decoration-tb-actions-icon(-active)?-
    bg`), die hier einfach auf denselben hellen Kontrast gesetzt werden. */
 [data-tauri-plugin-decoration-root] [data-tauri-decoration-control] {
-  color: #f5f5f5 !important;
+  color: var(--decoration-fg) !important;
 }
 [data-tauri-plugin-decoration-root] [data-tauri-decoration-control]:hover,
 [data-tauri-plugin-decoration-root]
   [data-tauri-decoration-control][data-tauri-decoration-hover] {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: var(--decoration-hover-bg) !important;
 }
 :root {
-  --decoration-tb-actions-icon-bg: rgba(255, 255, 255, 0.18);
-  --decoration-tb-actions-icon-active-bg: rgba(255, 255, 255, 0.32);
-}
-
-/* Light appearance: the plugin's own light scheme (dark icons, dark hover). */
-html[data-theme="light"] [data-tauri-plugin-decoration-root] [data-tauri-decoration-control] {
-  color: #202020 !important;
-}
-html[data-theme="light"] [data-tauri-plugin-decoration-root] [data-tauri-decoration-control]:hover,
-html[data-theme="light"]
-  [data-tauri-plugin-decoration-root]
-  [data-tauri-decoration-control][data-tauri-decoration-hover] {
-  background: rgba(0, 0, 0, 0.1) !important;
-}
-html[data-theme="light"] {
-  --decoration-tb-actions-icon-bg: rgba(0, 0, 0, 0.1);
-  --decoration-tb-actions-icon-active-bg: rgba(0, 0, 0, 0.2);
+  --decoration-tb-actions-icon-bg: var(--decoration-icon-bg);
+  --decoration-tb-actions-icon-active-bg: var(--decoration-icon-active-bg);
 }
 
 /* CJK-Text hat keine Leerzeichen zwischen Wörtern: Zeilen dürfen an

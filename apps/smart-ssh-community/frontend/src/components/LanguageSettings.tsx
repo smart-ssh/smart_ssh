@@ -31,9 +31,9 @@ export function LanguageSettings() {
 
   return (
     <div>
-      {error && <p role="alert" className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="mb-4 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>}
       <section aria-labelledby="appearance-heading" className="mb-6">
-        <p id="appearance-heading" className="mb-2 text-sm font-semibold text-slate-200">
+        <p id="appearance-heading" className="mb-2 text-sm font-semibold text-fg-soft">
           {t("appearance.heading")}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -49,7 +49,7 @@ export function LanguageSettings() {
           ))}
         </div>
       </section>
-      <p id="language-heading" className="mb-2 text-sm font-semibold text-slate-200">
+      <p id="language-heading" className="mb-2 text-sm font-semibold text-fg-soft">
         {t("appearance.language")}
       </p>
       <fieldset aria-labelledby="language-heading" className="m-0 flex min-w-0 flex-wrap gap-2 border-0 p-0">

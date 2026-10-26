@@ -82,6 +82,13 @@ Bedienelemente sind nach WCAG ausgenommen. Die automatischen
 Barrierefreiheits-Scans der Browser-Tests prüfen das ohne Ausnahme für das
 Hauptfenster, jede Einstellungskategorie und die Befehlsbestätigung.
 
+## Farbgebung als austauschbares Theme
+
+Die Oberfläche bezieht jede Farbe aus benannten Rollen (Flächen, Text,
+Linien, Akzent, Gefahr, Warnung, Erfolg, Fokus, Terminal). Die Werte stehen
+an einer Stelle; ein weiteres Erscheinungsbild ersetzt nur diese Werte. Das
+dunkle Erscheinungsbild und seine Kontraste bleiben dabei unverändert.
+
 ## Grenzen
 
 - Es gibt keine automatische Unterscheidung, wann eine Antwort ein Dokument

@@ -28,7 +28,7 @@ import { MAIN_TAB_ENTRIES, type MainTab } from "./navEntries";
 import { useSessionTabs } from "./useSessionTabs";
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
 
 type Tab = MainTab;
 
@@ -203,7 +203,7 @@ function App() {
     // Notizbereich unmarkierbar gemacht. `AppHeader` trägt bereits sein
     // eigenes, korrekt auf die Titelleisten-Drag-Region begrenztes
     // `select-none` (Spec 0014).
-    <div className="flex h-[var(--app-vh,100vh)] flex-col bg-slate-900 text-slate-100 overflow-hidden">
+    <div className="flex h-[var(--app-vh,100vh)] flex-col bg-surface text-fg overflow-hidden">
       <AppHeader>
         {narrow ? (
           <NarrowHeaderNav
@@ -383,9 +383,9 @@ function MainScreen({
     });
   };
   return (
-    <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
+    <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
       {!narrow && (
-      <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+      <header className="flex items-center justify-between border-b border-surface-raised px-6 py-4">
         <div className="flex items-center gap-6">
           <h1 className="font-heading text-xl font-semibold tracking-wide">Smart SSH</h1>
           <nav className="flex gap-1">
@@ -397,8 +397,8 @@ function MainScreen({
                 aria-current={tab === entry.id ? "page" : undefined}
                 className={`${FOCUS_RING} font-heading border px-3 py-1.5 text-sm font-semibold tracking-wide ${
                   tab === entry.id
-                    ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
-                    : "border-transparent text-slate-400 hover:bg-slate-800"
+                    ? "border-accent/55 bg-accent/16 text-accent-fg"
+                    : "border-transparent text-fg-subtle hover:bg-surface-raised"
                 }`}
               >
                 {t(entry.labelKey)}
@@ -413,12 +413,12 @@ function MainScreen({
       {tab === "connect" ? (
         <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-6 py-8 narrow:px-3 narrow:py-4">
           {hasActiveProvider === false && (
-            <p className="rounded border border-amber-800 bg-amber-950 px-4 py-3 text-sm text-amber-200">
+            <p className="rounded border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning-fg-softer">
               {t("mainScreen.noActiveProvider")}{" "}
               <button
                 type="button"
                 onClick={openSettingsFrom}
-                className="rounded underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                className="rounded underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fg-soft"
               >
                 {t("mainScreen.setupProviderNow")}
               </button>
@@ -427,7 +427,7 @@ function MainScreen({
           )}
 
           <section>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-fg-subtle">
               {t("mainScreen.serversHeading")}
             </h2>
             <ServerList

@@ -53,7 +53,7 @@ export function Tabs({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="flex gap-1 border-b border-slate-700"
+      className="flex gap-1 border-b border-border"
     >
       {tabs.map((tab, index) => {
         const selected = tab.id === value;
@@ -68,10 +68,10 @@ export function Tabs({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
-            className={`-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${tabClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+            className={`-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${tabClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
               selected
-                ? "border-indigo-400 text-slate-100"
-                : "border-transparent text-slate-300 hover:text-ink"
+                ? "border-accent-fg text-fg"
+                : "border-transparent text-fg-muted hover:text-fg-bright"
             }`}
           >
             {tab.label}
@@ -79,7 +79,7 @@ export function Tabs({
               <>
                 <span
                   aria-hidden="true"
-                  className="ml-1.5 inline-block h-2 w-2 rounded-full bg-red-400"
+                  className="ml-1.5 inline-block h-2 w-2 rounded-full bg-danger-fg"
                 />
                 {tab.invalidLabel && (
                   <span className="sr-only"> ({tab.invalidLabel})</span>

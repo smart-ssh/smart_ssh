@@ -93,15 +93,15 @@ export function VoiceInputSettings() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-slate-300">
+      <p className="text-sm text-fg-muted">
         {t("voice.settings.description", { source: SPEECH_MODEL_SOURCE })}
       </p>
       {errorKey && (
-        <p role="alert" className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">
+        <p role="alert" className="rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">
           {t(errorKey)}
         </p>
       )}
-      <label className="flex items-center gap-2 text-sm text-slate-300">
+      <label className="flex items-center gap-2 text-sm text-fg-muted">
         <input
           type="checkbox"
           checked={enabled}
@@ -118,7 +118,7 @@ export function VoiceInputSettings() {
       </label>
 
       <fieldset className="space-y-3">
-        <legend className="mb-2 text-sm font-semibold text-slate-200">
+        <legend className="mb-2 text-sm font-semibold text-fg-soft">
           {t("voice.settings.model")}
         </legend>
         {SPEECH_MODELS.map((id) => {
@@ -126,7 +126,7 @@ export function VoiceInputSettings() {
           const downloading = status?.state === "downloading";
           const ready = status?.state === "ready";
           return (
-            <div key={id} className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
+            <div key={id} className="flex flex-wrap items-center gap-3 text-sm text-fg-muted">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -139,7 +139,7 @@ export function VoiceInputSettings() {
                 />
                 {t(`voice.settings.models.${id}`, { size: SPEECH_MODEL_SIZE_MIB[id] })}
               </label>
-              <span aria-live="polite" className="text-slate-400">
+              <span aria-live="polite" className="text-fg-subtle">
                 {statusText(status)}
               </span>
               {downloading ? (
@@ -171,7 +171,7 @@ export function VoiceInputSettings() {
         })}
       </fieldset>
 
-      <label className="flex items-center gap-2 text-sm text-slate-300">
+      <label className="flex items-center gap-2 text-sm text-fg-muted">
         {t("voice.settings.language")}
         <select
           value={language}
@@ -183,7 +183,7 @@ export function VoiceInputSettings() {
               throw err;
             }));
           }}
-          className="rounded border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100"
+          className="rounded border border-border-strong bg-surface-sunken px-2.5 py-1.5 text-sm text-fg"
         >
           <option value="auto">{t("voice.settings.languageAuto")}</option>
           {LANGUAGE_CODES.map((code) => (

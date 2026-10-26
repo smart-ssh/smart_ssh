@@ -100,6 +100,7 @@ pub(crate) use chat_turn::{
 // `app-shell::mcp_backend` ruft dies direkt auf.
 pub use action_exec::handle_mcp_action_proposed;
 pub(crate) use action_exec::state_independent_escalation_code;
+pub(crate) use outgoing::outgoing_scope;
 
 pub use notes::{
     backfill_missing_chat_titles, execute_note_shrink_request, fallback_title_from_message,

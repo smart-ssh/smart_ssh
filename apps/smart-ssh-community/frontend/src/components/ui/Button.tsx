@@ -12,16 +12,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const BASE =
   "inline-flex items-center justify-center gap-1.5 rounded font-semibold transition-colors " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 " +
-  "focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus " +
+  "focus-visible:ring-offset-1 focus-visible:ring-offset-surface " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-indigo-600 text-slate-950 hover:bg-indigo-500",
+  primary: "bg-accent text-on-accent hover:bg-accent-strong",
   secondary:
-    "border border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700",
-  danger: "border border-red-800 bg-red-950 text-red-300 hover:bg-red-900",
-  ghost: "text-indigo-400 hover:bg-slate-800 hover:text-indigo-300",
+    "border border-border-strong bg-surface-raised text-fg hover:bg-surface-hover",
+  danger: "border border-danger-border bg-danger-subtle text-danger-fg-soft hover:bg-danger-subtle-hover",
+  ghost: "text-accent-fg hover:bg-surface-raised hover:text-accent-fg-soft",
 };
 
 const SIZES: Record<ButtonSize, string> = {

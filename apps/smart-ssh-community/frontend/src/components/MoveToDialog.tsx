@@ -35,7 +35,7 @@ export function MoveToDialog({ item, groups, servers, onMove, onClose }: Props) 
     onMove(item, target);
   };
   const optionClass =
-    "flex min-h-11 w-full items-center rounded px-3 py-2 text-left text-sm text-slate-100 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40";
+    "flex min-h-11 w-full items-center rounded px-3 py-2 text-left text-sm text-fg hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:opacity-40";
   const disabledFor = (target: DropTarget) => classifyDrop(item, target, groups, servers) !== "valid";
   return (
     <DialogFrame
@@ -44,7 +44,7 @@ export function MoveToDialog({ item, groups, servers, onMove, onClose }: Props) 
       onClose={onClose}
       actions={<Button onClick={onClose}>{t("common.cancel")}</Button>}
     >
-      <ul className="divide-y divide-slate-800 rounded border border-slate-700">
+      <ul className="divide-y divide-surface-raised rounded border border-border">
         <li>
           <button type="button" className={optionClass} disabled={disabledFor({ kind: "root" })} onClick={() => choose({ kind: "root" })}>
             {t("mainScreen.ungrouped")}

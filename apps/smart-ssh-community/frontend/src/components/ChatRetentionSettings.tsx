@@ -64,7 +64,7 @@ export function ChatRetentionSettings() {
   // SettingsScreen-eigenen Header-Rahmen sähe wie eine doppelte Linie aus.
   return (
     <div>
-      {error && <p role="alert" className="mb-2 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="mb-2 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>}
       {/* Spec-Reviewer-Fund (Spec 0055, Review des Gesamtpakets): die
        * entfernte `<h3>` (Teil 3) war NICHT nur eine doppelte Kategorie-
        * Überschrift, sondern trug auch die einzige Feldbeschriftung ("Chat-
@@ -73,8 +73,8 @@ export function ChatRetentionSettings() {
        * Überschrift wieder eingesetzt (kein erneutes Duplikat des
        * Kategorie-Titels "Sitzungen & Daten", der weiterhin ausschließlich
        * von `SettingsScreen` gerendert wird). */}
-      <p className="mb-2 text-sm text-slate-300">{t("chatRetention.label")}</p>
-      <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+      <p className="mb-2 text-sm text-fg-muted">{t("chatRetention.label")}</p>
+      <label className="mb-2 flex items-center gap-2 text-sm text-fg-muted">
         <input
           type="checkbox"
           checked={days !== null}
@@ -96,7 +96,7 @@ export function ChatRetentionSettings() {
           className={`${FIELD_CONTROL_CLASS} w-24`}
         />
       )}
-      <p className="mt-1 text-xs text-slate-400">{t("chatRetention.hint")}</p>
+      <p className="mt-1 text-xs text-fg-subtle">{t("chatRetention.hint")}</p>
       <AutoReconnectSettings />
     </div>
   );

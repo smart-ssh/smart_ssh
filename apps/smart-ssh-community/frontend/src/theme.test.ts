@@ -14,6 +14,7 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ setTheme: setNativeTheme }),
 }));
 
+import { darkDeclarations, lightDeclarations } from "./themeTokens";
 import {
   THEME_CACHE_KEY,
   applyStoredTheme,
@@ -76,5 +77,19 @@ describe("persistence and application", () => {
     storeData.set("theme", "light");
     await applyStoredTheme();
     expect(getResolvedTheme()).toBe("light");
+  });
+});
+
+describe("theme files", () => {
+  it("light defines every variable that has a literal value in dark (palette, literals, terminal)", () => {
+    // Semantic tokens that only reference a palette primitive follow the palette.
+    const literal = Object.entries(darkDeclarations)
+      .filter(([, v]) => !v.startsWith("var("))
+      .map(([k]) => k);
+    expect(literal.filter((k) => !(k in lightDeclarations))).toEqual([]);
+  });
+
+  it("light does not define variables unknown to dark", () => {
+    expect(Object.keys(lightDeclarations).filter((k) => !(k in darkDeclarations))).toEqual([]);
   });
 });

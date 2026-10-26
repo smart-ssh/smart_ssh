@@ -1,4 +1,4 @@
-// Spiegelt die Rust-DTOs aus `crates/app-shell/src/dto.rs` (Spec 0007,
+// Spiegelt die Rust-DTOs aus `crates/app-logic/src/dto.rs` (Spec 0007,
 // Abschnitt 8.2). Feldnamen camelCase, weil die DTO-Structs dort
 // `#[serde(rename_all = "camelCase")]` tragen; `ProviderType`-Werte
 // bleiben snake_case (exakt wie im SQL-`CHECK`-Constraint), weil dieser

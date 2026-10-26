@@ -144,15 +144,15 @@ export function NoteSuggestionToast() {
       {suggestions.map((suggestion) => (
         <div
           key={suggestion.actionId}
-          className="rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm shadow-lg"
+          className="rounded-lg border border-border bg-surface-raised p-3 text-sm shadow-lg"
         >
           {suggestion.expired ? (
             <div className="flex items-center justify-between gap-2">
               <div className="space-y-1">
-                <p className="font-semibold text-slate-100">
+                <p className="font-semibold text-fg">
                   {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
                 </p>
-                <output className="block text-xs text-slate-300">
+                <output className="block text-xs text-fg-muted">
                   {t("noteSuggestion.expired")}
                 </output>
               </div>
@@ -166,7 +166,7 @@ export function NoteSuggestionToast() {
             </div>
           ) : !suggestion.expanded ? (
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-slate-100">
+              <span className="font-semibold text-fg">
                 {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
               </span>
               <div className="flex shrink-0 gap-1">
@@ -190,7 +190,7 @@ export function NoteSuggestionToast() {
           ) : (
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold text-slate-100">
+                <p className="font-semibold text-fg">
                   {suggestionTitle(t, suggestion.targetKind, suggestion.targetName)}
                 </p>
                 <Button
@@ -205,7 +205,7 @@ export function NoteSuggestionToast() {
               {suggestion.summaryIncomplete && (
                 <p
                   role="alert"
-                  className="rounded border border-amber-600 bg-amber-950 px-2 py-1 text-xs text-amber-200"
+                  className="rounded border border-warning bg-warning-subtle px-2 py-1 text-xs text-warning-fg-softer"
                 >
                   {t("noteSuggestion.summaryIncomplete")}
                 </p>
@@ -217,7 +217,7 @@ export function NoteSuggestionToast() {
                 />
               </div>
               {suggestion.error && (
-                <p role="alert" className="text-xs text-red-300">
+                <p role="alert" className="text-xs text-danger-fg-soft">
                   {suggestion.error}
                 </p>
               )}

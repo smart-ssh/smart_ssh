@@ -606,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "서버 콘텐츠를 통해 지시를 삽입하려는 시도가 의심됩니다 – 확인이 필요합니다",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP를 통해 요청됨 – 항상 확인이 필요합니다",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "저장된 sudo 비밀번호를 사용합니다 – 항상 확인이 필요합니다",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "전송 전에 저장된 비밀 값을 삽입합니다 – 항상 확인이 필요합니다",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "자격 증명이 들어 있는 파일(예: SSH 키, .env, /etc/shadow)을 읽습니다 – 항상 확인이 필요합니다",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "이 응답의 이전 동작이 거부되었습니다 – 확인이 필요합니다",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "sftp-server를 시작합니다(sudo 사용 시: root 권한의 파일 접근) – 항상 확인이 필요합니다",
@@ -1434,6 +1435,8 @@
     "import": {
       "title": "백업에서 복원",
       "pickTitle": "백업 파일 선택",
+      "pickFailed": "선택한 위치에서 파일을 열 수 없습니다.",
+      "chooseAgain": "파일 다시 선택",
       "file": "파일: {{name}}",
       "kind": "이 백업을 여는 방법",
       "useCode": "복구 코드",

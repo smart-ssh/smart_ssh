@@ -237,14 +237,14 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     // Titelleistenhöhe frei (`pt-9` zusätzlich zum `p-6`, also
     // `pt-15`), über dem die Drag-Leiste liegt — die Karte rückt nie
     // darunter.
-    <div className="flex h-screen flex-col items-center overflow-y-auto bg-slate-900 px-6 pb-6 pt-15 text-slate-100 narrow:px-4">
+    <div className="flex h-screen flex-col items-center overflow-y-auto bg-surface px-6 pb-6 pt-15 text-fg narrow:px-4">
       <StartupTitleBarDragStrip />
-      <div className="my-auto w-full max-w-md rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl narrow:p-4">
+      <div className="my-auto w-full max-w-md rounded-lg border border-border bg-surface-raised p-6 shadow-xl narrow:p-4">
         <h1 className="font-heading mb-1 text-xl font-semibold tracking-wide">Smart SSH</h1>
 
         {state === null ? (
           <>
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.stateUnknown")}</p>
+            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.stateUnknown")}</p>
             <Actions>
               <Secondary onClick={retry}>{t("startup.answers.retry")}</Secondary>
               <Secondary onClick={() => void quitApplication()}>
@@ -259,7 +259,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
               void run(() => unlockWithMasterPassword(password));
             }}
           >
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unlockIntro")}</p>
+            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.unlockIntro")}</p>
             <Field
               label={t("startup.passwordLabel")}
               help={
@@ -293,15 +293,15 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
              * bei einer Datei, die sich bloß nicht lesen lässt. Beides
              * entscheidet das Backend. */}
             {state.offersStartOver && (
-              <div className="mt-6 border-t border-slate-700 pt-4">
-                <p className="mb-3 text-sm text-slate-400">{t("startup.wayOutHint")}</p>
+              <div className="mt-6 border-t border-border pt-4">
+                <p className="mb-3 text-sm text-fg-subtle">{t("startup.wayOutHint")}</p>
                 <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
               </div>
             )}
           </form>
         ) : state.screen === "unusableWrapping" ? (
           <>
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unusableWrapping")}</p>
+            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.unusableWrapping")}</p>
             <Actions>
               <StartOver busy={busy} onClick={() => void run(startOverFromUnlockScreen)} t={t} />
               <Secondary onClick={() => void quitApplication()}>
@@ -314,7 +314,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
             {/* A3 *nicht erreichbar* (D1), Klarstellung 10a: Über den Inhalt
              * der Datei ist nichts gesagt — hier gibt es **kein** „Neu
              * anfangen", auch nach beliebig vielen Versuchen nicht. */}
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.unreachableWrapping")}</p>
+            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.unreachableWrapping")}</p>
             <Actions>
               <Button variant="primary" onClick={retry}>
                 {t("startup.answers.retry")}
@@ -326,7 +326,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
           </>
         ) : (
           <>
-            <p className="mb-4 mt-3 text-sm text-slate-300">{t("startup.continuingInTheWindow")}</p>
+            <p className="mb-4 mt-3 text-sm text-fg-muted">{t("startup.continuingInTheWindow")}</p>
             {/* **Diese Maske braucht eigene Knöpfe** (Review-Fund Runde 1,
               * A16/Spec 0059): Wählt der Nutzer im Dialog D1 „Beenden",
               * kommt der Startablauf als Fehler zurück („Der Start wurde
@@ -365,7 +365,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
         {error && (
           <p
             role="alert"
-            className="mt-4 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200"
+            className="mt-4 rounded border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger-fg-softer"
           >
             {error}
           </p>

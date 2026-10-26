@@ -15,10 +15,6 @@ const STORE_KEY = "theme";
 /** Same key as in `public/theme-init.js` (pre-paint script). */
 export const THEME_CACHE_KEY = "smart-ssh.theme";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
-/** Page background per theme, mirrored into `<meta name="theme-color">` so
- * browser-hosted system bars (Android WebView) follow the appearance. Keep in
- * sync with `--color-slate-950` in `index.css`. */
-const THEME_COLOR: Record<ResolvedTheme, string> = { dark: "#090c14", light: "#f4f6fa" };
 
 /** Anything but the three known values (missing, corrupt, hand-edited) is the default. */
 export function parseThemeChoice(value: unknown): ThemeChoice {
@@ -100,7 +96,9 @@ export function applyThemeChoice(choice: ThemeChoice): void {
     meta.name = "theme-color";
     document.head.appendChild(meta);
   }
-  meta.content = THEME_COLOR[resolved];
+  // Page ground of the active theme, so browser-hosted system bars (Android
+  // WebView) follow the appearance; empty where no stylesheet is loaded.
+  meta.content = getComputedStyle(root).getPropertyValue("--surface-sunken").trim();
   syncNativeTheme(choice);
   listeners.forEach((l) => l());
 }
@@ -136,78 +134,3 @@ export async function setThemeChoice(choice: ThemeChoice): Promise<void> {
   await store.set(STORE_KEY, choice);
   await store.save();
 }
-
-/** xterm.js reads no CSS variables, so the terminal gets explicit palettes. */
-export interface TerminalPalette {
-  background: string;
-  foreground: string;
-  cursor: string;
-  cursorAccent: string;
-  selectionBackground: string;
-  black: string;
-  red: string;
-  green: string;
-  yellow: string;
-  blue: string;
-  magenta: string;
-  cyan: string;
-  white: string;
-  brightBlack: string;
-  brightRed: string;
-  brightGreen: string;
-  brightYellow: string;
-  brightBlue: string;
-  brightMagenta: string;
-  brightCyan: string;
-  brightWhite: string;
-}
-
-export const TERMINAL_THEMES: Record<ResolvedTheme, TerminalPalette> = {
-  dark: {
-    background: "#0c1120",
-    foreground: "#dfe3ee",
-    cursor: "#6c7cf5",
-    cursorAccent: "#0c1120",
-    selectionBackground: "rgba(108,124,245,0.35)",
-    black: "#0c1120",
-    red: "#e5484d",
-    green: "#3fb950",
-    yellow: "#e0a12c",
-    blue: "#6c7cf5",
-    magenta: "#a5b0ff",
-    cyan: "#5980a6",
-    white: "#8b93a8",
-    brightBlack: "#4f596e",
-    brightRed: "#f0918f",
-    brightGreen: "#8fd79a",
-    brightYellow: "#f0c46b",
-    brightBlue: "#a5b0ff",
-    brightMagenta: "#c9d0ff",
-    brightCyan: "#9fc0dd",
-    brightWhite: "#e6e9f2",
-  },
-  // Every normal colour reaches >= 4.5:1 on the background (themeContrast.test.ts).
-  light: {
-    background: "#fafbfd",
-    foreground: "#1c2233",
-    cursor: "#4350c8",
-    cursorAccent: "#fafbfd",
-    selectionBackground: "rgba(67,80,200,0.25)",
-    black: "#1c2233",
-    red: "#b3262b",
-    green: "#1a7f37",
-    yellow: "#8a5a00",
-    blue: "#3b45a8",
-    magenta: "#8a2fa0",
-    cyan: "#1f6a80",
-    white: "#4f596e",
-    brightBlack: "#566079",
-    brightRed: "#c0282d",
-    brightGreen: "#1f6f35",
-    brightYellow: "#7a5000",
-    brightBlue: "#2f3aa0",
-    brightMagenta: "#7a2a8f",
-    brightCyan: "#1a6075",
-    brightWhite: "#2c3346",
-  },
-};

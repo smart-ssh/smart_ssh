@@ -606,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Обнаружена возможная попытка внедрить инструкции через содержимое сервера – требуется подтверждение",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Запрошено через MCP – всегда требуется подтверждение",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Использует сохранённый пароль sudo – всегда требуется подтверждение",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Вставляет сохранённое секретное значение перед отправкой – всегда требуется подтверждение",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Читает файл с учётными данными (например, ключ SSH, .env, /etc/shadow) – всегда требуется подтверждение",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Более раннее действие в этом ответе отклонено – требуется подтверждение",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Запускает sftp-server (с sudo: доступ к файлам с правами root) – всегда требуется подтверждение",
@@ -1458,6 +1459,8 @@
     "import": {
       "title": "Восстановление из копии",
       "pickTitle": "Выберите файл копии",
+      "pickFailed": "Не удалось открыть файл из выбранного расположения.",
+      "chooseAgain": "Выбрать файл снова",
       "file": "Файл: {{name}}",
       "kind": "Чем открывается эта копия",
       "useCode": "Код восстановления",

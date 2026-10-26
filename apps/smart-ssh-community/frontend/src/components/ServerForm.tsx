@@ -201,23 +201,23 @@ function IdentityFileFacts({
   const { t } = useTranslation();
   if (emptyPath) return null;
   if (error) {
-    return <p className="mt-1 text-xs text-amber-400">{t("serverForm.identityFile.checkFailed")}</p>;
+    return <p className="mt-1 text-xs text-warning-fg">{t("serverForm.identityFile.checkFailed")}</p>;
   }
   if (facts === null) {
     return loading ? (
-      <p className="mt-1 text-xs text-slate-400">{t("serverForm.identityFile.checking")}</p>
+      <p className="mt-1 text-xs text-fg-subtle">{t("serverForm.identityFile.checking")}</p>
     ) : null;
   }
 
   const problemLine = facts.problem ? (
-    <li className="text-amber-400">
+    <li className="text-warning-fg">
       {/* Issue #667 / Spec 0109 C3: the file is missing on this device. */}
       {facts.problem.code === "KEY_FILE_NOT_FOUND"
         ? `${t("errors.KEY_FILE_NOT_FOUND_ON_DEVICE")}: ${path}`
         : translateErrorCode(t, facts.problem.code, facts.problem.message)}
     </li>
   ) : (
-    <li className="text-emerald-400">{t("serverForm.identityFile.looksValid")}</li>
+    <li className="text-success-fg">{t("serverForm.identityFile.looksValid")}</li>
   );
 
   // B-3 verlangt Existenz, Rechte, Gültigkeit UND Verschlüsselung — auch
@@ -247,15 +247,15 @@ function IdentityFileFacts({
       {problemLine}
       {permissionsAreKnown &&
         (facts.permissionsTooOpen ? (
-          <li className="text-amber-400">{t("serverForm.identityFile.permissionsTooOpen")}</li>
+          <li className="text-warning-fg">{t("serverForm.identityFile.permissionsTooOpen")}</li>
         ) : (
-          <li className="text-slate-400">{t("serverForm.identityFile.permissionsOk")}</li>
+          <li className="text-fg-subtle">{t("serverForm.identityFile.permissionsOk")}</li>
         ))}
       {/* `encrypted` ist nur aussagekräftig, wenn der Schlüssel überhaupt
        * gültig ist (bei einem Problem steht das Feld immer auf `false`,
        * s. `crate::dto::KeyFileFactsDto::from`). */}
       {!facts.problem && (
-        <li className="text-slate-400">
+        <li className="text-fg-subtle">
           {facts.encrypted
             ? t("serverForm.identityFile.encrypted")
             : t("serverForm.identityFile.notEncrypted")}
@@ -1004,10 +1004,10 @@ export function ServerForm({
   if (loaded && isLocal) {
     return (
       <div className="max-w-2xl space-y-6 p-4" onChange={() => setDirty(true)}>
-        <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">{loaded.name}</h2>
-        <p className="text-sm text-slate-400">{t("serverForm.localHint")}</p>
+        <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">{loaded.name}</h2>
+        <p className="text-sm text-fg-subtle">{t("serverForm.localHint")}</p>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger-fg">{error}</p>}
 
         <Tabs
           tabs={tabItems}
@@ -1018,13 +1018,13 @@ export function ServerForm({
         />
 
         <TabPanel idBase={tabsIdBase} id="general" active={activeTab === "general"} className="space-y-6">
-        <div className="block text-sm text-slate-300">
+        <div className="block text-sm text-fg-muted">
           {t("serverForm.tags")}
-          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
+          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-border-strong bg-surface p-1.5">
             {tags.map((tag) => (
               <span
                 key={tag}
-                className="flex items-center gap-1 rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-100"
+                className="flex items-center gap-1 rounded bg-border px-2 py-0.5 text-xs text-fg"
               >
                 {tag}
                 <button
@@ -1033,7 +1033,7 @@ export function ServerForm({
                     setDirty(true);
                     setTags(tags.filter((tagValue) => tagValue !== tag));
                   }}
-                  className="rounded text-slate-400 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -1053,7 +1053,7 @@ export function ServerForm({
               }}
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
-              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
             />
           </div>
           <Button variant="primary" size="sm"
@@ -1069,10 +1069,10 @@ export function ServerForm({
         </TabPanel>
 
         <TabPanel idBase={tabsIdBase} id="notes" active={activeTab === "notes"} className="space-y-6">
-        <div className="block text-sm text-slate-300">
+        <div className="block text-sm text-fg-muted">
           {t("common.notes")}
           {isLocalNoteLarge && (
-            <div className="mt-1 rounded border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+            <div className="mt-1 rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
               <p>{t("serverForm.largeNoteHint")}</p>
               <button
                 type="button"
@@ -1082,7 +1082,7 @@ export function ServerForm({
               >
                 {localShrinkRequesting ? t("serverForm.summarizeRequesting") : t("serverForm.summarizeNow")}
               </button>
-              {localShrinkError && <p className="mt-1 text-red-400">{localShrinkError}</p>}
+              {localShrinkError && <p className="mt-1 text-danger-fg">{localShrinkError}</p>}
             </div>
           )}
           <textarea
@@ -1090,7 +1090,7 @@ export function ServerForm({
             value={localNotes}
             onChange={(e) => setLocalNotes(e.target.value)}
             rows={6}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+            className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 text-sm text-fg"
           />
           <Button variant="primary" size="sm"
             onClick={handleSaveLocalNotes}
@@ -1109,7 +1109,7 @@ export function ServerForm({
 
   return (
     <div className="max-w-2xl space-y-6 p-4">
-      <h2 className="font-heading text-lg font-semibold tracking-wide text-slate-100">
+      <h2 className="font-heading text-lg font-semibold tracking-wide text-fg">
         {isCreate ? t("serverForm.titleNew") : t("serverForm.titleExisting", { name: loaded?.name ?? "" })}
       </h2>
 
@@ -1166,19 +1166,19 @@ export function ServerForm({
           )}
         </Field>
 
-        <div className="block text-sm text-slate-300">
+        <div className="block text-sm text-fg-muted">
           {t("serverForm.tags")}
-          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
+          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-border-strong bg-surface p-1.5">
             {tags.map((tag) => (
               <span
                 key={tag}
-                className="flex items-center gap-1 rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-100"
+                className="flex items-center gap-1 rounded bg-border px-2 py-0.5 text-xs text-fg"
               >
                 {tag}
                 <button
                   type="button"
                   onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="rounded text-slate-400 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -1198,7 +1198,7 @@ export function ServerForm({
               }}
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
-              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="min-w-24 flex-1 rounded bg-transparent px-1 py-0.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
             />
           </div>
         </div>
@@ -1266,13 +1266,13 @@ export function ServerForm({
           )}
         </Field>
 
-        <fieldset className="rounded border border-slate-700 p-3">
-          <legend className="px-1 text-sm text-slate-300">{t("serverForm.authFieldset")}</legend>
+        <fieldset className="rounded border border-border p-3">
+          <legend className="px-1 text-sm text-fg-muted">{t("serverForm.authFieldset")}</legend>
           <select
             aria-label={t("serverForm.authFieldset")}
             value={auth.kind}
             onChange={(e) => setAuth(authStateFromKind(e.target.value as AuthFormState["kind"]))}
-            className="mb-3 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100"
+            className="mb-3 w-full rounded border border-border-strong bg-surface px-2 py-1.5 text-fg"
           >
             <option value="password">{AUTH_KIND_LABELS.password}</option>
             <option value="privateKey">{AUTH_KIND_LABELS.privateKey}</option>
@@ -1294,7 +1294,7 @@ export function ServerForm({
                 label={
                   <>
                     {t("serverForm.password")}{" "}
-                    <span className="text-slate-400">
+                    <span className="text-fg-subtle">
                       {!isCreate && auth.saved
                         ? t("serverForm.unchangedHint")
                         : t("serverForm.passwordOptionalHint")}
@@ -1315,7 +1315,7 @@ export function ServerForm({
                 )}
               </Field>
               {!isCreate && auth.saved && (
-                <label className="flex items-center gap-2 text-sm text-slate-300">
+                <label className="flex items-center gap-2 text-sm text-fg-muted">
                   <input
                     type="checkbox"
                     checked={auth.remove}
@@ -1325,7 +1325,7 @@ export function ServerForm({
                 </label>
               )}
               {!isCreate && !auth.saved && loaded?.authKind === "no_password" && (
-                <p className="text-xs text-slate-400">{t("serverForm.noPasswordSaved")}</p>
+                <p className="text-xs text-fg-subtle">{t("serverForm.noPasswordSaved")}</p>
               )}
             </div>
           )}
@@ -1334,9 +1334,9 @@ export function ServerForm({
             <div className="space-y-2">
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-fg-muted">
                     {t("serverForm.privateKeyLabel")}{" "}
-                    {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
+                    {!isCreate && <span className="text-fg-subtle">{t("serverForm.unchangedHint")}</span>}
                   </span>
                   <Button size="sm"
                     onClick={async () => {
@@ -1355,13 +1355,13 @@ export function ServerForm({
                   value={auth.keyContent}
                   onChange={(e) => setAuth({ ...auth, keyContent: e.target.value })}
                   rows={4}
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
+                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
                 />
                 {/* Spec 0069, Teil C2 (BL-0110): reiner Hinweistext — keine
                  * Prüfung des Inhalts, keine Sperre, kein Einfluss auf
                  * Speichern/Verbinden. RSA-Schlüssel funktionieren
                  * unverändert weiter. */}
-                <p className="mt-1 text-xs text-slate-400">{t("serverForm.ed25519Recommendation")}</p>
+                <p className="mt-1 text-xs text-fg-subtle">{t("serverForm.ed25519Recommendation")}</p>
               </div>
               <Field label={t("serverForm.passphraseOptional")}>
                 {(control) => (
@@ -1379,16 +1379,16 @@ export function ServerForm({
           )}
 
           {auth.kind === "agent" && (
-            <p className="text-sm text-slate-400">{t("serverForm.agentHint")}</p>
+            <p className="text-sm text-fg-subtle">{t("serverForm.agentHint")}</p>
           )}
 
           {auth.kind === "certificate" && (
             <div className="space-y-2">
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-fg-muted">
                     {t("serverForm.certificateLabel")}{" "}
-                    {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
+                    {!isCreate && <span className="text-fg-subtle">{t("serverForm.unchangedHint")}</span>}
                   </span>
                   <Button size="sm"
                     onClick={async () => {
@@ -1407,14 +1407,14 @@ export function ServerForm({
                   value={auth.certContent}
                   onChange={(e) => setAuth({ ...auth, certContent: e.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
+                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
                 />
               </div>
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-fg-muted">
                     {t("serverForm.associatedKey")}{" "}
-                    {!isCreate && <span className="text-slate-400">{t("serverForm.unchangedHint")}</span>}
+                    {!isCreate && <span className="text-fg-subtle">{t("serverForm.unchangedHint")}</span>}
                   </span>
                   <Button size="sm"
                     onClick={async () => {
@@ -1431,7 +1431,7 @@ export function ServerForm({
                   value={auth.keyContent}
                   onChange={(e) => setAuth({ ...auth, keyContent: e.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
+                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
                 />
               </div>
             </div>
@@ -1441,7 +1441,7 @@ export function ServerForm({
             <div className="space-y-2">
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm text-slate-300">{t("serverForm.identityFilePathLabel")}</span>
+                  <span className="text-sm text-fg-muted">{t("serverForm.identityFilePathLabel")}</span>
                   <Button size="sm"
                     onClick={async () => {
                       const path = await pickFilePath(t("serverForm.chooseIdentityFileDialogTitle"));
@@ -1458,7 +1458,7 @@ export function ServerForm({
                   value={auth.path}
                   onChange={(e) => setAuth({ ...auth, path: e.target.value })}
                   placeholder={t("serverForm.identityFilePathPlaceholder")}
-                  className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
+                  className="mt-1 w-full rounded border border-border-strong bg-surface px-2 py-1.5 font-mono text-xs text-fg"
                 />
                 {/* Spec 0076, B-3: Vorab-Befund — hindert das Speichern
                  * nicht, die Datei darf erst später entstehen. */}
@@ -1491,28 +1491,28 @@ export function ServerForm({
         {importPromptOpen && (
           <ModalBackdrop
             layer="app"
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4"
           >
             <dialog
               open
               aria-modal="true"
               aria-labelledby="import-key-title"
-              className="static w-full max-w-md rounded-lg border border-slate-600 bg-slate-900 p-4 text-inherit"
+              className="static w-full max-w-md rounded-lg border border-border-strong bg-surface p-4 text-inherit"
             >
-              <h2 id="import-key-title" className="mb-2 text-base font-semibold text-slate-100">
+              <h2 id="import-key-title" className="mb-2 text-base font-semibold text-fg">
                 {t("serverForm.importKey.title")}
               </h2>
-              <p className="mb-2 font-mono text-xs break-all text-slate-300">
+              <p className="mb-2 font-mono text-xs break-all text-fg-muted">
                 {auth.kind === "identityFile" ? auth.path : ""}
               </p>
-              <ul className="mb-3 space-y-1 text-sm text-slate-300">
+              <ul className="mb-3 space-y-1 text-sm text-fg-muted">
                 <li>{t("serverForm.importKey.importHint")}</li>
                 {platformCapabilities(detectFallbackPlatform()).keyFilePath && (
                   <li>{t("serverForm.importKey.keepHint")}</li>
                 )}
               </ul>
               {importError && (
-                <p role="alert" className="mb-2 text-xs text-red-400">
+                <p role="alert" className="mb-2 text-xs text-danger-fg">
                   {importError}
                 </p>
               )}
@@ -1551,11 +1551,11 @@ export function ServerForm({
          * Entwurf) eine Schlüsseldatei ist — der Knopf wirkt auf den
          * gespeicherten Server, nicht auf den gerade offenen Entwurf. */}
         {!isCreate && loaded && loaded.authKind === "identity_file" && (
-          <fieldset className="rounded border border-slate-700 p-3">
-            <legend className="px-1 text-sm text-slate-300">
+          <fieldset className="rounded border border-border p-3">
+            <legend className="px-1 text-sm text-fg-muted">
               {t("serverForm.convertToKeychain.legend")}
             </legend>
-            <p className="mb-2 text-xs text-slate-400">{t("serverForm.convertToKeychain.hint")}</p>
+            <p className="mb-2 text-xs text-fg-subtle">{t("serverForm.convertToKeychain.hint")}</p>
             {!convertConfirmOpen && (
               <>
                   <Button size="sm"
@@ -1565,7 +1565,7 @@ export function ServerForm({
                     {t("serverForm.convertToKeychain.button")}
                   </Button>
                   {!convertFacts?.validKey && (
-                    <p className="mt-2 text-xs text-amber-400">
+                    <p className="mt-2 text-xs text-warning-fg">
                       {convertFactsError
                         ? t("serverForm.convertToKeychain.checkFailed")
                         : convertFacts
@@ -1580,13 +1580,13 @@ export function ServerForm({
               </>
             )}
             {convertConfirmOpen && (
-              <div className="rounded border border-slate-600 bg-slate-950 p-3 text-sm">
-                <p className="mb-2 text-slate-200">{t("serverForm.convertToKeychain.confirmWhatChanges")}</p>
-                <p className="mb-2 text-slate-400">{t("serverForm.convertToKeychain.confirmWhatStays")}</p>
-                <p className="mb-3 font-mono text-xs break-all text-slate-300">
+              <div className="rounded border border-border-strong bg-surface-sunken p-3 text-sm">
+                <p className="mb-2 text-fg-soft">{t("serverForm.convertToKeychain.confirmWhatChanges")}</p>
+                <p className="mb-2 text-fg-subtle">{t("serverForm.convertToKeychain.confirmWhatStays")}</p>
+                <p className="mb-3 font-mono text-xs break-all text-fg-muted">
                   {loaded.identityFilePath}
                 </p>
-                {convertError && <p className="mb-2 text-xs text-red-400">{convertError}</p>}
+                {convertError && <p className="mb-2 text-xs text-danger-fg">{convertError}</p>}
                 <div className="flex gap-2">
                   <Button size="sm"
                     onClick={() => {
@@ -1610,14 +1610,14 @@ export function ServerForm({
           </fieldset>
         )}
 
-        <fieldset className="rounded border border-slate-700 p-3">
-          <legend className="px-1 text-sm text-slate-300">{t("serverForm.sudoFieldset")}</legend>
-          <p className="mb-2 text-xs text-slate-400">{t("serverForm.sudoHint")}</p>
+        <fieldset className="rounded border border-border p-3">
+          <legend className="px-1 text-sm text-fg-muted">{t("serverForm.sudoFieldset")}</legend>
+          <p className="mb-2 text-xs text-fg-subtle">{t("serverForm.sudoHint")}</p>
           <Field
             label={
               <>
                 {t("serverForm.sudoLabel")}{" "}
-                <span className="text-slate-400">
+                <span className="text-fg-subtle">
                   {sudoPasswordUnknown
                     ? t("serverForm.sudoUnchangedUnknown")
                     : hasSudoPassword
@@ -1669,8 +1669,8 @@ export function ServerForm({
         )}
 
         {!isLocal && (
-          <details className="rounded border border-slate-700 p-3">
-            <summary className="cursor-pointer text-sm text-slate-300">
+          <details className="rounded border border-border p-3">
+            <summary className="cursor-pointer text-sm text-fg-muted">
               {t("serverForm.advanced")}
             </summary>
             <Field
@@ -1707,14 +1707,14 @@ export function ServerForm({
         </TabPanel>
 
         <TabPanel idBase={tabsIdBase} id="security" active={activeTab === "security"} className="space-y-3">
-        <fieldset className="rounded border border-slate-700 p-3">
-          <legend className="px-1 text-sm text-slate-300">
+        <fieldset className="rounded border border-border p-3">
+          <legend className="px-1 text-sm text-fg-muted">
             {t("serverForm.postIngestFieldset")}
           </legend>
-          <p className="mb-2 text-xs text-slate-400">{t("serverForm.postIngestHint")}</p>
+          <p className="mb-2 text-xs text-fg-subtle">{t("serverForm.postIngestHint")}</p>
           <div className="space-y-2">
             {(["strict", "balanced", "standard"] as PostIngestPolicy[]).map((option) => (
-              <label key={option} className="flex items-start gap-2 text-sm text-slate-300">
+              <label key={option} className="flex items-start gap-2 text-sm text-fg-muted">
                 <input
                   type="radio"
                   name="postIngestPolicy"
@@ -1726,7 +1726,7 @@ export function ServerForm({
                 <span>
                   <span className="font-medium">{t(`serverForm.postIngest.${option}.label`)}</span>
                   <br />
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-fg-subtle">
                     {t(`serverForm.postIngest.${option}.description`)}
                   </span>
                 </span>
@@ -1735,11 +1735,11 @@ export function ServerForm({
           </div>
         </fieldset>
 
-        <fieldset className="rounded border border-slate-700 p-3">
-          <legend className="px-1 text-sm text-slate-300">
+        <fieldset className="rounded border border-border p-3">
+          <legend className="px-1 text-sm text-fg-muted">
             {t("serverForm.aiInjectionCheckFieldset")}
           </legend>
-          <label className="flex items-start gap-2 text-sm text-slate-300">
+          <label className="flex items-start gap-2 text-sm text-fg-muted">
             <input
               type="checkbox"
               checked={aiInjectionCheckEnabled}
@@ -1749,7 +1749,7 @@ export function ServerForm({
             />
             <span>{t("serverForm.aiInjectionCheckLabel")}</span>
           </label>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-fg-subtle">
             {secondOpinionAvailable
               ? t("serverForm.aiInjectionCheckHint")
               : t("serverForm.aiInjectionCheckUnavailableHint")}
@@ -1758,15 +1758,15 @@ export function ServerForm({
 
         {!isCreate && !isLocal && storedHostKeys !== null && (
           <section aria-labelledby="stored-host-keys-heading" className="space-y-1">
-            <h3 id="stored-host-keys-heading" className="text-sm font-medium text-slate-300">
+            <h3 id="stored-host-keys-heading" className="text-sm font-medium text-fg-muted">
               {t("serverForm.hostKeys.title")}
             </h3>
             {storedHostKeys.length === 0 ? (
-              <p className="text-xs text-slate-400">{t("serverForm.hostKeys.none")}</p>
+              <p className="text-xs text-fg-subtle">{t("serverForm.hostKeys.none")}</p>
             ) : (
               <ul className="space-y-1">
                 {storedHostKeys.map((k) => (
-                  <li key={`${k.algorithm}:${k.fingerprint}`} className="text-xs text-slate-300">
+                  <li key={`${k.algorithm}:${k.fingerprint}`} className="text-xs text-fg-muted">
                     <span className="font-mono">{k.algorithm}</span>{" "}
                     <span className="select-text break-all font-mono">{k.fingerprint}</span>
                   </li>
@@ -1777,10 +1777,10 @@ export function ServerForm({
         )}
         </TabPanel>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger-fg">{error}</p>}
 
         {activeTab !== "notes" && (
-          <div className="narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-t narrow:border-slate-800 narrow:bg-slate-900 narrow:px-4 narrow:py-2">
+          <div className="narrow:sticky narrow:bottom-0 narrow:z-10 narrow:-mx-4 narrow:border-t narrow:border-surface-raised narrow:bg-surface narrow:px-4 narrow:py-2">
             <div className="flex flex-wrap items-center gap-2 narrow:flex-col narrow:items-stretch">
               <Button variant="primary" type="submit" disabled={saving} className="narrow:min-h-11 narrow:w-full">
                 {saving ? t("common.saving") : isCreate ? t("common.create") : t("common.save")}
@@ -1797,7 +1797,7 @@ export function ServerForm({
                 </Button>
               )}
               {!isCreate && dirty && onConnect && (
-                <span className="text-xs text-slate-400" data-testid="connect-save-first-hint">
+                <span className="text-xs text-fg-subtle" data-testid="connect-save-first-hint">
                   {t("serverForm.connectSaveFirst")}
                 </span>
               )}
@@ -1825,7 +1825,7 @@ export function ServerForm({
           <div hidden={activeTab !== "general"} className="space-y-6">
             <ServerFormSections serverId={serverId} dirty={dirty} tab="general" />
 
-            <div className="border-t border-slate-700 pt-4">
+            <div className="border-t border-border pt-4">
               <Button variant="danger" size="sm"
                 onClick={handleDeleteClick}
               >
@@ -1838,16 +1838,16 @@ export function ServerForm({
                * Schlüsselbund-Verwaltungsprogramm wiederzufinden. */}
               {secretsLeftBehind && (
                 <div
-                  className="mt-3 rounded border border-amber-700 bg-amber-950 p-3 text-sm"
+                  className="mt-3 rounded border border-warning-border-strong bg-warning-subtle p-3 text-sm"
                   data-testid="secrets-left-behind"
                 >
-                  <p className="mb-2 font-medium text-amber-200">
+                  <p className="mb-2 font-medium text-warning-fg-softer">
                     {t("serverForm.deletedWithLeftoverSecretsTitle")}
                   </p>
-                  <p className="mb-2 text-amber-200">
+                  <p className="mb-2 text-warning-fg-softer">
                     {t("serverForm.deletedWithLeftoverSecretsHint")}
                   </p>
-                  <ul className="mb-2 space-y-1 font-mono text-xs text-amber-200">
+                  <ul className="mb-2 space-y-1 font-mono text-xs text-warning-fg-softer">
                     {secretsLeftBehind.map((ref) => (
                       <li key={ref}>{ref}</li>
                     ))}
@@ -1864,16 +1864,16 @@ export function ServerForm({
               )}
 
               {deletePreview && (
-                <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
-                  <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
+                <div className="mt-3 rounded border border-danger-border bg-danger-subtle p-3 text-sm">
+                  <p className="mb-2 font-medium text-danger-fg-softer">{t("serverForm.deleteImpactTitle")}</p>
                   {(deletePreview.server.authKind === "agent" ||
                     deletePreview.server.authKind === "no_password") &&
                   !deletePreview.server.hasSudoPassword &&
                   !deletePreview.server.sudoPasswordUnknown &&
                   deletePreview.serversLosingJumpHost.length === 0 ? (
-                    <p className="mb-2 text-red-200">{t("serverForm.deleteNoKeychainImpact")}</p>
+                    <p className="mb-2 text-danger-fg-softer">{t("serverForm.deleteNoKeychainImpact")}</p>
                   ) : (
-                    <ul className="mb-2 space-y-1 text-red-200">
+                    <ul className="mb-2 space-y-1 text-danger-fg-softer">
                       {/* Spec 0076: `identity_file` hat keinen Secret-Inhalt
                        * im Schlüsselbund, der zwingend existiert — anders als
                        * bei den übrigen Anmeldearten steht dort höchstens
@@ -1921,7 +1921,7 @@ export function ServerForm({
                    * obwohl Chat-Historie/Notizen/Tags dieses Servers beim
                    * Löschen unwiderruflich mitverschwinden (`ON DELETE
                    * CASCADE`, Spec 0034/0008). */}
-                  <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
+                  <p className="mb-2 text-danger-fg-softer">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
                   <div className="flex gap-2">
                     <Button size="sm"
                       onClick={() => setDeletePreview(null)}
@@ -1955,7 +1955,7 @@ export function ServerForm({
                 {previewLoading ? t("common.loading") : t("serverForm.contextPreview")}
               </Button>
               {preview !== null && (
-                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
+                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-border bg-surface-sunken p-3 text-xs text-fg-muted">
                   {preview || t("serverForm.noContext")}
                 </pre>
               )}
@@ -1998,20 +1998,20 @@ export function TestResultBadge({ result }: { result: TestConnectionResult }) {
   const { t } = useTranslation();
   switch (result.kind) {
     case "success":
-      return <span className="text-sm text-emerald-400">{t("serverForm.testResult.success")}</span>;
+      return <span className="text-sm text-success-fg">{t("serverForm.testResult.success")}</span>;
     case "authenticationFailed":
-      return <span className="text-sm text-red-400">{t("serverForm.testResult.authFailed")}</span>;
+      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.authFailed")}</span>;
     case "hostKeyUnknown":
       return (
-        <span className="text-sm text-amber-400">{t("serverForm.testResult.hostKeyUnknown")}</span>
+        <span className="text-sm text-warning-fg">{t("serverForm.testResult.hostKeyUnknown")}</span>
       );
     case "hostKeyMismatch":
-      return <span className="text-sm text-red-400">{t("serverForm.testResult.hostKeyMismatch")}</span>;
+      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.hostKeyMismatch")}</span>;
     case "networkError":
       // Spec 0069, Teil A5: bekannter Code → übersetzte Meldung; ohne
       // Code → wie bisher der rohe Backend-Text.
       return (
-        <span className="text-sm text-red-400">
+        <span className="text-sm text-danger-fg">
           {translateErrorCode(
             t,
             result.code,
@@ -2020,6 +2020,6 @@ export function TestResultBadge({ result }: { result: TestConnectionResult }) {
         </span>
       );
     case "timeout":
-      return <span className="text-sm text-red-400">{t("serverForm.testResult.timeout")}</span>;
+      return <span className="text-sm text-danger-fg">{t("serverForm.testResult.timeout")}</span>;
   }
 }

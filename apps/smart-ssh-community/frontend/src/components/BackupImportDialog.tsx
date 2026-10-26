@@ -4,7 +4,6 @@ import {
   backupKeyStatus,
   cancelBackupImport,
   commandErrorCode,
-  commandErrorMessage,
   confirmBackupImport,
   pickBackupImportFile,
   startBackupImport,
@@ -43,22 +42,32 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
   const [needsKey, setNeedsKey] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const finished = useRef(false);
+  const mounted = useRef(true);
+  // A failed file choice: persistent (not cleared by the code/passphrase
+  // switch) and answered by "Choose file again".
+  const [pickError, setPickError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const pick = (initial: boolean) => {
+    setPickError(null);
     pickBackupImportFile(t("backup.import.pickTitle"))
       .then((name) => {
-        if (cancelled) return;
-        if (name === null) onClose();
-        else setFileName(name);
+        if (!mounted.current) return;
+        if (name !== null) setFileName(name);
+        else if (initial) onClose();
+        else if (fileName === "") setPickError(t("backup.import.pickFailed"));
       })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(commandErrorMessage(err));
+      .catch(() => {
+        if (!mounted.current) return;
         setFileName("");
+        setPickError(t("backup.import.pickFailed"));
       });
+  };
+
+  useEffect(() => {
+    mounted.current = true;
+    pick(true);
     return () => {
-      cancelled = true;
+      mounted.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -194,7 +203,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
           </table>
           <p>{t("backup.confirm.sessions", { count: preview.openSessions })}</p>
           <p>{t("backup.confirm.safety", { dir: preview.safetyBackupDir })}</p>
-          {error && <p role="alert" className="text-red-300">{error}</p>}
+          {error && <p role="alert" className="text-danger-fg-soft">{error}</p>}
         </div>
       </DialogFrame>
     );
@@ -222,6 +231,14 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
       }
     >
       <div className="space-y-3 break-words">
+        {pickError && (
+          <div role="alert" className="space-y-2 text-danger-fg-soft">
+            <p>{pickError}</p>
+            <Button type="button" className="narrow:min-h-11" onClick={() => pick(false)}>
+              {t("backup.import.chooseAgain")}
+            </Button>
+          </div>
+        )}
         {fileName !== "" && <p>{t("backup.import.file", { name: fileName })}</p>}
         <fieldset className="flex flex-wrap gap-4">
           <legend className="sr-only">{t("backup.import.kind")}</legend>

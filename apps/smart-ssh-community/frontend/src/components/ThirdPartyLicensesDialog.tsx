@@ -61,16 +61,16 @@ export function ThirdPartyLicensesDialog({ onClose }: ThirdPartyLicensesDialogPr
         </Button>
       }
     >
-      <div className="min-h-0 flex-1 overflow-y-auto rounded border border-slate-700 bg-slate-950 p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded border border-border bg-surface-sunken p-3">
         {state.status === "loading" && (
-          <p className="text-sm text-slate-400">{t("about.thirdPartyLicenses.loading")}</p>
+          <p className="text-sm text-fg-subtle">{t("about.thirdPartyLicenses.loading")}</p>
         )}
         {state.status === "unavailable" && (
-          <p className="text-sm text-slate-400">{t("about.thirdPartyLicenses.unavailable")}</p>
+          <p className="text-sm text-fg-subtle">{t("about.thirdPartyLicenses.unavailable")}</p>
         )}
         {state.status === "available" && (
           // A4.2: plain-text `<pre>`, no `dangerouslySetInnerHTML`, no Markdown.
-          <pre className="select-text whitespace-pre-wrap break-words font-mono text-xs text-slate-200">
+          <pre className="select-text whitespace-pre-wrap break-words font-mono text-xs text-fg-soft">
             {state.text}
           </pre>
         )}

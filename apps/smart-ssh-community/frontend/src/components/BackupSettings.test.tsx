@@ -1,7 +1,7 @@
 // Issue #666, Spec 0109 (K2, K5, I3, I8, T4; tests 14, 17, 18): the "Data and
 // backup" section — code display and confirmation, passphrase validation,
 // counts confirmation, summary and the narrow layout.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
@@ -79,13 +79,18 @@ describe("BackupSettings", () => {
     renderSection();
     fireEvent.click(screen.getByRole("button", { name: "Export backup…" }));
     fireEvent.click(await screen.findByRole("button", { name: "Create a recovery code" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    // Wait for the recovery-code dialog itself: the key-setup dialog, which is
+    // still on screen while the code is pending, also has a "Cancel" button.
+    const codeDialog = (await screen.findByTestId("backup-recovery-code")).closest('[role="dialog"]') as HTMLElement;
+    expect(codeDialog).toBeTruthy();
+    fireEvent.click(within(codeDialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByTestId("backup-recovery-code")).toBeNull());
     expect(api.exportEncryptedBackup).not.toHaveBeenCalled();
 
     vi.mocked(api.backupKeyStatus).mockResolvedValue({ exists: true, hasCode: true, hasPassphrase: false });
     vi.mocked(api.newBackupCode).mockResolvedValue("23456-789AB-CDEFG");
     fireEvent.click(screen.getByRole("button", { name: "Export backup…" }));
-    await screen.findByTestId("backup-recovery-code");
+    await waitFor(() => expect(screen.getByTestId("backup-recovery-code").textContent).toBe("23456789ABCDEFG"));
     expect(api.newBackupCode).toHaveBeenCalled();
   });
 
@@ -195,6 +200,22 @@ describe("BackupSettings", () => {
       await open();
       expect(await screen.findByText("Backup restored")).toBeTruthy();
       expect(api.confirmBackupImport).not.toHaveBeenCalled();
+    });
+
+    it("keeps a failed file choice visible across code/passphrase and re-opens the picker", async () => {
+      renderSection();
+      vi.mocked(api.pickBackupImportFile).mockRejectedValueOnce({ message: "no path" });
+      fireEvent.click(screen.getByRole("button", { name: "Restore from backup…" }));
+      const msg = "The file could not be opened from the chosen location.";
+      expect(await screen.findByText(msg)).toBeTruthy();
+      fireEvent.click(screen.getByRole("radio", { name: "Passphrase" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Recovery code" }));
+      expect(screen.getByText(msg)).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Open backup" }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name: "Choose file again" }));
+      await waitFor(() => expect(screen.queryByText(msg)).toBeNull());
+      expect(api.pickBackupImportFile).toHaveBeenCalledTimes(2);
+      expect(await screen.findByText("File: b.sshbackup")).toBeTruthy();
     });
   });
 });

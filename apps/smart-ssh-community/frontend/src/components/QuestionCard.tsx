@@ -67,11 +67,11 @@ export function QuestionCard({
         aria-label={t("chat.question.cardLabel", { question })}
         className={`m-0 min-w-0 rounded border px-3 py-2 text-sm ${
           locked
-            ? "border-slate-700 bg-slate-900/60"
-            : "border-indigo-500/60 bg-slate-900"
+            ? "border-border bg-surface/60"
+            : "border-accent-strong/60 bg-surface"
         }`}
       >
-        <p className="whitespace-pre-wrap break-words font-medium text-slate-100">
+        <p className="whitespace-pre-wrap break-words font-medium text-fg">
           {question}
         </p>
         <ul className="mt-2 space-y-1">
@@ -84,10 +84,10 @@ export function QuestionCard({
                   disabled={locked}
                   aria-pressed={multiSelect ? isMarked : undefined}
                   onClick={() => choose(o.label)}
-                  className={`flex w-full items-start gap-2 rounded border px-2 py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                  className={`flex w-full items-start gap-2 rounded border px-2 py-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${
                     isMarked
-                      ? "border-indigo-400 bg-indigo-900/60 text-indigo-50"
-                      : "border-slate-700 text-slate-200 enabled:hover:bg-slate-800"
+                      ? "border-accent-fg bg-accent-subtle-hover/60 text-accent-fg-faintest"
+                      : "border-border text-fg-soft enabled:hover:bg-surface-raised"
                   } disabled:cursor-default`}
                 >
                   <span aria-hidden="true" className="w-4 shrink-0 text-center">
@@ -104,7 +104,7 @@ export function QuestionCard({
                   <span className="min-w-0">
                     <span className="block break-words">{o.label}</span>
                     {o.description && (
-                      <span className="block break-words text-xs text-slate-400">
+                      <span className="block break-words text-xs text-fg-subtle">
                         {o.description}
                       </span>
                     )}
@@ -119,13 +119,13 @@ export function QuestionCard({
             type="button"
             disabled={ticked.length === 0}
             onClick={submitMulti}
-            className="mt-2 rounded bg-indigo-600 px-3 py-1 text-xs text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 enabled:hover:bg-indigo-500 disabled:opacity-50"
+            className="mt-2 rounded bg-accent px-3 py-1 text-xs text-on-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg-soft enabled:hover:bg-accent-strong disabled:opacity-50"
           >
             {t("chat.question.send")}
           </button>
         )}
         {locked && state.ownWords && (
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-fg-subtle">
             {t("chat.question.answeredOwnWords")}
           </p>
         )}

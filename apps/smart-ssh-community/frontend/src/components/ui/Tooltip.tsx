@@ -52,7 +52,7 @@ export function Tooltip({
         role="tooltip"
         hidden={!pos}
         style={pos ? { position: "fixed", left: pos.left, bottom: pos.bottom } : undefined}
-        className="z-50 w-max max-w-72 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-left font-sans text-xs font-normal tracking-normal text-slate-100 normal-case shadow-lg"
+        className="z-50 w-max max-w-72 rounded border border-border-strong bg-surface px-2 py-1 text-left font-sans text-xs font-normal tracking-normal text-fg normal-case shadow-lg"
       >
         {content}
       </span>

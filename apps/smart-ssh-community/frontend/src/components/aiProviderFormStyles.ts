@@ -4,10 +4,10 @@ import { FIELD_CONTROL_CLASS } from "./ui";
  * pro Feld wiederholter Ad-hoc-Klassenketten — alle vier Farbpaletten
  * (`slate`/`indigo`/`emerald`/`red`) sind bereits projektweite Tokens
  * (`index.css`s `@theme`), hier nur konsistent auf Formularfelder/
- * Sekundäraktionen angewandt. `bg-slate-950` für Felder INNERHALB einer
- * `bg-slate-900/40`-Karte erzeugt die vom Reviewer gewünschte
+ * Sekundäraktionen angewandt. `bg-surface-sunken` für Felder INNERHALB einer
+ * `bg-surface/40`-Karte erzeugt die vom Reviewer gewünschte
  * Kontraststufung (Modal-Grund `slate-800` → Karte `slate-900/40` → Feld
- * `slate-950`), `focus:ring-indigo-500` ist der bislang fehlende sichtbare
+ * `slate-950`), `focus:ring-accent-strong` ist der bislang fehlende sichtbare
  * Fokus-Zustand.
  *
  * Spec-Reviewer-Fund (Spec 0056, Review dieses Schritts): `FIELD_CLASS`
@@ -25,7 +25,7 @@ import { FIELD_CONTROL_CLASS } from "./ui";
  * `font: inherit`) — Nutzereingaben erschienen halbfett. Der Text-Stil
  * liegt jetzt auf einem separaten `<span>` um den Label-Text, nicht mehr
  * auf dem Label-Element. */
-export const CARD_CLASS = "rounded-lg border border-slate-700 bg-slate-900/40 p-4";
+export const CARD_CLASS = "rounded-lg border border-border bg-surface/40 p-4";
 export const LABEL_CLASS = "block text-sm";
-export const LABEL_TEXT_CLASS = "font-medium text-slate-200";
+export const LABEL_TEXT_CLASS = "font-medium text-fg-soft";
 export const FIELD_CLASS = FIELD_CONTROL_CLASS;

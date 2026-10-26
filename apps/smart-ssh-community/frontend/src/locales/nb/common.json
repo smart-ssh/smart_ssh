@@ -606,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Mulig forsøk på å injisere instruksjoner via serverinnhold oppdaget – krever bekreftelse",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Forespurt via MCP – krever alltid bekreftelse",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Bruker det lagrede sudo-passordet – krever alltid bekreftelse",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Setter inn en lagret hemmelig verdi før sending – krever alltid bekreftelse",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Leser en fil med legitimasjon (f.eks. SSH-nøkkel, .env, /etc/shadow) – krever alltid bekreftelse",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "En tidligere handling i dette svaret ble avvist – krever bekreftelse",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Starter sftp-server (med sudo: filtilgang med root-rettigheter) – krever alltid bekreftelse",
@@ -1442,6 +1443,8 @@
     "import": {
       "title": "Gjenopprett fra sikkerhetskopi",
       "pickTitle": "Velg en sikkerhetskopifil",
+      "pickFailed": "Filen kunne ikke åpnes fra det valgte stedet.",
+      "chooseAgain": "Velg filen på nytt",
       "file": "Fil: {{name}}",
       "kind": "Hva som åpner denne sikkerhetskopien",
       "useCode": "Gjenopprettingskode",
