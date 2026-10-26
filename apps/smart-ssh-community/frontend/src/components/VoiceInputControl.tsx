@@ -61,10 +61,10 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
         aria-pressed={recording}
         title={`${label} (${shortcut})`}
         data-voice-state={voice.phase}
-        className={`inline-flex items-center justify-center gap-1.5 rounded border px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-70 ${
+        className={`inline-flex items-center justify-center gap-1.5 rounded border px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:cursor-not-allowed disabled:opacity-70 ${
           recording
-            ? "animate-pulse border-red-700 bg-red-900 text-red-100"
-            : "border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700"
+            ? "animate-pulse border-danger-border-strong bg-danger-subtle-hover text-danger-fg-faint"
+            : "border-border-strong bg-surface-raised text-fg hover:bg-border"
         }`}
       >
         {transcribing ? <Spinner /> : <MicIcon />}
@@ -76,7 +76,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
       {voice.errorKey && (
         <p
           role="alert"
-          className="basis-full rounded bg-red-950 px-3 py-2 text-xs text-red-300"
+          className="basis-full rounded bg-danger-subtle px-3 py-2 text-xs text-danger-fg-soft"
         >
           {t(voice.errorKey)}{" "}
           <button type="button" className="underline" onClick={voice.clearError}>
@@ -102,7 +102,7 @@ export function VoiceInputControl({ handlers, onPhaseChange, panelRef }: VoiceIn
             </>
           }
         >
-          <p className="text-sm text-slate-300">
+          <p className="text-sm text-fg-muted">
             {t("voice.consent.body", {
               model: voice.consent.model,
               size: SPEECH_MODEL_SIZE_MIB[voice.consent.model],

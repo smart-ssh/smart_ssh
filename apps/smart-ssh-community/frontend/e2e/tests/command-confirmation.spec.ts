@@ -54,7 +54,7 @@ test.describe("command confirmation", () => {
     for (const axis of ["Server", "Data"]) {
       const badge = card.getByText(new RegExp(`^${axis}ⓘ?$`));
       await expect(badge).toBeVisible();
-      await expect(badge).toHaveClass(/bg-red-900/);
+      await expect(badge).toHaveClass(/bg-danger-subtle-hover/);
     }
 
     const { confirm, reject } = decisionButtons(card);

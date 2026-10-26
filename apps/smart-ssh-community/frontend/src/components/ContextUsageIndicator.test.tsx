@@ -31,6 +31,6 @@ describe("context usage", () => {
     expect(screen.getByTestId("context-usage").dataset.nearLimit).toBe("false");
     rerender(wrap(160_000));
     expect(screen.getByTestId("context-usage").dataset.nearLimit).toBe("true");
-    expect(screen.getByTestId("context-usage").className).toContain("text-amber-300");
+    expect(screen.getByTestId("context-usage").className).toContain("text-warning-fg-soft");
   });
 });
