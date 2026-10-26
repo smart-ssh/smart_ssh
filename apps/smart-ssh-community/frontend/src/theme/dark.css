@@ -119,6 +119,10 @@
   --surface-hover: var(--palette-slate-700); /* hover fill on raised surfaces */
   --fg-bright: #ffffff; /* was `white` */
   --overlay: #000000; /* modal scrim base colour (use with /70) */
+  --web-border: #075985; /* web activity card outline */
+  --web-fg: #7dd3fc; /* web activity card title */
+  --mcp-subtle: #3b0764; /* "external tool (MCP)" badge fill */
+  --mcp-fg: #d8b4fe; /* "external tool (MCP)" badge text */
   --focus: var(--palette-indigo-400);
   --selection: rgba(108, 124, 245, 0.35);
 

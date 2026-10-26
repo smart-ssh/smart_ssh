@@ -22,7 +22,7 @@ shrink: the test also fails when a listed file is already clean — remove it.
 | Text | `fg-strong`, `fg`, `fg-soft`, `fg-muted`, `fg-subtle`, `fg-faint`, `fg-bright` (pure white) |
 | Roles `accent`, `danger`, `warning`, `success` | `<role>-subtle` (tinted fill), `-subtle-hover`, `-border`, `-border-strong`, `<role>` (solid), `-strong` (hover/brighter solid), `-fg` (text), `-fg-soft`, `-fg-softer`, `-fg-faint`, `-fg-faintest` |
 | Info | `info`, `info-fg` |
-| Misc | `on-accent` (text on a solid accent fill), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`) |
+| Misc | `on-accent` (text on a solid accent fill), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`), `web-border` / `web-fg` (web activity card), `mcp-subtle` / `mcp-fg` (external-tool origin badge) |
 | Terminal | `term-bg`, `term-fg`, `term-cursor`, `term-cursor-accent`, `term-selection`, `term-ansi-{black,red,green,yellow,blue,magenta,cyan,white,bright-*}` |
 
 Preferences when migrating: focus rings/outlines → `ring-focus`/`outline-focus`

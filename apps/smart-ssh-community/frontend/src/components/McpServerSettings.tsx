@@ -141,13 +141,13 @@ export function McpServerSettings() {
   // (auch für den hier ebenfalls entfernten `border-t`/`pt-4`-Rahmen).
   return (
     <div>
-      <p className="mb-2 text-xs text-slate-400">{t("mcpServer.hint")}</p>
+      <p className="mb-2 text-xs text-fg-subtle">{t("mcpServer.hint")}</p>
 
-      {error && <p className="mb-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{error}</p>}
+      {error && <p className="mb-2 rounded bg-danger-subtle px-2 py-1 text-xs text-danger-fg-soft">{error}</p>}
 
       {settings && (
         <>
-          <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+          <label className="mb-2 flex items-center gap-2 text-sm text-fg-muted">
             <input
               type="checkbox"
               checked={settings.enabled}
@@ -157,17 +157,17 @@ export function McpServerSettings() {
             {t("mcpServer.enable")}
           </label>
 
-          <div className="mb-3 space-y-2 rounded border border-slate-700 bg-slate-900 p-3">
+          <div className="mb-3 space-y-2 rounded border border-border bg-surface p-3">
             <div>
-              <p className="text-xs text-slate-400">{t("mcpServer.endpointLabel")}</p>
-              <code className="block text-xs break-all text-slate-200 select-all">
+              <p className="text-xs text-fg-subtle">{t("mcpServer.endpointLabel")}</p>
+              <code className="block text-xs break-all text-fg-soft select-all">
                 {settings.endpoint}
               </code>
             </div>
             <div>
-              <p className="text-xs text-slate-400">{t("mcpServer.tokenLabel")}</p>
+              <p className="text-xs text-fg-subtle">{t("mcpServer.tokenLabel")}</p>
               <code
-                className={`block text-xs break-all text-slate-200 ${tokenRevealed ? "select-all" : "select-none"}`}
+                className={`block text-xs break-all text-fg-soft ${tokenRevealed ? "select-all" : "select-none"}`}
               >
                 {tokenRevealed ? settings.token : MASKED_TOKEN}
               </code>
@@ -183,7 +183,7 @@ export function McpServerSettings() {
           </div>
 
           <div className="mb-3">
-            <label className="mb-1 flex items-center gap-2 text-sm text-slate-200">
+            <label className="mb-1 flex items-center gap-2 text-sm text-fg-soft">
               {t("mcpServer.confirmTimeoutLabel")}
               <input
                 type="number"
@@ -197,20 +197,20 @@ export function McpServerSettings() {
               />
               {t("mcpServer.confirmTimeoutUnit")}
             </label>
-            <p className="text-xs text-slate-400">{t("mcpServer.confirmTimeoutHint")}</p>
+            <p className="text-xs text-fg-subtle">{t("mcpServer.confirmTimeoutHint")}</p>
           </div>
 
           <div className="mb-3">
-            <p className="mb-1 text-sm font-medium text-slate-200">
+            <p className="mb-1 text-sm font-medium text-fg-soft">
               {t("mcpServer.allowListLabel")}
             </p>
             {servers.length === 0 ? (
-              <p className="text-xs text-slate-400">{t("mcpServer.noServers")}</p>
+              <p className="text-xs text-fg-subtle">{t("mcpServer.noServers")}</p>
             ) : (
-              <ul className="max-h-40 divide-y divide-slate-700 overflow-y-auto rounded border border-slate-700">
+              <ul className="max-h-40 divide-y divide-border overflow-y-auto rounded border border-border">
                 {servers.map((server) => (
                   <li key={server.id} className="px-2 py-1.5">
-                    <label className="flex items-center gap-2 text-sm text-slate-300">
+                    <label className="flex items-center gap-2 text-sm text-fg-muted">
                       <input
                         type="checkbox"
                         checked={settings.allowedServerIds.includes(server.id)}
@@ -227,9 +227,9 @@ export function McpServerSettings() {
             )}
           </div>
 
-          <p className="mb-1 text-xs text-slate-400">{t("mcpServer.exampleConfigHint")}</p>
+          <p className="mb-1 text-xs text-fg-subtle">{t("mcpServer.exampleConfigHint")}</p>
           <pre
-            className={`rounded border border-slate-700 bg-slate-950 p-2 text-xs break-all whitespace-pre-wrap text-slate-300 ${tokenRevealed ? "" : "select-none"}`}
+            className={`rounded border border-border bg-surface-sunken p-2 text-xs break-all whitespace-pre-wrap text-fg-muted ${tokenRevealed ? "" : "select-none"}`}
           >
             {exampleConfig(settings, tokenRevealed ? settings.token : MASKED_TOKEN)}
           </pre>
@@ -237,9 +237,9 @@ export function McpServerSettings() {
             <Button size="sm" onClick={() => void handleCopyConfig()}>
               {t("mcpServer.copyConfig")}
             </Button>
-            <span className="text-xs text-slate-400">{t("mcpServer.copyConfigNote")}</span>
+            <span className="text-xs text-fg-subtle">{t("mcpServer.copyConfigNote")}</span>
             <output
-              className={`text-xs ${copyStatus === "failed" ? "text-red-300" : "text-slate-400"}`}
+              className={`text-xs ${copyStatus === "failed" ? "text-danger-fg-soft" : "text-fg-subtle"}`}
             >
               {copyStatus === "copied" && t("mcpServer.copyConfigCopied")}
               {copyStatus === "failed" && t("mcpServer.copyConfigFailed")}
