@@ -410,7 +410,7 @@ Adversarial (ERHÖHT):
   Fenster; bis zur Antwort wird nichts geöffnet oder verändert. Alle Dialoge
   (D1–D4, Unlesbarer Verlauf), beide zweiten Bestätigungen (A5) und beide
   Hinweise erscheinen dort mit denselben Texten und Knöpfen wie auf dem
-  Desktop. Gewählt wird nur, was der Nutzer drückt; „Beenden“ schließt die App.
+  Desktop. Gewählt wird nur, was der Nutzer drückt. „Beenden“ bricht den Startversuch ab (nichts wird verändert); das Fenster zeigt dann die Maske „Der Start wurde abgebrochen“ mit „Erneut versuchen“ und „Beenden“, und dieses „Beenden“ schließt die App.
 - Wer Zugriff auf das entsperrte Benutzerkonto hat, kann die Daten lesen.
 - Ohne Master-Passwort oder Schlüsselbund-Schlüssel gibt es keine
   Wiederherstellung (E10).

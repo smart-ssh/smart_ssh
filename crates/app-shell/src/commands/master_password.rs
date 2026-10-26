@@ -1011,6 +1011,25 @@ mod tests {
     /// erreichbar* war im DTO nicht abbildbar und führte zum Passwortfeld —
     /// der Nutzer tippte ein Passwort für eine Datei, die gar nicht gelesen
     /// werden konnte. Die Zeile `Unreachable` unten ist genau das.
+    /// Issue #944: on Android the placement puts the keychain-mode startup in
+    /// the window, and the state is then missing with no wrapping file. The
+    /// screen for that case must continue the startup (no unlock field, no
+    /// start-over offer chosen by the app) — if the placement were bypassed
+    /// or this screen changed, the window would never run the startup.
+    #[test]
+    fn test_issue_944_the_window_startup_screen_continues_the_startup() {
+        use crate::startup_prompt::{startup_prompt_placement, StartupPromptPlacement};
+        use master_password::WrappingHealth as H;
+
+        assert_eq!(
+            startup_prompt_placement("android"),
+            StartupPromptPlacement::Window
+        );
+        let decision = decide_startup_screen(Some(H::Absent), 0);
+        assert_eq!(decision.screen, StartupScreen::SetUpMasterPassword);
+        assert!(!decision.offers_start_over);
+    }
+
     #[test]
     fn test_the_startup_screen_follows_the_state_of_the_wrapping_file() {
         // Entsperrt: über die Datei ist nichts zu sagen.
