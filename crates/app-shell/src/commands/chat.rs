@@ -10,16 +10,13 @@ use crate::event_emitter::TauriEventEmitter;
 use app_logic::confirmation::ConfirmationRegistry;
 use app_logic::dto::{ActionUserDecision, SessionSummaryDto};
 use app_logic::error::{CommandError, CommandResult};
-use app_logic::events::{
-    emit_chat_queued_messages_sent, emit_connection_status_changed, ConnectionStatus, EventEmitter,
-};
+use app_logic::events::{emit_chat_queued_messages_sent, EventEmitter};
 use app_logic::orchestration::run_chat_turn;
 use app_logic::session::Session;
 use app_logic::state::{ActionId, AppState, SessionId};
 
 use super::connect::build_session_system_context;
 use super::servers::resolve_server_for_note_shrink;
-use super::sftp::edit_session_dir;
 
 #[tauri::command]
 pub async fn send_chat_message(
@@ -625,81 +622,14 @@ pub async fn start_new_chat(
 }
 
 #[tauri::command]
-pub async fn disconnect(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    elevated: State<'_, crate::elevated_sftp::ElevatedSftpRegistry>,
-    grants: State<'_, app_logic::local_path_grants::LocalPathGrants>,
-    session_id: SessionId,
-) -> CommandResult<()> {
-    // Spec 0084, A2.1: Sitzung UND erhöhter Kanal gehen in einer einzigen
-    // Funktion weg — `SessionManager::remove` wird außer dort und in Tests
-    // nirgends aufgerufen. Sie sperrt den Transport nicht; das Trennen
-    // bleibt unten in diesem Befehl.
-    let session = elevated.remove_session(&state.sessions, session_id);
-    // Issue #356: closing the tab ends automatic reconnect attempts.
-    if let Some(session) = &session {
-        session.auto_reconnect.stop();
-    }
-    // Issue #89: picked and dropped local paths are granted per session and
-    // expire with it. Every reader also checks that the session still
-    // exists, so this is the explicit cleanup, not the only guard.
-    grants.remove_session(session_id);
-
-    // Spec 0017, §5 / Spec 0104, §5 (Issue #66): Schließen lehnt die
-    // wartende Bestätigung JEDER Sitzung ab (fail closed) — vor dem
-    // Trennen, damit die Aktion nicht mehr genehmigt werden kann, und ohne
-    // dass das Frontend die einzige Stelle dafür ist. Eine MCP-Sitzung wird
-    // dabei zusätzlich ausgetragen, auch ohne gefundene `Session`
-    // (Schließen während des Host-Key-Dialogs), damit die nächste
-    // MCP-Anfrage eine neue Sitzung anlegt statt auf diese zu warten.
-    app_logic::session::reject_pending_confirmation_on_close(
-        session_id,
-        session.as_deref(),
-        &state.mcp.sessions,
-        &state.pending_action_confirmations,
-    );
-    let session = session.ok_or("Session nicht gefunden")?;
-
-    // Best-effort: ein Fehler beim Trennen selbst (z. B. Verbindung bereits
-    // tot) soll `disconnect()` nicht scheitern lassen — die Session wird in
-    // jedem Fall aus `state.sessions` entfernt.
-    // Issue #328: a running AI command does not hold the transport any more;
-    // cancel it (Spec 0027) and give it a moment to wind down, then
-    // disconnect. Closing the connection ends the command channel anyway.
-    session.transport.mark_closed();
-    if let Some(action_id) = session.transport.running_action() {
-        let _ = state.running_command_cancellations.resolve(&action_id, ());
-    }
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
-        session.transport.wait_until_idle(),
-    )
-    .await;
-    let _ = session.transport.lock().await.disconnect().await;
-    // Droppt den Sender -> der Terminal-Aktor (falls einer läuft) beendet
-    // sich selbst beim nächsten `commands.recv()` (s. dortiger Kommentar),
-    // ohne hier ein zweites `connection-status-changed`-Event auszulösen.
-    *session.terminal.lock().unwrap() = None;
-
-    tracing::info!(session_id = %session_id, "session disconnected");
-    emit_connection_status_changed(
-        &TauriEventEmitter(app.clone()),
-        session_id,
-        ConnectionStatus::Disconnected,
-        None,
-    );
-
-    // Spec 0054, Teil 4, Punkt 6: "Temp aufräumen (bei Session-Ende
-    // spätestens)" — Fallback-Netz für einen "Lokal öffnen"-Flow, den der
-    // Nutzer nie explizit über `close_edit_session` beendet hat (z. B.
-    // Tab einfach geschlossen, während eine Datei noch offen war). Rein
-    // best-effort: `edit_session_dir` existiert typischerweise gar nicht
-    // (kein Datei-Editier-Flow in dieser Session genutzt), das ist kein
-    // Fehler.
-    if let Ok(dir) = edit_session_dir(session_id) {
-        let _ = tokio::fs::remove_dir_all(dir).await;
-    }
+pub async fn disconnect(app: AppHandle, session_id: SessionId) -> CommandResult<()> {
+    // Issue #816: the one complete close path (elevated channel, grants,
+    // pending confirmation, running command, transport, status event, edit
+    // copies) lives in `crate::sessions`; only disconnect-specific work
+    // follows here.
+    let session = crate::sessions::close_session_returning(&app, session_id)
+        .await
+        .ok_or("Session nicht gefunden")?;
 
     // Spec 0034, Abschnitt 4: "endet bei `disconnect()`" — vor dem Spawn
     // unten, damit `ended_at` zuverlässig gesetzt ist, sobald `disconnect()`

@@ -31,11 +31,19 @@ er erreichbar ist.
 
 **A2 — Kein erhöhter Kanal überlebt seine Sitzung.**
 1. Das Entfernen einer Sitzung und ihres Kanals geschieht an **einer**
-   Stelle der Hülle, die beim Trennen aufgerufen wird; außer ihr und Tests
-   entfernt nichts Sitzungen. Sie wartet nicht auf den Transport der
-   Sitzung; das Trennen des Transports bleibt danach beim Trennen. Die
-   Sitzung wird vor dem Löschen des Zuordnungs-Eintrags oder unter
-   derselben Sperre entfernt.
+   Stelle der Hülle; außer ihr und Tests entfernt nichts Sitzungen. Sie
+   wartet nicht auf den Transport der Sitzung. Die Sitzung wird vor dem
+   Löschen des Zuordnungs-Eintrags oder unter derselben Sperre entfernt.
+   Diese Stelle ist Teil des **einen öffentlichen Schließwegs** (Issue
+   #816), der eine Sitzung vollständig schließt: erhöhter Kanal
+   widerrufen, lokale Pfadfreigaben entfernt, wartende Bestätigung
+   abgelehnt, laufender KI-Befehl abgebrochen und abgewartet (höchstens
+   2 s), Transport getrennt (höchstens 2 s), Statusereignis „getrennt"
+   gesendet, Editier-Kopien entfernt. Trennen, Backup-Import und jede
+   einbettende App-Crate bzw. Erweiterung schließen Sitzungen nur darüber;
+   es gibt keinen zweiten Weg, der nur einen Teil davon tut. Das Trennen
+   hängt danach nur noch eigene Arbeit an (Chat-Sitzung beenden,
+   Notiz-Vorschlag).
 2. Aktivieren trägt den Kanal nur ein, wenn die Sitzung zu diesem Zeitpunkt
    noch existiert; Prüfung und Eintrag geschehen unter derselben Sperre, unter
    der auch das Entfernen (A2.1) den Eintrag löscht. Sonst endet der Befehl
@@ -131,8 +139,9 @@ Logik. Wo ein Modul beides mischte, gilt:
 
 - Dass KI und MCP den Kanal nicht erreichen, tragen Signaturen und
   Crate-Grenze; T5/T5b scheitern nur, wenn ein solcher Weg entsteht.
-- Die Zusage, dass nur eine Stelle Sitzungen entfernt (A2.1), ist per
-  Suche gesichert, nicht vom Compiler.
+- Die Zusage, dass nur eine Stelle Sitzungen entfernt (A2.1), sichert ein
+  Wächtertest, der die Quelltexte nach Aufrufen durchsucht (Selbsttest mit
+  eingepflanztem Aufruf), nicht der Compiler.
 
 ## 9. Klarstellungen
 
