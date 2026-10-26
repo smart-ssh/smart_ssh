@@ -1,6 +1,9 @@
 # ADR 0126 — Official OpenAI provider uses the Responses API
 
-Status: accepted
+## Status
+
+Accepted
+
 Concerns: Issue #168 (part 1), Spec 0006, ADR 0117
 
 ## Problem

@@ -1,7 +1,7 @@
 # 0035-app-shell-wiring-scope-reduction
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

@@ -1,6 +1,9 @@
 # ADR 0056: Entscheidungen bei der Umsetzung von Spec 0065 (max_tokens-Handling)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0065-max-tokens-handling.md, Commits `58da435`, `18872c7`,
 `bfb4558`, `96bb188` (erste Fassung) plus Review-Nacharbeit (dieser Commit)
 

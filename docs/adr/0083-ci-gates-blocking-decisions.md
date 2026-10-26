@@ -1,6 +1,8 @@
 # ADR 0083 — Entscheidungen beim Umstieg der CI-Gates auf blockierend (Spec 0090)
 
-Status: akzeptiert · Spec: `docs/specs/0090-ci-gates-blocking.md` · Backlog:
+## Status
+
+Accepted · Spec: `docs/specs/0090-ci-gates-blocking.md` · Backlog:
 BL-0229, BL-0228, BL-0056, BL-0094, BL-0284, BL-0047
 
 Spec 0090 ließ Design und Aufteilung bewusst offen („Design: Nichts

@@ -1,6 +1,9 @@
 # ADR 0107 — Filter-Engine: fail-closed bei undurchsichtiger Eingabe
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #13, Issue #55, Issue #60, Spec 0002 (Abschnitte 3, 4.4, 4.6), ADR 0001, ADR 0036
 
 ## Problem

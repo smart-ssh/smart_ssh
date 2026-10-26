@@ -1,6 +1,9 @@
 # ADR 0112 — Rückbau der feldweisen Verschlüsselung
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0036, Spec 0101 (E11), Spec 0040 §3, Spec 0057 §1.3, Issue #113
 
 ## Problem

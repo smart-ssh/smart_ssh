@@ -1,6 +1,9 @@
 # ADR 0145 — Zwischenablage als dritte Freigabequelle für Uploads
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: ADR 0113, Spec 0020 (5.2), Spec 0054 (Teil 3), Issue #571
 
 ## Problem

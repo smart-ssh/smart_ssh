@@ -1,6 +1,9 @@
 # ADR 0093 — Entscheidungen beim Verschlüsseln der Datenbank und beim Start
 
-Status: angenommen
+## Status
+
+Accepted
+
 Bezug: Spec 0101 (Etappe 1, Commits 3–5), Spec 0036, Spec 0040, Spec 0059,
 Spec 0071, Spec 0098, ADR 0092
 

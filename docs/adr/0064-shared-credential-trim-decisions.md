@@ -1,6 +1,9 @@
 # ADR 0064: Entscheidungen bei der Umsetzung von Spec 0073 (geteilter Credential-Trim)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0073-shared-credential-trim.md, Commits `0b57d09` (Helfer),
 `f754ab8` (DTO), `3beeba3` (Server-Secrets), `f3195bc` (adversariale Fälle),
 `2a93c5e` (Review-Nacharbeit)

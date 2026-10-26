@@ -1,7 +1,7 @@
 # 0038-pending-confirm-action-backend-timeout
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

@@ -1,6 +1,8 @@
 # ADR 0148 — Mobile-Build-Struktur (Android)
 
-Status: angenommen · Issue: #675 · Spec 0114
+## Status
+
+Accepted · Issue: #675 · Spec 0114
 
 ## Kontext
 

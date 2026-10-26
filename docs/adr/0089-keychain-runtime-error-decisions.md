@@ -1,6 +1,8 @@
 # ADR 0089 — Schlüsselbund-Fehler zur Laufzeit: offene Entscheidungen und bewusst nicht behobene Funde
 
-Status: akzeptiert · Spec: `docs/specs/0098-keychain-runtime-errors.md`
+## Status
+
+Accepted · Spec: `docs/specs/0098-keychain-runtime-errors.md`
 
 Spec 0098 ließ den Weg von `core` bis zum DTO ausdrücklich offen (§5) und
 verlangte nur, dass `core` ohne `AppState`-Abhängigkeit bleibt. Hier stehen

@@ -1,6 +1,9 @@
 # ADR 0124 — Websuche im Provider-Konto abgeschaltet: einmal ohne Web-Werkzeuge wiederholen
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #169, Spec 0105 (§3, §7), Spec 0051, Spec 0061, Spec 0064
 
 ## Problem

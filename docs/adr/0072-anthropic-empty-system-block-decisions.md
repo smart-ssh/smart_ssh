@@ -1,6 +1,9 @@
 # ADR 0072: Kein leerer Anthropic-System-Block — Entscheidungen bei der Umsetzung
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0081-anthropic-empty-system-block.md
 
 Spec 0081 gibt vor, das `system`-Feld im Anthropic-Request-Body komplett

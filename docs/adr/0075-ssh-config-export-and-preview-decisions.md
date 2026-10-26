@@ -1,6 +1,9 @@
 # ADR 0075 — Entscheidungen bei Export und Vorschau des `ssh_config`-Austauschs (Spec 0075, Schritte 4–6)
 
-Status: angenommen · 2026-09-25 · Spec: `docs/specs/0075-ssh-config-import-export.md`
+## Status
+
+Accepted · 2026-09-25 · Spec: `docs/specs/0075-ssh-config-import-export.md`
+
 Betrifft: `crates/core/src/profiles/ssh_config/export.rs`,
 `crates/core/src/profiles/ssh_config/quoting.rs`,
 `crates/app-shell/src/ssh_config_export.rs`,

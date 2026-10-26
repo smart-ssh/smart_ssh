@@ -1,6 +1,9 @@
 # ADR 0104 — Die Host-Key-Abfrage gehört einer stets gemounteten Komponente in `App`
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0007, Spec 0100, ADR 0091, Issue #12
 
 ## Problem

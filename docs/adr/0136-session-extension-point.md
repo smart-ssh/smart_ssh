@@ -1,6 +1,8 @@
 # ADR 0136: Session extension point (context section, known secrets, removal)
 
-Status: accepted (issue #463, Spec 0038)
+## Status
+
+Accepted · (issue #463, Spec 0038)
 
 ## Decisions
 

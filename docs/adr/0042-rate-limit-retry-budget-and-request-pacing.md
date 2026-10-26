@@ -1,7 +1,7 @@
 # 0042-rate-limit-retry-budget-and-request-pacing
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 
