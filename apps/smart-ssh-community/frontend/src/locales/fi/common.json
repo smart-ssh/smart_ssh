@@ -1436,6 +1436,8 @@
     "import": {
       "title": "Palauta varmuuskopiosta",
       "pickTitle": "Valitse varmuuskopiotiedosto",
+      "pickFailed": "Tiedostoa ei voitu avata valitusta sijainnista.",
+      "chooseAgain": "Valitse tiedosto uudelleen",
       "file": "Tiedosto: {{name}}",
       "kind": "Millä varmuuskopio avataan",
       "useCode": "Palautuskoodi",

@@ -1444,6 +1444,8 @@
     "import": {
       "title": "Restaurar desde copia",
       "pickTitle": "Elige un archivo de copia",
+      "pickFailed": "No se pudo abrir el archivo desde la ubicación elegida.",
+      "chooseAgain": "Elegir el archivo de nuevo",
       "file": "Archivo: {{name}}",
       "kind": "Qué abre esta copia",
       "useCode": "Código de recuperación",

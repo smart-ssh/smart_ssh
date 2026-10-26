@@ -1436,6 +1436,8 @@
     "import": {
       "title": "Visszaállítás mentésből",
       "pickTitle": "Válassz mentésfájlt",
+      "pickFailed": "A fájl nem nyitható meg a kiválasztott helyről.",
+      "chooseAgain": "Fájl újraválasztása",
       "file": "Fájl: {{name}}",
       "kind": "Mivel nyitható meg ez a mentés",
       "useCode": "Helyreállítási kód",

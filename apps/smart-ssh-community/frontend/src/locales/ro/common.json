@@ -1444,6 +1444,8 @@
     "import": {
       "title": "Restaurează din copie",
       "pickTitle": "Alegeți un fișier de copie",
+      "pickFailed": "Fișierul nu a putut fi deschis din locația aleasă.",
+      "chooseAgain": "Alege din nou fișierul",
       "file": "Fișier: {{name}}",
       "kind": "Ce deschide această copie",
       "useCode": "Cod de recuperare",

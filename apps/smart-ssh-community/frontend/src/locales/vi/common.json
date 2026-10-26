@@ -1428,6 +1428,8 @@
     "import": {
       "title": "Khôi phục từ bản sao lưu",
       "pickTitle": "Chọn tệp sao lưu",
+      "pickFailed": "Không thể mở tệp từ vị trí đã chọn.",
+      "chooseAgain": "Chọn lại tệp",
       "file": "Tệp: {{name}}",
       "kind": "Cách mở bản sao lưu này",
       "useCode": "Mã khôi phục",

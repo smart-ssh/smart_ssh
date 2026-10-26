@@ -1444,6 +1444,8 @@
     "import": {
       "title": "Restaurer depuis une sauvegarde",
       "pickTitle": "Choisir un fichier de sauvegarde",
+      "pickFailed": "Le fichier n’a pas pu être ouvert depuis l’emplacement choisi.",
+      "chooseAgain": "Choisir à nouveau le fichier",
       "file": "Fichier : {{name}}",
       "kind": "Ce qui ouvre cette sauvegarde",
       "useCode": "Code de récupération",

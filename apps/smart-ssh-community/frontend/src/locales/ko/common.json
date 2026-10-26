@@ -1428,6 +1428,8 @@
     "import": {
       "title": "백업에서 복원",
       "pickTitle": "백업 파일 선택",
+      "pickFailed": "선택한 위치에서 파일을 열 수 없습니다.",
+      "chooseAgain": "파일 다시 선택",
       "file": "파일: {{name}}",
       "kind": "이 백업을 여는 방법",
       "useCode": "복구 코드",

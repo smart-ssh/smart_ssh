@@ -1436,6 +1436,8 @@
     "import": {
       "title": "Gendan fra sikkerhedskopi",
       "pickTitle": "Vælg en sikkerhedskopi",
+      "pickFailed": "Filen kunne ikke åbnes fra den valgte placering.",
+      "chooseAgain": "Vælg filen igen",
       "file": "Fil: {{name}}",
       "kind": "Hvad åbner denne sikkerhedskopi",
       "useCode": "Gendannelseskode",

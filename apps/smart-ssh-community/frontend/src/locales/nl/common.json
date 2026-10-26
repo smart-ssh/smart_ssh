@@ -1436,6 +1436,8 @@
     "import": {
       "title": "Herstellen uit back-up",
       "pickTitle": "Kies een back-upbestand",
+      "pickFailed": "Het bestand kon niet worden geopend vanaf de gekozen locatie.",
+      "chooseAgain": "Bestand opnieuw kiezen",
       "file": "Bestand: {{name}}",
       "kind": "Waarmee deze back-up opent",
       "useCode": "Herstelcode",

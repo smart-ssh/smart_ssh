@@ -1436,6 +1436,8 @@
     "import": {
       "title": "Återställ från säkerhetskopia",
       "pickTitle": "Välj en säkerhetskopia",
+      "pickFailed": "Filen kunde inte öppnas från den valda platsen.",
+      "chooseAgain": "Välj fil igen",
       "file": "Fil: {{name}}",
       "kind": "Vad som öppnar den här säkerhetskopian",
       "useCode": "Återställningskod",
