@@ -270,6 +270,45 @@ host key is a hard stop with a strong warning
 
 ## 5. Trust boundaries that require your confirmation
 
+### Who is trusted inside the app
+
+The webview that renders Smart SSH's own user interface is part of the
+trusted base. Code running in it acts with your authority: it can type into
+terminals, answer pending confirmations, regenerate the MCP token and change
+settings, including safety settings such as "Always confirm on red risk".
+This is by design: the interface is your hand. Two facts make it so. The
+app's own Tauri commands are not restricted per command; the main window's
+capability file grants no per-command limits and also allows the key-value
+store that holds `settings.json`
+([`capabilities/default.json`](apps/smart-ssh-community/capabilities/default.json)).
+The red-risk setting is read from that store
+([`risk_second_opinion.rs`](crates/app-shell/src/risk_second_opinion.rs)).
+
+The confirmation boundaries below protect you against the AI and against
+external tools, not against code running in the webview.
+
+What keeps foreign code out of the webview:
+
+- **Content Security Policy.** `default-src 'self'; script-src 'self'`: only
+  scripts bundled with the app run; no inline or remote scripts
+  ([`tauri.conf.json`](apps/smart-ssh-community/tauri.conf.json)). A test
+  fails if any directive or source in the policy changes
+  ([`network_boundary.rs`](apps/smart-ssh-community/tests/network_boundary.rs)).
+- **No remote content.** No scripts, fonts or other resources are loaded from
+  the internet, and `connect-src` allows only the app itself and the Tauri
+  IPC (section 4,
+  [docs/netzwerkverbindungen.md](docs/netzwerkverbindungen.md)).
+- **Server and AI content is not inserted as HTML.** At the time of writing
+  the frontend sources contain no `dangerouslySetInnerHTML`, `innerHTML`,
+  `outerHTML` or `insertAdjacentHTML` outside tests
+  ([`frontend/src`](apps/smart-ssh-community/frontend/src)); the one place
+  that renders longer external text, the third-party licenses dialog, shows
+  it in a plain-text element
+  ([`ThirdPartyLicensesDialog.tsx`](apps/smart-ssh-community/frontend/src/components/ThirdPartyLicensesDialog.tsx)).
+  This is a property of the current code, not enforced by a test.
+
+### Confirmation boundaries
+
 Every action the AI proposes passes the filter engine first. Its decision is
 `AutoExec`, `Confirm` or `Deny`. Without a matching allow rule the decision
 is `Confirm`: **nothing the AI proposes runs automatically unless you
@@ -332,6 +371,12 @@ Risks we know about and accept, with the reason.
   no pattern is not rated red and, with an allow rule, runs automatically.
   The filter engine's deny rules and hard blacklist are unaffected
   ([ADR 0084](docs/adr/0084-red-risk-requires-confirm.md), §4).
+- **The webview is trusted.** A script-injection flaw in the app's own user
+  interface would equal full control over connected sessions and the safety
+  settings (section 5, "Who is trusted inside the app"). Accepted because
+  the interface is your own and the protections listed there keep foreign
+  code out. Planned hardening: safety settings changed only through backend
+  commands, not by the webview writing the settings store directly.
 - **Allow rules are your decision.** An allow rule lets matching proposals
   run without asking (except for the boundaries in section 5). A rule that
   is broader than intended widens what the AI can do on its own.
