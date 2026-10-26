@@ -33,3 +33,10 @@ cargo tauri android build --debug --apk --target aarch64 --ci
 Mindest-SDK ist 26. Siehe Spec 0114 und ADR 0148.
 
 TLS: Unter Android nutzen die HTTP-Clients (KI-Anbieter, Modell-Download) die eingebauten webpki-Wurzeln statt des Plattform-Verifiers (ADR 0148). Emulator-/Geräteprüfung ist manuell.
+
+## App-Crates, die `app-shell` einbetten (Issue #795)
+
+Zwei Punkte, ohne die die App unter Android beim Start abbricht:
+
+1. **Android-Kontext (`ndk-context`).** Der Schlüsselbund-Test beim Start (`probe_keychain_availability`) und die Spracheingabe (`cpal`) brauchen den Anwendungskontext, bevor ein Webview existiert; Tauri/tao legen ihn nicht an. Die App-Crate bindet ihn deshalb selbst ein: `gen/android/app/src/main/java/io/crates/keyring/Keyring.kt` (Klasse und Paket sind durch den exportierten JNI-Symbolnamen von `android-native-keyring-store` fest vorgegeben; `System.loadLibrary` nennt die App-Bibliothek, hier `smart_ssh_community_lib`) und in `MainActivity.onCreate` **vor** `super.onCreate` der eine Aufruf `Keyring.initializeNdkContext(applicationContext)`. Eine andere App-Crate kopiert beides und passt den Bibliotheksnamen an.
+2. **Android-Teil von Tauri-Plugins.** Die Tauri-CLI schreibt nur die Android-Projekte der *direkten* Abhängigkeiten der App-Crate in `gen/android/tauri.settings.gradle` und `app/tauri.build.gradle.kts`. Jedes Plugin mit Android-Teil, das `app-shell` registriert, muss daher auch direkte Abhängigkeit der App-Crate sein (für `tauri-plugin-fs`, Android-only, reicht ein `[target.'cfg(target_os = "android")'.dependencies]`-Eintrag). Sonst fehlt die Kotlin-Klasse (`com.plugin.fs.FsPlugin`) im APK. Prüfen: `tauri.settings.gradle` nennt `:tauri-plugin-fs`.
