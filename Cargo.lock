@@ -83,15 +83,14 @@ dependencies = [
  "chrono",
  "futures",
  "reqwest",
- "rustls",
  "serde",
  "serde_json",
  "ssh-manager-core",
+ "tls-config",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",
- "webpki-roots",
  "wiremock",
 ]
 
@@ -241,6 +240,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
  "tempfile",
+ "tls-config",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -5367,7 +5367,6 @@ checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
  "once_cell",
- "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -6107,13 +6106,12 @@ dependencies = [
  "cpal",
  "futures",
  "reqwest",
- "rustls",
  "serde",
  "sha2 0.11.0",
  "tempfile",
+ "tls-config",
  "tokio",
  "tracing",
- "webpki-roots",
  "whisper-rs",
 ]
 
@@ -6179,7 +6177,6 @@ dependencies = [
  "log",
  "memchr",
  "percent-encoding",
- "rustls",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -6190,7 +6187,6 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
- "webpki-roots",
 ]
 
 [[package]]
@@ -7198,6 +7194,14 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "tls-config"
+version = "0.7.0"
+dependencies = [
+ "rustls",
+ "webpki-roots",
+]
 
 [[package]]
 name = "tokio"
