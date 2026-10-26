@@ -273,7 +273,7 @@ not by hand-editing, so the lockfile stays consistent).
   gets its own `*.test.ts` via Vitest; component tests exist for the
   trickier interactive pieces, not for every component.
 - When a bug is fixed, add the regression test that would have caught it,
-  not just the fix — see `crates/app-logic/src/dto.rs`'s
+  not just the fix — see `crates/app-logic/src/dto/tests.rs`'s
   `rename_all_fields` regression tests for the pattern.
 - **Prove a regression test is real: it must fail against the un-fixed
   code.** Before accepting a regression test as green, verify it actually
