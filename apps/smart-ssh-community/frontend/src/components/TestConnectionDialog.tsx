@@ -44,7 +44,7 @@ export function TestConnectionDialog({ steps, result, onCancel, onClose }: Props
         {steps.length > 0 ? (
           <ConnectProgressList steps={steps} />
         ) : (
-          running && <p className="text-slate-400">{t("connectTab.stepsRunning")}</p>
+          running && <p className="text-fg-subtle">{t("connectTab.stepsRunning")}</p>
         )}
         {result && (
           <output className="block" data-testid="test-connection-result">

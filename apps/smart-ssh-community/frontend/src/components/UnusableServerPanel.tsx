@@ -56,22 +56,22 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
   return (
     <div className="space-y-4 p-4" data-testid="unusable-server-panel">
       <div>
-        <h2 className="flex flex-wrap items-center gap-2 break-words text-lg font-medium text-slate-100">
+        <h2 className="flex flex-wrap items-center gap-2 break-words text-lg font-medium text-fg">
           {server.name}
-          <span className="rounded bg-amber-900 px-2 py-0.5 text-xs font-normal text-amber-200">
+          <span className="rounded bg-warning-subtle-hover px-2 py-0.5 text-xs font-normal text-warning-fg-softer">
             {t("unusableServer.badge")}
           </span>
         </h2>
-        <p className="break-words text-sm text-slate-400">{t("unusableServer.host", { host: server.host })}</p>
+        <p className="break-words text-sm text-fg-subtle">{t("unusableServer.host", { host: server.host })}</p>
       </div>
-      <p className="rounded border border-amber-700 bg-amber-950 p-3 text-sm text-amber-200">
+      <p className="rounded border border-warning-border-strong bg-warning-subtle p-3 text-sm text-warning-fg-softer">
         {unusableReasonText(t, server.reason)}
       </p>
-      <p className="text-sm text-slate-300">{t("unusableServer.explanation")}</p>
+      <p className="text-sm text-fg-muted">{t("unusableServer.explanation")}</p>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger-fg">{error}</p>}
 
-      <div className="border-t border-slate-700 pt-4">
+      <div className="border-t border-border pt-4">
         {!secretsLeftBehind && (
           <Button variant="danger" size="sm"
             onClick={handleDeleteClick}
@@ -82,14 +82,14 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
 
         {secretsLeftBehind && (
           <div
-            className="mt-3 rounded border border-amber-700 bg-amber-950 p-3 text-sm"
+            className="mt-3 rounded border border-warning-border-strong bg-warning-subtle p-3 text-sm"
             data-testid="secrets-left-behind"
           >
-            <p className="mb-2 font-medium text-amber-200">
+            <p className="mb-2 font-medium text-warning-fg-softer">
               {t("serverForm.deletedWithLeftoverSecretsTitle")}
             </p>
-            <p className="mb-2 text-amber-200">{t("serverForm.deletedWithLeftoverSecretsHint")}</p>
-            <ul className="mb-2 space-y-1 font-mono text-xs text-amber-200">
+            <p className="mb-2 text-warning-fg-softer">{t("serverForm.deletedWithLeftoverSecretsHint")}</p>
+            <ul className="mb-2 space-y-1 font-mono text-xs text-warning-fg-softer">
               {secretsLeftBehind.map((ref) => (
                 <li key={ref} className="break-all">{ref}</li>
               ))}
@@ -106,15 +106,15 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
         )}
 
         {preview && (
-          <div className="mt-3 rounded border border-red-800 bg-red-950 p-3 text-sm">
-            <p className="mb-2 font-medium text-red-200">{t("serverForm.deleteImpactTitle")}</p>
-            <ul className="mb-2 space-y-1 text-red-200">
+          <div className="mt-3 rounded border border-danger-border bg-danger-subtle p-3 text-sm">
+            <p className="mb-2 font-medium text-danger-fg-softer">{t("serverForm.deleteImpactTitle")}</p>
+            <ul className="mb-2 space-y-1 text-danger-fg-softer">
               <li>{t("unusableServer.deleteSecrets")}</li>
               {preview.serversLosingJumpHost.map((s) => (
                 <li key={s.id}>{t("serverForm.serverWillLoseJumpHost", { name: s.name })}</li>
               ))}
             </ul>
-            <p className="mb-2 text-red-200">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
+            <p className="mb-2 text-danger-fg-softer">{t("serverForm.deleteAlwaysRemovesHistory")}</p>
             <div className="flex flex-wrap gap-2">
               <Button size="sm"
                 onClick={() => setPreview(null)}

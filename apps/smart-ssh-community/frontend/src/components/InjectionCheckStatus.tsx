@@ -11,11 +11,11 @@ export function InjectionCheckStatus({ check }: { check?: InjectionCheckState })
   if (check.state === "running") {
     return (
       <output
-        className="mt-1 flex items-center gap-2 text-xs text-slate-400"
+        className="mt-1 flex items-center gap-2 text-xs text-fg-subtle"
         data-testid="injection-check-running"
       >
         <span
-          className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
+          className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-fg-faint border-t-transparent"
           aria-hidden="true"
         />
         {t("chat.injectionChecking")}
@@ -24,14 +24,14 @@ export function InjectionCheckStatus({ check }: { check?: InjectionCheckState })
   }
   if (check.state === "unavailable") {
     return (
-      <output className="mt-1 block text-xs text-amber-300" data-testid="injection-check-unavailable">
+      <output className="mt-1 block text-xs text-warning-fg-soft" data-testid="injection-check-unavailable">
         {translateErrorCode(t, "AI_INJECTION_CHECK_UNAVAILABLE", "")}
       </output>
     );
   }
   return (
     <div
-      className="mt-1 rounded border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200"
+      className="mt-1 rounded border border-warning-border-strong/60 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-softer"
       role="alert"
       data-testid="injection-check-suspected"
     >

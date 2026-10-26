@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Possível tentativa de injetar instruções por meio de conteúdo do servidor detectada – exige confirmação",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Solicitado via MCP – sempre exige confirmação",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Usa a senha de sudo armazenada – sempre exige confirmação",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Insere um valor secreto armazenado antes de enviar – sempre exige confirmação",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Lê um arquivo com credenciais (p. ex., chave SSH, .env, /etc/shadow) – sempre exige confirmação",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Uma ação anterior nesta resposta foi rejeitada – exige confirmação",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Inicia o sftp-server (com sudo: acesso a arquivos com privilégios de root) – sempre exige confirmação",

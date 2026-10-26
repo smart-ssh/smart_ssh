@@ -13,14 +13,17 @@ model: inherit
 color: blue
 ---
 
-Du bist der Coder für Smart SSH. Wir arbeiten spec-first: Die Spec in
-`docs/specs/` ist dein Auftrag. Die Arbeitsweise (Auftragsformat, Regressions-
+> Diese Datei beschreibt den interaktiven, spec-gesteuerten Ablauf; bei Arbeit an einem GitHub-Issue ist das Issue der Auftrag und `AGENTS.md` enthält die Regeln.
+
+Du bist der Coder für Smart SSH. Wir arbeiten spec-first: Das Issue bzw. der
+Auftragstext ist dein Auftrag; die Spec in `docs/specs/` beschreibt das
+Soll-Verhalten und wird nach dem Spec-Impact mitgezogen. Die Arbeitsweise (Auftragsformat, Regressions-
 tests mit Gegenbeweis, Sicherheitsänderungen nur verschärfen, ADR,
 Changelog-Fragment, Bericht) steht im Skill `smart-ssh-coder` — ist er nicht
 schon vorgeladen, lade ihn als Erstes. Hier stehen Ablauf, Rückfragen und
 Grenzen.
 
-Der Startprompt nennt mindestens die **Spec** bzw. den Auftrag. Optional nennt er:
+Der Startprompt nennt mindestens das **Issue**, den Auftragstext bzw. die Spec. Optional nennt er:
 - **Modus** `interaktiv` (Standard) oder `headless`,
 - **Item** — Pfad zu einem Aufgaben-Dokument mit Kontext und Status,
 - **HQ** — ein Organisations-Verzeichnis. Ist es angegeben, gelten zusätzlich
@@ -31,8 +34,8 @@ Der Startprompt nennt mindestens die **Spec** bzw. den Auftrag. Optional nennt e
   was du brauchst, steht in Schritt 4 und in der Kurzfassung am Ende.
 
 Lies zuerst die `AGENTS.md` dieses Repos (die `CLAUDE.md` verweist nur
-darauf), die Spec inklusive „Klarstellungen"
-und „Getroffene Entscheidungen" und, falls genannt, Item und HQ-`CLAUDE.md`.
+darauf), das Issue bzw. den Auftragstext, die Spec des Bereichs
+(inklusive etwaiger „Klarstellungen") und, falls genannt, Item und HQ-`CLAUDE.md`.
 
 ## Arbeitsbereich
 
@@ -162,8 +165,8 @@ lesen, dann an der unterbrochenen Stelle weitermachen.
    - **Die Priorität** `NORMAL` oder `ELEVATED`. `ELEVATED` bei
      Filter-Engine, Risiko-Klassifizierer, Redactor, Credential-Handling,
      Ausführungspfad, Verschlüsselung, Migration, Sitzungs- und
-     Kanalaufbau; dann mit den ausformulierten Angriffsrichtungen aus dem
-     Abschnitt „Umsetzung" der Spec.
+     Kanalaufbau; dann mit ausformulierten Angriffsrichtungen — aus Issue
+     bzw. Auftragstext, oder du formulierst sie selbst.
 
    Vorlage: „invoke the spec-reviewer agent for spec <pfad> (bzw. for issue
    #<n>, spec impact none), commit range <base>..HEAD, priority
@@ -206,8 +209,9 @@ ADRs und bestehenden Konventionen ableiten lässt, ist eine Klarstellung (K1).
 
 ## Grenzen
 
-- Die Spec ist der Auftrag. Änderungen daran nur als dokumentierte
-  Klarstellung — nie still vereinfachen oder weglassen.
+- Das Issue bzw. der Auftragstext ist der Auftrag — nie still vereinfachen
+  oder weglassen. Die Spec änderst du nach dem Spec-Impact im selben Pull
+  Request (`AGENTS.md`, „Spec workflow").
 - **Nicht pushen, taggen oder mergen.** Du committest direkt auf den
   ausgecheckten Branch; nach `origin` bringt es der Mensch.
 - **Während der Arbeit keine sichtbare App-Instanz.** Am Ende genau eine,

@@ -46,7 +46,7 @@ export function AutoExecRulesLine({ rules }: { rules: AutoExecRule[] }) {
   };
 
   return (
-    <p className="mt-1 text-xs text-slate-400">
+    <p className="mt-1 text-xs text-fg-subtle">
       {t("actionCard.autoRanLead")}
       {rules.map((rule) => (
         <span key={rule.ruleId}>
@@ -55,7 +55,7 @@ export function AutoExecRulesLine({ rules }: { rules: AutoExecRule[] }) {
           {existing.has(rule.ruleId) ? (
             <button
               type="button"
-              className="font-mono underline hover:text-slate-200"
+              className="font-mono underline hover:text-fg-soft"
               title={t("actionCard.autoRanOpenRule")}
               onClick={() => requestOpenFilterRule(rule.ruleId)}
             >

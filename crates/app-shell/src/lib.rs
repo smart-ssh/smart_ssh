@@ -38,6 +38,8 @@ mod risk_second_opinion;
 #[cfg(test)]
 mod runtime_assumptions;
 mod services;
+/// Issue #816: the one public path to close a session completely.
+pub mod sessions;
 mod settings_store;
 /// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
 /// nach vorn.
@@ -431,6 +433,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
     let _log_guard = app_logic::logging::init_logging();
 
+    // Issue #935: before any HTTPS client is built, so dependencies that
+    // construct their own rustls config find a process-level provider.
+    init_crypto_provider();
+
     // Spec-Reviewer-Fund (Spec 0047, Review dieses Schritts): muss VOR dem
     // ersten Aufruf installiert sein, der selbst panicken kann —
     // `default_db_path()` unten hat ein `.expect(...)` (kein Home-/
@@ -565,6 +571,16 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     ));
     let app_state = match mode {
         app_logic::master_password::KeyMode::Password => None,
+        // Issue #944: where no native dialog exists (Android), the keychain-mode
+        // startup runs in the window with `WindowStartupPrompt`; nothing is
+        // opened or changed before the user can answer.
+        app_logic::master_password::KeyMode::Keychain
+            if crate::startup_prompt::startup_prompt_placement(std::env::consts::OS)
+                == crate::startup_prompt::StartupPromptPlacement::Window =>
+        {
+            tracing::info!("the keychain-mode startup runs in the window (Issue #944)");
+            None
+        }
         app_logic::master_password::KeyMode::Keychain => {
             let keyring = KeyringCredentialStore::new();
             let prompt = crate::startup_prompt::NativeStartupPrompt {
@@ -1208,4 +1224,19 @@ fn microphone_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     return crate::voice_input::microphone_plugin::<R>();
     #[cfg(not(target_os = "android"))]
     return tauri::plugin::Builder::new("microphone").build();
+}
+
+/// Installs `aws-lc-rs` as the process-level rustls provider (idempotent).
+pub(crate) fn init_crypto_provider() {
+    tls_config::install_default_crypto_provider();
+}
+
+#[cfg(test)]
+mod crypto_provider_tests {
+    #[test]
+    fn init_installs_default_provider_and_is_idempotent() {
+        super::init_crypto_provider();
+        super::init_crypto_provider();
+        assert!(tls_config::default_provider_installed());
+    }
 }

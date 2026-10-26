@@ -194,7 +194,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
   };
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-black/50 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
+    <ModalBackdrop layer="app" className="fixed inset-0 flex items-center justify-center bg-overlay/50 p-4 narrow:items-stretch narrow:p-0 narrow:pt-9">
       {/* The key handler only implements Escape and the Tab wrap of the dialog. */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
@@ -205,12 +205,12 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
         onKeyDown={handleKeyDown}
         onClick={handleClick}
         tabIndex={-1}
-        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-slate-800 shadow-xl outline-none narrow:h-full narrow:max-w-none narrow:flex-col narrow:rounded-none"
+        className="flex h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg bg-surface-raised shadow-xl outline-none narrow:h-full narrow:max-w-none narrow:flex-col narrow:rounded-none"
       >
         {showList && (
-        <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-700 bg-slate-900/40 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
+        <nav className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface/40 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
           <div className="flex items-center justify-between">
-            <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-slate-100">
+            <h2 id={titleId} className="font-heading px-4 pt-4 pb-2 text-lg font-semibold tracking-wide text-fg">
               {t("settings.title")}
             </h2>
             {narrow && (
@@ -230,10 +230,10 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                     setNarrowView("detail");
                   }}
                   aria-current={category.id === active?.id ? "page" : undefined}
-                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                  className={`w-full px-4 py-2 text-left text-sm narrow:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
                     category.id === active?.id
-                      ? "bg-indigo-600 text-slate-950"
-                      : "text-slate-300 hover:bg-slate-800"
+                      ? "bg-accent text-surface-sunken"
+                      : "text-fg-muted hover:bg-surface-raised"
                   }`}
                 >
                   {category.label}
@@ -246,7 +246,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
 
         {showDetail && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-700 px-6 py-4 narrow:px-2 narrow:py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-6 py-4 narrow:px-2 narrow:py-2">
             {narrow && (
               <>
                 <h2 id={titleId} className="sr-only">
@@ -263,7 +263,7 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                 </Button>
               </>
             )}
-            <h3 className="font-heading min-w-0 flex-1 truncate text-base font-semibold tracking-wide text-slate-100 narrow:text-center">
+            <h3 className="font-heading min-w-0 flex-1 truncate text-base font-semibold tracking-wide text-fg narrow:text-center">
               {active?.label}
             </h3>
             <Button variant="ghost" size="sm" className="narrow:min-h-11 narrow:min-w-11" onClick={onClose} aria-label={t("common.close")}>

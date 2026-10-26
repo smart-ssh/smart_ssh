@@ -1,6 +1,9 @@
 # ADR 0094 — Das MCP-Token in der Datenbank, und was dabei offen bleibt
 
-Status: angenommen
+## Status
+
+Accepted
+
 Bezug: Spec 0101 (A12, T12, T1), Spec 0028 (§9), ADR 0093
 
 ## Zusammenhang

@@ -1,6 +1,9 @@
-# ADR 0141 — Release-Fixtures für die Migrationstests stammen vom Release selbst
+# ADR 0151 — Release-Fixtures für die Migrationstests stammen vom Release selbst
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0059, Spec 0101, ADR 0052, Issue #15
 
 ## Problem

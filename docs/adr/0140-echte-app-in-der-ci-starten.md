@@ -1,6 +1,9 @@
 # ADR 0140 — Die echte App in der CI starten (tauri-driver, Rust-Tests)
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #235, Spec 0090 (§2a), Spec 0101, Issue #166, #234
 
 ## Kontext
@@ -28,7 +31,7 @@ unbemerkt.
    das Flag.
 3. **Fixtures.** Keine neue eingecheckte Binärdatei. Die Aktualisierung
    nutzt die vorhandene, vom Release 0.5.2 selbst geschriebene Datei
-   `v0.5.2.sqlite3` (ADR 0141) und legt deren Zugangsdaten über
+   `v0.5.2.sqlite3` (ADR 0151) und legt deren Zugangsdaten über
    `credentials-keyring` in den Test-Schlüsselbund. Der Passwort-Modus
    entsteht über `connect_encrypted` und `set_up_master_password`, also
    über dieselben öffentlichen Funktionen wie in der App. Das Datenverzeichnis

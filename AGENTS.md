@@ -114,23 +114,34 @@ crates/
 │   ├── filter/            # policy/filter engine (security-critical)
 │   ├── risk/               # command risk classification
 │   ├── ai/                  # AI provider abstraction + output redaction
-│   └── profiles/              # server/group/credential domain types
+│   ├── profiles/              # server/group/credential domain types
+│   └── entitlements.rs         # `Feature` enum and `EntitlementProvider` trait
 ├── ssh-transport/       # concrete SshTransport impl (russh + local pseudo-server)
 ├── persistence-sqlite/  # concrete ProfileStore/PolicyStore impl
 ├── credentials-keyring/ # concrete CredentialStore impl (OS keychain)
 ├── ai-providers/        # concrete AiProvider impls (Anthropic, OpenAI-compatible, ...)
 ├── mcp-server/           # MCP server exposing sessions to external clients
+├── speech/               # speech-to-text
 ├── app-logic/            # Tauri-free application logic: chat-turn orchestration,
 │                         # compaction, confirmation registry, connection test,
 │                         # server/group/credential management, DTOs, AppState
 │                         # (Spec 0084; see docs/architecture.md for the app-logic/
 │                         # app-shell boundary and its one deliberate exception)
-└── app-shell/            # thin wrapper: Tauri commands/events <-> app-logic/core APIs,
-                           # edition-parametrized via `Wiring` (Spec 0038)
+├── app-shell/            # Tauri layer: commands, events, wiring (`Wiring`, Spec 0038);
+│                         # depends on `app-logic` and directly on the adapter crates
+└── real-app-tests/       # starts the real app in CI
 apps/
 └── smart-ssh-community/  # thin binary: app_shell::run(Wiring::community())
     └── frontend/           # React, talks only to app-shell via invoke()
 ```
+
+Extension points:
+
+- `app_shell::Wiring` — `crates/app-shell/src/wiring.rs`
+- Frontend extension registry —
+  `apps/smart-ssh-community/frontend/src/extensions/registry.ts`
+- Namespaced extension tables — `extension_db` in `crates/persistence-sqlite`
+  (`crates/persistence-sqlite/src/extension_db.rs`)
 
 **`core` never depends on Tauri or a UI framework.** All domain logic
 belongs there; `app-shell` only translates between Tauri commands/events
@@ -156,6 +167,23 @@ code, that's a sign something is architecturally wrong — the special
 casing belongs at the transport/session-construction boundary, never
 inside the security logic itself.
 
+## Where to look
+
+- `docs/architecture.md` — read this when you need the crate boundaries, in particular app-logic vs. app-shell.
+- `THREAT-MODEL.md` — read this when a change touches what the AI sees, redaction, where data lives, network connections or trust boundaries.
+- `.claude/skills/smart-ssh-coder/references/security-invariants.md` — read this before changing anything security-critical.
+- `.claude/skills/smart-ssh-coder/references/codebase-map.md` — read this when you look for the file or extension point for a change.
+- `docs/ui-guidelines.md` — read this when you build or change UI.
+- `docs/i18n-glossary.md` — read this when you add or change translated texts.
+- `docs/datenpfade.md` — read this when you need to know where the app stores data on disk.
+- `docs/netzwerkverbindungen.md` — read this when you add or change an outgoing network connection.
+- `docs/android-build.md` — read this when you build for or debug on Android.
+- `docs/dev-environment.md` — read this when you set up a development environment.
+- `README_DEV.md` — read this for developer-facing build and run instructions.
+- `docs/specs/README.md` — read this when you change user-visible behaviour or write a spec.
+- `docs/adr/README.md` — read this when you make or look up an architecture decision.
+- `changelog.d/README.md` — read this when you add a changelog fragment.
+
 ## Security-critical modules — extra care
 
 `crates/core/src/filter/` (policy engine), `crates/core/src/risk/` (risk
@@ -180,6 +208,19 @@ irreversible happening on a real server. For changes here:
 - Redaction (`crates/core/src/ai/`) must run before content is persisted
   or sent anywhere — verify with a test that plants a redaction-worthy
   secret and asserts it never appears in plaintext in the output/DB.
+
+- **Keep `THREAT-MODEL.md` current.** A pull request that changes the
+  filter engine, risk classifier, redaction or fencing, credential
+  handling, the command execution/confirmation path, a network boundary
+  (new outgoing connection, listener, MCP), an IPC command with side
+  effects, a stored secret, an external process, or a trust boundary
+  updates `THREAT-MODEL.md` in the same pull request. This applies to
+  `crates/core/src/filter/`, `crates/core/src/risk/`, `crates/core/src/ai/`,
+  `crates/core/src/profiles/credentials.rs`, `crates/credentials-keyring/`,
+  `crates/app-logic/src/orchestration/`, `crates/mcp-server/`,
+  `crates/ssh-transport/` and `crates/app-shell/src/elevated_sftp.rs`. If it
+  does not need to change, the pull request description says
+  `Threat model: no change – <reason>`.
 
 ## Spec workflow
 
@@ -287,7 +328,7 @@ not by hand-editing, so the lockfile stays consistent).
   gets its own `*.test.ts` via Vitest; component tests exist for the
   trickier interactive pieces, not for every component.
 - When a bug is fixed, add the regression test that would have caught it,
-  not just the fix — see `crates/app-logic/src/dto.rs`'s
+  not just the fix — see `crates/app-logic/src/dto/tests.rs`'s
   `rename_all_fields` regression tests for the pattern.
 - **Prove a regression test is real: it must fail against the un-fixed
   code.** Before accepting a regression test as green, verify it actually

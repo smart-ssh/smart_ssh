@@ -1,6 +1,9 @@
 # ADR 0070: Karte „Notiz ist sehr groß“ — Schließen/Später/10 000 Zeichen, Entscheidungen bei der Umsetzung
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0079-large-note-card-close-later-10k.md, ADR 0050
 (Ursprungsdesign der Karte)
 

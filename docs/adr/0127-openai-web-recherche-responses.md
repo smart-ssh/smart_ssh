@@ -1,6 +1,9 @@
 # ADR 0127 — Web research for the official OpenAI provider
 
-Status: accepted
+## Status
+
+Accepted
+
 Concerns: Issue #168 (part 2), Spec 0105, ADR 0117 (decision 1 superseded for
 the official OpenAI provider), ADR 0126
 

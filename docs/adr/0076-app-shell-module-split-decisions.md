@@ -1,6 +1,9 @@
 # ADR 0076 — Entscheidungen bei der Modul-Aufteilung von `orchestration.rs`/`commands.rs` (Spec 0083)
 
-Status: angenommen · 2026-09-27 · Spec: `docs/specs/0083-app-shell-module-aufteilen.md`
+## Status
+
+Accepted · 2026-09-27 · Spec: `docs/specs/0083-app-shell-module-aufteilen.md`
+
 Betrifft: `crates/app-shell/src/orchestration.rs` + `orchestration/`,
 `crates/app-shell/src/commands.rs` + `commands/`
 

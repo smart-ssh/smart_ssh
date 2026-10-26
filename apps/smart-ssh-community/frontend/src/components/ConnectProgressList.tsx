@@ -56,17 +56,17 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
               data-failed={failed ? "true" : undefined}
               className={
                 failed
-                  ? "flex items-baseline gap-2 rounded border border-red-700 bg-red-950/40 px-2 py-1 text-red-300"
+                  ? "flex items-baseline gap-2 rounded border border-danger-border-strong bg-danger-subtle/40 px-2 py-1 text-danger-fg-soft"
                   : "flex items-baseline gap-2 px-2 py-1"
               }
             >
-              <span className="inline-flex w-4 shrink-0 justify-center text-slate-300" aria-hidden="true">
+              <span className="inline-flex w-4 shrink-0 justify-center text-fg-muted" aria-hidden="true">
                 {step.status === "running" ? (
                   <Spinner className="h-3 w-3" />
                 ) : step.status === "skipped" ? (
                   "–"
                 ) : step.status === "ok" ? (
-                  <span className="text-emerald-400">✓</span>
+                  <span className="text-success-fg">✓</span>
                 ) : (
                   "✗"
                 )}
@@ -76,8 +76,8 @@ export function ConnectProgressList({ steps }: { steps: ConnectStepSnapshot[] })
                   ? t("connectLog.step.dnsSkipped")
                   : t(`connectLog.step.${step.kind}`)}
               </span>
-              {multiHop && <span className="text-slate-400">{step.hop}</span>}
-              {detail && <span className="break-all text-slate-400">{detail}</span>}
+              {multiHop && <span className="text-fg-subtle">{step.hop}</span>}
+              {detail && <span className="break-all text-fg-subtle">{detail}</span>}
             </li>
           );
         })}

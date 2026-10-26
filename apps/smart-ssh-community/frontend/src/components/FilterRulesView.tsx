@@ -52,17 +52,17 @@ function scopeKey(scope: Scope): string {
 }
 
 const ACTION_COLORS: Record<RuleAction, string> = {
-  Allow: "bg-emerald-900 text-emerald-300",
-  Confirm: "bg-amber-900 text-amber-300",
-  Deny: "bg-red-900 text-red-300",
+  Allow: "bg-success-subtle-hover text-success-fg-soft",
+  Confirm: "bg-warning-subtle-hover text-warning-fg-soft",
+  Deny: "bg-danger-subtle-hover text-danger-fg-soft",
 };
 
 /** Ampel-Randfarbe je Regel-Aktion (Spec 0009) — Design-Import, Regeln-
  * Bildschirm: farbig markierter linker Kartenrand statt nur der Text-Badge. */
 const ACTION_BORDER: Record<RuleAction, string> = {
-  Allow: "border-l-emerald-600",
-  Confirm: "border-l-amber-600",
-  Deny: "border-l-red-600",
+  Allow: "border-l-success",
+  Confirm: "border-l-warning",
+  Deny: "border-l-danger",
 };
 
 /** Spec 0009, Abschnitt 6: Regel-Liste (gruppiert nach Scope, Auf/Ab statt
@@ -186,7 +186,7 @@ export function FilterRulesView({
     <div className="min-h-0 flex-1 overflow-y-auto p-4 narrow:p-3">
       <div className="max-w-3xl min-w-0 space-y-6">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-heading text-2xl font-bold tracking-wide text-slate-100">
+          <h2 className="font-heading text-2xl font-bold tracking-wide text-fg">
             {t("filterRules.title")}
           </h2>
           <Button variant="primary" className="narrow:min-h-11" onClick={() => setSelection({ kind: "new" })}>
@@ -194,22 +194,22 @@ export function FilterRulesView({
           </Button>
         </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger-fg">{error}</p>}
 
         <div className="space-y-4">
           {groups.length === 0 && (
-            <p className="text-sm text-slate-400">{t("filterRules.noRules")}</p>
+            <p className="text-sm text-fg-subtle">{t("filterRules.noRules")}</p>
           )}
           {groups.map((group) => (
             <div key={group.label}>
-              <h3 className="font-heading mb-1 text-sm font-semibold tracking-[0.14em] text-slate-400 uppercase">
+              <h3 className="font-heading mb-1 text-sm font-semibold tracking-[0.14em] text-fg-subtle uppercase">
                 {group.label}
               </h3>
               <ul className="space-y-1">
                 {group.rules.map((rule, index) => (
                   <li
                     key={rule.id}
-                    className={`border border-l-4 border-slate-700 bg-slate-800/60 px-3 py-2 text-sm ${ACTION_BORDER[rule.action]}`}
+                    className={`border border-l-4 border-border bg-surface-raised/60 px-3 py-2 text-sm ${ACTION_BORDER[rule.action]}`}
                   >
                     <div className="flex items-center gap-2 narrow:flex-wrap">
                     <span
@@ -218,12 +218,12 @@ export function FilterRulesView({
                       {rule.action}
                     </span>
                     <code
-                      className="min-w-0 flex-1 truncate font-mono text-slate-200 narrow:basis-full narrow:overflow-visible narrow:break-all narrow:whitespace-normal"
+                      className="min-w-0 flex-1 truncate font-mono text-fg-soft narrow:basis-full narrow:overflow-visible narrow:break-all narrow:whitespace-normal"
                       title={`${rule.patternType}: ${rule.patternValue}`}
                     >
                       {rule.patternType}: {rule.patternValue}
                     </code>
-                    <span className="font-mono text-xs text-slate-400 narrow:mr-auto">
+                    <span className="font-mono text-xs text-fg-subtle narrow:mr-auto">
                       {t("filterRules.priority", { value: rule.priority })}
                     </span>
                     <Button
@@ -263,9 +263,9 @@ export function FilterRulesView({
                         und Löschen bleiben möglich; Speichern verlangt dann
                         ein gültiges Muster. */}
                     {rule.patternError && (
-                      <p className="mt-1.5 text-xs text-amber-300" role="alert">
+                      <p className="mt-1.5 text-xs text-warning-fg-soft" role="alert">
                         ⚠ {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
-                        <span className="font-mono text-amber-200/70">{rule.patternError}</span>
+                        <span className="font-mono text-warning-fg-softer/70">{rule.patternError}</span>
                       </p>
                     )}
                   </li>
@@ -393,7 +393,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
     >
       <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-fg-muted">
           {t("filterRules.patternType")}
           <select
             ref={patternTypeRef}
@@ -406,7 +406,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
             <option value="exact">Exact</option>
           </select>
         </label>
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-fg-muted">
           {t("filterRules.pattern")}
           <input
             {...TECHNICAL_INPUT_PROPS}
@@ -421,7 +421,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
       </div>
 
       <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-fg-muted">
           {t("filterRules.action")}
           <select
             value={action}
@@ -433,7 +433,7 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
             <option value="Deny">Deny</option>
           </select>
         </label>
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-fg-muted">
           {t("filterRules.priorityLabel")}
           <input
             type="number"
@@ -445,10 +445,10 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
       </div>
 
       <div className="space-y-2">
-        <span id="filter-rule-scope-label" className="block text-sm text-slate-300">
+        <span id="filter-rule-scope-label" className="block text-sm text-fg-muted">
           {t("filterRules.scope")}
         </span>
-        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-300">
+        <div role="radiogroup" aria-labelledby="filter-rule-scope-label" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-muted">
           <label className="flex items-center gap-1">
             <input
               type="radio"
@@ -505,11 +505,11 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
 
       {error && (
         <div className="space-y-1">
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-danger-fg">{error}</p>
           {/* Spec 0077, 3.1.4: der Fehlertext der Bibliothek als Detail — er
               nennt die Stelle im Muster. */}
           {patternErrorDetail && (
-            <p className="font-mono text-xs text-red-300/80">{patternErrorDetail}</p>
+            <p className="font-mono text-xs text-danger-fg-soft/80">{patternErrorDetail}</p>
           )}
         </div>
       )}
@@ -524,21 +524,21 @@ function RuleForm({ rule, servers, knownTags, onSaved, onCancel }: RuleFormProps
 function HardBlacklistSection({ patterns }: { patterns: PatternDto[] }) {
   const { t } = useTranslation();
   return (
-    <div className="space-y-2 border-t border-slate-700 pt-4">
-      <h3 className="font-heading flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-100">
+    <div className="space-y-2 border-t border-border pt-4">
+      <h3 className="font-heading flex items-center gap-2 text-sm font-semibold tracking-wide text-fg">
         {t("filterRules.hardBlacklist")}
-        <span className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+        <span className="rounded bg-border px-2 py-0.5 text-xs text-fg-muted">
           {t("filterRules.hardBlacklistBadge")}
         </span>
       </h3>
-      <p className="text-xs text-slate-400">{t("filterRules.hardBlacklistHint")}</p>
+      <p className="text-xs text-fg-subtle">{t("filterRules.hardBlacklistHint")}</p>
       <ul className="space-y-1">
         {patterns.map((p, i) => (
           <li
             key={i}
-            className="rounded border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300"
+            className="rounded border border-surface-raised bg-surface/60 px-3 py-1.5 text-xs text-fg-muted"
           >
-            <span className="text-slate-400">{p.kind}:</span>{" "}
+            <span className="text-fg-subtle">{p.kind}:</span>{" "}
             <code className="break-all">{p.value}</code>
           </li>
         ))}
@@ -553,19 +553,19 @@ function decisionInfo(
   decision: Decision,
 ): { text: string; className: string; reason?: string; code?: string } {
   if (decision === "AutoExec") {
-    return { text: "AutoExec", className: "bg-emerald-900 text-emerald-300" };
+    return { text: "AutoExec", className: "bg-success-subtle-hover text-success-fg-soft" };
   }
   if ("Confirm" in decision) {
     return {
       text: "Confirm",
-      className: "bg-amber-900 text-amber-300",
+      className: "bg-warning-subtle-hover text-warning-fg-soft",
       reason: decision.Confirm.reason,
       code: decision.Confirm.code,
     };
   }
   return {
     text: "Deny",
-    className: "bg-red-900 text-red-300",
+    className: "bg-danger-subtle-hover text-danger-fg-soft",
     reason: decision.Deny.reason,
     code: decision.Deny.code,
   };
@@ -587,7 +587,7 @@ function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: Rule
   const { reason, code } = decisionInfo(trace.decision);
   const matchedRule = trace.matchedRule ? rules.find((r) => r.id === trace.matchedRule) : null;
   return (
-    <div className="mt-1 space-y-0.5 text-xs text-slate-400">
+    <div className="mt-1 space-y-0.5 text-xs text-fg-subtle">
       {reason && <p>{translateErrorCode(t, code, reason)}</p>}
       {matchedRule && (
         <p>
@@ -615,16 +615,16 @@ function TraceDetails({ trace, rules }: { trace: EvaluationTraceDto; rules: Rule
 function TraceView({ trace, rules }: { trace: EvaluationTraceDto; rules: RuleDto[] }) {
   const { t } = useTranslation();
   return (
-    <div className="rounded border border-slate-700 bg-slate-900/60 p-2">
+    <div className="rounded border border-border bg-surface/60 p-2">
       {trace.kind === "Segment" && trace.segmentIndex !== null && (
-        <span className="mr-2 text-xs text-slate-400">
+        <span className="mr-2 text-xs text-fg-subtle">
           {t("filterRules.segmentLabel", { index: trace.segmentIndex + 1 })}
         </span>
       )}
       <DecisionBadge decision={trace.decision} />
       <TraceDetails trace={trace} rules={rules} />
       {trace.subCommandTraces.length > 0 && (
-        <div className="mt-2 space-y-1 border-l border-slate-700 pl-2">
+        <div className="mt-2 space-y-1 border-l border-border pl-2">
           {trace.subCommandTraces.map((sub, i) => (
             <TraceView key={i} trace={sub} rules={rules} />
           ))}
@@ -686,12 +686,12 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
   };
 
   return (
-    <div className="space-y-3 border-t border-slate-700 pt-4">
-      <h3 className="font-heading text-sm font-semibold tracking-wide text-slate-100">
+    <div className="space-y-3 border-t border-border pt-4">
+      <h3 className="font-heading text-sm font-semibold tracking-wide text-fg">
         {t("filterRules.testRules")}
       </h3>
 
-      <label className="block text-sm text-slate-300">
+      <label className="block text-sm text-fg-muted">
         {t("filterRules.exampleCommand")}
         <textarea
           {...TECHNICAL_INPUT_PROPS}
@@ -704,7 +704,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
       </label>
 
       <div className="grid grid-cols-2 gap-3 narrow:grid-cols-1">
-        <label className="block text-sm text-slate-300">
+        <label className="block text-sm text-fg-muted">
           {t("filterRules.simulateServer")}
           <select
             value={serverId}
@@ -719,16 +719,16 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
             ))}
           </select>
         </label>
-        <div className="block text-sm text-slate-300">
+        <div className="block text-sm text-fg-muted">
           {t("filterRules.simulateTags")}
-          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-slate-600 bg-slate-900 p-1.5">
+          <div className="mt-1 flex flex-wrap items-center gap-1 rounded border border-border-strong bg-surface p-1.5">
             {selectedServerTags
               .filter((tag) => !tags.includes(tag))
               .map((tag) => (
                 <span
                   key={`server-${tag}`}
                   title={t("filterRules.tagFromServer")}
-                  className="flex items-center gap-1 rounded bg-indigo-900/60 px-2 py-0.5 text-xs text-indigo-200"
+                  className="flex items-center gap-1 rounded bg-accent-subtle-hover/60 px-2 py-0.5 text-xs text-accent-fg-softer"
                 >
                   {tag}
                 </span>
@@ -736,13 +736,13 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
             {tags.map((tag) => (
               <span
                 key={tag}
-                className="flex items-center gap-1 rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-100"
+                className="flex items-center gap-1 rounded bg-border px-2 py-0.5 text-xs text-fg"
               >
                 {tag}
                 <button
                   type="button"
                   onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="rounded text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="rounded text-fg-subtle hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕
@@ -763,7 +763,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
               onBlur={handleAddTag}
               placeholder={t("serverForm.tagPlaceholder")}
               aria-label={t("filterRules.simulateTags")}
-              className="min-w-[6rem] flex-1 rounded bg-transparent text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="min-w-[6rem] flex-1 rounded bg-transparent text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
             />
           </div>
         </div>
@@ -778,21 +778,21 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
         {testing ? t("common.testing") : t("filterRules.test")}
       </Button>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger-fg">{error}</p>}
 
       {result && invalidRules.length > 0 && (
         <div className="space-y-1" data-testid="test-invalid-pattern-rules">
-          <p className="text-xs uppercase tracking-wide text-slate-400">
+          <p className="text-xs uppercase tracking-wide text-fg-subtle">
             {t("filterRules.testInvalidPatternRules")}
           </p>
           <ul className="space-y-1">
             {invalidRules.map((rule) => (
-              <li key={rule.id} className="text-xs text-amber-300" role="alert">
-                <code className="text-slate-200">
+              <li key={rule.id} className="text-xs text-warning-fg-soft" role="alert">
+                <code className="text-fg-soft">
                   {rule.patternType}: {rule.patternValue}
                 </code>{" "}
                 ⚠ {t("errors.FILTER_RULE_PATTERN_INVALID")}{" "}
-                <span className="font-mono text-amber-200/70">{rule.patternError}</span>
+                <span className="font-mono text-warning-fg-softer/70">{rule.patternError}</span>
               </li>
             ))}
           </ul>
@@ -800,9 +800,9 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
       )}
 
       {result && (
-        <div className="space-y-3 rounded border border-slate-700 bg-slate-800/60 p-3">
+        <div className="space-y-3 rounded border border-border bg-surface-raised/60 p-3">
           <div>
-            <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">
+            <p className="mb-1 text-xs uppercase tracking-wide text-fg-subtle">
               {t("filterRules.overallDecision")}
             </p>
             <DecisionBadge decision={result.decision} big />
@@ -812,7 +812,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
           </div>
           {result.subCommandTraces.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
+              <p className="text-xs uppercase tracking-wide text-fg-subtle">
                 {t("filterRules.subCommands")}
               </p>
               {result.subCommandTraces.map((sub, i) => (

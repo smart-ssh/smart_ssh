@@ -1,7 +1,7 @@
 # 0045-sftp-browser-actions-scope-choices
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

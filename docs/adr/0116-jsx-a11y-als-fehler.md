@@ -1,6 +1,9 @@
 # ADR 0116 — `jsx-a11y`-Funde als Fehler
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0100 (A6.1, A6.3), Issue #112
 
 ## Kontext

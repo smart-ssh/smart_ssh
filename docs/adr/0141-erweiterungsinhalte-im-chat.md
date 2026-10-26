@@ -1,6 +1,8 @@
 # ADR 0141 — Erweiterungsinhalte in Chat-Nachrichten: opaker Verweis, Versiegelung im Kern
 
-Status: angenommen · ersetzt ADR 0137 · ändert ADR 0138, Entscheidung 4 · Spec 0110, Spec 0038 §2a, Spec 0039, Spec 0006 §8
+## Status
+
+Accepted · ersetzt ADR 0137 · ändert ADR 0138, Entscheidung 4 · Spec 0110, Spec 0038 §2a, Spec 0039, Spec 0006 §8
 
 Umsetzung in Schritten: #504 setzt Entscheidung 1 (Verweis und Speicherung),
 2 (Erweiterungspunkt, Signaturen), 7 (Aufräumen), 8 (Verlaufsanzeige,

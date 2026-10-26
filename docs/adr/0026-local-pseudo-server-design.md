@@ -1,7 +1,7 @@
 # 0026-local-pseudo-server-design
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

@@ -52,10 +52,10 @@ export function RecoveryCodeDialog({ code, onContinue, onCancel }: RecoveryCodeD
       }
     >
       <div className="space-y-3">
-        <p className="rounded border border-amber-700 bg-amber-950/40 p-2 text-amber-200">{t("backup.code.warning")}</p>
+        <p className="rounded border border-warning-border-strong bg-warning-subtle/40 p-2 text-warning-fg-softer">{t("backup.code.warning")}</p>
         <p
           data-testid="backup-recovery-code"
-          className="flex flex-wrap gap-x-3 gap-y-1 rounded border border-slate-600 bg-slate-950 p-3 font-mono text-base text-slate-100"
+          className="flex flex-wrap gap-x-3 gap-y-1 rounded border border-border-strong bg-surface-sunken p-3 font-mono text-base text-fg"
         >
           {codeGroups(code).map((group, i) => (
             <span key={i}>{group}</span>
@@ -65,8 +65,8 @@ export function RecoveryCodeDialog({ code, onContinue, onCancel }: RecoveryCodeD
           <Button size="sm" className="narrow:min-h-11" onClick={copy}>
             {t("backup.code.copy")}
           </Button>
-          {copied === "copied" && <span className="text-xs text-emerald-400">{t("about.copied")}</span>}
-          {copied === "failed" && <span className="text-xs text-red-300">{t("backup.code.copyFailed")}</span>}
+          {copied === "copied" && <span className="text-xs text-success-fg">{t("about.copied")}</span>}
+          {copied === "failed" && <span className="text-xs text-danger-fg-soft">{t("backup.code.copyFailed")}</span>}
         </div>
         <label className="flex items-start gap-2 narrow:min-h-11">
           <input
@@ -134,7 +134,7 @@ export function PassphraseDialog({ onSave, onCancel }: PassphraseDialogProps) {
       }
     >
       <div className="space-y-3">
-        <p className="rounded border border-amber-700 bg-amber-950/40 p-2 text-amber-200">{t("backup.passphrase.warning")}</p>
+        <p className="rounded border border-warning-border-strong bg-warning-subtle/40 p-2 text-warning-fg-softer">{t("backup.passphrase.warning")}</p>
         <Field
           label={t("backup.passphrase.label")}
           help={t("backup.passphrase.help", { count: MIN_BACKUP_PASSPHRASE })}
@@ -165,7 +165,7 @@ export function PassphraseDialog({ onSave, onCancel }: PassphraseDialogProps) {
             />
           )}
         </Field>
-        {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger-fg-soft">{error}</p>}
       </div>
     </DialogFrame>
   );

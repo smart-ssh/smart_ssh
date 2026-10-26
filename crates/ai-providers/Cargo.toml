@@ -29,5 +29,4 @@ wiremock = "0.6.5"
 # Android (Spec 0114, ADR 0148): the platform certificate verifier needs JNI
 # initialisation, so TLS there uses the bundled webpki roots instead.
 [target.'cfg(target_os = "android")'.dependencies]
-rustls = { version = "0.23.46", default-features = false, features = ["aws-lc-rs", "std", "tls12"] }
-webpki-roots = "1.0.10"
+tls-config = { path = "../tls-config" }

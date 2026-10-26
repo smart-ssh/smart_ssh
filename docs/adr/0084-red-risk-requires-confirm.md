@@ -1,6 +1,8 @@
 # ADR 0084 — Rotes Risiko verlangt Bestätigung (Spec 0092)
 
-Status: akzeptiert · Spec: `docs/specs/0092-red-risk-requires-confirm.md` ·
+## Status
+
+Accepted · Spec: `docs/specs/0092-red-risk-requires-confirm.md` ·
 Backlog: BL-0074
 
 ## 1. Entscheidung

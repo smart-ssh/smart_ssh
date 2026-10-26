@@ -71,15 +71,15 @@ export function AboutSettings() {
   return (
     <div className="space-y-4">
       {loadError && (
-        <p role="alert" className="rounded bg-red-950 px-3 py-2 text-sm text-red-300">{loadError}</p>
+        <p role="alert" className="rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{loadError}</p>
       )}
       {info && (
         <div>
-          <span className="block text-xs text-slate-400">{t("about.version")}</span>
+          <span className="block text-xs text-fg-subtle">{t("about.version")}</span>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <code
               title={displayLine}
-              className="min-w-0 select-text break-words rounded border border-slate-600 bg-slate-900 px-3 py-1.5 font-mono text-sm text-slate-100"
+              className="min-w-0 select-text break-words rounded border border-border-strong bg-surface px-3 py-1.5 font-mono text-sm text-fg"
             >
               {displayLine}
             </code>
@@ -87,10 +87,10 @@ export function AboutSettings() {
               {t("about.copyButton")}
             </Button>
             {copyState === "copied" && (
-              <span className="text-xs text-emerald-400">{t("about.copied")}</span>
+              <span className="text-xs text-success-fg">{t("about.copied")}</span>
             )}
             {copyState === "failed" && (
-              <span className="text-xs text-red-300">{t("about.copyFailed")}</span>
+              <span className="text-xs text-danger-fg-soft">{t("about.copyFailed")}</span>
             )}
           </div>
         </div>

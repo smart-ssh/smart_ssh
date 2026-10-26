@@ -1,7 +1,7 @@
 # 0046-ui-politur-scope-choices
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

@@ -1,6 +1,9 @@
 # ADR 0106 — Single-Instance-Schutz und Sperre auf das Datenverzeichnis
 
-Status: akzeptiert; §5/§6 und eine Konsequenz ergänzt durch ADR 0121
+## Status
+
+Accepted · §5/§6 und eine Konsequenz ergänzt durch ADR 0121
+
 Betrifft: Issue #19, Spec 0101 §1, ADR 0093 §7, ADR 0032
 
 ## Problem

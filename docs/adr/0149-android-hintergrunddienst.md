@@ -1,6 +1,8 @@
 # ADR 0149 — Android: Vordergrunddienst für offene Sitzungen
 
-Status: angenommen · Issue: #677 · Spec 0114 §4
+## Status
+
+Accepted · Issue: #677 · Spec 0114 §4
 
 ## Kontext
 

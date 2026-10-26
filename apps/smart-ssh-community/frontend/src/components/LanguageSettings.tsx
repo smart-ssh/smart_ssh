@@ -24,7 +24,7 @@ export function LanguageSettings() {
   // `ChatRetentionSettings.tsx`/`McpServerSettings.tsx`.
   return (
     <div>
-      {error && <p role="alert" className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="mb-4 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{error}</p>}
       <div className="flex flex-wrap gap-2">
         {languagesForPicker().map(({ code: language, endonym }) => (
           <Button

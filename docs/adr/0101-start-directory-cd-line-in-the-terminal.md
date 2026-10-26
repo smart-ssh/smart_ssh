@@ -1,6 +1,9 @@
 # ADR 0101 — Die `cd`-Zeile fürs Startverzeichnis im Terminal
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0102 (§3, §4.2), Issue #9
 
 ## Problem

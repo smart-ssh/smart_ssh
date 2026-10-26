@@ -1,7 +1,7 @@
 # 0041-settings-categories-scoped-to-what-already-lives-in-settings
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

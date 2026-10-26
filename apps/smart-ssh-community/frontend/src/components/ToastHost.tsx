@@ -43,8 +43,8 @@ export function ToastHost() {
           key={toast.id}
           className={`flex items-start justify-between gap-2 rounded-lg border p-3 text-sm shadow-lg ${
             toast.kind === "error"
-              ? "border-red-900 bg-red-950 text-red-200"
-              : "border-slate-700 bg-slate-800 text-slate-100"
+              ? "border-danger-subtle-hover bg-danger-subtle text-danger-fg-softer"
+              : "border-border bg-surface-raised text-fg"
           }`}
         >
           <p className="min-w-0 break-words">

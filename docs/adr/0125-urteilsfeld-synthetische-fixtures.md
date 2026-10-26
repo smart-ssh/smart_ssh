@@ -1,6 +1,9 @@
 # ADR 0125 — Strukturiertes Urteilsfeld: synthetische statt aufgezeichneter Fixtures
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #104, Spec 0074 (§4.4), Spec 0026 (§3), Spec 0039 (§5.2)
 
 ## Problem

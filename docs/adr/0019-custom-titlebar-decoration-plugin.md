@@ -1,7 +1,7 @@
 # 0019-custom-titlebar-decoration-plugin
 
 ## Status
-Akzeptiert
+Accepted
 
 ## Kontext
 

@@ -6,8 +6,7 @@ use tauri::{AppHandle, State};
 
 use app_logic::backup::{
     export_backup, start_import, BackupKey, BackupKeyStatus, BackupOpError, ExportSummary,
-    ImportContext, ImportPreview, ImportStart, ImportSummary, OpenSessions, PendingImport,
-    SnapshotCounts,
+    ImportContext, ImportPreview, ImportStart, ImportSummary, PendingImport, SnapshotCounts,
 };
 use app_logic::error::{CommandError, CommandResult};
 use app_logic::state::AppState;
@@ -280,54 +279,6 @@ fn summary_dto(s: ImportSummary) -> BackupImportSummaryDto {
     }
 }
 
-/// I8: closes the sessions an import replaces, like the close command does.
-struct ShellSessions {
-    app: AppHandle,
-}
-
-#[async_trait::async_trait]
-impl OpenSessions for ShellSessions {
-    fn affected(&self) -> usize {
-        use tauri::Manager;
-        self.app.state::<AppState>().sessions.affected()
-    }
-    async fn close_affected(&self) {
-        use tauri::Manager;
-        let state = self.app.state::<AppState>();
-        let elevated = self
-            .app
-            .state::<crate::elevated_sftp::ElevatedSftpRegistry>();
-        for entry in state.sessions.snapshot() {
-            if entry.server_id.0.is_nil() {
-                continue;
-            }
-            let Some(session) = elevated.remove_session(&state.sessions, entry.session_id) else {
-                continue;
-            };
-            session.auto_reconnect.stop();
-            app_logic::session::reject_pending_confirmation_on_close(
-                entry.session_id,
-                Some(session.as_ref()),
-                &state.mcp.sessions,
-                &state.pending_action_confirmations,
-            );
-            session.transport.mark_closed();
-            let _ = tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                session.transport.lock().await.disconnect(),
-            )
-            .await;
-            *session.terminal.lock().unwrap() = None;
-            app_logic::events::emit_connection_status_changed(
-                &crate::event_emitter::TauriEventEmitter(self.app.clone()),
-                entry.session_id,
-                app_logic::events::ConnectionStatus::Disconnected,
-                None,
-            );
-        }
-    }
-}
-
 fn default_safety_dir(app: &AppHandle) -> std::path::PathBuf {
     use tauri::Manager;
     let base = app
@@ -419,7 +370,7 @@ pub async fn start_backup_import(
         BackupSecret::Passphrase(secret)
     };
     let safety_dir = default_safety_dir(&app);
-    let sessions = ShellSessions { app: app.clone() };
+    let sessions = crate::sessions::AppOpenSessions::new(app.clone());
     let ctx = ImportContext {
         store: &state.backup_store,
         host_keys: &state.file_host_keys,
@@ -475,7 +426,7 @@ pub async fn confirm_backup_import(
     // The pending import holds the decrypted content; the staged file is done.
     slot.clear_file();
     let safety_dir = default_safety_dir(&app);
-    let sessions = ShellSessions { app: app.clone() };
+    let sessions = crate::sessions::AppOpenSessions::new(app.clone());
     let ctx = ImportContext {
         store: &state.backup_store,
         host_keys: &state.file_host_keys,
