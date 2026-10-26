@@ -215,7 +215,10 @@ irreversible happening on a real server. For changes here:
   `crates/app-logic/src/orchestration/`, `crates/mcp-server/`,
   `crates/ssh-transport/` and `crates/app-shell/src/elevated_sftp.rs`. If it
   does not need to change, the pull request description says
-  `Threat model: no change – <reason>`.
+  `Threat model: no change – <reason>`. CI enforces this (job
+  `threat-model-note`, `scripts/check-threat-model-note.mjs`); the
+  authoritative list of security-critical path prefixes is
+  `.github/security-paths.txt` (test-only changes do not count).
 
 ## Spec workflow
 
