@@ -41,6 +41,14 @@ tauri-plugin-store = "2"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tauri-plugin-decoration = "3.0"
 
+# Issue #795: `app-shell` registers `tauri-plugin-fs` on Android (#679). The
+# Tauri CLI only bundles the Android project (`com.plugin.fs.FsPlugin`) of
+# the app crate's *direct* dependencies into `gen/android`, so a transitive
+# dependency via `app-shell` leaves the Kotlin class out of the APK and the
+# app aborts at launch.
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-fs = "2"
+
 [dev-dependencies]
 # Issue #14: `tests/network_boundary.rs` liest die CSP aus `tauri.conf.json`.
 # Dieselbe Fassung, die `app-shell` ohnehin nutzt, keine neue Crate im Baum.
