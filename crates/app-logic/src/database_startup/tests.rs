@@ -942,6 +942,51 @@ async fn test_t7_without_the_second_confirmation_no_file_is_renamed() {
     );
 }
 
+/// Issue #944 (Android): Keystore-Eintrag fehlt, verschlüsselte Datenbank da
+/// (A3 → D2). Mit einem aufzeichnenden Fragesteller, wie ihn das Fenster
+/// stellt: D2 wird gefragt; ein Abbruch in D2 **oder** eine abgelehnte zweite
+/// Bestätigung lässt Datei, Schlüssel und Keystore unverändert, und der Start
+/// endet als `UserQuit` (der Aufrufer im Fenster zeigt die Maske, kein `exit`).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_issue_944_missing_keystore_entry_asks_d2_and_declining_touches_nothing() {
+    for (answers, confirm, expect_confirm_asked) in [
+        (vec![StartupChoice::Quit], true, false),
+        (vec![StartupChoice::StartOver], false, true),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = encrypted_database(dir.path()).await;
+        let before = std::fs::read(&db_path).unwrap();
+        let files_before = file_names(dir.path());
+
+        let credentials = CountingCredentialStore::new(GetBehaviour::Missing);
+        let mut prompt = ScriptedPrompt::new(answers);
+        if !confirm {
+            prompt = prompt.without_second_confirmation();
+        }
+
+        let result = open_or_prepare_database(
+            &db_path,
+            RootKeyAccess::Keychain(&credentials),
+            available(),
+            &prompt,
+            &lock_for(&db_path),
+        )
+        .await;
+
+        assert!(matches!(result, Err(StartupAbort::UserQuit)));
+        assert_eq!(prompt.asked(), vec![StartupDialog::D2]);
+        assert_eq!(
+            !prompt.confirm_texts.lock().unwrap().is_empty(),
+            expect_confirm_asked
+        );
+        assert_eq!(std::fs::read(&db_path).unwrap(), before);
+        assert_eq!(file_names(dir.path()), files_before);
+        assert_eq!(credentials.sets(), 0, "no new key may be generated");
+        assert_eq!(credentials.deletes.load(Ordering::SeqCst), 0);
+        assert!(prompt.notified.lock().unwrap().is_empty());
+    }
+}
+
 /// Klarstellung 9 (spec-reviewer Lauf 4, Fund 10): Die Kennung erkennt
 /// **denselben** Schlüssel wieder und einen anderen nicht.
 ///

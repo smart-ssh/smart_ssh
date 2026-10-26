@@ -36,8 +36,7 @@ use rfd::{MessageButtons, MessageDialog, MessageLevel};
 
 // Android (Spec 0114): `rfd` has no Android backend. Fatal errors are logged
 // (the log names the cause) and the process exits; warnings and notices are
-// logged only; a choice dialog answers "cancel", the conservative option
-// (no file is renamed or replaced without consent).
+// logged only. Choice dialogs are shown in the window instead (Issue #944).
 #[cfg(target_os = "android")]
 pub fn show_fatal_error_and_exit(title: &str, message: &str) -> ! {
     tracing::error!(
@@ -58,35 +57,24 @@ pub fn show_warning(title: &str, message: &str) {
     );
 }
 
+/// Not reached on Android: the keychain-mode startup runs in the window there
+/// (`startup_prompt::startup_prompt_placement`, Issue #944), where the user
+/// answers every choice. If it is ever called, the answer is "cancel" — the
+/// "touch nothing" outcome, never a destructive or setup choice.
 #[cfg(target_os = "android")]
 pub fn ask(
     title: &str,
     message: &str,
     _confirm: &str,
     _cancel: &str,
-    extra: Option<&str>,
+    _extra: Option<&str>,
 ) -> DialogAnswer {
-    let answer = android_answer(extra);
-    tracing::warn!(
+    tracing::error!(
         title,
         message,
-        ?answer,
-        "startup choice answered without a native dialog on Android"
+        "a native startup choice was requested on Android; declining without a change"
     );
-    answer
-}
-
-/// Android answer to a startup choice. A third button is only offered for
-/// "set up a master password" (Spec 0101, D1), which is non-destructive and
-/// continues in the window; it is the way forward when the Android keystore
-/// is unavailable. Every other choice stays the conservative "cancel".
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-fn android_answer(extra: Option<&str>) -> DialogAnswer {
-    if extra.is_some() {
-        DialogAnswer::Extra
-    } else {
-        DialogAnswer::Cancel
-    }
+    DialogAnswer::Cancel
 }
 
 #[cfg(target_os = "android")]
@@ -234,15 +222,4 @@ pub fn show_info(title: &str, message: &str) {
         .set_level(MessageLevel::Info)
         .set_buttons(MessageButtons::Ok)
         .show();
-}
-
-#[cfg(test)]
-mod android_answer_tests {
-    use super::*;
-
-    #[test]
-    fn test_android_takes_the_master_password_button_only_when_offered() {
-        assert_eq!(android_answer(Some("Set up")), DialogAnswer::Extra);
-        assert_eq!(android_answer(None), DialogAnswer::Cancel);
-    }
 }

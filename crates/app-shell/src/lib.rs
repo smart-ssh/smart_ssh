@@ -569,6 +569,16 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     ));
     let app_state = match mode {
         app_logic::master_password::KeyMode::Password => None,
+        // Issue #944: where no native dialog exists (Android), the keychain-mode
+        // startup runs in the window with `WindowStartupPrompt`; nothing is
+        // opened or changed before the user can answer.
+        app_logic::master_password::KeyMode::Keychain
+            if crate::startup_prompt::startup_prompt_placement(std::env::consts::OS)
+                == crate::startup_prompt::StartupPromptPlacement::Window =>
+        {
+            tracing::info!("the keychain-mode startup runs in the window (Issue #944)");
+            None
+        }
         app_logic::master_password::KeyMode::Keychain => {
             let keyring = KeyringCredentialStore::new();
             let prompt = crate::startup_prompt::NativeStartupPrompt {
