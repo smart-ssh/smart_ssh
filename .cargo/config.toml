@@ -7,3 +7,13 @@ GGML_NATIVE = "OFF"
 # cargo builds and the whisper-rs-sys CMake build on the same target as the
 # bundle (ignored outside Apple targets).
 MACOSX_DEPLOYMENT_TARGET = "10.15"
+
+# Android 15+ devices may use 16 KB memory pages: every .so must have its LOAD
+# segments aligned to 16 KB. NDK r27 links with 4 KB unless told otherwise
+# (docs/android-build.md). Static native parts (OpenSSL, whisper.cpp) end up
+# in the same cdylib, so the one link flag covers them.
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
