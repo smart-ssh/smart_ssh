@@ -11,10 +11,10 @@ import { ModalBackdrop } from "./ModalBackdrop";
 import { SessionTabContent, TabStateIndicator, tabDisplayLabel } from "./SessionTabParts";
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
 const ENTRY_BASE = `${FOCUS_RING} font-heading flex min-h-11 w-full items-center gap-2 border px-3 text-left text-sm font-semibold tracking-wide`;
 const entryTone = (current: boolean) =>
-  current ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-300" : "border-transparent text-slate-300 hover:bg-slate-800";
+  current ? "border-accent/55 bg-accent/16 text-accent-fg-soft" : "border-transparent text-fg-muted hover:bg-surface-raised";
 
 interface NarrowHeaderNavProps {
   tabs: SessionTab[];
@@ -47,7 +47,7 @@ export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
           e.currentTarget.focus();
           setOpen(true);
         }}
-        className={`${FOCUS_RING} flex h-11 w-11 shrink-0 items-center justify-center text-slate-200 hover:bg-slate-800`}
+        className={`${FOCUS_RING} flex h-11 w-11 shrink-0 items-center justify-center text-fg-soft hover:bg-surface-raised`}
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
           <path d="M4 6h16M4 12h16M4 18h16" />
@@ -56,7 +56,7 @@ export function NarrowHeaderNav(props: NarrowHeaderNavProps) {
       <span
         data-tauri-drag-region
         data-testid="narrow-title"
-        className="font-heading flex min-w-0 items-center gap-1.5 text-sm font-semibold tracking-wide text-slate-100"
+        className="font-heading flex min-w-0 items-center gap-1.5 text-sm font-semibold tracking-wide text-fg"
       >
         {active ? (
           <>
@@ -99,7 +99,7 @@ function NarrowMenu({
   };
 
   return (
-    <ModalBackdrop layer="app" className="fixed inset-0 z-50 bg-black/60">
+    <ModalBackdrop layer="app" className="fixed inset-0 z-50 bg-overlay/60">
       {/* A tap on the backdrop (outside the panel) closes the menu; Escape is
           handled by the focus trap. */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- backdrop dismiss; keyboard users use Escape */}
@@ -112,7 +112,7 @@ function NarrowMenu({
         aria-modal="true"
         aria-label={t("sessionTabs.menu.title")}
         onKeyDown={onKeyDown}
-        className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col gap-4 overflow-y-auto border-r border-slate-700 bg-slate-900 p-3 pt-12"
+        className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col gap-4 overflow-y-auto border-r border-border bg-surface p-3 pt-12"
       >
         <nav aria-label={t("sessionTabs.menu.title")} className="flex flex-col gap-1">
           <button
@@ -145,7 +145,7 @@ function NarrowMenu({
 
         {tabs.length > 0 && (
           <section aria-labelledby="narrow-menu-sessions" className="flex flex-col gap-1">
-            <h2 id="narrow-menu-sessions" className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <h2 id="narrow-menu-sessions" className="px-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
               {t("sessionTabs.menu.sessions")}
             </h2>
             <ul className="flex flex-col gap-1">
@@ -153,13 +153,13 @@ function NarrowMenu({
                 const current = s.sessionId === activeSessionId;
                 const label = tabDisplayLabel(s, t);
                 return (
-                  <li key={s.sessionId} className={`flex items-center border ${current ? "border-indigo-600/55 bg-indigo-600/16" : "border-transparent"}`}>
+                  <li key={s.sessionId} className={`flex items-center border ${current ? "border-accent/55 bg-accent/16" : "border-transparent"}`}>
                     <button
                       ref={!overview && current ? initialRef : undefined}
                       type="button"
                       aria-current={current ? "page" : undefined}
                       onClick={pick(() => onSwitch(s.sessionId))}
-                      className={`${FOCUS_RING} font-heading flex min-h-11 min-w-0 flex-1 items-center gap-1.5 px-3 text-left text-sm font-semibold tracking-wide ${current ? "text-indigo-300" : "text-slate-300"}`}
+                      className={`${FOCUS_RING} font-heading flex min-h-11 min-w-0 flex-1 items-center gap-1.5 px-3 text-left text-sm font-semibold tracking-wide ${current ? "text-accent-fg-soft" : "text-fg-muted"}`}
                     >
                       <SessionTabContent tab={s} t={t} label={label} labelClass="truncate" />
                     </button>
@@ -168,7 +168,7 @@ function NarrowMenu({
                       type="button"
                       onClick={() => onRequestClose(s.sessionId)}
                       aria-label={t("sessionTabs.closeTab", { name: label })}
-                      className={`${FOCUS_RING} flex h-11 w-11 shrink-0 items-center justify-center text-slate-400 hover:text-slate-200`}
+                      className={`${FOCUS_RING} flex h-11 w-11 shrink-0 items-center justify-center text-fg-subtle hover:text-fg-soft`}
                     >
                       ✕
                     </button>

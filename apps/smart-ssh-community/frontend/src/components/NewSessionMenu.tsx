@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useMenuPlacement } from "../hooks/useMenuPlacement";
 
 const itemClass =
-  "block min-h-11 w-full px-3 py-1.5 text-left text-slate-200 hover:bg-indigo-600/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+  "block min-h-11 w-full px-3 py-1.5 text-left text-fg-soft hover:bg-accent/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg";
 
 export function NewSessionMenu({
   x,
@@ -46,7 +46,7 @@ export function NewSessionMenu({
   return (
     <fieldset
       ref={menuRef}
-      className="fixed z-30 m-0 w-56 min-w-0 border border-slate-700 bg-slate-900 px-0 py-1 text-left text-xs shadow-lg"
+      className="fixed z-30 m-0 w-56 min-w-0 border border-border bg-surface px-0 py-1 text-left text-xs shadow-lg"
       style={placed}
     >
       <legend className="sr-only">{serverName}</legend>

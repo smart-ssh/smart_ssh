@@ -50,7 +50,7 @@ function CopyBadge() {
     <span
       data-testid="copy-badge"
       title={t("copyMarker.badgeHint")}
-      className="shrink-0 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200"
+      className="shrink-0 rounded bg-warning-subtle-hover px-2 py-0.5 text-xs text-warning-fg-softer"
     >
       {t("copyMarker.badge")}
       <span className="sr-only">. {t("copyMarker.badgeHint")}</span>
@@ -125,7 +125,7 @@ function KeyFileMissingNote({ path }: { path: string }) {
   }, [path]);
   if (!missing) return null;
   return (
-    <p className="text-xs text-amber-400">
+    <p className="text-xs text-warning-fg">
       {t("errors.KEY_FILE_NOT_FOUND_ON_DEVICE")}
     </p>
   );
@@ -475,16 +475,16 @@ export function ServerList({
         }}
        
         style={{ paddingLeft: `${indent(depth)}px` }}
-        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 aria-disabled:opacity-60"
+        className="flex w-full min-w-0 select-none items-center justify-between py-3 pr-4 text-left narrow:min-h-11 narrow:flex-1 narrow:flex-wrap narrow:gap-y-1 narrow:pr-2 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg aria-disabled:opacity-60"
       >
         <div className="min-w-0">
-          <p className="font-medium break-words text-slate-100">{server.name}</p>
+          <p className="font-medium break-words text-fg">{server.name}</p>
           {/* Spec 0046, Fund 5: der lokale Pseudo-Server hat konzeptionell
            * keinen Port (direkte Prozessausführung, kein SSH/TCP) —
            * `server.port` wäre hier immer `0` (s. `local_server::
            * synthetic_server`), das würde einen nicht existierenden Port
            * suggerieren statt ihn einfach auszublenden. */}
-          <p className="text-sm text-slate-400 narrow:break-all">
+          <p className="text-sm text-fg-subtle narrow:break-all">
             {server.isLocal
               ? `${server.username}@${server.host}`
               : `${server.username}@${server.host}:${server.port}`}
@@ -493,7 +493,7 @@ export function ServerList({
            * hängt, und wo sie liegt — `title` zeigt den vollen Pfad, falls
            * er abgeschnitten wird. */}
           {server.identityFilePath && (
-            <p className="truncate text-xs text-slate-400" title={server.identityFilePath}>
+            <p className="truncate text-xs text-fg-subtle" title={server.identityFilePath}>
               {/* spec-reviewer-Fund (Review dieses Schritts): das Emoji
                * allein trägt keine barrierefreie Bedeutung — `aria-hidden`
                * nimmt es aus dem Accessibility-Baum, der sichtbare Pfad
@@ -505,13 +505,13 @@ export function ServerList({
         </div>
         <div className="flex items-center gap-2 narrow:flex-wrap">
           {server.tags.map((tag) => (
-            <span key={tag} className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-200">
+            <span key={tag} className="rounded bg-border px-2 py-0.5 text-xs text-fg-soft">
               {tag}
             </span>
           ))}
           {server.isCopy && <CopyBadge />}
           {connectingServerIds.has(server.id) && (
-            <span className="text-xs text-indigo-300">{t("mainScreen.connecting")}</span>
+            <span className="text-xs text-accent-fg-soft">{t("mainScreen.connecting")}</span>
           )}
         </div>
       </button>
@@ -528,16 +528,16 @@ export function ServerList({
         className="flex w-full select-none items-center justify-between gap-2 py-3 pr-4 text-left opacity-70 narrow:flex-wrap narrow:pr-2"
       >
         <div className="min-w-0 break-words">
-          <p className="font-medium text-slate-300">
+          <p className="font-medium text-fg-muted">
             <span aria-hidden="true">⚠️</span> {server.name}
           </p>
-          <p className="text-sm text-slate-400">{server.host}</p>
-          <p className="text-xs text-amber-300">{unusableReasonText(t, server.reason)}</p>
-          <p className="text-xs text-slate-400">
+          <p className="text-sm text-fg-subtle">{server.host}</p>
+          <p className="text-xs text-warning-fg-soft">{unusableReasonText(t, server.reason)}</p>
+          <p className="text-xs text-fg-subtle">
             {t("unusableServer.listHint", { manage: t("nav.manage") })}
           </p>
         </div>
-        <span className="rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
+        <span className="rounded bg-warning-subtle-hover px-2 py-0.5 text-xs text-warning-fg-softer">
           {t("unusableServer.badge")}
         </span>
       </div>
@@ -556,11 +556,11 @@ export function ServerList({
       <li
         key={node.group.id}
         data-drop-target={groupDropTargetValue(node.group.id)}
-        className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "group", id: node.group.id })}`}
+        className={`border-b border-border last:border-b-0 ${highlightFor({ kind: "group", id: node.group.id })}`}
       >
         {/* Issue #49: Auf-/Zuklappen und „+" (neuer Server in dieser
          * Gruppe) als Geschwister — ein Button im Button wäre ungültig. */}
-        <div className="flex items-center hover:bg-slate-800">
+        <div className="flex items-center hover:bg-surface-raised">
           <button
             type="button"
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
@@ -575,9 +575,9 @@ export function ServerList({
                 : undefined
             }
             style={{ paddingLeft: `${indent(depth)}px` }}
-            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400"
+            className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg"
           >
-            <span className="w-3 text-slate-400">{collapsed ? "▸" : "▾"}</span>
+            <span className="w-3 text-fg-subtle">{collapsed ? "▸" : "▾"}</span>
             <span className="truncate" title={node.group.name}>
               📁 {node.group.name}
             </span>
@@ -597,7 +597,7 @@ export function ServerList({
           (node.children.length > 0 ||
             node.servers.length > 0 ||
             node.unusableServers.length > 0) && (
-          <ul className="divide-y divide-slate-800">
+          <ul className="divide-y divide-surface-raised">
             {node.children.map((child) => renderGroupSection(child, depth + 1))}
             {node.servers.map((s) => renderServerRow(s, depth + 1))}
             {node.unusableServers.map((s) => renderUnusableServerRow(s, depth + 1))}
@@ -608,7 +608,7 @@ export function ServerList({
   };
 
   if (loading) {
-    return <p className="text-sm text-slate-400">{t("mainScreen.loadingServers")}</p>;
+    return <p className="text-sm text-fg-subtle">{t("mainScreen.loadingServers")}</p>;
   }
 
   const localServer = platformCapabilities(detectFallbackPlatform()).localServer
@@ -634,7 +634,7 @@ export function ServerList({
 
   return (
     <>
-      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-sm text-danger-fg">{error}</p>}
       {error && connectFailure && connectFailure.message === error && (
         <div className="mb-2">
           <ConnectStepLog steps={connectFailure.steps} />
@@ -645,7 +645,7 @@ export function ServerList({
        * Gruppen-Bereiche, visuell durch die eigene Box + den Abstand zur
        * Gruppen-Liste klar abgesetzt — nie innerhalb eines Ordners. */}
       {localServer && (
-        <ul className="mb-4 divide-y divide-slate-700 rounded-md border border-slate-700">
+        <ul className="mb-4 divide-y divide-border rounded-md border border-border">
           {renderServerRow(localServer, 0)}
         </ul>
       )}
@@ -655,23 +655,23 @@ export function ServerList({
        * Gruppen, wird der Gruppenbaum unten ZUSÄTZLICH gezeigt (nicht
        * ausschließend) — s. `hasGroupTreeContent`. */}
       {!hasRealServers && !error && (
-        <div className="mb-4 rounded-md border border-slate-700 bg-slate-900/40 p-4">
-          <p className="text-sm font-medium text-slate-100">
+        <div className="mb-4 rounded-md border border-border bg-surface/40 p-4">
+          <p className="text-sm font-medium text-fg">
             {t("mainScreen.emptyStateTitle")}
           </p>
-          <p className="mt-1 text-sm text-slate-400">{t("mainScreen.emptyStateHint")}</p>
+          <p className="mt-1 text-sm text-fg-subtle">{t("mainScreen.emptyStateHint")}</p>
           <Button variant="primary"
             onClick={onCreateFirstServer}
             className="mt-3"
           >
             {t("mainScreen.emptyStateCreateFirstServer")}
           </Button>
-          <p className="mt-3 text-xs text-slate-400">{t("mainScreen.emptyStateTryLocalhost")}</p>
+          <p className="mt-3 text-xs text-fg-subtle">{t("mainScreen.emptyStateTryLocalhost")}</p>
         </div>
       )}
 
       {hasGroupTreeContent && (
-        <ul className="divide-y divide-slate-700 rounded-md border border-slate-700">
+        <ul className="divide-y divide-border rounded-md border border-border">
           {tree.roots.map((node) => renderGroupSection(node, 0))}
           {/* Issue #48: "Ohne Gruppe" ist zugleich das Ablageziel für die
            * Wurzelebene — beim Ziehen auch dann sichtbar, wenn noch kein
@@ -681,18 +681,18 @@ export function ServerList({
             drag) && (
             <li
               data-drop-target="root"
-              className={`border-b border-slate-700 last:border-b-0 ${highlightFor({ kind: "root" })}`}
+              className={`border-b border-border last:border-b-0 ${highlightFor({ kind: "root" })}`}
             >
-              <div className="px-4 py-2 text-sm font-medium text-slate-200">
+              <div className="px-4 py-2 text-sm font-medium text-fg-soft">
                 {t("mainScreen.ungrouped")}
               </div>
               {tree.ungroupedServers.length > 0 || tree.ungroupedUnusableServers.length > 0 ? (
-                <ul className="divide-y divide-slate-800">
+                <ul className="divide-y divide-surface-raised">
                   {tree.ungroupedServers.map((s) => renderServerRow(s, 1))}
                   {tree.ungroupedUnusableServers.map((s) => renderUnusableServerRow(s, 1))}
                 </ul>
               ) : (
-                <p className="mx-4 mb-2 rounded border border-dashed border-slate-600 px-3 py-2 text-xs text-slate-400">
+                <p className="mx-4 mb-2 rounded border border-dashed border-border-strong px-3 py-2 text-xs text-fg-subtle">
                   {t("treeDrag.rootDropZone")}
                 </p>
               )}
@@ -764,8 +764,8 @@ export function ServerList({
             </>
           }
         >
-          <p className="break-words text-sm text-slate-200">📁 {keepGroup.group.name}</p>
-          <p className="mt-2 text-sm text-slate-300">
+          <p className="break-words text-sm text-fg-soft">📁 {keepGroup.group.name}</p>
+          <p className="mt-2 text-sm text-fg-muted">
             {t("copyMarker.groupConfirmBody", {
               groups: keepGroup.scope.groups,
               servers: keepGroup.scope.servers,
