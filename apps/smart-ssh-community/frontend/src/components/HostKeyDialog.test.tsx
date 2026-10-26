@@ -397,10 +397,10 @@ describe("HostKeyDialog — unbekannt und geändert bleiben unterscheidbar (Issu
     expect(unknown.heading).toBe("Unbekannter Host");
     expect(mismatch.heading).toBe("Der Schlüssel dieses Servers ist nicht mehr derselbe.");
 
-    expect(unknown.className).toContain("border-slate-600");
+    expect(unknown.className).toContain("border-border-strong");
     expect(unknown.className).not.toContain("red");
-    expect(mismatch.className).toContain("border-red-600");
-    expect(mismatch.className).toContain("bg-red-950/95");
+    expect(mismatch.className).toContain("border-danger");
+    expect(mismatch.className).toContain("bg-danger-subtle/95");
 
     expect(unknown.buttons).toEqual(["Ablehnen", "Vertrauen"]);
     expect(mismatch.buttons).toEqual(["Verbindung abbrechen", "Trotzdem vertrauen"]);

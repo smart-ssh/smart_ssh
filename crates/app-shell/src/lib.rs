@@ -431,6 +431,10 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Beenden der App, danach ist ein finaler Flush ohnehin irrelevant.
     let _log_guard = app_logic::logging::init_logging();
 
+    // Issue #935: before any HTTPS client is built, so dependencies that
+    // construct their own rustls config find a process-level provider.
+    init_crypto_provider();
+
     // Spec-Reviewer-Fund (Spec 0047, Review dieses Schritts): muss VOR dem
     // ersten Aufruf installiert sein, der selbst panicken kann —
     // `default_db_path()` unten hat ein `.expect(...)` (kein Home-/
@@ -1218,4 +1222,19 @@ fn microphone_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     return crate::voice_input::microphone_plugin::<R>();
     #[cfg(not(target_os = "android"))]
     return tauri::plugin::Builder::new("microphone").build();
+}
+
+/// Installs `aws-lc-rs` as the process-level rustls provider (idempotent).
+pub(crate) fn init_crypto_provider() {
+    tls_config::install_default_crypto_provider();
+}
+
+#[cfg(test)]
+mod crypto_provider_tests {
+    #[test]
+    fn init_installs_default_provider_and_is_idempotent() {
+        super::init_crypto_provider();
+        super::init_crypto_provider();
+        assert!(tls_config::default_provider_installed());
+    }
 }

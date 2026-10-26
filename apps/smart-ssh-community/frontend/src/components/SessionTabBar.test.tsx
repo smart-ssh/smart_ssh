@@ -128,7 +128,7 @@ describe("SessionTabBar close button frame", () => {
     // Fixed size + transparent border at rest => no layout shift on hover.
     expect(close).toHaveClass("h-5", "w-5", "border", "border-transparent", "rounded");
     for (const prefix of ["hover:", "focus-visible:"]) {
-      expect(close).toHaveClass(`${prefix}border-slate-500`, `${prefix}bg-slate-600/60`);
+      expect(close).toHaveClass(`${prefix}border-fg-faint`, `${prefix}bg-border-strong/60`);
     }
   });
 });
