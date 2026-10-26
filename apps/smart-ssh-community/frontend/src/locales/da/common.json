@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Mulige forsøg på at smugle instruktioner ind via serverindhold registreret – kræver bekræftelse",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Anmodet via MCP – kræver altid bekræftelse",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Bruger den gemte sudo-adgangskode – kræver altid bekræftelse",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Indsætter en gemt hemmelig værdi før afsendelse – kræver altid bekræftelse",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Læser en fil med legitimationsoplysninger (f.eks. SSH-nøgle, .env, /etc/shadow) – kræver altid bekræftelse",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "En tidligere handling i dette svar blev afvist – kræver bekræftelse",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Starter sftp-server (med sudo: filadgang med root-rettigheder) – kræver altid bekræftelse",

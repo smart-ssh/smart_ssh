@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Mogelijke poging tot het inbrengen van instructies via serverinhoud gedetecteerd – vereist bevestiging",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Via MCP aangevraagd – vereist altijd bevestiging",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Gebruikt het opgeslagen sudo-wachtwoord – vereist altijd bevestiging",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Voegt vóór het verzenden een opgeslagen geheime waarde in – vereist altijd bevestiging",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Leest een bestand met inloggegevens (bijv. SSH-sleutel, .env, /etc/shadow) – vereist altijd bevestiging",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Een eerdere actie in dit antwoord is geweigerd – vereist bevestiging",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Start sftp-server (met sudo: bestandstoegang met rootrechten) – vereist altijd bevestiging",

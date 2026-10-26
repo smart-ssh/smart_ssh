@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Phát hiện khả năng có nỗ lực chèn chỉ thị qua nội dung máy chủ – cần xác nhận",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Được yêu cầu qua MCP – luôn cần xác nhận",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Dùng mật khẩu sudo đã lưu – luôn cần xác nhận",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Chèn một giá trị bí mật đã lưu trước khi gửi – luôn cần xác nhận",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Đọc một tệp chứa thông tin xác thực (ví dụ khóa SSH, .env, /etc/shadow) – luôn cần xác nhận",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Một hành động trước đó trong phản hồi này đã bị từ chối – cần xác nhận",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Khởi động sftp-server (với sudo: truy cập tệp với quyền root) – luôn cần xác nhận",

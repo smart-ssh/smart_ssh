@@ -599,6 +599,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Kemungkinan upaya menyisipkan instruksi melalui konten server terdeteksi – memerlukan konfirmasi",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Diminta melalui MCP – selalu memerlukan konfirmasi",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Menggunakan kata sandi sudo yang tersimpan – selalu memerlukan konfirmasi",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Menyisipkan nilai rahasia yang tersimpan sebelum dikirim – selalu memerlukan konfirmasi",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Membaca berkas berisi kredensial (mis. kunci SSH, .env, /etc/shadow) – selalu memerlukan konfirmasi",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Tindakan sebelumnya dalam respons ini ditolak – memerlukan konfirmasi",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Memulai sftp-server (dengan sudo: akses berkas dengan hak root) – selalu memerlukan konfirmasi",
