@@ -266,7 +266,7 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     const ths = container.querySelectorAll("thead th");
     expect(ths.length).toBe(6);
     ths.forEach((th) => {
-      expect(th).toHaveClass("sticky", "top-0", "bg-slate-900");
+      expect(th).toHaveClass("sticky", "top-0", "bg-surface");
     });
     const table = container.querySelector("table");
     expect(table).toHaveClass("border-separate", "border-spacing-0");
@@ -559,7 +559,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     expect(row).not.toHaveAttribute("data-active");
 
     // hover: stronger background and underlined name
-    expect(row.className).toContain("hover:bg-slate-700/60");
+    expect(row.className).toContain("hover:bg-border/60");
     expect(row.className).toContain("group");
     expect(screen.getByText(/a\.txt/).className).toContain("group-hover:underline");
 

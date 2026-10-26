@@ -10,6 +10,8 @@ description: >
 
 # smart_ssh — Coder-Arbeitsweise
 
+> Diese Datei beschreibt den interaktiven, spec-gesteuerten Ablauf; bei Arbeit an einem GitHub-Issue ist das Issue der Auftrag und `AGENTS.md` enthält die Regeln.
+
 Ergänzt `AGENTS.md` (Gate, Architektur, Spec-Workflow, Changelog- und
 Testkonventionen gelten dort vollständig und werden hier nicht wiederholt).
 Die Review-Pflicht gehört zum Ablauf des Coders: Sie steht hier im
@@ -33,19 +35,26 @@ Commit-Messages englisch (Conventional Commits).
 
 ## Auftragsformat
 
-Specs enthalten einen Abschnitt **„Ist-Stand"** und am Ende einen Abschnitt
-**„Umsetzung"** (Teil 0, Reihenfolge mit wörtlichen Commit-Messages,
-Priorität, Angriffsrichtungen, Aufteilung, berührte Module, „Melde
-zurück"). Der Abschnitt „Umsetzung" ist dein Auftrag; „Melde zurück" legt
-fest, was in `summary.md`/`report.md` stehen muss.
+Auftrag ist das **Issue** (Goal, Requirements, Acceptance Criteria, Spec
+impact) oder ein **ausdrücklicher Auftragstext** im Startprompt. Die Spec des
+Bereichs beschreibt das Soll-Verhalten (keine Aufgabenliste, kein
+„Ist-Stand", keine Commit-Reihenfolge — `docs/specs/README.md`) und wird im
+selben Pull Request nach dem Spec-Impact (`new` / `update NNNN` / `none`)
+nachgezogen (`AGENTS.md`, „Spec workflow"). Eine Spec ohne Abschnitt „Ist-Stand"
+oder „Umsetzung" ist normal und kein Grund anzuhalten.
 
-**Ist-Stand prüfen, Widerspruch melden.** Sieht der Code anders aus als im
-Ist-Stand beschrieben (eine Funktion fehlt, ein Verhalten ist schon
-behoben, eine Zählung stimmt nicht), hältst du an und meldest das als
-Rückfrage (Ablauf „Rückfragen" im Agenten) — du passt die Umsetzung
-**nicht** stillschweigend an. Der Widerspruch ist erwünscht: Er zeigt, dass
-die Spec auf einer falschen Annahme steht. Aussagen mit „(gelesen, nicht
-ausgeführt)" prüfst du zuerst.
+**Aktuellen Stand im Code prüfen, Widerspruch melden.** Sieht der Code anders
+aus, als Issue bzw. Auftragstext ihn beschreiben (eine Funktion fehlt, ein
+Verhalten ist schon behoben, eine Zählung stimmt nicht), hältst du an und
+meldest das als Rückfrage (Ablauf „Rückfragen" im Agenten) — du passt die
+Umsetzung **nicht** stillschweigend an. Der Widerspruch ist erwünscht: Er zeigt,
+dass der Auftrag auf einer falschen Annahme steht. Aussagen mit „(gelesen,
+nicht ausgeführt)" prüfst du zuerst.
+
+Das Format „Teil 0 / Commit N / Abschluss" und die Regel „Ist-Stand" gelten
+**nur**, wenn ein Auftragstext sie ausdrücklich so verwendet; „Ist-Stand"
+meint dann den Auftragstext, nicht einen Spec-Abschnitt (ein vorgegebener
+„Melde zurück"-Block legt fest, was in `summary.md`/`report.md` steht):
 
 - **Teil 0 — zuerst klären und berichten:** Ist-Stand im Code verifizieren
   (nicht aus Erinnerung), die Frage beantworten, *vor* dem Bauen der
@@ -56,7 +65,7 @@ ausgeführt)" prüfst du zuerst.
 
 Offene Produktfragen: dem PO vorlegen, mit empfohlener Option zuerst. Wenn
 keine Rückfrage möglich ist (Subagent), **anhalten und berichten** statt zu
-raten. Die Antwort in der Spec unter „Getroffene Entscheidungen" festhalten.
+raten. Die Antwort im Issue bzw. Auftragstext (oder, wo die Spec es vorsieht, dort) festhalten.
 
 ## Breite Suchen: `repo-research`
 

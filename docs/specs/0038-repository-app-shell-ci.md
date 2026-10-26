@@ -95,6 +95,27 @@ bearbeiteten Text), und unmittelbar vor dem Senden. Die Einsetzung des
 gespeicherten Sudo-Passworts (Spec 0018) kommt danach: Sie wirkt auf das
 umgewandelte Kommando.
 
+**Rückfrage vor der Bestätigung.** Die Umwandlung kann zusätzlich gefragt
+werden, ob sie einen Text ändern wird (reine Abfrage mit Server-Angaben, Art und
+ursprünglichem Text; ohne Nebenwirkung, sie sieht und liefert keine Geheimnisse).
+Standardantwort: nein. Antwortet sie ja, wird aus einem `AutoExec` für diese
+Aktion (Kommando oder `WriteRemoteFile`-Inhalt) ein `Confirm` mit dem Code
+`FILTER_INSERTED_SECRET_REQUIRES_CONFIRM` – wie beim gespeicherten
+Sudo-Passwort (Spec 0018), auch bei MCP-Herkunft. Der Schritt eskaliert nur: ein
+`Confirm` oder `Deny` bleibt unverändert. Er steht in der Eskalationskette
+unmittelbar nach dem Sudo-Passwort-Schritt; die Erklärung zur Bestätigung
+(Regelvorschlag) nennt denselben Code. Ohne registrierte Umwandlung ändert sich
+nichts.
+
+**Struktur-Prüfung.** Ein umgewandeltes Kommando muss, wenn es vom
+freigegebenen abweicht, in dieselbe Anzahl Top-Level-Teilkommandos zerfallen
+(`|`, `&&`, `||`, `;`, mit dem Parser der Filter-Engine, ohne Zählung von
+Command-Substitutionen). Eine andere Anzahl, oder ein umgewandelter Text, den der
+Parser nicht zerlegen kann, während der Originaltext zerlegbar war, lehnt ab: es
+wird nichts gesendet, die KI erhält eine allgemeine Meldung ohne den
+umgewandelten Text. Lässt sich schon das Original nicht zerlegen, wird der
+umgewandelte Text nur gesendet, wenn er dem Original gleicht.
+
 **Wer was sieht.** Filter, Risiko-Einstufung, Zweitmeinung, Bestätigungsdialog,
 Ledger, Ergebnis-Ereignis, Verlauf und Logs sehen ausschließlich den
 ursprünglichen Text. Der umgewandelte Text existiert nur im Aufruf an den

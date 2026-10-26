@@ -292,12 +292,16 @@ into `Confirm`, never `Confirm` into `AutoExec`, and never lift a `Deny`
 | **Reading typical secret paths** (SSH keys, `.env`, …) | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
 | **Starting `sftp-server`** (elevated file browser) from an AI proposal | Always | [ADR 0058](docs/adr/0058-sftp-elevated-and-toasts-decisions.md), §8 |
 | **Commands that use a stored sudo password** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
+| **Commands into which stored secret values are inserted** right before sending (by an outgoing transform of the edition) | Always | [Spec 0038](docs/specs/0038-repository-app-shell-ci.md) |
 | **Suspected prompt injection** in content just read (if the injection check is enabled) | Always for the next action | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), §5 |
 | **Any action after you rejected an earlier one in the same answer** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
 | **Commands too long, too nested or too opaque to check** | Always | [ADR 0107](docs/adr/0107-filter-fail-closed-on-opaque-input.md) |
 | **Hard-blacklisted commands** (e.g. `rm -rf /`) | Always | [`engine.rs`](crates/core/src/filter/engine.rs) |
 | **Content read from the server** (post-ingest policy) | Per server: `Strict` always, `Balanced` for modifying actions, `Standard` never | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), [ADR 0027](docs/adr/0027-post-ingest-policy-scope-and-injection-check-timing.md) |
 | **Red risk**: the risk indicator rates the proposal red on the server or the data axis — also when only the AI second opinion raises it to red | Setting "Always confirm on red risk", **on by default** | [Spec 0092](docs/specs/0092-red-risk-requires-confirm.md), [ADR 0084](docs/adr/0084-red-risk-requires-confirm.md) |
+
+A command prepared for sending must keep the structure of the approved one:
+if it splits into a different number of top-level segments, nothing is sent.
 
 **About red risk.** The setting is on by default, and a missing or
 unreadable value counts as on. With it on, a red-rated proposal never runs
