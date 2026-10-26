@@ -11,7 +11,7 @@ function tab(page: Page, label: string) {
     .filter({ has: page.getByRole("button", { name: `Close tab "${label}"`, exact: true }) });
 }
 
-const ACTIVE = /bg-indigo-600\/16/;
+const ACTIVE = /bg-accent\/16/;
 
 test("an MCP session gets its own tab, and closing the active user tab never activates it", async ({ app }) => {
   await app.launch(populated());

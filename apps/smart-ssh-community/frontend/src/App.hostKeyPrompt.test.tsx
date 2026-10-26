@@ -381,7 +381,7 @@ describe("App host key prompt closes when the backend ends it (Issue #37)", () =
     const region = screen.getByRole("status");
     expect(region).toContainElement(toast);
     expect(region.textContent).not.toContain("⚠");
-    expect(region.querySelector(".bg-red-950")).toBeNull();
+    expect(region.querySelector(".bg-danger-subtle")).toBeNull();
     expect(confirmHostKey).not.toHaveBeenCalled();
   });
 

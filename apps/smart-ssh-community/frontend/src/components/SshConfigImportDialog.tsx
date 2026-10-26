@@ -211,19 +211,19 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
     >
       <div>
           {loading && <p>{t("common.loading")}</p>}
-          {error && <p className="mb-3 rounded border border-red-700 bg-red-950/50 p-2 text-red-300">{error}</p>}
+          {error && <p className="mb-3 rounded border border-danger-border-strong bg-danger-subtle/50 p-2 text-danger-fg-soft">{error}</p>}
 
           {preview && (
             <>
               {/* Gelesene Dateien (§3.1.4) */}
               <section className="mb-4">
-                <h3 className="mb-1 font-semibold text-slate-100">{t("sshConfigImport.filesHeading")}</h3>
+                <h3 className="mb-1 font-semibold text-fg">{t("sshConfigImport.filesHeading")}</h3>
                 <ul className="space-y-0.5 font-mono text-xs">
                   {preview.files.map((f) => (
                     <li key={f.path} className="flex gap-2">
-                      <span className="text-slate-400">{"  ".repeat(f.depth)}</span>
+                      <span className="text-fg-subtle">{"  ".repeat(f.depth)}</span>
                       <span className="break-all">{f.path}</span>
-                      <span className="text-slate-400">— {t(`sshConfigImport.fileStatus.${f.status}`)}</span>
+                      <span className="text-fg-subtle">— {t(`sshConfigImport.fileStatus.${f.status}`)}</span>
                     </li>
                   ))}
                 </ul>
@@ -232,7 +232,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
               {/* Gruppenstruktur (§4.5) */}
               {preview.groups.length > 0 && (
                 <section className="mb-4">
-                  <h3 className="mb-1 font-semibold text-slate-100">{t("sshConfigImport.groupsHeading")}</h3>
+                  <h3 className="mb-1 font-semibold text-fg">{t("sshConfigImport.groupsHeading")}</h3>
                   <ul className="space-y-0.5 text-xs">
                     {preview.groups.map((g, i) => (
                       <li key={`${g.sourcePath}-${g.name}`} style={{ paddingLeft: `${groupDepth(preview.groups, i) * 14}px` }}>
@@ -244,8 +244,8 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
               )}
 
               {/* Weg (b): globale Wahl + Dateien, die dabei aufgingen (§3.1.9) */}
-              <section className="mb-4 rounded border border-slate-700 p-3">
-                <h3 className="mb-2 font-semibold text-slate-100">{t("sshConfigImport.identityFile.modeHeading")}</h3>
+              <section className="mb-4 rounded border border-border p-3">
+                <h3 className="mb-2 font-semibold text-fg">{t("sshConfigImport.identityFile.modeHeading")}</h3>
                 <div className="mb-2 flex gap-4">
                   {(["keepAsFile", "intoKeychain", "drop"] as const).map((mode) => (
                     <label key={mode} className="flex items-center gap-1">
@@ -260,7 +260,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                   ))}
                 </div>
                 {filesOpenedOnConfirm.length > 0 && (
-                  <div className="rounded border border-amber-700 bg-amber-950/40 p-2 text-xs text-amber-200">
+                  <div className="rounded border border-warning-border-strong bg-warning-subtle/40 p-2 text-xs text-warning-fg-softer">
                     <p className="mb-1 font-semibold">
                       {t("sshConfigImport.identityFile.willOpenHeading", { count: filesOpenedOnConfirm.length })}
                     </p>
@@ -282,7 +282,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
 
               {/* Profile (§3.1.7) */}
               <section className="mb-4">
-                <h3 className="mb-1 font-semibold text-slate-100">
+                <h3 className="mb-1 font-semibold text-fg">
                   {t("sshConfigImport.entriesHeading", { count: preview.entries.length })}
                 </h3>
                 <div className="space-y-2">
@@ -292,7 +292,7 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                     return (
                       <div
                         key={e.index}
-                        className={`rounded border p-3 ${st.selected ? "border-slate-700 bg-slate-800/60" : "border-slate-800 bg-slate-900/40 opacity-60"}`}
+                        className={`rounded border p-3 ${st.selected ? "border-border bg-surface-raised/60" : "border-surface-raised bg-surface/40 opacity-60"}`}
                       >
                         <div className="mb-2 flex items-center gap-2">
                           <input
@@ -303,12 +303,12 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                           />
                           <span
                             data-testid={`entry-${e.index}-name`}
-                            className="font-mono font-semibold text-slate-100"
+                            className="font-mono font-semibold text-fg"
                           >
                             {e.name}
                           </span>
                           {e.conflict && (
-                            <span className="rounded bg-amber-900/60 px-1.5 py-0.5 text-xs text-amber-300">
+                            <span className="rounded bg-warning-subtle-hover/60 px-1.5 py-0.5 text-xs text-warning-fg-soft">
                               {t(`sshConfigImport.conflict.${e.conflict.kind}`, { name: e.conflict.existingName })}
                             </span>
                           )}
@@ -321,40 +321,40 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                               <input
                                 {...TECHNICAL_INPUT_PROPS}
                                 type="text"
-                                className="rounded border border-slate-600 bg-slate-950 px-1.5 py-0.5 text-slate-100"
+                                className="rounded border border-border-strong bg-surface-sunken px-1.5 py-0.5 text-fg"
                                 placeholder={t("sshConfigImport.conflict.renamePlaceholder")}
                                 value={st.renameTo}
                                 onChange={(ev) => setEntry(e.index, { renameTo: ev.target.value })}
                               />
                             </label>
                             {!st.renameTo.trim() && (
-                              <p className="mt-1 text-slate-400">{t("sshConfigImport.conflict.skipHint")}</p>
+                              <p className="mt-1 text-fg-subtle">{t("sshConfigImport.conflict.skipHint")}</p>
                             )}
                           </div>
                         )}
 
                         <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] break-words gap-x-2 gap-y-0.5 pl-6 text-xs">
-                          <dt className="text-slate-400">{t("sshConfigImport.field.host")}</dt>
+                          <dt className="text-fg-subtle">{t("sshConfigImport.field.host")}</dt>
                           <dd>
                             {e.host.value}{" "}
-                            <span className="text-slate-400">— {originLabel(t, e.host.origin)}</span>
+                            <span className="text-fg-subtle">— {originLabel(t, e.host.origin)}</span>
                           </dd>
-                          <dt className="text-slate-400">{t("sshConfigImport.field.port")}</dt>
+                          <dt className="text-fg-subtle">{t("sshConfigImport.field.port")}</dt>
                           <dd>
                             {e.port.value}{" "}
-                            <span className="text-slate-400">— {originLabel(t, e.port.origin)}</span>
+                            <span className="text-fg-subtle">— {originLabel(t, e.port.origin)}</span>
                           </dd>
-                          <dt className="text-slate-400">{t("sshConfigImport.field.username")}</dt>
+                          <dt className="text-fg-subtle">{t("sshConfigImport.field.username")}</dt>
                           <dd>
                             {e.username.value || t("sshConfigImport.field.emptyValue")}{" "}
-                            <span className="text-slate-400">— {originLabel(t, e.username.origin)}</span>
+                            <span className="text-fg-subtle">— {originLabel(t, e.username.origin)}</span>
                           </dd>
                           {e.jumpHost && (
                             <>
-                              <dt className="text-slate-400">{t("sshConfigImport.field.jumpHost")}</dt>
+                              <dt className="text-fg-subtle">{t("sshConfigImport.field.jumpHost")}</dt>
                               <dd>
                                 {e.jumpHost.name}{" "}
-                                <span className="text-slate-400">
+                                <span className="text-fg-subtle">
                                   —{" "}
                                   {e.jumpHost.existing
                                     ? t("sshConfigImport.jumpHost.existing")
@@ -367,11 +367,11 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
 
                         {e.identityFile && (
                           <div className="mt-2 pl-6 text-xs">
-                            <span className="text-slate-400">{t("sshConfigImport.field.identityFile")}: </span>
+                            <span className="text-fg-subtle">{t("sshConfigImport.field.identityFile")}: </span>
                             <span className="font-mono break-all">{e.identityFile.path}</span>{" "}
-                            <span className="text-slate-400">— {originLabel(t, e.identityFile.origin)}</span>
+                            <span className="text-fg-subtle">— {originLabel(t, e.identityFile.origin)}</span>
                             {!e.identityFile.usableWhenConnecting && (
-                              <span className="ml-2 rounded bg-amber-900/60 px-1.5 py-0.5 text-amber-300">
+                              <span className="ml-2 rounded bg-warning-subtle-hover/60 px-1.5 py-0.5 text-warning-fg-soft">
                                 {t("sshConfigImport.identityFile.notUsable")}
                               </span>
                             )}
@@ -409,10 +409,10 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
                                   key={tag.tag}
                                   className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs ${
                                     tag.isLiteral
-                                      ? "border border-red-600 bg-red-950/50 text-red-200"
+                                      ? "border border-danger bg-danger-subtle/50 text-danger-fg-softer"
                                       : flagged
-                                        ? "border border-amber-600 bg-amber-950/40 text-amber-200"
-                                        : "border border-slate-600 bg-slate-900 text-slate-300"
+                                        ? "border border-warning bg-warning-subtle/40 text-warning-fg-softer"
+                                        : "border border-border-strong bg-surface text-fg-muted"
                                   }`}
                                   title={
                                     tag.isLiteral
@@ -447,10 +447,10 @@ export function SshConfigImportDialog({ onClose, onImported }: SshConfigImportDi
               {/* Nicht übernommene Direktiven (§3.1.5) */}
               {preview.skipped.length > 0 && (
                 <section className="mb-2">
-                  <h3 className="mb-1 font-semibold text-slate-100">
+                  <h3 className="mb-1 font-semibold text-fg">
                     {t("sshConfigImport.skippedHeading", { count: preview.skipped.length })}
                   </h3>
-                  <ul className="space-y-0.5 font-mono text-xs text-slate-400">
+                  <ul className="space-y-0.5 font-mono text-xs text-fg-subtle">
                     {preview.skipped.map((s, i) => (
                       <li key={i}>
                         {s.file}:{s.line} — {s.directive ?? t("sshConfigImport.skipped.unreadableLine")}

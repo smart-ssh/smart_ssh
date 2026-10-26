@@ -63,7 +63,7 @@ export function LocalEditCopyEditor({ sessionId, localPath, fileName, onClose }:
       }
     >
       {error && (
-        <p role="alert" className="mb-2 text-xs text-red-400">
+        <p role="alert" className="mb-2 text-xs text-danger-fg">
           {error}
         </p>
       )}

@@ -153,6 +153,7 @@ body,
   --color-danger-fg-soft: var(--danger-fg-soft);
   --color-danger-fg-softer: var(--danger-fg-softer);
   --color-danger-fg-faint: var(--danger-fg-faint);
+  --color-danger-fg-faintest: var(--danger-fg-faintest);
   --color-warning-subtle: var(--warning-subtle);
   --color-warning-subtle-hover: var(--warning-subtle-hover);
   --color-warning-border: var(--warning-border);
@@ -176,6 +177,9 @@ body,
   --color-info: var(--info);
   --color-info-fg: var(--info-fg);
   --color-fg-bright: var(--fg-bright);
+  --color-local-border: var(--local-border);
+  --color-local: var(--local);
+  --color-local-fg: var(--local-fg);
   --color-on-accent: var(--on-accent);
   --color-surface-hover: var(--surface-hover);
   --color-overlay: var(--overlay);

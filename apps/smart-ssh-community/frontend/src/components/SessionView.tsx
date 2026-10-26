@@ -301,10 +301,10 @@ export function SessionView({
   // Chat-Eingabe (dito `send_chat_message`).
   if (mcp) {
     return (
-      <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
-        <header className="flex items-center justify-between gap-3 border-b border-fuchsia-900/60 px-4 py-2">
+      <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
+        <header className="flex items-center justify-between gap-3 border-b border-local-border/60 px-4 py-2">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="shrink-0 border border-fuchsia-500/60 px-1.5 text-xs text-fuchsia-300">
+            <span className="shrink-0 border border-local/60 px-1.5 text-xs text-local-fg">
               {t("sessionTabs.mcp.badge")}
             </span>
             <span
@@ -313,7 +313,7 @@ export function SessionView({
             >
               {sessionTabLabel({ serverName, mcp }, t("sessionTabs.mcp.unnamedClient"))}
             </span>
-            {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
+            {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
           </div>
           <Button onClick={onRequestClose} className="shrink-0">
             {t("session.disconnect")}
@@ -345,7 +345,7 @@ export function SessionView({
       label: (
         <>
           {t("session.filesTab")}
-          {filesElevatedUser && <span className="ml-1 text-amber-400">⚠</span>}
+          {filesElevatedUser && <span className="ml-1 text-warning-fg">⚠</span>}
         </>
       ),
     },
@@ -374,36 +374,36 @@ export function SessionView({
   );
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col bg-slate-900 text-slate-100">
-      <header className="relative flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-2">
+    <div className="flex flex-1 min-h-0 flex-col bg-surface text-fg">
+      <header className="relative flex items-center justify-between gap-3 border-b border-surface-raised px-4 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <span title={serverName} className="font-heading min-w-0 truncate font-semibold tracking-wide">
             {serverName}
           </span>
-          {statusNote && <span className="font-mono text-xs text-amber-300">{statusNote}</span>}
+          {statusNote && <span className="font-mono text-xs text-warning-fg-soft">{statusNote}</span>}
           {autoAttempt !== null && (
             <>
-              <output className="font-mono text-xs text-amber-300">
+              <output className="font-mono text-xs text-warning-fg-soft">
                 {t("session.reconnectingAuto", { attempt: autoAttempt })}
               </output>
               <button
                 type="button"
                 onClick={handleStopAutoReconnect}
-                className={`shrink-0 text-xs text-indigo-300 underline hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${narrow ? "min-h-11 px-2" : ""}`}
+                className={`shrink-0 text-xs text-accent-fg-soft underline hover:text-accent-fg-softer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${narrow ? "min-h-11 px-2" : ""}`}
               >
                 {t("session.stopReconnect")}
               </button>
             </>
           )}
           {gaveUp && autoAttempt === null && (
-            <output className="font-mono text-xs text-amber-300">
+            <output className="font-mono text-xs text-warning-fg-soft">
               {t("session.reconnectGaveUp")}
             </output>
           )}
           <SessionHeaderItems runtimeSessionId={sessionId} serverId={serverId} />
           {!narrow && showReconnect && reconnectButton}
           {reconnectError && (
-            <span role="alert" className="font-mono text-xs text-red-300">
+            <span role="alert" className="font-mono text-xs text-danger-fg-soft">
               {reconnectError}
             </span>
           )}
@@ -421,7 +421,7 @@ export function SessionView({
             </Button>
             {menuOpen && (
               <div
-                className="absolute right-2 top-full z-20 flex w-48 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded border border-slate-700 bg-slate-900 p-2 shadow-lg"
+                className="absolute right-2 top-full z-20 flex w-48 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded border border-border bg-surface p-2 shadow-lg"
               >
                 {showReconnect && reconnectButton}
                 <Button
@@ -468,10 +468,10 @@ export function SessionView({
             role="separator"
             aria-orientation="vertical"
             aria-label={t("session.splitHandle")}
-            className="group relative w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-slate-800"
+            className="group relative w-1.5 shrink-0 cursor-col-resize touch-none select-none bg-surface-raised"
             {...splitHandlers}
           >
-            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-700 group-hover:bg-indigo-500" />
+            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border group-hover:bg-accent-strong" />
           </span>
         )}
         <div
@@ -479,19 +479,19 @@ export function SessionView({
             narrow
               ? narrowTab === "ai"
                 ? "hidden"
-                : "flex min-h-0 min-w-0 flex-1 flex-col bg-slate-950"
-              : "flex shrink-0 flex-col bg-slate-950"
+                : "flex min-h-0 min-w-0 flex-1 flex-col bg-surface-sunken"
+              : "flex shrink-0 flex-col bg-surface-sunken"
           }
           style={narrow ? undefined : { width: effectiveRightWidth }}
         >
           {!narrow && (
-            <div className="flex h-8 shrink-0 items-center gap-3 border-b border-slate-800 px-3">
+            <div className="flex h-8 shrink-0 items-center gap-3 border-b border-surface-raised px-3">
               <button
                 type="button"
                 onClick={() => setRightPanelView("terminal")}
                 aria-pressed={rightPanelView === "terminal"}
-                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                  rightPanelView === "terminal" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
+                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${
+                  rightPanelView === "terminal" ? "text-accent-fg" : "text-fg-subtle hover:text-fg-soft"
                 }`}
               >
                 {t("session.terminalTab")}
@@ -500,15 +500,15 @@ export function SessionView({
                 type="button"
                 onClick={() => setRightPanelView("files")}
                 aria-pressed={rightPanelView === "files"}
-                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                  rightPanelView === "files" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
+                className={`font-heading text-xs font-semibold tracking-[0.13em] uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg ${
+                  rightPanelView === "files" ? "text-accent-fg" : "text-fg-subtle hover:text-fg-soft"
                 }`}
               >
                 {t("session.filesTab")}
                 {filesElevatedUser && (
                   // Spec 0067, A5: erhöhter Modus bleibt auch bei verborgener
                   // Dateien-Ansicht sichtbar.
-                  <span className="ml-1.5 normal-case tracking-normal text-amber-400">
+                  <span className="ml-1.5 normal-case tracking-normal text-warning-fg">
                     ⚠ {filesElevatedUser}
                   </span>
                 )}
