@@ -10,6 +10,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSoftKeyboardViewport } from "../hooks/useSoftKeyboardViewport";
 import { detectFallbackPlatform } from "../titlebarLayout";
 import { applyModifiers, keySequence, type TerminalKeyId } from "../terminalKeys";
+import { getResolvedTheme, subscribeTheme, TERMINAL_THEMES } from "../theme";
 import { TerminalKeyRow } from "./TerminalKeyRow";
 
 /** Issue #355: Verbindungszustand, den `SessionView` dem Terminal meldet. */
@@ -57,29 +58,7 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
       convertEol: true,
       fontSize: 13,
       fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace",
-      theme: {
-        background: "#0c1120",
-        foreground: "#dfe3ee",
-        cursor: "#6c7cf5",
-        cursorAccent: "#0c1120",
-        selectionBackground: "rgba(108,124,245,0.35)",
-        black: "#0c1120",
-        red: "#e5484d",
-        green: "#3fb950",
-        yellow: "#e0a12c",
-        blue: "#6c7cf5",
-        magenta: "#a5b0ff",
-        cyan: "#5980a6",
-        white: "#8b93a8",
-        brightBlack: "#4f596e",
-        brightRed: "#f0918f",
-        brightGreen: "#8fd79a",
-        brightYellow: "#f0c46b",
-        brightBlue: "#a5b0ff",
-        brightMagenta: "#c9d0ff",
-        brightCyan: "#9fc0dd",
-        brightWhite: "#e6e9f2",
-      },
+      theme: TERMINAL_THEMES[getResolvedTheme()],
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
@@ -155,8 +134,14 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
       resizeObserver.observe(containerRef.current);
     }
 
+    // Issue #804: open sessions follow the appearance live.
+    const unsubscribeTheme = subscribeTheme(() => {
+      term.options.theme = TERMINAL_THEMES[getResolvedTheme()];
+    });
+
     return () => {
       disposed = true;
+      unsubscribeTheme();
       termRef.current = null;
       dataSubscription.dispose();
       resizeObserver?.disconnect();

@@ -160,7 +160,7 @@ export function HostKeyDialog({ event, onDecision }: HostKeyDialogProps) {
                 <button
                   type="button"
                   onClick={() => decide("trust")}
-                  className="font-heading border border-white/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-white/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
+                  className="font-heading border border-ink/15 px-3 py-2 text-sm font-semibold tracking-wide text-red-200 hover:bg-ink/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-red-950"
                 >
                   {t("hostKeyDialog.trustAnyway")}
                 </button>

@@ -49,6 +49,13 @@
       "dataAndBackup": "Adatok és biztonsági mentés"
     }
   },
+  "appearance": {
+    "heading": "Megjelenés",
+    "language": "Nyelv",
+    "system": "Rendszer követése",
+    "light": "Világos",
+    "dark": "Sötét"
+  },
   "about": {
     "version": "Verzió",
     "copyHint": "Másolás a vágólapra",

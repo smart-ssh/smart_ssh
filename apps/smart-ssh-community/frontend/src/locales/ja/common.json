@@ -49,6 +49,13 @@
       "dataAndBackup": "データとバックアップ"
     }
   },
+  "appearance": {
+    "heading": "外観",
+    "language": "言語",
+    "system": "システムに従う",
+    "light": "ライト",
+    "dark": "ダーク"
+  },
   "about": {
     "version": "バージョン",
     "copyHint": "クリップボードにコピー",

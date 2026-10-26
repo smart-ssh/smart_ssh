@@ -49,6 +49,13 @@
       "dataAndBackup": "Veri ve yedek"
     }
   },
+  "appearance": {
+    "heading": "Görünüm",
+    "language": "Dil",
+    "system": "Sistemi izle",
+    "light": "Açık",
+    "dark": "Koyu"
+  },
   "about": {
     "version": "Sürüm",
     "copyHint": "Panoya kopyala",

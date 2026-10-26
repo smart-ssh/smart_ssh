@@ -194,7 +194,7 @@ export function Sidebar({
         title={node.group.name}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
         className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-          isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
+          isSelected("group", node.group.id) ? "bg-slate-800 text-ink" : "text-slate-300"
         }`}
       >
         📁 {node.group.name}
@@ -223,7 +223,7 @@ export function Sidebar({
       title={server.name}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
       className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-        isSelected("server", server.id) ? "bg-slate-800 text-white" : "text-slate-300"
+        isSelected("server", server.id) ? "bg-slate-800 text-ink" : "text-slate-300"
       }`}
     >
       🖥️ {server.name}
@@ -328,7 +328,7 @@ export function Sidebar({
                       title={label}
                       style={{ paddingLeft: "8px" }}
                       className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-                        selected ? "bg-slate-800 text-white" : "text-slate-300"
+                        selected ? "bg-slate-800 text-ink" : "text-slate-300"
                       }`}
                     >
                       {view.icon && <span aria-hidden="true">{view.icon} </span>}

@@ -71,7 +71,7 @@ export function Tabs({
             className={`-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${tabClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
               selected
                 ? "border-indigo-400 text-slate-100"
-                : "border-transparent text-slate-300 hover:text-white"
+                : "border-transparent text-slate-300 hover:text-ink"
             }`}
           >
             {tab.label}

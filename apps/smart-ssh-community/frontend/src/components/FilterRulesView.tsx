@@ -742,7 +742,7 @@ export function TestPanel({ servers, rules }: { servers: ServerDto[]; rules: Rul
                 <button
                   type="button"
                   onClick={() => setTags(tags.filter((tagValue) => tagValue !== tag))}
-                  className="rounded text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="rounded text-slate-400 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   aria-label={t("serverForm.removeTagAria", { tag })}
                 >
                   ✕

@@ -8,6 +8,7 @@ import { initI18n } from './i18n.ts'
 import { installContextMenuSuppression } from './contextMenu.ts'
 import type { StartupStateDto } from './types.ts'
 import { detectFallbackPlatform } from './titlebarLayout.ts'
+import { applyStoredTheme, initTheme } from './theme.ts'
 
 // Spec 0114: CSS hook for the Android-only narrow layout (`narrow:` variant).
 document.documentElement.dataset.platform = detectFallbackPlatform()
@@ -30,6 +31,11 @@ document.documentElement.dataset.platform = detectFallbackPlatform()
 // also nie scheitern), bleibt `null`: `StartupGate` zeigt dann eine
 // Meldung mit „Erneut versuchen" statt eine App, deren Kommandos alle
 // fehlschlagen.
+// Issue #804: cached appearance first (the pre-paint script already set it),
+// then the stored choice once the store is readable (not before the unlock in
+// password mode — `StartupGate` repeats it after unlocking).
+initTheme()
+
 let startupState: StartupStateDto | null = null
 try {
   startupState = await getStartupState()
@@ -48,6 +54,14 @@ try {
 await initI18n(
   startupState && startupState.screen !== 'unlocked' ? startupState.language : undefined,
 )
+
+if (startupState && startupState.screen === 'unlocked') {
+  try {
+    await applyStoredTheme()
+  } catch (err) {
+    console.error('Gespeicherte Darstellung konnte nicht gelesen werden:', err)
+  }
+}
 
 // Issue #629: no WebView menu ("Reload") in release builds.
 if (import.meta.env.PROD) installContextMenuSuppression()

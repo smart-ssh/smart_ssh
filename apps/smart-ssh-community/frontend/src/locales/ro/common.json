@@ -49,6 +49,13 @@
       "dataAndBackup": "Date și copii de rezervă"
     }
   },
+  "appearance": {
+    "heading": "Aspect",
+    "language": "Limbă",
+    "system": "Urmează sistemul",
+    "light": "Luminos",
+    "dark": "Întunecat"
+  },
   "about": {
     "version": "Versiune",
     "copyHint": "Copiază în clipboard",

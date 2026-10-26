@@ -1617,7 +1617,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                     type="button"
                     aria-label={t("chat.attachmentRemove", { name: a.name })}
                     onClick={() => composerCtx.removeAttachment(a.id)}
-                    className="text-slate-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    className="text-slate-300 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   >
                     ×
                   </button>
@@ -1690,7 +1690,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
                 disabled={action.disabled}
                 onClick={() => invokeComposerAction(action)}
-                className="rounded p-1.5 text-slate-300 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+                className="rounded p-1.5 text-slate-300 hover:bg-slate-700 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
               >
                 {action.icon}
               </button>

@@ -49,6 +49,13 @@
       "dataAndBackup": "Дані та резервна копія"
     }
   },
+  "appearance": {
+    "heading": "Вигляд",
+    "language": "Мова",
+    "system": "Як у системі",
+    "light": "Світла",
+    "dark": "Темна"
+  },
   "about": {
     "version": "Версія",
     "copyHint": "Копіювати в буфер обміну",

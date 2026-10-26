@@ -49,6 +49,13 @@
       "dataAndBackup": "Datos y copia de seguridad"
     }
   },
+  "appearance": {
+    "heading": "Apariencia",
+    "language": "Idioma",
+    "system": "Seguir el sistema",
+    "light": "Claro",
+    "dark": "Oscuro"
+  },
   "about": {
     "version": "Versión",
     "copyHint": "Copiar al portapapeles",

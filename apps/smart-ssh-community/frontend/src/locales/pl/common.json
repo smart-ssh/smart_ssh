@@ -49,6 +49,13 @@
       "dataAndBackup": "Dane i kopia zapasowa"
     }
   },
+  "appearance": {
+    "heading": "Wygląd",
+    "language": "Język",
+    "system": "Zgodnie z systemem",
+    "light": "Jasny",
+    "dark": "Ciemny"
+  },
   "about": {
     "version": "Wersja",
     "copyHint": "Kopiuj do schowka",

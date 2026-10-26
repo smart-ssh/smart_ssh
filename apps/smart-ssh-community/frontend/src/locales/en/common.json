@@ -49,6 +49,13 @@
       "dataAndBackup": "Data and backup"
     }
   },
+  "appearance": {
+    "heading": "Appearance",
+    "language": "Language",
+    "system": "Follow system",
+    "light": "Light",
+    "dark": "Dark"
+  },
   "about": {
     "version": "Version",
     "copyHint": "Copy to clipboard",

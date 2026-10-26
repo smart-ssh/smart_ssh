@@ -49,6 +49,13 @@
       "dataAndBackup": "데이터 및 백업"
     }
   },
+  "appearance": {
+    "heading": "화면 모드",
+    "language": "언어",
+    "system": "시스템 설정 따르기",
+    "light": "라이트",
+    "dark": "다크"
+  },
   "about": {
     "version": "버전",
     "copyHint": "클립보드에 복사",

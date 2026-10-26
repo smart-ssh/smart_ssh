@@ -49,6 +49,13 @@
       "dataAndBackup": "Данные и резервная копия"
     }
   },
+  "appearance": {
+    "heading": "Оформление",
+    "language": "Язык",
+    "system": "Как в системе",
+    "light": "Светлая",
+    "dark": "Тёмная"
+  },
   "about": {
     "version": "Версия",
     "copyHint": "Копировать в буфер обмена",

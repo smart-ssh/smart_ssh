@@ -11,6 +11,7 @@ import {
 } from "../api";
 import { onStartupPrompt, onStartupUnlocked } from "../events";
 import { applyStoredLanguage } from "../i18n";
+import { applyStoredTheme } from "../theme";
 import { translateErrorCode } from "../errorCodes";
 import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../types";
 import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
@@ -129,6 +130,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       // gespeicherte Sprachwahl aus Spec 0024 wird nachgeholt (ADR 0095
       // §8). Ein Fehler dabei ist kein Grund, die App nicht zu zeigen.
       void applyStoredLanguage().catch((err: unknown) => console.error(err));
+      void applyStoredTheme().catch((err: unknown) => console.error(err));
       void refresh();
     });
 

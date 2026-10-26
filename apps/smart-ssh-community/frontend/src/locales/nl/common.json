@@ -49,6 +49,13 @@
       "dataAndBackup": "Gegevens en back-up"
     }
   },
+  "appearance": {
+    "heading": "Weergave",
+    "language": "Taal",
+    "system": "Systeem volgen",
+    "light": "Licht",
+    "dark": "Donker"
+  },
   "about": {
     "version": "Versie",
     "copyHint": "Naar klembord kopiëren",

@@ -23,6 +23,7 @@
         }
       ]
     },
+    "core:window:allow-set-theme",
     "store:default",
     "os:default"
   ]
