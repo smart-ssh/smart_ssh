@@ -193,8 +193,8 @@ export function Sidebar({
         onClick={() => onSelect({ kind: "group", id: node.group.id })}
         title={node.group.name}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-          isSelected("group", node.group.id) ? "bg-slate-800 text-white" : "text-slate-300"
+        className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+          isSelected("group", node.group.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
         }`}
       >
         📁 {node.group.name}
@@ -222,8 +222,8 @@ export function Sidebar({
       onClick={() => onSelect({ kind: "server", id: server.id })}
       title={server.name}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-        isSelected("server", server.id) ? "bg-slate-800 text-white" : "text-slate-300"
+      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+        isSelected("server", server.id) ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
       }`}
     >
       🖥️ {server.name}
@@ -246,19 +246,19 @@ export function Sidebar({
       onClick={() => onSelect({ kind: "unusableServer", id: server.id })}
       title={unusableReasonText(t, server.reason)}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
-      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-        isSelected("unusableServer", server.id) ? "bg-slate-800 text-amber-200" : "text-amber-300/80"
+      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm italic hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+        isSelected("unusableServer", server.id) ? "bg-surface-raised text-warning-fg-softer" : "text-warning-fg-soft/80"
       }`}
     >
       <span aria-hidden="true">⚠️</span> {server.name}{" "}
-      <span className="text-xs not-italic text-slate-400">({t("unusableServer.badge")})</span>
+      <span className="text-xs not-italic text-fg-subtle">({t("unusableServer.badge")})</span>
     </div>
     </div>
   );
 
   return (
-    <div className="flex w-64 shrink-0 flex-col border-r border-slate-800 narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
-      <div className="flex gap-1 border-b border-slate-800 p-2">
+    <div className="flex w-64 shrink-0 flex-col border-r border-surface-raised narrow:min-h-0 narrow:w-full narrow:flex-1 narrow:border-r-0">
+      <div className="flex gap-1 border-b border-surface-raised p-2">
         <Button size="sm"
           onClick={() => onSelect({ kind: "newGroup", parentId: currentFolder })}
           className="flex-1"
@@ -272,7 +272,7 @@ export function Sidebar({
           {t("sidebar.addServer")}
         </Button>
       </div>
-      <div className="flex gap-1 border-b border-slate-800 p-2">
+      <div className="flex gap-1 border-b border-surface-raised p-2">
         <Button size="sm"
           onClick={onImportSshConfig}
           title={t("sidebar.importSshConfigHint")}
@@ -302,7 +302,7 @@ export function Sidebar({
             className="flex flex-col"
           >
         {localServer && (
-          <div role="none" data-drop-target="none" className="mb-2 border-b border-slate-800 pb-2">
+          <div role="none" data-drop-target="none" className="mb-2 border-b border-surface-raised pb-2">
             {renderServer(localServer, 0)}
           </div>
         )}
@@ -310,7 +310,7 @@ export function Sidebar({
         {tree.ungroupedServers.map((s) => renderServer(s, 0))}
         {tree.ungroupedUnusableServers.map((s) => renderUnusableServer(s, 0))}
             {manageViews.length > 0 && (
-              <div role="none" data-drop-target="none" className="mt-2 border-t border-slate-800 pt-2">
+              <div role="none" data-drop-target="none" className="mt-2 border-t border-surface-raised pt-2">
                 {manageViews.map((view) => {
                   const key = `extensionView:${view.id}`;
                   const selected = selection?.kind === "extensionView" && selection.id === view.id;
@@ -327,8 +327,8 @@ export function Sidebar({
                       onClick={() => onSelect({ kind: "extensionView", id: view.id })}
                       title={label}
                       style={{ paddingLeft: "8px" }}
-                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-                        selected ? "bg-slate-800 text-white" : "text-slate-300"
+                      className={`block w-full min-w-0 cursor-pointer select-none truncate rounded px-2 py-1 text-left text-sm narrow:min-h-11 narrow:flex-1 narrow:py-3 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg ${
+                        selected ? "bg-surface-raised text-fg-bright" : "text-fg-muted"
                       }`}
                     >
                       {view.icon && <span aria-hidden="true">{view.icon} </span>}
@@ -344,10 +344,10 @@ export function Sidebar({
         {groups.length === 0 &&
           tree.ungroupedServers.length === 0 &&
           tree.ungroupedUnusableServers.length === 0 && (
-          <p className="px-2 py-1 text-sm text-slate-400">{t("sidebar.empty")}</p>
+          <p className="px-2 py-1 text-sm text-fg-subtle">{t("sidebar.empty")}</p>
         )}
         {drag && (
-          <p className="mt-2 rounded border border-dashed border-slate-600 px-2 py-2 text-xs text-slate-400">
+          <p className="mt-2 rounded border border-dashed border-border-strong px-2 py-2 text-xs text-fg-subtle">
             {t("treeDrag.rootDropZone")}
           </p>
         )}

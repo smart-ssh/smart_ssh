@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal as XTerm } from "@xterm/xterm";
+import { Terminal as XTerm, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { commandErrorMessage, openTerminal, terminalInput, terminalResize } from "../api";
 import { base64ToBytes, onTerminalOutput } from "../events";
@@ -11,6 +11,35 @@ import { useSoftKeyboardViewport } from "../hooks/useSoftKeyboardViewport";
 import { detectFallbackPlatform } from "../titlebarLayout";
 import { applyModifiers, keySequence, type TerminalKeyId } from "../terminalKeys";
 import { TerminalKeyRow } from "./TerminalKeyRow";
+
+/** xterm theme built from the `term-*` colour tokens (theme/dark.css). */
+function readTerminalTheme(): ITheme {
+  const style = getComputedStyle(document.documentElement);
+  const v = (name: string) => style.getPropertyValue(`--term-${name}`).trim();
+  return {
+    background: v("bg"),
+    foreground: v("fg"),
+    cursor: v("cursor"),
+    cursorAccent: v("cursor-accent"),
+    selectionBackground: v("selection"),
+    black: v("ansi-black"),
+    red: v("ansi-red"),
+    green: v("ansi-green"),
+    yellow: v("ansi-yellow"),
+    blue: v("ansi-blue"),
+    magenta: v("ansi-magenta"),
+    cyan: v("ansi-cyan"),
+    white: v("ansi-white"),
+    brightBlack: v("ansi-bright-black"),
+    brightRed: v("ansi-bright-red"),
+    brightGreen: v("ansi-bright-green"),
+    brightYellow: v("ansi-bright-yellow"),
+    brightBlue: v("ansi-bright-blue"),
+    brightMagenta: v("ansi-bright-magenta"),
+    brightCyan: v("ansi-bright-cyan"),
+    brightWhite: v("ansi-bright-white"),
+  };
+}
 
 /** Issue #355: Verbindungszustand, den `SessionView` dem Terminal meldet. */
 export type TerminalLink = "live" | "lost" | "reconnecting";
@@ -57,32 +86,19 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
       convertEol: true,
       fontSize: 13,
       fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace",
-      theme: {
-        background: "#0c1120",
-        foreground: "#dfe3ee",
-        cursor: "#6c7cf5",
-        cursorAccent: "#0c1120",
-        selectionBackground: "rgba(108,124,245,0.35)",
-        black: "#0c1120",
-        red: "#e5484d",
-        green: "#3fb950",
-        yellow: "#e0a12c",
-        blue: "#6c7cf5",
-        magenta: "#a5b0ff",
-        cyan: "#5980a6",
-        white: "#8b93a8",
-        brightBlack: "#4f596e",
-        brightRed: "#f0918f",
-        brightGreen: "#8fd79a",
-        brightYellow: "#f0c46b",
-        brightBlue: "#a5b0ff",
-        brightMagenta: "#c9d0ff",
-        brightCyan: "#9fc0dd",
-        brightWhite: "#e6e9f2",
-      },
+      theme: readTerminalTheme(),
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    // A theme switch changes the `term-*` variables on the root element;
+    // re-read them so open terminals follow it live.
+    const themeObserver = new MutationObserver(() => {
+      term.options.theme = readTerminalTheme();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class", "style"],
+    });
 
     let disposed = false;
     let unlistenOutput: (() => void) | undefined;
@@ -161,6 +177,7 @@ export function TerminalView({ sessionId, link = "live", onReconnect }: Terminal
       dataSubscription.dispose();
       resizeObserver?.disconnect();
       unlistenOutput?.();
+      themeObserver.disconnect();
       term.dispose();
     };
     // `t` ist bewusst keine Abhängigkeit: ein Sprachwechsel soll das
