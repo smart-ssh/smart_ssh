@@ -6,7 +6,7 @@ Sicherheitszusagen. Für Bereiche ohne Oberfläche (Build, CI, Release) ist
 „der Nutzer" der Beitragende oder der, der ein Release-Paket bekommt.
 
 Eine Spec beschreibt den Stand von `main`, keinen Plan. Sie ändert sich im
-selben Pull Request wie der Code (siehe `CLAUDE.md`, Abschnitt „Spec
+selben Pull Request wie der Code (siehe `AGENTS.md`, Abschnitt „Spec
 workflow").
 
 ## Form
