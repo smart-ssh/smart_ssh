@@ -2,6 +2,7 @@
 // im selben Zeilen-Container wie das Aktions-Label sitzen, statt als
 // eigener Block über dem Kommando-Text.
 import { fireEvent, render, screen } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -252,7 +253,7 @@ describe("registered document actions (Spec 0045)", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("title", "Erfordert einen kostenpflichtigen Plan");
 
-    fireEvent.click(button);
+    clickDisabled(button);
     expect(onInvoke).not.toHaveBeenCalled();
   });
 

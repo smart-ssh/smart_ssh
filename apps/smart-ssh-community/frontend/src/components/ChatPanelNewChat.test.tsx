@@ -2,6 +2,7 @@
 // Sitzung — gesperrt während eines Turns bzw. bei offener Bestätigung, leert
 // bei Erfolg die Chat-Ansicht.
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendChatMessage, startNewChat } from "../api";
@@ -174,7 +175,7 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
 
     const button = await screen.findByRole("button", { name: "Neuer Chat" });
     await waitFor(() => expect(button).toBeDisabled());
-    fireEvent.click(button);
+    clickDisabled(button);
     expect(startNewChat).not.toHaveBeenCalled();
   });
 
