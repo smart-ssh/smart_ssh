@@ -25,6 +25,7 @@ mod elevated_sftp;
 /// Spec 0084, §4: der Newtype, der die `EventEmitter`-Impl für
 /// `tauri::AppHandle` trägt (s. dortiger Moduldoc-Kommentar).
 mod event_emitter;
+mod extension_plugins;
 mod file_clipboard;
 mod file_ops;
 mod first_run_notice;
@@ -678,14 +679,18 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Kommando unerreichbar („plugin store not found") — selbst wenn die ACL
     // es erlaubt.
     let defer_plugins = app_state.is_none();
-    let builder = if defer_plugins {
+    let ext = std::mem::take(&mut wiring.plugins_after_unlock); // Issue #894
+    let (builder, deferred_extension_plugins) = if defer_plugins {
         tracing::info!(
             "the application starts locked; the plugins that touch files, settings or the \
              operating system are registered only after unlocking (Spec 0101, A16)"
         );
-        builder
+        (builder, ext)
     } else {
-        register_unlocked_plugins_on(builder)
+        (
+            extension_plugins::register_on(register_unlocked_plugins_on(builder), ext),
+            Vec::new(),
+        )
     };
 
     // Schlüsselbund-Modus: Der beim Start aufgebaute Zustand muss hier an
@@ -763,6 +768,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
         // hängt daran, ob es etwas nachzuholen gibt.
         .manage(UnlockedPluginsPendingSlot(defer_plugins))
+        .manage(extension_plugins::pending(deferred_extension_plugins))
         // Spec 0101, Klarstellung 9 (Fund 8): Ab hier gehört der
         // Flush-Wächter dem verwalteten Zustand, damit `quit_application`
         // den Puffer schreiben kann — `AppHandle::exit` führt keine
@@ -1165,6 +1171,7 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
             );
         }
     }
+    extension_plugins::register_pending(app); // Issue #894: after the core's own
     tracing::info!(
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"
@@ -1228,11 +1235,4 @@ pub(crate) fn init_crypto_provider() {
 }
 
 #[cfg(test)]
-mod crypto_provider_tests {
-    #[test]
-    fn init_installs_default_provider_and_is_idempotent() {
-        super::init_crypto_provider();
-        super::init_crypto_provider();
-        assert!(tls_config::default_provider_installed());
-    }
-}
+mod crypto_provider;

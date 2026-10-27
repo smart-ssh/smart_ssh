@@ -172,7 +172,15 @@ Die Umwandlung kann keine Prüfung umgehen oder abschwächen. Für Dateiinhalt
 gibt es keine Hard-Blacklist-Prüfung, weil die Blacklist Kommandos beschreibt.
 
 **Master-Passwort-Modus** (Spec 0101): Plugins dürfen Befehle erst **nach
-dem Entsperren** registrieren, sonst wären sie vorher aufrufbar.
+dem Entsperren** registrieren, sonst wären sie vorher aufrufbar. Dafür gibt
+es in der Verdrahtung eine eigene Liste, `plugins_after_unlock` (Community:
+leer; Issue #894): Ihre Plugins werden im Passwort-Modus erst nach dem
+Entsperren registriert (nach den eigenen Plugins des Kerns, in der Reihenfolge
+der Liste), im Schlüsselbund-Modus beim Start. Jedes höchstens einmal je
+Prozess; ein Plugin, dessen Registrierung scheitert, steht im Log und hält
+weder die übrigen noch das Entsperren auf. Die Hooks in `plugins` laufen vor
+dem Entsperren — Plugins mit Befehlen, die eine entsperrte App brauchen,
+gehören in `plugins_after_unlock`.
 
 ### 2a. Erweiterungseigene Datenbanktabellen
 
