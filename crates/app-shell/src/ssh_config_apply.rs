@@ -131,26 +131,6 @@ impl From<&KeyFileError> for IdentityFallbackReason {
     }
 }
 
-/// Ergebnis eines erfolgreichen Lesens auf Weg (b) — der Inhalt für den
-/// Schlüsselbund plus, ob der Schlüssel verschlüsselt war (Grundlage für
-/// [`IdentityEncryptedNotice`], §3.1.9 b).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeyFileRead {
-    pub content: String,
-    pub encrypted: bool,
-}
-
-/// Liest eine Schlüsseldatei für Weg (b). Getrennt als Trait, damit die
-/// Tests belegen können, **welche** Dateien geöffnet wurden — und dass die
-/// Vorschau keine öffnet (§6.4.1b).
-///
-/// `Send + Sync`: Die Quelle wird über ein `await` hinweg gehalten (das
-/// Anlegen jedes Profils ist async), und ohne diese Schranke wäre das
-/// Future des Tauri-Kommandos nicht `Send`.
-pub trait KeyFileSource: Send + Sync {
-    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason>;
-}
-
 /// Führt den bestätigten Plan aus (§3.1.11).
 ///
 /// `choices` ist die Wahl des Nutzers je Eintrag; ein Eintrag ohne Wahl
@@ -161,7 +141,7 @@ pub async fn apply_import(
     choices: &[EntryChoice],
     store: &dyn ProfileStore,
     credential_store: &(dyn CredentialStore + Send + Sync),
-    keys: &dyn KeyFileSource,
+    keys: &(dyn KeyFileReader + Send + Sync),
 ) -> CommandResult<ApplyOutcome> {
     let choice_of = |i: usize| -> EntryChoice {
         choices
@@ -283,44 +263,50 @@ pub async fn apply_import(
 
         // §3.1.9: Der Weg entscheidet, ob überhaupt eine Datei aufgeht.
         let auth = match (&e.identity_file, c.identity_mode) {
-            (Some(idf), IdentityMode::IntoKeychain) => match keys.read_key(&idf.path) {
-                Ok(read) => {
-                    // §3.1.9 (b), letzter Punkt: Die Vorschau konnte das
-                    // nicht wissen (§5.1) — jetzt, nach dem tatsächlichen
-                    // Lesen, steht es in der Abschlussmeldung, damit der
-                    // Nutzer die Passphrase nachträgt, bevor er sich zum
-                    // ersten Mal verbindet.
-                    if read.encrypted {
-                        outcome.identity_encrypted.push(IdentityEncryptedNotice {
+            (Some(idf), IdentityMode::IntoKeychain) =>
+            // `enforce_permissions = false`: for the import a permission problem is
+            // a finding, not a block (§5.5). Same checks as the manual path.
+            {
+                match keys.read(&idf.path, false) {
+                    Ok(read) => {
+                        // §3.1.9 (b), letzter Punkt: Die Vorschau konnte das
+                        // nicht wissen (§5.1) — jetzt, nach dem tatsächlichen
+                        // Lesen, steht es in der Abschlussmeldung, damit der
+                        // Nutzer die Passphrase nachträgt, bevor er sich zum
+                        // ersten Mal verbindet.
+                        if read.encrypted {
+                            outcome.identity_encrypted.push(IdentityEncryptedNotice {
+                                entry: e.name.clone(),
+                                path: idf.path.clone(),
+                            });
+                        }
+                        AuthMethodInput::PrivateKey {
+                            key_content: Some(read.key.expose_secret().to_string()),
+                            // §3.1.9 (b): Nach einer Passphrase wird beim Import
+                            // **nicht** gefragt; ein verschlüsselter Schlüssel
+                            // geht byte-gleich in den Schlüsselbund (Spec 0076,
+                            // C-4).
+                            passphrase: None,
+                        }
+                    }
+                    Err(err) => {
+                        let reason = IdentityFallbackReason::from(&err);
+                        // Ein Fehler lässt den Import **nicht** scheitern:
+                        // dieser eine Server fällt auf Weg (a) zurück, und die
+                        // Meldung sagt warum (§3.1.9 b). Der Grund trägt nie
+                        // Dateiinhalt.
+                        outcome.identity_fallbacks.push(IdentityFallback {
                             entry: e.name.clone(),
                             path: idf.path.clone(),
+                            reason,
                         });
-                    }
-                    AuthMethodInput::PrivateKey {
-                        key_content: Some(read.content),
-                        // §3.1.9 (b): Nach einer Passphrase wird beim Import
-                        // **nicht** gefragt; ein verschlüsselter Schlüssel
-                        // geht byte-gleich in den Schlüsselbund (Spec 0076,
-                        // C-4).
-                        passphrase: None,
+                        AuthMethodInput::IdentityFile {
+                            path: idf.path.clone(),
+                            passphrase: None,
+                        }
                     }
                 }
-                Err(reason) => {
-                    // Ein Fehler lässt den Import **nicht** scheitern:
-                    // dieser eine Server fällt auf Weg (a) zurück, und die
-                    // Meldung sagt warum (§3.1.9 b). Der Grund trägt nie
-                    // Dateiinhalt.
-                    outcome.identity_fallbacks.push(IdentityFallback {
-                        entry: e.name.clone(),
-                        path: idf.path.clone(),
-                        reason,
-                    });
-                    AuthMethodInput::IdentityFile {
-                        path: idf.path.clone(),
-                        passphrase: None,
-                    }
-                }
-            },
+            }
             // (a) — der Pfad wandert unverändert in die Anmeldeart, die
             // Datei bleibt zu (§4.6, §5.5).
             (Some(idf), IdentityMode::KeepAsFile) => AuthMethodInput::IdentityFile {
@@ -427,53 +413,6 @@ async fn rollback(
                 error = %err,
                 "Rücknahme einer importierten Gruppe fehlgeschlagen"
             );
-        }
-    }
-}
-
-/// Weg (b) im Betrieb - ueber **denselben** [`KeyFileReader`], den das
-/// Anlegen eines Servers von Hand benutzt.
-///
-/// §5.5 ist hier woertlich zu nehmen: "dann gelten die Pruefungen aus Spec
-/// 0076 (Dateirechte, symbolische Links, Gueltigkeit des Schluessels), und
-/// zwar dieselben wie beim Anlegen eines Servers von Hand. Der Import
-/// erfindet dafuer keine eigenen, schwaecheren Regeln."
-///
-/// Die erste Fassung tat genau das - `exists()` + `read_to_string` +
-/// Teilstring-Suche nach `PRIVATE KEY` - und war damit an drei Stellen
-/// schwaecher als die Handstelle (Review-Runde 1): keine Groessengrenze,
-/// keine Pruefung der Dateiart (ein FIFO haette das Kommando unbegrenzt
-/// haengen lassen), und eine Teilstring-Pruefung statt echter
-/// Schluesselgueltigkeit, ueber die eine beliebige Textdatei mit dieser
-/// Zeichenfolge als "privater Schluessel" in den Schluesselbund gewandert
-/// waere.
-///
-/// `enforce_permissions: false` - fuer den Import ist ein Rechte-Mangel ein
-/// **Befund**, keine Sperre; genau so sieht es der Trait-Kommentar zu
-/// [`KeyFileReader::read`] fuer den Import ausdruecklich vor.
-///
-/// §5.1: Geoeffnet wird **nur**, was im Plan stand. Diese Quelle bekommt
-/// deshalb den Pfad aus dem Plan, nie einen aus dem Frontend.
-pub struct DiskKeyFiles<'a> {
-    pub reader: &'a (dyn KeyFileReader + Send + Sync),
-}
-
-impl KeyFileSource for DiskKeyFiles<'_> {
-    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason> {
-        match self.reader.read(path, false) {
-            // §3.1.9 (b) / Spec 0076 C-4: Der Dateiinhalt geht byte-gleich
-            // in den Schluesselbund, auch wenn er verschluesselt ist - nach
-            // einer Passphrase wird beim Import nicht gefragt. `encrypted`
-            // wandert mit, damit die Abschlussmeldung sagen kann, dass die
-            // Passphrase nachzutragen ist (spec-reviewer-Fund, Runde 1).
-            Ok(content) => Ok(KeyFileRead {
-                content: content.key.expose_secret().to_string(),
-                encrypted: content.encrypted,
-            }),
-            // Kein Fehler laesst den Import scheitern: dieser eine Server
-            // faellt auf Weg (a) zurueck, und die Meldung sagt warum
-            // (§3.1.9 b). Der Grund traegt nie Dateiinhalt.
-            Err(err) => Err(IdentityFallbackReason::from(&err)),
         }
     }
 }
@@ -934,9 +873,7 @@ pub async fn apply_ssh_config_import(
         &choices,
         state.profile_store.as_ref(),
         state.credential_store.as_ref(),
-        &DiskKeyFiles {
-            reader: state.key_file_reader.as_ref(),
-        },
+        state.key_file_reader.as_ref(),
     )
     .await?;
     Ok(outcome)

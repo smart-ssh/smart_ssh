@@ -1,41 +1,16 @@
 //! Tests zu Spec 0075, Schritt 3 (§6.3.4–9, §6.3.15–16, §6.4.1, §6.4.1a,
 //! §6.4.1b, §6.4.3a, §6.4.8).
 
-use std::sync::Mutex;
-
 use ssh_manager_core::profiles::ssh_config::{build_plan, ImportSource, Inventory};
 use ssh_manager_core::profiles::{AuthMethod, ProfileStore};
 use uuid::Uuid;
 
 use super::*;
 use app_logic::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+use ssh_manager_core::ssh::mock::MockKeyFileReader;
 
 const MARKER_KEY: &str =
     "-----BEGIN OPENSSH PRIVATE KEY-----\nGEHEIMER_SCHLUESSEL_4711\n-----END OPENSSH PRIVATE KEY-----";
-
-/// Zählt mit, welche Pfade geöffnet wurden — das ist der Zeuge für §5.1 und
-/// §6.4.1/1a/1b. Ohne ihn wäre „hat nichts geöffnet" nicht prüfbar.
-#[derive(Default)]
-struct SpyKeyFiles {
-    opened: Mutex<Vec<String>>,
-    /// Pfade, die absichtlich scheitern sollen.
-    fail: Vec<(String, IdentityFallbackReason)>,
-    /// Pfade, die als verschlüsselt gelten sollen (§3.1.9 b).
-    encrypted: Vec<String>,
-}
-
-impl KeyFileSource for SpyKeyFiles {
-    fn read_key(&self, path: &str) -> Result<KeyFileRead, IdentityFallbackReason> {
-        self.opened.lock().unwrap().push(path.to_string());
-        if let Some((_, why)) = self.fail.iter().find(|(p, _)| p == path) {
-            return Err(*why);
-        }
-        Ok(KeyFileRead {
-            content: MARKER_KEY.to_string(),
-            encrypted: self.encrypted.iter().any(|p| p == path),
-        })
-    }
-}
 
 fn plan_from(text: &str) -> ssh_manager_core::profiles::ssh_config::ImportPlan {
     plan_from_inv(text, &[], &[])
@@ -85,7 +60,7 @@ impl Fixture {
         &self,
         plan: &ssh_manager_core::profiles::ssh_config::ImportPlan,
         choices: &[EntryChoice],
-        keys: &dyn KeyFileSource,
+        keys: &(dyn KeyFileReader + Send + Sync),
     ) -> CommandResult<ApplyOutcome> {
         apply_import(plan, choices, &self.store, &self.creds, keys).await
     }
@@ -153,7 +128,7 @@ async fn t_6_3_1_vorschau_und_ergebnis_stimmen_ueberein() {
     let choices: Vec<EntryChoice> = (0..plan.entries.len())
         .map(|i| choose(i, IdentityMode::KeepAsFile))
         .collect();
-    f.apply(&plan, &choices, &SpyKeyFiles::default())
+    f.apply(&plan, &choices, &MockKeyFileReader::new())
         .await
         .expect("Import");
 
@@ -250,7 +225,7 @@ async fn t_6_3_1_vorschau_und_ergebnis_stimmen_ueberein() {
 async fn t_6_4_1_weg_a_liest_keine_schluesseldatei() {
     let plan = plan_from("Host a\n  HostName 1.1.1.1\n  IdentityFile /keys/id_ed25519\n");
     let f = Fixture::new();
-    let spy = SpyKeyFiles::default();
+    let spy = MockKeyFileReader::new();
     // Vorgabeeinstellung = Weg (a): keine Wahl übergeben.
     let out = f.apply(&plan, &[], &spy).await.expect("Import");
 
@@ -258,9 +233,9 @@ async fn t_6_4_1_weg_a_liest_keine_schluesseldatei() {
     // **Keine** Datei wurde geöffnet. Der Test scheitert, sobald jemand
     // „hilfsbereit" den Schlüssel einliest.
     assert!(
-        spy.opened.lock().unwrap().is_empty(),
+        spy.read_paths().is_empty(),
         "geöffnet: {:?}",
-        spy.opened.lock().unwrap()
+        spy.read_paths()
     );
     // Der Pfad steht in der Anmeldeart, unverändert (§4.6).
     let s = f.server("a").await;
@@ -346,7 +321,10 @@ async fn t_6_4_1a_weg_b_liest_genau_die_angekuendigten_dateien() {
         "Host a\n  IdentityFile /k/a\nHost b\n  IdentityFile /k/b\nHost c\n  IdentityFile /k/c\n",
     );
     let f = Fixture::new();
-    let spy = SpyKeyFiles::default();
+    let spy = MockKeyFileReader::new()
+        .with_key("/k/a", MARKER_KEY)
+        .with_key("/k/b", MARKER_KEY)
+        .with_key("/k/c", MARKER_KEY);
     // a und c auf Weg (b), b **abgewählt**.
     let choices = vec![
         choose(0, IdentityMode::IntoKeychain),
@@ -363,7 +341,7 @@ async fn t_6_4_1a_weg_b_liest_genau_die_angekuendigten_dateien() {
     assert_eq!(out.created_servers, 2);
 
     // Genau die zwei gewählten Dateien — und die des abgewählten **nicht**.
-    let opened = spy.opened.lock().unwrap().clone();
+    let opened = spy.read_paths();
     assert_eq!(opened, vec!["/k/a".to_string(), "/k/c".to_string()]);
     assert!(!opened.contains(&"/k/b".to_string()));
 
@@ -412,15 +390,26 @@ async fn t_6_4_1a_fehlende_unlesbare_und_ungueltige_datei_fallen_auf_weg_a() {
         "Host fehlt\n  IdentityFile /k/fehlt\nHost unlesbar\n  IdentityFile /k/unlesbar\nHost keinkey\n  IdentityFile /k/keinkey\nHost gut\n  IdentityFile /k/gut\n",
     );
     let f = Fixture::new();
-    let spy = SpyKeyFiles {
-        opened: Default::default(),
-        fail: vec![
-            ("/k/fehlt".into(), IdentityFallbackReason::Missing),
-            ("/k/unlesbar".into(), IdentityFallbackReason::Unreadable),
-            ("/k/keinkey".into(), IdentityFallbackReason::NotAKey),
-        ],
-        encrypted: vec![],
-    };
+    let spy = MockKeyFileReader::new()
+        .with_error(
+            "/k/fehlt",
+            KeyFileError::NotFound {
+                path: "/k/fehlt".into(),
+            },
+        )
+        .with_error(
+            "/k/unlesbar",
+            KeyFileError::NotReadable {
+                path: "/k/unlesbar".into(),
+            },
+        )
+        .with_error(
+            "/k/keinkey",
+            KeyFileError::InvalidKey {
+                path: "/k/keinkey".into(),
+            },
+        )
+        .with_key("/k/gut", MARKER_KEY);
     let choices: Vec<EntryChoice> = (0..4)
         .map(|i| choose(i, IdentityMode::IntoKeychain))
         .collect();
@@ -457,11 +446,11 @@ async fn t_6_4_1a_fehlende_unlesbare_und_ungueltige_datei_fallen_auf_weg_a() {
 async fn t_3_1_9c_weg_c_ergibt_agent() {
     let plan = plan_from("Host a\n  IdentityFile /k/a\n");
     let f = Fixture::new();
-    let spy = SpyKeyFiles::default();
+    let spy = MockKeyFileReader::new();
     f.apply(&plan, &[choose(0, IdentityMode::Drop)], &spy)
         .await
         .expect("Import");
-    assert!(spy.opened.lock().unwrap().is_empty(), "Weg (c) hat gelesen");
+    assert!(spy.read_paths().is_empty(), "Weg (c) hat gelesen");
     assert_eq!(f.server("a").await.auth, AuthMethod::Agent);
 }
 
@@ -472,7 +461,7 @@ async fn t_6_4_3_importiertes_profil_hat_die_produktvorgaben() {
     let plan =
         plan_from("Host a\n  HostName 1.1.1.1\n  PostIngestPolicy allow\n  AiInjectionCheck no\n");
     let f = Fixture::new();
-    f.apply(&plan, &[], &SpyKeyFiles::default())
+    f.apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect("Import");
     let s = f.server("a").await;
@@ -516,7 +505,7 @@ async fn t_6_4_3a_abgewaehltes_schlagwort_landet_nicht_am_profil() {
             rename_to: None,
             dropped_tags: vec!["*.prod.de".to_string()],
         }],
-        &SpyKeyFiles::default(),
+        &MockKeyFileReader::new(),
     )
     .await
     .expect("Import");
@@ -531,7 +520,7 @@ async fn t_5_2a_nicht_abgewaehltes_schlagwort_bleibt() {
     // Gegenprobe: ohne sie wäre „Schlagworte immer weglassen" grün.
     let plan = plan_from("Host *.prod.de\n  User deploy\nHost web1.prod.de\n");
     let f = Fixture::new();
-    f.apply(&plan, &[], &SpyKeyFiles::default())
+    f.apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect("Import");
     assert_eq!(f.server("web1.prod.de").await.tags, vec!["*.prod.de"]);
@@ -577,7 +566,7 @@ async fn t_105_apply_ohne_wahl_folgt_der_vorgabe() {
         vec!["*.de", "*.prod.de", "web*"]
     );
     let f = Fixture::new();
-    f.apply(&plan, &[], &SpyKeyFiles::default())
+    f.apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect("Import");
     assert_eq!(
@@ -605,7 +594,7 @@ async fn t_105_nutzer_waehlt_in_beide_richtungen_um() {
             rename_to: None,
             dropped_tags: vec!["*.de".to_string(), "web*".to_string()],
         }],
-        &SpyKeyFiles::default(),
+        &MockKeyFileReader::new(),
     )
     .await
     .expect("Import");
@@ -638,7 +627,7 @@ async fn t_6_3_5_namenskonflikt_wird_uebersprungen_bestand_unveraendert() {
     let f = Fixture::new();
     // Erster Import.
     let plan = plan_from("Host a\n  HostName 1.1.1.1\n  User max\n");
-    f.apply(&plan, &[], &SpyKeyFiles::default())
+    f.apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect("erster Import");
     let before = f.server("a").await;
@@ -651,7 +640,7 @@ async fn t_6_3_5_namenskonflikt_wird_uebersprungen_bestand_unveraendert() {
         "Konflikt nicht erkannt"
     );
     let out = f
-        .apply(&plan2, &[], &SpyKeyFiles::default())
+        .apply(&plan2, &[], &MockKeyFileReader::new())
         .await
         .expect("zweiter Import");
 
@@ -668,7 +657,7 @@ async fn t_6_3_5_namenskonflikt_wird_uebersprungen_bestand_unveraendert() {
 async fn t_3_1_8_konflikt_mit_neuem_namen_wird_angelegt() {
     let f = Fixture::new();
     let plan = plan_from("Host a\n  HostName 1.1.1.1\n");
-    f.apply(&plan, &[], &SpyKeyFiles::default())
+    f.apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect("erster");
     let existing = f.servers().await;
@@ -683,7 +672,7 @@ async fn t_3_1_8_konflikt_mit_neuem_namen_wird_angelegt() {
                 rename_to: Some("a (importiert)".to_string()),
                 dropped_tags: Vec::new(),
             }],
-            &SpyKeyFiles::default(),
+            &MockKeyFileReader::new(),
         )
         .await
         .expect("zweiter");
@@ -708,7 +697,7 @@ async fn t_6_3_8_alle_abgewaehlt_legt_nichts_an() {
         })
         .collect();
     let out = f
-        .apply(&plan, &choices, &SpyKeyFiles::default())
+        .apply(&plan, &choices, &MockKeyFileReader::new())
         .await
         .expect("Import");
     assert_eq!(out.created_servers, 0);
@@ -728,7 +717,7 @@ async fn t_6_3_9_fehler_mitten_im_anlegen_nimmt_profile_und_gruppen_zurueck() {
     f.store.fail_create_server_after(2);
 
     let err = f
-        .apply(&plan, &[], &SpyKeyFiles::default())
+        .apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect_err("sollte scheitern");
     assert!(
@@ -761,7 +750,10 @@ async fn t_3_1_11_rollback_raeumt_auch_den_schluesselbund() {
         "Host a\n  IdentityFile /k/a\nHost b\n  IdentityFile /k/b\nHost c\n  IdentityFile /k/c\n",
     );
     let f = Fixture::new();
-    let spy = SpyKeyFiles::default();
+    let spy = MockKeyFileReader::new()
+        .with_key("/k/a", MARKER_KEY)
+        .with_key("/k/b", MARKER_KEY)
+        .with_key("/k/c", MARKER_KEY);
     let choices: Vec<EntryChoice> = (0..3)
         .map(|i| choose(i, IdentityMode::IntoKeychain))
         .collect();
@@ -792,7 +784,7 @@ async fn t_3_1_11_rollback_raeumt_auch_den_schluesselbund() {
 async fn t_3_1_6_jump_host_zeigt_auf_das_importierte_profil() {
     let plan = plan_from("Host bastion\n  HostName 1.1.1.1\nHost x\n  ProxyJump bastion\n");
     let f = Fixture::new();
-    f.apply(&plan, &[], &SpyKeyFiles::default())
+    f.apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect("Import");
     let bastion = f.server("bastion").await;
@@ -819,7 +811,7 @@ async fn t_3_1_6_abgewaehltes_jump_ziel_ergibt_keinen_jump_host() {
             rename_to: None,
             dropped_tags: Vec::new(),
         }],
-        &SpyKeyFiles::default(),
+        &MockKeyFileReader::new(),
     )
     .await
     .expect("Import");
@@ -840,7 +832,7 @@ async fn t_6_3_15_markierter_pfad_wird_trotzdem_angelegt() {
         "hätte als nicht benutzbar markiert sein müssen"
     );
     let f = Fixture::new();
-    f.apply(&plan, &[], &SpyKeyFiles::default())
+    f.apply(&plan, &[], &MockKeyFileReader::new())
         .await
         .expect("Import");
     // Trotzdem angelegt, mit dem Pfad unverändert (§3.1.9 a).
@@ -859,11 +851,7 @@ async fn t_6_3_15_markierter_pfad_wird_trotzdem_angelegt() {
 async fn t_6_3_16_verschluesselter_schluessel_erscheint_im_ergebnis() {
     let plan = plan_from("Host web1\n  IdentityFile /k/verschluesselt\n");
     let f = Fixture::new();
-    let spy = SpyKeyFiles {
-        opened: Default::default(),
-        fail: vec![],
-        encrypted: vec!["/k/verschluesselt".to_string()],
-    };
+    let spy = MockKeyFileReader::new().with_encrypted_key("/k/verschluesselt", MARKER_KEY);
     let out = f
         .apply(&plan, &[choose(0, IdentityMode::IntoKeychain)], &spy)
         .await
@@ -889,24 +877,29 @@ async fn t_6_3_16_unverschluesselter_schluessel_erscheint_nicht_im_ergebnis() {
         .apply(
             &plan,
             &[choose(0, IdentityMode::IntoKeychain)],
-            &SpyKeyFiles::default(),
+            &MockKeyFileReader::new(),
         )
         .await
         .expect("Import");
     assert!(out.identity_encrypted.is_empty());
 }
 
-// ------------------------------------------- DiskKeyFiles
+// ------------------------------------------- real reader (OsKeyFileReader)
 
 /// §5.5: Weg (b) benutzt **denselben** Leser wie die Handstelle, also den
 /// echten [`app_logic::key_files::OsKeyFileReader`] mit allen Prüfungen aus
 /// Spec 0076 — nicht eine eigene, schwächere Fassung.
-fn disk() -> DiskKeyFiles<'static> {
-    // `Box::leak`: Der Leser ist zustandslos und lebt im Betrieb ohnehin so
-    // lange wie der `AppState`; im Test spart das eine Hilfsstruktur.
-    let reader: &'static app_logic::key_files::OsKeyFileReader =
-        Box::leak(Box::new(app_logic::key_files::OsKeyFileReader::new()));
-    DiskKeyFiles { reader }
+fn disk() -> app_logic::key_files::OsKeyFileReader {
+    app_logic::key_files::OsKeyFileReader::new()
+}
+
+/// Reads through the real reader the way `apply_import` does
+/// (`enforce_permissions = false`) and maps the error to the fallback reason.
+fn read_reason(path: &str) -> Result<(), IdentityFallbackReason> {
+    disk()
+        .read(path, false)
+        .map(|_| ())
+        .map_err(|e| IdentityFallbackReason::from(&e))
 }
 
 #[test]
@@ -916,7 +909,7 @@ fn t_5_5_weg_b_benutzt_dieselben_pruefungen_wie_die_handstelle() {
     // (1) Fehlende Datei.
     let missing = d.path().join("gibtsnicht");
     assert_eq!(
-        disk().read_key(&missing.display().to_string()),
+        read_reason(&missing.display().to_string()),
         Err(IdentityFallbackReason::Missing)
     );
 
@@ -930,16 +923,14 @@ fn t_5_5_weg_b_benutzt_dieselben_pruefungen_wie_die_handstelle() {
         "-----BEGIN OPENSSH PRIVATE KEY-----\nGEHEIMER_TEXT_4711\n-----END OPENSSH PRIVATE KEY-----\n",
     )
     .unwrap();
-    let err = disk()
-        .read_key(&fake.display().to_string())
-        .expect_err("kein gültiger Schlüssel");
+    let err = read_reason(&fake.display().to_string()).expect_err("kein gültiger Schlüssel");
     assert_eq!(err, IdentityFallbackReason::NotAKey);
     // Der Grund trägt keinen Dateiinhalt (§5.1).
     assert!(!format!("{err:?}").contains("GEHEIMER_TEXT"));
 
     // (3) Ein relativer Pfad ist beim Lesen nicht auflösbar (Spec 0076 A-3).
     assert_eq!(
-        disk().read_key("keys/id_rsa"),
+        read_reason("keys/id_rsa"),
         Err(IdentityFallbackReason::PathNotAbsolute)
     );
 }
@@ -959,9 +950,7 @@ fn t_5_5_fifo_haengt_nicht() {
 
     // Ohne Leser-seitige Prüfung blockiert schon das Öffnen — der Test
     // käme nie zurück. Mit ihr ist es ein Befund.
-    let err = disk()
-        .read_key(&fifo.display().to_string())
-        .expect_err("FIFO ist kein Schlüssel");
+    let err = read_reason(&fifo.display().to_string()).expect_err("FIFO ist kein Schlüssel");
     assert_eq!(err, IdentityFallbackReason::NotARegularFile);
 }
 
