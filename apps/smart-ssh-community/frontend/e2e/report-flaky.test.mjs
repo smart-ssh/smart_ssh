@@ -56,7 +56,7 @@ describe("report-flaky", () => {
   });
 
   it("CLI: annotation, file and summary; missing report is a warning with exit 0", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "flaky-"));
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "flaky-")));
     const rep = path.join(dir, "r.json");
     const out = path.join(dir, "out.txt");
     const sum = path.join(dir, "sum.md");
