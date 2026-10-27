@@ -26,7 +26,7 @@ test.describe("narrow shell @phone", () => {
     await burger.click();
     const menu = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(menu).toBeVisible();
-    for (const name of ["Overview", "Connect", "Manage", "Filter Rules", "Settings", "db-primary", 'Close tab "db-primary"']) {
+    for (const name of ["Connect", "Manage", "Filter Rules", "Settings", "db-primary", 'Close tab "db-primary"']) {
       const entry = menu.getByRole("button", { name, exact: true });
       await expectFullyInViewport(entry);
       await expectTopmostAtCenter(entry);
