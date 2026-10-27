@@ -238,6 +238,41 @@ Nutzung der KI registrieren (Spec 0006, Nutzungsangabe je Anfrage). Regeln:
 - Der Kern speichert nichts davon. Community registriert keinen Beobachter;
   dann ändert sich nichts.
 
+### Erweiterungs-API (`app_logic::ext`)
+
+Erweiterungs-Crates, die über `Wiring` einhängen, nutzen genau ein Modul von
+`app-logic`: `app_logic::ext`. Es ist die unterstützte Oberfläche; Einträge
+darin ändern sich nur zusammen mit einem Changelog-Eintrag und dieser Spec.
+Alles außerhalb (die übrigen Module von `app-logic`, die öffentlichen Felder
+von `AppState`) darf sich ohne Ankündigung ändern. Das Modul führt bestehende
+Einträge nur wieder aus (Re-Exports); kein bisheriger Pfad entfällt.
+
+Nach Themen:
+
+- **Zustand:** `AppState` als Typ (für `app.try_state::<AppState>()`); seine
+  Felder gehören nicht zur Oberfläche.
+- **Sitzungs-Erweiterung:** `SessionExtension`, `ServerScope`, `scope_for_id`,
+  `PromptLanguage`, `rebuild_server_redactors`, `rebuild_redactors_for_sessions`.
+- **Chat-Inhalte:** `ChatContentExtension`, `PendingContent`, `ResolvedBlock`,
+  `RedactedBlock`, `ChatContentError`, `accept_extension_content`.
+- **KI-Nutzung:** `AiUsageObserver`, `AiUsagePurpose`, `AiUsageRecord`.
+- **Sicherung:** `Snapshot`, `ChangeSet`, `Change`, `HostKeyRow`,
+  `KNOWN_SECTIONS`, `apply_changes`, `start_import_snapshot`,
+  `BackupOpError`, `OpenSessions`, `FileHostKeyStore`.
+- **Ereignisse:** `EventEmitter`, `ConnectionStatus`,
+  `emit_connection_status_changed`.
+- **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`.
+- **Zugriffsfunktionen** (statt Feldzugriff auf `AppState`): `profile_store`,
+  `backup_store`, `file_host_keys`, `open_session_server_ids` (jeder Server
+  mit offener Sitzung einmal, sortiert) und
+  `rebuild_redactors_for_open_sessions` (baut den Redactor jedes Servers mit
+  offener Sitzung neu, keines anderen; bekannte Geheimnisse erweitern den
+  Redactor nur).
+- **Testhilfen:** `ext::test_support` (nur mit `test-support`).
+
+Sitzungen schließt eine Erweiterung ausschließlich über den öffentlichen
+Schließweg von `app-shell` (Issue #816), nicht über `ext`.
+
 ## 3. Ein Binary je Edition
 
 Das Community-Binary ist ein dünnes Programm, das nur die Verdrahtung der

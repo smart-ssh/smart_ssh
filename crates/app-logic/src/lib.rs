@@ -41,6 +41,8 @@ pub mod dto;
 pub mod ephemeral_credentials;
 pub mod error;
 pub mod events;
+/// Extension API: the documented, supported surface for extension crates.
+pub mod ext;
 pub mod field_content_decryption;
 pub mod filter_rules;
 pub mod folder_upload;
