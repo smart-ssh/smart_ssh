@@ -1,6 +1,7 @@
 //! Extension point for per-server session data (Spec 0038, section 2a).
 //!
-//! An edition can register one [`SessionExtension`]. It contributes
+//! An edition can register any number of [`SessionExtension`]s (combined by
+//! [`CompositeSessionExtension`]). It contributes
 //! (1) a text section for the AI session context of a server, (2) literal
 //! secret values the per-server redactor must mask and (3) gets told when a
 //! server or group was deleted. The core only calls the trait; it does not
@@ -52,6 +53,64 @@ pub trait SessionExtension: Send + Sync {
     /// Called after the core deleted the group (also for every group removed
     /// by a cascade).
     fn group_removed(&self, _group_id: GroupId) {}
+}
+
+/// Combines several extensions into one (Spec 0038, section 2a). Sections
+/// are asked sequentially in registration order and joined by a blank line;
+/// secrets are united; removal callbacks reach every extension. The result
+/// still goes through the single redact-then-fence path.
+pub struct CompositeSessionExtension {
+    extensions: Vec<std::sync::Arc<dyn SessionExtension>>,
+}
+
+impl CompositeSessionExtension {
+    pub fn new(extensions: Vec<std::sync::Arc<dyn SessionExtension>>) -> Self {
+        Self { extensions }
+    }
+}
+
+#[async_trait::async_trait]
+impl SessionExtension for CompositeSessionExtension {
+    async fn context_section(
+        &self,
+        scope: &ServerScope,
+        language: crate::system_prompt::PromptLanguage,
+    ) -> Option<String> {
+        let mut sections = Vec::new();
+        for ext in &self.extensions {
+            if let Some(text) = ext.context_section(scope, language.clone()).await {
+                if !text.trim().is_empty() {
+                    sections.push(text);
+                }
+            }
+        }
+        (!sections.is_empty()).then(|| sections.join("\n\n"))
+    }
+
+    fn known_secrets(&self, scope: &ServerScope) -> Vec<SecretString> {
+        let mut out: Vec<SecretString> = Vec::new();
+        for secret in self.extensions.iter().flat_map(|e| e.known_secrets(scope)) {
+            if !out
+                .iter()
+                .any(|s| s.expose_secret() == secret.expose_secret())
+            {
+                out.push(secret);
+            }
+        }
+        out
+    }
+
+    fn server_removed(&self, server_id: ServerId) {
+        for ext in &self.extensions {
+            ext.server_removed(server_id);
+        }
+    }
+
+    fn group_removed(&self, group_id: GroupId) {
+        for ext in &self.extensions {
+            ext.group_removed(group_id);
+        }
+    }
 }
 
 /// Scope of a stored server. A broken group chain is logged and leaves the
@@ -447,5 +506,108 @@ mod tests {
         let masked = redactor.redact_text("sudo-pw-1234 and ext-secret-xyz");
         assert!(!masked.contains("sudo-pw-1234"));
         assert!(!masked.contains("ext-secret-xyz"));
+    }
+
+    fn two_extensions(
+        a_section: Option<&str>,
+        b_section: Option<&str>,
+        id: ServerId,
+    ) -> CompositeSessionExtension {
+        let mk = |sec: Option<&str>, secret: &str| -> std::sync::Arc<dyn SessionExtension> {
+            std::sync::Arc::new(TestExtension {
+                server: id,
+                section: sec.map(str::to_string),
+                secrets: vec![secret.to_string()],
+            })
+        };
+        CompositeSessionExtension::new(vec![
+            mk(a_section, "secret-from-a"),
+            mk(b_section, "secret-from-b"),
+        ])
+    }
+
+    #[tokio::test]
+    async fn test_composite_joins_sections_in_order_and_drops_empty() {
+        let id = ServerId::new();
+        let both = two_extensions(Some("first"), Some("second"), id);
+        let got = both.context_section(&scope(id), PromptLanguage::En).await;
+        assert_eq!(got.as_deref(), Some("first\n\nsecond"));
+
+        let only_b = two_extensions(None, Some("second"), id);
+        let got = only_b.context_section(&scope(id), PromptLanguage::En).await;
+        assert_eq!(got.as_deref(), Some("second"));
+
+        let blank = two_extensions(Some("  \n"), None, id);
+        assert!(blank
+            .context_section(&scope(id), PromptLanguage::En)
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn test_composite_one_fence_and_both_secrets_masked() {
+        let id = ServerId::new();
+        let ext = two_extensions(
+            Some("a uses secret-from-a"),
+            Some("b uses secret-from-b"),
+            id,
+        );
+        let secrets = known_secrets(Some(&ext), Some(&scope(id)));
+        assert_eq!(secrets.len(), 2);
+        let redactor = redactor_with_secrets(None, &secrets);
+        let mut p = parts(PromptLanguage::En);
+        assert!(
+            append_extension_section(&mut p, Some(&ext), Some(&scope(id)), redactor.as_ref()).await
+        );
+        let text = p.assemble();
+        assert_eq!(text.matches("## Extension context").count(), 1, "{text}");
+        assert_eq!(text.matches("<server_note").count(), 1, "{text}");
+        assert!(text.contains("a uses") && text.contains("b uses"));
+        assert!(!text.contains("secret-from-a") && !text.contains("secret-from-b"));
+        let out = redactor.redact_text("x secret-from-a y secret-from-b");
+        assert!(!out.contains("secret-from-"), "{out}");
+    }
+
+    #[test]
+    fn test_composite_secrets_are_deduplicated_in_order() {
+        let id = ServerId::new();
+        let mk = |s: &[&str]| -> std::sync::Arc<dyn SessionExtension> {
+            std::sync::Arc::new(TestExtension {
+                server: id,
+                section: None,
+                secrets: s.iter().map(|x| x.to_string()).collect(),
+            })
+        };
+        let c = CompositeSessionExtension::new(vec![mk(&["a", "b"]), mk(&["b", "c"])]);
+        let got: Vec<String> = c
+            .known_secrets(&scope(id))
+            .iter()
+            .map(|s| s.expose_secret().to_string())
+            .collect();
+        assert_eq!(got, ["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_composite_removal_callbacks_reach_all_in_order() {
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(u8, bool)>::new()));
+        struct Logging(u8, std::sync::Arc<std::sync::Mutex<Vec<(u8, bool)>>>);
+        impl SessionExtension for Logging {
+            fn server_removed(&self, _: ServerId) {
+                self.1.lock().unwrap().push((self.0, true));
+            }
+            fn group_removed(&self, _: GroupId) {
+                self.1.lock().unwrap().push((self.0, false));
+            }
+        }
+        let c = CompositeSessionExtension::new(vec![
+            std::sync::Arc::new(Logging(1, log.clone())),
+            std::sync::Arc::new(Logging(2, log.clone())),
+        ]);
+        c.server_removed(ServerId::new());
+        c.group_removed(GroupId::new());
+        assert_eq!(
+            *log.lock().unwrap(),
+            [(1, true), (2, true), (1, false), (2, false)]
+        );
     }
 }
