@@ -95,6 +95,21 @@ die Ermittlung fehl, ist die Kette leer (mit Warnung im Log), und der Text
 wird trotzdem vorbereitet. Ohne registrierte Umwandlung (Community) wird der
 Text unverändert gesendet, ohne dass die Gruppenkette ermittelt wird.
 
+**Mehrere Umwandlungen.** Die Verdrahtung kann eine **Liste** von
+Umwandlungen enthalten. Der Kern führt sie in der Reihenfolge der Registrierung
+aus; die ältere Einzel-Umwandlung (überholt, wird in einem späteren Release
+entfernt) läuft, wenn gesetzt, zuerst. Jede Umwandlung erhält den Text, den die
+vorige geliefert hat (gleicher Server, gleiche Art). Die eingesetzten Geheimnisse
+aller Umwandlungen werden zusammengeführt (Reihenfolge bleibt). Die erste
+Ablehnung beendet die Kette: nichts vom Zwischenergebnis wird zurückgegeben
+oder protokolliert, die späteren Umwandlungen werden nicht aufgerufen. Die
+Rückfrage vor der Bestätigung ist „ja“, sobald **irgendeine** Umwandlung „ja“
+antwortet (im Zweifel fragen). Struktur-Prüfung, Hard-Blacklist-Prüfung,
+Aufnahme der Geheimnisse in den Redactor und Maskierung der Ablehnungsmeldung
+gelten genau einmal, für den **endgültigen** Text der Kette. Ohne Umwandlung
+bleibt es beim unveränderten Text; mit genau einer wird sie unverändert
+verwendet.
+
 **Wann sie läuft.** Genau auf diesen Wegen: von der KI vorgeschlagene
 Kommandos, von der KI vorgeschlagener Inhalt einer `WriteRemoteFile`-Aktion
 und über MCP vorgeschlagene Kommandos. Nie bei Eingaben im Terminal. Sie läuft

@@ -74,7 +74,15 @@ pub struct Wiring {
     /// Issue #464 (Spec 0038, section 2): transforms approved commands and
     /// file content right before they are sent to the server. Community
     /// registers none, so text is sent unchanged.
+    ///
+    /// Superseded by [`Wiring::outgoing_transforms`] and will be removed in a
+    /// later release. When set, it runs first, before the list entries.
     pub outgoing_transform: Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
+    /// Issue #893 (Spec 0038, section 2): several outgoing transforms. They
+    /// run in this order on the approved text; each one receives the output
+    /// of the previous one, the inserted secrets are collected, and the first
+    /// rejection stops the chain. Community registers none.
+    pub outgoing_transforms: Vec<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>>,
 
     /// Issue #610 (Spec 0038, section 2): observers told about every
     /// completed AI request of a session (ids, provider, purpose, usage;
@@ -122,6 +130,7 @@ impl Wiring {
             chat_content_extensions: Vec::new(),
 
             outgoing_transform: None,
+            outgoing_transforms: Vec::new(),
             ai_usage_observers: Vec::new(),
             entitlement_features: Vec::new(),
         }
@@ -146,6 +155,28 @@ impl Wiring {
             1 => all.pop(),
             _ => Some(Arc::new(
                 app_logic::session_extension::CompositeSessionExtension::new(all),
+            )),
+        }
+    }
+
+    /// Issue #893: the single transform the session gets. The old
+    /// `outgoing_transform` runs first, then `outgoing_transforms` in order.
+    /// Zero transforms give `None` (text is sent as is), one is passed
+    /// through, two or more are combined into a composite.
+    pub fn combined_outgoing_transform(
+        &self,
+    ) -> Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>> {
+        let mut all: Vec<_> = self
+            .outgoing_transform
+            .iter()
+            .chain(self.outgoing_transforms.iter())
+            .cloned()
+            .collect();
+        match all.len() {
+            0 => None,
+            1 => all.pop(),
+            _ => Some(Arc::new(
+                ssh_manager_core::outgoing::CompositeOutgoingTransform::new(all),
             )),
         }
     }
@@ -207,6 +238,63 @@ mod tests {
     #[test]
     fn test_community_registers_no_chat_content_extensions() {
         assert!(Wiring::community().chat_content_extensions.is_empty());
+    }
+
+    /// Issue #893: Community registers no outgoing transform, so the session
+    /// gets `None`.
+    #[test]
+    fn test_community_registers_no_outgoing_transforms() {
+        let w = Wiring::community();
+        assert!(w.outgoing_transforms.is_empty());
+        assert!(w.outgoing_transform.is_none());
+        assert!(w.combined_outgoing_transform().is_none());
+    }
+
+    /// Issue #893: zero -> `None`, one -> passed through, two or more ->
+    /// composite; the old field runs first.
+    #[tokio::test]
+    async fn test_combined_outgoing_transform_orders_old_field_first() {
+        use ssh_manager_core::outgoing::{
+            OutgoingKind, OutgoingTransform, Prepared, Rejection, ServerScope,
+        };
+        struct Append(&'static str);
+        #[async_trait::async_trait]
+        impl OutgoingTransform for Append {
+            async fn prepare_outgoing(
+                &self,
+                _: &ServerScope,
+                _: OutgoingKind,
+                text: &str,
+            ) -> Result<Prepared, Rejection> {
+                Ok(Prepared::new(format!("{text}{}", self.0), Vec::new()))
+            }
+        }
+        let scope = ServerScope {
+            server_id: Default::default(),
+            group_chain: Vec::new(),
+            tags: Vec::new(),
+        };
+        let run = |t: Arc<dyn OutgoingTransform>| {
+            let scope = scope.clone();
+            async move {
+                use secrecy::ExposeSecret;
+                t.prepare_outgoing(&scope, OutgoingKind::Command, "x")
+                    .await
+                    .unwrap()
+                    .text()
+                    .expose_secret()
+                    .to_string()
+            }
+        };
+
+        let mut w = Wiring::community();
+        w.outgoing_transforms = vec![Arc::new(Append("1"))];
+        assert_eq!(run(w.combined_outgoing_transform().unwrap()).await, "x1");
+
+        let mut w = Wiring::community();
+        w.outgoing_transform = Some(Arc::new(Append("0")));
+        w.outgoing_transforms = vec![Arc::new(Append("1")), Arc::new(Append("2"))];
+        assert_eq!(run(w.combined_outgoing_transform().unwrap()).await, "x012");
     }
 
     /// Issue #610: Community registers no AI usage observer.
