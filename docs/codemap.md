@@ -133,20 +133,8 @@ Test files (the same areas): `crates/core/src/ai/tests.rs`, `crates/core/src/fil
 
 Recipes are grep commands in fenced blocks, so the checker leaves them alone.
 
-- **New `Session` field.** Do not count the construction sites from memory, list them:
-
-  ```bash
-  grep -rnE '\bSession \{' --include='*.rs' crates apps | grep -v -e '->' -e 'struct ' -e 'impl '
-  ```
-
-  This returns the struct literals (production code, tests and `test_support`) without signatures and other types. Every site gets the field, then `cargo check --workspace --all-targets`.
-- **New `Server` profile field.** Many struct literals across several crates (also examples, tests, `ServerInput` literals). If the field has no default, `cargo check --workspace --all-targets` shows every missing site; insert it **after the last field** of the literal, not after a named one (the order changes with every migration). Also needed: a migration, `crates/persistence-sqlite/src/store.rs` (both SELECTs, INSERT, the complete UPDATE, `row_to_server`), the DTO, the frontend type and test fixtures. List the store sites with:
-
-  ```bash
-  grep -nE 'FROM servers|INSERT INTO servers|UPDATE servers|fn row_to_server' crates/persistence-sqlite/src/store.rs
-  ```
-
-  The migration test (`test_migration_from_earlier_schema_…`) creates data in the **old** schema with raw SQL — new columns must not appear there.
+- **New `Session` or `Server` profile field.** Many struct literals across several crates, plus store, backup, DTO and frontend sites. The full checklist with the grep commands is in [`docs/recipes/new-session-or-server-field.md`](recipes/new-session-or-server-field.md).
+- **New AI provider type.** See [`docs/recipes/new-ai-provider.md`](recipes/new-ai-provider.md).
 - **New parameter on a Tauri command.** If the `invoke` lacks it, every call fails: update the wrapper in `apps/smart-ssh-community/frontend/src/api.ts` at once (with a default) and adjust `toHaveBeenCalledWith(...)` expectations in tests.
 - **New API or event function in the frontend.** Add it to every test that replaces the api or events module with `vi.mock`, otherwise you get `undefined is not a function`; mocks followed by `.catch` must return a promise.
 - **New `AiEvent` variant.** Every `match event` gets an arm: the main round and the side calls in orchestration, compaction and the risk second opinion:
