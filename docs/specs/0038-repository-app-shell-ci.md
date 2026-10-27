@@ -370,6 +370,20 @@ Berechtigungen; die Registry kennt sie nicht. Ohne Registrierungen sehen
 Formulare, Seitenleiste und Chat-Eingabefeld aus und verhalten sich wie
 zuvor.
 
+**Startpunkt für einbettende Apps:** Die Startfolge des Frontends (Plattform-
+Attribut, Darstellung, Startzustand, Sprache, Unterdrückung des
+WebView-Menüs im Release-Build, Wurzel-Fehlergrenze, Startschutz) steckt in
+einer exportierten Funktion `bootstrap()`. Eine App mit eigenem
+Einstiegspunkt ruft sie auf, statt die Schritte zu kopieren; spätere
+Startschritte kommen so automatisch dazu. Optionen: `beforeRender` (läuft
+nach der Sprachwahl und vor dem ersten Rendern, darf asynchron sein; ein
+Fehler wird protokolliert und die App startet trotzdem), `extensions`
+(Komponenten ohne eigene Oberfläche, die einmal neben der App innerhalb des
+Startschutzes gerendert werden – also erst nach dem Entsperren –, jede in
+einer eigenen Fehlergrenze; eine fehlerhafte beeinträchtigt die App nicht)
+und `wrap` (Hülle um die App innerhalb des Startschutzes). Der Startschutz
+entscheidet weiterhin allein, wann die App eingehängt wird.
+
 Die Beiträge werden registriert, bevor die erste Komponente rendert; eine
 spätere Registrierung (nach einer asynchronen Prüfung) ist zulässig. Bei
 Einstellungs-Abschnitten, Formular-Abschnitten, Server-Reitern, Sitzungs-Kopf-Einträgen, Verwalten-Ansichten und
