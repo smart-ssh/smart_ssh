@@ -78,7 +78,7 @@ impl SessionExtension for CompositeSessionExtension {
     ) -> Option<String> {
         let mut sections = Vec::new();
         for ext in &self.extensions {
-            if let Some(text) = ext.context_section(scope, language.clone()).await {
+            if let Some(text) = ext.context_section(scope, language).await {
                 if !text.trim().is_empty() {
                     sections.push(text);
                 }
