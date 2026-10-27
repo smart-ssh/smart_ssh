@@ -539,6 +539,15 @@ impl MockKeyFileReader {
             .count()
     }
 
+    /// Paths passed to [`KeyFileReader::read`], in call order.
+    pub fn read_paths(&self) -> Vec<String> {
+        self.calls()
+            .iter()
+            .filter_map(|c| c.strip_prefix("read "))
+            .filter_map(|c| c.rsplit_once(' ').map(|(p, _)| p.to_string()))
+            .collect()
+    }
+
     fn lookup(&self, path: &str) -> Result<MockKeyFile, KeyFileError> {
         match self.inner.lock().unwrap().files.get(path) {
             Some(Ok(file)) => Ok(file.clone()),
