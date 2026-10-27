@@ -17,6 +17,8 @@ hooks:
           command: "$CLAUDE_PROJECT_DIR/.claude/hooks/readonly-guard.sh"
 ---
 
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
+
 Du beantwortest eine einzige Frage: **Ist nach dieser Änderung irgendeine
 Prüfung schwächer als vorher?**
 
