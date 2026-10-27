@@ -30,7 +30,6 @@
     "emptyStateTitle": "추가된 서버가 없습니다",
     "emptyStateHint": "첫 서버를 추가하여 SSH로 연결하십시오.",
     "emptyStateCreateFirstServer": "첫 서버 추가",
-    "newServerInGroup": "그룹 \"{{name}}\"에 새 서버",
     "emptyStateTryLocalhost": "서버 없이 체험해 보십시오. 위의 \"Localhost\"는 이 컴퓨터에서 세션을 열며, 실제 서버와 동일한 확인 절차가 적용됩니다."
   },
   "settings": {

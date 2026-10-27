@@ -741,3 +741,70 @@ async fn claims_are_per_chat_session() {
         .await
         .is_ok());
 }
+
+/// Issue #878: `open_session_server_ids` returns each server once, even
+/// with two open sessions on it.
+#[test]
+fn test_ext_open_session_server_ids_are_deduplicated() {
+    let manager = SessionManager::new();
+    let a = ServerId::new();
+    let b = ServerId::new();
+    for server in [a, a, b] {
+        manager.insert(Uuid::new_v4(), Arc::new(dummy_session(server)));
+    }
+    let mut expected = vec![a, b];
+    expected.sort_by_key(|id| id.0);
+    assert_eq!(crate::ext::server_ids_of(&manager), expected);
+    assert!(crate::ext::server_ids_of(&SessionManager::new()).is_empty());
+}
+
+/// Issue #878: `rebuild_redactors_for_open_sessions` rebuilds the redactor of
+/// each server with an open session and of no other.
+#[tokio::test]
+async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only() {
+    use crate::session_extension::{ServerScope, SessionExtension};
+    use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+    use secrecy::SecretString;
+
+    struct Recording(StdMutex<Vec<ServerId>>);
+    impl SessionExtension for Recording {
+        fn known_secrets(&self, scope: &ServerScope) -> Vec<SecretString> {
+            self.0.lock().unwrap().push(scope.server_id);
+            vec![SecretString::from("ext-secret-42".to_string())]
+        }
+    }
+
+    let manager = SessionManager::new();
+    let a = ServerId::new();
+    let b = ServerId::new();
+    let closed = ServerId::new();
+    let (id_a1, id_a2, id_b) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    manager.insert(id_a1, Arc::new(dummy_session(a)));
+    manager.insert(id_a2, Arc::new(dummy_session(a)));
+    manager.insert(id_b, Arc::new(dummy_session(b)));
+    let ext = Recording(StdMutex::new(Vec::new()));
+    let text = "key=ext-secret-42";
+
+    crate::ext::rebuild_for_open_sessions_with(
+        &manager,
+        &InMemoryProfileStore::new(),
+        &InMemoryCredentialStore::new(),
+        Some(&ext),
+    )
+    .await;
+
+    let mut seen = ext.0.lock().unwrap().clone();
+    seen.sort_by_key(|id| id.0);
+    let mut expected = vec![a, a, b];
+    expected.sort_by_key(|id| id.0);
+    assert_eq!(seen, expected);
+    assert!(!seen.contains(&closed));
+    for id in [id_a1, id_a2, id_b] {
+        assert!(!manager
+            .get(id)
+            .unwrap()
+            .redactor
+            .redact_text(text)
+            .contains("ext-secret-42"));
+    }
+}

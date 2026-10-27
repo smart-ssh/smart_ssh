@@ -30,7 +30,6 @@
     "emptyStateTitle": "Palvelimia ei ole vielä lisätty",
     "emptyStateHint": "Lisää ensimmäinen palvelin yhdistääksesi SSH:lla.",
     "emptyStateCreateFirstServer": "Lisää ensimmäinen palvelin",
-    "newServerInGroup": "Uusi palvelin ryhmässä \"{{name}}\"",
     "emptyStateTryLocalhost": "Kokeile ilman palvelinta: yllä oleva \"Localhost\" avaa istunnon tähän koneeseen – samoilla vahvistuksilla kuin oikealla palvelimella."
   },
   "settings": {

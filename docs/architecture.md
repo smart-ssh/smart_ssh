@@ -145,6 +145,11 @@ direkt gebraucht") nicht offensichtlich erfüllt, steht hier mit Grund:
 | `crates/app-shell/src/event_emitter.rs` | Trägt `impl EventEmitter for TauriEventEmitter` — ein Newtype um `tauri::AppHandle`, nötig weil die Orphan-Rule `impl EventEmitter for tauri::AppHandle` in `app-logic` verbietet (weder Trait noch Typ sind dort definiert). |
 | `test_support.rs`s `MockAiProvider` (die undifferenzierte Variante) | Nur von `commands::ai_providers`s eigenem Test gebraucht, kein Cross-Crate-Bedarf — bleibt deshalb lokal statt hinter `test-support`. |
 
+Extension crates use `app_logic::ext` (Spec 0038, "Erweiterungs-API") as the
+single supported surface of `app-logic`, next to the root re-exports of
+`app-shell` (`Wiring`, `DbExtension`, `BackgroundService`, `ServiceContext`,
+`RunningService`).
+
 Weitere Module, die ohne eigenes `tauri::` auskommen oder nur an `Wiring`/
 dem Startablauf hängen, bleiben aus dem jeweils genannten Grund hier:
 

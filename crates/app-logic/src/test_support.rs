@@ -512,6 +512,35 @@ pub fn session_with_ai_and_transport(
     ai_provider: impl ssh_manager_core::ai::AiProvider + 'static,
     transport: Box<dyn ssh_manager_core::ssh::SshTransport>,
 ) -> crate::session::Session {
+    session_with_ai_transport_and_server_id(ai_provider, transport, ServerId::new())
+}
+
+/// Like [`session_with_transport`], but with a chosen `ServerId` (e.g. the
+/// nil id of the local pseudo-server, issue #974).
+pub fn session_with_transport_and_server_id(
+    transport: Box<dyn ssh_manager_core::ssh::SshTransport>,
+    server_id: ServerId,
+) -> crate::session::Session {
+    struct NoAi;
+    impl ssh_manager_core::ai::AiProvider for NoAi {
+        fn send(
+            &self,
+            _context: ssh_manager_core::ai::SessionContext,
+        ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>>
+        {
+            Box::pin(futures::stream::iter(vec![
+                ssh_manager_core::ai::AiEvent::Done,
+            ]))
+        }
+    }
+    session_with_ai_transport_and_server_id(NoAi, transport, server_id)
+}
+
+fn session_with_ai_transport_and_server_id(
+    ai_provider: impl ssh_manager_core::ai::AiProvider + 'static,
+    transport: Box<dyn ssh_manager_core::ssh::SshTransport>,
+    server_id: ServerId,
+) -> crate::session::Session {
     use std::sync::Arc;
     use tokio::sync::Mutex as AsyncMutex;
 
@@ -528,7 +557,7 @@ pub fn session_with_ai_and_transport(
         filter_engine: Box::new(ssh_manager_core::filter::FilterEngine::new(
             crate::policy::NoRulesPolicyStore,
         )),
-        server_id: ServerId::new(),
+        server_id,
         tags: Vec::new(),
         terminal: std::sync::Mutex::new(None),
         redactor: crate::session::SwappableRedactor::new(Box::new(

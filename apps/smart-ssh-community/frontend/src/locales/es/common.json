@@ -30,7 +30,6 @@
     "emptyStateTitle": "Aún no se ha añadido ningún servidor",
     "emptyStateHint": "Añada su primer servidor para conectarse por SSH.",
     "emptyStateCreateFirstServer": "Añadir primer servidor",
-    "newServerInGroup": "Nuevo servidor en el grupo “{{name}}”",
     "emptyStateTryLocalhost": "Pruébelo sin servidor: “Localhost”, arriba, abre una sesión en este equipo, con las mismas confirmaciones que en un servidor real."
   },
   "settings": {

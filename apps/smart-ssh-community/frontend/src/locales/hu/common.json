@@ -30,7 +30,6 @@
     "emptyStateTitle": "Még nincs hozzáadott szerver",
     "emptyStateHint": "Adja hozzá az első szervert az SSH-csatlakozáshoz.",
     "emptyStateCreateFirstServer": "Első szerver hozzáadása",
-    "newServerInGroup": "Új szerver a(z) \"{{name}}\" csoportban",
     "emptyStateTryLocalhost": "Kipróbálható szerver nélkül is: a fenti \"Localhost\" munkamenetet nyit ezen a gépen – ugyanazokkal a megerősítésekkel, mint egy valódi szerveren."
   },
   "settings": {

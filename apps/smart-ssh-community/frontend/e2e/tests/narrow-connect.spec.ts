@@ -11,7 +11,7 @@ async function noHorizontalScroll(page: import("@playwright/test").Page) {
 }
 
 test.describe("narrow Connect area @phone", () => {
-  test("nested server tree has no horizontal scroll; every row has a tappable ⋯ and rows are 44 px high", async ({ app }) => {
+  test("nested server tree has no horizontal scroll; no row actions, rows are 44 px high", async ({ app }) => {
     await app.launch({
       ...populated(),
       groups: [
@@ -25,9 +25,8 @@ test.describe("narrow Connect area @phone", () => {
     });
     const page = app.page;
     await noHorizontalScroll(page);
-    const more = page.getByRole("button", { name: /^Move “.*” to…$/ });
-    await expect(more).toHaveCount(4 + 1 + 4); // 5 servers (not the local one) + 4 folders
-    for (const handle of await more.all()) await expectUsable(handle);
+    await expect(page.getByRole("button", { name: /^Move “.*” to…$/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^New server in/ })).toHaveCount(0);
     for (const row of await page.getByRole("button", { name: /^(db-primary|web-1|lab-box|standalone|an-extremely)/ }).all()) {
       expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
@@ -35,22 +34,18 @@ test.describe("narrow Connect area @phone", () => {
     await captureScreen(page, "connect-narrow-tree");
   });
 
-  test("Move to… moves a server and a folder with the same backend calls as drag and drop", async ({ app }) => {
+  test("servers start at the 📁 icon of their folder (three levels, 28 px step)", async ({ app }) => {
     await app.launch(populated());
     const page = app.page;
-    await page.getByRole("button", { name: "Move “standalone” to…" }).click();
-    const dialog = page.getByRole("dialog");
-    await expectFullyInViewport(dialog);
-    await captureScreen(page, "connect-narrow-move-to");
-    await dialog.getByRole("button", { name: /Lab/ }).click();
-    await expect.poll(() => app.calls("move_server_to_group")).toEqual([
-      { cmd: "move_server_to_group", args: { id: "s-loose", groupId: "g-lab" } },
-    ]);
-    await page.getByRole("button", { name: "Move “Lab” to…" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /Production/ }).click();
-    await expect.poll(() => app.calls("move_group")).toEqual([
-      { cmd: "move_group", args: { id: "g-lab", parentId: "g-prod" } },
-    ]);
+    const pad = async (loc: import("@playwright/test").Locator) =>
+      parseFloat(await loc.evaluate((el) => (el as HTMLElement).style.paddingLeft));
+    const prod = page.getByRole("button", { name: /^📁 Production/ });
+    const web = page.getByRole("button", { name: /^📁 Web/ });
+    const web1 = page.getByRole("button", { name: /^web-1\b/ });
+    await expect(web1).toBeVisible();
+    expect((await prod.locator("svg").boundingBox())!.width).toBe(20);
+    expect((await pad(web)) - (await pad(prod))).toBe(28);
+    expect((await pad(web1)) - (await pad(web))).toBe(28);
     await noHorizontalScroll(page);
   });
 
