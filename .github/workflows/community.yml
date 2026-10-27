@@ -60,64 +60,40 @@ jobs:
         timeout-minutes: 22
         uses: ./.github/actions/linux-deps
 
+      # The gate itself lives in `scripts/gate.sh` (one definition for local
+      # runs and CI; every Cargo call uses `--locked`). Linux and macOS call
+      # it per stage. Windows keeps the Cargo steps inline in the default
+      # shell with the same commands and flags: under Git Bash (`shell: bash`)
+      # perl cannot build the vendored OpenSSL (missing
+      # Locale::Maketext::Simple). Keep the Windows commands identical to
+      # the `rust` stage of `scripts/gate.sh`.
+      - name: Rust gate (fmt, clippy, test, build)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: scripts/gate.sh --ci rust
+
       - name: cargo fmt --check
+        if: runner.os == 'Windows'
         run: cargo fmt --all --check
 
       - name: cargo clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        if: runner.os == 'Windows'
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: cargo test
-        # Spec 0090, A9: ohne `--no-fail-fast` bricht der Schritt beim
-        # ersten scheiternden Test-Binary ab und ein einzelner Lauf zeigt
-        # nie alle betroffenen Crates auf einmal.
-        # Issue #358: the clipboard round-trip test needs a display; Linux
-        # runs under a virtual X server, and the test must not be skipped.
-        # Two steps instead of one `shell: bash` step: on Windows bash is Git
-        # Bash, whose perl cannot build the vendored OpenSSL (missing
-        # Locale::Maketext::Simple), so Windows keeps the default shell.
-        if: runner.os == 'Linux'
+        if: runner.os == 'Windows'
         env:
           SMART_SSH_REQUIRE_CLIPBOARD_TESTS: "1"
-        run: xvfb-run -a cargo test --workspace --no-fail-fast
-
-      - name: cargo test
-        if: runner.os != 'Linux'
-        env:
-          SMART_SSH_REQUIRE_CLIPBOARD_TESTS: "1"
-        run: cargo test --workspace --no-fail-fast
+        run: cargo test --workspace --locked --no-fail-fast
 
       - name: cargo build
-        run: cargo build --workspace
+        if: runner.os == 'Windows'
+        run: cargo build --workspace --locked
 
-      # Spec 0084, A3/T4: `app-logic` (die Tauri-freie Anwendungslogik) darf
-      # `tauri`/`tauri-*`/`wry`/`tao`/`rfd` in ihrem gesamten
-      # Abhängigkeitsbaum nicht enthalten — weder direkt noch transitiv,
-      # weder normal noch als Build- oder Dev-Abhängigkeit, unter keinem
-      # Feature. `-p app-logic` (nicht an der Workspace-Wurzel, s. Spec 0084
-      # §6 T4): der Baum von `app-shell` selbst enthält `tauri` natürlich
-      # weiterhin. `--prefix none` liefert eine Paketzeile je Zeile
-      # (`name vX.Y.Z`) ohne die Baum-Zeichnung, damit der Regex-Anker `^`
-      # exakt den Paketnamen trifft, nicht irgendeine Teilzeichenkette davon
-      # (z. B. dürfte ein fiktives `not-tauri`-Paket hier nicht mit
-      # anschlagen).
+      # Spec 0084, A3/T4 (details in `scripts/gate.sh`, stage `boundary`).
       - name: Grenzprüfung app-logic ist Tauri-frei (Spec 0084, A3)
         shell: bash
-        run: |
-          # spec-reviewer-Fund (Teil 2): `cargo tree | grep` in einem
-          # `if`-Pipeline liesse den Schritt bei einem Fehlschlag von
-          # `cargo tree` selbst (kaputtes Lockfile, Feature-Konflikt) still
-          # gruen durchlaufen, weil `grep` (kein Treffer -> Exit 1) den
-          # Pipeline-Status dominiert. Deshalb: Baum zuerst in eine Variable,
-          # mit eigenem, explizitem Fehlerpfad.
-          tree_output="$(cargo tree -p app-logic -e normal,build,dev --all-features --prefix none)"
-          if [ $? -ne 0 ]; then
-            echo "::error::cargo tree -p app-logic ist fehlgeschlagen - Grenzpruefung (Spec 0084 A3) konnte nicht laufen"
-            exit 1
-          fi
-          if echo "$tree_output" | grep -E '^(tauri|tauri-[a-zA-Z0-9_-]*|wry|tao|rfd)( |$)'; then
-            echo "::error::app-logic haengt von tauri/tauri-*/wry/tao/rfd ab (Spec 0084, A3) - siehe Zeile(n) oben"
-            exit 1
-          fi
+        run: scripts/gate.sh --ci boundary
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -151,21 +127,26 @@ jobs:
         working-directory: apps/smart-ssh-community/frontend
         run: npm run generate-notices
 
-      # Spec 0090, A5: oxlint findings of severity "error" fail the job.
-      # Spec 0100, A6.1: every `jsx-a11y` rule is configured as "error" in
-      # `.oxlintrc.json`, so accessibility findings fail the job too.
-      # Remaining warnings do not fail the job (oxlint's exit code already
-      # makes that distinction); see the `npm run lint` output for them.
+      # Spec 0090, A5 / Spec 0100, A6.1: oxlint errors (incl. every
+      # `jsx-a11y` rule) and failing vitest cases fail the job. On Linux and
+      # macOS `scripts/gate.sh frontend` runs tsc, lint, vitest and build.
+      - name: Frontend (tsc, lint, tests, build)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: scripts/gate.sh --ci frontend
+
       - name: Frontend lint
+        if: runner.os == 'Windows'
         working-directory: apps/smart-ssh-community/frontend
         run: npm run lint
 
-      # Spec 0090, A5: ein fehlschlagender vitest-Fall färbt den Job rot.
       - name: Frontend tests
+        if: runner.os == 'Windows'
         working-directory: apps/smart-ssh-community/frontend
         run: npm test
 
       - name: Frontend build
+        if: runner.os == 'Windows'
         working-directory: apps/smart-ssh-community/frontend
         run: npm run build
 
@@ -418,7 +399,7 @@ jobs:
           npm run build
 
       - name: Build app (frontend embedded)
-        run: cargo build -p smart-ssh-community --features tauri/custom-protocol
+        run: cargo build --locked -p smart-ssh-community --features tauri/custom-protocol
 
       - name: Real app startup tests
         timeout-minutes: 15
@@ -427,7 +408,7 @@ jobs:
         run: |
           xvfb-run -a dbus-run-session -- bash -c '
             echo -n "ci-keyring-pw" | gnome-keyring-daemon --unlock --components=secrets
-            cargo test -p real-app-tests -- --ignored --test-threads=1'
+            cargo test --locked -p real-app-tests -- --ignored --test-threads=1'
 
       - name: Upload app logs
         if: failure()
@@ -517,6 +498,7 @@ jobs:
 
       - name: Build Android debug APK
         working-directory: apps/smart-ssh-community
+        # No `--locked`: `cargo tauri android build` does not forward it to Cargo.
         run: cargo tauri android build --debug --apk --target aarch64 --target x86_64 --ci
 
       # Android 15+ with 16 KB pages needs every .so aligned to 0x4000+.

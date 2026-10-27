@@ -75,7 +75,7 @@ jobs:
         run: cargo install cargo-mutants --version 27.1.0 --locked
 
       - name: Build test dependencies
-        run: cargo test -p ssh-manager-core --no-run
+        run: cargo test --locked -p ssh-manager-core --no-run
 
       - name: Split mutants into shards
         id: plan

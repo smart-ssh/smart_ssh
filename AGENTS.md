@@ -28,24 +28,26 @@ current finding (Spec 0090, A4) — a stale exemption (e.g. for a withdrawn
 advisory) fails the job too.
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo build --workspace
+scripts/gate.sh                  # all stages, in order
+scripts/gate.sh rust             # fmt --check, clippy, test, build
+scripts/gate.sh boundary         # app-logic stays free of Tauri (Spec 0084, A3)
+scripts/gate.sh frontend         # tsc -b, npm run lint, vitest, npm run build
+scripts/gate.sh --ci rust        # as CI: clipboard test required, under xvfb-run on Linux
 ```
 
-The last step builds without the `test-support` feature, which `cargo
-test`/`clippy --all-targets` both enable — it's the only one of the four
+`scripts/gate.sh` is the single definition of the gate; CI calls it too
+(Windows keeps its Cargo steps inline with the same commands, see the
+comment in `community.yml`). Every Cargo build/test/clippy/tree call uses
+`--locked`, so the checked-in `Cargo.lock` is what gets tested and a stale
+lockfile fails instead of being re-resolved silently (guarded by
+`src/cargoLockedCheck.test.ts`).
+
+The `rust` stage's last step builds without the `test-support` feature, which `cargo
+test`/`clippy --all-targets` both enable — it is the only one of the four
 that catches a production-code call into a test-only access point (e.g.
 `parts_mut_for_tests`, gated on `cfg(any(test, feature = "test-support"))`),
 since that call compiles fine as long as `test-support` is on.
 
-```bash
-cd apps/smart-ssh-community/frontend
-npx tsc -b
-npm run lint      # Tauri command check (scripts/check-tauri-commands.mjs), then oxlint
-npx vitest run
-```
 
 Browser tests (issue #166, ADR 0120) run the real frontend in Chromium and
 WebKit, at 1280×800 and 800×560, against a fake backend that replaces the
