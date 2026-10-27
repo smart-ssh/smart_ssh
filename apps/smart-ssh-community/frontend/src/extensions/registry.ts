@@ -312,11 +312,35 @@ export function subscribeSettingsSections(listener: () => void): () => void {
   };
 }
 
-/** Registriert (bzw. ersetzt bei gleicher `id`) eine Dokument-Aktion (Spec
- * 0045) — gerendert in `ChatPanel`s Dokument-Karte, neben dem bestehenden
- * Markdown-Export. */
+let documentActionsSnapshot: DocumentAction[] = [];
+const documentActionListeners = new Set<() => void>();
+
+function notifyDocumentActionsChanged(): void {
+  documentActionsSnapshot = Array.from(registry.documentActions.values());
+  for (const listener of Array.from(documentActionListeners)) listener();
+}
+
+/** Registers (or replaces, same `id`) a document action (Spec 0045),
+ * rendered in the chat panel's document card next to the Markdown export.
+ * Subscribers are notified. */
 export function registerDocumentAction(action: DocumentAction): void {
   registry.documentActions.set(action.id, action);
+  notifyDocumentActionsChanged();
+}
+
+/** Removes a document action and notifies subscribers. Unknown id: no-op. */
+export function unregisterDocumentAction(id: string): void {
+  if (!registry.documentActions.delete(id)) return;
+  notifyDocumentActionsChanged();
+}
+
+/** Subscribes to changes of the document actions; returns the unsubscribe
+ * function. Compatible with `useSyncExternalStore`. */
+export function subscribeDocumentActions(listener: () => void): () => void {
+  documentActionListeners.add(listener);
+  return () => {
+    documentActionListeners.delete(listener);
+  };
 }
 
 /** Registrierte Settings-Abschnitte. Zwischen zwei Änderungen dieselbe
@@ -325,38 +349,52 @@ export function listSettingsSections(): SettingsSectionContribution[] {
   return settingsSectionsSnapshot;
 }
 
-/** spec-reviewer-Fund (Review dieses Schritts): rein statisch — kein
- * Subscription-/Change-Notification-Mechanismus. `ChatPanel` liest diese
- * Liste bei jedem Render neu, reagiert aber nicht selbst auf eine
- * Registrierung/ein `disabled`-Umschalten, das NACH dem ersten Render der
- * jeweiligen Dokument-Karte passiert — ein solcher Aufrufer muss also vor
- * dem ersten Render registriert haben (wie `registerBuiltinExtensions.ts`
- * es für `registerSettingsSection` tut) bzw. selbst für einen Re-Render
- * sorgen (z. B. über ein von außen beobachtetes Entitlement-Update, das
- * die aufrufende Komponente ohnehin neu rendert). Kein Verstoß gegen Spec
- * 0045 (die keinen Notify-Mechanismus verlangt), aber genau die Art
- * "sieht aus wie ein Andockpunkt, verhält sich aber überraschend" von
- * Falle, die diese Spec eigentlich vermeiden will — deshalb hier explizit
- * festgehalten statt stillschweigend vorausgesetzt. */
+/** Registered document actions. The list is reactive (see
+ * `subscribeDocumentActions`); the same array reference is returned
+ * until the next change (do not mutate). */
 export function listDocumentActions(): DocumentAction[] {
-  return Array.from(registry.documentActions.values());
+  return documentActionsSnapshot;
 }
 
-/** Registriert (bzw. ersetzt bei gleicher `id`) eine Erweiterung des
- * Erststart-Hinweises (Spec 0031, Abschnitt 6). Wie die übrigen Typen vor
- * dem ersten Render zu registrieren — der Hinweis liest die Liste beim
- * Öffnen. */
+let firstRunNoticeSnapshot: FirstRunNoticeExtension[] = [];
+const firstRunNoticeListeners = new Set<() => void>();
+
+function notifyFirstRunNoticeChanged(): void {
+  firstRunNoticeSnapshot = Array.from(registry.firstRunNoticeExtensions.values()).sort(
+    (a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  for (const listener of Array.from(firstRunNoticeListeners)) listener();
+}
+
+/** Registers (or replaces, same `id`) a first-run notice extension
+ * (Spec 0031, section 6). Subscribers are notified. */
 export function registerFirstRunNoticeExtension(extension: FirstRunNoticeExtension): void {
   registry.firstRunNoticeExtensions.set(extension.id, extension);
+  notifyFirstRunNoticeChanged();
+}
+
+/** Removes a first-run notice extension and notifies subscribers. Unknown
+ * id: no-op. */
+export function unregisterFirstRunNoticeExtension(id: string): void {
+  if (!registry.firstRunNoticeExtensions.delete(id)) return;
+  notifyFirstRunNoticeChanged();
+}
+
+/** Subscribes to changes of the first-run notice extensions; returns the
+ * unsubscribe function. Compatible with `useSyncExternalStore`. */
+export function subscribeFirstRunNoticeExtensions(listener: () => void): () => void {
+  firstRunNoticeListeners.add(listener);
+  return () => {
+    firstRunNoticeListeners.delete(listener);
+  };
 }
 
 /** Registrierte Erststart-Hinweis-Erweiterungen, aufsteigend nach `order`;
  * bei gleichem `order` nach `id`, damit die Reihenfolge nicht von der
- * Import-Reihenfolge abhängt. */
+ * Import-Reihenfolge abhängt. Zwischen zwei Änderungen dieselbe
+ * Array-Referenz (nicht verändern). */
 export function listFirstRunNoticeExtensions(): FirstRunNoticeExtension[] {
-  return Array.from(registry.firstRunNoticeExtensions.values()).sort(
-    (a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-  );
+  return firstRunNoticeSnapshot;
 }
 
 // Server-/Gruppen-Formular-Abschnitte und Verwalten-Ansichten teilen sich
@@ -454,7 +492,9 @@ export function resetRegistryForTests(): void {
   registry.settingsSections.clear();
   notifySettingsSectionsChanged();
   registry.documentActions.clear();
+  notifyDocumentActionsChanged();
   registry.firstRunNoticeExtensions.clear();
+  notifyFirstRunNoticeChanged();
   registry.serverFormSections.clear();
   registry.serverSettingsTabs.clear();
   registry.sessionHeaderItems.clear();

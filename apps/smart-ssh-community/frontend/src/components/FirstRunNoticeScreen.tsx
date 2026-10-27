@@ -1,7 +1,8 @@
-import { Component as ReactComponent, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component as ReactComponent, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   listFirstRunNoticeExtensions,
+  subscribeFirstRunNoticeExtensions,
   type FirstRunNoticeContinueHandler,
   type FirstRunNoticeExtensionContext,
 } from "../extensions/registry";
@@ -73,25 +74,38 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
   const [checked, setChecked] = useState(false);
   const checkboxRef = useRef<HTMLInputElement>(null);
 
-  // Spec 0031, Abschnitt 6: Erweiterungen werden beim Öffnen einmal
-  // gelesen. Jede bekommt nur `onContinue` — keinen Zugriff auf
+  // Spec 0031, Abschnitt 6: Erweiterungen werden reaktiv gelesen
+  // (Registrierung/Entfernen bei offenem Hinweis wirkt sofort). Jede bekommt nur `onContinue` — keinen Zugriff auf
   // `checked`, den Text oder den "Weiter"-Button.
   const continueHandlers = useRef(new Map<string, FirstRunNoticeContinueHandler>());
   const handlersRan = useRef(false);
   // Erweiterungen, deren Darstellung gescheitert ist: ihr Handler wird
   // verworfen und darf auch später nicht mehr registriert werden.
   const failedExtensions = useRef(new Set<string>());
-  const [extensions] = useState(() =>
-    listFirstRunNoticeExtensions().map(({ id, Component }) => {
-      const context: FirstRunNoticeExtensionContext = {
-        onContinue: (handler) => {
-          if (failedExtensions.current.has(id)) return;
-          continueHandlers.current.set(id, handler);
-        },
-      };
-      return { id, Component, context };
-    }),
+  const registered = useSyncExternalStore(
+    subscribeFirstRunNoticeExtensions,
+    listFirstRunNoticeExtensions,
   );
+  const extensions = useMemo(
+    () =>
+      registered.map(({ id, Component }) => {
+        const context: FirstRunNoticeExtensionContext = {
+          onContinue: (handler) => {
+            if (failedExtensions.current.has(id)) return;
+            continueHandlers.current.set(id, handler);
+          },
+        };
+        return { id, Component, context };
+      }),
+    [registered],
+  );
+  // An extension removed while the notice is open no longer runs its handler.
+  useEffect(() => {
+    const ids = new Set(registered.map((e) => e.id));
+    for (const id of Array.from(continueHandlers.current.keys())) {
+      if (!ids.has(id)) continueHandlers.current.delete(id);
+    }
+  }, [registered]);
 
   const onExtensionError = (id: string, error: unknown) => {
     failedExtensions.current.add(id);
