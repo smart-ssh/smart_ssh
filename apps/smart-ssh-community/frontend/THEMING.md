@@ -17,11 +17,11 @@ non-test `src/**/*.{ts,tsx}`. There is no allowlist: every component is migrated
 |---|---|
 | Neutral surfaces | `surface-sunken` (inputs, window ground), `surface`, `surface-raised`, `surface-hover` |
 | Lines | `border`, `border-strong` |
-| Text | `fg-strong`, `fg`, `fg-soft`, `fg-muted`, `fg-subtle`, `fg-faint`, `fg-bright` (pure white) |
+| Text | `fg-strong`, `fg`, `fg-soft`, `fg-muted`, `fg-subtle`, `fg-faint`, `fg-bright` (pure white in dark, near-black in light) |
 | Roles `accent`, `danger`, `warning`, `success` | `<role>-subtle` (tinted fill), `-subtle-hover`, `-border`, `-border-strong`, `<role>` (solid), `-strong` (hover/brighter solid), `-fg` (text), `-fg-soft`, `-fg-softer`, `-fg-faint`, `-fg-faintest` (`danger` has `-fg-faintest` for text on a solid danger fill) |
 | Info | `info`, `info-fg` |
 | Local session | `local-border`, `local`, `local-fg` (badge and header of a local-shell session) |
-| Misc | `on-accent` (text on a solid accent fill), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`), `web-border` / `web-fg` (web activity card), `mcp-subtle` / `mcp-fg` (external-tool origin badge) |
+| Misc | `on-accent` (text on a solid accent fill), `on-solid` (white text on a solid accent/danger button in every theme), `focus` (focus ring/outline), `selection`, `overlay` (modal scrim base, use `bg-overlay/70`), `web-border` / `web-fg` (web activity card), `mcp-subtle` / `mcp-fg` (external-tool origin badge) |
 | Terminal | `term-bg`, `term-fg`, `term-cursor`, `term-cursor-accent`, `term-selection`, `term-ansi-{black,red,green,yellow,blue,magenta,cyan,white,bright-*}` |
 
 Preferences when migrating: focus rings/outlines → `ring-focus`/`outline-focus`
@@ -110,7 +110,17 @@ Example: `text-slate-400` → `text-fg-subtle`; `border-red-800` →
 
 ## Add a theme
 
-Create `src/theme/<name>.css` that overrides the same layer-2 variables under
-`[data-theme="<name>"] { … }`, import it from `index.css`, and set
-`data-theme` on `<html>`. No component changes are needed — as long as no
-colour is hard-coded (the guard enforces this).
+Light (`src/theme/light.css`) is the worked example.
+
+1. Create `src/theme/<name>.css` that overrides the same variables as
+   `dark.css` under `html[data-theme="<name>"] { … }` (palette primitives,
+   tokens with literal values, `--term-*`, window controls), and import it
+   from `index.css`.
+2. Add the name to `ResolvedTheme` and `THEME_CHOICES` in `src/theme.ts`
+   (resolution rules) and a label `appearance.<name>` in every locale. A test
+   fails when a theme file misses a variable that has a literal value in
+   `dark.css`.
+3. Extend the contrast test (`src/themeContrast.test.ts`) to the new theme.
+
+No component changes are needed — as long as no colour is hard-coded (the
+guard enforces this).

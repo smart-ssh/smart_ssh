@@ -49,6 +49,13 @@
       "dataAndBackup": "Data og sikkerhedskopi"
     }
   },
+  "appearance": {
+    "heading": "Udseende",
+    "language": "Sprog",
+    "system": "Følg systemet",
+    "light": "Lyst",
+    "dark": "Mørkt"
+  },
   "about": {
     "version": "Version",
     "copyHint": "Kopiér til udklipsholder",

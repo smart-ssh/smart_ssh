@@ -16,6 +16,7 @@
     "decoration:default",
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-set-theme",
     "store:default",
     "os:default"
   ]

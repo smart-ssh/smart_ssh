@@ -119,7 +119,7 @@ export function QuestionCard({
             type="button"
             disabled={ticked.length === 0}
             onClick={submitMulti}
-            className="mt-2 rounded bg-accent px-3 py-1 text-xs text-fg-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg-soft enabled:hover:bg-accent-strong disabled:opacity-50"
+            className="mt-2 rounded bg-accent px-3 py-1 text-xs text-on-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg-soft enabled:hover:bg-accent-strong disabled:opacity-50"
           >
             {t("chat.question.send")}
           </button>

@@ -49,6 +49,13 @@
       "dataAndBackup": "Tiedot ja varmuuskopio"
     }
   },
+  "appearance": {
+    "heading": "Ulkoasu",
+    "language": "Kieli",
+    "system": "Seuraa järjestelmää",
+    "light": "Vaalea",
+    "dark": "Tumma"
+  },
   "about": {
     "version": "Versio",
     "copyHint": "Kopioi leikepöydälle",

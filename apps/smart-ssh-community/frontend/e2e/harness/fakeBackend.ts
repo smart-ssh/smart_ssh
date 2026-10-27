@@ -136,6 +136,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       return null;
     },
     "plugin:os|locale": () => model.locale,
+    "plugin:window|set_theme": () => null,
     "plugin:store|load": () => 1,
     "plugin:store|get": ({ key }) => [store[key as string] ?? null, key as string in store],
     "plugin:store|has": ({ key }) => (key as string) in store,

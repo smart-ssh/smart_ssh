@@ -49,6 +49,13 @@
       "dataAndBackup": "डेटा और बैकअप"
     }
   },
+  "appearance": {
+    "heading": "दिखावट",
+    "language": "भाषा",
+    "system": "सिस्टम का पालन करें",
+    "light": "लाइट",
+    "dark": "डार्क"
+  },
   "about": {
     "version": "संस्करण",
     "copyHint": "क्लिपबोर्ड पर कॉपी करें",

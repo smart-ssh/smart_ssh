@@ -49,6 +49,13 @@
       "dataAndBackup": "数据与备份"
     }
   },
+  "appearance": {
+    "heading": "外观",
+    "language": "语言",
+    "system": "跟随系统",
+    "light": "浅色",
+    "dark": "深色"
+  },
   "about": {
     "version": "版本",
     "copyHint": "复制到剪贴板",

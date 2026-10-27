@@ -49,6 +49,13 @@
       "dataAndBackup": "Dữ liệu và sao lưu"
     }
   },
+  "appearance": {
+    "heading": "Giao diện",
+    "language": "Ngôn ngữ",
+    "system": "Theo hệ thống",
+    "light": "Sáng",
+    "dark": "Tối"
+  },
   "about": {
     "version": "Phiên bản",
     "copyHint": "Sao chép vào bộ nhớ tạm",

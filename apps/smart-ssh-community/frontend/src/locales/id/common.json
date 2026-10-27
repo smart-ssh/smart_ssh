@@ -49,6 +49,13 @@
       "dataAndBackup": "Data dan cadangan"
     }
   },
+  "appearance": {
+    "heading": "Tampilan",
+    "language": "Bahasa",
+    "system": "Ikuti sistem",
+    "light": "Terang",
+    "dark": "Gelap"
+  },
   "about": {
     "version": "Versi",
     "copyHint": "Salin ke papan klip",
