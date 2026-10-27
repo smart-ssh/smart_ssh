@@ -654,7 +654,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let entitlement_catalogue =
         crate::wiring::EntitlementCatalogue::new(std::mem::take(&mut wiring.entitlement_features));
     let plugins = wiring.plugins;
-    let plugins_after_unlock = std::mem::take(&mut wiring.plugins_after_unlock);
     let service_host = ServiceHost::new(std::mem::take(&mut wiring.services));
 
     // Issue #19: als erstes Plugin, s. `single_instance::register_on`.
@@ -680,18 +679,17 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Kommando unerreichbar („plugin store not found") — selbst wenn die ACL
     // es erlaubt.
     let defer_plugins = app_state.is_none();
-    // Issue #894: extension plugins wait for the unlock in password mode.
-    let mut deferred_extension_plugins = plugins_after_unlock;
-    let builder = if defer_plugins {
+    let ext = std::mem::take(&mut wiring.plugins_after_unlock); // Issue #894
+    let (builder, deferred_extension_plugins) = if defer_plugins {
         tracing::info!(
             "the application starts locked; the plugins that touch files, settings or the \
              operating system are registered only after unlocking (Spec 0101, A16)"
         );
-        builder
+        (builder, ext)
     } else {
-        extension_plugins::register_on(
-            register_unlocked_plugins_on(builder),
-            std::mem::take(&mut deferred_extension_plugins),
+        (
+            extension_plugins::register_on(register_unlocked_plugins_on(builder), ext),
+            Vec::new(),
         )
     };
 
@@ -770,9 +768,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         // wenn die Plugins aufgeschoben wurden — `register_unlocked_plugins`
         // hängt daran, ob es etwas nachzuholen gibt.
         .manage(UnlockedPluginsPendingSlot(defer_plugins))
-        .manage(extension_plugins::PendingExtensionPlugins::<tauri::Wry>::new(
-            deferred_extension_plugins,
-        ))
+        .manage(extension_plugins::pending(deferred_extension_plugins))
         // Spec 0101, Klarstellung 9 (Fund 8): Ab hier gehört der
         // Flush-Wächter dem verwalteten Zustand, damit `quit_application`
         // den Puffer schreiben kann — `AppHandle::exit` führt keine
@@ -1175,8 +1171,7 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
             );
         }
     }
-    // Issue #894: extension plugins come after the core's own, in order.
-    let _ = extension_plugins::register_pending(app);
+    extension_plugins::register_pending(app); // Issue #894: after the core's own
     tracing::info!(
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"
@@ -1240,11 +1235,4 @@ pub(crate) fn init_crypto_provider() {
 }
 
 #[cfg(test)]
-mod crypto_provider_tests {
-    #[test]
-    fn init_installs_default_provider_and_is_idempotent() {
-        super::init_crypto_provider();
-        super::init_crypto_provider();
-        assert!(tls_config::default_provider_installed());
-    }
-}
+mod crypto_provider;

@@ -36,6 +36,13 @@ impl<R: Runtime> PendingExtensionPlugins<R> {
     }
 }
 
+/// The managed state for the waiting plugins.
+pub(crate) fn pending<R: Runtime>(
+    factories: Vec<UnlockedPluginFactory<R>>,
+) -> PendingExtensionPlugins<R> {
+    PendingExtensionPlugins::new(factories)
+}
+
 /// Password mode: register the waiting plugins after the gate opened. The
 /// list is drained, so a second call registers nothing. A failing plugin is
 /// logged and does not stop the others; the names of the failed plugins are
