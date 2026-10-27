@@ -173,7 +173,12 @@ describe("confirmation card explanation (issue #596)", () => {
 
   it("shows nothing extra for a single segment without a reason", async () => {
     await renderCard({ segments: [], suggestions: [] });
+    // The card renders nothing while loading and when the answer is empty, so the
+    // DOM cannot signal "done": let the component's own `.then` run first.
     await waitFor(() => expect(explainConfirmation).toHaveBeenCalled());
+    await act(async () => {
+      await vi.mocked(explainConfirmation).mock.results[0].value;
+    });
     expect(screen.queryByText("Parts of this command")).toBeNull();
   });
 
@@ -205,6 +210,10 @@ describe("confirmation card explanation (issue #596)", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText(/All `wc` calls/));
     await waitFor(() => expect(acceptAndCreateRule).toHaveBeenCalled());
+    // Let the click handler's continuation after the awaited call run before the absence check.
+    await act(async () => {
+      await vi.mocked(acceptAndCreateRule).mock.results[0].value;
+    });
     expect(screen.queryByText(/Rule created\./)).toBeNull();
   });
 

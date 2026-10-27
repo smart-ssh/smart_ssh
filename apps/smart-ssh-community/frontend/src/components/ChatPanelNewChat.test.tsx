@@ -122,15 +122,15 @@ describe("ChatPanel „Neuer Chat“ (issue #271)", () => {
     const field = await screen.findByPlaceholderText(PLACEHOLDER);
     fireEvent.change(field, { target: { value: "hallo Welt" } });
     fireEvent.keyDown(field, { key: "Enter" });
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalled());
     expect(await screen.findByText("hallo Welt")).toBeInTheDocument();
+    expect(sendChatMessage).toHaveBeenCalled();
 
     const button = await screen.findByRole("button", { name: "Neuer Chat" });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
 
-    await waitFor(() => expect(startNewChat).toHaveBeenCalledWith("session-1"));
     await waitFor(() => expect(screen.queryByText("hallo Welt")).not.toBeInTheDocument());
+    await waitFor(() => expect(startNewChat).toHaveBeenCalledWith("session-1"));
   });
 
   it("resets the context usage indicator to 0 after a new chat (issue #648)", async () => {

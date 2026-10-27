@@ -229,10 +229,10 @@ describe("App host key prompt in every tab state (Issue #12)", () => {
       const { reject } = await expectVisibleFocusedDialog(event, view);
 
       fireEvent.click(reject);
+      await waitFor(() => expect(screen.queryByRole(roleFor(event))).toBeNull());
       await waitFor(() =>
         expect(confirmHostKey).toHaveBeenCalledWith(event.sessionId, { decision: "reject" }),
       );
-      expect(screen.queryByRole(roleFor(event))).toBeNull();
       vi.mocked(confirmHostKey).mockClear();
     }
   });

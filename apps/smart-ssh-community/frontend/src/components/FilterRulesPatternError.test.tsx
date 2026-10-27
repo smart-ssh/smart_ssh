@@ -111,10 +111,9 @@ describe("Regel-Formular bei ungültigem Muster (Spec 0077, T-6)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^(Anlegen|Create)$/ }));
 
-    await waitFor(() => expect(createRuleMock).toHaveBeenCalled());
-
     expect(await screen.findByText(invalidPatternText())).toBeInTheDocument();
     expect(screen.getByText(LIBRARY_ERROR)).toBeInTheDocument();
+    expect(createRuleMock).toHaveBeenCalled();
   });
 
   // Gegenprobe: Ein anderer Fehler behält das bisherige Verhalten (roher

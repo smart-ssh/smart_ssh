@@ -398,7 +398,6 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     fireEvent.click(screen.getByText("prod-1"));
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
-    await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText("prod-1").closest("button")).toBeEnabled());
 
     fireEvent.click(screen.getByText("Localhost"));
@@ -467,8 +466,8 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
     await screen.findByText(noticeTitle());
     await acknowledgeNotice();
 
+    await waitFor(() => expect(screen.queryByText(noticeTitle())).toBeNull());
     await waitFor(() => expect(startConnectMock).toHaveBeenCalledWith(expect.objectContaining({ id: "remote-1" })));
-    expect(screen.queryByText(noticeTitle())).toBeNull();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
     expect(other).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalled();

@@ -2,6 +2,7 @@
 // Warnung, Speichern trotzdem möglich; generischer Provider → keine
 // Warnung."
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -90,6 +91,16 @@ function renderFormWithDialog() {
   const result = renderForm();
   fireEvent.click(screen.getByRole("button", { name: "Provider hinzufügen" }));
   return result;
+}
+
+/** The probe's outcome renders nothing for the cases asserted by absence, so the DOM gives no
+ * "done" signal: wait for the call, then for its (rejected) promise after the component's own
+ * `catch` handler has run. */
+async function settleOllamaProbe() {
+  await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    await vi.mocked(discoverModels).mock.results[0].value.catch(() => undefined);
+  });
 }
 
 describe("AiProviderSettings API-key format hint (Spec 0050, Teil 2)", () => {
@@ -584,7 +595,7 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
 
     renderForm();
 
-    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    await settleOllamaProbe();
     expect(
       screen.queryByText("Kein lokales Ollama gefunden (Standard-Port 11434)."),
     ).not.toBeInTheDocument();
@@ -598,7 +609,7 @@ describe("AiProviderSettings Ollama probe results (Spec 0069, Teil B3, Test 23)"
 
     renderForm();
 
-    await waitFor(() => expect(discoverModels).toHaveBeenCalledTimes(1));
+    await settleOllamaProbe();
     expect(
       screen.queryByText("Kein lokales Ollama gefunden (Standard-Port 11434)."),
     ).not.toBeInTheDocument();
@@ -914,9 +925,9 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
     fillAndSubmit();
 
-    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
     // Rest des Erfolgspfads unverändert: Liste neu geladen.
     expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(addAiProvider).toHaveBeenCalledTimes(1);
     expect(listAiProviders).toHaveBeenCalledTimes(2);
     expect(setActiveAiProvider).not.toHaveBeenCalled();
   });
@@ -932,8 +943,8 @@ describe("AiProviderSettings form submit activates the first provider (Spec 0069
     expect(screen.queryByText(WILL_ACTIVATE_HINT)).not.toBeInTheDocument();
     fillAndSubmit();
 
-    await waitFor(() => expect(addAiProvider).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("Prov")).toBeInTheDocument();
+    expect(addAiProvider).toHaveBeenCalledTimes(1);
     expect(setActiveAiProvider).not.toHaveBeenCalled();
   });
 });

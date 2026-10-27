@@ -123,6 +123,12 @@ sofort mit einer Meldung scheitern. Ein Test, der absichtlich beweist, dass
 ein deaktiviertes Bedienelement nichts tut, benutzt `clickDisabled` aus
 `src/test/clickDisabled.ts`.
 
+`scripts/check-test-waits.mjs` (Teil von `npm run lint`, Issue #966) meldet
+ein `waitFor` allein auf `toHaveBeenCalled*`, dem direkt eine synchrone
+DOM-Abfrage, Abwesenheitsprüfung oder ein `fireEvent` folgt (R13). Eine
+Stelle, deren nächster Schritt nachweislich nicht von einem späteren Render
+abhängt, trägt direkt über dem `waitFor` den Kommentar `// wait-ok: <Grund>`.
+
 ### Nachweis
 
 Ein behobener Wackler wird mit einer **Verzögerungsprobe** belegt: eine
