@@ -71,15 +71,13 @@ mod tests {
 
     const DATA: &str = "data-from-ext-plugin-894";
 
-    #[tauri::command]
-    fn ext_ping() -> &'static str {
-        DATA
-    }
-
     fn plugin(name: &'static str) -> UnlockedPluginFactory<MockRuntime> {
         Box::new(move || {
             tauri::plugin::Builder::<MockRuntime>::new(name)
-                .invoke_handler(tauri::generate_handler![ext_ping])
+                .invoke_handler(|invoke: tauri::ipc::Invoke<MockRuntime>| {
+                    invoke.resolver.resolve(DATA);
+                    true
+                })
                 .build()
         })
     }
