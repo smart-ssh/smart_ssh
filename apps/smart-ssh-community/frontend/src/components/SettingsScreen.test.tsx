@@ -98,12 +98,12 @@ describe("SettingsScreen registered sections (Spec 0050, Fund 1.2)", () => {
 
     renderSettingsScreen();
 
-    await waitFor(() => expect(screen.getByText("Test-Sektion")).toBeInTheDocument());
+    expect(await screen.findByText("Test-Sektion")).toBeInTheDocument();
     expect(screen.queryByText("test-section-content")).not.toBeInTheDocument();
 
     screen.getByText("Test-Sektion").click();
 
-    await waitFor(() => expect(screen.getByText("test-section-content")).toBeInTheDocument());
+    expect(await screen.findByText("test-section-content")).toBeInTheDocument();
   });
 
   it("falls back to the id as the nav label when a registered section has no label", async () => {
@@ -111,7 +111,7 @@ describe("SettingsScreen registered sections (Spec 0050, Fund 1.2)", () => {
 
     renderSettingsScreen();
 
-    await waitFor(() => expect(screen.getByText("unlabeled-section")).toBeInTheDocument());
+    expect(await screen.findByText("unlabeled-section")).toBeInTheDocument();
   });
 
   it("still shows the built-in categories alongside registered sections", async () => {
@@ -149,7 +149,7 @@ describe("SettingsScreen late-registered sections (issue #243)", () => {
   it("keeps the selected category when a section is registered later", async () => {
     registerSettingsSection({ id: "early-section", label: "Frueh-Sektion", component: TestSection });
     renderSettingsScreen();
-    await waitFor(() => expect(screen.getByText("Frueh-Sektion")).toBeInTheDocument());
+    expect(await screen.findByText("Frueh-Sektion")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Frueh-Sektion" }));
     expect(screen.getByRole("button", { name: "Frueh-Sektion" })).toHaveAttribute(
       "aria-current",

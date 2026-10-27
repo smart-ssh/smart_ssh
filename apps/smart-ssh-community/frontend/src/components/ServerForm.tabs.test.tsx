@@ -106,7 +106,7 @@ beforeEach(() => {
 describe("ServerForm tabs (issue #606)", () => {
   it("opens an existing server on General with four tabs and each field in its own tab", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     expect(tabNames()).toEqual(["Allgemein", "Verbindung", "Sicherheit", "Notizen"]);
     expect(screen.getByRole("tab", { name: "Allgemein" })).toHaveAttribute("aria-selected", "true");
@@ -125,7 +125,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("keeps unsaved edits across tab switches and saves them with one updateServer call", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("web-01"), { target: { value: "web-02" } });
     openTab("Verbindung");
@@ -146,7 +146,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("shows Save on General, Connection and Security but not on Notes", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     for (const name of ["Allgemein", "Verbindung", "Sicherheit"]) {
       openTab(name);
       expect(screen.getByRole("button", { name: "Speichern" })).toBeInTheDocument();
@@ -157,7 +157,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("marks the Connection tab and jumps to it when Save finds an invalid field", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("example.invalid"), { target: { value: "" } });
     expect(screen.getByRole("tab", { name: "Allgemein" })).toHaveAttribute("aria-selected", "true");
@@ -177,7 +177,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("moves between tabs with the arrow keys, Home and End", async () => {
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     const general = screen.getByRole("tab", { name: "Allgemein" });
     general.focus();
     fireEvent.keyDown(general, { key: "ArrowRight" });
@@ -207,7 +207,7 @@ describe("ServerForm tabs (issue #606)", () => {
 
   it("opens General again when another server is selected", async () => {
     const { rerender } = renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Sicherheit");
     rerender(
       <I18nextProvider i18n={testI18n}>

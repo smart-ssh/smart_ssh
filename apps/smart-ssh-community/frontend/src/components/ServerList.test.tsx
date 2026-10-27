@@ -136,7 +136,7 @@ describe("ServerList port display (Spec 0046, Fund 5)", () => {
   it("hides the port for the local pseudo-server", async () => {
     renderList();
 
-    await waitFor(() => expect(screen.getByText("Localhost")).toBeInTheDocument());
+    expect(await screen.findByText("Localhost")).toBeInTheDocument();
 
     expect(screen.getByText("me@localhost")).toBeInTheDocument();
     expect(screen.queryByText(/:0\b/)).toBeNull();
@@ -146,7 +146,7 @@ describe("ServerList port display (Spec 0046, Fund 5)", () => {
   it("still shows the port for a normal remote server", async () => {
     renderList();
 
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
 
     expect(screen.getByText("deploy@prod-1.internal:2222")).toBeInTheDocument();
   });
@@ -209,7 +209,7 @@ describe("ServerList empty-state entry block (Spec 0069, Teil C1)", () => {
 describe("ServerList host key prompt ownership (Issue #12)", () => {
   it("does not subscribe to host-key-verification-needed itself", async () => {
     renderList();
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
     expect(onHostKeyVerificationNeeded).not.toHaveBeenCalled();
   });
 });
@@ -232,7 +232,7 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
   it("moves a server into a group via the narrow command, reloads, and does not connect", async () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
     renderList();
-    await waitFor(() => expect(screen.getByText("prod-1")).toBeInTheDocument());
+    expect(await screen.findByText("prod-1")).toBeInTheDocument();
     const loadsBefore = vi.mocked(listServers).mock.calls.length;
 
     dragOnto(screen.getByText("prod-1"), screen.getByText(/Prod$/));
@@ -249,7 +249,7 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
     startConnectMock.mockClear();
     vi.mocked(moveServerToGroup).mockClear();
     renderList();
-    await waitFor(() => expect(screen.getByText("Localhost")).toBeInTheDocument());
+    expect(await screen.findByText("Localhost")).toBeInTheDocument();
 
     dragOnto(screen.getByText("Localhost"), screen.getByText(/Prod$/));
 
@@ -264,7 +264,7 @@ describe("ServerList drag and drop (issue #48 / Spec 0103)", () => {
       Promise.reject({ message: "Zyklus", code: "GROUP_CYCLE_DETECTED" }),
     );
     renderList();
-    await waitFor(() => expect(screen.getByText(/Web$/)).toBeInTheDocument());
+    expect(await screen.findByText(/Web$/)).toBeInTheDocument();
 
     dragOnto(screen.getByText(/Prod$/), screen.getByText(/Web$/));
 

@@ -83,7 +83,7 @@ const openTab = (name: string) => fireEvent.click(screen.getByRole("tab", { name
 const passwordField = () => screen.getByLabelText(/^Passwort/, { selector: "input[type=password]" });
 
 async function loaded() {
-  await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+  expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
   openTab("Verbindung");
 }
 

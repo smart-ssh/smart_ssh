@@ -231,9 +231,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("✓ Zugangsdaten gültig")).toBeInTheDocument();
     expect(testAiProviderCredentials).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "sk-abc" }),
     );
@@ -252,11 +250,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText("✗ Authentifizierung fehlgeschlagen – API-Key prüfen"),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("✗ Authentifizierung fehlgeschlagen – API-Key prüfen")).toBeInTheDocument();
   });
 
   it("shows an unreachable result including the message", async () => {
@@ -273,11 +267,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText("✗ Provider nicht erreichbar: connection refused"),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("✗ Provider nicht erreichbar: connection refused")).toBeInTheDocument();
   });
 
   // Spec 0069, Teil A5, Test 19: `unreachable` mit `AI_RATE_LIMITED` zeigt
@@ -299,13 +289,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText(
-          "Zugangsdaten vermutlich gültig, der Anbieter drosselt aber gerade. In einer Minute erneut testen.",
-        ),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("Zugangsdaten vermutlich gültig, der Anbieter drosselt aber gerade. In einer Minute erneut testen.")).toBeInTheDocument();
     expect(
       screen.queryByText(/Provider nicht erreichbar/),
     ).not.toBeInTheDocument();
@@ -328,9 +312,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByText(/kennt dieses Modell nicht/)).toBeInTheDocument(),
-    );
+    expect(await screen.findByText(/kennt dieses Modell nicht/)).toBeInTheDocument();
     expect(
       screen.queryByText(/HTTP 404: model_not_found/),
     ).not.toBeInTheDocument();
@@ -351,11 +333,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByText(/unterstützt keine Tool-Aufrufe/),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText(/unterstützt keine Tool-Aufrufe/)).toBeInTheDocument();
     expect(
       screen.queryByText(/does not support tools/),
     ).not.toBeInTheDocument();
@@ -370,9 +348,7 @@ describe("AiProviderSettings credentials test button (Spec 0050, Teil 3)", () =>
     fireEvent.click(
       screen.getByRole("button", { name: "Zugangsdaten testen" }),
     );
-    await waitFor(() =>
-      expect(screen.getByText("✓ Zugangsdaten gültig")).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("✓ Zugangsdaten gültig")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("API-Key"), {
       target: { value: "sk-abc-changed" },
@@ -692,7 +668,7 @@ describe('AiProviderSettings "Ollama übernehmen" (Spec 0069, Teil B4, Test 24/2
     // Spec 0071 merge: `commandErrorMessage` extrahiert jetzt `.message`
     // statt eines rohen `String(err)` — ein natives `Error`-Objekt liefert
     // hier "boom", nicht mehr "Error: boom" (s. Mock oben).
-    await waitFor(() => expect(screen.getByText("boom")).toBeInTheDocument());
+    expect(await screen.findByText("boom")).toBeInTheDocument();
     expect(setActiveAiProvider).not.toHaveBeenCalled();
   });
 
