@@ -164,10 +164,10 @@ inside the security logic itself.
 
 ## Where to look
 
+- `docs/codemap.md` — read this first when you look for the file, symbol or extension point for a change (checked by `npm run check-codemap`).
 - `docs/architecture.md` — read this when you need the crate boundaries, in particular app-logic vs. app-shell.
 - `THREAT-MODEL.md` — read this when a change touches what the AI sees, redaction, where data lives, network connections or trust boundaries.
 - `.claude/skills/smart-ssh-coder/references/security-invariants.md` — read this before changing anything security-critical.
-- `.claude/skills/smart-ssh-coder/references/codebase-map.md` — read this when you look for the file or extension point for a change.
 - `docs/ui-guidelines.md` — read this when you build or change UI.
 - `docs/i18n-glossary.md` — read this when you add or change translated texts.
 - `docs/datenpfade.md` — read this when you need to know where the app stores data on disk.
