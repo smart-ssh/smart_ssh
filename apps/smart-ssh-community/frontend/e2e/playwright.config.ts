@@ -28,7 +28,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  reporter: process.env.CI ? [["list"], ["html", { open: "never", outputFolder: "./playwright-report" }]] : "list",
+  // On CI the JSON report feeds `report-flaky.mjs` (flaky tests in the job summary).
+  reporter: process.env.CI
+    ? [
+        ["list"],
+        ["html", { open: "never", outputFolder: "./playwright-report" }],
+        ["json", { outputFile: "./test-results/results.json" }],
+      ]
+    : "list",
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: "retain-on-failure",

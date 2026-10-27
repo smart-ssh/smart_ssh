@@ -344,6 +344,21 @@ jobs:
       - name: Browser tests (Playwright)
         run: npm run test:e2e
 
+      # Lists tests that passed only on a retry (summary, annotations, file).
+      # Never changes the job result; the test step above decides that.
+      - name: Report flaky browser tests
+        if: always()
+        run: node e2e/report-flaky.mjs
+
+      - name: Upload flaky browser test list
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: flaky-browser-tests
+          path: apps/smart-ssh-community/frontend/e2e/flaky-tests.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload Playwright traces and report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

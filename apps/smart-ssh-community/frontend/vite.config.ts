@@ -35,6 +35,6 @@ export default {
     testTimeout: 15000,
     // Issue #166: the browser tests under `e2e/` are Playwright specs
     // (`npm run test:e2e`), not Vitest tests.
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'e2e/*.test.mjs'],
   },
 }
