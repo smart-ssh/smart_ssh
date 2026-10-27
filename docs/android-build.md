@@ -50,3 +50,14 @@ Drei Punkte, ohne die die App unter Android beim Start abbricht:
 - Direkte Abhängigkeit auf `tauri-plugin-fs` (Punkt 2).
 - Die Insets-Behandlung in `MainActivity` (Punkt 3).
 - Keinen Aufruf, der den `ndk-context` initialisiert (Punkt 1).
+
+## Launcher icon
+
+The launcher icons (adaptive icon and legacy PNGs) are generated from the desktop logo; `apps/smart-ssh-community/icons/android/` is the single source of truth and `gen/android/app/src/main/res/` holds a byte-identical copy (checked by `apps/smart-ssh-community/tests/android_launcher_icons.rs`). To regenerate after changing `apps/smart-ssh-community/icons/icon.png` or `icon-source.png` (flat background colour of the adaptive icon):
+
+```bash
+(cd apps/smart-ssh-community/frontend && npm ci)   # once, provides Playwright/Chromium
+node scripts/generate-android-icons.mjs
+```
+
+No manual step is needed; commit both output directories. Do not run `tauri icon` for Android: it overwrites these files with its template set.
