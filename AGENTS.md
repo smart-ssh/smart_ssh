@@ -110,6 +110,13 @@ not feature correctness. On macOS use `./scripts/tauri-dev.sh`, not plain
 repeatedly while iterating — build/test/lint don't need a running window;
 start it once, when a change is actually ready to look at.
 
+## Toolchain
+
+The Rust version comes from `rust-toolchain.toml` (exact `x.y.z`); CI reads
+the channel from that file, and `[workspace.package] rust-version` carries
+the same minor. A bump is its own pull request that also fixes any new
+clippy findings. Projects embedding the core can reuse the same file.
+
 ## Git staging — never blanket-add
 
 **Never `git add -A` or `git add .`.** Several files are deliberately
