@@ -20,7 +20,7 @@ Abschnitt „Review" und im Agenten `smart-ssh-coder` (Schritt 6), nicht in
 
 Vor Änderungen an Orchestrierung, Providern, Filter-Engine, Redaction oder
 SFTP: `references/security-invariants.md` lesen. Für das Finden von
-Erweiterungspunkten: `references/codebase-map.md`.
+Erweiterungspunkten: `docs/codemap.md` (`references/codebase-map.md` verweist darauf).
 
 ## Rollen
 
