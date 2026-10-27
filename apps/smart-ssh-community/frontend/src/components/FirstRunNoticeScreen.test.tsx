@@ -1,6 +1,7 @@
 // Spec 0031, Abschnitt 4/6: "Weiter"-Button bleibt deaktiviert, bis die
 // Checkbox aktiv ist — kein Wegklicken ohne bewusste Bestätigung.
 import { fireEvent, render, screen } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,7 +44,7 @@ describe("first-run notice screen (Spec 0031)", () => {
     // Ein deaktivierter Button feuert in jsdom (wie im echten Browser)
     // keinen Klick-Handler aus — trotzdem hier explizit geprüft, dass ohne
     // vorherige Checkbox-Aktivierung nichts passiert.
-    fireEvent.click(continueButton);
+    clickDisabled(continueButton);
     expect(onAcknowledge).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("checkbox"));

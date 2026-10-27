@@ -331,7 +331,9 @@ not by hand-editing, so the lockfile stays consistent).
   "test connection" feature), not a test file.
 - Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
   gets its own `*.test.ts` via Vitest; component tests exist for the
-  trickier interactive pieces, not for every component.
+  trickier interactive pieces, not for every component. Async frontend tests
+  follow ADR 0122 R6–R15 (`docs/adr/0122-plattform-und-zeitunabhaengige-tests.md`):
+  wait for the final DOM state, re-query after transitions, send events in `act`.
 - When a bug is fixed, add the regression test that would have caught it,
   not just the fix — see `crates/app-logic/src/dto/tests.rs`'s
   `rename_all_fields` regression tests for the pattern.

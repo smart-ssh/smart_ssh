@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { clickDisabled } from "../../test/clickDisabled";
 import { useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS, Tooltip } from ".";
@@ -37,7 +38,7 @@ describe("Button", () => {
         Off
       </Button>,
     );
-    fireEvent.click(screen.getByRole("button"));
+    clickDisabled(screen.getByRole("button"));
     expect(onClick).not.toHaveBeenCalled();
   });
 });

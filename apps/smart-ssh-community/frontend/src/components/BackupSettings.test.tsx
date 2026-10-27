@@ -2,6 +2,7 @@
 // backup" section — code display and confirmation, passphrase validation,
 // counts confirmation, summary and the narrow layout.
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
@@ -64,7 +65,7 @@ describe("BackupSettings", () => {
     expect(screen.getByTestId("backup-recovery-code").textContent).toBe("ABCDEFGHJKMNPQR");
     expect(screen.getAllByText(/^[A-Z]{5}$/)).toHaveLength(3);
     expect((next as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(next);
+    clickDisabled(next);
     expect(api.exportEncryptedBackup).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "I have noted the code" }));
