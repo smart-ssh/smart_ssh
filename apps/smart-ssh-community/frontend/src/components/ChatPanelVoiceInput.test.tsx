@@ -101,6 +101,7 @@ function renderChatPanel() {
 
 const statusListeners: Array<(ev: unknown) => void> = [];
 const partialListeners: Array<(ev: { text: string; revision: number }) => void> = [];
+const emitStatus = (ev: unknown) => act(() => statusListeners.forEach((h) => h(ev)));
 const emitPartial = (text: string, revision: number) =>
   act(() => partialListeners.forEach((h) => h({ text, revision })));
 
@@ -211,11 +212,11 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     await waitFor(() => expect(startSpeechModelDownload).toHaveBeenCalledWith("base"));
     expect(startVoiceRecording).not.toHaveBeenCalled();
     await waitFor(() => expect(statusListeners.length).toBeGreaterThan(0));
-    statusListeners.forEach((h) => h({ model: "base", state: "downloading", done: 5, total: 10 }));
+    await emitStatus({ model: "base", state: "downloading", done: 5, total: 10 });
     await screen.findByRole("progressbar");
-    statusListeners.forEach((h) => h({ model: "base", state: "ready" }));
-    await waitFor(() => expect(startVoiceRecording).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await emitStatus({ model: "base", state: "ready" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(startVoiceRecording).toHaveBeenCalledTimes(1);
   });
 
   it("cancelling during the download cancels it and does not record", async () => {
