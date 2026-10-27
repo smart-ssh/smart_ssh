@@ -48,6 +48,11 @@ pub type SessionId = Uuid;
 /// verschachtelt nach `SessionId` sortieren zu müssen.
 pub type ActionId = Uuid;
 
+/// Shared application state.
+///
+/// Extension crates do not use the fields (they stay `pub` for `app-shell`
+/// and may change without notice): use the accessors and re-exports of
+/// [`crate::ext`].
 pub struct AppState {
     pub sessions: SessionManager,
     /// Spec 0038, section 2a: the session extension an edition registered
