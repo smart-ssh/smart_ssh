@@ -23,8 +23,7 @@ pub use crate::state::AppState;
 
 // --- Session extension ---------------------------------------------------
 pub use crate::session_extension::{
-    rebuild_redactors_for_sessions, rebuild_server_redactors, scope_for_id, ServerScope,
-    SessionExtension,
+    rebuild_server_redactors, scope_for_id, ServerScope, SessionExtension,
 };
 pub use crate::system_prompt::PromptLanguage;
 
@@ -91,27 +90,6 @@ pub(crate) fn server_ids_of(sessions: &crate::session::SessionManager) -> Vec<Se
     ids.sort_by_key(|id| id.0);
     ids.dedup();
     ids
-}
-
-/// [`rebuild_redactors_for_open_sessions`] on its parts, so tests need no
-/// `AppState`.
-#[cfg(test)]
-pub(crate) async fn rebuild_for_open_sessions_with(
-    sessions: &crate::session::SessionManager,
-    profile_store: &dyn ProfileStore,
-    credential_store: &dyn ssh_manager_core::profiles::CredentialStore,
-    extension: Option<&dyn SessionExtension>,
-) {
-    for server_id in server_ids_of(sessions) {
-        rebuild_redactors_for_sessions(
-            sessions,
-            profile_store,
-            credential_store,
-            extension,
-            server_id,
-        )
-        .await;
-    }
 }
 
 /// Test doubles, for tests of extension crates.
