@@ -1176,7 +1176,7 @@ pub(crate) fn register_unlocked_plugins(app: &tauri::AppHandle) {
         }
     }
     // Issue #894: extension plugins come after the core's own, in order.
-    extension_plugins::register_pending(app);
+    let _ = extension_plugins::register_pending(app);
     tracing::info!(
         "registered the plugins that touch files, settings or the operating system after \
          unlocking (Spec 0101, A16)"

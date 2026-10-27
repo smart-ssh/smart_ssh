@@ -38,13 +38,15 @@ impl<R: Runtime> PendingExtensionPlugins<R> {
 
 /// Password mode: register the waiting plugins after the gate opened. The
 /// list is drained, so a second call registers nothing. A failing plugin is
-/// logged and does not stop the others.
-pub(crate) fn register_pending<R: Runtime>(app: &AppHandle<R>) {
+/// logged and does not stop the others; the names of the failed plugins are
+/// returned (for tests).
+pub(crate) fn register_pending<R: Runtime>(app: &AppHandle<R>) -> Vec<&'static str> {
     use tauri::plugin::Plugin;
     use tauri::Manager;
 
+    let mut failed = Vec::new();
     let Some(pending) = app.try_state::<PendingExtensionPlugins<R>>() else {
-        return;
+        return failed;
     };
     let factories = match pending.0.lock() {
         Ok(mut guard) => std::mem::take(&mut *guard),
@@ -59,8 +61,10 @@ pub(crate) fn register_pending<R: Runtime>(app: &AppHandle<R>) {
                 error = %err,
                 "an extension plugin could not be registered after unlocking (Spec 0101, A16)"
             );
+            failed.push(name);
         }
     }
+    failed
 }
 
 #[cfg(test)]
@@ -139,7 +143,7 @@ mod tests {
         let locked = call(&webview, "ext894").expect_err("must not be reachable while locked");
         assert!(locked.to_string().contains("not found"), "got {locked}");
 
-        register_pending(app.handle());
+        assert!(register_pending(app.handle()).is_empty());
         assert!(call(&webview, "ext894")
             .expect("reachable after unlock")
             .contains(DATA));
@@ -160,19 +164,27 @@ mod tests {
             .contains(DATA));
     }
 
+    fn failing_plugin(name: &'static str) -> UnlockedPluginFactory<MockRuntime> {
+        Box::new(move || {
+            tauri::plugin::Builder::<MockRuntime>::new(name)
+                .setup(|_, _| Err("setup refused".into()))
+                .build()
+        })
+    }
+
     #[test]
     fn test_a_failing_registration_does_not_stop_the_next_one() {
-        // The second factory repeats the first one's name: registration fails.
         let app = mock_builder()
             .manage(PendingExtensionPlugins::<MockRuntime>::new(vec![
                 plugin("ext894a"),
-                plugin("ext894a"),
+                failing_plugin("ext894bad"),
                 plugin("ext894b"),
             ]))
-            .build(context(&["ext894a", "ext894b"]))
+            .build(context(&["ext894a", "ext894b", "ext894bad"]))
             .expect("app");
         let webview = webview(&app);
-        register_pending(app.handle());
+        let failed = register_pending(app.handle());
+        assert_eq!(failed, vec!["ext894bad"]);
         assert!(call(&webview, "ext894a").is_ok());
         assert!(call(&webview, "ext894b")
             .expect("the plugin after the failing one is registered")
