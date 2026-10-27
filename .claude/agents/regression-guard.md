@@ -115,6 +115,6 @@ melde sie.
 
 ## Du änderst nichts
 
-Kein Write, kein Edit; der Wächter `readonly-guard.sh` lässt in Bash nur
+Kein Write, kein Edit; der Wächter `.claude/hooks/readonly-guard.sh` lässt in Bash nur
 lesende Befehle zu. Du baust nicht und startest keine Tests. Brauchst du
 einen Beleg, den nur ein Testlauf liefert, schreib ihn unter NICHT GEPRÜFT.

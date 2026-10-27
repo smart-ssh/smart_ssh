@@ -28,8 +28,8 @@ checklist, test-only files under "Required tests").
 - [ ] `crates/ai-providers/src/` – the provider implementation (a new module
       like `anthropic.rs` or `openai_compatible.rs`, `pub use` and `mod` in
       `crates/ai-providers/src/lib.rs`). It implements `AiProvider` and uses
-      the shared pieces: `retry.rs`, `rate_limit_budget.rs`, `usage.rs`,
-      `overload.rs`, `request_logging.rs`, `sse.rs`, `content.rs`.
+      the shared pieces: `crates/ai-providers/src/retry.rs`, `crates/ai-providers/src/rate_limit_budget.rs`, `crates/ai-providers/src/usage.rs`,
+      `crates/ai-providers/src/overload.rs`, `crates/ai-providers/src/request_logging.rs`, `crates/ai-providers/src/sse.rs`, `crates/ai-providers/src/content.rs`.
 - [ ] `crates/ai-providers/src/discovery.rs` – model-list URL and auth header
       per type (two `match` sites).
 - [ ] `crates/app-logic/src/ai_provider_factory.rs` – the `match` that builds
@@ -54,8 +54,8 @@ checklist, test-only files under "Required tests").
       (option and defaults),
       `apps/smart-ssh-community/frontend/src/apiKeyFormat.ts` (key prefix
       check) and the texts per `new-ui-text.md`.
-- [ ] `docs/specs/` – the provider specs (`0006-ai-provider-trait.md`,
-      `0025-extended-openai-compatible-providers.md`) when behaviour changes;
+- [ ] `docs/specs/` – the provider specs (`docs/specs/0006-ai-provider-trait.md`,
+      `docs/specs/0025-extended-openai-compatible-providers.md`) when behaviour changes;
       `docs/netzwerkverbindungen.md` and `THREAT-MODEL.md` (new outgoing
       host, what is sent), `changelog.d/issue-<n>-<topic>.md`.
 
@@ -75,7 +75,7 @@ items 8 and 11). The new provider must go through the same path:
   (placeholders, tool results). Escape fence markers in untrusted text first.
 - Do not add a second path that sends stored history without
   `reapply_redaction_for_send` (called by the core before `AiProvider::send`).
-- Never log request bodies or keys outside `request_logging.rs`, which
+- Never log request bodies or keys outside `crates/ai-providers/src/request_logging.rs`, which
   redacts.
 
 ## Required tests

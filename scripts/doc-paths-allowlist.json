@@ -1,0 +1,250 @@
+{
+  ".claude/agents/smart-ssh-coder.md": [
+    {
+      "token": "questions/",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": ".agent/",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": "status.json",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": "review-NN.md",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": "summary.md",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": "report.md",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": "decision.md",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    }
+  ],
+  ".claude/skills/smart-ssh-coder/SKILL.md": [
+    {
+      "token": "summary.md",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": "report.md",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    },
+    {
+      "token": "review-01.md",
+      "reason": "Per-run state file of the interactive coder workflow; created at run time, not tracked."
+    }
+  ],
+  "README_DEV.md": [
+    {
+      "token": "release/X.Y.0",
+      "reason": "Git branch name pattern, not a path."
+    },
+    {
+      "token": "target/release/",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "target/release/bundle/dmg/",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "target/release/bundle/macos/",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "target/release/bundle/msi/",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "target/release/bundle/nsis/",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "target/release/bundle/deb/",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "target/release/bundle/appimage/",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "target/release/smart-ssh",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    }
+  ],
+  "changelog.d/README.md": [
+    {
+      "token": "issue-69-tab-nach-schliessen.md",
+      "reason": "Example fragment file name, illustrative only."
+    },
+    {
+      "token": "0101-master-passwort.md",
+      "reason": "Example fragment file name, illustrative only."
+    },
+    {
+      "token": "0101-entsperrmaske.md",
+      "reason": "Example fragment file name, illustrative only."
+    }
+  ],
+  "docs/android-build.md": [
+    {
+      "token": "io/crates/keyring/Keyring.kt",
+      "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "gen/android/tauri.settings.gradle",
+      "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "app/tauri.build.gradle.kts",
+      "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "values/themes.xml",
+      "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "values-night/themes.xml",
+      "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "com/smartssh/desktop/",
+      "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "values/strings.xml",
+      "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "gen/android",
+      "reason": "Not a tracked file (generated or created at run time)."
+    }
+  ],
+  "docs/datenpfade.md": [
+    {
+      "token": "%APPDATA%\\com.smartssh.desktop\\settings.json",
+      "reason": "File inside the per-user app data directory at run time, not in the repository."
+    },
+    {
+      "token": "settings.json",
+      "reason": "File inside the per-user app data directory at run time, not in the repository."
+    }
+  ],
+  "docs/dev-environment.md": [
+    {
+      "token": "target/debug/smart-ssh",
+      "reason": "Build output directory; created by cargo, not tracked in the repository."
+    },
+    {
+      "token": "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk",
+      "reason": "Environment variable assignment, not a path."
+    }
+  ],
+  "docs/netzwerkverbindungen.md": [
+    {
+      "token": "ggerganov/whisper.cpp",
+      "reason": "GitHub owner/repository name, not a repository path."
+    }
+  ],
+  "docs/recipes/new-ui-text.md": [
+    {
+      "token": ".ts",
+      "reason": "File extension named in prose, not a path."
+    },
+    {
+      "token": ".tsx",
+      "reason": "File extension named in prose, not a path."
+    }
+  ],
+  ".claude/agents/silent-failure-hunter.md": [
+    {
+      "token": "tests.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "AGENTS.md": [
+    {
+      "token": "tests/",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "test_support.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/architecture.md": [
+    {
+      "token": "test_support.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "lib.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "lib.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/recipes/new-migration.md": [
+    {
+      "token": "store.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/recipes/new-tauri-command.md": [
+    {
+      "token": "servers.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "groups.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "groups.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "lib.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/recipes/new-ai-provider.md": [
+    {
+      "token": "anthropic.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "openai_compatible.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "anthropic.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "openai_compatible.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "openai_responses.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/recipes/new-session-or-server-field.md": [
+    {
+      "token": "store.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ]
+}

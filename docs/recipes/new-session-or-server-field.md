@@ -53,7 +53,7 @@ backup and import, the DTO and the frontend.
       a server; texts per `new-ui-text.md`.
 - [ ] Importers/exporters that list server fields (for example the
       `ssh_config` export names fields without an OpenSSH equivalent).
-- [ ] `docs/specs/` (profile spec `0003-server-profile-datenmodell.md` or the
+- [ ] `docs/specs/` (profile spec `docs/specs/0003-server-profile-datenmodell.md` or the
       spec of the feature), `changelog.d/issue-<n>-<topic>.md`.
 
 ## Required tests
@@ -75,7 +75,7 @@ backup and import, the DTO and the frontend.
 - The release-chain tests (`crates/persistence-sqlite/src/tests_release_chain.rs`)
   fail when a migration loses data of a released database.
 - **Not detected today:** a column missing from a hand-written SQL statement
-  in `store.rs` or `backup_store.rs`. Nothing compares the column list of
+  in `store.rs` or `crates/persistence-sqlite/src/backup_store.rs`. Nothing compares the column list of
   `servers` with these statements; the field is silently dropped (stored as
   `NULL`/default, lost on backup restore) unless your round-trip tests above
   cover it. A forgotten frontend fixture or form field is likewise caught
@@ -86,5 +86,5 @@ backup and import, the DTO and the frontend.
 PR #21 added `start_directory` to the server profile: migration `0017`, core
 type, DTO and input, store, frontend form and fixtures, spec 0102
 (`docs/specs/0102-server-start-directory.md`). PR #766 added `is_copy`
-(migration `0026_copy_marker.sql`) with the backup-store change and the
+(migration `crates/persistence-sqlite/migrations/0026_copy_marker.sql`) with the backup-store change and the
 backup round-trip test.

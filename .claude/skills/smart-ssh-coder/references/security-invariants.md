@@ -71,8 +71,8 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
     Quelle "manuell" (ADR 0045).
 15. **Erhöhter Dateibrowser (Spec 0067)**:
     - eigener Kanal `Session::elevated_sftp`, erreichbar nur mit
-      `commands::BrowserAccess` (privater Konstruktor in `commands.rs`) —
-      KI (`orchestration.rs`) und MCP (`mcp_backend.rs`) können ihn nicht
+      `commands::BrowserAccess` (privater Konstruktor in `crates/app-shell/src/commands.rs`) —
+      KI (`crates/app-logic/src/orchestration.rs`) und MCP (`crates/app-shell/src/mcp_backend.rs`) können ihn nicht
       einmal kompilierbar ansprechen. Regressionstest:
       `test_ai_and_mcp_file_actions_never_use_the_elevated_channel`.
     - nie Default, nie persistiert, beim Öffnen des Browsers und bei
