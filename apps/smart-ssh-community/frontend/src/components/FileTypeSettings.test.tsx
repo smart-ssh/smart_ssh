@@ -3,7 +3,7 @@
 // Öffnen"-Teil gehört zu Teil 4 (`fileTypeSettings.ts`s `appForFileName`,
 // dort separat getestet) — hier geht es nur um "pro Typ gesetzt": die
 // Einstellungs-UI selbst.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
@@ -32,6 +32,15 @@ function renderSettings() {
   );
 }
 
+/** The loaded (empty) settings replace the rows; adding a row before that would lose it. The empty
+ * result gives the DOM no signal, so wait for the load promise after the component's own `.then`. */
+async function settleInitialLoad() {
+  await waitFor(() => expect(loadFileTypeApps).toHaveBeenCalled());
+  await act(async () => {
+    await vi.mocked(loadFileTypeApps).mock.results[0].value;
+  });
+}
+
 describe("FileTypeSettings (Spec 0054, Teil 5)", () => {
   it("shows previously saved mappings", async () => {
     vi.mocked(loadFileTypeApps).mockResolvedValue({ ".conf": "/usr/bin/code" });
@@ -47,7 +56,7 @@ describe("FileTypeSettings (Spec 0054, Teil 5)", () => {
     vi.mocked(saveFileTypeApps).mockResolvedValue(undefined);
 
     renderSettings();
-    await waitFor(() => expect(loadFileTypeApps).toHaveBeenCalled());
+    await settleInitialLoad();
 
     fireEvent.click(screen.getByText("+ Zuordnung"));
     const extensionInput = screen.getByPlaceholderText(".conf");
@@ -68,7 +77,7 @@ describe("FileTypeSettings (Spec 0054, Teil 5)", () => {
     vi.mocked(saveFileTypeApps).mockResolvedValue(undefined);
 
     renderSettings();
-    await waitFor(() => expect(loadFileTypeApps).toHaveBeenCalled());
+    await settleInitialLoad();
 
     fireEvent.click(screen.getByText("+ Zuordnung"));
     fireEvent.change(screen.getByPlaceholderText(".conf"), { target: { value: ".conf" } });

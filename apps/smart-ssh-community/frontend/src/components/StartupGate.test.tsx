@@ -215,6 +215,7 @@ describe("StartupGate", () => {
     // Beide Zuhörer: genau zweimal angemeldet (ein Versuch, ein Neuversuch).
     expect(onStartupUnlocked).toHaveBeenCalledTimes(2);
     // Erst nach der erfolgreichen Anmeldung läuft das Kommando.
+    // wait-ok: the "no listener" error is set by a failed attempt before the unlock call, so it is already rendered if it applies
     await waitFor(() => expect(unlockWithMasterPassword).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/kein Zuhörer/)).toBeNull();
 
@@ -323,6 +324,8 @@ describe("StartupGate", () => {
     renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
 
     await waitFor(() => expect(unlockWithMasterPassword).toHaveBeenCalledTimes(1));
+    // The retry button is disabled while the first attempt runs; re-query once it is enabled again.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Erneut versuchen" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Erneut versuchen" }));
     // Ohne das Zurücksetzen des Merkers **und** eine Abhängigkeit, die sich
     // ändert, bliebe es bei einem Aufruf — der Knopf wäre dann wirkungslos.

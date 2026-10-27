@@ -17,6 +17,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { tierLabel } from "./tiers";
 
 import type { FeatureLockedPayload } from "./entitlements";
 import { subscribeFeatureLocked } from "./featureLockedBus";
@@ -44,7 +45,7 @@ export function FeatureLockedDialog() {
         </Button>
       }
     >
-      <p>{t("featureLocked.body", { feature: locked.feature, tier: locked.tier })}</p>
+      <p>{t("featureLocked.body", { feature: locked.feature, tier: tierLabel(locked.tier, t) })}</p>
     </DialogFrame>
   );
 }

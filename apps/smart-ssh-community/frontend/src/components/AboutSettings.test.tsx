@@ -1,6 +1,6 @@
 // Spec 0052, Abschnitt 3.2: die Kategorie „Über" zeigt Version + Hash,
 // der Text ist markierbar und kopierbar.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { getAppInfo } from "../api";
@@ -99,8 +99,8 @@ describe("AboutSettings (Spec 0052)", () => {
     const button = await screen.findByRole("button", { name: "Kopieren" });
     fireEvent.click(button);
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("0.4.1 (a5b3e01) · Community · Release-Build"));
     expect(await screen.findByText("Kopiert!")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith("0.4.1 (a5b3e01) · Community · Release-Build");
   });
 
   it("shows a visible error (not just a console warning) when the clipboard write fails", async () => {

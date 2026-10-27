@@ -109,7 +109,7 @@ import type {
   QuestionOption,
 } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
-import { Button, Tooltip } from "./ui";
+import { Button, ErrorBoundary, Tooltip } from "./ui";
 import { AutoExecRulesLine } from "./AutoExecRulesLine";
 import { WebActivityCard } from "./WebActivityCard";
 import { InjectionCheckStatus } from "./InjectionCheckStatus";
@@ -1663,8 +1663,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 {composerMenuOpen && (
                   <div className="absolute bottom-full left-0 z-20 mb-1 flex w-56 max-w-[calc(100vw-1.5rem)] flex-col gap-1 rounded border border-border bg-surface p-2 shadow-lg">
                     {composerActions.map((action) => (
-                      <Button
-                        key={action.id}
+                      <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><Button
                         title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
                         disabled={action.disabled}
                         onClick={() => {
@@ -1675,7 +1674,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                       >
                         <span aria-hidden="true">{action.icon}</span>
                         {action.label}
-                      </Button>
+                      </Button></ErrorBoundary>
                     ))}
                   </div>
                 )}
@@ -1683,8 +1682,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
             )
           ) : (
             composerActions.map((action) => (
-              <button
-                key={action.id}
+              <ErrorBoundary key={action.id} id={`composer-action:${action.id}`}><button
                 type="button"
                 aria-label={action.label}
                 title={action.disabled ? (action.disabledReason ?? action.label) : action.label}
@@ -1693,7 +1691,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
                 className="rounded p-1.5 text-fg-muted hover:bg-border hover:text-fg-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg disabled:opacity-50"
               >
                 {action.icon}
-              </button>
+              </button></ErrorBoundary>
             ))
           )}
           {voiceEnabled && (
@@ -2911,15 +2909,14 @@ function DocumentCard({
         {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
          * Export (reaktiv), der Export-Button bleibt an seinem Platz. */}
         {documentActions.map((action) => (
-          <Button
-            key={action.id}
+          <ErrorBoundary key={action.id} id={`document-action:${action.id}`}><Button
             size="sm"
             disabled={action.disabled}
             title={action.disabled ? action.disabledReason : undefined}
             onClick={() => action.onInvoke({ contentMarkdown, title })}
           >
             {action.label}
-          </Button>
+          </Button></ErrorBoundary>
         ))}
       </div>
     </div>

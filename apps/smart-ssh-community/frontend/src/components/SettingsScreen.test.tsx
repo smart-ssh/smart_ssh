@@ -125,6 +125,28 @@ describe("SettingsScreen registered sections (Spec 0050, Fund 1.2)", () => {
   });
 });
 
+describe("SettingsScreen failing section (issue #880)", () => {
+  beforeEach(() => resetRegistryForTests());
+  afterEach(() => resetRegistryForTests());
+
+  it("does not show a section that throws; the other sections stay usable", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken settings section");
+    };
+    registerSettingsSection({ id: "bad-section", label: "Bad", component: Broken });
+    registerSettingsSection({ id: "ok-section", label: "Fine", component: TestSection });
+    renderSettingsScreen();
+    fireEvent.click(await screen.findByText("Bad"));
+    await waitFor(() =>
+      expect(spy.mock.calls.some((c) => String(c[0]).includes("settings-section:bad-section"))).toBe(true),
+    );
+    fireEvent.click(screen.getByText("Fine"));
+    expect(await screen.findByText("test-section-content")).toBeInTheDocument();
+    spy.mockRestore();
+  });
+});
+
 describe("SettingsScreen late-registered sections (issue #243)", () => {
   beforeEach(() => {
     resetRegistryForTests();

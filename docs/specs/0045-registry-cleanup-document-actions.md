@@ -70,12 +70,30 @@ gibt es nicht; die App hat dafür keine Darstellung.
   Befehl, den die Aktion aufruft. Wer die Sperre in der Oberfläche umgeht,
   scheitert dort.
 
+- Jeder Beitrag zu einem Andockpunkt (Einstellungs-Abschnitt,
+  Formular-Abschnitt, Server-Einstellungs-Reiter, Sitzungskopf-Element,
+  Composer-Aktion, Verwalten-Ansicht, Dokument-Aktion) ist für sich
+  abgesichert: Ein Beitrag, der beim Anzeigen einen Fehler wirft, wird
+  nicht angezeigt und einmal protokolliert; alle übrigen Beiträge und der
+  Rest der App bleiben bedienbar. Fehler in Ereignis-Handlern oder
+  asynchronem Code fängt das nicht ab.
+- Wirft die Oberfläche außerhalb der Andockpunkte beim Anzeigen einen
+  Fehler, erscheint statt eines leeren Fensters ein Wiederherstellungs-
+  Bildschirm („Something went wrong") mit der Schaltfläche „Reload", die
+  die Oberfläche neu lädt. Der Text verweist auf das Diagnosepaket unter
+  Einstellungen → Diagnose; die Fehlerdetails selbst werden nicht
+  angezeigt.
+
 ## 7. Akzeptanzfälle
 
 - Anmelden und Auflisten von Dokument-Aktionen; gleiche Kennung ersetzt.
 - Die Dokument-Karte zeigt eine angemeldete aktive Aktion (Klick ruft die
   Handlung mit Titel und Inhalt auf) und eine gesperrte (sichtbar, nicht
   klickbar, Begründung als Tooltip).
+- Ein Beitrag, der beim Anzeigen wirft, verschwindet allein; die anderen
+  Beiträge und die eingebauten Bereiche bleiben bedienbar.
+- Ein Fehler außerhalb der Andockpunkte zeigt den Wiederherstellungs-
+  Bildschirm; „Reload" lädt neu.
 
 ## 8. (entfallen)
 

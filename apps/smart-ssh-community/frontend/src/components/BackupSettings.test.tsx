@@ -99,7 +99,8 @@ describe("BackupSettings", () => {
     vi.mocked(api.backupKeyStatus).mockResolvedValue({ exists: true, hasCode: true, hasPassphrase: false });
     renderSection();
     fireEvent.click(screen.getByRole("button", { name: "Export backup…" }));
-    await waitFor(() => expect(api.exportEncryptedBackup).toHaveBeenCalled());
+    expect(await screen.findByText(/Backup saved to \/tmp\/b.sshbackup/)).toBeTruthy();
+    expect(api.exportEncryptedBackup).toHaveBeenCalled();
     expect(screen.queryByTestId("backup-recovery-code")).toBeNull();
     expect(api.createBackupKeyWithCode).not.toHaveBeenCalled();
   });

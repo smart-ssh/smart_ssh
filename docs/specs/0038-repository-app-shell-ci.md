@@ -37,8 +37,17 @@ eigene Verzweigung auslösen.
 
 ### Sitzungs-Erweiterung
 
-Die Verdrahtung kann **eine** Sitzungs-Erweiterung enthalten; die Community
-Edition hat keine. Sie liefert dem Kern je Server (Server-Kennung inklusive
+Die Verdrahtung kann **beliebig viele** Sitzungs-Erweiterungen enthalten; die
+Community Edition hat keine. Der Kern kombiniert sie in Registrierungs-
+reihenfolge: Die Kontext-Abschnitte aller Erweiterungen werden nacheinander
+erfragt, leere oder nur aus Leerraum bestehende Antworten entfallen, der Rest
+wird durch eine Leerzeile getrennt zu **einem** Abschnitt (eine Überschrift,
+ein Fence); bleibt nichts übrig, gibt es keinen Abschnitt. Die bekannten
+Secrets sind die Vereinigung aller Erweiterungen (Reihenfolge erhalten,
+identische Werte nur einmal). Die Meldungen über gelöschte Server und Gruppen
+erhalten alle Erweiterungen, in Registrierungsreihenfolge. Das ältere Einzelfeld
+`session_extension` gilt weiter und zählt als erster Eintrag der Liste. Mit
+genau einer Erweiterung verhält sich alles wie zuvor. Sie liefert dem Kern je Server (Server-Kennung inklusive
 des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
 
 - **Kontext-Abschnitt:** Text, den der Kern dem KI-Kontext der Sitzung nach
@@ -85,6 +94,21 @@ ein inzwischen verschobener Server liefert also seine aktuelle Kette. Schlägt
 die Ermittlung fehl, ist die Kette leer (mit Warnung im Log), und der Text
 wird trotzdem vorbereitet. Ohne registrierte Umwandlung (Community) wird der
 Text unverändert gesendet, ohne dass die Gruppenkette ermittelt wird.
+
+**Mehrere Umwandlungen.** Die Verdrahtung kann eine **Liste** von
+Umwandlungen enthalten. Der Kern führt sie in der Reihenfolge der Registrierung
+aus; die ältere Einzel-Umwandlung (überholt, wird in einem späteren Release
+entfernt) läuft, wenn gesetzt, zuerst. Jede Umwandlung erhält den Text, den die
+vorige geliefert hat (gleicher Server, gleiche Art). Die eingesetzten Geheimnisse
+aller Umwandlungen werden zusammengeführt (Reihenfolge bleibt). Die erste
+Ablehnung beendet die Kette: nichts vom Zwischenergebnis wird zurückgegeben
+oder protokolliert, die späteren Umwandlungen werden nicht aufgerufen. Die
+Rückfrage vor der Bestätigung ist „ja“, sobald **irgendeine** Umwandlung „ja“
+antwortet (im Zweifel fragen). Struktur-Prüfung, Hard-Blacklist-Prüfung,
+Aufnahme der Geheimnisse in den Redactor und Maskierung der Ablehnungsmeldung
+gelten genau einmal, für den **endgültigen** Text der Kette. Ohne Umwandlung
+bleibt es beim unveränderten Text; mit genau einer wird sie unverändert
+verwendet.
 
 **Wann sie läuft.** Genau auf diesen Wegen: von der KI vorgeschlagene
 Kommandos, von der KI vorgeschlagener Inhalt einer `WriteRemoteFile`-Aktion
@@ -261,7 +285,7 @@ Nach Themen:
   `BackupOpError`, `OpenSessions`, `FileHostKeyStore`.
 - **Ereignisse:** `EventEmitter`, `ConnectionStatus`,
   `emit_connection_status_changed`.
-- **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`.
+- **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`. Der Command-Fehlertyp `CommandError` (`{ message, code, feature_locked, connect_log }`) liegt in `ssh_manager_core::ipc_error` und ist der Typ, den Erweiterungs-Plugins zurückgeben; seine JSON-Form ist durch eine gemeinsame Fixture für Rust und Frontend festgelegt.
 - **Zugriffsfunktionen** (statt Feldzugriff auf `AppState`): `profile_store`,
   `backup_store`, `file_host_keys`, `open_session_server_ids` (jeder Server
   mit offener Sitzung einmal, sortiert) und

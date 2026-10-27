@@ -124,11 +124,13 @@ describe("ChatPanel question card (issue #547)", () => {
     renderChatPanel();
     await ask(question());
     fireEvent.click(await screen.findByRole("button", { name: /Beta/ }));
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Beta"));
-    const group = screen.getByRole("group");
-    expect(within(group).getByRole("button", { name: /Alpha/ })).toBeDisabled();
-    expect(within(group).getByRole("button", { name: /Beta/ })).toHaveTextContent("✓");
-    expect(screen.getAllByText("Beta")).toHaveLength(2);
+    await waitFor(() => {
+      const group = screen.getByRole("group");
+      expect(within(group).getByRole("button", { name: /Alpha/ })).toBeDisabled();
+      expect(within(group).getByRole("button", { name: /Beta/ })).toHaveTextContent("✓");
+      expect(screen.getAllByText("Beta")).toHaveLength(2);
+    });
+    expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Beta");
   });
 
   it("sends ticked labels one per line in option order for multi select", async () => {
@@ -180,8 +182,8 @@ describe("ChatPanel question card (issue #547)", () => {
     await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(1));
     await ask(question());
     fireEvent.click(await screen.findByRole("button", { name: /Alpha/ }));
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Alpha"));
-    expect(screen.getAllByText(/Wird mit der nächsten Anfrage gesendet/).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Wird mit der nächsten Anfrage gesendet/)).length).toBeGreaterThan(0);
+    expect(sendChatMessage).toHaveBeenCalledWith("session-1", "Alpha");
   });
 
   it("derives lock state from the history on reopen", async () => {

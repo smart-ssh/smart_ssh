@@ -1484,5 +1484,10 @@
       "newerVersion": "Ezt a mentést a Smart SSH újabb verziója készítette. Frissítsd az alkalmazást, és próbáld újra.",
       "failed": "A művelet sikertelen. Semmi sem változott."
     }
+  },
+  "errorBoundary": {
+    "title": "Valami elromlott",
+    "body": "A Smart SSH váratlan hibába ütközött a felületen. A folytatáshoz töltse újra. Ha ismét előfordul, az újratöltés után hozzon létre diagnosztikai csomagot a Beállítások → Diagnosztika alatt.",
+    "reload": "Újratöltés"
   }
 }

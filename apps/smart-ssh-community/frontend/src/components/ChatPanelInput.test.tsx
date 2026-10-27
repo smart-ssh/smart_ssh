@@ -191,6 +191,7 @@ describe("ChatPanel prompt history after send (Spec 0015, §5, issue #352)", () 
     });
     renderChatPanel();
     const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    // wait-ok: `field` was found above and stays mounted; the wait only orders the initial history load before typing
     await waitFor(() => expect(listPromptHistory).toHaveBeenCalledTimes(1));
 
     fireEvent.change(field, { target: { value: "neu" } });

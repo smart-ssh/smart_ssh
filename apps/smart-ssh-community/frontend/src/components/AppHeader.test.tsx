@@ -39,6 +39,7 @@ describe("AppHeader drag region", () => {
     mockCommands("macos", "custom");
     const { container } = render(<AppHeader>tabs</AppHeader>);
 
+    // wait-ok: the drag-region attributes are static markup rendered with the first render; the wait only lets the platform effect settle
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
 
     const header = container.querySelector("header");

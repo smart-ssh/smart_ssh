@@ -8,8 +8,10 @@
 //! prepared text exists only for the transport call, so [`Prepared`] never
 //! shows it in `Debug`.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::profiles::GroupId;
 use crate::shared::ServerId;
@@ -104,9 +106,201 @@ pub trait OutgoingTransform: Send + Sync {
     }
 }
 
+/// Several transforms run as one (issue #893, Spec 0038).
+///
+/// They run in registration order; transform *n+1* receives the text produced
+/// by transform *n* (same scope and kind). The inserted secrets of all
+/// transforms are returned together, in order. The first [`Rejection`] stops
+/// the chain and nothing of the partial result is returned.
+/// `requires_confirmation` is `true` if any transform answers `true`
+/// (fail-closed). The core's checks on the transformed text (hard blacklist,
+/// redactor update, rejection redaction) apply to the final text, once.
+pub struct CompositeOutgoingTransform {
+    transforms: Vec<Arc<dyn OutgoingTransform>>,
+}
+
+impl CompositeOutgoingTransform {
+    pub fn new(transforms: Vec<Arc<dyn OutgoingTransform>>) -> Self {
+        Self { transforms }
+    }
+}
+
+impl std::fmt::Debug for CompositeOutgoingTransform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompositeOutgoingTransform")
+            .field("transforms", &self.transforms.len())
+            .finish()
+    }
+}
+
+#[async_trait]
+impl OutgoingTransform for CompositeOutgoingTransform {
+    async fn prepare_outgoing(
+        &self,
+        scope: &ServerScope,
+        kind: OutgoingKind,
+        text: &str,
+    ) -> Result<Prepared, Rejection> {
+        let mut current = SecretString::from(text.to_string());
+        let mut secrets: Vec<SecretString> = Vec::new();
+        for transform in &self.transforms {
+            let prepared = transform
+                .prepare_outgoing(scope, kind, current.expose_secret())
+                .await?;
+            current = prepared.text;
+            secrets.extend(prepared.secrets);
+        }
+        Ok(Prepared {
+            text: current,
+            secrets,
+        })
+    }
+
+    /// `true` if any transform answers `true`. Each one is asked about the
+    /// original text (a pure query cannot see its predecessor's output).
+    fn requires_confirmation(&self, scope: &ServerScope, kind: OutgoingKind, text: &str) -> bool {
+        self.transforms
+            .iter()
+            .any(|t| t.requires_confirmation(scope, kind, text))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Step {
+        from: &'static str,
+        to: &'static str,
+        secret: &'static str,
+        confirm: bool,
+        reject: bool,
+        calls: AtomicUsize,
+        seen: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl Step {
+        fn new(from: &'static str, to: &'static str, secret: &'static str) -> Arc<Self> {
+            Arc::new(Self {
+                from,
+                to,
+                secret,
+                confirm: false,
+                reject: false,
+                calls: AtomicUsize::new(0),
+                seen: Default::default(),
+            })
+        }
+        fn with(from: &'static str, confirm: bool, reject: bool) -> Arc<Self> {
+            Arc::new(Self {
+                from,
+                to: "",
+                secret: "",
+                confirm,
+                reject,
+                calls: AtomicUsize::new(0),
+                seen: Default::default(),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl OutgoingTransform for Step {
+        async fn prepare_outgoing(
+            &self,
+            _scope: &ServerScope,
+            _kind: OutgoingKind,
+            text: &str,
+        ) -> Result<Prepared, Rejection> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.seen.lock().unwrap().push(text.to_string());
+            if self.reject {
+                return Err(Rejection {
+                    message: format!("rejected by {}", self.from),
+                });
+            }
+            Ok(Prepared::new(
+                text.replace(self.from, self.to),
+                vec![SecretString::from(self.secret.to_string())],
+            ))
+        }
+        fn requires_confirmation(&self, _: &ServerScope, _: OutgoingKind, _: &str) -> bool {
+            self.confirm
+        }
+    }
+
+    fn scope() -> ServerScope {
+        ServerScope {
+            server_id: ServerId::default(),
+            group_chain: Vec::new(),
+            tags: Vec::new(),
+        }
+    }
+
+    fn composite(steps: &[&Arc<Step>]) -> CompositeOutgoingTransform {
+        CompositeOutgoingTransform::new(
+            steps
+                .iter()
+                .map(|s| Arc::clone(s) as Arc<dyn OutgoingTransform>)
+                .collect(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_composite_chains_output_and_unions_secrets() {
+        let a = Step::new("AAA", "BBB", "secret-one");
+        let b = Step::new("BBB", "CCC", "secret-two");
+        let c = composite(&[&a, &b]);
+        let out = c
+            .prepare_outgoing(&scope(), OutgoingKind::Command, "echo AAA")
+            .await
+            .unwrap();
+        assert_eq!(b.seen.lock().unwrap().as_slice(), ["echo BBB"]);
+        assert_eq!(out.text().expose_secret(), "echo CCC");
+        let secrets: Vec<&str> = out.secrets().iter().map(|s| s.expose_secret()).collect();
+        assert_eq!(secrets, ["secret-one", "secret-two"]);
+        let shown = format!("{out:?} {c:?}");
+        for needle in ["secret-one", "secret-two", "echo", "CCC"] {
+            assert!(!shown.contains(needle), "{shown}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_composite_first_rejection_stops_chain() {
+        let a = Step::with("first", false, true);
+        let b = Step::new("x", "y", "s");
+        let err = composite(&[&a, &b])
+            .prepare_outgoing(&scope(), OutgoingKind::Command, "x")
+            .await
+            .unwrap_err();
+        assert_eq!(err.message, "rejected by first");
+        assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn test_composite_second_rejection_is_returned() {
+        let a = Step::new("x", "y", "s");
+        let b = Step::with("second", false, true);
+        let err = composite(&[&a, &b])
+            .prepare_outgoing(&scope(), OutgoingKind::Command, "x")
+            .await
+            .unwrap_err();
+        assert_eq!(err.message, "rejected by second");
+    }
+
+    #[test]
+    fn test_composite_requires_confirmation_if_any_does() {
+        let yes = Step::with("a", true, false);
+        let no = Step::with("a", false, false);
+        let q = |c: &CompositeOutgoingTransform| {
+            c.requires_confirmation(&scope(), OutgoingKind::Command, "t")
+        };
+        assert!(q(&composite(&[&yes, &no])));
+        assert!(q(&composite(&[&no, &yes])));
+        assert!(q(&composite(&[&yes, &yes])));
+        assert!(!q(&composite(&[&no, &no])));
+    }
 
     #[test]
     fn test_debug_of_prepared_shows_neither_text_nor_secrets() {

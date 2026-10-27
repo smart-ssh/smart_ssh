@@ -117,6 +117,7 @@ describe("ServerForm start directory (Spec 0102)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
 
     await waitFor(() => expect(updateServer).toHaveBeenCalledTimes(1));
+    // wait-ok: asserts only the mock's arguments, no DOM state depends on the call
     expect(vi.mocked(updateServer).mock.calls[0][1].startDirectory).toBeNull();
   });
 
@@ -142,7 +143,6 @@ describe("ServerForm start directory (Spec 0102)", () => {
     );
     renderForm("00000000-0000-0000-0000-000000000000");
 
-    await waitFor(() => expect(getServer).toHaveBeenCalled());
     // Vor dem Laden ist `isLocal` noch unbekannt; danach verschwindet das Feld.
     await waitFor(() => expect(screen.queryByLabelText(LABEL)).toBeNull());
     expect(screen.queryByText(/Startverzeichnis/)).toBeNull();

@@ -162,6 +162,20 @@ describe("ChatPanel composer extension slot (Issue #471)", () => {
     expect(dragState.calls).toBe(0);
   });
 
+  it("does not render a composer action that throws while rendering (issue #880)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken icon");
+    };
+    registerComposerAction({ id: "bad", label: "Bad action", icon: <Broken />, onInvoke: vi.fn() });
+    registerTestAction();
+    renderChatPanel();
+    expect(await screen.findByRole("button", { name: "Attach file" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bad action" })).toBeNull();
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("composer-action:bad"))).toBe(true);
+    spy.mockRestore();
+  });
+
   it("renders registered actions as labelled buttons and adds/removes chips", async () => {
     registerTestAction();
     renderChatPanel();

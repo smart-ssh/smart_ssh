@@ -1476,5 +1476,10 @@
       "newerVersion": "Cadangan ini dibuat oleh Smart SSH versi lebih baru. Perbarui aplikasi dan coba lagi.",
       "failed": "Operasi gagal. Tidak ada yang diubah."
     }
+  },
+  "errorBoundary": {
+    "title": "Terjadi kesalahan",
+    "body": "Smart SSH mengalami kesalahan tak terduga pada antarmuka. Muat ulang untuk melanjutkan. Jika terjadi lagi, buat paket diagnostik di Pengaturan → Diagnostik setelah memuat ulang.",
+    "reload": "Muat ulang"
   }
 }

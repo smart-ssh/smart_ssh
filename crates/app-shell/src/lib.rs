@@ -489,12 +489,12 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Move einzelner Felder ist erlaubt) — der Über-Dialog-Command
     // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
     // wird nirgends als Tauri-`State` verwaltet.
-    let edition = wiring.edition;
+    let (edition, session_extension) = (wiring.edition, wiring.combined_session_extension());
     // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
     // `State`.
-    let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
+    let edition_data_paths =
+        commands::EditionDataPaths(std::mem::take(&mut wiring.extra_data_paths));
     // Issue #469: ebenso — `send_chat_message` liest die Resolver als `State`.
-
     // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
     //
@@ -559,7 +559,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         db_path,
         data_dir_lock,
         language,
-        wiring.outgoing_transform.take(),
+        wiring.combined_outgoing_transform(),
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
@@ -592,7 +592,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             // jeder Laufzeit (s. `runtime_assumptions`).
             match tauri::async_runtime::block_on(open_and_assemble(
                 &wiring.entitlements,
-                wiring.session_extension.clone(),
+                session_extension.clone(),
                 &inputs,
                 app_logic::database_startup::RootKeyAccess::Keychain(&keyring),
                 &prompt,
@@ -647,7 +647,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let gate = std::sync::Arc::new(crate::startup_gate::StartupGate::new(app_state.is_some()));
     let pending =
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
-            .with_session_extension(wiring.session_extension.clone())
+            .with_session_extension(session_extension)
             .with_db_extensions(db_extensions)
             .with_chat_content(chat_content);
     let entitlement_catalogue =

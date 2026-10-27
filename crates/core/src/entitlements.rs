@@ -108,17 +108,32 @@ fn lenient_feature_set<'de, D: Deserializer<'de>>(d: D) -> Result<HashSet<Featur
         .collect())
 }
 
-/// Lizenzstufe (Spec 0037, Abschnitt 2 — Architektur-Brief Abschnitt 1,
-/// D3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Tier {
-    Free,
-    Personal,
-    Pro,
-    Team,
-    Business,
-    Enterprise,
+/// An opaque tier identifier (Spec 0037, section 2). The core knows only
+/// [`TierId::FREE`]; editions name and label their own tiers in their
+/// frontend registration. Any string is accepted (an unknown tier is shown
+/// with a generic label), and it serialises as the plain string.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TierId(Cow<'static, str>);
+
+impl TierId {
+    /// The free state: the only tier the core itself uses.
+    pub const FREE: TierId = TierId(Cow::Borrowed("free"));
+
+    /// Declares a tier id in `const` context.
+    pub const fn new(id: &'static str) -> TierId {
+        TierId(Cow::Borrowed(id))
+    }
+
+    pub fn id(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for TierId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 /// Der für einen Nutzer/eine Installation aktuell geltende Entitlement-
@@ -126,7 +141,7 @@ pub enum Tier {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Entitlements {
-    pub tier: Tier,
+    pub tier: TierId,
     #[serde(deserialize_with = "lenient_feature_set")]
     pub features: HashSet<Feature>,
     pub seats: Option<u32>,
@@ -137,10 +152,10 @@ pub struct Entitlements {
 
 impl Entitlements {
     /// Der Zustand der (aktuell einzigen existierenden) Community Edition
-    /// — `Tier::Free`, keine Features freigeschaltet.
+    /// — `TierId::FREE`, keine Features freigeschaltet.
     pub fn free() -> Self {
         Self {
-            tier: Tier::Free,
+            tier: TierId::FREE,
             features: HashSet::new(),
             seats: None,
             expires_at: None,
@@ -163,7 +178,7 @@ impl Entitlements {
         } else {
             Err(FeatureLocked {
                 feature: f.clone(),
-                tier: self.tier,
+                tier: self.tier.clone(),
             })
         }
     }
@@ -177,7 +192,7 @@ impl Entitlements {
 #[error("feature {feature:?} is not available in tier {tier:?}")]
 pub struct FeatureLocked {
     pub feature: Feature,
-    pub tier: Tier,
+    pub tier: TierId,
 }
 
 /// Liefert den aktuell geltenden Entitlement-Stand — als Trait modelliert,
@@ -251,7 +266,7 @@ mod tests {
     #[test]
     fn test_wire_format_is_unchanged() {
         let mut e = Entitlements::free();
-        e.tier = Tier::Pro;
+        e.tier = TierId::new("pro");
         e.features.insert(EXPORT);
         assert_eq!(
             serde_json::to_string(&e).unwrap(),
@@ -306,7 +321,7 @@ mod tests {
     fn test_free_entitlements_has_free_tier_and_empty_feature_set() {
         let entitlements = Entitlements::free();
 
-        assert_eq!(entitlements.tier, Tier::Free);
+        assert_eq!(entitlements.tier, TierId::FREE);
         assert!(entitlements.features.is_empty());
         assert_eq!(entitlements.seats, None);
         assert_eq!(entitlements.expires_at, None);
@@ -331,7 +346,7 @@ mod tests {
             .expect_err("not granted in Entitlements::free()");
 
         assert_eq!(err.feature, EXPORT);
-        assert_eq!(err.tier, Tier::Free);
+        assert_eq!(err.tier, TierId::FREE);
     }
 
     #[test]
@@ -350,5 +365,39 @@ mod tests {
 
         let rx = provider.watch();
         assert_eq!(*rx.borrow(), entitlements);
+    }
+
+    #[test]
+    fn test_every_former_tier_value_still_round_trips_and_unknown_is_kept() {
+        for id in [
+            "free",
+            "personal",
+            "pro",
+            "team",
+            "business",
+            "enterprise",
+            "some_future_tier",
+        ] {
+            let t: TierId = serde_json::from_str(&format!("\"{id}\"")).unwrap();
+            assert_eq!(t.id(), id);
+            assert_eq!(serde_json::to_string(&t).unwrap(), format!("\"{id}\""));
+            let json = format!(
+                r#"{{"tier":"{id}","features":[],"seats":null,"expiresAt":null,"nonCommercial":false,"licensee":null}}"#
+            );
+            let e: Entitlements = serde_json::from_str(&json).unwrap();
+            assert_eq!(e.tier.id(), id);
+        }
+        assert_eq!(TierId::FREE.to_string(), "free");
+    }
+
+    #[test]
+    fn test_feature_locked_carries_the_tier_of_the_entitlements() {
+        let mut e = Entitlements::free();
+        e.tier = TierId::new("edition_tier");
+        let locked = e.require(&HISTORY).unwrap_err();
+        assert_eq!(
+            serde_json::to_string(&locked).unwrap(),
+            r#"{"feature":"session_history","tier":"edition_tier"}"#
+        );
     }
 }

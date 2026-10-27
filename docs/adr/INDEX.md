@@ -158,3 +158,4 @@
 | 0152 | Code comments in new code are written in English | Accepted | [0152-code-comment-language.md](0152-code-comment-language.md) |
 | 0153 | Entitlement feature ids are open; editions register their own | Accepted | [0153-open-entitlement-feature-ids.md](0153-open-entitlement-feature-ids.md) |
 | 0154 | Android code of the core ships as a Tauri plugin crate | Accepted | [0154-android-host-plugin-crate.md](0154-android-host-plugin-crate.md) |
+| 0155 | Entitlement tier ids are open; editions register their own | Accepted | [0155-open-entitlement-tier-ids.md](0155-open-entitlement-tier-ids.md) |

@@ -840,3 +840,100 @@ fn test_same_segment_structure_helper() {
     assert!(same_segment_structure("echo 'oops", "echo 'oops"));
     assert!(!same_segment_structure("echo 'oops", "echo a"));
 }
+
+/// Replaces `from` by `to` and reports `to` as an inserted secret if asked.
+struct Sub {
+    from: &'static str,
+    to: &'static str,
+    secret: bool,
+}
+
+#[async_trait]
+impl OutgoingTransform for Sub {
+    async fn prepare_outgoing(
+        &self,
+        _scope: &ServerScope,
+        _kind: OutgoingKind,
+        text: &str,
+    ) -> Result<Prepared, Rejection> {
+        let secrets = if self.secret {
+            vec![SecretString::from(self.to.to_string())]
+        } else {
+            Vec::new()
+        };
+        Ok(Prepared::new(text.replace(self.from, self.to), secrets))
+    }
+}
+
+fn two_step_chain(a: Sub, b: Sub) -> Arc<dyn OutgoingTransform> {
+    Arc::new(ssh_manager_core::outgoing::CompositeOutgoingTransform::new(
+        vec![Arc::new(a), Arc::new(b)],
+    ))
+}
+
+// Issue #893: the secrets of both transforms are masked in the output of the
+// very command that carried them.
+#[tokio::test]
+async fn test_chain_secrets_of_both_transforms_are_masked_in_the_command_output() {
+    let transport = MockSshTransport::default().with_response(
+        "echo alpha-secret beta-secret",
+        output("got alpha-secret and beta-secret\n"),
+    );
+    let mut session = test_session_allowing_everything(propose("echo X Z"), transport);
+    session.set_outgoing_transform_for_tests(Some(two_step_chain(
+        Sub {
+            from: "X",
+            to: "alpha-secret",
+            secret: true,
+        },
+        Sub {
+            from: "Z",
+            to: "beta-secret",
+            secret: true,
+        },
+    )));
+    let emitter = TestEmitter::default();
+
+    run_approved_turn(&session, &emitter).await;
+
+    let shown = format!(
+        "{} {:?}",
+        all_event_text(&emitter),
+        session.context.lock().await.history
+    );
+    assert!(!shown.contains("alpha-secret"), "{shown}");
+    assert!(!shown.contains("beta-secret"), "{shown}");
+    assert!(shown.contains("[REDACTED]"), "{shown}");
+}
+
+// Issue #893: the hard-blacklist re-check applies to the final text of the chain.
+#[tokio::test]
+async fn test_chain_whose_final_text_is_blacklisted_is_rejected() {
+    let transport = MockSshTransport::default();
+    let executed = transport.executed_handle();
+    let mut session = test_session_allowing_everything(propose("X Z"), transport);
+    session.set_outgoing_transform_for_tests(Some(two_step_chain(
+        Sub {
+            from: "X",
+            to: "rm -rf",
+            secret: false,
+        },
+        Sub {
+            from: "Z",
+            to: "/",
+            secret: false,
+        },
+    )));
+    let emitter = TestEmitter::default();
+
+    run_approved_turn(&session, &emitter).await;
+
+    assert!(executed.lock().unwrap().is_empty());
+    let shown = format!(
+        "{} {:?}",
+        all_event_text(&emitter),
+        session.context.lock().await.history
+    );
+    assert!(shown.contains("hard blacklist"), "{shown}");
+    assert!(!shown.contains("rm -rf"), "{shown}");
+}

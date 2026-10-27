@@ -89,6 +89,7 @@ describe("title bar drag layer above modals (issue #160)", () => {
   it("is absent without an open dialog, so the header behaves as before", async () => {
     mockCommands("windows", "custom");
     renderApp(null);
+    // wait-ok: no modal is registered, so the layer cannot appear later; the wait only lets the platform effect settle
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
 
     expect(dragLayer()).toBeNull();
@@ -100,8 +101,11 @@ describe("title bar drag layer above modals (issue #160)", () => {
     const { container } = renderApp(<HostKeyDialog event={hostKeyEvent} onDecision={vi.fn()} />);
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
 
-    const layer = dragLayer();
-    expect(layer).not.toBeNull();
+    const layer = await waitFor(() => {
+      const el = dragLayer();
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
     // Ziehbar, ohne Inhalt: nur Fensterfunktion, keine App-Inhalte.
     expect(layer).toHaveAttribute("data-tauri-drag-region");
     expect(layer).toBeEmptyDOMElement();
@@ -136,6 +140,7 @@ describe("title bar drag layer above modals (issue #160)", () => {
   it("leaves the macOS traffic-light area free on the left", async () => {
     mockCommands("macos", "custom");
     const { container } = renderApp(<HostKeyDialog event={hostKeyEvent} onDecision={vi.fn()} />);
+    // wait-ok: the header element exists from the first render; the waitFor below awaits its style
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
 
     const header = container.querySelector("header")!;
@@ -151,6 +156,7 @@ describe("title bar drag layer above modals (issue #160)", () => {
   it("works for a dialog from the extension registry and disappears once it closes", async () => {
     mockCommands("linux", "custom");
     renderApp(<FeatureLockedDialog />);
+    // wait-ok: nothing is published yet, so the layer cannot appear later
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
     expect(dragLayer()).toBeNull();
 
@@ -186,7 +192,7 @@ describe("title bar drag layer above modals (issue #160)", () => {
     );
     const { rerender } = render(app(2));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
-    expect(dragLayer()).not.toBeNull();
+    await waitFor(() => expect(dragLayer()).not.toBeNull());
 
     rerender(app(1));
     expect(dragLayer()).not.toBeNull();
@@ -241,7 +247,7 @@ describe("title bar drag layer with a dialog in a hidden container (issue #160)"
     mockCommands("windows", "custom");
     const { rerender } = render(app(true, inlineDialog));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
-    expect(dragLayer()).not.toBeNull();
+    await waitFor(() => expect(dragLayer()).not.toBeNull());
 
     // Tab-Wechsel per Tastatur: nur die Klasse des Containers ändert sich,
     // der Dialog bleibt gemountet.
@@ -257,6 +263,8 @@ describe("title bar drag layer with a dialog in a hidden container (issue #160)"
     mockCommands("windows", "custom");
     render(app(false, inlineDialog));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
+    // The hidden-container check runs in a MutationObserver microtask; let it run before the absence check.
+    await act(async () => {});
 
     expect(document.querySelector("[data-modal-backdrop]")).not.toBeNull();
     expect(dragLayer()).toBeNull();
@@ -266,7 +274,7 @@ describe("title bar drag layer with a dialog in a hidden container (issue #160)"
     mockCommands("linux", "custom");
     render(app(true, inlineDialog));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
-    expect(dragLayer()).not.toBeNull();
+    await waitFor(() => expect(dragLayer()).not.toBeNull());
 
     act(() => {
       screen.getByTestId("tab-container").style.display = "none";
@@ -281,7 +289,7 @@ describe("title bar drag layer with a dialog in a hidden container (issue #160)"
     render(app(false, <HostKeyDialog event={hostKeyEvent} onDecision={vi.fn()} />));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("create_overlay_titlebar"));
 
-    expect(dragLayer()).not.toBeNull();
+    await waitFor(() => expect(dragLayer()).not.toBeNull());
   });
 });
 
