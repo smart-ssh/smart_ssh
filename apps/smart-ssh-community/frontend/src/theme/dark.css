@@ -126,6 +126,7 @@
   --on-accent: var(--palette-slate-950); /* text on a solid accent fill */
   --surface-hover: var(--palette-slate-700); /* hover fill on raised surfaces */
   --fg-bright: #ffffff; /* was `white` */
+  --on-solid: #ffffff; /* text on a solid accent/danger fill (white in both themes) */
   --overlay: #000000; /* modal scrim base colour (use with /70) */
   --web-border: #075985; /* web activity card outline */
   --web-fg: #7dd3fc; /* web activity card title */

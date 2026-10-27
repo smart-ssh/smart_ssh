@@ -1725,9 +1725,12 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     fireEvent.change(screen.getByLabelText("Ziel-Nutzer"), { target: { value: "postgres" } });
     fireEvent.click(screen.getByRole("button", { name: "Erhöhen" }));
     await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "postgres", false));
+    // The arrow is disabled until enabling has finished (`finally` after the
+    // mock resolved); wait for that end state, not just for the call.
+    await waitFor(() => expect(arrow).toBeEnabled());
 
     fireEvent.click(arrow);
-    fireEvent.click(screen.getByRole("menuitem"));
+    fireEvent.click(await screen.findByRole("menuitem"));
     expect(screen.getByLabelText("Ziel-Nutzer")).toHaveValue("postgres");
   });
 

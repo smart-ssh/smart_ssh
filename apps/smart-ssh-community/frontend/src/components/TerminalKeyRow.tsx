@@ -32,7 +32,7 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
     { id: "slash", label: "/" },
     { id: "dash", label: "-" },
   ];
-  const mod = (on: boolean) => `${base} ${on ? "border-accent-fg bg-accent text-fg-bright" : ""}`;
+  const mod = (on: boolean) => `${base} ${on ? "border-accent-fg bg-accent text-on-solid" : ""}`;
   return (
     <div
       role="toolbar"

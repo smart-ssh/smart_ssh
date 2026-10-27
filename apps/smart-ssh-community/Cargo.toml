@@ -32,7 +32,7 @@ tauri = { version = "2", features = [] }
 # "Permission ... not found" beim Build). Deshalb müssen dieselben
 # Tauri-Plugins, die `app-shell::run` tatsächlich registriert, hier
 # zusätzlich direkt gelistet sein.
-tauri-plugin-dialog = "2.7.2"
+tauri-plugin-dialog = "2.7.3"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2.5.5"
 tauri-plugin-os = "2"

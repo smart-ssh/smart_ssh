@@ -49,6 +49,13 @@
       "dataAndBackup": "Daten und Backup"
     }
   },
+  "appearance": {
+    "heading": "Erscheinungsbild",
+    "language": "Sprache",
+    "system": "System folgen",
+    "light": "Hell",
+    "dark": "Dunkel"
+  },
   "about": {
     "version": "Version",
     "copyHint": "In die Zwischenablage kopieren",

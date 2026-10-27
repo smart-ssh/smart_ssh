@@ -49,6 +49,13 @@
       "dataAndBackup": "Data och säkerhetskopia"
     }
   },
+  "appearance": {
+    "heading": "Utseende",
+    "language": "Språk",
+    "system": "Följ systemet",
+    "light": "Ljust",
+    "dark": "Mörkt"
+  },
   "about": {
     "version": "Version",
     "copyHint": "Kopiera till urklipp",

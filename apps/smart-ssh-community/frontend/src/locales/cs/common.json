@@ -49,6 +49,13 @@
       "dataAndBackup": "Data a záloha"
     }
   },
+  "appearance": {
+    "heading": "Vzhled",
+    "language": "Jazyk",
+    "system": "Podle systému",
+    "light": "Světlý",
+    "dark": "Tmavý"
+  },
   "about": {
     "version": "Verze",
     "copyHint": "Kopírovat do schránky",
