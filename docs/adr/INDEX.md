@@ -155,3 +155,4 @@
 | 0149 | Android: Vordergrunddienst für offene Sitzungen | Accepted | [0149-android-hintergrunddienst.md](0149-android-hintergrunddienst.md) |
 | 0150 | Dateiauswahl unter Android | Accepted | [0150-android-dateiauswahl.md](0150-android-dateiauswahl.md) |
 | 0151 | Release-Fixtures für die Migrationstests stammen vom Release selbst | Accepted | [0151-release-fixtures-for-migration-tests.md](0151-release-fixtures-for-migration-tests.md) |
+| 0152 | Code comments in new code are written in English | Accepted | [0152-code-comment-language.md](0152-code-comment-language.md) |
