@@ -30,8 +30,8 @@ selbst zu treffen, und berichtet ehrlich — nie ein Ergebnis behaupten, das
 nicht geprüft ist. Was nicht getestet werden konnte (z. B. UI nicht klickbar),
 ausdrücklich sagen.
 
-Sprache: Bericht und Code-Kommentare deutsch (mit Spec-Verweis),
-Commit-Messages englisch (Conventional Commits).
+Sprache: Bericht deutsch, Commit-Messages englisch (Conventional Commits).
+Code-Kommentare: Regel in `AGENTS.md` ("Code comments").
 
 ## Auftragsformat
 

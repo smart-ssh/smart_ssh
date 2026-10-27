@@ -11,7 +11,6 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import io.crates.keyring.Keyring
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,10 +18,8 @@ class MainActivity : TauriActivity() {
     // contrast and the background follow the appearance setting. The last
     // choice is stored natively so a cold start in Light shows no dark flash.
     applyAppearance(resolveAppearance(storedChoice()))
-    // Issue #795: the ndk-context must exist before the Rust side starts
-    // (credential store probe, audio input). One call; copy it into the
-    // MainActivity of any app crate that embeds `app-shell`.
-    Keyring.initializeNdkContext(applicationContext)
+    // The ndk-context is created by tao (>= 0.37) inside `super.onCreate`; do
+    // not initialize it here again (see docs/android-build.md).
     super.onCreate(savedInstanceState)
     applySystemInsets()
     // Window exists now; the first frame is not drawn yet.

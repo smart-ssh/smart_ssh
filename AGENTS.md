@@ -339,6 +339,13 @@ not by hand-editing, so the lockfile stays consistent).
   single most effective guard against the tautological tests that a past
   audit found across the codebase.
 
+## Code comments
+
+Comments in new code are written in English; existing German comments stay
+as they are (translate only when the surrounding function is substantially
+rewritten, never in bulk). Spec references (`Spec NNNN, A<n>`) stay as they
+are. See `docs/adr/0152-code-comment-language.md`.
+
 ## Commits
 
 Conventional Commits, scoped to the crate/area, referencing the spec if any:
