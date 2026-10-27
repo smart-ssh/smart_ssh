@@ -25,7 +25,7 @@ here, update this file in the same change.
 | `crates/ssh-transport/` | Concrete transports (russh and the local pseudo-server) | `crates/ssh-transport/src/transport.rs` — `RusshTransport`; `crates/ssh-transport/src/local.rs` — `LocalTransport`; `crates/ssh-transport/src/sftp.rs`; `crates/ssh-transport/src/host_key.rs` |
 | `crates/persistence-sqlite/` | SQLite profile and policy stores, migrations, encryption | `crates/persistence-sqlite/src/store.rs`; `crates/persistence-sqlite/src/policy_store.rs`; `crates/persistence-sqlite/src/extension_db.rs` — `ExtensionDb`; `crates/persistence-sqlite/src/extension_store.rs` — `ExtensionStore`; `crates/persistence-sqlite/src/encryption.rs` |
 | `crates/credentials-keyring/` | OS keychain credential store | `crates/credentials-keyring/src/lib.rs` — `KeyringCredentialStore` |
-| `crates/app-logic/` | Tauri-free application logic: chat-turn orchestration, confirmation, server/group management, DTOs | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session.rs` — `Session`, `ChatTurnState`; `crates/app-logic/src/error.rs` — `CommandError`; `crates/app-logic/src/confirmation.rs` — `ConfirmationRegistry`; `crates/app-logic/src/servers.rs` — `create_server` |
+| `crates/app-logic/` | Tauri-free application logic: chat-turn orchestration, confirmation, server/group management, DTOs | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session.rs` — `Session`, `ChatTurnState`; `crates/core/src/ipc_error.rs` — `CommandError`; `crates/app-logic/src/confirmation.rs` — `ConfirmationRegistry`; `crates/app-logic/src/servers.rs` — `create_server` |
 | `crates/app-shell/` | Tauri layer: commands, events, wiring | `crates/app-shell/src/lib.rs` — `run`; `crates/app-shell/src/wiring.rs` — `Wiring`; `crates/app-shell/src/commands/` — all `#[tauri::command]`s |
 | `crates/mcp-server/` | MCP server that exposes sessions to external clients | `crates/mcp-server/src/tool_server.rs` — `SmartSshMcpServer`, `ProposeCommandArgs`; `crates/mcp-server/src/auth.rs` — `require_bearer_token`, `SharedToken` |
 | `crates/speech/` | Speech-to-text | `crates/speech/src/lib.rs` — `ModelManager`; `crates/speech/src/transcribe.rs` — `strip_non_speech` |
@@ -87,7 +87,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Locale files | `apps/smart-ssh-community/frontend/src/locales/` (one folder per language); parity test `apps/smart-ssh-community/frontend/src/locales/localeKeyParity.test.ts` |
 | Backend → frontend events | `crates/app-logic/src/events.rs` — `emit_data_changed`, `emit_connection_status_changed`; listeners in `apps/smart-ssh-community/frontend/src/events.ts` |
 | DTOs sent to the frontend | `crates/app-logic/src/dto.rs` — `ServerDto`; TS side `apps/smart-ssh-community/frontend/src/types.ts` |
-| Error type shown to the user | `crates/app-logic/src/error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
+| Error type shown to the user | `crates/core/src/ipc_error.rs` — `CommandError`; `apps/smart-ssh-community/frontend/src/errorCodes.ts` |
 | Application state and sessions | `crates/app-logic/src/state.rs` — `AppState`; `crates/app-logic/src/session.rs` — `Session` |
 | In-memory stores for tests | `crates/app-logic/src/test_support.rs` — `InMemoryProfileStore`; `crates/persistence-sqlite/src/test_support.rs` — `migrate_up_to` |
 | Mock SSH transport and SFTP | `crates/core/src/ssh/mock.rs` (feature `test-support`) |
