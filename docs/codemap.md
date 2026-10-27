@@ -127,7 +127,7 @@ Production code:
 - `crates/core/src/filter/parser.rs` — shell-command parsing for the filter: `split_top_level_segments`, here-string and shell-wrapper analysis, `analyse_options`.
 - `crates/app-logic/src/servers.rs` — server CRUD: `create_server`, `update_server`, `delete_server`, `move_server_to_group`.
 
-Test files (the same areas): `crates/core/src/ai/tests.rs`, `crates/core/src/filter/tests.rs`, `crates/ssh-transport/tests/integration.rs`, `crates/app-logic/src/database_startup/tests.rs`, `crates/app-logic/src/orchestration/notes/tests.rs`, `crates/app-shell/src/commands/sftp/revocation_tests.rs`, `apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.test.tsx`.
+Test files (the same areas): `crates/core/src/ai/tests.rs`, `crates/core/src/filter/tests.rs`, `crates/ssh-transport/tests/integration.rs`, `crates/app-logic/src/database_startup/tests.rs`, `crates/app-logic/src/orchestration/notes/tests.rs`, `crates/app-logic/src/orchestration/chat_turn/tests_continuation.rs`, `crates/app-logic/src/orchestration/chat_turn/tests_compaction.rs`, `crates/app-logic/src/orchestration/action_exec/tests_files_and_ledger.rs`, `crates/app-logic/src/orchestration/action_exec/tests_core.rs`, `crates/app-shell/src/commands/sftp/revocation_tests.rs`, `apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.test.tsx`.
 
 ## 7. Pitfalls when extending
 
