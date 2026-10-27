@@ -37,7 +37,7 @@ scripts/gate.sh --ci rust        # as CI: clipboard test required, under xvfb-ru
 
 `scripts/gate.sh` is the single definition of the gate; CI calls it too
 (Windows keeps its Cargo steps inline with the same commands, see the
-comment in `community.yml`). Every Cargo build/test/clippy/tree call uses
+comment in `.github/workflows/community.yml`). Every Cargo build/test/clippy/tree call uses
 `--locked`, so the checked-in `Cargo.lock` is what gets tested and a stale
 lockfile fails instead of being re-resolved silently (guarded by
 `src/cargoLockedCheck.test.ts`).
