@@ -51,12 +51,12 @@ Namensraum innerhalb derselben Crate.
 **Ein Modul gehört nach `app-shell`, wenn es Tauri direkt braucht** —
 `tauri::`, `tauri_plugin_*::`, `AppHandle`, `#[tauri::command]`, oder das
 Paket `rfd` (das native Dialoge zeigt, bevor `tauri::Builder::default()`
-überhaupt läuft, s. `app-shell/src/startup_dialog.rs`s Moduldoc). Alles
+überhaupt läuft, s. `crates/app-shell/src/startup_dialog.rs`s Moduldoc). Alles
 andere gehört nach `app-logic`.
 
 **Eine Ausnahme, bewusst in die andere Richtung: der erhöhte SFTP-Kanal**
 (Spec 0067 A — der `sudo`-Dateibrowser-Modus). `ElevatedSftpRegistry`,
-`ElevatedSftp`, `ElevationContext` (`app-shell/src/elevated_sftp.rs`) und
+`ElevatedSftp`, `ElevationContext` (`crates/app-shell/src/elevated_sftp.rs`) und
 der Zugangsnachweis `BrowserAccess` (`app-shell/src/commands/
 elevation.rs`, privates Feld, nur dort konstruierbar) sind selbst
 Tauri-frei — sie bleiben trotzdem in `app-shell`. Grund: Spec 0067 A
@@ -99,7 +99,7 @@ Diese Helfer liegen in `app_logic::test_support`/`app_logic::policy`
 hinter `#[cfg(any(test, feature = "test-support"))]` statt reinem
 `#[cfg(test)]` — ein `#[cfg(test)]` allein wäre außerhalb der eigenen
 Crate unsichtbar, ein Konsument (`app-shell`) sähe die Typen gar nicht.
-`app-shell/Cargo.toml` aktiviert das Feature ausschließlich unter
+`crates/app-shell/Cargo.toml` aktiviert das Feature ausschließlich unter
 `[dev-dependencies]`:
 
 ```toml
@@ -108,7 +108,7 @@ app-logic = { path = "../app-logic", features = ["test-support"] }
 ```
 
 Dasselbe Muster wie die bereits bestehende Dev-Abhängigkeit auf
-`ssh-manager-core`s `test-support`-Feature (`app-shell/Cargo.toml`, Spec
+`ssh-manager-core`s `test-support`-Feature (`crates/app-shell/Cargo.toml`, Spec
 0020 Abschnitt 6). Kein Produktivbau aktiviert das Feature — `cargo tree
 -p smart-ssh-community -e features` zeigt es nicht (A5, T4).
 
@@ -141,8 +141,8 @@ direkt gebraucht") nicht offensichtlich erfüllt, steht hier mit Grund:
 
 | Modul | Grund |
 |---|---|
-| `elevated_sftp.rs`, `test_support::elevation`, `commands::elevation::browser_channel_tests`s T5/T5b | Spec 0067 A / Spec 0084 A1 — erhöhter Kanal, s. oben. Selbst Tauri-frei. |
-| `event_emitter.rs` | Trägt `impl EventEmitter for TauriEventEmitter` — ein Newtype um `tauri::AppHandle`, nötig weil die Orphan-Rule `impl EventEmitter for tauri::AppHandle` in `app-logic` verbietet (weder Trait noch Typ sind dort definiert). |
+| `crates/app-shell/src/elevated_sftp.rs`, `test_support::elevation`, `commands::elevation::browser_channel_tests`s T5/T5b | Spec 0067 A / Spec 0084 A1 — erhöhter Kanal, s. oben. Selbst Tauri-frei. |
+| `crates/app-shell/src/event_emitter.rs` | Trägt `impl EventEmitter for TauriEventEmitter` — ein Newtype um `tauri::AppHandle`, nötig weil die Orphan-Rule `impl EventEmitter for tauri::AppHandle` in `app-logic` verbietet (weder Trait noch Typ sind dort definiert). |
 | `test_support.rs`s `MockAiProvider` (die undifferenzierte Variante) | Nur von `commands::ai_providers`s eigenem Test gebraucht, kein Cross-Crate-Bedarf — bleibt deshalb lokal statt hinter `test-support`. |
 
 Weitere Module, die ohne eigenes `tauri::` auskommen oder nur an `Wiring`/
@@ -150,11 +150,11 @@ dem Startablauf hängen, bleiben aus dem jeweils genannten Grund hier:
 
 | Modul | Grund |
 |---|---|
-| `chat_content.rs`, `db_extensions.rs` | Wenden die Erweiterungen aus `Wiring` an (Spec 0038 Abschnitt 2a), aufgerufen aus dem Start-/Entsperrablauf in `app-shell`. |
-| `edit_copies.rs`, `file_clipboard.rs` | Ablage und Aufräumen lokaler Dateien des Dateibrowsers (Spec 0054), vom Command-Layer und vom Start-/Beenden-Ablauf benutzt. |
-| `file_ops.rs` | Laufende Datei-Operationen des erhöhten Kanals; hängt an `ElevatedSftpRegistry` (s. o.) und bleibt deshalb bei ihr. |
-| `startup_gate.rs` | Torliste vor dem `generate_handler!`-Verteiler (Spec 0101 A16); selbst Tauri-frei, gehört zum Tor, das die Verdrahtung einhängt. |
-| `startup_prompt.rs` | Zuordnung Fall → Dialog für die nativen Startdialoge (Spec 0101 A3/A5), arbeitet mit dem nativen Fehlerdialog zusammen. |
+| `crates/app-shell/src/chat_content.rs`, `crates/app-shell/src/db_extensions.rs` | Wenden die Erweiterungen aus `Wiring` an (Spec 0038 Abschnitt 2a), aufgerufen aus dem Start-/Entsperrablauf in `app-shell`. |
+| `crates/app-shell/src/edit_copies.rs`, `crates/app-shell/src/file_clipboard.rs` | Ablage und Aufräumen lokaler Dateien des Dateibrowsers (Spec 0054), vom Command-Layer und vom Start-/Beenden-Ablauf benutzt. |
+| `crates/app-shell/src/file_ops.rs` | Laufende Datei-Operationen des erhöhten Kanals; hängt an `ElevatedSftpRegistry` (s. o.) und bleibt deshalb bei ihr. |
+| `crates/app-shell/src/startup_gate.rs` | Torliste vor dem `generate_handler!`-Verteiler (Spec 0101 A16); selbst Tauri-frei, gehört zum Tor, das die Verdrahtung einhängt. |
+| `crates/app-shell/src/startup_prompt.rs` | Zuordnung Fall → Dialog für die nativen Startdialoge (Spec 0101 A3/A5), arbeitet mit dem nativen Fehlerdialog zusammen. |
 
 Alle übrigen Module in `app-shell` erfüllen die Regel direkt —
 `tauri::`/`tauri_plugin_*::`/`AppHandle`/`#[tauri::command]` im eigenen

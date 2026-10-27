@@ -24,7 +24,7 @@ translates (see `docs/architecture.md`).
       handler, otherwise browser tests fail on the unknown command.
 - [ ] Frontend tests that mock the API module via `vi.mock`: add the new
       function to those mocks (otherwise `undefined is not a function`).
-- [ ] `apps/smart-ssh-community/capabilities/default.json` (and `mobile.json`)
+- [ ] `apps/smart-ssh-community/capabilities/default.json` (and `apps/smart-ssh-community/capabilities/mobile.json`)
       – normally **no change**: own `#[tauri::command]`s are allowed
       implicitly. Only plugin permissions are listed there.
 - [ ] `changelog.d/issue-<n>-<topic>.md` and the spec of the area when
@@ -48,7 +48,7 @@ translates (see `docs/architecture.md`).
   `#[tauri::command]` is not in `generate_handler!`, a `generate_handler!`
   entry has no definition, a non-test frontend file `invoke`s an unregistered
   name, or a name in `ALLOWED_WHILE_LOCKED` is not registered.
-- Unknown commands in a browser test fail that test (missing `fakeBackend.ts`
+- Unknown commands in a browser test fail that test (missing `apps/smart-ssh-community/frontend/e2e/harness/fakeBackend.ts`
   handler).
 - No automated check: the `types.ts` ↔ DTO match, the `vi.mock` additions in
   older tests (surfaces as a test failure, not a named report), and whether the
@@ -58,4 +58,4 @@ translates (see `docs/architecture.md`).
 
 PR #766 (`keep_server_as_regular_entry`, `keep_group_as_regular_entry`):
 command in `crates/app-shell/src/commands/servers.rs` and `groups.rs`, registration in
-`lib.rs`, wrapper in `api.ts`, types in `types.ts`, handler in `fakeBackend.ts`.
+`lib.rs`, wrapper in `api.ts`, types in `types.ts`, handler in `apps/smart-ssh-community/frontend/e2e/harness/fakeBackend.ts`.

@@ -45,6 +45,13 @@ describe("check-doc-paths", () => {
     expect(checkDocPaths(root)).toEqual([]);
   });
 
+  it("does not accept a bare file name that only exists elsewhere in the repository", () => {
+    const root = tree({ "AGENTS.md": "`commands.rs`\n", "crates/app-shell/src/commands.rs": "" });
+    const problems = checkDocPaths(root);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("commands.rs");
+  });
+
   it("checks the file even when a line suffix is present", () => {
     const root = tree({ "AGENTS.md": "`src/gone.rs:12-30`\n" });
     expect(checkDocPaths(root)).toHaveLength(1);

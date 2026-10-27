@@ -12,8 +12,7 @@
 //    repository root, a configured extra base directory (default: the frontend
 //    root and its `src/`) or the document's own directory. A trailing
 //    `:<line>` / `:<line>-<line>` is stripped first. A bare file name without
-//    any `/` (`lib.rs`) is an abbreviation and passes when a file with that
-//    name exists anywhere in the repository. URLs and tokens starting
+//    any `/` is resolved like any other path (no search by file name). URLs and tokens starting
 //    with `~`, `/`, `$` or `-` are ignored.
 //  * Section rule: after a backticked `FILE.md`, a `section "Title"` /
 //    `Abschnitt „Title“` on the same line (or directly `FILE.md`, „Title“), or `FILE.md#anchor` inside the
@@ -49,8 +48,6 @@ export const DEFAULT_CONFIG = {
   baseDirs: [
     "apps/smart-ssh-community/frontend",
     "apps/smart-ssh-community/frontend/src",
-    "apps/smart-ssh-community",
-    "crates",
   ],
   allowlist: "scripts/doc-paths-allowlist.json",
 };
@@ -157,7 +154,6 @@ export function checkDocPaths(root = REPO_ROOT, config = DEFAULT_CONFIG) {
   problems.push(...allowProblems);
   const matchers = cfg.documents.map(globToRegExp);
   const docs = walk(root).filter((f) => matchers.some((m) => m.test(f))).sort();
-  const baseNames = new Set(walk(root).map((f) => f.slice(f.lastIndexOf("/") + 1)));
   const headingCache = new Map();
   const headings = (f) => {
     if (!headingCache.has(f)) headingCache.set(f, headingsOf(f));
@@ -168,11 +164,7 @@ export function checkDocPaths(root = REPO_ROOT, config = DEFAULT_CONFIG) {
     const allowed = new Set((entries[doc] ?? []).map((e) => e.token));
     const docDir = path.dirname(path.join(root, doc));
     const bases = [root, ...cfg.baseDirs.map((d) => path.join(root, d)), docDir];
-    const resolve = (p) => {
-      const hit = bases.map((b) => path.join(b, p)).find((c) => fs.existsSync(c));
-      if (hit || p.includes("/") || !baseNames.has(p)) return hit;
-      return path.join(root, p); // bare name found elsewhere; only existence matters
-    };
+    const resolve = (p) => bases.map((b) => path.join(b, p)).find((c) => fs.existsSync(c));
     for (const { n, text } of proseLines(fs.readFileSync(path.join(root, doc), "utf8"))) {
       const re = /`([^`\n]+)`/g;
       let m;

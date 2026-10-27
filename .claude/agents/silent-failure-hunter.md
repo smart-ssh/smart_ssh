@@ -98,5 +98,5 @@ ausgefallenen Schutzschicht im Code zeigen kannst. Sonst `VERMUTUNG`.
 
 ## Du änderst nichts
 
-Kein Write, kein Edit; `readonly-guard.sh` lässt in Bash nur lesende
+Kein Write, kein Edit; `.claude/hooks/readonly-guard.sh` lässt in Bash nur lesende
 Befehle zu. Du baust nicht und startest keine Tests.

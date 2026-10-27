@@ -45,7 +45,7 @@ must upgrade without losing any row; migrations are append-only.
 
 - `crates/persistence-sqlite/src/tests_release_chain.rs` fails when a
   migration drops or changes data of a released database.
-- The version-list assertion in `chat_session_store.rs` fails when the number
+- The version-list assertion in `crates/persistence-sqlite/src/chat_session_store.rs` fails when the number
   of migrations changes without the test being updated.
 - `cargo check --workspace --all-targets` reports every struct literal missing
   a new field without a default.

@@ -123,6 +123,10 @@
     {
       "token": "values/strings.xml",
       "reason": "Generated Android project file (gen/android is created by the Tauri CLI) or Android resource path relative to it."
+    },
+    {
+      "token": "gen/android",
+      "reason": "Not a tracked file (generated or created at run time)."
     }
   ],
   "docs/datenpfade.md": [
@@ -159,6 +163,60 @@
     {
       "token": ".tsx",
       "reason": "File extension named in prose, not a path."
+    }
+  ],
+  ".claude/agents/silent-failure-hunter.md": [
+    {
+      "token": "tests.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "AGENTS.md": [
+    {
+      "token": "tests/",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "test_support.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/architecture.md": [
+    {
+      "token": "test_support.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "lib.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "lib.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/recipes/new-migration.md": [
+    {
+      "token": "store.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/recipes/new-tauri-command.md": [
+    {
+      "token": "servers.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "groups.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "groups.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "lib.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
     }
   ]
 }
