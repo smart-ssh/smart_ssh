@@ -83,8 +83,8 @@ describe("DataPathsSection (Issue #16)", () => {
     renderSection();
     fireEvent.click(await screen.findByLabelText("Kopieren: Host-Keys"));
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("/data/host_keys.json"));
     expect(await screen.findByText("Pfad kopiert")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith("/data/host_keys.json");
   });
 
   it("öffnet den Ordner über den Bezeichner, nie über einen Pfad", async () => {

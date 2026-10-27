@@ -66,7 +66,15 @@ pub struct Wiring {
     pub extra_data_paths: Vec<app_logic::data_paths::ExtraDataPath>,
     /// Spec 0038, section 2a: per-server session context section, known
     /// secrets for redaction and removal callbacks. Community has none.
+    ///
+    /// Superseded by [`Wiring::session_extensions`] and will be removed in a
+    /// later release. When set, it counts as the first entry of that list.
     pub session_extension: Option<Arc<dyn app_logic::session_extension::SessionExtension>>,
+    /// Issue #892 (Spec 0038, section 2a): any number of session extensions,
+    /// in registration order. The core combines them (context sections
+    /// joined, secrets united, removal callbacks to all). Community
+    /// registers none.
+    pub session_extensions: Vec<Arc<dyn app_logic::session_extension::SessionExtension>>,
     /// Issue #504 (ADR 0141, Spec 0038 §2a): content extensions that attach
     /// their own content to user chat messages. The core stores only an
     /// opaque reference and tells them when chat sessions are removed.
@@ -123,11 +131,35 @@ impl Wiring {
             edition: Edition::Community,
             extra_data_paths: Vec::new(),
             session_extension: None,
+            session_extensions: Vec::new(),
             chat_content_extensions: Vec::new(),
 
             outgoing_transform: None,
             ai_usage_observers: Vec::new(),
             entitlement_features: Vec::new(),
+        }
+    }
+}
+
+impl Wiring {
+    /// The single `Option` the rest of the app works with: `None` without
+    /// extensions, the extension itself for exactly one, otherwise a
+    /// [`CompositeSessionExtension`] (legacy field first).
+    pub fn combined_session_extension(
+        &self,
+    ) -> Option<Arc<dyn app_logic::session_extension::SessionExtension>> {
+        let mut all: Vec<_> = self
+            .session_extension
+            .iter()
+            .chain(self.session_extensions.iter())
+            .cloned()
+            .collect();
+        match all.len() {
+            0 => None,
+            1 => all.pop(),
+            _ => Some(Arc::new(
+                app_logic::session_extension::CompositeSessionExtension::new(all),
+            )),
         }
     }
 }
@@ -140,6 +172,54 @@ mod tests {
     #[test]
     fn test_community_registers_no_plugins_after_unlock() {
         assert!(Wiring::community().plugins_after_unlock.is_empty());
+    }
+
+    /// Issue #892: Community registers no session extension, builds no composite.
+    #[test]
+    fn test_community_builds_no_session_extension() {
+        let w = Wiring::community();
+        assert!(w.session_extensions.is_empty());
+        assert!(w.combined_session_extension().is_none());
+    }
+
+    struct Named(&'static str);
+
+    #[async_trait::async_trait]
+    impl app_logic::session_extension::SessionExtension for Named {
+        async fn context_section(
+            &self,
+            _scope: &app_logic::session_extension::ServerScope,
+            _language: app_logic::system_prompt::PromptLanguage,
+        ) -> Option<String> {
+            Some(self.0.to_string())
+        }
+    }
+
+    /// Issue #892: legacy field and list entry are both active, legacy first.
+    #[tokio::test]
+    async fn test_legacy_field_and_list_entry_are_both_active_legacy_first() {
+        let mut w = Wiring::community();
+        w.session_extension = Some(Arc::new(Named("legacy")));
+        w.session_extensions.push(Arc::new(Named("listed")));
+        let combined = w.combined_session_extension().expect("combined");
+        let scope = app_logic::session_extension::ServerScope {
+            server_id: ssh_manager_core::shared::ServerId::new(),
+            group_chain: Vec::new(),
+            tags: Vec::new(),
+        };
+        let text = combined
+            .context_section(&scope, app_logic::system_prompt::PromptLanguage::En)
+            .await
+            .expect("section");
+        assert_eq!(text, "legacy\n\nlisted");
+    }
+
+    /// Issue #892: only the legacy field behaves as before (no wrapper needed).
+    #[tokio::test]
+    async fn test_only_legacy_field_passes_through() {
+        let mut w = Wiring::community();
+        w.session_extension = Some(Arc::new(Named("legacy")));
+        assert!(w.combined_session_extension().is_some());
     }
 
     /// Issue #504: Community registers no chat content extension.

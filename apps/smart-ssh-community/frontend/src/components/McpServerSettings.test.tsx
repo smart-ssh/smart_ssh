@@ -43,6 +43,7 @@ describe("McpServerSettings copy action (issue #184)", () => {
     const { container } = renderIt();
     const button = await screen.findByRole("button", { name: "Konfiguration kopieren" });
     fireEvent.click(button);
+    // wait-ok: the snippet <pre> is rendered together with the copy button found above
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const shown = container.querySelector("pre")?.textContent;
     expect(shown).not.toContain("tok-secret-123");
