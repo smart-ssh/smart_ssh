@@ -1484,5 +1484,10 @@
       "newerVersion": "Den här säkerhetskopian skapades av en nyare version av Smart SSH. Uppdatera appen och försök igen.",
       "failed": "Åtgärden misslyckades. Inget ändrades."
     }
+  },
+  "errorBoundary": {
+    "title": "Något gick fel",
+    "body": "Smart SSH stötte på ett oväntat fel i gränssnittet. Ladda om för att fortsätta. Om det händer igen, skapa ett diagnostikpaket under Inställningar → Diagnostik efter omladdningen.",
+    "reload": "Ladda om"
   }
 }

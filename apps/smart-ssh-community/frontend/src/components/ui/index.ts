@@ -10,3 +10,5 @@ export { Spinner } from "./Spinner";
 export { TabPanel, Tabs, tabId, useTabsIdBase } from "./Tabs";
 export type { TabItem } from "./Tabs";
 export { Tooltip } from "./Tooltip";
+export { ErrorBoundary } from "./ErrorBoundary";
+export type { ErrorBoundaryProps } from "./ErrorBoundary";

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { ErrorBoundary } from "../components/ui";
 import { useChatSessionId } from "../chatSessionIds";
 import { listSessionHeaderItems, subscribeFormSlots } from "./registry";
 
@@ -18,11 +19,13 @@ export function SessionHeaderItems({
     <>
       {items.map(({ id, component: Item }) => (
         <div key={id} data-extension-session-header-item={id} className="shrink-0">
-          <Item
-            runtimeSessionId={runtimeSessionId}
-            serverId={serverId}
-            chatSessionId={chatSessionId}
-          />
+          <ErrorBoundary id={`session-header-item:${id}`} resetKeys={[runtimeSessionId]}>
+            <Item
+              runtimeSessionId={runtimeSessionId}
+              serverId={serverId}
+              chatSessionId={chatSessionId}
+            />
+          </ErrorBoundary>
         </div>
       ))}
     </>

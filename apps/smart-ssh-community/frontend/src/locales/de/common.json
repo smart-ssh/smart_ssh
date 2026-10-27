@@ -1484,5 +1484,10 @@
       "newerVersion": "Dieses Backup stammt aus einer neueren Version von Smart SSH. Aktualisiere die App und versuche es erneut.",
       "failed": "Der Vorgang ist fehlgeschlagen. Es wurde nichts geändert."
     }
+  },
+  "errorBoundary": {
+    "title": "Etwas ist schiefgelaufen",
+    "body": "Smart SSH ist in der Oberfläche auf einen unerwarteten Fehler gestoßen. Lade neu, um fortzufahren. Tritt er erneut auf, erzeuge nach dem Neuladen ein Diagnosepaket unter Einstellungen → Diagnose.",
+    "reload": "Neu laden"
   }
 }

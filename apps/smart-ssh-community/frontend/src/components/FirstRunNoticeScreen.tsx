@@ -1,4 +1,4 @@
-import { Component as ReactComponent, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
   listFirstRunNoticeExtensions,
@@ -6,7 +6,7 @@ import {
   type FirstRunNoticeContinueHandler,
   type FirstRunNoticeExtensionContext,
 } from "../extensions/registry";
-import { Button, DialogFrame } from "./ui";
+import { Button, DialogFrame, ErrorBoundary } from "./ui";
 
 interface FirstRunNoticeScreenProps {
   /** Aufgerufen bei "Weiter". Der Aufrufer speichert die Pflicht-
@@ -30,34 +30,6 @@ function runContinueHandlers(handlers: [string, FirstRunNoticeContinueHandler][]
     } catch (err) {
       report(err);
     }
-  }
-}
-
-interface ExtensionBoundaryProps {
-  id: string;
-  onError: (id: string, error: unknown, info: ErrorInfo) => void;
-  children: ReactNode;
-}
-
-/** Fängt Render-, Lifecycle- und Effect-Fehler genau einer Erweiterung ab
- * (Spec 0031, Abschnitt 6, issue #159). Danach rendert sie nichts mehr für
- * diese Erweiterung — auch nicht den umgebenden Bereich —, damit
- * Hinweistext, Pflicht-Checkbox und "Weiter" bedienbar bleiben. Ohne sie
- * würde ein Wurf den ganzen Baum aushängen und damit die einzige
- * Möglichkeit, den Hinweis zu bestätigen. */
-class ExtensionBoundary extends ReactComponent<ExtensionBoundaryProps, { failed: boolean }> {
-  state = { failed: false };
-
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-
-  componentDidCatch(error: unknown, info: ErrorInfo): void {
-    this.props.onError(this.props.id, error, info);
-  }
-
-  render(): ReactNode {
-    return this.state.failed ? null : this.props.children;
   }
 }
 
@@ -107,10 +79,10 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
     }
   }, [registered]);
 
-  const onExtensionError = (id: string, error: unknown) => {
+  // The boundary itself logs the failure (once, with the extension id).
+  const onExtensionError = (id: string) => {
     failedExtensions.current.add(id);
     continueHandlers.current.delete(id);
-    console.error(`First-run notice extension "${id}" failed to render:`, error);
   };
 
   const afterStored = () => {
@@ -153,14 +125,17 @@ export function FirstRunNoticeScreen({ onAcknowledge }: FirstRunNoticeScreenProp
         {t("firstRunNotice.checkboxLabel")}
       </label>
       {extensions.map(({ id, Component, context }) => (
-        <ExtensionBoundary key={id} id={id} onError={onExtensionError}>
+        <ErrorBoundary key={id} id={id}
+          label="First-run notice extension"
+          onError={onExtensionError}
+        >
           <section
             data-testid={`first-run-notice-extension-${id}`}
             className="mt-3 min-w-0 max-w-full break-words border-t border-border pt-3 text-fg-muted"
           >
             <Component {...context} />
           </section>
-        </ExtensionBoundary>
+        </ErrorBoundary>
       ))}
     </DialogFrame>
   );

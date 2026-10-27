@@ -1484,5 +1484,10 @@
       "newerVersion": "Tämän varmuuskopion on tehnyt uudempi Smart SSH -versio. Päivitä sovellus ja yritä uudelleen.",
       "failed": "Toiminto epäonnistui. Mitään ei muutettu."
     }
+  },
+  "errorBoundary": {
+    "title": "Jokin meni pieleen",
+    "body": "Smart SSH kohtasi käyttöliittymässä odottamattoman virheen. Jatka lataamalla uudelleen. Jos virhe toistuu, luo uudelleenlatauksen jälkeen diagnostiikkapaketti kohdassa Asetukset → Diagnostiikka.",
+    "reload": "Lataa uudelleen"
   }
 }

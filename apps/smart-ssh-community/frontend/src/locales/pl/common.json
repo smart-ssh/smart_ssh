@@ -1500,5 +1500,10 @@
       "newerVersion": "Tę kopię utworzyła nowsza wersja Smart SSH. Zaktualizuj aplikację i spróbuj ponownie.",
       "failed": "Operacja nie powiodła się. Nic nie zmieniono."
     }
+  },
+  "errorBoundary": {
+    "title": "Coś poszło nie tak",
+    "body": "Smart SSH napotkał nieoczekiwany błąd w interfejsie. Załaduj ponownie, aby kontynuować. Jeśli się powtórzy, po przeładowaniu utwórz pakiet diagnostyczny w Ustawienia → Diagnostyka.",
+    "reload": "Załaduj ponownie"
   }
 }

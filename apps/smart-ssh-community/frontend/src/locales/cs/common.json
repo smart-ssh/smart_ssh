@@ -1500,5 +1500,10 @@
       "newerVersion": "Tuto zálohu vytvořila novější verze Smart SSH. Aktualizujte aplikaci a zkuste to znovu.",
       "failed": "Operace selhala. Nic se nezměnilo."
     }
+  },
+  "errorBoundary": {
+    "title": "Něco se pokazilo",
+    "body": "Smart SSH narazil v rozhraní na neočekávanou chybu. Pro pokračování načtěte aplikaci znovu. Pokud se to bude opakovat, vytvořte po načtení balíček diagnostiky v Nastavení → Diagnostika.",
+    "reload": "Načíst znovu"
   }
 }

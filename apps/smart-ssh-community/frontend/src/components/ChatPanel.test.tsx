@@ -258,6 +258,31 @@ describe("registered document actions (Spec 0045)", () => {
     expect(onInvoke).not.toHaveBeenCalled();
   });
 
+  it("does not render a document action that throws while rendering (issue #880)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken label");
+    };
+    registerDocumentAction({ id: "bad", label: (<Broken />) as unknown as string, onInvoke: vi.fn() });
+    registerDocumentAction({ id: "good", label: "Als Word speichern", onInvoke: vi.fn() });
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={documentItem()}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Als Word speichern" })).toBeInTheDocument();
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("document-action:bad"))).toBe(true);
+    spy.mockRestore();
+  });
+
   it("still renders the unchanged markdown export button alongside registered actions", () => {
     registerDocumentAction({ id: "save-word", label: "Als Word speichern", onInvoke: vi.fn() });
 

@@ -1492,5 +1492,10 @@
       "newerVersion": "Esta copia fue creada por una versión más reciente de Smart SSH. Actualiza la app e inténtalo de nuevo.",
       "failed": "La operación falló. No se cambió nada."
     }
+  },
+  "errorBoundary": {
+    "title": "Algo salió mal",
+    "body": "Smart SSH encontró un error inesperado en la interfaz. Recarga para continuar. Si vuelve a ocurrir, crea un paquete de diagnóstico en Ajustes → Diagnóstico tras recargar.",
+    "reload": "Recargar"
   }
 }

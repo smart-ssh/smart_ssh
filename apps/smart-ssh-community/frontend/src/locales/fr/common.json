@@ -1492,5 +1492,10 @@
       "newerVersion": "Cette sauvegarde provient d’une version plus récente de Smart SSH. Mettez l’application à jour et réessayez.",
       "failed": "L’opération a échoué. Rien n’a été modifié."
     }
+  },
+  "errorBoundary": {
+    "title": "Une erreur s’est produite",
+    "body": "Smart SSH a rencontré une erreur inattendue dans l’interface. Rechargez pour continuer. Si cela se reproduit, créez un paquet de diagnostic sous Réglages → Diagnostic après le rechargement.",
+    "reload": "Recharger"
   }
 }
