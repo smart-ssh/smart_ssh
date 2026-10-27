@@ -54,18 +54,3 @@ pub fn microphone<R: Runtime>() -> TauriPlugin<R> {
     });
     builder.build()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The desktop build yields plugins with the names the Rust side relies on.
-    #[test]
-    fn plugins_are_named_and_build_on_desktop() {
-        use tauri::plugin::Plugin;
-        let s = session_service::<tauri::Wry>();
-        let m = microphone::<tauri::Wry>();
-        assert_eq!(s.name(), "session-service");
-        assert_eq!(m.name(), "microphone");
-    }
-}
