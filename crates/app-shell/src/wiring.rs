@@ -91,24 +91,6 @@ pub struct Wiring {
 }
 
 impl Wiring {
-    /// Issue #893: the single transform the session gets. The old
-    /// `outgoing_transform` runs first, then `outgoing_transforms` in order.
-    /// Zero transforms give `None` (text is sent as is), one is passed
-    /// through, two or more are combined into a composite.
-    pub(crate) fn take_outgoing_transform(
-        &mut self,
-    ) -> Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>> {
-        let mut all: Vec<_> = self.outgoing_transform.take().into_iter().collect();
-        all.append(&mut self.outgoing_transforms);
-        match all.len() {
-            0 => None,
-            1 => all.pop(),
-            _ => Some(Arc::new(
-                ssh_manager_core::outgoing::CompositeOutgoingTransform::new(all),
-            )),
-        }
-    }
-
     /// Community-Edition-Verdrahtung.
     ///
     /// **Scope-Hinweis (s. begleitende ADR 0035):** `ai_providers` und
@@ -146,6 +128,24 @@ impl Wiring {
     }
 }
 
+/// Issue #893: the single transform the session gets. The old
+/// `outgoing_transform` runs first, then `outgoing_transforms` in order.
+/// Zero transforms give `None` (text is sent as is), one is passed
+/// through, two or more are combined into a composite.
+pub(crate) fn merge(
+    w: &mut Wiring,
+) -> Option<Arc<dyn ssh_manager_core::outgoing::OutgoingTransform>> {
+    let mut all: Vec<_> = w.outgoing_transform.take().into_iter().collect();
+    all.append(&mut w.outgoing_transforms);
+    match all.len() {
+        0 => None,
+        1 => all.pop(),
+        _ => Some(Arc::new(
+            ssh_manager_core::outgoing::CompositeOutgoingTransform::new(all),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,7 +163,7 @@ mod tests {
         let mut w = Wiring::community();
         assert!(w.outgoing_transforms.is_empty());
         assert!(w.outgoing_transform.is_none());
-        assert!(w.take_outgoing_transform().is_none());
+        assert!(merge(&mut w).is_none());
     }
 
     /// Issue #893: zero -> `None`, one -> passed through, two or more ->
@@ -205,12 +205,12 @@ mod tests {
 
         let mut w = Wiring::community();
         w.outgoing_transforms = vec![Arc::new(Append("1"))];
-        assert_eq!(run(w.take_outgoing_transform().unwrap()).await, "x1");
+        assert_eq!(run(merge(&mut w).unwrap()).await, "x1");
 
         let mut w = Wiring::community();
         w.outgoing_transform = Some(Arc::new(Append("0")));
         w.outgoing_transforms = vec![Arc::new(Append("1")), Arc::new(Append("2"))];
-        assert_eq!(run(w.take_outgoing_transform().unwrap()).await, "x012");
+        assert_eq!(run(merge(&mut w).unwrap()).await, "x012");
         assert!(w.outgoing_transform.is_none() && w.outgoing_transforms.is_empty());
     }
 

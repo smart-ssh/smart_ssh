@@ -492,10 +492,9 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let edition = wiring.edition;
     // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
     // `State`.
-    let outgoing_transform = wiring.take_outgoing_transform();
-    let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
+    let edition_data_paths =
+        commands::EditionDataPaths(std::mem::take(&mut wiring.extra_data_paths));
     // Issue #469: ebenso — `send_chat_message` liest die Resolver als `State`.
-
     // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
     //
@@ -560,7 +559,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         db_path,
         data_dir_lock,
         language,
-        outgoing_transform,
+        wiring::merge(&mut wiring),
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
