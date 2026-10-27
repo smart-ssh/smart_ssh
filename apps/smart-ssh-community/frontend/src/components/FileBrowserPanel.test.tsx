@@ -791,6 +791,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     await screen.findByText(/a\.txt/);
     fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
     fireEvent.click(screen.getByText("Dateiinhalt kopieren"));
+    // wait-ok: the copy job (and with it any progress status) is set synchronously in the click handler, before the mock is called
     await waitFor(() => expect(sftpCopyContent).toHaveBeenCalled());
     expect(screen.queryByRole("status")).toBeNull();
   });
@@ -904,6 +905,8 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     await waitFor(() =>
       expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o2644, true, false, null),
     );
+    // The first dialog is closed (and the list reloaded) before the menu is opened again.
+    await waitFor(() => expect(screen.queryByDisplayValue("2644")).toBeNull());
 
     // Ticking setgid explicitly reports the change.
     fireEvent.click(screen.getByRole("button", { name: /^(Aktionen|Actions): / }));
@@ -1089,6 +1092,8 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.change(input, { target: { value: "b.txt" } });
     fireEvent.click(screen.getByText("Übernehmen"));
 
+    await waitFor(() => expect(screen.queryByDisplayValue("b.txt")).toBeNull());
+    // wait-ok: the rename dialog is already closed above (successful rename), so the conflict message cannot appear later
     await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null));
     expect(screen.queryByText("Ziel existiert bereits")).not.toBeInTheDocument();
   });
@@ -1192,6 +1197,7 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     await screen.findByText(/a\.txt/);
     fireEvent.click(screen.getByText("Hochladen"));
 
+    // wait-ok: the upload only starts after the overwrite check passed, so a prompt would have been rendered before this call
     await waitFor(() =>
       expect(sftpUpload).toHaveBeenCalledWith("session-1", "/local/new.txt", "new.txt", null),
     );
@@ -1687,6 +1693,10 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     renderPanel();
     await screen.findByText(/a\.txt/);
     await waitFor(() => expect(sessionIsRoot).toHaveBeenCalledWith("session-1"));
+    // Let the component's continuation of the resolved probe run before the absence check.
+    await act(async () => {
+      await vi.mocked(sessionIsRoot).mock.results[0].value;
+    });
     expect(screen.queryByRole("button", { name: /Erhöhte Rechte/ })).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" }),

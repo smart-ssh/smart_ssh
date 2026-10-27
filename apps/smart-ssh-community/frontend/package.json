@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "npm run check-commands && npm run check-a11y-rules && npm run check-changelog && npm run check-release-notes && npm run check-adr && npm run check-conventions && npm run check-codemap && npm run check-doc-paths && oxlint",
+    "lint": "npm run check-commands && npm run check-a11y-rules && npm run check-changelog && npm run check-release-notes && npm run check-adr && npm run check-conventions && npm run check-codemap && npm run check-doc-paths && npm run check-test-waits && oxlint",
     "check-commands": "node ../../../scripts/check-tauri-commands.mjs",
     "check-a11y-rules": "node ../../../scripts/check-a11y-lint-rules.mjs",
     "check-changelog": "node ../../../scripts/check-changelog-highlights.mjs",
@@ -16,6 +16,7 @@
     "check-codemap": "node ../../../scripts/check-codemap.mjs",
     "check-conventions": "node ../../../scripts/check-conventions.mjs",
     "check-doc-paths": "node ../../../scripts/check-doc-paths.mjs",
+    "check-test-waits": "node ../../../scripts/check-test-waits.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",

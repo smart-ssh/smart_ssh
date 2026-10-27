@@ -1,6 +1,6 @@
 // Issue #696, Spec 0011: an automatically run command names the rule behind
 // it; confirmed/denied commands show no such line.
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";

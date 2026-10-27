@@ -132,8 +132,8 @@ describe("ServerList narrow layout: Move to… (Issue #582)", () => {
     fireEvent.click(await screen.findByRole("button", { name: moveLabel("prod-1") }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^📁 Beta/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(moveServerToGroup).toHaveBeenCalledWith("remote-1", "g-b"));
-    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("moves a folder to the top level and refuses its own subfolder", async () => {
