@@ -650,6 +650,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             .with_session_extension(wiring.session_extension.clone())
             .with_db_extensions(db_extensions)
             .with_chat_content(chat_content);
+    let entitlement_catalogue =
+        crate::wiring::EntitlementCatalogue::new(std::mem::take(&mut wiring.entitlement_features));
     let plugins = wiring.plugins;
     let service_host = ServiceHost::new(std::mem::take(&mut wiring.services));
 
@@ -793,6 +795,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         .manage(crate::speech_models::SpeechModels::default())
         .manage(crate::voice_input::VoiceRecorder::default())
         .manage(edition)
+        .manage(entitlement_catalogue)
         .manage(edition_data_paths)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
         // (gemessen, M4). Die Begründung, warum es nicht genügt, sich auf
@@ -1079,6 +1082,9 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
         };
         while receiver.changed().await.is_ok() {
             let current = receiver.borrow_and_update().clone();
+            let current = handle_for_entitlements
+                .state::<crate::wiring::EntitlementCatalogue>()
+                .filter(current);
             tauri::Emitter::emit(&handle_for_entitlements, "entitlements:changed", current).ok();
         }
     });
