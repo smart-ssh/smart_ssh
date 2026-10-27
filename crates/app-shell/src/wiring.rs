@@ -73,6 +73,13 @@ pub struct Wiring {
     /// never content). Passive: they cannot influence the chat flow.
     /// Community registers none.
     pub ai_usage_observers: Vec<Arc<dyn app_logic::ai_usage::AiUsageObserver>>,
+
+    /// Issue #876 (Spec 0037, section 2): the edition's catalogue of the
+    /// entitlement features it gates. Only these reach the frontend
+    /// (`get_entitlements`, `entitlements:changed`); other ids from the
+    /// provider are dropped. Duplicates are logged and skipped at startup.
+    /// Community registers none.
+    pub entitlement_features: Vec<ssh_manager_core::entitlements::Feature>,
 }
 
 impl Wiring {
@@ -107,6 +114,7 @@ impl Wiring {
 
             outgoing_transform: None,
             ai_usage_observers: Vec::new(),
+            entitlement_features: Vec::new(),
         }
     }
 }
@@ -125,5 +133,69 @@ mod tests {
     #[test]
     fn test_community_registers_no_ai_usage_observers() {
         assert!(Wiring::community().ai_usage_observers.is_empty());
+    }
+}
+
+/// The deduplicated catalogue of registered entitlement features, managed as
+/// Tauri state. Filters what the frontend sees.
+pub struct EntitlementCatalogue(Vec<ssh_manager_core::entitlements::Feature>);
+
+impl EntitlementCatalogue {
+    /// Builds the catalogue; logs and skips duplicates.
+    pub fn new(features: Vec<ssh_manager_core::entitlements::Feature>) -> Self {
+        let mut unique: Vec<ssh_manager_core::entitlements::Feature> = Vec::new();
+        for f in features {
+            if unique.contains(&f) {
+                tracing::warn!(feature = %f, "duplicate entitlement feature skipped");
+            } else {
+                unique.push(f);
+            }
+        }
+        Self(unique)
+    }
+
+    /// The entitlements as the frontend may see them: only registered
+    /// features; unknown ids are dropped (logged at debug, id only).
+    pub fn filter(
+        &self,
+        mut e: ssh_manager_core::entitlements::Entitlements,
+    ) -> ssh_manager_core::entitlements::Entitlements {
+        for f in &e.features {
+            if !self.0.contains(f) {
+                tracing::debug!(feature = %f, "unregistered entitlement feature dropped");
+            }
+        }
+        e.retain_catalogue(&self.0);
+        e
+    }
+}
+
+#[cfg(test)]
+mod entitlement_catalogue_tests {
+    use super::*;
+    use ssh_manager_core::entitlements::{Entitlements, Feature};
+
+    const A: Feature = Feature::new("feature_a");
+    const B: Feature = Feature::new("feature_b");
+
+    fn granting_a_and_b() -> Entitlements {
+        let mut e = Entitlements::free();
+        e.features.insert(A);
+        e.features.insert(B);
+        e
+    }
+
+    #[test]
+    fn test_registered_catalogue_passes_only_its_features() {
+        let c = EntitlementCatalogue::new(vec![A, A]);
+        let out = c.filter(granting_a_and_b());
+        assert_eq!(out.features.len(), 1);
+        assert!(out.has(&A));
+    }
+
+    #[test]
+    fn test_community_catalogue_returns_no_features() {
+        let c = EntitlementCatalogue::new(Wiring::community().entitlement_features);
+        assert!(c.filter(granting_a_and_b()).features.is_empty());
     }
 }

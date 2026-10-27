@@ -63,7 +63,7 @@ pub type PolicySourceResult<T> = Result<T, PolicySourceError>;
 
 /// Eine einzelne Quelle von [`Rule`]s auf einer bestimmten [`RuleOrigin`]-
 /// Ebene (Spec 0037, Abschnitt 5) — z. B. der bestehende SQLite-
-/// Regelspeicher (`RuleOrigin::User`) oder ein künftiges `OrgPolicy`-Modul
+/// Regelspeicher (`RuleOrigin::User`) oder eine künftige `Organization`-Regelquelle
 /// (`RuleOrigin::Organization`, privates Repo, nicht Teil dieser Spec).
 ///
 /// Anders als [`PolicyStore::rules_for`] (bereits nach `EffectiveScope`

@@ -37,6 +37,10 @@ anmelden. Eine Dokument-Aktion hat:
 Ob eine Aktion gesperrt ist, entscheidet das anmeldende Modul. Die
 Registry und die Dokument-Karte zeigen nur an, was sie bekommen.
 
+Dokument-Aktionen lassen sich jederzeit anmelden, ersetzen und wieder
+entfernen. Eine offene Dokument-Karte zeigt die Änderung sofort, ohne
+Neuladen und ohne dass sich sonst etwas ändert.
+
 ## 4. Darstellung der Dokument-Aktionen
 
 - Die Aktionen erscheinen **nur auf der Dokument-Karte** (Spec 0012,
@@ -83,6 +87,9 @@ Elemente hinzufügen.
 - Eine Erweiterung hat eine Kennung, eine Rangfolge und eine eigene
   Anzeige. Erweiterungen erscheinen aufsteigend nach Rangfolge, bei
   Gleichstand nach Kennung.
+- Erweiterungen lassen sich jederzeit anmelden, ersetzen und wieder
+  entfernen. Ein offener Erststart-Hinweis zeigt die Änderung sofort; die
+  Handlung einer entfernten Erweiterung wird nicht mehr ausgeführt.
 - Eine Erweiterung kann genau eine Handlung anmelden, die einmal
   ausgeführt wird, nachdem der Nutzer den Hinweis bestätigt hat und die
   Bestätigung gespeichert ist. Eine erneute Anmeldung ersetzt die

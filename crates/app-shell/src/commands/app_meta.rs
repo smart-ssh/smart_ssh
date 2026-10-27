@@ -180,8 +180,9 @@ mod app_info_tests {
 #[tauri::command]
 pub fn get_entitlements(
     state: State<'_, AppState>,
+    catalogue: State<'_, crate::wiring::EntitlementCatalogue>,
 ) -> ssh_manager_core::entitlements::Entitlements {
-    state.entitlements.current()
+    catalogue.filter(state.entitlements.current())
 }
 
 /// Aktiviert die Overlay-Titelleiste und konfiguriert macOS-Ampel-Insets
