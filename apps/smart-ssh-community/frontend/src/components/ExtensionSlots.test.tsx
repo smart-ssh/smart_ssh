@@ -127,6 +127,22 @@ describe("server form section", () => {
   });
 });
 
+describe("failing form section (issue #880)", () => {
+  it("is not rendered while the other section and the form stay usable", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = (): never => {
+      throw new Error("broken form section");
+    };
+    registerServerFormSection({ id: "bad", component: Broken });
+    registerServerFormSection({ id: "good", component: ServerSection });
+    serverForm("s-1");
+    expect(await screen.findByText("server-ext s-1 clean")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("server-form-section:bad"))).toBe(true);
+    spy.mockRestore();
+  });
+});
+
 describe("group form section", () => {
   const groupForm = (groupId: string | null) =>
     wrap(<GroupForm groupId={groupId} defaultParentId={null} allGroups={[group]} onSaved={vi.fn()} onDeleted={vi.fn()} />);

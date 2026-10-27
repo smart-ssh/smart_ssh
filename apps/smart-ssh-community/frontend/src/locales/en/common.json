@@ -1484,5 +1484,10 @@
       "newerVersion": "This backup was made by a newer version of Smart SSH. Update the app and try again.",
       "failed": "The operation failed. Nothing was changed."
     }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "body": "Smart SSH hit an unexpected error in the interface. Reload to continue. If it happens again, create a diagnostics bundle under Settings → Diagnostics after reloading.",
+    "reload": "Reload"
   }
 }

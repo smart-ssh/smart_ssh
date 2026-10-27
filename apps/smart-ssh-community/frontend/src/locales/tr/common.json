@@ -1484,5 +1484,10 @@
       "newerVersion": "Bu yedek Smart SSH’nin daha yeni bir sürümüyle oluşturuldu. Uygulamayı güncelleyip tekrar deneyin.",
       "failed": "İşlem başarısız oldu. Hiçbir şey değişmedi."
     }
+  },
+  "errorBoundary": {
+    "title": "Bir şeyler ters gitti",
+    "body": "Smart SSH arayüzde beklenmeyen bir hatayla karşılaştı. Devam etmek için yeniden yükleyin. Tekrar olursa, yeniden yükledikten sonra Ayarlar → Tanılama altında bir tanılama paketi oluşturun.",
+    "reload": "Yeniden yükle"
   }
 }

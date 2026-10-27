@@ -1492,5 +1492,10 @@
       "newerVersion": "Questo backup è stato creato da una versione più recente di Smart SSH. Aggiorna l’app e riprova.",
       "failed": "Operazione non riuscita. Non è stato modificato nulla."
     }
+  },
+  "errorBoundary": {
+    "title": "Qualcosa è andato storto",
+    "body": "Smart SSH ha riscontrato un errore imprevisto nell’interfaccia. Ricarica per continuare. Se si ripete, dopo il ricaricamento crea un pacchetto di diagnostica in Impostazioni → Diagnostica.",
+    "reload": "Ricarica"
   }
 }

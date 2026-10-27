@@ -1476,5 +1476,10 @@
       "newerVersion": "Bản sao lưu này do phiên bản Smart SSH mới hơn tạo ra. Hãy cập nhật ứng dụng rồi thử lại.",
       "failed": "Thao tác thất bại. Không có gì thay đổi."
     }
+  },
+  "errorBoundary": {
+    "title": "Đã xảy ra lỗi",
+    "body": "Smart SSH gặp lỗi không mong đợi trong giao diện. Hãy tải lại để tiếp tục. Nếu lỗi lặp lại, hãy tạo gói chẩn đoán trong Cài đặt → Chẩn đoán sau khi tải lại.",
+    "reload": "Tải lại"
   }
 }

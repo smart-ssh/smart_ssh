@@ -18,7 +18,7 @@ import { MasterPasswordSettings } from "./MasterPasswordSettings";
 import { VoiceInputSettings } from "./VoiceInputSettings";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { ModalBackdrop } from "./ModalBackdrop";
-import { Button } from "./ui";
+import { Button, ErrorBoundary } from "./ui";
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -284,7 +284,9 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
                 {listSettingsSectionsForCategory(DATA_BACKUP_CATEGORY_ID).map(
                   ({ id, component: Section }) => (
                     <div key={id} className="mt-6 min-w-0">
-                      <Section />
+                      <ErrorBoundary id={`settings-section:${id}`}>
+                        <Section />
+                      </ErrorBoundary>
                     </div>
                   ),
                 )}
@@ -294,7 +296,11 @@ export function SettingsScreen({ onClose, onProvidersChanged, returnFocusTo }: S
             {active?.id === ABOUT_CATEGORY_ID && <AboutSettings />}
             {registeredSections.map(
               ({ id, category, component: Section }) =>
-                !category && active?.id === id && <Section key={id} />,
+                !category && active?.id === id && (
+                  <ErrorBoundary key={id} id={`settings-section:${id}`}>
+                    <Section />
+                  </ErrorBoundary>
+                ),
             )}
           </div>
         </div>

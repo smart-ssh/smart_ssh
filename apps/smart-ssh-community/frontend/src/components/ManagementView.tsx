@@ -14,7 +14,7 @@ import { GroupForm, type MovedTo } from "./GroupForm";
 import { useManageViews } from "../extensions/FormSlots";
 import { ServerForm } from "./ServerForm";
 import { useIsNarrow } from "../hooks/useIsNarrow";
-import { Button } from "./ui";
+import { Button, ErrorBoundary } from "./ui";
 import { Sidebar, type Selection } from "./Sidebar";
 import { SshConfigExportDialog } from "./SshConfigExportDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
@@ -283,7 +283,11 @@ export function ManagementView({
         {selection?.kind === "extensionView" &&
           (() => {
             const View = manageViews.find((v) => v.id === selection.id)?.component;
-            return View ? <View key={selection.id} /> : null;
+            return View ? (
+              <ErrorBoundary key={selection.id} id={`manage-view:${selection.id}`}>
+                <View />
+              </ErrorBoundary>
+            ) : null;
           })()}
         {!selection && !narrow && (
           // Spec 0072, Teil 3 (BL-0202): dieser Platzhaltertext stand fest
