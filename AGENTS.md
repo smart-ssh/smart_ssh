@@ -37,7 +37,7 @@ scripts/gate.sh --ci rust        # as CI: clipboard test required, under xvfb-ru
 
 `scripts/gate.sh` is the single definition of the gate; CI calls it too
 (Windows keeps its Cargo steps inline with the same commands, see the
-comment in `community.yml`). Every Cargo build/test/clippy/tree call uses
+comment in `.github/workflows/community.yml`). Every Cargo build/test/clippy/tree call uses
 `--locked`, so the checked-in `Cargo.lock` is what gets tested and a stale
 lockfile fails instead of being re-resolved silently (guarded by
 `src/cargoLockedCheck.test.ts`).
@@ -86,6 +86,16 @@ guidance documents that does not exist; intentional non-paths go into
 `scripts/doc-paths-allowlist.json` with a reason. CI runs all of them through the same
 `npm run lint` step.
 
+`npm run lint` also runs `npm run check-file-size`
+(`scripts/check-file-size.mjs`, issue #841): tracked `*.rs`, `*.ts`, `*.tsx`,
+`*.mjs` and `*.kt` files may have at most 1,200 lines (test files: 2,000).
+Files above their limit are listed in `scripts/file-size-allowlist.json` with
+their maximum size; such a file may not grow past its entry, and an entry for a
+file that is now within the limit or deleted fails as stale. `node
+scripts/check-file-size.mjs --update` lowers or removes entries (never raises
+or adds). On pull requests CI also compares with the base branch (`--base`),
+so entries can only go down: split the file instead of raising an entry.
+
 Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
 if formatting is off, clippy and test never even execute, so a red CI run
 that only shows a `fmt` failure tells you nothing about whether the actual
@@ -99,6 +109,13 @@ not feature correctness. On macOS use `./scripts/tauri-dev.sh`, not plain
 `docs/adr/0022-stable-dev-code-signature.md`). Don't relaunch it
 repeatedly while iterating — build/test/lint don't need a running window;
 start it once, when a change is actually ready to look at.
+
+## Toolchain
+
+The Rust version comes from `rust-toolchain.toml` (exact `x.y.z`); CI reads
+the channel from that file, and `[workspace.package] rust-version` carries
+the same minor. A bump is its own pull request that also fixes any new
+clippy findings. Projects embedding the core can reuse the same file.
 
 ## Git staging — never blanket-add
 

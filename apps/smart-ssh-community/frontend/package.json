@@ -7,10 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "npm run check-commands && npm run check-a11y-rules && npm run check-changelog && npm run check-release-notes && npm run check-adr && npm run check-conventions && npm run check-codemap && npm run check-doc-paths && npm run check-test-waits && oxlint",
+    "lint": "npm run check-commands && npm run check-a11y-rules && npm run check-changelog && npm run check-release-notes && npm run check-adr && npm run check-conventions && npm run check-codemap && npm run check-doc-paths && npm run check-file-size && npm run check-test-waits && oxlint",
     "check-commands": "node ../../../scripts/check-tauri-commands.mjs",
     "check-a11y-rules": "node ../../../scripts/check-a11y-lint-rules.mjs",
     "check-changelog": "node ../../../scripts/check-changelog-highlights.mjs",
+    "check-file-size": "node ../../../scripts/check-file-size.mjs",
     "check-release-notes": "node ../../../scripts/check-release-notes.mjs",
     "check-adr": "node ../../../scripts/check-adr.mjs",
     "check-codemap": "node ../../../scripts/check-codemap.mjs",
