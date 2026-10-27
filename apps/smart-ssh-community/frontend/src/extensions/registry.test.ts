@@ -1,6 +1,10 @@
 import { describe, expect, it, afterEach, vi } from "vitest";
 import {
   listDocumentActions,
+  subscribeDocumentActions,
+  subscribeFirstRunNoticeExtensions,
+  unregisterDocumentAction,
+  unregisterFirstRunNoticeExtension,
   listFirstRunNoticeExtensions,
   registerFirstRunNoticeExtension,
   listSettingsSections,
@@ -102,6 +106,41 @@ describe("registry", () => {
 
     resetRegistryForTests();
     expect(listFirstRunNoticeExtensions()).toEqual([]);
+  });
+
+  it("keeps document action snapshot identity until a change and notifies listeners (#884)", () => {
+    registerDocumentAction({ id: "a", label: "A", onInvoke: vi.fn() });
+    const first = listDocumentActions();
+    expect(listDocumentActions()).toBe(first);
+
+    const listener = vi.fn();
+    const unsubscribe = subscribeDocumentActions(listener);
+    registerDocumentAction({ id: "b", label: "B", onInvoke: vi.fn() });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listDocumentActions()).not.toBe(first);
+    unregisterDocumentAction("b");
+    expect(listener).toHaveBeenCalledTimes(2);
+    unregisterDocumentAction("missing");
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    unregisterDocumentAction("a");
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps first-run notice snapshot identity until a change and notifies listeners (#884)", () => {
+    registerFirstRunNoticeExtension({ id: "a", order: 1, Component: Noop });
+    const first = listFirstRunNoticeExtensions();
+    expect(listFirstRunNoticeExtensions()).toBe(first);
+
+    const listener = vi.fn();
+    const unsubscribe = subscribeFirstRunNoticeExtensions(listener);
+    registerFirstRunNoticeExtension({ id: "a", order: 2, Component: Noop });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listFirstRunNoticeExtensions()).not.toBe(first);
+    unregisterFirstRunNoticeExtension("a");
+    expect(listFirstRunNoticeExtensions()).toEqual([]);
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
   });
 
   describe("settings sections with a target category (#674)", () => {

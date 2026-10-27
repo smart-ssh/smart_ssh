@@ -3,26 +3,8 @@
  * `#[serde(rename_all = "camelCase")]` auf `Entitlements` selbst. */
 export type Tier = "free" | "personal" | "pro" | "team" | "business" | "enterprise";
 
-export type Feature =
-  | "shared_inventory"
-  | "shared_notes"
-  | "curated_rule_packs"
-  | "org_policy"
-  | "multi_server_actions"
-  | "managed_ai"
-  | "org_ai_policy"
-  | "team_agents"
-  | "session_history"
-  | "activity_report"
-  | "session_handover"
-  | "cloud_sync"
-  | "document_export"
-  | "audit_export"
-  | "sso"
-  | "self_hosted"
-  | "server_environment"
-  | "chat_attachments"
-  | "self_hosted_sync";
+/** Feature ids are defined by the edition that registers them (Spec 0037). */
+export type Feature = string;
 
 export interface Entitlements {
   tier: Tier;

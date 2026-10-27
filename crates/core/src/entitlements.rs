@@ -7,87 +7,105 @@
 //! `EntitlementProvider`-Implementierung (z. B. [`FixedEntitlements`] für
 //! die Community Edition).
 
+use std::borrow::Cow;
 use std::collections::HashSet;
+use std::fmt;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
-/// Ein einzelnes, gatebares Feature (Spec 0037, Abschnitt 2 — Architektur-
-/// Brief Abschnitt 2, Feature-Matrix). **Kein `CertificateAuth`-Feature**:
-/// Zertifikats-Auth ist bereits veröffentlicht und bleibt endgültig Free
-/// (D4), kein Gating dafür.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Feature {
-    SharedInventory,
-    SharedNotes,
-    CuratedRulePacks,
-    OrgPolicy,
-    MultiServerActions,
-    ManagedAi,
-    OrgAiPolicy,
-    TeamAgents,
-    SessionHistory,
-    ActivityReport,
-    SessionHandover,
-    CloudSync,
-    DocumentExport,
-    AuditExport,
-    Sso,
-    SelfHosted,
-    /// Per-server environment data contributed by an extension (session
-    /// context section and known secrets). Local, not service-bound.
-    ServerEnvironment,
-    /// Issue #469: Dateianhänge in Chat-Nachrichten (lokal, nicht dienst-gebunden).
-    ChatAttachments,
-    /// Synchronisation through targets operated by the user, e.g. an own
-    /// folder or own SFTP server; not a hosted service. Local, not
-    /// service-bound.
-    SelfHostedSync,
+/// Maximum length of a feature id.
+const MAX_FEATURE_ID_LEN: usize = 64;
+
+/// Whether `id` matches `^[a-z][a-z0-9_]{0,63}$`.
+fn is_valid_feature_id(id: &str) -> bool {
+    let b = id.as_bytes();
+    !b.is_empty()
+        && b.len() <= MAX_FEATURE_ID_LEN
+        && b[0].is_ascii_lowercase()
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_')
 }
 
+/// An opaque, gatable feature identifier (Spec 0037, section 2). The core
+/// declares no product features; editions and integrations declare their own
+/// constants with [`Feature::new`] and register them through
+/// `Wiring::entitlement_features`. Serialises as the plain id string.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct Feature(Cow<'static, str>);
+
 impl Feature {
-    /// Trennt lokale von Dienst-gebundenen Features —
-    /// Metadaten fürs Lizenzsystem des privaten Repos, das im
-    /// versions-basierten Perpetual-Fallback (abgelaufenes Abo, App-Version
-    /// noch in der zuletzt bezahlten Minor-Reihe) nur die **lokalen**
-    /// Pro-Features aktiv lässt. `core` selbst trifft keine
-    /// Lizenzentscheidung (s. Moduldoc) — diese Methode liefert nur die
-    /// Einordnung, auf der das private `licensing`-Modul aufbaut.
-    ///
-    /// **Kriterium**: "Dienst-gebunden" heißt, ein von uns selbst
-    /// betriebener laufender Dienst steht dahinter, der ohne aktives Abo
-    /// nicht mehr funktionieren darf/kann — nicht dasselbe wie
-    /// Team-/Enterprise-Tier-Zugehörigkeit. `OrgPolicy` (Policy-as-Code aus
-    /// dem Git des Kunden) und `AuditExport` (lokaler signierter Export)
-    /// sind z. B. Team-Tier, aber lokal: kein Dienst von uns, der bei
-    /// Ablauf abgeschaltet werden müsste.
-    ///
-    /// `ManagedAi` (unser KI-Proxy) und `CloudSync` (unser gehosteter
-    /// Sync-Dienst) sind die einzigen aktuell dienst-gebundenen Features.
-    /// Alle anderen bleiben im Fallback aktiv.
-    pub fn is_service_bound(&self) -> bool {
-        match self {
-            Feature::ManagedAi | Feature::CloudSync => true,
-            Feature::SharedInventory
-            | Feature::SharedNotes
-            | Feature::CuratedRulePacks
-            | Feature::OrgPolicy
-            | Feature::MultiServerActions
-            | Feature::OrgAiPolicy
-            | Feature::TeamAgents
-            | Feature::SessionHistory
-            | Feature::ActivityReport
-            | Feature::SessionHandover
-            | Feature::DocumentExport
-            | Feature::AuditExport
-            | Feature::Sso
-            | Feature::SelfHosted
-            | Feature::ServerEnvironment
-            | Feature::ChatAttachments
-            | Feature::SelfHostedSync => false,
+    /// Declares a feature id in `const` context. The id should match
+    /// `^[a-z][a-z0-9_]{0,63}$`; an id outside that pattern can be neither
+    /// deserialised nor sent to the frontend.
+    pub const fn new(id: &'static str) -> Feature {
+        Feature(Cow::Borrowed(id))
+    }
+
+    pub fn id(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Feature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Feature {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let id = String::deserialize(d)?;
+        if is_valid_feature_id(&id) {
+            Ok(Feature(Cow::Owned(id)))
+        } else {
+            Err(serde::de::Error::custom("invalid feature id"))
         }
     }
+}
+
+/// Transition constants for the ids extensions use today. Editions declare
+/// their own constants; these go away in a later release.
+#[allow(non_upper_case_globals)]
+impl Feature {
+    #[deprecated(note = "editions declare their own feature constants; this goes away")]
+    pub const DocumentExport: Feature = Feature::new("document_export");
+    #[deprecated(note = "editions declare their own feature constants; this goes away")]
+    pub const SessionHistory: Feature = Feature::new("session_history");
+    #[deprecated(note = "editions declare their own feature constants; this goes away")]
+    pub const ServerEnvironment: Feature = Feature::new("server_environment");
+    #[deprecated(note = "editions declare their own feature constants; this goes away")]
+    pub const ChatAttachments: Feature = Feature::new("chat_attachments");
+    #[deprecated(note = "editions declare their own feature constants; this goes away")]
+    pub const SelfHostedSync: Feature = Feature::new("self_hosted_sync");
+    #[deprecated(note = "editions declare their own feature constants; this goes away")]
+    pub const ManagedAi: Feature = Feature::new("managed_ai");
+
+    /// Transition only: true for the ids `managed_ai` and `cloud_sync`.
+    /// Editions classify their own features; this goes away.
+    #[deprecated(note = "editions classify their own features; this goes away")]
+    pub fn is_service_bound(&self) -> bool {
+        matches!(self.id(), "managed_ai" | "cloud_sync")
+    }
+}
+
+/// Deserialises a feature set, skipping unknown or malformed entries.
+fn lenient_feature_set<'de, D: Deserializer<'de>>(d: D) -> Result<HashSet<Feature>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Entry {
+        Valid(Feature),
+        Skipped(serde::de::IgnoredAny),
+    }
+    let raw = Vec::<Entry>::deserialize(d)?;
+    Ok(raw
+        .into_iter()
+        .filter_map(|e| match e {
+            Entry::Valid(f) => Some(f),
+            Entry::Skipped(_) => None,
+        })
+        .collect())
 }
 
 /// Lizenzstufe (Spec 0037, Abschnitt 2 — Architektur-Brief Abschnitt 1,
@@ -109,6 +127,7 @@ pub enum Tier {
 #[serde(rename_all = "camelCase")]
 pub struct Entitlements {
     pub tier: Tier,
+    #[serde(deserialize_with = "lenient_feature_set")]
     pub features: HashSet<Feature>,
     pub seats: Option<u32>,
     pub expires_at: Option<DateTime<Utc>>,
@@ -130,20 +149,20 @@ impl Entitlements {
         }
     }
 
-    pub fn has(&self, f: Feature) -> bool {
-        self.features.contains(&f)
+    pub fn has(&self, f: &Feature) -> bool {
+        self.features.contains(f)
     }
 
     /// Spec 0037, Abschnitt 3 (D5): Gating-Konvention — jeder Tauri-Command,
     /// der ein gegatetes Feature auslöst, ruft dies als erste Anweisung auf.
     /// Gesperrte Features schlagen **geschlossen** fehl (`Err`), nie eine
     /// stille Degradierung auf ein "Free-Verhalten" als Fallback.
-    pub fn require(&self, f: Feature) -> Result<(), FeatureLocked> {
+    pub fn require(&self, f: &Feature) -> Result<(), FeatureLocked> {
         if self.has(f) {
             Ok(())
         } else {
             Err(FeatureLocked {
-                feature: f,
+                feature: f.clone(),
                 tier: self.tier,
             })
         }
@@ -154,7 +173,7 @@ impl Entitlements {
 /// typ eingebettet (nicht als String transportiert), damit das Frontend ihn
 /// eindeutig von fachlichen Fehlern unterscheiden kann (Spec 0037,
 /// Abschnitt 2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize)]
 #[error("feature {feature:?} is not available in tier {tier:?}")]
 pub struct FeatureLocked {
     pub feature: Feature,
@@ -196,62 +215,91 @@ impl EntitlementProvider for FixedEntitlements {
     }
 }
 
+impl Entitlements {
+    /// Keeps only the features in `catalogue` (the edition's registered
+    /// features); everything else is dropped.
+    pub fn retain_catalogue(&mut self, catalogue: &[Feature]) {
+        self.features.retain(|f| catalogue.contains(f));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Einordnung der Features: ein Assert pro Variante statt einer
-    /// Schleife über ein Array — das exhaustive `match` in
-    /// `is_service_bound` selbst sorgt bereits dafür, dass eine künftig
-    /// hinzugefügte `Feature`-Variante ohne Klassifizierung nicht
-    /// kompiliert; dieser Test sichert zusätzlich ab, dass jede *bestehende*
-    /// Variante tatsächlich den beabsichtigten Wert liefert (ein
-    /// Kopier-/Vertauschungsfehler im `match` selbst würde sonst nicht
-    /// auffallen).
-    #[test]
-    fn test_is_service_bound_classifies_every_feature() {
-        assert!(Feature::ManagedAi.is_service_bound());
-        assert!(Feature::CloudSync.is_service_bound());
+    const EXPORT: Feature = Feature::new("document_export");
+    const HISTORY: Feature = Feature::new("session_history");
 
-        assert!(!Feature::SharedInventory.is_service_bound());
-        assert!(!Feature::SharedNotes.is_service_bound());
-        assert!(!Feature::CuratedRulePacks.is_service_bound());
-        assert!(!Feature::OrgPolicy.is_service_bound());
-        assert!(!Feature::MultiServerActions.is_service_bound());
-        assert!(!Feature::OrgAiPolicy.is_service_bound());
-        assert!(!Feature::TeamAgents.is_service_bound());
-        assert!(!Feature::SessionHistory.is_service_bound());
-        assert!(!Feature::ActivityReport.is_service_bound());
-        assert!(!Feature::SessionHandover.is_service_bound());
+    #[allow(deprecated)]
+    #[test]
+    fn test_deprecated_constants_and_is_service_bound_keep_today_values() {
+        assert_eq!(Feature::DocumentExport.id(), "document_export");
+        assert_eq!(Feature::SessionHistory.id(), "session_history");
+        assert_eq!(Feature::ServerEnvironment.id(), "server_environment");
+        assert_eq!(Feature::ChatAttachments.id(), "chat_attachments");
+        assert_eq!(Feature::SelfHostedSync.id(), "self_hosted_sync");
+        assert_eq!(Feature::ManagedAi.id(), "managed_ai");
+        assert!(Feature::ManagedAi.is_service_bound());
+        assert!(Feature::new("cloud_sync").is_service_bound());
         assert!(!Feature::DocumentExport.is_service_bound());
-        assert!(!Feature::AuditExport.is_service_bound());
-        assert!(!Feature::Sso.is_service_bound());
-        assert!(!Feature::SelfHosted.is_service_bound());
+        assert!(!Feature::SessionHistory.is_service_bound());
         assert!(!Feature::ServerEnvironment.is_service_bound());
         assert!(!Feature::ChatAttachments.is_service_bound());
         assert!(!Feature::SelfHostedSync.is_service_bound());
     }
 
     #[test]
-    fn test_self_hosted_sync_serialises_snake_case_and_is_locked_in_free() {
+    fn test_wire_format_is_unchanged() {
+        let mut e = Entitlements::free();
+        e.tier = Tier::Pro;
+        e.features.insert(EXPORT);
         assert_eq!(
-            serde_json::to_string(&Feature::SelfHostedSync).unwrap(),
-            "\"self_hosted_sync\""
+            serde_json::to_string(&e).unwrap(),
+            r#"{"tier":"pro","features":["document_export"],"seats":null,"expiresAt":null,"nonCommercial":false,"licensee":null}"#
         );
-        let free = Entitlements::free();
-        assert!(!free.has(Feature::SelfHostedSync));
-        assert!(free.require(Feature::SelfHostedSync).is_err());
+        let locked = Entitlements::free().require(&HISTORY).unwrap_err();
+        assert_eq!(
+            serde_json::to_string(&locked).unwrap(),
+            r#"{"feature":"session_history","tier":"free"}"#
+        );
+        let back: Entitlements = serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        assert_eq!(back, e);
     }
 
     #[test]
-    fn test_chat_attachments_serialises_snake_case_and_is_locked_in_free() {
-        assert_eq!(
-            serde_json::to_string(&Feature::ChatAttachments).unwrap(),
-            "\"chat_attachments\""
-        );
-        let free = Entitlements::free();
-        assert!(!free.has(Feature::ChatAttachments));
-        assert!(free.require(Feature::ChatAttachments).is_err());
+    fn test_unknown_and_malformed_features_are_skipped() {
+        let json = r#"{"tier":"pro","features":["unknown_feature","Not-Valid","document_export"],"seats":null,"expiresAt":null,"nonCommercial":false,"licensee":null}"#;
+        let e: Entitlements = serde_json::from_str(json).unwrap();
+        let ids: HashSet<&str> = e.features.iter().map(|f| f.id()).collect();
+        assert_eq!(ids, HashSet::from(["unknown_feature", "document_export"]));
+    }
+
+    #[test]
+    fn test_invalid_single_feature_fails_to_deserialise() {
+        for bad in ["\"Not-Valid\"", "\"\"", "\"1a\"", "\"_a\"", "5"] {
+            assert!(serde_json::from_str::<Feature>(bad).is_err(), "{bad}");
+        }
+        let long = format!("\"a{}\"", "b".repeat(64));
+        assert!(serde_json::from_str::<Feature>(&long).is_err());
+        let ok = format!("\"a{}\"", "b".repeat(63));
+        assert!(serde_json::from_str::<Feature>(&ok).is_ok());
+    }
+
+    #[test]
+    fn test_retain_catalogue_drops_unregistered_features() {
+        let mut e = Entitlements::free();
+        e.features.insert(EXPORT);
+        e.features.insert(HISTORY);
+        e.retain_catalogue(std::slice::from_ref(&EXPORT));
+        assert!(e.has(&EXPORT));
+        assert!(!e.has(&HISTORY));
+        e.retain_catalogue(&[]);
+        assert!(e.features.is_empty());
+    }
+
+    #[test]
+    fn test_display_is_the_id() {
+        assert_eq!(EXPORT.to_string(), "document_export");
     }
 
     #[test]
@@ -269,9 +317,9 @@ mod tests {
     #[test]
     fn test_require_ok_when_feature_is_present() {
         let mut entitlements = Entitlements::free();
-        entitlements.features.insert(Feature::DocumentExport);
+        entitlements.features.insert(EXPORT);
 
-        assert!(entitlements.require(Feature::DocumentExport).is_ok());
+        assert!(entitlements.require(&EXPORT).is_ok());
     }
 
     #[test]
@@ -279,17 +327,17 @@ mod tests {
         let entitlements = Entitlements::free();
 
         let err = entitlements
-            .require(Feature::DocumentExport)
-            .expect_err("DocumentExport ist in Entitlements::free() nicht enthalten");
+            .require(&EXPORT)
+            .expect_err("not granted in Entitlements::free()");
 
-        assert_eq!(err.feature, Feature::DocumentExport);
+        assert_eq!(err.feature, EXPORT);
         assert_eq!(err.tier, Tier::Free);
     }
 
     #[test]
     fn test_fixed_entitlements_current_returns_configured_state() {
         let mut free = Entitlements::free();
-        free.features.insert(Feature::SessionHistory);
+        free.features.insert(HISTORY);
         let provider = FixedEntitlements(free.clone());
 
         assert_eq!(provider.current(), free);
