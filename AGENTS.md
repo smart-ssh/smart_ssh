@@ -8,9 +8,9 @@ server** — the AI is a copilot, never an autonomous actor. Code quality
 rules here exist to protect that promise, not as bureaucracy.
 
 This file holds the project facts and conventions that apply to every
-contributor and every coding agent. Role-specific workflows — how an
-implementation run is carried out and reviewed — live in the agent and
-skill definitions under `.claude/`.
+contributor and every coding agent. Issues and this file define the work.
+The agent and skill definitions under `.claude/` are optional helpers for
+interactive Claude Code sessions; on conflict, this file and the issue win.
 
 ## Before every commit
 

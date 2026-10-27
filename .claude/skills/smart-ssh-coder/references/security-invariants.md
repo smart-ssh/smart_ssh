@@ -1,5 +1,7 @@
 # Sicherheitsinvarianten (Stand der bisherigen Specs/ADRs)
 
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
+
 Jede Regel mit Herkunft. Vor Änderungen am jeweiligen Bereich die genannte
 Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 
@@ -82,7 +84,7 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
       (landen ungequotet im Kommando), nie hängen (Timeouts).
     - Temp-Dateien des Bearbeiten-Flows 0600 ab Erzeugung, Ordner 0700.
 
-## Architektur-Invarianten
+## Strukturelle Invarianten
 
 16. **`core` ohne Tauri/UI**; neue externe Abhängigkeit → erst Trait.
 17. **Kein Sonderfall für den lokalen Pseudo-Server in Sicherheitslogik** —

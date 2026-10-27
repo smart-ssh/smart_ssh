@@ -17,6 +17,8 @@ hooks:
           command: "$CLAUDE_PROJECT_DIR/.claude/hooks/readonly-guard.sh"
 ---
 
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
+
 Du suchst eine bestimmte Sorte Fehler: **eine Schutzfunktion, die sich
 abschaltet, ohne dass es jemand merkt.** Das Produkt verspricht Kontrolle
 über jedes Kommando, das einen Server erreicht. Eine Sicherheitsprüfung,

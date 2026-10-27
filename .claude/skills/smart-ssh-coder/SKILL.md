@@ -1,71 +1,38 @@
 ---
 name: smart-ssh-coder
 description: >
-  Arbeitsweise für die Umsetzung von Specs, Bugfixes und Aufträgen im
-  öffentlichen smart_ssh-Repo. Laden, bevor eine Spec aus docs/specs/
-  umgesetzt oder ein Auftrag im Format "Teil 0 / Commit 1..n / Abschluss"
-  bearbeitet wird — auch bei Fragen zu Regressionstests, Review-Workflow,
-  ADRs, CHANGELOG oder Abschlussberichten.
+  Interactive working method for implementing issues, bug fixes and specs in
+  the public smart_ssh repo: regression tests with counter-proof, security
+  changes only tighten, review triage, repo-research for broad searches. Load
+  before implementing a GitHub issue or a spec from docs/specs/.
 ---
 
 # smart_ssh — Coder-Arbeitsweise
 
-> Diese Datei beschreibt den interaktiven, spec-gesteuerten Ablauf; bei Arbeit an einem GitHub-Issue ist das Issue der Auftrag und `AGENTS.md` enthält die Regeln.
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
 
 Ergänzt `AGENTS.md` (Gate, Architektur, Spec-Workflow, Changelog- und
 Testkonventionen gelten dort vollständig und werden hier nicht wiederholt).
-Die Review-Pflicht gehört zum Ablauf des Coders: Sie steht hier im
-Abschnitt „Review" und im Agenten `smart-ssh-coder` (Schritt 6), nicht in
-`AGENTS.md`.
+Der Ablauf einer Sitzung steht im Agenten `smart-ssh-coder`.
 
 Vor Änderungen an Orchestrierung, Providern, Filter-Engine, Redaction oder
 SFTP: `references/security-invariants.md` lesen. Für das Finden von
 Erweiterungspunkten: `docs/codemap.md` (`references/codebase-map.md` verweist darauf).
 
-## Rollen
+## Auftrag
 
-Der **Product Owner** (PO) schreibt die Specs und trifft Produkt-
-entscheidungen. Der Coder setzt um, legt echte Entscheidungen vor statt sie
-selbst zu treffen, und berichtet ehrlich — nie ein Ergebnis behaupten, das
-nicht geprüft ist. Was nicht getestet werden konnte (z. B. UI nicht klickbar),
-ausdrücklich sagen.
+Auftrag ist ein **GitHub-Issue** (Goal, Requirements, Acceptance Criteria,
+Spec impact) oder eine Spec. Die Spec beschreibt das Soll-Verhalten
+(`docs/specs/README.md`) und wird im selben Pull Request nach dem
+Spec-Impact nachgezogen (`AGENTS.md`, „Spec workflow").
 
-Sprache: Bericht deutsch, Commit-Messages englisch (Conventional Commits).
-Code-Kommentare: Regel in `AGENTS.md` ("Code comments").
+**Code gegen das Issue prüfen, Widerspruch melden.** Sieht der Code anders
+aus, als das Issue ihn beschreibt (eine Funktion fehlt, ein Verhalten ist
+schon behoben), hältst du an und meldest das der Person, die die Sitzung
+führt — du passt die Umsetzung nicht stillschweigend an.
 
-## Auftragsformat
-
-Auftrag ist das **Issue** (Goal, Requirements, Acceptance Criteria, Spec
-impact) oder ein **ausdrücklicher Auftragstext** im Startprompt. Die Spec des
-Bereichs beschreibt das Soll-Verhalten (keine Aufgabenliste, kein
-„Ist-Stand", keine Commit-Reihenfolge — `docs/specs/README.md`) und wird im
-selben Pull Request nach dem Spec-Impact (`new` / `update NNNN` / `none`)
-nachgezogen (`AGENTS.md`, „Spec workflow"). Eine Spec ohne Abschnitt „Ist-Stand"
-oder „Umsetzung" ist normal und kein Grund anzuhalten.
-
-**Aktuellen Stand im Code prüfen, Widerspruch melden.** Sieht der Code anders
-aus, als Issue bzw. Auftragstext ihn beschreiben (eine Funktion fehlt, ein
-Verhalten ist schon behoben, eine Zählung stimmt nicht), hältst du an und
-meldest das als Rückfrage (Ablauf „Rückfragen" im Agenten) — du passt die
-Umsetzung **nicht** stillschweigend an. Der Widerspruch ist erwünscht: Er zeigt,
-dass der Auftrag auf einer falschen Annahme steht. Aussagen mit „(gelesen,
-nicht ausgeführt)" prüfst du zuerst.
-
-Das Format „Teil 0 / Commit N / Abschluss" und die Regel „Ist-Stand" gelten
-**nur**, wenn ein Auftragstext sie ausdrücklich so verwendet; „Ist-Stand"
-meint dann den Auftragstext, nicht einen Spec-Abschnitt (ein vorgegebener
-„Melde zurück"-Block legt fest, was in `summary.md`/`report.md` steht):
-
-- **Teil 0 — zuerst klären und berichten:** Ist-Stand im Code verifizieren
-  (nicht aus Erinnerung), die Frage beantworten, *vor* dem Bauen der
-  betroffenen Teile berichten. Unabhängige Teile dürfen weiterlaufen.
-- **Commit N:** ein Commit pro Teil, vorgegebene Commit-Message wörtlich
-  übernehmen, jeder Commit mit grünem Gate.
-- **Abschluss:** Gate, Review, ADR, Changelog-Fragment, Bericht (siehe unten).
-
-Offene Produktfragen: dem PO vorlegen, mit empfohlener Option zuerst. Wenn
-keine Rückfrage möglich ist (Subagent), **anhalten und berichten** statt zu
-raten. Die Antwort im Issue bzw. Auftragstext (oder, wo die Spec es vorsieht, dort) festhalten.
+Offene Produktfragen: mit empfohlener Option zuerst vorlegen, nicht raten.
+Die Antwort im Issue festhalten.
 
 ## Breite Suchen: `repo-research`
 
@@ -104,82 +71,21 @@ etwas anderes tun.
 
 ## Review
 
-**Verpflichtend nach jedem Implementierungsschritt mit eigenem Commit** —
-nicht nur bei offensichtlich riskanten Änderungen und unabhängig vom
-Spec-Impact. Du rufst den `spec-reviewer`-Agenten selbst und ausdrücklich
-auf, bevor du den Abschluss meldest; was der Aufruf nennen muss (Spec bzw.
-Issue mit „spec impact none", Commit-Range, Priorität `NORMAL`/`ELEVATED`,
-bei `ELEVATED` ausformulierte Angriffswege), steht im Agenten, Schritt 6.
-
-Den Bericht vollständig lesen, dann jeden Fund triagieren:
-- **beheben** — Gate wieder grün, eigener Commit mit Bezug auf den Fund,
-  mit Test und Gegenbeweis, oder
+Nach jedem Implementierungsschritt mit eigenem Commit rufst du den
+`spec-reviewer` ausdrücklich auf (Aufruf und Priorität: Agent
+`smart-ssh-coder`, Schritt 5). Den Bericht vollständig lesen, dann jeden
+Fund triagieren:
+- **beheben** — Gate wieder grün, eigener Commit mit Test und Gegenbeweis, oder
 - **bewusst nicht beheben** (Fehlalarm, außerhalb dieses Schritts,
-  bewusste Designentscheidung) — mit Begründung in der ADR und im Bericht.
-Nichts stillschweigend fallen lassen. Die Abschlussmeldung enthält immer
-beide Teile: was gefunden und behoben wurde, und was gefunden, aber bewusst
-nicht behoben wurde (mit Grund). Hat eine Nachbesserung selbst etwas
+  Designentscheidung) — mit Begründung im PR und ggf. in der ADR.
+Nichts stillschweigend fallen lassen; beide Teile (behoben / bewusst nicht
+behoben) gehören in den PR-Text. Hat eine Nachbesserung selbst etwas
 gelockert, eine weitere Runde.
 
-**Runde 2 prüft nur das Delta.** Die zweite Runde bekommt nicht noch
-einmal die ganze Range, sondern:
-- die Funde aus `review-01.md` mit deiner Triage (behoben mit Commit,
-  oder bewusst nicht behoben mit Grund),
-- die Commit-Range **seit Runde 1**,
-- den Auftrag, zu prüfen, ob die Funde behoben sind und ob die
-  Nachbesserungen etwas gelockert haben.
-
-Eine volle Runde ist nur nötig, wenn die Nachbesserung den Kern umbaut und
-nicht bloß ergänzt.
-
-## Die App starten — während der Arbeit nicht, am Ende einmal
-
-**Während du arbeitest, startest du keine sichtbare Instanz der App.**
-Bauen, Testen und Linten brauchen kein Fenster. Jede Instanz, die du
-zwischendurch hochziehst, nimmt dem Menschen am Rechner den Bildschirm und hinterlässt
-Fenster, die niemand zuordnen kann.
-
-**Ausnahme, und die gilt wirklich:** Lässt sich etwas anders nicht prüfen —
-ein Layout, ein Dialogablauf, ein Zustand, den kein Test abbildet —, dann
-starte sie, sieh nach, und **schließe sie danach wieder**. Sag im Bericht,
-warum es nötig war.
-
-**Genau eine Instanz am Ende**, wenn das Gate grün ist und du fertig
-meldest, damit sie geprüft werden kann. Schreib in den Bericht dazu, **was
-man sich ansehen soll** — welcher Ablauf, welcher Bildschirm, worauf zu achten
-ist. Eine laufende App ohne diesen Hinweis nützt niemandem.
-
-Auf macOS immer `./scripts/tauri-dev.sh`, nie `cargo tauri dev` direkt
-(Signatur-Eigenheit, s. `docs/adr/0022-stable-dev-code-signature.md`).
-
-## Das Gate belegen, nicht behaupten
-
-Deine Aussage „Gate grün" ist für den Architekten unbrauchbar, solange er
-sie nicht nachvollziehen kann — und er fährt das Gate ohnehin selbst noch
-einmal. Damit ein Unterschied **diagnostizierbar** wird statt nur
-ärgerlich, schreibst du beim letzten Durchlauf mit:
-
-```bash
-{ date -u +%FT%TZ; echo "HEAD=$(git rev-parse HEAD)"; } > .agent/<BL-ID>/gate.txt
-( cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings     && cargo test --workspace && cargo build --workspace ) >> .agent/<BL-ID>/gate.txt 2>&1
-echo "RUST_EXIT=$?" >> .agent/<BL-ID>/gate.txt
-fe="$(ls -d apps/*/frontend | head -n1)"
-( cd "$fe" && npx tsc -b && npm run lint && npx vitest run && npx vite build )     >> .agent/<BL-ID>/gate.txt 2>&1
-echo "FE_EXIT=$?" >> .agent/<BL-ID>/gate.txt
-```
-
-Drei Regeln dazu:
-
-- **Nach dem letzten Commit**, nicht davor. Der `HEAD` in der Datei muss
-  der Stand sein, den du abgibst — sonst belegt sie einen anderen Code.
-- **Beide Rückgabewerte gehören in die Zusammenfassung**, zusammen mit dem
-  `HEAD`-Kürzel. „Gate grün" ohne diese drei Angaben ist keine Aussage.
-- **Nie durch eine Pipe.** `… | tail` liefert den Rückgabewert von `tail`,
-  also immer 0.
-
-Scheitert ein Schritt, ist das **kein** Grund, ihn zu wiederholen, bis er
-durchgeht. Ein Test, der mal scheitert und mal nicht, ist ein eigener Fund
-und gehört in den Bericht — mit der Zahl der Versuche.
+**Runde 2 prüft nur das Delta:** die Funde der ersten Runde mit deiner
+Triage, die Commit-Range seit Runde 1 und den Auftrag zu prüfen, ob die Funde
+behoben sind und ob die Nachbesserungen etwas gelockert haben. Eine volle
+Runde nur, wenn die Nachbesserung den Kern umbaut.
 
 ## Keine Personennamen
 
@@ -190,33 +96,13 @@ Lizenz- oder Copyright-Text, der wörtlich zitiert wird.
 
 ## Abschluss
 
-- **ADR** für jede offen gelassene Entscheidung, jede Abweichung von der Spec
-  und jeden bewusst nicht behobenen Fund. **Die Nummer vergibst du selbst:
-  die höchste in `docs/adr/` plus eins** (`ls docs/adr/ | sort | tail -3`).
-  Kein Platzhalter. Da immer nur ein Auftrag je Repo läuft, kann keine
-  zweite Sitzung dieselbe Nummer greifen.
-  **Lies die Nummer nach dem Anlegen zurück** und prüfe, dass sie genau
-  einmal vorkommt.
-- **Changelog**: nicht `CHANGELOG.md` direkt ändern, sondern ein Fragment
-  in `changelog.d/` (englisch, nutzerrelevant; Dateiname und Regeln in
-  `changelog.d/README.md`). Grund: parallele Coder würden sonst dieselben
-  Zeilen ändern.
-- **Version nie selbst erhöhen.**
-- **Bericht**: `.agent/<BL-ID>/report.md` — was umgesetzt ist (in Nutzersprache),
-  Teil-0-Befund, Review-Funde behoben / bewusst nicht behoben mit Grund,
-  **manuelle Testabläufe** (nummeriert, inkl. nötiger Server-Einrichtung),
-  Commit-Liste.
-- **Zusammenfassung**: zusätzlich `.agent/<BL-ID>/summary.md`, **höchstens 40
-  Zeilen**, in dieser Reihenfolge:
-  1. Status und ob das Gate grün ist,
-  2. was entschieden werden muss (je Punkt eine Zeile, mit Verweis auf den
-     Abschnitt im Bericht),
-  3. offene Annahmen (`ANNAHME A-n`) und wodurch sie aufgelöst werden,
-  4. Kosten des Laufs.
-  Grund: Der Architekt liest zuerst diese Datei und öffnet den langen
-  Bericht nur, wenn sie ihn auf eine Stelle zeigt. Ein 370-Zeilen-Bericht
-  landet sonst vollständig in seinem Kontext. Die Zusammenfassung ersetzt
-  den Bericht nicht — sie verweist auf ihn.
+Gate, Spec, ADR und Changelog-Fragment nach `AGENTS.md` („Before every
+commit", „Spec workflow", „Versioning & changelog", Details in
+`changelog.d/README.md`); ADR-Nummer vor dem Push gegen den Basis-Branch
+prüfen. Der PR-Text nennt je Acceptance Criterion den Test, der es prüft,
+die Gegenbeweise, Annahmen und nummerierte manuelle Testschritte für alles,
+was nur in der Oberfläche prüfbar ist. Was nicht getestet werden konnte,
+sagst du ausdrücklich.
 
 ## Was bei diesem Produkt zählt
 
@@ -225,6 +111,5 @@ Lizenz- oder Copyright-Text, der wörtlich zitiert wird.
 - Sicherheit vor Bequemlichkeit — aber keine Bevormundung bei manuellen
   Aktionen (Dateibrowser, Terminal sind vertrauenswürdige Nutzeraktionen).
 - Ehrliche Hinweise statt Verharmlosung.
-- Bei langen Aufgaben kurze Zwischenstände statt langer Funkstille.
 - Wird ein Befehl per Berechtigung abgelehnt (z. B. `rm`), ihn zum
   Selbst-Ausführen anbieten, nicht umgehen.
