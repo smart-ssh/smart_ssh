@@ -75,10 +75,13 @@ describe("NarrowHeaderNav", () => {
     setup();
     open();
     const menu = screen.getByRole("dialog", { name: /navigation menu/i });
-    for (const name of ["Overview", "Connect", "Manage", "Filter Rules", "Settings"]) {
+    for (const name of ["Connect", "Manage", "Filter Rules", "Settings"]) {
       expect(within(menu).getByRole("button", { name })).toBeInTheDocument();
     }
+    expect(within(menu).queryByRole("button", { name: "Overview" })).toBeNull();
     expect(within(menu).getByRole("button", { name: "Manage" })).toHaveAttribute("aria-current", "page");
+    expect(within(menu).getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page")).toHaveLength(1);
+    expect(within(menu).getByRole("button", { name: "Manage" })).toHaveFocus();
     expect(within(menu).getByRole("button", { name: "Connect" })).not.toHaveAttribute("aria-current");
     expect(within(menu).getByRole("button", { name: /^prod-db$/ })).toBeInTheDocument();
     expect(within(menu).getByRole("button", { name: /^Connecting to staging/ })).toBeInTheDocument();
@@ -90,6 +93,8 @@ describe("NarrowHeaderNav", () => {
     open();
     expect(screen.getByRole("button", { name: "Manage" })).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("button", { name: /^prod-db$/ })).toHaveAttribute("aria-current", "page");
+    const menu = screen.getByRole("dialog");
+    expect(within(menu).getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page")).toHaveLength(1);
   });
 
   it("navigates and closes on selection", () => {
@@ -99,10 +104,6 @@ describe("NarrowHeaderNav", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(h.onSelectMainTab).toHaveBeenCalledWith("connect");
     expect(screen.queryByRole("dialog")).toBeNull();
-
-    open();
-    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
-    expect(h.onSwitch).toHaveBeenCalledWith(null);
 
     open();
     fireEvent.click(screen.getByRole("button", { name: /^prod-db$/ }));

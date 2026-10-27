@@ -115,20 +115,12 @@ function NarrowMenu({
         className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col gap-4 overflow-y-auto border-r border-border bg-surface p-3 pt-12"
       >
         <nav aria-label={t("sessionTabs.menu.title")} className="flex flex-col gap-1">
-          <button
-            ref={overview ? initialRef : undefined}
-            type="button"
-            aria-current={overview ? "page" : undefined}
-            onClick={pick(() => onSwitch(null))}
-            className={`${ENTRY_BASE} ${entryTone(overview)}`}
-          >
-            {t("sessionTabs.overview")}
-          </button>
           {MAIN_TAB_ENTRIES.map((entry) => {
             const current = overview && tab === entry.id;
             return (
               <button
                 key={entry.id}
+                ref={current ? initialRef : undefined}
                 type="button"
                 aria-current={current ? "page" : undefined}
                 onClick={pick(() => onSelectMainTab(entry.id))}
