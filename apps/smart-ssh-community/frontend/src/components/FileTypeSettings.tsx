@@ -108,10 +108,10 @@ export function FileTypeSettings() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-slate-400">{t("fileTypes.description")}</p>
+      <p className="mb-4 text-sm text-fg-subtle">{t("fileTypes.description")}</p>
 
       {loadError && (
-        <p role="alert" className="mb-4 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{loadError}</p>
+        <p role="alert" className="mb-4 rounded bg-danger-subtle px-3 py-2 text-sm text-danger-fg-soft">{loadError}</p>
       )}
 
       <div className="mb-3 space-y-2">
@@ -156,10 +156,10 @@ export function FileTypeSettings() {
           {t("fileTypes.save")}
         </Button>
         {saveState === "saved" && (
-          <span className="text-xs text-emerald-400">{t("fileTypes.saved")}</span>
+          <span className="text-xs text-success-fg">{t("fileTypes.saved")}</span>
         )}
         {saveState === "failed" && (
-          <span className="text-xs text-red-300">{t("fileTypes.saveFailed")}</span>
+          <span className="text-xs text-danger-fg-soft">{t("fileTypes.saveFailed")}</span>
         )}
       </div>
     </div>

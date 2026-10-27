@@ -13,7 +13,7 @@ interface TerminalKeyRowProps {
 export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: TerminalKeyRowProps) {
   const { t } = useTranslation();
   const base =
-    "min-h-11 min-w-11 shrink-0 rounded border border-slate-700 bg-slate-800 px-3 font-mono text-sm text-slate-200 active:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400";
+    "min-h-11 min-w-11 shrink-0 rounded border border-border bg-surface-raised px-3 font-mono text-sm text-fg-soft active:bg-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg";
   // Keep focus (and the soft keyboard) in the terminal when a key is tapped.
   const keepFocus = (e: React.MouseEvent | React.PointerEvent) => e.preventDefault();
   const keys: { id: TerminalKeyId; label: string; aria?: string }[] = [
@@ -32,7 +32,7 @@ export function TerminalKeyRow({ ctrl, alt, onToggleCtrl, onToggleAlt, onKey }: 
     { id: "slash", label: "/" },
     { id: "dash", label: "-" },
   ];
-  const mod = (on: boolean) => `${base} ${on ? "border-indigo-400 bg-indigo-600 text-white" : ""}`;
+  const mod = (on: boolean) => `${base} ${on ? "border-accent-fg bg-accent text-on-solid" : ""}`;
   return (
     <div
       role="toolbar"

@@ -5,10 +5,10 @@ import { Spinner } from "./ui";
 import { numberedServerName, sessionTabLabel, type SessionTab } from "../useSessionTabs";
 
 const STATUS_DOT: Record<SessionTab["status"], string> = {
-  connected: "bg-emerald-500",
-  disconnected: "bg-slate-500",
-  reconnecting: "bg-amber-500",
-  awaiting_host_key: "bg-amber-500",
+  connected: "bg-success-strong",
+  disconnected: "bg-fg-faint",
+  reconnecting: "bg-warning-strong",
+  awaiting_host_key: "bg-warning-strong",
 };
 
 /** The visible label of a tab, including connecting/failed wording. */
@@ -25,7 +25,7 @@ export function TabStateIndicator({ tab }: { tab: SessionTab }) {
   return tab.phase === "connecting" ? (
     <Spinner className="h-2.5 w-2.5 shrink-0" />
   ) : tab.phase === "failed" ? (
-    <span aria-hidden="true" className="shrink-0 text-red-400">
+    <span aria-hidden="true" className="shrink-0 text-danger-fg">
       ✗
     </span>
   ) : (
@@ -49,7 +49,7 @@ export function SessionTabContent({
     <>
       <TabStateIndicator tab={tab} />
       {tab.mcp && (
-        <span className="shrink-0 border border-fuchsia-500/60 px-1 text-[10px] leading-tight text-fuchsia-300">
+        <span className="shrink-0 border border-local/60 px-1 text-[10px] leading-tight text-local-fg">
           {t("sessionTabs.mcp.badge")}
         </span>
       )}
@@ -58,12 +58,12 @@ export function SessionTabContent({
       </span>
       {tab.hasPendingAction &&
         (tab.mcp ? (
-          <span className="shrink-0 animate-pulse bg-amber-400 px-1 text-[10px] leading-tight text-slate-950">
+          <span className="shrink-0 animate-pulse bg-warning-fg px-1 text-[10px] leading-tight text-surface-sunken">
             {t("sessionTabs.mcp.pendingBadge")}
           </span>
         ) : (
           <span
-            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400"
+            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-warning-fg"
             title={t("sessionTabs.pendingAction")}
           />
         ))}

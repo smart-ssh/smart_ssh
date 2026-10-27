@@ -71,15 +71,15 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
       }
     >
 
-        {error && <p className="mb-3 rounded border border-red-700 bg-red-950/50 p-2 text-sm text-red-300">{error}</p>}
+        {error && <p className="mb-3 rounded border border-danger-border-strong bg-danger-subtle/50 p-2 text-sm text-danger-fg-soft">{error}</p>}
 
         {result && (
-          <div className="space-y-3 text-sm text-slate-300">
+          <div className="space-y-3 text-sm text-fg-muted">
             <p className="break-words">{t("sshConfigExport.result.summary", { count: result.exported.length, path: result.path })}</p>
 
             {result.exported.some((e) => e.renamed) && (
-              <div className="rounded border border-slate-700 bg-slate-800/60 p-2">
-                <p className="mb-1 font-semibold text-slate-100">{t("sshConfigExport.result.renamedHeading")}</p>
+              <div className="rounded border border-border bg-surface-raised/60 p-2">
+                <p className="mb-1 font-semibold text-fg">{t("sshConfigExport.result.renamedHeading")}</p>
                 <ul className="space-y-0.5 font-mono text-xs">
                   {result.exported
                     .filter((e) => e.renamed)
@@ -93,21 +93,21 @@ export function SshConfigExportDialog({ onClose }: SshConfigExportDialogProps) {
             )}
 
             <div>
-              <p className="mb-1 text-xs text-slate-400">{t("sshConfigExport.result.includeHintLabel")}</p>
+              <p className="mb-1 text-xs text-fg-subtle">{t("sshConfigExport.result.includeHintLabel")}</p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 overflow-x-auto rounded border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-xs text-slate-100">
+                <code className="flex-1 overflow-x-auto rounded border border-border-strong bg-surface-sunken px-2 py-1.5 font-mono text-xs text-fg">
                   {result.includeHint}
                 </code>
                 <Button size="sm" onClick={handleCopyIncludeHint}>
                   {t("sshConfigExport.result.copy")}
                 </Button>
-                {copyState === "copied" && <span className="text-xs text-emerald-400">{t("about.copied")}</span>}
+                {copyState === "copied" && <span className="text-xs text-success-fg">{t("about.copied")}</span>}
               </div>
             </div>
 
-            <p className="text-xs text-slate-400">{t("sshConfigExport.result.notRepresentedHint")}</p>
+            <p className="text-xs text-fg-subtle">{t("sshConfigExport.result.notRepresentedHint")}</p>
             {/* Spec 0109, T2: this is not a backup. */}
-            <p className="text-xs text-slate-300">{t("sshConfigExport.backupHint")}</p>
+            <p className="text-xs text-fg-muted">{t("sshConfigExport.backupHint")}</p>
           </div>
         )}
 

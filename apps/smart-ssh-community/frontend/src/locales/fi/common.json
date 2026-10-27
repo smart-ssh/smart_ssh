@@ -49,6 +49,13 @@
       "dataAndBackup": "Tiedot ja varmuuskopio"
     }
   },
+  "appearance": {
+    "heading": "Ulkoasu",
+    "language": "Kieli",
+    "system": "Seuraa järjestelmää",
+    "light": "Vaalea",
+    "dark": "Tumma"
+  },
   "about": {
     "version": "Versio",
     "copyHint": "Kopioi leikepöydälle",
@@ -599,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Palvelimen sisällön kautta havaittiin mahdollinen ohjeiden syöttöyritys – vaatii vahvistuksen",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Pyydetty MCP:n kautta – vaatii aina vahvistuksen",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Käyttää tallennettua sudo-salasanaa – vaatii aina vahvistuksen",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Lisää tallennetun salaisen arvon ennen lähetystä – vaatii aina vahvistuksen",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Lukee tunnistetietoja sisältävän tiedoston (esim. SSH-avain, .env, /etc/shadow) – vaatii aina vahvistuksen",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Aiempi toiminto tässä vastauksessa hylättiin – vaatii vahvistuksen",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Käynnistää sftp-serverin (sudolla: tiedostokäyttö root-oikeuksin) – vaatii aina vahvistuksen",

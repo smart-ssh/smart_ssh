@@ -1,7 +1,7 @@
 # 0030-local-pseudo-server-chat-persistence-exemption
 
 ## Status
-Vorgeschlagen
+Proposed
 
 ## Kontext
 

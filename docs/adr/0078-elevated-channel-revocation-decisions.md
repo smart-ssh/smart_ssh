@@ -1,6 +1,9 @@
 # ADR 0078 — Entscheidungen beim Abbruch laufender Befehle bei Widerruf (Spec 0085, Teil 1)
 
-Status: angenommen · 2026-09-28 · Spec: `docs/specs/0085-elevated-channel-revocation-follow-ups.md`
+## Status
+
+Accepted · 2026-09-28 · Spec: `docs/specs/0085-elevated-channel-revocation-follow-ups.md`
+
 Betrifft: `crates/app-shell/` (`commands/elevation.rs`, `commands/sftp.rs`,
 `elevated_sftp.rs`), `crates/app-logic/` (`session.rs`), `crates/core/`
 (ein Kommentar), `crates/ssh-transport/` (nur Tests)

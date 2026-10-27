@@ -1,6 +1,9 @@
 # ADR 0058: Entscheidungen bei der Umsetzung von Spec 0067 (erhöhter Dateibrowser + Meldungen)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0067-sftp-elevated-and-toasts.md, Commits `7e4e262`,
 `235f9a6`, `d28e266`, `8bfc9a2`, Review-Nacharbeit `030150d`
 

@@ -49,6 +49,13 @@
       "dataAndBackup": "数据与备份"
     }
   },
+  "appearance": {
+    "heading": "外观",
+    "language": "语言",
+    "system": "跟随系统",
+    "light": "浅色",
+    "dark": "深色"
+  },
   "about": {
     "version": "版本",
     "copyHint": "复制到剪贴板",
@@ -599,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "检测到可能通过服务器内容注入指令的企图——需要确认",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "经由 MCP 请求——始终需要确认",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "使用已保存的 sudo 密码——始终需要确认",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "发送前会插入已保存的机密值——始终需要确认",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "读取含有凭据的文件（例如 SSH 密钥、.env、/etc/shadow）——始终需要确认",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "本次回复中较早的操作已被拒绝——需要确认",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "启动 sftp-server（使用 sudo 时：以 root 权限访问文件）——始终需要确认",

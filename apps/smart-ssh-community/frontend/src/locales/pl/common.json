@@ -49,6 +49,13 @@
       "dataAndBackup": "Dane i kopia zapasowa"
     }
   },
+  "appearance": {
+    "heading": "Wygląd",
+    "language": "Język",
+    "system": "Zgodnie z systemem",
+    "light": "Jasny",
+    "dark": "Ciemny"
+  },
   "about": {
     "version": "Wersja",
     "copyHint": "Kopiuj do schowka",
@@ -599,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Wykryto możliwą próbę wstrzyknięcia instrukcji przez treść z serwera – wymaga potwierdzenia",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Zażądane przez MCP – zawsze wymaga potwierdzenia",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Używa zapisanego hasła sudo – zawsze wymaga potwierdzenia",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Wstawia zapisaną tajną wartość przed wysłaniem – zawsze wymaga potwierdzenia",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Odczytuje plik z danymi uwierzytelniającymi (np. klucz SSH, .env, /etc/shadow) – zawsze wymaga potwierdzenia",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Wcześniejsze działanie w tej odpowiedzi zostało odrzucone – wymaga potwierdzenia",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Uruchamia sftp-server (z sudo: dostęp do plików z uprawnieniami roota) – zawsze wymaga potwierdzenia",

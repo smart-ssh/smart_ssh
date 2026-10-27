@@ -57,6 +57,10 @@
   --palette-red-300: #ff9d9b;
   --palette-red-200: #ffc2c0;
   --palette-red-100: #ffe1e0;
+  --palette-red-50: #fef2f2;
+  --palette-fuchsia-900: #86198f;
+  --palette-fuchsia-500: #e12afb;
+  --palette-fuchsia-300: #f4a8ff;
   --palette-steel-600: #5980a6;
   --palette-steel-400: #9fc0dd;
 
@@ -93,6 +97,7 @@
   --danger-fg-soft: var(--palette-red-300);
   --danger-fg-softer: var(--palette-red-200);
   --danger-fg-faint: var(--palette-red-100);
+  --danger-fg-faintest: var(--palette-red-50);
   --warning-subtle: var(--palette-amber-950);
   --warning-subtle-hover: var(--palette-amber-900);
   --warning-border: var(--palette-amber-800);
@@ -115,9 +120,13 @@
   --success-fg-faint: var(--palette-emerald-100);
   --info: var(--palette-steel-600);
   --info-fg: var(--palette-steel-400);
+  --local-border: var(--palette-fuchsia-900); /* local-session badge/header */
+  --local: var(--palette-fuchsia-500);
+  --local-fg: var(--palette-fuchsia-300);
   --on-accent: var(--palette-slate-950); /* text on a solid accent fill */
   --surface-hover: var(--palette-slate-700); /* hover fill on raised surfaces */
   --fg-bright: #ffffff; /* was `white` */
+  --on-solid: #ffffff; /* text on a solid accent/danger fill (white in both themes) */
   --overlay: #000000; /* modal scrim base colour (use with /70) */
   --web-border: #075985; /* web activity card outline */
   --web-fg: #7dd3fc; /* web activity card title */

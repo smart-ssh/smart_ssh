@@ -1,6 +1,9 @@
 # ADR 0065: Entscheidungen bei der Umsetzung von Spec 0076 (Anmeldung mit einer Schlüsseldatei)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0076-identity-file-auth.md, Commits `8062078` (Variante,
 Schnittstelle, Kette, Leseumsetzung), `f3d13c3` (DTO-Pfad, Hop-Angabe),
 `489718c` (Überführung), `d0cc3a4` (§9 K-3, `libc::O_NONBLOCK`), `28b14fd`

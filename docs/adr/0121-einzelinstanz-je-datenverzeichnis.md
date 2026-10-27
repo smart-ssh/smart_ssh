@@ -1,6 +1,9 @@
 # ADR 0121 — Single-Instance-Schutz nur mit dem Standard-Datenverzeichnis
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #44, ergänzt ADR 0106 §5/§6 und löst dort eine Konsequenz
 ab; Spec 0101 §1; ADR 0032
 

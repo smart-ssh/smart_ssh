@@ -1,6 +1,9 @@
 # ADR 0103 — MCP-Notizen redigiert und gefenct wie im KI-Kontext
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0039, ADR 0034, Spec 0028 (`get_server_notes`), Issue #18
 
 ## Problem

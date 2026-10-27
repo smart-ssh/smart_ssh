@@ -49,6 +49,13 @@
       "dataAndBackup": "Dati e backup"
     }
   },
+  "appearance": {
+    "heading": "Aspetto",
+    "language": "Lingua",
+    "system": "Segui il sistema",
+    "light": "Chiaro",
+    "dark": "Scuro"
+  },
   "about": {
     "version": "Versione",
     "copyHint": "Copia negli appunti",
@@ -599,6 +606,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Rilevato possibile tentativo di iniettare istruzioni tramite il contenuto del server: richiede conferma",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Richiesto tramite MCP: richiede sempre conferma",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Usa la password sudo memorizzata: richiede sempre conferma",
+    "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Inserisce un valore segreto memorizzato prima dell'invio: richiede sempre conferma",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Legge un file con credenziali (ad es. chiave SSH, .env, /etc/shadow): richiede sempre conferma",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Un'azione precedente in questa risposta è stata rifiutata: richiede conferma",
     "FILTER_SFTP_SERVER_REQUIRES_CONFIRM": "Avvia sftp-server (con sudo: accesso ai file con privilegi di root): richiede sempre conferma",

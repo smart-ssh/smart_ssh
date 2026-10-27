@@ -50,9 +50,9 @@ export function BackupSettings({ onRestored = () => window.location.reload() }: 
 
   return (
     <section className="space-y-4">
-      <h4 className="font-heading text-sm font-semibold tracking-wide text-slate-200">{t("backup.title")}</h4>
-      <p className="text-sm text-slate-300">{t("backup.intro")}</p>
-      <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">
+      <h4 className="font-heading text-sm font-semibold tracking-wide text-fg-soft">{t("backup.title")}</h4>
+      <p className="text-sm text-fg-muted">{t("backup.intro")}</p>
+      <ul className="list-disc space-y-1 pl-5 text-sm text-fg-muted">
         <li>{t("backup.included")}</li>
         <li>{t("backup.excluded")}</li>
         <li>{t("backup.restoreInfo")}</li>
@@ -71,9 +71,9 @@ export function BackupSettings({ onRestored = () => window.location.reload() }: 
           {t("backup.setPassphrase")}
         </Button>
       </div>
-      {error && <p role="alert" className="rounded border border-red-700 bg-red-950/50 p-2 text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="rounded border border-danger-border-strong bg-danger-subtle/50 p-2 text-sm text-danger-fg-soft">{error}</p>}
       {result && (
-        <output className="block break-words rounded border border-emerald-800 bg-emerald-950/30 p-2 text-sm text-emerald-200">
+        <output className="block break-words rounded border border-success-border bg-success-subtle/30 p-2 text-sm text-success-fg-softer">
           {t("backup.exportDone", { path: result.path })} {t("backup.exportCounts", { ...result })}
         </output>
       )}

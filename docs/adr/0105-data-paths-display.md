@@ -1,6 +1,9 @@
 # ADR 0105 — Anzeige der Datenpfade: Quellen, Ordner öffnen, Edition-Einträge
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Issue #16, Spec 0063, ADR 0032
 
 ## Problem

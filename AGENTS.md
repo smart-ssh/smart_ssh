@@ -8,9 +8,9 @@ server** — the AI is a copilot, never an autonomous actor. Code quality
 rules here exist to protect that promise, not as bureaucracy.
 
 This file holds the project facts and conventions that apply to every
-contributor and every coding agent. Role-specific workflows — how an
-implementation run is carried out and reviewed — live in the agent and
-skill definitions under `.claude/`.
+contributor and every coding agent. Issues and this file define the work.
+The agent and skill definitions under `.claude/` are optional helpers for
+interactive Claude Code sessions; on conflict, this file and the issue win.
 
 ## Before every commit
 
@@ -73,7 +73,15 @@ registered (issue #101). Then it runs `npm run check-a11y-rules`
 (`scripts/check-a11y-lint-rules.mjs`, issue #146): it fails when a
 `jsx-a11y` rule that the installed oxlint enables is not listed with
 `error` in `.oxlintrc.json` (Spec 0100 A6.1, ADR 0116) — after an oxlint
-upgrade that adds a rule, add it there. CI runs both through the same
+upgrade that adds a rule, add it there. Finally `npm run check-conventions`
+(`scripts/check-conventions.mjs`, issue #858) fails on a new `*_tests.rs` file
+(see "Testing conventions"), on a stale entry in its list of the existing
+ones, and on `LOCAL_SERVER_ID` / `local_server` anywhere under
+`crates/core/src/filter/` or `crates/core/src/risk/` (see "No special-casing
+the local pseudo-server"). `npm run check-doc-paths` (`scripts/check-doc-paths.mjs`,
+issue #874) fails on a backticked path or a quoted section reference in these
+guidance documents that does not exist; intentional non-paths go into
+`scripts/doc-paths-allowlist.json` with a reason. CI runs all of them through the same
 `npm run lint` step.
 
 `npm run lint` also runs `npm run check-file-size`
@@ -119,23 +127,34 @@ crates/
 │   ├── filter/            # policy/filter engine (security-critical)
 │   ├── risk/               # command risk classification
 │   ├── ai/                  # AI provider abstraction + output redaction
-│   └── profiles/              # server/group/credential domain types
+│   ├── profiles/              # server/group/credential domain types
+│   └── entitlements.rs         # `Feature` enum and `EntitlementProvider` trait
 ├── ssh-transport/       # concrete SshTransport impl (russh + local pseudo-server)
 ├── persistence-sqlite/  # concrete ProfileStore/PolicyStore impl
 ├── credentials-keyring/ # concrete CredentialStore impl (OS keychain)
 ├── ai-providers/        # concrete AiProvider impls (Anthropic, OpenAI-compatible, ...)
 ├── mcp-server/           # MCP server exposing sessions to external clients
+├── speech/               # speech-to-text
 ├── app-logic/            # Tauri-free application logic: chat-turn orchestration,
 │                         # compaction, confirmation registry, connection test,
 │                         # server/group/credential management, DTOs, AppState
 │                         # (Spec 0084; see docs/architecture.md for the app-logic/
 │                         # app-shell boundary and its one deliberate exception)
-└── app-shell/            # thin wrapper: Tauri commands/events <-> app-logic/core APIs,
-                           # edition-parametrized via `Wiring` (Spec 0038)
+├── app-shell/            # Tauri layer: commands, events, wiring (`Wiring`, Spec 0038);
+│                         # depends on `app-logic` and directly on the adapter crates
+└── real-app-tests/       # starts the real app in CI
 apps/
 └── smart-ssh-community/  # thin binary: app_shell::run(Wiring::community())
     └── frontend/           # React, talks only to app-shell via invoke()
 ```
+
+Extension points:
+
+- `app_shell::Wiring` — `crates/app-shell/src/wiring.rs`
+- Frontend extension registry —
+  `apps/smart-ssh-community/frontend/src/extensions/registry.ts`
+- Namespaced extension tables — `extension_db` in `crates/persistence-sqlite`
+  (`crates/persistence-sqlite/src/extension_db.rs`)
 
 **`core` never depends on Tauri or a UI framework.** All domain logic
 belongs there; `app-shell` only translates between Tauri commands/events
@@ -161,6 +180,25 @@ code, that's a sign something is architecturally wrong — the special
 casing belongs at the transport/session-construction boundary, never
 inside the security logic itself.
 
+## Where to look
+
+- `docs/codemap.md` — read this first when you look for the file, symbol or extension point for a change (checked by `npm run check-codemap`).
+- `docs/recipes/README.md` — read this before a change that always touches the same files (new Tauri command, new UI text, new database migration).
+- `docs/architecture.md` — read this when you need the crate boundaries, in particular app-logic vs. app-shell.
+- `THREAT-MODEL.md` — read this when a change touches what the AI sees, redaction, where data lives, network connections or trust boundaries.
+- `.claude/skills/smart-ssh-coder/references/security-invariants.md` — read this before changing anything security-critical.
+- `docs/ui-guidelines.md` — read this when you build or change UI.
+- `docs/i18n-glossary.md` — read this when you add or change translated texts.
+- `docs/glossary.md` — read this when you meet a project or domain term (Wiring, fencing, ledger, …) you do not know.
+- `docs/datenpfade.md` — read this when you need to know where the app stores data on disk.
+- `docs/netzwerkverbindungen.md` — read this when you add or change an outgoing network connection.
+- `docs/android-build.md` — read this when you build for or debug on Android.
+- `docs/dev-environment.md` — read this when you set up a development environment.
+- `README_DEV.md` — read this for developer-facing build and run instructions.
+- `docs/specs/README.md` — read this when you change user-visible behaviour or write a spec.
+- `docs/adr/README.md` — read this when you make or look up an architecture decision.
+- `changelog.d/README.md` — read this when you add a changelog fragment.
+
 ## Security-critical modules — extra care
 
 `crates/core/src/filter/` (policy engine), `crates/core/src/risk/` (risk
@@ -185,6 +223,19 @@ irreversible happening on a real server. For changes here:
 - Redaction (`crates/core/src/ai/`) must run before content is persisted
   or sent anywhere — verify with a test that plants a redaction-worthy
   secret and asserts it never appears in plaintext in the output/DB.
+
+- **Keep `THREAT-MODEL.md` current.** A pull request that changes the
+  filter engine, risk classifier, redaction or fencing, credential
+  handling, the command execution/confirmation path, a network boundary
+  (new outgoing connection, listener, MCP), an IPC command with side
+  effects, a stored secret, an external process, or a trust boundary
+  updates `THREAT-MODEL.md` in the same pull request. This applies to
+  `crates/core/src/filter/`, `crates/core/src/risk/`, `crates/core/src/ai/`,
+  `crates/core/src/profiles/credentials.rs`, `crates/credentials-keyring/`,
+  `crates/app-logic/src/orchestration/`, `crates/mcp-server/`,
+  `crates/ssh-transport/` and `crates/app-shell/src/elevated_sftp.rs`. If it
+  does not need to change, the pull request description says
+  `Threat model: no change – <reason>`.
 
 ## Spec workflow
 
@@ -273,17 +324,26 @@ not by hand-editing, so the lockfile stays consistent).
 
 ## Testing conventions
 
-- Rust: tests live in `#[cfg(test)] mod tests` next to the code, using
-  trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
+- Rust: small test modules stay inline (`#[cfg(test)] mod tests { … }`).
+  Larger ones go in `<module>/tests.rs` or `<module>/tests_<topic>.rs` next
+  to `<module>.rs`, declared with `#[cfg(test)] mod tests;`. Cross-crate or
+  real-connection tests live in the crate's `tests/` directory
+  (`crates/ssh-transport/tests/integration.rs` is the one place real
+  test-fixture SSH connections are exercised). Shared helpers live in
+  `test_support.rs` behind `cfg(any(test, feature = "test-support"))`. Tests
+  use trait mocks (`MockAiProvider` in `crates/core/src/ai/tests.rs`, the
   in-memory `ProfileStore`/`CredentialStore` in
   `crates/app-logic/src/test_support.rs`) — no real network/SSH/keychain
-  access in unit tests. `crates/ssh-transport/tests/integration.rs` is the
-  one place real (test-fixture) SSH connections are exercised.
+  access in unit tests. **No new `*_tests.rs` files**: seven exist
+  (listed in `scripts/check-conventions.mjs`) and stay until they are
+  touched anyway; when one is renamed or removed, drop it from that list.
+  Note that `crates/app-logic/src/test_connection.rs` is production code (the
+  "test connection" feature), not a test file.
 - Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
   gets its own `*.test.ts` via Vitest; component tests exist for the
   trickier interactive pieces, not for every component.
 - When a bug is fixed, add the regression test that would have caught it,
-  not just the fix — see `crates/app-logic/src/dto.rs`'s
+  not just the fix — see `crates/app-logic/src/dto/tests.rs`'s
   `rename_all_fields` regression tests for the pattern.
 - **Prove a regression test is real: it must fail against the un-fixed
   code.** Before accepting a regression test as green, verify it actually
@@ -292,6 +352,13 @@ not by hand-editing, so the lockfile stays consistent).
   that passes both before and after the fix tests nothing; this is the
   single most effective guard against the tautological tests that a past
   audit found across the codebase.
+
+## Code comments
+
+Comments in new code are written in English; existing German comments stay
+as they are (translate only when the surrounding function is substantially
+rewritten, never in bulk). Spec references (`Spec NNNN, A<n>`) stay as they
+are. See `docs/adr/0152-code-comment-language.md`.
 
 ## Commits
 

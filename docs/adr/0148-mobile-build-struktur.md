@@ -1,6 +1,8 @@
 # ADR 0148 — Mobile-Build-Struktur (Android)
 
-Status: angenommen · Issue: #675 · Spec 0114
+## Status
+
+Accepted · Issue: #675 · Spec 0114
 
 ## Kontext
 
@@ -17,4 +19,5 @@ Die App war ein reines Desktop-Binary. Tauri-Mobile lädt die App als Bibliothek
 ## Offen (muss auf Gerät/Emulator geprüft werden)
 
 - **TLS:** `reqwest` mit `rustls` nutzt `rustls-platform-verifier`, das unter Android eine JNI-Initialisierung samt Kotlin-Komponente braucht. Entscheidung: unter Android (`cfg(target_os = "android")`) bauen `ai-providers` und `speech` ihre HTTP-Clients mit einer vorkonfigurierten rustls-Konfiguration auf Basis der eingebauten `webpki-roots`; Desktop bleibt unverändert beim Plattform-Verifier. Begründung: kein Kotlin-/JNI-Code, auf dem Host ohne Gerät übersetzbar und testbar. Nachteil: Wurzelzertifikate, die der Nutzer im Android-Zertifikatsspeicher installiert hat (z. B. Firmen-CA), werden nicht berücksichtigt; ein späteres Issue kann den Plattform-Verifier nachrüsten.
-- **Build-Ausgabe von `tauri android init`** (`gen/android`) ist noch nicht eingecheckt.
+- **Build-Ausgabe von `tauri android init`** (`gen/android`) ist eingecheckt. Der Android-`ndk-context` kommt ab tao 0.37 von tao selbst (Issue #820); die frühere Umgehung (Issue #795) ist entfernt, weil sie doppelt initialisiert und beim Start paniert. Der Test `apps/smart-ssh-community/tests/android_ndk_context.rs` koppelt das an die tao-Version im Lockfile.
+- **Krypto-Provider (Issue #935):** Die vorkonfigurierte Konfiguration übergibt den Provider `aws-lc-rs` ausdrücklich (gemeinsamer Helfer in der Crate `tls-config`, von `ai-providers` und `speech` genutzt), statt den Prozess-Standard von rustls zu verwenden; `app_shell::run` installiert `aws-lc-rs` zusätzlich einmalig als Prozess-Standard. Grund: Mit `ring` (über `sqlx`/`tls-rustls`) und `aws-lc-rs` gleichzeitig kann rustls keinen Standard wählen und paniert. Das unnötige `tls-rustls`-Feature von `sqlx` ist entfernt. Zertifikatsprüfung unverändert.

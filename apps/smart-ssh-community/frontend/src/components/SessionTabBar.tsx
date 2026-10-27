@@ -5,7 +5,7 @@ import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionTabContent, tabDisplayLabel } from "./SessionTabParts";
 
 const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900";
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg focus-visible:ring-offset-1 focus-visible:ring-offset-surface";
 
 interface SessionTabBarProps {
   tabs: SessionTab[];
@@ -91,8 +91,8 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
         title={t("sessionTabs.overview")}
         className={`${FOCUS_RING} font-heading shrink-0 border px-2.5 py-1 text-xs font-semibold tracking-wide ${
           activeSessionId === null
-            ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-400"
-            : "border-transparent text-slate-400 hover:bg-slate-800"
+            ? "border-accent/55 bg-accent/16 text-accent-fg"
+            : "border-transparent text-fg-subtle hover:bg-surface-raised"
         }`}
       >
         {t("sessionTabs.overview")}
@@ -119,8 +119,8 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
             }
             className={`group flex shrink-0 items-center gap-1.5 border px-2 py-1 text-xs ${
               active
-                ? "border-indigo-600/55 bg-indigo-600/16 text-indigo-300"
-                : "border-transparent text-slate-400 hover:bg-slate-800"
+                ? "border-accent/55 bg-accent/16 text-accent-fg-soft"
+                : "border-transparent text-fg-subtle hover:bg-surface-raised"
             }`}
           >
             <button
@@ -151,7 +151,7 @@ export function SessionTabBar({ tabs, activeSessionId, onSwitch, onRequestClose,
               // Eigener Tab-Stopp nur im aktiven Tab; die übrigen schließt die
               // Entf-Taste auf dem fokussierten Tab (Roving-Tabindex).
               tabIndex={active ? 0 : -1}
-              className={`${FOCUS_RING} inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-slate-400 hover:border-slate-500 hover:bg-slate-600/60 hover:text-slate-200 focus-visible:border-slate-500 focus-visible:bg-slate-600/60 focus-visible:text-slate-200`}
+              className={`${FOCUS_RING} inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-transparent text-fg-subtle hover:border-fg-faint hover:bg-border-strong/60 hover:text-fg-soft focus-visible:border-fg-faint focus-visible:bg-border-strong/60 focus-visible:text-fg-soft`}
             >
               ✕
             </button>

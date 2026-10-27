@@ -1,6 +1,8 @@
 # ADR 0150 — Dateiauswahl unter Android
 
-Status: angenommen · Issue: #679 · Spec 0114
+## Status
+
+Accepted · Issue: #679 · Spec 0114
 
 ## Kontext
 

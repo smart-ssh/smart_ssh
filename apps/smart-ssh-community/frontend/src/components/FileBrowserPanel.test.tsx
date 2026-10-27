@@ -266,7 +266,7 @@ describe("FileBrowserPanel column resizing (Spec 0053, Teil 1)", () => {
     const ths = container.querySelectorAll("thead th");
     expect(ths.length).toBe(6);
     ths.forEach((th) => {
-      expect(th).toHaveClass("sticky", "top-0", "bg-slate-900");
+      expect(th).toHaveClass("sticky", "top-0", "bg-surface");
     });
     const table = container.querySelector("table");
     expect(table).toHaveClass("border-separate", "border-spacing-0");
@@ -559,7 +559,7 @@ describe("FileBrowserPanel context menu + read-only actions (Spec 0054, Teil 1+2
     expect(row).not.toHaveAttribute("data-active");
 
     // hover: stronger background and underlined name
-    expect(row.className).toContain("hover:bg-slate-700/60");
+    expect(row.className).toContain("hover:bg-border/60");
     expect(row.className).toContain("group");
     expect(screen.getByText(/a\.txt/).className).toContain("group-hover:underline");
 
@@ -1725,9 +1725,12 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     fireEvent.change(screen.getByLabelText("Ziel-Nutzer"), { target: { value: "postgres" } });
     fireEvent.click(screen.getByRole("button", { name: "Erhöhen" }));
     await waitFor(() => expect(sftpElevationEnable).toHaveBeenCalledWith("session-1", "postgres", false));
+    // The arrow is disabled until enabling has finished (`finally` after the
+    // mock resolved); wait for that end state, not just for the call.
+    await waitFor(() => expect(arrow).toBeEnabled());
 
     fireEvent.click(arrow);
-    fireEvent.click(screen.getByRole("menuitem"));
+    fireEvent.click(await screen.findByRole("menuitem"));
     expect(screen.getByLabelText("Ziel-Nutzer")).toHaveValue("postgres");
   });
 

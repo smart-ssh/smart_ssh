@@ -86,8 +86,8 @@ export function classifyDrop(
 /** Tailwind-Klassen für ein Ablageziel, je nachdem, was ein Loslassen dort
  * bewirken würde. */
 export function dropHighlightClass(kind: DropKind | null): string {
-  if (kind === "valid") return "bg-indigo-900/40 ring-2 ring-inset ring-indigo-500";
-  if (kind === "cycle") return "bg-red-950/40 ring-2 ring-inset ring-red-500";
+  if (kind === "valid") return "bg-accent-subtle-hover/40 ring-2 ring-inset ring-accent-strong";
+  if (kind === "cycle") return "bg-danger-subtle/40 ring-2 ring-inset ring-danger-strong";
   return "";
 }
 

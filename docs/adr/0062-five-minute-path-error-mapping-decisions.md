@@ -1,6 +1,9 @@
 # ADR 0062: Entscheidungen bei der Umsetzung von Spec 0069 (Fünf-Minuten-Pfad: Einstieg und verständliche Fehler)
 
-Status: Angenommen
+## Status
+
+Accepted
+
 Bezug: docs/specs/0069-five-minute-path-onboarding-and-errors.md, Commits
 `b134075` (A3), `31dab1e` (A2), `b55eba7` (A4), `5132657` (A5), `0e18508`
 (B), `fbe15c9` (C1), `89cf360` (C2), Review-Nacharbeit (s. Abschnitt 4)

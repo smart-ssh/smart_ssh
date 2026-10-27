@@ -203,7 +203,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
           </table>
           <p>{t("backup.confirm.sessions", { count: preview.openSessions })}</p>
           <p>{t("backup.confirm.safety", { dir: preview.safetyBackupDir })}</p>
-          {error && <p role="alert" className="text-red-300">{error}</p>}
+          {error && <p role="alert" className="text-danger-fg-soft">{error}</p>}
         </div>
       </DialogFrame>
     );
@@ -232,7 +232,7 @@ export function BackupImportDialog({ onClose, onRestored }: Props) {
     >
       <div className="space-y-3 break-words">
         {pickError && (
-          <div role="alert" className="space-y-2 text-red-300">
+          <div role="alert" className="space-y-2 text-danger-fg-soft">
             <p>{pickError}</p>
             <Button type="button" className="narrow:min-h-11" onClick={() => pick(false)}>
               {t("backup.import.chooseAgain")}

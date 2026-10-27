@@ -1,7 +1,7 @@
 # 0029-chat-context-truncation-budget-constant
 
 ## Status
-Ersetzt durch [ADR 0048](0048-compaction-token-estimation-and-context-parts.md) —
+Superseded by 0048 · Ersetzt durch [ADR 0048](0048-compaction-token-estimation-and-context-parts.md) —
 `chat_context_truncation`/`DEFAULT_CHAR_BUDGET` existieren seit Spec 0057
 Etappe 2 nicht mehr; das dort begründete "kein fester, providerunabhängiger
 Zeichen-Wert" wird durch einen echten, modellabhängigen Prozentsatz des

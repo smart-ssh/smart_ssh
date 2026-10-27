@@ -1,6 +1,9 @@
 # ADR 0100 — Eine Quelle für die Kennzeile der Drittlizenz-Datei
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0099 (A1.8, A2.2, A4.3), Issue #7
 
 ## Problem

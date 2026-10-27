@@ -1,5 +1,7 @@
 # Sicherheitsinvarianten (Stand der bisherigen Specs/ADRs)
 
+> Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
+
 Jede Regel mit Herkunft. Vor Änderungen am jeweiligen Bereich die genannte
 Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 
@@ -69,8 +71,8 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
     Quelle "manuell" (ADR 0045).
 15. **Erhöhter Dateibrowser (Spec 0067)**:
     - eigener Kanal `Session::elevated_sftp`, erreichbar nur mit
-      `commands::BrowserAccess` (privater Konstruktor in `commands.rs`) —
-      KI (`orchestration.rs`) und MCP (`mcp_backend.rs`) können ihn nicht
+      `commands::BrowserAccess` (privater Konstruktor in `crates/app-shell/src/commands.rs`) —
+      KI (`crates/app-logic/src/orchestration.rs`) und MCP (`crates/app-shell/src/mcp_backend.rs`) können ihn nicht
       einmal kompilierbar ansprechen. Regressionstest:
       `test_ai_and_mcp_file_actions_never_use_the_elevated_channel`.
     - nie Default, nie persistiert, beim Öffnen des Browsers und bei
@@ -82,7 +84,7 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
       (landen ungequotet im Kommando), nie hängen (Timeouts).
     - Temp-Dateien des Bearbeiten-Flows 0600 ab Erzeugung, Ordner 0700.
 
-## Architektur-Invarianten
+## Strukturelle Invarianten
 
 16. **`core` ohne Tauri/UI**; neue externe Abhängigkeit → erst Trait.
 17. **Kein Sonderfall für den lokalen Pseudo-Server in Sicherheitslogik** —

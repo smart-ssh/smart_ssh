@@ -206,13 +206,13 @@ export function ManagementView({
       {showDetail && (
       <div className="min-w-0 flex-1 overflow-y-auto">
         {narrow && selection && (
-          <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900 px-2 py-1">
+          <div className="sticky top-0 z-10 border-b border-surface-raised bg-surface px-2 py-1">
             <Button variant="ghost" onClick={goBack} className="min-h-11 min-w-11">
               <span aria-hidden="true">←</span> {t("management.back")}
             </Button>
           </div>
         )}
-        {error && <p className="p-4 text-sm text-red-400">{error}</p>}
+        {error && <p className="p-4 text-sm text-danger-fg">{error}</p>}
 
         {/* `key` erzwingt einen vollständigen Remount (statt Wiederverwendung
          * derselben Komponenten-Instanz mit nur geänderten Props), sobald
@@ -291,7 +291,7 @@ export function ManagementView({
           // lag außerhalb des Dateisatzes von Spec 0069. Interpoliert die
           // Button-Beschriftungen aus `sidebar.addGroup`/`sidebar.addServer`
           // statt sie hier ein zweites Mal wörtlich zu führen.
-          <p className="p-4 text-sm text-slate-400">
+          <p className="p-4 text-sm text-fg-subtle">
             {t("management.emptyState", {
               addGroup: t("sidebar.addGroup"),
               addServer: t("sidebar.addServer"),

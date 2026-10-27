@@ -1,6 +1,9 @@
 # ADR 0097 — Fehlerarten der Verpackungsdatei und der Wechsel auf den Schlüsselbund
 
-Status: akzeptiert
+## Status
+
+Accepted
+
 Betrifft: Spec 0101 (A3, A5, A15–A17, §7, Klarstellung 10 a–d), ADR 0095 §7,
 ADR 0096 §5
 

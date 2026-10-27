@@ -1,0 +1,104 @@
+/* Light theme (issue #804). Overrides the same variables as dark.css under
+   [data-theme="light"]: palette primitives first (the layer-2 semantic tokens
+   in dark.css reference them), then the tokens that hold literal values.
+   The "950..700" steps are the light surfaces, "50..500" the dark foregrounds.
+   `theme.test.ts` fails when this file misses a variable defined in dark.css;
+   `themeContrast.test.ts` checks the text contrast of both themes. */
+html[data-theme="light"] {
+  --palette-slate-950: #f4f6fa;
+  --palette-slate-900: #ffffff;
+  --palette-slate-800: #eceff6;
+  --palette-slate-700: #d9deea;
+  --palette-slate-600: #b7bfd0;
+  --palette-slate-500: #566079;
+  --palette-slate-400: #4a5368;
+  --palette-slate-300: #3d455a;
+  --palette-slate-200: #2c3346;
+  --palette-slate-100: #1c2233;
+  --palette-slate-50: #0f1420;
+  --palette-indigo-950: #eceeff;
+  --palette-indigo-900: #e0e4ff;
+  --palette-indigo-800: #cdd3ff;
+  --palette-indigo-700: #aeb8fb;
+  --palette-indigo-600: #4c5bd4;
+  --palette-indigo-500: #3f4cb8;
+  --palette-indigo-400: #3541a3;
+  --palette-indigo-300: #2b3589;
+  --palette-indigo-200: #202767;
+  --palette-indigo-100: #171b4a;
+  --palette-indigo-50: #10133a;
+  --palette-emerald-950: #e8f6ea;
+  --palette-emerald-900: #d9efdd;
+  --palette-emerald-800: #c3e6ca;
+  --palette-emerald-700: #8fcf9c;
+  --palette-emerald-600: #1e7a35;
+  --palette-emerald-500: #19692d;
+  --palette-emerald-400: #145a26;
+  --palette-emerald-300: #104a1f;
+  --palette-emerald-200: #0c3a18;
+  --palette-emerald-100: #082b12;
+  --palette-amber-950: #fdf4e0;
+  --palette-amber-900: #faebc8;
+  --palette-amber-800: #f4dba0;
+  --palette-amber-700: #e0b860;
+  --palette-amber-600: #a85f00;
+  --palette-amber-500: #8f4f00;
+  --palette-amber-400: #7a4300;
+  --palette-amber-300: #653800;
+  --palette-amber-200: #502d00;
+  --palette-amber-100: #3b2100;
+  --palette-red-950: #fdecec;
+  --palette-red-900: #fbdcdc;
+  --palette-red-800: #f6c4c4;
+  --palette-red-700: #e89a9a;
+  --palette-red-600: #c62f34;
+  --palette-red-500: #b3262b;
+  --palette-red-400: #9c1f24;
+  --palette-red-300: #861a1f;
+  --palette-red-200: #6b1519;
+  --palette-red-100: #4f1012;
+  --palette-red-50: #330a0c;
+  --palette-steel-600: #3d6486;
+  --palette-steel-400: #2f5675;
+  --palette-fuchsia-900: #d9a3d9;
+  --palette-fuchsia-500: #a43aa4;
+  --palette-fuchsia-300: #8a1f8a;
+
+  --fg-bright: #0f1420;
+  --on-solid: #ffffff;
+  --overlay: #000000;
+  --web-border: #7cb7d6;
+  --web-fg: #0b5d86;
+  --mcp-subtle: #efe6fb;
+  --mcp-fg: #5b2a9a;
+  --selection: rgba(76, 91, 212, 0.25);
+
+  /* Window controls (tauri-plugin-decoration): dark icons on a light bar */
+  --decoration-fg: #202020;
+  --decoration-hover-bg: rgba(0, 0, 0, 0.1);
+  --decoration-icon-bg: rgba(0, 0, 0, 0.1);
+  --decoration-icon-active-bg: rgba(0, 0, 0, 0.2);
+
+  /* Terminal: every normal ANSI colour reaches >= 4.5:1 on --term-bg */
+  --term-bg: #fafbfd;
+  --term-fg: #1c2233;
+  --term-cursor: #4350c8;
+  --term-cursor-accent: #fafbfd;
+  --term-selection: rgba(67, 80, 200, 0.25);
+  --term-ansi-black: #1c2233;
+  --term-ansi-red: #b3262b;
+  --term-ansi-green: #1a7f37;
+  --term-ansi-yellow: #8a5a00;
+  --term-ansi-blue: #3b45a8;
+  --term-ansi-magenta: #8a2fa0;
+  --term-ansi-cyan: #1f6a80;
+  --term-ansi-white: #4f596e;
+  --term-ansi-bright-black: #566079;
+  --term-ansi-bright-red: #c0282d;
+  --term-ansi-bright-green: #1f6f35;
+  --term-ansi-bright-yellow: #7a5000;
+  --term-ansi-bright-blue: #2f3aa0;
+  --term-ansi-bright-magenta: #7a2a8f;
+  --term-ansi-bright-cyan: #1a6075;
+  --term-ansi-bright-white: #2c3346;
+}

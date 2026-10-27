@@ -23,12 +23,12 @@ export function TreeDragGhost({ drag, kind }: { drag: TreeDragState; kind: DropK
       style={{ position: "fixed", left: drag.x + 14, top: drag.y + 14 }}
       className={`pointer-events-none z-50 rounded border px-2 py-1 text-xs shadow-lg ${
         kind === "cycle"
-          ? "border-red-500 bg-red-950 text-red-100"
-          : "border-slate-600 bg-slate-800 text-slate-100"
+          ? "border-danger-strong bg-danger-subtle text-danger-fg-faint"
+          : "border-border-strong bg-surface-raised text-fg"
       }`}
     >
       {icon} {drag.item.label}
-      {hint && <span className="ml-2 text-slate-400">{hint}</span>}
+      {hint && <span className="ml-2 text-fg-subtle">{hint}</span>}
     </div>
   );
 }

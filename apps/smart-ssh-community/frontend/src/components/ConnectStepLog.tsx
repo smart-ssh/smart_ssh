@@ -36,15 +36,15 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
   };
 
   return (
-    <details className="mt-2 w-full text-xs text-slate-300" data-testid="connect-step-log">
-      <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-200">
+    <details className="mt-2 w-full text-xs text-fg-muted" data-testid="connect-step-log">
+      <summary className="cursor-pointer select-none text-fg-subtle hover:text-fg-soft">
         {t("connectLog.title")}
       </summary>
-      <div className="mt-2 space-y-2 break-words rounded border border-slate-700 bg-slate-900/60 p-2">
+      <div className="mt-2 space-y-2 break-words rounded border border-border bg-surface/60 p-2">
         {groups.map((group) => (
           <div key={group.hopIndex}>
             {multiHop && (
-              <div className="mb-1 font-medium text-slate-200">
+              <div className="mb-1 font-medium text-fg-soft">
                 {t("connectLog.hop", { index: group.hopIndex + 1, hop: group.hop })}
               </div>
             )}
@@ -58,7 +58,7 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                     data-failed={failed ? "true" : undefined}
                     className={
                       failed
-                        ? "rounded border border-red-700 bg-red-950/40 px-1 py-0.5 text-red-300"
+                        ? "rounded border border-danger-border-strong bg-danger-subtle/40 px-1 py-0.5 text-danger-fg-soft"
                         : "px-1 py-0.5"
                     }
                   >
@@ -68,9 +68,9 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
                       </span>
                       <span className="min-w-0 font-medium">{stepLabel(t, record.step, record.status.state)}</span>
                       <span>{stepStatusText(t, record)}</span>
-                      <span className="text-slate-400">{formatDuration(record.durationMs)}</span>
+                      <span className="text-fg-subtle">{formatDuration(record.durationMs)}</span>
                     </div>
-                    {details && <div className="ml-5 break-all text-slate-400">{details}</div>}
+                    {details && <div className="ml-5 break-all text-fg-subtle">{details}</div>}
                   </li>
                 );
               })}
@@ -83,8 +83,8 @@ export function ConnectStepLog({ steps }: { steps: ConnectStepRecord[] }) {
           >
             {t("connectLog.copy")}
           </Button>
-          {copied === "ok" && <span className="text-emerald-400">{t("connectLog.copied")}</span>}
-          {copied === "failed" && <span className="text-red-400">{t("connectLog.copyFailed")}</span>}
+          {copied === "ok" && <span className="text-success-fg">{t("connectLog.copied")}</span>}
+          {copied === "failed" && <span className="text-danger-fg">{t("connectLog.copyFailed")}</span>}
         </div>
       </div>
     </details>
