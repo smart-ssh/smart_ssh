@@ -164,6 +164,7 @@ inside the security logic itself.
 
 ## Where to look
 
+- `docs/recipes/README.md` — read this before a change that always touches the same files (new Tauri command, new UI text, new database migration).
 - `docs/architecture.md` — read this when you need the crate boundaries, in particular app-logic vs. app-shell.
 - `THREAT-MODEL.md` — read this when a change touches what the AI sees, redaction, where data lives, network connections or trust boundaries.
 - `.claude/skills/smart-ssh-coder/references/security-invariants.md` — read this before changing anything security-critical.
