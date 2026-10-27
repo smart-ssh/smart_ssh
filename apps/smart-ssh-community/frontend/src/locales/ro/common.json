@@ -1492,5 +1492,10 @@
       "newerVersion": "Această copie a fost creată de o versiune mai nouă a Smart SSH. Actualizați aplicația și încercați din nou.",
       "failed": "Operația a eșuat. Nu s-a schimbat nimic."
     }
+  },
+  "errorBoundary": {
+    "title": "Ceva nu a mers bine",
+    "body": "Smart SSH a întâlnit o eroare neașteptată în interfață. Reîncarcă pentru a continua. Dacă se repetă, după reîncărcare creează un pachet de diagnosticare în Setări → Diagnosticare.",
+    "reload": "Reîncarcă"
   }
 }

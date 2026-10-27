@@ -1484,5 +1484,10 @@
       "newerVersion": "Deze back-up is gemaakt met een nieuwere versie van Smart SSH. Werk de app bij en probeer het opnieuw.",
       "failed": "De bewerking is mislukt. Er is niets gewijzigd."
     }
+  },
+  "errorBoundary": {
+    "title": "Er is iets misgegaan",
+    "body": "Smart SSH heeft een onverwachte fout in de interface gevonden. Laad opnieuw om door te gaan. Gebeurt het weer, maak dan na het herladen een diagnosepakket onder Instellingen → Diagnose.",
+    "reload": "Opnieuw laden"
   }
 }

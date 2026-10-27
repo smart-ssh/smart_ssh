@@ -51,7 +51,7 @@ import { ModalBackdrop } from "./ModalBackdrop";
 import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
-import { Button, TabPanel, Tabs, tabId, useTabsIdBase, type TabItem } from "./ui";
+import { Button, ErrorBoundary, TabPanel, Tabs, tabId, useTabsIdBase, type TabItem } from "./ui";
 import { Field, FIELD_CONTROL_CLASS } from "./ui/Field";
 
 interface ServerFormProps {
@@ -459,7 +459,7 @@ export function ServerForm({
         active={activeTab === `ext:${x.id}`}
         className="space-y-6"
       >
-        <x.component serverId={extServerId} />
+        <ErrorBoundary id={`server-settings-tab:${x.id}`} resetKeys={[extServerId]}><x.component serverId={extServerId} /></ErrorBoundary>
       </TabPanel>
     ));
   // Tabs whose fields fail the browser validation (the form is `noValidate`,
