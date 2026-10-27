@@ -11,6 +11,12 @@ requirements inside a spec (for example `A4.3`). Code, tests and comments
 refer to them; an ID is kept as long as its statement holds and is never
 reused. See `docs/specs/README.md`.
 
+**`BrowserAccess` / `BrowserChannel`** — Types that guard the elevated
+channel. `BrowserAccess` is a token that can only be created inside the
+`commands` module; `BrowserChannel` is the channel (normal or elevated)
+handed to one file-browser command, which also records a mid-command
+revocation. `crates/app-shell/src/commands/elevation.rs`; Specs 0084, 0085.
+
 **Compaction** — Shrinking the context sent to the AI provider in long
 sessions: a size threshold (measured after fencing) triggers it, the last
 three rounds stay intact, and older rounds are condensed into a rolling
@@ -28,12 +34,6 @@ another user (via sudo) that only the file browser can use. If it is
 revoked or inactive, an action fails; it never falls back to the normal
 channel. AI and MCP file actions never use it.
 `crates/app-shell/src/elevated_sftp.rs`; Specs 0067, 0085.
-
-**`BrowserAccess` / `BrowserChannel`** — Types that guard the elevated
-channel. `BrowserAccess` is a token that can only be created inside the
-`commands` module; `BrowserChannel` is the channel (normal or elevated)
-handed to one file-browser command, which also records a mid-command
-revocation. `crates/app-shell/src/commands/elevation.rs`; Specs 0084, 0085.
 
 **Extension / extension registry** — A way for an embedding app to add UI
 and behaviour without changing the core. In the frontend, extensions
