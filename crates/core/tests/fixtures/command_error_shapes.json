@@ -1,0 +1,41 @@
+{
+  "connect_log": {
+    "code": "SSH_CONNECT_FAILED",
+    "connect_log": [
+      {
+        "durationMs": 12,
+        "hop": "alice@example.org:22",
+        "hopIndex": 0,
+        "status": {
+          "code": "DNS_FAILED",
+          "state": "failed"
+        },
+        "step": {
+          "addresses": [
+            "192.0.2.1"
+          ],
+          "host": "example.org",
+          "kind": "dnsResolution",
+          "port": 22
+        }
+      }
+    ],
+    "message": "Connection failed"
+  },
+  "feature_locked": {
+    "code": "FEATURE_LOCKED",
+    "feature_locked": {
+      "feature": "document_export",
+      "tier": "free"
+    },
+    "message": "feature Feature(\"document_export\") is not available in tier Free"
+  },
+  "message_only": {
+    "code": null,
+    "message": "Something failed"
+  },
+  "with_code": {
+    "code": "GROUP_SELF_PARENT",
+    "message": "Group cannot be its own parent"
+  }
+}

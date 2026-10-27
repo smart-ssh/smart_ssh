@@ -14,6 +14,7 @@ pub mod data_change;
 pub mod entitlements;
 pub mod filter;
 pub mod fs_hardening;
+pub mod ipc_error;
 pub mod outgoing;
 pub mod profiles;
 pub mod risk;

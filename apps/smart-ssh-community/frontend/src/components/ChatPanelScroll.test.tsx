@@ -105,7 +105,11 @@ async function setup() {
     </I18nextProvider>,
   );
   await waitFor(() => expect(onChatTextDelta).toHaveBeenCalled());
-  const scroller = document.querySelector(".overflow-y-auto") as HTMLElement;
+  const scroller = await waitFor(() => {
+    const el = document.querySelector(".overflow-y-auto");
+    expect(el).not.toBeNull();
+    return el as HTMLElement;
+  });
   const m = fakeMetrics(scroller);
   let text = "";
   const delta = (d: string) => {

@@ -270,6 +270,7 @@ describe("ServerForm — Löschen mit Rückständen (Spec 0071, A17)", () => {
     fireEvent.click(await screen.findByText("Server löschen"));
     fireEvent.click(await screen.findByText("Endgültig löschen"));
 
+    // wait-ok: the form calls onDeleted only in the branch without left-behind secrets, so the notice cannot appear later
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
     expect(screen.queryByTestId("secrets-left-behind")).not.toBeInTheDocument();
   });
@@ -1008,7 +1009,7 @@ describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)"
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(updateServer).toHaveBeenCalledTimes(1);
     expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
   });

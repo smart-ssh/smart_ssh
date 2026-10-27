@@ -93,7 +93,7 @@ async function renderSending() {
   );
   await screen.findByText("check the disk");
   await waitFor(() => expect(onChatAiRequestStarted).toHaveBeenCalled());
-  const field = screen.getByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+  const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
   fireEvent.change(field, { target: { value: "hallo" } });
   fireEvent.keyDown(field, { key: "Enter" });
   await waitFor(() => expect(sendChatMessage).toHaveBeenCalled());
@@ -148,7 +148,7 @@ describe("ChatPanel AI wait line (issue #694)", () => {
     );
     await screen.findByText("check the disk");
     await waitFor(() => expect(onChatAiRequestStarted).toHaveBeenCalled());
-    const field = screen.getByPlaceholderText("Frage stellen oder Kommando beschreiben …");
+    const field = await screen.findByPlaceholderText("Frage stellen oder Kommando beschreiben …");
     fireEvent.change(field, { target: { value: "hallo" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await waitFor(() => expect(sendChatMessage).toHaveBeenCalled());
@@ -166,6 +166,7 @@ describe("ChatPanel AI wait line (issue #694)", () => {
     vi.mocked(sendChatMessage).mockImplementation(() => new Promise(() => {}));
     fireEvent.change(field, { target: { value: "again" } });
     fireEvent.keyDown(field, { key: "Enter" });
+    // wait-ok: the waiting indicator is driven only by the request-started event, which this test never emits again; nothing renders later
     await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(2));
     expect(screen.queryByTestId("chat-ai-waiting")).toBeNull();
   });
