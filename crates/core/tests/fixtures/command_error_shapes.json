@@ -28,7 +28,7 @@
       "feature": "document_export",
       "tier": "free"
     },
-    "message": "feature Feature(\"document_export\") is not available in tier Free"
+    "message": "feature Feature(\"document_export\") is not available in tier TierId(\"free\")"
   },
   "message_only": {
     "code": null,
