@@ -461,7 +461,7 @@ impl PolicyStore for SqlitePolicyStore {
 /// Spec 0037, Abschnitt 5: "Der bestehende SQLite-Regelspeicher ... ist und
 /// bleibt die einzige `User`-Quelle" — bindet ihn als [`PolicySource`] ein,
 /// damit er über [`ssh_manager_core::filter::CombinedPolicySource`] neben
-/// künftigen `Organization`-Quellen (privates Repo, `OrgPolicy`-Modul)
+/// künftigen `Organization`-Quellen
 /// verwendbar ist. In der Community Edition ist er die einzige Quelle
 /// (s. Spec-Text) — dieselbe `PolicyStore`-Auswertungslogik wie zuvor,
 /// nur über den neuen Trait erreichbar.
