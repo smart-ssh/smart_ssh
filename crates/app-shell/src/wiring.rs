@@ -27,6 +27,9 @@ pub enum Edition {
 /// leer) — die Infrastruktur existiert für ein künftiges Official-Binary.
 pub type PluginHook = Box<dyn FnOnce(Builder<Wry>) -> Builder<Wry> + Send>;
 
+/// Factory of an extension plugin that is registered only after unlock.
+pub type UnlockedPlugin = crate::extension_plugins::UnlockedPluginFactory<Wry>;
+
 pub struct Wiring {
     pub entitlements: Arc<dyn EntitlementProvider>,
     pub ai_providers: Vec<Arc<dyn AiProvider>>,
@@ -36,7 +39,16 @@ pub struct Wiring {
     /// **Im Passwort-Modus** (Master-Passwort, Spec 0101) dürfen Hooks, die
     /// Befehle registrieren, diese erst **nach dem Entsperren** registrieren,
     /// sonst wären sie vor dem Entsperren aufrufbar (ADR 0095 §8).
+    ///
+    /// Hooks here run **before** unlock. Extension plugins with commands that
+    /// need an unlocked app belong in [`Wiring::plugins_after_unlock`].
     pub plugins: Vec<PluginHook>,
+    /// Issue #894 (Spec 0038, section 2): extension plugins registered only
+    /// after unlock (password mode: after the startup gate opened and after
+    /// the core's own plugins; keyring mode: at build time), in order, once
+    /// per process. A failing registration is logged and skipped.
+    /// Community registers none.
+    pub plugins_after_unlock: Vec<UnlockedPlugin>,
     /// Issue #462 (Spec 0038, 2a): extensions that keep their own tables in
     /// the encrypted application database. Their migrations run after the
     /// core migrations and **only after unlock** (never while the app is
@@ -106,6 +118,7 @@ impl Wiring {
             policy_sources: Vec::new(),
             services: Vec::new(),
             plugins: Vec::new(),
+            plugins_after_unlock: Vec::new(),
             db_extensions: Vec::new(),
             edition: Edition::Community,
             extra_data_paths: Vec::new(),
@@ -122,6 +135,12 @@ impl Wiring {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #894: Community registers no plugin after unlock.
+    #[test]
+    fn test_community_registers_no_plugins_after_unlock() {
+        assert!(Wiring::community().plugins_after_unlock.is_empty());
+    }
 
     /// Issue #504: Community registers no chat content extension.
     #[test]

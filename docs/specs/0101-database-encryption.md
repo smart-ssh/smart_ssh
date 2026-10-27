@@ -456,7 +456,10 @@ Adversarial (ERHÖHT):
    - A16 gilt für **alle** Kommandos, auch die der Plugins: Vor der
      Entsperrung ist kein Plugin-Kommando erreichbar, das Dateien,
      Einstellungen oder das Betriebssystem berührt. Einstellungsdateien sind
-     vor der Entsperrung nicht lesbar.
+     vor der Entsperrung nicht lesbar. Das gilt auch für Plugins einer
+     Erweiterung, die in der Verdrahtung als „nach dem Entsperren" angemeldet
+     sind (Spec 0038, Abschnitt 2): Ihre Befehle melden vor der Entsperrung
+     „Plugin nicht gefunden" und sind erst danach erreichbar.
    - Passwort ändern und Einrichten prüfen die neue Verpackung, **bevor** sie
      die alte ersetzt bzw. K aus dem Schlüsselbund entfernt; Reste einer
      abgebrochenen Verpackung bleiben nicht liegen; nach dem Umbenennen wird
