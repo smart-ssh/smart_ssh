@@ -492,6 +492,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let edition = wiring.edition;
     // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
     // `State`.
+    let outgoing_transform = wiring.take_outgoing_transform();
     let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
     // Issue #469: ebenso — `send_chat_message` liest die Resolver als `State`.
 
@@ -559,7 +560,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         db_path,
         data_dir_lock,
         language,
-        wiring.outgoing_transform.take(),
+        outgoing_transform,
         Arc::new(std::mem::take(&mut wiring.ai_usage_observers)),
     );
     let mode = app_logic::master_password::key_mode(&inputs.db_path);
