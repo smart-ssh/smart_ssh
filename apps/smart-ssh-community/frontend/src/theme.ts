@@ -83,6 +83,18 @@ function syncNativeTheme(choice: ThemeChoice): void {
   }
 }
 
+/** Issue #956: Android only — the bridge object injected by `MainActivity`. */
+function syncAndroidBars(choice: ThemeChoice, resolved: ResolvedTheme): void {
+  const bridge = (window as { SmartSshAppearance?: { set(c: string, r: string): void } })
+    .SmartSshAppearance;
+  if (!bridge) return;
+  try {
+    bridge.set(choice, resolved);
+  } catch (err) {
+    console.error("Android system bars could not be styled:", err);
+  }
+}
+
 /** Applies a choice to the document (and the native window) immediately. */
 export function applyThemeChoice(choice: ThemeChoice): void {
   currentChoice = choice;
@@ -100,6 +112,7 @@ export function applyThemeChoice(choice: ThemeChoice): void {
   // WebView) follow the appearance; empty where no stylesheet is loaded.
   meta.content = getComputedStyle(root).getPropertyValue("--surface-sunken").trim();
   syncNativeTheme(choice);
+  syncAndroidBars(choice, resolved);
   listeners.forEach((l) => l());
 }
 
