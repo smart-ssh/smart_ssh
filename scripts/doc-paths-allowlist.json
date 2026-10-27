@@ -218,5 +218,33 @@
       "token": "lib.rs",
       "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
     }
+  ],
+  "docs/recipes/new-ai-provider.md": [
+    {
+      "token": "anthropic.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "openai_compatible.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "anthropic.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "openai_compatible.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    },
+    {
+      "token": "openai_responses.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
+  ],
+  "docs/recipes/new-session-or-server-field.md": [
+    {
+      "token": "store.rs",
+      "reason": "Abbreviated citation: the file name exists in several crates, the surrounding text names the crate or area."
+    }
   ]
 }
