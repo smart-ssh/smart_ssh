@@ -246,8 +246,8 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     vi.mocked(loadVoiceInputEnabled).mockResolvedValue(false);
     renderChatPanel();
     await screen.findByPlaceholderText(PLACEHOLDER);
-    await waitFor(() => expect(loadVoiceInputEnabled).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole("button", { name: START })).toBeNull());
+    expect(loadVoiceInputEnabled).toHaveBeenCalled();
   });
 
   describe("live text (issue #595)", () => {
