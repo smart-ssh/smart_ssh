@@ -31,7 +31,7 @@
   "crates/app-shell/src/commands/sftp.rs": 2673,
   "crates/app-shell/src/commands/sftp/revocation_tests.rs": 2846,
   "crates/app-shell/src/elevated_sftp.rs": 1363,
-  "crates/app-shell/src/lib.rs": 1242,
+  "crates/app-shell/src/lib.rs": 1238,
   "crates/core/src/ai/redactor.rs": 1444,
   "crates/core/src/ai/redactor_reference.rs": 1436,
   "crates/core/src/ai/tests.rs": 3315,

@@ -79,7 +79,7 @@ import {
   type ComposerContext,
   listComposerActions,
   listComposerDropHandlers,
-  listDocumentActions,
+  listDocumentActions, subscribeDocumentActions,
   subscribeComposer,
 } from "../extensions/registry";
 import { isPointerInside } from "../dropZone";
@@ -2870,6 +2870,7 @@ function DocumentCard({
   onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const documentActions = useSyncExternalStore(subscribeDocumentActions, listDocumentActions);
   const [exporting, setExporting] = useState<DocumentFormat | null>(null);
   const [savedFormat, setSavedFormat] = useState<DocumentFormat | null>(null);
 
@@ -2908,9 +2909,8 @@ function DocumentCard({
         </Button>
         {savedFormat && <span className="text-xs text-success-fg">✓ {t("chat.exportedAsMarkdown")}</span>}
         {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
-         * Export — der bestehende Export-Button bleibt unverändert an
-         * seinem Platz, die Registry-Aktionen kommen daneben, nicht statt. */}
-        {listDocumentActions().map((action) => (
+         * Export (reaktiv), der Export-Button bleibt an seinem Platz. */}
+        {documentActions.map((action) => (
           <Button
             key={action.id}
             size="sm"

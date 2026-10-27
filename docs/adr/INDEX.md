@@ -156,4 +156,5 @@
 | 0150 | Dateiauswahl unter Android | Accepted | [0150-android-dateiauswahl.md](0150-android-dateiauswahl.md) |
 | 0151 | Release-Fixtures für die Migrationstests stammen vom Release selbst | Accepted | [0151-release-fixtures-for-migration-tests.md](0151-release-fixtures-for-migration-tests.md) |
 | 0152 | Code comments in new code are written in English | Accepted | [0152-code-comment-language.md](0152-code-comment-language.md) |
+| 0153 | Entitlement feature ids are open; editions register their own | Accepted | [0153-open-entitlement-feature-ids.md](0153-open-entitlement-feature-ids.md) |
 | 0154 | Android code of the core ships as a Tauri plugin crate | Accepted | [0154-android-host-plugin-crate.md](0154-android-host-plugin-crate.md) |

@@ -1,13 +1,14 @@
 // Spec 0029, Abschnitt 4: strukturelle DOM-Prüfung, dass die Risiko-Badges
 // im selben Zeilen-Container wie das Aktions-Label sitzen, statt als
 // eigener Block über dem Kommando-Text.
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   registerDocumentAction,
   resetRegistryForTests,
+  unregisterDocumentAction,
 } from "../extensions/registry";
 import { testI18n } from "../testI18n";
 import type { RiskAssessment } from "../types";
@@ -639,5 +640,49 @@ describe("context compaction note (Issue #601)", () => {
       </I18nextProvider>,
     );
     expect(screen.getByText(/zusammengefasst/)).toBeInTheDocument();
+  });
+});
+
+describe("document actions are reactive (#884)", () => {
+  afterEach(() => {
+    resetRegistryForTests();
+  });
+
+  function renderDocument() {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ChatItemView
+          item={{ type: "document", id: "doc-1", title: "T", contentMarkdown: "# T" }}
+          onRespond={vi.fn()}
+          onAcceptWithRule={vi.fn()}
+          onExport={vi.fn()}
+          onContinueTruncated={vi.fn()}
+          serverId="server-1"
+          sessionId="session-1"
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("shows an action registered after the first render and removes it again", () => {
+    renderDocument();
+    expect(screen.queryByRole("button", { name: "Late" })).toBeNull();
+
+    act(() => registerDocumentAction({ id: "late", label: "Late", onInvoke: vi.fn() }));
+    expect(screen.getByRole("button", { name: "Late" })).toBeInTheDocument();
+
+    act(() => unregisterDocumentAction("late"));
+    expect(screen.queryByRole("button", { name: "Late" })).toBeNull();
+  });
+
+  it("updates the button when an action is replaced under the same id", () => {
+    registerDocumentAction({ id: "a", label: "Act", onInvoke: vi.fn() });
+    renderDocument();
+    expect(screen.getByRole("button", { name: "Act" })).toBeEnabled();
+
+    act(() =>
+      registerDocumentAction({ id: "a", label: "Act", onInvoke: vi.fn(), disabled: true }),
+    );
+    expect(screen.getByRole("button", { name: "Act" })).toBeDisabled();
   });
 });

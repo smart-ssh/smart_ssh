@@ -633,7 +633,7 @@ mod feature_locked_tests {
     #[test]
     fn test_command_error_feature_locked_carries_structured_feature_and_tier() {
         let err = ssh_manager_core::entitlements::FeatureLocked {
-            feature: Feature::DocumentExport,
+            feature: Feature::new("document_export"),
             tier: Tier::Free,
         };
 
@@ -643,7 +643,7 @@ mod feature_locked_tests {
         let feature_locked = command_error
             .feature_locked
             .expect("feature_locked muss gesetzt sein");
-        assert_eq!(feature_locked.feature, Feature::DocumentExport);
+        assert_eq!(feature_locked.feature, Feature::new("document_export"));
         assert_eq!(feature_locked.tier, Tier::Free);
     }
 

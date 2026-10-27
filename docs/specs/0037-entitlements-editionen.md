@@ -14,17 +14,15 @@ gesperrte Funktion freigeschaltet ist.
 
 ## 2. Funktionen und Berechtigungen
 
-- **Funktionen** (`Feature`): SharedInventory, SharedNotes,
-  CuratedRulePacks, OrgPolicy, MultiServerActions, ManagedAi, OrgAiPolicy,
-  TeamAgents, SessionHistory, ActivityReport, SessionHandover, CloudSync,
-  DocumentExport, AuditExport, Sso, SelfHosted, ChatAttachments (Dateianhänge
-  im Chat, lokal, nicht dienst-gebunden, Spec 0110), ServerEnvironment
-  (Server-Umgebungsdaten einer Erweiterung: Kontextabschnitt der Sitzung und
-  bekannte Geheimnisse, lokal, nicht dienst-gebunden, Spec 0038),
-  SelfHostedSync (Synchronisation über Ziele, die der Nutzer selbst betreibt,
-  z. B. eigener Ordner oder eigener SFTP-Server; lokal, nicht dienst-gebunden,
-  getrennt von CloudSync). Die Namen werden als
-  `snake_case` serialisiert.
+- **Funktionen** (`Feature`): Der Kern definiert nur den Typ einer
+  Funktionskennung, keine Liste von Funktionen. Eine Kennung ist ein
+  Text aus Kleinbuchstaben, Ziffern und Unterstrichen (beginnt mit einem
+  Buchstaben, höchstens 64 Zeichen) und wird unverändert serialisiert.
+  Editionen und Integrationen deklarieren ihre eigenen Funktionen und
+  melden sie beim Start an (`Wiring`); nur angemeldete Funktionen gibt der
+  Kern an das Frontend weiter. Enthalten Berechtigungsdaten unbekannte oder
+  ungültige Kennungen, werden diese ignoriert, der Rest bleibt gültig.
+  Die Community Edition meldet keine Funktion an.
 - **Stufen** (`Tier`): Free, Personal, Pro, Team, Business, Enterprise.
 - **Berechtigungen** (`Entitlements`): Stufe, Menge der freigeschalteten
   Funktionen, optionale Platzzahl, optionales Ablaufdatum, Kennzeichen für
@@ -53,10 +51,9 @@ Verhaltensweise der freien Stufe.
 
 Der Export von KI-Dokumenten (Spec 0012) kennt nur Markdown, vollständig frei.
 Ein Export als Word-Datei, ein entsprechender Button und die zugehörige
-Abhängigkeit existieren in diesem Repo nicht. Der Funktionsname
-`DocumentExport` bleibt im Vokabular, wird aber hier nirgends geprüft, weil
-es nichts gibt, das er sperren könnte. Eine spätere Edition bringt ihre
-eigene Prüfung mit.
+Abhängigkeit existieren in diesem Repo nicht. Der Kern prüft
+dafür keine Funktion, weil es nichts gibt, das sie sperren könnte. Eine
+spätere Edition deklariert und prüft ihre eigene Funktion.
 
 ## 5. Policy-Ebenen in der Filter-Engine
 
@@ -116,6 +113,11 @@ einmaliger Prüfauftrag, kein Verhalten. Die Nummer wird nicht neu vergeben.
 ## 10. Nachweis (Testfälle)
 
 - Ein fester Anbieter ist in allen Tests nutzbar.
+- Eine Funktionskennung wird unverändert serialisiert; eine ungültige
+  Kennung allein ist ein Fehler, in einer Berechtigungsmenge wird sie
+  übersprungen.
+- Gewährt der Anbieter `[a, b]` und hat die Edition nur `a` angemeldet,
+  sieht das Frontend nur `a`; die Community Edition sieht keine.
 - Allow (User) gegen Deny (Organization) und Allow (User) gegen Confirm
   (Organization), jeweils mit **höherer** Spezifität auf Nutzerseite: Die
   Organisationsregel gewinnt.
