@@ -30,7 +30,6 @@
     "emptyStateTitle": "Ingen server har lagts till ännu",
     "emptyStateHint": "Lägg till din första server för att ansluta via SSH.",
     "emptyStateCreateFirstServer": "Lägg till första servern",
-    "newServerInGroup": "Ny server i gruppen \"{{name}}\"",
     "emptyStateTryLocalhost": "Prova utan server: \"Localhost\" ovan öppnar en session på den här datorn — med samma bekräftelser som på en riktig server."
   },
   "settings": {

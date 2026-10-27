@@ -128,9 +128,7 @@ function App() {
    * `server`. Kein `switchTo(null)` nötig: `ServerList` ist ohnehin nur
    * sichtbar, wenn kein Session-Tab aktiv ist (s. `activeSessionId === null`-
    * Zweig unten).
-   *
-   * Issue #49: dasselbe für „+" an einer Gruppenzeile der Server-Liste,
-   * nur mit dieser Gruppe als Vorgabe. */
+   * (Issue #978: das „+" an Gruppenzeilen gibt es nicht mehr.) */
   const handleCreateServerInGroup = (groupId: string | null) => {
     setTab("manage");
     setPendingNoteEditSelection({ kind: "newServer", groupId });
@@ -296,7 +294,6 @@ function App() {
           pendingRuleSelection={pendingRuleSelection}
           onRuleSelectionConsumed={() => setPendingRuleSelection(null)}
           onCreateFirstServer={handleCreateFirstServer}
-          onCreateServerInGroup={handleCreateServerInGroup}
         />
       </div>
     </div>
@@ -334,8 +331,6 @@ interface MainScreenProps {
   onSwitchToExistingTab: (sessionId: string) => void;
   /** Spec 0069, Teil C1 (BL-0082). */
   onCreateFirstServer: () => void;
-  /** Issue #49. */
-  onCreateServerInGroup: (groupId: string) => void;
 }
 
 function MainScreen({
@@ -362,7 +357,6 @@ function MainScreen({
   onConnectRequestConsumed,
   onRequestConnect,
   onCreateFirstServer,
-  onCreateServerInGroup,
 }: MainScreenProps) {
   const { t } = useTranslation();
   const openSettingsFrom = (event: { currentTarget: HTMLElement }) => openSettingsRaw(event.currentTarget);
@@ -442,7 +436,6 @@ function MainScreen({
               connectRequest={connectRequest}
               onConnectRequestConsumed={onConnectRequestConsumed}
               onCreateFirstServer={onCreateFirstServer}
-              onCreateServerInGroup={onCreateServerInGroup}
             />
           </section>
         </main>

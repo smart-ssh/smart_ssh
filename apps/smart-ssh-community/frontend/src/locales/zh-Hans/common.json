@@ -30,7 +30,6 @@
     "emptyStateTitle": "尚未添加服务器",
     "emptyStateHint": "添加您的第一台服务器，即可通过 SSH 连接。",
     "emptyStateCreateFirstServer": "添加第一台服务器",
-    "newServerInGroup": "在分组“{{name}}”中新建服务器",
     "emptyStateTryLocalhost": "无需服务器也可体验：上方的“Localhost”会在本机打开一个会话——确认流程与真实服务器完全相同。"
   },
   "settings": {

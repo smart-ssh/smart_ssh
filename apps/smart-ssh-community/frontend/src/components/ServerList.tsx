@@ -36,7 +36,6 @@ import type {
 import { useTreeDrag } from "../useTreeDrag";
 import { ChatSessionPickerScreen } from "./ChatSessionPickerScreen";
 import { ConnectStepLog } from "./ConnectStepLog";
-import { MoveToDialog } from "./MoveToDialog";
 import { FirstRunNoticeScreen } from "./FirstRunNoticeScreen";
 import { TreeDragGhost } from "./TreeDragGhost";
 import { unusableReasonText } from "../unusableServer";
@@ -93,7 +92,6 @@ interface ServerListProps {
   onCreateFirstServer: () => void;
   /** Issue #49: „+" an einer Gruppenzeile — wechselt zu „Verwalten" mit
    * geöffnetem Neu-Formular, diese Gruppe vorbelegt. */
-  onCreateServerInGroup: (groupId: string) => void;
 }
 
 /** Spec 0047, Fund D2: bislang zeigte dieser Screen bei jedem Fehler nur
@@ -161,12 +159,9 @@ export function ServerList({
   connectRequest = null,
   onConnectRequestConsumed,
   onCreateFirstServer,
-  onCreateServerInGroup,
 }: ServerListProps) {
   const { t } = useTranslation();
   const narrow = useIsNarrow();
-  // Issue #582: row whose "Move to…" dialog is open (narrow layout).
-  const [moveItem, setMoveItem] = useState<DragItem | null>(null);
   const [servers, setServers] = useState<ServerDto[]>([]);
   const [groups, setGroups] = useState<GroupDto[]>([]);
   // Issue #100: Server mit unlesbarer Anmeldeart — sichtbar, aber nicht
@@ -234,18 +229,10 @@ export function ServerList({
   const { drag, handlersFor } = useTreeDrag((item, target) => void handleDrop(item, target), {
     touchDrag: !narrow,
   });
-  const indent = (depth: number) => (narrow ? depth * 12 + 12 : depth * 16 + 16);
-  const moreButton = (item: DragItem) => (
-    <Button
-      variant="ghost"
-      onClick={() => setMoveItem(item)}
-      title={t("treeDrag.moveTo", { name: item.label })}
-      aria-label={t("treeDrag.moveTo", { name: item.label })}
-      className="mr-1 min-h-11 min-w-11 shrink-0"
-    >
-      ⋯
-    </Button>
-  );
+  // Issue #978: chevron size plus the gap after it (gap-2 = 8 px) is the
+  // per-level step, so a child starts exactly where its parent's 📁 icon starts.
+  const chevronPx = narrow ? 20 : 16;
+  const indent = (depth: number) => (narrow ? 12 : 16) + depth * (chevronPx + 8);
   const dropKind = drag?.target ? classifyDrop(drag.item, drag.target, groups, servers) : null;
   const highlightFor = (target: DropTarget) =>
     drag?.target &&
@@ -515,7 +502,6 @@ export function ServerList({
           )}
         </div>
       </button>
-      {narrow && !server.isLocal && moreButton({ kind: "server", id: server.id, label: server.name })}
     </li>
   );
 
@@ -558,13 +544,13 @@ export function ServerList({
         data-drop-target={groupDropTargetValue(node.group.id)}
         className={`border-b border-border last:border-b-0 ${highlightFor({ kind: "group", id: node.group.id })}`}
       >
-        {/* Issue #49: Auf-/Zuklappen und „+" (neuer Server in dieser
-         * Gruppe) als Geschwister — ein Button im Button wäre ungültig. */}
+        {/* Issue #49: Auf-/Zuklappen (Issue #978: kein „+" und kein „⋯" mehr im Connect-Baum). */}
         <div className="flex items-center hover:bg-surface-raised">
           <button
             type="button"
             {...handlersFor({ kind: "group", id: node.group.id, label: node.group.name })}
             onClick={() => onToggleGroup(node.group.id)}
+            aria-expanded={!collapsed}
             title={node.group.name}
             onContextMenu={
               node.group.isCopy
@@ -577,21 +563,26 @@ export function ServerList({
             style={{ paddingLeft: `${indent(depth)}px` }}
             className="flex min-w-0 flex-1 select-none items-center gap-2 py-2 narrow:min-h-11 pr-2 text-left text-sm font-medium text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-fg"
           >
-            <span className="w-3 text-fg-subtle">{collapsed ? "▸" : "▾"}</span>
+            <svg
+              data-testid="group-chevron"
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              width={chevronPx}
+              height={chevronPx}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0 text-fg-soft"
+            >
+              <path d={collapsed ? "M6 3.5 10.5 8 6 12.5" : "M3.5 6 8 10.5 12.5 6"} />
+            </svg>
             <span className="truncate" title={node.group.name}>
               📁 {node.group.name}
             </span>
             {node.group.isCopy && <CopyBadge />}
           </button>
-          <Button variant="ghost" size="sm"
-            onClick={() => onCreateServerInGroup(node.group.id)}
-            title={t("mainScreen.newServerInGroup", { name: node.group.name })}
-            aria-label={t("mainScreen.newServerInGroup", { name: node.group.name })}
-            className="mr-3 narrow:mr-1 narrow:min-h-11 narrow:min-w-11"
-          >
-            +
-          </Button>
-          {narrow && moreButton({ kind: "group", id: node.group.id, label: node.group.name })}
         </div>
         {!collapsed &&
           (node.children.length > 0 ||
@@ -699,16 +690,6 @@ export function ServerList({
             </li>
           )}
         </ul>
-      )}
-
-      {moveItem && (
-        <MoveToDialog
-          item={moveItem}
-          groups={groups}
-          servers={servers}
-          onMove={(item, target) => void handleDrop(item, target)}
-          onClose={() => setMoveItem(null)}
-        />
       )}
 
       {drag && <TreeDragGhost drag={drag} kind={dropKind} />}

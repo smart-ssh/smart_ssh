@@ -103,7 +103,6 @@ const startConnectMock = vi.fn();
 
 function renderList(
   onCreateFirstServer: () => void = vi.fn(),
-  onCreateServerInGroup: (groupId: string) => void = vi.fn(),
   onToggleGroup: (groupId: string) => void = vi.fn(),
 ) {
   return render(
@@ -116,7 +115,6 @@ function renderList(
         collapsedGroupIds={new Set()}
         onToggleGroup={onToggleGroup}
         onCreateFirstServer={onCreateFirstServer}
-        onCreateServerInGroup={onCreateServerInGroup}
       />
     </I18nextProvider>,
   );
@@ -300,22 +298,17 @@ describe("ServerList new server in a group (issue #49)", () => {
     vi.mocked(listGroups).mockImplementation(() => Promise.resolve([]));
   });
 
-  it("the + action on a group row opens the form for that group without toggling it", async () => {
-    vi.mocked(listGroups).mockImplementation(() =>
-      Promise.resolve([group(), group({ id: "group-2", name: "Web", parentId: "group-1" })]),
-    );
-    startConnectMock.mockClear();
-    const onCreateServerInGroup = vi.fn();
+  it("group rows have no + action and expose aria-expanded (Issue #978)", async () => {
+    vi.mocked(listGroups).mockImplementation(() => Promise.resolve([group()]));
     const onToggleGroup = vi.fn();
-    renderList(vi.fn(), onCreateServerInGroup, onToggleGroup);
-
-    fireEvent.click(await screen.findByRole("button", {
-        name: testI18n.t("mainScreen.newServerInGroup", { name: "Web" }),
-      }));
-
-    expect(onCreateServerInGroup).toHaveBeenCalledWith("group-2");
-    expect(onToggleGroup).not.toHaveBeenCalled();
-    expect(startConnectMock).not.toHaveBeenCalled();
+    renderList(vi.fn(), onToggleGroup);
+    const header = await screen.findByRole("button", { name: /📁/ });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByRole("button", { name: /^(New server in|Neuer Server in)/ })).toBeNull();
+    expect(header.textContent).not.toMatch(/[▸▾]/);
+    expect(header.querySelector("svg")).toHaveAttribute("width", "16");
+    fireEvent.click(header);
+    expect(onToggleGroup).toHaveBeenCalledWith("group-1");
   });
 });
 
@@ -551,7 +544,6 @@ describe("ServerList resume request (Issue #611)", () => {
           collapsedGroupIds={new Set()}
           onToggleGroup={vi.fn()}
           onCreateFirstServer={vi.fn()}
-          onCreateServerInGroup={vi.fn()}
           resumeRequest={{ serverId: "remote-1", chatSessionId: "chat-9" }}
           onResumeRequestConsumed={opts.onConsumed}
         />
@@ -601,7 +593,6 @@ describe("ServerList new session (issue #657)", () => {
           collapsedGroupIds={new Set()}
           onToggleGroup={vi.fn()}
           onCreateFirstServer={vi.fn()}
-          onCreateServerInGroup={vi.fn()}
         />
       </I18nextProvider>,
     );

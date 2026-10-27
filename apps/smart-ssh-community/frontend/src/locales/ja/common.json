@@ -30,7 +30,6 @@
     "emptyStateTitle": "サーバーがまだ追加されていません",
     "emptyStateHint": "最初のサーバーを追加して、SSHで接続しましょう。",
     "emptyStateCreateFirstServer": "最初のサーバーを追加",
-    "newServerInGroup": "グループ「{{name}}」に新しいサーバー",
     "emptyStateTryLocalhost": "サーバーなしで試せます。上の「Localhost」を開くと、このマシン上でセッションが始まり、実際のサーバーと同じ確認が行われます。"
   },
   "settings": {

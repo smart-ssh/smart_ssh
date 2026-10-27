@@ -30,7 +30,6 @@
     "emptyStateTitle": "Henüz sunucu eklenmedi",
     "emptyStateHint": "SSH ile bağlanmak için ilk sunucunuzu ekleyin.",
     "emptyStateCreateFirstServer": "İlk sunucuyu ekle",
-    "newServerInGroup": "\"{{name}}\" grubunda yeni sunucu",
     "emptyStateTryLocalhost": "Sunucu olmadan deneyin: yukarıdaki \"Localhost\" bu makinede bir oturum açar — gerçek bir sunucudakiyle aynı onaylarla."
   },
   "settings": {
