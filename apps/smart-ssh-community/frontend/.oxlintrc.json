@@ -59,5 +59,34 @@
     "jsx-a11y/role-supports-aria-props": "error",
     "jsx-a11y/scope": "error",
     "jsx-a11y/tabindex-no-positive": "error"
-  }
+  },
+  "jsPlugins": [
+    "eslint-plugin-testing-library"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx"
+      ],
+      "rules": {
+        "testing-library/await-async-queries": "error",
+        "testing-library/no-wait-for-side-effects": "error",
+        "testing-library/prefer-find-by": "error",
+        "vitest/valid-expect": [
+          "error",
+          {
+            "maxArgs": 2
+          }
+        ],
+        "vitest/expect-expect": "off",
+        "vitest/no-conditional-expect": "off",
+        "vitest/require-mock-type-parameters": "off",
+        "vitest/require-to-throw-message": "off"
+      },
+      "plugins": [
+        "vitest"
+      ]
+    }
+  ]
 }

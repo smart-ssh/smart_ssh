@@ -1,5 +1,5 @@
 // Issue #51: die zugeklappte Detailansicht des Schritt-Protokolls.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
@@ -62,7 +62,7 @@ describe("ConnectStepLog (issue #51)", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     renderLog();
     fireEvent.click(screen.getByText("Kopieren"));
-    await waitFor(() => expect(screen.getByText("Kopiert")).toBeInTheDocument());
+    expect(await screen.findByText("Kopiert")).toBeInTheDocument();
     const text = (writeText.mock.calls[0] as unknown as [string])[0];
     expect(text).toContain("Hop 2: root@target:22");
     expect(text).toContain("✗ Anmeldung — fehlgeschlagen: Anmeldung fehlgeschlagen");
@@ -73,10 +73,6 @@ describe("ConnectStepLog (issue #51)", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     renderLog();
     fireEvent.click(screen.getByText("Kopieren"));
-    await waitFor(() =>
-      expect(
-        screen.getByText("Kopieren in die Zwischenablage ist fehlgeschlagen."),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText("Kopieren in die Zwischenablage ist fehlgeschlagen.")).toBeInTheDocument();
   });
 });
