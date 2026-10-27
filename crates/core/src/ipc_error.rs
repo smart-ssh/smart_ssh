@@ -96,7 +96,7 @@ pub type CommandResult<T> = Result<T, CommandError>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entitlements::{Feature, Tier};
+    use crate::entitlements::{Feature, TierId};
 
     #[test]
     fn json_shapes_match_fixture() {
@@ -118,7 +118,7 @@ mod tests {
             "with_code": CommandError::with_code("Group cannot be its own parent", "GROUP_SELF_PARENT"),
             "feature_locked": CommandError::feature_locked(FeatureLocked {
                 feature: Feature::new("document_export"),
-                tier: Tier::Free,
+                tier: TierId::FREE,
             }),
             "connect_log": CommandError::with_code("Connection failed", "SSH_CONNECT_FAILED")
                 .with_connect_log(vec![rec]),

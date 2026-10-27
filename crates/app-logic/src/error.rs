@@ -538,7 +538,7 @@ mod secret_store_code_tests {
 #[cfg(test)]
 mod feature_locked_tests {
     use super::*;
-    use ssh_manager_core::entitlements::{Feature, Tier};
+    use ssh_manager_core::entitlements::{Feature, TierId};
 
     /// Spec 0037, Abschnitt 2: `FeatureLocked` muss strukturiert (nicht nur
     /// als generischer `message`-String über den blanket `From<E: Display>`)
@@ -548,7 +548,7 @@ mod feature_locked_tests {
     fn test_command_error_feature_locked_carries_structured_feature_and_tier() {
         let err = ssh_manager_core::entitlements::FeatureLocked {
             feature: Feature::new("document_export"),
-            tier: Tier::Free,
+            tier: TierId::FREE,
         };
 
         let command_error = CommandError::feature_locked(err);
@@ -558,7 +558,7 @@ mod feature_locked_tests {
             .feature_locked
             .expect("feature_locked muss gesetzt sein");
         assert_eq!(feature_locked.feature, Feature::new("document_export"));
-        assert_eq!(feature_locked.tier, Tier::Free);
+        assert_eq!(feature_locked.tier, TierId::FREE);
     }
 
     /// Gegentest: ein gewöhnlicher Fehler (über den blanket `From<E:
