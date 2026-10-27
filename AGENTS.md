@@ -78,7 +78,10 @@ upgrade that adds a rule, add it there. Finally `npm run check-conventions`
 (see "Testing conventions"), on a stale entry in its list of the existing
 ones, and on `LOCAL_SERVER_ID` / `local_server` anywhere under
 `crates/core/src/filter/` or `crates/core/src/risk/` (see "No special-casing
-the local pseudo-server"). CI runs all of them through the same
+the local pseudo-server"). `npm run check-doc-paths` (`scripts/check-doc-paths.mjs`,
+issue #874) fails on a backticked path or a quoted section reference in these
+guidance documents that does not exist; intentional non-paths go into
+`scripts/doc-paths-allowlist.json` with a reason. CI runs all of them through the same
 `npm run lint` step.
 
 Order matters: `cargo fmt --all --check` runs *before* clippy/test in CI —
