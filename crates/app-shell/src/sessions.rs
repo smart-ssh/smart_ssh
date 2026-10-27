@@ -337,6 +337,52 @@ mod tests {
         assert_fully_closed(&rig, &slot, &op, rx).await;
     }
 
+    /// Issue #974: `close_all_remote` closes every remote session but leaves
+    /// the local pseudo-server session (nil server id) open and untouched.
+    #[tokio::test]
+    async fn test_close_all_remote_keeps_the_local_pseudo_server_session() {
+        let (rig, slot, op, rx) = busy_rig().await;
+        let local = Arc::new(
+            app_logic::test_support::session_with_transport_and_server_id(
+                Box::new(working_transport()),
+                app_logic::dto::LOCAL_SERVER_ID,
+            ),
+        );
+        let local_id = SessionId::new_v4();
+        rig.f.sessions.insert(local_id, local);
+        rig.grants.grant(local_id, vec![std::env::temp_dir()]);
+
+        close_all_remote(&rig.ctx()).await;
+
+        assert_fully_closed(&rig, &slot, &op, rx).await;
+        assert!(
+            rig.f.sessions.get(local_id).is_some(),
+            "the pseudo-server session must stay in the registry"
+        );
+        assert!(
+            rig.grants
+                .check(local_id, &std::env::temp_dir(), None)
+                .is_ok(),
+            "the pseudo-server session's grants must stay"
+        );
+        let events = rig.emitter.events.lock().unwrap();
+        let status_events = events
+            .iter()
+            .filter(|(name, _)| name == "connection-status-changed")
+            .count();
+        assert_eq!(
+            status_events, 1,
+            "only the remote session gets a status event"
+        );
+        let local_text = local_id.to_string();
+        assert!(
+            events
+                .iter()
+                .all(|(_, payload)| !payload.to_string().contains(&local_text)),
+            "no event may mention the pseudo-server session"
+        );
+    }
+
     #[tokio::test]
     async fn test_close_of_unknown_session_returns_none() {
         let rig = Rig::new(Box::new(working_transport()));
