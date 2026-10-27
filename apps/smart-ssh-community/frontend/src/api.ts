@@ -57,7 +57,7 @@ import type {
   StoredHostKeyDto,
 } from "./types";
 
-/** Von `crate::error::CommandError` (`crates/app-shell/src/error.rs`). */
+/** From `ssh_manager_core::ipc_error::CommandError`. */
 export interface CommandErrorPayload {
   message: string;
   /** Spec 0024, Abschnitt 5: stabiler Code fürs Frontend-Mapping (s.

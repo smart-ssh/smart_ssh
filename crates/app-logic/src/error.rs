@@ -9,9 +9,6 @@
 //! `keyring`-Fehler über `credentials-keyring`), die allesamt `Display`
 //! implementieren — kein separater `From`-Impl pro Fehlertyp nötig.
 
-use serde::Serialize;
-
-use ssh_manager_core::entitlements::FeatureLocked;
 use ssh_manager_core::profiles::CredentialError;
 use ssh_manager_core::ssh::SshError;
 
@@ -197,92 +194,9 @@ pub fn ssh_command_error(err: &SshError) -> CommandError {
     CommandError::with_code(err.to_string(), err.code())
 }
 
-#[derive(Debug, Serialize)]
-pub struct CommandError {
-    pub message: String,
-    /// Spec 0024, Abschnitt 5: stabiler, sprachunabhängiger Bezeichner fürs
-    /// Frontend-Mapping auf Übersetzungs-Keys — `None` für die (weit
-    /// überwiegende) Mehrheit der Fehler, die weiterhin nur über den
-    /// blanket `From<E: Display>`-Impl unten entstehen (unverändert wie vor
-    /// Spec 0024: `message` reicht dafür aus, ein `code` pro Fehlertyp wäre
-    /// hier unverhältnismäßiger Aufwand, s. Moduldoc). Gezielt `Some` nur an
-    /// den Stellen, die explizit `CommandError::with_code` verwenden — aktuell
-    /// die Validierungsfehler aus den Server-/Gruppen-Formularen (Spec 0008,
-    /// s. `groups.rs`/`server_credentials.rs`).
-    pub code: Option<&'static str>,
-    /// Spec 0037, Abschnitt 2: strukturiert eingebettet (nicht nur als
-    /// `message`-String), damit das Frontend einen gesperrten Feature-Fehler
-    /// eindeutig von einem fachlichen Fehler unterscheiden kann — inkl.
-    /// `feature`/`tier`, nicht nur "irgendein Fehler ist aufgetreten".
-    /// `None` für jeden anderen Fehler (die weit überwiegende Mehrheit).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub feature_locked: Option<FeatureLocked>,
-    /// Issue #51: das Schritt-Protokoll eines gescheiterten
-    /// Verbindungsaufbaus (`connect`), damit die Oberfläche es unter der
-    /// Fehlermeldung zeigen kann. `None` für jeden anderen Fehler.
-    ///
-    /// Nur für die Oberfläche: Wer einen `CommandError` loggt, loggt
-    /// `code`/`message`, nie dieses Feld (Spec 0094).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub connect_log: Option<Vec<ssh_manager_core::ssh::ConnectStepRecord>>,
-}
-
-impl CommandError {
-    pub fn with_code(message: impl Into<String>, code: &'static str) -> Self {
-        Self {
-            message: message.into(),
-            code: Some(code),
-            feature_locked: None,
-            connect_log: None,
-        }
-    }
-
-    /// Issue #51: hängt das Schritt-Protokoll eines Verbindungsversuchs an.
-    pub fn with_connect_log(
-        mut self,
-        steps: Vec<ssh_manager_core::ssh::ConnectStepRecord>,
-    ) -> Self {
-        self.connect_log = Some(steps);
-        self
-    }
-
-    /// Spec 0037, Abschnitt 3 (D5): Gating-Konvention. Kein `impl
-    /// From<FeatureLocked> for CommandError` (und damit kein bloßes `?` wie
-    /// in der Spec-Skizze): `FeatureLocked` implementiert `Display` (über
-    /// `thiserror`), der blanket `impl<E: Display> From<E>` unten deckt es
-    /// also bereits ab — ein zweiter, spezifischerer `From`-Impl für exakt
-    /// diesen einen `Display`-Typ wäre eine von Rusts Kohärenzregeln
-    /// verbotene überlappende Impl (E0119). Ein gegatetes Command ruft
-    /// deshalb explizit `.map_err(CommandError::feature_locked)?` statt nur
-    /// `?` auf `require(...)`.
-    ///
-    /// `#[allow(dead_code)]`: noch kein einziger tatsächlich gegateter
-    /// Command in diesem Schritt (s. `AppState::entitlements`-Doc-
-    /// Kommentar) — bleibt bis zum ersten echten `require(...)`-Aufruf
-    /// unvermeidlich ungenutzt.
-    #[allow(dead_code)]
-    pub fn feature_locked(err: FeatureLocked) -> Self {
-        Self {
-            message: err.to_string(),
-            code: Some("FEATURE_LOCKED"),
-            feature_locked: Some(err),
-            connect_log: None,
-        }
-    }
-}
-
-impl<E: std::fmt::Display> From<E> for CommandError {
-    fn from(err: E) -> Self {
-        Self {
-            message: err.to_string(),
-            code: None,
-            feature_locked: None,
-            connect_log: None,
-        }
-    }
-}
-
-pub type CommandResult<T> = Result<T, CommandError>;
+/// The command error type lives in `ssh_manager_core::ipc_error` so that
+/// extension crates without an `app-logic` dependency can return it too.
+pub use ssh_manager_core::ipc_error::{CommandError, CommandResult};
 
 #[cfg(test)]
 mod code_tests {

@@ -261,7 +261,7 @@ Nach Themen:
   `BackupOpError`, `OpenSessions`, `FileHostKeyStore`.
 - **Ereignisse:** `EventEmitter`, `ConnectionStatus`,
   `emit_connection_status_changed`.
-- **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`.
+- **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`. Der Command-Fehlertyp `CommandError` (`{ message, code, feature_locked, connect_log }`) liegt in `ssh_manager_core::ipc_error` und ist der Typ, den Erweiterungs-Plugins zurückgeben; seine JSON-Form ist durch eine gemeinsame Fixture für Rust und Frontend festgelegt.
 - **Zugriffsfunktionen** (statt Feldzugriff auf `AppState`): `profile_store`,
   `backup_store`, `file_host_keys`, `open_session_server_ids` (jeder Server
   mit offener Sitzung einmal, sortiert) und
