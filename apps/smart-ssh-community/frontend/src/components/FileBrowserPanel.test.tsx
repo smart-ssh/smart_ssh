@@ -4,11 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// jsdom implementiert Pointer-Capture nicht (s. https://github.com/jsdom/jsdom/issues/2527) —
-// `useDragResize` (Spec 0053) ruft `setPointerCapture`/`releasePointerCapture`
-// auf jedem Drag-Handle auf; ohne diesen Polyfill würde jeder Klick auf ein
-// Handle mit einer echten `TypeError` abbrechen, unabhängig vom eigentlich
-// zu testenden Verhalten.
+// jsdom lacks pointer capture (jsdom#2527); `useDragResize` (Spec 0053) needs it on every handle.
 if (!Element.prototype.setPointerCapture) {
   Element.prototype.setPointerCapture = () => {};
   Element.prototype.releasePointerCapture = () => {};
@@ -905,7 +901,6 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     await waitFor(() =>
       expect(sftpChmod).toHaveBeenCalledWith("session-1", "logs", 0o2644, true, false, null),
     );
-    // The first dialog is closed (and the list reloaded) before the menu is opened again.
     await waitFor(() => expect(screen.queryByDisplayValue("2644")).toBeNull());
 
     // Ticking setgid explicitly reports the change.
@@ -1092,9 +1087,8 @@ describe("FileBrowserPanel server-modifying actions (Spec 0054, Teil 3)", () => 
     fireEvent.change(input, { target: { value: "b.txt" } });
     fireEvent.click(screen.getByText("Übernehmen"));
 
-    await waitFor(() => expect(screen.queryByDisplayValue("b.txt")).toBeNull());
-    // wait-ok: the rename dialog is already closed above (successful rename), so the conflict message cannot appear later
     await waitFor(() => expect(sftpRename).toHaveBeenCalledWith("session-1", "a.txt", "b.txt", null));
+    await waitFor(() => expect(screen.queryByDisplayValue("b.txt")).toBeNull());
     expect(screen.queryByText("Ziel existiert bereits")).not.toBeInTheDocument();
   });
 
@@ -1692,11 +1686,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
     vi.mocked(sessionIsRoot).mockResolvedValueOnce(true);
     renderPanel();
     await screen.findByText(/a\.txt/);
-    await waitFor(() => expect(sessionIsRoot).toHaveBeenCalledWith("session-1"));
-    // Let the component's continuation of the resolved probe run before the absence check.
-    await act(async () => {
-      await vi.mocked(sessionIsRoot).mock.results[0].value;
-    });
+    await act(() => vi.mocked(sessionIsRoot).mock.results[0].value);
     expect(screen.queryByRole("button", { name: /Erhöhte Rechte/ })).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Weitere Optionen zur Rechteerhöhung" }),
