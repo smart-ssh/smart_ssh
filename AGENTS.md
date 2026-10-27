@@ -170,6 +170,7 @@ inside the security logic itself.
 - `.claude/skills/smart-ssh-coder/references/codebase-map.md` — read this when you look for the file or extension point for a change.
 - `docs/ui-guidelines.md` — read this when you build or change UI.
 - `docs/i18n-glossary.md` — read this when you add or change translated texts.
+- `docs/glossary.md` — read this when you meet a project or domain term (Wiring, fencing, ledger, …) you do not know.
 - `docs/datenpfade.md` — read this when you need to know where the app stores data on disk.
 - `docs/netzwerkverbindungen.md` — read this when you add or change an outgoing network connection.
 - `docs/android-build.md` — read this when you build for or debug on Android.
