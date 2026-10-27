@@ -30,7 +30,6 @@
     "emptyStateTitle": "Niciun server adăugat încă",
     "emptyStateHint": "Adăugați primul server pentru a vă conecta prin SSH.",
     "emptyStateCreateFirstServer": "Adaugă primul server",
-    "newServerInGroup": "Server nou în grupul „{{name}}”",
     "emptyStateTryLocalhost": "Încercați fără server: „Localhost” de mai sus deschide o sesiune pe acest calculator — cu aceleași confirmări ca pe un server real."
   },
   "settings": {

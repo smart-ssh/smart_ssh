@@ -30,7 +30,6 @@
     "emptyStateTitle": "Zatím nebyl přidán žádný server",
     "emptyStateHint": "Přidejte svůj první server a připojte se přes SSH.",
     "emptyStateCreateFirstServer": "Přidat první server",
-    "newServerInGroup": "Nový server ve skupině „{{name}}“",
     "emptyStateTryLocalhost": "Vyzkoušejte to bez serveru: „Localhost“ výše otevře relaci na tomto počítači — se stejnými potvrzeními jako na skutečném serveru."
   },
   "settings": {

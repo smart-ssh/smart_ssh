@@ -30,7 +30,6 @@
     "emptyStateTitle": "Ingen server tilføjet endnu",
     "emptyStateHint": "Tilføj din første server for at oprette forbindelse via SSH.",
     "emptyStateCreateFirstServer": "Tilføj første server",
-    "newServerInGroup": "Ny server i gruppen \"{{name}}\"",
     "emptyStateTryLocalhost": "Prøv uden en server: \"Localhost\" ovenfor åbner en session på denne maskine – med de samme bekræftelser som på en rigtig server."
   },
   "settings": {

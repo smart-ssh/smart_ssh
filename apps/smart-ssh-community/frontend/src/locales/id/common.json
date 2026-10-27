@@ -30,7 +30,6 @@
     "emptyStateTitle": "Belum ada server yang ditambahkan",
     "emptyStateHint": "Tambahkan server pertama Anda untuk terhubung melalui SSH.",
     "emptyStateCreateFirstServer": "Tambah server pertama",
-    "newServerInGroup": "Server baru di grup \"{{name}}\"",
     "emptyStateTryLocalhost": "Coba tanpa server: \"Localhost\" di atas membuka sesi di komputer ini — dengan konfirmasi yang sama seperti pada server sungguhan."
   },
   "settings": {

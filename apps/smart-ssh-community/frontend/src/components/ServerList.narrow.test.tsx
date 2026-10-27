@@ -3,14 +3,14 @@
 // dafür immer `port: 0` (s. `local_server::synthetic_server`), das darf im
 // UI nicht als echter Port `0` erscheinen. Ein normaler Server zeigt
 // seinen Port unverändert.
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
 import type { GroupDto, ServerDto } from "../types";
 import { ServerList } from "./ServerList";
 import { setNarrow, setWide } from "../test/matchMedia";
-import { listGroups, moveGroup, moveServerToGroup } from "../api";
+import { listGroups, listServers } from "../api";
 
 function localServer(): ServerDto {
   return {
@@ -68,8 +68,6 @@ vi.mock("../api", async () => {
     listGroups: vi.fn(() => Promise.resolve([] as GroupDto[])),
     listChatSessions: vi.fn(() => Promise.resolve([])),
     resumeChatSession: vi.fn(),
-    moveServerToGroup: vi.fn(() => Promise.resolve()),
-    moveGroup: vi.fn(() => Promise.resolve()),
     commandErrorMessage: actual.commandErrorMessage,
     commandErrorCode: actual.commandErrorCode,
     commandErrorConnectLog: actual.commandErrorConnectLog,
@@ -89,7 +87,6 @@ const startConnectMock = vi.fn();
 
 function renderList(
   onCreateFirstServer: () => void = vi.fn(),
-  onCreateServerInGroup: (groupId: string) => void = vi.fn(),
   onToggleGroup: (groupId: string) => void = vi.fn(),
 ) {
   return render(
@@ -102,59 +99,57 @@ function renderList(
         collapsedGroupIds={new Set()}
         onToggleGroup={onToggleGroup}
         onCreateFirstServer={onCreateFirstServer}
-        onCreateServerInGroup={onCreateServerInGroup}
       />
     </I18nextProvider>,
   );
 }
 
 
-const moveLabel = (name: string) => new RegExp(`^(Move “${name}” to|„${name}“ verschieben)`);
-
 function folder(id: string, name: string, parentId: string | null): GroupDto {
   return { id, name, parentId, notes: "" };
 }
 
-describe("ServerList narrow layout: Move to… (Issue #582)", () => {
+const pad = (el: HTMLElement) => parseFloat(el.style.paddingLeft);
+
+describe("ServerList Connect tree: chevrons, indentation, no row actions (Issue #978)", () => {
   beforeEach(() => {
-    vi.mocked(moveServerToGroup).mockClear();
-    vi.mocked(moveGroup).mockClear();
     vi.mocked(listGroups).mockResolvedValue([folder("g-a", "Alpha", null), folder("g-b", "Beta", "g-a")]);
+    vi.mocked(listServers).mockResolvedValue([
+      localServer(),
+      { ...remoteServer(), id: "s-a", name: "in-alpha", groupId: "g-a" },
+      { ...remoteServer(), id: "s-b", name: "in-beta", groupId: "g-b" },
+    ]);
   });
   afterEach(() => {
     setWide();
     vi.mocked(listGroups).mockResolvedValue([]);
+    vi.mocked(listServers).mockResolvedValue([localServer(), remoteServer()]);
   });
 
-  it("moves a server through the same backend call as drag and drop", async () => {
-    setNarrow();
+  it.each([
+    ["narrow", 20, setNarrow],
+    ["wide", 16, setWide],
+  ])("%s: children start at the 📁 icon of their parent (depth 1 and 2)", async (_n, chevron, set) => {
+    set();
     renderList();
-    fireEvent.click(await screen.findByRole("button", { name: moveLabel("prod-1") }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^📁 Beta/ }));
-    await waitFor(() => expect(moveServerToGroup).toHaveBeenCalledWith("remote-1", "g-b"));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    const alpha = await screen.findByRole("button", { name: /📁 Alpha/ });
+    const beta = await screen.findByRole("button", { name: /📁 Beta/ });
+    const inAlpha = (await screen.findByText("in-alpha")).closest("button")!;
+    const inBeta = (await screen.findByText("in-beta")).closest("button")!;
+    const step = chevron + 8; // chevron plus the gap-2 after it
+    expect(alpha.querySelector("svg")).toHaveAttribute("width", String(chevron));
+    expect(pad(beta) - pad(alpha)).toBe(step);
+    expect(pad(inAlpha) - pad(alpha)).toBe(step);
+    expect(pad(inBeta) - pad(beta)).toBe(step);
   });
 
-  it("moves a folder to the top level and refuses its own subfolder", async () => {
-    setNarrow();
-    vi.mocked(listGroups).mockResolvedValue([folder("g-a", "Alpha", null), folder("g-b", "Beta", "g-a")]);
-    renderList();
-    fireEvent.click(await screen.findByRole("button", { name: moveLabel("Beta") }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("button", { name: /^📁 Beta/ })).toBeDisabled();
-    fireEvent.click(within(dialog).getByRole("button", { name: /Ungrouped|Ohne Gruppe/ }));
-    await waitFor(() => expect(moveGroup).toHaveBeenCalledWith("g-b", null));
-  });
-
-  it("offers no row actions for the local server and none in the wide layout", async () => {
-    setNarrow();
-    renderList();
-    await screen.findByText("prod-1");
-    const moveButtons = () => screen.queryAllByRole("button", { name: /verschieben nach|Move .* to/ });
-    expect(moveButtons()).toHaveLength(3); // prod-1 and the two folders; the local server has none
-    expect(screen.queryByRole("button", { name: moveLabel("Localhost") })).toBeNull();
-    setWide();
-    await waitFor(() => expect(moveButtons()).toHaveLength(0));
+  it("has no ⋯ / Move to… and no + buttons in either layout", async () => {
+    for (const set of [setNarrow, setWide]) {
+      set();
+      renderList();
+      await screen.findByText("in-alpha");
+      expect(screen.queryAllByRole("button", { name: /verschieben nach|Move .* to|^⋯$|^\+$/ })).toHaveLength(0);
+      cleanup();
+    }
   });
 });

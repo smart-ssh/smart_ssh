@@ -76,7 +76,6 @@ function renderList() {
         collapsedGroupIds={new Set()}
         onToggleGroup={vi.fn()}
         onCreateFirstServer={vi.fn()}
-        onCreateServerInGroup={vi.fn()}
       />
     </I18nextProvider>,
   );

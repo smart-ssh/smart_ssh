@@ -30,7 +30,6 @@
     "emptyStateTitle": "Nog geen server toegevoegd",
     "emptyStateHint": "Voeg uw eerste server toe om via SSH te verbinden.",
     "emptyStateCreateFirstServer": "Eerste server toevoegen",
-    "newServerInGroup": "Nieuwe server in groep \"{{name}}\"",
     "emptyStateTryLocalhost": "Probeer het zonder server: \"Localhost\" hierboven opent een sessie op deze computer — met dezelfde bevestigingen als op een echte server."
   },
   "settings": {

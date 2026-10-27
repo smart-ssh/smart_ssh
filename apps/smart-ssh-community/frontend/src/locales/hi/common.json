@@ -30,7 +30,6 @@
     "emptyStateTitle": "अभी तक कोई सर्वर नहीं जोड़ा गया",
     "emptyStateHint": "SSH से कनेक्ट करने के लिए अपना पहला सर्वर जोड़ें।",
     "emptyStateCreateFirstServer": "पहला सर्वर जोड़ें",
-    "newServerInGroup": "समूह \"{{name}}\" में नया सर्वर",
     "emptyStateTryLocalhost": "बिना सर्वर के आज़माएँ: ऊपर \"Localhost\" इसी मशीन पर सत्र खोलता है — असली सर्वर जैसी ही पुष्टियों के साथ।"
   },
   "settings": {

@@ -30,7 +30,6 @@
     "emptyStateTitle": "Chưa thêm máy chủ nào",
     "emptyStateHint": "Thêm máy chủ đầu tiên để kết nối qua SSH.",
     "emptyStateCreateFirstServer": "Thêm máy chủ đầu tiên",
-    "newServerInGroup": "Máy chủ mới trong nhóm \"{{name}}\"",
     "emptyStateTryLocalhost": "Dùng thử mà không cần máy chủ: \"Localhost\" ở trên mở một phiên trên máy này — với các bước xác nhận giống như trên máy chủ thật."
   },
   "settings": {

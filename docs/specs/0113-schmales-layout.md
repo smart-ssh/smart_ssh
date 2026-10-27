@@ -51,7 +51,7 @@ Bezüge: Spec 0052 (Titelleiste), docs/ui-guidelines.md.
 ## 5a. Verbinden-Ansicht
 
 - Serverbaum, Sitzungsauswahl, Erstnutzungs-Hinweis und Verbindungs-Reiter nutzen die volle Breite mit kleinem Rand. Lange Namen, Hosts und Protokollzeilen brechen um, statt die Seite zu verbreitern.
-- Zeilen des Serverbaums sind mindestens 44 px hoch. Jede Server- und Ordnerzeile (außer dem lokalen Server) hat eine Schaltfläche „⋯“; sie öffnet „Verschieben nach…“ mit „Ohne Gruppe“ und allen Ordnern. Ziele, die nichts ändern würden, und ein Ordner in seinem eigenen Unterordner sind nicht wählbar. Das Verschieben bewirkt dasselbe wie Ziehen und Ablegen; Ziehen mit der Maus bleibt möglich, eine Fingergeste zum Scrollen startet kein Ziehen.
+- Zeilen des Serverbaums sind mindestens 44 px hoch. Der Pfeil an Ordnerzeilen ist 20 px groß; Server und Untergruppen beginnen dort, wo das 📁-Symbol ihres Ordners beginnt (Abschnitt 3 der Spec 0033). Der Baum der Verbinden-Ansicht hat im schmalen Layout weder „⋯“ noch „Verschieben nach…“ noch „+“; Verschieben geht in der Verwalten-Ansicht („⋯“) und in der breiten Ansicht per Ziehen mit der Maus. Dort bleibt es dasselbe wie Ziehen und Ablegen (Spec 0103); eine Fingergeste zum Scrollen startet kein Ziehen.
 - Die Sitzungsauswahl ist ein Vollbild-Dialog; die Liste nutzt die verfügbare Höhe, „Neue Unterhaltung“, Umbenennen und Löschen sind mindestens 44 px groß.
 - Im Verbindungs-Reiter bleiben „Erneut versuchen“, „Schließen“ und „Abbrechen“ am unteren Rand sichtbar, auch bei langem Protokoll.
 
