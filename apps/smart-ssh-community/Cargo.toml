@@ -49,6 +49,10 @@ tauri-plugin-decoration = "3.0"
 # app aborts at launch.
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-fs = "2"
+# Issue #888: the foreground session service and the microphone permission
+# plugin (Kotlin) ship with this crate as an Android library module; same
+# direct-dependency rule as above.
+tauri-plugin-android-host = { version = "0.7.0", path = "../../crates/tauri-plugin-android-host" }
 
 [dev-dependencies]
 # Issue #14: `tests/network_boundary.rs` liest die CSP aus `tauri.conf.json`.

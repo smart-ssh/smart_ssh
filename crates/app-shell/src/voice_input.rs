@@ -96,25 +96,12 @@ pub fn set_speech_language(app: AppHandle, language: String) -> CommandResult<()
 #[cfg(target_os = "android")]
 mod android_permission {
     use serde::Deserialize;
-    use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
     use tauri::{AppHandle, Manager, Runtime};
-
-    struct Handle<R: Runtime>(PluginHandle<R>);
+    use tauri_plugin_android_host::MicrophoneHandle as Handle;
 
     #[derive(Deserialize)]
     struct PermissionResult {
         granted: bool,
-    }
-
-    pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
-        Builder::new("microphone")
-            .setup(|app, api| {
-                let handle =
-                    api.register_android_plugin("com.smartssh.desktop", "MicrophonePlugin")?;
-                app.manage(Handle(handle));
-                Ok(())
-            })
-            .build()
     }
 
     /// `Ok(true)` when the permission is granted (asking if needed).
@@ -134,11 +121,6 @@ mod android_permission {
             }
         }
     }
-}
-
-#[cfg(target_os = "android")]
-pub(crate) fn microphone_plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    android_permission::plugin()
 }
 
 /// Starts recording. Errors with `speech_no_model` before the input device

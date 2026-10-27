@@ -588,6 +588,17 @@ jobs:
           [ "$count" -gt 0 ] || { echo "::error::no .so found in APK"; exit 1; }
           exit $fail
 
+      # Issue #888: the session service and microphone plugin come from the
+      # `tauri-plugin-android-host` library via Gradle and manifest merge.
+      - name: Check merged manifest and Gradle wiring of the Android host plugin
+        run: |
+          grep -q 'tauri-plugin-android-host' apps/smart-ssh-community/gen/android/tauri.settings.gradle \
+            || { echo "::error::tauri.settings.gradle does not list tauri-plugin-android-host"; exit 1; }
+          export AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n1)"
+          for apk in $(find apps/smart-ssh-community/gen/android/app/build/outputs/apk -name '*.apk'); do
+            scripts/check-android-apk-manifest.sh "$apk"
+          done
+
       - name: Upload APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
