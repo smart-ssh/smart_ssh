@@ -307,7 +307,7 @@ describe("StartupGate", () => {
     );
     renderGate(state({ screen: "setUpMasterPassword", mode: "keychain" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Beenden" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Erneut versuchen" })).toBeTruthy();
 
@@ -345,7 +345,7 @@ describe("StartupGate", () => {
 
     // Der neue Dateiname darf nicht mit dem Wechsel zur App verschwinden —
     // sonst erfährt ihn der Nutzer nirgends.
-    await waitFor(() => expect(screen.getByText("DIE-APP-0101")).toBeTruthy());
+    expect(await screen.findByText("DIE-APP-0101")).toBeTruthy();
     expect(screen.getByText(/smart-ssh.db.unreadable-0101/)).toBeTruthy();
   });
 
@@ -353,7 +353,7 @@ describe("StartupGate", () => {
     vi.mocked(getStartupState).mockRejectedValue({ message: "kaputt", code: null });
     renderGate(null);
 
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByText("DIE-APP-0101")).toBeNull();
     expect(screen.getByText(/Startzustand nicht lesen/)).toBeTruthy();
   });

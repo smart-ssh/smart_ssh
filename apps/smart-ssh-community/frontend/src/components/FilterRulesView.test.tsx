@@ -103,7 +103,7 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^(Testen|Test)$/ }));
 
-    await waitFor(() => expect(screen.getByText("AutoExec")).toBeInTheDocument());
+    expect(await screen.findByText("AutoExec")).toBeInTheDocument();
   });
 
   it("still shows 'no rule matched' when no server is selected (regression baseline)", async () => {
@@ -167,7 +167,7 @@ describe("TestPanel server-tag derivation (Spec 0046, Fund 2)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^(Testen|Test)$/ }));
 
-    await waitFor(() => expect(screen.getByText("ps *")).toBeInTheDocument());
+    expect(await screen.findByText("ps *")).toBeInTheDocument();
     expect(screen.getByText("grep *")).toBeInTheDocument();
     expect(screen.getAllByTestId("trace-checks")).toHaveLength(1);
     expect(screen.getByTestId("trace-checks").textContent).toMatch(/redirection|Umleitung/i);

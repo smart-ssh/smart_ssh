@@ -287,7 +287,7 @@ describe("startup screens: title bar drag strip (issue #163)", () => {
     // (die des Headers), keine zusätzliche Startleiste.
     await waitFor(() => expect(vi.mocked(onStartupPrompt)).toHaveBeenCalled());
     deliverPrompt({ ...question, kind: "notice" });
-    await waitFor(() => expect(screen.queryByTestId("titlebar-drag-layer")).not.toBeNull());
+    expect(await screen.findByTestId("titlebar-drag-layer")).toBeTruthy();
     expect(strip()).toBeNull();
     expect(document.querySelectorAll("[data-testid$='drag-layer'], [data-testid$='drag-strip']")).toHaveLength(1);
   });

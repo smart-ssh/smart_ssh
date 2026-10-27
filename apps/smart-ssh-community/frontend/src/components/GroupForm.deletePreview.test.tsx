@@ -4,7 +4,7 @@
 // *Gegenbeweis:* Ohne die `unusableServersToUnassign`-Zeilen in `GroupForm`
 // fehlt der Name des nicht nutzbaren Servers, und bei sonst leerer Vorschau
 // erscheint fälschlich „keine Auswirkungen".
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { deleteGroup } from "../api";
@@ -50,7 +50,7 @@ describe("GroupForm delete preview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Gruppe löschen" }));
 
-    await waitFor(() => expect(screen.getByText(/kaputt/)).toBeTruthy());
+    expect(await screen.findByText(/kaputt/)).toBeTruthy();
     expect(screen.getByText(/Nicht nutzbarer Server/)).toBeTruthy();
     expect(screen.queryByText(/Keine weiteren Objekte/)).toBeNull();
   });

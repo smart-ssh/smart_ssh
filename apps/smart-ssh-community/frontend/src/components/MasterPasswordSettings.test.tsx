@@ -3,6 +3,7 @@
 // Bestätigung, und die Frage vor dem Überschreiben eines fremden
 // Schlüssels im Schlüsselbund.
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getMasterPasswordMode, setUpMasterPassword, switchToOsKeychain } from "../api";
@@ -63,7 +64,7 @@ describe("MasterPasswordSettings", () => {
 
     const button = screen.getByRole("button", { name: "Master-Passwort einrichten" });
     expect(button).toHaveProperty("disabled", true);
-    fireEvent.click(button);
+    clickDisabled(button);
     expect(setUpMasterPassword).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("checkbox"));

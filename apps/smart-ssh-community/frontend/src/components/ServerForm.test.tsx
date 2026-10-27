@@ -307,7 +307,7 @@ describe("ServerForm — Verbindungstest ohne Schlüsseldatei-Pfad (issue #254)"
     });
 
     renderForm();
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
@@ -785,7 +785,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
   it.each(results)("$kind: Dialog bei offenem Formular sichtbar, fokussiert und außerhalb des Formulars", async (result) => {
     vi.mocked(testConnection).mockResolvedValue(result);
     renderInTabs(true);
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
 
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
@@ -823,7 +823,7 @@ describe("ServerForm — Host-Key-Dialog in jedem Tab-Zustand (Issue #12)", () =
       }),
     );
     const { switchTab } = renderInTabs(true);
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
     await waitFor(() => expect(testConnection).toHaveBeenCalled());
@@ -878,7 +878,7 @@ describe("ServerForm — step log of a test connection (issue #51)", () => {
         />
       </I18nextProvider>,
     );
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
     fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
 
@@ -918,7 +918,7 @@ describe("ServerForm — gespeicherte Host-Keys (Spec 0008)", () => {
   it("shows no host key area in the create form", async () => {
     renderNewServerForm();
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /Anlegen|Create/ })).toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: /Anlegen|Create/ })).toBeInTheDocument();
     expect(screen.queryByText("Host-Keys")).not.toBeInTheDocument();
     expect(listStoredHostKeys).not.toHaveBeenCalled();
   });
@@ -944,7 +944,7 @@ describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)"
         />
       </I18nextProvider>,
     );
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     openTab("Verbindung");
     fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
     fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), { target: { value: NEW_PATH } });
@@ -1003,7 +1003,7 @@ describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)"
         />
       </I18nextProvider>,
     );
-    await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
     fireEvent.change(screen.getByDisplayValue("web-01"), { target: { value: "web-02" } });
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
 

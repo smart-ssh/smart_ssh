@@ -55,7 +55,7 @@ async function open(lang: string) {
     </I18nextProvider>,
   );
   fireEvent.click(screen.getAllByRole("button")[0]);
-  await waitFor(() => expect(screen.getByText(/ps aux, grep java/)).toBeTruthy());
+  expect(await screen.findByText(/ps aux, grep java/)).toBeTruthy();
   return onAccept;
 }
 

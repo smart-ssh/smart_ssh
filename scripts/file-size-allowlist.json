@@ -41,6 +41,6 @@
   "crates/core/src/filter/tests.rs": 3294,
   "crates/persistence-sqlite/src/backup_store.rs": 1327,
   "crates/persistence-sqlite/src/chat_session_store.rs": 1666,
-  "crates/ssh-transport/src/local.rs": 1392,
+  "crates/ssh-transport/src/local.rs": 1399,
   "crates/ssh-transport/tests/integration.rs": 2695
 }

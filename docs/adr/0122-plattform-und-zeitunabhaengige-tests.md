@@ -91,6 +91,38 @@ verweisen auf sie mit „ADR 0122, Rn".
   ein Test, der die Datei direkt danach von der Platte liest, sie
   vollständig sieht.
 
+- **R13 — Auf den fertigen DOM-Zustand warten, nicht auf den Mock-Aufruf.**
+  Nach einer asynchronen Aktion wartet der Test (`waitFor`/`findBy*`) auf
+  das gerenderte Ergebnis, mit dem er als Nächstes arbeitet (Element da oder
+  weg, aktiviert, Text sichtbar). Ein `waitFor` allein auf
+  `toHaveBeenCalled*` wird nur von Prüfungen auf Mocks gefolgt, nie von einer
+  synchronen DOM-Abfrage oder einem Ereignis.
+  Falsch: `await waitFor(() => expect(api.save).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));`
+  Richtig: `fireEvent.click(await screen.findByRole("button", { name:
+  "Close" }));` bzw. `await waitFor(() => expect(button).toBeEnabled());`
+  vor dem Klick.
+- **R14 — Elemente nach einem asynchronen Übergang neu abfragen.** Eine
+  Referenz, die vor einem Übergang (Dialog ersetzt, Liste neu gerendert,
+  Button während der Arbeit deaktiviert) geholt wurde, wird danach nicht
+  mehr für Klick oder Prüfung benutzt; der Test fragt neu ab, mit
+  `within(dialog)`, wo mehrere Dialoge oder gleichnamige Buttons existieren
+  können.
+  Falsch: `const cancel = screen.getByText("Cancel"); …; fireEvent.click(cancel);`
+  Richtig: `fireEvent.click(within(await screen.findByRole("dialog")).getByText("Cancel"));`
+- **R15 — Testereignisse laufen in `act`.** Fake-Backend-Ereignisse,
+  Listener-Aufrufe und Timer-Vorlauf, die Komponentenzustand ändern, laufen
+  in `act` (direkt oder über einen Helfer wie `emitPartial`); Testing
+  Library unterdrückt die act-Warnung während eines offenen `waitFor`.
+  Falsch: `listeners.get("chat-event")?.(payload);`
+  Richtig: `act(() => { listeners.get("chat-event")?.(payload); });`
+
+Absicherung (R13/R14): `src/test-setup.ts` lässt `fireEvent.*` auf einem
+nicht mehr im Dokument hängenden Knoten und auf einem deaktivierten Element
+sofort mit einer Meldung scheitern. Ein Test, der absichtlich beweist, dass
+ein deaktiviertes Bedienelement nichts tut, benutzt `clickDisabled` aus
+`src/test/clickDisabled.ts`.
+
 ### Nachweis
 
 Ein behobener Wackler wird mit einer **Verzögerungsprobe** belegt: eine

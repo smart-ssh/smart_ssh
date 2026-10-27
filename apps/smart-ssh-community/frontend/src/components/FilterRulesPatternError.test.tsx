@@ -3,6 +3,7 @@
 // erscheinen (3.1.4) — und eine schon gespeicherte Regel mit einem solchen
 // Muster muss in der Regelliste als wirkungslos erkennbar sein (3.2.3).
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { clickDisabled } from "../test/clickDisabled";
 import { I18nextProvider } from "react-i18next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { testI18n } from "../testI18n";
@@ -207,8 +208,8 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     expect(down).toBeDisabled();
     expect(up).toHaveAttribute("title", expect.stringMatching(/./));
 
-    fireEvent.click(up);
-    fireEvent.click(down);
+    clickDisabled(up);
+    clickDisabled(down);
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
@@ -236,8 +237,8 @@ describe("Prioritäts-Pfeile an einer Regel mit ungültigem Muster (Spec 0077, 3
     expect(bottomUp).toBeDisabled();
     expect(bottomUp).toHaveAttribute("title", neighbourReason);
 
-    fireEvent.click(topDown);
-    fireEvent.click(bottomUp);
+    clickDisabled(topDown);
+    clickDisabled(bottomUp);
     expect(swapRulePrioritiesMock).not.toHaveBeenCalled();
     expect(updateRuleMock).not.toHaveBeenCalled();
   });

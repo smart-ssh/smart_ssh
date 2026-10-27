@@ -1,0 +1,38 @@
+name: Threat model note
+
+# Issue #864: PRs touching security-critical paths (.github/security-paths.txt)
+# must update THREAT-MODEL.md or state `Threat model: no change – <reason>` in
+# the description. `edited` re-runs the check after the description changes.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: threat-model-note-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  threat-model-note:
+    name: threat-model-note
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check THREAT-MODEL.md note
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.txt"
+          git diff --name-only "origin/$BASE_REF"...HEAD > "$RUNNER_TEMP/changed-files.txt"
+          node scripts/check-threat-model-note.mjs \
+            --changed-files "$RUNNER_TEMP/changed-files.txt" \
+            --body-file "$RUNNER_TEMP/pr-body.txt"

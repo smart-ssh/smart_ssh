@@ -28,24 +28,26 @@ current finding (Spec 0090, A4) — a stale exemption (e.g. for a withdrawn
 advisory) fails the job too.
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo build --workspace
+scripts/gate.sh                  # all stages, in order
+scripts/gate.sh rust             # fmt --check, clippy, test, build
+scripts/gate.sh boundary         # app-logic stays free of Tauri (Spec 0084, A3)
+scripts/gate.sh frontend         # tsc -b, npm run lint, vitest, npm run build
+scripts/gate.sh --ci rust        # as CI: clipboard test required, under xvfb-run on Linux
 ```
 
-The last step builds without the `test-support` feature, which `cargo
-test`/`clippy --all-targets` both enable — it's the only one of the four
+`scripts/gate.sh` is the single definition of the gate; CI calls it too
+(Windows keeps its Cargo steps inline with the same commands, see the
+comment in `community.yml`). Every Cargo build/test/clippy/tree call uses
+`--locked`, so the checked-in `Cargo.lock` is what gets tested and a stale
+lockfile fails instead of being re-resolved silently (guarded by
+`src/cargoLockedCheck.test.ts`).
+
+The `rust` stage's last step builds without the `test-support` feature, which `cargo
+test`/`clippy --all-targets` both enable — it is the only one of the four
 that catches a production-code call into a test-only access point (e.g.
 `parts_mut_for_tests`, gated on `cfg(any(test, feature = "test-support"))`),
 since that call compiles fine as long as `test-support` is on.
 
-```bash
-cd apps/smart-ssh-community/frontend
-npx tsc -b
-npm run lint      # Tauri command check (scripts/check-tauri-commands.mjs), then oxlint
-npx vitest run
-```
 
 Browser tests (issue #166, ADR 0120) run the real frontend in Chromium and
 WebKit, at 1280×800 and 800×560, against a fake backend that replaces the
@@ -235,7 +237,10 @@ irreversible happening on a real server. For changes here:
   `crates/app-logic/src/orchestration/`, `crates/mcp-server/`,
   `crates/ssh-transport/` and `crates/app-shell/src/elevated_sftp.rs`. If it
   does not need to change, the pull request description says
-  `Threat model: no change – <reason>`.
+  `Threat model: no change – <reason>`. CI enforces this (job
+  `threat-model-note`, `scripts/check-threat-model-note.mjs`); the
+  authoritative list of security-critical path prefixes is
+  `.github/security-paths.txt` (test-only changes do not count).
 
 ## Spec workflow
 
@@ -341,7 +346,9 @@ not by hand-editing, so the lockfile stays consistent).
   "test connection" feature), not a test file.
 - Frontend: pure logic (`groupTree.ts`, `remotePath.ts`, `errorCodes.ts`, …)
   gets its own `*.test.ts` via Vitest; component tests exist for the
-  trickier interactive pieces, not for every component.
+  trickier interactive pieces, not for every component. Async frontend tests
+  follow ADR 0122 R6–R15 (`docs/adr/0122-plattform-und-zeitunabhaengige-tests.md`):
+  wait for the final DOM state, re-query after transitions, send events in `act`.
 - When a bug is fixed, add the regression test that would have caught it,
   not just the fix — see `crates/app-logic/src/dto/tests.rs`'s
   `rename_all_fields` regression tests for the pattern.

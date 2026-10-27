@@ -1,6 +1,6 @@
 // Issue #217: technical fields of the server form switch off the system text
 // correction (macOS auto-capitalization etc.); free-text fields keep it.
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
 import { getServer } from "../api";
@@ -72,7 +72,7 @@ describe("ServerForm text correction (issue #217)", () => {
   it("disables correction on host and username", async () => {
     vi.mocked(getServer).mockResolvedValue(SERVER);
     renderNew();
-    await waitFor(() => expect(screen.getByDisplayValue("db01.example.lan")).toBeTruthy());
+    expect(await screen.findByDisplayValue("db01.example.lan")).toBeTruthy();
     for (const key of ["serverForm.host", "serverForm.username"]) {
       const field = screen.getByLabelText(testI18n.t(key));
       expect(field.getAttribute("autocapitalize")).toBe("off");
@@ -84,7 +84,7 @@ describe("ServerForm text correction (issue #217)", () => {
   it("keeps correction on the notes textarea", async () => {
     vi.mocked(getServer).mockResolvedValue(SERVER);
     const { container } = renderNew();
-    await waitFor(() => expect(screen.getByDisplayValue("db01.example.lan")).toBeTruthy());
+    expect(await screen.findByDisplayValue("db01.example.lan")).toBeTruthy();
     const notes = container.querySelector("textarea");
     expect(notes).not.toBeNull();
     expect(notes!.hasAttribute("autocapitalize")).toBe(false);

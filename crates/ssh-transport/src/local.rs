@@ -1034,25 +1034,32 @@ mod tests {
         let mut transport = LocalTransport::new();
         transport.set_max_output_bytes(4096);
 
-        let output = tokio::time::timeout(
-            NO_HANG_TIMEOUT,
-            transport.execute(
-                "echo $$; sh -c 'echo $$ >&2; exec yes AAAAAAAAAAAAAAAA' | \\\n                 sh -c 'echo $$ >&2; exec cat'",
-            ),
-        )
-        .await
-        .expect("execute() must not hang")
-        .unwrap();
+        // The PIDs travel through files, not stdout/stderr: both share the
+        // output cap, which may legitimately drop whatever is not yet read.
+        // The flooding member (last in the pipeline) starts only after the
+        // other member has written its PID file, so all three files exist when
+        // the cap is hit. The first member is a long `sleep` that neither
+        // reads nor writes the pipe, so only the process-group kill (not
+        // SIGPIPE/EOF) can end it.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path().display();
+        let command = format!(
+            "export DIR='{d}'; echo $$ > \"$DIR/outer\"; \
+             sh -c 'echo $$ > \"$DIR/a\"; exec sleep 600' | \
+             sh -c 'while [ ! -s \"$DIR/a\" ]; do sleep 0.01; done; echo $$ > \"$DIR/b\"; exec yes AAAAAAAAAAAAAAAA'"
+        );
+
+        let output = tokio::time::timeout(NO_HANG_TIMEOUT, transport.execute(&command))
+            .await
+            .expect("execute() must not hang")
+            .unwrap();
 
         assert!(output.truncated);
-        // stdout starts with the outer shell's pid; stderr holds the pids of
-        // the two pipeline members.
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        let mut pids: Vec<&str> = stdout.lines().take(1).collect();
-        pids.extend(stderr.split_whitespace());
-        assert_eq!(pids.len(), 3, "expected 3 pids, got {pids:?}");
-        for pid in pids {
+        for name in ["outer", "a", "b"] {
+            let pid = std::fs::read_to_string(dir.path().join(name))
+                .unwrap_or_else(|e| panic!("pid file {name} missing: {e}"));
+            let pid = pid.trim();
+            assert!(pid.parse::<u32>().is_ok(), "{name}: not a pid: {pid:?}");
             wait_until_gone(pid).await;
         }
     }

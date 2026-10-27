@@ -1849,7 +1849,7 @@ describe("FileBrowserPanel elevated mode (Spec 0067, A5)", () => {
 
     fireEvent.click(dirButton);
     await waitFor(() => expect(sftpList).toHaveBeenLastCalledWith("session-1", "logs", null));
-    await waitFor(() => expect(screen.getByDisplayValue("logs")).toBeInTheDocument());
+    expect(await screen.findByDisplayValue("logs")).toBeInTheDocument();
 
     act(() => handlerBeforeNavigation({ payload: { type: "drop", position: IN, paths: ["/local/x.conf"] } }));
 

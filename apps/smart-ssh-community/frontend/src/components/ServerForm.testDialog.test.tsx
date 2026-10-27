@@ -107,7 +107,7 @@ async function startTest(): Promise<string> {
       />
     </I18nextProvider>,
   );
-  await waitFor(() => expect(screen.getByDisplayValue("web-01")).toBeInTheDocument());
+  expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("tab", { name: "Verbindung" }));
   fireEvent.click(screen.getByRole("button", { name: "Verbindung testen" }));
   await waitFor(() => expect(testConnection).toHaveBeenCalled());
