@@ -1061,19 +1061,9 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
         app_logic::orchestration::backfill_missing_chat_titles(&state.chat_session_store).await;
     });
 
-    // Spec 0038, Abschnitt 4: hält das Frontend über
-    // `entitlements:changed` aktuell, sobald `EntitlementProvider::
-    // watch()` einen neuen Stand liefert. Unabhängiger Review-Pass:
-    // bei `FixedEntitlements` (Community Edition) beendet sich
-    // dieser Task bereits beim Start — `FixedEntitlements::watch()`
-    // droppt ihren `Sender` sofort (s. dortiger Kommentar), also
-    // liefert bereits das erste `changed().await` hier ein `Err`,
-    // die `while`-Schleife läuft kein einziges Mal. Kein aktiver
-    // Leerlauf-Task für die gesamte App-Laufzeit, wie ein früherer
-    // Kommentar hier fälschlich behauptete — die Infrastruktur
-    // (Command + Event) steht trotzdem, s. Spec-Text; ein
-    // künftiger `EntitlementProvider`, der seinen `Sender` am Leben
-    // hält, würde diesen Task tatsächlich laufen lassen.
+    // Spec 0038, Abschnitt 4: hält das Frontend über `entitlements:changed`
+    // aktuell. Bei `FixedEntitlements` (Community) endet der Task sofort,
+    // weil `watch()` ihren `Sender` droppt (s. dortiger Kommentar).
     let handle_for_entitlements = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut receiver = {
