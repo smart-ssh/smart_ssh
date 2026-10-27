@@ -1,0 +1,27 @@
+# Security-critical path prefixes (one repo-relative prefix per line).
+# A pull request touching one of these must change THREAT-MODEL.md or carry
+# the line `Threat model: no change – <reason>` in its description
+# (checked by scripts/check-threat-model-note.mjs, job `threat-model-note`).
+crates/core/src/filter/
+crates/core/src/risk/
+crates/core/src/ai/
+crates/core/src/profiles/credentials.rs
+crates/credentials-keyring/
+crates/app-logic/src/server_credentials.rs
+crates/persistence-sqlite/src/credential_store.rs
+crates/app-logic/src/orchestration/
+crates/persistence-sqlite/src/encryption.rs
+crates/app-logic/src/master_password
+crates/app-shell/src/commands/master_password.rs
+crates/persistence-sqlite/migrations/
+crates/ssh-transport/
+crates/core/src/ssh/
+crates/app-shell/src/commands/connect.rs
+apps/smart-ssh-community/frontend/src/components/HostKeyDialog.tsx
+crates/app-shell/src/elevated_sftp.rs
+crates/app-shell/src/commands/elevation.rs
+apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.tsx
+crates/mcp-server/
+crates/app-shell/src/mcp_backend.rs
+crates/app-shell/src/mcp_settings.rs
+apps/smart-ssh-community/capabilities/
