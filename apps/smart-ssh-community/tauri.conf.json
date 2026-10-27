@@ -13,7 +13,10 @@
       "cwd": "frontend"
     },
     "devUrl": "http://localhost:5173",
-    "frontendDist": "frontend/dist"
+    "frontendDist": "frontend/dist",
+    "windows": {
+      "staticVCRuntime": false
+    }
   },
   "app": {
     "windows": [
