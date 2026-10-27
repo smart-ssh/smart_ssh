@@ -80,6 +80,19 @@ describe("persistence and application", () => {
   });
 });
 
+describe("Android system bars (#956)", () => {
+  it("hands choice and resolved theme to the native bridge", () => {
+    const set = vi.fn();
+    (window as unknown as { SmartSshAppearance: unknown }).SmartSshAppearance = { set };
+    applyThemeChoice("light");
+    expect(set).toHaveBeenLastCalledWith("light", "light");
+    applyThemeChoice("dark");
+    expect(set).toHaveBeenLastCalledWith("dark", "dark");
+    delete (window as unknown as { SmartSshAppearance?: unknown }).SmartSshAppearance;
+    expect(() => applyThemeChoice("light")).not.toThrow();
+  });
+});
+
 describe("theme files", () => {
   it("light defines every variable that has a literal value in dark (palette, literals, terminal)", () => {
     // Semantic tokens that only reference a palette primitive follow the palette.

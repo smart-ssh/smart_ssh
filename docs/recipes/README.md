@@ -20,6 +20,8 @@ Every recipe has the same five sections:
 | [`new-tauri-command.md`](new-tauri-command.md) | The frontend needs a new backend entry point |
 | [`new-ui-text.md`](new-ui-text.md) | A user-visible string is added or changed |
 | [`new-migration.md`](new-migration.md) | The SQLite schema changes |
+| [`new-ai-provider.md`](new-ai-provider.md) | A new `ProviderType` is added |
+| [`new-session-or-server-field.md`](new-session-or-server-field.md) | A field is added to `Session` or to the `Server` profile |
 
 Paths in recipes are checked by extracting every backticked path and testing
 that it exists, for example:
