@@ -1,7 +1,10 @@
-/** Spiegelt `ssh_manager_core::entitlements::{Tier, Feature, Entitlements}`
+/** Spiegelt `ssh_manager_core::entitlements::{TierId, Feature, Entitlements}`
  * (Spec 0037, Abschnitt 2) — Feldnamen `camelCase` gemäß dem
  * `#[serde(rename_all = "camelCase")]` auf `Entitlements` selbst. */
-export type Tier = "free" | "personal" | "pro" | "team" | "business" | "enterprise";
+export type Tier = string;
+
+/** The only tier the core knows; editions register their own (see `tiers.ts`). */
+export const FREE_TIER: Tier = "free";
 
 /** Feature ids are defined by the edition that registers them (Spec 0037). */
 export type Feature = string;

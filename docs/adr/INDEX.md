@@ -157,3 +157,4 @@
 | 0151 | Release-Fixtures für die Migrationstests stammen vom Release selbst | Accepted | [0151-release-fixtures-for-migration-tests.md](0151-release-fixtures-for-migration-tests.md) |
 | 0152 | Code comments in new code are written in English | Accepted | [0152-code-comment-language.md](0152-code-comment-language.md) |
 | 0153 | Entitlement feature ids are open; editions register their own | Accepted | [0153-open-entitlement-feature-ids.md](0153-open-entitlement-feature-ids.md) |
+| 0155 | Entitlement tier ids are open; editions register their own | Accepted | [0155-open-entitlement-tier-ids.md](0155-open-entitlement-tier-ids.md) |

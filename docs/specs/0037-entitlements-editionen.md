@@ -23,7 +23,11 @@ gesperrte Funktion freigeschaltet ist.
   Kern an das Frontend weiter. Enthalten Berechtigungsdaten unbekannte oder
   ungültige Kennungen, werden diese ignoriert, der Rest bleibt gültig.
   Die Community Edition meldet keine Funktion an.
-- **Stufen** (`Tier`): Free, Personal, Pro, Team, Business, Enterprise.
+- **Stufen** (`Tier`): Der Kern kennt nur die Stufe „free“ (Ausgangswert).
+  Eine Stufenkennung ist ein beliebiger Text und wird unverändert
+  serialisiert; frühere Werte bleiben gültig. Editionen melden ihre Stufen
+  samt Anzeigenamen im Frontend an. Eine unbekannte Stufe wird mit der
+  Kennung als allgemeiner Bezeichnung angezeigt.
 - **Berechtigungen** (`Entitlements`): Stufe, Menge der freigeschalteten
   Funktionen, optionale Platzzahl, optionales Ablaufdatum, Kennzeichen für
   nichtkommerzielle Nutzung, optionaler Lizenznehmer. Der Ausgangswert

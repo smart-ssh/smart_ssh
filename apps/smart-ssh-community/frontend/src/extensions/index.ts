@@ -54,6 +54,9 @@ export { useEntitlements } from "./useEntitlements";
 export type { UseEntitlementsResult } from "./useEntitlements";
 
 export type { Entitlements, Feature, Tier, FeatureLockedPayload } from "./entitlements";
+export { FREE_TIER } from "./entitlements";
+export { registerTier, tierLabel } from "./tiers";
+export type { TierContribution } from "./tiers";
 
 export { publishFeatureLocked, subscribeFeatureLocked } from "./featureLockedBus";
 export { FeatureLockedDialog } from "./FeatureLockedDialog";
