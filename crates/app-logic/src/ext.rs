@@ -93,27 +93,6 @@ pub(crate) fn server_ids_of(sessions: &crate::session::SessionManager) -> Vec<Se
     ids
 }
 
-/// [`rebuild_redactors_for_open_sessions`] on its parts, so tests need no
-/// `AppState`.
-#[cfg(test)]
-pub(crate) async fn rebuild_for_open_sessions_with(
-    sessions: &crate::session::SessionManager,
-    profile_store: &dyn ProfileStore,
-    credential_store: &dyn ssh_manager_core::profiles::CredentialStore,
-    extension: Option<&dyn SessionExtension>,
-) {
-    for server_id in server_ids_of(sessions) {
-        rebuild_redactors_for_sessions(
-            sessions,
-            profile_store,
-            credential_store,
-            extension,
-            server_id,
-        )
-        .await;
-    }
-}
-
 /// Test doubles, for tests of extension crates.
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support {

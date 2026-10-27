@@ -758,13 +758,17 @@ fn test_ext_open_session_server_ids_are_deduplicated() {
     assert!(crate::ext::server_ids_of(&SessionManager::new()).is_empty());
 }
 
-/// Issue #878: `rebuild_redactors_for_open_sessions` rebuilds the redactor of
-/// each server with an open session and of no other.
+/// Issue #989: the production `rebuild_redactors_for_open_sessions`, run on a
+/// real `AppState`, rebuilds the redactor of each server with an open session
+/// (once per server, one `known_secrets` call per session) and of no other;
+/// the rebuilt redactor masks the extension's literal secret. With no open
+/// session it does nothing.
 #[tokio::test]
 async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only() {
     use crate::session_extension::{ServerScope, SessionExtension};
-    use crate::test_support::{InMemoryCredentialStore, InMemoryProfileStore};
+    use crate::test_support::InMemoryCredentialStore;
     use secrecy::SecretString;
+    use ssh_manager_core::ssh::{HostKeyDecision, HostKeyStore};
 
     struct Recording(StdMutex<Vec<ServerId>>);
     impl SessionExtension for Recording {
@@ -773,25 +777,79 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
             vec![SecretString::from("ext-secret-42".to_string())]
         }
     }
+    struct NoHostKeys;
+    impl HostKeyStore for NoHostKeys {
+        fn check(&self, _host: &str, _port: u16, _key: &[u8]) -> HostKeyDecision {
+            HostKeyDecision::Unknown {
+                fingerprint: String::new(),
+            }
+        }
+        fn trust(&self, _host: &str, _port: u16, _key: &[u8]) -> Result<(), SshError> {
+            Ok(())
+        }
+    }
 
-    let manager = SessionManager::new();
+    let dir = tempfile::tempdir().unwrap();
+    let db = persistence_sqlite::SqliteProfileStore::connect_plaintext(&dir.path().join("main.db"))
+        .await
+        .unwrap();
+    let data_changes = db.data_changes();
+    let ext = Arc::new(Recording(StdMutex::new(Vec::new())));
+    let state = crate::state::AppState {
+        sessions: SessionManager::new(),
+        session_extension: Some(ext.clone()),
+        root_key_fingerprint: [0; 32],
+        ai_provider_store: Arc::new(db.ai_provider_store()),
+        backup_store: db.backup_store(),
+        policy_store: db.policy_store(),
+        prompt_history_store: db.prompt_history_store(),
+        chat_session_store: db.chat_session_store(),
+        ledger_store: db.ledger_store(),
+        profile_store: Arc::new(db),
+        credential_store: Arc::new(InMemoryCredentialStore::new()),
+        key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
+        keychain: credentials_keyring::KeychainAvailability::Available,
+        file_host_keys: Arc::new(
+            crate::ext::FileHostKeyStore::load(dir.path().join("hk.json")).unwrap(),
+        ),
+        host_key_store: Arc::new(NoHostKeys),
+        data_changes,
+        connector: Arc::new(crate::test_connection::RealConnector),
+        entitlements: Arc::new(ssh_manager_core::entitlements::FixedEntitlements(
+            ssh_manager_core::entitlements::Entitlements::free(),
+        )),
+        pending_host_key_confirmations: ConfirmationRegistry::new(),
+        connect_attempts: Default::default(),
+        pending_action_confirmations: ConfirmationRegistry::new(),
+        running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
+        mcp: crate::state::McpState::default(),
+        rate_limit_registry: ai_providers::RateLimitRegistry::new(),
+        pending_ssh_config_import: StdMutex::new(None),
+        outgoing_transform: None,
+        chat_content: Default::default(),
+        ai_usage_observers: Default::default(),
+    };
+
+    // No open session: a no-op, the extension is not asked.
+    crate::ext::rebuild_redactors_for_open_sessions(&state).await;
+    assert!(ext.0.lock().unwrap().is_empty());
+
     let a = ServerId::new();
     let b = ServerId::new();
     let closed = ServerId::new();
     let (id_a1, id_a2, id_b) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
-    manager.insert(id_a1, Arc::new(dummy_session(a)));
-    manager.insert(id_a2, Arc::new(dummy_session(a)));
-    manager.insert(id_b, Arc::new(dummy_session(b)));
-    let ext = Recording(StdMutex::new(Vec::new()));
+    state.sessions.insert(id_a1, Arc::new(dummy_session(a)));
+    state.sessions.insert(id_a2, Arc::new(dummy_session(a)));
+    state.sessions.insert(id_b, Arc::new(dummy_session(b)));
     let text = "key=ext-secret-42";
+    for id in [id_a1, id_a2, id_b] {
+        assert_eq!(
+            state.sessions.get(id).unwrap().redactor.redact_text(text),
+            text
+        );
+    }
 
-    crate::ext::rebuild_for_open_sessions_with(
-        &manager,
-        &InMemoryProfileStore::new(),
-        &InMemoryCredentialStore::new(),
-        Some(&ext),
-    )
-    .await;
+    crate::ext::rebuild_redactors_for_open_sessions(&state).await;
 
     let mut seen = ext.0.lock().unwrap().clone();
     seen.sort_by_key(|id| id.0);
@@ -800,7 +858,8 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
     assert_eq!(seen, expected);
     assert!(!seen.contains(&closed));
     for id in [id_a1, id_a2, id_b] {
-        assert!(!manager
+        assert!(!state
+            .sessions
             .get(id)
             .unwrap()
             .redactor
