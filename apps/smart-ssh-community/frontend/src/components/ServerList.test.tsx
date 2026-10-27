@@ -411,7 +411,6 @@ describe("ServerList first-run notice (issue #111 / Spec 0031)", () => {
 
     await waitFor(() => expect(startConnectMock).toHaveBeenCalledTimes(2));
     expect(startConnectMock).toHaveBeenLastCalledWith(expect.objectContaining({ id: "local" }));
-    // wait-ok: no notice was rendered by the first connect's acknowledgement path; the second connect starts directly
     expect(screen.queryByText(noticeTitle())).toBeNull();
     expect(saveFirstRunNoticeAcknowledged).toHaveBeenCalledTimes(1);
   });
