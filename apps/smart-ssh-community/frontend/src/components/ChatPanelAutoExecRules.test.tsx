@@ -108,8 +108,14 @@ describe("auto-exec rule line (issue #696)", () => {
   });
 
   it("renders a rule that no longer exists as plain text", async () => {
-    renderItem(item({ autoExecRules: [{ ...globalRule, ruleId: "gone" }] }));
-    await waitFor(() => expect(listRulesMock).toHaveBeenCalled());
+    // The existing rule renders as a button only after the rule list was loaded, so
+    // waiting for it proves the "gone" rule was checked against the loaded list.
+    renderItem(
+      item({
+        autoExecRules: [{ ...globalRule, ruleId: "gone" }, { ...globalRule, ruleId: "r1", patternValue: "ls *" }],
+      }),
+    );
+    expect(await screen.findByRole("button", { name: "ls *" })).toBeInTheDocument();
     expect(screen.getAllByText("uptime").some((el) => el.tagName === "SPAN")).toBe(true);
     expect(screen.queryByRole("button", { name: "uptime" })).toBeNull();
   });

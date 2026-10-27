@@ -226,7 +226,9 @@ describe("ChatPanel voice input (Spec 0108, §5, issue #418)", () => {
     fireEvent.click(await screen.findByRole("button", { name: START }));
     fireEvent.click(await screen.findByRole("button", { name: "Herunterladen" }));
     await waitFor(() => expect(startSpeechModelDownload).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
+    // The download button disappears once the dialog switched to its progress state.
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Herunterladen" })).toBeNull());
+    fireEvent.click(await screen.findByRole("button", { name: "Abbrechen" }));
     await waitFor(() => expect(cancelSpeechModelDownload).toHaveBeenCalledWith("base"));
     expect(startVoiceRecording).not.toHaveBeenCalled();
   });
