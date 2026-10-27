@@ -3,8 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { getStartupState } from './api.ts'
-import { RootErrorScreen } from './components/RootErrorScreen.tsx'
-import { ErrorBoundary } from './components/ui'
+import { AppRoot } from './components/AppRoot.tsx'
 import { StartupGate } from './components/StartupGate.tsx'
 import { initI18n } from './i18n.ts'
 import { installContextMenuSuppression } from './contextMenu.ts'
@@ -70,10 +69,10 @@ if (import.meta.env.PROD) installContextMenuSuppression()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary id="app-root" fallback={<RootErrorScreen />}>
+    <AppRoot>
       <StartupGate initialState={startupState}>
         <App />
       </StartupGate>
-    </ErrorBoundary>
+    </AppRoot>
   </StrictMode>,
 )

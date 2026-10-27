@@ -1,8 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RootErrorScreen } from "./RootErrorScreen";
-import { ErrorBoundary } from "./ui";
+import { AppRoot } from "./AppRoot";
 import { testI18n } from "../testI18n";
 
 function Broken(): never {
@@ -25,11 +24,11 @@ describe("root error boundary (issue #880)", () => {
   it("shows the recovery screen and reloads on click", () => {
     render(
       <I18nextProvider i18n={testI18n}>
-        <ErrorBoundary id="app-root" fallback={<RootErrorScreen />}>
+        <AppRoot>
           <div>
             <Broken />
           </div>
-        </ErrorBoundary>
+        </AppRoot>
       </I18nextProvider>,
     );
     expect(screen.getByRole("heading")).toBeInTheDocument();
