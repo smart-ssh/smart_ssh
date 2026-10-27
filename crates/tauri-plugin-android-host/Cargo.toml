@@ -1,0 +1,17 @@
+[package]
+name = "tauri-plugin-android-host"
+version.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Android host plugins (background session service, microphone permission) for apps embedding app-shell"
+# Tauri's build tooling keys the Android library off this.
+links = "tauri-plugin-android-host"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

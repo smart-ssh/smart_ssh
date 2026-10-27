@@ -220,6 +220,7 @@ dependencies = [
  "ssh-manager-core",
  "ssh-transport",
  "tauri",
+ "tauri-plugin-android-host",
  "tauri-plugin-decoration",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
@@ -5957,6 +5958,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-android-host",
  "tauri-plugin-decoration",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
@@ -6699,6 +6701,15 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-android-host"
+version = "0.7.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

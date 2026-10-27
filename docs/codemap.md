@@ -30,6 +30,7 @@ here, update this file in the same change.
 | `crates/mcp-server/` | MCP server that exposes sessions to external clients | `crates/mcp-server/src/tool_server.rs` — `SmartSshMcpServer`, `ProposeCommandArgs`; `crates/mcp-server/src/auth.rs` — `require_bearer_token`, `SharedToken` |
 | `crates/speech/` | Speech-to-text | `crates/speech/src/lib.rs` — `ModelManager`; `crates/speech/src/transcribe.rs` — `strip_non_speech` |
 | `crates/tls-config/` | Shared TLS configuration | `crates/tls-config/src/lib.rs` |
+| `crates/tauri-plugin-android-host/` | Android library module (session service, microphone permission) for apps embedding app-shell | `crates/tauri-plugin-android-host/src/lib.rs`, `crates/tauri-plugin-android-host/android/` |
 | `crates/real-app-tests/` | Starts the real app in CI | `crates/real-app-tests/tests/` |
 | `apps/smart-ssh-community/` | Thin binary, `app_shell::run(Wiring::community())` | `apps/smart-ssh-community/src/lib.rs`; `apps/smart-ssh-community/tauri.conf.json` |
 
@@ -97,7 +98,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Browser access gate for file browsing | `crates/app-shell/src/commands/elevation.rs` — `BrowserAccess`, `BrowserChannel` |
 | MCP server | `crates/mcp-server/src/tool_server.rs` — `SmartSshMcpServer`; backend glue `crates/app-shell/src/mcp_backend.rs`; settings `crates/app-shell/src/mcp_settings.rs` |
 | Speech input | `crates/speech/src/lib.rs` — `ModelManager`; Tauri side `crates/app-shell/src/voice_input.rs` — `get_speech_language`; models `crates/app-shell/src/speech_models.rs` |
-| Android background service | `crates/app-shell/src/android_service.rs`; build guide `docs/android-build.md` |
+| Android background service | `crates/app-shell/src/android_service.rs` (Rust), `crates/tauri-plugin-android-host/android/` (Kotlin); build guide `docs/android-build.md` |
 | Local pseudo-server | `crates/app-shell/src/local_server.rs` — `synthetic_server`; `crates/ssh-transport/src/local.rs` — `LocalTransport` |
 | Filter rules storage and defaults | `crates/persistence-sqlite/src/policy_store.rs`; `crates/app-logic/src/policy.rs`; hard blacklist `crates/core/src/filter/blacklist.rs` |
 | Output redaction | `crates/core/src/ai/redactor.rs` — `DefaultOutputRedactor`; `crates/core/src/ai/live_redaction.rs` |

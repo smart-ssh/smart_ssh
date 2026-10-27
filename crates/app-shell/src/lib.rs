@@ -1217,13 +1217,10 @@ where
     }
 }
 
-/// Android: the microphone permission plugin; elsewhere a plugin that does
+/// Android: the microphone permission plugin (shipped by `tauri-plugin-android-host`); elsewhere a plugin that does
 /// nothing (keeps both registration chains identical on every platform).
 fn microphone_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    #[cfg(target_os = "android")]
-    return crate::voice_input::microphone_plugin::<R>();
-    #[cfg(not(target_os = "android"))]
-    return tauri::plugin::Builder::new("microphone").build();
+    tauri_plugin_android_host::microphone()
 }
 
 /// Installs `aws-lc-rs` as the process-level rustls provider (idempotent).
