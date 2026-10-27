@@ -489,7 +489,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     // Move einzelner Felder ist erlaubt) — der Über-Dialog-Command
     // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
     // wird nirgends als Tauri-`State` verwaltet.
-    let edition = wiring.edition;
+    let (edition, session_extension) = (wiring.edition, wiring.combined_session_extension());
     // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
     // `State`.
     let edition_data_paths = commands::EditionDataPaths(wiring.extra_data_paths);
@@ -592,7 +592,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             // jeder Laufzeit (s. `runtime_assumptions`).
             match tauri::async_runtime::block_on(open_and_assemble(
                 &wiring.entitlements,
-                wiring.session_extension.clone(),
+                session_extension.clone(),
                 &inputs,
                 app_logic::database_startup::RootKeyAccess::Keychain(&keyring),
                 &prompt,
@@ -647,7 +647,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
     let gate = std::sync::Arc::new(crate::startup_gate::StartupGate::new(app_state.is_some()));
     let pending =
         crate::commands::master_password::PendingStartup::new(inputs, wiring.entitlements.clone())
-            .with_session_extension(wiring.session_extension.clone())
+            .with_session_extension(session_extension)
             .with_db_extensions(db_extensions)
             .with_chat_content(chat_content);
     let entitlement_catalogue =

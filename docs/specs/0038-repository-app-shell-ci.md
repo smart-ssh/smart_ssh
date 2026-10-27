@@ -37,8 +37,17 @@ eigene Verzweigung auslösen.
 
 ### Sitzungs-Erweiterung
 
-Die Verdrahtung kann **eine** Sitzungs-Erweiterung enthalten; die Community
-Edition hat keine. Sie liefert dem Kern je Server (Server-Kennung inklusive
+Die Verdrahtung kann **beliebig viele** Sitzungs-Erweiterungen enthalten; die
+Community Edition hat keine. Der Kern kombiniert sie in Registrierungs-
+reihenfolge: Die Kontext-Abschnitte aller Erweiterungen werden nacheinander
+erfragt, leere oder nur aus Leerraum bestehende Antworten entfallen, der Rest
+wird durch eine Leerzeile getrennt zu **einem** Abschnitt (eine Überschrift,
+ein Fence); bleibt nichts übrig, gibt es keinen Abschnitt. Die bekannten
+Secrets sind die Vereinigung aller Erweiterungen (Reihenfolge erhalten,
+identische Werte nur einmal). Die Meldungen über gelöschte Server und Gruppen
+erhalten alle Erweiterungen, in Registrierungsreihenfolge. Das ältere Einzelfeld
+`session_extension` gilt weiter und zählt als erster Eintrag der Liste. Mit
+genau einer Erweiterung verhält sich alles wie zuvor. Sie liefert dem Kern je Server (Server-Kennung inklusive
 des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
 
 - **Kontext-Abschnitt:** Text, den der Kern dem KI-Kontext der Sitzung nach
