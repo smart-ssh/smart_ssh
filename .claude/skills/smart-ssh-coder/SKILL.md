@@ -11,7 +11,7 @@ description: >
 
 > Optional helper for interactive Claude Code sessions. Project rules live in `AGENTS.md`; on conflict, `AGENTS.md` and the issue win.
 
-Ergänzt `AGENTS.md` (Gate, Architektur, Spec-Workflow, Changelog- und
+Ergänzt `AGENTS.md` (Gate, Aufbau der Crates, Spec-Workflow, Changelog- und
 Testkonventionen gelten dort vollständig und werden hier nicht wiederholt).
 Der Ablauf einer Sitzung steht im Agenten `smart-ssh-coder`.
 
