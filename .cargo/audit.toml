@@ -89,21 +89,6 @@ ignore = [
     # aktualisiert) oder die GTK3-Kette entfällt.
     "RUSTSEC-2024-0370",
 
-    # --- unic-char-*-Kette: transitive Tauri-Abhängigkeit ---------------
-    #
-    # Cross-Plattform (nicht Linux-only, verifiziert via
-    # `cargo tree --target all`), transitiv über `urlpattern` →
-    # `tauri-utils` → `tauri`. Kein Fix verfügbar.
-    #
-    # Entschieden gegen: je 0.9.0 (Cargo.lock, s. Version je Zeile unten).
-    # Überholt, wenn `cargo audit` eine dieser IDs nicht mehr meldet (Crate
-    # ersetzt/aktualisiert) oder `tauri` `urlpattern` nicht mehr zieht.
-    "RUSTSEC-2025-0081", # unic-char-property 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0075", # unic-char-range 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0080", # unic-common 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0100", # unic-ucd-ident 0.9.0 — s. Begründung oben
-    "RUSTSEC-2025-0098", # unic-ucd-version 0.9.0 — s. Begründung oben
-
     # --- RUSTSEC-2024-0429: bewusst ANDERS behandelt als "unmaintained" -
     #
     # Unsoundness in `glib::VariantStrIter`s `Iterator`/
