@@ -25,7 +25,7 @@ describe("ErrorBoundary (issue #880)", () => {
     expect(screen.queryByText(/boom-secret/)).toBeNull();
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toBe("x");
-    expect(consoleError.mock.calls.some((c) => String(c[0]).includes('"x"'))).toBe(true);
+    expect(consoleError.mock.calls.some((c: unknown[]) => String(c[0]).includes('"x"'))).toBe(true);
   });
 
   it("renders nothing by default", () => {
