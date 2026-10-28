@@ -4,6 +4,10 @@
   "version": "0.7.0",
   "license": "Apache-2.0",
   "type": "module",
+  "exports": {
+    "./public-api": "./src/public-api.ts",
+    "./test-support": "./src/test-support.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
