@@ -240,7 +240,7 @@ describe("first-run notice extensions that fail to render (Spec 0031, section 6)
 
   const ourLogsFor = (spy: ReturnType<typeof vi.spyOn>, id: string) =>
     spy.mock.calls.filter(
-      ([message]) => typeof message === "string" && message.includes(`"${id}"`),
+      ([message]: unknown[]) => typeof message === "string" && message.includes(`"${id}"`),
     );
 
   it("keeps the notice usable and hides only the failing extension's area", () => {
