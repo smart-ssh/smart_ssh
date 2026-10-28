@@ -399,6 +399,21 @@ zentral abgefangen und als Hinweis-Dialog gezeigt. Der Dialog ist über allen
 Ansichten sichtbar, auch bei aktivem Sitzungs-Tab. Ein vollständiger
 Upgrade-Ablauf gehört nicht zu diesem Stand.
 
+**Einziger unterstützter Einstiegspunkt:** Erweiterungen und einbettende
+Apps importieren ausschließlich über `smart-ssh/public-api` (und in Tests
+über `smart-ssh/test-support`); beide Pfade löst die `exports`-Tabelle des
+Frontend-Pakets auf. Alles, was eine Erweiterung nutzen darf, ist dort
+exportiert: die Registrierungsfunktionen und Typen, Berechtigungs-Typen,
+`bootstrap`, die UI-Bausteine samt `ErrorBoundary`, der zentrale
+Aufruf-Wrapper `invokeCommand` (meldet `FeatureLocked` an den Hinweis-Dialog),
+die Fehler-Helfer, `listServers`, `getStartupState`, einige Hilfen
+(`TECHNICAL_INPUT_PROPS`, `useIsNarrow`, `resolveSectionLabel`,
+`pickAndReadTextFile`, `SUPPORTED_LANGUAGES`, `settingsStore`, `initI18n`) und
+DTO-Typen. Relative Importe interner Dateien sind nicht unterstützt und
+können bei jeder Umbenennung brechen. Exporte ändern sich nur zusammen mit
+einem Changelog-Eintrag und einer Anpassung dieser Spec; ein Test hält die
+Liste fest.
+
 ## 5. Abhängigkeitsprüfung
 
 Die Lizenzprüfung der Rust-Abhängigkeiten (Spec 0090) ist ein Pflichtschritt

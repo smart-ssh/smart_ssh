@@ -97,13 +97,16 @@ export function commandErrorFeatureLocked(err: unknown): FeatureLockedPayload | 
  * einen `feature_locked`-Fehler an `featureLockedBus`, bevor er (unverändert)
  * weitergereicht wird, damit einzelne Aufrufstellen `FeatureLocked` nicht
  * selbst behandeln müssen (s. `extensions/FeatureLockedDialog.tsx`). */
-function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+export function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return tauriInvoke<T>(cmd, args).catch((err: unknown) => {
     const featureLocked = commandErrorFeatureLocked(err);
     if (featureLocked) publishFeatureLocked(featureLocked);
     throw err;
   });
 }
+
+/** Internal short name; the exported `invokeCommand` is the public one. */
+const invoke = invokeCommand;
 
 /** Extrahiert eine anzeigbare Meldung aus einem abgelehnten `invoke()`. */
 export function commandErrorMessage(err: unknown): string {
