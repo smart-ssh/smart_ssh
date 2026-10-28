@@ -48,3 +48,4 @@ Bezüge: Spec 0113 (Schmales Layout), Spec 0101 (Master-Passwort), Spec 0049 (Ti
 - Eine Sitzung ohne laufende Arbeit hält das Gerät nicht wach. Nur solange ein Befehl läuft oder eine Dateiübertragung aktiv ist, wird ein Teil-Wake-Lock gehalten.
 - Bricht die Verbindung beim Netzwechsel (WLAN ↔ Mobilfunk) ab, gilt das automatische Neuverbinden (Spec 0107). Der SSH-Keepalive bleibt bei 15 Sekunden.
 - Kehrt man zur App zurück, wird der Verbindungsstatus der offenen Tabs neu vom Backend gelesen.
+- Der Android-Teil dieses Hintergrunddienstes (Dienst, Benachrichtigung, Wake-Lock) und die Mikrofon-Abfrage der Spracheingabe gehören zum Kern und kommen als eigene Plugin-Bibliothek mit; jede App, die den Kern einbettet, hat sie ohne eigenen Code. Die Benachrichtigung zeigt das Symbol der jeweiligen App.

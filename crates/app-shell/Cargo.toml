@@ -32,6 +32,7 @@ ssh-manager-core = { version = "0.7.0", path = "../core" }
 ssh-transport = { version = "0.7.0", path = "../ssh-transport" }
 tauri = { version = "2", features = [] }
 tls-config = { path = "../tls-config" }
+tauri-plugin-android-host = { version = "0.7.0", path = "../tauri-plugin-android-host" }
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2.5.5"

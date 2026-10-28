@@ -1,4 +1,4 @@
-package com.smartssh.desktop
+package dev.smartssh.androidhost
 
 import android.Manifest
 import android.app.Activity

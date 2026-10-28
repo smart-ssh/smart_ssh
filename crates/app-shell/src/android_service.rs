@@ -100,20 +100,14 @@ pub(crate) fn start(app: &AppHandle) {
     }
     app.manage(Installed);
     let (tx, rx) = mpsc::channel();
-    let (handle_tx, handle_rx) = mpsc::channel();
-    let plugin = tauri::plugin::Builder::<Wry>::new("session-service")
-        .setup(move |_app, api| {
-            let handle =
-                api.register_android_plugin("com.smartssh.desktop", "SessionServicePlugin")?;
-            let _ = handle_tx.send(handle);
-            Ok(())
-        })
-        .build();
-    if let Err(error) = app.plugin(plugin) {
+    if let Err(error) = app.plugin(tauri_plugin_android_host::session_service::<Wry>()) {
         tracing::error!(%error, "session service plugin could not be registered");
         return;
     }
-    let Ok(handle) = handle_rx.recv() else {
+    let Some(handle) = app
+        .try_state::<tauri_plugin_android_host::SessionServiceHandle<Wry>>()
+        .map(|state| state.0.clone())
+    else {
         tracing::error!("session service plugin handle missing");
         return;
     };

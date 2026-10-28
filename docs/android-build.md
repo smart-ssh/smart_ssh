@@ -36,7 +36,7 @@ TLS: Unter Android nutzen die HTTP-Clients (KI-Anbieter, Modell-Download) die ei
 
 ## App-Crates, die `app-shell` einbetten (Issue #795)
 
-Drei Punkte, ohne die die App unter Android beim Start abbricht:
+Drei Punkte (plus die Plugin-Crate unten), ohne die die App unter Android beim Start abbricht:
 
 1. **Android-Kontext (`ndk-context`) nicht selbst anlegen.** Der Schlüsselbund-Test beim Start (`probe_keychain_availability`) und die Spracheingabe (`cpal`) brauchen den Anwendungskontext. Seit **tao 0.37** legt tao ihn selbst in `onCreate` an (`ndk_context::initialize_android_context`, innerhalb von `super.onCreate`). Eine App-Crate darf ihn **nicht** noch einmal initialisieren (früherer Aufruf `Keyring.initializeNdkContext` aus Issue #795): doppelte Initialisierung lässt die Rust-Seite beim Start paniken. Die Aussage hängt an der tao-Version im `Cargo.lock`; der Test `apps/smart-ssh-community/tests/android_ndk_context.rs` schlägt fehl, wenn tao >= 0.37 ist und ein Kotlin-Aufruf von `initializeNdkContext` oder `io/crates/keyring/Keyring.kt` auftaucht, und ebenso, wenn tao unter 0.37 fällt (dann muss die App den Kontext wieder selbst anlegen).
 2. **Android-Teil von Tauri-Plugins.** Die Tauri-CLI schreibt nur die Android-Projekte der *direkten* Abhängigkeiten der App-Crate in `gen/android/tauri.settings.gradle` und `app/tauri.build.gradle.kts`. Jedes Plugin mit Android-Teil, das `app-shell` registriert, muss daher auch direkte Abhängigkeit der App-Crate sein (für `tauri-plugin-fs`, Android-only, reicht ein `[target.'cfg(target_os = "android")'.dependencies]`-Eintrag). Sonst fehlt die Kotlin-Klasse (`com.plugin.fs.FsPlugin`) im APK. Prüfen: `tauri.settings.gradle` nennt `:tauri-plugin-fs`.
@@ -44,9 +44,7 @@ Drei Punkte, ohne die die App unter Android beim Start abbricht:
 
 ### Checkliste: was eine App-Crate aus `gen/android` braucht
 
-- Kotlin-Klassen `SessionServicePlugin`, `SessionService` und `MicrophonePlugin` unter `com/smartssh/desktop/`.
-- Manifest: die Berechtigungen dieser Klassen und der `<service>`-Eintrag für `SessionService`.
-- Die von ihnen verwendeten Strings (`values/strings.xml`).
+- Direkte Abhängigkeit auf `tauri-plugin-android-host` (ADR 0154): Sie bringt den Vordergrunddienst (`SessionServicePlugin`, `SessionService`), `MicrophonePlugin`, deren Berechtigungen, den `<service>`-Eintrag und die Strings als Android-Bibliothek mit. Nichts davon wird kopiert; die Manifest-Einträge kommen über den Manifest-Merge. Das Benachrichtigungs-Symbol ist das App-Symbol (`applicationInfo.icon`). Prüfen: `tauri.settings.gradle` nennt `:tauri-plugin-android-host`, und `scripts/check-android-apk-manifest.sh <apk>` ist grün.
 - Direkte Abhängigkeit auf `tauri-plugin-fs` (Punkt 2).
 - Die Insets-Behandlung in `MainActivity` (Punkt 3).
 - Keinen Aufruf, der den `ndk-context` initialisiert (Punkt 1).
