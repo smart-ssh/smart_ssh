@@ -164,15 +164,7 @@ impl SshTransport for RusshTransport {
     }
 
     async fn execute(&mut self, command: &str) -> Result<CommandOutput, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, None).await?;
         drain_channel(channel, self.max_output_bytes).await
     }
 
@@ -186,22 +178,7 @@ impl SshTransport for RusshTransport {
         command: &str,
         stdin: &[u8],
     ) -> Result<CommandOutput, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if !stdin.is_empty() {
-            channel
-                .data_bytes(stdin.to_vec())
-                .await
-                .map_err(map_session_russh_error)?;
-        }
-        channel.eof().await.map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, Some(stdin)).await?;
         drain_channel(channel, self.max_output_bytes).await
     }
 
@@ -210,15 +187,7 @@ impl SshTransport for RusshTransport {
         command: &str,
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, None).await?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes, None).await
     }
 
@@ -228,22 +197,7 @@ impl SshTransport for RusshTransport {
         stdin: &[u8],
         cancel: oneshot::Receiver<()>,
     ) -> Result<ExecOutcome, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if !stdin.is_empty() {
-            channel
-                .data_bytes(stdin.to_vec())
-                .await
-                .map_err(map_session_russh_error)?;
-        }
-        channel.eof().await.map_err(map_session_russh_error)?;
+        let channel = self.open_exec(command, Some(stdin)).await?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes, None).await
     }
 
@@ -257,24 +211,7 @@ impl SshTransport for RusshTransport {
         cancel: oneshot::Receiver<()>,
         sink: ExecOutputSink,
     ) -> Result<ExecOutcome, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if let Some(stdin) = stdin {
-            if !stdin.is_empty() {
-                channel
-                    .data_bytes(stdin.to_vec())
-                    .await
-                    .map_err(map_session_russh_error)?;
-            }
-            channel.eof().await.map_err(map_session_russh_error)?;
-        }
+        let channel = self.open_exec(command, stdin).await?;
         drain_channel_cancellable(channel, cancel, self.max_output_bytes, Some(sink)).await
     }
 
@@ -285,24 +222,7 @@ impl SshTransport for RusshTransport {
         command: &str,
         stdin: Option<&[u8]>,
     ) -> Result<Option<Box<dyn RunningExec>>, SshError> {
-        let channel = self
-            .handle
-            .channel_open_session()
-            .await
-            .map_err(map_session_russh_error)?;
-        channel
-            .exec(true, command)
-            .await
-            .map_err(map_session_russh_error)?;
-        if let Some(stdin) = stdin {
-            if !stdin.is_empty() {
-                channel
-                    .data_bytes(stdin.to_vec())
-                    .await
-                    .map_err(map_session_russh_error)?;
-            }
-            channel.eof().await.map_err(map_session_russh_error)?;
-        }
+        let channel = self.open_exec(command, stdin).await?;
         Ok(Some(Box::new(RunningRusshExec {
             channel,
             max_output_bytes: self.max_output_bytes,
@@ -402,11 +322,16 @@ impl SshTransport for RusshTransport {
 }
 
 impl RusshTransport {
-    /// s. `open_sftp_via_exec` (Spec 0067).
-    async fn open_sftp_via_exec_inner(
-        &mut self,
+    /// Opens a session channel and starts `command` on it. `stdin`: `None`
+    /// sends no data and no EOF; `Some(bytes)` writes `bytes` (if non-empty)
+    /// and then EOF — needed so that e.g. `sudo -S` (Spec 0018, section 5)
+    /// actually reads the password delivered via stdin instead of waiting
+    /// for a prompt that never arrives (no TTY).
+    async fn open_exec(
+        &self,
         command: &str,
-    ) -> Result<Box<dyn SftpSession>, SshError> {
+        stdin: Option<&[u8]>,
+    ) -> Result<Channel<Msg>, SshError> {
         let channel = self
             .handle
             .channel_open_session()
@@ -416,6 +341,24 @@ impl RusshTransport {
             .exec(true, command)
             .await
             .map_err(map_session_russh_error)?;
+        if let Some(stdin) = stdin {
+            if !stdin.is_empty() {
+                channel
+                    .data_bytes(stdin.to_vec())
+                    .await
+                    .map_err(map_session_russh_error)?;
+            }
+            channel.eof().await.map_err(map_session_russh_error)?;
+        }
+        Ok(channel)
+    }
+
+    /// s. `open_sftp_via_exec` (Spec 0067).
+    async fn open_sftp_via_exec_inner(
+        &mut self,
+        command: &str,
+    ) -> Result<Box<dyn SftpSession>, SshError> {
+        let channel = self.open_exec(command, None).await?;
         // `russh-sftp` wartet auf jede Antwort bis zum Request-Timeout
         // (Default 10 s) — auch dann, wenn der Kanal schon zu ist (sudo hat
         // abgelehnt). Für den Handshake daher kurz, danach der Normalwert.
