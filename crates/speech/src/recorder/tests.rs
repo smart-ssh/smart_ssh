@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::*;
-use crate::audio::{resample_mono, to_mono_16k};
+use crate::audio::resample_mono;
 use crate::transcribe::{
     parse_language, InvalidLanguage, TranscribeError, TranscribeSession, Transcriber,
 };
@@ -262,6 +262,16 @@ async fn transcription_failure_maps_to_key_and_frees_recorder() {
     assert_eq!(err.key(), "speech_transcription_failed");
     rec.start(model(), None).unwrap();
     rec.cancel();
+}
+
+/// Mixes interleaved frames down to mono and resamples to 16 kHz.
+fn to_mono_16k(interleaved: &[f32], channels: usize, rate: u32) -> Vec<f32> {
+    let channels = channels.max(1);
+    let mono: Vec<f32> = interleaved
+        .chunks_exact(channels)
+        .map(|f| f.iter().sum::<f32>() / channels as f32)
+        .collect();
+    resample_mono(&mono, rate)
 }
 
 #[test]
