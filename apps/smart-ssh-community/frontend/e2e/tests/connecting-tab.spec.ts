@@ -2,7 +2,7 @@
 import { expect, test } from "../support/app";
 import { emitProgress, lastAttemptId, snapshotStep } from "../support/connecting";
 import { ACKNOWLEDGED, failingStepLog, server } from "../support/data";
-import { expectUsable } from "../support/layout";
+import { expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 
@@ -163,7 +163,7 @@ test("connecting tab at phone width: progress, wrapped step log and Retry/Close 
   });
   const page = app.page;
   const noHScroll = async () =>
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
   await page.getByRole("button", { name: /^alpha\b/ }).click();
   await emitProgress(app, [
     snapshotStep("dnsResolution", "ok", { code: "contacting", target: "a-very-long-hostname.internal.example.test:22" }),

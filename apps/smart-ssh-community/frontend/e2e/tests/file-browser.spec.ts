@@ -6,7 +6,7 @@ import type { RemoteEntryDto } from "../../src/types";
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
-import { expectFullyInViewport, expectUsable } from "../support/layout";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 import { openSession } from "../support/session";
 
@@ -218,13 +218,10 @@ test.describe("file browser, narrow layout @phone", () => {
     await app.page.getByRole("tab", { name: "Files", exact: true }).click();
     await expect(app.page.getByText("notes.txt")).toBeVisible();
   }
-  const noPageScroll = (page: Page) =>
-    page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-
   test("two-line rows, no horizontal scroll, toolbar actions behind the overflow menu", async ({ app }) => {
     await openNarrow(app);
     const page = app.page;
-    expect(await noPageScroll(page)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
     await expect(page.locator("table")).toHaveCount(0);
     const row = page.getByRole("listitem").filter({ hasText: "notes.txt" });
     await expect(row).toContainText("2.0 KB");
@@ -267,7 +264,7 @@ test.describe("file browser, narrow layout @phone", () => {
     await expect(dialog).toContainText("deploy");
     await expect(dialog).toContainText("644");
     await expect(dialog).toContainText("rw-r--r--");
-    expect(await noPageScroll(page)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
   });
 
   test("resizing to wide restores the table with the default column widths", async ({ app }) => {
