@@ -42,8 +42,7 @@ mod services;
 /// Issue #816: the one public path to close a session completely.
 pub mod sessions;
 mod settings_store;
-/// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
-/// nach vorn.
+/// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz nach vorn.
 mod single_instance;
 mod speech_models;
 /// Spec 0075, §3.1.11: den bestätigten Importplan ausführen — der einzige

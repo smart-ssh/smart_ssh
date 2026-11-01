@@ -772,34 +772,6 @@ pub async fn get_chat_history(
         .collect())
 }
 
-/// Issue #1020, Spec 0114 §4: everything the chat needs to be rebuilt after
-/// the webview missed events (Android background): the history plus the
-/// confirmation that is still waiting, if any.
-#[tauri::command]
-pub async fn get_chat_resync(
-    state: State<'_, AppState>,
-    session_id: SessionId,
-) -> CommandResult<app_logic::dto::ChatResyncDto> {
-    let session = state
-        .sessions
-        .get(session_id)
-        .ok_or("Session nicht gefunden")?;
-    let history = session.context.lock().await.history.clone();
-    // Only a confirmation the registry still knows may become a card with
-    // active buttons — a stale proposal must not be confirmable.
-    let pending_proposal = session
-        .pending_proposal()
-        .filter(|(action_id, _)| state.pending_action_confirmations.contains(action_id))
-        .map(|(_, payload)| payload);
-    Ok(app_logic::dto::ChatResyncDto {
-        history: history
-            .into_iter()
-            .map(app_logic::dto::ChatHistoryEntryDto::from)
-            .collect(),
-        pending_proposal,
-    })
-}
-
 #[cfg(test)]
 mod send_chat_message_persistence_tests {
     use std::sync::Arc;
@@ -885,7 +857,6 @@ mod send_chat_message_persistence_tests {
             sudo_password: app_logic::session::SwappableSudoPassword::new(None),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
-            pending_proposal: std::sync::Mutex::new(None),
             mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),

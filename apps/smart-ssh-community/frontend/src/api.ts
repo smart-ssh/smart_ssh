@@ -1,3 +1,4 @@
+import type { ChatResyncDto } from "./chatResync";
 import { Channel, invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type { FeatureLockedPayload } from "./extensions/entitlements";
 import { publishFeatureLocked } from "./extensions/featureLockedBus";
@@ -209,6 +210,9 @@ export const getChatSessionRetentionDays = () =>
 
 export const setChatSessionRetentionDays = (days: number | null) =>
   invoke<void>("set_chat_session_retention_days", { days });
+
+export const getChatResync = (sessionId: string) =>
+  invoke<ChatResyncDto>("get_chat_resync", { sessionId });
 
 export const getChatHistory = (sessionId: string) =>
   invoke<ChatHistoryEntryDto[]>("get_chat_history", { sessionId });

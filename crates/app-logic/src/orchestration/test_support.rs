@@ -429,7 +429,6 @@ pub(crate) fn session_with_ai_provider(
         sudo_password: crate::session::SwappableSudoPassword::new(None),
         status: StdMutex::new(crate::events::ConnectionStatus::Connected),
         pending_action: StdMutex::new(None),
-        pending_proposal: StdMutex::new(None),
         mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),
