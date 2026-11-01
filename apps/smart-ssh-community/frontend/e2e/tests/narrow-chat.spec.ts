@@ -1,8 +1,7 @@
-import type { Page } from "@playwright/test";
 import { expect, test } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
-import { expectFullyInViewport, expectUsable } from "../support/layout";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 import { chatInput, openSession, redCommandProposal } from "../support/session";
 
@@ -13,10 +12,6 @@ const OPTIONS = [
   { label: "Alpha", description: "first option" },
   { label: "Beta", description: null },
 ];
-
-async function noPageScroll(page: Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-}
 
 test.describe("narrow chat panel @phone", () => {
   test("messages, cards and confirmation fit; the composer works", async ({ app }) => {
@@ -45,7 +40,7 @@ test.describe("narrow chat panel @phone", () => {
     await app.emit("chat-web-activity", { sessionId, activity: { kind: "search", input: "how to rotate logs on a long server ".repeat(3), results: [], cited: [{ title: "Log rotation guide", url: `https://docs.example.com/${"long-segment/".repeat(10)}` }], contentTruncated: false, errorCode: null } });
     await app.emit("chat-action-proposed", redCommandProposal(sessionId, `rm -rf /var/lib/app/cache\ntar czf /tmp/backup.tgz ${"/srv/data/very/long/path/segment ".repeat(6)}`));
     await expect(page.getByRole("button", { name: "Execute", exact: true })).toBeVisible();
-    await noPageScroll(page);
+    await expectNoHorizontalPageScroll(page);
 
     // The code block scrolls inside its box.
     const pre = page.locator("pre").first();
@@ -64,7 +59,7 @@ test.describe("narrow chat panel @phone", () => {
     await page.getByRole("button", { name: "Accept + Rule" }).click();
     const suggestion = page.getByRole("button", { name: /rm -rf \/var\/lib\/app\/\*/ });
     await expectFullyInViewport(suggestion);
-    await noPageScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await captureScreen(page, "chat-narrow-quick-rule");
     await suggestion.click();
     expect((await app.calls("accept_and_create_rule")).length).toBe(1);
@@ -96,7 +91,7 @@ test.describe("narrow chat panel @phone", () => {
       await b.scrollIntoViewIfNeeded();
       await expectUsable(b);
     }
-    await noPageScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await captureScreen(page, "chat-narrow-cards");
   });
 });

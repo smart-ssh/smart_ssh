@@ -5,14 +5,10 @@ import type { Locator, Page } from "@playwright/test";
 import type { RemoteEntryDto, SshConfigImportPreviewDto } from "../../src/types";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, populated, server } from "../support/data";
-import { expectFullyInViewport, expectUsable } from "../support/layout";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 
 const FINGERPRINT = "SHA256:Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx5";
-
-async function noHorizontalScroll(page: import("@playwright/test").Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-}
 
 test("host key prompt is full-screen with the whole fingerprint and both actions @phone", async ({ app }) => {
   await app.launch({
@@ -30,7 +26,7 @@ test("host key prompt is full-screen with the whole fingerprint and both actions
   expect(box!.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
   await expectUsable(dialog.getByRole("button", { name: "Reject", exact: true }));
   await expectUsable(dialog.getByRole("button", { name: "Trust", exact: true }));
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
 });
 
 test("unlock screen fits without horizontal scroll @phone", async ({ app }) => {
@@ -43,7 +39,7 @@ test("unlock screen fits without horizontal scroll @phone", async ({ app }) => {
   });
   const page = app.page;
   await expectUsable(page.getByRole("button", { name: "Unlock", exact: true }));
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
 });
 
 const UNLOCK_STATE = {
@@ -64,7 +60,7 @@ async function expectSheet(page: Page, dialog: Locator, title: RegExp | string, 
   }, { message: "dialog fills the viewport" }).toBe(true);
   await expectUsable(dialog.getByRole("heading", { name: title }));
   for (const name of buttons) await expectUsable(dialog.getByRole("button", { name, exact: true }));
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
 }
 
 /** Navigation lives behind the burger menu at phone width (Spec 0113 §3). */
@@ -211,6 +207,6 @@ test("toasts stay inside the viewport and do not cover the composer @phone", asy
   await expect(composer, "chat composer is on screen").toBeVisible();
   const [t, c] = await Promise.all([status.boundingBox(), composer.boundingBox()]);
   expect(t!.y + t!.height, "toasts end above the composer").toBeLessThanOrEqual(c!.y + 0.5);
-  await noHorizontalScroll(page);
+  await expectNoHorizontalPageScroll(page);
   await captureScreen(page, "narrow-toasts");
 });

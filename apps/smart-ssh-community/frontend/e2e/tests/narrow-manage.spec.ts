@@ -2,12 +2,8 @@
 import { expect, test, type AppDriver } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, group, populated, server } from "../support/data";
-import { expectUsable } from "../support/layout";
+import { expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
-
-async function noHorizontalScroll(page: import("@playwright/test").Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-}
 
 async function openManage(app: AppDriver) {
   const page = app.page;
@@ -47,7 +43,7 @@ test.describe("narrow Manage area @phone", () => {
     await expectUsable(page.getByRole("button", { name: "Import …", exact: true }));
     await expectUsable(page.getByRole("button", { name: "Export …", exact: true }));
     await expect(page.getByText("Select a group or server on the left")).toHaveCount(0);
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow manage list");
     await captureScreen(page, "manage-narrow-list");
 
@@ -55,7 +51,7 @@ test.describe("narrow Manage area @phone", () => {
     await expect(page.getByRole("button", { name: "🖥️ db-primary" })).toHaveCount(0);
     await expectUsable(back(app));
     await expectUsable(page.getByRole("button", { name: "Save", exact: true }));
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow server form");
     await captureScreen(page, "manage-narrow-server-form");
     await back(app).click();
@@ -93,13 +89,13 @@ test.describe("narrow Manage area @phone", () => {
     await page.getByRole("button", { name: /📁 Group with a very long name/ }).click();
     await expectUsable(back(app));
     await expectUsable(page.getByRole("button", { name: "Save", exact: true }));
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow group form");
     await captureScreen(page, "manage-narrow-group-form");
     await back(app).click();
     await page.getByRole("button", { name: "Import …", exact: true }).click();
     await expectUsable(page.getByRole("dialog"));
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow import");
     await captureScreen(page, "manage-narrow-import");
   });
@@ -116,7 +112,7 @@ test.describe("narrow Manage area @phone", () => {
     await openManage(app);
     await page.getByRole("button", { name: "Export …", exact: true }).click();
     await expectUsable(page.getByRole("dialog"));
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow export");
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -125,14 +121,14 @@ test.describe("narrow Manage area @phone", () => {
     const groupSection = page.getByTestId("ext-group-section");
     await groupSection.scrollIntoViewIfNeeded();
     await expectUsable(groupSection);
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await back(app).click();
 
     await page.getByRole("button", { name: "🖥️ db-primary" }).click();
     const notes = page.getByText("Notes", { exact: true }).first();
     await notes.scrollIntoViewIfNeeded();
     await expectUsable(notes);
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow notes");
   });
 
@@ -149,13 +145,13 @@ test.describe("narrow Manage area @phone", () => {
     await openManage(app);
     await page.getByRole("button", { name: /Extension view/ }).click();
     await expectUsable(back(app));
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await back(app).click();
     await expectUsable(page.getByRole("button", { name: /Extension view/ }));
     await page.getByRole("button", { name: "🖥️ db-primary" }).click();
     const section = page.getByTestId("ext-section");
     await section.scrollIntoViewIfNeeded();
     await expectUsable(section);
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
   });
 });

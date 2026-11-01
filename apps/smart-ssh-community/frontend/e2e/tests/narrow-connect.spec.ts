@@ -3,12 +3,8 @@
 import { expect, test } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { ACKNOWLEDGED, group, populated, server } from "../support/data";
-import { expectFullyInViewport, expectUsable } from "../support/layout";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
-
-async function noHorizontalScroll(page: import("@playwright/test").Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-}
 
 test.describe("narrow Connect area @phone", () => {
   test("nested server tree has no horizontal scroll; no row actions, rows are 44 px high", async ({ app }) => {
@@ -24,7 +20,7 @@ test.describe("narrow Connect area @phone", () => {
       ],
     });
     const page = app.page;
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expect(page.getByRole("button", { name: /^Move “.*” to…$/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^New server in/ })).toHaveCount(0);
     for (const row of await page.getByRole("button", { name: /^(db-primary|web-1|lab-box|standalone|an-extremely)/ }).all()) {
@@ -46,7 +42,7 @@ test.describe("narrow Connect area @phone", () => {
     expect((await prod.locator("svg").boundingBox())!.width).toBe(20);
     expect((await pad(web)) - (await pad(prod))).toBe(28);
     expect((await pad(web1)) - (await pad(web))).toBe(28);
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
   });
 
   test("session picker: New conversation and the list are usable; selecting resumes", async ({ app }) => {
@@ -71,7 +67,7 @@ test.describe("narrow Connect area @phone", () => {
     await expectUsable(dialog.getByRole("button", { name: "New conversation" }));
     await expectUsable(dialog.getByRole("button", { name: "Cancel", exact: true }));
     await expectUsable(dialog.getByRole("button", { name: "Rename" }).first());
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow session picker");
     await captureScreen(page, "connect-narrow-session-picker");
     await dialog.getByRole("button", { name: /Session 1\b/ }).click();
@@ -86,7 +82,7 @@ test.describe("narrow Connect area @phone", () => {
     await expectFullyInViewport(dialog);
     await expectUsable(dialog.getByRole("checkbox"));
     await expectUsable(dialog.getByRole("button", { name: "Continue", exact: true }));
-    await noHorizontalScroll(page);
+    await expectNoHorizontalPageScroll(page);
     await captureScreen(page, "connect-narrow-first-run");
   });
 });
