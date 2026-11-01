@@ -102,6 +102,14 @@ fn data_url(media_type: &str, base64: &str) -> String {
     format!("data:{media_type};base64,{base64}")
 }
 
+/// A single text part becomes a plain string, anything else a block array.
+pub(crate) fn text_or_blocks(parts: &[ContentPart], block: fn(&ContentPart) -> Value) -> Value {
+    match parts {
+        [ContentPart::Text(text)] => json!(text),
+        _ => Value::Array(parts.iter().map(block).collect()),
+    }
+}
+
 /// Anthropic Messages API content block.
 pub(crate) fn anthropic_block(part: &ContentPart) -> Value {
     match part {

@@ -1303,11 +1303,11 @@ impl OpenAiStreamState {
             let mut events = Vec::new();
             for (_, call) in std::mem::take(&mut self.tool_calls) {
                 log_tool_call_fragment(self.request_id, &call.name, &call.arguments);
-                events.push(RawEvent::Public(finalize_tool_call(
-                    self.request_id,
-                    &call.name,
-                    &call.arguments,
-                )));
+                events.push(RawEvent::Public(
+                    // Issue #604: unknown tool, broken JSON or invalid fields are
+                    // non-fatal (`AiEvent::InvalidToolCall`).
+                    tool_call_event(self.request_id, &call.name, &call.arguments),
+                ));
             }
             events.extend(self.take_usage_events());
             events.push(RawEvent::Public(if finish_reason_is_length {
@@ -1346,13 +1346,6 @@ impl OpenAiStreamState {
             events
         }
     }
-}
-
-pub(crate) fn finalize_tool_call(request_id: Uuid, name: &str, arguments: &str) -> AiEvent {
-    // Issue #604: unknown tool, broken JSON or invalid fields are
-    // non-fatal (`AiEvent::InvalidToolCall`); `AiError::InvalidResponse`
-    // stays for real protocol errors.
-    tool_call_event(request_id, name, arguments)
 }
 
 fn event_stream_from_response(
