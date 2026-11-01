@@ -1,0 +1,9 @@
+<resources>
+    <string name="session_channel_name">Active sessions</string>
+    <plurals name="session_notification_title">
+        <item quantity="one">Smart SSH – %d session active</item>
+        <item quantity="other">Smart SSH – %d sessions active</item>
+    </plurals>
+    <string name="session_notification_disconnect_all">Disconnect all</string>
+    <string name="session_notification_denied_hint">Notifications are off. Smart SSH keeps your sessions running in the background anyway; you can see it in the system task manager.</string>
+</resources>

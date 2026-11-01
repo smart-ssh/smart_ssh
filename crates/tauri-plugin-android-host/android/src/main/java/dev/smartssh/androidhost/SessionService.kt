@@ -1,4 +1,4 @@
-package com.smartssh.desktop
+package dev.smartssh.androidhost
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -21,8 +21,8 @@ import app.tauri.plugin.JSObject
  */
 class SessionService : Service() {
   companion object {
-    const val ACTION_UPDATE = "com.smartssh.desktop.action.UPDATE"
-    const val ACTION_DISCONNECT_ALL = "com.smartssh.desktop.action.DISCONNECT_ALL"
+    const val ACTION_UPDATE = "dev.smartssh.androidhost.action.UPDATE"
+    const val ACTION_DISCONNECT_ALL = "dev.smartssh.androidhost.action.DISCONNECT_ALL"
     const val EXTRA_SESSIONS = "sessions"
     private const val CHANNEL_ID = "sessions"
     private const val NOTIFICATION_ID = 1
@@ -80,7 +80,7 @@ class SessionService : Service() {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
       )
     return NotificationCompat.Builder(this, CHANNEL_ID)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(applicationInfo.icon)
       .setContentTitle(resources.getQuantityString(R.plurals.session_notification_title, sessions, sessions))
       .setContentIntent(open)
       .setOngoing(true)
