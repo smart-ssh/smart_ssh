@@ -127,6 +127,31 @@ impl Default for LocalFileSession {
     }
 }
 
+fn local_entry(name: String, path: String, metadata: &std::fs::Metadata) -> RemoteEntry {
+    let (uid, gid) = owner_ids(metadata);
+    RemoteEntry {
+        name,
+        path,
+        is_dir: metadata.is_dir(),
+        size: metadata.len(),
+        permissions: permission_bits(metadata),
+        modified: modified_time(metadata),
+        uid,
+        gid,
+        owner: None,
+        group: None,
+        is_symlink: metadata.file_type().is_symlink(),
+    }
+}
+
+/// Entry for `path` itself: named by its last component, or the whole path.
+fn path_entry(path: &str, metadata: &std::fs::Metadata) -> RemoteEntry {
+    let name = Path::new(path)
+        .file_name()
+        .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
+    local_entry(name, path.to_string(), metadata)
+}
+
 #[async_trait]
 impl SftpSession for LocalFileSession {
     async fn list_dir(&mut self, path: &str) -> Result<Vec<RemoteEntry>, SshError> {
@@ -136,27 +161,16 @@ impl SftpSession for LocalFileSession {
         let mut entries = Vec::new();
         while let Some(entry) = read_dir.next_entry().await.map_err(|e| io_err(path, e))? {
             let metadata = entry.metadata().await.map_err(|e| io_err(path, e))?;
-            let (uid, gid) = owner_ids(&metadata);
-            entries.push(RemoteEntry {
-                name: entry.file_name().to_string_lossy().into_owned(),
-                // Built from the caller's `path`, not `entry.path()` (which
-                // would carry the resolved home prefix): relative input
-                // stays relative output (`"."` → `./name`), as before
-                // issue #10, so `remotePath.ts` keeps working unchanged.
-                path: Path::new(path)
+            entries.push(local_entry(
+                entry.file_name().to_string_lossy().into_owned(),
+                // From the caller's `path`, not `entry.path()` (resolved home
+                // prefix): relative input stays relative (`"."` → `./name`).
+                Path::new(path)
                     .join(entry.file_name())
                     .to_string_lossy()
                     .into_owned(),
-                is_dir: metadata.is_dir(),
-                size: metadata.len(),
-                permissions: permission_bits(&metadata),
-                modified: modified_time(&metadata),
-                uid,
-                gid,
-                owner: None,
-                group: None,
-                is_symlink: metadata.file_type().is_symlink(),
-            });
+                &metadata,
+            ));
         }
         Ok(entries)
     }
@@ -252,48 +266,14 @@ impl SftpSession for LocalFileSession {
         let metadata = tokio::fs::metadata(self.resolve(path))
             .await
             .map_err(|e| io_err(path, e))?;
-        let name = std::path::Path::new(path)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string());
-        let (uid, gid) = owner_ids(&metadata);
-        Ok(RemoteEntry {
-            name,
-            path: path.to_string(),
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-            permissions: permission_bits(&metadata),
-            modified: modified_time(&metadata),
-            uid,
-            gid,
-            owner: None,
-            group: None,
-            is_symlink: false,
-        })
+        Ok(path_entry(path, &metadata))
     }
 
     async fn lstat(&mut self, path: &str) -> Result<RemoteEntry, SshError> {
         let metadata = tokio::fs::symlink_metadata(self.resolve(path))
             .await
             .map_err(|e| io_err(path, e))?;
-        let name = std::path::Path::new(path)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string());
-        let (uid, gid) = owner_ids(&metadata);
-        Ok(RemoteEntry {
-            name,
-            path: path.to_string(),
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-            permissions: permission_bits(&metadata),
-            modified: modified_time(&metadata),
-            uid,
-            gid,
-            owner: None,
-            group: None,
-            is_symlink: metadata.file_type().is_symlink(),
-        })
+        Ok(path_entry(path, &metadata))
     }
 
     /// `symlink_metadata` (lstat) statt `metadata` (stat) — SFTP `REMOVE`
