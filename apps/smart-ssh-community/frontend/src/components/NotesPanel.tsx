@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../formatDateTime";
 import {
-  commandErrorCode,
   commandErrorMessage,
   largeNoteDialogThresholdChars,
   listNoteRevisions,
@@ -11,7 +10,7 @@ import {
   updateGroupNotes,
   updateServerNotes,
 } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText } from "../errorCodes";
 import type { NoteRevisionDto, NoteTarget } from "../types";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button, FIELD_CONTROL_CLASS } from "./ui";
@@ -96,7 +95,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
   const loadHistory = () => {
     listNoteRevisions(target)
       .then(setRevisions)
-      .catch((err) => setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))));
+      .catch((err) => setError(commandErrorText(t, err)));
   };
 
   useEffect(() => {
@@ -116,7 +115,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       onNotesChanged();
       if (showHistory) loadHistory();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setSaving(false);
     }
@@ -129,7 +128,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
       onNotesChanged();
       loadHistory();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -146,7 +145,7 @@ export function NotesPanel({ target, currentNotes, onNotesChanged, autoFocus = f
     try {
       await requestNoteShrink(target.Server);
     } catch (err) {
-      setShrinkError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setShrinkError(commandErrorText(t, err));
     } finally {
       setShrinkRequesting(false);
     }

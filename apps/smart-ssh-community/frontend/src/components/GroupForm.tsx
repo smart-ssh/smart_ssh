@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, createGroup, deleteGroup, updateGroup } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { createGroup, deleteGroup, updateGroup } from "../api";
+import { commandErrorText } from "../errorCodes";
 import { GroupFormSections } from "../extensions/FormSlots";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
 import type { DeleteGroupResult, GroupDto } from "../types";
@@ -113,7 +113,7 @@ export function GroupForm({
       setDirty(false);
       onSaved();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setSaving(false);
     }
@@ -125,7 +125,7 @@ export function GroupForm({
     try {
       setDeletePreview(await deleteGroup(groupId, false));
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -137,7 +137,7 @@ export function GroupForm({
       await deleteGroup(groupId, true);
       onDeleted();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setDeleting(false);
     }

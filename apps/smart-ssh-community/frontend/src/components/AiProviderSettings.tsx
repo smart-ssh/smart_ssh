@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import {
   addAiProvider,
   commandErrorCode,
-  commandErrorMessage,
   deleteAiProvider,
   discoverModels,
   fetchAttestationInfo,
@@ -14,7 +13,7 @@ import {
 import { Button } from "./ui";
 import { AddAiProviderDialog, type AddAiProviderResult } from "./AddAiProviderDialog";
 import { CARD_CLASS, FIELD_CLASS, LABEL_CLASS, LABEL_TEXT_CLASS } from "./aiProviderFormStyles";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText } from "../errorCodes";
 import { OLLAMA_BASE_URL, OLLAMA_PLACEHOLDER_API_KEY } from "../ollama";
 import {
   loadRedRiskAlwaysConfirm,
@@ -100,7 +99,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         setRiskClassifierEnabled(settings.enabled);
         setRiskClassifierProviderId(settings.providerId);
       })
-      .catch((err) => setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))));
+      .catch((err) => setError(commandErrorText(tRef.current, err)));
   }, []);
 
   /** Spec 0026, Abschnitt 3, Punkt 1: erst bei der nächsten `connect()`
@@ -113,7 +112,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     try {
       await saveRiskClassifierSettings({ enabled, providerId });
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setRiskSettingsSaving(false);
     }
@@ -125,7 +124,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
   useEffect(() => {
     loadRedRiskAlwaysConfirm()
       .then(setRedRiskAlwaysConfirm)
-      .catch((err) => setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))));
+      .catch((err) => setError(commandErrorText(tRef.current, err)));
   }, []);
 
   /** Spec 0092, A1.3: erst bei der nächsten `connect()` wirksam — trotzdem
@@ -137,7 +136,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     try {
       await saveRedRiskAlwaysConfirm(value);
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setRedRiskSettingSaving(false);
     }
@@ -149,9 +148,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
         setProviders(list);
         setProvidersLoaded(true);
       })
-      .catch((err) =>
-        setError(translateErrorCode(tRef.current, commandErrorCode(err), commandErrorMessage(err))),
-      );
+      .catch((err) => setError(commandErrorText(tRef.current, err)));
   };
 
   useEffect(reload, []);
@@ -244,7 +241,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       // `KEYCHAIN_UNAVAILABLE`), nichts aktiv gesetzt (der
       // `setActiveAiProvider`-Aufruf oben ist nie erreicht, wenn schon
       // `addAiProvider` wirft).
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setOllamaAdding(false);
     }
@@ -262,7 +259,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     } catch (err) {
       setAttestationErrors((prev) => ({
         ...prev,
-        [providerId]: translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
+        [providerId]: commandErrorText(t, err),
       }));
     } finally {
       setAttestationLoading((prev) => ({ ...prev, [providerId]: false }));
@@ -281,9 +278,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
     reload();
     onProvidersChanged();
     if (activationError !== null) {
-      setError(
-        translateErrorCode(t, commandErrorCode(activationError), commandErrorMessage(activationError)),
-      );
+      setError(commandErrorText(t, activationError));
     }
   };
 
@@ -294,7 +289,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -305,7 +300,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -329,7 +324,7 @@ export function AiProviderSettings({ onProvidersChanged }: AiProviderSettingsPro
       reload();
       onProvidersChanged();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 

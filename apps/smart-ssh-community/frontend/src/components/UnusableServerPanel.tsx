@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, deleteUnusableServer } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { deleteUnusableServer } from "../api";
+import { commandErrorText } from "../errorCodes";
 import type { DeleteUnusableServerResult, UnusableServerDto } from "../types";
 import { unusableReasonText } from "../unusableServer";
 import { Button } from "./ui";
@@ -23,15 +23,12 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
   const [deleting, setDeleting] = useState(false);
   const [secretsLeftBehind, setSecretsLeftBehind] = useState<string[] | null>(null);
 
-  const describe = (err: unknown) =>
-    translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
-
   const handleDeleteClick = async () => {
     setError(null);
     try {
       setPreview(await deleteUnusableServer(server.id, false));
     } catch (err) {
-      setError(describe(err));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -47,7 +44,7 @@ export function UnusableServerPanel({ server, onDeleted }: UnusableServerPanelPr
       }
       onDeleted();
     } catch (err) {
-      setError(describe(err));
+      setError(commandErrorText(t, err));
     } finally {
       setDeleting(false);
     }

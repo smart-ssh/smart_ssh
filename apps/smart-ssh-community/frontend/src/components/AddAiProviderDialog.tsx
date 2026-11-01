@@ -4,7 +4,6 @@ import { apiKeyFormatWarning } from "../apiKeyFormat";
 import {
   addAiProvider,
   commandErrorCode,
-  commandErrorMessage,
   discoverModels,
   setActiveAiProvider,
   testAiProviderCredentials,
@@ -12,7 +11,7 @@ import {
 } from "../api";
 import { Button } from "./ui";
 import { DialogFrame } from "./ui/DialogFrame";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText, translateErrorCode } from "../errorCodes";
 import { effectiveApiKey, OLLAMA_BASE_URL } from "../ollama";
 import {
   type AiProviderConfigDto,
@@ -178,7 +177,7 @@ export function AddAiProviderDialog({
       onAdded({ newId, fetchAttestation: Boolean(form.attestationUrl), activationError });
     } catch (err) {
       // The dialog stays open with all entered values.
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
       setSubmitting(false);
     }
   };
@@ -263,7 +262,7 @@ export function AddAiProviderDialog({
         : await testAiProviderCredentials(testConfig);
       setCredentialTestResult(result);
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setCredentialTestRunning(false);
     }

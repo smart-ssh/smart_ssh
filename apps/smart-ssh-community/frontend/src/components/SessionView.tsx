@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { commandErrorCode, commandErrorMessage, reconnectSession, stopAutoReconnect } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { reconnectSession, stopAutoReconnect } from "../api";
+import { commandErrorText } from "../errorCodes";
 import { onAutoReconnectChanged, onConnectionStatusChanged } from "../events";
 import type { McpSessionInfo } from "../types";
 import { sessionTabLabel } from "../useSessionTabs";
@@ -266,9 +266,7 @@ export function SessionView({
   }, [sessionId]);
 
   const handleStopAutoReconnect = useCallback(() => {
-    stopAutoReconnect(sessionId).catch((err) =>
-      setReconnectError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err))),
-    );
+    stopAutoReconnect(sessionId).catch((err) => setReconnectError(commandErrorText(t, err)));
   }, [sessionId, t]);
 
   // Issue #355: Knopf und Taste R lösen denselben Pfad aus; `reconnectBusy`
@@ -285,9 +283,7 @@ export function SessionView({
         setLink("live");
       })
       .catch((err) => {
-        setReconnectError(
-          translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
-        );
+        setReconnectError(commandErrorText(t, err));
         setLink("lost");
       })
       .finally(() => {
