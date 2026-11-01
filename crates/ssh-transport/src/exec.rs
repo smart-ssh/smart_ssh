@@ -167,18 +167,14 @@ pub(crate) struct ExecAccumulator {
 
 impl ExecAccumulator {
     /// Nur für Tests (s. `accumulate_exec_output` unten) — die echte
-    /// `RusshTransport`-Implementierung ruft immer `with_limit` mit ihrem
+    /// `RusshTransport`-Implementierung ruft immer `with_limit_and_sink` mit ihrem
     /// konfigurierten `max_output_bytes` auf, nie den Default direkt.
     #[cfg(test)]
     pub(crate) fn new() -> Self {
-        Self::with_limit(MAX_STREAM_OUTPUT_BYTES)
+        Self::with_limit_and_sink(MAX_STREAM_OUTPUT_BYTES, None)
     }
 
-    pub(crate) fn with_limit(limit: usize) -> Self {
-        Self::with_limit_and_sink(limit, None)
-    }
-
-    /// Issue #325: like [`Self::with_limit`], with a live copy of the kept
+    /// Issue #325: like [`Self::new`], with a live copy of the kept
     /// output (see [`CappedOutput::with_limit_and_sink`]).
     pub(crate) fn with_limit_and_sink(limit: usize, sink: Option<ExecOutputSink>) -> Self {
         Self {

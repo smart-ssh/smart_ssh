@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -57,31 +58,21 @@ pub struct RusshTransport {
 /// Limit hinaus belegen, bevor der Cap greift — anders als zuvor, wo alle
 /// `ChannelMsg`s erst vollständig in einem `Vec` gesammelt wurden.
 async fn drain_channel(
-    mut channel: Channel<Msg>,
+    channel: Channel<Msg>,
     max_output_bytes: usize,
 ) -> Result<CommandOutput, SshError> {
-    let mut acc = ExecAccumulator::with_limit(max_output_bytes);
-    loop {
-        if acc.cap_reached() {
-            let _ = channel.eof().await;
-            let _ = channel.close().await;
-            break;
-        }
-        match channel.wait().await {
-            None => break,
-            Some(msg) => {
-                let is_close = matches!(msg, ChannelMsg::Close);
-                acc.push(msg);
-                if is_close {
-                    break;
-                }
-            }
-        }
-    }
-    Ok(acc.into_output())
+    drain_channel_cancellable(
+        channel,
+        std::future::pending::<()>(),
+        max_output_bytes,
+        None,
+    )
+    .await
+    .map(|outcome| outcome.output)
 }
 
-/// Wie [`drain_channel`], aber bricht früh ab, sobald `cancel` auflöst
+/// The one drain loop; [`drain_channel`] calls it with a never-resolving
+/// `cancel`. Bricht früh ab, sobald `cancel` auflöst
 /// (Spec 0027) — für ein Kommando, das nie von selbst endet (`journalctl
 /// -f`, `tail -f`, …). Liefert die bis dahin gesammelte Ausgabe mit
 /// `cancelled: true` zurück statt weiter auf das reguläre Kanal-Ende zu
@@ -99,7 +90,7 @@ async fn drain_channel(
 /// Töten des Remote-Prozesses (s. Spec 0027, Abschnitt 3).
 async fn drain_channel_cancellable(
     mut channel: Channel<Msg>,
-    mut cancel: oneshot::Receiver<()>,
+    mut cancel: impl Future<Output = impl Sized> + Unpin,
     max_output_bytes: usize,
     sink: Option<ExecOutputSink>,
 ) -> Result<ExecOutcome, SshError> {
