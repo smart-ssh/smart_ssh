@@ -139,9 +139,7 @@ fn estimate_message_tokens(message: &ChatMessage) -> usize {
         )),
         MessageContent::ActionRejected { command, reason } => {
             let reason_text = match reason {
-                RejectionReason::User => "",
-                RejectionReason::Timeout => "",
-                RejectionReason::Reconnect => "",
+                RejectionReason::User | RejectionReason::Timeout | RejectionReason::Reconnect => "",
                 RejectionReason::Blocked(reason) => reason.as_str(),
             };
             estimate_tokens(command)

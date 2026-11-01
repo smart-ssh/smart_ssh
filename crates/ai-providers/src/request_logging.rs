@@ -110,12 +110,7 @@ pub(crate) fn history_shapes(context: &SessionContext) -> Vec<String> {
             MessageContent::ActionRejected { command, reason } => format!(
                 "[action_rejected] command_len={} reason={}",
                 command.len(),
-                match reason {
-                    RejectionReason::User => "user",
-                    RejectionReason::Blocked(_) => "blocked",
-                    RejectionReason::Timeout => "timeout",
-                    RejectionReason::Reconnect => "reconnect",
-                }
+                reason.kind()
             ),
             // Issue #162: nur Art und Längen, keine Anfrage/URL/Seitentext.
             MessageContent::WebActivity(activity) => format!(

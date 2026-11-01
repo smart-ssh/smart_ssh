@@ -14,6 +14,8 @@ if (!Element.prototype.scrollTo) {
 
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
   acceptAndCreateRule: vi.fn(),
   cancelRunningCommand: vi.fn(),
   retryChatTurn: vi.fn(() => Promise.resolve()),
@@ -36,6 +38,7 @@ vi.mock("../events", () => ({
   onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
+  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),

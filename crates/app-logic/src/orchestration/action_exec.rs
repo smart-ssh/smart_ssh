@@ -14,17 +14,22 @@ use ssh_manager_core::filter::{
     exceeds_command_length_limit, Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin,
     DEFAULT_MAX_COMMAND_LENGTH,
 };
-use ssh_manager_core::profiles::{AiAction, NoteTargetSelector, PostIngestPolicy, ProfileStore};
+use ssh_manager_core::profiles::{AiAction, PostIngestPolicy, ProfileStore};
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 
+mod rejected_action;
+use rejected_action::describe_rejected_action;
+#[cfg(test)]
+use ssh_manager_core::profiles::NoteTargetSelector;
+
 use crate::confirmation::ConfirmationRegistry;
+use crate::confirmation_settled::emit_settled_for_rejection;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
-    emit_action_confirmation_settled, emit_action_decision_escalated, emit_chat_action_proposed,
-    emit_chat_action_result, emit_chat_error, emit_chat_injection_check,
-    emit_risk_assessment_updated, ActionResultPayload, ConfirmationSettledReason, EventEmitter,
-    InjectionCheckState,
+    emit_action_decision_escalated, emit_chat_action_proposed, emit_chat_action_result,
+    emit_chat_error, emit_chat_injection_check, emit_risk_assessment_updated, ActionResultPayload,
+    EventEmitter, InjectionCheckState,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -831,21 +836,7 @@ pub(crate) async fn handle_action_proposed(
             // `await`. Explizit statt am Blockende, damit es nicht von der
             // Länge des folgenden Aufrufs abhängt.
             drop(cleanup);
-            match deny_reason {
-                RejectionReason::Reconnect => emit_action_confirmation_settled(
-                    emitter,
-                    session_id,
-                    action_id,
-                    ConfirmationSettledReason::Reconnect,
-                ),
-                RejectionReason::Timeout => emit_action_confirmation_settled(
-                    emitter,
-                    session_id,
-                    action_id,
-                    ConfirmationSettledReason::Timeout,
-                ),
-                _ => {}
-            }
+            emit_settled_for_rejection(emitter, session_id, action_id, &deny_reason);
             if matches!(user_decision, ActionUserDecision::Deny) {
                 earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
             }
@@ -1410,27 +1401,6 @@ async fn skip_auto_exec_after_stop(
     )
     .await;
     false
-}
-
-fn describe_rejected_action(action: &AiAction) -> String {
-    match action {
-        AiAction::SuggestCommand { command } => command.clone(),
-        AiAction::ReadRemoteFile { path } => sftp_read_pseudo_command(path),
-        AiAction::WriteRemoteFile { path, .. } => sftp_write_pseudo_command(path),
-        AiAction::ProposeNoteUpdate { target, .. } => {
-            let target_label = match target {
-                NoteTargetSelector::CurrentServer => "aktueller Server",
-                NoteTargetSelector::CurrentServerGroup => "aktuelle Servergruppe",
-            };
-            format!("update-note ({target_label})")
-        }
-        AiAction::GenerateDocument { .. } => unreachable!(
-            "GenerateDocument durchläuft nie evaluate_action/einen Bestätigungsdialog, s. dort"
-        ),
-        AiAction::AskUser { .. } => unreachable!(
-            "AskUser is intercepted in run_one_round and never reaches a confirmation dialog"
-        ),
-    }
 }
 
 /// `AiAction::SuggestCommand` läuft durch die Filter-Engine;

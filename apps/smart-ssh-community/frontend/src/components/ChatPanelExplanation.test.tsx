@@ -29,6 +29,8 @@ if (!Element.prototype.scrollTo) {
 
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
   acceptAndCreateRule: vi.fn(),
   cancelRunningCommand: vi.fn(),
   continueTruncatedResponse: vi.fn(() => Promise.resolve()),
@@ -53,6 +55,7 @@ vi.mock("../events", () => ({
   onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
+  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
   onChatContextUsage: vi.fn(() => Promise.resolve(() => {})),
   onChatContextCompacted: vi.fn(() => Promise.resolve(() => {})),
   onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),

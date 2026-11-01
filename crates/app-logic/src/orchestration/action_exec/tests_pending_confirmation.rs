@@ -848,3 +848,24 @@ fn test_deny_reconnect_is_not_deserializable_from_the_frontend() {
         .is_err()
     );
 }
+
+/// Issue #1019: when the confirmation times out, the chat card is told.
+#[tokio::test(start_paused = true)]
+async fn test_timeout_tells_the_chat_card_the_confirmation_expired() {
+    let (fixture, executed) = fixture_recording_execution();
+    let task = fixture.spawn_proposal();
+    let action_id = fixture.await_pending_indicator().await;
+
+    tokio::time::advance(super::PENDING_ACTION_CONFIRM_TIMEOUT + Duration::from_secs(1)).await;
+    task.await.expect("task ends normally");
+
+    assert!(executed.lock().unwrap().is_empty(), "action ran");
+    let events = fixture.emitter.events.lock().unwrap();
+    let settled: Vec<_> = events
+        .iter()
+        .filter(|(name, _)| name == "action-confirmation-settled")
+        .collect();
+    assert_eq!(settled.len(), 1);
+    assert_eq!(settled[0].1["actionId"], action_id.to_string());
+    assert_eq!(settled[0].1["reason"], "timeout");
+}

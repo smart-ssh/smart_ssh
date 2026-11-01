@@ -614,42 +614,6 @@ pub fn emit_note_update_expired(emitter: &dyn EventEmitter, action_id: ActionId)
     );
 }
 
-/// Issue #1019: why the backend settled a pending confirmation on its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ConfirmationSettledReason {
-    Reconnect,
-    Timeout,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ActionConfirmationSettledPayload {
-    session_id: SessionId,
-    action_id: ActionId,
-    reason: ConfirmationSettledReason,
-}
-
-/// Issue #1019: `action-confirmation-settled` — a pending confirmation was
-/// settled by the backend (reconnect, timeout); the chat card switches to a
-/// final state without buttons. Carries ids and the reason only.
-pub fn emit_action_confirmation_settled(
-    emitter: &dyn EventEmitter,
-    session_id: SessionId,
-    action_id: ActionId,
-    reason: ConfirmationSettledReason,
-) {
-    emit(
-        emitter,
-        "action-confirmation-settled",
-        &ActionConfirmationSettledPayload {
-            session_id,
-            action_id,
-            reason,
-        },
-    );
-}
-
 /// Spec 0057, §4.2 (Etappe 4): der ERSTE Dialog ("Deine Notiz für diesen
 /// Server ist sehr groß …") — bewusst ein eigenes, app-weites Event statt
 /// einer Erweiterung von `note-update-suggested` (dessen `action`-Feld
