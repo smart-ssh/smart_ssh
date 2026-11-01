@@ -161,6 +161,35 @@ impl StoredRule {
     }
 }
 
+/// The one place that inserts a `filter_rules` row (plain `INSERT`, a
+/// conflicting id fails).
+async fn write_rule(
+    conn: &mut sqlx::SqliteConnection,
+    rule: &StoredRule,
+) -> Result<(), PolicyStoreError> {
+    let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
+    let (scope_type, scope_value) = scope_to_db(&rule.scope);
+    sqlx::query(
+        "INSERT INTO filter_rules \
+         (id, pattern_type, pattern_value, action, scope_type, scope_value, priority, \
+          created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&rule.id.0)
+    .bind(pattern_type)
+    .bind(pattern_value)
+    .bind(action_to_db(&rule.action))
+    .bind(scope_type)
+    .bind(scope_value)
+    .bind(rule.priority)
+    .bind(rule.created_at.to_rfc3339())
+    .bind(rule.updated_at.to_rfc3339())
+    .execute(&mut *conn)
+    .await
+    .map_err(backend_err)?;
+    Ok(())
+}
+
 fn row_to_stored_rule(row: &sqlx::sqlite::SqliteRow) -> Result<StoredRule, PolicyStoreError> {
     let id: String = row.get("id");
     let pattern_type: String = row.get("pattern_type");
@@ -264,26 +293,7 @@ impl SqlitePolicyStore {
         }
         let mut tx = self.pool.begin().await.map_err(backend_err)?;
         for rule in rules {
-            let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
-            let (scope_type, scope_value) = scope_to_db(&rule.scope);
-            sqlx::query(
-                "INSERT INTO filter_rules \
-                 (id, pattern_type, pattern_value, action, scope_type, scope_value, priority, \
-                  created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            )
-            .bind(&rule.id.0)
-            .bind(pattern_type)
-            .bind(pattern_value)
-            .bind(action_to_db(&rule.action))
-            .bind(scope_type)
-            .bind(scope_value)
-            .bind(rule.priority)
-            .bind(rule.created_at.to_rfc3339())
-            .bind(rule.updated_at.to_rfc3339())
-            .execute(&mut *tx)
-            .await
-            .map_err(backend_err)?;
+            write_rule(&mut tx, rule).await?;
         }
         tx.commit().await.map_err(backend_err)?;
         self.data_changes.notify(DataKind::Rules);
@@ -301,27 +311,8 @@ impl SqlitePolicyStore {
     }
 
     async fn insert_unchecked(&self, rule: &StoredRule) -> Result<(), PolicyStoreError> {
-        let (pattern_type, pattern_value) = pattern_to_db(&rule.pattern);
-        let (scope_type, scope_value) = scope_to_db(&rule.scope);
-
-        sqlx::query(
-            "INSERT INTO filter_rules \
-             (id, pattern_type, pattern_value, action, scope_type, scope_value, priority, \
-              created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(&rule.id.0)
-        .bind(pattern_type)
-        .bind(pattern_value)
-        .bind(action_to_db(&rule.action))
-        .bind(scope_type)
-        .bind(scope_value)
-        .bind(rule.priority)
-        .bind(rule.created_at.to_rfc3339())
-        .bind(rule.updated_at.to_rfc3339())
-        .execute(&self.pool)
-        .await
-        .map_err(backend_err)?;
+        let mut conn = self.pool.acquire().await.map_err(backend_err)?;
+        write_rule(&mut conn, rule).await?;
         self.data_changes.notify(DataKind::Rules);
         Ok(())
     }
