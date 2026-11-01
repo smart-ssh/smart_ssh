@@ -33,7 +33,7 @@ use ssh_manager_core::ai::{
 use ssh_manager_core::ssh::CommandOutput;
 
 use crate::action::{parameters_json_schema, tool_call_event};
-use crate::content::{check_attachments, ContentPart};
+use crate::content::check_attachments;
 use crate::error::{
     error_stream, map_http_response, map_stream_error_object, map_transport_error,
     provider_request_id, timeout_error,
@@ -228,16 +228,10 @@ impl AnthropicProvider {
         let messages: Vec<Value> =
             crate::content::group_parts(&context.history, role_str, message_content_text)
                 .into_iter()
-                .map(|(role, mut parts)| {
+                .map(|(role, parts)| {
                     // Issue #470: image/PDF attachments are native content blocks.
-                    let content = if parts.len() == 1 && matches!(parts[0], ContentPart::Text(_)) {
-                        match parts.remove(0) {
-                            ContentPart::Text(text) => json!(text),
-                            _ => unreachable!(),
-                        }
-                    } else {
-                        Value::Array(parts.iter().map(crate::content::anthropic_block).collect())
-                    };
+                    let content =
+                        crate::content::text_or_blocks(&parts, crate::content::anthropic_block);
                     json!({"role": role, "content": content})
                 })
                 .collect();
@@ -1110,11 +1104,10 @@ impl AnthropicStreamState {
                     // ob dieses Ereignis freigegeben oder verworfen wird
                     // (Ist-Befund vor diesem Fix: es wurde bedingungslos
                     // freigegeben, s. Abschlussbericht).
-                    self.held_tool_events.push(finalize_tool_use(
-                        self.request_id,
-                        &name,
-                        &json_acc,
-                    ));
+                    self.held_tool_events.push(
+                        // Issue #604: invalid calls are non-fatal (`AiEvent::InvalidToolCall`).
+                        tool_call_event(self.request_id, &name, &json_acc),
+                    );
                 }
             }
             // Anthropic liefert `stop_reason` im
@@ -1423,11 +1416,6 @@ impl AnthropicStreamState {
 /// Issue #162: `value.field` als `&str`, falls vorhanden.
 fn str_field<'a>(value: Option<&'a Value>, field: &str) -> Option<&'a str> {
     value.and_then(|v| v.get(field)).and_then(Value::as_str)
-}
-
-fn finalize_tool_use(request_id: Uuid, name: &str, json_acc: &str) -> AiEvent {
-    // Issue #604: invalid calls are non-fatal (`AiEvent::InvalidToolCall`).
-    tool_call_event(request_id, name, json_acc)
 }
 
 fn event_stream_from_response(

@@ -17,6 +17,15 @@
 
 use std::time::Duration;
 
+/// System-time based jitter in `0..bound` milliseconds (no `rand`
+/// dependency; not cryptographic).
+pub(crate) fn jitter_ms(bound: u64) -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| u64::from(d.subsec_millis()) % bound)
+        .unwrap_or(0)
+}
+
 /// Harte Obergrenze an Versuchen (1 initialer Versuch + bis zu
 /// `MAX_ATTEMPTS - 1` Wiederholungen bei HTTP 429) — Spec 0051, Teil 1:
 /// "harte Obergrenze an Versuchen (z. B. 3–5)".
@@ -71,11 +80,7 @@ pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<
 pub(crate) fn backoff_delay(attempt: u32) -> Duration {
     let exp = BASE_BACKOFF.saturating_mul(1u32 << attempt.min(6));
     let capped = exp.min(MAX_BACKOFF);
-    let jitter_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.subsec_millis() % 250)
-        .unwrap_or(0);
-    capped + Duration::from_millis(u64::from(jitter_ms))
+    capped + Duration::from_millis(jitter_ms(250))
 }
 
 /// Wartezeit vor dem nächsten Retry-Versuch: `Retry-After` hat Vorrang vor

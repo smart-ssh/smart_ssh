@@ -116,17 +116,11 @@ impl OpenAiResponsesProvider {
             .history
             .iter()
             .map(|message| {
-                let mut parts =
-                    crate::content::message_parts(&message.content, message_content_text);
+                let parts = crate::content::message_parts(&message.content, message_content_text);
                 // Issue #470: text-only keeps the plain string form;
                 // image/PDF attachments become `input_*` content parts.
-                let content = match parts.as_slice() {
-                    [crate::content::ContentPart::Text(_)] => match parts.remove(0) {
-                        crate::content::ContentPart::Text(text) => json!(text),
-                        _ => unreachable!(),
-                    },
-                    _ => Value::Array(parts.iter().map(crate::content::responses_block).collect()),
-                };
+                let content =
+                    crate::content::text_or_blocks(&parts, crate::content::responses_block);
                 json!({"role": role_str(message.role), "content": content})
             })
             .collect();
