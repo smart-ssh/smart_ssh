@@ -983,9 +983,8 @@ pub struct SessionParts {
     /// Instanz: `risk_second_opinion_provider`/`injection_check_provider`
     /// können denselben API-Key/dasselbe Rate-Limit-Kontingent wie
     /// `ai_provider` teilen, ohne dass die App das unterscheiden könnte —
-    /// s. `crate::orchestration::wait_for_ai_request_slot`, das dieses
-    /// Feld unmittelbar vor jedem `send()`-Aufruf konsultiert. `None` vor
-    /// dem ersten Aufruf.
+    /// s. `crate::orchestration::wait_for_ai_request_slot`, das dieses Feld unmittelbar
+    /// vor jedem `send()`-Aufruf konsultiert. `None` vor dem ersten Aufruf.
     pub ai_request_paced_at: AsyncMutex<Option<tokio::time::Instant>>,
     /// Issue #356, Spec 0107 §8: state of the automatic reconnect.
     pub auto_reconnect: crate::auto_reconnect::AutoReconnectState,
@@ -996,10 +995,11 @@ pub struct SessionParts {
 pub struct ChatTurnState {
     pub running: bool,
     pub queued: Vec<String>,
-    /// Issue #315: `true`, solange „Neuer Chat" den Turn-Slot hält. Nutzer-
-    /// Nachrichten werden dann abgelehnt statt eingereiht (sonst landeten sie
-    /// unbemerkt in der ersten Anfrage des neuen Chats).
+    /// Issue #315: `true`, solange „Neuer Chat" den Turn-Slot hält. Nutzer-Nachrichten
+    /// werden dann abgelehnt statt eingereiht (sonst landeten sie unbemerkt in der ersten
+    /// Anfrage des neuen Chats).
     pub swapping: bool,
+    pub pending_proposal: Option<(ActionId, serde_json::Value)>, // issue #1020
 }
 
 impl Session {

@@ -42,8 +42,7 @@ mod services;
 /// Issue #816: the one public path to close a session completely.
 pub mod sessions;
 mod settings_store;
-/// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz
-/// nach vorn.
+/// Issue #19: ein zweiter Start desselben Builds holt die laufende Instanz nach vorn.
 mod single_instance;
 mod speech_models;
 /// Spec 0075, §3.1.11: den bestätigten Importplan ausführen — der einzige
@@ -841,6 +840,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             voice_input::cancel_voice_recording,
             commands::list_sessions,
             commands::get_chat_history,
+            commands::get_chat_resync,
             commands::list_groups,
             commands::create_group,
             commands::update_group,
