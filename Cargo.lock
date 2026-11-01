@@ -5956,6 +5956,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-android-host",
  "tauri-plugin-decoration",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
