@@ -866,7 +866,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
         (
             // spec-reviewer-Fund (Review dieses Schritts): HIER bewusst
             // KEINE Rundenkürzung mehr — ein früherer Versuch, hier
-            // `compaction::truncate_rounds_with_placeholder` unbedingt
+            // eine unbedingte Rundenkürzung
             // aufzurufen, kürzte JEDE wiederaufgenommene Sitzung mit mehr
             // als `MIN_PRESERVED_ROUNDS` Runden sofort auf 3, unabhängig
             // vom tatsächlichen Token-Budget (Spec 0057 §3.2 definiert die

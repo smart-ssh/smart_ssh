@@ -274,3 +274,14 @@ wird einmal je Kompaktierungsschritt gesendet, definiert als: die rollierende
 Zusammenfassung deckt mehr Runden ab als beim zuletzt gemeldeten Schritt
 (bzw. die erste Kompaktierung der Sitzung). Verworfen: Token-Zählung per
 Tokenizer je Modell (Aufwand, nicht für alle Provider möglich).
+
+## Nachtrag (Issue #1004): unbedingte Varianten entfernt
+
+Die oben als `#[cfg(test)]`-Bausteine erhaltenen Varianten
+`truncate_rounds_with_placeholder`, `truncate_oversized_command_outputs` und
+`compact_rounds_for_budget` (nur noch von Tests genutzt, nie als Fallback
+von `compact_rounds_with_summary` aufgerufen) sind entfernt. Der Fallback
+bei fehlgeschlagener Zusammenfassung baut den Platzhalter direkt aus
+`determine_round_cut_count`, `round_truncation_placeholder` und
+`build_round_result`; diese Bausteine sind direkt getestet. Verhalten in
+Produktion unverändert.
