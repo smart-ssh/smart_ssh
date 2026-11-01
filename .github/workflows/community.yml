@@ -36,6 +36,11 @@ jobs:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    # CI builds keep only line tables (file:line in panics/backtraces) instead
+    # of full debug info, to keep `target/` small (#1043). Local builds keep
+    # the `[profile.dev]` from Cargo.toml.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +66,13 @@ jobs:
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Disk usage after cache restore
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          df -h
+          du -sh target 2>/dev/null || echo "target/: absent"
+
       # Nur auf Linux nötig: Tauri (genauer `wry`) linkt gegen WebKitGTK,
       # ohne diese System-Pakete schlägt bereits `cargo build`/`clippy` für
       # `apps/smart-ssh-community` fehl. Die Paketliste, der .deb-Cache und
@@ -81,6 +93,13 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: scripts/gate.sh --ci rust
+
+      - name: Disk usage after Rust gate
+        if: always() && matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          df -h
+          du -sh target 2>/dev/null || echo "target/: absent"
 
       - name: cargo fmt --check
         if: runner.os == 'Windows'
