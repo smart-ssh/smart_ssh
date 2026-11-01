@@ -208,18 +208,10 @@ pub fn clear_sudo_password(
     }
 }
 
-/// Stores a new optional key passphrase, or keeps the existing ref.
-///
-/// Spec 0049, Fund 1: rand-trimmen, bevor entschieden wird, ob
-/// überhaupt eine neue Passphrase vorliegt — sonst würde ein
-/// rein aus Whitespace bestehender Paste (kommt von der
-/// Frontend-Leer-Prüfung `passphrase === ""` nicht ab, s.
-/// `ServerForm.tsx`s `toAuthMethodInput`) fälschlich als "neue
-/// Passphrase gesetzt" gewertet, statt wie ein echtes Leerfeld
-/// die bestehende Passphrase unverändert zu lassen.
-/// Spec 0073, A3: über den geteilten `trim_credential_value` —
-/// dasselbe gilt damit auch für einen Paste, der nur aus
-/// unsichtbaren Zeichen besteht.
+/// Stores a new optional key passphrase or keeps the existing ref. The value
+/// is edge-trimmed first (Spec 0049, Fund 1; Spec 0073, A3: shared
+/// `trim_credential_value`, so an all-whitespace or invisible-only paste
+/// counts like an empty field and leaves the existing passphrase alone).
 fn write_or_keep_passphrase(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
