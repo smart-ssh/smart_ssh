@@ -38,6 +38,15 @@ tippen muss. Die Fälle unterscheiden sich nur im Inhalt des Eintrags:
    nennt den Blockier-Grund, damit die KI nicht denselben Vorschlag später
    wiederholt.
 
+Eine vom Nutzer bestätigte und gespeicherte Notiz-Änderung erscheint für die
+KI als eigener, ausgezeichneter Ergebnis-Eintrag: Er sagt, dass der Vorschlag
+der KI bestätigt und angewendet wurde, nennt das Ziel (aktueller Server oder
+Servergruppe) mit seinem Namen und gibt den gespeicherten (bereits
+geschwärzten) Notiztext wieder, in der Sprache der Sitzung. Er wird nie mit
+Text des Nutzers zu einer Nachricht verschmolzen (etwa einer Frage, die der
+Nutzer bei offener Karte getippt hat). Die automatische Fortsetzung sieht
+die neue Notiz im System-Prompt.
+
 Abgelehnte Notiz-Änderungen folgen demselben Muster (Ergebnis-Eintrag und
 automatische Fortsetzung); für die KI ist das dieselbe Art Rückmeldung wie
 ein abgelehntes Kommando.
