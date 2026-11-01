@@ -103,6 +103,7 @@ fn dummy_session(server_id: ServerId) -> Session {
         sudo_password: SwappableSudoPassword::new(None),
         status: StdMutex::new(ConnectionStatus::Connected),
         pending_action: StdMutex::new(None),
+        pending_proposal: StdMutex::new(None),
         mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
         auto_continue_stop_notify: tokio::sync::Notify::new(),

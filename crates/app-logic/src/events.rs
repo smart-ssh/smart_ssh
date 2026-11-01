@@ -428,25 +428,25 @@ pub fn emit_chat_action_proposed(
     risk_assessment: Option<RiskAssessment>,
     origin: ActionOrigin,
     auto_exec_rules: Vec<AutoExecRuleDto>,
-) {
-    emit(
-        emitter,
-        "chat-action-proposed",
-        &ChatActionProposedPayload {
-            session_id,
-            action_id,
-            action,
-            decision,
-            previous_note_content,
-            uses_stored_sudo_password,
-            previous_file_content,
-            previous_file_size,
-            target_name,
-            risk_assessment,
-            origin,
-            auto_exec_rules,
-        },
-    );
+) -> Option<serde_json::Value> {
+    let payload = ChatActionProposedPayload {
+        session_id,
+        action_id,
+        action,
+        decision,
+        previous_note_content,
+        uses_stored_sudo_password,
+        previous_file_content,
+        previous_file_size,
+        target_name,
+        risk_assessment,
+        origin,
+        auto_exec_rules,
+    };
+    // Returned so the caller can keep it for a chat re-sync (issue #1020).
+    let value = serde_json::to_value(&payload).ok();
+    emit(emitter, "chat-action-proposed", &payload);
+    value
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -841,6 +841,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             voice_input::cancel_voice_recording,
             commands::list_sessions,
             commands::get_chat_history,
+            commands::get_chat_resync,
             commands::list_groups,
             commands::create_group,
             commands::update_group,

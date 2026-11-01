@@ -800,3 +800,27 @@ async fn test_issue_108_closing_the_session_rejects_the_waiting_mcp_confirmation
         .expect("Task ohne Panic");
     assert!(!fixture.snapshot_has_pending_action(&manager));
 }
+
+/// Issue #1020: the card data of a waiting confirmation is kept for a chat
+/// re-sync while it waits, and is gone once the waiting task is aborted.
+#[tokio::test]
+async fn test_waiting_confirmation_keeps_its_proposal_until_cleaned_up() {
+    let fixture = Fixture::new();
+    let task = fixture.spawn_proposal();
+    let action_id = fixture.await_pending_indicator().await;
+
+    let (stored_id, payload) = fixture
+        .session
+        .pending_proposal()
+        .expect("a waiting confirmation keeps its proposal");
+    assert_eq!(stored_id, action_id);
+    assert_eq!(payload["actionId"], action_id.to_string());
+    assert!(payload["decision"].get("Confirm").is_some());
+
+    task.abort();
+    let _ = with_timeout("the aborted task did not end", task).await;
+    assert!(
+        fixture.session.pending_proposal().is_none(),
+        "the proposal must go with the confirmation"
+    );
+}

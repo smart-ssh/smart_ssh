@@ -805,6 +805,12 @@ pub struct SessionParts {
     /// `SessionManager` entfernt wurde, und ist als App-weite Benachrichtigung
     /// (`note-update-suggested`) ohnehin nie an einen Tab gebunden.
     pub pending_action: StdMutex<Option<ActionId>>,
+    /// Issue #1020: the `chat-action-proposed` payload of the confirmation
+    /// that is waiting (same `ActionId` as `pending_action` once that is
+    /// set). Lets the chat be rebuilt after the webview missed the event
+    /// (Android background). Cleared together with the confirmation's
+    /// registry entry; display data only, never used for a decision.
+    pub pending_proposal: StdMutex<Option<(ActionId, serde_json::Value)>>,
     /// Issue #108, Spec 0104 §3: `true`, solange eine MCP-Bestätigung dieser
     /// Session registriert ist (von der Registrierung bis zum Aufräumen,
     /// also auch vor dem Setzen des Indikators). Ein weiterer MCP-Vorschlag
@@ -1003,6 +1009,36 @@ pub struct ChatTurnState {
 }
 
 impl Session {
+    /// Issue #1020: remember the card data of the waiting confirmation.
+    pub(crate) fn set_pending_proposal(
+        &self,
+        action_id: ActionId,
+        payload: Option<serde_json::Value>,
+    ) {
+        *crate::poison::lock_tolerating_poison(&self.pending_proposal) =
+            payload.map(|p| (action_id, p));
+    }
+
+    /// Issue #1020: adjust the stored card data of `action_id` (no-op when
+    /// that confirmation is not the stored one).
+    pub(crate) fn update_pending_proposal(
+        &self,
+        action_id: ActionId,
+        update: impl FnOnce(&mut serde_json::Value),
+    ) {
+        let mut guard = crate::poison::lock_tolerating_poison(&self.pending_proposal);
+        if let Some((id, payload)) = guard.as_mut() {
+            if *id == action_id {
+                update(payload);
+            }
+        }
+    }
+
+    /// Issue #1020: the card data of the waiting confirmation, if any.
+    pub fn pending_proposal(&self) -> Option<(ActionId, serde_json::Value)> {
+        crate::poison::lock_tolerating_poison(&self.pending_proposal).clone()
+    }
+
     /// Id handed to every `ChatContentExtension` hook (Issue #620): the saved
     /// chat session id, which survives a resume under a new tab id. Only a
     /// session without a saved chat (persistence off, local server) falls

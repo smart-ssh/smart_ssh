@@ -1394,6 +1394,16 @@ pub enum ChatHistoryEntryDto {
     },
 }
 
+/// Issue #1020: history plus the still-waiting confirmation, to rebuild the
+/// chat after missed events. `pending_proposal` has the shape of the
+/// `chat-action-proposed` event payload.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatResyncDto {
+    pub history: Vec<ChatHistoryEntryDto>,
+    pub pending_proposal: Option<serde_json::Value>,
+}
+
 /// Issue #545: one answer option of a question (event and history).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

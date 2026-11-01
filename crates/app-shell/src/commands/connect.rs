@@ -961,6 +961,7 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             sudo_password: app_logic::session::SwappableSudoPassword::new(sudo_password),
             status: std::sync::Mutex::new(app_logic::events::ConnectionStatus::Connected),
             pending_action: std::sync::Mutex::new(None),
+            pending_proposal: std::sync::Mutex::new(None),
             mcp_confirmation_claim: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop: std::sync::atomic::AtomicBool::new(false),
             auto_continue_stop_notify: tokio::sync::Notify::new(),

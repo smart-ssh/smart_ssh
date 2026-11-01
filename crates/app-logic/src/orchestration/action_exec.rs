@@ -486,7 +486,8 @@ pub(crate) async fn handle_action_proposed(
     let (previous_file_content, previous_file_size) =
         previous_file_content_for_action(&action, session).await;
 
-    emit_chat_action_proposed(
+    let is_confirm = matches!(decision, Decision::Confirm { .. });
+    let proposed_payload = emit_chat_action_proposed(
         emitter,
         session_id,
         action_id,
@@ -501,6 +502,11 @@ pub(crate) async fn handle_action_proposed(
         origin.clone(),
         auto_exec_rules,
     );
+    // Issue #1020: keep the card data of a waiting confirmation so a chat
+    // re-sync can rebuild it; cleared with the confirmation (`Drop`).
+    if is_confirm {
+        session.set_pending_proposal(action_id, proposed_payload.clone());
+    }
 
     // Spec 0026, Abschnitt 3: läuft NACH der bereits gesendeten
     // regelbasierten Einschätzung (das Event oben ist schon raus, das Badge
@@ -564,6 +570,7 @@ pub(crate) async fn handle_action_proposed(
                     _ => None,
                 },
             );
+            let reason_for_proposal = reason.clone();
             emit_risk_assessment_updated(
                 emitter,
                 session_id,
@@ -572,6 +579,13 @@ pub(crate) async fn handle_action_proposed(
                 reason,
                 second_opinion_unavailable,
             );
+            session.update_pending_proposal(action_id, |payload| {
+                if let Some(risk) = payload.get_mut("riskAssessment") {
+                    risk["dataRisk"] = serde_json::json!(data_risk);
+                    risk["dataRiskReason"] = serde_json::json!(reason_for_proposal);
+                    risk["aiReviewed"] = serde_json::json!(true);
+                }
+            });
             // Spec 0092, A3: nur die STUFE festhalten, nicht den Text der
             // Zweitmeinung — s. Kommentar unten am Grundtext.
             second_opinion_data_risk = Some(data_risk);
@@ -679,6 +693,11 @@ pub(crate) async fn handle_action_proposed(
             reason.clone(),
             code.clone(),
         );
+        // Issue #1020: from here on the card is a confirmation.
+        if let Some(mut payload) = proposed_payload {
+            payload["decision"] = serde_json::json!({"Confirm": {"reason": reason, "code": code}});
+            session.set_pending_proposal(action_id, Some(payload));
+        }
         prepared = PreparedDecision::Confirm {
             reason,
             code,
