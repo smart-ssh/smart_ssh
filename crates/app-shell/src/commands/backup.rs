@@ -342,6 +342,22 @@ pub async fn pick_backup_import_file(
     Ok(Some(name))
 }
 
+/// The one place the `ImportContext` of start/confirm is built.
+fn import_context<'a>(
+    state: &'a AppState,
+    safety_dir: &'a std::path::Path,
+    sessions: &'a crate::sessions::AppOpenSessions,
+) -> ImportContext<'a> {
+    ImportContext {
+        store: &state.backup_store,
+        host_keys: &state.file_host_keys,
+        sessions,
+        safety_dir,
+        folder_label: "Previous data",
+        writer_version: env!("CARGO_PKG_VERSION"),
+    }
+}
+
 /// I1–I3: opens the chosen file with a recovery code (`kind` = `code`) or a
 /// passphrase (`passphrase`). Changes nothing unless local data is empty.
 #[tauri::command]
@@ -371,14 +387,7 @@ pub async fn start_backup_import(
     };
     let safety_dir = default_safety_dir(&app);
     let sessions = crate::sessions::AppOpenSessions::new(app.clone());
-    let ctx = ImportContext {
-        store: &state.backup_store,
-        host_keys: &state.file_host_keys,
-        sessions: &sessions,
-        safety_dir: &safety_dir,
-        folder_label: "Previous data",
-        writer_version: env!("CARGO_PKG_VERSION"),
-    };
+    let ctx = import_context(&state, &safety_dir, &sessions);
     match start_import(&ctx, &file, secret)
         .await
         .map_err(command_error)?
@@ -427,14 +436,7 @@ pub async fn confirm_backup_import(
     slot.clear_file();
     let safety_dir = default_safety_dir(&app);
     let sessions = crate::sessions::AppOpenSessions::new(app.clone());
-    let ctx = ImportContext {
-        store: &state.backup_store,
-        host_keys: &state.file_host_keys,
-        sessions: &sessions,
-        safety_dir: &safety_dir,
-        folder_label: "Previous data",
-        writer_version: env!("CARGO_PKG_VERSION"),
-    };
+    let ctx = import_context(&state, &safety_dir, &sessions);
     let summary = pending.confirm(&ctx).await.map_err(command_error)?;
     Ok(summary_dto(summary))
 }
