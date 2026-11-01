@@ -10,6 +10,10 @@
 //! working. The `AppState` fields stay `pub` for `app-shell`; extensions use
 //! the accessor functions below instead.
 //!
+//! Backup import (`open_backup`, `ImportContext`, `PendingImport`, …) and the
+//! chat content registry (`ChatContentRegistry`, `seal_extension_parts`) are
+//! part of the surface; `SessionManager`/`Session` only under `test_support`.
+//!
 //! Closing a session is not part of this module: the one public way for an
 //! extension to close sessions is the session close path of `app-shell`.
 
@@ -30,7 +34,8 @@ pub use crate::system_prompt::PromptLanguage;
 
 // --- Chat content --------------------------------------------------------
 pub use crate::chat_content_extension::{
-    ChatContentError, ChatContentExtension, PendingContent, RedactedBlock, ResolvedBlock,
+    seal_extension_parts, ChatContentError, ChatContentExtension, ChatContentRegistry,
+    PendingContent, RedactedBlock, ResolvedBlock,
 };
 pub use crate::orchestration::accept_extension_content;
 
@@ -39,8 +44,9 @@ pub use crate::ai_usage::{AiUsageObserver, AiUsagePurpose, AiUsageRecord};
 
 // --- Backup / snapshot ---------------------------------------------------
 pub use crate::backup::{
-    apply_changes, start_import_snapshot, BackupOpError, Change, ChangeSet, HostKeyRow,
-    OpenSessions, Snapshot, KNOWN_SECTIONS,
+    apply_changes, open_backup, start_import_snapshot, BackupKey, BackupOpError, Change, ChangeSet,
+    HostKeyRow, ImportContext, ImportPreview, ImportStart, ImportSummary, NoSessions, OpenSessions,
+    PendingImport, Snapshot, SnapshotCounts, KNOWN_SECTIONS,
 };
 pub use crate::host_key_store::FileHostKeyStore;
 
@@ -96,5 +102,28 @@ pub(crate) fn server_ids_of(sessions: &crate::session::SessionManager) -> Vec<Se
 /// Test doubles, for tests of extension crates.
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support {
+    pub use crate::session::{Session, SessionManager};
     pub use crate::test_support::*;
+}
+
+#[cfg(test)]
+mod tests {
+    // Compile-level check: removing a re-export from the facade fails the build.
+    #[allow(unused_imports)]
+    use super::test_support::{Session, SessionManager};
+    #[allow(unused_imports)]
+    use super::{
+        apply_changes, open_backup, seal_extension_parts, start_import_snapshot, BackupKey,
+        BackupOpError, Change, ChangeSet, ChatContentRegistry, HostKeyRow, ImportContext,
+        ImportPreview, ImportStart, ImportSummary, NoSessions, OpenSessions, PendingImport,
+        Snapshot, SnapshotCounts, KNOWN_SECTIONS,
+    };
+
+    #[test]
+    fn facade_paths_name_the_same_items_as_internal_paths() {
+        let _: fn() -> SessionManager = SessionManager::new;
+        let _: Option<ChatContentRegistry> = None;
+        let _: Option<crate::backup::BackupKey> = None::<BackupKey>;
+        let _: Option<crate::session::Session> = None::<Session>;
+    }
 }
