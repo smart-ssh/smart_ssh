@@ -21,7 +21,7 @@ use tauri_plugin_store::StoreExt;
 
 use ssh_manager_core::ai::AiProvider;
 
-use app_logic::ai_provider_factory::build_ai_provider;
+use app_logic::ai_provider_factory::build_ai_provider_from_config;
 use app_logic::state::AppState;
 
 /// Spec 0024, Abschnitt 4: derselbe `tauri-plugin-store`-Ablageort wie die
@@ -143,30 +143,15 @@ pub async fn resolve_second_opinion_provider<R: tauri::Runtime>(
     let Ok(config) = state.ai_provider_store.get(&provider_id).await else {
         return SecondOpinionSetup::Unavailable;
     };
-    let Ok(api_key) = state.credential_store.get(&config.credential_ref) else {
+    // Side call (second opinion / injection check): never web tools (#162).
+    let Ok((provider, budget)) = build_ai_provider_from_config(
+        &state.rate_limit_registry,
+        state.credential_store.as_ref(),
+        &config,
+        false,
+    ) else {
         return SecondOpinionSetup::Unavailable;
     };
-
-    let (provider, budget) = build_ai_provider(
-        &state.rate_limit_registry,
-        config.provider_type,
-        config.base_url.as_deref(),
-        &config.model,
-        api_key,
-        config.supports_native_tool_calling,
-        config.extra_headers.clone(),
-        // Spec 0065, Teil 4: greift hier ohnehin nie — `build_second_
-        // opinion_context` (in `app_logic::second_opinion`) setzt
-        // `max_tokens_hint` immer explizit (`SIDE_CALL_MAX_TOKENS`), der
-        // laut Rangfolge Vorrang hat.
-        // Trotzdem korrekt durchgereicht statt hart `None`, für den Fall,
-        // dass dieser Provider künftig noch für einen zweiten,
-        // hint-losen Zweck wiederverwendet wird.
-        config.max_tokens_override,
-        // Issue #162: Nebenaufruf (Zweitmeinung/Injection-Check) — nie
-        // Web-Werkzeuge.
-        false,
-    );
     let source = app_logic::ai_usage::AiUsageSource {
         provider_config_id: config.id.0.to_string(),
         provider_type: config.provider_type,

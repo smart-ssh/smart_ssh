@@ -13,12 +13,15 @@ use ssh_manager_core::ai::{AiProvider, ProviderType};
 use ssh_manager_core::profiles::{CredentialError, CredentialStore};
 
 pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
-/// Spec 0072, B1: `pub(crate)` statt privat — `commands::discover_models`
-/// braucht denselben Default, um für Anthropic ohne eingegebene `base_url`
-/// (dort kein Pflichtfeld, s. Spec 0007 Abschnitt 8.3) gegen den richtigen
-/// Endpunkt zu discovern, statt fälschlich auf [`DEFAULT_OPENAI_BASE_URL`]
-/// zurückzufallen.
 pub const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
+
+/// Endpoint when no base URL is set: Anthropic's own, else official OpenAI (Spec 0072, B1).
+pub fn default_base_url(provider_type: ProviderType) -> &'static str {
+    match provider_type {
+        ProviderType::Anthropic => DEFAULT_ANTHROPIC_BASE_URL,
+        _ => DEFAULT_OPENAI_BASE_URL,
+    }
+}
 
 /// The official OpenAI API: provider type `openai` without a base URL or
 /// with the default one (ADR 0124). Only this combination uses the
@@ -70,12 +73,22 @@ pub fn build_ai_provider(
     web_research_enabled: bool,
 ) -> (Box<dyn AiProvider>, Arc<ProviderBudgetGuard>) {
     let api_key = api_key.expose_secret().to_string();
-    match provider_type {
+    let resolved_base_url = base_url.unwrap_or_else(|| default_base_url(provider_type));
+    let budget = registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
+    let provider: Box<dyn AiProvider> = match provider_type {
+        ProviderType::Anthropic => Box::new(
+            AnthropicProvider::new(
+                resolved_base_url,
+                model,
+                api_key,
+                supports_native_tool_calling,
+                budget.clone(),
+                max_tokens_override,
+            )
+            .with_web_research(web_research_enabled),
+        ),
         ProviderType::OpenAi | ProviderType::GenericOpenAiCompatible | ProviderType::Ollama => {
-            let resolved_base_url = base_url.unwrap_or(DEFAULT_OPENAI_BASE_URL);
-            let budget =
-                registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
-            let provider: Box<dyn AiProvider> = if is_official_openai(provider_type, base_url) {
+            if is_official_openai(provider_type, base_url) {
                 // Issue #168: only the official provider has the Responses
                 // `web_search` tool; compatible endpoints never get one.
                 Box::new(
@@ -100,27 +113,10 @@ pub fn build_ai_provider(
                     budget.clone(),
                     max_tokens_override,
                 ))
-            };
-            (provider, budget)
+            }
         }
-        ProviderType::Anthropic => {
-            let resolved_base_url = base_url.unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
-            let budget =
-                registry.guard_for(&provider_identity_key(resolved_base_url, model, &api_key));
-            let provider: Box<dyn AiProvider> = Box::new(
-                AnthropicProvider::new(
-                    resolved_base_url,
-                    model,
-                    api_key,
-                    supports_native_tool_calling,
-                    budget.clone(),
-                    max_tokens_override,
-                )
-                .with_web_research(web_research_enabled),
-            );
-            (provider, budget)
-        }
-    }
+    };
+    (provider, budget)
 }
 
 /// Issue #249: der eine Pfad „API-Key aus dem `CredentialStore` lesen und
