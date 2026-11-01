@@ -190,40 +190,23 @@ pub async fn discover_models(
     // der eingegebene API-Key an `api.openai.com` gehen — einen Dritten,
     // mit dem der Nutzer nie interagieren wollte. Dieselbe
     // Verteidigung-in-der-Tiefe wie die `provider_type`-Prüfung oben.
-    let needs_base_url = matches!(
-        config.provider_type,
-        ssh_manager_core::ai::ProviderType::GenericOpenAiCompatible
-            | ssh_manager_core::ai::ProviderType::Ollama
-    );
-    if needs_base_url && config.base_url.as_deref().unwrap_or("").trim().is_empty() {
+    if missing_required_base_url(config.provider_type, config.base_url.as_deref()) {
         return Err("Base-URL erforderlich, bevor Modelle geladen werden können".into());
     }
 
-    let api_key = if !config.api_key.is_empty() {
-        config.api_key.clone()
-    } else if let Some(id) = existing_provider_id {
-        let existing = state.ai_provider_store.get(&id).await?;
-        state
-            .credential_store
-            .get(&existing.credential_ref)
-            .map_err(secret_store_error)?
-            .expose_secret()
-            .to_string()
-    } else {
-        return Err("API-Key erforderlich".into());
-    };
+    let api_key = resolve_api_key(
+        &state,
+        &config,
+        existing_provider_id,
+        "API-Key erforderlich",
+    )
+    .await?;
 
-    // Spec 0072, B1: derselbe provider-abhängige Default wie
-    // `ai_provider_factory::build_ai_provider` — sonst ginge ein Anthropic-
-    // Discovery-Aufruf ohne eingegebene `base_url` fälschlich gegen
-    // `api.openai.com`.
-    let default_base_url = match config.provider_type {
-        ssh_manager_core::ai::ProviderType::Anthropic => {
-            app_logic::ai_provider_factory::DEFAULT_ANTHROPIC_BASE_URL
-        }
-        _ => app_logic::ai_provider_factory::DEFAULT_OPENAI_BASE_URL,
-    };
-    let base_url = config.base_url.as_deref().unwrap_or(default_base_url);
+    // Spec 0072, B1: same per-provider default as `build_ai_provider`.
+    let base_url = config
+        .base_url
+        .as_deref()
+        .unwrap_or_else(|| app_logic::ai_provider_factory::default_base_url(config.provider_type));
 
     // Spec 0069, Teil A4: mit `err.code()` statt über das blanket `From<E:
     // Display>` unten (`CommandError::from`), das den Code verwirft — sonst
@@ -362,6 +345,26 @@ mod missing_required_base_url_tests {
     }
 }
 
+/// Form key if filled, else the stored key of `existing_provider_id`, else `missing_message`.
+async fn resolve_api_key(
+    state: &AppState,
+    config: &AiProviderConfigInput,
+    existing_provider_id: Option<ProviderId>,
+    missing_message: &str,
+) -> CommandResult<String> {
+    if !config.api_key.is_empty() {
+        return Ok(config.api_key.clone());
+    }
+    let id = existing_provider_id.ok_or(missing_message)?;
+    let existing = state.ai_provider_store.get(&id).await?;
+    Ok(state
+        .credential_store
+        .get(&existing.credential_ref)
+        .map_err(secret_store_error)?
+        .expose_secret()
+        .to_string())
+}
+
 #[tauri::command]
 pub async fn test_ai_provider_credentials(
     state: State<'_, AppState>,
@@ -372,33 +375,19 @@ pub async fn test_ai_provider_credentials(
     // `discover_models` — vor jeder Verwendung von `api_key`/`base_url`.
     let config = config.trimmed();
 
-    // Spec-Reviewer-Fund (Spec 0050, Review dieses Schritts): derselbe
-    // Schutz wie in `discover_models` oben — ohne diese Prüfung fällt ein
-    // fehlendes `base_url` bei `GenericOpenAiCompatible`/`Ollama`
-    // stillschweigend auf `DEFAULT_OPENAI_BASE_URL` zurück
-    // (`build_ai_provider`/`ai_provider_factory.rs`). Der "Zugangsdaten
-    // testen"-Button ist wie "Modelle laden" ein `type="button"` und läuft
-    // schon vor dem Formular-`required`-Attribut der Base-URL — ohne
-    // diese serverseitige Prüfung würde der eingegebene API-Key an
-    // `api.openai.com` gehen, einen Dritten, mit dem der Nutzer nie
-    // interagieren wollte.
+    // Same guard as in `discover_models` above (Spec 0050): never send the key
+    // to the default endpoint when a custom one is required but missing.
     if missing_required_base_url(config.provider_type, config.base_url.as_deref()) {
         return Err("Base-URL erforderlich, bevor die Zugangsdaten getestet werden können".into());
     }
 
-    let api_key = if !config.api_key.is_empty() {
-        config.api_key.clone()
-    } else if let Some(id) = existing_provider_id {
-        let existing = state.ai_provider_store.get(&id).await?;
-        state
-            .credential_store
-            .get(&existing.credential_ref)
-            .map_err(secret_store_error)?
-            .expose_secret()
-            .to_string()
-    } else {
-        return Err("API-Key erforderlich, bevor die Zugangsdaten getestet werden können".into());
-    };
+    let api_key = resolve_api_key(
+        &state,
+        &config,
+        existing_provider_id,
+        "API-Key erforderlich, bevor die Zugangsdaten getestet werden können",
+    )
+    .await?;
 
     let (provider, _budget) = build_ai_provider(
         &state.rate_limit_registry,
