@@ -39,7 +39,12 @@ export function historyEntryToItem(entry: ChatHistoryEntryDto): ChatItem {
         truncated: entry.truncated,
       };
     case "actionRejected":
-      return { type: "historyRejected", id: freshId(), command: entry.command, reason: entry.reason };
+      return {
+        type: "historyRejected",
+        id: freshId(),
+        command: entry.command,
+        reason: entry.reason,
+      };
     case "webActivity":
       return { type: "webActivity", id: freshId(), activity: entry.activity };
     case "extensionParts":
@@ -97,6 +102,20 @@ export function actionItemFromProposed(
   };
 }
 
+/** Live-only notices: the backend history holds no entry for them, so a
+ * rebuilt list never contains them (issue #1041). `aiBudgetWaiting` is
+ * transient and stays out. */
+const LIVE_ONLY_TYPES: ReadonlySet<ChatItem["type"]> = new Set([
+  "error",
+  "ruleNotice",
+  "contextCompacted",
+  "autoContinuationLimitReached",
+  "emptyResponse",
+  "refusedResponse",
+  "webResearchUnavailable",
+  "responseCancelled",
+]);
+
 /** Issue #1020: the chat after a re-sync — stored history, the still-waiting
  * confirmation, and the live items the backend history does not hold yet
  * (running commands, the partial answer being streamed). */
@@ -109,16 +128,20 @@ export function mergeResyncedItems(
   const rebuiltLast = rebuilt[rebuilt.length - 1];
   const keepStreamingTail =
     last?.type === "assistant" &&
-    !(rebuiltLast?.type === "assistant" && rebuiltLast.text.startsWith(last.text));
+    !(
+      rebuiltLast?.type === "assistant" &&
+      rebuiltLast.text.startsWith(last.text)
+    );
   const carried = current.filter(
     (item) =>
-      item === last
+      LIVE_ONLY_TYPES.has(item.type) ||
+      (item === last
         ? keepStreamingTail
         : item.type === "action" &&
           !item.result &&
           item.actionId !== pendingActionId &&
-          (item.decision === "AutoExec" || (item.responded && item.userDecision !== "deny")),
+          (item.decision === "AutoExec" ||
+            (item.responded && item.userDecision !== "deny"))),
   );
   return [...rebuilt, ...carried];
 }
-
