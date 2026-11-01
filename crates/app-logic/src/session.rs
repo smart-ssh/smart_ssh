@@ -1305,13 +1305,34 @@ impl Session {
         &self,
         confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
     ) -> bool {
+        self.settle_pending_confirmation(confirmations, crate::dto::ActionUserDecision::Deny)
+    }
+
+    /// Issue #1019: like [`Self::reject_pending_confirmation`], but the
+    /// rejection is booked as `RejectionReason::Reconnect` and the chat card
+    /// is told. Still a deny, never an approval.
+    pub fn discard_pending_confirmation_for_reconnect(
+        &self,
+        confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
+    ) -> bool {
+        self.settle_pending_confirmation(
+            confirmations,
+            crate::dto::ActionUserDecision::DenyReconnect,
+        )
+    }
+
+    fn settle_pending_confirmation(
+        &self,
+        confirmations: &ConfirmationRegistry<ActionId, crate::dto::ActionUserDecision>,
+        decision: crate::dto::ActionUserDecision,
+    ) -> bool {
         let Some(action_id) = *crate::poison::lock_tolerating_poison(&self.pending_action) else {
             return false;
         };
         // Kann nur scheitern, wenn die Bestätigung im selben Moment
         // anderweitig aufgelöst wurde (Klick, Timeout, Frontend-Ablehnung)
         // — dann gibt es nichts mehr abzulehnen.
-        match confirmations.resolve(&action_id, crate::dto::ActionUserDecision::Deny) {
+        match confirmations.resolve(&action_id, decision) {
             Ok(()) => true,
             Err(err) => {
                 tracing::debug!(error = %err, "pending confirmation already settled on close");

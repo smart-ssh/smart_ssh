@@ -441,6 +441,10 @@ pub enum RejectionReason {
     /// fälschlich annehmen, ein Mensch habe sich aktiv gegen den
     /// Vorschlag entschieden.
     Timeout,
+    /// Issue #1019: the connection was re-established while the
+    /// confirmation was open and the pending action was discarded. The
+    /// user did not decide.
+    Reconnect,
 }
 
 /// Beschreibung einer Aktion, die ein Provider per Tool-/Function-Calling

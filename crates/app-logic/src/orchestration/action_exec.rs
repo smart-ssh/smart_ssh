@@ -21,9 +21,10 @@ use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 use crate::confirmation::ConfirmationRegistry;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
-    emit_action_decision_escalated, emit_chat_action_proposed, emit_chat_action_result,
-    emit_chat_error, emit_chat_injection_check, emit_risk_assessment_updated, ActionResultPayload,
-    EventEmitter, InjectionCheckState,
+    emit_action_confirmation_settled, emit_action_decision_escalated, emit_chat_action_proposed,
+    emit_chat_action_result, emit_chat_error, emit_chat_injection_check,
+    emit_risk_assessment_updated, ActionResultPayload, ConfirmationSettledReason, EventEmitter,
+    InjectionCheckState,
 };
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
@@ -785,6 +786,11 @@ pub(crate) async fn handle_action_proposed(
                 .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
                 .await;
             let (user_decision, deny_reason) = match timeout_result {
+                Ok(Ok(ActionUserDecision::DenyReconnect)) => {
+                    // Issue #1019: discarded by a reconnect — a deny with
+                    // its own reason; the card is told below.
+                    (ActionUserDecision::Deny, RejectionReason::Reconnect)
+                }
                 Ok(Ok(decision)) => (decision, RejectionReason::User),
                 Ok(Err(_)) => {
                     // Sender wurde gedroppt (z. B. App beendet, bevor der
@@ -825,6 +831,21 @@ pub(crate) async fn handle_action_proposed(
             // `await`. Explizit statt am Blockende, damit es nicht von der
             // Länge des folgenden Aufrufs abhängt.
             drop(cleanup);
+            match deny_reason {
+                RejectionReason::Reconnect => emit_action_confirmation_settled(
+                    emitter,
+                    session_id,
+                    action_id,
+                    ConfirmationSettledReason::Reconnect,
+                ),
+                RejectionReason::Timeout => emit_action_confirmation_settled(
+                    emitter,
+                    session_id,
+                    action_id,
+                    ConfirmationSettledReason::Timeout,
+                ),
+                _ => {}
+            }
             if matches!(user_decision, ActionUserDecision::Deny) {
                 earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
             }
@@ -1569,7 +1590,7 @@ async fn handle_user_decision(
         };
 
     match user_decision {
-        ActionUserDecision::Deny => {
+        ActionUserDecision::Deny | ActionUserDecision::DenyReconnect => {
             if let AiAction::SuggestCommand { .. } = &action {
                 write_ledger_entry(
                     session,

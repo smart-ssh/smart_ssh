@@ -511,7 +511,13 @@ pub enum HostKeyUserDecision {
 pub enum ActionUserDecision {
     Approve,
     Deny,
-    EditThenApprove { command: String },
+    EditThenApprove {
+        command: String,
+    },
+    /// Issue #1019: backend-internal deny for a confirmation discarded by a
+    /// reconnect. Never accepted from the frontend (`skip_deserializing`).
+    #[serde(skip_deserializing)]
+    DenyReconnect,
 }
 
 /// Herkunft einer vorgeschlagenen Aktion (Spec 0028, Abschnitt 6/9a) —
@@ -1524,6 +1530,12 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                     ssh_manager_core::ai::RejectionReason::Timeout => {
                         "Zeitüberschreitung — nicht innerhalb der zulässigen Zeit beantwortet, \
                          automatisch abgelehnt."
+                            .to_string()
+                    }
+                    // Issue #1019.
+                    ssh_manager_core::ai::RejectionReason::Reconnect => {
+                        "Verworfen, weil die Verbindung neu aufgebaut wurde — der Nutzer hat \
+                         nicht entschieden."
                             .to_string()
                     }
                 };

@@ -114,6 +114,7 @@ pub(crate) fn history_shapes(context: &SessionContext) -> Vec<String> {
                     RejectionReason::User => "user",
                     RejectionReason::Blocked(_) => "blocked",
                     RejectionReason::Timeout => "timeout",
+                    RejectionReason::Reconnect => "reconnect",
                 }
             ),
             // Issue #162: nur Art und Längen, keine Anfrage/URL/Seitentext.
@@ -169,6 +170,7 @@ pub(crate) fn history_contents(context: &SessionContext) -> Vec<String> {
                         format!("blocked: {}", redactor.redact_text(reason))
                     }
                     RejectionReason::Timeout => "timeout".to_string(),
+                    RejectionReason::Reconnect => "reconnect".to_string(),
                 }
             ),
             MessageContent::WebActivity(activity) => format!(

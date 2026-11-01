@@ -1019,7 +1019,7 @@ pub async fn suggest_note_update_on_disconnect(
     // trotzdem ein, wird der Vorschlag unverändert übernommen — exakt wie
     // dort.
     match user_decision {
-        ActionUserDecision::Deny => {}
+        ActionUserDecision::Deny | ActionUserDecision::DenyReconnect => {}
         ActionUserDecision::Approve | ActionUserDecision::EditThenApprove { .. } => {
             execute_note_update(
                 session,

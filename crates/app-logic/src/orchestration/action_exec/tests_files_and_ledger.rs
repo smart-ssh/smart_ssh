@@ -2017,6 +2017,17 @@ async fn test_ledger_records_origin_derived_source_and_timeout_code_for_timed_ou
     };
     tokio::join!(action_future, advancer);
 
+    // Issue #1019: the chat card is told about the expiry.
+    assert!(
+        emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(name, payload)| name == "action-confirmation-settled"
+                && payload["reason"] == "timeout"),
+        "expected action-confirmation-settled with reason timeout"
+    );
     let entries = ledger_store.load_entries(chat_session_id).await.unwrap();
     assert_eq!(
         entries.len(),
