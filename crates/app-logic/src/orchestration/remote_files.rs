@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use ssh_manager_core::ai::{fence_untrusted, ChatMessage, MessageContent, Role, UntrustedKind};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
+use ssh_manager_core::ssh::elevated::shell_single_quote;
 use ssh_manager_core::ssh::{CommandOutput, SshError};
 
 use crate::events::{emit_chat_action_result, ActionResultPayload, EventEmitter};
@@ -268,13 +269,6 @@ fn backup_path_for(path: &str) -> String {
     )
 }
 
-/// Einfaches POSIX-Single-Quote-Escaping für Pfade, die als Argument in ein
-/// per `execute_with_stdin` ausgeführtes Shell-Kommando eingebettet werden
-/// (Spec 0020, Abschnitt 4.3).
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', r"'\''"))
-}
-
 /// Regulärer (nicht-privilegierter) Schreibversuch per SFTP: Backup (falls
 /// die Datei existiert) + eigentliches Schreiben, in dieser Reihenfolge
 /// (Spec 0020, Abschnitt 4.2, Punkt 4: "vor jedem Überschreiben"). Gibt den
@@ -359,8 +353,8 @@ async fn write_via_sudo_fallback(
     if let Some(backup) = &backup_path {
         let cmd = format!(
             "sudo -S cp -p {} {}",
-            shell_quote(path),
-            shell_quote(backup)
+            shell_single_quote(path),
+            shell_single_quote(backup)
         );
         execute_privileged(session, &cmd, password).await?;
     }
@@ -387,8 +381,8 @@ async fn write_via_sudo_fallback(
 
     let install_cmd = format!(
         "sudo -S install -m {mode:o} {} {}",
-        shell_quote(&temp_name),
-        shell_quote(path)
+        shell_single_quote(&temp_name),
+        shell_single_quote(path)
     );
     let install_result = execute_privileged(session, &install_cmd, password).await;
 

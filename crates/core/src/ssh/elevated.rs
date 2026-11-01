@@ -57,17 +57,7 @@ pub fn is_valid_target_user(user: &str) -> bool {
 /// Quotet `s` für eine POSIX-Shell (und csh/tcsh/fish) in einfache
 /// Anführungszeichen; ein `'` im Text wird zu `'\''`.
 pub fn shell_single_quote(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('\'');
-    for c in s.chars() {
-        if c == '\'' {
-            out.push_str("'\\''");
-        } else {
-            out.push(c);
-        }
-    }
-    out.push('\'');
-    out
+    format!("'{}'", s.replace('\'', r"'\''"))
 }
 
 /// Probe-Kommando zur Pfad-Erkennung: [`posix_sftp_server_probe`] unter
@@ -326,6 +316,21 @@ pub fn classify_sudo_check(output: &CommandOutput) -> SudoCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Pins the exact bytes of the single shared quoting function.
+    #[test]
+    fn shell_single_quote_exact_output() {
+        for (input, want) in [
+            ("", "''"),
+            ("plain", "'plain'"),
+            ("it's", r"'it'\''s'"),
+            ("'", r"''\'''"),
+            ("a\nb", "'a\nb'"),
+            ("äö日本", "'äö日本'"),
+        ] {
+            assert_eq!(shell_single_quote(input), want);
+        }
+    }
 
     fn out(exit: i32, stdout: &str, stderr: &str) -> CommandOutput {
         CommandOutput {
