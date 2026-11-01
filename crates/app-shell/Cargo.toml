@@ -84,6 +84,7 @@ rfd = { version = "0.16.0", default-features = false, features = [
 # unter `[dependencies]`.
 persistence-sqlite = { version = "0.7.0", path = "../persistence-sqlite", features = ["test-support"] }
 tempfile = "3.27.0"
+toml = "1.1.4"
 # ADR 0065 §3 (Nachtrag): `libc::mkfifo` im Testaufbau von
 # `ssh_config_apply/tests.rs` — nach Spec 0084 der einzige verbliebene
 # Gebrauch in dieser Crate, deshalb nur noch `[dev-dependencies]`.
