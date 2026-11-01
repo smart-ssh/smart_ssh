@@ -9,6 +9,7 @@
 use ssh_manager_core::ai::default_action_schemas;
 
 use super::*;
+use crate::error::ProviderErrorInfo;
 
 /// Issue #545: a stored question is sent as assistant text with the
 /// question and numbered option labels.
@@ -1624,16 +1625,20 @@ const WEB_SEARCH_DISABLED_BODY: &str = r#"{"type":"error","error":{"type":"inval
 fn test_documented_web_search_disabled_rejection_is_recognised() {
     assert!(is_web_tools_disabled_rejection(
         400,
-        WEB_SEARCH_DISABLED_BODY
+        &ProviderErrorInfo::from_body(WEB_SEARCH_DISABLED_BODY)
     ));
     // Schreibweise mit Werkzeugnamen bzw. für den Seitenabruf.
     assert!(is_web_tools_disabled_rejection(
         400,
-        r#"{"type":"error","error":{"type":"invalid_request_error","message":"tools.0: web_search is not enabled"}}"#,
+        &ProviderErrorInfo::from_body(
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"tools.0: web_search is not enabled"}}"#
+        )
     ));
     assert!(is_web_tools_disabled_rejection(
         400,
-        r#"{"type":"error","error":{"type":"invalid_request_error","message":"Web fetch is not enabled for your organization"}}"#,
+        &ProviderErrorInfo::from_body(
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"Web fetch is not enabled for your organization"}}"#
+        )
     ));
 }
 
@@ -1653,7 +1658,10 @@ fn test_other_bad_requests_are_not_a_web_tool_rejection() {
         r#"{"error":"Web search is not enabled"}"#,
         "",
     ] {
-        assert!(!is_web_tools_disabled_rejection(400, body), "{body}");
+        assert!(
+            !is_web_tools_disabled_rejection(400, &ProviderErrorInfo::from_body(body)),
+            "{body}"
+        );
     }
 }
 
@@ -1662,7 +1670,10 @@ fn test_other_bad_requests_are_not_a_web_tool_rejection() {
 fn test_non_400_statuses_are_never_a_web_tool_rejection() {
     for status in [401, 403, 404, 413, 429, 500, 503, 529] {
         assert!(
-            !is_web_tools_disabled_rejection(status, WEB_SEARCH_DISABLED_BODY),
+            !is_web_tools_disabled_rejection(
+                status,
+                &ProviderErrorInfo::from_body(WEB_SEARCH_DISABLED_BODY)
+            ),
             "{status}"
         );
     }

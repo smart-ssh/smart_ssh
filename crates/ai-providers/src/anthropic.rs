@@ -654,8 +654,10 @@ async fn connect_and_stream(
             // Nebenaufruf) bleibt beim allgemeinen Mapping und kann keinen
             // weiteren Wiederholversuch auslösen.
             let mapped = if request_has_web_tools(&body)
-                && is_web_tools_disabled_rejection(status.as_u16(), &text)
-            {
+                && is_web_tools_disabled_rejection(
+                    status.as_u16(),
+                    &crate::error::ProviderErrorInfo::from_body(&text),
+                ) {
                 AiError::WebResearchRejected(format!("HTTP {status}: {text}"))
             } else {
                 map_http_response(status, &headers, &text)
@@ -709,31 +711,12 @@ fn request_has_web_tools(body: &Value) -> bool {
 /// nicht mit einem Fehlercode im Suchergebnis. Geprüft werden deshalb alle
 /// drei Merkmale zusammen, nie der Text allein: Status 400, `error.type ==
 /// "invalid_request_error"` (erste Ebene unter `error`, wie
-/// `crate::error::is_structured_model_not_found`) und eine Meldung, die ein
+/// `ProviderErrorInfo::is_model_not_found_structured`) und eine Meldung, die ein
 /// Web-Werkzeug nennt UND „not enabled" enthält (case-insensitive). Jeder
 /// andere 400 (z. B. ungültiger Parameter), 401/403, 429, 5xx/529 und ein
 /// nicht als JSON lesbarer Body fallen nicht darunter (ADR 0124).
-fn is_web_tools_disabled_rejection(status: u16, body: &str) -> bool {
-    if status != 400 {
-        return false;
-    }
-    let Ok(value) = serde_json::from_str::<Value>(body) else {
-        return false;
-    };
-    let Some(error) = value.get("error") else {
-        return false;
-    };
-    if error.get("type").and_then(Value::as_str) != Some("invalid_request_error") {
-        return false;
-    }
-    let Some(message) = error.get("message").and_then(Value::as_str) else {
-        return false;
-    };
-    let lower = message.to_lowercase();
-    let names_web_tool = ["web search", "web_search", "web fetch", "web_fetch"]
-        .iter()
-        .any(|marker| lower.contains(marker));
-    names_web_tool && lower.contains("not enabled")
+fn is_web_tools_disabled_rejection(status: u16, info: &crate::error::ProviderErrorInfo) -> bool {
+    status == 400 && info.is_web_tools_disabled()
 }
 
 /// Zustand des äußeren Retry-Streams aus `send()` (Spec 0065, Teil 3).

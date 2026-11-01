@@ -115,7 +115,7 @@ fn sensitive_header_value(value: &str) -> Option<reqwest::header::HeaderValue> {
 /// Chat-Pfad hängt es deshalb selbst an (`crate::anthropic`s
 /// `format!("{}/v1/messages", ...)`). Ohne dieselbe Ergänzung hier lief
 /// „Modelle laden" für Anthropic gegen den falschen Pfad — und wurde durch
-/// [`is_structured_model_not_found`](crate::error) sogar als "Modell nicht
+/// [`ProviderErrorInfo::is_model_not_found_structured`](crate::error::ProviderErrorInfo) sogar als "Modell nicht
 /// gefunden" (statt sichtbar falsch) angezeigt, weil Anthropics generische
 /// 404-Antwort auf einen unbekannten Pfad zufällig `error.type ==
 /// "not_found_error"` trägt.
@@ -135,12 +135,54 @@ pub async fn discover_models(
     .await
 }
 
-/// Spec 0068, Teil 5a: Zeitüberschreitung eines Discovery-/Attestierungs-
-/// Aufrufs — dieselbe Meldung wie im Chat-Pfad. Spec 0069, Teil A2:
-/// `AiError::Timeout` statt `NetworkError` (Log-Text unverändert, s.
-/// `timeout_error`-Doc-Kommentar).
-fn discovery_timeout(timeout: std::time::Duration) -> AiError {
-    timeout_error(timeout)
+/// Sends a discovery/attestation GET with a timeout. Transport errors and
+/// timeouts are mapped and logged (with `secrets` masked); a non-2xx response
+/// is read (bounded), mapped and logged. Only a success response is returned.
+async fn send_get(
+    request: reqwest::RequestBuilder,
+    request_id: Uuid,
+    secrets: &[&str],
+    timeout: std::time::Duration,
+) -> Result<reqwest::Response, AiError> {
+    let response = match tokio::time::timeout(timeout, request.send()).await {
+        Ok(Ok(response)) => response,
+        Ok(Err(err)) => {
+            let mapped = map_transport_error(&err);
+            log_provider_transport_error(request_id, &mapped, secrets);
+            return Err(mapped);
+        }
+        Err(_elapsed) => {
+            let mapped = timeout_error(timeout);
+            log_provider_transport_error(request_id, &mapped, secrets);
+            return Err(mapped);
+        }
+    };
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = read_error_body_with_timeout(response.text()).await;
+        let mapped = map_http_status(status, &text);
+        log_provider_error_response(request_id, status.as_u16(), &text, &mapped, secrets);
+        return Err(mapped);
+    }
+    Ok(response)
+}
+
+/// Reads a response body within `timeout`; a timeout is mapped and logged,
+/// a read/parse error becomes `InvalidResponse`.
+async fn read_within<T>(
+    read: impl std::future::Future<Output = Result<T, reqwest::Error>>,
+    request_id: Uuid,
+    secrets: &[&str],
+    timeout: std::time::Duration,
+) -> Result<T, AiError> {
+    match tokio::time::timeout(timeout, read).await {
+        Ok(result) => result.map_err(|err| AiError::InvalidResponse(err.to_string())),
+        Err(_elapsed) => {
+            let mapped = timeout_error(timeout);
+            log_provider_transport_error(request_id, &mapped, secrets);
+            Err(mapped)
+        }
+    }
 }
 
 /// Spec 0068, Teil 5a: Verbindungsaufbau und Body-Lesen sind begrenzt —
@@ -194,36 +236,9 @@ async fn discover_models_within(
         };
     }
 
-    let response = match tokio::time::timeout(timeout, request.send()).await {
-        Ok(Ok(response)) => response,
-        Ok(Err(err)) => {
-            let mapped = map_transport_error(&err);
-            log_provider_transport_error(request_id, &mapped, &secrets);
-            return Err(mapped);
-        }
-        Err(_elapsed) => {
-            let mapped = discovery_timeout(timeout);
-            log_provider_transport_error(request_id, &mapped, &secrets);
-            return Err(mapped);
-        }
-    };
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let text = read_error_body_with_timeout(response.text()).await;
-        let mapped = map_http_status(status, &text);
-        log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &secrets);
-        return Err(mapped);
-    }
-
-    let parsed: ModelsResponse = match tokio::time::timeout(timeout, response.json()).await {
-        Ok(result) => result.map_err(|err| AiError::InvalidResponse(err.to_string()))?,
-        Err(_elapsed) => {
-            let mapped = discovery_timeout(timeout);
-            log_provider_transport_error(request_id, &mapped, &secrets);
-            return Err(mapped);
-        }
-    };
+    let response = send_get(request, request_id, &secrets, timeout).await?;
+    let parsed: ModelsResponse =
+        read_within(response.json(), request_id, &secrets, timeout).await?;
     Ok(parsed.data.into_iter().map(|entry| entry.id).collect())
 }
 
@@ -250,36 +265,8 @@ async fn fetch_attestation_info_within(
     // Liste statt eines eigenen, secret-losen Log-Pfads.
     let request_id = Uuid::new_v4();
     let client = crate::sse::new_client();
-    let response = match tokio::time::timeout(timeout, client.get(url).send()).await {
-        Ok(Ok(response)) => response,
-        Ok(Err(err)) => {
-            let mapped = map_transport_error(&err);
-            log_provider_transport_error(request_id, &mapped, &[]);
-            return Err(mapped);
-        }
-        Err(_elapsed) => {
-            let mapped = discovery_timeout(timeout);
-            log_provider_transport_error(request_id, &mapped, &[]);
-            return Err(mapped);
-        }
-    };
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let text = read_error_body_with_timeout(response.text()).await;
-        let mapped = map_http_status(status, &text);
-        log_provider_error_response(request_id, status.as_u16(), &text, &mapped, &[]);
-        return Err(mapped);
-    }
-
-    match tokio::time::timeout(timeout, response.text()).await {
-        Ok(result) => result.map_err(|err| AiError::InvalidResponse(err.to_string())),
-        Err(_elapsed) => {
-            let mapped = discovery_timeout(timeout);
-            log_provider_transport_error(request_id, &mapped, &[]);
-            Err(mapped)
-        }
-    }
+    let response = send_get(client.get(url), request_id, &[], timeout).await?;
+    read_within(response.text(), request_id, &[], timeout).await
 }
 
 #[cfg(test)]
