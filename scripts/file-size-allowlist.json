@@ -7,7 +7,7 @@
   "crates/ai-providers/src/anthropic.rs": 1552,
   "crates/ai-providers/src/openai_compatible.rs": 1471,
   "crates/ai-providers/src/request_logging.rs": 1311,
-  "crates/app-logic/src/compaction.rs": 1884,
+  "crates/app-logic/src/compaction.rs": 1720,
   "crates/app-logic/src/database_startup/tests.rs": 2309,
   "crates/app-logic/src/dto.rs": 1825,
   "crates/app-logic/src/events.rs": 1737,
