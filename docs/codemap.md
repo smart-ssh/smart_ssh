@@ -40,7 +40,7 @@ here, update this file in the same change.
 3. Chat turn: `crates/app-logic/src/orchestration/chat_turn.rs` — `run_chat_turn`, `run_one_round`; the AI answer arrives as AiEvent values (`crates/core/src/ai/types.rs` — `AiEvent`).
 4. Action proposed: `crates/app-logic/src/orchestration/action_exec.rs` — `handle_action_proposed`, `evaluate_action`.
 5. Filter engine: `crates/core/src/filter/engine.rs` — `FilterEngine::evaluate` (a rule-based deny ends the path).
-6. Risk classifier: `crates/core/src/risk/classifier.rs` — `RuleBasedRiskClassifier`; the AI second opinion (escalation only) is `crates/app-logic/src/second_opinion.rs` — `fetch_second_opinion`.
+6. Risk classifier: `crates/core/src/risk/classifier.rs` — `RuleBasedRiskClassifier`; the AI second opinion (escalation only) is `crates/app-logic/src/second_opinion.rs` — `fetch_second_opinion_with_usage`.
 7. Confirmation: `crates/app-logic/src/orchestration/action_exec.rs` — `handle_user_decision`, waiting on `crates/app-logic/src/confirmation.rs` — `ConfirmationRegistry`; the user answer enters through `crates/app-shell/src/commands/chat.rs`.
 8. Execution: `crates/app-logic/src/orchestration/action_exec.rs` — `execute_action`, `execute_suggested_command`, which call `crates/core/src/ssh/transport.rs` — `SshTransport`; the output is redacted (`crates/core/src/ai/redactor.rs` — `OutputRedactor`) before it is stored or sent to the AI.
 9. Transport: `crates/ssh-transport/src/transport.rs` — `RusshTransport` (or `crates/ssh-transport/src/local.rs` — `LocalTransport`).

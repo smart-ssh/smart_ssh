@@ -63,7 +63,7 @@ Callers never build fence tags themselves.
 **Injection check** — A second-opinion call by the optional second
 provider that looks at content read from a server for prompt-injection
 attempts; the outcome can only raise caution for that server.
-`crates/app-logic/src/second_opinion.rs` (`fetch_injection_check`);
+`crates/app-logic/src/second_opinion.rs` (`fetch_injection_check_with_usage`);
 Spec 0039, section 5.
 
 **Ledger** — The append-only record of a session's events (entries are

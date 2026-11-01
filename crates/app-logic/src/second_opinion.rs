@@ -17,8 +17,8 @@ use futures::StreamExt;
 use unicode_normalization::UnicodeNormalization;
 
 use ssh_manager_core::ai::{
-    truncate_for_second_opinion, AiEvent, AiProvider, AiUsage, ChatMessage, MessageContent, Role,
-    SessionContext, DEFAULT_SECOND_OPINION_MAX_LEN,
+    truncate_for_second_opinion, AiError, AiEvent, AiProvider, AiUsage, ChatMessage,
+    MessageContent, Role, SessionContext, DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 use ssh_manager_core::risk::RiskLevel;
 
@@ -29,7 +29,7 @@ const SECOND_OPINION_PROMPT: &str =
      `VERDICT: none`, `VERDICT: yellow` oder `VERDICT: red`, danach folgt eine kurze Begründung.";
 
 /// Baut den `SessionContext` für einen Zweitmeinungs-Aufruf (sowohl
-/// [`fetch_second_opinion`] als auch [`fetch_injection_check`], "dieselbe
+/// [`fetch_second_opinion_with_usage`] als auch [`fetch_injection_check_with_usage`], "dieselbe
 /// Infrastruktur", s. Doc-Kommentar unten bei `INJECTION_CHECK_PROMPT`) —
 /// kürzt `content` zentral über [`truncate_for_second_opinion`] (Spec 0043,
 /// Fund C), bevor es in die `history` wandert, und hängt bei Kürzung einen
@@ -92,6 +92,56 @@ fn outcome_from_parsed<V>(parsed: Option<(V, String)>) -> SideCallOutcome<V> {
     }
 }
 
+/// How a side-call stream ended (Issue #1006); each caller maps it itself.
+pub(crate) enum SideCallEnd {
+    Done,
+    Truncated,
+    Refused,
+    Error(AiError),
+    /// No terminal event.
+    StreamEnded,
+}
+
+/// Shared collector for text-only AI side calls: appends `TextDelta`s,
+/// ignores events a side call never expects (no tool schemas, no web tools)
+/// and hands each `RequestUsage` to `on_usage` **as it arrives**, so callers
+/// running under a timeout keep the usage when the timeout fires.
+pub(crate) async fn collect_side_call_text<F, Fut>(
+    mut stream: impl futures::Stream<Item = AiEvent> + Unpin,
+    mut on_usage: F,
+) -> (String, SideCallEnd)
+where
+    F: FnMut(AiUsage) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    let mut text = String::new();
+    while let Some(event) = stream.next().await {
+        let end = match event {
+            AiEvent::TextDelta(delta) => {
+                text.push_str(&delta);
+                continue;
+            }
+            AiEvent::RequestUsage(usage) => {
+                on_usage(usage).await;
+                continue;
+            }
+            AiEvent::Done => SideCallEnd::Done,
+            AiEvent::TextTruncated => SideCallEnd::Truncated,
+            AiEvent::Refused => SideCallEnd::Refused,
+            AiEvent::Error(err) => SideCallEnd::Error(err),
+            // Side calls offer no tools; stray events are ignored.
+            AiEvent::ActionProposed(_)
+            | AiEvent::WebActivity(_)
+            | AiEvent::WebContentIngested
+            | AiEvent::Usage { .. }
+            | AiEvent::Retrying { .. }
+            | AiEvent::InvalidToolCall { .. } => continue,
+        };
+        return (text, end);
+    }
+    (text, SideCallEnd::StreamEnded)
+}
+
 /// Fragt `provider` nach einer Zweitmeinung zur Daten-Risiko-Achse für
 /// `command_or_path` (Spec 0026, Abschnitt 3). **Minimaler Kontext**: nur
 /// der Kommando-/Pfadtext selbst als einzige `history`-Nachricht, kein
@@ -109,16 +159,9 @@ fn outcome_from_parsed<V>(parsed: Option<(V, String)>) -> SideCallOutcome<V> {
 /// aus Spec 0006 (`ai_providers::fallback::parse_fallback_response`), das
 /// bei nicht parsebarem Text ebenfalls graceful auf reinen Text zurückfällt
 /// statt einen Fehler zu erzeugen.
-pub async fn fetch_second_opinion(
-    provider: &dyn AiProvider,
-    command_or_path: &str,
-) -> SideCallOutcome<RiskLevel> {
-    fetch_second_opinion_with_usage(provider, command_or_path, &mut None).await
-}
-
-/// Like [`fetch_second_opinion`]; additionally stores the `RequestUsage` of
-/// the request in `usage` if it arrives before the stream loop stops
-/// (Issue #610). The stop conditions are unchanged; nothing waits for usage.
+///
+/// Stores the `RequestUsage` of the request in `usage` if it arrives before the
+/// stream loop stops (Issue #610); nothing waits for usage.
 pub async fn fetch_second_opinion_with_usage(
     provider: &dyn AiProvider,
     command_or_path: &str,
@@ -126,37 +169,16 @@ pub async fn fetch_second_opinion_with_usage(
 ) -> SideCallOutcome<RiskLevel> {
     let context = build_second_opinion_context(SECOND_OPINION_PROMPT, command_or_path);
 
-    let mut stream = provider.send(context);
-    let mut text = String::new();
-    while let Some(event) = stream.next().await {
-        match event {
-            AiEvent::TextDelta(delta) => text.push_str(&delta),
-            // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen Nebenaufruf —
-            // eine unvollständige Zweitmeinung wird einfach normal geparst
-            // (parse_second_opinion liefert bei unklarem Text ohnehin None).
-            AiEvent::Done | AiEvent::TextTruncated | AiEvent::Refused => break,
-            // Netzwerk-/Auth-/sonstiger Providerfehler: keine Zweitmeinung
-            // verfügbar, kein Absturz, kein Blockieren der (bereits
-            // angezeigten) regelbasierten Einschätzung.
-            AiEvent::Error(err) => {
-                tracing::warn!(code = err.code(), "second opinion provider call failed");
-                return SideCallOutcome::ProviderError { code: err.code() };
-            }
-            // Nicht erwartet (leere `available_actions`), aber auch kein
-            // Fehlerfall — ein Provider ohne natives Tool-Calling könnte
-            // theoretisch trotzdem einen Fallback-Aktionsblock parsen,
-            // falls der Prompt-Text zufällig danach aussieht. Einfach
-            // ignoriert, das Textergebnis zählt.
-            AiEvent::ActionProposed(_) => {}
-            // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
-            // ignoriert.
-            AiEvent::WebActivity(_)
-            | AiEvent::WebContentIngested
-            | AiEvent::Usage { .. }
-            | AiEvent::Retrying { .. }
-            | AiEvent::InvalidToolCall { .. } => {}
-            AiEvent::RequestUsage(request_usage) => *usage = Some(request_usage),
-        }
+    let (text, end) = collect_side_call_text(provider.send(context), |u| {
+        *usage = Some(u);
+        std::future::ready(())
+    })
+    .await;
+    // Spec 0065, Teil 2: a refused/truncated answer is parsed like a complete
+    // one (the parser yields no verdict for unclear text).
+    if let SideCallEnd::Error(err) = end {
+        tracing::warn!(code = err.code(), "second opinion provider call failed");
+        return SideCallOutcome::ProviderError { code: err.code() };
     }
 
     outcome_from_parsed(parse_second_opinion(&text))
@@ -324,7 +346,7 @@ const INJECTION_CHECK_PROMPT: &str =
 /// `content` einen Versuch enthält, Anweisungen einzuschleusen (Spec 0039,
 /// Abschnitt 5.2). **Minimaler Kontext**: nur der Inhalt selbst als
 /// einzige `history`-Nachricht, dasselbe Sparsamkeitsprinzip wie
-/// [`fetch_second_opinion`].
+/// [`fetch_second_opinion_with_usage`].
 ///
 /// [`SideCallOutcome::ProviderError`] bei einem Provider-Fehler (Issue #102:
 /// `warn`-Log mit Fehler-Code, ohne Inhalt), [`SideCallOutcome::NoVerdict`]
@@ -332,14 +354,8 @@ const INJECTION_CHECK_PROMPT: &str =
 /// oder stillem Durchwinken (s. Aufrufer in `orchestration`: nie
 /// abschwächen, den Nutzer informieren, die nächste Aktion bestätigen
 /// lassen).
-pub async fn fetch_injection_check(
-    provider: &dyn AiProvider,
-    content: &str,
-) -> SideCallOutcome<bool> {
-    fetch_injection_check_with_usage(provider, content, &mut None).await
-}
-
-/// Like [`fetch_injection_check`]; see [`fetch_second_opinion_with_usage`].
+///
+/// Stores the `RequestUsage` in `usage` (see [`fetch_second_opinion_with_usage`]).
 pub async fn fetch_injection_check_with_usage(
     provider: &dyn AiProvider,
     content: &str,
@@ -347,27 +363,16 @@ pub async fn fetch_injection_check_with_usage(
 ) -> SideCallOutcome<bool> {
     let context = build_second_opinion_context(INJECTION_CHECK_PROMPT, content);
 
-    let mut stream = provider.send(context);
-    let mut text = String::new();
-    while let Some(event) = stream.next().await {
-        match event {
-            AiEvent::TextDelta(delta) => text.push_str(&delta),
-            // Spec 0065, Teil 2: s. identischer Kommentar bei `fetch_second_opinion`.
-            AiEvent::Done | AiEvent::TextTruncated | AiEvent::Refused => break,
-            AiEvent::Error(err) => {
-                tracing::warn!(code = err.code(), "injection check provider call failed");
-                return SideCallOutcome::ProviderError { code: err.code() };
-            }
-            AiEvent::ActionProposed(_) => {}
-            // Issue #162: Nebenaufruf ohne Web-Werkzeuge; defensiv
-            // ignoriert.
-            AiEvent::WebActivity(_)
-            | AiEvent::WebContentIngested
-            | AiEvent::Usage { .. }
-            | AiEvent::Retrying { .. }
-            | AiEvent::InvalidToolCall { .. } => {}
-            AiEvent::RequestUsage(request_usage) => *usage = Some(request_usage),
-        }
+    let (text, end) = collect_side_call_text(provider.send(context), |u| {
+        *usage = Some(u);
+        std::future::ready(())
+    })
+    .await;
+    // Spec 0065, Teil 2: a refused/truncated answer is parsed like a complete
+    // one (the parser yields no verdict for unclear text).
+    if let SideCallEnd::Error(err) = end {
+        tracing::warn!(code = err.code(), "injection check provider call failed");
+        return SideCallOutcome::ProviderError { code: err.code() };
     }
 
     outcome_from_parsed(parse_injection_check(&text))
@@ -433,7 +438,7 @@ mod tests {
         };
         let oversized = "A".repeat(DEFAULT_SECOND_OPINION_MAX_LEN + 5_000);
 
-        let result = fetch_second_opinion(&provider, &oversized).await;
+        let result = fetch_second_opinion_with_usage(&provider, &oversized, &mut None).await;
 
         assert_eq!(
             result,
@@ -466,7 +471,7 @@ mod tests {
             received: received.clone(),
         };
 
-        let _ = fetch_second_opinion(&provider, "cat /var/log/syslog").await;
+        let _ = fetch_second_opinion_with_usage(&provider, "cat /var/log/syslog", &mut None).await;
 
         let context = received.lock().unwrap().clone().expect("send() aufgerufen");
         let MessageContent::Text(sent_text) = &context.history[0].content else {
@@ -492,7 +497,7 @@ mod tests {
         };
         let oversized = "cat /etc/shadow\n".repeat(2_000);
 
-        let result = fetch_second_opinion(&provider, &oversized).await;
+        let result = fetch_second_opinion_with_usage(&provider, &oversized, &mut None).await;
 
         assert_eq!(
             result,
@@ -1072,9 +1077,12 @@ mod tests {
         let expected = SideCallOutcome::ProviderError {
             code: "AI_NETWORK_ERROR",
         };
-        assert_eq!(fetch_second_opinion(&ErrProvider, "x").await, expected);
         assert_eq!(
-            fetch_injection_check(&ErrProvider, "x").await,
+            fetch_second_opinion_with_usage(&ErrProvider, "x", &mut None).await,
+            expected
+        );
+        assert_eq!(
+            fetch_injection_check_with_usage(&ErrProvider, "x", &mut None).await,
             SideCallOutcome::ProviderError {
                 code: "AI_NETWORK_ERROR"
             }
@@ -1172,10 +1180,10 @@ mod tests {
             response_text: "I cannot say anything useful here.",
             received: Arc::new(Mutex::new(None)),
         };
-        let so = fetch_second_opinion(&provider, "ls").await;
+        let so = fetch_second_opinion_with_usage(&provider, "ls", &mut None).await;
         assert_eq!(so, SideCallOutcome::NoVerdict);
         assert!(so.is_unavailable());
-        let ic = fetch_injection_check(&provider, "some text").await;
+        let ic = fetch_injection_check_with_usage(&provider, "some text", &mut None).await;
         assert_eq!(ic, SideCallOutcome::NoVerdict);
         assert!(ic.is_unavailable());
     }
@@ -1186,7 +1194,7 @@ mod tests {
             response_text: "VERDICT: no\nfine",
             received: Arc::new(Mutex::new(None)),
         };
-        let ic = fetch_injection_check(&provider, "text").await;
+        let ic = fetch_injection_check_with_usage(&provider, "text", &mut None).await;
         assert!(!ic.is_unavailable());
     }
 }

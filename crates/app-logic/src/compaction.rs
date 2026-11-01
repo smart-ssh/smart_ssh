@@ -27,17 +27,16 @@
 //! aber unabhängig von `session.context`/dem Ledger, s.
 //! [`RollingSummary`]-Doc-Kommentar.
 
-use futures::StreamExt;
-
 use ssh_manager_core::ai::{
-    fence_untrusted, ActionSchema, AiEvent, ChatMessage, MessageContent, OutputRedactor,
-    ProviderType, RejectionReason, Role, SessionContext, UntrustedKind,
+    fence_untrusted, ActionSchema, ChatMessage, MessageContent, OutputRedactor, ProviderType,
+    RejectionReason, Role, SessionContext, UntrustedKind,
 };
 
 use crate::events::EventEmitter;
 use crate::orchestration::{
     reapply_redaction_and_seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
 };
+use crate::second_opinion::{collect_side_call_text, SideCallEnd};
 use crate::session::Session;
 use crate::state::SessionId;
 use crate::system_prompt::PromptLanguage;
@@ -758,57 +757,35 @@ async fn generate_rolling_summary(
     )
     .await;
     let call = async {
-        let mut stream = session.ai_provider.send(summary_context);
-        let mut text = String::new();
-        while let Some(event) = stream.next().await {
-            match event {
-                AiEvent::TextDelta(delta) => text.push_str(&delta),
-                // Kein Tool-Schema angeboten, aber defensiv wie an den
-                // anderen reinen-Text-Aufrufstellen: einfach ignorieren.
-                AiEvent::ActionProposed(_) => {}
-                // Issue #162: Nebenaufrufe bekommen keine Web-Werkzeuge
-                // (s. `ai_providers::anthropic`); defensiv ignoriert.
-                AiEvent::WebActivity(_)
-                | AiEvent::WebContentIngested
-                | AiEvent::Usage { .. }
-                | AiEvent::Retrying { .. }
-                | AiEvent::InvalidToolCall { .. } => {}
-                // Issue #610: passive report (purpose `Other`).
-                AiEvent::RequestUsage(usage) => {
-                    session
-                        .report_ai_usage(crate::ai_usage::AiUsagePurpose::Other, usage)
-                        .await;
-                }
-                // Spec 0065, Teil 2: kein „Weiter"-Hinweis für diesen
-                // Nebenaufruf — eine unvollständige Zusammenfassung ist
-                // immer noch besser als gar keine.
-                AiEvent::Done | AiEvent::TextTruncated => return Some(text),
-                // Issue #647: a refused summary is no summary.
-                AiEvent::Refused => return None,
-                AiEvent::Error(err) => {
-                    // Spec 0094, A1.7: `AiError`s `Display` kann Inhalt
-                    // tragen (`ModelNotFound` den vollen Antworttext des
-                    // Providers, `InvalidResponse` Argumentwerte). Ab `warn`
-                    // nur der Code, der Text auf `debug`.
-                    tracing::warn!(
-                        code = err.code(),
-                        "session summary generation failed, falling back to plain round \
-                         truncation"
-                    );
-                    tracing::debug!(
-                        code = err.code(),
-                        error = %ssh_manager_core::ai::default_log_redactor()
-                            .redact_text(&err.to_string()),
-                        "session summary generation failed, falling back to plain round \
-                         truncation (error text)"
-                    );
-                    return None;
-                }
+        // Issue #610: passive usage report (purpose `Other`).
+        let (text, end) = collect_side_call_text(session.ai_provider.send(summary_context), |u| {
+            session.report_ai_usage(crate::ai_usage::AiUsagePurpose::Other, u)
+        })
+        .await;
+        match end {
+            // Spec 0065, Teil 2: an incomplete summary beats none.
+            SideCallEnd::Done | SideCallEnd::Truncated => Some(text),
+            // Issue #647: a refused summary is no summary. A stream end
+            // without `Done`/`Error` is treated like an error.
+            SideCallEnd::Refused | SideCallEnd::StreamEnded => None,
+            SideCallEnd::Error(err) => {
+                // Spec 0094, A1.7: `AiError`'s `Display` can carry content;
+                // from `warn` on only the code, the text goes to `debug`.
+                tracing::warn!(
+                    code = err.code(),
+                    "session summary generation failed, falling back to plain round \
+                     truncation"
+                );
+                tracing::debug!(
+                    code = err.code(),
+                    error = %ssh_manager_core::ai::default_log_redactor()
+                        .redact_text(&err.to_string()),
+                    "session summary generation failed, falling back to plain round \
+                     truncation (error text)"
+                );
+                None
             }
         }
-        // Stream endete ohne `Done`/`Error` — genauso wie ein Fehler
-        // behandeln, nicht stillschweigend als Erfolg werten.
-        None
     };
 
     let text = match tokio::time::timeout(SUMMARY_CALL_TIMEOUT, call).await {
