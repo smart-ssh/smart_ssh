@@ -286,11 +286,14 @@ Nach Themen:
 - **Sitzungs-Erweiterung:** `SessionExtension`, `ServerScope`, `scope_for_id`,
   `PromptLanguage`, `rebuild_server_redactors`, `rebuild_redactors_for_sessions`.
 - **Chat-Inhalte:** `ChatContentExtension`, `PendingContent`, `ResolvedBlock`,
-  `RedactedBlock`, `ChatContentError`, `accept_extension_content`.
+  `RedactedBlock`, `ChatContentError`, `ChatContentRegistry`,
+  `seal_extension_parts`, `accept_extension_content`.
 - **KI-Nutzung:** `AiUsageObserver`, `AiUsagePurpose`, `AiUsageRecord`.
 - **Sicherung:** `Snapshot`, `ChangeSet`, `Change`, `HostKeyRow`,
   `KNOWN_SECTIONS`, `apply_changes`, `start_import_snapshot`,
-  `BackupOpError`, `OpenSessions`, `FileHostKeyStore`.
+  `BackupOpError`, `OpenSessions`, `NoSessions`, `BackupKey`, `ImportContext`,
+  `ImportPreview`, `ImportStart`, `ImportSummary`, `PendingImport`,
+  `SnapshotCounts`, `open_backup`, `FileHostKeyStore`.
 - **Ereignisse:** `EventEmitter`, `ConnectionStatus`,
   `emit_connection_status_changed`.
 - **Fehler und Helfer:** `CommandError`, `is_local`, `DocumentFormat`. Der Command-Fehlertyp `CommandError` (`{ message, code, feature_locked, connect_log }`) liegt in `ssh_manager_core::ipc_error` und ist der Typ, den Erweiterungs-Plugins zurückgeben; seine JSON-Form ist durch eine gemeinsame Fixture für Rust und Frontend festgelegt.
@@ -300,7 +303,9 @@ Nach Themen:
   `rebuild_redactors_for_open_sessions` (baut den Redactor jedes Servers mit
   offener Sitzung neu, keines anderen; bekannte Geheimnisse erweitern den
   Redactor nur).
-- **Testhilfen:** `ext::test_support` (nur mit `test-support`).
+- **Testhilfen:** `ext::test_support` (nur mit `test-support`); sie nennt auch
+  `SessionManager` und `Session`, damit Tests einer Erweiterung die Menge
+  offener Sitzungen aufbauen können.
 
 Sitzungen schließt eine Erweiterung ausschließlich über den öffentlichen
 Schließweg von `app-shell` (Issue #816), nicht über `ext`.
