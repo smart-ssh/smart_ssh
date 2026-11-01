@@ -469,7 +469,6 @@
     "confirmClosePending": "Une confirmation est encore en attente pour « {{name}} ». Fermer l’onglet malgré tout ? L’action en attente sera alors considérée comme rejetée."
   },
   "aiProvider": {
-    "title": "Fournisseur d’IA",
     "openLogs": "Ouvrir les journaux de diagnostic dans le gestionnaire de fichiers",
     "noProviders": "Aucun fournisseur configuré pour l’instant.",
     "configuredProvidersTitle": "Fournisseurs configurés",
@@ -741,7 +740,6 @@
     "openedLocally": "« {{name}} » ouvert localement — les modifications seront proposées au téléversement",
     "openLocallyFailed": "« {{name}} » n’a pas pu être ouvert localement : {{reason}}",
     "editUploaded": "Modification de « {{name}} » téléversée",
-    "editUploadFailed": "La modification de « {{name}} » n’a pas pu être téléversée : {{reason}}",
     "uploadedFolder": "Dossier « {{name}} » téléversé — {{count}} fichiers",
     "uploadFolderFailed": "Échec du téléversement du dossier « {{name}} » : {{reason}}",
     "uploadFailedMany": "{{name}} fichiers n’ont pas pu être téléversés, p. ex. : {{reason}}",

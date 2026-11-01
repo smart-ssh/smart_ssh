@@ -469,7 +469,6 @@
     "confirmClosePending": "\"{{name}}\"에 대한 확인이 아직 대기 중입니다. 그래도 탭을 닫으시겠습니까? 대기 중인 동작은 거부된 것으로 처리됩니다."
   },
   "aiProvider": {
-    "title": "AI 제공자",
     "openLogs": "파일 관리자에서 진단 로그 열기",
     "noProviders": "아직 설정된 제공자가 없습니다.",
     "configuredProvidersTitle": "설정된 제공자",
@@ -731,7 +730,6 @@
     "openedLocally": "“{{name}}”을(를) 로컬에서 열었습니다 — 변경 사항은 업로드하도록 안내됩니다",
     "openLocallyFailed": "“{{name}}”을(를) 로컬에서 열 수 없습니다: {{reason}}",
     "editUploaded": "“{{name}}”의 변경 사항을 업로드했습니다",
-    "editUploadFailed": "“{{name}}”의 변경 사항을 업로드할 수 없습니다: {{reason}}",
     "uploadedFolder": "폴더 “{{name}}”을(를) 업로드했습니다 — 파일 {{count}}개",
     "uploadFolderFailed": "폴더 “{{name}}” 업로드에 실패했습니다: {{reason}}",
     "uploadFailedMany": "파일 {{name}}개를 업로드할 수 없습니다. 예: {{reason}}",

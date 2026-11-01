@@ -469,7 +469,6 @@
     "confirmClosePending": "En bekreftelse venter fortsatt for “{{name}}”. Lukke fanen likevel? Den ventende handlingen regnes da som avvist."
   },
   "aiProvider": {
-    "title": "AI-leverandør",
     "openLogs": "Åpne diagnoselogger i filbehandleren",
     "noProviders": "Ingen leverandør er satt opp ennå.",
     "configuredProvidersTitle": "Oppsatte leverandører",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” åpnet lokalt – endringer tilbys for opplasting",
     "openLocallyFailed": "“{{name}}” kunne ikke åpnes lokalt: {{reason}}",
     "editUploaded": "Endringen i “{{name}}” lastet opp",
-    "editUploadFailed": "Endringen i “{{name}}” kunne ikke lastes opp: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” lastet opp – {{count}} filer",
     "uploadFolderFailed": "Opplasting av mappen “{{name}}” mislyktes: {{reason}}",
     "uploadFailedMany": "{{name}} filer kunne ikke lastes opp, f.eks.: {{reason}}",

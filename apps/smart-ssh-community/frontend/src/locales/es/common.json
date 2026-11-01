@@ -469,7 +469,6 @@
     "confirmClosePending": "Aún hay una confirmación pendiente para “{{name}}”. ¿Cerrar la pestaña de todos modos? La acción pendiente se considerará rechazada."
   },
   "aiProvider": {
-    "title": "Proveedor de IA",
     "openLogs": "Abrir registros de diagnóstico en el administrador de archivos",
     "noProviders": "Aún no hay ningún proveedor configurado.",
     "configuredProvidersTitle": "Proveedores configurados",
@@ -741,7 +740,6 @@
     "openedLocally": "“{{name}}” abierto localmente: se ofrecerá subir los cambios",
     "openLocallyFailed": "No se pudo abrir “{{name}}” localmente: {{reason}}",
     "editUploaded": "Cambio en “{{name}}” subido",
-    "editUploadFailed": "No se pudo subir el cambio en “{{name}}”: {{reason}}",
     "uploadedFolder": "Carpeta “{{name}}” subida: {{count}} archivos",
     "uploadFolderFailed": "Error al subir la carpeta “{{name}}”: {{reason}}",
     "uploadFailedMany": "No se pudieron subir {{name}} archivos, p. ej.: {{reason}}",

@@ -469,7 +469,6 @@
     "confirmClosePending": "A confirmation is still pending for \"{{name}}\". Close the tab anyway? The pending action will then count as rejected."
   },
   "aiProvider": {
-    "title": "AI Provider",
     "openLogs": "Open diagnostic logs in file manager",
     "noProviders": "No provider configured yet.",
     "configuredProvidersTitle": "Configured providers",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” opened locally — changes will be offered for upload",
     "openLocallyFailed": "“{{name}}” could not be opened locally: {{reason}}",
     "editUploaded": "Change to “{{name}}” uploaded",
-    "editUploadFailed": "Change to “{{name}}” could not be uploaded: {{reason}}",
     "uploadedFolder": "Folder “{{name}}” uploaded — {{count}} files",
     "uploadFolderFailed": "Uploading folder “{{name}}” failed: {{reason}}",
     "uploadFailedMany": "{{name}} files could not be uploaded, e.g.: {{reason}}",

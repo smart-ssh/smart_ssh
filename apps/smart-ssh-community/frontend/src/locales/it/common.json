@@ -469,7 +469,6 @@
     "confirmClosePending": "Per \"{{name}}\" è ancora in sospeso una conferma. Chiudere comunque la scheda? L'azione in sospeso verrà considerata rifiutata."
   },
   "aiProvider": {
-    "title": "Provider IA",
     "openLogs": "Apri i log diagnostici nel gestore di file",
     "noProviders": "Nessun provider ancora configurato.",
     "configuredProvidersTitle": "Provider configurati",
@@ -741,7 +740,6 @@
     "openedLocally": "“{{name}}” aperto localmente: le modifiche verranno proposte per il caricamento",
     "openLocallyFailed": "Impossibile aprire “{{name}}” localmente: {{reason}}",
     "editUploaded": "Modifica a “{{name}}” caricata",
-    "editUploadFailed": "Impossibile caricare la modifica a “{{name}}”: {{reason}}",
     "uploadedFolder": "Cartella “{{name}}” caricata — {{count}} file",
     "uploadFolderFailed": "Caricamento della cartella “{{name}}” non riuscito: {{reason}}",
     "uploadFailedMany": "Impossibile caricare {{name}} file, ad es.: {{reason}}",

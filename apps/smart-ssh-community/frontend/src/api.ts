@@ -32,7 +32,6 @@ import type {
   NoteRevisionDto,
   NoteTarget,
   PatternDto,
-  PatternSuggestionDto,
   ConfirmationExplanationDto,
   SuggestionPatternDto,
   RemoteEntryDto,
@@ -446,9 +445,6 @@ export const evaluateExplained = (command: string, ctx: EvalContextInput) =>
   invoke<EvaluationTraceDto>("evaluate_explained", { command, ctx });
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ------------
-
-export const suggestRulePatterns = (command: string) =>
-  invoke<PatternSuggestionDto[]>("suggest_rule_patterns", { command });
 
 /** Issue #596: coverage per segment, suggestions for uncovered segments and a
  * verdict per suggestion, evaluated by the backend for the session's server. */

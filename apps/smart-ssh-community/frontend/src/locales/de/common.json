@@ -469,7 +469,6 @@
     "confirmClosePending": "Für \"{{name}}\" wartet noch eine Bestätigung. Tab wirklich schließen? Die wartende Aktion gilt dann als abgelehnt."
   },
   "aiProvider": {
-    "title": "AI-Provider",
     "openLogs": "Diagnose-Logs im Dateimanager öffnen",
     "noProviders": "Noch kein Provider konfiguriert.",
     "configuredProvidersTitle": "Konfigurierte Provider",
@@ -736,7 +735,6 @@
     "openedLocally": "„{{name}}“ lokal geöffnet — Änderungen werden zum Hochladen angeboten",
     "openLocallyFailed": "„{{name}}“ konnte nicht lokal geöffnet werden: {{reason}}",
     "editUploaded": "Änderung an „{{name}}“ hochgeladen",
-    "editUploadFailed": "Änderung an „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
     "uploadedFolder": "Ordner „{{name}}“ hochgeladen — {{count}} Dateien",
     "uploadFolderFailed": "Ordner „{{name}}“ konnte nicht hochgeladen werden: {{reason}}",
     "uploadFailedMany": "{{name}} Dateien konnten nicht hochgeladen werden, z. B.: {{reason}}",

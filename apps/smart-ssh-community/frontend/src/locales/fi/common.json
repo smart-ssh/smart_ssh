@@ -469,7 +469,6 @@
     "confirmClosePending": "Kohteelle \"{{name}}\" odottaa vielä vahvistus. Suljetaanko välilehti silti? Odottava toiminto katsotaan tällöin hylätyksi."
   },
   "aiProvider": {
-    "title": "Tekoälyn palveluntarjoaja",
     "openLogs": "Avaa diagnostiikkalokit tiedostonhallinnassa",
     "noProviders": "Palveluntarjoajaa ei ole vielä määritetty.",
     "configuredProvidersTitle": "Määritetyt palveluntarjoajat",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” avattu paikallisesti – muutokset tarjotaan lähetettäviksi",
     "openLocallyFailed": "Kohdetta “{{name}}” ei voitu avata paikallisesti: {{reason}}",
     "editUploaded": "Kohteen “{{name}}” muutos lähetetty",
-    "editUploadFailed": "Kohteen “{{name}}” muutosta ei voitu lähettää: {{reason}}",
     "uploadedFolder": "Kansio “{{name}}” lähetetty – {{count}} tiedostoa",
     "uploadFolderFailed": "Kansion “{{name}}” lähetys epäonnistui: {{reason}}",
     "uploadFailedMany": "{{name}} tiedostoa ei voitu lähettää, esim.: {{reason}}",

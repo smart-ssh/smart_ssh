@@ -469,7 +469,6 @@
     "confirmClosePending": "A(z) \"{{name}}\" megerősítése még függőben van. Mégis bezárja a lapot? A függő művelet ekkor elutasítottnak minősül."
   },
   "aiProvider": {
-    "title": "AI-szolgáltató",
     "openLogs": "Diagnosztikai naplók megnyitása a fájlkezelőben",
     "noProviders": "Még nincs beállított szolgáltató.",
     "configuredProvidersTitle": "Beállított szolgáltatók",
@@ -736,7 +735,6 @@
     "openedLocally": "A(z) „{{name}}” helyben megnyitva – a módosítások feltöltésre lesznek felkínálva",
     "openLocallyFailed": "A(z) „{{name}}” nem nyitható meg helyben: {{reason}}",
     "editUploaded": "A(z) „{{name}}” módosítása feltöltve",
-    "editUploadFailed": "A(z) „{{name}}” módosítása nem tölthető fel: {{reason}}",
     "uploadedFolder": "A(z) „{{name}}” mappa feltöltve – {{count}} fájl",
     "uploadFolderFailed": "A(z) „{{name}}” mappa feltöltése sikertelen: {{reason}}",
     "uploadFailedMany": "{{name}} fájl nem tölthető fel, pl.: {{reason}}",

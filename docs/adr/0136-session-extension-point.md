@@ -24,7 +24,7 @@ Accepted · (issue #463, Spec 0038)
 - **Known secrets are escaped literals**; empty values are skipped (an empty
   pattern would match everywhere). They are added to the sudo-password
   pattern, never replacing it.
-- **Rebuild** is `app_shell::rebuild_server_redactors(app, server_id)`; it
+- **Rebuild** is `app_logic::ext::rebuild_server_redactors(&state, server_id)`; it
   swaps the redactor of every open session of the server through
   `SwappableRedactor`. History is already re-redacted before each send.
 - **Removal callbacks** run in the app-logic delete flows after the store

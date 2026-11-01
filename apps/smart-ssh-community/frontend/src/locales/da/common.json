@@ -469,7 +469,6 @@
     "confirmClosePending": "En bekræftelse afventer stadig for \"{{name}}\". Skal fanen lukkes alligevel? Den ventende handling tæller så som afvist."
   },
   "aiProvider": {
-    "title": "AI-udbyder",
     "openLogs": "Åbn diagnoselogfiler i filhåndtering",
     "noProviders": "Ingen udbyder konfigureret endnu.",
     "configuredProvidersTitle": "Konfigurerede udbydere",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” åbnet lokalt – ændringer tilbydes uploadet",
     "openLocallyFailed": "“{{name}}” kunne ikke åbnes lokalt: {{reason}}",
     "editUploaded": "Ændring af “{{name}}” uploadet",
-    "editUploadFailed": "Ændring af “{{name}}” kunne ikke uploades: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” uploadet – {{count}} filer",
     "uploadFolderFailed": "Upload af mappen “{{name}}” mislykkedes: {{reason}}",
     "uploadFailedMany": "{{name}} filer kunne ikke uploades, f.eks.: {{reason}}",

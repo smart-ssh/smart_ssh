@@ -469,7 +469,6 @@
     "confirmClosePending": "Pro „{{name}}“ stále čeká potvrzení. Zavřít kartu přesto? Čekající akce se pak bude považovat za zamítnutou."
   },
   "aiProvider": {
-    "title": "Poskytovatel AI",
     "openLogs": "Otevřít diagnostické logy ve správci souborů",
     "noProviders": "Zatím není nastaven žádný poskytovatel.",
     "configuredProvidersTitle": "Nastavení poskytovatelé",
@@ -746,7 +745,6 @@
     "openedLocally": "„{{name}}“ otevřeno lokálně — změny budou nabídnuty k nahrání",
     "openLocallyFailed": "„{{name}}“ se nepodařilo otevřít lokálně: {{reason}}",
     "editUploaded": "Změna v „{{name}}“ nahrána",
-    "editUploadFailed": "Změnu v „{{name}}“ se nepodařilo nahrát: {{reason}}",
     "uploadedFolder": "Složka „{{name}}“ nahrána — souborů: {{count}}",
     "uploadFolderFailed": "Nahrání složky „{{name}}“ selhalo: {{reason}}",
     "uploadFailedMany": "Souborů, které se nepodařilo nahrát: {{name}}, např.: {{reason}}",

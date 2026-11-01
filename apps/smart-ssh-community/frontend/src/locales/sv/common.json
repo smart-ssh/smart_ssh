@@ -469,7 +469,6 @@
     "confirmClosePending": "En bekräftelse väntar fortfarande för \"{{name}}\". Stänga fliken ändå? Den väntande åtgärden räknas då som avvisad."
   },
   "aiProvider": {
-    "title": "AI-leverantör",
     "openLogs": "Öppna diagnostikloggar i filhanteraren",
     "noProviders": "Ingen leverantör har ställts in ännu.",
     "configuredProvidersTitle": "Inställda leverantörer",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” öppnad lokalt — ändringar erbjuds för uppladdning",
     "openLocallyFailed": "“{{name}}” kunde inte öppnas lokalt: {{reason}}",
     "editUploaded": "Ändringen i “{{name}}” uppladdad",
-    "editUploadFailed": "Ändringen i “{{name}}” kunde inte laddas upp: {{reason}}",
     "uploadedFolder": "Mappen “{{name}}” uppladdad — {{count}} filer",
     "uploadFolderFailed": "Uppladdningen av mappen “{{name}}” misslyckades: {{reason}}",
     "uploadFailedMany": "{{name}} filer kunde inte laddas upp, t.ex.: {{reason}}",
