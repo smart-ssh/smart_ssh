@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  commandErrorCode,
-  commandErrorMessage,
   getStartupState,
   quitApplication,
   startOverFromUnlockScreen,
@@ -12,7 +10,7 @@ import {
 import { onStartupPrompt, onStartupUnlocked } from "../events";
 import { applyStoredLanguage } from "../i18n";
 import { applyStoredTheme } from "../theme";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText } from "../errorCodes";
 import type { StartupPromptAnswer, StartupPromptRequest, StartupStateDto } from "../types";
 import { Button, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { StartupPromptDialog } from "./StartupPromptDialog";
@@ -92,7 +90,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
     try {
       setState(await getStartupState());
     } catch (err) {
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     }
   }, [t]);
 
@@ -153,7 +151,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       // ist wirkungslos. Ohne dieses `catch` stünde davon nur eine
       // unbehandelte Ablehnung in der Konsole, die niemand sieht.
       if (cancelled) return;
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     });
 
     return () => {
@@ -195,7 +193,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
       // andersherum stünde die Meldung schon, während `refresh` noch läuft,
       // und ein Fehler dort überschriebe sie.
       await refresh();
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     } finally {
       setBusy(false);
       setPassword("");
@@ -210,7 +208,7 @@ export function StartupGate({ initialState, children }: StartupGateProps) {
   ) => {
     setQuestion(null);
     void answerStartupPrompt(answer, pw, repeated, warningConfirmed).catch((err: unknown) => {
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
     });
   };
 
@@ -418,11 +416,3 @@ function StartOver({
   );
 }
 
-/** Der Fehlertext: übersetzter Code, sonst der Text des Backends (Spec
- * 0024, Abschnitt 5) — nie eine leere Anzeige. */
-function messageFor(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  err: unknown,
-): string {
-  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
-}

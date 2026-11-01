@@ -1,3 +1,5 @@
+import { commandErrorCode, commandErrorMessage } from "./api";
+
 /** Spec 0024, Abschnitt 5: Mapping von stabilen Backend-`code`s (s.
  * `SshError`/`AiError`/`Decision`/`CommandError` in `crates/core`/
  * `crates/app-shell`) auf Übersetzungs-Keys im `errors`-Namespace der
@@ -295,4 +297,13 @@ export function translateErrorCode(
     return t(`errors.${code}_DATE`, params);
   }
   return t(`errors.${code}`, params);
+}
+
+/** The display text for a rejected command: the translated error code, else
+ * the backend's own message (Spec 0024, Abschnitt 5). */
+export function commandErrorText(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  err: unknown,
+): string {
+  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
 }

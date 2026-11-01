@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  commandErrorCode,
   commandErrorMessage,
   listGroups,
   listServers,
   listUnusableServers,
 } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText } from "../errorCodes";
 import { performMove, type DragItem, type DropTarget } from "../treeDrag";
 import type { GroupDto, ServerDto, UnusableServerDto } from "../types";
 import { GroupForm, type MovedTo } from "./GroupForm";
@@ -133,7 +132,7 @@ export function ManagementView({
         setMovedTo({ groupId: target.kind === "group" ? target.id : null });
       }
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
     reload();
   };
