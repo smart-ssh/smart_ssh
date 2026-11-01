@@ -1070,12 +1070,8 @@ async fn archive(
 
 type Conn = sqlx::SqliteConnection;
 type Res = Result<(), BackupStoreError>;
-
-// One writer per table; `upsert` picks a plain `INSERT` (a conflicting key
-// fails) or an upsert that overwrites every non-key column.
-
-/// Builds `INSERT INTO <table> (<cols>) VALUES (?, …)`, plus
-/// `ON CONFLICT(<first col>) DO UPDATE SET c = excluded.c, …` for an upsert.
+/// One writer per table: plain `INSERT` (a conflict fails) or, with `upsert`,
+/// `ON CONFLICT(<first col>) DO UPDATE SET c = excluded.c, …` on every other column.
 fn insert_sql(table: &str, cols: &str, upsert: bool) -> sqlx::AssertSqlSafe<String> {
     let cols: Vec<&str> = cols.split(", ").collect();
     let marks = vec!["?"; cols.len()].join(", ");
@@ -1264,6 +1260,5 @@ async fn insert_all(
     }
     Ok(())
 }
-
 #[cfg(test)]
 mod tests_insert_sql;
