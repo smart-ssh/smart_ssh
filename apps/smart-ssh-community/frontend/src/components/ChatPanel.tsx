@@ -1,6 +1,5 @@
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import {
-  type ComponentPropsWithoutRef,
   type FormEvent,
   type KeyboardEvent,
   useCallback,
@@ -23,6 +22,7 @@ import {
   retryChatTurn,
   exportDocument,
   getChatHistory,
+  getChatResync,
   listAiProviders,
   listPromptHistory,
   respondToAction,
@@ -39,6 +39,7 @@ import {
   onChatActionOutput,
   onChatActionWaitingInput,
   onChatActionResult,
+  onActionConfirmationSettled,
   onChatAutoContinuationLimitReached,
   onChatAutoContinuationStarted,
   onChatDocumentGenerated,
@@ -79,7 +80,6 @@ import {
   type ComposerContext,
   listComposerActions,
   listComposerDropHandlers,
-  listDocumentActions, subscribeDocumentActions,
   subscribeComposer,
 } from "../extensions/registry";
 import { isPointerInside } from "../dropZone";
@@ -108,8 +108,10 @@ import type {
   InjectionCheckState,
   QuestionOption,
 } from "../types";
+import { actionItemFromProposed, freshId, historyEntryToItem, mergeResyncedItems } from "../chatResync";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button, ErrorBoundary, Tooltip } from "./ui";
+import { DocumentCard, MARKDOWN_COMPONENTS } from "./ChatDocumentCard";
 import { AutoExecRulesLine } from "./AutoExecRulesLine";
 import { WebActivityCard } from "./WebActivityCard";
 import { InjectionCheckStatus } from "./InjectionCheckStatus";
@@ -155,6 +157,10 @@ export type ChatItem =
        * "abgelehnt" markiert wird, statt weiter "Bestätigung nötig" zu
        * zeigen. */
       userDecision?: "approve" | "deny" | "editThenApprove";
+      /** Issue #1019: the backend settled the confirmation without the
+       * user (reconnect, timeout) or no longer knew it (`unknown`); the
+       * card is final and has no buttons. */
+      settled?: "reconnect" | "timeout" | "unknown";
       result?: ActionResultPayload;
       /** Spec 0019, Abschnitt 3/4 — nur bei `ProposeNoteUpdate` gesetzt. */
       previousNoteContent: string | null;
@@ -263,6 +269,8 @@ export type ChatItem =
       truncated: boolean;
     }
   | { type: "historyRejected"; id: string; command: string; reason: string }
+  // Issue #1020: a stored action result in plain text (not assistant text).
+  | { type: "historyActionResult"; id: string; text: string }
   // Spec 0105: serverseitige Web-Recherche des Providers — live
   // (`chat-web-activity`) und aus einer fortgesetzten Historie gleich
   // dargestellt.
@@ -378,8 +386,6 @@ function decisionCardTone(decision: Decision): string {
   return "border-danger-border-strong/45 bg-danger-subtle/15";
 }
 
-let nextId = 0;
-const freshId = () => `item-${nextId++}`;
 
 interface ChatPanelProps {
   sessionId: string;
@@ -399,6 +405,11 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }: ChatPanelProps) {
+  // The settled-event listener lives in an effect that must not resubscribe per render.
+  const onActionSettledRef = useRef(onActionSettled);
+  useEffect(() => {
+    onActionSettledRef.current = onActionSettled;
+  });
   const { t } = useTranslation();
   const [items, setItems] = useState<ChatItem[]>([]);
   // Issue #601: last real input size reported by the provider (numbers only).
@@ -601,53 +612,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       .then((entries) => {
         if (entries.length === 0) return;
         setItems((prev) => [
-          ...entries.map((entry): ChatItem => {
-            switch (entry.type) {
-              case "text":
-                return {
-                  type: entry.role === "user" ? "user" : "assistant",
-                  id: freshId(),
-                  text: entry.text,
-                };
-              case "commandResult":
-                return {
-                  type: "historyCommandResult",
-                  id: freshId(),
-                  command: entry.command,
-                  stdout: entry.stdout,
-                  stderr: entry.stderr,
-                  exitCode: entry.exitCode,
-                  cancelled: entry.cancelled,
-                  truncated: entry.truncated,
-                };
-              case "actionRejected":
-                return {
-                  type: "historyRejected",
-                  id: freshId(),
-                  command: entry.command,
-                  reason: entry.reason,
-                };
-              case "webActivity":
-                return { type: "webActivity", id: freshId(), activity: entry.activity };
-              case "extensionParts":
-                // Issue #504: shown like attachments — label and kind only,
-                // never content, without asking any extension.
-                return {
-                  type: "historyAttachments",
-                  id: freshId(),
-                  items: entry.items.map((p) => ({ name: p.label, kind: p.media })),
-                };
-              case "question":
-                return {
-                  type: "question",
-                  id: freshId(),
-                  questionId: entry.questionId,
-                  question: entry.question,
-                  options: entry.options,
-                  multiSelect: entry.multiSelect,
-                };
-            }
-          }),
+          ...entries.map(historyEntryToItem),
           ...prev,
         ]);
       })
@@ -657,6 +622,40 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         // (derselbe Geist wie andere Best-effort-`.catch`-Stellen in
         // dieser Komponente, z. B. `listPromptHistory` oben).
       });
+  }, [sessionId]);
+
+  // Issue #1020, Spec 0114 §4: after the app returns from the background the
+  // webview may have missed events — rebuild this chat from the backend:
+  // history, action results, and the confirmation that still waits.
+  // `riskSecondOpinionEnabled` is read through a ref so the listener (and a
+  // re-sync in flight) is not torn down when the setting loads.
+  const riskSecondOpinionRef = useRef(riskSecondOpinionEnabled);
+  useEffect(() => {
+    riskSecondOpinionRef.current = riskSecondOpinionEnabled;
+  }, [riskSecondOpinionEnabled]);
+  useEffect(() => {
+    let cancelled = false;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      getChatResync(sessionId)
+        .then((resync) => {
+          if (cancelled) return;
+          const rebuilt = resync.history.map(historyEntryToItem);
+          const pending = resync.pendingProposal;
+          if (pending) {
+            rebuilt.push(actionItemFromProposed(pending, riskSecondOpinionRef.current));
+          }
+          setItems((prev) => mergeResyncedItems(prev, rebuilt, pending?.actionId ?? null));
+        })
+        .catch(() => {
+          // Best-effort like the initial history load: keep what is shown.
+        });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -687,41 +686,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
         setAiWait(null);
-        // Spec 0026, Abschnitt 3/4: eine Zweitmeinung ist nur zu erwarten,
-        // wenn sie aktiviert ist UND die Regel-Einschätzung überhaupt noch
-        // Raum nach oben hat (ein bereits regelbasiertes "red" kann nicht
-        // weiter eskalieren, s. `escalate_data_risk` im Backend) — in
-        // beiden Fällen bliebe der Spinner sonst ohne je eintreffendes
-        // Update-Event hängen.
-        const riskSecondOpinionPending =
-          riskSecondOpinionEnabled &&
-          event.riskAssessment !== null &&
-          event.riskAssessment.dataRisk !== "red";
-        setItems((prev) => [
-          ...prev,
-          {
-            type: "action",
-            id: freshId(),
-            actionId: event.actionId,
-            action: event.action,
-            decision: event.decision,
-            responded: false,
-            previousNoteContent: event.previousNoteContent,
-            usesStoredSudoPassword: event.usesStoredSudoPassword,
-            previousFileContent: event.previousFileContent,
-            previousFileSize: event.previousFileSize,
-            targetName: event.targetName,
-            riskAssessment: event.riskAssessment,
-            riskSecondOpinionPending,
-            secondOpinionUnavailable: false,
-            // Spec 0027: bei AutoExec beginnt die Ausführung sofort (keine
-            // Bestätigung nötig) — bei Confirm/Deny erst später, s.
-            // `respond()` unten.
-            startedAt: event.decision === "AutoExec" ? Date.now() : null,
-            origin: event.origin,
-            autoExecRules: event.autoExecRules,
-          },
-        ]);
+        setItems((prev) => [...prev, actionItemFromProposed(event, riskSecondOpinionEnabled)]);
       }),
       onRiskAssessmentUpdated((event) => {
         if (event.sessionId !== sessionId) return;
@@ -789,6 +754,17 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
           const { [event.actionId]: _cleared, ...rest } = prev;
           return rest;
         });
+      }),
+      onActionConfirmationSettled((event) => {
+        if (event.sessionId !== sessionId) return;
+        setItems((prev) =>
+          prev.map((item) =>
+            item.type === "action" && item.actionId === event.actionId
+              ? { ...item, responded: true, settled: event.reason }
+              : item,
+          ),
+        );
+        onActionSettledRef.current(sessionId);
       }),
       onChatActionResult((event) => {
         if (event.sessionId !== sessionId) return;
@@ -1013,12 +989,22 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       ),
     );
     onActionSettled(sessionId);
-    respondToAction(sessionId, actionId, decision).catch((err) =>
+    respondToAction(sessionId, actionId, decision).catch((err) => {
+      // Issue #1019: the optimistic state is rolled back. An unknown
+      // confirmation was settled by the backend: the card shows "expired",
+      // never "approved". Any other error leaves the request open.
+      const unknown = commandErrorCode(err) === "ACTION_CONFIRMATION_UNKNOWN";
       setItems((prev) => [
-        ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
-      ]),
-    );
+        ...prev.map((item) =>
+          item.type === "action" && item.actionId === actionId
+            ? unknown
+              ? { ...item, responded: true, userDecision: undefined, startedAt: null, settled: "unknown" as const }
+              : { ...item, responded: false, userDecision: undefined, startedAt: null }
+            : item,
+        ),
+        { type: "error" as const, id: freshId(), message: commandErrorMessage(err), code: null },
+      ]);
+    });
   };
 
   /** Spec 0021, Abschnitt 5 / Spec 0066, §1: bricht den laufenden
@@ -2089,6 +2075,16 @@ export function ChatItemView({
       </div>
     );
   }
+  if (item.type === "historyActionResult") {
+    return (
+      <div
+        className="rounded border border-border bg-surface-sunken px-3 py-2 text-xs"
+        data-testid="history-action-result"
+      >
+        <p className="whitespace-pre-wrap break-words font-mono">{item.text}</p>
+      </div>
+    );
+  }
   if (item.type === "historyRejected") {
     return (
       <div className="rounded border border-warning-border/50 bg-warning-subtle/30 px-3 py-2 text-xs text-warning-fg-soft">
@@ -2106,11 +2102,14 @@ export function ChatItemView({
   // `userDecision` erkannt und mit einem eigenen "abgelehnt"-Label/-Ton
   // überlagert, statt weiter fälschlich "Bestätigung nötig" zu zeigen.
   const rejectedByUser = item.responded && item.userDecision === "deny";
+  const settled = item.settled;
   const blockedByFilter = typeof item.decision === "object" && "Deny" in item.decision;
-  const badge = rejectedByUser
+  const badge = settled
+    ? { text: t("actionCard.expired"), className: "bg-danger-subtle-hover text-danger-fg-soft" }
+    : rejectedByUser
     ? { text: t("actionCard.rejected"), className: "bg-danger-subtle-hover text-danger-fg-soft" }
     : decisionBadge(t, item.decision);
-  const cardTone = rejectedByUser
+  const cardTone = settled || rejectedByUser
     ? "border-danger-border-strong/45 bg-danger-subtle/15"
     : decisionCardTone(item.decision);
   const needsConfirmation = !item.responded && typeof item.decision === "object" && "Confirm" in item.decision;
@@ -2162,7 +2161,7 @@ export function ChatItemView({
       {command && (
         <code
           className={`block border border-border bg-surface-sunken px-2 py-1 font-mono text-xs break-words whitespace-pre-wrap ${
-            rejectedByUser || blockedByFilter
+            settled || rejectedByUser || blockedByFilter
               ? "text-fg-subtle line-through decoration-danger-strong/60"
               : "text-fg-soft"
           }`}
@@ -2209,7 +2208,17 @@ export function ChatItemView({
           )}
         </div>
       )}
-      {rejectedByUser ? (
+      {settled ? (
+        <output className="mt-1 block text-xs text-danger-fg-soft">
+          {t(
+            settled === "reconnect"
+              ? "actionCard.discardedAfterReconnect"
+              : settled === "timeout"
+                ? "actionCard.expiredTimeout"
+                : "actionCard.expiredUnknown",
+          )}
+        </output>
+      ) : rejectedByUser ? (
         <p className="mt-1 text-xs text-danger-fg-soft">{t("actionCard.rejectedByUser")}</p>
       ) : (
         <>
@@ -2840,86 +2849,6 @@ function TakeIntoNoteButton({
     >
       {state === "error" ? t("actionCard.takeIntoNoteFailed") : t("actionCard.takeIntoNote")}
     </Button>
-  );
-}
-
-/** Spec 0012, Abschnitt 3: eigene Karte für `chat-document-generated`,
- * gerendertes Markdown statt Rohtext, mit den beiden Export-Buttons. Kein
- * Bestätigungsdialog/keine Approve-Deny-Buttons wie bei `type: "action"` —
- * es ist bereits nichts Persistentes passiert, das rückgängig zu machen
- * wäre. */
-/** Spec 0113 §4a: in the narrow layout a code block scrolls sideways inside its own box, so it
- * must be reachable by keyboard; the wide layout keeps the plain `pre`. */
-function ScrollablePre(props: ComponentPropsWithoutRef<"pre">) {
-  const narrow = useIsNarrow();
-  // A scrollable region must be keyboard-reachable (axe "scrollable-region-focusable").
-  // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-  return <pre {...props} tabIndex={narrow ? 0 : undefined} />;
-}
-const MARKDOWN_COMPONENTS = { pre: ({ node: _node, ...rest }: ComponentPropsWithoutRef<"pre"> & { node?: unknown }) => <ScrollablePre {...rest} /> };
-
-function DocumentCard({
-  title,
-  contentMarkdown,
-  onExport,
-}: {
-  title: string;
-  contentMarkdown: string;
-  onExport: (contentMarkdown: string, title: string, format: DocumentFormat) => Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const documentActions = useSyncExternalStore(subscribeDocumentActions, listDocumentActions);
-  const [exporting, setExporting] = useState<DocumentFormat | null>(null);
-  const [savedFormat, setSavedFormat] = useState<DocumentFormat | null>(null);
-
-  const handleExportClick = async (format: DocumentFormat) => {
-    setExporting(format);
-    try {
-      await onExport(contentMarkdown, title, format);
-      setSavedFormat(format);
-    } finally {
-      setExporting(null);
-    }
-  };
-
-  return (
-    <div className="rounded-lg border border-accent-border-strong/60 bg-surface-raised/80 p-3.5 text-sm shadow-md">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="text-base">📄</span>
-          <span className="min-w-0 break-words font-semibold text-fg">{title}</span>
-        </div>
-        <span className="rounded bg-accent-subtle/80 px-2 py-0.5 text-xs text-accent-fg-soft border border-accent-border/50">
-          {t("chat.documentGenerated")}
-        </span>
-      </div>
-      <div className="prose prose-sm prose-invert max-w-none rounded bg-surface-sunken p-3 prose-pre:bg-surface prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-headings:my-1.5">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{contentMarkdown}</ReactMarkdown>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 narrow:[&_button]:min-h-11">
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={exporting !== null}
-          onClick={() => handleExportClick("markdown")}
-        >
-          {exporting === "markdown" ? t("common.saving") : t("chat.saveAsMarkdown")}
-        </Button>
-        {savedFormat && <span className="text-xs text-success-fg">✓ {t("chat.exportedAsMarkdown")}</span>}
-        {/* Spec 0045: registrierte Dokument-Aktionen neben dem Markdown-
-         * Export (reaktiv), der Export-Button bleibt an seinem Platz. */}
-        {documentActions.map((action) => (
-          <ErrorBoundary key={action.id} id={`document-action:${action.id}`}><Button
-            size="sm"
-            disabled={action.disabled}
-            title={action.disabled ? action.disabledReason : undefined}
-            onClick={() => action.onInvoke({ contentMarkdown, title })}
-          >
-            {action.label}
-          </Button></ErrorBoundary>
-        ))}
-      </div>
-    </div>
   );
 }
 

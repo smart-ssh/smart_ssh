@@ -284,3 +284,36 @@ export async function expectVerticallyCentredWith(
     ).toBeLessThanOrEqual(tolerance);
   }).toPass({ timeout: 5_000 });
 }
+
+/**
+ * The page does not scroll sideways; with `scope`, nothing inside it sticks out
+ * either (except inside boxes that scroll on their own).
+ */
+export async function expectNoHorizontalPageScroll(page: Page, scope?: Locator): Promise<void> {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  if (scope) {
+    // The scrolling content box itself must not scroll sideways (its own overflow would hide a wide child).
+    for (const box of await scope.locator("div.overflow-y-auto").all()) {
+      expect(await box.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    }
+    // Nothing inside the dialog is wider than the dialog, except boxes that scroll on their own.
+    const overflow = await scope.evaluate((root) => {
+      const limit = root.getBoundingClientRect().right + 1;
+      const bad: string[] = [];
+      for (const el of root.querySelectorAll<HTMLElement>("*")) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.right <= limit) continue;
+        let p: HTMLElement | null = el.parentElement;
+        let scrolls = false;
+        while (p && p !== root) {
+          const ox = getComputedStyle(p).overflowX;
+          if (ox === "auto" || ox === "scroll" || ox === "hidden") scrolls = true;
+          p = p.parentElement;
+        }
+        if (!scrolls) bad.push(`${el.tagName}.${el.className}`.slice(0, 80));
+      }
+      return bad;
+    });
+    expect(overflow).toEqual([]);
+  }
+}

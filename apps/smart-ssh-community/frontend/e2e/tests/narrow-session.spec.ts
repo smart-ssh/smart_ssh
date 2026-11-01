@@ -1,7 +1,7 @@
 import { expect, test } from "../support/app";
 import { expectNoSeriousA11yViolations } from "../support/axe";
 import { populated } from "../support/data";
-import { expectUsable } from "../support/layout";
+import { expectNoHorizontalPageScroll, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 import { openSession } from "../support/session";
 
@@ -23,7 +23,7 @@ test.describe("narrow session view @phone", () => {
     await tab("Files").click();
     await captureScreen(page, "session-narrow-files");
     await tab("AI").click();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
 
     const more = page.getByRole("button", { name: "More actions" });
     await expectUsable(more);

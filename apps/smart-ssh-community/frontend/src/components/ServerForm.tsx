@@ -24,7 +24,7 @@ import {
   updateLocalServerTags,
   updateServer,
 } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText, translateErrorCode } from "../errorCodes";
 import { onConnectProgress, onNoteShrinkSucceeded } from "../events";
 import { pickAndReadTextFile, pickFilePath } from "../fileDialog";
 import { flattenGroupOptions, groupOptionLabel } from "../groupTree";
@@ -768,7 +768,7 @@ export function ServerForm({
       setInvalidTabs(new Set());
       onSaved();
     } catch (err) {
-      const message = translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
+      const message = commandErrorText(t, err);
       // The server itself is saved once `importSavedId` is set; only the
       // import failed — keep the dialog open for a retry or "keep path".
       if (importKey && savedId !== null) {
@@ -806,11 +806,7 @@ export function ServerForm({
       // wissen, dass das Passwort weiter im Schlüsselbund liegt und beim
       // nächsten `sudo` erneut eingespeist wird; genau das ist die
       // Begründung, aus der A17 diesen Fall überhaupt scheitern lässt.
-      setError(
-        t("serverForm.removeSudoPasswordFailed") +
-          " " +
-          translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)),
-      );
+      setError(t("serverForm.removeSudoPasswordFailed") + " " + commandErrorText(t, err));
     } finally {
       setClearingSudoPassword(false);
     }
@@ -831,7 +827,7 @@ export function ServerForm({
       loadServer();
       onSaved();
     } catch (err) {
-      setConvertError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setConvertError(commandErrorText(t, err));
     } finally {
       setConverting(false);
     }
@@ -848,7 +844,7 @@ export function ServerForm({
     try {
       setDeletePreview(await deleteServer(serverId, false));
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -868,7 +864,7 @@ export function ServerForm({
       }
       onDeleted();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setDeleting(false);
     }
@@ -909,7 +905,7 @@ export function ServerForm({
       testAttemptRef.current = null;
       setTestDialog(null);
       if (commandErrorCode(err) !== "SSH_CONNECT_CANCELLED") {
-        setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+        setError(commandErrorText(t, err));
       }
     } finally {
       unlisten?.();
@@ -939,7 +935,7 @@ export function ServerForm({
       await trustHostKey(h, p, rawKey);
       await runTest();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -961,7 +957,7 @@ export function ServerForm({
       setDirty(false);
       onSaved();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setSavingLocalTags(false);
     }
@@ -975,7 +971,7 @@ export function ServerForm({
       setDirty(false);
       onSaved();
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setSavingLocalNotes(false);
     }
@@ -988,7 +984,7 @@ export function ServerForm({
     try {
       setPreview(await previewEffectiveNotes(serverId));
     } catch (err) {
-      setError(translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err)));
+      setError(commandErrorText(t, err));
     } finally {
       setPreviewLoading(false);
     }

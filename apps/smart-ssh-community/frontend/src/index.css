@@ -191,27 +191,6 @@ body,
   --color-web-fg: var(--web-fg);
   --color-mcp-subtle: var(--mcp-subtle);
   --color-mcp-fg: var(--mcp-fg);
-  --color-term-bg: var(--term-bg);
-  --color-term-fg: var(--term-fg);
-  --color-term-cursor: var(--term-cursor);
-  --color-term-cursor-accent: var(--term-cursor-accent);
-  --color-term-selection: var(--term-selection);
-  --color-term-ansi-black: var(--term-ansi-black);
-  --color-term-ansi-red: var(--term-ansi-red);
-  --color-term-ansi-green: var(--term-ansi-green);
-  --color-term-ansi-yellow: var(--term-ansi-yellow);
-  --color-term-ansi-blue: var(--term-ansi-blue);
-  --color-term-ansi-magenta: var(--term-ansi-magenta);
-  --color-term-ansi-cyan: var(--term-ansi-cyan);
-  --color-term-ansi-white: var(--term-ansi-white);
-  --color-term-ansi-bright-black: var(--term-ansi-bright-black);
-  --color-term-ansi-bright-red: var(--term-ansi-bright-red);
-  --color-term-ansi-bright-green: var(--term-ansi-bright-green);
-  --color-term-ansi-bright-yellow: var(--term-ansi-bright-yellow);
-  --color-term-ansi-bright-blue: var(--term-ansi-bright-blue);
-  --color-term-ansi-bright-magenta: var(--term-ansi-bright-magenta);
-  --color-term-ansi-bright-cyan: var(--term-ansi-bright-cyan);
-  --color-term-ansi-bright-white: var(--term-ansi-bright-white);
 
   /* Der Entwurf ist fast durchgehend eckig — "Cards, figures and buttons
      framed as blueprint objects: square-cornered" (s. Industry-

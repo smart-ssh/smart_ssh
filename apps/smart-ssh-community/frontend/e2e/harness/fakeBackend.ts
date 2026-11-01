@@ -343,6 +343,7 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
     // empty home directory in the file browser.
     send_chat_message: () => null,
     get_chat_history: () => [],
+    get_chat_resync: () => ({ history: [], pendingProposal: null }),
     list_prompt_history: () => [],
     open_terminal: () => ({ missingDirectory: null }),
     terminal_resize: () => null,

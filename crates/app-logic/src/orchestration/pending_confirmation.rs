@@ -164,6 +164,13 @@ impl Drop for ConfirmationCleanup<'_> {
                 *pending = None;
             }
         }
+        {
+            // Issue #1020: the stored proposal belongs to this confirmation.
+            let mut turn = lock_tolerating_poison(&self.session.chat_turn);
+            if turn.pending_proposal.as_ref().map(|(id, _)| *id) == Some(self.registry.action_id) {
+                turn.pending_proposal = None;
+            }
+        }
         // Der Registry-Eintrag wird danach vom Feld `registry`
         // ([`RegistryCleanup`]) abgeräumt.
     }

@@ -4,8 +4,6 @@ import { NewSessionMenu } from "./NewSessionMenu";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useTranslation } from "react-i18next";
 import {
-  commandErrorCode,
-  commandErrorMessage,
   keepGroupAsRegularEntry,
   keepServerAsRegularEntry,
   listChatSessions,
@@ -14,7 +12,7 @@ import {
   listUnusableServers,
   inspectKeyFile,
 } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText } from "../errorCodes";
 import { loadFirstRunNoticeAcknowledged, saveFirstRunNoticeAcknowledged } from "../firstRunNotice";
 import { buildGroupTree, type GroupTreeNode } from "../groupTree";
 import {
@@ -129,13 +127,6 @@ function KeyFileMissingNote({ path }: { path: string }) {
   );
 }
 
-function describeError(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  err: unknown,
-): string {
-  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
-}
-
 /**
  * Spec 0007, Abschnitt 7 / Spec 0033: Klick auf einen Server löst
  * `connect()` aus. Server erscheinen jetzt nach Gruppen-Hierarchie
@@ -199,7 +190,7 @@ export function ServerList({
           setGroups(g);
           setUnusableServers(u);
         })
-        .catch((err) => setError(describeError(t, err)))
+        .catch((err) => setError(commandErrorText(t, err)))
         .finally(() => setLoading(false)),
     [t],
   );
@@ -222,7 +213,7 @@ export function ServerList({
     try {
       await performMove(item, target);
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
     await loadTree();
   };
@@ -276,7 +267,7 @@ export function ServerList({
     try {
       await keepServerAsRegularEntry(server.id);
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
     await loadTree();
   };
@@ -285,7 +276,7 @@ export function ServerList({
     try {
       setKeepGroup({ group, scope: await keepGroupAsRegularEntry(group.id, false) });
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
   };
   const confirmKeepGroup = async () => {
@@ -295,7 +286,7 @@ export function ServerList({
     try {
       await keepGroupAsRegularEntry(group.id, true);
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
     await loadTree();
   };
@@ -396,7 +387,7 @@ export function ServerList({
       }
       setSessionPickerState({ server, sessions });
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -416,7 +407,7 @@ export function ServerList({
       const sessions = await listChatSessions(server.id);
       setSessionPickerState({ server, sessions });
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
     }
   };
 
@@ -435,7 +426,7 @@ export function ServerList({
     try {
       await saveFirstRunNoticeAcknowledged();
     } catch (err) {
-      setError(describeError(t, err));
+      setError(commandErrorText(t, err));
       return;
     }
     setFirstRunAcknowledged(true);

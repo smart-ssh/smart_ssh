@@ -3,7 +3,7 @@
 import { expect, test } from "../support/app";
 import { populated } from "../support/data";
 import { expectNoSeriousA11yViolations } from "../support/axe";
-import { expectFullyInViewport, expectTopmostAtCenter } from "../support/layout";
+import { expectFullyInViewport, expectNoHorizontalPageScroll, expectTopmostAtCenter } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
 
 test.describe("narrow shell @phone", () => {
@@ -16,7 +16,7 @@ test.describe("narrow shell @phone", () => {
     await expect(page.getByTestId("narrow-title")).toHaveText("Smart SSH");
     await expect(page.getByRole("navigation")).toHaveCount(0);
     await expect(page.getByRole("toolbar")).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
     await captureScreen(page, `narrow-shell-overview-${info.project.name}`);
 
     // The session view itself is laid out separately; here only the shell matters.
@@ -32,7 +32,7 @@ test.describe("narrow shell @phone", () => {
       await expectTopmostAtCenter(entry);
     }
     await expect(menu.getByRole("button", { name: "db-primary", exact: true })).toHaveAttribute("aria-current", "page");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expectNoHorizontalPageScroll(page);
     await expectNoSeriousA11yViolations(page, "narrow menu");
     await captureScreen(page, `narrow-shell-menu-${info.project.name}`);
   });

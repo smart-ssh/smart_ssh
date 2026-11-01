@@ -11,9 +11,7 @@ mod audio;
 mod recorder;
 mod transcribe;
 
-pub use audio::{
-    resample_mono, to_mono_16k, AudioCapture, AudioSource, CaptureError, CpalSource, TARGET_RATE,
-};
+pub use audio::{resample_mono, AudioCapture, AudioSource, CaptureError, CpalSource, TARGET_RATE};
 pub use recorder::{
     LiveConfig, PartialCallback, RecordError, Recorder, RecorderState, StateCallback,
     LIVE_INTERVAL, LIVE_WINDOW, MAX_RECORDING,
@@ -133,12 +131,6 @@ pub enum ModelManagerError {
     AlreadyDownloading,
     Downloading,
     Io,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub struct DownloadProgress {
-    pub done: u64,
-    pub total: u64,
 }
 
 /// Called after each state change of a download: progress and the final

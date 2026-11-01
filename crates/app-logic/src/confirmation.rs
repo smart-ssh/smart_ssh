@@ -148,7 +148,9 @@ impl<K: Eq + Hash, T> ConfirmationRegistry<K, T> {
     /// den Eintrag selbst aus der Map). Spec 0084, A5: auch von
     /// `app-shell`s Tests gebraucht (`commands::connect`), deshalb hinter
     /// `test-support` statt reinem `#[cfg(test)]`.
-    #[cfg(any(test, feature = "test-support"))]
+    ///
+    /// Issue #1020: also used by production code (`get_chat_resync`), so no
+    /// longer test-only.
     pub fn contains(&self, key: &K) -> bool {
         lock_tolerating_poison(&self.pending).contains_key(key)
     }

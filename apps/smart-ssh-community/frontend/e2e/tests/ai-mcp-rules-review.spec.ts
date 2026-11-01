@@ -1,8 +1,7 @@
 // Issue #386: UI review of the AI provider settings, the MCP settings and the
 // filter rule management. Tab order with visible focus, Escape and focus
 // return, and long content at both window sizes (docs/ui-guidelines.md).
-import type { Page } from "@playwright/test";
-import { expect, test } from "../support/app";
+import { expect, openSettings, test } from "../support/app";
 import { aiProvider, populated, server } from "../support/data";
 import { expectNoClippedText, expectTabOrderFollowsVisualOrder, expectUsable } from "../support/layout";
 import { captureScreen } from "../support/screenshots";
@@ -44,14 +43,6 @@ const longContent = () => ({
     },
   },
 });
-
-async function openSettings(page: Page, category: string) {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: category, exact: true }).click();
-  return dialog;
-}
 
 for (const category of ["AI Provider", "MCP Server"]) {
   test(`settings: ${category} has a Tab order that follows the visual order, with visible focus`, async ({ app }) => {

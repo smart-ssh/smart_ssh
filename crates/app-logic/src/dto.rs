@@ -511,7 +511,12 @@ pub enum HostKeyUserDecision {
 pub enum ActionUserDecision {
     Approve,
     Deny,
-    EditThenApprove { command: String },
+    EditThenApprove {
+        command: String,
+    },
+    /// Issue #1019: internal deny after a reconnect; never sent by the frontend.
+    #[serde(skip_deserializing)]
+    DenyReconnect,
 }
 
 /// Herkunft einer vorgeschlagenen Aktion (Spec 0028, Abschnitt 6/9a) —
@@ -1513,20 +1518,7 @@ impl From<ssh_manager_core::ai::ChatMessage> for ChatHistoryEntryDto {
                 truncated: output.truncated,
             },
             ssh_manager_core::ai::MessageContent::ActionRejected { command, reason } => {
-                let reason_text = match reason {
-                    ssh_manager_core::ai::RejectionReason::User => {
-                        "Vom Nutzer abgelehnt.".to_string()
-                    }
-                    ssh_manager_core::ai::RejectionReason::Blocked(reason) => reason,
-                    // Spec 0046, Fund 4: eigener Text statt "Vom Nutzer
-                    // abgelehnt" — es gibt hier gerade keinen Nutzer, der
-                    // aktiv abgelehnt hätte.
-                    ssh_manager_core::ai::RejectionReason::Timeout => {
-                        "Zeitüberschreitung — nicht innerhalb der zulässigen Zeit beantwortet, \
-                         automatisch abgelehnt."
-                            .to_string()
-                    }
-                };
+                let reason_text = crate::confirmation_settled::rejection_reason_text(reason);
                 ChatHistoryEntryDto::ActionRejected {
                     role,
                     command,

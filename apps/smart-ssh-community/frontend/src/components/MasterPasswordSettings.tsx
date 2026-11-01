@@ -5,12 +5,11 @@ import { characterCount } from "../passwordLength";
 import {
   changeMasterPassword,
   commandErrorCode,
-  commandErrorMessage,
   getMasterPasswordMode,
   setUpMasterPassword,
   switchToOsKeychain,
 } from "../api";
-import { translateErrorCode } from "../errorCodes";
+import { commandErrorText } from "../errorCodes";
 import { Button, DialogFrame, Field, FIELD_CONTROL_CLASS } from "./ui";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 
@@ -77,7 +76,7 @@ export function MasterPasswordSettings() {
   useEffect(() => {
     getMasterPasswordMode()
       .then(setMode)
-      .catch((err: unknown) => setError(messageFor(t, err)));
+      .catch((err: unknown) => setError(commandErrorText(t, err)));
   }, [t]);
 
   const clearSecrets = () => {
@@ -97,7 +96,7 @@ export function MasterPasswordSettings() {
       onDone();
       setMode(await getMasterPasswordMode());
     } catch (err) {
-      setError(messageFor(t, err));
+      setError(commandErrorText(t, err));
       throw err;
     } finally {
       setBusy(false);
@@ -346,9 +345,3 @@ function PasswordField({
   );
 }
 
-function messageFor(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  err: unknown,
-): string {
-  return translateErrorCode(t, commandErrorCode(err), commandErrorMessage(err));
-}

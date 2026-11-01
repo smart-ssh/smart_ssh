@@ -35,16 +35,6 @@ pub trait AudioCapture: Send {
     fn snapshot(&self) -> Vec<f32>;
 }
 
-/// Mixes interleaved frames down to mono and resamples to 16 kHz.
-pub fn to_mono_16k(interleaved: &[f32], channels: usize, rate: u32) -> Vec<f32> {
-    let channels = channels.max(1);
-    let mono: Vec<f32> = interleaved
-        .chunks_exact(channels)
-        .map(|f| f.iter().sum::<f32>() / channels as f32)
-        .collect();
-    resample_mono(&mono, rate)
-}
-
 /// Resamples mono audio to 16 kHz (box average when downsampling, linear
 /// interpolation when upsampling).
 pub fn resample_mono(mono: &[f32], rate: u32) -> Vec<f32> {

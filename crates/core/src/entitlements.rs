@@ -81,13 +81,6 @@ impl Feature {
     pub const SelfHostedSync: Feature = Feature::new("self_hosted_sync");
     #[deprecated(note = "editions declare their own feature constants; this goes away")]
     pub const ManagedAi: Feature = Feature::new("managed_ai");
-
-    /// Transition only: true for the ids `managed_ai` and `cloud_sync`.
-    /// Editions classify their own features; this goes away.
-    #[deprecated(note = "editions classify their own features; this goes away")]
-    pub fn is_service_bound(&self) -> bool {
-        matches!(self.id(), "managed_ai" | "cloud_sync")
-    }
 }
 
 /// Deserialises a feature set, skipping unknown or malformed entries.
@@ -247,20 +240,13 @@ mod tests {
 
     #[allow(deprecated)]
     #[test]
-    fn test_deprecated_constants_and_is_service_bound_keep_today_values() {
+    fn test_deprecated_constants_keep_today_values() {
         assert_eq!(Feature::DocumentExport.id(), "document_export");
         assert_eq!(Feature::SessionHistory.id(), "session_history");
         assert_eq!(Feature::ServerEnvironment.id(), "server_environment");
         assert_eq!(Feature::ChatAttachments.id(), "chat_attachments");
         assert_eq!(Feature::SelfHostedSync.id(), "self_hosted_sync");
         assert_eq!(Feature::ManagedAi.id(), "managed_ai");
-        assert!(Feature::ManagedAi.is_service_bound());
-        assert!(Feature::new("cloud_sync").is_service_bound());
-        assert!(!Feature::DocumentExport.is_service_bound());
-        assert!(!Feature::SessionHistory.is_service_bound());
-        assert!(!Feature::ServerEnvironment.is_service_bound());
-        assert!(!Feature::ChatAttachments.is_service_bound());
-        assert!(!Feature::SelfHostedSync.is_service_bound());
     }
 
     #[test]

@@ -3,7 +3,7 @@
 // at both window sizes (docs/ui-guidelines.md).
 import type { Page } from "@playwright/test";
 import { THIRD_PARTY_NOTICES_MARKER } from "../../src/thirdPartyNoticesMarker";
-import { expect, test } from "../support/app";
+import { expect, openSettings, test } from "../support/app";
 import { populated, server } from "../support/data";
 import { expectNoClippedText, expectTabOrderFollowsVisualOrder, expectUsable } from "../support/layout";
 import { NOTE_COMMANDS, openNotes } from "../support/notes";
@@ -30,14 +30,6 @@ const longContent = () => ({
     get_master_password_mode: { result: "password" },
   },
 });
-
-async function openSettings(page: Page, category?: string) {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog).toBeVisible();
-  if (category) await dialog.getByRole("button", { name: category, exact: true }).click();
-  return dialog;
-}
 
 test("settings: focus starts on the active category, Escape closes and focus returns to the trigger", async ({ app }) => {
   await app.launch(populated());
