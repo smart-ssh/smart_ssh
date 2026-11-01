@@ -28,6 +28,29 @@ pub enum Decision {
     Deny { reason: String, code: String },
 }
 
+impl Decision {
+    fn severity(&self) -> u8 {
+        match self {
+            Decision::AutoExec => 0,
+            Decision::Confirm { .. } => 1,
+            Decision::Deny { .. } => 2,
+        }
+    }
+
+    /// The stricter of two decisions: `Deny` > `Confirm` > `AutoExec`. On
+    /// equal severity `self` wins, so an earlier step keeps its code and
+    /// reason. This is the only way the escalation chain combines decisions,
+    /// which makes "escalate only" a property of the type of operation.
+    #[must_use]
+    pub fn stricter(self, other: Decision) -> Decision {
+        if other.severity() > self.severity() {
+            other
+        } else {
+            self
+        }
+    }
+}
+
 /// Wirkung einer Nutzerregel (Spec 0002, Abschnitt 2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RuleAction {
