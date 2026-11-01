@@ -126,40 +126,29 @@ pub async fn request_note_shrink(
         // eine grundsätzlich andere Persistenz (`local_server::save_notes`
         // statt `ProfileStore::record_note_revision`, s. `orchestration::
         // NoteShrinkTarget`-Doc-Kommentar).
-        if app_logic::dto::is_local(server_id) {
-            let target = crate::local_server::LocalNoteShrinkTarget { app: app.clone() };
-            execute_note_shrink_request(
-                session_id,
-                server_id,
-                ai_provider.as_ref(),
-                &ai_provider_budget,
-                redactor.as_ref(),
-                &TauriEventEmitter(app.clone()),
-                &target,
-                &state.pending_action_confirmations,
-                language,
-            )
-            .await;
-        } else {
-            let target = app_logic::orchestration::ProfileStoreNoteShrinkTarget {
-                profile_store: state.profile_store.as_ref(),
-                server_id,
-                provider_label,
-                model,
+        let target: Box<dyn app_logic::orchestration::NoteShrinkTarget + '_> =
+            if app_logic::dto::is_local(server_id) {
+                Box::new(crate::local_server::LocalNoteShrinkTarget { app: app.clone() })
+            } else {
+                Box::new(app_logic::orchestration::ProfileStoreNoteShrinkTarget {
+                    profile_store: state.profile_store.as_ref(),
+                    server_id,
+                    provider_label,
+                    model,
+                })
             };
-            execute_note_shrink_request(
-                session_id,
-                server_id,
-                ai_provider.as_ref(),
-                &ai_provider_budget,
-                redactor.as_ref(),
-                &TauriEventEmitter(app.clone()),
-                &target,
-                &state.pending_action_confirmations,
-                language,
-            )
-            .await;
-        }
+        execute_note_shrink_request(
+            session_id,
+            server_id,
+            ai_provider.as_ref(),
+            &ai_provider_budget,
+            redactor.as_ref(),
+            &TauriEventEmitter(app.clone()),
+            target.as_ref(),
+            &state.pending_action_confirmations,
+            language,
+        )
+        .await;
     });
 
     Ok(())
