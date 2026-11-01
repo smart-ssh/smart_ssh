@@ -2019,13 +2019,9 @@ async fn test_propose_note_update_always_waits_for_confirmation_and_persists() {
         "CurrentServer muss auf session.server_id auflösen, nie auf eine von der KI \
          gelieferte ID (die KI kennt hier gar keine)"
     );
-    assert!(session
-        .context
-        .lock()
-        .await
-        .history
-        .iter()
-        .any(|m| matches!(&m.content, MessageContent::Text(t) if t.contains("aktualisiert"))));
+    assert!(session.context.lock().await.history.iter().any(
+        |m| matches!(&m.content, MessageContent::Text(t) if t.contains("<note_update_result"))
+    ));
 }
 
 /// Kern des ADR-Vorschlags in diesem Modul-Doc: nach einem
