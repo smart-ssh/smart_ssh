@@ -896,38 +896,42 @@ pub fn emit_chat_action_waiting_input(
     );
 }
 
+/// Payload of every chat event that carries only the session id.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionOnlyPayload {
+    session_id: SessionId,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ChatErrorPayload {
     session_id: SessionId,
     message: String,
     code: Option<&'static str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    provider_error_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    http_status: Option<u16>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    provider_message: Option<String>,
-    /// Issue #694: name of the provider and the exceeded limit in seconds
-    /// for the timeout errors (shown in the translated message).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    provider_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    timeout_secs: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    access_returns: Option<String>,
+    #[serde(flatten)]
+    details: ChatErrorDetails,
 }
 
 /// Issue #600: optional provider details of a `chat-error` (shown under
 /// "Details"). `provider_message` must already be redacted.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatErrorDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_error_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub http_status: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_message: Option<String>,
+    /// Issue #694: name of the provider and the exceeded limit in seconds
+    /// for the timeout errors (shown in the translated message).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_secs: Option<u64>,
     /// Issue #631: when access returns after a provider usage limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub access_returns: Option<String>,
 }
 
@@ -978,20 +982,9 @@ pub fn emit_chat_error_with_details(
             session_id,
             message,
             code,
-            provider_error_type: details.provider_error_type,
-            http_status: details.http_status,
-            provider_message: details.provider_message,
-            provider_name: details.provider_name,
-            timeout_secs: details.timeout_secs,
-            access_returns: details.access_returns,
+            details,
         },
     );
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatResponseTruncatedPayload {
-    session_id: SessionId,
 }
 
 /// Spec 0065, Teil 2: die zuletzt gestreamte KI-Antwort wurde durch das
@@ -1010,7 +1003,7 @@ pub fn emit_chat_response_truncated(emitter: &dyn EventEmitter, session_id: Sess
     emit(
         emitter,
         "chat-response-truncated",
-        &ChatResponseTruncatedPayload { session_id },
+        &SessionOnlyPayload { session_id },
     );
 }
 
@@ -1149,12 +1142,6 @@ pub fn emit_chat_injection_check(
     );
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatWebResearchUnavailablePayload {
-    session_id: SessionId,
-}
-
 /// Issue #169 (Spec 0105 §7): der Provider hat die laufende Anfrage
 /// abgelehnt, weil die Web-Werkzeuge für das Provider-Konto abgeschaltet
 /// sind; die Sitzung fragt ab jetzt ohne Web-Recherche weiter. Das Frontend
@@ -1166,14 +1153,8 @@ pub fn emit_chat_web_research_unavailable(emitter: &dyn EventEmitter, session_id
     emit(
         emitter,
         "chat-web-research-unavailable",
-        &ChatWebResearchUnavailablePayload { session_id },
+        &SessionOnlyPayload { session_id },
     );
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatResponseEmptyPayload {
-    session_id: SessionId,
 }
 
 /// Spec 0080, A2: eine Runde endete mit `Done` (kein Fehler), aber weder
@@ -1198,14 +1179,8 @@ pub fn emit_chat_response_empty(emitter: &dyn EventEmitter, session_id: SessionI
     emit(
         emitter,
         "chat-response-empty",
-        &ChatResponseEmptyPayload { session_id },
+        &SessionOnlyPayload { session_id },
     );
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatResponseRefusedPayload {
-    session_id: SessionId,
 }
 
 /// Issue #647: the model declined the request (`refusal` /
@@ -1215,14 +1190,8 @@ pub fn emit_chat_response_refused(emitter: &dyn EventEmitter, session_id: Sessio
     emit(
         emitter,
         "chat-response-refused",
-        &ChatResponseRefusedPayload { session_id },
+        &SessionOnlyPayload { session_id },
     );
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatResponseCancelledPayload {
-    session_id: SessionId,
 }
 
 /// Spec 0066, §1: der Nutzer hat eine laufende KI-Anfrage per Stopp
@@ -1233,14 +1202,8 @@ pub fn emit_chat_response_cancelled(emitter: &dyn EventEmitter, session_id: Sess
     emit(
         emitter,
         "chat-response-cancelled",
-        &ChatResponseCancelledPayload { session_id },
+        &SessionOnlyPayload { session_id },
     );
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatQueuedMessagesSentPayload {
-    session_id: SessionId,
 }
 
 /// Spec 0066, §2: während eines laufenden Turns eingereihte
@@ -1251,7 +1214,7 @@ pub fn emit_chat_queued_messages_sent(emitter: &dyn EventEmitter, session_id: Se
     emit(
         emitter,
         "chat-queued-messages-sent",
-        &ChatQueuedMessagesSentPayload { session_id },
+        &SessionOnlyPayload { session_id },
     );
 }
 
@@ -1616,6 +1579,74 @@ mod tests {
         );
     }
 
+    /// Issue #1010: `chat-error` JSON — `code` stays present as `null`,
+    /// absent provider details are omitted, present ones are camelCase.
+    #[test]
+    fn test_chat_error_payload_shape_with_and_without_details() {
+        let emitter = TestEmitter::default();
+        let sid = Uuid::new_v4();
+        emit_chat_error(&emitter, sid, "boom".into(), None);
+        emit_chat_error_with_details(
+            &emitter,
+            sid,
+            "limit".into(),
+            Some("ai_rate_limited"),
+            ChatErrorDetails {
+                provider_error_type: Some("t".into()),
+                http_status: Some(429),
+                provider_message: Some("m".into()),
+                provider_name: Some("p".into()),
+                timeout_secs: Some(30),
+                access_returns: Some("later".into()),
+            },
+        );
+        let events = emitter.events.lock().unwrap();
+        assert_eq!(events[0].0, "chat-error");
+        assert_eq!(
+            events[0].1,
+            serde_json::json!({"sessionId": sid.to_string(), "message": "boom", "code": null})
+        );
+        assert_eq!(
+            events[1].1,
+            serde_json::json!({
+                "sessionId": sid.to_string(), "message": "limit", "code": "ai_rate_limited",
+                "providerErrorType": "t", "httpStatus": 429, "providerMessage": "m",
+                "providerName": "p", "timeoutSecs": 30, "accessReturns": "later"
+            })
+        );
+    }
+
+    /// Issue #1010: all session-only events serialise to `{"sessionId": …}`.
+    #[test]
+    fn test_session_only_events_payload_shape() {
+        let emitter = TestEmitter::default();
+        let sid = Uuid::new_v4();
+        emit_chat_response_truncated(&emitter, sid);
+        emit_chat_web_research_unavailable(&emitter, sid);
+        emit_chat_response_empty(&emitter, sid);
+        emit_chat_response_refused(&emitter, sid);
+        emit_chat_response_cancelled(&emitter, sid);
+        emit_chat_queued_messages_sent(&emitter, sid);
+        emit_chat_context_compacted(&emitter, sid);
+        let events = emitter.events.lock().unwrap();
+        let names: Vec<&str> = events.iter().map(|e| e.0.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "chat-response-truncated",
+                "chat-web-research-unavailable",
+                "chat-response-empty",
+                "chat-response-refused",
+                "chat-response-cancelled",
+                "chat-queued-messages-sent",
+                "chat-context-compacted"
+            ]
+        );
+        for e in events.iter() {
+            assert_eq!(e.1, serde_json::json!({"sessionId": sid.to_string()}));
+        }
+    }
+
     /// Issue #611: `chat-session-changed` payload shape (camelCase, `null`
     /// for a session without a persisted chat).
     #[test]
@@ -1720,18 +1751,12 @@ pub fn emit_chat_context_usage(
     );
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatContextCompactedPayload {
-    session_id: SessionId,
-}
-
 /// Issue #601: older parts of the chat were summarized or cut to fit the
 /// model's context for a request (once per compaction step).
 pub fn emit_chat_context_compacted(emitter: &dyn EventEmitter, session_id: SessionId) {
     emit(
         emitter,
         "chat-context-compacted",
-        &ChatContextCompactedPayload { session_id },
+        &SessionOnlyPayload { session_id },
     );
 }
