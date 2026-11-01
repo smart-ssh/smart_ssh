@@ -29,6 +29,7 @@ pub mod chat_resync;
 pub mod compaction;
 pub mod confirmation;
 pub mod confirmation_explain;
+pub mod confirmation_settled;
 pub mod connect_attempts;
 /// Issue #16: die wirksamen Datenpfade für die Anzeige in den Einstellungen.
 pub mod data_paths;

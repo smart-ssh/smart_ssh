@@ -1079,7 +1079,7 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
     let result = async {
         // A confirmation waiting at the time of the drop is rejected, never
         // executed on the new connection (fail closed, as on close).
-        session.reject_pending_confirmation(&state.pending_action_confirmations);
+        session.discard_pending_confirmation_for_reconnect(&state.pending_action_confirmations);
         if let Some(action_id) = session.transport.running_action() {
             let _ = state.running_command_cancellations.resolve(&action_id, ());
         }

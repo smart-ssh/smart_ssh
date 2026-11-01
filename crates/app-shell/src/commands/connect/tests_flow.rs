@@ -751,8 +751,11 @@ async fn test_pending_confirmation_at_drop_is_rejected_not_executed_after_reconn
     .unwrap();
 
     assert!(
-        matches!(waiting.await, Ok(app_logic::dto::ActionUserDecision::Deny)),
-        "the waiting action is denied, never approved"
+        matches!(
+            waiting.await,
+            Ok(app_logic::dto::ActionUserDecision::DenyReconnect)
+        ),
+        "the waiting action is discarded as a reconnect, never approved"
     );
     reset(app.handle());
 }

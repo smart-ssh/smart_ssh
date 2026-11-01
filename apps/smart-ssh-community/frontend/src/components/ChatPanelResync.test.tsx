@@ -49,6 +49,7 @@ vi.mock("../api", () => ({
 }));
 
 vi.mock("../events", () => ({
+  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
   onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
   onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
   onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
