@@ -1869,3 +1869,40 @@ fn test_waiting_for_input_note_only_on_stop_while_waiting() {
     let finished = format_command_result("apt install x", &output, false, true);
     assert!(!finished.contains("<waiting_for_input>"));
 }
+
+fn note_result_history() -> Vec<ssh_manager_core::ai::ChatMessage> {
+    use ssh_manager_core::ai::ChatMessage;
+    vec![
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("update the note".to_string()),
+        },
+        ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text("proposing".to_string()),
+        },
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text("<note_update_result target=\"current_server\" name=\"web-1\">\nconfirmed\nNEW\n</note_update_result>".to_string()),
+        },
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("typed while pending".to_string()),
+        },
+    ]
+}
+
+/// Issue #1018: the tagged note result stays its own block next to the
+/// user's text typed while the card was pending.
+#[test]
+fn test_note_update_result_is_separate_block_from_queued_user_text() {
+    let body = combine_provider().build_request_body(&history_context(note_result_history()));
+    let last = body["messages"].as_array().unwrap().last().unwrap().clone();
+    let blocks = last["content"].as_array().expect("block array");
+    assert_eq!(blocks.len(), 2, "{last}");
+    assert!(blocks[0]["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("<note_update_result target=\"current_server\" name=\"web-1\">"));
+    assert_eq!(blocks[1]["text"], "typed while pending");
+}

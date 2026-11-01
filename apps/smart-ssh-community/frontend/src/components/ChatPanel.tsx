@@ -22,6 +22,7 @@ import {
   retryChatTurn,
   exportDocument,
   getChatHistory,
+  getChatResync,
   listAiProviders,
   listPromptHistory,
   respondToAction,
@@ -107,6 +108,7 @@ import type {
   InjectionCheckState,
   QuestionOption,
 } from "../types";
+import { actionItemFromProposed, freshId, historyEntryToItem, mergeResyncedItems } from "../chatResync";
 import { NoteDiffPreview } from "./NoteDiffPreview";
 import { Button, ErrorBoundary, Tooltip } from "./ui";
 import { DocumentCard, MARKDOWN_COMPONENTS } from "./ChatDocumentCard";
@@ -267,6 +269,8 @@ export type ChatItem =
       truncated: boolean;
     }
   | { type: "historyRejected"; id: string; command: string; reason: string }
+  // Issue #1020: a stored action result in plain text (not assistant text).
+  | { type: "historyActionResult"; id: string; text: string }
   // Spec 0105: serverseitige Web-Recherche des Providers — live
   // (`chat-web-activity`) und aus einer fortgesetzten Historie gleich
   // dargestellt.
@@ -382,8 +386,6 @@ function decisionCardTone(decision: Decision): string {
   return "border-danger-border-strong/45 bg-danger-subtle/15";
 }
 
-let nextId = 0;
-const freshId = () => `item-${nextId++}`;
 
 interface ChatPanelProps {
   sessionId: string;
@@ -610,53 +612,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       .then((entries) => {
         if (entries.length === 0) return;
         setItems((prev) => [
-          ...entries.map((entry): ChatItem => {
-            switch (entry.type) {
-              case "text":
-                return {
-                  type: entry.role === "user" ? "user" : "assistant",
-                  id: freshId(),
-                  text: entry.text,
-                };
-              case "commandResult":
-                return {
-                  type: "historyCommandResult",
-                  id: freshId(),
-                  command: entry.command,
-                  stdout: entry.stdout,
-                  stderr: entry.stderr,
-                  exitCode: entry.exitCode,
-                  cancelled: entry.cancelled,
-                  truncated: entry.truncated,
-                };
-              case "actionRejected":
-                return {
-                  type: "historyRejected",
-                  id: freshId(),
-                  command: entry.command,
-                  reason: entry.reason,
-                };
-              case "webActivity":
-                return { type: "webActivity", id: freshId(), activity: entry.activity };
-              case "extensionParts":
-                // Issue #504: shown like attachments — label and kind only,
-                // never content, without asking any extension.
-                return {
-                  type: "historyAttachments",
-                  id: freshId(),
-                  items: entry.items.map((p) => ({ name: p.label, kind: p.media })),
-                };
-              case "question":
-                return {
-                  type: "question",
-                  id: freshId(),
-                  questionId: entry.questionId,
-                  question: entry.question,
-                  options: entry.options,
-                  multiSelect: entry.multiSelect,
-                };
-            }
-          }),
+          ...entries.map(historyEntryToItem),
           ...prev,
         ]);
       })
@@ -666,6 +622,40 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         // (derselbe Geist wie andere Best-effort-`.catch`-Stellen in
         // dieser Komponente, z. B. `listPromptHistory` oben).
       });
+  }, [sessionId]);
+
+  // Issue #1020, Spec 0114 §4: after the app returns from the background the
+  // webview may have missed events — rebuild this chat from the backend:
+  // history, action results, and the confirmation that still waits.
+  // `riskSecondOpinionEnabled` is read through a ref so the listener (and a
+  // re-sync in flight) is not torn down when the setting loads.
+  const riskSecondOpinionRef = useRef(riskSecondOpinionEnabled);
+  useEffect(() => {
+    riskSecondOpinionRef.current = riskSecondOpinionEnabled;
+  }, [riskSecondOpinionEnabled]);
+  useEffect(() => {
+    let cancelled = false;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      getChatResync(sessionId)
+        .then((resync) => {
+          if (cancelled) return;
+          const rebuilt = resync.history.map(historyEntryToItem);
+          const pending = resync.pendingProposal;
+          if (pending) {
+            rebuilt.push(actionItemFromProposed(pending, riskSecondOpinionRef.current));
+          }
+          setItems((prev) => mergeResyncedItems(prev, rebuilt, pending?.actionId ?? null));
+        })
+        .catch(() => {
+          // Best-effort like the initial history load: keep what is shown.
+        });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -696,41 +686,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
         setAiWait(null);
-        // Spec 0026, Abschnitt 3/4: eine Zweitmeinung ist nur zu erwarten,
-        // wenn sie aktiviert ist UND die Regel-Einschätzung überhaupt noch
-        // Raum nach oben hat (ein bereits regelbasiertes "red" kann nicht
-        // weiter eskalieren, s. `escalate_data_risk` im Backend) — in
-        // beiden Fällen bliebe der Spinner sonst ohne je eintreffendes
-        // Update-Event hängen.
-        const riskSecondOpinionPending =
-          riskSecondOpinionEnabled &&
-          event.riskAssessment !== null &&
-          event.riskAssessment.dataRisk !== "red";
-        setItems((prev) => [
-          ...prev,
-          {
-            type: "action",
-            id: freshId(),
-            actionId: event.actionId,
-            action: event.action,
-            decision: event.decision,
-            responded: false,
-            previousNoteContent: event.previousNoteContent,
-            usesStoredSudoPassword: event.usesStoredSudoPassword,
-            previousFileContent: event.previousFileContent,
-            previousFileSize: event.previousFileSize,
-            targetName: event.targetName,
-            riskAssessment: event.riskAssessment,
-            riskSecondOpinionPending,
-            secondOpinionUnavailable: false,
-            // Spec 0027: bei AutoExec beginnt die Ausführung sofort (keine
-            // Bestätigung nötig) — bei Confirm/Deny erst später, s.
-            // `respond()` unten.
-            startedAt: event.decision === "AutoExec" ? Date.now() : null,
-            origin: event.origin,
-            autoExecRules: event.autoExecRules,
-          },
-        ]);
+        setItems((prev) => [...prev, actionItemFromProposed(event, riskSecondOpinionEnabled)]);
       }),
       onRiskAssessmentUpdated((event) => {
         if (event.sessionId !== sessionId) return;
@@ -2116,6 +2072,16 @@ export function ChatItemView({
       <div className="space-y-1">
         <WebActivityCard activity={item.activity} />
         <InjectionCheckStatus check={injectionCheck} />
+      </div>
+    );
+  }
+  if (item.type === "historyActionResult") {
+    return (
+      <div
+        className="rounded border border-border bg-surface-sunken px-3 py-2 text-xs"
+        data-testid="history-action-result"
+      >
+        <p className="whitespace-pre-wrap break-words font-mono">{item.text}</p>
       </div>
     );
   }

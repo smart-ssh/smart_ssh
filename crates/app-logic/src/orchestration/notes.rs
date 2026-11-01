@@ -33,9 +33,9 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
-    push_history, push_history_scoped, reapply_redaction_and_seal_for_send,
-    wait_for_ai_request_slot, wait_for_rate_limit_budget, write_ledger_entry,
-    PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
+    push_history, reapply_redaction_and_seal_for_send, wait_for_ai_request_slot,
+    wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
+    SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
 use crate::second_opinion::{collect_side_call_text, SideCallEnd};
@@ -44,6 +44,13 @@ use crate::second_opinion::{collect_side_call_text, SideCallEnd};
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_note_result;
+
+mod note_result;
+use note_result::record_note_update_for_model;
 
 /// Spec 0016, Abschnitt 6: löst den von der KI gewählten
 /// [`NoteTargetSelector`] in die tatsächliche `ServerId`/`GroupId` auf — nie
@@ -208,7 +215,7 @@ pub(crate) async fn execute_note_update(
     match persist_note_revision(
         profile_store,
         target,
-        new_content,
+        new_content.clone(),
         NoteEditor::Ai {
             provider: session.ai_provider_label.clone(),
             model: session.ai_model.clone(),
@@ -225,15 +232,8 @@ pub(crate) async fn execute_note_update(
                     summary: summary.clone(),
                 },
             );
-            push_history_scoped(
-                session,
-                ChatMessage {
-                    role: Role::ActionResult,
-                    content: MessageContent::Text(summary),
-                },
-                persist,
-            )
-            .await;
+            record_note_update_for_model(session, target, &new_content, profile_store, persist)
+                .await;
             true
         }
         Err(err) => {

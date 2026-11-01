@@ -25,6 +25,7 @@ pub mod auto_reconnect;
 pub mod background_keepalive;
 pub mod backup;
 pub mod chat_content_extension;
+pub mod chat_resync;
 pub mod compaction;
 pub mod confirmation;
 pub mod confirmation_explain;

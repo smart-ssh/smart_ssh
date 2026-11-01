@@ -492,7 +492,7 @@ pub(crate) async fn handle_action_proposed(
     let (previous_file_content, previous_file_size) =
         previous_file_content_for_action(&action, session).await;
 
-    emit_chat_action_proposed(
+    let proposed_payload = emit_chat_action_proposed(
         emitter,
         session_id,
         action_id,
@@ -507,6 +507,7 @@ pub(crate) async fn handle_action_proposed(
         origin.clone(),
         auto_exec_rules,
     );
+    session.remember_proposal(action_id, proposed_payload.clone());
 
     // Spec 0026, Abschnitt 3: läuft NACH der bereits gesendeten
     // regelbasierten Einschätzung (das Event oben ist schon raus, das Badge
@@ -570,6 +571,7 @@ pub(crate) async fn handle_action_proposed(
                     _ => None,
                 },
             );
+            session.review_proposal(action_id, data_risk, &reason);
             emit_risk_assessment_updated(
                 emitter,
                 session_id,
@@ -584,39 +586,32 @@ pub(crate) async fn handle_action_proposed(
         }
     }
 
-    // Spec 0092, A3: Die Zweitmeinung hat das Daten-Risiko auf Rot gehoben,
-    // nachdem `chat-action-proposed` mit `AutoExec` längst draußen ist. Die
-    // Aktion wird ab hier wie jedes andere `Confirm` behandelt — dieselbe
-    // Wartezeit, dieselbe Abbruchlogik, derselbe Tab-Indikator, dieselben
-    // Ledger-Einträge (A3.1), weil es buchstäblich derselbe
+    // Spec 0092, A3: Die Zweitmeinung hat das Daten-Risiko auf Rot gehoben, nachdem
+    // `chat-action-proposed` mit `AutoExec` längst draußen ist. Die Aktion wird ab hier wie jedes
+    // andere `Confirm` behandelt — dieselbe Wartezeit, dieselbe Abbruchlogik, derselbe
+    // Tab-Indikator, dieselben Ledger-Einträge (A3.1), weil es buchstäblich derselbe
     // `PreparedDecision::Confirm`-Zweig unten ist.
     //
-    // Dass `prepared` hier noch `AutoExec` ist, heißt zugleich: Das
-    // regelbasierte Rot hat NICHT gegriffen (sonst hätte das Glied oben
-    // schon eskaliert) — die Anhebung kommt also tatsächlich von der
-    // Zweitmeinung. Nur Eskalation, wie überall: aus `Deny`/`Confirm` wird
-    // hier nichts.
+    // Dass `prepared` hier noch `AutoExec` ist, heißt zugleich: Das regelbasierte Rot hat NICHT
+    // gegriffen (sonst hätte das Glied oben schon eskaliert) — die Anhebung kommt also tatsächlich
+    // von der Zweitmeinung. Nur Eskalation, wie überall: aus `Deny`/`Confirm` wird hier nichts.
     //
-    // **Reihenfolge**: `register` VOR dem Ereignis (A3.2) — das Frontend
-    // erfährt erst von der wartenden Bestätigung, wenn der Empfänger schon
-    // steht, ein sehr schneller Klick geht also nicht ins Leere. Und das
-    // Ereignis NACH `risk-assessment-updated` (§5), damit das Badge rot ist,
-    // bevor der Dialog erscheint.
+    // **Reihenfolge**: `register` VOR dem Ereignis (A3.2) — das Frontend erfährt erst von der
+    // wartenden Bestätigung, wenn der Empfänger schon steht, ein sehr schneller Klick geht also
+    // nicht ins Leere. Und das Ereignis NACH `risk-assessment-updated` (§5), damit das Badge rot
+    // ist, bevor der Dialog erscheint.
     //
-    // **A3.3, Stopp hat Vorrang**: hier geprüft, nicht erst unten im
-    // `match` — ein während der Zweitmeinung eingetroffener Stopp soll die
-    // Aktion überspringen lassen, nicht einen Dialog zeigen. Ohne diese
-    // Prüfung eskalierte die Aktion und der `AutoExec`-Stopp-Zweig unten
-    // käme nie dran.
+    // **A3.3, Stopp hat Vorrang**: hier geprüft, nicht erst unten im `match` — ein während der
+    // Zweitmeinung eingetroffener Stopp soll die Aktion überspringen lassen, nicht einen Dialog
+    // zeigen. Ohne diese Prüfung eskalierte die Aktion und der `AutoExec`-Stopp-Zweig unten käme
+    // nie dran.
     //
-    // Restlücke, ehrlich benannt (spec-reviewer-Fund, Runde 1): Ein Stopp,
-    // der NACH dieser Zeile eintrifft, sieht einen Dialog für eine gerade
-    // gestoppte Aktion — A3.3 verlangt „bekommt keinen Dialog". Das ist eine
-    // EIGENE, neue Lücke, nicht die bekannte „Kommando läuft trotz Stopp":
-    // Sie ist die sichere Richtung (eine Rückfrage zu viel, nie eine
-    // Ausführung zu viel) und lässt sich nicht schließen, solange das
-    // Ereignis überhaupt gesendet werden muss, bevor der Nutzer klicken
-    // kann. Ausgeführt wird in diesem Rennen nichts ohne Klick.
+    // Restlücke, ehrlich benannt (spec-reviewer-Fund, Runde 1): Ein Stopp, der NACH dieser Zeile
+    // eintrifft, sieht einen Dialog für eine gerade gestoppte Aktion — A3.3 verlangt „bekommt
+    // keinen Dialog". Das ist eine EIGENE, neue Lücke, nicht die bekannte „Kommando läuft trotz
+    // Stopp": Sie ist die sichere Richtung (eine Rückfrage zu viel, nie eine Ausführung zu viel)
+    // und lässt sich nicht schließen, solange das Ereignis überhaupt gesendet werden muss, bevor
+    // der Nutzer klicken kann. Ausgeführt wird in diesem Rennen nichts ohne Klick.
     let mut prepared = prepared;
     let raised_to_red = second_opinion_data_risk == Some(RiskLevel::Red);
     // Issue #102 (Maintainer-Entscheidung: fail closed, pro Aktion): Eine
@@ -685,6 +680,7 @@ pub(crate) async fn handle_action_proposed(
             reason.clone(),
             code.clone(),
         );
+        session.escalate_proposal(action_id, proposed_payload, &reason, &code);
         prepared = PreparedDecision::Confirm {
             reason,
             code,
