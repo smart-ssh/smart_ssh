@@ -469,7 +469,6 @@
     "confirmClosePending": "「{{name}}」の確認がまだ保留中です。それでもタブを閉じますか？ 保留中の操作は拒否されたものとして扱われます。"
   },
   "aiProvider": {
-    "title": "AIプロバイダー",
     "openLogs": "診断ログをファイルマネージャーで開く",
     "noProviders": "プロバイダーがまだ設定されていません。",
     "configuredProvidersTitle": "設定済みのプロバイダー",
@@ -731,7 +730,6 @@
     "openedLocally": "「{{name}}」をローカルで開きました — 変更内容はアップロードの確認が表示されます",
     "openLocallyFailed": "「{{name}}」をローカルで開けませんでした: {{reason}}",
     "editUploaded": "「{{name}}」の変更をアップロードしました",
-    "editUploadFailed": "「{{name}}」の変更をアップロードできませんでした: {{reason}}",
     "uploadedFolder": "フォルダー「{{name}}」をアップロードしました — {{count}}個のファイル",
     "uploadFolderFailed": "フォルダー「{{name}}」のアップロードに失敗しました: {{reason}}",
     "uploadFailedMany": "{{name}}個のファイルをアップロードできませんでした。例: {{reason}}",

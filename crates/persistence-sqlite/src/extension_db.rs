@@ -145,23 +145,6 @@ pub fn validate_prefix(prefix: &str) -> Result<(), ExtensionMigrationError> {
     Ok(())
 }
 
-/// No prefix may be the start of another one (`ext_a_` would own the tables
-/// of `ext_a_b_`... only if the latter were allowed; the validation above
-/// forbids inner underscores, so equality is the only collision).
-pub fn validate_unique_prefixes<'a>(
-    prefixes: impl IntoIterator<Item = &'a str>,
-) -> Result<(), ExtensionMigrationError> {
-    let mut seen = std::collections::BTreeSet::new();
-    for p in prefixes {
-        if !seen.insert(p.to_owned()) {
-            return Err(ExtensionMigrationError::InvalidRegistration(
-                "two extensions registered the same prefix",
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn history_table(prefix: &str) -> String {
     format!("{prefix}schema_migrations")
 }

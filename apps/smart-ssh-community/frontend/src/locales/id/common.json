@@ -469,7 +469,6 @@
     "confirmClosePending": "Konfirmasi untuk \"{{name}}\" masih tertunda. Tetap tutup tab? Tindakan yang tertunda akan dianggap ditolak."
   },
   "aiProvider": {
-    "title": "Penyedia AI",
     "openLogs": "Buka log diagnostik di pengelola berkas",
     "noProviders": "Belum ada penyedia yang dikonfigurasi.",
     "configuredProvidersTitle": "Penyedia yang dikonfigurasi",
@@ -731,7 +730,6 @@
     "openedLocally": "“{{name}}” dibuka secara lokal — perubahan akan ditawarkan untuk diunggah",
     "openLocallyFailed": "“{{name}}” tidak dapat dibuka secara lokal: {{reason}}",
     "editUploaded": "Perubahan pada “{{name}}” diunggah",
-    "editUploadFailed": "Perubahan pada “{{name}}” tidak dapat diunggah: {{reason}}",
     "uploadedFolder": "Folder “{{name}}” diunggah — {{count}} berkas",
     "uploadFolderFailed": "Gagal mengunggah folder “{{name}}”: {{reason}}",
     "uploadFailedMany": "{{name}} berkas tidak dapat diunggah, mis.: {{reason}}",

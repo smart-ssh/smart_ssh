@@ -469,7 +469,6 @@
     "confirmClosePending": "Voor \"{{name}}\" is nog een bevestiging in behandeling. Het tabblad toch sluiten? De openstaande actie geldt dan als geweigerd."
   },
   "aiProvider": {
-    "title": "AI-provider",
     "openLogs": "Diagnostische logboeken openen in bestandsbeheer",
     "noProviders": "Nog geen provider ingesteld.",
     "configuredProvidersTitle": "Ingestelde providers",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” lokaal geopend — wijzigingen worden ter upload aangeboden",
     "openLocallyFailed": "“{{name}}” kon niet lokaal worden geopend: {{reason}}",
     "editUploaded": "Wijziging in “{{name}}” geüpload",
-    "editUploadFailed": "Wijziging in “{{name}}” kon niet worden geüpload: {{reason}}",
     "uploadedFolder": "Map “{{name}}” geüpload — {{count}} bestanden",
     "uploadFolderFailed": "Uploaden van map “{{name}}” mislukt: {{reason}}",
     "uploadFailedMany": "{{name}} bestanden konden niet worden geüpload, bijv.: {{reason}}",

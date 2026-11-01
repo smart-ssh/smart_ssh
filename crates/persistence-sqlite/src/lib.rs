@@ -90,8 +90,8 @@ pub use encryption::{
 };
 pub use error::{ConnectFailureKind, PersistenceError, PersistenceResult};
 pub use extension_db::{
-    validate_prefix, validate_unique_prefixes, ExtensionDb, ExtensionMigration,
-    ExtensionMigrationError, ExtensionRegistration,
+    validate_prefix, ExtensionDb, ExtensionMigration, ExtensionMigrationError,
+    ExtensionRegistration,
 };
 pub use extension_store::{
     ExtensionStore, ExtensionStoreError, NamespacedStore, MAX_KEYS_PER_NAMESPACE, MAX_KEY_BYTES,

@@ -469,7 +469,6 @@
     "confirmClosePending": "Ainda há uma confirmação pendente para \"{{name}}\". Fechar a aba mesmo assim? A ação pendente será considerada rejeitada."
   },
   "aiProvider": {
-    "title": "Provedor de IA",
     "openLogs": "Abrir logs de diagnóstico no gerenciador de arquivos",
     "noProviders": "Nenhum provedor configurado ainda.",
     "configuredProvidersTitle": "Provedores configurados",
@@ -741,7 +740,6 @@
     "openedLocally": "“{{name}}” aberto localmente — as alterações serão oferecidas para envio",
     "openLocallyFailed": "Não foi possível abrir “{{name}}” localmente: {{reason}}",
     "editUploaded": "Alteração em “{{name}}” enviada",
-    "editUploadFailed": "Não foi possível enviar a alteração em “{{name}}”: {{reason}}",
     "uploadedFolder": "Pasta “{{name}}” enviada — {{count}} arquivos",
     "uploadFolderFailed": "Falha ao enviar a pasta “{{name}}”: {{reason}}",
     "uploadFailedMany": "{{name}} arquivos não puderam ser enviados, p. ex.: {{reason}}",

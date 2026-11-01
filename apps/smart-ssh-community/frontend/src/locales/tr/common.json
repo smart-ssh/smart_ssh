@@ -469,7 +469,6 @@
     "confirmClosePending": "\"{{name}}\" için hâlâ bekleyen bir onay var. Sekme yine de kapatılsın mı? Bekleyen eylem reddedilmiş sayılır."
   },
   "aiProvider": {
-    "title": "Yapay zeka sağlayıcısı",
     "openLogs": "Tanılama günlüklerini dosya yöneticisinde aç",
     "noProviders": "Henüz sağlayıcı yapılandırılmadı.",
     "configuredProvidersTitle": "Yapılandırılmış sağlayıcılar",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” yerel olarak açıldı — değişiklikler yükleme için sunulacak",
     "openLocallyFailed": "“{{name}}” yerel olarak açılamadı: {{reason}}",
     "editUploaded": "“{{name}}” değişikliği yüklendi",
-    "editUploadFailed": "“{{name}}” değişikliği yüklenemedi: {{reason}}",
     "uploadedFolder": "“{{name}}” klasörü yüklendi — {{count}} dosya",
     "uploadFolderFailed": "“{{name}}” klasörü yüklenemedi: {{reason}}",
     "uploadFailedMany": "{{name}} dosya yüklenemedi, örn.: {{reason}}",

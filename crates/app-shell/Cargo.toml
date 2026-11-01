@@ -16,7 +16,6 @@ ai-providers = { version = "0.7.0", path = "../ai-providers" }
 # nie umgekehrt (A3, s. `docs/architecture.md`).
 app-logic = { version = "0.7.0", path = "../app-logic" }
 async-trait = "0.1.92"
-base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 credentials-keyring = { version = "0.7.0", path = "../credentials-keyring" }
 directories = "6.0.0"
@@ -39,10 +38,6 @@ tauri-plugin-os = "2"
 tauri-plugin-store = "2"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1.44"
-# Nur der `WorkerGuard`-Typ (Rückgabewert von `app_logic::logging::
-# init_logging`, den `build_app_state`/`run` durchreichen) — der Aufbau
-# des Subscribers selbst liegt seit Spec 0084 in `app-logic`.
-tracing-appender = "0.2.5"
 uuid = { version = "1.26.0", features = ["v4", "serde"] }
 
 # Desktop-only dependencies (Spec 0114, ADR 0148): these crates have no

@@ -469,7 +469,6 @@
     "confirmClosePending": "Dla „{{name}}” nadal oczekuje potwierdzenie. Zamknąć kartę mimo to? Oczekujące działanie zostanie wtedy uznane za odrzucone."
   },
   "aiProvider": {
-    "title": "Dostawca AI",
     "openLogs": "Otwórz dzienniki diagnostyczne w menedżerze plików",
     "noProviders": "Nie skonfigurowano jeszcze dostawcy.",
     "configuredProvidersTitle": "Skonfigurowani dostawcy",
@@ -746,7 +745,6 @@
     "openedLocally": "„{{name}}” otwarto lokalnie — zmiany zostaną zaproponowane do wysłania",
     "openLocallyFailed": "Nie udało się otworzyć „{{name}}” lokalnie: {{reason}}",
     "editUploaded": "Zmianę w „{{name}}” wysłano",
-    "editUploadFailed": "Nie udało się wysłać zmiany w „{{name}}”: {{reason}}",
     "uploadedFolder": "Folder „{{name}}” wysłany — plików: {{count}}",
     "uploadFolderFailed": "Wysyłanie folderu „{{name}}” nie powiodło się: {{reason}}",
     "uploadFailedMany": "Plików, których nie udało się wysłać: {{name}}, np.: {{reason}}",

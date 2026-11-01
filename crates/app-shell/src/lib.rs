@@ -78,19 +78,6 @@ pub use db_extensions::DbExtension;
 pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
 pub use wiring::{Edition, Wiring};
 
-/// Spec 0038, section 2a: asks the core to rebuild the redactor of every open
-/// session on `server_id` — for a session extension whose secret values
-/// changed. History already in the sessions is re-redacted on the next send.
-pub async fn rebuild_server_redactors<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    server_id: ssh_manager_core::shared::ServerId,
-) {
-    use tauri::Manager;
-    if let Some(state) = app.try_state::<AppState>() {
-        app_logic::session_extension::rebuild_server_redactors(&state, server_id).await;
-    }
-}
-
 use std::sync::Arc;
 
 use credentials_keyring::KeyringCredentialStore;
@@ -892,7 +879,6 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::list_hard_blacklist,
             commands::list_known_tags,
             commands::evaluate_explained,
-            commands::suggest_rule_patterns,
             commands::explain_confirmation,
             commands::accept_and_create_rule,
             commands::export_document,

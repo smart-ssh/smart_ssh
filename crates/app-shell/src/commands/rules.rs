@@ -6,8 +6,7 @@ use tauri::State;
 use ssh_manager_core::filter::{hard_blacklist_patterns, RuleId, Scope};
 
 use app_logic::dto::{
-    ActionUserDecision, EvalContextInput, EvaluationTraceDto, PatternDto, PatternSuggestionDto,
-    RuleDto, RuleInput,
+    ActionUserDecision, EvalContextInput, EvaluationTraceDto, PatternDto, RuleDto, RuleInput,
 };
 use app_logic::error::CommandResult;
 use app_logic::state::{ActionId, AppState, SessionId};
@@ -92,13 +91,6 @@ pub async fn evaluate_explained(
 }
 
 // --- Spec 0011: Regel-Schnellvorschlag im Bestätigungsdialog ---------------
-
-/// Rein lesend, kein `AppState` nötig — reine Textheuristik ohne
-/// Datenbankzugriff (Spec 0011, Abschnitt 2).
-#[tauri::command]
-pub async fn suggest_rule_patterns(command: String) -> CommandResult<Vec<PatternSuggestionDto>> {
-    Ok(app_logic::rule_suggestions::suggest_rule_patterns(&command))
-}
 
 /// Issue #596, Spec 0011: coverage per segment, suggestions for the
 /// uncovered segments and a verdict per suggestion for the pending command

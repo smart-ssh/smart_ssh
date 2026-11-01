@@ -469,7 +469,6 @@
     "confirmClosePending": "Vẫn còn một yêu cầu xác nhận đang chờ cho \"{{name}}\". Vẫn đóng tab? Hành động đang chờ khi đó sẽ được tính là bị từ chối."
   },
   "aiProvider": {
-    "title": "Nhà cung cấp AI",
     "openLogs": "Mở nhật ký chẩn đoán trong trình quản lý tệp",
     "noProviders": "Chưa cấu hình nhà cung cấp nào.",
     "configuredProvidersTitle": "Các nhà cung cấp đã cấu hình",
@@ -731,7 +730,6 @@
     "openedLocally": "Đã mở “{{name}}” cục bộ — các thay đổi sẽ được đề nghị tải lên",
     "openLocallyFailed": "Không thể mở “{{name}}” cục bộ: {{reason}}",
     "editUploaded": "Đã tải lên thay đổi của “{{name}}”",
-    "editUploadFailed": "Không thể tải lên thay đổi của “{{name}}”: {{reason}}",
     "uploadedFolder": "Đã tải lên thư mục “{{name}}” — {{count}} tệp",
     "uploadFolderFailed": "Tải thư mục “{{name}}” lên thất bại: {{reason}}",
     "uploadFailedMany": "Không thể tải lên {{name}} tệp, ví dụ: {{reason}}",

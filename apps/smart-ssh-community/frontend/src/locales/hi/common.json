@@ -469,7 +469,6 @@
     "confirmClosePending": "\"{{name}}\" के लिए एक पुष्टि अभी लंबित है। फिर भी टैब बंद करें? तब लंबित कार्रवाई अस्वीकृत मानी जाएगी।"
   },
   "aiProvider": {
-    "title": "AI प्रदाता",
     "openLogs": "डायग्नोस्टिक लॉग फ़ाइल मैनेजर में खोलें",
     "noProviders": "अभी तक कोई प्रदाता कॉन्फ़िगर नहीं है।",
     "configuredProvidersTitle": "कॉन्फ़िगर किए गए प्रदाता",
@@ -736,7 +735,6 @@
     "openedLocally": "“{{name}}” स्थानीय रूप से खोली गई — बदलाव अपलोड के लिए प्रस्तावित होंगे",
     "openLocallyFailed": "“{{name}}” स्थानीय रूप से नहीं खोली जा सकी: {{reason}}",
     "editUploaded": "“{{name}}” में बदलाव अपलोड हुआ",
-    "editUploadFailed": "“{{name}}” में बदलाव अपलोड नहीं हो सका: {{reason}}",
     "uploadedFolder": "फ़ोल्डर “{{name}}” अपलोड हुआ — {{count}} फ़ाइलें",
     "uploadFolderFailed": "फ़ोल्डर “{{name}}” अपलोड करना विफल रहा: {{reason}}",
     "uploadFailedMany": "{{name}} फ़ाइलें अपलोड नहीं हो सकीं, जैसे: {{reason}}",

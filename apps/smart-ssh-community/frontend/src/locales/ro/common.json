@@ -469,7 +469,6 @@
     "confirmClosePending": "Pentru „{{name}}” mai este în așteptare o confirmare. Închideți totuși fila? Acțiunea în așteptare va fi considerată respinsă."
   },
   "aiProvider": {
-    "title": "Furnizor IA",
     "openLogs": "Deschide jurnalele de diagnosticare în managerul de fișiere",
     "noProviders": "Niciun furnizor configurat încă.",
     "configuredProvidersTitle": "Furnizori configurați",
@@ -741,7 +740,6 @@
     "openedLocally": "„{{name}}” deschis local — modificările vor fi oferite spre încărcare",
     "openLocallyFailed": "„{{name}}” nu a putut fi deschis local: {{reason}}",
     "editUploaded": "Modificarea „{{name}}” a fost încărcată",
-    "editUploadFailed": "Modificarea „{{name}}” nu a putut fi încărcată: {{reason}}",
     "uploadedFolder": "Folderul „{{name}}” încărcat — fișiere: {{count}}",
     "uploadFolderFailed": "Încărcarea folderului „{{name}}” a eșuat: {{reason}}",
     "uploadFailedMany": "Fișiere neîncărcate: {{name}}, de ex.: {{reason}}",

@@ -82,15 +82,6 @@ pub fn read_sudo_password_for_redaction(
     }
 }
 
-/// Wie [`server_redactor`], für Aufrufer, die das Sudo-Passwort ohnehin
-/// schon gelesen haben (`app_shell::commands::connect` braucht es auch für
-/// die Sitzung selbst) — ein Bauplan, nicht zwei.
-pub fn redactor_with_sudo_password(
-    sudo_password: Option<&SecretString>,
-) -> Box<dyn OutputRedactor> {
-    crate::session_extension::redactor_with_secrets(sudo_password, &[])
-}
-
 /// Redigiert jeden (Quelle, Notiztext)-Abschnitt und fenct ihn danach
 /// einzeln — dieselbe Abschnittsform und dasselbe Trennzeichen wie
 /// `compaction::SystemContextParts::assemble_with_notes`. Keine Abschnitte
