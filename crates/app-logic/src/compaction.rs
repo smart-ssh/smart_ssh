@@ -337,82 +337,10 @@ pub fn round_count(history: &[ChatMessage]) -> usize {
     split_into_rounds(history.to_vec()).len()
 }
 
-/// Spec 0057, §3.2, Schritt 1: alte Runden werden auf einen einzelnen
-/// Platzhalter-Hinweis gekürzt, die letzten `min_preserved_rounds` bleiben
-/// vollständig erhalten. Reines Abschneiden — noch OHNE Zusammenfassung
-/// (die KI-Summary, Spec 0057 §2, ersetzt diesen Platzhalter und bleibt
-/// sein Fallback, §2.2). No-op, wenn ohnehin nicht mehr
-/// als `min_preserved_rounds` Runden vorhanden sind. Kürzt UNBEDINGT auf
-/// genau `min_preserved_rounds` — anders als [`compact_rounds_for_budget`]
-/// (die tatsächlich in [`compact_for_send`] verwendete, budgetbewusste
-/// Variante) ohne Rücksicht darauf, ob weniger Kürzung schon gereicht
-/// hätte. Als eigenständiger, einfacher Baustein erhalten (u. a. direkt
-/// getestet).
-#[cfg(test)]
-fn truncate_rounds_with_placeholder(
-    history: Vec<ChatMessage>,
-    min_preserved_rounds: usize,
-    language: PromptLanguage,
-) -> Vec<ChatMessage> {
-    let rounds = split_into_rounds(history);
-    if rounds.len() <= min_preserved_rounds {
-        return rounds.into_iter().flatten().collect();
-    }
-
-    let cut_count = rounds.len() - min_preserved_rounds;
-    let mut result = vec![round_truncation_placeholder(language, cut_count)];
-    for round in rounds.into_iter().skip(cut_count) {
-        result.extend(round);
-    }
-    result
-}
-
-/// Wie [`truncate_rounds_with_placeholder`], aber budgetbewusst
-/// (spec-reviewer-Fund, Review dieses Schritts: die Aufgabenstellung
-/// verlangt "nur so weit wie nötig" — nicht sofort auf
-/// `min_preserved_rounds` kürzen, sondern Runde für Runde entfernen und
-/// nach jeder Entfernung prüfen, ob der Request schon wieder unters
-/// Budget passt). Belässt `context.history` unverändert, wenn schon
-/// unterhalb `min_preserved_rounds` Runden vorhanden sind — dann kann
-/// Schritt 1 ohnehin nichts mehr beitragen. Rein synchron, OHNE
-/// Zusammenfassung — seit Etappe 3 nicht mehr der in [`compact_for_send`]
-/// verwendete Pfad (s. [`compact_rounds_with_summary`]), aber als
-/// eigenständiger, direkt getesteter Baustein UND als der Fallback-Pfad
-/// erhalten, auf den [`compact_rounds_with_summary`] zurückfällt, wenn die
-/// Zusammenfassung fehlschlägt (Spec 0057, §2.2).
-#[cfg_attr(not(test), allow(dead_code))]
-fn compact_rounds_for_budget(
-    context: &mut SessionContext,
-    min_preserved_rounds: usize,
-    budget_tokens: usize,
-    language: PromptLanguage,
-) {
-    let rounds = split_into_rounds(std::mem::take(&mut context.history));
-    if rounds.len() <= min_preserved_rounds {
-        context.history = rounds.into_iter().flatten().collect();
-        return;
-    }
-    let fixed_tokens = estimate_tokens(&context.system_context)
-        + estimate_action_schemas_tokens(&context.available_actions);
-    let cut_count = determine_round_cut_count(
-        &rounds,
-        min_preserved_rounds,
-        fixed_tokens,
-        budget_tokens,
-        language,
-    );
-    context.history = build_round_result(
-        rounds,
-        cut_count,
-        round_truncation_placeholder(language, cut_count),
-    );
-}
-
 /// Reine Cut-Count-Bestimmung (kein Zusammenfassungs-Aufruf, keine
-/// Seiteneffekte) — dieselbe inkrementelle Suche wie zuvor inline in
-/// [`compact_rounds_for_budget`], jetzt herausgelöst, damit
-/// [`compact_rounds_with_summary`] (Etappe 3) sie ebenfalls nutzen kann,
-/// BEVOR überhaupt ein KI-Aufruf für die Zusammenfassung stattfindet: das
+/// Seiteneffekte) — die inkrementelle Suche, die
+/// [`compact_rounds_with_summary`] nutzt, BEVOR überhaupt ein KI-Aufruf
+/// für die Zusammenfassung stattfindet: das
 /// Cut-Count wird konservativ anhand der Größe des einfachen
 /// TEXT-Platzhalters bestimmt (nicht der — a priori unbekannten — Größe
 /// einer künftigen Zusammenfassung). Eine echte Zusammenfassung fällt in
@@ -542,8 +470,7 @@ fn summary_placeholder_message(language: PromptLanguage, summary_text: &str) -> 
 
 /// Spec 0057, §3.2, Schritt 1 (Etappe 3: MIT Zusammenfassung statt reinem
 /// Abschneiden). Bestimmt zunächst — rein synchron, kein KI-Aufruf —
-/// dasselbe `cut_count` wie [`compact_rounds_for_budget`]
-/// ([`determine_round_cut_count`]). Deckt die bereits gespeicherte
+/// das `cut_count` ([`determine_round_cut_count`]). Deckt die bereits gespeicherte
 /// [`RollingSummary`] (falls vorhanden) diesen `cut_count` schon ab, wird
 /// sie unverändert wiederverwendet (kein KI-Aufruf nötig — "nicht jedes
 /// Mal die ganze History von vorne", Spec 0057 §2.1). Andernfalls wird NUR
@@ -557,8 +484,7 @@ fn summary_placeholder_message(language: PromptLanguage, summary_text: &str) -> 
 /// Antwort), wird `session.summary` NICHT verändert (der zuletzt gültige
 /// Stand bleibt für den nächsten Versuch erhalten) und für DIESE eine
 /// Anfrage exakt der Etappe-2-Platzhalter ohne Zusammenfassung verwendet
-/// (`round_truncation_placeholder`) — identisch zu
-/// [`compact_rounds_for_budget`]s Ergebnis für denselben `cut_count`.
+/// (`round_truncation_placeholder`) für denselben `cut_count`.
 async fn compact_rounds_with_summary(
     session: &Session,
     session_id: SessionId,
@@ -979,29 +905,7 @@ fn truncate_oversized_output(output: &mut ssh_manager_core::ssh::CommandOutput) 
     true
 }
 
-/// Kürzt `stdout`/`stderr` jeder `CommandResult`-Nachricht in `history` auf
-/// höchstens [`MAX_SINGLE_OUTPUT_BYTES_IN_CONTEXT`] Byte — die Runde selbst
-/// (und damit die Nachricht) bleibt erhalten, nur ihr Inhalt schrumpft.
-/// Läuft unbedingt über die GESAMTE übergebene Historie — anders als
-/// [`compact_oversized_outputs_for_budget`] (die tatsächlich in
-/// [`compact_for_send`] verwendete, budgetbewusste Variante, die aufhört
-/// sobald der Request wieder passt) kürzt diese Variante ALLE
-/// übergroßen Ausgaben unbedingt. Als eigenständiger, einfacher Baustein
-/// erhalten (u. a. direkt getestet).
-#[cfg(test)]
-fn truncate_oversized_command_outputs(history: Vec<ChatMessage>) -> Vec<ChatMessage> {
-    history
-        .into_iter()
-        .map(|mut message| {
-            if let MessageContent::CommandResult { output, .. } = &mut message.content {
-                truncate_oversized_output(output);
-            }
-            message
-        })
-        .collect()
-}
-
-/// Wie [`truncate_oversized_command_outputs`], aber budgetbewusst
+/// Kürzt übergroße `CommandResult`-Ausgaben budgetbewusst
 /// (spec-reviewer-Fund, Review dieses Schritts: die Aufgabenstellung
 /// verlangt "nur so weit wie nötig" — nicht jede übergroße Ausgabe
 /// unbedingt kürzen, sondern in einer festen (chronologischen)
@@ -1538,33 +1442,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_truncate_rounds_with_placeholder_keeps_last_n_rounds_fully_intact() {
-        let history = vec![
-            user_message("Runde 1"),
-            command_result("cmd1", "out1"),
-            user_message("Runde 2"),
-            command_result("cmd2", "out2"),
-            user_message("Runde 3"),
-            command_result("cmd3", "out3"),
-            user_message("Runde 4"),
-            command_result("cmd4", "out4"),
-        ];
-        let result = truncate_rounds_with_placeholder(history.clone(), 3, PromptLanguage::De);
-
-        // Platzhalter + die letzten 3 Runden (je 2 Nachrichten) = 7.
-        assert_eq!(result.len(), 1 + 6);
-        // Die letzten 3 Runden müssen BYTE-IDENTISCH erhalten sein.
-        assert_eq!(&result[1..], &history[2..]);
-    }
-
-    #[test]
-    fn test_truncate_rounds_with_placeholder_is_noop_when_within_limit() {
-        let history = vec![user_message("a"), user_message("b")];
-        let result = truncate_rounds_with_placeholder(history.clone(), 3, PromptLanguage::De);
-        assert_eq!(result, history);
-    }
-
     /// spec-reviewer-Fund (Review dieses Schritts): Schritt 1 darf nicht
     /// unbedingt auf `MIN_PRESERVED_ROUNDS` kürzen, sondern nur so viele
     /// alte Runden entfernen, wie tatsächlich nötig sind, um wieder unters
@@ -1572,7 +1449,7 @@ mod tests {
     /// reicht das Entfernen EINER alten Runde bereits, müssen die übrigen
     /// (auch über `MIN_PRESERVED_ROUNDS` hinaus) unangetastet bleiben.
     #[test]
-    fn test_compact_rounds_for_budget_stops_as_soon_as_it_fits() {
+    fn test_determine_round_cut_count_stops_as_soon_as_it_fits() {
         let history = vec![
             user_message("alte Runde 1"),
             user_message("alte Runde 2"),
@@ -1582,20 +1459,19 @@ mod tests {
         ];
         // Budget genau so bemessen, dass das Entfernen NUR der ältesten
         // Runde ("alte Runde 1") bereits reicht.
-        let mut budget_probe = context_with(String::new(), history.clone());
-        compact_rounds_for_budget(&mut budget_probe, 4, usize::MAX, PromptLanguage::De); // 1 Runde entfernt (5 > 4)
-        let budget = estimate_request_tokens(&budget_probe);
+        let rounds = split_into_rounds(history);
+        let budget = estimate_message_tokens(&round_truncation_placeholder(PromptLanguage::De, 1))
+            + rounds[1..]
+                .iter()
+                .flatten()
+                .map(estimate_message_tokens)
+                .sum::<usize>();
 
-        let mut context = context_with(String::new(), history);
-        compact_rounds_for_budget(&mut context, 1, budget, PromptLanguage::De);
+        let cut_count = determine_round_cut_count(&rounds, 1, 0, budget, PromptLanguage::De);
 
-        assert!(
-            context.history.iter().any(
-                |m| matches!(&m.content, MessageContent::Text(t) if t.contains("alte Runde 2"))
-            ),
-            "Runde 2 hätte nicht entfernt werden dürfen, das Budget passte schon nach Runde 1: \
-             {:?}",
-            context.history
+        assert_eq!(
+            cut_count, 1,
+            "nur die älteste Runde hätte entfernt werden dürfen, das Budget passte schon danach"
         );
     }
 
@@ -1610,19 +1486,15 @@ mod tests {
     /// Rolle und Platzierung (erste Nachricht) bleiben gleich.
     #[test]
     fn test_round_truncation_placeholder_follows_the_prompt_language() {
-        let history = vec![
-            user_message("Runde 1"),
-            user_message("Runde 2"),
-            user_message("Runde 3"),
-        ];
-        let english = truncate_rounds_with_placeholder(history.clone(), 1, PromptLanguage::En);
+        let english = round_truncation_placeholder(PromptLanguage::En, 2);
+        let english = [english];
         assert_eq!(english[0].role, Role::ActionResult);
         let text = placeholder_text(&english[0]);
         assert!(text.contains("older conversation truncated"), "{text}");
         assert!(text.contains("2 earlier conversation round(s)"), "{text}");
         assert!(!text.contains("ältere Konversation gekürzt"), "{text}");
 
-        let german = truncate_rounds_with_placeholder(history, 1, PromptLanguage::De);
+        let german = [round_truncation_placeholder(PromptLanguage::De, 2)];
         assert_eq!(german[0].role, Role::ActionResult);
         assert_eq!(
             placeholder_text(&german[0]),
@@ -1657,14 +1529,19 @@ mod tests {
                     .iter()
                     .map(estimate_message_tokens)
                     .sum::<usize>();
-            let mut context = context_with(String::new(), history.clone());
-            compact_rounds_for_budget(&mut context, 1, budget, language);
-
+            let rounds = split_into_rounds(history.clone());
+            let cut_count = determine_round_cut_count(&rounds, 1, 0, budget, language);
             assert_eq!(
-                context.history.len(),
-                1 + 3,
+                cut_count, 1,
                 "{language:?}: genau eine Runde hätte entfernt werden müssen"
             );
+            let mut context = context_with(String::new(), Vec::new());
+            context.history = build_round_result(
+                rounds,
+                cut_count,
+                round_truncation_placeholder(language, cut_count),
+            );
+            assert_eq!(context.history.len(), 1 + 3);
             assert_eq!(
                 context.history[0],
                 round_truncation_placeholder(language, 1),
@@ -1679,47 +1556,6 @@ mod tests {
     }
 
     // --- Schritt 2: Riesen-Einzelausgabe gekürzt, Runde nicht verworfen ---
-
-    #[test]
-    fn test_truncate_oversized_command_outputs_shrinks_but_keeps_the_message() {
-        let huge_output = "x".repeat(500_000);
-        let history = vec![
-            user_message("Frage"),
-            command_result("cat big.log", &huge_output),
-        ];
-        let result = truncate_oversized_command_outputs(history);
-
-        assert_eq!(
-            result.len(),
-            2,
-            "die Runde/Nachricht darf nicht verworfen werden"
-        );
-        let MessageContent::CommandResult { output, .. } = &result[1].content else {
-            panic!("erwartete CommandResult");
-        };
-        assert!(
-            output.stdout.len() < 500_000,
-            "die riesige Ausgabe muss gekürzt worden sein"
-        );
-        // spec-reviewer-Fund (Review dieses Schritts): kein eigener,
-        // in die Bytes hineingeschriebener Hinweistext mehr (der wäre
-        // INNERHALB der `<stdout>`-Fence gelandet und durch echten
-        // Ausgabeinhalt vortäuschbar) — stattdessen dasselbe
-        // `truncated`-Flag wie beim Spec-0043-Exec-Cap, das
-        // `ai_providers::format_command_result` bereits als
-        // `<output_truncated>`-Hinweis AUSSERHALB der Fence rendert.
-        assert!(
-            output.truncated,
-            "muss das bestehende truncated-Flag setzen, keinen eigenen In-Fence-Hinweistext"
-        );
-    }
-
-    #[test]
-    fn test_truncate_oversized_command_outputs_leaves_small_output_untouched() {
-        let history = vec![command_result("ls", "total 0")];
-        let result = truncate_oversized_command_outputs(history.clone());
-        assert_eq!(result, history);
-    }
 
     /// spec-reviewer-Fund (Review dieses Schritts): die budgetbewusste
     /// Variante darf NICHT jede übergroße Ausgabe unbedingt kürzen —
