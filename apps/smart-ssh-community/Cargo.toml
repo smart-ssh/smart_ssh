@@ -58,3 +58,4 @@ tauri-plugin-android-host = { version = "0.7.0", path = "../../crates/tauri-plug
 # Issue #14: `tests/network_boundary.rs` liest die CSP aus `tauri.conf.json`.
 # Dieselbe Fassung, die `app-shell` ohnehin nutzt, keine neue Crate im Baum.
 serde_json = "1.0.151"
+toml = "1.1.4"

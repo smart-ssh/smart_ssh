@@ -33,6 +33,7 @@ mod local_file;
 mod local_server;
 mod mcp_backend;
 mod mcp_settings;
+mod required_plugins;
 mod risk_second_opinion;
 /// Spec 0101, §2 Frage 2: die gemessene Annahme über Tauris
 /// Async-Runtime, auf der der synchrone Secret-Speicher steht.
@@ -74,6 +75,7 @@ mod window_prompt;
 mod wiring;
 
 pub use db_extensions::DbExtension;
+pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
 pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
 pub use wiring::{Edition, Wiring};
 

@@ -230,6 +230,7 @@ dependencies = [
  "tempfile",
  "tls-config",
  "tokio",
+ "toml 1.1.4+spec-1.1.0",
  "tracing",
  "uuid",
 ]
@@ -5955,7 +5956,6 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
- "tauri-plugin-android-host",
  "tauri-plugin-decoration",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
@@ -5963,6 +5963,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-os",
  "tauri-plugin-store",
+ "toml 1.1.4+spec-1.1.0",
 ]
 
 [[package]]
