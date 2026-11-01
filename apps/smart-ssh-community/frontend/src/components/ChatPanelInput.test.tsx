@@ -15,6 +15,7 @@ import {
   stopAutoContinuation,
 } from "../api";
 import {
+  onActionConfirmationSettled,
   onActionDecisionEscalated,
   onChatActionProposed,
   onChatQueuedMessagesSent,
@@ -43,6 +44,8 @@ if (!Element.prototype.scrollTo) {
 
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
   acceptAndCreateRule: vi.fn(),
   cancelRunningCommand: vi.fn(),
   continueTruncatedResponse: vi.fn(() => Promise.resolve()),
@@ -78,6 +81,7 @@ vi.mock("../events", () => ({
   onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
   onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
+  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
   onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
   onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
@@ -623,5 +627,103 @@ describe("ChatPanel web research unavailable (issue #169)", () => {
     expect(
       notices[0].compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+// Issue #1019: a confirmation settled by the backend (reconnect, timeout) or
+// unknown to it must leave a final card without buttons, never "approved".
+describe("ChatPanel settled confirmation cards (Issue #1019)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const proposed: ChatActionProposedEvent = {
+    sessionId: "session-1",
+    actionId: "action-1",
+    action: { SuggestCommand: { command: "rm -rf /data" } },
+    decision: { Confirm: { reason: "needs confirmation", code: "FILTER_CONFIRM" } },
+    previousNoteContent: null,
+    usesStoredSudoPassword: false,
+    previousFileContent: null,
+    previousFileSize: null,
+    targetName: null,
+    riskAssessment: {
+      serverRisk: "none",
+      serverRiskReason: null,
+      dataRisk: "none",
+      dataRiskReason: null,
+      aiReviewed: false,
+    },
+    origin: { kind: "internal" },
+  };
+
+  async function renderWithPendingCard() {
+    let proposedHandler: ((event: ChatActionProposedEvent) => void) | null = null;
+    let settledHandler:
+      | ((event: { sessionId: string; actionId: string; reason: "reconnect" | "timeout" }) => void)
+      | null = null;
+    vi.mocked(onChatActionProposed).mockImplementation((h) => {
+      proposedHandler = h;
+      return Promise.resolve(() => {});
+    });
+    vi.mocked(onActionConfirmationSettled).mockImplementation((h) => {
+      settledHandler = h;
+      return Promise.resolve(() => {});
+    });
+    renderChatPanel();
+    await waitFor(() => expect(proposedHandler).not.toBeNull());
+    await waitFor(() => expect(settledHandler).not.toBeNull());
+    act(() => {
+      proposedHandler!(proposed);
+    });
+    expect(await screen.findByRole("button", { name: "Ausführen" })).toBeInTheDocument();
+    return { settle: settledHandler! };
+  }
+
+  it("shows the discarded state without buttons after a reconnect", async () => {
+    const { settle } = await renderWithPendingCard();
+    act(() => {
+      settle({ sessionId: "session-1", actionId: "action-1", reason: "reconnect" });
+    });
+    expect(await screen.findByText(/Verworfen, nachdem die Verbindung neu aufgebaut/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ablehnen" })).not.toBeInTheDocument();
+  });
+
+  it("shows the expired state without buttons after a timeout", async () => {
+    const { settle } = await renderWithPendingCard();
+    act(() => {
+      settle({ sessionId: "session-1", actionId: "action-1", reason: "timeout" });
+    });
+    expect(await screen.findByText(/Nicht rechtzeitig beantwortet/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+  });
+
+  it("ignores a settled event for another session", async () => {
+    const { settle } = await renderWithPendingCard();
+    act(() => {
+      settle({ sessionId: "other", actionId: "action-1", reason: "timeout" });
+    });
+    expect(screen.getByRole("button", { name: "Ausführen" })).toBeInTheDocument();
+  });
+
+  it("rolls back to the expired state when the backend does not know the confirmation", async () => {
+    await renderWithPendingCard();
+    vi.mocked(respondToAction).mockRejectedValueOnce({
+      message: "unknown",
+      code: "ACTION_CONFIRMATION_UNKNOWN",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ausführen" }));
+    expect(await screen.findByText(/Diese Anfrage ist nicht mehr offen/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ausführen" })).not.toBeInTheDocument();
+    expect(screen.queryByText("läuft", { exact: false })).not.toBeInTheDocument();
+  });
+
+  it("keeps the request open when the response fails with another error", async () => {
+    await renderWithPendingCard();
+    vi.mocked(respondToAction).mockRejectedValueOnce({ message: "boom", code: "OTHER" });
+    fireEvent.click(screen.getByRole("button", { name: "Ausführen" }));
+    expect(await screen.findByRole("button", { name: "Ausführen" })).toBeInTheDocument();
+    expect(screen.queryByText(/Diese Anfrage ist nicht mehr offen/)).not.toBeInTheDocument();
   });
 });

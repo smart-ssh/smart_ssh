@@ -762,6 +762,44 @@ mod attachment_tests {
         crate::content::test_fixtures::assert_extension_placeholder(&p.build_request_body(&ctx));
     }
 
+    /// Issue #1018: the tagged note result is its own input item, apart from
+    /// the user's text typed while the card was pending.
+    #[test]
+    fn test_note_update_result_is_own_input_item() {
+        use ssh_manager_core::ai::{ChatMessage, MessageContent, Role};
+        let p = OpenAiResponsesProvider::new(
+            "https://api.openai.com/v1",
+            "gpt-4o",
+            "k",
+            true,
+            Vec::new(),
+            budget(),
+            None,
+        );
+        let mut ctx = context_with_image_and_pdf("x");
+        ctx.history = vec![
+            ChatMessage {
+                role: Role::ActionResult,
+                content: MessageContent::Text(
+                    "<note_update_result target=\"current_server\" name=\"web-1\">\nok\n</note_update_result>"
+                        .to_string(),
+                ),
+            },
+            ChatMessage {
+                role: Role::User,
+                content: MessageContent::Text("typed while pending".to_string()),
+            },
+        ];
+        let body = p.build_request_body(&ctx);
+        let input = body["input"].as_array().unwrap();
+        assert_eq!(input.len(), 2, "{body}");
+        assert!(input[0]["content"]
+            .as_str()
+            .unwrap()
+            .starts_with("<note_update_result target=\"current_server\""));
+        assert_eq!(input[1]["content"], "typed while pending");
+    }
+
     #[test]
     fn test_responses_image_and_pdf_input_parts() {
         let p = OpenAiResponsesProvider::new(

@@ -195,6 +195,16 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
+/** Issue #1019: the backend settled a pending confirmation on its own. */
+export interface ActionConfirmationSettledEvent {
+  sessionId: string;
+  actionId: string;
+  reason: "reconnect" | "timeout";
+}
+/** Issue #1019: a pending confirmation was discarded by a reconnect or
+ * expired; the chat card switches to a final state without buttons. */
+export const onActionConfirmationSettled =
+  payloadListener<ActionConfirmationSettledEvent>("action-confirmation-settled");
 /** Issue #628: the backend timed out a pending note confirmation (update or
  * shrink suggestion); the card switches to its "expired" state. */
 export const onNoteUpdateExpired =

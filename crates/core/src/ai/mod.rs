@@ -25,6 +25,7 @@ mod redactor_generators;
 mod redactor_property;
 #[cfg(test)]
 mod redactor_reference;
+mod rejection;
 mod second_opinion;
 mod types;
 
@@ -43,10 +44,11 @@ pub use provider::AiProvider;
 pub use redactor::{
     default_log_redactor, DefaultOutputRedactor, OutputRedactor, REDACTED_PLACEHOLDER,
 };
+pub use rejection::RejectionReason;
 pub use second_opinion::{truncate_for_second_opinion, DEFAULT_SECOND_OPINION_MAX_LEN};
 pub use types::{
     default_action_schemas, english_action_schemas, sanitize_tool_name, ActionParameter,
     ActionParameterKind, ActionSchema, AiError, AiEvent, AiUsage, ChatMessage,
-    InvalidToolCallReason, MediaClass, MessageContent, ProviderId, ProviderType, RejectionReason,
-    Role, SessionContext, WebActivity, WebActivityKind, WebSource, WEB_CONTENT_MAX_CHARS,
+    InvalidToolCallReason, MediaClass, MessageContent, ProviderId, ProviderType, Role,
+    SessionContext, WebActivity, WebActivityKind, WebSource, WEB_CONTENT_MAX_CHARS,
 };

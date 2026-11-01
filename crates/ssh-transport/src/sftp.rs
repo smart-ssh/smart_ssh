@@ -44,15 +44,18 @@ impl RusshSftpSession {
         map_sftp_error(path, e, self.session.is_closed())
     }
 
-    /// Issue #155: wie [`Self::map_error`], für die `io::Error` aus dem
-    /// Schreiben über einen geöffneten Datei-Handle (`write_all`/`shutdown`).
-    fn map_write_error(&self, path: &str, e: std::io::Error) -> SshError {
-        let message = format!("SFTP-Schreibfehler bei '{path}': {e}");
-        if is_channel_gone_io(&e) && self.session.is_closed() {
+    /// `SessionClosed` if the channel is gone and the session closed (#155).
+    fn closed_or_channel(&self, message: String, channel_gone: bool) -> SshError {
+        if channel_gone && self.session.is_closed() {
             SshError::SessionClosed(message)
         } else {
             SshError::ChannelError(message)
         }
+    }
+
+    fn map_io_error(&self, op: &str, path: &str, e: &std::io::Error) -> SshError {
+        let message = format!("SFTP-{op} bei '{path}': {e}");
+        self.closed_or_channel(message, is_channel_gone_io(e))
     }
 }
 
@@ -252,14 +255,10 @@ impl SftpSession for RusshSftpSession {
         let mut out = Vec::new();
         let mut chunk = vec![0u8; 64 * 1024];
         loop {
-            let n = reader.read(&mut chunk).await.map_err(|e| {
-                let message = format!("SFTP-Lesefehler bei '{path}': {e}");
-                if is_channel_gone_io(&e) && self.session.is_closed() {
-                    SshError::SessionClosed(message)
-                } else {
-                    SshError::ChannelError(message)
-                }
-            })?;
+            let n = reader
+                .read(&mut chunk)
+                .await
+                .map_err(|e| self.map_io_error("Lesefehler", path, &e))?;
             if n == 0 {
                 break;
             }
@@ -283,7 +282,7 @@ impl SftpSession for RusshSftpSession {
             .map_err(|e| self.map_error(path, e))?;
         file.write_all(content)
             .await
-            .map_err(|e| self.map_write_error(path, e))?;
+            .map_err(|e| self.map_io_error("Schreibfehler", path, &e))?;
         // `File::poll_write` reicht Schreibanfragen nur "fire-and-forget"
         // weiter (`write_nowait`) — erst `shutdown()`/`flush()` wartet auf
         // die ausstehenden Bestätigungen. Ohne diesen Aufruf lief der
@@ -293,7 +292,7 @@ impl SftpSession for RusshSftpSession {
         // zurückkehrt.
         file.shutdown()
             .await
-            .map_err(|e| self.map_write_error(path, e))?;
+            .map_err(|e| self.map_io_error("Schreibfehler", path, &e))?;
         Ok(())
     }
 
@@ -310,14 +309,10 @@ impl SftpSession for RusshSftpSession {
             .map_err(|e| self.map_error(path, e))?;
         let mut buf = vec![0u8; chunk_size.max(1)];
         loop {
-            let n = file.read(&mut buf).await.map_err(|e| {
-                let message = format!("SFTP-Lesefehler bei '{path}': {e}");
-                if is_channel_gone_io(&e) && self.session.is_closed() {
-                    SshError::SessionClosed(message)
-                } else {
-                    SshError::ChannelError(message)
-                }
-            })?;
+            let n = file
+                .read(&mut buf)
+                .await
+                .map_err(|e| self.map_io_error("Lesefehler", path, &e))?;
             if n == 0 {
                 return Ok(TransferEnd::Completed);
             }
@@ -345,7 +340,7 @@ impl SftpSession for RusshSftpSession {
                 ChunkSource::Data(n) => file
                     .write_all(&buf[..n])
                     .await
-                    .map_err(|e| self.map_write_error(path, e))?,
+                    .map_err(|e| self.map_io_error("Schreibfehler", path, &e))?,
                 ChunkSource::Eof => break TransferEnd::Completed,
                 ChunkSource::Stop => break TransferEnd::Stopped,
             }
@@ -354,7 +349,7 @@ impl SftpSession for RusshSftpSession {
         // Bestätigungen.
         file.shutdown()
             .await
-            .map_err(|e| self.map_write_error(path, e))?;
+            .map_err(|e| self.map_io_error("Schreibfehler", path, &e))?;
         Ok(end)
     }
 
@@ -410,12 +405,7 @@ impl SftpSession for RusshSftpSession {
             }
             Err(TapError::Timeout) => Err(SshError::Timeout),
             Err(TapError::Closed) => {
-                let message = format!("SFTP-Kanal bei '{from}' geschlossen");
-                if self.session.is_closed() {
-                    Err(SshError::SessionClosed(message))
-                } else {
-                    Err(SshError::ChannelError(message))
-                }
+                Err(self.closed_or_channel(format!("SFTP-Kanal bei '{from}' geschlossen"), true))
             }
         }
     }
@@ -433,7 +423,7 @@ impl SftpSession for RusshSftpSession {
             Ok(mut file) => file
                 .shutdown()
                 .await
-                .map_err(|e| self.map_write_error(path, e)),
+                .map_err(|e| self.map_io_error("Schreibfehler", path, &e)),
             Err(e) => {
                 // SFTP v3 hat keinen „existiert"-Status: ein Server meldet
                 // EXCL-Konflikte als generisches `Failure`. Nur in diesem

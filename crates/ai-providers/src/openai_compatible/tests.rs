@@ -1291,3 +1291,36 @@ fn test_waiting_for_input_note_only_on_stop_while_waiting() {
     let finished = format_command_result("apt install x", &output, false, true);
     assert!(!finished.contains("<waiting_for_input>"));
 }
+
+fn note_result_history() -> Vec<ssh_manager_core::ai::ChatMessage> {
+    use ssh_manager_core::ai::ChatMessage;
+    vec![
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("update the note".to_string()),
+        },
+        ChatMessage {
+            role: Role::Assistant,
+            content: MessageContent::Text("proposing".to_string()),
+        },
+        ChatMessage {
+            role: Role::ActionResult,
+            content: MessageContent::Text("<note_update_result target=\"current_server\" name=\"web-1\">\nconfirmed\nNEW\n</note_update_result>".to_string()),
+        },
+        ChatMessage {
+            role: Role::User,
+            content: MessageContent::Text("typed while pending".to_string()),
+        },
+    ]
+}
+
+/// Issue #1018: the tagged note result is a recognisable element, apart from
+/// the user's own text typed while the card was pending.
+#[test]
+fn test_note_update_result_tag_is_kept_apart_from_queued_user_text() {
+    let body = combine_provider().build_request_body(&history_context(note_result_history()));
+    let messages = body["messages"].as_array().unwrap();
+    let text = messages.last().unwrap()["content"].as_str().unwrap();
+    assert!(text.starts_with("<note_update_result target=\"current_server\" name=\"web-1\">"));
+    assert!(text.ends_with("</note_update_result>\n\ntyped while pending"));
+}

@@ -14,11 +14,17 @@ use ssh_manager_core::filter::{
     exceeds_command_length_limit, Decision, EvalContext, EvaluationTrace, RuleId, RuleOrigin,
     DEFAULT_MAX_COMMAND_LENGTH,
 };
-use ssh_manager_core::profiles::{AiAction, NoteTargetSelector, PostIngestPolicy, ProfileStore};
+use ssh_manager_core::profiles::{AiAction, PostIngestPolicy, ProfileStore};
 use ssh_manager_core::risk::{RiskAssessment, RiskClassifier, RiskLevel, RuleBasedRiskClassifier};
 use ssh_manager_core::ssh::{CommandOutput, ExecOutcome, SshError};
 
+mod rejected_action;
+use rejected_action::describe_rejected_action;
+#[cfg(test)]
+use ssh_manager_core::profiles::NoteTargetSelector;
+
 use crate::confirmation::ConfirmationRegistry;
+use crate::confirmation_settled::emit_settled_for_rejection;
 use crate::dto::{ActionOrigin, ActionUserDecision};
 use crate::events::{
     emit_action_decision_escalated, emit_chat_action_proposed, emit_chat_action_result,
@@ -486,7 +492,7 @@ pub(crate) async fn handle_action_proposed(
     let (previous_file_content, previous_file_size) =
         previous_file_content_for_action(&action, session).await;
 
-    emit_chat_action_proposed(
+    let proposed_payload = emit_chat_action_proposed(
         emitter,
         session_id,
         action_id,
@@ -501,6 +507,7 @@ pub(crate) async fn handle_action_proposed(
         origin.clone(),
         auto_exec_rules,
     );
+    session.remember_proposal(action_id, proposed_payload.clone());
 
     // Spec 0026, Abschnitt 3: läuft NACH der bereits gesendeten
     // regelbasierten Einschätzung (das Event oben ist schon raus, das Badge
@@ -564,6 +571,7 @@ pub(crate) async fn handle_action_proposed(
                     _ => None,
                 },
             );
+            session.review_proposal(action_id, data_risk, &reason);
             emit_risk_assessment_updated(
                 emitter,
                 session_id,
@@ -578,39 +586,32 @@ pub(crate) async fn handle_action_proposed(
         }
     }
 
-    // Spec 0092, A3: Die Zweitmeinung hat das Daten-Risiko auf Rot gehoben,
-    // nachdem `chat-action-proposed` mit `AutoExec` längst draußen ist. Die
-    // Aktion wird ab hier wie jedes andere `Confirm` behandelt — dieselbe
-    // Wartezeit, dieselbe Abbruchlogik, derselbe Tab-Indikator, dieselben
-    // Ledger-Einträge (A3.1), weil es buchstäblich derselbe
+    // Spec 0092, A3: Die Zweitmeinung hat das Daten-Risiko auf Rot gehoben, nachdem
+    // `chat-action-proposed` mit `AutoExec` längst draußen ist. Die Aktion wird ab hier wie jedes
+    // andere `Confirm` behandelt — dieselbe Wartezeit, dieselbe Abbruchlogik, derselbe
+    // Tab-Indikator, dieselben Ledger-Einträge (A3.1), weil es buchstäblich derselbe
     // `PreparedDecision::Confirm`-Zweig unten ist.
     //
-    // Dass `prepared` hier noch `AutoExec` ist, heißt zugleich: Das
-    // regelbasierte Rot hat NICHT gegriffen (sonst hätte das Glied oben
-    // schon eskaliert) — die Anhebung kommt also tatsächlich von der
-    // Zweitmeinung. Nur Eskalation, wie überall: aus `Deny`/`Confirm` wird
-    // hier nichts.
+    // Dass `prepared` hier noch `AutoExec` ist, heißt zugleich: Das regelbasierte Rot hat NICHT
+    // gegriffen (sonst hätte das Glied oben schon eskaliert) — die Anhebung kommt also tatsächlich
+    // von der Zweitmeinung. Nur Eskalation, wie überall: aus `Deny`/`Confirm` wird hier nichts.
     //
-    // **Reihenfolge**: `register` VOR dem Ereignis (A3.2) — das Frontend
-    // erfährt erst von der wartenden Bestätigung, wenn der Empfänger schon
-    // steht, ein sehr schneller Klick geht also nicht ins Leere. Und das
-    // Ereignis NACH `risk-assessment-updated` (§5), damit das Badge rot ist,
-    // bevor der Dialog erscheint.
+    // **Reihenfolge**: `register` VOR dem Ereignis (A3.2) — das Frontend erfährt erst von der
+    // wartenden Bestätigung, wenn der Empfänger schon steht, ein sehr schneller Klick geht also
+    // nicht ins Leere. Und das Ereignis NACH `risk-assessment-updated` (§5), damit das Badge rot
+    // ist, bevor der Dialog erscheint.
     //
-    // **A3.3, Stopp hat Vorrang**: hier geprüft, nicht erst unten im
-    // `match` — ein während der Zweitmeinung eingetroffener Stopp soll die
-    // Aktion überspringen lassen, nicht einen Dialog zeigen. Ohne diese
-    // Prüfung eskalierte die Aktion und der `AutoExec`-Stopp-Zweig unten
-    // käme nie dran.
+    // **A3.3, Stopp hat Vorrang**: hier geprüft, nicht erst unten im `match` — ein während der
+    // Zweitmeinung eingetroffener Stopp soll die Aktion überspringen lassen, nicht einen Dialog
+    // zeigen. Ohne diese Prüfung eskalierte die Aktion und der `AutoExec`-Stopp-Zweig unten käme
+    // nie dran.
     //
-    // Restlücke, ehrlich benannt (spec-reviewer-Fund, Runde 1): Ein Stopp,
-    // der NACH dieser Zeile eintrifft, sieht einen Dialog für eine gerade
-    // gestoppte Aktion — A3.3 verlangt „bekommt keinen Dialog". Das ist eine
-    // EIGENE, neue Lücke, nicht die bekannte „Kommando läuft trotz Stopp":
-    // Sie ist die sichere Richtung (eine Rückfrage zu viel, nie eine
-    // Ausführung zu viel) und lässt sich nicht schließen, solange das
-    // Ereignis überhaupt gesendet werden muss, bevor der Nutzer klicken
-    // kann. Ausgeführt wird in diesem Rennen nichts ohne Klick.
+    // Restlücke, ehrlich benannt (spec-reviewer-Fund, Runde 1): Ein Stopp, der NACH dieser Zeile
+    // eintrifft, sieht einen Dialog für eine gerade gestoppte Aktion — A3.3 verlangt „bekommt
+    // keinen Dialog". Das ist eine EIGENE, neue Lücke, nicht die bekannte „Kommando läuft trotz
+    // Stopp": Sie ist die sichere Richtung (eine Rückfrage zu viel, nie eine Ausführung zu viel)
+    // und lässt sich nicht schließen, solange das Ereignis überhaupt gesendet werden muss, bevor
+    // der Nutzer klicken kann. Ausgeführt wird in diesem Rennen nichts ohne Klick.
     let mut prepared = prepared;
     let raised_to_red = second_opinion_data_risk == Some(RiskLevel::Red);
     // Issue #102 (Maintainer-Entscheidung: fail closed, pro Aktion): Eine
@@ -679,6 +680,7 @@ pub(crate) async fn handle_action_proposed(
             reason.clone(),
             code.clone(),
         );
+        session.escalate_proposal(action_id, proposed_payload, &reason, &code);
         prepared = PreparedDecision::Confirm {
             reason,
             code,
@@ -785,6 +787,11 @@ pub(crate) async fn handle_action_proposed(
                 .wait_for_decision(PENDING_ACTION_CONFIRM_TIMEOUT)
                 .await;
             let (user_decision, deny_reason) = match timeout_result {
+                Ok(Ok(ActionUserDecision::DenyReconnect)) => {
+                    // Issue #1019: discarded by a reconnect — a deny with
+                    // its own reason; the card is told below.
+                    (ActionUserDecision::Deny, RejectionReason::Reconnect)
+                }
                 Ok(Ok(decision)) => (decision, RejectionReason::User),
                 Ok(Err(_)) => {
                     // Sender wurde gedroppt (z. B. App beendet, bevor der
@@ -825,6 +832,7 @@ pub(crate) async fn handle_action_proposed(
             // `await`. Explizit statt am Blockende, damit es nicht von der
             // Länge des folgenden Aufrufs abhängt.
             drop(cleanup);
+            emit_settled_for_rejection(emitter, session_id, action_id, &deny_reason);
             if matches!(user_decision, ActionUserDecision::Deny) {
                 earlier_rejection.store(true, std::sync::atomic::Ordering::SeqCst);
             }
@@ -1391,27 +1399,6 @@ async fn skip_auto_exec_after_stop(
     false
 }
 
-fn describe_rejected_action(action: &AiAction) -> String {
-    match action {
-        AiAction::SuggestCommand { command } => command.clone(),
-        AiAction::ReadRemoteFile { path } => sftp_read_pseudo_command(path),
-        AiAction::WriteRemoteFile { path, .. } => sftp_write_pseudo_command(path),
-        AiAction::ProposeNoteUpdate { target, .. } => {
-            let target_label = match target {
-                NoteTargetSelector::CurrentServer => "aktueller Server",
-                NoteTargetSelector::CurrentServerGroup => "aktuelle Servergruppe",
-            };
-            format!("update-note ({target_label})")
-        }
-        AiAction::GenerateDocument { .. } => unreachable!(
-            "GenerateDocument durchläuft nie evaluate_action/einen Bestätigungsdialog, s. dort"
-        ),
-        AiAction::AskUser { .. } => unreachable!(
-            "AskUser is intercepted in run_one_round and never reaches a confirmation dialog"
-        ),
-    }
-}
-
 /// `AiAction::SuggestCommand` läuft durch die Filter-Engine;
 /// `AiAction::ProposeNoteUpdate` verlangt **immer** eine Bestätigung,
 /// unabhängig von der Filter-Engine (Spec 0003, Abschnitt 5.2 — explizit
@@ -1569,7 +1556,7 @@ async fn handle_user_decision(
         };
 
     match user_decision {
-        ActionUserDecision::Deny => {
+        ActionUserDecision::Deny | ActionUserDecision::DenyReconnect => {
             if let AiAction::SuggestCommand { .. } = &action {
                 write_ledger_entry(
                     session,

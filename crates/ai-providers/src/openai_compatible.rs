@@ -446,6 +446,12 @@ fn format_action_rejected(command: &str, reason: &RejectionReason) -> String {
              abgelehnt (kein aktives Nutzerfeedback)."
                 .to_string()
         }
+        // Issue #1019: the connection was re-established; no human decided.
+        RejectionReason::Reconnect => {
+            "The action was discarded because the connection was re-established; the user did \
+             not decide."
+                .to_string()
+        }
     };
     format!(
         "<action_rejected>\n<command>{command}</command>\n<reason>{reason_text}</reason>\n</action_rejected>"
