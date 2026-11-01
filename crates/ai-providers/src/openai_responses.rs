@@ -397,7 +397,6 @@ fn map_stream_error(info: &ProviderErrorInfo) -> AiError {
     }
     let message = info.message.clone().unwrap_or_default();
     match info.code.as_deref() {
-        Some("context_length_exceeded") => AiError::ContextTooLarge,
         Some("invalid_api_key") => AiError::AuthenticationFailed,
         Some("model_not_found") => AiError::ModelNotFound(message),
         _ => AiError::ProviderUnavailable(message),

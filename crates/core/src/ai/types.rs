@@ -535,7 +535,7 @@ impl ActionSchema {
     /// KI muss nie eine `ServerId`/`GroupId` kennen oder korrekt formatieren
     /// (Ursache des `target_id ist keine gültige UUID`-Bugfalls). `target`
     /// ist optional (Default bei Fehlen: `current_server`, s.
-    /// `ai_providers::action::action_from_tool_arguments`); das Backend
+    /// `ai_providers::action::parse_tool_action`); das Backend
     /// löst daraus die tatsächliche ID selbst aus dem Session-Kontext auf.
     pub fn propose_note_update() -> Self {
         Self {

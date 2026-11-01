@@ -65,34 +65,6 @@ pub(crate) fn parameters_json_schema(schema: &ActionSchema) -> Value {
     ]))
 }
 
-/// Parst Tool-/Function-Argumente (Name + JSON-Argumentobjekt, wie sie
-/// sowohl aus einem nativen Tool-Call als auch aus dem Fallback-JSON-Block
-/// kommen) in eine konkrete [`AiAction`] (Spec 0003, Abschnitt 5.2).
-///
-/// Gibt `Err` bei unbekanntem Aktionsnamen, fehlenden Pflichtfeldern oder
-/// einem unbekannten `target`-Wert zurück — die Aufrufer entscheiden je
-/// nach Modus (nativ vs. Fallback), wie damit umzugehen ist (s.
-/// `openai_compatible.rs`/`anthropic.rs`).
-pub(crate) fn action_from_tool_arguments(
-    name: &str,
-    arguments: &Value,
-) -> Result<AiAction, AiError> {
-    parse_tool_action(name, arguments).map_err(|reason| match reason {
-        InvalidToolCallReason::UnknownTool => {
-            AiError::InvalidResponse(format!("unbekannte Aktion '{name}'"))
-        }
-        InvalidToolCallReason::MissingField(field) => {
-            AiError::InvalidResponse(format!("Feld '{field}' fehlt oder ist kein String"))
-        }
-        InvalidToolCallReason::InvalidValue(field) => {
-            AiError::InvalidResponse(format!("unbekannter {field}-Wert"))
-        }
-        InvalidToolCallReason::InvalidJson => {
-            AiError::InvalidResponse("Tool-Argumente sind kein gültiges JSON".to_string())
-        }
-    })
-}
-
 /// Issue #604: a finished native tool call (name + raw JSON arguments) as
 /// an event: a valid call is proposed; an unknown tool, broken JSON or
 /// invalid fields become the non-fatal [`AiEvent::InvalidToolCall`] (logged,
@@ -123,7 +95,18 @@ pub(crate) fn tool_call_event(request_id: uuid::Uuid, name: &str, raw_arguments:
     }
 }
 
-fn parse_tool_action(name: &str, arguments: &Value) -> Result<AiAction, InvalidToolCallReason> {
+/// Parst Tool-/Function-Argumente (Name + JSON-Argumentobjekt, wie sie
+/// sowohl aus einem nativen Tool-Call als auch aus dem Fallback-JSON-Block
+/// kommen) in eine konkrete [`AiAction`] (Spec 0003, Abschnitt 5.2).
+///
+/// Gibt `Err` bei unbekanntem Aktionsnamen, fehlenden Pflichtfeldern oder
+/// einem unbekannten `target`-Wert zurück — die Aufrufer entscheiden je
+/// nach Modus (nativ vs. Fallback), wie damit umzugehen ist (s.
+/// `openai_compatible.rs`/`anthropic.rs`).
+pub(crate) fn parse_tool_action(
+    name: &str,
+    arguments: &Value,
+) -> Result<AiAction, InvalidToolCallReason> {
     let get_str_aliases = |keys: &[&str]| -> Result<String, InvalidToolCallReason> {
         for &key in keys {
             if let Some(val) = arguments.get(key) {
@@ -250,8 +233,8 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_parses_ask_user_leniently() {
-        let action = action_from_tool_arguments(
+    fn test_parse_tool_action_parses_ask_user_leniently() {
+        let action = parse_tool_action(
             "ask_user",
             &json!({"question": "Q?", "options": [{"label": "A"}]}),
         )
@@ -268,7 +251,7 @@ mod tests {
                 multi_select: false,
             }
         );
-        assert!(action_from_tool_arguments("ask_user", &json!({"options": []})).is_err());
+        assert!(parse_tool_action("ask_user", &json!({"options": []})).is_err());
     }
 
     #[test]
@@ -296,9 +279,8 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_parses_suggest_command() {
-        let action =
-            action_from_tool_arguments("suggest_command", &json!({"command": "ls -la"})).unwrap();
+    fn test_parse_tool_action_parses_suggest_command() {
+        let action = parse_tool_action("suggest_command", &json!({"command": "ls -la"})).unwrap();
 
         assert_eq!(
             action,
@@ -309,8 +291,8 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_parses_propose_note_update_for_current_server() {
-        let action = action_from_tool_arguments(
+    fn test_parse_tool_action_parses_propose_note_update_for_current_server() {
+        let action = parse_tool_action(
             "propose_note_update",
             &json!({"target": "current_server", "new_content": "neu"}),
         )
@@ -326,8 +308,8 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_parses_propose_note_update_for_current_server_group() {
-        let action = action_from_tool_arguments(
+    fn test_parse_tool_action_parses_propose_note_update_for_current_server_group() {
+        let action = parse_tool_action(
             "propose_note_update",
             &json!({"target": "current_server_group", "new_content": "neu"}),
         )
@@ -346,10 +328,9 @@ mod tests {
     /// als Default — kein Fehler, und die KI muss das Feld nicht einmal
     /// kennen, um den häufigsten Fall (aktueller Server) auszulösen.
     #[test]
-    fn test_action_from_tool_arguments_defaults_missing_target_to_current_server() {
+    fn test_parse_tool_action_defaults_missing_target_to_current_server() {
         let action =
-            action_from_tool_arguments("propose_note_update", &json!({"new_content": "neu"}))
-                .unwrap();
+            parse_tool_action("propose_note_update", &json!({"new_content": "neu"})).unwrap();
 
         assert_eq!(
             action,
@@ -361,8 +342,8 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_parses_generate_document() {
-        let action = action_from_tool_arguments(
+    fn test_parse_tool_action_parses_generate_document() {
+        let action = parse_tool_action(
             "generate_document",
             &json!({"title": "Analyse", "content_markdown": "# Analyse\n\nInhalt."}),
         )
@@ -378,28 +359,35 @@ mod tests {
     }
 
     #[test]
-    fn test_action_from_tool_arguments_rejects_unknown_action_name() {
-        let result = action_from_tool_arguments("delete_everything", &json!({}));
+    fn test_parse_tool_action_rejects_unknown_action_name() {
+        let result = parse_tool_action("delete_everything", &json!({}));
 
-        assert!(matches!(result, Err(AiError::InvalidResponse(_))));
+        assert_eq!(result, Err(InvalidToolCallReason::UnknownTool));
     }
 
     #[test]
-    fn test_action_from_tool_arguments_rejects_unknown_target_value() {
-        let result = action_from_tool_arguments(
+    fn test_parse_tool_action_rejects_unknown_target_value() {
+        let result = parse_tool_action(
             "propose_note_update",
             &json!({"target": "some_other_server", "new_content": "x"}),
         );
 
-        assert!(matches!(result, Err(AiError::InvalidResponse(_))));
+        assert_eq!(
+            result,
+            Err(InvalidToolCallReason::InvalidValue("target".to_string()))
+        );
     }
 
     #[test]
-    fn test_action_from_tool_arguments_rejects_missing_new_content() {
-        let result =
-            action_from_tool_arguments("propose_note_update", &json!({"target": "current_server"}));
+    fn test_parse_tool_action_rejects_missing_new_content() {
+        let result = parse_tool_action("propose_note_update", &json!({"target": "current_server"}));
 
-        assert!(matches!(result, Err(AiError::InvalidResponse(_))));
+        assert_eq!(
+            result,
+            Err(InvalidToolCallReason::MissingField(
+                "new_content".to_string()
+            ))
+        );
     }
 
     /// Issue #604: an invalid call is never repaired into an action and
