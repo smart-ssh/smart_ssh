@@ -33,7 +33,7 @@ const ALLOWED_SERVERS_KEY: &str = "mcpServerAllowedServerIds";
 /// änderbar war (unabhängiger Review-Pass, Spec-Audit-Fund).
 const CONFIRM_TIMEOUT_SECS_KEY: &str = "mcpServerConfirmTimeoutSecs";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServerSettingsDto {
     pub enabled: bool,
@@ -48,6 +48,20 @@ pub struct McpServerSettingsDto {
     /// `set_mcp_server_confirm_timeout_secs`), analog zu einem geänderten
     /// Port.
     pub confirm_timeout_secs: u64,
+}
+
+/// The token is shown to the user on purpose (IPC), but `Debug` must not
+/// print it (issue #848).
+impl std::fmt::Debug for McpServerSettingsDto {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServerSettingsDto")
+            .field("enabled", &self.enabled)
+            .field("endpoint", &self.endpoint)
+            .field("token", &"[REDACTED]")
+            .field("allowed_server_ids", &self.allowed_server_ids)
+            .field("confirm_timeout_secs", &self.confirm_timeout_secs)
+            .finish()
+    }
 }
 
 fn generate_token() -> String {
@@ -339,6 +353,21 @@ mod tests {
     /// `McpServerConfig::default()` (fest 5 Minuten) konstruierte, egal was
     /// in den Einstellungen stand. Ohne persistierten Wert muss weiterhin
     /// exakt der Backend-Default gelten.
+    /// Issue #848: `Debug` hides the token but still prints the other fields.
+    #[test]
+    fn test_settings_dto_debug_hides_token() {
+        let dto = McpServerSettingsDto {
+            enabled: true,
+            endpoint: "http://127.0.0.1:1234".into(),
+            token: "tok-s3cr3t-value".into(),
+            allowed_server_ids: vec![],
+            confirm_timeout_secs: 7,
+        };
+        let shown = format!("{dto:?}");
+        assert!(!shown.contains("tok-s3cr3t-value"), "{shown}");
+        assert!(shown.contains("127.0.0.1:1234") && shown.contains("[REDACTED]"));
+    }
+
     #[test]
     fn test_load_confirm_timeout_secs_defaults_to_backend_default_without_stored_value() {
         let _guard = lock();

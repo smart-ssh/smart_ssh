@@ -341,7 +341,7 @@ impl From<&AiProviderConfig> for AiProviderConfigDto {
 /// `CredentialStore` weitergereicht (`add_ai_provider`) bzw. bei
 /// `update_ai_provider` interpretiert: leer = Credential unverändert
 /// lassen (s. `app_shell::commands::update_ai_provider`-Doc-Kommentar).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiProviderConfigInput {
     pub provider_type: ProviderType,
@@ -693,10 +693,8 @@ pub struct DeleteUnusableServerResult {
 
 /// Eingabe für `create_server`/`update_server`/`test_connection` (Spec
 /// 0008, Abschnitt 4). `group_id`/`jump_host` direkt als `GroupId`/
-/// `ServerId` statt `String` — beide sind `Uuid`-Newtypes und
-/// (de-)serialisieren bereits als reiner UUID-String, ein manuelles
-/// Parsen im Command-Handler wäre nur Boilerplate.
-#[derive(Debug, Clone, Deserialize)]
+/// `ServerId` statt `String` (beides `Uuid`-Newtypes, kein Parsen nötig).
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerInput {
     pub name: String,
@@ -791,7 +789,7 @@ pub fn normalize_start_directory_input(input: Option<String>) -> Result<Option<S
 /// "privateKey", "keyContent": "...", "passphrase": null}`, die
 /// natürliche Form für das TypeScript-Frontend, dieses Objekt selbst zu
 /// bauen.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -1801,6 +1799,7 @@ pub fn sort_remote_entries(entries: &mut [RemoteEntryDto]) {
     });
 }
 
+mod redacted_debug;
 #[cfg(test)]
 mod tests;
 

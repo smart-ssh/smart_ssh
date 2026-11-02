@@ -9,6 +9,8 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
+use secrecy::{ExposeSecret, SecretString};
+use subtle::ConstantTimeEq;
 
 /// Hält das aktuell gültige Token hinter einem `Mutex`, damit
 /// "Neu generieren" (Spec 0028, Abschnitt 9) das alte Token **sofort**
@@ -17,15 +19,30 @@ use axum::response::Response;
 /// was laufende Verbindungen unnötig hart trennen würde. `Arc`-geklont
 /// zwischen dem Axum-`State` dieser Middleware und der Stelle, die das
 /// Token bei "Neu generieren" austauscht (Spec 0028, Abschnitt 9).
-#[derive(Clone, Default)]
-pub struct SharedToken(Arc<Mutex<String>>);
+/// The token is a `SecretString`; `Debug` is written by hand and never
+/// prints it.
+#[derive(Clone)]
+pub struct SharedToken(Arc<Mutex<SecretString>>);
+
+impl Default for SharedToken {
+    fn default() -> Self {
+        Self::new(String::new())
+    }
+}
+
+impl std::fmt::Debug for SharedToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SharedToken([REDACTED])")
+    }
+}
 
 impl SharedToken {
     pub fn new(initial: impl Into<String>) -> Self {
-        Self(Arc::new(Mutex::new(initial.into())))
+        Self(Arc::new(Mutex::new(SecretString::from(initial.into()))))
     }
 
-    pub fn get(&self) -> String {
+    /// Returns a copy of the current token as a secret.
+    pub fn get(&self) -> SecretString {
         self.0.lock().expect("SharedToken-Mutex vergiftet").clone()
     }
 
@@ -33,7 +50,7 @@ impl SharedToken {
     /// Token abgelehnt, unabhängig von bereits offenen HTTP-Verbindungen
     /// (jeder neue Tool-Call durchläuft die Middleware erneut).
     pub fn set(&self, new_token: impl Into<String>) {
-        *self.0.lock().expect("SharedToken-Mutex vergiftet") = new_token.into();
+        *self.0.lock().expect("SharedToken-Mutex vergiftet") = SecretString::from(new_token.into());
     }
 }
 
@@ -51,6 +68,7 @@ pub async fn require_bearer_token(
     next: Next,
 ) -> Result<Response, StatusCode> {
     let expected = expected.get();
+    let expected = expected.expose_secret();
     // Issue #115: Ein leeres oder nur aus Leerzeichen bestehendes erwartetes
     // Token heißt "MCP ohne Geheimnis" — `Authorization: Bearer ` (leerer
     // Wert) wäre sonst gleich und käme durch. Ein solches Token gewährt
@@ -61,12 +79,11 @@ pub async fn require_bearer_token(
         return Err(StatusCode::UNAUTHORIZED);
     }
     match extract_bearer(&headers) {
-        // Konstante Laufzeit wäre hier zusätzliche Härtung, aber die Spec
-        // (Abschnitt 6) verlangt nur "kein Teil-Zugriff bei falschem
-        // Token", kein Schutz gegen Timing-Seitenkanäle innerhalb von
-        // 127.0.0.1 — ein einfacher Vergleich reicht für diese
-        // Bedrohungslage.
-        Some(token) if token == expected => Ok(next.run(request).await),
+        // Constant-time comparison on the byte slices; a length mismatch
+        // returns early (only the length leaks, not the content).
+        Some(token) if bool::from(token.as_bytes().ct_eq(expected.as_bytes())) => {
+            Ok(next.run(request).await)
+        }
         _ => Err(StatusCode::UNAUTHORIZED),
     }
 }
@@ -129,6 +146,32 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_token_differing_in_last_byte_or_length_is_rejected() {
+        let token = SharedToken::new("secret-token");
+        for bad in [
+            "Bearer secret-tokeX",
+            "Bearer secret-toke",
+            "Bearer secret-token2",
+        ] {
+            assert_eq!(
+                status_for(token.clone(), Some(bad)).await,
+                StatusCode::UNAUTHORIZED,
+                "{bad}"
+            );
+        }
+        assert_eq!(
+            status_for(token, Some("Bearer secret-token")).await,
+            StatusCode::OK
+        );
+    }
+
+    #[test]
+    fn test_shared_token_debug_does_not_print_token() {
+        let shown = format!("{:?}", SharedToken::new("sup3r-secret-value"));
+        assert!(!shown.contains("sup3r-secret-value"), "{shown}");
     }
 
     #[tokio::test]
