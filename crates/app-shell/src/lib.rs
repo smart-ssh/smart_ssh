@@ -76,11 +76,11 @@ mod window_prompt;
 mod wiring;
 
 pub use db_extensions::DbExtension;
+pub use extension_plugins::UnlockedPluginFactory;
 pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
 pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
-pub use wiring::{Edition, Wiring};
-
 use std::sync::Arc;
+pub use wiring::{Edition, UnlockedPlugin, Wiring};
 
 use credentials_keyring::KeyringCredentialStore;
 use persistence_sqlite::default_db_path;

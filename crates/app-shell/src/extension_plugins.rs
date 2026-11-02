@@ -51,6 +51,13 @@ impl<R: Runtime> UnlockedPluginFactory<R> {
     {
         Self(Box::new(move || Box::new(Erased(build()))))
     }
+
+    /// Name the plugin registers with. The plugin is built lazily, so this
+    /// builds it and drops it again without registering anything; the factory
+    /// is consumed (create a second one to also register the plugin).
+    pub fn into_name(self) -> &'static str {
+        (self.0)().name()
+    }
 }
 
 /// Keyring mode: register the plugins on the builder, in order.
@@ -127,6 +134,11 @@ mod tests {
                 })
                 .build()
         })
+    }
+
+    #[test]
+    fn test_into_name_returns_registered_name() {
+        assert_eq!(plugin("name-probe-1070").into_name(), "name-probe-1070");
     }
 
     fn context(names: &[&str]) -> tauri::Context<MockRuntime> {
