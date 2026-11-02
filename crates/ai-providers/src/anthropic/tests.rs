@@ -9,7 +9,10 @@
 use ssh_manager_core::ai::default_action_schemas;
 
 use super::*;
+use crate::common::prompt_format::format_command_result;
 use crate::error::ProviderErrorInfo;
+use ssh_manager_core::ai::{MessageContent, Role};
+use ssh_manager_core::ssh::CommandOutput;
 
 /// Issue #545: a stored question is sent as assistant text with the
 /// question and numbered option labels.
