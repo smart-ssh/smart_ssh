@@ -417,6 +417,39 @@ pub fn redactor_for_connect(
     (redactor, !(sudo.1 && !lookup.incomplete && compiled))
 }
 
+/// Redactor for a request without a session (note summary, issue #1057): the
+/// same sudo read and scope lookup as a connect, plus whether it is "redaction
+/// incomplete". On a failure the redactor keeps every secret that is known.
+pub async fn redactor_for_sessionless_request(
+    profile_store: &dyn ProfileStore,
+    sudo: (Option<SecretString>, bool),
+    extension: Option<&dyn SessionExtension>,
+    server_id: ServerId,
+    local_tags: Option<Vec<String>>,
+) -> (Box<dyn OutputRedactor>, bool) {
+    let lookup = scope_lookup(profile_store, server_id, local_tags).await;
+    let secrets = known_secrets(extension, lookup.scope.as_ref());
+    redactor_for_connect(&sudo, &lookup, &secrets)
+}
+
+/// Tells the user once, in the note-shrink toast, that masking may be
+/// incomplete (issue #1057). No-op when the lookup was complete.
+pub fn notify_note_request_redaction_incomplete(
+    emitter: &dyn crate::events::EventEmitter,
+    server_id: ServerId,
+    incomplete: bool,
+) {
+    if incomplete {
+        crate::events::emit_note_shrink_failed(
+            emitter,
+            server_id,
+            "Some secret values for this server could not be loaded; they may not be masked \
+             in what is sent to the AI."
+                .to_string(),
+        );
+    }
+}
+
 /// Redactor for a reconnected session (issue #843). A failed sudo read keeps
 /// the session's known password in the patterns; if anything could not be
 /// determined (sudo read, scope lookup, literal compile), the secrets known
@@ -464,6 +497,9 @@ impl SessionExtension for RecordingExtension {
         self.groups.lock().unwrap().push(group_id);
     }
 }
+
+#[cfg(test)]
+mod tests_sessionless;
 
 #[cfg(test)]
 mod tests {

@@ -144,7 +144,9 @@ apply to a server (server or group lookup), or the stored sudo password
 cannot be read, or a secret cannot be compiled into a pattern, the session
 keeps masking what it already knew (a rebuild extends the set instead of
 replacing it), masks at least the server-level secrets, and shows one chat
-notice `REDACTION_INCOMPLETE`. If the profile store fails while the server
+notice `REDACTION_INCOMPLETE`. The sessionless note summary uses the same
+lookup and shows the same notice once (via the note-shrink failure toast). If
+the profile store fails while the server
 tags are read for rule evaluation, the rules run on the tags from connect
 time and an action that would run automatically asks for confirmation
 (`FILTER_SERVER_TAGS_UNAVAILABLE`) — never the other way
