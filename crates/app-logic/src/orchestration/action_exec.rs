@@ -83,6 +83,10 @@ mod tests_escalation_log;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_escalation;
+// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_live_output;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
@@ -170,7 +174,7 @@ pub(crate) async fn handle_action_proposed(
     let matched_rule = evaluation.matched_rule.clone();
     let matched_rule_origin = evaluation.matched_rule_origin;
     let engine_decision = evaluation.decision.clone();
-    let mut decision = evaluation.decision.clone();
+    let decision = evaluation.decision.clone();
 
     // Vorgezogen (war vorher erst nach der Eskalationskette berechnet, s.
     // Git-Historie) — die neue Spec-0039-Eskalation unten braucht die
@@ -180,259 +184,40 @@ pub(crate) async fn handle_action_proposed(
     // an ihrem Ergebnis.
     let risk_assessment = risk_assessment_for_action(&action);
 
-    // Spec 0068, Teil 2: ein Lesebefehl/`sftp-read` auf einen Secret-Pfad
-    // (`~/.ssh/id_*`, `.env`, `/etc/shadow`, …) verlangt IMMER eine
-    // Bestätigung — auch wenn eine Allow-Regel greift. Reine Eskalation
-    // (nur `AutoExec` → `Confirm`, `Deny` bleibt `Deny`), für Chat UND MCP,
-    // weil beide durch diese Funktion laufen.
-    //
-    // Bewusst VOR der Injection-Prüfung (zweite Review-Runde): deren `swap`
-    // verbraucht das Verdachts-Flag nur bei `AutoExec`; läge diese Prüfung
-    // dahinter, verbrauchte eine Secret-Lese-Aktion das Flag, und die
-    // eigentliche Folgeaktion liefe wieder automatisch. Damit der Dialog
-    // trotzdem den alarmierenderen Grund zeigt, wird das Flag hier nur
-    // GELESEN (nicht verbraucht) und bei gesetztem Flag der Injection-Grund
-    // angezeigt.
-    if matches!(decision, Decision::AutoExec) {
-        if let Some(finding) = pseudo_command_for_risk_classification(&action)
-            .as_deref()
-            .and_then(ssh_manager_core::risk::secret_path_read_reason)
-        {
-            decision = check_finding_confirm(
-                finding,
-                "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM",
-                session
-                    .injection_suspected
-                    .load(std::sync::atomic::Ordering::SeqCst),
-                peek_injection_reason(session).as_deref(),
-            );
-        }
-    }
-
-    // ADR 0058 §8 (Entscheidung, 2026-09-21): ein Aufruf von
-    // `sftp-server` verlangt IMMER eine Bestätigung — auch gegen eine
-    // Allow-Regel (mit der NOPASSWD-Regel des erhöhten Dateibrowsers ist das
-    // passwortloser Root-Dateizugriff). Dasselbe Muster wie die
-    // Secret-Prüfung oben: nur `AutoExec` → `Confirm`, vor der
-    // Injection-Prüfung, deren Flag hier nur gelesen wird.
-    if matches!(decision, Decision::AutoExec) {
-        if let Some(finding) = pseudo_command_for_risk_classification(&action)
-            .as_deref()
-            .and_then(ssh_manager_core::risk::sftp_server_invocation_reason)
-        {
-            decision = check_finding_confirm(
-                finding,
-                "FILTER_SFTP_SERVER_REQUIRES_CONFIRM",
-                session
-                    .injection_suspected
-                    .load(std::sync::atomic::Ordering::SeqCst),
-                peek_injection_reason(session).as_deref(),
-            );
-        }
-    }
-
-    // Spec 0092, A2: Ist die app-weite Einstellung „Bei rotem Risiko immer
-    // nachfragen" an, verlangt ein auf EINER der beiden Achsen rot
-    // eingestufter Vorschlag immer eine Bestätigung — auch gegen eine
-    // Allow-Regel. Reine Eskalation (`AutoExec` → `Confirm`), für Chat UND
-    // MCP, weil beide durch diese Funktion laufen.
-    //
-    // Stelle in der Kette (Spec 0092, §4): NACH Secret-Pfad und
-    // `sftp-server`, damit deren genauerer Code erhalten bleibt (A2.4 — die
-    // beiden Glieder oben haben `decision` dann schon auf `Confirm` gesetzt,
-    // die Bedingung hier greift nicht mehr), und VOR der Injection-Prüfung,
-    // damit das Verdachts-Flag hier nur GELESEN und nicht verbraucht wird
-    // (A2.3, dasselbe Muster und derselbe Grund wie bei den beiden oben).
-    // Ein bereits vorliegendes `Confirm` (z. B. `FILTER_HARD_BLACKLIST`,
-    // Spec 0092 §4) bleibt dadurch ebenfalls unberührt, ein `Deny` erst
-    // recht.
-    if session.red_risk_always_confirm && matches!(decision, Decision::AutoExec) {
-        if let Some(reason) = red_risk_confirm_reason(&action, risk_assessment.as_ref()) {
-            decision = if session
-                .injection_suspected
-                .load(std::sync::atomic::Ordering::SeqCst)
-            {
-                Decision::Confirm {
-                    reason: with_injection_reason(
-                        format!(
-                            "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                             erkannt; außerdem: {reason} – erfordert Bestätigung"
-                        ),
-                        peek_injection_reason(session).as_deref(),
-                    ),
-                    code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
-                }
-            } else {
-                Decision::Confirm {
-                    reason: format!("{reason} – erfordert immer Bestätigung"),
-                    code: "FILTER_RED_RISK_REQUIRES_CONFIRM".to_string(),
-                }
-            };
-        }
-    }
-
-    // Unabhängiger Review-Pass (Spec 0039): ersetzt die bisherige SEC-03-
-    // Bremse aus Spec 0013. Die ALTE Logik: `round` war ein rein lokaler
-    // Schleifenzähler in `run_chat_turn`s `for round in 1..=MAX_AUTO_
-    // FOLLOWUP_ROUNDS`-Schleife, kein Feld auf `Session` — jeder Aufruf von
-    // `send_chat_message` (= jede neue Nutzer-Nachricht) rief `run_chat_
-    // turn` frisch auf, wodurch `round` wieder bei 1 begann. Die alte
-    // Eskalation (`round >= 2 && (SuggestCommand | ReadRemoteFile) &&
-    // AutoExec -> Confirm`) griff deshalb nur INNERHALB einer einzigen
-    // automatischen Fortsetzungskette, nicht über die ganze Sitzung hinweg
-    // — ein in Runde 1 eingeschleustes, aber erst bei der NÄCHSTEN
-    // Nutzer-Nachricht ausgelöstes Payload traf wieder auf `round == 1` und
-    // lief unter normaler, nicht eskalierter Policy (Spec 0039, Abschnitt
-    // 1, Punkt 4).
-    //
-    // `session.untrusted_content_ingested` ist stattdessen session-weit
-    // monoton: einmal gesetzt (durch `fence_untrusted`-Inhalt, der in den
-    // Kontext gelangt ist — Kommando-Ausgabe, SFTP-Dateiinhalt, Notizen im
-    // System-Prompt), bleibt es für den Rest der Sitzung gesetzt,
-    // unabhängig von Runden-/Nachrichtengrenzen. Die tatsächliche Schärfe
-    // danach ist pro Server über `Session::post_ingest_policy`
-    // konfigurierbar (Spec 0039, Abschnitt 5.1), statt global fest, damit
-    // Allow-Regeln nicht für jeden Server wertlos werden.
-    if session
-        .untrusted_content_ingested
-        .load(std::sync::atomic::Ordering::SeqCst)
-        && matches!(decision, Decision::AutoExec)
-    {
-        let is_modifying_action = risk_assessment
-            .as_ref()
-            .is_some_and(|r| r.server_risk != RiskLevel::None);
-        let escalate = match session.post_ingest_policy {
-            PostIngestPolicy::Strict => true,
-            PostIngestPolicy::Balanced => is_modifying_action,
-            PostIngestPolicy::Standard => false,
-        };
-        // `sftp-write`/`ProposeNoteUpdate`/MCP-Herkunft bleiben unabhängig
-        // von dieser Stufe eskalationspflichtig (Spec 0039, Abschnitt 5.1,
-        // letzter Absatz) — nicht als Sonderfall hier nötig: `evaluate_
-        // action` liefert für `WriteRemoteFile`/`ProposeNoteUpdate` nie
-        // `AutoExec`, und die MCP-Eskalation unten läuft unabhängig davon,
-        // ob dieser Zweig hier schon eskaliert hat.
-        if escalate {
-            decision = Decision::Confirm {
-                reason: "Serverinhalt wurde in dieser Sitzung bereits eingelesen – erfordert \
-                         Bestätigung"
-                    .to_string(),
-                code: "FILTER_POST_INGEST_REQUIRES_CONFIRM".to_string(),
-            };
-        }
-    }
-
-    // Spec 0039, Abschnitt 5.2: die optionale KI-Prüfung auf eingeschleuste
-    // Anweisungen (s. `execute_suggested_command`/`execute_read_remote_
-    // file`, wo sie tatsächlich läuft) bezieht sich auf "die auf diesem
-    // Inhalt basierende Folgeaktion" — deshalb wird das Flag hier beim
-    // Eskalieren VERBRAUCHT (auf `false` zurückgesetzt), anders als
-    // `untrusted_content_ingested` oben, das für die ganze Sitzung gilt.
-    // Nur Eskalation nach oben, wie bei der Risiko-Zweitmeinung aus Spec
-    // 0026 (ein "nein"/keine Prüfung macht nichts zusätzlich AutoExec-
-    // fähig, das es sonst nicht wäre).
-    //
-    // Unabhängiger Review-Pass (Spec 0039): `swap` muss auf den
-    // `AutoExec`-Zweig BESCHRÄNKT bleiben, statt unbedingt bei jedem
-    // Aktionsvorschlag zu laufen — sonst verbraucht z. B. eine an der
-    // Hard-Blacklist scheiternde `Deny`-Aktion (die der Payload absichtlich
-    // vorschieben kann, etwa `rm -rf /`) das Verdachts-Flag, bevor die
-    // eigentlich gemeinte Folgeaktion überhaupt vorgeschlagen wird — diese
-    // liefe dann trotz erkanntem Verdacht ungebremst als `AutoExec`.
-    if matches!(decision, Decision::AutoExec)
-        && session
-            .injection_suspected
-            .swap(false, std::sync::atomic::Ordering::SeqCst)
-    {
-        decision = Decision::Confirm {
-            reason: with_injection_reason(
-                "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, erkannt – \
-                 erfordert Bestätigung"
-                    .to_string(),
-                take_injection_reason(session).as_deref(),
-            ),
-            code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
-        };
-    }
-    // Issue #102: der Injection-Check lief nicht (oder lieferte kein
-    // Urteil) → die nächste `AutoExec`-Aktion wird bestätigungspflichtig,
-    // "klebrig bis verbraucht" wie der Verdacht. Nur Eskalation; ein
-    // vorhandenes `Confirm`/`Deny` bleibt unberührt, das Flag dann auch.
-    if matches!(decision, Decision::AutoExec)
-        && session
-            .injection_check_unavailable
-            .swap(false, std::sync::atomic::Ordering::SeqCst)
-    {
-        decision = Decision::Confirm {
-            reason: "Die Prüfung auf eingeschleuste Anweisungen konnte nicht ausgeführt werden – \
-                     erfordert Bestätigung"
-                .to_string(),
-            code: "FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM".to_string(),
-        };
-    }
-
-    // Spec 0028, Abschnitt 5: ein über MCP (externes Tool) ausgelöster
-    // Vorschlag landet **immer** bei einer Bestätigung, unabhängig von
-    // einer sonst greifenden Allow-Regel — ein externes Tool ist eine neue
-    // Vertrauensgrenze, die strenger behandelt wird als die interne KI
-    // (dieselbe Denkweise wie bei SFTP-Schreibzugriffen, Spec 0020,
-    // Abschnitt 4.2). Diese Einschränkung ist für die Free-Version fest
-    // codiert, keine Einstellung — bewusst als eigener, benannter Schritt
-    // statt als verstecktes Sonderverhalten irgendwo in `evaluate_action`.
-    if matches!(origin, ActionOrigin::Mcp { .. }) && matches!(decision, Decision::AutoExec) {
-        decision = Decision::Confirm {
-            reason: "Über MCP (externes Tool) angefragt – erfordert immer Bestätigung".to_string(),
-            code: "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM".to_string(),
-        };
-    }
-
-    // Unabhängiger Review-Pass (Spec 0018): das gespeicherte Sudo-Passwort
-    // ist ein Root-Zugangsdatum — dessen Verwendung verdient dieselbe
-    // "neue Vertrauensgrenze verlangt immer Bestätigung"-Behandlung wie
-    // MCP-Herkunft oder ein SFTP-Schreibzugriff (Spec 0020, Abschnitt 4.2),
-    // unabhängig davon, ob eine (oft für den unprivilegierten Fall
-    // angelegte) Allow-Regel per Dual-Text-Matching (ADR 0002) zufällig
-    // auch die `sudo`-Variante mit abdeckt. Ohne diese Eskalation hätte
-    // z. B. eine harmlos gemeinte Regel "systemctl restart *" ein
-    // gespeichertes Root-Passwort ohne jede Rückfrage verbraucht.
+    // The post-engine escalation chain (secret path, `sftp-server`, red risk,
+    // post-ingest, injection suspicion/unavailable, MCP origin, sudo password,
+    // inserted secret, earlier rejection) lives once in `escalation::escalate`
+    // (issue #826): a pure function that only combines via
+    // `Decision::stricter`. Here: read the facts, escalate, then consume
+    // exactly the one-shot flags the result names.
     let uses_password = uses_stored_sudo_password(session, &action);
-    if uses_password && matches!(decision, Decision::AutoExec) {
-        decision = Decision::Confirm {
-            reason: "Verwendet das hinterlegte Sudo-Passwort – erfordert immer Bestätigung"
-                .to_string(),
-            code: "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM".to_string(),
-        };
-    }
-
-    // Issue #815 (Spec 0038): a registered outgoing transform that will change
-    // this text (insert stored secret values) always needs a confirmation,
-    // like the stored sudo password. Escalation only.
     let transform_scope = if session.outgoing_transform.is_some() {
         Some(super::outgoing::outgoing_scope(session, profile_store).await)
     } else {
         None
     };
-    if matches!(decision, Decision::AutoExec)
-        && transform_requires_confirmation(session, transform_scope.as_ref(), &action)
+    let mut facts = escalation_facts(
+        session,
+        &action,
+        risk_assessment.as_ref(),
+        transform_scope.as_ref(),
+    );
+    facts.mcp_origin = matches!(origin, ActionOrigin::Mcp { .. });
+    facts.earlier_rejection = earlier_rejection.load(std::sync::atomic::Ordering::SeqCst);
+    let escalation = super::escalation::escalate(decision, &facts);
+    if escalation.consume_injection_suspected
+        && session
+            .injection_suspected
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
     {
-        decision = Decision::Confirm {
-            reason: "Fügt vor dem Senden einen gespeicherten geheimen Wert ein – erfordert immer Bestätigung"
-                .to_string(),
-            code: "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM".to_string(),
-        };
+        let _ = take_injection_reason(session);
     }
-
-    // Spec 0068, Teil 4 (Review-Fund): nach einer Ablehnung in derselben
-    // Antwort nie mehr ohne Rückfrage — nur Eskalation.
-    if matches!(decision, Decision::AutoExec)
-        && earlier_rejection.load(std::sync::atomic::Ordering::SeqCst)
-    {
-        decision = Decision::Confirm {
-            reason: "Eine vorherige Aktion dieser Antwort wurde abgelehnt – erfordert Bestätigung"
-                .to_string(),
-            code: "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM".to_string(),
-        };
+    if escalation.consume_injection_check_unavailable {
+        session
+            .injection_check_unavailable
+            .swap(false, std::sync::atomic::Ordering::SeqCst);
     }
+    let decision = escalation.decision;
 
     // Issue #688: one default-level line when the chain above turned the
     // engine's `AutoExec` into something stricter. Logging only; the
@@ -1065,57 +850,10 @@ fn log_filter_escalation(
     );
 }
 
-/// `Confirm`-Entscheidung für einen Treffer der Secret-Pfad- bzw.
-/// `sftp-server`-Prüfung (Spec 0068 Teil 2, ADR 0058 §8). Reine Eskalation;
-/// der Aufrufer ruft das nur bei `AutoExec` auf.
-///
-/// Issue #109: Konnte die Prüfung das Kommando nicht prüfen (Längen- oder
-/// Verschachtelungsgrenze), nennt der Dialog genau das
-/// (`FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM`) statt eines Treffers,
-/// den es nicht gab. Ein Injection-Verdacht hat weiterhin Vorrang.
-fn check_finding_confirm(
-    finding: ssh_manager_core::risk::CommandCheckFinding,
-    match_code: &str,
-    injection_suspected: bool,
-    injection_reason: Option<&str>,
-) -> Decision {
-    let reason = finding.reason();
-    if injection_suspected {
-        Decision::Confirm {
-            reason: with_injection_reason(
-                format!(
-                    "Möglicher Versuch, Anweisungen über Serverinhalt einzuschleusen, \
-                     erkannt; außerdem: {reason} – erfordert Bestätigung"
-                ),
-                injection_reason,
-            ),
-            code: "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM".to_string(),
-        }
-    } else if finding.is_not_assessable() {
-        Decision::Confirm {
-            reason: format!("{reason} – erfordert immer Bestätigung"),
-            code: "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM".to_string(),
-        }
-    } else {
-        Decision::Confirm {
-            reason: format!("{reason} – erfordert immer Bestätigung"),
-            code: match_code.to_string(),
-        }
-    }
-}
-
 /// Issue #693: separator between the confirmation text and the checker's
 /// reason; the frontend splits on the last occurrence. The reason itself
 /// never contains a newline (see [`sanitize_injection_reason`]).
 pub(crate) const INJECTION_REASON_MARKER: &str = "\nReason: ";
-
-/// Issue #693: appends the checker's reason (if any) to a confirmation text.
-fn with_injection_reason(text: String, reason: Option<&str>) -> String {
-    match reason {
-        Some(r) if !r.is_empty() => format!("{text}{INJECTION_REASON_MARKER}{r}"),
-        _ => text,
-    }
-}
 
 /// Issue #693: the checker's reason is derived from untrusted content, so
 /// before it is stored or shown it is redacted, stripped of control
@@ -1153,76 +891,88 @@ fn take_injection_reason(session: &Session) -> Option<String> {
         .and_then(|mut g| g.take())
 }
 
-/// Issue #596: the post-engine escalations that do not depend on the user's
-/// choice, evaluated **read-only** for the verdict of a rule suggestion: the
-/// code of the first one that would turn an `AutoExec` into a `Confirm` for
-/// `command` (chat origin), or `None`. Same conditions and order as the chain
-/// in `handle_action_proposed`, but it never consumes the one-shot flags
-/// (`injection_suspected`, `injection_check_unavailable`) and skips the
-/// escalation after an earlier rejection (transient, not a property of the
-/// command).
+/// Test helper: the decision the secret-path / `sftp-server` step produces for
+/// `finding`, via the shared `escalate` (the former stand-alone function).
+#[cfg(test)]
+fn check_finding_confirm(
+    finding: ssh_manager_core::risk::CommandCheckFinding,
+    match_code: &str,
+    injection_suspected: bool,
+    injection_reason: Option<&str>,
+) -> Decision {
+    let mut facts = super::escalation::EscalationFacts {
+        injection_suspected,
+        injection_reason: injection_reason.map(str::to_string),
+        ..Default::default()
+    };
+    if match_code == "FILTER_SFTP_SERVER_REQUIRES_CONFIRM" {
+        facts.sftp_server = Some(finding);
+    } else {
+        facts.secret_path = Some(finding);
+    }
+    super::escalation::escalate(Decision::AutoExec, &facts).decision
+}
+
+/// Reads the session state the escalation chain depends on (read-only: the
+/// one-shot flags are loaded, never consumed). `mcp_origin` and
+/// `earlier_rejection` are transient and left `false`; the caller sets them.
+fn escalation_facts(
+    session: &Session,
+    action: &AiAction,
+    risk_assessment: Option<&RiskAssessment>,
+    transform_scope: Option<&ssh_manager_core::outgoing::ServerScope>,
+) -> super::escalation::EscalationFacts {
+    use std::sync::atomic::Ordering::SeqCst;
+    let pseudo = pseudo_command_for_risk_classification(action);
+    let post_ingest_escalates = session.untrusted_content_ingested.load(SeqCst) && {
+        let is_modifying_action = risk_assessment.is_some_and(|r| r.server_risk != RiskLevel::None);
+        match session.post_ingest_policy {
+            PostIngestPolicy::Strict => true,
+            PostIngestPolicy::Balanced => is_modifying_action,
+            PostIngestPolicy::Standard => false,
+        }
+    };
+    super::escalation::EscalationFacts {
+        secret_path: pseudo
+            .as_deref()
+            .and_then(ssh_manager_core::risk::secret_path_read_reason),
+        sftp_server: pseudo
+            .as_deref()
+            .and_then(ssh_manager_core::risk::sftp_server_invocation_reason),
+        red_risk_reason: if session.red_risk_always_confirm {
+            red_risk_confirm_reason(action, risk_assessment)
+        } else {
+            None
+        },
+        post_ingest_escalates,
+        injection_suspected: session.injection_suspected.load(SeqCst),
+        injection_reason: peek_injection_reason(session),
+        injection_check_unavailable: session.injection_check_unavailable.load(SeqCst),
+        mcp_origin: false,
+        uses_stored_sudo_password: uses_stored_sudo_password(session, action),
+        transform_marks_text: transform_requires_confirmation(session, transform_scope, action),
+        earlier_rejection: false,
+    }
+}
+
+/// Issue #596: the escalation code that does not depend on the user's choice,
+/// for the verdict of a rule suggestion: the code of the step that would turn
+/// an `AutoExec` into a `Confirm` for `command` (chat origin, no earlier
+/// rejection), or `None`. Runs the same [`escalate`](super::escalation::escalate)
+/// as the decision path, so the codes are identical (an injection suspicion
+/// shows the injection code for a secret-path hit, like the main chain). It
+/// never consumes a one-shot flag: the returned `Escalation` is only read.
 pub(crate) fn state_independent_escalation_code(
     session: &Session,
     command: &str,
     transform_scope: Option<&ssh_manager_core::outgoing::ServerScope>,
 ) -> Option<&'static str> {
-    use std::sync::atomic::Ordering::SeqCst;
     let action = AiAction::SuggestCommand {
         command: command.to_string(),
     };
-    let pseudo = pseudo_command_for_risk_classification(&action);
-    if let Some(finding) = pseudo
-        .as_deref()
-        .and_then(ssh_manager_core::risk::secret_path_read_reason)
-    {
-        return Some(if finding.is_not_assessable() {
-            "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM"
-        } else {
-            "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM"
-        });
-    }
-    if let Some(finding) = pseudo
-        .as_deref()
-        .and_then(ssh_manager_core::risk::sftp_server_invocation_reason)
-    {
-        return Some(if finding.is_not_assessable() {
-            "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM"
-        } else {
-            "FILTER_SFTP_SERVER_REQUIRES_CONFIRM"
-        });
-    }
     let risk_assessment = risk_assessment_for_action(&action);
-    if session.red_risk_always_confirm
-        && red_risk_confirm_reason(&action, risk_assessment.as_ref()).is_some()
-    {
-        return Some("FILTER_RED_RISK_REQUIRES_CONFIRM");
-    }
-    if session.untrusted_content_ingested.load(SeqCst) {
-        let is_modifying_action = risk_assessment
-            .as_ref()
-            .is_some_and(|r| r.server_risk != RiskLevel::None);
-        let escalate = match session.post_ingest_policy {
-            PostIngestPolicy::Strict => true,
-            PostIngestPolicy::Balanced => is_modifying_action,
-            PostIngestPolicy::Standard => false,
-        };
-        if escalate {
-            return Some("FILTER_POST_INGEST_REQUIRES_CONFIRM");
-        }
-    }
-    if session.injection_suspected.load(SeqCst) {
-        return Some("FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM");
-    }
-    if session.injection_check_unavailable.load(SeqCst) {
-        return Some("FILTER_INJECTION_CHECK_UNAVAILABLE_REQUIRES_CONFIRM");
-    }
-    if uses_stored_sudo_password(session, &action) {
-        return Some("FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM");
-    }
-    if transform_requires_confirmation(session, transform_scope, &action) {
-        return Some("FILTER_INSERTED_SECRET_REQUIRES_CONFIRM");
-    }
-    None
+    let facts = escalation_facts(session, &action, risk_assessment.as_ref(), transform_scope);
+    super::escalation::escalate(Decision::AutoExec, &facts).code
 }
 
 /// Issue #815: asks the registered outgoing transform (pure query) whether it

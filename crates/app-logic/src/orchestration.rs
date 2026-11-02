@@ -69,6 +69,7 @@
 pub(crate) mod action_exec;
 mod attachments;
 mod chat_turn;
+mod escalation;
 mod live_output;
 mod new_chat;
 mod notes;
