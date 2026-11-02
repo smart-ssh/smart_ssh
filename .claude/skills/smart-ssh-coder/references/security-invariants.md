@@ -52,8 +52,15 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 
 ## Redaction und Geheimnisse
 
-11. **Redaction vor Versand/Log**: `reapply_redaction_for_send` vor jedem
-    `AiProvider::send()`; Kommando-Ausgaben werden beim Erzeugen redigiert.
+11. **Redaction vor Versand/Log**: `AiProvider::send()` nimmt nur einen
+    `RedactedContext` (`crates/core/src/ai/redacted_context.rs`, private
+    Felder, kein `Deserialize`/`Default`). Er entsteht nur über
+    `RedactedContext::seal` (versiegelt Extension-Teile, dann
+    `reapply_redaction_for_send` über die ganze Historie; als letzter Schritt
+    vor `send`) oder über die eine benannte Ausnahme
+    `unredacted_command_for_second_opinion` (Risiko-Zweitmeinung, nur
+    `second_opinion.rs`, THREAT-MODEL.md §1). `for_tests` nur hinter
+    `test-support`, nie in `[dependencies]`. Kommando-Ausgaben werden beim Erzeugen redigiert.
     Nutzertext wird verschlüsselt gespeichert (Spec 0036) und beim Versand
     redigiert. Test-Muster: Geheimnis einpflanzen (`AKIAABCDEFGHIJKLMNOP`
     wird erkannt), prüfen, dass es nie im Klartext im Request steht.

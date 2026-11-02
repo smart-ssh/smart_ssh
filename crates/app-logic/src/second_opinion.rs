@@ -18,7 +18,8 @@ use unicode_normalization::UnicodeNormalization;
 
 use ssh_manager_core::ai::{
     truncate_for_second_opinion, AiError, AiEvent, AiProvider, AiUsage, ChatMessage,
-    MessageContent, Role, SessionContext, DEFAULT_SECOND_OPINION_MAX_LEN,
+    MessageContent, NoExtensionSealer, OutputRedactor, RedactedContext, Role, SessionContext,
+    DEFAULT_SECOND_OPINION_MAX_LEN,
 };
 use ssh_manager_core::risk::RiskLevel;
 
@@ -35,7 +36,8 @@ const SECOND_OPINION_PROMPT: &str =
 /// Fund C), bevor es in die `history` wandert, und hängt bei Kürzung einen
 /// Hinweis an `system_prompt` an, damit die Zweitmeinung selbst weiß, dass
 /// ihr nur ein Ausschnitt vorliegt.
-fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionContext {
+/// Truncated content plus the (possibly extended) system prompt.
+fn build_second_opinion_parts(system_prompt: &str, content: &str) -> (String, String) {
     let (truncated_content, was_truncated) =
         truncate_for_second_opinion(content, DEFAULT_SECOND_OPINION_MAX_LEN);
     let system_context = if was_truncated {
@@ -47,6 +49,11 @@ fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionCo
     } else {
         system_prompt.to_string()
     };
+    (system_context, truncated_content)
+}
+
+fn build_second_opinion_context(system_prompt: &str, content: &str) -> SessionContext {
+    let (system_context, truncated_content) = build_second_opinion_parts(system_prompt, content);
     SessionContext {
         system_context,
         history: vec![ChatMessage {
@@ -167,7 +174,13 @@ pub async fn fetch_second_opinion_with_usage(
     command_or_path: &str,
     usage: &mut Option<AiUsage>,
 ) -> SideCallOutcome<RiskLevel> {
-    let context = build_second_opinion_context(SECOND_OPINION_PROMPT, command_or_path);
+    // Issue #833: the one named exception to `RedactedContext::seal`.
+    let (system_context, text) = build_second_opinion_parts(SECOND_OPINION_PROMPT, command_or_path);
+    let context = RedactedContext::unredacted_command_for_second_opinion(
+        system_context,
+        text,
+        Some(crate::orchestration::SIDE_CALL_MAX_TOKENS),
+    );
 
     let (text, end) = collect_side_call_text(provider.send(context), |u| {
         *usage = Some(u);
@@ -359,9 +372,17 @@ const INJECTION_CHECK_PROMPT: &str =
 pub async fn fetch_injection_check_with_usage(
     provider: &dyn AiProvider,
     content: &str,
+    redactor: &dyn OutputRedactor,
     usage: &mut Option<AiUsage>,
 ) -> SideCallOutcome<bool> {
-    let context = build_second_opinion_context(INJECTION_CHECK_PROMPT, content);
+    // Issue #833: the content is already redacted by the caller; sealing it
+    // again is idempotent and makes the request go through the same entry
+    // point as every other one.
+    let Ok(context) = RedactedContext::seal(
+        build_second_opinion_context(INJECTION_CHECK_PROMPT, content),
+        redactor,
+        &NoExtensionSealer,
+    );
 
     let (text, end) = collect_side_call_text(provider.send(context), |u| {
         *usage = Some(u);
@@ -416,7 +437,8 @@ mod tests {
     }
 
     impl AiProvider for RecordingMockAiProvider {
-        fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+        fn send(&self, context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+            let context = context.into_parts();
             *self.received.lock().unwrap() = Some(context);
             Box::pin(futures::stream::iter(vec![
                 AiEvent::TextDelta(self.response_text.to_string()),
@@ -1066,7 +1088,7 @@ mod tests {
     async fn provider_error_and_empty_answer_still_mean_no_check() {
         struct ErrProvider;
         impl AiProvider for ErrProvider {
-            fn send(&self, _: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+            fn send(&self, _: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
                 Box::pin(futures::stream::iter(vec![AiEvent::Error(
                     ssh_manager_core::ai::AiError::NetworkError("boom".into()),
                 )]))
@@ -1082,7 +1104,13 @@ mod tests {
             expected
         );
         assert_eq!(
-            fetch_injection_check_with_usage(&ErrProvider, "x", &mut None).await,
+            fetch_injection_check_with_usage(
+                &ErrProvider,
+                "x",
+                ssh_manager_core::ai::default_log_redactor(),
+                &mut None
+            )
+            .await,
             SideCallOutcome::ProviderError {
                 code: "AI_NETWORK_ERROR"
             }
@@ -1183,7 +1211,13 @@ mod tests {
         let so = fetch_second_opinion_with_usage(&provider, "ls", &mut None).await;
         assert_eq!(so, SideCallOutcome::NoVerdict);
         assert!(so.is_unavailable());
-        let ic = fetch_injection_check_with_usage(&provider, "some text", &mut None).await;
+        let ic = fetch_injection_check_with_usage(
+            &provider,
+            "some text",
+            ssh_manager_core::ai::default_log_redactor(),
+            &mut None,
+        )
+        .await;
         assert_eq!(ic, SideCallOutcome::NoVerdict);
         assert!(ic.is_unavailable());
     }
@@ -1194,7 +1228,13 @@ mod tests {
             response_text: "VERDICT: no\nfine",
             received: Arc::new(Mutex::new(None)),
         };
-        let ic = fetch_injection_check_with_usage(&provider, "text", &mut None).await;
+        let ic = fetch_injection_check_with_usage(
+            &provider,
+            "text",
+            ssh_manager_core::ai::default_log_redactor(),
+            &mut None,
+        )
+        .await;
         assert!(!ic.is_unavailable());
     }
 }

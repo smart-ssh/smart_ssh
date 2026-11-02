@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
+use ssh_manager_core::ai::{AiError, AiEvent, AiProvider};
 
 use crate::events::TestEmitter;
 
@@ -46,8 +46,9 @@ impl ScriptedProvider {
 impl AiProvider for ScriptedProvider {
     fn send(
         &self,
-        context: SessionContext,
+        context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+        let context = context.into_parts();
         self.sends.lock().unwrap().push(SendRecord {
             web_research_disabled: self.disabled.load(Ordering::SeqCst),
             at: tokio::time::Instant::now(),

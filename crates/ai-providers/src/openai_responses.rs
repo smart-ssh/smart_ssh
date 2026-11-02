@@ -25,7 +25,8 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    AiError, AiEvent, AiProvider, SessionContext, WebActivity, WebActivityKind, WebSource,
+    AiError, AiEvent, AiProvider, RedactedContext, SessionContext, WebActivity, WebActivityKind,
+    WebSource,
 };
 
 use crate::action::parameters_json_schema;
@@ -166,7 +167,9 @@ impl OpenAiResponsesProvider {
 }
 
 impl AiProvider for OpenAiResponsesProvider {
-    fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    fn send(&self, context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+        // One-way unwrap: the request was redacted and sealed by the core (issue #833).
+        let context = context.into_parts();
         let request_id = Uuid::new_v4();
         log_outgoing_context(request_id, &context);
 

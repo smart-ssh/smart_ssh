@@ -490,7 +490,7 @@ pub fn session_with_transport(
     impl ssh_manager_core::ai::AiProvider for NoAi {
         fn send(
             &self,
-            _context: ssh_manager_core::ai::SessionContext,
+            _context: ssh_manager_core::ai::RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>>
         {
             Box::pin(futures::stream::iter(vec![
@@ -525,7 +525,7 @@ pub fn session_with_transport_and_server_id(
     impl ssh_manager_core::ai::AiProvider for NoAi {
         fn send(
             &self,
-            _context: ssh_manager_core::ai::SessionContext,
+            _context: ssh_manager_core::ai::RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>>
         {
             Box::pin(futures::stream::iter(vec![

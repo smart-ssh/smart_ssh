@@ -241,6 +241,25 @@ pub fn seal_extension_parts(
     Ok(out)
 }
 
+/// [`ExtensionSealer`] backed by the registry of one session: the app-layer
+/// half of `RedactedContext::seal` (issue #833).
+pub struct RegistrySealer<'a> {
+    pub registry: &'a ChatContentRegistry,
+    pub session_id: Uuid,
+}
+
+impl ssh_manager_core::ai::ExtensionSealer for RegistrySealer<'_> {
+    type Error = SealError;
+
+    fn seal_extensions(
+        &self,
+        history: Vec<ChatMessage>,
+        redactor: &dyn OutputRedactor,
+    ) -> Result<Vec<ChatMessage>, SealError> {
+        seal_extension_parts(history, self.registry, self.session_id, redactor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

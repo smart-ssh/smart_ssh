@@ -28,12 +28,16 @@ impl MockAiProvider {
 }
 
 impl AiProvider for MockAiProvider {
-    fn send(&self, _context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    fn send(&self, _context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::iter(self.events.clone()))
     }
 }
 
-fn empty_context() -> SessionContext {
+fn empty_context() -> RedactedContext {
+    RedactedContext::for_tests(empty_session_context())
+}
+
+fn empty_session_context() -> SessionContext {
     SessionContext {
         system_context: String::new(),
         history: Vec::new(),

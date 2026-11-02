@@ -2374,6 +2374,7 @@ pub(crate) async fn check_for_injected_instructions(
     let outcome = crate::second_opinion::fetch_injection_check_with_usage(
         provider,
         content,
+        session.redactor.as_ref(),
         &mut request_usage,
     )
     .await;

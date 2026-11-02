@@ -6,8 +6,8 @@ use futures::Stream;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, RejectionReason, Role,
-    SessionContext,
+    default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, RedactedContext,
+    RejectionReason, Role, SessionContext,
 };
 use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, SshError};
 
@@ -54,7 +54,7 @@ fn test_added_secret_values_are_masked_and_survive_a_swap() {
 /// versehentlichen Aufruf sofort sichtbar.
 struct UnusedAiProvider;
 impl AiProvider for UnusedAiProvider {
-    fn send(&self, _ctx: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    fn send(&self, _ctx: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
         unreachable!("dieser Test ruft AiProvider::send nie auf")
     }
 }

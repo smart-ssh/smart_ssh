@@ -691,6 +691,9 @@ pub(crate) mod test_fixtures {
         context: SessionContext,
     ) -> Vec<ssh_manager_core::ai::AiEvent> {
         use futures::StreamExt;
-        provider.send(context).collect().await
+        provider
+            .send(ssh_manager_core::ai::RedactedContext::for_tests(context))
+            .collect()
+            .await
     }
 }

@@ -2,7 +2,8 @@ use std::pin::Pin;
 
 use futures::Stream;
 
-use super::types::{AiEvent, SessionContext};
+use super::redacted_context::RedactedContext;
+use super::types::AiEvent;
 
 /// Einheitliche Abstraktion über eine frei wählbare KI (OpenAI, Anthropic,
 /// lokale Modelle via Ollama, generischer OpenAI-kompatibler Endpoint),
@@ -21,7 +22,7 @@ use super::types::{AiEvent, SessionContext};
 /// Streams, nicht beim Aufruf von `send()` selbst. `async_trait` hätte hier
 /// nichts zu transformieren.
 pub trait AiProvider: Send + Sync {
-    fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>>;
+    fn send(&self, context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>>;
 
     /// Issue #169 (Spec 0105 §7): bietet ab jetzt für den Rest der Lebenszeit
     /// dieser Instanz (= der Sitzung) kein Web-Werkzeug mehr an. Aufgerufen,

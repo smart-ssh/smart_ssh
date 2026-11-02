@@ -1423,7 +1423,7 @@ mod browser_channel_tests {
     impl ssh_manager_core::ai::AiProvider for ProposeOnceAiProvider {
         fn send(
             &self,
-            _context: ssh_manager_core::ai::SessionContext,
+            _context: ssh_manager_core::ai::RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>>
         {
             let events = if self.sent.swap(true, std::sync::atomic::Ordering::SeqCst) {

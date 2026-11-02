@@ -4,7 +4,7 @@
 
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{AiEvent, AiProvider, SessionContext};
+use ssh_manager_core::ai::{AiEvent, AiProvider};
 use ssh_manager_core::filter::FilterEngine;
 use ssh_manager_core::profiles::{AiAction, PostIngestPolicy};
 
@@ -25,7 +25,7 @@ async fn test_runaway_followup_rounds_are_bounded() {
     impl AiProvider for RepeatingAiProvider {
         fn send(
             &self,
-            _context: SessionContext,
+            _context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             Box::pin(futures::stream::iter(vec![
                 AiEvent::ActionProposed(AiAction::SuggestCommand {
@@ -109,7 +109,7 @@ async fn test_run_chat_turn_paces_consecutive_main_round_requests() {
     impl AiProvider for RepeatingAiProvider {
         fn send(
             &self,
-            _context: SessionContext,
+            _context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             Box::pin(futures::stream::iter(vec![
                 AiEvent::ActionProposed(AiAction::SuggestCommand {

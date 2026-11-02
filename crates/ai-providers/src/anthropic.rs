@@ -28,7 +28,8 @@ use uuid::Uuid;
 
 use ssh_manager_core::ai::{
     fence_untrusted, ActionSchema, AiError, AiEvent, AiProvider, AiUsage, MessageContent,
-    RejectionReason, Role, SessionContext, UntrustedKind, WebActivity, WebActivityKind, WebSource,
+    RedactedContext, RejectionReason, Role, SessionContext, UntrustedKind, WebActivity,
+    WebActivityKind, WebSource,
 };
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -747,7 +748,9 @@ impl AiProvider for AnthropicProvider {
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
-    fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+    fn send(&self, context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+        // One-way unwrap: the request was redacted and sealed by the core (issue #833).
+        let context = context.into_parts();
         // Spec 0016, Abschnitt 4: eine frische `request_id` pro
         // `send()`-Aufruf, geteilt über alle Log-Zeilen dieses einen
         // KI-Anfrage-Zyklus (Kontext → Streaming-Chunks → Tool-Call-Parsing)

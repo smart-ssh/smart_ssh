@@ -10,7 +10,8 @@ use uuid::Uuid;
 use tokio::sync::Mutex as AsyncMutex;
 
 use ssh_manager_core::ai::{
-    fence_untrusted, AiError, AiProvider, DefaultOutputRedactor, SessionContext, UntrustedKind,
+    fence_untrusted, reapply_redaction_for_send, AiError, AiProvider, DefaultOutputRedactor,
+    SessionContext, UntrustedKind,
 };
 use ssh_manager_core::filter::{Decision, FilterEngine};
 use ssh_manager_core::profiles::PostIngestPolicy;
@@ -809,7 +810,7 @@ struct NeverRespondingProvider;
 impl AiProvider for NeverRespondingProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::pending())
     }

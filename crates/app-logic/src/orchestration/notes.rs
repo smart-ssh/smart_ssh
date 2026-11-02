@@ -33,9 +33,8 @@ use crate::system_prompt::{note_format, with_response_language, PromptLanguage};
 
 use super::action_exec::{emit_action_error, handle_action_proposed};
 use super::chat_turn::{
-    push_history, reapply_redaction_and_seal_for_send, wait_for_ai_request_slot,
-    wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
-    SIDE_CALL_MAX_TOKENS,
+    push_history, seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
+    write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT, SIDE_CALL_MAX_TOKENS,
 };
 use super::pending_confirmation::RegisteredConfirmation;
 use crate::second_opinion::{collect_side_call_text, SideCallEnd};
@@ -613,13 +612,6 @@ async fn request_ai_title(
     // `run_one_round`.
     // Issue #562: same redaction-and-sealing entry point as chat turns and
     // compaction; a sealing failure means no title request at all.
-    request_context.history = reapply_redaction_and_seal_for_send(
-        request_context.history,
-        session.redactor.as_ref(),
-        &session.chat_content,
-        session.extension_content_key(session_id).await,
-    )
-    .map_err(|_| TitleFailure::SealFailed)?;
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(title_generation_instruction(system_context_parts.language)),
@@ -631,11 +623,20 @@ async fn request_ai_title(
     // ausdrücklich überschrieben, sonst würde die Anfrage den vollen
     // Haupt-Chat-Default erben.
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
+    // Issue #562/#833: sealing is the last step, after the instruction was
+    // appended; a sealing failure means no title request at all.
+    let request_context = seal_for_send(
+        request_context,
+        session.redactor.as_ref(),
+        &session.chat_content,
+        session.extension_content_key(session_id).await,
+    )
+    .map_err(|_| TitleFailure::SealFailed)?;
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
         &session.ai_provider_budget,
-        crate::compaction::estimate_request_tokens(&request_context),
+        crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
     )
@@ -840,20 +841,6 @@ pub async fn suggest_note_update_on_disconnect(
     // Issue #564: same redaction-and-sealing entry point as chat turns,
     // compaction and the title request; a sealing failure means no request
     // and no proposal.
-    match reapply_redaction_and_seal_for_send(
-        request_context.history,
-        session.redactor.as_ref(),
-        &session.chat_content,
-        session.extension_content_key(session_id).await,
-    ) {
-        Ok(history) => request_context.history = history,
-        Err(_) => {
-            tracing::info!(
-                "skipping note-update suggestion on disconnect: sealing the request failed"
-            );
-            return false;
-        }
-    }
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(disconnect_completion_instruction(
@@ -870,11 +857,28 @@ pub async fn suggest_note_update_on_disconnect(
     // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar
     // (analog zur Auto-Titel-Stelle oben).
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
+    // Issue #564/#833: same entry point as chat turns, as the last step after
+    // the instruction was appended; a sealing failure means no request and no
+    // proposal.
+    let request_context = match seal_for_send(
+        request_context,
+        session.redactor.as_ref(),
+        &session.chat_content,
+        session.extension_content_key(session_id).await,
+    ) {
+        Ok(context) => context,
+        Err(_) => {
+            tracing::info!(
+                "skipping note-update suggestion on disconnect: sealing the request failed"
+            );
+            return false;
+        }
+    };
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
         &session.ai_provider_budget,
-        crate::compaction::estimate_request_tokens(&request_context),
+        crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
     )
@@ -1228,6 +1232,13 @@ async fn summarize_note_for_shrink(
         // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar.
         max_tokens_hint: Some(SIDE_CALL_MAX_TOKENS),
     };
+    // Issue #833: this request has no session and no extension content, so
+    // there is nothing to seal; `NoExtensionSealer` cannot fail.
+    let Ok(request_context) = ssh_manager_core::ai::RedactedContext::seal(
+        request_context,
+        redactor,
+        &ssh_manager_core::ai::NoExtensionSealer,
+    );
 
     // Spec 0061, Abschnitt 3: dieser Aufruf läuft session-unabhängig (s.
     // Doc-Kommentar an `execute_note_shrink_request` weiter unten) — kein
@@ -1238,7 +1249,7 @@ async fn summarize_note_for_shrink(
     // Session teilen (Spec 0061 Abschnitt 2).
     wait_for_rate_limit_budget(
         budget,
-        crate::compaction::estimate_request_tokens(&request_context),
+        crate::compaction::estimate_request_tokens(request_context.as_session_context()),
         emitter,
         session_id,
     )
