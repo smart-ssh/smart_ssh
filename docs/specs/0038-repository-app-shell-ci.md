@@ -80,7 +80,11 @@ des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
   `REDACTION_INCOMPLETE` („Einige geheime Werte dieses Servers konnten nicht
   geladen werden; sie werden in dem, was an die KI geht, möglicherweise nicht
   maskiert.“). „Server nicht gespeichert“ (etwa der lokale Pseudo-Server) ist
-  kein Fehler und löst den Hinweis nicht aus.
+  kein Fehler und löst den Hinweis nicht aus. Dieselbe Regel gilt für die
+  Notiz-Zusammenfassung („Jetzt zusammenfassen“), die ohne Sitzung läuft:
+  Ist der Bereich oder das Sudo-Passwort nicht lesbar, bleiben die
+  Server-Secrets maskiert, und der Nutzer sieht einmalig dieselbe Meldung
+  als Hinweis im Notiz-Kürzungs-Toast (der Ablauf läuft weiter).
 - **Entfernen:** Nach dem Löschen eines Servers (auch eines nicht nutzbaren)
   und nach dem Löschen einer Gruppe, einschließlich jeder mitgelöschten
   Untergruppe, wird die Erweiterung benachrichtigt, damit sie ihre eigenen
