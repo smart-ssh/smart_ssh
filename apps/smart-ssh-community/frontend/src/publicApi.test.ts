@@ -38,6 +38,7 @@ const EXPECTED: Record<string, Kind> = {
   // api and helpers
   invokeCommand: fn, commandErrorMessage: fn, commandErrorCode: fn, commandErrorFeatureLocked: fn,
   commandErrorConnectLog: fn, listServers: fn, getStartupState: fn,
+  listGroups: fn, listAiProviders: fn, listChatSessions: fn,
   TECHNICAL_INPUT_PROPS: obj, useIsNarrow: fn, resolveSectionLabel: fn, pickAndReadTextFile: fn,
   SUPPORTED_LANGUAGES: obj, settingsStore: fn, initI18n: fn,
 };
@@ -55,6 +56,10 @@ describe("public-api", () => {
   it("test-support exports the matchMedia helpers", () => {
     expect(typeof testSupport.installMatchMediaMock).toBe("function");
     expect(typeof testSupport.setWide).toBe("function");
+    expect(typeof testSupport.setNarrow).toBe("function");
+    expect(typeof testSupport.listComposerActions).toBe("function");
+    expect(typeof testSupport.listComposerDropHandlers).toBe("function");
+    expect(typeof testSupport.resetComposerRegistryForTests).toBe("function");
   });
 
   it("resolves by package name through the exports map", () => {
