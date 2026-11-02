@@ -1,4 +1,4 @@
-import { settingsStore } from "./i18n";
+import { setUiPreference, settingsStore } from "./i18n";
 
 /** Spec 0031, Abschnitt 2: derselbe `tauri-plugin-store`-Ablageort/Muster
  * wie die UI-Sprache (Spec 0024) und die Risiko-Zweitmeinungs-Einstellung
@@ -17,7 +17,5 @@ export async function loadFirstRunNoticeAcknowledged(): Promise<boolean> {
  * — dieser Aufruf hier ist nur der UI-seitige Teil, der den Screen selbst
  * nicht mehr zeigt. */
 export async function saveFirstRunNoticeAcknowledged(): Promise<void> {
-  const store = await settingsStore();
-  await store.set(ACKNOWLEDGED_KEY, true);
-  await store.save();
+  await setUiPreference(ACKNOWLEDGED_KEY, true);
 }

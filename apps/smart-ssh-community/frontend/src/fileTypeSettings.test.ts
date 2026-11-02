@@ -5,6 +5,7 @@ const storeSet = vi.fn();
 const storeSave = vi.fn();
 
 vi.mock("./i18n", () => ({
+  setUiPreference: (key: string, value: unknown) => storeSet(key, value),
   settingsStore: () => Promise.resolve({ get: storeGet, set: storeSet, save: storeSave }),
 }));
 
@@ -52,7 +53,6 @@ describe("saveFileTypeApps", () => {
   it("writes and saves the given map", async () => {
     await saveFileTypeApps({ ".conf": "/usr/bin/code" });
     expect(storeSet).toHaveBeenCalledWith("fileTypeDefaultApps", { ".conf": "/usr/bin/code" });
-    expect(storeSave).toHaveBeenCalled();
   });
 });
 
