@@ -261,7 +261,10 @@ In short:
   settings open and no Ollama provider exists.
 - **The MCP server** is off by default; when enabled, it listens on
   `127.0.0.1` only and requires a bearer token
-  ([Spec 0028](docs/specs/0028-mcp-server-integration.md)).
+  ([Spec 0028](docs/specs/0028-mcp-server-integration.md)). The token is held
+  as a secret type and compared in constant time; input types that carry
+  secrets have a redacting `Debug`, so they cannot leak through a `?value`
+  log field.
 
 This is enforced by tests: the webview's Content Security Policy allows only
 `connect-src 'self' ipc:`, and only an allowlisted crate may depend on an

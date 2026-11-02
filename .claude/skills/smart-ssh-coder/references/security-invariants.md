@@ -73,6 +73,10 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
     (Spec 0066 §3, `build_session_system_context`).
 13. **Probe-/sudo-stderr nie in Chat/KI-Kontext** — nur in die Meldung
     des Dateibrowsers (Spec 0067).
+14. **Typen mit Geheimnissen haben ein redigierendes `Debug`** (Eingabe-DTOs
+    mit Klartext-Secrets, `SharedToken`): Secret-Felder erscheinen als
+    `[REDACTED]`; Test mit Testgeheimnis (Issue #848). Neue Typen dieser Art
+    bekommen kein abgeleitetes `Debug`.
 
 ## Manuelle Aktionen (Dateibrowser, Terminal)
 

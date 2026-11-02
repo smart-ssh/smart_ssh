@@ -233,6 +233,10 @@ irreversible happening on a real server. For changes here:
   or sent anywhere — verify with a test that plants a redaction-worthy
   secret and asserts it never appears in plaintext in the output/DB.
 
+- Types that carry plaintext secrets (input DTOs with keys, passwords,
+  passphrases, tokens) have a redacting `Debug` that prints `[REDACTED]`,
+  never a derived one — add a test that plants a secret and checks the
+  `{:?}` output.
 - **Keep `THREAT-MODEL.md` current.** A pull request that changes the
   filter engine, risk classifier, redaction or fencing, credential
   handling, the command execution/confirmation path, a network boundary

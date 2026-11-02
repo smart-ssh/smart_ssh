@@ -215,7 +215,7 @@ pub async fn discover_models(
     let models = ai_providers::discover_models(
         config.provider_type,
         base_url,
-        &api_key,
+        api_key.expose_secret(),
         &config.extra_headers,
     )
     .await
@@ -351,18 +351,17 @@ async fn resolve_api_key(
     config: &AiProviderConfigInput,
     existing_provider_id: Option<ProviderId>,
     missing_message: &str,
-) -> CommandResult<String> {
+) -> CommandResult<SecretString> {
     if !config.api_key.is_empty() {
-        return Ok(config.api_key.clone());
+        return Ok(SecretString::from(config.api_key.clone()));
     }
     let id = existing_provider_id.ok_or(missing_message)?;
     let existing = state.ai_provider_store.get(&id).await?;
-    Ok(state
+    // Stays a `SecretString` (zeroed on drop) until the HTTP client needs it.
+    state
         .credential_store
         .get(&existing.credential_ref)
-        .map_err(secret_store_error)?
-        .expose_secret()
-        .to_string())
+        .map_err(secret_store_error)
 }
 
 #[tauri::command]
@@ -394,7 +393,7 @@ pub async fn test_ai_provider_credentials(
         config.provider_type,
         config.base_url.as_deref(),
         &config.model,
-        SecretString::from(api_key),
+        api_key,
         config.supports_native_tool_calling,
         config.extra_headers.clone(),
         config.max_tokens_override,
