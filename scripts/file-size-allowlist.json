@@ -12,7 +12,6 @@
   "crates/app-logic/src/dto.rs": 1816,
   "crates/app-logic/src/events.rs": 1697,
   "crates/app-logic/src/key_files.rs": 1205,
-  "crates/app-logic/src/orchestration/action_exec.rs": 2181,
   "crates/app-logic/src/orchestration/action_exec/tests_core.rs": 2198,
   "crates/app-logic/src/orchestration/action_exec/tests_files_and_ledger.rs": 2303,
   "crates/app-logic/src/orchestration/chat_turn/tests_compaction.rs": 2641,
