@@ -68,6 +68,7 @@ mod startup_prompt;
 mod test_support;
 /// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
 mod ui_language;
+pub mod ui_preferences;
 mod voice_input;
 /// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
 /// Passwort-Modus.
@@ -473,16 +474,13 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         "Smart SSH startet"
     );
 
-    // Spec 0052, Abschnitt 3.2: `Edition` (`Copy`) separat gesichert, bevor
-    // `wiring.plugins` unten per Wert herausgezogen wird (ein partieller
-    // Move einzelner Felder ist erlaubt) — der Über-Dialog-Command
-    // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
-    // wird nirgends als Tauri-`State` verwaltet.
+    // Spec 0052, 3.2: `Edition` is `Copy`; `get_app_info` reads it as `State`.
     let (edition, session_extension) = (wiring.edition, wiring.combined_session_extension());
     // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
     // `State`.
     let edition_data_paths =
         commands::EditionDataPaths(std::mem::take(&mut wiring.extra_data_paths));
+    let ui_preference_registry = ui_preferences::startup_registry(&mut wiring);
     // Issue #469: ebenso — `send_chat_message` liest die Resolver als `State`.
     // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.
@@ -791,6 +789,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         .manage(edition)
         .manage(entitlement_catalogue)
         .manage(edition_data_paths)
+        .manage(ui_preference_registry)
         // Spec 0101, A16: Das Tor sitzt **vor** dem erzeugten Verteiler
         // (gemessen, M4). Die Begründung, warum es nicht genügt, sich auf
         // den fehlenden `AppState` zu verlassen, steht im Modulkommentar
@@ -831,6 +830,7 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             chat_retention::set_chat_session_retention_days,
             risk_second_opinion::set_risk_second_opinion_settings,
             risk_second_opinion::set_red_risk_always_confirm,
+            ui_preferences::set_ui_preference,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::get_speech_model_status,

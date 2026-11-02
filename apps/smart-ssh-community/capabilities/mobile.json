@@ -24,7 +24,15 @@
       ]
     },
     "core:window:allow-set-theme",
-    "store:default",
+    "store:allow-load",
+    "store:allow-get-store",
+    "store:allow-get",
+    "store:allow-has",
+    "store:allow-keys",
+    "store:allow-values",
+    "store:allow-entries",
+    "store:allow-length",
+    "store:allow-reload",
     "os:default"
   ]
 }

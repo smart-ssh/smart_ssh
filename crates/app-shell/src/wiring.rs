@@ -60,6 +60,12 @@ pub struct Wiring {
     /// Community registers none.
     pub services: Vec<Arc<dyn crate::services::BackgroundService>>,
     pub edition: Edition,
+    /// Issue #862: additional UI preference keys (with their value shape)
+    /// the webview may write to the settings store through
+    /// `set_ui_preference`, for an embedding app's own frontend modules.
+    /// Default empty. Registering a security key or an already registered
+    /// key makes the app fail at startup.
+    pub ui_preferences: Vec<crate::ui_preferences::UiPreference>,
     /// Issue #16: zusätzliche Datenpfade einer Edition (z. B. eine
     /// Lizenzdatei), die die Einstellungen neben den eingebauten Pfaden
     /// anzeigen. Community liefert keine.
@@ -137,6 +143,7 @@ impl Wiring {
             plugins_after_unlock: Vec::new(),
             db_extensions: Vec::new(),
             edition: Edition::Community,
+            ui_preferences: Vec::new(),
             extra_data_paths: Vec::new(),
             session_extension: None,
             session_extensions: Vec::new(),

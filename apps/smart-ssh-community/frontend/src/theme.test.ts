@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const storeData = new Map<string, unknown>();
 const save = vi.fn(async () => {});
 vi.mock("./i18n", () => ({
+  setUiPreference: async (k: string, v: unknown) => void storeData.set(k, v),
   settingsStore: async () => ({
     get: async (k: string) => storeData.get(k),
     set: async (k: string, v: unknown) => void storeData.set(k, v),
@@ -57,7 +58,6 @@ describe("persistence and application", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.style.colorScheme).toBe("light");
     expect(storeData.get("theme")).toBe("light");
-    expect(save).toHaveBeenCalled();
     expect(window.localStorage.getItem(THEME_CACHE_KEY)).toBe("light");
     expect(setNativeTheme).toHaveBeenCalledWith("light");
   });
