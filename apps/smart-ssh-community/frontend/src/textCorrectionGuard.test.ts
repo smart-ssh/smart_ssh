@@ -12,7 +12,7 @@ const NON_TEXT_TYPES = new Set(["radio", "checkbox", "number", "button", "file",
 
 /** Free-text fields (prose for humans or the AI): system correction stays on. */
 const FREE_TEXT_ALLOWLIST: { file: string; marker: string }[] = [
-  { file: "ChatPanel.tsx", marker: 'placeholder={t("chat.inputPlaceholder")}' },
+  { file: "chat/Composer.tsx", marker: 'placeholder={t("chat.inputPlaceholder")}' },
   { file: "NotesPanel.tsx", marker: "textarea" },
   { file: "ServerForm.tsx", marker: "ref={localNotesRef}" },
 ];
