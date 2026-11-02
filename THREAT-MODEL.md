@@ -303,11 +303,17 @@ terminals, answer pending confirmations, regenerate the MCP token and change
 settings, including safety settings such as "Always confirm on red risk".
 This is by design: the interface is your hand. Two facts make it so. The
 app's own Tauri commands are not restricted per command; the main window's
-capability file grants no per-command limits and also allows the key-value
-store that holds `settings.json`
+capability file grants no per-command limits and also allows reading the
+key-value store that holds `settings.json`
 ([`capabilities/default.json`](apps/smart-ssh-community/capabilities/default.json)).
-The red-risk setting is read from that store
-([`risk_second_opinion.rs`](crates/app-shell/src/risk_second_opinion.rs)).
+The capability grants read access to that store only: the webview can read
+`settings.json` but not write it. Every settings change goes through a backend
+command. Security settings (red-risk confirmation, the AI risk second opinion,
+the MCP settings) have their own commands
+([`risk_second_opinion.rs`](crates/app-shell/src/risk_second_opinion.rs)); plain
+UI preferences go through one command that accepts only registered keys and
+value shapes and never a security key
+([`ui_preferences.rs`](crates/app-shell/src/ui_preferences.rs)).
 
 The confirmation boundaries below protect you against the AI and against
 external tools, not against code running in the webview.
@@ -360,6 +366,7 @@ into `Confirm`, never `Confirm` into `AutoExec`, and never lift a `Deny`
 | **Suspected prompt injection** in content just read (if the injection check is enabled) | Always for the next action | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), §5 |
 | **Any action after you rejected an earlier one in the same answer** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
 | **Commands too long, too nested or too opaque to check** | Always | [ADR 0107](docs/adr/0107-filter-fail-closed-on-opaque-input.md) |
+| **Filter rules that cannot be loaded** (unreadable rule store or failing rule source): all allow rules are ignored | Always | [Spec 0002](docs/specs/0002-filter-engine-spec.md), §3.4 |
 | **Hard-blacklisted commands** (e.g. `rm -rf /`) | Always | [`engine.rs`](crates/core/src/filter/engine.rs) |
 | **Content read from the server** (post-ingest policy) | Per server: `Strict` always, `Balanced` for modifying actions, `Standard` never | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), [ADR 0027](docs/adr/0027-post-ingest-policy-scope-and-injection-check-timing.md) |
 | **Red risk**: the risk indicator rates the proposal red on the server or the data axis — also when only the AI second opinion raises it to red | Setting "Always confirm on red risk", **on by default** | [Spec 0092](docs/specs/0092-red-risk-requires-confirm.md), [ADR 0084](docs/adr/0084-red-risk-requires-confirm.md) |
@@ -404,8 +411,12 @@ Risks we know about and accept, with the reason.
   interface would equal full control over connected sessions and the safety
   settings (section 5, "Who is trusted inside the app"). Accepted because
   the interface is your own and the protections listed there keep foreign
-  code out. Planned hardening: safety settings changed only through backend
-  commands, not by the webview writing the settings store directly.
+  code out. Hardened: the webview can read but not write the settings
+  store. Security settings ("Always confirm on red risk", the AI risk second
+  opinion) change only through backend commands that validate the value, and
+  UI preferences only through a command with a registry of allowed keys. A
+  script in the webview can still call those commands, so it can change the
+  safety settings; it cannot write the store file directly.
 - **Allow rules are your decision.** An allow rule lets matching proposals
   run without asking (except for the boundaries in section 5). A rule that
   is broader than intended widens what the AI can do on its own.

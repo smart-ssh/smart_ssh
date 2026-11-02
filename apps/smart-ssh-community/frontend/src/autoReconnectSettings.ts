@@ -1,4 +1,4 @@
-import { settingsStore } from "./i18n";
+import { setUiPreference, settingsStore } from "./i18n";
 
 /** Issue #356, Spec 0107 §8: Einstellung „Automatisch neu verbinden“ im
  * selben `tauri-plugin-store` wie die übrigen UI-Einstellungen. Das Backend
@@ -26,7 +26,5 @@ export async function loadAutoReconnectSeconds(): Promise<AutoReconnectSeconds> 
 }
 
 export async function saveAutoReconnectSeconds(value: AutoReconnectSeconds): Promise<void> {
-  const store = await settingsStore();
-  await store.set(KEY, value);
-  await store.save();
+  await setUiPreference(KEY, value);
 }

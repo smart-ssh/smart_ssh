@@ -156,6 +156,14 @@ export function installFakeBackend(fixture: FakeBackendFixture): void {
       return null;
     },
 
+    // Issue #862: the webview only reads the store; the backend writes UI
+    // preferences (the fake accepts any key, validation is Rust-tested).
+    set_ui_preference: ({ key, value }) => {
+      store[key as string] = value;
+      persist();
+      return null;
+    },
+
     // --- Start-up and window chrome --------------------------------------
     get_startup_state: () => ({
       screen: "unlocked",

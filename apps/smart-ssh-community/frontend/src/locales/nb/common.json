@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Mulig forsøk på å injisere instruksjoner via serverinnhold oppdaget – krever bekreftelse",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Forespurt via MCP – krever alltid bekreftelse",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Bruker det lagrede sudo-passordet – krever alltid bekreftelse",
+    "FILTER_RULES_UNAVAILABLE": "Filterreglene kunne ikke lastes – ingenting kjøres automatisk, bekreftelse kreves",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Setter inn en lagret hemmelig verdi før sending – krever alltid bekreftelse",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Leser en fil med legitimasjon (f.eks. SSH-nøkkel, .env, /etc/shadow) – krever alltid bekreftelse",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "En tidligere handling i dette svaret ble avvist – krever bekreftelse",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større enn 50 MB og kan ikke kopieres til utklippstavlen.",
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valgte KI-leverandøren er ikke konfigurert. Velg en konfigurert leverandør.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Velg en KI-leverandør før du slår på den andre vurderingen av risiko.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten"
   },

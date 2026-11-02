@@ -788,8 +788,8 @@ async fn test_t6_4_8_security_logic_does_not_branch_on_the_auth_method() {
     struct OneRule(Rule);
     #[async_trait]
     impl PolicyStore for OneRule {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![self.0.clone()]
+        async fn rules_for(&self, _scope: &EffectiveScope) -> crate::filter::PolicyRules {
+            crate::filter::PolicyRules::complete(vec![self.0.clone()])
         }
     }
 

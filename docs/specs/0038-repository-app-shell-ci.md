@@ -191,7 +191,10 @@ der Liste), im Schlüsselbund-Modus beim Start. Jedes höchstens einmal je
 Prozess; ein Plugin, dessen Registrierung scheitert, steht im Log und hält
 weder die übrigen noch das Entsperren auf. Die Hooks in `plugins` laufen vor
 dem Entsperren — Plugins mit Befehlen, die eine entsperrte App brauchen,
-gehören in `plugins_after_unlock`.
+gehören in `plugins_after_unlock`. Die Liste nimmt jedes Tauri-Plugin
+aus, auch eines mit eigenem Konfigurationstyp; seine Konfiguration aus
+`tauri.conf.json` (`plugins.<name>`) wird wie bei einem Plugin am Builder
+angewendet (Issue #1049).
 
 ### 2a. Erweiterungseigene Datenbanktabellen
 
@@ -422,10 +425,15 @@ Frontend-Pakets auf. Alles, was eine Erweiterung nutzen darf, ist dort
 exportiert: die Registrierungsfunktionen und Typen, Berechtigungs-Typen,
 `bootstrap`, die UI-Bausteine samt `ErrorBoundary`, der zentrale
 Aufruf-Wrapper `invokeCommand` (meldet `FeatureLocked` an den Hinweis-Dialog),
-die Fehler-Helfer, `listServers`, `getStartupState`, einige Hilfen
+die Fehler-Helfer, `listServers`, `listGroups`, `listAiProviders`,
+`listChatSessions`, `getStartupState`, einige Hilfen
 (`TECHNICAL_INPUT_PROPS`, `useIsNarrow`, `resolveSectionLabel`,
 `pickAndReadTextFile`, `SUPPORTED_LANGUAGES`, `settingsStore`, `initI18n`) und
-DTO-Typen. Relative Importe interner Dateien sind nicht unterstützt und
+DTO-Typen (u. a. `GroupDto`) sowie die Typen `ComposerContext` und
+`ComposerAction`. `smart-ssh/test-support` bietet die Medienabfrage-Hilfen
+(`installMatchMediaMock`, `setWide`, `setNarrow`) und die Hilfen der
+Composer-Registrierung (`listComposerActions`, `listComposerDropHandlers`,
+`resetComposerRegistryForTests`). Relative Importe interner Dateien sind nicht unterstützt und
 können bei jeder Umbenennung brechen. Exporte ändern sich nur zusammen mit
 einem Changelog-Eintrag und einer Anpassung dieser Spec; ein Test hält die
 Liste fest.

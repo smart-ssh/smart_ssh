@@ -1,3 +1,4 @@
+import { setRedRiskAlwaysConfirm, setRiskSecondOpinionSettings } from "./api";
 import { settingsStore } from "./i18n";
 
 /** Spec 0026, Abschnitt 3, Punkt 1: eigene Einstellung über
@@ -30,10 +31,8 @@ export async function loadRiskClassifierSettings(): Promise<RiskClassifierSettin
  * hier absichtlich anders gehandhabt wird, da eine laufende Session einen
  * bereits aufgebauten `AiProvider` fest referenziert. */
 export async function saveRiskClassifierSettings(settings: RiskClassifierSettings): Promise<void> {
-  const store = await settingsStore();
-  await store.set(ENABLED_KEY, settings.enabled);
-  await store.set(PROVIDER_ID_KEY, settings.providerId);
-  await store.save();
+  // Issue #856: written by the backend, which validates the provider id.
+  await setRiskSecondOpinionSettings(settings.enabled, settings.providerId);
 }
 
 /** Spec 0092, A1.2/A1.4: liest die Einstellung „Bei rotem Risiko immer
@@ -55,7 +54,6 @@ export async function loadRedRiskAlwaysConfirm(): Promise<boolean> {
  * der nächsten Verbindung (das Backend liest den Wert einmalig in
  * `connect()`) — trotzdem sofort gespeichert, damit nichts verloren geht. */
 export async function saveRedRiskAlwaysConfirm(value: boolean): Promise<void> {
-  const store = await settingsStore();
-  await store.set(RED_RISK_ALWAYS_CONFIRM_KEY, value);
-  await store.save();
+  // Issue #856: written by the backend, never by the webview directly.
+  await setRedRiskAlwaysConfirm(value);
 }

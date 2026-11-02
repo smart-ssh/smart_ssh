@@ -665,7 +665,7 @@ export function FileBrowserPanel({
   // Persistenz-Aufruf lief vorher als Seiteneffekt *innerhalb* eines
   // `setState`-Updaters (`setColumnWidths((current) => { save(current);
   // return current; })`) — unter `StrictMode` (aktiv in `main.tsx`) ruft
-  // React Updater im Dev-Modus doppelt auf, was `store.save()` doppelt
+  // React Updater im Dev-Modus doppelt auf, was das Speichern doppelt
   // ausgelöst hätte (harmlos, da idempotent, aber ein vermeidbares
   // Anti-Pattern). `columnWidthsRef` hält den aktuellen Wert stattdessen
   // synchron zum State nach, `handleColumnDragEnd` liest ihn direkt statt

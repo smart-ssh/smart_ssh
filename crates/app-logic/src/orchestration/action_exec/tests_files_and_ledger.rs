@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use ssh_manager_core::ai::{AiEvent, DefaultOutputRedactor, OutputRedactor};
 use ssh_manager_core::filter::normalize_lexical_path as normalize;
-use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
+use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
 use ssh_manager_core::profiles::Server;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::mock::MockSftpSession;
@@ -63,8 +63,8 @@ async fn test_read_remote_file_traversal_path_does_not_match_allow_rule_for_othe
     struct AllowDeployDir;
     #[async_trait]
     impl PolicyStore for AllowDeployDir {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("allow-deploy-read".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob(
                     "sftp-read /home/deploy/*".to_string(),
@@ -73,7 +73,7 @@ async fn test_read_remote_file_traversal_path_does_not_match_allow_rule_for_othe
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -137,15 +137,15 @@ async fn test_read_remote_file_deny_rule_blocks_without_reading() {
     struct DenyEtcRead;
     #[async_trait]
     impl PolicyStore for DenyEtcRead {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-etc-read".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("sftp-read /etc/*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -494,15 +494,15 @@ async fn test_write_remote_file_deny_rule_blocks() {
     struct DenyEtcWrite;
     #[async_trait]
     impl PolicyStore for DenyEtcWrite {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-etc-write".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("sftp-write /etc/**".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -1630,15 +1630,15 @@ async fn test_ledger_records_rejected_decision_for_auto_deny_rule() {
     struct DenyLsPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyLsPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -2046,15 +2046,15 @@ async fn test_ledger_records_edit_then_approve_auto_blocked_edit() {
     struct DenyEditedPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyEditedPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-rm".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("rm *".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 

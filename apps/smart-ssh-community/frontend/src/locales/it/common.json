@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Rilevato possibile tentativo di iniettare istruzioni tramite il contenuto del server: richiede conferma",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Richiesto tramite MCP: richiede sempre conferma",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Usa la password sudo memorizzata: richiede sempre conferma",
+    "FILTER_RULES_UNAVAILABLE": "Impossibile caricare le regole del filtro: nulla viene eseguito automaticamente, serve conferma",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Inserisce un valore segreto memorizzato prima dell'invio: richiede sempre conferma",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Legge un file con credenziali (ad es. chiave SSH, .env, /etc/shadow): richiede sempre conferma",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Un'azione precedente in questa risposta è stata rifiutata: richiede conferma",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "La chiave nel portachiavi non appartiene a questo database. Nulla è stato modificato: memorizzarla renderebbe il database illeggibile al prossimo avvio.",
     "SFTP_CONTENT_TOO_LARGE": "Il file supera i 50 MB e non può essere copiato negli appunti.",
     "CLIPBOARD_FILE_FAILED": "Impossibile mettere il file negli appunti su questo sistema.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Il provider IA selezionato non è configurato. Scegli un provider configurato.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Scegli un provider IA prima di attivare il secondo parere sul rischio.",
     "SSH_SFTP_ALREADY_EXISTS": "Esiste già un file o una cartella con questo nome",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "File della chiave non trovato su questo dispositivo"
   },

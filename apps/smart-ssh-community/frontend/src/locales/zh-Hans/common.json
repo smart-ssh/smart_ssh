@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "检测到可能通过服务器内容注入指令的企图——需要确认",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "经由 MCP 请求——始终需要确认",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "使用已保存的 sudo 密码——始终需要确认",
+    "FILTER_RULES_UNAVAILABLE": "无法加载过滤规则——不会自动执行任何命令，需要确认",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "发送前会插入已保存的机密值——始终需要确认",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "读取含有凭据的文件（例如 SSH 密钥、.env、/etc/shadow）——始终需要确认",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "本次回复中较早的操作已被拒绝——需要确认",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "密钥环中的密钥不属于此数据库。未做任何更改——保存它会导致数据库在下次启动时无法读取。",
     "SFTP_CONTENT_TOO_LARGE": "文件大于 50 MB，无法复制到剪贴板。",
     "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "所选的 AI 提供商尚未配置。请选择已配置的提供商。",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "开启风险二次评估前，请先选择 AI 提供商。",
     "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件"
   },
