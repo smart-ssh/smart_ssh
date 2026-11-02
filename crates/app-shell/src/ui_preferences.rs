@@ -178,6 +178,14 @@ impl UiPreferenceRegistry {
     }
 }
 
+/// Builds the registry at startup. A security key or duplicate among the
+/// embedding app's extra keys is a programming error: fail before anything
+/// starts.
+pub(crate) fn startup_registry(wiring: &mut crate::Wiring) -> UiPreferenceRegistry {
+    UiPreferenceRegistry::with_extra(std::mem::take(&mut wiring.ui_preferences))
+        .unwrap_or_else(|err| panic!("invalid Wiring::ui_preferences: {err}"))
+}
+
 /// Validates, then writes in one atomic update. A rejected value leaves the
 /// settings file untouched.
 pub(crate) fn write_ui_preference<R: Runtime>(
@@ -246,7 +254,7 @@ mod tests {
         ]);
         for key in keys {
             let err = registry.validate(key, &json!(true)).unwrap_err();
-            assert_eq!(err.code.as_deref(), Some(UI_PREFERENCE_REJECTED), "{key}");
+            assert_eq!(err.code, Some(UI_PREFERENCE_REJECTED), "{key}");
         }
     }
 

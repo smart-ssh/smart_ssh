@@ -22,6 +22,8 @@ Die Dateiliste hat die Spalten Name, Größe, Rechte, Besitzer und
   erhalten. Sie gelten global, nicht je Server oder Sitzung. Ein fehlender,
   kaputter oder unplausibler gespeicherter Wert (nicht endlich, nicht
   positiv, absurd groß) wird verworfen und durch den Standardwert ersetzt.
+  Die Layout-Einstellungen (Breiten, Aufteilung, Spalten, Sortierung) schreibt
+  das Backend; die Oberfläche liest sie nur.
 
 ### Besitzer-Spalte und Spalten ein-/ausblenden
 

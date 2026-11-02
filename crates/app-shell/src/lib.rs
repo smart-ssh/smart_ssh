@@ -68,7 +68,7 @@ mod startup_prompt;
 mod test_support;
 /// Issue #90: die UI-Sprache als Sprache des Sitzungs-System-Prompts.
 mod ui_language;
-mod ui_preferences;
+pub mod ui_preferences;
 mod voice_input;
 /// Spec 0101, §2 Frage 3: die Startdialoge im Fenster, fuer den
 /// Passwort-Modus.
@@ -78,7 +78,6 @@ mod wiring;
 pub use db_extensions::DbExtension;
 pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
 pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
-pub use ui_preferences::{UiPreference, UiPreferenceShape};
 pub use wiring::{Edition, Wiring};
 
 use std::sync::Arc;
@@ -475,22 +474,13 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
         "Smart SSH startet"
     );
 
-    // Spec 0052, Abschnitt 3.2: `Edition` (`Copy`) separat gesichert, bevor
-    // `wiring.plugins` unten per Wert herausgezogen wird (ein partieller
-    // Move einzelner Felder ist erlaubt) — der Über-Dialog-Command
-    // `get_app_info` braucht sie als `State<Edition>`, `Wiring` selbst
-    // wird nirgends als Tauri-`State` verwaltet.
+    // Spec 0052, 3.2: `Edition` is `Copy`; `get_app_info` reads it as `State`.
     let (edition, session_extension) = (wiring.edition, wiring.combined_session_extension());
     // Issue #16: ebenso vorab herausgezogen; `get_data_paths` liest sie als
     // `State`.
     let edition_data_paths =
         commands::EditionDataPaths(std::mem::take(&mut wiring.extra_data_paths));
-    // Issue #862: a security key or duplicate among the extra UI preferences
-    // is a programming error of the embedding app; fail before anything starts.
-    let ui_preference_registry = ui_preferences::UiPreferenceRegistry::with_extra(std::mem::take(
-        &mut wiring.ui_preferences,
-    ))
-    .unwrap_or_else(|err| panic!("invalid Wiring::ui_preferences: {err}"));
+    let ui_preference_registry = ui_preferences::startup_registry(&mut wiring);
     // Issue #469: ebenso — `send_chat_message` liest die Resolver als `State`.
     // Spec 0101, Etappe 3 (§2 Frage 3): Der Startablauf hat seit dem
     // Master-Passwort zwei Formen.

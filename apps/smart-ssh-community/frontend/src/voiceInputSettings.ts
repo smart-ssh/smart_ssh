@@ -1,4 +1,4 @@
-import { settingsStore } from "./i18n";
+import { setUiPreference, settingsStore } from "./i18n";
 
 /** Spec 0108 §5.4: „Spracheingabe“ ein/aus, im selben `tauri-plugin-store`
  * wie die übrigen UI-Einstellungen. Standard: an. */
@@ -19,9 +19,7 @@ export function subscribeVoiceInputEnabled(listener: Listener): () => void {
 }
 
 export async function saveVoiceInputEnabled(enabled: boolean): Promise<void> {
-  const store = await settingsStore();
-  await store.set(KEY, enabled);
-  await store.save();
+  await setUiPreference(KEY, enabled);
   for (const l of listeners) l(enabled);
 }
 

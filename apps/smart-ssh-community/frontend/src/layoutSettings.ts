@@ -1,4 +1,4 @@
-import { settingsStore } from "./i18n";
+import { setUiPreference, settingsStore } from "./i18n";
 import { FILE_SORT_COLUMNS, type FileSort, type FileSortColumn } from "./fileSort";
 
 /** Spec 0053: UI-Layout-Präferenzen (Spaltenbreiten im Dateimanager,
@@ -37,9 +37,7 @@ export async function loadHiddenFileColumns(): Promise<HideableFileColumn[]> {
 }
 
 export async function saveHiddenFileColumns(hidden: readonly HideableFileColumn[]): Promise<void> {
-  const store = await settingsStore();
-  await store.set(FILE_MANAGER_HIDDEN_COLUMNS_KEY, [...hidden]);
-  await store.save();
+  await setUiPreference(FILE_MANAGER_HIDDEN_COLUMNS_KEY, [...hidden]);
 }
 
 /** Obergrenze rein als Sanity-Check gegen eine grob kaputte
@@ -84,9 +82,7 @@ export async function loadFileManagerColumnWidths(): Promise<Partial<FileManager
 }
 
 export async function saveFileManagerColumnWidths(widths: FileManagerColumnWidths): Promise<void> {
-  const store = await settingsStore();
-  await store.set(FILE_MANAGER_COLUMN_WIDTHS_KEY, widths);
-  await store.save();
+  await setUiPreference(FILE_MANAGER_COLUMN_WIDTHS_KEY, widths);
 }
 
 /** `null`, wenn nie gespeichert oder der gespeicherte Wert ungültig ist —
@@ -98,9 +94,7 @@ export async function loadAiSshSplitWidthPx(): Promise<number | null> {
 }
 
 export async function saveAiSshSplitWidthPx(widthPx: number): Promise<void> {
-  const store = await settingsStore();
-  await store.set(AI_SSH_SPLIT_WIDTH_KEY, widthPx);
-  await store.save();
+  await setUiPreference(AI_SSH_SPLIT_WIDTH_KEY, widthPx);
 }
 
 const FILE_MANAGER_SORT_KEY = "fileManagerSort";
@@ -123,7 +117,5 @@ export async function loadFileManagerSort(): Promise<FileSort | null> {
 }
 
 export async function saveFileManagerSort(sort: FileSort): Promise<void> {
-  const store = await settingsStore();
-  await store.set(FILE_MANAGER_SORT_KEY, sort);
-  await store.save();
+  await setUiPreference(FILE_MANAGER_SORT_KEY, sort);
 }

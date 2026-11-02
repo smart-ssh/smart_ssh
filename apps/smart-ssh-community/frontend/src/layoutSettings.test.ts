@@ -10,6 +10,7 @@ const storeSet = vi.fn();
 const storeSave = vi.fn();
 
 vi.mock("./i18n", () => ({
+  setUiPreference: (key: string, value: unknown) => storeSet(key, value),
   settingsStore: () =>
     Promise.resolve({ get: storeGet, set: storeSet, save: storeSave }),
 }));
@@ -82,12 +83,10 @@ describe("hidden file columns (issue #653)", () => {
     expect(await loadHiddenFileColumns()).toEqual([]);
   });
 
-  it("persists the list and saves the store", async () => {
+  it("persists the list through the backend command", async () => {
     storeSet.mockClear();
-    storeSave.mockClear();
     await saveHiddenFileColumns(["modified"]);
     expect(storeSet).toHaveBeenCalledWith("fileManagerHiddenColumns", ["modified"]);
-    expect(storeSave).toHaveBeenCalled();
   });
 });
 
@@ -104,6 +103,5 @@ describe("file manager sort", () => {
     expect(await loadFileManagerSort()).toEqual({ column: "size", direction: "desc" });
     await saveFileManagerSort({ column: "size", direction: "desc" });
     expect(storeSet).toHaveBeenCalledWith("fileManagerSort", { column: "size", direction: "desc" });
-    expect(storeSave).toHaveBeenCalled();
   });
 });
