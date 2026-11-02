@@ -335,6 +335,7 @@ into `Confirm`, never `Confirm` into `AutoExec`, and never lift a `Deny`
 | **Suspected prompt injection** in content just read (if the injection check is enabled) | Always for the next action | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), §5 |
 | **Any action after you rejected an earlier one in the same answer** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
 | **Commands too long, too nested or too opaque to check** | Always | [ADR 0107](docs/adr/0107-filter-fail-closed-on-opaque-input.md) |
+| **Filter rules that cannot be loaded** (unreadable rule store or failing rule source): all allow rules are ignored | Always | [Spec 0002](docs/specs/0002-filter-engine-spec.md), §3.4 |
 | **Hard-blacklisted commands** (e.g. `rm -rf /`) | Always | [`engine.rs`](crates/core/src/filter/engine.rs) |
 | **Content read from the server** (post-ingest policy) | Per server: `Strict` always, `Balanced` for modifying actions, `Standard` never | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), [ADR 0027](docs/adr/0027-post-ingest-policy-scope-and-injection-check-timing.md) |
 | **Red risk**: the risk indicator rates the proposal red on the server or the data axis — also when only the AI second opinion raises it to red | Setting "Always confirm on red risk", **on by default** | [Spec 0092](docs/specs/0092-red-risk-requires-confirm.md), [ADR 0084](docs/adr/0084-red-risk-requires-confirm.md) |
