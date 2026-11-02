@@ -26,7 +26,6 @@
   "crates/app-shell/src/commands/connect.rs": 1521,
   "crates/app-shell/src/commands/elevation.rs": 1649,
   "crates/app-shell/src/commands/master_password.rs": 1413,
-  "crates/app-shell/src/commands/sftp.rs": 2673,
   "crates/app-shell/src/commands/sftp/revocation_tests.rs": 2846,
   "crates/app-shell/src/elevated_sftp.rs": 1363,
   "crates/app-shell/src/lib.rs": 1223,
