@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { locale as systemLocale } from "@tauri-apps/plugin-os";
 import { load, type Store } from "@tauri-apps/plugin-store";
 import i18next from "i18next";
@@ -48,6 +49,13 @@ export function settingsStore(): Promise<Store> {
     });
   }
   return storePromise;
+}
+
+/** Issue #862: the webview can only read the settings store. A UI preference
+ * is written by the backend, which accepts registered keys and value shapes
+ * only (`set_ui_preference`, rejects with `UI_PREFERENCE_REJECTED`). */
+export function setUiPreference(key: string, value: unknown): Promise<void> {
+  return invoke<void>("set_ui_preference", { key, value });
 }
 
 /** Erster Teil der Spec-0024-Abschnitt-4-Ermittlung: gespeicherte
@@ -136,7 +144,5 @@ export async function applyStoredLanguage(): Promise<void> {
 
 export async function setLanguage(language: SupportedLanguage): Promise<void> {
   await i18next.changeLanguage(language);
-  const store = await settingsStore();
-  await store.set(LANGUAGE_KEY, language);
-  await store.save();
+  await setUiPreference(LANGUAGE_KEY, language);
 }

@@ -113,6 +113,10 @@ pub const RISK_SETTINGS_PROVIDER_UNKNOWN: &str = "RISK_SETTINGS_PROVIDER_UNKNOWN
 /// Issue #856: the risk second opinion was switched on without a provider.
 pub const RISK_SETTINGS_PROVIDER_REQUIRED: &str = "RISK_SETTINGS_PROVIDER_REQUIRED";
 
+/// Issue #862: `set_ui_preference` refused a key that is not a registered UI
+/// preference, or a value outside the shape registered for it.
+pub const UI_PREFERENCE_REJECTED: &str = "UI_PREFERENCE_REJECTED";
+
 /// Spec 0077, 3.1.3: Wandelt einen [`RuleWriteError`] in einen
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
@@ -272,6 +276,8 @@ mod code_tests {
             // Issue #856.
             super::RISK_SETTINGS_PROVIDER_UNKNOWN,
             super::RISK_SETTINGS_PROVIDER_REQUIRED,
+            // Issue #862.
+            super::UI_PREFERENCE_REJECTED,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();
