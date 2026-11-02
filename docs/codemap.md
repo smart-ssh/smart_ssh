@@ -95,7 +95,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 | Mock SSH transport and SFTP | `crates/core/src/ssh/mock.rs` (feature `test-support`) |
 | Real SSH tests | `crates/ssh-transport/tests/integration.rs` |
 | Elevated SFTP channel | `crates/app-shell/src/elevated_sftp.rs` — `ElevatedSftp`, `ElevatedSftpSlot`; sudo/sftp-server logic `crates/core/src/ssh/elevated.rs` — `is_safe_absolute_path`; commands `crates/app-shell/src/commands/elevation.rs` |
-| SFTP commands | `crates/app-shell/src/commands/sftp.rs` — `sftp_list`, `sftp_download`, `sftp_upload`; transfers `crates/app-shell/src/commands/sftp/transfer.rs` |
+| SFTP commands | `crates/app-shell/src/commands/sftp/mod.rs` (shared imports, re-exports) with one file per group: `sftp/{list,download,upload_clipboard,delete,permissions,rename_mkdir,copy_content,edit_session}.rs`; transfers `crates/app-shell/src/commands/sftp/transfer.rs` |
 | Browser access gate for file browsing | `crates/app-shell/src/commands/elevation.rs` — `BrowserAccess`, `BrowserChannel` |
 | MCP server | `crates/mcp-server/src/tool_server.rs` — `SmartSshMcpServer`; backend glue `crates/app-shell/src/mcp_backend.rs`; settings `crates/app-shell/src/mcp_settings.rs` |
 | Speech input | `crates/speech/src/lib.rs` — `ModelManager`; Tauri side `crates/app-shell/src/voice_input.rs` — `get_speech_language`; models `crates/app-shell/src/speech_models.rs` |
@@ -125,7 +125,7 @@ Production code:
 - `apps/smart-ssh-community/frontend/src/components/ServerForm.tsx` — `ServerForm` with tabs general, connection, security, notes; `authStateFromKind` and `toAuthMethodInput` map the auth form; `TestResultBadge`.
 - `crates/ai-providers/src/anthropic.rs` — `AnthropicProvider`: request building (`anthropic_tool_definition`), stream parsing (`to_raw_stream`), retry (`RetryState`), web research citations.
 - `crates/ai-providers/src/openai_compatible.rs` — `OpenAiCompatibleProvider`: request building, `connect_and_stream`, `process_frame_stream`, tool-call buffering (`OpenAiStreamState`).
-- `crates/app-shell/src/commands/sftp.rs` — SFTP commands: listing (`sftp_list`), `sftp_download`, `sftp_upload`, mutations, edit sessions.
+- `crates/app-shell/src/commands/sftp/` — SFTP commands (one file per group): listing (`sftp_list`), `sftp_download`, `sftp_upload`, mutations, edit sessions.
 - `crates/app-logic/src/orchestration/action_exec.rs` — `handle_action_proposed` (entry), `evaluate_action` (filter plus risk), `handle_user_decision` (confirmation), `execute_action` and `execute_suggested_command` (run and redact), `check_for_injected_instructions`.
 - `crates/core/src/filter/parser.rs` — shell-command parsing for the filter: `split_top_level_segments`, here-string and shell-wrapper analysis, `analyse_options`.
 - `crates/app-logic/src/servers.rs` — server CRUD: `create_server`, `update_server`, `delete_server`, `move_server_to_group`.
