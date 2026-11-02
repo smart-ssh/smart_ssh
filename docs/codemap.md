@@ -119,7 +119,8 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 
 Production code:
 
-- `apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.tsx` — `FileBrowserPanel` is one component: listing and navigation, selection, context menu, upload/download/transfers, rename/delete/create, preview and edit, elevated mode; small helpers `formatMb`, `findMenuTrigger` sit around it.
+- `apps/smart-ssh-community/frontend/src/components/FileBrowserPanel.tsx` — `FileBrowserPanel` is one component: listing and navigation, selection, context menu, upload/download/transfers, rename/delete/create, preview and edit, elevated mode; its sub-components (menus, properties/chmod/chown dialogs, rename prompt, resize handle, elevation failure dialog) live in `apps/smart-ssh-community/frontend/src/components/fileBrowser/`.
+- `apps/smart-ssh-community/frontend/src/components/fileBrowser/shared.ts` — small helpers `formatMb`, `findMenuTrigger` shared by them.
 - `apps/smart-ssh-community/frontend/src/components/ChatPanel.tsx` — `ChatPanel` (message list, input, queue, stop), `ChatItemView` (one chat item), `ConfirmActionForm` (confirmation card), `RiskBadges`, `ActionResultView`, `TakeIntoNoteButton`.
 - `apps/smart-ssh-community/frontend/src/components/ServerForm.tsx` — `ServerForm` with tabs general, connection, security, notes; `authStateFromKind` and `toAuthMethodInput` map the auth form; `TestResultBadge`.
 - `crates/ai-providers/src/anthropic.rs` — `AnthropicProvider`: request building (`anthropic_tool_definition`), stream parsing (`to_raw_stream`), retry (`RetryState`), web research citations.
