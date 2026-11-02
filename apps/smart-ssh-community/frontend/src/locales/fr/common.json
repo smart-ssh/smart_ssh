@@ -657,6 +657,8 @@
     "KEYCHAIN_KEY_MISMATCH": "La clé du trousseau n’appartient pas à cette base de données. Rien n’a été modifié — l’enregistrer rendrait la base illisible au prochain démarrage.",
     "SFTP_CONTENT_TOO_LARGE": "Le fichier dépasse 50 Mo et ne peut pas être copié dans le presse-papiers.",
     "CLIPBOARD_FILE_FAILED": "Le fichier n’a pas pu être placé dans le presse-papiers sur ce système.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Le fournisseur d'IA sélectionné n'est pas configuré. Choisissez un fournisseur configuré.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Choisissez un fournisseur d'IA avant d'activer le second avis sur le risque.",
     "SSH_SFTP_ALREADY_EXISTS": "Un fichier ou un dossier portant ce nom existe déjà",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fichier de clé introuvable sur cet appareil"
   },

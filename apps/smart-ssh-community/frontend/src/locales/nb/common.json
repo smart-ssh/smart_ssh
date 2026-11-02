@@ -657,6 +657,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nøkkelen i nøkkelringen hører ikke til denne databasen. Ingenting ble endret – å lagre den ville gjort databasen uleselig ved neste oppstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større enn 50 MB og kan ikke kopieres til utklippstavlen.",
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke legges på utklippstavlen på dette systemet.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valgte KI-leverandøren er ikke konfigurert. Velg en konfigurert leverandør.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Velg en KI-leverandør før du slår på den andre vurderingen av risiko.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navnet finnes allerede",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøkkelfilen ble ikke funnet på denne enheten"
   },

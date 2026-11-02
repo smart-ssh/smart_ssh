@@ -211,6 +211,15 @@ export const getChatSessionRetentionDays = () =>
 export const setChatSessionRetentionDays = (days: number | null) =>
   invoke<void>("set_chat_session_retention_days", { days });
 
+/** Issue #856: security switches are written by the backend only; it rejects
+ * an unknown provider id (`RISK_SETTINGS_PROVIDER_UNKNOWN`) and enabling
+ * without a provider (`RISK_SETTINGS_PROVIDER_REQUIRED`). */
+export const setRiskSecondOpinionSettings = (enabled: boolean, providerId: string | null) =>
+  invoke<void>("set_risk_second_opinion_settings", { enabled, providerId });
+
+export const setRedRiskAlwaysConfirm = (value: boolean) =>
+  invoke<void>("set_red_risk_always_confirm", { value });
+
 export const getChatResync = (sessionId: string) =>
   invoke<ChatResyncDto>("get_chat_resync", { sessionId });
 

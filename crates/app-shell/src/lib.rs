@@ -1040,9 +1040,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     }
 
     let app = app.clone();
-    // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim
-    // App-Start — No-op, solange keine Aufbewahrungsdauer
-    // konfiguriert ist (Default).
+    // Spec 0034, Abschnitt 5: Aufräum-Job beim App-Start.
     let handle_for_retention = app.clone();
     tauri::async_runtime::spawn(async move {
         let state = handle_for_retention.state::<AppState>();
