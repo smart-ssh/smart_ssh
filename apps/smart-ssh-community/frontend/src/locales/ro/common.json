@@ -658,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Cheia din portchei nu aparține acestei baze de date. Nimic nu a fost modificat — stocarea ei ar face baza de date ilizibilă la următoarea pornire.",
     "SFTP_CONTENT_TOO_LARGE": "Fișierul depășește 50 MB și nu poate fi copiat în clipboard.",
     "CLIPBOARD_FILE_FAILED": "Fișierul nu a putut fi pus în clipboard pe acest sistem.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Furnizorul AI selectat nu este configurat. Alegeți un furnizor configurat.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Alegeți un furnizor AI înainte de a activa a doua opinie despre risc.",
     "SSH_SFTP_ALREADY_EXISTS": "Există deja un fișier sau un dosar cu acest nume",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Fișierul cheie nu a fost găsit pe acest dispozitiv"
   },

@@ -658,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "De sleutel in de sleutelhanger hoort niet bij deze database. Er is niets gewijzigd — opslaan zou de database bij de volgende start onleesbaar maken.",
     "SFTP_CONTENT_TOO_LARGE": "Het bestand is groter dan 50 MB en kan niet naar het klembord worden gekopieerd.",
     "CLIPBOARD_FILE_FAILED": "Het bestand kon op dit systeem niet op het klembord worden geplaatst.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "De gekozen AI-provider is niet geconfigureerd. Kies een geconfigureerde provider.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Kies een AI-provider voordat je de tweede mening over risico inschakelt.",
     "SSH_SFTP_ALREADY_EXISTS": "Er bestaat al een bestand of map met deze naam",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Sleutelbestand niet gevonden op dit apparaat"
   },

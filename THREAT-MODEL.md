@@ -306,7 +306,8 @@ app's own Tauri commands are not restricted per command; the main window's
 capability file grants no per-command limits and also allows the key-value
 store that holds `settings.json`
 ([`capabilities/default.json`](apps/smart-ssh-community/capabilities/default.json)).
-The red-risk setting is read from that store
+The red-risk setting is read from that store and written by backend commands
+only
 ([`risk_second_opinion.rs`](crates/app-shell/src/risk_second_opinion.rs)).
 
 The confirmation boundaries below protect you against the AI and against
@@ -405,8 +406,10 @@ Risks we know about and accept, with the reason.
   interface would equal full control over connected sessions and the safety
   settings (section 5, "Who is trusted inside the app"). Accepted because
   the interface is your own and the protections listed there keep foreign
-  code out. Planned hardening: safety settings changed only through backend
-  commands, not by the webview writing the settings store directly.
+  code out. Partly hardened: "Always confirm on red risk" and the AI risk
+  second opinion are changed only through backend commands that validate the
+  value; the webview can still write other settings (and, until the store is
+  made read-only for it, the store file itself).
 - **Allow rules are your decision.** An allow rule lets matching proposals
   run without asking (except for the boundaries in section 5). A rule that
   is broader than intended widens what the AI can do on its own.

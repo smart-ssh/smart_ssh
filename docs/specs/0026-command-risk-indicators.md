@@ -110,7 +110,11 @@ Schaden lässt sich gut musterbasiert erfassen.
    Hinweistext empfiehlt ein lokales Modell (z. B. Ollama), damit auch die
    Zweitmeinung nicht zwingend an einen weiteren externen Anbieter geht. Die
    Wahl ist eine app-weite Einstellung und wird beim Verbinden einer Sitzung
-   gelesen.
+   gelesen. Geschrieben wird die Einstellung ausschließlich vom Backend; es
+   prüft sie vor dem Speichern: Ein Provider, der nicht zu den
+   konfigurierten gehört, wird abgelehnt, ebenso das Einschalten ohne
+   Provider. Bei einer Ablehnung bleibt die gespeicherte Einstellung
+   unverändert, und der Einstellungsbereich zeigt den Fehler an.
 3. **Minimaler Kontext:** Die Anfrage enthält ausschließlich das Kommando bzw.
    den Pfad als Text, keinen Chatverlauf und keine Server-Notizen. Gefragt
    wird sinngemäß, ob die Ausgabe sensible Daten enthalten könnte, die nicht an

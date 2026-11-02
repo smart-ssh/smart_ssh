@@ -269,6 +269,9 @@ const KNOWN_ERROR_CODES = new Set<string>([
   "ELEVATED_USER_CHANGED",
   // Issue #358: „Datei kopieren" konnte die Zwischenablage nicht belegen.
   "CLIPBOARD_FILE_FAILED",
+  // Issue #856: the backend refused a risk second-opinion setting.
+  "RISK_SETTINGS_PROVIDER_UNKNOWN",
+  "RISK_SETTINGS_PROVIDER_REQUIRED",
 ]);
 
 /** Issue #600: errors for which the error card offers "Try again". */

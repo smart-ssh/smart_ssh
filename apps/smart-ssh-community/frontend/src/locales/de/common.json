@@ -658,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Der Schlüssel im Schlüsselbund gehört nicht zu dieser Datenbank. Es wurde nichts verändert — würde er gesichert, wäre die Datenbank beim nächsten Start unlesbar.",
     "SFTP_CONTENT_TOO_LARGE": "Die Datei ist größer als 50 MB und kann nicht in die Zwischenablage kopiert werden.",
     "CLIPBOARD_FILE_FAILED": "Die Datei konnte auf diesem System nicht in die Zwischenablage gelegt werden.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Der gewählte KI-Anbieter ist nicht eingerichtet. Wähle einen eingerichteten Anbieter.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Wähle einen KI-Anbieter, bevor du die Zweitmeinung zum Risiko einschaltest.",
     "SSH_SFTP_ALREADY_EXISTS": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Schlüsseldatei auf diesem Gerät nicht gefunden"
   },

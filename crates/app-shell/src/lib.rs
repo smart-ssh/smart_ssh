@@ -829,6 +829,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::delete_chat_session,
             chat_retention::get_chat_session_retention_days,
             chat_retention::set_chat_session_retention_days,
+            risk_second_opinion::set_risk_second_opinion_settings,
+            risk_second_opinion::set_red_risk_always_confirm,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::get_speech_model_status,
@@ -1038,9 +1040,7 @@ pub(crate) fn spawn_post_startup_tasks(app: &tauri::AppHandle) {
     }
 
     let app = app.clone();
-    // Spec 0034, Abschnitt 5: Aufbewahrungs-Aufräum-Job beim
-    // App-Start — No-op, solange keine Aufbewahrungsdauer
-    // konfiguriert ist (Default).
+    // Spec 0034, Abschnitt 5: Aufräum-Job beim App-Start.
     let handle_for_retention = app.clone();
     tauri::async_runtime::spawn(async move {
         let state = handle_for_retention.state::<AppState>();

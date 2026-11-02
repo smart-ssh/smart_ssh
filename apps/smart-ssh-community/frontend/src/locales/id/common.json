@@ -658,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Kunci di keychain bukan milik basis data ini. Tidak ada yang diubah — menyimpannya akan membuat basis data tidak dapat dibaca pada startup berikutnya.",
     "SFTP_CONTENT_TOO_LARGE": "Berkas lebih besar dari 50 MB dan tidak dapat disalin ke papan klip.",
     "CLIPBOARD_FILE_FAILED": "Berkas tidak dapat ditempatkan di papan klip pada sistem ini.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Penyedia AI yang dipilih belum dikonfigurasi. Pilih penyedia yang sudah dikonfigurasi.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Pilih penyedia AI sebelum mengaktifkan opini kedua tentang risiko.",
     "SSH_SFTP_ALREADY_EXISTS": "File atau folder dengan nama ini sudah ada",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Berkas kunci tidak ditemukan di perangkat ini"
   },

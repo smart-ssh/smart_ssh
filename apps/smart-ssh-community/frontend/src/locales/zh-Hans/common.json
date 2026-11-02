@@ -658,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "密钥环中的密钥不属于此数据库。未做任何更改——保存它会导致数据库在下次启动时无法读取。",
     "SFTP_CONTENT_TOO_LARGE": "文件大于 50 MB，无法复制到剪贴板。",
     "CLIPBOARD_FILE_FAILED": "在此系统上无法将该文件放入剪贴板。",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "所选的 AI 提供商尚未配置。请选择已配置的提供商。",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "开启风险二次评估前，请先选择 AI 提供商。",
     "SSH_SFTP_ALREADY_EXISTS": "已存在同名的文件或文件夹",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "此设备上找不到密钥文件"
   },

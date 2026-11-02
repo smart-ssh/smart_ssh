@@ -658,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Khóa trong kho khóa không thuộc về cơ sở dữ liệu này. Không có gì bị thay đổi — nếu lưu nó, cơ sở dữ liệu sẽ không đọc được ở lần khởi động tiếp theo.",
     "SFTP_CONTENT_TOO_LARGE": "Tệp lớn hơn 50 MB và không thể sao chép vào bộ nhớ tạm.",
     "CLIPBOARD_FILE_FAILED": "Không thể đặt tệp vào bộ nhớ tạm trên hệ thống này.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Nhà cung cấp AI đã chọn chưa được cấu hình. Hãy chọn một nhà cung cấp đã cấu hình.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Hãy chọn nhà cung cấp AI trước khi bật ý kiến thứ hai về rủi ro.",
     "SSH_SFTP_ALREADY_EXISTS": "Đã có tệp hoặc thư mục với tên này",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Không tìm thấy tệp khóa trên thiết bị này"
   },
