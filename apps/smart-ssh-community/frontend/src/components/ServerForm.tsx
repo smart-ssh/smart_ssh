@@ -47,7 +47,7 @@ import type {
 } from "../types";
 import type { MovedTo } from "./GroupForm";
 import { HostKeyDialog } from "./HostKeyDialog";
-import { ModalBackdrop } from "./ModalBackdrop";
+import { DialogFrame } from "./ui/DialogFrame";
 import { detectFallbackPlatform, platformCapabilities } from "../titlebarLayout";
 import { NotesPanel } from "./NotesPanel";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
@@ -782,6 +782,15 @@ export function ServerForm({
     }
   };
 
+  const importPrimaryRef = useRef<HTMLButtonElement>(null);
+
+  // Cancel/Escape of the key-import prompt; after a failed import the server is already saved, so it acts like "keep".
+  const cancelImportPrompt = () => {
+    if (saving) return;
+    if (importSavedId !== null) finishKeepingPath();
+    else setImportPromptOpen(false);
+  };
+
   /** "Keep file path" after the server was already saved by a failed import. */
   const finishKeepingPath = () => {
     setImportPromptOpen(false);
@@ -1485,44 +1494,15 @@ export function ServerForm({
         {/* Issue #667: shown once when a key-file server is saved with a new
          * or changed path. */}
         {importPromptOpen && (
-          <ModalBackdrop
+          <DialogFrame
             layer="app"
-            className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4"
-          >
-            <dialog
-              open
-              aria-modal="true"
-              aria-labelledby="import-key-title"
-              className="static w-full max-w-md rounded-lg border border-border-strong bg-surface p-4 text-inherit"
-            >
-              <h2 id="import-key-title" className="mb-2 text-base font-semibold text-fg">
-                {t("serverForm.importKey.title")}
-              </h2>
-              <p className="mb-2 font-mono text-xs break-all text-fg-muted">
-                {auth.kind === "identityFile" ? auth.path : ""}
-              </p>
-              <ul className="mb-3 space-y-1 text-sm text-fg-muted">
-                <li>{t("serverForm.importKey.importHint")}</li>
-                {platformCapabilities(detectFallbackPlatform()).keyFilePath && (
-                  <li>{t("serverForm.importKey.keepHint")}</li>
-                )}
-              </ul>
-              {importError && (
-                <p role="alert" className="mb-2 text-xs text-danger-fg">
-                  {importError}
-                </p>
-              )}
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  size="sm"
-                  disabled={saving}
-                  onClick={() => {
-                    // The server may already be saved (failed import): then
-                    // cancelling cannot undo that, so it behaves like "keep".
-                    if (importSavedId !== null) finishKeepingPath();
-                    else setImportPromptOpen(false);
-                  }}
-                >
+            size="md"
+            title={t("serverForm.importKey.title")}
+            onClose={cancelImportPrompt}
+            initialFocusRef={importPrimaryRef}
+            actions={
+              <>
+                <Button size="sm" disabled={saving} onClick={cancelImportPrompt}>
                   {t("common.cancel")}
                 </Button>
                 {platformCapabilities(detectFallbackPlatform()).keyFilePath && (
@@ -1534,12 +1514,25 @@ export function ServerForm({
                     {t("serverForm.importKey.keep")}
                   </Button>
                 )}
-                <Button variant="primary" size="sm" autoFocus disabled={saving} onClick={() => save(true)}>
+                <Button ref={importPrimaryRef} variant="primary" size="sm" disabled={saving} onClick={() => save(true)}>
                   {t("serverForm.importKey.import")}
                 </Button>
-              </div>
-            </dialog>
-          </ModalBackdrop>
+              </>
+            }
+          >
+            <p className="mb-2 font-mono text-xs break-all text-fg-muted">{auth.kind === "identityFile" ? auth.path : ""}</p>
+            <ul className="mb-3 space-y-1 text-sm text-fg-muted">
+              <li>{t("serverForm.importKey.importHint")}</li>
+              {platformCapabilities(detectFallbackPlatform()).keyFilePath && (
+                <li>{t("serverForm.importKey.keepHint")}</li>
+              )}
+            </ul>
+            {importError && (
+              <p role="alert" className="mb-2 text-xs text-danger-fg">
+                {importError}
+              </p>
+            )}
+          </DialogFrame>
         )}
 
         {/* Spec 0076, C-1/C-2/C-7 (BL-0222): nur für einen bereits
