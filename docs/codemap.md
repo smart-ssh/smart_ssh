@@ -73,6 +73,7 @@ Root: `apps/smart-ssh-community/frontend/src/`.
 ## 4. Extension points
 
 - `crates/app-shell/src/wiring.rs` — `Wiring`, `Wiring::community`: an edition assembles its stores, providers and extra commands here.
+- `crates/app-shell/src/extension_plugins.rs` — `UnlockedPluginFactory`, `into_name`: factories pushed into the after-unlock plugin list of the wiring; exported from the crate root.
 - `apps/smart-ssh-community/frontend/src/extensions/registry.ts` — `registerSettingsSection`, `registerDocumentAction`, `registerFirstRunNoticeExtension`: frontend contributions.
 - `crates/persistence-sqlite/src/extension_db.rs` — `ExtensionDb`, `ExtensionMigration`, `validate_prefix`: namespaced tables with their own migrations.
 - `crates/persistence-sqlite/src/extension_store.rs` — `ExtensionStore`, `NamespacedStore`: namespaced key-value store.

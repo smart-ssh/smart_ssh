@@ -76,9 +76,10 @@ mod window_prompt;
 mod wiring;
 
 pub use db_extensions::DbExtension;
+pub use extension_plugins::UnlockedPluginFactory;
 pub use required_plugins::{PluginTarget, RequiredPluginCrate, REQUIRED_DIRECT_PLUGIN_CRATES};
 pub use services::{BackgroundService, RunningService, ServiceContext, ServiceHost};
-pub use wiring::{Edition, Wiring};
+pub use wiring::{Edition, UnlockedPlugin, Wiring};
 
 use std::sync::Arc;
 
