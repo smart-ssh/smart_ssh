@@ -1,27 +1,24 @@
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
 import { type FormEvent, type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { acceptAndCreateRule, commandErrorCode, commandErrorMessage, continueTruncatedResponse, retryChatTurn, exportDocument, getChatHistory, getChatResync, listAiProviders, listPromptHistory, respondToAction, sendChatMessage, stopAutoContinuation, startNewChat } from "../api";
-import { onActionDecisionEscalated, onAiBudgetWaiting, onChatActionProposed, onChatActionOutput, onChatActionWaitingInput, onChatActionResult, onActionConfirmationSettled, onChatAutoContinuationLimitReached, onChatAutoContinuationStarted, onChatDocumentGenerated, onChatQuestionAsked, onChatError, onChatAiRetrying, onChatAiRequestStarted, onChatQueuedMessagesSent, onChatResponseCancelled, onChatResponseEmpty, onChatResponseRefused, onChatWebResearchUnavailable, onChatResponseTruncated, onChatContextUsage, onChatContextCompacted, onChatTextDelta, onChatWebActivity, onChatInjectionCheck, onRiskAssessmentUpdated } from "../events";
-import { isRetryableAiError } from "../errorCodes";
+import { acceptAndCreateRule, commandErrorCode, commandErrorMessage, continueTruncatedResponse, retryChatTurn, exportDocument, listAiProviders, listPromptHistory, respondToAction, sendChatMessage, stopAutoContinuation, startNewChat } from "../api";
 import { appendToDraft, loadVoiceInputEnabled, subscribeVoiceInputEnabled } from "../voiceInputSettings";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useStickToBottom } from "../hooks/useStickToBottom";
 import type { VoiceHandlers, VoicePhase } from "../useVoiceInput";
 import { VoiceInputControl } from "./VoiceInputControl";
-import { appendLiveOutput, type LiveOutput } from "../liveOutput";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { type ComposerAction, type ComposerAttachment, type ComposerContext, listComposerActions, listComposerDropHandlers, subscribeComposer } from "../extensions/registry";
 import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
 import { initialHistoryNavState, navigateHistory, type HistoryNavState } from "../promptHistoryNav";
 import { loadRiskClassifierSettings } from "../riskSettings";
-import type { ActionUserDecision, DocumentFormat, SuggestionVerdictDto, SuggestionPatternDto, Scope, InjectionCheckState } from "../types";
-import { actionItemFromProposed, freshId, historyEntryToItem, mergeResyncedItems } from "../chatResync";
+import type { ActionUserDecision, DocumentFormat, SuggestionVerdictDto, SuggestionPatternDto, Scope } from "../types";
+import { freshId } from "../chatResync";
 import { Button, ErrorBoundary } from "./ui";
 import { deriveQuestionStates } from "./QuestionCard";
+import { useChatTranscript } from "./chat/useChatTranscript";
 import { ChatItemView } from "./chat/ChatItemView";
-import { type ChatItem } from "./chat/chatItem";
 
 // Re-exported so existing importers (tests, `chatResync`) keep working.
 export { ChatItemView } from "./chat/ChatItemView";
@@ -47,18 +44,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }: ChatPanelProps) {
-  // The settled-event listener lives in an effect that must not resubscribe per render.
-  const onActionSettledRef = useRef(onActionSettled);
-  useEffect(() => {
-    onActionSettledRef.current = onActionSettled;
-  });
   const { t } = useTranslation();
-  const [items, setItems] = useState<ChatItem[]>([]);
-  // Issue #601: last real input size reported by the provider (numbers only).
-  const [contextUsage, setContextUsage] = useState<{
-    inputTokens: number;
-    windowTokens: number;
-  } | null>(null);
   const [draft, setDraft] = useState("");
   // Issue #471: Composer-Erweiterungspunkt, ausstehende Anhänge, Fehler am Eingabefeld.
   const composerActions = useSyncExternalStore(subscribeComposer, listComposerActions);
@@ -142,24 +128,6 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * die komplette Runden-Kette, dessen Promise-Auflösung ist also das
    * zuverlässige "die ganze Kette ist zu Ende"-Signal, unabhängig davon, ob
    * sie regulär endete, am Sicherheits-Cap oder durch "Automatik stoppen". */
-  const [autoContinuing, setAutoContinuing] = useState(false);
-  // Issue #600: provider overloaded, automatic retry pending.
-  const [retrying, setRetrying] = useState<{ attempt: number; max: number; deadline: number } | null>(null);
-  const [retryNow, setRetryNow] = useState(() => Date.now());
-  // Issue #694: a request is out; `since` is the last sign of life (request
-  // sent / last content) and drives the "Waiting for a response" line.
-  const [aiWait, setAiWait] = useState<{ provider: string; since: number; gotContent: boolean } | null>(null);
-  const [waitNow, setWaitNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!aiWait) return;
-    const id = window.setInterval(() => setWaitNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [aiWait]);
-  useEffect(() => {
-    if (!retrying) return;
-    const id = window.setInterval(() => setRetryNow(Date.now()), 250);
-    return () => window.clearInterval(id);
-  }, [retrying]);
   /** Issue #271: „Neuer Chat" läuft (Doppelklick-Schutz) bzw. ist gescheitert. */
   const [startingNewChat, setStartingNewChat] = useState(false);
   const [newChatError, setNewChatError] = useState<string | null>(null);
@@ -173,6 +141,11 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * `Session::risk_second_opinion_provider`-Doc-Kommentar) — ein bewusst
    * akzeptierter kleiner Randfall, kein Korrektheitsproblem. */
   const [riskSecondOpinionEnabled, setRiskSecondOpinionEnabled] = useState(false);
+  const { state: transcript, dispatch } = useChatTranscript(sessionId, {
+    riskSecondOpinionEnabled,
+    onActionSettled,
+  });
+  const { items, contextUsage, retrying, retryNow, aiWait, waitNow, autoContinuing, liveOutputs, injectionChecks, waitingActions } = transcript;
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const {
@@ -183,11 +156,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   /** Issue #325: live output per running action, kept outside `items` so
    * that its updates (up to ten per second) do not trigger the chat's
    * jump-to-the-end effect below. Removed when the result arrives. */
-  const [liveOutputs, setLiveOutputs] = useState<Record<string, LiveOutput>>({});
   // Issue #693: injection check state per checked item (action / web card id).
-  const [injectionChecks, setInjectionChecks] = useState<Record<string, InjectionCheckState>>({});
   // Issue #327: actions whose command is probably waiting for input.
-  const [waitingActions, setWaitingActions] = useState<Record<string, true>>({});
   // Spec 0055, Teil 1: `<textarea>` statt `<input type="text">` für die
   // mehrzeilige Eingabe (Shift+Enter/Auto-Grow) — dieselbe DOM-API
   // (`.value`/`.selectionStart`/`.setSelectionRange`), die restliche
@@ -243,377 +213,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       .catch(() => setRiskSecondOpinionEnabled(false));
   }, []);
 
-  // Spec 0034, Abschnitt 6/8: seedet den bereits geladenen Verlauf einer
-  // fortgesetzten Sitzung (leer bei einem frischen `connect()`, s.
-  // `get_chat_history`-Doc-Kommentar) — ohne das startet der Tab nach
-  // einem "Fortsetzen" fälschlich leer, obwohl das Backend bereits mit
-  // gefüllter Historie gestartet ist. Läuft einmal pro Tab (`sessionId`
-  // ändert sich nie innerhalb desselben Tabs), vor jedem Live-Event.
-  useEffect(() => {
-    getChatHistory(sessionId)
-      .then((entries) => {
-        if (entries.length === 0) return;
-        setItems((prev) => [
-          ...entries.map(historyEntryToItem),
-          ...prev,
-        ]);
-      })
-      .catch(() => {
-        // Best-effort: eine fehlgeschlagene Historie-Ladung soll den Tab
-        // nicht unbenutzbar machen, nur ohne sichtbaren Altverlauf starten
-        // (derselbe Geist wie andere Best-effort-`.catch`-Stellen in
-        // dieser Komponente, z. B. `listPromptHistory` oben).
-      });
-  }, [sessionId]);
 
-  // Issue #1020, Spec 0114 §4: after the app returns from the background the
-  // webview may have missed events — rebuild this chat from the backend:
-  // history, action results, and the confirmation that still waits.
-  // `riskSecondOpinionEnabled` is read through a ref so the listener (and a
-  // re-sync in flight) is not torn down when the setting loads.
-  const riskSecondOpinionRef = useRef(riskSecondOpinionEnabled);
-  useEffect(() => {
-    riskSecondOpinionRef.current = riskSecondOpinionEnabled;
-  }, [riskSecondOpinionEnabled]);
-  useEffect(() => {
-    let cancelled = false;
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      getChatResync(sessionId)
-        .then((resync) => {
-          if (cancelled) return;
-          const rebuilt = resync.history.map(historyEntryToItem);
-          const pending = resync.pendingProposal;
-          if (pending) {
-            rebuilt.push(actionItemFromProposed(pending, riskSecondOpinionRef.current));
-          }
-          setItems((prev) => mergeResyncedItems(prev, rebuilt, pending?.actionId ?? null));
-        })
-        .catch(() => {
-          // Best-effort like the initial history load: keep what is shown.
-        });
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      cancelled = true;
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [sessionId]);
-
-  useEffect(() => {
-    // Spec 0061 Follow-up (spec-reviewer Fund): Timer für das automatische
-    // Entfernen der `aiBudgetWaiting`-Karte (s. `onAiBudgetWaiting` unten)
-    // dürfen beim Session-Wechsel/Unmount nicht weiterlaufen.
-    const pendingBudgetTimers: number[] = [];
-    const unlisten = [
-      onChatAiRequestStarted((event) => {
-        if (event.sessionId !== sessionId) return;
-        const now = Date.now();
-        setWaitNow(now);
-        setAiWait({ provider: event.providerName, since: now, gotContent: false });
-      }),
-      onChatTextDelta((event) => {
-        if (event.sessionId !== sessionId) return;
-        setRetrying(null);
-        setAiWait((w) => (w ? { ...w, since: Date.now(), gotContent: true } : w));
-        setItems((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.type === "assistant") {
-            return [...prev.slice(0, -1), { ...last, text: last.text + event.delta }];
-          }
-          return [...prev, { type: "assistant", id: freshId(), text: event.delta }];
-        });
-      }),
-      onChatActionProposed((event) => {
-        if (event.sessionId !== sessionId) return;
-        setRetrying(null);
-        setAiWait(null);
-        setItems((prev) => [...prev, actionItemFromProposed(event, riskSecondOpinionRef.current)]);
-      }),
-      onRiskAssessmentUpdated((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) =>
-          prev.map((item) =>
-            item.type === "action" && item.actionId === event.actionId && item.riskAssessment
-              ? {
-                  ...item,
-                  riskAssessment: {
-                    ...item.riskAssessment,
-                    dataRisk: event.dataRisk,
-                    dataRiskReason: event.reason,
-                    aiReviewed: true,
-                  },
-                  riskSecondOpinionPending: false,
-                  secondOpinionUnavailable: event.secondOpinionUnavailable === true,
-                }
-              : item,
-          ),
-        );
-      }),
-      // Spec 0092, A3.2: die Entscheidung zu `actionId` wurde NACH
-      // `chat-action-proposed` von `AutoExec` auf `Confirm` verschärft (die
-      // KI-Zweitmeinung hat das Daten-Risiko auf Rot gehoben) — die Karte
-      // baut sich daraus selbst ein `Confirm{reason, code}`, weil dieses
-      // Event (anders als `chat-action-proposed`) nicht den ganzen
-      // `Decision`-Enum überträgt. `needsConfirmation` (s. `ChatItemView`)
-      // greift danach automatisch, der Bestätigungsdialog erscheint also
-      // ohne weiteres Zutun.
-      //
-      // `startedAt` MUSS auf `null` zurückgesetzt werden: Beim ursprünglichen
-      // `chat-action-proposed` stand die Entscheidung noch auf `AutoExec`,
-      // also wurde `startedAt` optimistisch auf `Date.now()` gesetzt (s.
-      // unten) — ohne diesen Reset zeigte die Karte fälschlich gleichzeitig
-      // den Lauf-Indikator (`RunningCommandIndicator`, „läuft bereits") UND
-      // den Bestätigungsdialog, obwohl die Aktion nie automatisch
-      // angelaufen ist (A3.1: sie wird wie jedes andere `Confirm`
-      // behandelt).
-      onActionDecisionEscalated((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) =>
-          prev.map((item) =>
-            item.type === "action" && item.actionId === event.actionId
-              ? {
-                  ...item,
-                  decision: { Confirm: { reason: event.reason, code: event.code } },
-                  startedAt: null,
-                }
-              : item,
-          ),
-        );
-      }),
-      onChatActionOutput((event) => {
-        if (event.sessionId !== sessionId) return;
-        setLiveOutputs((prev) => ({
-          ...prev,
-          [event.actionId]: appendLiveOutput(prev[event.actionId], event),
-        }));
-      }),
-      onChatActionWaitingInput((event) => {
-        if (event.sessionId !== sessionId) return;
-        setWaitingActions((prev) => {
-          if (event.waiting) return { ...prev, [event.actionId]: true };
-          if (!(event.actionId in prev)) return prev;
-          const { [event.actionId]: _cleared, ...rest } = prev;
-          return rest;
-        });
-      }),
-      onActionConfirmationSettled((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) =>
-          prev.map((item) =>
-            item.type === "action" && item.actionId === event.actionId
-              ? { ...item, responded: true, settled: event.reason }
-              : item,
-          ),
-        );
-        onActionSettledRef.current(sessionId);
-      }),
-      onChatActionResult((event) => {
-        if (event.sessionId !== sessionId) return;
-        setWaitingActions((prev) => {
-          if (!(event.actionId in prev)) return prev;
-          const { [event.actionId]: _finished, ...rest } = prev;
-          return rest;
-        });
-        // Issue #325: the final result replaces the live view.
-        setLiveOutputs((prev) => {
-          if (!(event.actionId in prev)) return prev;
-          const { [event.actionId]: _finished, ...rest } = prev;
-          return rest;
-        });
-        setItems((prev) =>
-          prev.map((item) =>
-            item.type === "action" && item.actionId === event.actionId
-              ? { ...item, result: event.result, responded: true }
-              : item,
-          ),
-        );
-      }),
-      onChatError((event) => {
-        if (event.sessionId !== sessionId) return;
-        setRetrying(null);
-        setAiWait(null);
-        setItems((prev) => {
-          // Issue #600: "Try again" only when nothing but the user's own
-          // message came since the last user turn (no reply, command or
-          // proposal that a resend would repeat or contradict).
-          let retryable = isRetryableAiError(event.code);
-          let sawUser = false;
-          for (let i = prev.length - 1; retryable && i >= 0; i--) {
-            const it = prev[i];
-            if (it.type === "user") {
-              sawUser = true;
-              break;
-            }
-            if (it.type === "assistant" || it.type === "action" || it.type === "error") retryable = false;
-          }
-          if (!sawUser) retryable = false;
-          return [
-            ...prev,
-            {
-              type: "error",
-              id: freshId(),
-              message: event.message,
-              code: event.code ?? null,
-              details: {
-                providerErrorType: event.providerErrorType,
-                httpStatus: event.httpStatus,
-                providerMessage: event.providerMessage,
-                providerName: event.providerName,
-                timeoutSecs: event.timeoutSecs,
-                accessReturns: event.accessReturns,
-              },
-              retryable,
-            },
-          ];
-        });
-      }),
-      onChatAiRetrying((event) => {
-        if (event.sessionId !== sessionId) return;
-        setRetryNow(Date.now());
-        setRetrying({
-          attempt: event.attempt,
-          max: event.maxAttempts,
-          deadline: Date.now() + event.delaySecs * 1000,
-        });
-      }),
-      onChatResponseTruncated((event) => {
-        if (event.sessionId !== sessionId) return;
-        // Spec 0065, Teil 2: markiert die zuletzt gestreamte Assistant-
-        // Nachricht (dieselbe `last?.type === "assistant"`-Suche wie bei
-        // `onChatTextDelta` oben) — das Event kommt immer unmittelbar nach
-        // dem letzten Text-Delta derselben Antwort.
-        setItems((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.type === "assistant") {
-            return [...prev.slice(0, -1), { ...last, truncated: true }];
-          }
-          // Spec 0080, A3, zweiter Punkt: früher wurde das Event hier
-          // verworfen, wenn keine Assistant-Nachricht direkt vorherging
-          // (z. B. eine Runde, die schon am Limit endet, bevor auch nur ein
-          // Text-Delta kam) — der Nutzer sah dann trotz Kürzung gar
-          // nichts. Jetzt kommt stattdessen ein leeres Assistant-Element
-          // mit Kürzungs-Hinweis + „Weiter" dazu.
-          return [...prev, { type: "assistant", id: freshId(), text: "", truncated: true }];
-        });
-      }),
-      onChatInjectionCheck((event) => {
-        if (event.sessionId !== sessionId) return;
-        const { sessionId: _s, itemId, ...state } = event;
-        setInjectionChecks((prev) => ({ ...prev, [itemId]: state as InjectionCheckState }));
-      }),
-      onChatWebActivity((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) => [
-          ...prev,
-          {
-            type: "webActivity",
-            id: freshId(),
-            activity: event.activity,
-            activityId: event.activityId,
-          },
-        ]);
-      }),
-      onChatResponseEmpty((event) => {
-        if (event.sessionId !== sessionId) return;
-        // Spec 0080, A3: eigenes Element statt eines markierten Assistant-
-        // Eintrags — kein „Weiter" (die Runde ist nicht abgeschnitten,
-        // sondern leer), keine Export-/Notiz-Leiste (nichts zu exportieren).
-        // Text der NÄCHSTEN Runde landet nie hier: `onChatTextDelta` prüft
-        // `last?.type === "assistant"`, "emptyResponse" erfüllt das nie,
-        // ein Folge-Delta hängt sich also immer an ein neues Element.
-        setItems((prev) => [...prev, { type: "emptyResponse", id: freshId() }]);
-      }),
-      onChatResponseRefused((event) => {
-        if (event.sessionId !== sessionId) return;
-        // Issue #647: own item; text streamed before stays as it is.
-        setItems((prev) => [...prev, { type: "refusedResponse", id: freshId() }]);
-      }),
-      onChatWebResearchUnavailable((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) => [...prev, { type: "webResearchUnavailable", id: freshId() }]);
-      }),
-      onChatQueuedMessagesSent((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) =>
-          prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
-        );
-      }),
-      onChatContextUsage((event) => {
-        if (event.sessionId !== sessionId) return;
-        setContextUsage({ inputTokens: event.inputTokens, windowTokens: event.windowTokens });
-      }),
-      onChatContextCompacted((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) => [...prev, { type: "contextCompacted", id: freshId() }]);
-      }),
-      onChatResponseCancelled((event) => {
-        if (event.sessionId !== sessionId) return;
-        setRetrying(null);
-        setItems((prev) => [...prev, { type: "responseCancelled", id: freshId() }]);
-      }),
-      onChatAutoContinuationLimitReached((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) => [
-          ...prev,
-          { type: "autoContinuationLimitReached", id: freshId(), limit: event.limit },
-        ]);
-      }),
-      onChatAutoContinuationStarted((event) => {
-        if (event.sessionId !== sessionId) return;
-        setAutoContinuing(true);
-      }),
-      onAiBudgetWaiting((event) => {
-        if (event.sessionId !== sessionId) return;
-        const id = freshId();
-        setItems((prev) => [...prev, { type: "aiBudgetWaiting", id, waitSeconds: event.waitSeconds }]);
-        // Spec 0061 §4: "verschwindet, sobald der Request rausgeht". Es gibt
-        // (bewusst, s. ADR 0054) kein eigenes "Warten beendet"-Event vom
-        // Backend — die Karte ist rein informativ, kein Steuerelement. Ein
-        // client-seitiger Timer approximiert das Verschwinden anhand der
-        // bekannten Wartedauer, statt die Karte dauerhaft stehen zu lassen
-        // (spec-reviewer Fund: Karten stapelten sich sonst über mehrere
-        // Wartevorgänge, z. B. innerhalb einer Auto-Fortsetzungs-Serie).
-        pendingBudgetTimers.push(
-          window.setTimeout(
-            () => setItems((prev) => prev.filter((it) => it.id !== id)),
-            Math.max(event.waitSeconds, 1) * 1000,
-          ),
-        );
-      }),
-      onChatQuestionAsked((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) => [
-          ...prev,
-          {
-            type: "question",
-            id: freshId(),
-            questionId: event.questionId,
-            question: event.question,
-            options: event.options,
-            multiSelect: event.multiSelect,
-          },
-        ]);
-      }),
-      onChatDocumentGenerated((event) => {
-        if (event.sessionId !== sessionId) return;
-        setItems((prev) => [
-          ...prev,
-          {
-            type: "document",
-            id: freshId(),
-            title: event.title,
-            contentMarkdown: event.contentMarkdown,
-          },
-        ]);
-      }),
-    ];
-
-    return () => {
-      unlisten.forEach((p) => p.then((unlistenFn) => unlistenFn()));
-      pendingBudgetTimers.forEach((id) => window.clearTimeout(id));
-    };
-  }, [sessionId]);
 
   const respond = (actionId: string, decision: ActionUserDecision) => {
     // Spec 0027: die tatsächliche Ausführung beginnt jetzt (nicht bei
@@ -623,29 +223,19 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       decision.decision === "approve" || decision.decision === "editThenApprove"
         ? Date.now()
         : null;
-    setItems((prev) =>
-      prev.map((item) =>
-        item.type === "action" && item.actionId === actionId
-          ? { ...item, responded: true, userDecision: decision.decision, startedAt: startedAt ?? item.startedAt }
-          : item,
-      ),
-    );
+    dispatch({ type: "actionResponded", actionId, decision: decision.decision, startedAt });
     onActionSettled(sessionId);
     respondToAction(sessionId, actionId, decision).catch((err) => {
       // Issue #1019: the optimistic state is rolled back. An unknown
       // confirmation was settled by the backend: the card shows "expired",
       // never "approved". Any other error leaves the request open.
       const unknown = commandErrorCode(err) === "ACTION_CONFIRMATION_UNKNOWN";
-      setItems((prev) => [
-        ...prev.map((item) =>
-          item.type === "action" && item.actionId === actionId
-            ? unknown
-              ? { ...item, responded: true, userDecision: undefined, startedAt: null, settled: "unknown" as const }
-              : { ...item, responded: false, userDecision: undefined, startedAt: null }
-            : item,
-        ),
-        { type: "error" as const, id: freshId(), message: commandErrorMessage(err), code: null },
-      ]);
+      dispatch({
+        type: "actionRespondFailed",
+        actionId,
+        unknown,
+        errorItem: { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
+      });
     });
   };
 
@@ -654,13 +244,9 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
    * offener Bestätigungsdialog bleibt stehen, ein laufendes Kommando läuft
    * zu Ende. */
   const handleStopAutoContinuation = () => {
-    setAutoContinuing(false);
-    setAiWait(null);
+    dispatch({ type: "autoContinuationStopped" });
     stopAutoContinuation(sessionId).catch((err) =>
-      setItems((prev) => [
-        ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
-      ]),
+      dispatch({ type: "itemAppended", item: { type: "error", id: freshId(), message: commandErrorMessage(err), code: null } }),
     );
   };
 
@@ -690,13 +276,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     editedCommand: string | null,
     verdict?: SuggestionVerdictDto,
   ) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.type === "action" && item.actionId === actionId
-          ? { ...item, responded: true, startedAt: Date.now() }
-          : item,
-      ),
-    );
+    dispatch({ type: "ruleAccepting", actionId, startedAt: Date.now() });
     onActionSettled(sessionId);
     acceptAndCreateRule(
       sessionId,
@@ -709,27 +289,24 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       .then(() => {
         // Issue #596: no silent failure — repeat why the command still asks.
         if (verdict && !verdict.autoExec) {
-          setItems((prev) => [
-            ...prev,
-            {
+          dispatch({ type: "itemAppended", item: {
               type: "ruleNotice",
               id: freshId(),
               reasons: verdict.reasons.map((r) => r.code),
-            },
-          ]);
+            } });
         }
       })
       .catch((err) =>
-      setItems((prev) => [
-        ...prev,
-        // Spec 0077, 3.1.4: Code weiterreichen statt `null`, damit ein
+        dispatch({
+          type: "itemAppended",
+          // Spec 0077, 3.1.4: Code weiterreichen statt `null`, damit ein
         // ungültiges Muster auch hier übersetzt erscheint. Die Anzeige
         // ersetzt die `message` durch den übersetzten Satz — hier bewusst
         // ohne den Fehlertext der Bibliothek: Es wird ein Vorschlag
         // angelegt, kein selbstgeschriebenes Muster.
-        { type: "error", id: freshId(), message: commandErrorMessage(err), code: commandErrorCode(err) },
-      ]),
-    );
+          item: { type: "error", id: freshId(), message: commandErrorMessage(err), code: commandErrorCode(err) },
+        }),
+      );
   };
 
   /** Spec 0012, Abschnitt 3: der native Speichern-Dialog selbst lebt im
@@ -740,10 +317,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     try {
       await exportDocument(contentMarkdown, title, format);
     } catch (err) {
-      setItems((prev) => [
-        ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
-      ]);
+      dispatch({ type: "itemAppended", item: { type: "error", id: freshId(), message: commandErrorMessage(err), code: null } });
       throw err;
     }
   };
@@ -757,31 +331,26 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     // Spec 0066, spec-reviewer-Fund: während eine Antwort läuft, würde die
     // Fortsetzungs-Anweisung eingereiht und in einem fremden Turn landen.
     if (sending) return;
-    setItems((prev) =>
-      prev.map((it) => (it.id === itemId && it.type === "assistant" ? { ...it, truncated: false } : it)),
-    );
+    dispatch({ type: "truncatedCleared", id: itemId });
     await runSend(() => continueTruncatedResponse(sessionId));
   };
 
   /** Issue #600: "Try again" on a retryable error card. */
   const handleRetryTurn = async (itemId: string) => {
     if (sending) return;
-    setItems((prev) => prev.filter((it) => it.id !== itemId));
+    dispatch({ type: "itemRemoved", id: itemId });
     await runSend(() => retryChatTurn(sessionId));
   };
 
   const runSend = async (call: () => Promise<void>) => {
     pendingSendsRef.current += 1;
     // Issue #694: drop a stale wait line from the previous turn.
-    if (pendingSendsRef.current === 1) setAiWait(null);
+    if (pendingSendsRef.current === 1) dispatch({ type: "turnStarted" });
     setSending(true);
     try {
       await call();
     } catch (err) {
-      setItems((prev) => [
-        ...prev,
-        { type: "error", id: freshId(), message: commandErrorMessage(err), code: null },
-      ]);
+      dispatch({ type: "itemAppended", item: { type: "error", id: freshId(), message: commandErrorMessage(err), code: null } });
     } finally {
       // Spec 0021, Abschnitt 7: Fail-Safe — läuft in JEDEM Fall (Erfolg,
       // Fehler, gleich welcher der vier Ausgänge zuletzt griff), damit die
@@ -792,13 +361,8 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       pendingSendsRef.current -= 1;
       if (pendingSendsRef.current === 0) {
         setSending(false);
-        setAutoContinuing(false);
-        setRetrying(null);
-        setAiWait(null);
         // Läuft im Backend nichts mehr, wartet auch keine Nachricht mehr.
-        setItems((prev) =>
-          prev.map((it) => (it.type === "user" && it.queued ? { ...it, queued: false } : it)),
-        );
+        dispatch({ type: "turnSettled" });
       }
     }
   };
@@ -808,10 +372,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
   const handleQuestionAnswer = async (text: string) => {
     const queued = sending;
     scrollToBottom();
-    setItems((prev) => [
-      ...prev,
-      { type: "user", id: freshId(), text, ...(queued ? { queued: true } : {}) },
-    ]);
+    dispatch({ type: "itemAppended", item: { type: "user", id: freshId(), text, ...(queued ? { queued: true } : {}) } });
     await runSend(() => sendChatMessage(sessionId, text));
   };
 
@@ -830,9 +391,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     const itemId = freshId();
     // Issue #540: an own message always jumps to the bottom and follows again.
     scrollToBottom();
-    setItems((prev) => [
-      ...prev,
-      {
+    dispatch({ type: "itemAppended", item: {
         type: "user",
         id: itemId,
         text,
@@ -840,8 +399,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         ...(sentAttachments.length > 0
           ? { attachments: sentAttachments.map((a) => ({ name: a.name, kind: a.kind })) }
           : {}),
-      },
-    ]);
+      } });
     setDraft("");
     setAttachments([]);
     setHistoryNav(initialHistoryNavState);
@@ -867,14 +425,14 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         // die Nachricht abgelehnt. Sie verschwindet aus dem Verlauf und bleibt
         // im Eingabefeld (ein inzwischen getippter Entwurf bleibt unberührt).
         if (commandErrorCode(err) === "CHAT_SWITCHING") {
-          setItems((prev) => prev.filter((it) => it.id !== itemId));
+          dispatch({ type: "itemRemoved", id: itemId });
           setDraft((current) => (current === "" ? text : current));
         }
         // Issue #471: lehnt das Backend eine Nachricht mit Anhängen ab
         // (Grenze, Modell, gesperrte Funktion), wurde nichts gesendet: Text
         // und Chips bleiben zum Korrigieren, der Fehler steht am Eingabefeld.
         if (sentAttachments.length > 0) {
-          setItems((prev) => prev.filter((it) => it.id !== itemId));
+          dispatch({ type: "itemRemoved", id: itemId });
           setDraft((current) => (current === "" ? text : current));
           setAttachments((current) => (current.length === 0 ? sentAttachments : current));
           setComposerError(commandErrorMessage(err));
@@ -1005,8 +563,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
     try {
       await startNewChat(sessionId);
       // Issue #648: the new chat has no usage yet; keep the window size.
-      setContextUsage((prev) => (prev ? { ...prev, inputTokens: 0 } : prev));
-      setItems([]);
+      dispatch({ type: "chatCleared" });
       setHistoryNav(initialHistoryNavState);
     } catch (err) {
       setNewChatError(commandErrorMessage(err));

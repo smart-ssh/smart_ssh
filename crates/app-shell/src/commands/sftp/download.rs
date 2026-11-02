@@ -203,6 +203,55 @@ pub(super) fn default_downloads_dir() -> CommandResult<std::path::PathBuf> {
     }
 }
 
+/// Lists one directory through the browser channel, taking the channel lock
+/// per call (see `download_recursive`).
+struct BrowserDirLister<'a> {
+    session: &'a Session,
+    channel: &'a BrowserChannel,
+}
+
+#[async_trait::async_trait]
+impl app_logic::sftp_ops::DirLister for BrowserDirLister<'_> {
+    async fn list_dir(
+        &mut self,
+        path: &str,
+    ) -> CommandResult<Vec<ssh_manager_core::ssh::RemoteEntry>> {
+        let mut guard = lock_browser_sftp(self.session, self.channel).await;
+        let mut sftp = guard.sftp().await?;
+        Ok(sftp.list_dir(path).await?)
+    }
+}
+
+/// Validates each discovered entry and creates local folders right after its
+/// directory was listed (before the next listing), as the walk used to.
+struct DownloadTreeVisitor {
+    files: Vec<(String, std::path::PathBuf, u64)>,
+    local_dirs: std::collections::HashMap<String, std::path::PathBuf>,
+}
+
+#[async_trait::async_trait]
+impl app_logic::sftp_ops::TreeVisitor for DownloadTreeVisitor {
+    async fn visit(
+        &mut self,
+        remote_dir: &str,
+        entry: ssh_manager_core::ssh::RemoteEntry,
+    ) -> CommandResult<()> {
+        safe_local_segment(&entry.name)?;
+        let local_dir = self
+            .local_dirs
+            .get(remote_dir)
+            .ok_or_else(|| CommandError::from("internal error: unknown parent directory"))?;
+        let local_entry_path = local_dir.join(&entry.name);
+        if entry.is_dir {
+            tokio::fs::create_dir_all(&local_entry_path).await?;
+            self.local_dirs.insert(entry.path, local_entry_path);
+        } else {
+            self.files.push((entry.path, local_entry_path, entry.size));
+        }
+        Ok(())
+    }
+}
+
 /// Rekursiver Ordner-Download (Spec 0054, Teil 2: "Ordner rekursiv"):
 /// listet iterativ (kein async-rekursiver Aufruf nötig — vermeidet das
 /// Boxing, das ein `async fn`, das sich selbst aufruft, in Rust braucht)
@@ -225,28 +274,22 @@ pub(super) async fn download_recursive(
     let op_guard = channel.register_op(Uuid::new_v4(), OpKind::Download, remote_root);
     let op = op_guard.handle();
     tokio::fs::create_dir_all(local_root).await?;
-    let mut files: Vec<(String, std::path::PathBuf, u64)> = Vec::new();
-    let mut queue = vec![(remote_root.to_string(), local_root.to_path_buf())];
-    while let Some((remote_dir, local_dir)) = queue.pop() {
-        if op.is_user_stopped() {
-            return Err(stopped_error());
-        }
-        let entries = {
-            let mut guard = lock_browser_sftp(session, channel).await;
-            let mut sftp = guard.sftp().await?;
-            sftp.list_dir(&remote_dir).await?
-        };
-        for entry in entries {
-            safe_local_segment(&entry.name)?;
-            let local_entry_path = local_dir.join(&entry.name);
-            if entry.is_dir {
-                tokio::fs::create_dir_all(&local_entry_path).await?;
-                queue.push((entry.path, local_entry_path));
-            } else {
-                files.push((entry.path, local_entry_path, entry.size));
-            }
-        }
-    }
+    // The walk lives in `app_logic::sftp_ops`; the channel lock is taken per
+    // listing (by `BrowserDirLister`) so a revocation is noticed between them.
+    let mut lister = BrowserDirLister { session, channel };
+    let mut visitor = DownloadTreeVisitor {
+        files: Vec::new(),
+        // Remote directory path -> its local counterpart. A directory's entry
+        // always precedes the entries inside it, so the parent is known.
+        local_dirs: std::collections::HashMap::from([(
+            remote_root.to_string(),
+            local_root.to_path_buf(),
+        )]),
+    };
+    app_logic::sftp_ops::walk_tree(&mut lister, remote_root, op, &mut visitor)
+        .await?
+        .ok_or_else(stopped_error)?;
+    let files = visitor.files;
     op.set_files(0, Some(files.len() as u64));
     op.set_bytes_total(Some(files.iter().map(|f| f.2).sum()));
     let run = FileRun {
