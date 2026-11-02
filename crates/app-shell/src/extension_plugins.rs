@@ -12,18 +12,55 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, Builder, Runtime};
 
+/// A built plugin with its config type erased, so it can be registered on
+/// either a `Builder` or an `AppHandle`.
+trait ErasedPlugin<R: Runtime> {
+    fn name(&self) -> &'static str;
+    fn register_on_builder(self: Box<Self>, builder: Builder<R>) -> Builder<R>;
+    fn register_on_app(self: Box<Self>, app: &AppHandle<R>) -> tauri::Result<()>;
+}
+
+struct Erased<P>(P);
+
+impl<R: Runtime, P: tauri::plugin::Plugin<R> + 'static> ErasedPlugin<R> for Erased<P> {
+    fn name(&self) -> &'static str {
+        self.0.name()
+    }
+    fn register_on_builder(self: Box<Self>, builder: Builder<R>) -> Builder<R> {
+        builder.plugin(self.0)
+    }
+    fn register_on_app(self: Box<Self>, app: &AppHandle<R>) -> tauri::Result<()> {
+        app.plugin(self.0)
+    }
+}
+
 /// Factory for one extension plugin. A factory (not the plugin itself) works
-/// with both `Builder::plugin` and `AppHandle::plugin`.
-pub type UnlockedPluginFactory<R> = Box<dyn FnOnce() -> tauri::plugin::TauriPlugin<R> + Send>;
+/// with both `Builder::plugin` and `AppHandle::plugin`. The plugin's config
+/// type is erased, so any `tauri::plugin::TauriPlugin<R, C>` fits; its config
+/// (`plugins.<name>` in `tauri.conf.json`) is applied by Tauri on registration,
+/// as for plugins registered on the builder (issue #1049).
+pub struct UnlockedPluginFactory<R: Runtime>(Box<dyn FnOnce() -> Box<dyn ErasedPlugin<R>> + Send>);
+
+impl<R: Runtime> UnlockedPluginFactory<R> {
+    /// Wraps a function that builds the plugin, e.g.
+    /// `UnlockedPluginFactory::new(|| my_plugin::init())`.
+    pub fn new<P, F>(build: F) -> Self
+    where
+        P: tauri::plugin::Plugin<R> + 'static,
+        F: FnOnce() -> P + Send + 'static,
+    {
+        Self(Box::new(move || Box::new(Erased(build()))))
+    }
+}
 
 /// Keyring mode: register the plugins on the builder, in order.
 pub(crate) fn register_on<R: Runtime>(
     builder: Builder<R>,
     factories: Vec<UnlockedPluginFactory<R>>,
 ) -> Builder<R> {
-    factories
-        .into_iter()
-        .fold(builder, |builder, factory| builder.plugin(factory()))
+    factories.into_iter().fold(builder, |builder, factory| {
+        (factory.0)().register_on_builder(builder)
+    })
 }
 
 /// Plugins waiting for the unlock (password mode). Always managed, possibly
@@ -48,7 +85,6 @@ pub(crate) fn pending<R: Runtime>(
 /// logged and does not stop the others; the names of the failed plugins are
 /// returned (for tests).
 pub(crate) fn register_pending<R: Runtime>(app: &AppHandle<R>) -> Vec<&'static str> {
-    use tauri::plugin::Plugin;
     use tauri::Manager;
 
     let mut failed = Vec::new();
@@ -60,9 +96,9 @@ pub(crate) fn register_pending<R: Runtime>(app: &AppHandle<R>) -> Vec<&'static s
         Err(poisoned) => std::mem::take(&mut *poisoned.into_inner()),
     };
     for factory in factories {
-        let plugin = factory();
+        let plugin = (factory.0)();
         let name = plugin.name();
-        if let Err(err) = app.plugin(plugin) {
+        if let Err(err) = plugin.register_on_app(app) {
             tracing::error!(
                 plugin = name,
                 error = %err,
@@ -83,7 +119,7 @@ mod tests {
     const DATA: &str = "data-from-ext-plugin-894";
 
     fn plugin(name: &'static str) -> UnlockedPluginFactory<MockRuntime> {
-        Box::new(move || {
+        UnlockedPluginFactory::new(move || {
             tauri::plugin::Builder::<MockRuntime>::new(name)
                 .invoke_handler(|invoke: tauri::ipc::Invoke<MockRuntime>| {
                     invoke.resolver.resolve(DATA);
@@ -172,7 +208,7 @@ mod tests {
     }
 
     fn failing_plugin(name: &'static str) -> UnlockedPluginFactory<MockRuntime> {
-        Box::new(move || {
+        UnlockedPluginFactory::new(move || {
             tauri::plugin::Builder::<MockRuntime>::new(name)
                 .setup(|_, _| Err("setup refused".into()))
                 .build()
@@ -196,5 +232,82 @@ mod tests {
         assert!(call(&webview, "ext894b")
             .expect("the plugin after the failing one is registered")
             .contains(DATA));
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Cfg {
+        greeting: String,
+    }
+
+    fn configured_plugin(name: &'static str) -> UnlockedPluginFactory<MockRuntime> {
+        UnlockedPluginFactory::new(move || {
+            tauri::plugin::Builder::<MockRuntime, Cfg>::new(name)
+                .setup(|app, api| {
+                    use tauri::Manager;
+                    app.manage(api.config().greeting.clone());
+                    Ok(())
+                })
+                .invoke_handler(|invoke: tauri::ipc::Invoke<MockRuntime>| {
+                    use tauri::Manager;
+                    let greeting = invoke.message.webview().state::<String>().inner().clone();
+                    invoke.resolver.resolve(greeting);
+                    true
+                })
+                .build()
+        })
+    }
+
+    fn configured_context(name: &str) -> tauri::Context<MockRuntime> {
+        let mut context = context(&[name]);
+        context.config_mut().plugins.0.insert(
+            name.to_string(),
+            serde_json::json!({ "greeting": "config-1049" }),
+        );
+        context
+    }
+
+    #[test]
+    fn test_config_carrying_plugin_is_locked_then_gets_its_config_after_unlock() {
+        let app = mock_builder()
+            .manage(PendingExtensionPlugins::<MockRuntime>::new(vec![
+                configured_plugin("ext1049"),
+            ]))
+            .build(configured_context("ext1049"))
+            .expect("app");
+        let webview = webview(&app);
+        let locked = call(&webview, "ext1049").expect_err("locked");
+        assert!(locked.to_string().contains("not found"), "got {locked}");
+
+        assert!(register_pending(app.handle()).is_empty());
+        assert!(call(&webview, "ext1049")
+            .expect("reachable after unlock")
+            .contains("config-1049"));
+        // Once only.
+        assert!(register_pending(app.handle()).is_empty());
+    }
+
+    #[test]
+    fn test_config_carrying_plugin_in_keyring_mode_gets_its_config() {
+        let app = register_on(mock_builder(), vec![configured_plugin("ext1049")])
+            .build(configured_context("ext1049"))
+            .expect("app");
+        assert!(call(&webview(&app), "ext1049")
+            .expect("reachable")
+            .contains("config-1049"));
+    }
+
+    #[test]
+    fn test_failing_config_carrying_plugin_is_logged_and_skipped() {
+        // Config is missing, so deserialising `Cfg` fails at registration.
+        let app = mock_builder()
+            .manage(PendingExtensionPlugins::<MockRuntime>::new(vec![
+                configured_plugin("ext1049bad"),
+                plugin("ext1049ok"),
+            ]))
+            .build(context(&["ext1049bad", "ext1049ok"]))
+            .expect("app");
+        let webview = webview(&app);
+        assert_eq!(register_pending(app.handle()), vec!["ext1049bad"]);
+        assert!(call(&webview, "ext1049ok").is_ok());
     }
 }
