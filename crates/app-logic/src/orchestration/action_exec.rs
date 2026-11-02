@@ -34,6 +34,7 @@ use crate::events::{
 use crate::session::Session;
 use crate::state::{ActionId, SessionId};
 
+use super::approval::{ApprovedAction, ApprovedCommand};
 use super::chat_turn::{
     ledger_source_for_origin, push_history_scoped, wait_for_ai_request_slot,
     wait_for_rate_limit_budget, write_ledger_entry, PENDING_ACTION_CONFIRM_TIMEOUT,
@@ -508,7 +509,7 @@ pub(crate) async fn handle_action_proposed(
                 session,
                 session_id,
                 action_id,
-                action,
+                ApprovedAction::from_auto_exec(action),
                 emitter,
                 profile_store,
                 persist,
@@ -1366,7 +1367,7 @@ async fn handle_user_decision(
                 session,
                 session_id,
                 action_id,
-                action,
+                ApprovedAction::from_user_approval(action),
                 emitter,
                 profile_store,
                 persist,
@@ -1512,7 +1513,7 @@ async fn handle_user_decision(
                 session,
                 session_id,
                 action_id,
-                effective_action,
+                ApprovedAction::from_user_approval(effective_action),
                 emitter,
                 profile_store,
                 persist,
@@ -1534,7 +1535,7 @@ async fn execute_action(
     session: &Session,
     session_id: SessionId,
     action_id: ActionId,
-    action: AiAction,
+    action: ApprovedAction,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     persist: bool,
@@ -1551,9 +1552,9 @@ async fn execute_action(
     // Spec 0068, Teil 3: s. `handle_user_decision`.
     sudo_fallback_announced: bool,
 ) -> bool {
-    match action {
-        AiAction::SuggestCommand { command } => {
-            execute_suggested_command(
+    let action = match action {
+        ApprovedAction::Command(command) => {
+            return execute_suggested_command(
                 session,
                 session_id,
                 action_id,
@@ -1563,8 +1564,24 @@ async fn execute_action(
                 persist,
                 ledger_source,
             )
-            .await
+            .await;
         }
+        ApprovedAction::FileWrite(approved) => {
+            return execute_write_remote_file(
+                session,
+                session_id,
+                action_id,
+                approved,
+                emitter,
+                profile_store,
+                persist,
+                sudo_fallback_announced,
+            )
+            .await;
+        }
+        ApprovedAction::Other(action) => action,
+    };
+    match action {
         AiAction::ProposeNoteUpdate {
             target,
             new_content,
@@ -1590,19 +1607,8 @@ async fn execute_action(
         AiAction::ReadRemoteFile { path } => {
             execute_read_remote_file(session, session_id, action_id, path, emitter, persist).await
         }
-        AiAction::WriteRemoteFile { path, content } => {
-            execute_write_remote_file(
-                session,
-                session_id,
-                action_id,
-                path,
-                content,
-                emitter,
-                profile_store,
-                persist,
-                sudo_fallback_announced,
-            )
-            .await
+        AiAction::SuggestCommand { .. } | AiAction::WriteRemoteFile { .. } => {
+            unreachable!("approved commands and file writes are wrapped by ApprovedAction")
         }
     }
 }
@@ -1687,12 +1693,13 @@ async fn execute_suggested_command(
     session: &Session,
     session_id: SessionId,
     action_id: ActionId,
-    command: String,
+    approved: ApprovedCommand,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     persist: bool,
     ledger_source: LedgerSource,
 ) -> bool {
+    let command = approved.as_str().to_owned();
     // Spec 0018, Abschnitt 5: nur umschreiben/Stdin füttern, wenn tatsächlich
     // ein Passwort hinterlegt ist — sonst unverändertes Verhalten
     // (`execute()` wie bisher, scheitert wie gewohnt ohne TTY).
