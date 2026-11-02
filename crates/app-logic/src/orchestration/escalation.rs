@@ -40,6 +40,10 @@ pub(crate) struct EscalationFacts {
     pub transform_marks_text: bool,
     /// An earlier action of the same AI response was rejected (Spec 0068, 4).
     pub earlier_rejection: bool,
+    /// The profile store failed (other than "server not stored") when the
+    /// current server tags were read, so the rules ran on the tags frozen at
+    /// connect time (issue #843).
+    pub server_tags_unavailable: bool,
 }
 
 /// Result of [`escalate`].
@@ -55,6 +59,7 @@ pub(crate) struct Escalation {
 }
 
 const INJECTION_CODE: &str = "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM";
+pub(crate) const SERVER_TAGS_UNAVAILABLE_CODE: &str = "FILTER_SERVER_TAGS_UNAVAILABLE";
 const NOT_ASSESSABLE_CODE: &str = "FILTER_COMMAND_NOT_ASSESSABLE_REQUIRES_CONFIRM";
 
 fn with_reason(text: String, reason: Option<&str>) -> String {
@@ -229,6 +234,16 @@ pub(crate) fn escalate(engine: Decision, facts: &EscalationFacts) -> Escalation 
             "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM",
         );
     }
+    // 11. Server tags could not be read (issue #843). Added last: the codes
+    // of the earlier steps win.
+    if auto(&out) && facts.server_tags_unavailable {
+        apply(
+            &mut out,
+            "Die aktuellen Server-Tags konnten nicht gelesen werden – erfordert Bestätigung"
+                .to_string(),
+            SERVER_TAGS_UNAVAILABLE_CODE,
+        );
+    }
     out
 }
 
@@ -263,6 +278,7 @@ mod tests {
                 uses_stored_sudo_password: b[4],
                 transform_marks_text: b[5],
                 earlier_rejection: b[6],
+                server_tags_unavailable: b[7],
             })
     }
 

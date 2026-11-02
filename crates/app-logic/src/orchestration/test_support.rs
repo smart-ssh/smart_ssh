@@ -322,11 +322,22 @@ pub(crate) struct InMemoryProfileStore {
     /// sich weiterhin auf den bisherigen `ServerNotFound`-Fallback
     /// unten.
     pub(crate) servers: StdMutex<HashMap<ServerId, Server>>,
+    /// Issue #843: `get_server` fails with a backend error (not
+    /// `ServerNotFound`).
+    pub(crate) fail_get_server: std::sync::atomic::AtomicBool,
 }
 
 #[async_trait]
 impl ProfileStore for InMemoryProfileStore {
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
+        if self
+            .fail_get_server
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(ssh_manager_core::profiles::ProfileError::Backend(
+                "disk I/O error".to_string(),
+            ));
+        }
         self.servers.lock().unwrap().get(id).cloned().ok_or(
             ssh_manager_core::profiles::ProfileError::ServerNotFound(*id),
         )
@@ -455,6 +466,7 @@ pub(crate) fn session_with_ai_provider(
         injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
         second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
         injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
+        redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
         // Spec 0034: Tests laufen bewusst ohne Persistenz-Anbindung
         // (s. `Session::chat_session_store`-Doc-Kommentar) — kein
         // In-Memory-`ChatSessionStore`-Mock nötig, `push_history`

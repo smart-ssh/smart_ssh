@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "삽입된 지시 검사를 실행하지 못했습니다(AI 제공자 문제). 다음에 제안되는 동작에는 확인이 필요합니다.",
     "AI_INJECTION_CHECK_INACTIVE": "삽입된 지시 검사가 이 서버에서는 켜져 있지만 이 세션에서는 활성 상태가 아닙니다(AI 세컨드 오피니언이 꺼져 있거나 설정하지 못함). 설정에서 세컨드 오피니언을 켜고 다시 연결하십시오.",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI 세컨드 오피니언이 켜져 있지만 이 세션에서 설정하지 못했습니다(제공자가 제거되었거나 자격 증명을 찾을 수 없음). 명령이 세컨드 오피니언으로 검사되지 않습니다 – 설정을 수정하고 다시 연결하십시오.",
+    "REDACTION_INCOMPLETE": "이 서버의 일부 비밀 값을 불러오지 못했습니다. AI로 전송되는 내용에서 가려지지 않을 수 있습니다.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "서버의 현재 태그를 읽지 못했습니다 – 확인이 필요합니다",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "위험도가 빨간색으로 평가되었거나 신뢰할 수 있게 평가할 수 없습니다(예: 너무 김) – 항상 확인이 필요합니다",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "메모 업데이트에는 항상 확인이 필요합니다",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "파일 쓰기에는 항상 확인이 필요합니다",

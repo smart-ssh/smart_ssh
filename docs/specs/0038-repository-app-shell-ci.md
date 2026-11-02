@@ -70,6 +70,17 @@ des lokalen Pseudo-Servers, Gruppenkette von der Wurzel her, Tags):
   offener Sitzungen eines Servers neu aufbauen lassen (etwa nach geänderten
   Werten); schon gesendeter Verlauf wird beim nächsten Senden erneut
   redigiert. Redaction wird dadurch nur erweitert, nie abgeschwächt.
+  **Lässt sich der Bereich eines Servers nicht vollständig bestimmen** (der
+  Profilspeicher schlägt beim Lesen des Servers oder seiner Gruppenkette
+  fehl), maskiert die Sitzung mindestens die Secrets auf Server-Ebene; beim
+  Neuaufbau bleiben die bereits bekannten Secrets zusätzlich maskiert, statt
+  ersetzt zu werden. Dasselbe gilt, wenn das gespeicherte Sudo-Passwort nicht
+  gelesen oder ein Wert nicht als Muster übersetzt werden kann. In allen
+  diesen Fällen zeigt die Sitzung einmalig den Chat-Hinweis
+  `REDACTION_INCOMPLETE` („Einige geheime Werte dieses Servers konnten nicht
+  geladen werden; sie werden in dem, was an die KI geht, möglicherweise nicht
+  maskiert.“). „Server nicht gespeichert“ (etwa der lokale Pseudo-Server) ist
+  kein Fehler und löst den Hinweis nicht aus.
 - **Entfernen:** Nach dem Löschen eines Servers (auch eines nicht nutzbaren)
   und nach dem Löschen einer Gruppe, einschließlich jeder mitgelöschten
   Untergruppe, wird die Erweiterung benachrichtigt, damit sie ihre eigenen

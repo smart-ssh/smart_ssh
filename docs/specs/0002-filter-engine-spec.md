@@ -203,6 +203,12 @@ Eine Auswertung bekommt das Kommando und einen Kontext: den Server, auf dem
 es laufen soll, und dessen Tags. Aus dem Kontext ergibt sich, welche Regeln
 gelten (Global immer, Server und Tag nur bei Übereinstimmung).
 
+Die Tags eines Servers liest die App für jede Aktion neu aus dem Profilspeicher.
+Schlägt das fehl (anders als „Server nicht gespeichert“, etwa beim lokalen
+Pseudo-Server), gelten die beim Verbinden gemerkten Tags, und eine Aktion, die
+sonst automatisch liefe, verlangt eine Bestätigung
+(`FILTER_SERVER_TAGS_UNAVAILABLE`); ein `Deny` bleibt `Deny`.
+
 Die Regeln kommen aus einer austauschbaren Quelle. Tests und die laufende
 App nutzen dieselbe Auswertung, nur mit anderer Quelle; die Logik hängt
 weder von SSH noch von einer KI-API noch von der Oberfläche ab.

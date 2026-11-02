@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "De controle op ingevoegde instructies kon niet worden uitgevoerd (probleem met de AI-provider). De volgende voorgestelde actie vereist bevestiging.",
     "AI_INJECTION_CHECK_INACTIVE": "De controle op ingevoegde instructies is voor deze server ingeschakeld, maar niet actief in deze sessie (de AI second opinion is uit of kon niet worden ingesteld). Schakel de second opinion in de instellingen in en verbind opnieuw.",
     "AI_SECOND_OPINION_SETUP_FAILED": "De AI second opinion is ingeschakeld, maar kon voor deze sessie niet worden ingesteld (provider verwijderd of inloggegevens niet gevonden). Opdrachten worden er niet door gecontroleerd – herstel de instelling en verbind opnieuw.",
+    "REDACTION_INCOMPLETE": "Sommige geheime waarden van deze server konden niet worden geladen; ze worden mogelijk niet gemaskeerd in wat naar de AI wordt gestuurd.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "De huidige servertags konden niet worden gelezen – bevestiging vereist",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risico als rood beoordeeld, of niet betrouwbaar te beoordelen (bijv. te lang) – vereist altijd bevestiging",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notitiewijzigingen vereisen altijd bevestiging",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Bestandsschrijfacties vereisen altijd bevestiging",

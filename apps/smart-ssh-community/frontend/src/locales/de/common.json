@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Die Prüfung auf eingeschleuste Anweisungen konnte nicht ausgeführt werden (Problem beim KI-Anbieter). Die nächste vorgeschlagene Aktion erfordert eine Bestätigung.",
     "AI_INJECTION_CHECK_INACTIVE": "Die Prüfung auf eingeschleuste Anweisungen ist für diesen Server eingeschaltet, in dieser Sitzung aber nicht aktiv (die KI-Zweitmeinung ist aus oder konnte nicht eingerichtet werden). Zweitmeinung in den Einstellungen einschalten und neu verbinden.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Die KI-Zweitmeinung ist eingeschaltet, konnte für diese Sitzung aber nicht eingerichtet werden (Anbieter entfernt oder Zugangsdaten nicht gefunden). Befehle werden nicht damit geprüft – Einstellung korrigieren und neu verbinden.",
+    "REDACTION_INCOMPLETE": "Einige geheime Werte dieses Servers konnten nicht geladen werden; sie werden in dem, was an die KI geht, möglicherweise nicht maskiert.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Die aktuellen Server-Tags konnten nicht gelesen werden – erfordert Bestätigung",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risiko rot eingestuft oder nicht sicher einschätzbar (z. B. zu lang) – erfordert immer Bestätigung",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notiz-Aktualisierungen erfordern immer eine Bestätigung",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Dateischreibvorgänge erfordern immer eine Bestätigung",

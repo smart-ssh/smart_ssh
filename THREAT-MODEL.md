@@ -137,6 +137,20 @@ New patterns were added in
 [Spec 0078](docs/specs/0078-redactor-at-in-url-password.md) and
 [Spec 0095](docs/specs/0095-redactor-command-line-passwords-and-tokens.md).
 
+### When the secrets to mask cannot be fully loaded
+
+If the profile store fails while the app determines which extension secrets
+apply to a server (server or group lookup), or the stored sudo password
+cannot be read, or a secret cannot be compiled into a pattern, the session
+keeps masking what it already knew (a rebuild extends the set instead of
+replacing it), masks at least the server-level secrets, and shows one chat
+notice `REDACTION_INCOMPLETE`. If the profile store fails while the server
+tags are read for rule evaluation, the rules run on the tags from connect
+time and an action that would run automatically asks for confirmation
+(`FILTER_SERVER_TAGS_UNAVAILABLE`) — never the other way
+([`crates/app-logic/src/session_extension.rs`](crates/app-logic/src/session_extension.rs),
+[`crates/app-logic/src/orchestration/escalation.rs`](crates/app-logic/src/orchestration/escalation.rs)).
+
 ### The explicit limit
 
 > **We redact known secret formats. Unusual formats can slip through. Do not

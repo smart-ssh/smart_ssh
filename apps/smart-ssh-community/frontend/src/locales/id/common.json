@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Pemeriksaan instruksi yang disisipkan tidak dapat dijalankan (masalah penyedia AI). Tindakan berikutnya yang diusulkan memerlukan konfirmasi.",
     "AI_INJECTION_CHECK_INACTIVE": "Pemeriksaan instruksi yang disisipkan diaktifkan untuk server ini tetapi tidak aktif di sesi ini (opini kedua AI nonaktif atau tidak dapat disiapkan). Aktifkan opini kedua di pengaturan dan hubungkan ulang.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Opini kedua AI diaktifkan tetapi tidak dapat disiapkan untuk sesi ini (penyedia dihapus atau kredensial tidak ditemukan). Perintah tidak diperiksa olehnya – perbaiki pengaturan dan hubungkan ulang.",
+    "REDACTION_INCOMPLETE": "Beberapa nilai rahasia server ini tidak dapat dimuat; nilai tersebut mungkin tidak disamarkan dalam apa yang dikirim ke AI.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Tag server saat ini tidak dapat dibaca – memerlukan konfirmasi",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risiko dinilai merah, atau tidak dapat dinilai dengan andal (mis. terlalu panjang) – selalu memerlukan konfirmasi",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Pembaruan catatan selalu memerlukan konfirmasi",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Penulisan berkas selalu memerlukan konfirmasi",
