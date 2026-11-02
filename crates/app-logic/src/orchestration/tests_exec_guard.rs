@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// `(file relative to `crates/`, reason)`.
 const ALLOWLIST: &[(&str, &str)] = &[
     (
-        "app-logic/src/orchestration/action_exec.rs",
+        "app-logic/src/orchestration/action_exec/execute.rs",
         "approved AI/MCP command: execute_suggested_command takes an ApprovedCommand",
     ),
     (
