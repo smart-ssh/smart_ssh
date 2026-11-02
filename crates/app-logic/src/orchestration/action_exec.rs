@@ -93,6 +93,10 @@ mod tests_live_output;
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_auto_exec_rules;
 
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_path_normalisation;
+
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das
 /// bereits registrierte Warten.
 ///
