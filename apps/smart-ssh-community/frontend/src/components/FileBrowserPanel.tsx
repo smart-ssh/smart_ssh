@@ -28,7 +28,6 @@ import {
   sftpElevationStatus,
   sftpExists,
   sftpStat,
-  sftpList,
   sftpMkdir,
   sftpCreateFile,
   sftpCancelCopyContent,
@@ -36,7 +35,6 @@ import {
   sftpCopyFile,
   sftpReadText,
   sftpRename,
-  sftpStartDirectory,
   sessionIsRoot,
   sftpUpload,
 } from "../api";
@@ -49,19 +47,8 @@ import {
 } from "../events";
 import { isPointerInside } from "../dropZone";
 import { formatBytes } from "../format";
-import {
-  loadFileManagerColumnWidths,
-  loadFileManagerSort,
-  saveFileManagerColumnWidths,
-  loadHiddenFileColumns,
-  saveHiddenFileColumns,
-  type HideableFileColumn,
-  saveFileManagerSort,
-  type FileManagerColumnWidths,
-} from "../layoutSettings";
-import { DEFAULT_FILE_SORT, nextFileSort, sortEntries, type FileSort, type FileSortColumn } from "../fileSort";
+import { sortEntries } from "../fileSort";
 import { displayPath, joinPath, localBaseName, parentPath } from "../remotePath";
-import { notifyMissingStartDirectory } from "../startDirectory";
 import { showToast } from "../toastBus";
 import type {
   DeletePreviewDto,
@@ -100,10 +87,10 @@ import { UploadConflictDialog } from "./fileBrowser/UploadConflictDialog";
 import { FileTable } from "./fileBrowser/FileTable";
 import { FileToolbar } from "./fileBrowser/FileToolbar";
 import { ElevationControls } from "./fileBrowser/ElevationControls";
+import { useFileColumns } from "./fileBrowser/useFileColumns";
+import { useRemoteDirectory } from "./fileBrowser/useRemoteDirectory";
 import { TransferList } from "./fileBrowser/TransferList";
 import {
-  ACTIONS_COLUMN_WIDTH,
-  NAME_MIN_WIDTH,
   currentCaps,
   focusMenuTrigger,
   formatMb,
@@ -113,25 +100,6 @@ import {
   type UploadConflict,
 } from "./fileBrowser/shared";
 
-/** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
- * (alles in px). Die Name-Spalte hat bewusst keinen eigenen Eintrag hier
- * — sie bekommt nie eine explizite Breite (s. `<colgroup>` unten), nimmt
- * unter `table-layout: fixed` also automatisch den nach den anderen
- * Spalten verbleibenden Rest ein. `NAME_MIN_WIDTH` fließt stattdessen in
- * `clampColumnWidth` ein, damit eine sehr breit gezogene Nachbarspalte
- * die Name-Spalte nie unter ihre eigene Mindestbreite drückt. */
-const DEFAULT_COLUMN_WIDTHS: FileManagerColumnWidths = {
-  size: 90,
-  permissions: 90,
-  modified: 150,
-  owner: 130,
-};
-const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
-  size: 56,
-  permissions: 64,
-  modified: 90,
-  owner: 80,
-};
 /** Issue #357: ab dieser Größe zeigt "Dateiinhalt kopieren" Fortschritt. */
 const COPY_PROGRESS_FROM_BYTES = 5 * 1024 * 1024;
 
@@ -185,17 +153,18 @@ export function FileBrowserPanel({
   onElevationChange,
 }: FileBrowserPanelProps) {
   const caps = currentCaps();
-  const [path, setPath] = useState(".");
-  const [pathInput, setPathInput] = useState(".");
-  // Spec 0102: Startpfad dieser Sitzung (`"."` = Home), Ziel von „Zum
-  // Startverzeichnis". Kommt einmalig vom Backend (`sftp_start_directory`).
-  const [startPath, setStartPath] = useState(".");
-  const [rawEntries, setEntries] = useState<RemoteEntryDto[]>([]);
-  // Spec 0053, Teil 3: app-weite Sortierung der Dateiliste (Frontend-seitig).
-  const [fileSort, setFileSort] = useState<FileSort>(DEFAULT_FILE_SORT);
-  const entries = useMemo(() => sortEntries(rawEntries, fileSort), [rawEntries, fileSort]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    fileSort,
+    hiddenColumns,
+    columnWidths,
+    columnsMenu,
+    setColumnsMenu,
+    tableContainerRef,
+    toggleColumn,
+    handleColumnDrag,
+    handleColumnDragEnd,
+    handleSortClick,
+  } = useFileColumns();
   // Spec 0054, Teil 1: EIN gemeinsamer State für Drei-Punkte-Menü UND
   // Kontextmenü (Rechtsklick) statt zweier getrennter — beide zeigen
   // dieselben Aktionen (`FileEntryMenu` unten), der einzige Unterschied ist
@@ -261,11 +230,6 @@ export function FileBrowserPanel({
   const [folderSummary, setFolderSummary] = useState<FolderUploadSummaryDto | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [dragOver, setDragOver] = useState(false);
-  // Issue #653: hidden columns (app-wide) and the header's right-click menu.
-  const [hiddenColumns, setHiddenColumns] = useState<HideableFileColumn[]>([]);
-  const [columnsMenu, setColumnsMenu] = useState<{ x: number; y: number } | null>(null);
-  const [columnWidths, setColumnWidths] = useState<FileManagerColumnWidths>(DEFAULT_COLUMN_WIDTHS);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
@@ -411,28 +375,27 @@ export function FileBrowserPanel({
     );
   }, [sessionId]);
 
+  const {
+    path,
+    pathRef,
+    pathInput,
+    setPathInput,
+    startPath,
+    entries: rawEntries,
+    loading,
+    error,
+    setError,
+    knownDirModes,
+    load,
+    reloadAfterReconnect,
+  } = useRemoteDirectory(sessionId, channelUser);
+  const entries = useMemo(() => sortEntries(rawEntries, fileSort), [rawEntries, fileSort]);
+  const connectionLostRef = useRef(false);
+
   // Verbindung weg → erhöhter Kanal ist weg (lebt nur in der Session).
   // Issue #355: nach einem Reconnect das bisherige Verzeichnis neu laden
   // (Home, falls es nicht mehr existiert). Der erhöhte Kanal kommt nicht
   // zurück, daher immer im normalen Modus.
-  const pathRef = useRef(path);
-  pathRef.current = path;
-  const connectionLostRef = useRef(false);
-  const reloadAfterReconnect = () => {
-    setLoading(true);
-    setError(null);
-    const show = (target: string) => (result: RemoteEntryDto[]) => {
-      setEntries(result);
-      setPath(target);
-      setPathInput(target);
-    };
-    const previous = pathRef.current;
-    sftpList(sessionId, previous, null)
-      .then(show(previous), () => sftpList(sessionId, ".", null).then(show(".")))
-      .catch((err) => setError(commandErrorMessage(err)))
-      .finally(() => setLoading(false));
-  };
-
   useEffect(() => {
     const unlisten = onConnectionStatusChanged((event) => {
       if (event.sessionId !== sessionId) return;
@@ -582,143 +545,6 @@ export function FileBrowserPanel({
   };
   const [editUploadOffer, setEditUploadOffer] = useState<UploadOffer | null>(null);
 
-  // Spec 0053, Teil 1: einmalig beim Mounten geladen (diese Komponente lebt
-  // pro Tab, s. Doc-Kommentar oben) — ungültige/fehlende Felder bleiben
-  // beim eingebauten Default (`loadFileManagerColumnWidths` liefert nur
-  // die tatsächlich gültigen Felder zurück, s. dortiger Kommentar).
-  useEffect(() => {
-    loadFileManagerColumnWidths()
-      .then((stored) => setColumnWidths((prev) => ({ ...prev, ...stored })))
-      .catch((err) => console.warn("Konnte Spaltenbreiten nicht laden:", err));
-  }, []);
-
-  useEffect(() => {
-    loadHiddenFileColumns()
-      .then(setHiddenColumns)
-      .catch((err) => console.warn("Could not load hidden columns:", err));
-  }, []);
-
-  const toggleColumn = useCallback((column: HideableFileColumn) => {
-    setHiddenColumns((prev) => {
-      const next = prev.includes(column) ? prev.filter((c) => c !== column) : [...prev, column];
-      saveHiddenFileColumns(next).catch((err) => console.warn("Could not save hidden columns:", err));
-      return next;
-    });
-  }, []);
-
-  /** Klemmt eine vorgeschlagene Breite für `column` auf ihre Mindestbreite
-   * UND darauf, dass die Name-Spalte (die den Rest der verfügbaren Breite
-   * einnimmt, s. `<colgroup>` unten) nie unter `NAME_MIN_WIDTH` fällt —
-   * abhängig von der aktuell tatsächlich verfügbaren Breite des
-   * Tabellen-Containers, nicht von einem festen Annahmewert. */
-  const clampColumnWidth = useCallback(
-    (column: keyof FileManagerColumnWidths, proposed: number, widths: FileManagerColumnWidths) => {
-      const hidden = hiddenColumnsRef.current;
-      const min = MIN_COLUMN_WIDTHS[column];
-      const containerWidth = tableContainerRef.current?.clientWidth ?? Infinity;
-      const otherColumnsTotal =
-        ACTIONS_COLUMN_WIDTH +
-        (Object.keys(widths) as (keyof FileManagerColumnWidths)[])
-          .filter((key) => key !== column && !hidden.includes(key))
-          .reduce((sum, key) => sum + widths[key], 0);
-      const maxForThisColumn = containerWidth - otherColumnsTotal - NAME_MIN_WIDTH;
-      return Math.min(Math.max(proposed, min), Math.max(min, maxForThisColumn));
-    },
-    [],
-  );
-  const hiddenColumnsRef = useRef(hiddenColumns);
-  hiddenColumnsRef.current = hiddenColumns;
-
-  // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts): der
-  // Persistenz-Aufruf lief vorher als Seiteneffekt *innerhalb* eines
-  // `setState`-Updaters (`setColumnWidths((current) => { save(current);
-  // return current; })`) — unter `StrictMode` (aktiv in `main.tsx`) ruft
-  // React Updater im Dev-Modus doppelt auf, was das Speichern doppelt
-  // ausgelöst hätte (harmlos, da idempotent, aber ein vermeidbares
-  // Anti-Pattern). `columnWidthsRef` hält den aktuellen Wert stattdessen
-  // synchron zum State nach, `handleColumnDragEnd` liest ihn direkt statt
-  // über einen Updater.
-  const columnWidthsRef = useRef(columnWidths);
-  useEffect(() => {
-    columnWidthsRef.current = columnWidths;
-  }, [columnWidths]);
-
-  const handleColumnDrag = useCallback(
-    (column: keyof FileManagerColumnWidths) => (deltaX: number) => {
-      setColumnWidths((prev) => {
-        const clamped = clampColumnWidth(column, prev[column] + deltaX, prev);
-        if (clamped === prev[column]) return prev;
-        return { ...prev, [column]: clamped };
-      });
-    },
-    [clampColumnWidth],
-  );
-
-  useEffect(() => {
-    loadFileManagerSort()
-      .then((stored) => {
-        if (stored) setFileSort(stored);
-      })
-      .catch((err) => console.warn("Konnte Sortierung nicht laden:", err));
-  }, []);
-
-  const handleSortClick = (column: FileSortColumn) => {
-    const next = nextFileSort(fileSort, column);
-    setFileSort(next);
-    saveFileManagerSort(next).catch((err) => console.warn("Konnte Sortierung nicht speichern:", err));
-  };
-
-  const handleColumnDragEnd = useCallback(() => {
-    saveFileManagerColumnWidths(columnWidthsRef.current).catch((err) =>
-      console.warn("Konnte Spaltenbreiten nicht speichern:", err),
-    );
-  }, []);
-
-  // `elevatedOverride`: beim Umschalten ist der neue Modus im State noch
-  // nicht angekommen — der Aufrufer übergibt ihn dann explizit.
-  // Issue #624: the mode of every listed entry, so an empty listing of a
-  // folder can be explained by the folder's own (missing) execute bit.
-  const knownDirModes = useRef(new Map<string, number>());
-
-  const load = useCallback((targetPath: string, userOverride?: string | null) => {
-    setLoading(true);
-    setError(null);
-    sftpList(sessionId, targetPath, userOverride === undefined ? channelUser : userOverride)
-      .then((result) => {
-        for (const e of result) knownDirModes.current.set(e.path, e.permissionsOctal);
-        setEntries(result);
-        setPath(targetPath);
-        setPathInput(targetPath);
-      })
-      .catch((err) => setError(commandErrorMessage(err)))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, channelUser]);
-
-  useEffect(() => {
-    // Spec 0102: erst den Startpfad erfragen (ein fehlendes oder nicht
-    // erreichbares Startverzeichnis liefert `"."` und ggf. den einmaligen
-    // Hinweis); scheitert schon die Abfrage, wie bisher im Home starten.
-    let cancelled = false;
-    const queryStart = async () => {
-      try {
-        return await sftpStartDirectory(sessionId);
-      } catch {
-        return null;
-      }
-    };
-    void queryStart().then((start) => {
-      if (cancelled) return;
-      const target = start?.path ?? ".";
-      notifyMissingStartDirectory(t, start?.missingDirectory ?? null);
-      setStartPath(target);
-      load(target);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
 
   // Schließt das offene Menü (Drei-Punkte oder Kontextmenü) bei einem Klick
   // irgendwo sonst hin. Die Trigger (⋮-Button, Rechtsklick) rufen jeweils
@@ -890,7 +716,7 @@ export function FileBrowserPanel({
       unlisten.forEach((p) => p.then((fn) => fn()));
     };
     // Spec 0067: reload after a transfer uses the current channel (via refs).
-  }, [sessionId]);
+  }, [sessionId, pathRef]);
 
   // Spec 0020, Abschnitt 5.1: Upload per Drag-and-Drop aus dem Betriebssystem.
   // Nur aktiv, während dieser Tab UND die Dateien-Ansicht sichtbar sind (s.

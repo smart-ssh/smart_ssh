@@ -6,6 +6,7 @@
 
 mod action;
 mod anthropic;
+mod common;
 mod content;
 mod discovery;
 mod error;
