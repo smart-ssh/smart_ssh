@@ -432,6 +432,24 @@ pub async fn redactor_for_sessionless_request(
     redactor_for_connect(&sudo, &lookup, &secrets)
 }
 
+/// Tells the user once, in the note-shrink toast, that masking may be
+/// incomplete (issue #1057). No-op when the lookup was complete.
+pub fn notify_note_request_redaction_incomplete(
+    emitter: &dyn crate::events::EventEmitter,
+    server_id: ServerId,
+    incomplete: bool,
+) {
+    if incomplete {
+        crate::events::emit_note_shrink_failed(
+            emitter,
+            server_id,
+            "Some secret values for this server could not be loaded; they may not be masked \
+             in what is sent to the AI."
+                .to_string(),
+        );
+    }
+}
+
 /// Redactor for a reconnected session (issue #843). A failed sudo read keeps
 /// the session's known password in the patterns; if anything could not be
 /// determined (sudo read, scope lookup, literal compile), the secrets known
@@ -479,6 +497,9 @@ impl SessionExtension for RecordingExtension {
         self.groups.lock().unwrap().push(group_id);
     }
 }
+
+#[cfg(test)]
+mod tests_sessionless;
 
 #[cfg(test)]
 mod tests {

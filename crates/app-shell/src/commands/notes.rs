@@ -143,13 +143,17 @@ pub async fn request_note_shrink(
                     model,
                 })
             };
+        app_logic::session_extension::notify_note_request_redaction_incomplete(
+            &TauriEventEmitter(app.clone()),
+            server_id,
+            redaction_incomplete,
+        );
         execute_note_shrink_request(
             session_id,
             server_id,
             ai_provider.as_ref(),
             &ai_provider_budget,
             redactor.as_ref(),
-            redaction_incomplete,
             &TauriEventEmitter(app.clone()),
             target.as_ref(),
             &state.pending_action_confirmations,
