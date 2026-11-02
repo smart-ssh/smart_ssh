@@ -6,6 +6,7 @@
 use async_trait::async_trait;
 
 use ssh_manager_core::ai::{AiEvent, DefaultOutputRedactor, OutputRedactor};
+use ssh_manager_core::filter::normalize_lexical_path as normalize;
 use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
 use ssh_manager_core::profiles::Server;
 use ssh_manager_core::shared::ServerId;
@@ -36,25 +37,19 @@ use crate::test_support::log_capture;
 /// Filter-Auswertung lexikalisch aufgelöst werden.
 #[test]
 fn test_normalize_remote_path_resolves_traversal_and_redundant_segments() {
+    assert_eq!(normalize("/home/deploy/../../etc/shadow"), "/etc/shadow");
     assert_eq!(
-        normalize_remote_path("/home/deploy/../../etc/shadow"),
-        "/etc/shadow"
-    );
-    assert_eq!(
-        normalize_remote_path("/etc/nginx//secret.conf"),
+        normalize("/etc/nginx//secret.conf"),
         "/etc/nginx/secret.conf"
     );
     assert_eq!(
-        normalize_remote_path("/etc/nginx/./secret.conf"),
+        normalize("/etc/nginx/./secret.conf"),
         "/etc/nginx/secret.conf"
     );
-    assert_eq!(
-        normalize_remote_path("/home/deploy/app.log"),
-        "/home/deploy/app.log"
-    );
+    assert_eq!(normalize("/home/deploy/app.log"), "/home/deploy/app.log");
     // Traversal über die Wurzel hinaus kann nicht höher als `/` gehen.
-    assert_eq!(normalize_remote_path("/../../etc/shadow"), "/etc/shadow");
-    assert_eq!(normalize_remote_path("/"), "/");
+    assert_eq!(normalize("/../../etc/shadow"), "/etc/shadow");
+    assert_eq!(normalize("/"), "/");
 }
 
 /// Unabhängiger Review-Pass (Spec 0020): eine Allow-Regel für

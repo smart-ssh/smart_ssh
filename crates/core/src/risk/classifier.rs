@@ -854,6 +854,11 @@ fn strip_quotes(text: &str) -> String {
         .collect()
 }
 
+/// Normalises path-like parts inside whole command text (regex based, stops
+/// at shell separators). Deliberately separate from the path normaliser of the
+/// filter/execution path, `filter::normalize_lexical_path`, which takes one
+/// path string.
+///
 /// `//` → `/`, `/./` → `/`, `x/../` → `` (wiederholt, rein lexikalisch).
 /// Pfadteile enthalten keine Shell-Trenner (`credentials</../dev/null`
 /// darf `credentials` nicht wegkürzen — zweite Review-Runde).

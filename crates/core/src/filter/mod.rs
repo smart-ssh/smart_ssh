@@ -32,7 +32,7 @@ pub use engine::{
 // — analog zu `DEFAULT_MAX_COMMAND_LENGTH` oben.
 pub use parser::{split_top_level_segments, MAX_SUBSTITUTION_DEPTH};
 // Spec 0077, 3.1.1: Prüfung eines Musters beim Speichern und Melden.
-pub use pattern::PatternError;
+pub use pattern::{normalize_lexical_path, PatternError};
 pub use types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Pattern, Rule, RuleAction, RuleId,
     RuleOrigin, Scope, TraceKind,
