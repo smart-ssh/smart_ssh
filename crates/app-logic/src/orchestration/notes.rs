@@ -1404,11 +1404,23 @@ pub async fn execute_note_shrink_request(
     ai_provider: &dyn AiProvider,
     ai_provider_budget: &ai_providers::ProviderBudgetGuard,
     redactor: &dyn OutputRedactor,
+    redaction_incomplete: bool,
     emitter: &dyn EventEmitter,
     target: &dyn NoteShrinkTarget,
     action_confirmations: &ConfirmationRegistry<ActionId, ActionUserDecision>,
     language: PromptLanguage,
 ) {
+    // Issue #1057: tell the user once that masking may be incomplete (the
+    // redactor already holds every secret that is known).
+    if redaction_incomplete {
+        emit_note_shrink_failed(
+            emitter,
+            server_id,
+            "Some secret values for this server could not be loaded; they may not be masked \
+             in what is sent to the AI."
+                .to_string(),
+        );
+    }
     let Some((server_name, note_text)) = target.read().await else {
         emit_note_shrink_failed(
             emitter,

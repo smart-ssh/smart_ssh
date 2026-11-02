@@ -967,6 +967,7 @@ async fn test_execute_note_shrink_request_emits_diff_and_persists_only_after_app
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1073,6 +1074,7 @@ async fn test_execute_note_shrink_request_flags_truncated_summary_and_stores_sho
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1153,6 +1155,7 @@ async fn test_execute_note_shrink_request_truncated_summary_denied_leaves_note_u
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1223,6 +1226,7 @@ async fn test_execute_note_shrink_request_denied_leaves_note_unchanged() {
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1284,6 +1288,7 @@ async fn test_execute_note_shrink_request_ai_failure_emits_failed_event_and_leav
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1333,6 +1338,7 @@ async fn test_execute_note_shrink_request_unanswered_confirmation_times_out_as_d
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1381,6 +1387,7 @@ async fn test_execute_note_shrink_request_emits_failed_event_when_server_not_fou
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1463,6 +1470,7 @@ async fn test_execute_note_shrink_request_aborts_when_note_changed_before_approv
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -1544,6 +1552,7 @@ async fn test_execute_note_shrink_request_persist_failure_emits_failed_event() {
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -2551,6 +2560,7 @@ async fn test_issue_107_dropping_the_note_shrink_wait_removes_the_registry_entry
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -2645,6 +2655,7 @@ async fn test_issue_107_note_shrink_timeout_leaves_no_entry_and_rejects_late_res
         &provider,
         &budget,
         &redactor,
+        false,
         &emitter,
         &target,
         &confirmations,
@@ -2920,4 +2931,123 @@ async fn test_issue_564_disconnect_request_plain_session_and_secret_absent() {
     };
     assert!(first.starts_with("prüfe"));
     assert!(!format!("{history:?}").contains(SECRET_0096));
+}
+
+/// Issue #1057: redaction-incomplete notice of the sessionless note-shrink
+/// request.
+mod redaction_incomplete {
+    use super::*;
+    use crate::server_credentials::sudo_password_credential_ref;
+    use crate::session_extension::{
+        redactor_for_sessionless_request, ServerScope, SessionExtension,
+    };
+    use crate::test_support::InMemoryCredentialStore;
+    use secrecy::SecretString;
+    use std::sync::atomic::Ordering::SeqCst;
+
+    const NOTICE: &str = "Some secret values for this server could not be loaded";
+
+    struct Ext;
+    impl SessionExtension for Ext {
+        fn known_secrets(&self, _scope: &ServerScope) -> Vec<SecretString> {
+            vec![SecretString::from("server-secret-111".to_string())]
+        }
+    }
+
+    /// Builds the redactor like the command does, runs the request and
+    /// returns (masked sample, number of notices).
+    async fn run(
+        profile_store: &crate::test_support::InMemoryProfileStore,
+        credentials: &InMemoryCredentialStore,
+        server_id: ServerId,
+    ) -> (String, usize) {
+        let (redactor, incomplete) = redactor_for_sessionless_request(
+            profile_store,
+            crate::server_redaction::read_sudo_password_checked(credentials, server_id),
+            Some(&Ext),
+            server_id,
+            None,
+        )
+        .await;
+        let masked = redactor.redact_text("s=server-secret-111 p=sudo-pw-222");
+        let provider = MockAiProvider::new(vec![AiEvent::Done]);
+        let emitter = TestEmitter::default();
+        let confirmations = ConfirmationRegistry::new();
+        let target = crate::orchestration::ProfileStoreNoteShrinkTarget {
+            profile_store,
+            server_id,
+            provider_label: "p".to_string(),
+            model: "m".to_string(),
+        };
+        let budget = ai_providers::ProviderBudgetGuard::new();
+        // The target read fails/ends the request right after the notice.
+        execute_note_shrink_request(
+            Uuid::new_v4(),
+            server_id,
+            &provider,
+            &budget,
+            redactor.as_ref(),
+            incomplete,
+            &emitter,
+            &target,
+            &confirmations,
+            PromptLanguage::De,
+        )
+        .await;
+        let n = emitter
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, p)| {
+                name == "note-shrink-failed" && p["message"].as_str().unwrap().contains(NOTICE)
+            })
+            .count();
+        (masked, n)
+    }
+
+    #[tokio::test]
+    async fn test_failing_get_server_masks_server_secret_and_notices_once() {
+        let server_id = ServerId::new();
+        let store = crate::test_support::InMemoryProfileStore::new();
+        store.fail_get_server.store(true, SeqCst);
+        let (masked, n) = run(&store, &InMemoryCredentialStore::new(), server_id).await;
+        assert!(!masked.contains("server-secret-111"), "{masked}");
+        assert_eq!(n, 1);
+    }
+
+    #[tokio::test]
+    async fn test_failing_sudo_read_notices_once() {
+        let server_id = ServerId::new();
+        let store = crate::test_support::InMemoryProfileStore::new()
+            .with_server(server_with_notes(server_id, "n"));
+        let creds = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(server_id), "sudo-pw-222")
+            .with_failing_get();
+        let (_, n) = run(&store, &creds, server_id).await;
+        assert_eq!(n, 1);
+    }
+
+    #[tokio::test]
+    async fn test_healthy_stores_no_notice_and_sudo_masked() {
+        let server_id = ServerId::new();
+        let store = crate::test_support::InMemoryProfileStore::new()
+            .with_server(server_with_notes(server_id, "n"));
+        let creds = InMemoryCredentialStore::new()
+            .with_secret(&sudo_password_credential_ref(server_id), "sudo-pw-222");
+        let (masked, n) = run(&store, &creds, server_id).await;
+        assert!(!masked.contains("server-secret-111") && !masked.contains("sudo-pw-222"));
+        assert_eq!(n, 0);
+    }
+
+    #[tokio::test]
+    async fn test_server_not_found_counts_as_complete() {
+        let (_, n) = run(
+            &crate::test_support::InMemoryProfileStore::new(),
+            &InMemoryCredentialStore::new(),
+            ServerId::new(),
+        )
+        .await;
+        assert_eq!(n, 0);
+    }
 }

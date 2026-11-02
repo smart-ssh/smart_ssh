@@ -4,7 +4,6 @@
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
-use ssh_manager_core::ai::OutputRedactor;
 use ssh_manager_core::profiles::{
     effective_notes, record_revision, GroupId, NoteEditor, NoteTarget,
 };
@@ -104,16 +103,24 @@ pub async fn request_note_shrink(
     // erfasst. Kein hinterlegtes Passwort ist kein harter Fehler; ein
     // Lesefehler des Schlüsselbunds wird protokolliert (Issue #36, s.
     // `read_sudo_password_for_redaction`).
-    let scope = super::scope::extension_scope(&app, state.profile_store.as_ref(), server_id).await;
-    let extension_secrets = app_logic::session_extension::known_secrets(
-        state.session_extension.as_deref(),
-        scope.as_ref(),
-    );
-    let redactor: Box<dyn OutputRedactor> = app_logic::server_redaction::server_redactor(
+    // Issue #1057: same lookup as `connect()`; a failed sudo read or scope
+    // lookup keeps the known secrets and flags the request "incomplete".
+    let local_tags = app_logic::dto::is_local(server_id)
+        .then(|| crate::local_server::synthetic_server(&app).tags);
+    // Read before the `await`: the credential store is not `Sync`.
+    let sudo = app_logic::server_redaction::read_sudo_password_checked(
         state.credential_store.as_ref(),
         server_id,
-        &extension_secrets,
     );
+    let (redactor, redaction_incomplete) =
+        app_logic::session_extension::redactor_for_sessionless_request(
+            state.profile_store.as_ref(),
+            sudo,
+            state.session_extension.as_deref(),
+            server_id,
+            local_tags,
+        )
+        .await;
 
     let language = crate::ui_language::session_prompt_language(&app);
     tokio::spawn(async move {
@@ -142,6 +149,7 @@ pub async fn request_note_shrink(
             ai_provider.as_ref(),
             &ai_provider_budget,
             redactor.as_ref(),
+            redaction_incomplete,
             &TauriEventEmitter(app.clone()),
             target.as_ref(),
             &state.pending_action_confirmations,

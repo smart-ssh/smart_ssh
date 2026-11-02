@@ -417,6 +417,21 @@ pub fn redactor_for_connect(
     (redactor, !(sudo.1 && !lookup.incomplete && compiled))
 }
 
+/// Redactor for a request without a session (note summary, issue #1057): the
+/// same sudo read and scope lookup as a connect, plus whether it is "redaction
+/// incomplete". On a failure the redactor keeps every secret that is known.
+pub async fn redactor_for_sessionless_request(
+    profile_store: &dyn ProfileStore,
+    sudo: (Option<SecretString>, bool),
+    extension: Option<&dyn SessionExtension>,
+    server_id: ServerId,
+    local_tags: Option<Vec<String>>,
+) -> (Box<dyn OutputRedactor>, bool) {
+    let lookup = scope_lookup(profile_store, server_id, local_tags).await;
+    let secrets = known_secrets(extension, lookup.scope.as_ref());
+    redactor_for_connect(&sudo, &lookup, &secrets)
+}
+
 /// Redactor for a reconnected session (issue #843). A failed sudo read keeps
 /// the session's known password in the patterns; if anything could not be
 /// determined (sudo read, scope lookup, literal compile), the secrets known
