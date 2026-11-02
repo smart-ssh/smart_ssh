@@ -1,9 +1,8 @@
-import { formatDuration, formatSpeed, nextRate, type RateState } from "../transferRate";
+import { nextRate } from "../transferRate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
-import { formatDateTime } from "../formatDateTime";
 import {
   claimClipboardFiles,
   claimDroppedPaths,
@@ -24,7 +23,6 @@ import {
   sftpDownload,
   sftpDownloadDefault,
   sftpDownloadDir,
-  sftpCancelTransfer,
   sftpElevationDisable,
   sftpElevationEnable,
   sftpElevationStatus,
@@ -70,7 +68,6 @@ import type {
   DownloadResultDto,
   ElevationResultDto,
   RunningOperationDto,
-  LocalFilePreviewDto,
   FolderUploadPreviewDto,
   FolderUploadSummaryDto,
   RemoteEntryDto,
@@ -86,7 +83,6 @@ import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useMenuPlacement } from "../hooks/useMenuPlacement";
 import { Button, DialogFrame, FIELD_CONTROL_CLASS } from "./ui";
 import { LocalEditCopyEditor } from "./LocalEditCopyEditor";
-import { formatOwner } from "../fileOwner";
 import { TECHNICAL_INPUT_PROPS } from "../technicalInputProps";
 import { FileEntryMenu } from "./fileBrowser/FileEntryMenu";
 import { FilePropertiesDialog } from "./fileBrowser/FilePropertiesDialog";
@@ -95,9 +91,27 @@ import { ChmodDialog } from "./fileBrowser/ChmodDialog";
 import { ChownDialog } from "./fileBrowser/ChownDialog";
 import { RenamePrompt } from "./fileBrowser/RenamePrompt";
 import { DirectoryMenu } from "./fileBrowser/DirectoryMenu";
-import { ColumnResizeHandle } from "./fileBrowser/ColumnResizeHandle";
 import { ElevationFailureDialog } from "./fileBrowser/ElevationFailureDialog";
-import { COLUMN_ORDER, currentCaps, focusMenuTrigger, formatMb, isValidEntryName, type MoveKind } from "./fileBrowser/shared";
+import { FolderSummaryDialog } from "./fileBrowser/FolderSummaryDialog";
+import { LocalEditStatusBar } from "./fileBrowser/LocalEditStatusBar";
+import { NarrowEntryList } from "./fileBrowser/NarrowEntryList";
+import { StopPromptDialog } from "./fileBrowser/StopPromptDialog";
+import { UploadConflictDialog } from "./fileBrowser/UploadConflictDialog";
+import { FileTable } from "./fileBrowser/FileTable";
+import { FileToolbar } from "./fileBrowser/FileToolbar";
+import { ElevationControls } from "./fileBrowser/ElevationControls";
+import { TransferList } from "./fileBrowser/TransferList";
+import {
+  ACTIONS_COLUMN_WIDTH,
+  NAME_MIN_WIDTH,
+  currentCaps,
+  focusMenuTrigger,
+  formatMb,
+  isValidEntryName,
+  type MoveKind,
+  type Transfer,
+  type UploadConflict,
+} from "./fileBrowser/shared";
 
 /** Spec 0053, Teil 1: Standard-/Mindestbreiten der verstellbaren Spalten
  * (alles in px). Die Name-Spalte hat bewusst keinen eigenen Eintrag hier
@@ -118,13 +132,8 @@ const MIN_COLUMN_WIDTHS: FileManagerColumnWidths = {
   modified: 90,
   owner: 80,
 };
-const NAME_MIN_WIDTH = 120;
 /** Issue #357: ab dieser Größe zeigt "Dateiinhalt kopieren" Fortschritt. */
 const COPY_PROGRESS_FROM_BYTES = 5 * 1024 * 1024;
-
-/** Feste, nicht verstellbare Aktionsspalte (⋮-Menü) — kein Label, immer
- * gleich schmal, kein Drag-Handle. */
-const ACTIONS_COLUMN_WIDTH = 36;
 
 /** Verzeichnis-Anteil eines lokalen Pfads (POSIX oder Windows). */
 function localDirName(localPath: string): string {
@@ -138,34 +147,6 @@ function revealLabelKey(): string {
   if (platform.includes("mac")) return "fileToasts.revealFinder";
   if (platform.includes("win")) return "fileToasts.revealExplorer";
   return "fileToasts.revealFileManager";
-}
-
-interface Transfer {
-  id: string;
-  kind: "upload" | "download" | "delete" | "chmod" | "chown";
-  fileName: string;
-  totalBytes: number | null;
-  error: string | null;
-  /** Issue #621: the transfer started while elevated mode was on. */
-  startedElevated?: boolean;
-  /** Issue #621: finished successfully, but elevated mode ended meanwhile —
-   * the row stays (as done) with a note. */
-  doneElevationEnded?: boolean;
-  /** Issue #622: bytes transferred so far (progress events, throttled). */
-  bytesDone?: number;
-  /** Issue #623: moving-average speed and remaining time. */
-  rate?: RateState;
-  /** Issue #622: folder transfers — files done / total (known once the walk is done). */
-  folder?: { filesDone: number; filesTotal: number };
-  /** Issue #622: ended without error — `cancelled` (cancel button) or `stopped`
-   * (elevated rights ended). */
-  stopped?: "cancelled" | "stopped";
-  /** Issue #658: recursive delete/chmod — entries done / total (`null` while counting). */
-  entries?: { done: number; total: number | null };
-  /** Issue #658: entries changed when the row ended (cancelled / stopped / failed). */
-  entriesDone?: number;
-  /** Issue #622: a stopped upload left this incomplete remote file behind. */
-  incompleteRemotePath?: string;
 }
 
 /** Issue #622: asked before ending elevated rights (or changing the target
@@ -196,10 +177,6 @@ interface FileBrowserPanelProps {
  * Tab-Wechsel gemountet (s. `SessionView`), ihr `path`-State lebt daher
  * automatisch pro Tab getrennt, ohne zusätzliche Buchführung.
  */
-// Header cells (not the thead) are sticky with their own opaque background and
-// the table uses `border-separate`: a sticky thead under `border-collapse`
-// leaves a seam in WebKit through which scrolled rows showed (#650).
-const STICKY_TH = "sticky top-0 z-10 bg-surface";
 
 
 export function FileBrowserPanel({
@@ -272,15 +249,7 @@ export function FileBrowserPanel({
   // Upload-Überschreib-Diff-Vorschau (Spec 0054, Teil 3): `remoteText` ist
   // `null`, wenn die Remote-Datei nicht als Text lesbar war (Binärdatei/zu
   // groß) — dann zeigt der Dialog nur einen Größenvergleich.
-  const [uploadConflict, setUploadConflict] = useState<{
-    localPath: string;
-    remotePath: string;
-    localPreview: LocalFilePreviewDto;
-    remoteText: string | null;
-    /** Issue #655: why `remoteText` is `null`. */
-    remoteReadFailure: PreviewReadFailure | null;
-    remoteSize: number;
-  } | null>(null);
+  const [uploadConflict, setUploadConflict] = useState<UploadConflict | null>(null);
   // Issue #128: folder upload. `folderConfirm` = the list of existing remote
   // files the upload would overwrite (one confirmation for the whole folder,
   // Spec 0054 Teil 3); `folderSummary` = result with skipped/failed entries.
@@ -301,7 +270,7 @@ export function FileBrowserPanel({
 
   // Spec 0054, Teil 4: "Lokal öffnen -> bearbeiten -> Upload anbieten".
   const localEdit = useLocalEditSession(sessionId);
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   // Spec 0067, A5: erhöhter Modus pro Browser-Ansicht — nie Default, nicht
   // persistiert. `null` = normaler Modus.
@@ -1626,21 +1595,7 @@ export function FileBrowserPanel({
               </form>
   );
 
-  const sortAria = (column: FileSortColumn): "ascending" | "descending" | "none" =>
-    fileSort.column !== column ? "none" : fileSort.direction === "asc" ? "ascending" : "descending";
-  const sortButton = (column: FileSortColumn) => (
-    <button
-      type="button"
-      onClick={() => handleSortClick(column)}
-      data-testid={`column-sort-${column}`}
-      className="inline-flex max-w-full items-center gap-1 rounded font-normal hover:text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
-    >
-      <span className="truncate">{t(`fileBrowser.column.${column}`)}</span>
-      {fileSort.column === column && (
-        <span aria-hidden="true">{fileSort.direction === "asc" ? "▲" : "▼"}</span>
-      )}
-    </button>
-  );
+  const canElevate = !elevated && sessionRoot !== undefined && sessionRoot !== true;
 
   return (
     <div
@@ -1668,413 +1623,65 @@ export function FileBrowserPanel({
           {t("fileElevation.failure.sftpServerUnsafe", { path: elevationWarning })}
         </div>
       )}
-      {narrow && (
-        <div className="flex items-center gap-1.5 border-b border-surface-raised px-2 py-1.5">
-          <Button
-            className="min-h-11 min-w-11"
-            onClick={() => load(startPath)}
-            title={t("fileBrowser.toStartDirectory")}
-            aria-label={t("fileBrowser.toStartDirectory")}
-          >
-            ⌂
-          </Button>
-          <Button
-            className="min-h-11 min-w-11"
-            onClick={() => load(parentPath(path))}
-            disabled={path === "."}
-            title={t("fileBrowser.parentDirectory")}
-            aria-label={t("fileBrowser.parentDirectory")}
-          >
-            ↑
-          </Button>
-          <form
-            className="min-w-0 flex-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              load(pathInput.trim() || ".");
-            }}
-          >
-            <input
-              {...TECHNICAL_INPUT_PROPS}
-              value={pathInput}
-              onChange={(e) => setPathInput(e.target.value)}
-              aria-label={t("fileBrowser.properties.path")}
-              title={pathInput}
-              className={`${FIELD_CONTROL_CLASS} min-h-11 w-full px-2 py-1 font-mono text-xs`}
+      <FileToolbar
+        narrow={narrow}
+        path={path}
+        startPath={startPath}
+        pathInput={pathInput}
+        setPathInput={setPathInput}
+        load={load}
+        overflowRef={overflowRef}
+        overflowButtonRef={overflowButtonRef}
+        overflowOpen={overflowOpen}
+        setOverflowOpen={setOverflowOpen}
+        setElevationMenuOpen={setElevationMenuOpen}
+        setOtherUserOpen={setOtherUserOpen}
+        setOtherUserDraft={setOtherUserDraft}
+        otherUserInputRef={otherUserInputRef}
+        elevationTargetUser={elevationTargetUser}
+        otherUserForm={otherUserForm}
+        elevationControls={
+          canElevate ? (
+            <ElevationControls
+              groupRef={elevationGroupRef}
+              menuButtonRef={elevationMenuButtonRef}
+              menuRef={elevationMenuRef}
+              otherUserItemRef={otherUserItemRef}
+              otherUserInputRef={otherUserInputRef}
+              menuStyle={elevationMenuStyle}
+              enablingElevation={enablingElevation}
+              elevationMenuOpen={elevationMenuOpen}
+              otherUserOpen={otherUserOpen}
+              elevationTargetUser={elevationTargetUser}
+              otherUserForm={otherUserForm}
+              onToggleElevation={handleToggleElevation}
+              setElevationMenuOpen={setElevationMenuOpen}
+              setOtherUserOpen={setOtherUserOpen}
+              setOtherUserDraft={setOtherUserDraft}
             />
-          </form>
-          <div ref={overflowRef} className="shrink-0">
-            <Button
-              ref={overflowButtonRef}
-              className="min-h-11 min-w-11"
-              onClick={() => {
-                setElevationMenuOpen(false);
-                setOtherUserOpen(false);
-                setOverflowOpen((open) => !open);
-              }}
-              aria-haspopup="menu"
-              aria-expanded={overflowOpen}
-              aria-label={t("fileBrowser.fileActionsGroup")}
-              title={t("fileBrowser.fileActionsGroup")}
-            >
-              ⋯
-            </Button>
-            {overflowOpen && (
-              <div
-                role="menu"
-                aria-label={t("fileBrowser.fileActionsGroup")}
-                className="fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto rounded-t border border-border-strong bg-surface-raised py-1 shadow-lg"
-              >
-                {[
-                  {
-                    key: "mkdir",
-                    label: t("fileBrowser.newFolderButton"),
-                    run: () => {
-                      setNameError(null);
-                      setMkdirOpen("");
-                    },
-                  },
-                  { key: "upload", label: t("fileBrowser.upload"), run: handleUploadButton },
-                  ...(caps.folderPicker
-                    ? [{ key: "uploadFolder", label: t("fileBrowser.uploadFolder"), run: handleUploadFolderButton }]
-                    : []),
-                  ...(cutEntry
-                    ? [
-                        { key: "paste", label: t("fileBrowser.paste"), run: handlePaste },
-                        { key: "cancelCut", label: t("fileBrowser.cancelCut"), run: () => setCutEntry(null) },
-                      ]
-                    : []),
-                  ...(!elevated && sessionRoot !== undefined && sessionRoot !== true
-                    ? [
-                        {
-                          key: "elevate",
-                          label: enablingElevation
-                            ? t("fileElevation.enabling")
-                            : `🔓 ${t("fileElevation.toggle")}`,
-                          run: () => handleToggleElevation("root"),
-                          disabled: enablingElevation,
-                        },
-                        {
-                          key: "otherUser",
-                          label: t("fileElevation.otherUser"),
-                          run: () => {
-                            setOtherUserDraft(elevationTargetUser);
-                            setOtherUserOpen(true);
-                            setTimeout(() => otherUserInputRef.current?.focus(), 0);
-                          },
-                          disabled: enablingElevation,
-                        },
-                      ]
-                    : []),
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    role="menuitem"
-                    disabled={"disabled" in item ? item.disabled : false}
-                    className="block min-h-11 w-full px-4 py-2 text-left text-sm text-fg-soft hover:bg-border focus-visible:bg-border focus-visible:outline-none disabled:opacity-50"
-                    onClick={() => {
-                      setOverflowOpen(false);
-                      item.run();
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {otherUserForm}
-          </div>
-        </div>
-      )}
-      {!narrow && (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-surface-raised px-2 py-1.5">
-        <div className="flex min-w-[12rem] flex-1 items-center gap-1.5">
-        <Button
-          size="sm"
-          onClick={() => load(startPath)}
-          title={t("fileBrowser.toStartDirectory")}
-          aria-label={t("fileBrowser.toStartDirectory")}
-        >
-          ⌂
-        </Button>
-        <Button
-          size="sm"
-          onClick={() => load(parentPath(path))}
-          disabled={path === "."}
-          title={t("fileBrowser.parentDirectory")}
-          aria-label={t("fileBrowser.parentDirectory")}
-        >
-          ↑
-        </Button>
-        <form
-          className="min-w-32 flex-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            load(pathInput.trim() || ".");
-          }}
-        >
-          <input
-            {...TECHNICAL_INPUT_PROPS}
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            aria-label={t("fileBrowser.properties.path")}
-            title={pathInput}
-            className={`${FIELD_CONTROL_CLASS} w-full px-2 py-1 font-mono text-xs`}
-          />
-        </form>
-        </div>
-        <fieldset
-          aria-label={t("fileBrowser.fileActionsGroup")}
-          className="m-0 flex min-w-0 items-center gap-1.5 border-0 p-0"
-        >
-        <Button
-          size="sm"
-          onClick={() => {
-            setNameError(null);
-            setMkdirOpen("");
-          }}
-        >
-          {t("fileBrowser.newFolderButton")}
-        </Button>
-        <Button size="sm" onClick={handleUploadButton}>
-          {t("fileBrowser.upload")}
-        </Button>
-        {caps.folderPicker && (
-          <Button size="sm" onClick={handleUploadFolderButton}>
-            {t("fileBrowser.uploadFolder")}
-          </Button>
-        )}
-        </fieldset>
-        {!elevated && sessionRoot !== undefined && sessionRoot !== true && (
-          <fieldset
-            ref={elevationGroupRef}
-            aria-label={t("fileElevation.group")}
-            className="relative m-0 flex min-w-0 items-center gap-0.5 border-0 border-l border-border p-0 pl-2"
-          >
-            <Button
-              size="sm"
-              onClick={() => handleToggleElevation("root")}
-              disabled={enablingElevation}
-              title={t("fileElevation.toggleTitle")}
-            >
-              {enablingElevation ? t("fileElevation.enabling") : `🔓 ${t("fileElevation.toggle")}`}
-            </Button>
-            <Button
-              size="sm"
-              ref={elevationMenuButtonRef}
-              onClick={() => {
-                setOtherUserOpen(false);
-                setElevationMenuOpen((open) => !open);
-              }}
-              disabled={enablingElevation}
-              aria-haspopup="menu"
-              aria-expanded={elevationMenuOpen || otherUserOpen}
-              aria-label={t("fileElevation.moreOptions")}
-              title={t("fileElevation.moreOptions")}
-            >
-              ▾
-            </Button>
-            {elevationMenuOpen && (
-              <div
-                role="menu"
-                ref={elevationMenuRef}
-                style={elevationMenuStyle}
-                className="fixed z-20 rounded border border-border-strong bg-surface-raised p-1 shadow-lg"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  ref={otherUserItemRef}
-                  className="w-full whitespace-nowrap rounded px-2 py-1 text-left text-xs hover:bg-border focus-visible:bg-border"
-                  onClick={() => {
-                    setElevationMenuOpen(false);
-                    setOtherUserDraft(elevationTargetUser);
-                    setOtherUserOpen(true);
-                    setTimeout(() => otherUserInputRef.current?.focus(), 0);
-                  }}
-                >
-                  {t("fileElevation.otherUser")}
-                </button>
-              </div>
-            )}
-            {otherUserForm}
-          </fieldset>
-        )}
-        {cutEntry && (
-          <>
-            <Button
-              size="sm"
-              onClick={handlePaste}
-              title={t("fileBrowser.pasteTitle", { name: cutEntry.name })}
-            >
-              {t("fileBrowser.paste")}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setCutEntry(null)}
-              title={t("fileBrowser.cancelCut")}
-              aria-label={t("fileBrowser.cancelCut")}
-            >
-              ✕
-            </Button>
-          </>
-        )}
-      </div>
-      )}
+          ) : null
+        }
+        canElevate={canElevate}
+        enablingElevation={enablingElevation}
+        onToggleElevation={handleToggleElevation}
+        folderPickerAvailable={caps.folderPicker}
+        onNewFolder={() => {
+          setNameError(null);
+          setMkdirOpen("");
+        }}
+        onUpload={handleUploadButton}
+        onUploadFolder={handleUploadFolderButton}
+        cutEntry={cutEntry}
+        onPaste={handlePaste}
+        onCancelCut={() => setCutEntry(null)}
+      />
 
       {transfers.length > 0 && (
-        <div className="space-y-1 border-b border-surface-raised bg-surface-sunken/60 px-2 py-1.5">
-          {transfers.map((transfer) => (
-            <div key={transfer.id} className="flex items-center gap-2 text-xs">
-              {transfer.doneElevationEnded ? (
-                <>
-                  <span className="text-success-fg">✓</span>
-                  <span className="min-w-0 flex-1 truncate text-fg-muted">
-                    {t("fileBrowser.transferDone", { name: transfer.fileName })}{" "}
-                    <span className="text-fg-subtle">{t("fileBrowser.transferElevationEnded")}</span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
-                    aria-label={t("common.close")}
-                    title={t("common.close")}
-                  >
-                    ✕
-                  </Button>
-                </>
-              ) : transfer.stopped ? (
-                <>
-                  <span className="text-warning-fg">■</span>
-                  <span className="min-w-0 flex-1 truncate text-fg-muted">
-                    {t(
-                      transfer.stopped === "cancelled"
-                        ? "fileBrowser.transferCancelled"
-                        : "fileBrowser.transferStopped",
-                      { name: transfer.fileName },
-                    )}
-                    {transfer.entriesDone !== undefined && (
-                      <span className="text-fg-subtle">
-                        {" — "}
-                        {t("fileBrowser.entriesChanged", { count: transfer.entriesDone })}
-                      </span>
-                    )}
-                    {transfer.incompleteRemotePath && (
-                      <span className="text-warning-fg-soft">
-                        {" "}
-                        {t("fileBrowser.transferIncomplete", { path: transfer.incompleteRemotePath })}
-                      </span>
-                    )}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
-                    aria-label={t("common.close")}
-                    title={t("common.close")}
-                  >
-                    ✕
-                  </Button>
-                </>
-              ) : transfer.error ? (
-                <>
-                  <span className="text-danger-fg">✗</span>
-                  <span className="min-w-0 flex-1 truncate text-danger-fg-soft">
-                    {transfer.fileName}: {transfer.error}
-                    {transfer.entriesDone !== undefined &&
-                      ` — ${t("fileBrowser.entriesChanged", { count: transfer.entriesDone })}`}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setTransfers((prev) => prev.filter((x) => x.id !== transfer.id))}
-                    aria-label={t("common.close")}
-                    title={t("common.close")}
-                  >
-                    ✕
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent-fg" />
-                  <span className="min-w-0 flex-1 truncate text-fg-muted">
-                    {t(
-                      {
-                        upload: "fileBrowser.transferUpload",
-                        download: "fileBrowser.transferDownload",
-                        delete: "fileBrowser.transferDelete",
-                        chmod: "fileBrowser.transferChmod",
-                        chown: "fileBrowser.transferChown",
-                      }[transfer.kind],
-                      { name: transfer.fileName },
-                    )}
-                    {transfer.totalBytes !== null && ` (${formatBytes(transfer.totalBytes)})`}
-                    {transfer.folder &&
-                      ` — ${t("fileBrowser.transferFiles", {
-                        done: transfer.folder.filesDone,
-                        total: transfer.folder.filesTotal,
-                      })}`}
-                  </span>
-                  {transfer.kind === "delete" || transfer.kind === "chmod" || transfer.kind === "chown" ? (
-                    <>
-                      {transfer.entries?.total != null && transfer.entries.total > 0 ? (
-                        <progress
-                          className="h-1.5 w-24 shrink-0"
-                          max={transfer.entries.total}
-                          value={Math.min(transfer.entries.done, transfer.entries.total)}
-                          aria-label={transfer.fileName}
-                        />
-                      ) : null}
-                      <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-fg-subtle">
-                        {transfer.entries?.total != null
-                          ? t("fileBrowser.entriesProgress", {
-                              done: transfer.entries.done,
-                              total: transfer.entries.total,
-                            })
-                          : (transfer.entries?.done ?? 0)}
-                      </span>
-                    </>
-                  ) : transfer.totalBytes !== null && transfer.totalBytes > 0 ? (
-                    <progress
-                      className="h-1.5 w-24 shrink-0"
-                      max={transfer.totalBytes}
-                      value={Math.min(transfer.bytesDone ?? 0, transfer.totalBytes)}
-                      aria-label={transfer.fileName}
-                    />
-                  ) : null}
-                  {transfer.kind !== "delete" && transfer.kind !== "chmod" && transfer.kind !== "chown" && (
-                  <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-fg-subtle">
-                    {formatBytes(transfer.bytesDone ?? 0)}
-                    {transfer.totalBytes !== null && ` / ${formatBytes(transfer.totalBytes)}`}
-                    {" · "}
-                    <span className="inline-block min-w-[5.5rem]">{formatSpeed(transfer.rate?.speed ?? null)}</span>
-                    {" · "}
-                    <span className="inline-block min-w-[6.5rem]">
-                      {transfer.rate?.etaSeconds != null
-                        ? t("fileBrowser.transferRemaining", { time: formatDuration(transfer.rate.etaSeconds) })
-                        : formatDuration(null)}
-                    </span>
-                  </span>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      sftpCancelTransfer(sessionId, transfer.id).catch((err) =>
-                        console.warn("Konnte Transfer nicht abbrechen:", err),
-                      )
-                    }
-                    aria-label={t("fileBrowser.transferCancel")}
-                    title={t("fileBrowser.transferCancel")}
-                  >
-                    ✕
-                  </Button>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
+        <TransferList
+          transfers={transfers}
+          sessionId={sessionId}
+          onDismiss={(id) => setTransfers((prev) => prev.filter((x) => x.id !== id))}
+        />
       )}
 
       {copyJob && Math.max(copyJob.done, copyJob.total ?? 0) >= COPY_PROGRESS_FROM_BYTES && (
@@ -2126,231 +1733,31 @@ export function FileBrowserPanel({
           </p>
         )}
         {!loading && !error && narrow && entries.length > 0 && (
-          <ul className="m-0 list-none p-0 text-xs">
-            {entries.map((entry) => {
-              const rowMenuOpen = openMenu?.anchor === "row" && openMenu.entry.path === entry.path;
-              const details = [
-                entry.isDir ? null : formatBytes(entry.size),
-                entry.modified ? formatDateTime(entry.modified, i18n.language) : null,
-              ]
-                .filter((part): part is string => part !== null)
-                .join(" · ");
-              return (
-                // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- mouse-only shortcut to the ⋯ menu, same as the table row
-                <li
-                  key={entry.path}
-                  data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
-                  className="group flex min-h-11 items-center border-t border-surface-raised/70 pl-2 hover:bg-border/60 focus-within:bg-border/80 data-[active=true]:bg-border/80"
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDirMenu(null);
-                    setOpenMenu({ entry, anchor: "row" });
-                  }}
-                >
-                  <div className="min-w-0 flex-1 py-1">
-                    {entry.isDir ? (
-                      <button
-                        type="button"
-                        onClick={() => load(entry.path)}
-                        className="block max-w-full truncate rounded text-left text-sm text-accent-fg-soft group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
-                        title={entry.name}
-                      >
-                        📁 {entry.name}
-                      </button>
-                    ) : (
-                      <span className="block truncate text-sm text-fg-soft group-hover:underline" title={entry.name}>
-                        📄 {entry.name}
-                      </span>
-                    )}
-                    <span className="block truncate text-fg-subtle">{details || "—"}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      // Same reasoning as the wide row button: keep the click away from the
-                      // document-wide "click outside closes" listener.
-                      e.stopPropagation();
-                      setOpenMenu(rowMenuOpen ? null : { entry, anchor: "row" });
-                    }}
-                    data-menu-trigger={entry.path}
-                    aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
-                    aria-haspopup="true"
-                    aria-expanded={rowMenuOpen}
-                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-lg text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
-                  >
-                    ⋯
-                  </button>
-                  {rowMenuOpen && renderEntryMenu(entry, "")}
-                </li>
-              );
-            })}
-          </ul>
+          <NarrowEntryList
+            entries={entries}
+            openMenu={openMenu}
+            setOpenMenu={setOpenMenu}
+            setDirMenu={setDirMenu}
+            load={load}
+            renderEntryMenu={renderEntryMenu}
+          />
         )}
         {!loading && !error && !narrow && entries.length > 0 && (
-          <table
-            className="w-full table-fixed border-separate border-spacing-0 text-left text-xs"
-            style={{
-              // Spec-Reviewer-Fund (Spec 0053, Review dieses Schritts):
-              // ohne diese `min-width` konnte die Name-Spalte unter
-              // `table-fixed` auf tatsächlich 0px kollabieren, sobald der
-              // SSH-/SFTP-Bereich (Teil 2, per Divider verstellbar) schmaler
-              // war als die Summe der anderen Spalten — Dateinamen
-              // verschwanden komplett statt nur abgeschnitten zu werden,
-              // und `clampColumnWidth`s `NAME_MIN_WIDTH` griff dabei gar
-              // nicht (das klemmt nur beim Spalten-Drag selbst, nicht beim
-              // Schmaler-Werden des ganzen Panels). Mit dieser Mindestbreite
-              // wächst die Tabelle stattdessen über den Container hinaus,
-              // und der umgebende `overflow-auto`-Container (s. oben)
-              // scrollt horizontal statt die Name-Spalte zu verschlucken.
-              minWidth:
-                COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).reduce(
-                  (sum, c) => sum + columnWidths[c],
-                  0,
-                ) +
-                ACTIONS_COLUMN_WIDTH +
-                NAME_MIN_WIDTH,
-            }}
-          >
-            {/* `table-fixed` + `<colgroup>` statt des vorherigen
-                automatischen Spaltenlayouts — nur so lassen sich
-                Spaltenbreiten gezielt per Drag setzen. Die Name-Spalte hat
-                bewusst keine `width` (kein `<col>`-Attribut dafür) — unter
-                `table-fixed` nimmt eine Spalte ohne explizite Breite den
-                nach den anderen verbleibenden Rest ein, genau das von der
-                Spec verlangte "flexibler Rest"-Verhalten. */}
-            <colgroup>
-              <col />
-              {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
-                <col key={c} style={{ width: columnWidths[c] }} />
-              ))}
-              <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
-            </colgroup>
-            <thead className="text-fg-subtle">
-              <tr
-                className="[&>th]:px-2 [&>th]:py-1 [&>th]:font-normal"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setOpenMenu(null);
-                  setDirMenu(null);
-                  setColumnsMenu({ x: e.clientX, y: e.clientY });
-                }}
-              >
-                <th className={STICKY_TH} aria-sort={sortAria("name")}>{sortButton("name")}</th>
-                {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
-                  <th
-                    key={c}
-                    className={`relative ${STICKY_TH}`}
-                    aria-sort={c === "owner" ? undefined : sortAria(c)}
-                  >
-                    {c === "owner" ? t("fileBrowser.column.owner") : sortButton(c)}
-                    <ColumnResizeHandle
-                      testId={`column-resize-${c}`}
-                      onDrag={handleColumnDrag(c)}
-                      onDragEnd={handleColumnDragEnd}
-                    />
-                  </th>
-                ))}
-                <th className={STICKY_TH}>
-                  <span className="sr-only">{t("fileBrowser.actionsColumn")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr
-                  key={entry.path}
-                  data-active={openMenu?.entry.path === entry.path ? "true" : undefined}
-                  className="group hover:bg-border/60 focus-within:bg-border/80 data-[active=true]:bg-border/80 [&>td]:border-t [&>td]:border-surface-raised/70"
-                  // Spec 0054, Teil 1: Rechtsklick öffnet dasselbe Menü wie
-                  // das Drei-Punkte-Symbol, nur an der Klickposition statt
-                  // in der Aktionsspalte verankert (s. `openMenu`-Doc-
-                  // Kommentar oben). `preventDefault` unterdrückt das
-                  // native Browser-/OS-Kontextmenü.
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDirMenu(null);
-                    setOpenMenu({ entry, anchor: { x: e.clientX, y: e.clientY } });
-                  }}
-                >
-                  <td className="max-w-0 px-2 py-1">
-                    {entry.isDir ? (
-                      <button
-                        type="button"
-                        onClick={() => load(entry.path)}
-                        className="block max-w-full truncate rounded text-left text-accent-fg-soft hover:underline group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
-                        title={entry.name}
-                      >
-                        📁 {entry.name}
-                      </button>
-                    ) : (
-                      <span className="block truncate text-fg-soft group-hover:underline" title={entry.name}>
-                        📄 {entry.name}
-                      </span>
-                    )}
-                  </td>
-                  {COLUMN_ORDER.filter((c) => !hiddenColumns.includes(c)).map((c) => (
-                    <td
-                      key={c}
-                      className={`px-2 py-1 whitespace-nowrap text-fg-subtle${c === "permissions" ? " font-mono" : ""}${c === "owner" ? " truncate" : ""}`}
-                      title={c === "owner" ? formatOwner(entry) : undefined}
-                    >
-                      {c === "size" && (entry.isDir ? "—" : formatBytes(entry.size))}
-                      {c === "permissions" && entry.permissions}
-                      {c === "owner" && formatOwner(entry)}
-                      {c === "modified" &&
-                        (entry.modified ? formatDateTime(entry.modified, i18n.language) : "—")}
-                    </td>
-                  ))}
-                  <td className="relative px-2 py-1 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        // Bug-Fix (Spec 0054, Teil 0): das "Klick-außerhalb
-                        // schließt das Menü"-Effekt weiter unten hängt einen
-                        // rohen `document.addEventListener("click", ...)`
-                        // ein, der bei JEDEM Klick unbedingt `setMenuFor(null)`
-                        // aufruft. Ohne `stopPropagation` hier lief dieser
-                        // Klick nach dem synthetischen `onClick` (das den
-                        // State auf den NEUEN Eintrag setzt) noch nativ bis
-                        // zu `document` weiter und traf dort den ALTEN,
-                        // noch nicht abgeräumten Listener (Cleanup des
-                        // vorherigen Effekt-Laufs passiert erst nach dem
-                        // Commit, also nach diesem Klick) — dessen
-                        // `setMenuFor(null)` überschrieb den gerade gesetzten
-                        // Wert innerhalb desselben Batches. Effekt: das Menü
-                        // eines anderen Eintrags ließ sich nie öffnen, ein
-                        // bereits offenes Menü verschwand bei jedem weiteren
-                        // Drei-Punkte-Klick sofort wieder, statt zu wechseln.
-                        // `stopPropagation` verhindert, dass dieser Klick den
-                        // dokumentweiten Listener überhaupt erreicht (React
-                        // ruft dabei auch `nativeEvent.stopPropagation()`
-                        // auf) — ein echtes Klicken außerhalb von Button und
-                        // Menü ist davon unberührt und schließt weiterhin.
-                        e.stopPropagation();
-                        setOpenMenu(
-                          openMenu?.anchor === "row" && openMenu.entry.path === entry.path
-                            ? null
-                            : { entry, anchor: "row" },
-                        );
-                      }}
-                      data-menu-trigger={entry.path}
-                      aria-label={`${t("fileBrowser.actionsColumn")}: ${entry.name}`}
-                      aria-haspopup="true"
-                      aria-expanded={openMenu?.anchor === "row" && openMenu.entry.path === entry.path}
-                      className="rounded px-1.5 text-fg-subtle hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-fg"
-                    >
-                      ⋮
-                    </button>
-                    {openMenu?.anchor === "row" && openMenu.entry.path === entry.path &&
-                      renderEntryMenu(entry, "fixed z-10")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <FileTable
+            entries={entries}
+            fileSort={fileSort}
+            hiddenColumns={hiddenColumns}
+            columnWidths={columnWidths}
+            openMenu={openMenu}
+            setOpenMenu={setOpenMenu}
+            setDirMenu={setDirMenu}
+            setColumnsMenu={setColumnsMenu}
+            load={load}
+            onSort={handleSortClick}
+            onColumnDrag={handleColumnDrag}
+            onColumnDragEnd={handleColumnDragEnd}
+            renderEntryMenu={renderEntryMenu}
+          />
         )}
         {columnsMenu && (
           <ColumnsMenu
@@ -2411,69 +1818,14 @@ export function FileBrowserPanel({
           bei einer erkannten lokalen Änderung (`changed`) den Upload an,
           und macht das "Bearbeitung beenden" jederzeit erreichbar (Spec:
           "Watcher stoppt, wenn der Nutzer den Flow beendet"). */}
-      {localEdit.session && (
-        <div className="flex items-center gap-2 border-t border-accent-border-strong/50 bg-accent-subtle/40 px-2 py-1.5 text-xs">
-          {localEdit.session.status === "uploading" ? (
-            <span className="text-fg-muted">
-              {t("fileBrowser.localEdit.uploading", { name: localEdit.session.entry.name })}
-            </span>
-          ) : localEdit.session.status === "changed" ? (
-            <>
-              <span className="flex-1 text-warning-fg-soft">
-                {t("fileBrowser.localEdit.changed", { name: localEdit.session.entry.name })}
-              </span>
-              {editIdentityMismatch ? (
-                <Button size="sm" variant="primary" onClick={() => handleOfferEditUpload(true)}>
-                  {channelUser
-                    ? t("fileElevation.editUploadAs", { user: channelUser })
-                    : t("fileElevation.editUploadAsLogin")}
-                </Button>
-              ) : (
-                <Button size="sm" variant="primary" onClick={() => handleOfferEditUpload()}>
-                  {t("fileBrowser.upload")}
-                </Button>
-              )}
-              <Button size="sm" onClick={localEdit.dismissChange}>
-                {t("fileBrowser.localEdit.later")}
-              </Button>
-            </>
-          ) : (
-            <span className="flex-1 text-fg-muted">
-              {t("fileBrowser.localEdit.editing", { name: localEdit.session.entry.name })}
-              {localEdit.session.elevatedUser && (
-                <span className="ml-1 text-warning-fg-soft">
-                  {t("fileElevation.editOpenedAs", { user: localEdit.session.elevatedUser })}
-                </span>
-              )}
-            </span>
-          )}
-          {!caps.externalEditor && localEdit.session.status === "editing" && (
-            <Button size="sm" onClick={() => setInAppEditorOpen(true)}>
-              {t("common.edit")}
-            </Button>
-          )}
-          <Button size="sm" onClick={localEdit.endSession}>
-            {t("fileBrowser.localEdit.end")}
-          </Button>
-          {editIdentityMismatch && (
-            <span className="w-full text-warning-fg-soft">
-              {localEdit.session.elevatedUser
-                ? channelUser
-                  ? t("fileElevation.editIdentityChanged", {
-                      from: localEdit.session.elevatedUser,
-                      user: channelUser,
-                    })
-                  : t("fileElevation.editIdentityElevatedOff", {
-                      from: localEdit.session.elevatedUser,
-                    })
-                : t("fileElevation.editIdentityElevatedOn", { user: channelUser })}
-            </span>
-          )}
-          {localEdit.session.error && (
-            <span className="w-full text-danger-fg-soft">{localEdit.session.error}</span>
-          )}
-        </div>
-      )}
+      <LocalEditStatusBar
+        localEdit={localEdit}
+        editIdentityMismatch={editIdentityMismatch}
+        channelUser={channelUser}
+        externalEditor={caps.externalEditor}
+        onOfferUpload={handleOfferEditUpload}
+        onOpenInAppEditor={() => setInAppEditorOpen(true)}
+      />
 
       {inAppEditorOpen && localEdit.session && !caps.externalEditor && (
         <LocalEditCopyEditor
@@ -2668,42 +2020,13 @@ export function FileBrowserPanel({
       )}
 
       {uploadConflict && (
-        <DialogFrame
-          layer="sessionTab"
-          title={elevated ? t("fileElevation.overwriteTitle", { user: elevatedUser }) : t("fileBrowser.uploadConflict.title")}
-          onClose={() => setUploadConflict(null)}
-          actions={
-            <>
-              <Button onClick={() => setUploadConflict(null)}>{t("fileBrowser.cancel")}</Button>
-              <Button variant="danger" onClick={handleConfirmUpload}>
-                {t("fileBrowser.overwrite")}
-              </Button>
-            </>
-          }
-        >
-          <p className="mb-3">
-            <span className="font-mono text-xs break-all">{uploadConflict.remotePath}</span>{" "}
-            {t("fileBrowser.uploadConflict.body")}
-          </p>
-          {uploadConflict.localPreview.text !== null && uploadConflict.remoteText !== null ? (
-            <NoteDiffPreview
-              previousContent={uploadConflict.remoteText}
-              newContent={uploadConflict.localPreview.text}
-            />
-          ) : (
-            <p className="border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-subtle">
-              {uploadConflict.remoteReadFailure
-                ? t(
-                    previewReadFailureHint(uploadConflict.remoteReadFailure).key,
-                    previewReadFailureHint(uploadConflict.remoteReadFailure).options,
-                  )
-                : t("fileBrowser.uploadConflict.noDiff", {
-                    remoteSize: formatBytes(uploadConflict.remoteSize),
-                    localSize: formatBytes(uploadConflict.localPreview.size),
-                  })}
-            </p>
-          )}
-        </DialogFrame>
+        <UploadConflictDialog
+          conflict={uploadConflict}
+          elevated={elevated}
+          elevatedUser={elevatedUser}
+          onCancel={() => setUploadConflict(null)}
+          onConfirm={handleConfirmUpload}
+        />
       )}
 
       {folderConfirm && (
@@ -2734,100 +2057,14 @@ export function FileBrowserPanel({
         </DialogFrame>
       )}
 
-      {folderSummary && (
-        <DialogFrame
-          layer="sessionTab"
-          title={t("fileBrowser.folderUpload.summaryTitle", { name: folderSummary.folderName })}
-          onClose={() => setFolderSummary(null)}
-          actions={
-            <Button variant="primary" onClick={() => setFolderSummary(null)}>
-              {t("fileBrowser.folderUpload.close")}
-            </Button>
-          }
-        >
-          <p className="mb-3">
-            {t("fileBrowser.folderUpload.summary", {
-              uploaded: folderSummary.filesUploaded,
-              skipped: folderSummary.skipped.length,
-              failed: folderSummary.failed.length,
-            })}
-          </p>
-          {folderSummary.notAttempted > 0 && (
-            <p className="mb-3 text-warning-fg-soft">
-              {t("fileBrowser.folderUpload.notAttempted", { count: folderSummary.notAttempted })}
-            </p>
-          )}
-          <ul className="max-h-60 overflow-y-auto border border-border bg-surface-sunken px-2 py-1.5 text-xs text-fg-muted">
-            {folderSummary.failed.map((f) => (
-              <li key={"f:" + f.path} className="break-all">
-                <span className="text-danger-fg">{t("fileBrowser.folderUpload.failed")}:</span>{" "}
-                <span className="font-mono">{f.path}</span> — {f.error}
-              </li>
-            ))}
-            {folderSummary.skipped.map((e) => (
-              <li key={"s:" + e.path} className="break-all">
-                <span className="text-warning-fg-soft">{t("fileBrowser.folderUpload.skipped")}:</span>{" "}
-                <span className="font-mono">{e.path}</span> —{" "}
-                {t("fileBrowser.folderUpload.reason." + e.reason)}
-              </li>
-            ))}
-          </ul>
-        </DialogFrame>
-      )}
+      {folderSummary && <FolderSummaryDialog folderSummary={folderSummary} onClose={() => setFolderSummary(null)} />}
 
       {stopPrompt && (
-        <DialogFrame
-          layer="sessionTab"
-          size="sm"
-          title={t("fileElevation.stopTitle")}
-          onClose={() => setStopPrompt(null)}
-          actions={
-            <>
-              <Button onClick={() => setStopPrompt(null)}>{t("fileBrowser.cancel")}</Button>
-              <Button variant="danger" onClick={confirmStopPrompt}>
-                {t("fileElevation.toggleOff")}
-              </Button>
-            </>
-          }
-        >
-          <p>{t("fileElevation.stopBody")}</p>
-          <ul className="mt-2 space-y-1 text-xs">
-            {stopPrompt.operations.map((op) => (
-              <li key={op.id} className="break-all">
-                <span className="font-semibold">
-                  {t(
-                    {
-                      download: "fileElevation.opDownload",
-                      upload: "fileElevation.opUpload",
-                      delete: "fileElevation.opDelete",
-                      chmod: "fileElevation.opChmod",
-                      chown: "fileElevation.opChown",
-                    }[op.kind],
-                  )}
-                </span>{" "}
-                <span className="font-mono">{op.path}</span>
-                {op.bytesTotal !== null && op.bytesDone !== null ? (
-                  <span className="text-fg-subtle">
-                    {" "}
-                    ({formatBytes(op.bytesDone)} / {formatBytes(op.bytesTotal)}
-                    {op.filesTotal !== null &&
-                      op.filesDone !== null &&
-                      ` — ${t("fileBrowser.transferFiles", { done: op.filesDone, total: op.filesTotal })}`}
-                    )
-                  </span>
-                ) : (
-                  op.filesTotal !== null &&
-                  op.filesDone !== null && (
-                    <span className="text-fg-subtle">
-                      {" "}
-                      ({t("fileBrowser.entriesProgress", { done: op.filesDone, total: op.filesTotal })})
-                    </span>
-                  )
-                )}
-              </li>
-            ))}
-          </ul>
-        </DialogFrame>
+        <StopPromptDialog
+          operations={stopPrompt.operations}
+          onCancel={() => setStopPrompt(null)}
+          onConfirm={confirmStopPrompt}
+        />
       )}
 
       {elevationFailure && (
