@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "无法执行注入指令检查（AI 提供商出现问题）。下一个建议的操作需要确认。",
     "AI_INJECTION_CHECK_INACTIVE": "此服务器已启用注入指令检查，但在本会话中并未生效（AI 二次意见已关闭或无法建立）。请在设置中启用二次意见并重新连接。",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI 二次意见已开启，但无法为本会话建立（提供商已被移除或找不到凭据）。命令不会经过它的检查——请修正设置并重新连接。",
+    "REDACTION_INCOMPLETE": "无法加载此服务器的部分机密值；发送给 AI 的内容中可能未对其进行遮盖。",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "无法读取服务器的当前标签——需要确认",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "风险被评为红色，或无法可靠评估（例如过长）——始终需要确认",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "更新备注始终需要确认",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "写入文件始终需要确认",

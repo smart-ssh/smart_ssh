@@ -952,6 +952,11 @@ pub struct SessionParts {
     /// Hinweis, keine erzwungene Bestätigung; einmalig gesendet
     /// (`swap(false)`).
     pub injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool,
+    /// Issue #843: `true` while a notice "redaction incomplete" is due —
+    /// the secret values to mask (extension secrets, sudo password) could not
+    /// be fully loaded or compiled. Sent once (`swap(false)`) with the
+    /// code `REDACTION_INCOMPLETE`; a later incomplete rebuild sets it again.
+    pub redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool,
     /// Spec 0034: Persistenz-Anbindung für diese Sitzung. `None` für
     /// Sitzungen, die bewusst keine `chat_sessions`-Zeile bekommen sollen
     /// (Tests; s. Abschnitt 10 zu MCP — MCP-ausgelöste Aktionen laufen

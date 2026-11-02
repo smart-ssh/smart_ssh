@@ -593,6 +593,7 @@ fn session_with_ai_transport_and_server_id(
         injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
         second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
         injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
+        redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
         chat_session_store: None,
         ledger_store: None,
         chat_session_id: AsyncMutex::new(None),

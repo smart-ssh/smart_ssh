@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "La vérification des instructions injectées n’a pas pu être exécutée (problème du fournisseur d’IA). La prochaine action proposée exige une confirmation.",
     "AI_INJECTION_CHECK_INACTIVE": "La vérification des instructions injectées est activée pour ce serveur mais n’est pas active dans cette session (le second avis IA est désactivé ou n’a pas pu être mis en place). Activez le second avis dans les paramètres et reconnectez-vous.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Le second avis IA est activé mais n’a pas pu être mis en place pour cette session (fournisseur supprimé ou identifiant introuvable). Les commandes ne sont pas vérifiées par lui – corrigez le réglage et reconnectez-vous.",
+    "REDACTION_INCOMPLETE": "Certaines valeurs secrètes de ce serveur n'ont pas pu être chargées ; elles risquent de ne pas être masquées dans ce qui est envoyé à l'IA.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Les tags actuels du serveur n'ont pas pu être lus – confirmation requise",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risque évalué comme rouge, ou n’ayant pas pu être évalué de façon fiable (p. ex. trop long) – exige toujours une confirmation",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Les mises à jour de notes exigent toujours une confirmation",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Les écritures de fichiers exigent toujours une confirmation",

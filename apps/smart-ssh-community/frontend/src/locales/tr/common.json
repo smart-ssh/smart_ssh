@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Enjekte edilmiş talimat denetimi çalıştırılamadı (yapay zeka sağlayıcısı sorunu). Önerilen sonraki eylem onay gerektirir.",
     "AI_INJECTION_CHECK_INACTIVE": "Enjekte edilmiş talimat denetimi bu sunucu için etkin ama bu oturumda aktif değil (yapay zeka ikinci görüşü kapalı veya kurulamadı). Ayarlar'da ikinci görüşü etkinleştirin ve yeniden bağlanın.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Yapay zeka ikinci görüşü açık ama bu oturum için kurulamadı (sağlayıcı kaldırıldı veya kimlik bilgisi bulunamadı). Komutlar onunla denetlenmiyor – ayarı düzeltin ve yeniden bağlanın.",
+    "REDACTION_INCOMPLETE": "Bu sunucunun bazı gizli değerleri yüklenemedi; yapay zekâya gönderilenlerde maskelenmemiş olabilirler.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Sunucunun güncel etiketleri okunamadı – onay gerektirir",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risk kırmızı olarak değerlendirildi veya güvenilir biçimde değerlendirilemedi (örn. çok uzun) – her zaman onay gerektirir",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Not güncellemeleri her zaman onay gerektirir",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Dosya yazmaları her zaman onay gerektirir",

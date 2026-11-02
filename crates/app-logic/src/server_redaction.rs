@@ -66,9 +66,19 @@ pub fn read_sudo_password_for_redaction(
     credential_store: &dyn CredentialStore,
     server_id: ServerId,
 ) -> Option<SecretString> {
+    read_sudo_password_checked(credential_store, server_id).0
+}
+
+/// [`read_sudo_password_for_redaction`] plus whether the read was complete:
+/// `false` after a backend error (issue #843, the caller marks the session
+/// "redaction incomplete"). `NotFound` is complete.
+pub fn read_sudo_password_checked(
+    credential_store: &dyn CredentialStore,
+    server_id: ServerId,
+) -> (Option<SecretString>, bool) {
     match credential_store.get(&sudo_password_credential_ref(server_id)) {
-        Ok(password) => Some(password),
-        Err(CredentialError::NotFound(_)) => None,
+        Ok(password) => (Some(password), true),
+        Err(CredentialError::NotFound(_)) => (None, true),
         Err(CredentialError::Backend(_)) => {
             tracing::warn!(
                 server_id = %server_id.0,
@@ -77,7 +87,7 @@ pub fn read_sudo_password_for_redaction(
                 "Sudo-Passwort konnte für den Redactor nicht gelesen werden — die Sitzung \
                  redigiert nur die eingebauten Muster, nicht das Sudo-Passwort"
             );
-            None
+            (None, false)
         }
     }
 }

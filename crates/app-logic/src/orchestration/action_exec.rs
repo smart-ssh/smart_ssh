@@ -170,7 +170,8 @@ pub(crate) async fn handle_action_proposed(
         *path = normalize_remote_path(path);
     }
 
-    let evaluation = evaluate_action(session, &action, profile_store).await;
+    let (evaluation, server_tags_unavailable) =
+        evaluate_action(session, &action, profile_store).await;
     let matched_rule = evaluation.matched_rule.clone();
     let matched_rule_origin = evaluation.matched_rule_origin;
     let engine_decision = evaluation.decision.clone();
@@ -203,6 +204,7 @@ pub(crate) async fn handle_action_proposed(
         transform_scope.as_ref(),
     );
     facts.mcp_origin = matches!(origin, ActionOrigin::Mcp { .. });
+    facts.server_tags_unavailable = server_tags_unavailable;
     facts.earlier_rejection = earlier_rejection.load(std::sync::atomic::Ordering::SeqCst);
     let escalation = super::escalation::escalate(decision, &facts);
     if escalation.consume_injection_suspected
@@ -700,11 +702,33 @@ pub async fn handle_mcp_action_proposed(
 /// `connect()` eingefrorene Kopie zurück, falls der Server inzwischen nicht
 /// mehr auflösbar ist.
 async fn tags_for_session(session: &Session, profile_store: &dyn ProfileStore) -> Vec<String> {
-    profile_store
-        .get_server(&session.server_id)
-        .await
-        .map(|s| s.tags)
-        .unwrap_or_else(|_| session.tags.clone())
+    server_tags_lookup(session, profile_store).await.0
+}
+
+/// [`tags_for_session`] plus whether the profile store failed with anything
+/// but "server not stored" (issue #843). `ServerNotFound` is normal (the
+/// local pseudo-server has no row) and keeps the frozen tags silently; any
+/// other error keeps them too but is reported, so the caller can escalate.
+/// Logs the server id and error kind only.
+async fn server_tags_lookup(
+    session: &Session,
+    profile_store: &dyn ProfileStore,
+) -> (Vec<String>, bool) {
+    match profile_store.get_server(&session.server_id).await {
+        Ok(server) => (server.tags, false),
+        Err(ssh_manager_core::profiles::ProfileError::ServerNotFound(_)) => {
+            (session.tags.clone(), false)
+        }
+        Err(_) => {
+            // Error kind only, never the message (ADR 0086).
+            tracing::warn!(
+                server_id = %session.server_id.0,
+                error_kind = "store_error",
+                "server tags could not be read — rules use the tags from connect time"
+            );
+            (session.tags.clone(), true)
+        }
+    }
 }
 
 /// Issue #696: the rules behind an automatic run, from the trace of the
@@ -952,6 +976,7 @@ fn escalation_facts(
         uses_stored_sudo_password: uses_stored_sudo_password(session, action),
         transform_marks_text: transform_requires_confirmation(session, transform_scope, action),
         earlier_rejection: false,
+        server_tags_unavailable: false,
     }
 }
 
@@ -1161,33 +1186,37 @@ async fn evaluate_action(
     session: &Session,
     action: &AiAction,
     profile_store: &dyn ProfileStore,
-) -> EvaluationTrace {
+) -> (EvaluationTrace, bool) {
     match action {
         AiAction::SuggestCommand { command } => {
-            let tags = tags_for_session(session, profile_store).await;
+            let (tags, tags_unavailable) = server_tags_lookup(session, profile_store).await;
             let ctx = EvalContext {
                 server_id: session.server_id,
                 tags,
             };
-            session
+            let trace = session
                 .filter_engine
                 .evaluate_explained(command, &ctx)
-                .await
+                .await;
+            (trace, tags_unavailable)
         }
-        AiAction::ProposeNoteUpdate { .. } => EvaluationTrace {
-            decision: Decision::Confirm {
-                reason: "Notiz-Aktualisierungen erfordern immer eine manuelle Bestätigung"
-                    .to_string(),
-                code: "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM".to_string(),
+        AiAction::ProposeNoteUpdate { .. } => (
+            EvaluationTrace {
+                decision: Decision::Confirm {
+                    reason: "Notiz-Aktualisierungen erfordern immer eine manuelle Bestätigung"
+                        .to_string(),
+                    code: "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM".to_string(),
+                },
+                matched_rule: None,
+                matched_rule_origin: None,
+                matched_hard_blacklist_entry: None,
+                sub_command_traces: Vec::new(),
+                kind: Default::default(),
+                segment_index: None,
+                checks: Vec::new(),
             },
-            matched_rule: None,
-            matched_rule_origin: None,
-            matched_hard_blacklist_entry: None,
-            sub_command_traces: Vec::new(),
-            kind: Default::default(),
-            segment_index: None,
-            checks: Vec::new(),
-        },
+            false,
+        ),
         AiAction::GenerateDocument { .. } => unreachable!(
             "GenerateDocument wird bereits in run_one_round abgefangen \
              (Spec 0012: kein Filter-Engine-/Bestätigungspfad) und erreicht \
@@ -1198,18 +1227,19 @@ async fn evaluate_action(
              and never reaches evaluate_action"
         ),
         AiAction::ReadRemoteFile { path } => {
-            let tags = tags_for_session(session, profile_store).await;
+            let (tags, tags_unavailable) = server_tags_lookup(session, profile_store).await;
             let ctx = EvalContext {
                 server_id: session.server_id,
                 tags,
             };
-            session
+            let trace = session
                 .filter_engine
                 .evaluate_explained(&sftp_read_pseudo_command(path), &ctx)
-                .await
+                .await;
+            (trace, tags_unavailable)
         }
         AiAction::WriteRemoteFile { path, .. } => {
-            let tags = tags_for_session(session, profile_store).await;
+            let (tags, tags_unavailable) = server_tags_lookup(session, profile_store).await;
             let ctx = EvalContext {
                 server_id: session.server_id,
                 tags,
@@ -1226,7 +1256,7 @@ async fn evaluate_action(
                     code: "FILTER_FILE_WRITE_REQUIRES_CONFIRM".to_string(),
                 };
             }
-            trace
+            (trace, tags_unavailable)
         }
     }
 }
@@ -1401,11 +1431,11 @@ async fn handle_user_decision(
                     )
                     .await;
 
-                    let tags = profile_store
-                        .get_server(&session.server_id)
-                        .await
-                        .map(|s| s.tags)
-                        .unwrap_or_else(|_| session.tags.clone());
+                    // A store failure is logged by the lookup; only `Deny`
+                    // matters in this re-evaluation, so the frozen tags
+                    // stay in use (issue #843).
+                    let (tags, _tags_unavailable) =
+                        server_tags_lookup(session, profile_store).await;
                     let ctx = EvalContext {
                         server_id: session.server_id,
                         tags,
@@ -2245,6 +2275,20 @@ pub(crate) fn announce_second_opinion_setup_failure(
              active in this session (AI second opinion is off or could not be set up)."
                 .to_string(),
             Some("AI_INJECTION_CHECK_INACTIVE"),
+        );
+    }
+    // Issue #843: secret values for this server may not be masked.
+    if session
+        .redaction_incomplete_notice_pending
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+    {
+        emit_chat_error(
+            emitter,
+            session_id,
+            "Some secret values for this server could not be loaded; they may not be masked \
+             in what is sent to the AI."
+                .to_string(),
+            Some("REDACTION_INCOMPLETE"),
         );
     }
 }

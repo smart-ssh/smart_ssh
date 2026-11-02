@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Kontrollen av injicerade instruktioner kunde inte köras (problem med AI-leverantören). Nästa föreslagna åtgärd kräver bekräftelse.",
     "AI_INJECTION_CHECK_INACTIVE": "Kontrollen av injicerade instruktioner är aktiverad för den här servern men inte aktiv i den här sessionen (AI:s andra åsikt är avstängd eller kunde inte ställas in). Aktivera andra åsikten i inställningarna och anslut igen.",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI:s andra åsikt är påslagen men kunde inte ställas in för den här sessionen (leverantören borttagen eller inloggningsuppgift saknas). Kommandon kontrolleras inte av den – rätta inställningen och anslut igen.",
+    "REDACTION_INCOMPLETE": "Vissa hemliga värden för den här servern kunde inte läsas in; de maskeras kanske inte i det som skickas till AI:n.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "De aktuella servertaggarna kunde inte läsas – kräver bekräftelse",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risken bedömdes som röd, eller kunde inte bedömas tillförlitligt (t.ex. för långt) – kräver alltid bekräftelse",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Anteckningsuppdateringar kräver alltid bekräftelse",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Filskrivningar kräver alltid bekräftelse",

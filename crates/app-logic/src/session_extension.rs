@@ -117,11 +117,19 @@ impl SessionExtension for CompositeSessionExtension {
 /// chain empty (the scope is context for the extension, not a security
 /// decision).
 pub async fn server_scope(store: &dyn ProfileStore, server: &Server) -> ServerScope {
+    server_scope_lookup(store, server).await.0
+}
+
+/// [`server_scope`] plus whether the scope is incomplete (the group chain
+/// could not be read, so group-level secrets are unknown; issue #843).
+pub async fn server_scope_lookup(store: &dyn ProfileStore, server: &Server) -> (ServerScope, bool) {
+    let mut incomplete = false;
     let group_chain = match server.group_id {
         None => Vec::new(),
         Some(group_id) => match store.group_chain(&group_id).await {
             Ok(chain) => chain.into_iter().map(|g| g.id).collect(),
             Err(err) => {
+                incomplete = true;
                 tracing::warn!(
                     server_id = %server.id.0,
                     error = %err,
@@ -131,11 +139,24 @@ pub async fn server_scope(store: &dyn ProfileStore, server: &Server) -> ServerSc
             }
         },
     };
-    ServerScope {
-        server_id: server.id,
-        group_chain,
-        tags: server.tags.clone(),
-    }
+    (
+        ServerScope {
+            server_id: server.id,
+            group_chain,
+            tags: server.tags.clone(),
+        },
+        incomplete,
+    )
+}
+
+/// Result of [`scope_lookup`].
+#[derive(Debug, Clone)]
+pub struct ScopeLookup {
+    /// `None` only when the server is not stored (and not local).
+    pub scope: Option<ServerScope>,
+    /// The profile store failed: the scope may lack groups or tags, so
+    /// secrets may be unknown to the redactor (issue #843).
+    pub incomplete: bool,
 }
 
 /// Scope of a server by id. `local_tags` is `Some` for the local
@@ -145,16 +166,55 @@ pub async fn scope_for_id(
     server_id: ServerId,
     local_tags: Option<Vec<String>>,
 ) -> Option<ServerScope> {
+    scope_lookup(store, server_id, local_tags).await.scope
+}
+
+/// [`scope_for_id`] that tells "server not stored" (`ServerNotFound`: no
+/// scope, complete) from a store failure (scope with at least the server id,
+/// flagged incomplete, so server-level secrets stay masked; issue #843).
+pub async fn scope_lookup(
+    store: &dyn ProfileStore,
+    server_id: ServerId,
+    local_tags: Option<Vec<String>>,
+) -> ScopeLookup {
     if let Some(tags) = local_tags {
-        return Some(ServerScope {
-            server_id,
-            group_chain: Vec::new(),
-            tags,
-        });
+        return ScopeLookup {
+            scope: Some(ServerScope {
+                server_id,
+                group_chain: Vec::new(),
+                tags,
+            }),
+            incomplete: false,
+        };
     }
     match store.get_server(&server_id).await {
-        Ok(server) => Some(server_scope(store, &server).await),
-        Err(_) => None,
+        Ok(server) => {
+            let (scope, incomplete) = server_scope_lookup(store, &server).await;
+            ScopeLookup {
+                scope: Some(scope),
+                incomplete,
+            }
+        }
+        Err(ssh_manager_core::profiles::ProfileError::ServerNotFound(_)) => ScopeLookup {
+            scope: None,
+            incomplete: false,
+        },
+        Err(_) => {
+            // Error kind only, never the message (ADR 0086).
+            tracing::warn!(
+                server_id = %server_id.0,
+                error_kind = "store_error",
+                "get_server failed — the extension scope has only the server id"
+            );
+            ScopeLookup {
+                scope: Some(ServerScope {
+                    server_id,
+                    group_chain: Vec::new(),
+                    tags: Vec::new(),
+                }),
+                incomplete: true,
+            }
+        }
     }
 }
 
@@ -165,18 +225,57 @@ pub fn redactor_with_secrets(
     sudo_password: Option<&SecretString>,
     extra_secrets: &[SecretString],
 ) -> Box<dyn OutputRedactor> {
+    redactor_with_secrets_checked(sudo_password, extra_secrets).0
+}
+
+/// Size limit of the retry for a literal the default regex limit rejects.
+const LITERAL_REGEX_SIZE_LIMIT: usize = 256 * 1024 * 1024;
+
+/// [`redactor_with_secrets`] plus whether every literal was compiled
+/// (`false` = "redaction incomplete", issue #843). A literal the default
+/// regex size limit rejects is retried with a larger limit; if that fails
+/// too, the count and byte length (never the value) are logged.
+pub fn redactor_with_secrets_checked(
+    sudo_password: Option<&SecretString>,
+    extra_secrets: &[SecretString],
+) -> (Box<dyn OutputRedactor>, bool) {
+    let mut failed = 0usize;
+    let mut failed_bytes = 0usize;
     let patterns: Vec<regex::Regex> = sudo_password
         .into_iter()
         .chain(extra_secrets.iter())
         .map(|s| s.expose_secret())
         .filter(|s| !s.is_empty())
-        .filter_map(|s| regex::Regex::new(&regex::escape(s)).ok())
+        .filter_map(|s| {
+            let escaped = regex::escape(s);
+            let compiled = regex::Regex::new(&escaped).or_else(|_| {
+                regex::RegexBuilder::new(&escaped)
+                    .size_limit(LITERAL_REGEX_SIZE_LIMIT)
+                    .build()
+            });
+            match compiled {
+                Ok(re) => Some(re),
+                Err(_) => {
+                    failed += 1;
+                    failed_bytes += s.len();
+                    None
+                }
+            }
+        })
         .collect();
-    if patterns.is_empty() {
+    if failed > 0 {
+        tracing::warn!(
+            literals = failed,
+            bytes = failed_bytes,
+            "secret literals could not be compiled for the redactor"
+        );
+    }
+    let redactor: Box<dyn OutputRedactor> = if patterns.is_empty() {
         Box::new(DefaultOutputRedactor::new())
     } else {
         Box::new(DefaultOutputRedactor::with_extra_patterns(patterns))
-    }
+    };
+    (redactor, failed == 0)
 }
 
 /// Known secrets of the extension for `scope`; empty without an extension.
@@ -260,12 +359,29 @@ pub async fn rebuild_redactors_for_sessions(
     if sessions.is_empty() {
         return;
     }
-    let sudo =
-        crate::server_redaction::read_sudo_password_for_redaction(credential_store, server_id);
+    let (sudo, sudo_complete) =
+        crate::server_redaction::read_sudo_password_checked(credential_store, server_id);
+    let mut scope_complete = true;
     let group_chain = match profile_store.get_server(&server_id).await {
-        Ok(server) => server_scope(profile_store, &server).await.group_chain,
-        Err(_) => Vec::new(),
+        Ok(server) => {
+            let (scope, incomplete) = server_scope_lookup(profile_store, &server).await;
+            scope_complete = !incomplete;
+            scope.group_chain
+        }
+        // Not stored (e.g. the local pseudo-server): no groups, as before.
+        Err(ssh_manager_core::profiles::ProfileError::ServerNotFound(_)) => Vec::new(),
+        Err(_) => {
+            // Error kind only, never the message (ADR 0086).
+            tracing::warn!(
+                server_id = %server_id.0,
+                error_kind = "store_error",
+                "get_server failed during the redactor rebuild — keeping the known secrets"
+            );
+            scope_complete = false;
+            Vec::new()
+        }
     };
+    let lookup_complete = sudo_complete && scope_complete;
     for session in sessions {
         let scope = ServerScope {
             server_id,
@@ -273,9 +389,27 @@ pub async fn rebuild_redactors_for_sessions(
             tags: session.tags.clone(),
         };
         let secrets = known_secrets(extension, Some(&scope));
-        // The only path that replaces (not extends) the literal secret set.
-        session
-            .swap_redactor_with_literals(redactor_with_secrets(sudo.as_ref(), &secrets), &secrets);
+        // A failed sudo read must not drop the session's known password.
+        let sudo_now = if sudo_complete {
+            sudo.clone()
+        } else {
+            sudo.clone()
+                .or_else(|| session.sudo_password.get().map(|p| (*p).clone()))
+        };
+        let (redactor, compiled) = redactor_with_secrets_checked(sudo_now.as_ref(), &secrets);
+        if lookup_complete {
+            // The only path that replaces (not extends) the literal secret set.
+            session.swap_redactor_with_literals(redactor, &secrets);
+        } else {
+            // The scope is not fully known: extend, never shrink (issue #843).
+            session.swap_redactor(redactor);
+            session.redactor.add_secret_values(&secrets);
+        }
+        if !(lookup_complete && compiled) {
+            session
+                .redaction_incomplete_notice_pending
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
     }
 }
 

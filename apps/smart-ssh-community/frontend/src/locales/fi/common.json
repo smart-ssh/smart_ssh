@@ -618,6 +618,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Syötettyjen ohjeiden tarkistusta ei voitu suorittaa (tekoälyn palveluntarjoajan ongelma). Seuraava ehdotettu toiminto vaatii vahvistuksen.",
     "AI_INJECTION_CHECK_INACTIVE": "Syötettyjen ohjeiden tarkistus on päällä tälle palvelimelle, mutta ei aktiivinen tässä istunnossa (tekoälyn toinen mielipide on pois päältä tai sen käyttöönotto epäonnistui). Ota toinen mielipide käyttöön asetuksissa ja yhdistä uudelleen.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Tekoälyn toinen mielipide on päällä, mutta sitä ei voitu ottaa käyttöön tässä istunnossa (palveluntarjoaja poistettu tai tunnistetietoa ei löytynyt). Se ei tarkista komentoja – korjaa asetus ja yhdistä uudelleen.",
+    "REDACTION_INCOMPLETE": "Joitakin tämän palvelimen salaisia arvoja ei voitu ladata; niitä ei ehkä peitetä tekoälylle lähetettävässä sisällössä.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Palvelimen nykyisiä tunnisteita ei voitu lukea – vaatii vahvistuksen",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Riski arvioitu punaiseksi tai sitä ei voitu arvioida luotettavasti (esim. liian pitkä) – vaatii aina vahvistuksen",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Muistiinpanojen päivitykset vaativat aina vahvistuksen",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Tiedostoon kirjoitukset vaativat aina vahvistuksen",
