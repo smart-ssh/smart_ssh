@@ -1,0 +1,192 @@
+// Issue #829: the chat event listeners stay registered when the risk second
+// opinion setting changes while an answer streams.
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { I18nextProvider } from "react-i18next";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getChatHistory } from "../api";
+import { onChatActionProposed, onChatTextDelta } from "../events";
+import { loadRiskClassifierSettings } from "../riskSettings";
+import type { ChatActionProposedEvent } from "../types";
+import { testI18n } from "../testI18n";
+import { ChatPanel } from "./ChatPanel";
+
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {};
+}
+
+vi.mock("../api", () => ({
+  commandErrorMessage: (err: unknown) => String(err),
+  commandErrorCode: (err: unknown) =>
+    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
+  acceptAndCreateRule: vi.fn(),
+  cancelRunningCommand: vi.fn(),
+  retryChatTurn: vi.fn(() => Promise.resolve()),
+  continueTruncatedResponse: vi.fn(() => Promise.resolve()),
+  exportDocument: vi.fn(),
+  explainConfirmation: vi.fn(() => new Promise(() => {})),
+  getChatHistory: vi.fn(() => Promise.resolve([])),
+  listAiProviders: vi.fn(() =>
+    Promise.resolve([
+      {
+        id: "p1",
+        providerType: "anthropic",
+        displayName: "Claude",
+        baseUrl: null,
+        model: "claude",
+        supportsNativeToolCalling: true,
+        isActive: true,
+        extraHeaders: [],
+        attestationUrl: null,
+      },
+    ]),
+  ),
+  listPromptHistory: vi.fn(() => Promise.resolve([])),
+  respondToAction: vi.fn(() => Promise.resolve()),
+  sendChatMessage: vi.fn(() => Promise.resolve()),
+  startNewChat: vi.fn(() => Promise.resolve("new-chat-id")),
+  stopAutoContinuation: vi.fn(() => Promise.resolve()),
+  takeChatContentIntoNote: vi.fn(),
+}));
+
+vi.mock("../events", () => ({
+  onActionDecisionEscalated: vi.fn(() => Promise.resolve(() => {})),
+  onAiBudgetWaiting: vi.fn(() => Promise.resolve(() => {})),
+  onChatActionProposed: vi.fn(() => Promise.resolve(() => {})),
+  onChatActionOutput: vi.fn(() => Promise.resolve(() => {})),
+  onChatActionWaitingInput: vi.fn(() => Promise.resolve(() => {})),
+  onChatActionResult: vi.fn(() => Promise.resolve(() => {})),
+  onActionConfirmationSettled: vi.fn(() => Promise.resolve(() => {})),
+  onChatAutoContinuationLimitReached: vi.fn(() => Promise.resolve(() => {})),
+  onChatAutoContinuationStarted: vi.fn(() => Promise.resolve(() => {})),
+  onChatDocumentGenerated: vi.fn(() => Promise.resolve(() => {})),
+  onChatQuestionAsked: vi.fn(() => Promise.resolve(() => {})),
+  onChatError: vi.fn(() => Promise.resolve(() => {})),
+  onChatContextUsage: vi.fn(() => Promise.resolve(() => {})),
+  onChatContextCompacted: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRetrying: vi.fn(() => Promise.resolve(() => {})),
+  onChatAiRequestStarted: vi.fn(() => Promise.resolve(() => {})),
+  onChatQueuedMessagesSent: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseCancelled: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseEmpty: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseRefused: vi.fn(() => Promise.resolve(() => {})),
+  onChatResponseTruncated: vi.fn(() => Promise.resolve(() => {})),
+  onChatTextDelta: vi.fn(() => Promise.resolve(() => {})),
+  onChatWebActivity: vi.fn(() => Promise.resolve(() => {})),
+  onChatInjectionCheck: vi.fn(() => Promise.resolve(() => {})),
+  onChatWebResearchUnavailable: vi.fn(() => Promise.resolve(() => {})),
+  onRiskAssessmentUpdated: vi.fn(() => Promise.resolve(() => {})),
+}));
+
+vi.mock("../riskSettings", () => ({
+  loadRiskClassifierSettings: vi.fn(),
+}));
+
+type Delta = { sessionId: string; delta: string };
+
+/** Registers like the real `listen()`: resolves asynchronously, and tracks how
+ * many listeners are active and whether the count ever dropped to zero. */
+function trackAsyncListener<T>(listener: unknown) {
+  const state = { active: 0, handler: null as null | ((e: T) => void), droppedToZero: false, started: 0 };
+  vi.mocked(listener as (h: (e: T) => void) => Promise<() => void>).mockImplementation((h) => {
+    state.started += 1;
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        state.active += 1;
+        state.handler = h;
+        resolve(() => {
+          state.active -= 1;
+          if (state.active === 0) state.droppedToZero = true;
+        });
+      }, 0);
+    });
+  });
+  return state;
+}
+
+function deferredSettings() {
+  let resolve: (enabled: boolean) => void = () => {};
+  vi.mocked(loadRiskClassifierSettings).mockImplementation(
+    () => new Promise((r) => (resolve = (enabled) => r({ enabled, providerId: null }))),
+  );
+  return (enabled: boolean) => resolve(enabled);
+}
+
+function proposed(): ChatActionProposedEvent {
+  return {
+    sessionId: "session-1",
+    actionId: "a1",
+    action: { SuggestCommand: { command: "ls" } },
+    decision: { Confirm: { reason: "no rule", code: "FILTER_NO_RULE_MATCHED" } },
+    previousNoteContent: null,
+    usesStoredSudoPassword: false,
+    previousFileContent: null,
+    previousFileSize: null,
+    targetName: null,
+    riskAssessment: {
+      serverRisk: "none",
+      serverRiskReason: null,
+      dataRisk: "yellow",
+      dataRiskReason: "x",
+      aiReviewed: false,
+    },
+    origin: "ai",
+    autoExecRules: [],
+  } as unknown as ChatActionProposedEvent;
+}
+
+function renderPanel() {
+  render(
+    <I18nextProvider i18n={testI18n}>
+      <ChatPanel sessionId="session-1" serverId="server-1" onActionSettled={vi.fn()} />
+    </I18nextProvider>,
+  );
+}
+
+describe("ChatPanel event subscription vs. risk second opinion setting (issue #829)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getChatHistory).mockResolvedValue([]);
+  });
+
+  it("keeps the listener and loses no delta when the setting changes mid-stream", async () => {
+    const delta = trackAsyncListener<Delta>(onChatTextDelta);
+    const settle = deferredSettings();
+    renderPanel();
+    await waitFor(() => expect(delta.active).toBe(1));
+    act(() => delta.handler?.({ sessionId: "session-1", delta: "Hel" }));
+    await act(async () => settle(true));
+    // Give a (wrongly triggered) re-subscription time to run.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    act(() => delta.handler?.({ sessionId: "session-1", delta: "lo " }));
+    act(() => delta.handler?.({ sessionId: "session-1", delta: "world" }));
+    expect(await screen.findByText("Hello world")).toBeInTheDocument();
+    expect(delta.started).toBe(1);
+    expect(delta.droppedToZero).toBe(false);
+  });
+
+  it("shows the pending second opinion after the setting turned on", async () => {
+    const proposal = trackAsyncListener<ChatActionProposedEvent>(onChatActionProposed);
+    const settle = deferredSettings();
+    renderPanel();
+    await waitFor(() => expect(proposal.active).toBe(1));
+    await act(async () => settle(true));
+    act(() => proposal.handler?.(proposed()));
+    const title = testI18n.t("actionCard.riskSecondOpinionPending");
+    await waitFor(() => expect(document.querySelector(`[title="${title}"]`)).not.toBeNull());
+    expect(proposal.started).toBe(1);
+  });
+
+  it("shows no pending second opinion when the setting is off", async () => {
+    const proposal = trackAsyncListener<ChatActionProposedEvent>(onChatActionProposed);
+    const settle = deferredSettings();
+    renderPanel();
+    await waitFor(() => expect(proposal.active).toBe(1));
+    await act(async () => settle(false));
+    act(() => proposal.handler?.(proposed()));
+    await screen.findByText("ls", { selector: "code" });
+    const title = testI18n.t("actionCard.riskSecondOpinionPending");
+    expect(document.querySelector(`[title="${title}"]`)).toBeNull();
+  });
+});
