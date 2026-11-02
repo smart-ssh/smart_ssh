@@ -7,9 +7,11 @@
 //! Präzedenz-Kette (Abschnitt 3) und den Test-Katalog (Abschnitt 6).
 
 mod blacklist;
+mod combined;
 mod engine;
 mod parser;
 mod pattern;
+mod policy_rules;
 mod types;
 
 #[cfg(test)]
@@ -21,11 +23,13 @@ mod adversarial_tests;
 #[cfg(test)]
 mod property_tests;
 
+pub use combined::CombinedPolicySource;
 pub use engine::{
     allow_rule_matches_segment, exceeds_command_length_limit, matches_hard_blacklist,
-    scope_applies, CombinedPolicySource, FilterEngine, PolicySource, PolicySourceError,
-    PolicySourceResult, PolicyStore, DEFAULT_MAX_COMMAND_LENGTH,
+    scope_applies, FilterEngine, PolicySource, PolicySourceError, PolicySourceResult, PolicyStore,
+    DEFAULT_MAX_COMMAND_LENGTH,
 };
+pub use policy_rules::PolicyRules;
 // Spec 0043, Fund B: von `crate::risk::classifier` wiederverwendet, damit
 // beide Konsumenten (Filter-Engine hier, Risiko-Klassifizierer dort)
 // denselben Rekursions-Cap für verschachtelte Command-Substitution nutzen

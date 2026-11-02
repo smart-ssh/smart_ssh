@@ -25,6 +25,9 @@ export {
   commandErrorConnectLog,
   listServers,
   getStartupState,
+  listGroups,
+  listAiProviders,
+  listChatSessions,
 } from "./api";
 
 export { TECHNICAL_INPUT_PROPS } from "./technicalInputProps";
@@ -34,4 +37,10 @@ export { pickAndReadTextFile } from "./fileDialog";
 export { SUPPORTED_LANGUAGES } from "./languages";
 export { settingsStore, initI18n } from "./i18n";
 
-export type { AiProviderConfigDto, ChatSessionSummaryDto, StartupStateDto } from "./types";
+export type {
+  AiProviderConfigDto,
+  ChatSessionSummaryDto,
+  GroupDto,
+  StartupStateDto,
+} from "./types";
+export type { ComposerContext, ComposerAction } from "./extensions/registry";
