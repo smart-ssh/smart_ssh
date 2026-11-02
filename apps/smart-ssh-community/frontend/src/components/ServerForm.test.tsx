@@ -985,6 +985,53 @@ describe("ServerForm — Schlüssel importieren oder Pfad behalten (Issue #667)"
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it("traps focus, closes on Escape like Cancel and returns focus to the save button", async () => {
+    vi.mocked(updateServer).mockResolvedValue(undefined);
+    vi.mocked(inspectKeyFile).mockResolvedValue(validKeyFacts());
+    const onSaved = vi.fn();
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <ServerForm
+          serverId={SERVER_ID}
+          defaultGroupId={null}
+          allGroups={[]}
+          allServers={[]}
+          onSaved={onSaved}
+          onDeleted={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    expect(await screen.findByDisplayValue("web-01")).toBeInTheDocument();
+    openTab("Verbindung");
+    fireEvent.change(authKindSelect(), { target: { value: "identityFile" } });
+    fireEvent.change(screen.getByPlaceholderText("~/.ssh/id_ed25519"), { target: { value: NEW_PATH } });
+    const saveButton = screen.getByRole("button", { name: "Speichern" });
+    saveButton.focus();
+    fireEvent.click(saveButton);
+
+    const dialog = await screen.findByRole("dialog");
+    const importButton = within(dialog).getByRole("button", { name: "Schlüssel importieren" });
+    await waitFor(() => expect(importButton).toHaveFocus());
+    const buttons = within(dialog).getAllByRole("button");
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    expect(last).toBe(importButton);
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(updateServer).not.toHaveBeenCalled();
+    expect(convertIdentityFileToKeychain).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText("~/.ssh/id_ed25519")).toHaveValue(NEW_PATH);
+    await waitFor(() => expect(saveButton).toHaveFocus());
+  });
+
   it("does not ask when the key-file path is unchanged", async () => {
     vi.mocked(getServer).mockResolvedValue(
       serverDto({ authKind: "identity_file", identityFilePath: IDENTITY_PATH }),
