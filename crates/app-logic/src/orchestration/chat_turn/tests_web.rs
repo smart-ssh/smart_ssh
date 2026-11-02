@@ -200,7 +200,7 @@ pub(super) struct HangingProvider(pub(super) Vec<AiEvent>);
 impl ssh_manager_core::ai::AiProvider for HangingProvider {
     fn send(
         &self,
-        _context: ssh_manager_core::ai::SessionContext,
+        _context: ssh_manager_core::ai::RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         use futures::StreamExt;
         Box::pin(futures::stream::iter(self.0.clone()).chain(futures::stream::pending()))

@@ -22,6 +22,8 @@ tracing = "0.1.44"
 uuid = { version = "1.26.0", features = ["v4"] }
 
 [dev-dependencies]
+# `RedactedContext::for_tests` (issue #833); never in `[dependencies]`.
+ssh-manager-core = { path = "../core", features = ["test-support"] }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time", "test-util"] }
 tracing-subscriber = { version = "0.3.23", features = ["json"] }
 wiremock = "0.6.5"

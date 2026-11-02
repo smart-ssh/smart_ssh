@@ -783,7 +783,8 @@ mod send_chat_message_persistence_tests {
     use chrono::Utc;
 
     use ssh_manager_core::ai::{
-        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, SessionContext,
+        default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, RedactedContext,
+        SessionContext,
     };
     use ssh_manager_core::filter::FilterEngine;
     use ssh_manager_core::profiles::Server;
@@ -821,7 +822,7 @@ mod send_chat_message_persistence_tests {
     impl AiProvider for NoopAiProvider {
         fn send(
             &self,
-            _context: SessionContext,
+            _context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             Box::pin(futures::stream::iter(vec![AiEvent::Done]))
         }
@@ -1047,11 +1048,11 @@ mod send_chat_message_persistence_tests {
     impl AiProvider for GatedRecordingProvider {
         fn send(
             &self,
-            context: SessionContext,
+            context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             let mut contexts = self.contexts.lock().unwrap();
             let first = contexts.is_empty();
-            contexts.push(context);
+            contexts.push(context.into_parts());
             if first {
                 let gate = self.gate.clone();
                 Box::pin(futures::stream::once(async move {
@@ -1332,11 +1333,11 @@ mod send_chat_message_persistence_tests {
     impl AiProvider for GatedActionProvider {
         fn send(
             &self,
-            context: SessionContext,
+            context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             let mut contexts = self.contexts.lock().unwrap();
             let first = contexts.is_empty();
-            contexts.push(context);
+            contexts.push(context.into_parts());
             if first {
                 let gate = self.gate.clone();
                 Box::pin(
@@ -1546,13 +1547,12 @@ mod send_chat_message_persistence_tests {
     impl AiProvider for ProposeAfterNoteProvider {
         fn send(
             &self,
-            context: SessionContext,
+            context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             let mut contexts = self.contexts.lock().unwrap();
-            let after_note = contexts.is_empty()
-                && history_texts(&context)
-                    .last()
-                    .is_some_and(|t| t.contains("wiederhergestellt"));
+            let context = context.into_parts();
+            let last = history_texts(&context).pop().unwrap_or_default();
+            let after_note = contexts.is_empty() && last.contains("wiederhergestellt");
             contexts.push(context);
             if after_note {
                 Box::pin(futures::stream::iter(vec![

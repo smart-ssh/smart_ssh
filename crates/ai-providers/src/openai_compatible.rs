@@ -24,8 +24,8 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    fence_untrusted, ActionSchema, AiError, AiEvent, AiProvider, MessageContent, RejectionReason,
-    Role, SessionContext, UntrustedKind,
+    fence_untrusted, ActionSchema, AiError, AiEvent, AiProvider, MessageContent, RedactedContext,
+    RejectionReason, Role, SessionContext, UntrustedKind,
 };
 use ssh_manager_core::ssh::CommandOutput;
 
@@ -792,9 +792,9 @@ pub(crate) struct RetryState {
 }
 
 impl AiProvider for OpenAiCompatibleProvider {
-    fn send(&self, context: SessionContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
-        // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zur
-        // Design-Entscheidung (Spec 0016, Abschnitt 4).
+    fn send(&self, context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
+        let context = context.into_parts();
+        // s. `AnthropicProvider::send` (Spec 0016, Abschnitt 4).
         let request_id = Uuid::new_v4();
         log_outgoing_context(request_id, &context);
 

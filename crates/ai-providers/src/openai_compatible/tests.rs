@@ -30,7 +30,7 @@ fn test_question_history_entry_is_rendered_with_numbered_labels() {
     );
 }
 
-use ssh_manager_core::ai::default_action_schemas;
+use ssh_manager_core::ai::{default_action_schemas, RedactedContext};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 
@@ -1100,7 +1100,10 @@ async fn test_context_limit_retry_logs_error_then_debug_line_with_old_and_new_bu
     );
 
     let events: Vec<AiEvent> = provider
-        .send(context_with_system("Testkontext", Vec::new()))
+        .send(RedactedContext::for_tests(context_with_system(
+            "Testkontext",
+            Vec::new(),
+        )))
         .collect()
         .await;
     assert_eq!(

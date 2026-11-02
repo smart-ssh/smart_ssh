@@ -425,6 +425,12 @@ async fn classify_credential_test_result(
         max_tokens_hint: None,
     };
 
+    // Issue #833: fixed text, nothing to redact; still the common entry point.
+    let Ok(context) = ssh_manager_core::ai::RedactedContext::seal(
+        context,
+        ssh_manager_core::ai::default_log_redactor(),
+        &ssh_manager_core::ai::NoExtensionSealer,
+    );
     let mut events = provider.send(context);
     let first_event = events.next().await;
     // `events` wird hier fallen gelassen, statt den Stream zu Ende zu

@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
+use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, RedactedContext};
 use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
 
 use crate::events::TestEmitter;
@@ -2103,7 +2103,7 @@ struct SlowAiProvider {
 impl AiProvider for SlowAiProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         let entered = self.entered.clone();
         let release = self.release.clone();

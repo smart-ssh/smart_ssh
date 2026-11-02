@@ -35,7 +35,7 @@ impl MockAiProvider {
 impl ssh_manager_core::ai::AiProvider for MockAiProvider {
     fn send(
         &self,
-        _context: ssh_manager_core::ai::SessionContext,
+        _context: ssh_manager_core::ai::RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = ssh_manager_core::ai::AiEvent> + Send>> {
         Box::pin(futures::stream::iter(self.events.clone()))
     }

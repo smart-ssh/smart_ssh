@@ -10,7 +10,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use ssh_manager_core::ai::{AiEvent, AiProvider, SessionContext};
+use ssh_manager_core::ai::{AiEvent, AiProvider, RedactedContext};
 use ssh_manager_core::audit::{LedgerDecisionOutcome, LedgerEntryContent};
 use ssh_manager_core::filter::FilterEngine;
 
@@ -79,7 +79,7 @@ struct VerdictProvider(&'static str);
 impl AiProvider for VerdictProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::iter(vec![
             AiEvent::TextDelta(self.0.to_string()),
@@ -430,7 +430,7 @@ struct GatedVerdictProvider {
 impl AiProvider for GatedVerdictProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         let entered = self.entered.clone();
         let release = self.release.clone();

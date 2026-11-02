@@ -228,7 +228,9 @@ mod tests {
         assert_eq!(store.get_calls(), 1);
 
         for _ in 0..5 {
-            let _ = provider.send(empty_context());
+            let _ = provider.send(ssh_manager_core::ai::RedactedContext::for_tests(
+                empty_context(),
+            ));
         }
 
         assert_eq!(
