@@ -59,6 +59,94 @@ pub(crate) fn red_risk_always_confirm_from_stored(value: Option<serde_json::Valu
     value.is_none_or(|value| value.as_bool().unwrap_or(true))
 }
 
+/// Issue #856: the security switches are written only here, never by the
+/// webview directly.
+pub(crate) fn write_red_risk_always_confirm<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    value: bool,
+) -> app_logic::error::CommandResult<()> {
+    crate::settings_store::update(app, |changes| {
+        changes.set(RED_RISK_ALWAYS_CONFIRM_KEY, serde_json::json!(value))
+    })
+}
+
+#[tauri::command]
+pub fn set_red_risk_always_confirm(
+    app: tauri::AppHandle,
+    value: bool,
+) -> app_logic::error::CommandResult<()> {
+    write_red_risk_always_confirm(&app, value)
+}
+
+/// Validates the second-opinion settings before they are written: enabling
+/// needs a provider id, and a given id must be a configured provider
+/// (`known`). Returns the provider id string to store (`None` = null).
+pub(crate) fn validate_second_opinion_settings(
+    enabled: bool,
+    provider_id: Option<&str>,
+    known: impl FnOnce(&ssh_manager_core::ai::ProviderId) -> bool,
+) -> app_logic::error::CommandResult<Option<String>> {
+    use app_logic::error::{
+        CommandError, RISK_SETTINGS_PROVIDER_REQUIRED, RISK_SETTINGS_PROVIDER_UNKNOWN,
+    };
+    let Some(raw) = provider_id else {
+        if enabled {
+            return Err(CommandError::with_code(
+                "Enabling the risk second opinion requires an AI provider.",
+                RISK_SETTINGS_PROVIDER_REQUIRED,
+            ));
+        }
+        return Ok(None);
+    };
+    let unknown = || {
+        CommandError::with_code(
+            "The selected AI provider is not configured.",
+            RISK_SETTINGS_PROVIDER_UNKNOWN,
+        )
+    };
+    let id = uuid::Uuid::parse_str(raw)
+        .map(ssh_manager_core::ai::ProviderId)
+        .map_err(|_| unknown())?;
+    if !known(&id) {
+        return Err(unknown());
+    }
+    Ok(Some(id.0.to_string()))
+}
+
+/// Validates, then writes both keys in one atomic update. A rejected value
+/// leaves the settings file untouched.
+pub(crate) fn write_second_opinion_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    enabled: bool,
+    provider_id: Option<&str>,
+    known: impl FnOnce(&ssh_manager_core::ai::ProviderId) -> bool,
+) -> app_logic::error::CommandResult<()> {
+    let stored = validate_second_opinion_settings(enabled, provider_id, known)?;
+    crate::settings_store::update(app, |changes| {
+        changes.set(ENABLED_KEY, serde_json::json!(enabled));
+        changes.set(PROVIDER_ID_KEY, serde_json::json!(stored));
+    })
+}
+
+#[tauri::command]
+pub async fn set_risk_second_opinion_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+    provider_id: Option<String>,
+) -> app_logic::error::CommandResult<()> {
+    // Look the provider up first so the validation itself stays synchronous.
+    let known = match provider_id
+        .as_deref()
+        .and_then(|raw| uuid::Uuid::parse_str(raw).ok())
+        .map(ssh_manager_core::ai::ProviderId)
+    {
+        Some(id) => state.ai_provider_store.get(&id).await.is_ok(),
+        None => false,
+    };
+    write_second_opinion_settings(&app, enabled, provider_id.as_deref(), |_| known)
+}
+
 /// Ergebnis der Auflösung der Zweitmeinungs-Einstellungen (Issue #102):
 /// "ausgeschaltet" und "eingeschaltet, aber nicht einrichtbar" sind getrennt,
 /// damit Letzteres dem Nutzer gemeldet werden kann statt still zu enden.
@@ -213,6 +301,73 @@ mod tests {
         assert!(!SecondOpinionSetup::Disabled.into_parts().1);
         let (provider, flagged) = SecondOpinionSetup::Unavailable.into_parts();
         assert!(provider.is_none() && flagged);
+    }
+
+    #[test]
+    fn test_validate_second_opinion_settings() {
+        let id = uuid::Uuid::new_v4().to_string();
+        let code = |r: app_logic::error::CommandResult<Option<String>>| r.unwrap_err().code;
+        assert_eq!(
+            validate_second_opinion_settings(true, Some(&id), |_| true).unwrap(),
+            Some(id.clone())
+        );
+        assert_eq!(
+            validate_second_opinion_settings(false, None, |_| false).unwrap(),
+            None
+        );
+        assert_eq!(
+            code(validate_second_opinion_settings(true, None, |_| true)),
+            Some("RISK_SETTINGS_PROVIDER_REQUIRED")
+        );
+        assert_eq!(
+            code(validate_second_opinion_settings(true, Some(&id), |_| false)),
+            Some("RISK_SETTINGS_PROVIDER_UNKNOWN")
+        );
+        assert_eq!(
+            code(validate_second_opinion_settings(
+                false,
+                Some("junk"),
+                |_| true
+            )),
+            Some("RISK_SETTINGS_PROVIDER_UNKNOWN")
+        );
+    }
+
+    #[test]
+    fn test_write_second_opinion_settings_writes_keys() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        let id = uuid::Uuid::new_v4().to_string();
+        write_second_opinion_settings(handle, true, Some(&id), |_| true).unwrap();
+        let store = handle.store(SETTINGS_STORE_FILE).unwrap();
+        assert_eq!(store.get(ENABLED_KEY), Some(serde_json::json!(true)));
+        assert_eq!(store.get(PROVIDER_ID_KEY), Some(serde_json::json!(id)));
+        write_second_opinion_settings(handle, false, None, |_| false).unwrap();
+        assert_eq!(store.get(ENABLED_KEY), Some(serde_json::json!(false)));
+        assert_eq!(store.get(PROVIDER_ID_KEY), Some(serde_json::json!(null)));
+
+        // Rejected values leave the file unchanged.
+        let before = (store.get(ENABLED_KEY), store.get(PROVIDER_ID_KEY));
+        assert!(write_second_opinion_settings(handle, true, Some(&id), |_| false).is_err());
+        assert!(write_second_opinion_settings(handle, true, None, |_| true).is_err());
+        assert_eq!(before, (store.get(ENABLED_KEY), store.get(PROVIDER_ID_KEY)));
+    }
+
+    #[test]
+    fn test_write_red_risk_always_confirm_round_trips_through_reader() {
+        let _guard = lock();
+        let app = test_app();
+        let handle = app.handle();
+        write_red_risk_always_confirm(handle, false).unwrap();
+        assert!(!red_risk_always_confirm(handle));
+        write_red_risk_always_confirm(handle, true).unwrap();
+        assert!(red_risk_always_confirm(handle));
+        let store = handle.store(SETTINGS_STORE_FILE).unwrap();
+        assert_eq!(
+            store.get(RED_RISK_ALWAYS_CONFIRM_KEY),
+            Some(serde_json::json!(true))
+        );
     }
 
     #[test]

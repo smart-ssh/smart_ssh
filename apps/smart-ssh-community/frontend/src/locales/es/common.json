@@ -657,6 +657,8 @@
     "KEYCHAIN_KEY_MISMATCH": "La clave del llavero no pertenece a esta base de datos. No se cambió nada: guardarla dejaría la base de datos ilegible en el próximo inicio.",
     "SFTP_CONTENT_TOO_LARGE": "El archivo supera los 50 MB y no se puede copiar al portapapeles.",
     "CLIPBOARD_FILE_FAILED": "No se pudo colocar el archivo en el portapapeles de este sistema.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "El proveedor de IA seleccionado no está configurado. Elija un proveedor configurado.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Elija un proveedor de IA antes de activar la segunda opinión sobre el riesgo.",
     "SSH_SFTP_ALREADY_EXISTS": "Ya existe un archivo o carpeta con este nombre",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Archivo de clave no encontrado en este dispositivo"
   },

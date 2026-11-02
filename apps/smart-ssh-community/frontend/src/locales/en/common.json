@@ -657,6 +657,8 @@
     "KEYCHAIN_KEY_MISMATCH": "The key in the keychain does not belong to this database. Nothing was changed — storing it would make the database unreadable at the next startup.",
     "SFTP_CONTENT_TOO_LARGE": "The file is larger than 50 MB and cannot be copied to the clipboard.",
     "CLIPBOARD_FILE_FAILED": "The file could not be placed on the clipboard on this system.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "The selected AI provider is not configured. Choose a configured provider.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Choose an AI provider before turning on the risk second opinion.",
     "SSH_SFTP_ALREADY_EXISTS": "A file or folder with this name already exists",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Key file not found on this device"
   },
