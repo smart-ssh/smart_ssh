@@ -222,6 +222,36 @@ impl app_logic::sftp_ops::DirLister for BrowserDirLister<'_> {
     }
 }
 
+/// Validates each discovered entry and creates local folders right after its
+/// directory was listed (before the next listing), as the walk used to.
+struct DownloadTreeVisitor {
+    files: Vec<(String, std::path::PathBuf, u64)>,
+    local_dirs: std::collections::HashMap<String, std::path::PathBuf>,
+}
+
+#[async_trait::async_trait]
+impl app_logic::sftp_ops::TreeVisitor for DownloadTreeVisitor {
+    async fn visit(
+        &mut self,
+        remote_dir: &str,
+        entry: ssh_manager_core::ssh::RemoteEntry,
+    ) -> CommandResult<()> {
+        safe_local_segment(&entry.name)?;
+        let local_dir = self
+            .local_dirs
+            .get(remote_dir)
+            .ok_or_else(|| CommandError::from("internal error: unknown parent directory"))?;
+        let local_entry_path = local_dir.join(&entry.name);
+        if entry.is_dir {
+            tokio::fs::create_dir_all(&local_entry_path).await?;
+            self.local_dirs.insert(entry.path, local_entry_path);
+        } else {
+            self.files.push((entry.path, local_entry_path, entry.size));
+        }
+        Ok(())
+    }
+}
+
 /// Rekursiver Ordner-Download (Spec 0054, Teil 2: "Ordner rekursiv"):
 /// listet iterativ (kein async-rekursiver Aufruf nötig — vermeidet das
 /// Boxing, das ein `async fn`, das sich selbst aufruft, in Rust braucht)
@@ -247,28 +277,19 @@ pub(super) async fn download_recursive(
     // The walk lives in `app_logic::sftp_ops`; the channel lock is taken per
     // listing (by `BrowserDirLister`) so a revocation is noticed between them.
     let mut lister = BrowserDirLister { session, channel };
-    let found = app_logic::sftp_ops::walk_tree(&mut lister, remote_root, op)
+    let mut visitor = DownloadTreeVisitor {
+        files: Vec::new(),
+        // Remote directory path -> its local counterpart. A directory's entry
+        // always precedes the entries inside it, so the parent is known.
+        local_dirs: std::collections::HashMap::from([(
+            remote_root.to_string(),
+            local_root.to_path_buf(),
+        )]),
+    };
+    app_logic::sftp_ops::walk_tree(&mut lister, remote_root, op, &mut visitor)
         .await?
         .ok_or_else(stopped_error)?;
-    let mut files: Vec<(String, std::path::PathBuf, u64)> = Vec::new();
-    // Remote directory path -> its local counterpart. A directory's entry
-    // always precedes the entries inside it, so the parent is known.
-    let mut local_dirs: std::collections::HashMap<String, std::path::PathBuf> =
-        std::collections::HashMap::new();
-    local_dirs.insert(remote_root.to_string(), local_root.to_path_buf());
-    for (remote_dir, entry) in found {
-        safe_local_segment(&entry.name)?;
-        let local_dir = local_dirs
-            .get(&remote_dir)
-            .ok_or_else(|| CommandError::from("internal error: unknown parent directory"))?;
-        let local_entry_path = local_dir.join(&entry.name);
-        if entry.is_dir {
-            tokio::fs::create_dir_all(&local_entry_path).await?;
-            local_dirs.insert(entry.path, local_entry_path);
-        } else {
-            files.push((entry.path, local_entry_path, entry.size));
-        }
-    }
+    let files = visitor.files;
     op.set_files(0, Some(files.len() as u64));
     op.set_bytes_total(Some(files.iter().map(|f| f.2).sum()));
     let run = FileRun {

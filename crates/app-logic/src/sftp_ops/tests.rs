@@ -414,21 +414,72 @@ impl DirLister for TreeLister {
     }
 }
 
+#[derive(Default)]
+struct Collect {
+    seen: Vec<(String, String)>,
+    fail_on: Option<String>,
+}
+
+#[async_trait]
+impl TreeVisitor for Collect {
+    async fn visit(&mut self, dir: &str, entry: RemoteEntry) -> CommandResult<()> {
+        if self.fail_on.as_deref() == Some(entry.path.as_str()) {
+            return Err("visitor failed".into());
+        }
+        self.seen.push((dir.to_string(), entry.path));
+        Ok(())
+    }
+}
+
 #[tokio::test]
 async fn test_walk_tree_lists_parent_before_children_and_honours_stop() {
     let sftp = TreeSftp::default().dir("/t").dir("/t/d").file("/t/d/f");
     let mut lister = TreeLister(sftp);
-    let found = walk_tree(&mut lister, "/t", &Progress::default())
+    let mut v = Collect::default();
+    walk_tree(&mut lister, "/t", &Progress::default(), &mut v)
         .await
         .unwrap()
         .unwrap();
-    let pos = |p: &str| found.iter().position(|(_, e)| e.path == p).unwrap();
+    let pos = |p: &str| v.seen.iter().position(|(_, e)| e == p).unwrap();
     assert!(pos("/t/d") < pos("/t/d/f"));
-    assert_eq!(found[pos("/t/d/f")].0, "/t/d");
+    assert_eq!(v.seen[pos("/t/d/f")].0, "/t/d");
 
     let op = Progress::default();
     op.stopped.store(true, Ordering::SeqCst);
-    assert!(walk_tree(&mut lister, "/t", &op).await.unwrap().is_none());
+    let mut v = Collect::default();
+    assert!(walk_tree(&mut lister, "/t", &op, &mut v)
+        .await
+        .unwrap()
+        .is_none());
+}
+
+/// The visitor runs right after each listing: an entry it rejects stops the
+/// walk before any later directory is listed.
+#[tokio::test]
+async fn test_walk_tree_visits_before_listing_next_directory() {
+    struct Counting(TreeLister, std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+    #[async_trait]
+    impl DirLister for Counting {
+        async fn list_dir(&mut self, path: &str) -> CommandResult<Vec<RemoteEntry>> {
+            self.1.lock().unwrap().push(path.to_string());
+            self.0.list_dir(path).await
+        }
+    }
+    let sftp = TreeSftp::default()
+        .dir("/t")
+        .dir("/t/a")
+        .dir("/t/b")
+        .file("/t/a/f");
+    let listed = Default::default();
+    let mut lister = Counting(TreeLister(sftp), std::sync::Arc::clone(&listed));
+    let mut v = Collect {
+        fail_on: Some("/t/a".into()),
+        ..Default::default()
+    };
+    assert!(walk_tree(&mut lister, "/t", &Progress::default(), &mut v)
+        .await
+        .is_err());
+    assert_eq!(*listed.lock().unwrap(), vec!["/t".to_string()]);
 }
 
 #[tokio::test]

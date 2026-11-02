@@ -56,16 +56,23 @@ pub async fn walk_dirs_and_count_files(
     Ok((dirs, file_count))
 }
 
-/// Walks the tree below `root` and returns every entry together with the
-/// path of the directory it was listed in. A parent directory's own entry
-/// always comes before the entries inside it. `Ok(None)`: stopped by the
-/// user before the walk finished.
+/// Receives every entry of [`walk_tree`] right after its directory was
+/// listed, before the next directory is listed. An error aborts the walk.
+#[async_trait]
+pub trait TreeVisitor: Send {
+    async fn visit(&mut self, dir: &str, entry: RemoteEntry) -> CommandResult<()>;
+}
+
+/// Walks the tree below `root`, handing each entry together with the path of
+/// the directory it was listed in to `visitor` as soon as that directory is
+/// listed. A parent directory's own entry always comes before the entries
+/// inside it. `Ok(None)`: stopped by the user before the walk finished.
 pub async fn walk_tree(
     lister: &mut dyn DirLister,
     root: &str,
     op: &dyn OpProgress,
-) -> CommandResult<Option<Vec<(String, RemoteEntry)>>> {
-    let mut found = Vec::new();
+    visitor: &mut dyn TreeVisitor,
+) -> CommandResult<Option<()>> {
     let mut queue = vec![root.to_string()];
     while let Some(dir) = queue.pop() {
         if op.is_user_stopped() {
@@ -75,10 +82,10 @@ pub async fn walk_tree(
             if entry.is_dir {
                 queue.push(entry.path.clone());
             }
-            found.push((dir.clone(), entry));
+            visitor.visit(&dir, entry).await?;
         }
     }
-    Ok(Some(found))
+    Ok(Some(()))
 }
 
 /// Recursive delete. `lstat` instead of `stat`: `stat` follows symlinks, so a
