@@ -228,13 +228,14 @@ pub fn redactor_with_secrets(
     redactor_with_secrets_checked(sudo_password, extra_secrets).0
 }
 
-/// Size limit of the retry for a literal the default regex limit rejects.
-const LITERAL_REGEX_SIZE_LIMIT: usize = 256 * 1024 * 1024;
-
 /// [`redactor_with_secrets`] plus whether every literal was compiled
 /// (`false` = "redaction incomplete", issue #843). A literal the default
-/// regex size limit rejects is retried with a larger limit; if that fails
-/// too, the count and byte length (never the value) are logged.
+/// regex size limit rejects (in practice only a value of about a megabyte)
+/// is not retried with a larger limit: matching such a regex is far too slow
+/// to run on every redaction (measured: minutes for 1 MB). The count and
+/// byte length (never the value) are logged; the session's literal secret
+/// set (`SwappableRedactor::add_secret_values`) still masks the value
+/// byte-wise.
 pub fn redactor_with_secrets_checked(
     sudo_password: Option<&SecretString>,
     extra_secrets: &[SecretString],
@@ -246,20 +247,12 @@ pub fn redactor_with_secrets_checked(
         .chain(extra_secrets.iter())
         .map(|s| s.expose_secret())
         .filter(|s| !s.is_empty())
-        .filter_map(|s| {
-            let escaped = regex::escape(s);
-            let compiled = regex::Regex::new(&escaped).or_else(|_| {
-                regex::RegexBuilder::new(&escaped)
-                    .size_limit(LITERAL_REGEX_SIZE_LIMIT)
-                    .build()
-            });
-            match compiled {
-                Ok(re) => Some(re),
-                Err(_) => {
-                    failed += 1;
-                    failed_bytes += s.len();
-                    None
-                }
+        .filter_map(|s| match regex::Regex::new(&regex::escape(s)) {
+            Ok(re) => Some(re),
+            Err(_) => {
+                failed += 1;
+                failed_bytes += s.len();
+                None
             }
         })
         .collect();
@@ -411,6 +404,47 @@ pub async fn rebuild_redactors_for_sessions(
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
     }
+}
+
+/// Redactor for a new session plus whether it is "redaction incomplete"
+/// (issue #843): the sudo read, the scope lookup or a literal failed.
+pub fn redactor_for_connect(
+    sudo: &(Option<SecretString>, bool),
+    lookup: &ScopeLookup,
+    extension_secrets: &[SecretString],
+) -> (Box<dyn OutputRedactor>, bool) {
+    let (redactor, compiled) = redactor_with_secrets_checked(sudo.0.as_ref(), extension_secrets);
+    (redactor, !(sudo.1 && !lookup.incomplete && compiled))
+}
+
+/// Redactor for a reconnected session (issue #843). A failed sudo read keeps
+/// the session's known password in the patterns; if anything could not be
+/// determined (sudo read, scope lookup, literal compile), the secrets known
+/// now are added to the session's kept literal set and the session is flagged
+/// "redaction incomplete".
+pub fn redactor_for_reconnect(
+    session: &crate::session::Session,
+    sudo: &(Option<SecretString>, bool),
+    lookup: &ScopeLookup,
+    extension_secrets: &[SecretString],
+) -> Box<dyn OutputRedactor> {
+    let (sudo_password, sudo_complete) = sudo;
+    let sudo_for_redactor = if *sudo_complete {
+        sudo_password.clone()
+    } else {
+        sudo_password
+            .clone()
+            .or_else(|| session.sudo_password.get().map(|p| (*p).clone()))
+    };
+    let (redactor, compiled) =
+        redactor_with_secrets_checked(sudo_for_redactor.as_ref(), extension_secrets);
+    if !(*sudo_complete && !lookup.incomplete && compiled) {
+        session.redactor.add_secret_values(extension_secrets);
+        session
+            .redaction_incomplete_notice_pending
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    redactor
 }
 
 /// Test double recording the removal callbacks.

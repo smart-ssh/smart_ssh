@@ -322,11 +322,22 @@ pub(crate) struct InMemoryProfileStore {
     /// sich weiterhin auf den bisherigen `ServerNotFound`-Fallback
     /// unten.
     pub(crate) servers: StdMutex<HashMap<ServerId, Server>>,
+    /// Issue #843: `get_server` fails with a backend error (not
+    /// `ServerNotFound`).
+    pub(crate) fail_get_server: std::sync::atomic::AtomicBool,
 }
 
 #[async_trait]
 impl ProfileStore for InMemoryProfileStore {
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
+        if self
+            .fail_get_server
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(ssh_manager_core::profiles::ProfileError::Backend(
+                "disk I/O error".to_string(),
+            ));
+        }
         self.servers.lock().unwrap().get(id).cloned().ok_or(
             ssh_manager_core::profiles::ProfileError::ServerNotFound(*id),
         )

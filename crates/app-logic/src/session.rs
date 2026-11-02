@@ -940,22 +940,17 @@ pub struct SessionParts {
     /// konnte (Provider-Fehler) oder kein Urteil lieferte. Wie
     /// `injection_suspected` "klebrig bis verbraucht": die nächste
     /// `AutoExec`-Aktion wird zu `Confirm` und setzt es zurück (fail closed,
-    /// pro Aktion). Beeinflusst `injection_suspected` nie.
+    /// pro Aktion); beeinflusst `injection_suspected` nie.
     pub injection_check_unavailable: std::sync::atomic::AtomicBool,
-    /// Issue #102: `true`, wenn die Zweitmeinung in den Einstellungen aktiv
-    /// ist, beim `connect()` aber nicht eingerichtet werden konnte. Der
-    /// Sitzungs-Hinweis wird einmalig gesendet (`swap(false)`).
+    /// Issue #102: `true`, wenn die Zweitmeinung aktiv ist, beim `connect()`
+    /// aber nicht eingerichtet werden konnte; Hinweis einmalig (`swap(false)`).
     pub second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool,
-    /// Issue #231: `true`, wenn die serverspezifische Injection-Prüfung
-    /// eingeschaltet ist, beim `connect()` aber kein Anbieter zur Verfügung
-    /// stand (Zweitmeinung app-weit aus oder nicht einrichtbar). Nur
-    /// Hinweis, keine erzwungene Bestätigung; einmalig gesendet
-    /// (`swap(false)`).
+    /// Issue #231: `true`, wenn die serverspezifische Injection-Prüfung an
+    /// ist, beim `connect()` aber kein Anbieter zur Verfügung stand
+    /// (Zweitmeinung app-weit aus oder nicht einrichtbar). Nur Hinweis, keine
+    /// erzwungene Bestätigung; einmalig gesendet (`swap(false)`).
     pub injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool,
-    /// Issue #843: `true` while a notice "redaction incomplete" is due —
-    /// the secret values to mask (extension secrets, sudo password) could not
-    /// be fully loaded or compiled. Sent once (`swap(false)`) with the
-    /// code `REDACTION_INCOMPLETE`; a later incomplete rebuild sets it again.
+    /// Issue #843: notice `REDACTION_INCOMPLETE` due (secrets not fully loaded).
     pub redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool,
     /// Spec 0034: Persistenz-Anbindung für diese Sitzung. `None` für
     /// Sitzungen, die bewusst keine `chat_sessions`-Zeile bekommen sollen

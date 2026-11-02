@@ -59,6 +59,11 @@ pub struct InMemoryProfileStore {
     /// Gruppe angelegt sind (§3.1.11).
     pub fail_create_server_after: Mutex<Option<usize>>,
     create_server_calls: Mutex<usize>,
+    /// Issue #843: `get_server` fails with a backend error.
+    pub fail_get_server: std::sync::atomic::AtomicBool,
+    /// Issue #843: `get_group` (and with it `group_chain`) fails with a
+    /// backend error.
+    pub fail_get_group: std::sync::atomic::AtomicBool,
 }
 
 impl InMemoryProfileStore {
@@ -102,6 +107,12 @@ impl InMemoryProfileStore {
 #[async_trait]
 impl ProfileStore for InMemoryProfileStore {
     async fn get_server(&self, id: &ServerId) -> ProfileResult<Server> {
+        if self
+            .fail_get_server
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(ProfileError::Backend("disk I/O error".to_string()));
+        }
         self.servers
             .lock()
             .unwrap()
@@ -111,6 +122,12 @@ impl ProfileStore for InMemoryProfileStore {
     }
 
     async fn get_group(&self, id: &GroupId) -> ProfileResult<Group> {
+        if self
+            .fail_get_group
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(ProfileError::Backend("disk I/O error".to_string()));
+        }
         self.groups
             .lock()
             .unwrap()

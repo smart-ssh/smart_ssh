@@ -104,8 +104,7 @@ pub async fn request_note_shrink(
     // erfasst. Kein hinterlegtes Passwort ist kein harter Fehler; ein
     // Lesefehler des Schlüsselbunds wird protokolliert (Issue #36, s.
     // `read_sudo_password_for_redaction`).
-    let scope =
-        super::connect::extension_scope(&app, state.profile_store.as_ref(), server_id).await;
+    let scope = super::scope::extension_scope(&app, state.profile_store.as_ref(), server_id).await;
     let extension_secrets = app_logic::session_extension::known_secrets(
         state.session_extension.as_deref(),
         scope.as_ref(),
