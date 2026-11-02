@@ -67,6 +67,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 pub(crate) mod action_exec;
+mod approval;
 mod attachments;
 mod chat_turn;
 mod escalation;
@@ -77,11 +78,15 @@ mod outgoing;
 /// Spec 0088, A1: das Warten auf eine Bestätigung als Wert mit `Drop`.
 mod pending_confirmation;
 mod remote_files;
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_exec_guard;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 pub(crate) mod test_support;
 
+pub use approval::{ApprovedCommand, ApprovedFileWrite};
 pub use attachments::{
     accept_extension_content, push_extension_parts, PreparedExtensionParts,
     ATTACHMENTS_REQUEST_TOO_LARGE, ATTACHMENTS_TOO_MANY, ATTACHMENTS_UNAVAILABLE,

@@ -5,6 +5,8 @@
 
 use uuid::Uuid;
 
+use super::approval::ApprovedFileWrite;
+
 use ssh_manager_core::ai::{fence_untrusted, ChatMessage, MessageContent, Role, UntrustedKind};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
 use ssh_manager_core::ssh::elevated::shell_single_quote;
@@ -307,6 +309,8 @@ async fn write_via_sftp_with_backup(
 /// Exit-Code als Kommando-Ergebnis zurückgibt) braucht dieser interne
 /// Aufbauschritt ein hartes Erfolg/Fehlschlag-Signal.
 async fn execute_privileged(
+    // Proof that a confirmed `WriteRemoteFile` action leads here.
+    _approval: &ApprovedFileWrite,
     session: &Session,
     command: &str,
     password: &secrecy::SecretString,
@@ -337,6 +341,7 @@ async fn execute_privileged(
 /// der ursprüngliche Schreibversuch, SFTP kennt zudem kein eigenes
 /// "Kopieren".
 async fn write_via_sudo_fallback(
+    approval: &ApprovedFileWrite,
     session: &Session,
     path: &str,
     content: &str,
@@ -356,7 +361,7 @@ async fn write_via_sudo_fallback(
             shell_single_quote(path),
             shell_single_quote(backup)
         );
-        execute_privileged(session, &cmd, password).await?;
+        execute_privileged(approval, session, &cmd, password).await?;
     }
 
     // `install -m` statt `mv`, um Rechte/Eigentümer des Ziels in einem
@@ -384,7 +389,7 @@ async fn write_via_sudo_fallback(
         shell_single_quote(&temp_name),
         shell_single_quote(path)
     );
-    let install_result = execute_privileged(session, &install_cmd, password).await;
+    let install_result = execute_privileged(approval, session, &install_cmd, password).await;
 
     // Temp-Datei aufräumen, unabhängig vom Ergebnis des `install`-Aufrufs.
     {
@@ -408,13 +413,14 @@ pub(crate) async fn execute_write_remote_file(
     session: &Session,
     session_id: SessionId,
     action_id: ActionId,
-    path: String,
-    content: String,
+    approved: ApprovedFileWrite,
     emitter: &dyn EventEmitter,
     profile_store: &dyn ProfileStore,
     persist: bool,
     sudo_fallback_announced: bool,
 ) -> bool {
+    let path = approved.path().to_owned();
+    let content = approved.content().to_owned();
     // Issue #464 (Spec 0038): the edition's transform runs on the final
     // approved content, right before it is written. Result, history and
     // errors below never see `wire_content`.
@@ -501,6 +507,7 @@ pub(crate) async fn execute_write_remote_file(
                 .await;
             };
             match write_via_sudo_fallback(
+                &approved,
                 session,
                 &path,
                 wire_content,

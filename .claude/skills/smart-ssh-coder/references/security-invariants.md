@@ -10,6 +10,13 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 1. **Jede KI-Aktion läuft durch Filter-Engine + Bestätigung.** Kein Pfad
    von einem KI-Vorschlag zur Ausführung ohne `handle_action_proposed` →
    `evaluate_action` (`crates/app-logic/src/orchestration/action_exec.rs`).
+   The command reaches the transport only as an `ApprovedCommand`
+   (`crates/app-logic/src/orchestration/approval.rs`), which only the
+   approval path can create (auto-run after `escalate`, user approval).
+   The guard test `exec_call_sites_are_allowlisted_and_not_stale`
+   (`crates/app-logic/src/orchestration/tests_exec_guard.rs`) fails on any
+   transport exec call (`.start_exec(`, `.execute_streaming(`, …) in a
+   production file that is not in its reasoned allowlist.
 2. **Eskalation nur in eine Richtung.** Regelbasiertes `Deny`/Risiko-`Red`
    wird nie durch KI-Meinung oder neuen Code aufgeweicht
    (ADR 0024, AGENTS.md). Enforced in one place: the post-engine chain is the pure
