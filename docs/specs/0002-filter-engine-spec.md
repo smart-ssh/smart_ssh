@@ -72,6 +72,16 @@ nebeneinander (Allow gegen Confirm), gewinnt die strengere.
 Trifft nichts, lautet die Entscheidung `Confirm` mit dem Grund „keine Regel
 gefunden".
 
+### 3.4 Regeln nicht ladbar
+
+Lassen sich die Regeln nicht (vollständig) laden – etwa weil der lokale
+Regelspeicher nicht lesbar ist oder eine Regelquelle ausfällt –, gilt keine
+Allow-Regel mehr: Ein Kommando, das sonst automatisch liefe, braucht
+Bestätigung, mit dem Code `FILTER_RULES_UNAVAILABLE` und dem Hinweis, dass die
+Regeln nicht geladen werden konnten. Deny-Regeln, die sich laden ließen, und
+die Hard-Blacklist gelten unverändert und gewinnen; der Ausfall senkt nie
+eine Entscheidung.
+
 ## 4. Zerlegung und Schutz vor Verkettung
 
 Dies ist der sicherheitskritischste Teil. Ein Vorschlag wie
@@ -236,7 +246,8 @@ gegriffen hat (Spec 0009, Abschnitt 4).
 
 ## 7. Sicherheitszusagen
 
-- Fail-safe: Zweifel führt zu `Confirm`, nie zu `AutoExec`.
+- Fail-safe: Zweifel führt zu `Confirm`, nie zu `AutoExec`. Das gilt auch,
+  wenn die Regeln nicht geladen werden können (3.4).
 - Eine Deny-Regel oder die Hard-Blacklist wird durch keinen weiteren Pfad
   abgeschwächt; Eskalation geht nur in eine Richtung (strenger).
 - Das Kommando wird vor jeder Prüfung normalisiert, und alle Ebenen sehen

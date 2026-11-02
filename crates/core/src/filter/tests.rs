@@ -1,6 +1,4 @@
-//! Testsuite für die Filter-Engine.
-//!
-//! Tests 1-12 setzen Zeile für Zeile den Testfall-Katalog aus
+//! Testsuite für die Filter-Engine. Tests 1-12 setzen Zeile für Zeile den Testfall-Katalog aus
 //! `docs/specs/0002-filter-engine-spec.md`, Abschnitt 6 um (Testname
 //! referenziert die Tabellenzeile in einem Kommentar). Danach folgen
 //! zusätzliche Tests für Groß-/Kleinschreibung, Whitespace-Varianten,
@@ -27,12 +25,13 @@ impl InMemoryPolicyStore {
 
 #[async_trait]
 impl PolicyStore for InMemoryPolicyStore {
-    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+    async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
         self.rules
             .iter()
             .filter(|rule| scope_applies(&rule.scope, scope))
             .cloned()
-            .collect()
+            .collect::<Vec<_>>()
+            .into()
     }
 }
 
@@ -2464,8 +2463,8 @@ struct SwappableStore(std::sync::Mutex<Vec<Rule>>);
 
 #[async_trait]
 impl PolicyStore for SwappableStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        self.0.lock().unwrap().clone()
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(self.0.lock().unwrap().clone())
     }
 }
 
@@ -2496,7 +2495,7 @@ async fn test_issue_260_invalid_pattern_is_logged_once_per_rule_and_pattern() {
     struct Shared(Arc<SwappableStore>);
     #[async_trait]
     impl PolicyStore for Shared {
-        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+        async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
             self.0.rules_for(scope).await
         }
     }
@@ -2961,7 +2960,7 @@ async fn test_issue_487_dedup_set_is_cleared_when_full() {
     struct Shared(Arc<SwappableStore>);
     #[async_trait]
     impl PolicyStore for Shared {
-        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+        async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
             self.0.rules_for(scope).await
         }
     }
@@ -3292,3 +3291,4 @@ mod non_writing_redirections {
         assert_deny(&eng.evaluate("rm -rf / 2>/dev/null", &ctx("s", &[])).await);
     }
 }
+mod unavailable;

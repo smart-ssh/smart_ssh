@@ -10,7 +10,9 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{AiProvider, RejectionReason};
-use ssh_manager_core::filter::{Decision, EffectiveScope, FilterEngine, PolicyStore, Rule};
+use ssh_manager_core::filter::{
+    Decision, EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule, RuleAction,
+};
 use ssh_manager_core::profiles::PostIngestPolicy;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::mock::MockSftpSession;
@@ -487,15 +489,15 @@ async fn test_auto_continuation_after_filter_deny_pushes_rejection_and_triggers_
     struct DenyCurlPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyCurlPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-curl".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("curl*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -711,15 +713,15 @@ async fn test_auto_continuation_cap_stops_after_configured_rounds_with_visible_m
     struct DenyEchoPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyEchoPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-echo".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("echo*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -795,15 +797,15 @@ async fn test_auto_continuation_cap_resets_for_each_new_user_message() {
     struct DenyEchoPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyEchoPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-echo".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("echo*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -1868,15 +1870,15 @@ async fn test_secret_path_escalation_never_turns_deny_into_confirm() {
     struct DenyCatPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyCatPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-cat".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("cat *".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
     let mut session = test_session(vec![AiEvent::Done], MockSshTransport::default());
@@ -1961,15 +1963,15 @@ async fn test_mcp_write_confirmation_announces_possible_sudo_fallback() {
 struct AllowLsOnly;
 #[async_trait]
 impl PolicyStore for AllowLsOnly {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        vec![Rule {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(vec![Rule {
             id: ssh_manager_core::filter::RuleId("allow-ls".to_string()),
             pattern: ssh_manager_core::filter::Pattern::Glob("ls*".to_string()),
             action: ssh_manager_core::filter::RuleAction::Allow,
             scope: ssh_manager_core::filter::Scope::Global,
             priority: 0,
             origin: ssh_manager_core::filter::RuleOrigin::User,
-        }]
+        }])
     }
 }
 
@@ -2261,7 +2263,7 @@ async fn test_blocked_edit_escalates_allowed_later_action_of_same_response() {
     struct DenyRmAllowLs2;
     #[async_trait]
     impl PolicyStore for DenyRmAllowLs2 {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
             let rule = |id: &str, glob: &str, action| Rule {
                 id: ssh_manager_core::filter::RuleId(id.to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
@@ -2270,18 +2272,10 @@ async fn test_blocked_edit_escalates_allowed_later_action_of_same_response() {
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
             };
-            vec![
-                rule(
-                    "deny-rm",
-                    "rm *",
-                    ssh_manager_core::filter::RuleAction::Deny,
-                ),
-                rule(
-                    "allow-ls",
-                    "ls*",
-                    ssh_manager_core::filter::RuleAction::Allow,
-                ),
-            ]
+            PolicyRules::complete(vec![
+                rule("deny-rm", "rm *", RuleAction::Deny),
+                rule("allow-ls", "ls*", RuleAction::Allow),
+            ])
         }
     }
     let mut session = test_session(
@@ -2345,7 +2339,7 @@ async fn test_blocked_action_escalates_allowed_later_action_of_same_response() {
     struct DenyRmAllowLs;
     #[async_trait]
     impl PolicyStore for DenyRmAllowLs {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
             let rule = |id: &str, glob: &str, action| Rule {
                 id: ssh_manager_core::filter::RuleId(id.to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
@@ -2354,18 +2348,10 @@ async fn test_blocked_action_escalates_allowed_later_action_of_same_response() {
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
             };
-            vec![
-                rule(
-                    "deny-rm",
-                    "rm *",
-                    ssh_manager_core::filter::RuleAction::Deny,
-                ),
-                rule(
-                    "allow-ls",
-                    "ls*",
-                    ssh_manager_core::filter::RuleAction::Allow,
-                ),
-            ]
+            PolicyRules::complete(vec![
+                rule("deny-rm", "rm *", RuleAction::Deny),
+                rule("allow-ls", "ls*", RuleAction::Allow),
+            ])
         }
     }
     let mut session = test_session(

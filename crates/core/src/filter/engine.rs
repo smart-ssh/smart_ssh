@@ -6,6 +6,7 @@ use crate::ai::{default_log_redactor, OutputRedactor};
 
 use super::blacklist;
 use super::parser::{self, ParseResult};
+use super::policy_rules::PolicyRules;
 use super::types::{
     Decision, EffectiveScope, EvalContext, EvaluationTrace, Rule, RuleAction, RuleId, RuleOrigin,
     Scope, TraceKind,
@@ -46,7 +47,7 @@ pub fn exceeds_command_length_limit(command: &str, limit: usize) -> bool {
 /// über `Box`/`Arc<dyn ...>` nutzbar).
 #[async_trait]
 pub trait PolicyStore {
-    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule>;
+    async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules;
 }
 
 /// Fehler aus [`PolicySource`] (Spec 0037, Abschnitt 5). Analog zu
@@ -79,56 +80,13 @@ pub trait PolicySource: Send + Sync {
     async fn watch(&self) -> PolicySourceResult<tokio::sync::watch::Receiver<Vec<Rule>>>;
 }
 
-/// Kombiniert mehrere [`PolicySource`]s zu einem [`PolicyStore`] (Spec
-/// 0037, Abschnitt 5) — die Grundlage dafür, dass `FilterEngine` (die
-/// weiterhin nur einen einzelnen `PolicyStore` kennt) mehrere
-/// unterschiedliche Regel-Ebenen gleichzeitig auswerten kann, sobald mehr
-/// als eine `PolicySource` existiert. In der Community Edition ist die
-/// Liste immer nur die eine SQLite-`User`-Quelle (s. Spec-Text) — dieselbe
-/// Filter-Engine-Logik, keine Sonderbehandlung für den Ein-Quellen-Fall.
-///
-/// Fehler einzelner Quellen werden bewusst nur geloggt, nicht propagiert
-/// (best-effort, analog zu anderen Stellen im Projekt, die eine einzelne
-/// fehlgeschlagene Zusatzquelle nicht den gesamten Vorgang abbrechen
-/// lassen): eine temporär nicht erreichbare `Organization`-Quelle soll
-/// nicht dazu führen, dass gar keine Regel mehr greift (das wäre in der
-/// Wirkung ein Fail-Open auf "keine Nutzerregeln mehr aktiv", nicht
-/// sicherer als ein Fail-Closed).
-pub struct CombinedPolicySource {
-    sources: Vec<std::sync::Arc<dyn PolicySource>>,
-}
-
-impl CombinedPolicySource {
-    pub fn new(sources: Vec<std::sync::Arc<dyn PolicySource>>) -> Self {
-        Self { sources }
-    }
-}
-
-#[async_trait]
-impl PolicyStore for CombinedPolicySource {
-    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
-        let mut all = Vec::new();
-        for source in &self.sources {
-            match source.rules().await {
-                Ok(rules) => {
-                    all.extend(rules.into_iter().filter(|r| scope_applies(&r.scope, scope)))
-                }
-                Err(err) => {
-                    tracing::warn!(origin = ?source.origin(), error = %err, "policy source unavailable, skipped");
-                }
-            }
-        }
-        all
-    }
-}
-
 /// Rule-less store for [`matches_hard_blacklist`].
 struct NoRules;
 
 #[async_trait::async_trait]
 impl PolicyStore for NoRules {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        Vec::new()
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(Vec::new())
     }
 }
 
@@ -271,6 +229,7 @@ impl<S: PolicyStore> FilterEngine<S> {
         self.store
             .rules_for(&scope)
             .await
+            .rules
             .into_iter()
             .filter(|r| ids.contains(&r.id))
             .collect()
@@ -393,7 +352,9 @@ impl<S: PolicyStore> FilterEngine<S> {
         }
 
         let scope = EffectiveScope::from(ctx);
-        let mut rules = self.store.rules_for(&scope).await;
+        let policy = self.store.rules_for(&scope).await;
+        let rules_unavailable = policy.unavailable;
+        let mut rules = policy.rules;
         self.report_invalid_patterns(&rules);
         rules.extend(
             candidates
@@ -401,7 +362,25 @@ impl<S: PolicyStore> FilterEngine<S> {
                 .filter(|rule| scope_applies(&rule.scope, &scope))
                 .cloned(),
         );
+        if rules_unavailable {
+            // Fail closed: never let an Allow rule (from the store or from
+            // candidates) decide while the rule set is incomplete.
+            rules.retain(|r| r.action != RuleAction::Allow);
+        }
         let mut trace = self.evaluate_parsed_explained(command, &rules, 0);
+        if rules_unavailable {
+            // `combine` never lowers: a Deny (rules or hard blacklist) wins.
+            trace.decision = combine(
+                trace.decision,
+                Decision::Confirm {
+                    reason: "the filter rules could not be loaded, so the command needs \
+                             confirmation"
+                        .to_string(),
+                    code: FILTER_RULES_UNAVAILABLE.to_string(),
+                },
+            );
+            push_check(&mut trace.checks, FILTER_RULES_UNAVAILABLE);
+        }
         // Issue #13: input whose encoding the engine cannot see through
         // (Unicode tricks, ANSI-C escapes) is escalated to at least
         // `Confirm`. The regular evaluation above still ran, so a `Deny`
@@ -1095,6 +1074,7 @@ const FILTER_SUBSTITUTION_TOO_DEEP: &str = "FILTER_SUBSTITUTION_TOO_DEEP";
 const FILTER_RULE_DENY: &str = "FILTER_RULE_DENY";
 const FILTER_RULE_CONFIRM: &str = "FILTER_RULE_CONFIRM";
 const FILTER_NO_RULE_MATCHED: &str = "FILTER_NO_RULE_MATCHED";
+pub(super) const FILTER_RULES_UNAVAILABLE: &str = "FILTER_RULES_UNAVAILABLE";
 
 /// Rangfolge für `merge_codes` — je kleiner, desto vorrangiger. Orientiert
 /// sich an derselben Bucket-Präzedenz wie die Entscheidungsfindung selbst
@@ -1114,8 +1094,9 @@ fn code_priority(code: &str) -> u8 {
         FILTER_OUTPUT_REDIRECTION => 5,
         FILTER_COMMAND_TOO_LONG => 6,
         FILTER_PARSE_AMBIGUOUS => 7,
-        FILTER_NO_RULE_MATCHED => 8,
-        FILTER_EMPTY_COMMAND => 9,
+        FILTER_RULES_UNAVAILABLE => 8,
+        FILTER_NO_RULE_MATCHED => 9,
+        FILTER_EMPTY_COMMAND => 10,
         _ => u8::MAX,
     }
 }
@@ -1169,6 +1150,7 @@ mod code_tests {
             FILTER_RULE_DENY,
             FILTER_RULE_CONFIRM,
             FILTER_NO_RULE_MATCHED,
+            FILTER_RULES_UNAVAILABLE,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();
@@ -1214,8 +1196,8 @@ mod here_string_depth_tests {
 
     #[async_trait]
     impl PolicyStore for NoRules {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            Vec::new()
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(Vec::new())
         }
     }
 
@@ -1297,8 +1279,8 @@ mod mutant_pin_tests {
 
     #[async_trait]
     impl PolicyStore for NoRulesStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            Vec::new()
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(Vec::new())
         }
     }
 
