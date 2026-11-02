@@ -797,6 +797,7 @@ mod send_chat_message_persistence_tests {
     use app_logic::test_support::InMemoryProfileStore;
 
     use super::*;
+    use ssh_manager_core::filter::PolicyRules;
 
     /// Nie tatsächlich aufgerufen — dieser Test führt kein Kommando aus,
     /// die KI schlägt keins vor (s. `NoopAiProvider`).
@@ -1288,15 +1289,15 @@ mod send_chat_message_persistence_tests {
         async fn rules_for(
             &self,
             _scope: &ssh_manager_core::filter::EffectiveScope,
-        ) -> Vec<ssh_manager_core::filter::Rule> {
-            vec![ssh_manager_core::filter::Rule {
+        ) -> PolicyRules {
+            PolicyRules::complete(vec![ssh_manager_core::filter::Rule {
                 id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Allow,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 

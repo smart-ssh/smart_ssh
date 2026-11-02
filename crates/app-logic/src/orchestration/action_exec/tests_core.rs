@@ -2,6 +2,7 @@
 //! Risiko/Injection-Eskalation, Ausführung) — Spec 0083: reine Verschiebung
 //! aus `orchestration::tests`, keine Verhaltensänderung.
 
+use ssh_manager_core::filter::PolicyRules;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -1275,15 +1276,15 @@ async fn test_post_ingest_policy_never_downgrades_a_deny_decision() {
     struct DenyLsPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyLsPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -1513,15 +1514,15 @@ async fn test_injection_suspected_never_downgrades_a_deny_decision() {
     struct DenyLsPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyLsPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -1558,15 +1559,15 @@ async fn test_injection_suspected_survives_an_unrelated_denied_action() {
     struct DenyLsPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyLsPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-ls".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("ls *".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -1773,15 +1774,15 @@ async fn test_edited_command_that_hits_deny_rule_is_blocked_not_executed() {
     struct DenyEditedPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyEditedPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-edited".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*-edited".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 
@@ -1882,15 +1883,15 @@ async fn test_deny_path_executes_nothing_and_does_not_block_further_events() {
     struct DenyCurlPolicyStore;
     #[async_trait]
     impl PolicyStore for DenyCurlPolicyStore {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-curl".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("curl*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
     let mut session = session;

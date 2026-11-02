@@ -5,6 +5,7 @@
 //! Verschiebung aus dem bisherigen `orchestration::tests`-Modulkopf, keine
 //! Verhaltensänderung.
 
+use ssh_manager_core::filter::PolicyRules;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -522,15 +523,15 @@ pub(crate) fn event_names_excluding_auto_continuation(
 pub(crate) struct AllowEverythingPolicyStore;
 #[async_trait]
 impl PolicyStore for AllowEverythingPolicyStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        vec![Rule {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(vec![Rule {
             id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
             pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
             action: ssh_manager_core::filter::RuleAction::Allow,
             scope: ssh_manager_core::filter::Scope::Global,
             priority: 0,
             origin: ssh_manager_core::filter::RuleOrigin::User,
-        }]
+        }])
     }
 }
 

@@ -344,6 +344,7 @@ pub async fn explain_confirmation(
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use ssh_manager_core::filter::PolicyRules;
     use ssh_manager_core::filter::{
         scope_applies, EffectiveScope, FilterEngine, Pattern, PolicyStore, ServerId,
     };
@@ -352,12 +353,14 @@ mod tests {
 
     #[async_trait]
     impl PolicyStore for StaticStore {
-        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
-            self.0
-                .iter()
-                .filter(|r| scope_applies(&r.scope, scope))
-                .cloned()
-                .collect()
+        async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(
+                self.0
+                    .iter()
+                    .filter(|r| scope_applies(&r.scope, scope))
+                    .cloned()
+                    .collect(),
+            )
         }
     }
 

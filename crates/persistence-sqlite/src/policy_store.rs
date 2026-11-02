@@ -26,8 +26,9 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use ssh_manager_core::filter::{
-    scope_applies, EffectiveScope, Pattern, PatternError, PolicySource, PolicySourceError,
-    PolicySourceResult, PolicyStore, Rule, RuleAction, RuleId, RuleOrigin, Scope,
+    scope_applies, EffectiveScope, Pattern, PatternError, PolicyRules, PolicySource,
+    PolicySourceError, PolicySourceResult, PolicyStore, Rule, RuleAction, RuleId, RuleOrigin,
+    Scope,
 };
 use ssh_manager_core::shared::ServerId;
 
@@ -416,34 +417,30 @@ impl SqlitePolicyStore {
 
 #[async_trait]
 impl PolicyStore for SqlitePolicyStore {
-    /// `PolicyStore::rules_for` (Spec 0002 Abschnitt 5) kennt kein
-    /// `Result` — ein Datenbankfehler wird deshalb geloggt und als leere
-    /// Regelliste behandelt statt propagiert. Das ist NICHT rundum
-    /// fail-safe, auch wenn es das auf den ersten Blick scheint: die
-    /// Hard-Blacklist bleibt zwar unverändert aktiv, und eine fehlende
-    /// Allow-Regel landet korrekt auf `Confirm` statt `AutoExec` — aber eine
-    /// vom Nutzer explizit gesetzte **Deny**-Regel für ein Kommando, das die
-    /// Hard-Blacklist selbst nicht abdeckt, geht in diesem Fall ebenso
-    /// verloren und degradiert zu einem anklickbaren `Confirm` (unabhängiger
-    /// Review-Pass, Spec 0002). `tracing::error!` statt `eprintln!`, damit
-    /// dieser sicherheitsrelevante Fall zumindest im strukturierten Log
-    /// (Spec 0016) sichtbar ist, statt nur auf stderr zu verschwinden — eine
-    /// sichtbare UI-Meldung wäre der nächste Schritt, ist aber (Stand jetzt)
-    /// noch nicht verdrahtet.
-    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
+    /// `PolicyStore::rules_for` (Spec 0002, section 5) reports whether the
+    /// rule set is complete. A database error is logged (without rule
+    /// contents) and returned as an *unavailable*, empty rule set: the
+    /// filter engine then never auto-executes and asks for confirmation with
+    /// `FILTER_RULES_UNAVAILABLE`. The hard blacklist stays active. A user
+    /// `Deny` rule cannot be applied while loading fails (it is not
+    /// readable), but the command can no longer run without a confirmation
+    /// that says the rules are unavailable.
+    async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
         match self.list_all().await {
-            Ok(stored) => stored
-                .into_iter()
-                .filter(|rule| scope_applies(&rule.scope, scope))
-                .map(StoredRule::into_rule)
-                .collect(),
+            Ok(stored) => PolicyRules::complete(
+                stored
+                    .into_iter()
+                    .filter(|rule| scope_applies(&rule.scope, scope))
+                    .map(StoredRule::into_rule)
+                    .collect(),
+            ),
             Err(err) => {
                 tracing::error!(
                     error = %err,
-                    "Filter-Regeln konnten nicht geladen werden — werte ohne \
-                     Nutzerregeln aus (auch Deny-Regeln greifen währenddessen nicht)",
+                    "filter rules could not be loaded - the rule set is unavailable, \
+                     nothing is auto-executed",
                 );
-                Vec::new()
+                PolicyRules::unavailable(Vec::new())
             }
         }
     }
@@ -715,13 +712,32 @@ mod tests {
             server_id,
             tags: vec!["prod".to_string()],
         };
-        let rules = PolicyStore::rules_for(&store, &effective).await;
+        let rules = PolicyStore::rules_for(&store, &effective).await.rules;
 
         let ids: Vec<String> = rules.iter().map(|r| r.id.0.clone()).collect();
         assert!(ids.contains(&"global-rule".to_string()));
         assert!(ids.contains(&"server-rule".to_string()));
         assert!(ids.contains(&"tag-rule".to_string()));
         assert!(!ids.contains(&"other-server-rule".to_string()));
+    }
+
+    /// Issue #836: a database error yields an unavailable rule set, not an
+    /// empty complete one.
+    #[tokio::test]
+    async fn test_rules_for_reports_unavailable_on_database_error() {
+        let store = in_memory_policy_store().await;
+        store
+            .create(&make_rule("global-rule", Scope::Global, 0))
+            .await
+            .unwrap();
+        store.pool.close().await;
+        let effective = EffectiveScope {
+            server_id: ServerId::new(),
+            tags: vec![],
+        };
+        let result = PolicyStore::rules_for(&store, &effective).await;
+        assert!(result.unavailable);
+        assert!(result.rules.is_empty());
     }
 
     /// Spec 0037, Abschnitt 5: "der bestehende SQLite-Regelspeicher ist
