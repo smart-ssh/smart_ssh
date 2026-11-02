@@ -829,6 +829,8 @@ pub fn run(mut wiring: Wiring, context: tauri::Context<tauri::Wry>) {
             commands::delete_chat_session,
             chat_retention::get_chat_session_retention_days,
             chat_retention::set_chat_session_retention_days,
+            risk_second_opinion::set_risk_second_opinion_settings,
+            risk_second_opinion::set_red_risk_always_confirm,
             speech_models::get_selected_speech_model,
             speech_models::set_selected_speech_model,
             speech_models::get_speech_model_status,
