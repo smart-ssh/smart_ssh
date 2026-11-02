@@ -91,6 +91,7 @@ pub mod server_redaction;
 pub mod servers;
 pub mod session;
 pub mod session_extension;
+pub mod sftp_ops;
 pub mod single_instance;
 pub mod ssh_config_import;
 pub mod start_directory;

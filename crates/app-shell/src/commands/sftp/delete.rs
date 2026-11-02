@@ -1,36 +1,6 @@
 use super::*;
 
-/// Sammelt rekursiv **alle** Verzeichnispfade unter `root` (inklusive
-/// `root` selbst) — geteilte Traversierung für `sftp_delete_preview` und
-/// den eigentlichen rekursiven Löschvorgang in `sftp_delete` unten. Liefert
-/// zusätzlich die Anzahl der gefundenen Dateien, damit ein Aufrufer nicht
-/// zweimal denselben Baum ablaufen muss.
-///
-/// Die zurückgegebenen Verzeichnispfade stehen in **Entdeckungsreihenfolge**
-/// (ein Verzeichnis erscheint immer erst NACHDEM sein Elternverzeichnis
-/// verarbeitet wurde) — das reicht, um sie für ein bottom-up-Löschen später
-/// einfach umzudrehen (`.rev()`), unabhängig davon, ob hier DFS oder BFS
-/// traversiert wird (s. `sftp_delete`).
-pub(super) async fn walk_dirs_and_count_files(
-    sftp: &mut dyn SftpSession,
-    root: &str,
-) -> Result<(Vec<String>, u64), SshError> {
-    let mut dirs = vec![root.to_string()];
-    let mut queue = vec![root.to_string()];
-    let mut file_count = 0u64;
-    while let Some(dir) = queue.pop() {
-        let entries = sftp.list_dir(&dir).await?;
-        for entry in entries {
-            if entry.is_dir {
-                queue.push(entry.path.clone());
-                dirs.push(entry.path);
-            } else {
-                file_count += 1;
-            }
-        }
-    }
-    Ok((dirs, file_count))
-}
+pub(super) use app_logic::sftp_ops::{delete_recursive, walk_dirs_and_count_files};
 
 /// Issue #658: the row of a recursive delete/chmod. A ticker reads the
 /// operation's entry counters (monotonic, only ever increasing) and emits
@@ -251,71 +221,4 @@ pub(super) async fn delete_impl_reporting(
         Some(()) => Ok(()),
         None => Err(stopped_error()),
     }
-}
-
-/// Eigentliche Rekursions-Logik hinter `sftp_delete` — von der
-/// Tauri-Befehls-Signatur (`State<AppState>`, `SessionId`) losgelöst, damit
-/// sie sich direkt gegen ein `SftpSession`-Testdouble prüfen lässt (s.
-/// `sftp_mutation_tests` unten, gegen den echten lokalen Pseudo-Server via
-/// `ssh_transport::LocalFileSession`).
-///
-/// Issue #622: `Ok(None)` = vom Nutzer gestoppt; geprüft wird vor jedem
-/// Eintrag, schon Gelöschtes bleibt gelöscht (wie bei einem Widerruf, Spec
-/// 0085).
-pub(super) async fn delete_recursive(
-    sftp: &mut dyn SftpSession,
-    path: &str,
-    op: &OpHandle,
-) -> Result<Option<()>, SshError> {
-    // `lstat` statt `stat` (Spec-Reviewer-Fund, Spec 0054, Review des
-    // Gesamtpakets, ERHÖHTE Priorität): `stat` folgt Symlinks — ein
-    // Eintrag, der selbst ein Symlink auf ein Verzeichnis ist, würde damit
-    // als "ist ein Ordner" erkannt und der Baum DAHINTER (potenziell weit
-    // außerhalb des eigentlich sichtbaren Verzeichnisses, z. B.
-    // `/var/www/current -> /etc`) rekursiv gelöscht. `lstat` meldet für
-    // einen Symlink dessen eigenen Typ, nie den des Ziels — der Symlink
-    // selbst wird dann korrekt nur entfernt, nie in ihn hinein rekursiert.
-    if op.is_user_stopped() {
-        return Ok(None);
-    }
-    let root_entry = sftp.lstat(path).await?;
-    if !root_entry.is_dir {
-        sftp.remove(path).await?;
-        return Ok(Some(()));
-    }
-
-    // Issue #658: from here on the operation counts entries (row + progress).
-    op.begin_entries();
-    let (dirs, file_count) = walk_dirs_and_count_files(sftp, path).await?;
-    op.set_files(0, Some(dirs.len() as u64 + file_count));
-    // Alle Dateien im Baum entfernen — dafür noch einmal denselben Baum
-    // ablaufen statt die Pfade aus `walk_dirs_and_count_files` zu sammeln:
-    // deren Rückgabe zählt Dateien nur, trägt ihre Pfade aber bewusst nicht
-    // mit (für die reine Vorschau in `sftp_delete_preview` unnötiger
-    // Speicher-/Allokations-Ballast bei großen Bäumen). Der zweite Durchlauf
-    // liest dieselben, kleinen Verzeichnislisten erneut — für den ohnehin
-    // seltenen "Ordner löschen"-Fall keine spürbare Mehrkosten.
-    for dir in &dirs {
-        if op.is_user_stopped() {
-            return Ok(None);
-        }
-        let entries = sftp.list_dir(dir).await?;
-        for entry in entries {
-            if !entry.is_dir {
-                if op.is_user_stopped() {
-                    return Ok(None);
-                }
-                sftp.remove(&entry.path).await?;
-                op.add_files_done();
-            }
-        }
-    }
-    for dir in dirs.into_iter().rev() {
-        if op.is_user_stopped() {
-            return Ok(None);
-        }
-        sftp.remove_dir(&dir).await?;
-        op.add_files_done();
-    }
-    Ok(Some(()))
 }

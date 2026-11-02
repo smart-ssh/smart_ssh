@@ -1,51 +1,13 @@
 use super::*;
 
+pub(super) use app_logic::sftp_ops::rename_replacing;
+
 /// Spec 0054, Teil 3: "Umbenennen" UND "Verschieben" laufen über denselben
 /// Befehl — SFTP `RENAME` unterscheidet nicht zwischen beidem, `to` kann im
 /// selben Verzeichnis (Umbenennen) oder einem anderen (Verschieben)
 /// liegen. Die Kollisionsprüfung (Zielname existiert schon) läuft im
-/// Frontend **vor** diesem Aufruf über `sftp_exists` — dieser Befehl führt
-/// nur noch aus, analog zu `sftp_delete`s Bestätigung.
-/// Issue #625: Umbenennen/Verschieben auf einen vorhandenen **Dateinamen**,
-/// nachdem der Nutzer „Überschreiben" bestätigt hat. SFTP `RENAME` ersetzt nie.
-///
-/// - Ziel ist ein Ordner: Fehler, nichts wird angefasst.
-/// - Server mit `posix-rename@openssh.com`: ein atomarer Austausch.
-/// - Sonst: Ziel entfernen, dann `rename`. Scheitert das `rename`, nennt der
-///   Fehler, dass das Ziel schon entfernt ist und die Quelle unverändert bleibt.
-///
-/// Ein Fehler beim `stat` des Ziels gilt als „Ziel fehlt": dann ersetzt
-/// nichts etwas, und das gewöhnliche `rename` entscheidet (es überschreibt
-/// nie, und ein Widerruf der Erhöhung schlägt dort genauso an).
-pub(super) async fn rename_replacing(
-    sftp: &mut dyn SftpSession,
-    from: &str,
-    to: &str,
-) -> Result<(), SshError> {
-    if from == to {
-        return Ok(());
-    }
-    match sftp.stat(to).await {
-        Ok(entry) if entry.is_dir => {
-            return Err(SshError::ChannelError(format!(
-                "Das Ziel '{to}' ist ein Ordner und kann nicht ersetzt werden."
-            )));
-        }
-        Ok(_) => {}
-        Err(_) => return sftp.rename(from, to).await,
-    }
-    if sftp.posix_rename(from, to).await? {
-        return Ok(());
-    }
-    sftp.remove(to).await?;
-    sftp.rename(from, to).await.map_err(|e| {
-        SshError::ChannelError(format!(
-            "Das Ziel '{to}' wurde bereits entfernt, aber das Umbenennen von '{from}' ist \
-             fehlgeschlagen; die Quelle ist unverändert: {e}"
-        ))
-    })
-}
-
+/// Frontend **vor** diesem Aufruf über `sftp_exists`; mit `overwrite` ersetzt
+/// `rename_replacing` (Issue #625) das Ziel.
 #[tauri::command]
 pub async fn sftp_rename(
     state: State<'_, AppState>,
