@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use ssh_manager_core::ai::AiEvent;
-use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
+use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
 use ssh_manager_core::ssh::mock::MockSftpSession;
 use uuid::Uuid;
 
@@ -21,8 +21,8 @@ async fn test_read_remote_file_filter_and_sftp_see_same_normalised_path() {
     struct AllowExactPath;
     #[async_trait]
     impl PolicyStore for AllowExactPath {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("allow-exact".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob(
                     "sftp-read /etc/nginx/secret.conf".to_string(),
@@ -31,7 +31,7 @@ async fn test_read_remote_file_filter_and_sftp_see_same_normalised_path() {
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 

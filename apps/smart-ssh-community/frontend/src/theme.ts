@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { settingsStore } from "./i18n";
+import { setUiPreference, settingsStore } from "./i18n";
 
 /** Issue #804: appearance setting (System / Light / Dark). The choice is
  * kept in the settings store next to the language. Because that store is not
@@ -143,7 +143,5 @@ export async function applyStoredTheme(): Promise<void> {
 export async function setThemeChoice(choice: ThemeChoice): Promise<void> {
   applyThemeChoice(choice);
   writeCachedChoice(choice);
-  const store = await settingsStore();
-  await store.set(STORE_KEY, choice);
-  await store.save();
+  await setUiPreference(STORE_KEY, choice);
 }

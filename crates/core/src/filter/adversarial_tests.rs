@@ -36,12 +36,14 @@ pub(super) struct StaticPolicyStore {
 
 #[async_trait]
 impl PolicyStore for StaticPolicyStore {
-    async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
-        self.rules
-            .iter()
-            .filter(|rule| scope_applies(&rule.scope, scope))
-            .cloned()
-            .collect()
+    async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(
+            self.rules
+                .iter()
+                .filter(|rule| scope_applies(&rule.scope, scope))
+                .cloned()
+                .collect(),
+        )
     }
 }
 

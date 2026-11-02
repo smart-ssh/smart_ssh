@@ -104,7 +104,7 @@ const SAFE_LOG_MESSAGES: &[&str] = &[
     "session summary generation failed, falling back to plain round truncation",
     "skipping note-update suggestion on disconnect: context compaction shortened the \
      note for this request, a proposal based on it could drop content",
-    "policy source unavailable, skipped",
+    "policy source unavailable, rule set incomplete",
     // ai_providers — nur request_id/Status-Metadaten, keine Prompt-/
     // Tool-Argument-Inhalte
     "AI request future started executing",

@@ -106,6 +106,17 @@ pub const SFTP_COPY_CANCELLED: &str = "SFTP_COPY_CANCELLED";
 /// die Zwischenablage legen (Plattform oder Sitzung ohne Unterstützung).
 pub const CLIPBOARD_FILE_FAILED: &str = "CLIPBOARD_FILE_FAILED";
 
+/// Issue #856: the risk second-opinion setting named a provider that is not a
+/// configured AI provider.
+pub const RISK_SETTINGS_PROVIDER_UNKNOWN: &str = "RISK_SETTINGS_PROVIDER_UNKNOWN";
+
+/// Issue #856: the risk second opinion was switched on without a provider.
+pub const RISK_SETTINGS_PROVIDER_REQUIRED: &str = "RISK_SETTINGS_PROVIDER_REQUIRED";
+
+/// Issue #862: `set_ui_preference` refused a key that is not a registered UI
+/// preference, or a value outside the shape registered for it.
+pub const UI_PREFERENCE_REJECTED: &str = "UI_PREFERENCE_REJECTED";
+
 /// Spec 0077, 3.1.3: Wandelt einen [`RuleWriteError`] in einen
 /// [`CommandError`] und hängt für ein ungültiges Muster den Code
 /// [`FILTER_RULE_PATTERN_INVALID`] an.
@@ -262,6 +273,11 @@ mod code_tests {
             super::SFTP_PREVIEW_NOT_TEXT,
             // Issue #358.
             super::CLIPBOARD_FILE_FAILED,
+            // Issue #856.
+            super::RISK_SETTINGS_PROVIDER_UNKNOWN,
+            super::RISK_SETTINGS_PROVIDER_REQUIRED,
+            // Issue #862.
+            super::UI_PREFERENCE_REJECTED,
         ];
         let mut unique = codes.to_vec();
         unique.sort_unstable();

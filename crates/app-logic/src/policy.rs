@@ -17,14 +17,15 @@
 //! Abschnitt 3).
 
 use async_trait::async_trait;
+use ssh_manager_core::filter::PolicyRules;
 
-use ssh_manager_core::filter::{EffectiveScope, PolicyStore, Rule};
+use ssh_manager_core::filter::{EffectiveScope, PolicyStore};
 
 pub struct NoRulesPolicyStore;
 
 #[async_trait]
 impl PolicyStore for NoRulesPolicyStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        Vec::new()
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(Vec::new())
     }
 }

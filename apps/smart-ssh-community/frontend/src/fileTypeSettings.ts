@@ -1,4 +1,4 @@
-import { settingsStore } from "./i18n";
+import { setUiPreference, settingsStore } from "./i18n";
 
 /** Spec 0054, Teil 5: pro Dateiendung ein lokales Standardprogramm — rein
  * lokal, kein Server-Bezug, keine Sicherheitsfrage (Spec-Wortlaut). Reiht
@@ -50,9 +50,7 @@ export async function loadFileTypeApps(): Promise<FileTypeAppSettings> {
 }
 
 export async function saveFileTypeApps(apps: FileTypeAppSettings): Promise<void> {
-  const store = await settingsStore();
-  await store.set(FILE_TYPE_DEFAULT_APPS_KEY, apps);
-  await store.save();
+  await setUiPreference(FILE_TYPE_DEFAULT_APPS_KEY, apps);
 }
 
 /** Spec 0054, Teil 4: welches lokale Programm (falls eines festgelegt ist)

@@ -35,7 +35,7 @@
   "crates/core/src/ai/redactor_reference.rs": 1436,
   "crates/core/src/ai/tests.rs": 3036,
   "crates/core/src/ai/types.rs": 1220,
-  "crates/core/src/filter/engine.rs": 1517,
+  "crates/core/src/filter/engine.rs": 1499,
   "crates/core/src/filter/parser.rs": 2206,
   "crates/core/src/filter/tests.rs": 3294,
   "crates/persistence-sqlite/src/backup_store.rs": 1264,

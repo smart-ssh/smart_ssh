@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Utasítások szervertartalomon keresztüli beinjektálásának lehetséges kísérlete észlelve – megerősítés szükséges",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP-n keresztül kérve – mindig megerősítés szükséges",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "A tárolt sudo-jelszót használja – mindig megerősítés szükséges",
+    "FILTER_RULES_UNAVAILABLE": "A szűrőszabályokat nem sikerült betölteni – semmi sem fut automatikusan, megerősítés szükséges",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Küldés előtt egy tárolt titkos értéket szúr be – mindig megerősítés szükséges",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Hitelesítő adatokat tartalmazó fájlt olvas (pl. SSH-kulcs, .env, /etc/shadow) – mindig megerősítés szükséges",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "A válasz egy korábbi műveletét elutasították – megerősítés szükséges",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "A kulcstartóban lévő kulcs nem ehhez az adatbázishoz tartozik. Semmi nem változott – a tárolása olvashatatlanná tenné az adatbázist a következő indításkor.",
     "SFTP_CONTENT_TOO_LARGE": "A fájl nagyobb 50 MB-nál, ezért nem másolható a vágólapra.",
     "CLIPBOARD_FILE_FAILED": "A fájlt nem sikerült a vágólapra helyezni ezen a rendszeren.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "A kiválasztott AI-szolgáltató nincs beállítva. Válasszon egy beállított szolgáltatót.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "A kockázati második vélemény bekapcsolása előtt válasszon AI-szolgáltatót.",
     "SSH_SFTP_ALREADY_EXISTS": "Már létezik ilyen nevű fájl vagy mappa",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "A kulcsfájl nem található ezen az eszközön"
   },
