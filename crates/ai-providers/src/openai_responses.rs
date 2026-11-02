@@ -30,14 +30,14 @@ use ssh_manager_core::ai::{
 };
 
 use crate::action::parameters_json_schema;
+use crate::common::prompt_format::{message_content_text, role_str};
 use crate::error::{
     classify_provider_error, map_transport_error, timeout_error, ProviderErrorInfo,
 };
 use crate::fallback::fallback_system_prompt_addition;
 use crate::openai_compatible::{
-    message_content_text, openai_compatible_default_max_tokens,
-    openai_compatible_model_max_output_tokens, retry_stream_with_overload, role_str,
-    OpenAiStreamState, RawEvent, RetryKind, RetryState,
+    openai_compatible_default_max_tokens, openai_compatible_model_max_output_tokens,
+    retry_stream_with_overload, OpenAiStreamState, RawEvent, RetryKind, RetryState,
 };
 use crate::request_logging::{log_outgoing_context, log_provider_transport_error};
 use crate::sse::{
