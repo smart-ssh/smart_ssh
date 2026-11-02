@@ -1550,11 +1550,10 @@ mod send_chat_message_persistence_tests {
             context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             let mut contexts = self.contexts.lock().unwrap();
-            let after_note = contexts.is_empty()
-                && history_texts(context.as_session_context())
-                    .last()
-                    .is_some_and(|t| t.contains("wiederhergestellt"));
-            contexts.push(context.into_parts());
+            let context = context.into_parts();
+            let last = history_texts(&context).pop().unwrap_or_default();
+            let after_note = contexts.is_empty() && last.contains("wiederhergestellt");
+            contexts.push(context);
             if after_note {
                 Box::pin(futures::stream::iter(vec![
                     AiEvent::ActionProposed(ssh_manager_core::profiles::AiAction::SuggestCommand {

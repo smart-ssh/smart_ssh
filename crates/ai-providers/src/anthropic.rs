@@ -749,16 +749,13 @@ impl AiProvider for AnthropicProvider {
     }
 
     fn send(&self, context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
-        // One-way unwrap: the request was redacted and sealed by the core (issue #833).
         let context = context.into_parts();
         // Spec 0016, Abschnitt 4: eine frische `request_id` pro
         // `send()`-Aufruf, geteilt über alle Log-Zeilen dieses einen
         // KI-Anfrage-Zyklus (Kontext → Streaming-Chunks → Tool-Call-Parsing)
-        // — bewusst hier lokal erzeugt statt als `SessionContext`-Feld: das
-        // hätte alle neun bestehenden `SessionContext`-Konstruktionsstellen
-        // (Produktivcode + Tests) angefasst, nur damit `app-shell` eine ID
-        // vorgibt, die für die Korrelation innerhalb *eines* Provider-Calls
-        // ohnehin genauso gut hier entstehen kann. `session_id` (per
+        // — bewusst hier lokal erzeugt statt als `SessionContext`-Feld (das
+        // hätte alle `SessionContext`-Konstruktionsstellen angefasst).
+        // `session_id` (per
         // `#[tracing::instrument]` in `app-shell::orchestration` bereits als
         // Span-Feld aktiv, s. dortiger Kommentar) bleibt die übergreifende
         // Korrelation über mehrere Runden/Provider-Aufrufe hinweg.

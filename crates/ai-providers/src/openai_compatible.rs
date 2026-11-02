@@ -793,10 +793,8 @@ pub(crate) struct RetryState {
 
 impl AiProvider for OpenAiCompatibleProvider {
     fn send(&self, context: RedactedContext) -> Pin<Box<dyn Stream<Item = AiEvent> + Send>> {
-        // One-way unwrap: the request was redacted and sealed by the core (issue #833).
         let context = context.into_parts();
-        // s. `crate::anthropic::AnthropicProvider::send`-Kommentar zur
-        // Design-Entscheidung (Spec 0016, Abschnitt 4).
+        // s. `AnthropicProvider::send` (Spec 0016, Abschnitt 4).
         let request_id = Uuid::new_v4();
         log_outgoing_context(request_id, &context);
 

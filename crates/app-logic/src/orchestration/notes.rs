@@ -608,10 +608,7 @@ async fn request_ai_title(
         session.model_context_window_tokens,
     )
     .await;
-    // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in
-    // `run_one_round`.
-    // Issue #562: same redaction-and-sealing entry point as chat turns and
-    // compaction; a sealing failure means no title request at all.
+    // Spec 0040, Abschnitt 5: s. Kommentar an der anderen `send()`-Stelle in `run_one_round`.
     request_context.history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(title_generation_instruction(system_context_parts.language)),
@@ -623,8 +620,7 @@ async fn request_ai_title(
     // ausdrücklich überschrieben, sonst würde die Anfrage den vollen
     // Haupt-Chat-Default erben.
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
-    // Issue #562/#833: sealing is the last step, after the instruction was
-    // appended; a sealing failure means no title request at all.
+    // Issue #562/#833: seal last; a sealing failure means no title request.
     let request_context = seal_for_send(
         request_context,
         session.redactor.as_ref(),
@@ -857,22 +853,15 @@ pub async fn suggest_note_update_on_disconnect(
     // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar
     // (analog zur Auto-Titel-Stelle oben).
     request_context.max_tokens_hint = Some(SIDE_CALL_MAX_TOKENS);
-    // Issue #564/#833: same entry point as chat turns, as the last step after
-    // the instruction was appended; a sealing failure means no request and no
-    // proposal.
-    let request_context = match seal_for_send(
+    // Issue #564/#833: seal last; a sealing failure means no request.
+    let Ok(request_context) = seal_for_send(
         request_context,
         session.redactor.as_ref(),
         &session.chat_content,
         session.extension_content_key(session_id).await,
-    ) {
-        Ok(context) => context,
-        Err(_) => {
-            tracing::info!(
-                "skipping note-update suggestion on disconnect: sealing the request failed"
-            );
-            return false;
-        }
+    ) else {
+        tracing::info!("skipping note-update suggestion on disconnect: sealing failed");
+        return false;
     };
 
     wait_for_ai_request_slot(session).await;
@@ -1232,8 +1221,7 @@ async fn summarize_note_for_shrink(
         // Spec 0065, Teil 1: Nebenaufruf — s. `SIDE_CALL_MAX_TOKENS`-Kommentar.
         max_tokens_hint: Some(SIDE_CALL_MAX_TOKENS),
     };
-    // Issue #833: this request has no session and no extension content, so
-    // there is nothing to seal; `NoExtensionSealer` cannot fail.
+    // Issue #833: no session, no extension content: `NoExtensionSealer` cannot fail.
     let Ok(request_context) = ssh_manager_core::ai::RedactedContext::seal(
         request_context,
         redactor,

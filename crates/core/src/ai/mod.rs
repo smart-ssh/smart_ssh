@@ -32,6 +32,8 @@ mod types;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_issue270;
 
 pub use extension_content::{
     seal_pending, ContentLimitError, RedactedBlock, ResolvedBlock, SealedContent, SealedPart,

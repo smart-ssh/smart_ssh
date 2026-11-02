@@ -1,7 +1,6 @@
 //! Tests für die Kompaktierung/rollierende Zusammenfassung des an die KI
 //! gesendeten Kontexts sowie die additive Re-Redaction vor jedem `send()`
-//! — Spec 0083: reine Verschiebung aus `orchestration::tests`, keine
-//! Verhaltensänderung.
+//! — Spec 0083: Verschiebung aus `orchestration::tests`.
 
 use std::sync::Mutex as StdMutex;
 
