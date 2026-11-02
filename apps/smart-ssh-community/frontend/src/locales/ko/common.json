@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "서버 콘텐츠를 통해 지시를 삽입하려는 시도가 의심됩니다 – 확인이 필요합니다",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP를 통해 요청됨 – 항상 확인이 필요합니다",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "저장된 sudo 비밀번호를 사용합니다 – 항상 확인이 필요합니다",
+    "FILTER_RULES_UNAVAILABLE": "필터 규칙을 불러올 수 없습니다 – 자동 실행되지 않으며 확인이 필요합니다",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "전송 전에 저장된 비밀 값을 삽입합니다 – 항상 확인이 필요합니다",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "자격 증명이 들어 있는 파일(예: SSH 키, .env, /etc/shadow)을 읽습니다 – 항상 확인이 필요합니다",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "이 응답의 이전 동작이 거부되었습니다 – 확인이 필요합니다",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "키체인의 키가 이 데이터베이스의 것이 아닙니다. 아무것도 변경되지 않았습니다. 저장하면 다음 시작 시 데이터베이스를 읽을 수 없게 됩니다.",
     "SFTP_CONTENT_TOO_LARGE": "파일이 50MB보다 커서 클립보드에 복사할 수 없습니다.",
     "CLIPBOARD_FILE_FAILED": "이 시스템에서는 파일을 클립보드에 넣을 수 없습니다.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "선택한 AI 제공자가 설정되어 있지 않습니다. 설정된 제공자를 선택하세요.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "위험 세컨드 오피니언을 켜기 전에 AI 제공자를 선택하세요.",
     "SSH_SFTP_ALREADY_EXISTS": "이 이름의 파일 또는 폴더가 이미 있습니다",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "이 기기에서 키 파일을 찾을 수 없습니다"
   },

@@ -275,7 +275,10 @@ In short:
   settings open and no Ollama provider exists.
 - **The MCP server** is off by default; when enabled, it listens on
   `127.0.0.1` only and requires a bearer token
-  ([Spec 0028](docs/specs/0028-mcp-server-integration.md)).
+  ([Spec 0028](docs/specs/0028-mcp-server-integration.md)). The token is held
+  as a secret type and compared in constant time; input types that carry
+  secrets have a redacting `Debug`, so they cannot leak through a `?value`
+  log field.
 
 This is enforced by tests: the webview's Content Security Policy allows only
 `connect-src 'self' ipc:`, and only an allowlisted crate may depend on an
@@ -303,7 +306,8 @@ app's own Tauri commands are not restricted per command; the main window's
 capability file grants no per-command limits and also allows the key-value
 store that holds `settings.json`
 ([`capabilities/default.json`](apps/smart-ssh-community/capabilities/default.json)).
-The red-risk setting is read from that store
+The red-risk setting is read from that store and written by backend commands
+only
 ([`risk_second_opinion.rs`](crates/app-shell/src/risk_second_opinion.rs)).
 
 The confirmation boundaries below protect you against the AI and against
@@ -357,6 +361,7 @@ into `Confirm`, never `Confirm` into `AutoExec`, and never lift a `Deny`
 | **Suspected prompt injection** in content just read (if the injection check is enabled) | Always for the next action | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), §5 |
 | **Any action after you rejected an earlier one in the same answer** | Always | [`action_exec.rs`](crates/app-logic/src/orchestration/action_exec.rs) |
 | **Commands too long, too nested or too opaque to check** | Always | [ADR 0107](docs/adr/0107-filter-fail-closed-on-opaque-input.md) |
+| **Filter rules that cannot be loaded** (unreadable rule store or failing rule source): all allow rules are ignored | Always | [Spec 0002](docs/specs/0002-filter-engine-spec.md), §3.4 |
 | **Hard-blacklisted commands** (e.g. `rm -rf /`) | Always | [`engine.rs`](crates/core/src/filter/engine.rs) |
 | **Content read from the server** (post-ingest policy) | Per server: `Strict` always, `Balanced` for modifying actions, `Standard` never | [Spec 0039](docs/specs/0039-untrusted-content-fencing.md), [ADR 0027](docs/adr/0027-post-ingest-policy-scope-and-injection-check-timing.md) |
 | **Red risk**: the risk indicator rates the proposal red on the server or the data axis — also when only the AI second opinion raises it to red | Setting "Always confirm on red risk", **on by default** | [Spec 0092](docs/specs/0092-red-risk-requires-confirm.md), [ADR 0084](docs/adr/0084-red-risk-requires-confirm.md) |
@@ -401,8 +406,10 @@ Risks we know about and accept, with the reason.
   interface would equal full control over connected sessions and the safety
   settings (section 5, "Who is trusted inside the app"). Accepted because
   the interface is your own and the protections listed there keep foreign
-  code out. Planned hardening: safety settings changed only through backend
-  commands, not by the webview writing the settings store directly.
+  code out. Partly hardened: "Always confirm on red risk" and the AI risk
+  second opinion are changed only through backend commands that validate the
+  value; the webview can still write other settings (and, until the store is
+  made read-only for it, the store file itself).
 - **Allow rules are your decision.** An allow rule lets matching proposals
   run without asking (except for the boundaries in section 5). A rule that
   is broader than intended widens what the AI can do on its own.

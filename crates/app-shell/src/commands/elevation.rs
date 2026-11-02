@@ -1384,15 +1384,15 @@ mod browser_channel_tests {
         async fn rules_for(
             &self,
             _scope: &ssh_manager_core::filter::EffectiveScope,
-        ) -> Vec<ssh_manager_core::filter::Rule> {
-            vec![ssh_manager_core::filter::Rule {
+        ) -> ssh_manager_core::filter::PolicyRules {
+            ssh_manager_core::filter::PolicyRules::complete(vec![ssh_manager_core::filter::Rule {
                 id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Allow,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 

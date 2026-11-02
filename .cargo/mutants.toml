@@ -121,7 +121,7 @@ exclude_re = [
     'classifier\.rs:\d+:\d+: replace match guard word\.text == "~" with false in cd_prefixes',
 
     # --- engine.rs: NoRules (issue #487) -------------------------------------
-    # `Vec::new()` and `vec![]` are the same empty vector; no input can tell
+    # `PolicyRules::complete(Vec::new())` equals `Default::default()`; no input can tell
     # the original body from the mutant. (#487)
-    "engine\\.rs:\\d+:\\d+: replace <impl PolicyStore for NoRules>::rules_for -> Vec<Rule> with vec!\\[\\]",
+    "engine\\.rs:\\d+:\\d+: replace <impl PolicyStore for NoRules>::rules_for -> PolicyRules with Default::default()",
 ]

@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Zjištěn možný pokus o vložení pokynů přes obsah serveru – vyžaduje potvrzení",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Vyžádáno přes MCP – vždy vyžaduje potvrzení",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Používá uložené heslo sudo – vždy vyžaduje potvrzení",
+    "FILTER_RULES_UNAVAILABLE": "Pravidla filtru se nepodařilo načíst – nic se nespouští automaticky, je nutné potvrzení",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Před odesláním vloží uloženou tajnou hodnotu – vždy vyžaduje potvrzení",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Čte soubor s přihlašovacími údaji (např. klíč SSH, .env, /etc/shadow) – vždy vyžaduje potvrzení",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "Dřívější akce v této odpovědi byla zamítnuta – vyžaduje potvrzení",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Klíč v klíčence nepatří k této databázi. Nic se nezměnilo — jeho uložení by databázi při dalším spuštění učinilo nečitelnou.",
     "SFTP_CONTENT_TOO_LARGE": "Soubor je větší než 50 MB a nelze jej zkopírovat do schránky.",
     "CLIPBOARD_FILE_FAILED": "Soubor se v tomto systému nepodařilo vložit do schránky.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Vybraný poskytovatel AI není nastaven. Vyberte nastaveného poskytovatele.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Před zapnutím druhého názoru na riziko vyberte poskytovatele AI.",
     "SSH_SFTP_ALREADY_EXISTS": "Soubor nebo složka s tímto názvem již existuje",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Soubor s klíčem nebyl na tomto zařízení nalezen"
   },

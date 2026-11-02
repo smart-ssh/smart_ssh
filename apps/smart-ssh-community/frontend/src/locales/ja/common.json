@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "サーバーの内容を通じて指示をインジェクションしようとする試みの可能性を検出しました – 確認が必要です",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "MCP経由でリクエストされました – 常に確認が必要です",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "保存済みのsudoパスワードを使用します – 常に確認が必要です",
+    "FILTER_RULES_UNAVAILABLE": "フィルタルールを読み込めませんでした – 自動実行は行われず、確認が必要です",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "送信前に保存済みの秘密の値を挿入します – 常に確認が必要です",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "認証情報を含むファイル（例: SSH鍵、.env、/etc/shadow）を読み取ります – 常に確認が必要です",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "この応答内の以前の操作が拒否されました – 確認が必要です",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "キーチェーンの鍵は、このデータベースのものではありません。何も変更されていません。保存すると、次回の起動時にデータベースを読み取れなくなります。",
     "SFTP_CONTENT_TOO_LARGE": "ファイルが 50 MB を超えているため、クリップボードにコピーできません。",
     "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "選択した AI プロバイダーは設定されていません。設定済みのプロバイダーを選択してください。",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "リスクのセカンドオピニオンをオンにする前に、AI プロバイダーを選択してください。",
     "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません"
   },

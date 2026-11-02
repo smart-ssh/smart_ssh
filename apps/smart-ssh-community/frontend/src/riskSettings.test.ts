@@ -15,12 +15,24 @@ const storeGet = vi.fn();
 const storeSet = vi.fn();
 const storeSave = vi.fn();
 
+const invokeMock = vi.fn();
+vi.mock("./api", () => ({
+  setRiskSecondOpinionSettings: (enabled: boolean, providerId: string | null) =>
+    invokeMock("set_risk_second_opinion_settings", { enabled, providerId }),
+  setRedRiskAlwaysConfirm: (value: boolean) =>
+    invokeMock("set_red_risk_always_confirm", { value }),
+}));
+
 vi.mock("./i18n", () => ({
   settingsStore: () => Promise.resolve({ get: storeGet, set: storeSet, save: storeSave }),
 }));
 
 // Import erst NACH dem Mock, damit `settingsStore` bereits ersetzt ist.
-const { loadRedRiskAlwaysConfirm, saveRedRiskAlwaysConfirm } = await import("./riskSettings");
+const {
+  loadRedRiskAlwaysConfirm,
+  saveRedRiskAlwaysConfirm,
+  saveRiskClassifierSettings,
+} = await import("./riskSettings");
 
 describe("loadRedRiskAlwaysConfirm (Spec 0092, A1.2)", () => {
   it("returns true when nothing is stored (missing key)", async () => {
@@ -49,10 +61,30 @@ describe("loadRedRiskAlwaysConfirm (Spec 0092, A1.2)", () => {
   );
 });
 
-describe("saveRedRiskAlwaysConfirm", () => {
-  it("stores the value under the same key the backend reads and saves", async () => {
+describe("saving goes through backend commands (issue #856)", () => {
+  it("saveRedRiskAlwaysConfirm invokes the command and never writes the store", async () => {
+    invokeMock.mockClear();
     await saveRedRiskAlwaysConfirm(false);
-    expect(storeSet).toHaveBeenCalledWith("redRiskAlwaysConfirm", false);
-    expect(storeSave).toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith("set_red_risk_always_confirm", { value: false });
+    expect(storeSet).not.toHaveBeenCalled();
+    expect(storeSave).not.toHaveBeenCalled();
+  });
+
+  it("saveRiskClassifierSettings invokes the command and never writes the store", async () => {
+    invokeMock.mockClear();
+    await saveRiskClassifierSettings({ enabled: true, providerId: "p-1" });
+    expect(invokeMock).toHaveBeenCalledWith("set_risk_second_opinion_settings", {
+      enabled: true,
+      providerId: "p-1",
+    });
+    expect(storeSet).not.toHaveBeenCalled();
+    expect(storeSave).not.toHaveBeenCalled();
+  });
+
+  it("propagates a backend rejection to the caller", async () => {
+    invokeMock.mockRejectedValueOnce({ message: "x", code: "RISK_SETTINGS_PROVIDER_UNKNOWN" });
+    await expect(
+      saveRiskClassifierSettings({ enabled: true, providerId: "gone" }),
+    ).rejects.toMatchObject({ code: "RISK_SETTINGS_PROVIDER_UNKNOWN" });
   });
 });

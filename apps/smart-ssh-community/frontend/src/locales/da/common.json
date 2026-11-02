@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Mulige forsøg på at smugle instruktioner ind via serverindhold registreret – kræver bekræftelse",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Anmodet via MCP – kræver altid bekræftelse",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Bruger den gemte sudo-adgangskode – kræver altid bekræftelse",
+    "FILTER_RULES_UNAVAILABLE": "Filterreglerne kunne ikke indlæses – intet udføres automatisk, bekræftelse kræves",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Indsætter en gemt hemmelig værdi før afsendelse – kræver altid bekræftelse",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Læser en fil med legitimationsoplysninger (f.eks. SSH-nøgle, .env, /etc/shadow) – kræver altid bekræftelse",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "En tidligere handling i dette svar blev afvist – kræver bekræftelse",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nøglen i nøgleringen hører ikke til denne database. Intet blev ændret – at gemme den ville gøre databasen ulæselig ved næste opstart.",
     "SFTP_CONTENT_TOO_LARGE": "Filen er større end 50 MB og kan ikke kopieres til udklipsholderen.",
     "CLIPBOARD_FILE_FAILED": "Filen kunne ikke lægges i udklipsholderen på dette system.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valgte AI-udbyder er ikke konfigureret. Vælg en konfigureret udbyder.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Vælg en AI-udbyder, før du slår den anden vurdering af risiko til.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mappe med dette navn findes allerede",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nøglefilen blev ikke fundet på denne enhed"
   },

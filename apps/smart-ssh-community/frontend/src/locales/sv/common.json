@@ -608,6 +608,7 @@
     "FILTER_INJECTION_SUSPECTED_REQUIRES_CONFIRM": "Möjligt försök att injicera instruktioner via serverinnehåll upptäcktes – kräver bekräftelse",
     "FILTER_MCP_ORIGIN_REQUIRES_CONFIRM": "Begärt via MCP – kräver alltid bekräftelse",
     "FILTER_SUDO_PASSWORD_REQUIRES_CONFIRM": "Använder det sparade sudo-lösenordet – kräver alltid bekräftelse",
+    "FILTER_RULES_UNAVAILABLE": "Filterreglerna kunde inte läsas in – inget körs automatiskt, bekräftelse krävs",
     "FILTER_INSERTED_SECRET_REQUIRES_CONFIRM": "Infogar ett sparat hemligt värde före sändning – kräver alltid bekräftelse",
     "FILTER_SECRET_PATH_READ_REQUIRES_CONFIRM": "Läser en fil med inloggningsuppgifter (t.ex. SSH-nyckel, .env, /etc/shadow) – kräver alltid bekräftelse",
     "FILTER_EARLIER_ACTION_REJECTED_REQUIRES_CONFIRM": "En tidigare åtgärd i det här svaret avvisades – kräver bekräftelse",
@@ -657,6 +658,8 @@
     "KEYCHAIN_KEY_MISMATCH": "Nyckeln i nyckelringen hör inte till den här databasen. Inget ändrades — att spara den skulle göra databasen oläsbar vid nästa start.",
     "SFTP_CONTENT_TOO_LARGE": "Filen är större än 50 MB och kan inte kopieras till urklipp.",
     "CLIPBOARD_FILE_FAILED": "Filen kunde inte läggas i Urklipp på det här systemet.",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "Den valda AI-leverantören är inte konfigurerad. Välj en konfigurerad leverantör.",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "Välj en AI-leverantör innan du slår på den andra bedömningen av risk.",
     "SSH_SFTP_ALREADY_EXISTS": "En fil eller mapp med det här namnet finns redan",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "Nyckelfilen hittades inte på den här enheten"
   },

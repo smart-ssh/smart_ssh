@@ -149,6 +149,7 @@ mod tests {
     use crate::first_run_notice::test_support::{lock, lock_async, test_app};
 
     use super::*;
+    use ssh_manager_core::filter::PolicyRules;
 
     fn reset_local_store<R: Runtime>(app: &AppHandle<R>) {
         if let Ok(store) = app.store(SETTINGS_STORE_FILE) {
@@ -264,12 +265,14 @@ mod tests {
         // `ssh_manager_core::filter::scope_applies`-Doc-Kommentar
         // ("öffentlich, damit PolicyStore-Implementierungen dieselbe Logik
         // verwenden").
-        async fn rules_for(&self, scope: &EffectiveScope) -> Vec<Rule> {
-            if ssh_manager_core::filter::scope_applies(&self.0.scope, scope) {
-                vec![self.0.clone()]
-            } else {
-                Vec::new()
-            }
+        async fn rules_for(&self, scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(
+                if ssh_manager_core::filter::scope_applies(&self.0.scope, scope) {
+                    vec![self.0.clone()]
+                } else {
+                    Vec::new()
+                },
+            )
         }
     }
 
