@@ -43,6 +43,9 @@ Eskalation entfällt, auch nicht bei ausgeschalteter Einstellung.
 - A1.4 Der Schalter steht im Einstellungsbereich des Risiko-Klassifizierers und
   lässt sich unabhängig davon bedienen, ob die Zweitmeinung an ist. Die Texte
   gibt es auf Deutsch und Englisch.
+- A1.5 Der Wert wird ausschließlich vom Backend geschrieben, nicht von der
+  Oberfläche direkt in die Einstellungsdatei. Das Lesen ändert sich nicht
+  (A1.2 gilt unverändert).
 
 **A2 — Eskalation bei regelbasiertem Rot**
 
