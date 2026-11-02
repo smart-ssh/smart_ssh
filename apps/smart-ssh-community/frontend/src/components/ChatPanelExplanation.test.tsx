@@ -30,7 +30,9 @@ if (!Element.prototype.scrollTo) {
 vi.mock("../api", () => ({
   commandErrorMessage: (err: unknown) => String(err),
   commandErrorCode: (err: unknown) =>
-    typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : null,
+    typeof err === "object" && err !== null && "code" in err
+      ? String((err as { code: unknown }).code)
+      : null,
   acceptAndCreateRule: vi.fn(),
   cancelRunningCommand: vi.fn(),
   continueTruncatedResponse: vi.fn(() => Promise.resolve()),
@@ -125,6 +127,7 @@ const EXPLANATION: ConfirmationExplanationDto = {
 async function renderCard(
   explanation: ConfirmationExplanationDto,
   reject = false,
+  code = "FILTER_NO_RULE_MATCHED",
 ) {
   if (reject)
     vi.mocked(explainConfirmation).mockRejectedValue(new Error("boom"));
@@ -145,7 +148,7 @@ async function renderCard(
     actionId: "action-1",
     action: { SuggestCommand: { command: COMMAND } },
     decision: {
-      Confirm: { reason: "no rule", code: "FILTER_NO_RULE_MATCHED" },
+      Confirm: { reason: "no rule", code },
     },
     previousNoteContent: null,
     usesStoredSudoPassword: false,
@@ -172,6 +175,17 @@ describe("confirmation card explanation (issue #596)", () => {
     expect(await screen.findByText("grep -v b")).toBeInTheDocument();
     expect(screen.getAllByText(/✓ covered by rule grep \*/)).toHaveLength(2);
     expect(screen.getByText("needs a rule")).toBeInTheDocument();
+  });
+
+  it("shows the translated text for FILTER_RULES_UNAVAILABLE (issue #836)", async () => {
+    await renderCard(
+      { segments: [], suggestions: [] },
+      false,
+      "FILTER_RULES_UNAVAILABLE",
+    );
+    expect(
+      await screen.findByText(/The filter rules could not be loaded/),
+    ).toBeInTheDocument();
   });
 
   it("shows nothing extra for a single segment without a reason", async () => {

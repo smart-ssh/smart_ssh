@@ -8,6 +8,7 @@
 
 use async_trait::async_trait;
 use ssh_manager_core::ai::AiEvent;
+use ssh_manager_core::filter::PolicyRules;
 use ssh_manager_core::filter::{
     EffectiveScope, EvalContext, FilterEngine, Pattern, PolicyStore, Rule, RuleAction, Scope,
 };
@@ -23,15 +24,15 @@ use super::*;
 struct AllowExactIptablesFlushStore;
 #[async_trait]
 impl PolicyStore for AllowExactIptablesFlushStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        vec![Rule {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(vec![Rule {
             id: RuleId("allow-iptables-flush".to_string()),
             pattern: Pattern::Exact("iptables -F".to_string()),
             action: RuleAction::Allow,
             scope: Scope::Global,
             priority: 0,
             origin: RuleOrigin::User,
-        }]
+        }])
     }
 }
 
@@ -39,15 +40,15 @@ impl PolicyStore for AllowExactIptablesFlushStore {
 struct DenyIptablesStore;
 #[async_trait]
 impl PolicyStore for DenyIptablesStore {
-    async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-        vec![Rule {
+    async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+        PolicyRules::complete(vec![Rule {
             id: RuleId("deny-iptables".to_string()),
             pattern: Pattern::Glob("iptables*".to_string()),
             action: RuleAction::Deny,
             scope: Scope::Global,
             priority: 10,
             origin: RuleOrigin::User,
-        }]
+        }])
     }
 }
 

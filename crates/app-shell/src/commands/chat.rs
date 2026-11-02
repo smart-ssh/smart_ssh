@@ -785,7 +785,7 @@ mod send_chat_message_persistence_tests {
         default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, RedactedContext,
         SessionContext,
     };
-    use ssh_manager_core::filter::FilterEngine;
+    use ssh_manager_core::filter::{FilterEngine, PolicyRules};
     use ssh_manager_core::profiles::Server;
     use ssh_manager_core::shared::ServerId;
     use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError, SshTransport};
@@ -1288,15 +1288,15 @@ mod send_chat_message_persistence_tests {
         async fn rules_for(
             &self,
             _scope: &ssh_manager_core::filter::EffectiveScope,
-        ) -> Vec<ssh_manager_core::filter::Rule> {
-            vec![ssh_manager_core::filter::Rule {
+        ) -> PolicyRules {
+            PolicyRules::complete(vec![ssh_manager_core::filter::Rule {
                 id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Allow,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
 

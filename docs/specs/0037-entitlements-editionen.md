@@ -78,6 +78,11 @@ Die Auswertungsreihenfolge (Ergänzung zu Spec 0002) ist:
 4. Erst danach: Spezifität des Geltungsbereichs (Server vor Tag vor
    Global), dann Priorität.
 
+Fällt eine Regelquelle aus (sie lässt sich nicht lesen), werden die Regeln der
+übrigen Quellen weiter ausgewertet, aber **alle** Allow-Regeln – auch die der
+funktionierenden Quellen – gelten nicht mehr; der Befehl braucht Bestätigung
+(Spec 0002, 3.4). Ein ausgefallener Eintrag lässt also nie weniger Prüfung zu.
+
 Die erklärte Auswertung (Spec 0009) nennt zusätzlich die Herkunft der
 greifenden Regel. Regeln kommen über Quellen mit einer Herkunft; der lokale
 Regelspeicher ist die einzige `User`-Quelle. Der Kern liefert selbst keine

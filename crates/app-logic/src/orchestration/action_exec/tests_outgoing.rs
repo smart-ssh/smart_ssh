@@ -1,6 +1,7 @@
 //! Issue #464 (Spec 0038): the outgoing transform runs on the final approved
 //! text, right before the transport call, and nowhere else.
 
+use ssh_manager_core::filter::PolicyRules;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -194,15 +195,15 @@ async fn test_filter_sees_the_original_text_not_the_prepared_one() {
     struct DenyY;
     #[async_trait]
     impl PolicyStore for DenyY {
-        async fn rules_for(&self, _scope: &EffectiveScope) -> Vec<Rule> {
-            vec![Rule {
+        async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
+            PolicyRules::complete(vec![Rule {
                 id: ssh_manager_core::filter::RuleId("deny-y".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*Y*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Deny,
                 scope: ssh_manager_core::filter::Scope::Global,
                 priority: 0,
                 origin: ssh_manager_core::filter::RuleOrigin::User,
-            }]
+            }])
         }
     }
     let transport = MockSshTransport::default().with_response("echo Y", output("done"));
