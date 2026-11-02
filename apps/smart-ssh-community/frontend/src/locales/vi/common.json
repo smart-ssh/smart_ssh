@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Không thể chạy kiểm tra chỉ thị bị chèn (lỗi nhà cung cấp AI). Hành động được đề xuất tiếp theo cần xác nhận.",
     "AI_INJECTION_CHECK_INACTIVE": "Kiểm tra chỉ thị bị chèn đã được bật cho máy chủ này nhưng không hoạt động trong phiên này (ý kiến thứ hai của AI đang tắt hoặc không thể thiết lập). Hãy bật ý kiến thứ hai trong cài đặt và kết nối lại.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Ý kiến thứ hai của AI đã được bật nhưng không thể thiết lập cho phiên này (nhà cung cấp đã bị xóa hoặc không tìm thấy thông tin xác thực). Lệnh không được nó kiểm tra – hãy sửa cài đặt và kết nối lại.",
+    "REDACTION_INCOMPLETE": "Không tải được một số giá trị bí mật của máy chủ này; chúng có thể không được che trong nội dung gửi tới AI.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Không đọc được thẻ hiện tại của máy chủ – cần xác nhận",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Rủi ro được đánh giá là đỏ, hoặc không thể đánh giá đáng tin cậy (ví dụ quá dài) – luôn cần xác nhận",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Cập nhật ghi chú luôn cần xác nhận",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Ghi tệp luôn cần xác nhận",

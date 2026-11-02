@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Verificarea instrucțiunilor injectate nu a putut fi efectuată (problemă la furnizorul de IA). Următoarea acțiune propusă necesită confirmare.",
     "AI_INJECTION_CHECK_INACTIVE": "Verificarea instrucțiunilor injectate este activată pentru acest server, dar nu este activă în această sesiune (a doua opinie a IA este dezactivată sau nu a putut fi configurată). Activați a doua opinie în setări și reconectați-vă.",
     "AI_SECOND_OPINION_SETUP_FAILED": "A doua opinie a IA este activată, dar nu a putut fi configurată pentru această sesiune (furnizor eliminat sau date de autentificare negăsite). Comenzile nu sunt verificate de ea – corectați setarea și reconectați-vă.",
+    "REDACTION_INCOMPLETE": "Unele valori secrete ale acestui server nu au putut fi încărcate; este posibil să nu fie mascate în ceea ce se trimite către IA.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Etichetele curente ale serverului nu au putut fi citite – necesită confirmare",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risc evaluat ca roșu sau care nu a putut fi evaluat fiabil (de ex. prea lung) – necesită întotdeauna confirmare",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Actualizările notițelor necesită întotdeauna confirmare",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Scrierile de fișiere necesită întotdeauna confirmare",

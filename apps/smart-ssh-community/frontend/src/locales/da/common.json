@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Kontrollen for indsmuglede instruktioner kunne ikke køres (problem hos AI-udbyderen). Den næste foreslåede handling kræver bekræftelse.",
     "AI_INJECTION_CHECK_INACTIVE": "Kontrollen for indsmuglede instruktioner er slået til for denne server, men er ikke aktiv i denne session (AI-anden vurdering er slået fra eller kunne ikke opsættes). Slå anden vurdering til i indstillingerne, og opret forbindelse igen.",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI-anden vurdering er slået til, men kunne ikke opsættes for denne session (udbyder fjernet eller legitimationsoplysninger ikke fundet). Kommandoer kontrolleres ikke af den – ret indstillingen, og opret forbindelse igen.",
+    "REDACTION_INCOMPLETE": "Nogle hemmelige værdier for denne server kunne ikke indlæses; de maskeres muligvis ikke i det, der sendes til AI'en.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "De aktuelle servertags kunne ikke læses – kræver bekræftelse",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risiko vurderet rød eller kunne ikke vurderes pålideligt (f.eks. for lang) – kræver altid bekræftelse",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Noteopdateringer kræver altid bekræftelse",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Filskrivninger kræver altid bekræftelse",

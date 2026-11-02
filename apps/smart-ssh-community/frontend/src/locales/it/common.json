@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Impossibile eseguire il controllo delle istruzioni iniettate (problema del provider IA). La prossima azione proposta richiede conferma.",
     "AI_INJECTION_CHECK_INACTIVE": "Il controllo delle istruzioni iniettate è attivato per questo server ma non è attivo in questa sessione (la seconda opinione IA è disattivata o non è stato possibile configurarla). Attivi la seconda opinione nelle impostazioni e si riconnetta.",
     "AI_SECOND_OPINION_SETUP_FAILED": "La seconda opinione IA è attivata ma non è stato possibile configurarla per questa sessione (provider rimosso o credenziale non trovata). I comandi non vengono controllati da essa: corregga l'impostazione e si riconnetta.",
+    "REDACTION_INCOMPLETE": "Alcuni valori segreti di questo server non sono stati caricati; potrebbero non essere mascherati in ciò che viene inviato all'IA.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Impossibile leggere i tag attuali del server – richiede conferma",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Rischio valutato rosso, o non valutabile in modo affidabile (ad es. troppo lungo): richiede sempre conferma",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Gli aggiornamenti delle note richiedono sempre conferma",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Le scritture di file richiedono sempre conferma",

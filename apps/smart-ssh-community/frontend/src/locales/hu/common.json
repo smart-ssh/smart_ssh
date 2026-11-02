@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "A beinjektált utasítások ellenőrzése nem futtatható (AI-szolgáltatói probléma). A következő javasolt művelet megerősítést igényel.",
     "AI_INJECTION_CHECK_INACTIVE": "A beinjektált utasítások ellenőrzése be van kapcsolva ehhez a szerverhez, de ebben a munkamenetben nem aktív (az AI második vélemény ki van kapcsolva, vagy nem állítható be). Kapcsolja be a második véleményt a beállításokban, és csatlakozzon újra.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Az AI második vélemény be van kapcsolva, de ehhez a munkamenethez nem állítható be (a szolgáltató el lett távolítva, vagy a hitelesítő adat nem található). A parancsokat nem ellenőrzi – javítsa a beállítást, és csatlakozzon újra.",
+    "REDACTION_INCOMPLETE": "A kiszolgáló néhány titkos értékét nem sikerült betölteni; előfordulhat, hogy az AI-nak küldött tartalomban nem lesznek maszkolva.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "A kiszolgáló aktuális címkéit nem sikerült beolvasni – megerősítést igényel",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "A kockázat piros, vagy nem értékelhető megbízhatóan (pl. túl hosszú) – mindig megerősítés szükséges",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "A jegyzetfrissítések mindig megerősítést igényelnek",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "A fájlírások mindig megerősítést igényelnek",

@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Não foi possível executar a verificação de instruções injetadas (problema no provedor de IA). A próxima ação proposta exige confirmação.",
     "AI_INJECTION_CHECK_INACTIVE": "A verificação de instruções injetadas está ativada para este servidor, mas não está ativa nesta sessão (a segunda opinião da IA está desativada ou não pôde ser configurada). Ative a segunda opinião nas configurações e reconecte.",
     "AI_SECOND_OPINION_SETUP_FAILED": "A segunda opinião da IA está ativada, mas não pôde ser configurada para esta sessão (provedor removido ou credencial não encontrada). Os comandos não são verificados por ela – corrija a configuração e reconecte.",
+    "REDACTION_INCOMPLETE": "Alguns valores secretos deste servidor não puderam ser carregados; podem não ser mascarados no que é enviado à IA.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Não foi possível ler as tags atuais do servidor – requer confirmação",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risco avaliado como vermelho, ou não pôde ser avaliado com segurança (p. ex., longo demais) – sempre exige confirmação",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Atualizações de anotações sempre exigem confirmação",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Gravações de arquivos sempre exigem confirmação",

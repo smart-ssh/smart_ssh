@@ -24,6 +24,7 @@ mod groups;
 pub mod master_password;
 mod notes;
 mod rules;
+mod scope;
 mod servers;
 mod sftp;
 mod terminal;

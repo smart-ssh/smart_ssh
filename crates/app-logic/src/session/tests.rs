@@ -124,6 +124,7 @@ fn dummy_session(server_id: ServerId) -> Session {
         injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
         second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
         injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
+        redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
         chat_session_store: None,
         ledger_store: None,
         chat_session_id: AsyncMutex::new(None),
@@ -865,5 +866,182 @@ async fn test_ext_rebuild_redactors_for_open_sessions_touches_open_servers_only(
             .redactor
             .redact_text(text)
             .contains("ext-secret-42"));
+    }
+}
+
+// --- Issue #843: lookup failures never weaken masking ------------------
+
+mod lookup_failures {
+    use super::*;
+    use crate::session_extension::{
+        rebuild_redactors_for_sessions, redactor_with_secrets_checked, scope_lookup, ServerScope,
+        SessionExtension,
+    };
+    use crate::test_support::{log_capture, InMemoryCredentialStore, InMemoryProfileStore};
+    use chrono::Utc;
+    use secrecy::SecretString;
+    use ssh_manager_core::profiles::{AuthMethod, Group, GroupId, PostIngestPolicy, Server};
+    use std::sync::atomic::Ordering::SeqCst;
+
+    /// Server secret for everyone, group secret only when the scope has the
+    /// group.
+    struct Ext {
+        group: GroupId,
+    }
+    impl SessionExtension for Ext {
+        fn known_secrets(&self, scope: &ServerScope) -> Vec<SecretString> {
+            let mut out = vec![SecretString::from("server-secret-111".to_string())];
+            if scope.group_chain.contains(&self.group) {
+                out.push(SecretString::from("group-secret-222".to_string()));
+            }
+            out
+        }
+    }
+
+    fn group() -> Group {
+        let now = Utc::now();
+        Group {
+            id: GroupId::new(),
+            name: "g".to_string(),
+            parent_id: None,
+            notes: String::new(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn server(group_id: Option<GroupId>) -> Server {
+        let now = Utc::now();
+        Server {
+            id: ServerId::new(),
+            name: "web".to_string(),
+            host: "example.invalid".to_string(),
+            port: 22,
+            username: "deploy".to_string(),
+            group_id,
+            tags: Vec::new(),
+            auth: AuthMethod::Agent,
+            notes: String::new(),
+            jump_host: None,
+            post_ingest_policy: PostIngestPolicy::default(),
+            ai_injection_check_enabled: false,
+            sftp_server_path: None,
+            start_directory: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    const TEXT: &str = "s=server-secret-111 g=group-secret-222";
+
+    #[tokio::test]
+    async fn test_get_server_failure_keeps_server_secret_masked_and_flags_incomplete() {
+        let g = group();
+        let srv = server(Some(g.id));
+        let store = InMemoryProfileStore::new()
+            .with_group(g.clone())
+            .with_server(srv.clone());
+        store.fail_get_server.store(true, SeqCst);
+        let ext = Ext { group: g.id };
+
+        let lookup = scope_lookup(&store, srv.id, None).await;
+        assert!(lookup.incomplete);
+        let scope = lookup.scope.expect("a scope with the server id");
+        assert_eq!(scope.server_id, srv.id);
+        let secrets = ext.known_secrets(&scope);
+        let (redactor, compiled) = redactor_with_secrets_checked(None, &secrets);
+        assert!(compiled);
+        let masked = redactor.redact_text(TEXT);
+        assert!(!masked.contains("server-secret-111"), "{masked}");
+    }
+
+    #[tokio::test]
+    async fn test_server_not_found_is_complete_without_scope() {
+        let store = InMemoryProfileStore::new();
+        let lookup = scope_lookup(&store, ServerId::new(), None).await;
+        assert!(lookup.scope.is_none());
+        assert!(!lookup.incomplete);
+    }
+
+    #[tokio::test]
+    async fn test_group_chain_failure_flags_incomplete_and_keeps_server_secret() {
+        let g = group();
+        let srv = server(Some(g.id));
+        let store = InMemoryProfileStore::new()
+            .with_group(g.clone())
+            .with_server(srv.clone());
+        store.fail_get_group.store(true, SeqCst);
+        let ext = Ext { group: g.id };
+
+        let lookup = scope_lookup(&store, srv.id, None).await;
+        assert!(lookup.incomplete);
+        let secrets = ext.known_secrets(&lookup.scope.unwrap());
+        let (redactor, _) = redactor_with_secrets_checked(None, &secrets);
+        assert!(!redactor.redact_text(TEXT).contains("server-secret-111"));
+    }
+
+    /// Counter-check: healthy store, complete scope.
+    #[tokio::test]
+    async fn test_healthy_lookup_is_complete() {
+        let g = group();
+        let srv = server(Some(g.id));
+        let store = InMemoryProfileStore::new()
+            .with_group(g.clone())
+            .with_server(srv.clone());
+        let lookup = scope_lookup(&store, srv.id, None).await;
+        assert!(!lookup.incomplete);
+        assert_eq!(lookup.scope.unwrap().group_chain, vec![g.id]);
+    }
+
+    #[tokio::test]
+    async fn test_rebuild_with_failing_get_server_keeps_group_secret_and_flags_session() {
+        let g = group();
+        let srv = server(Some(g.id));
+        let store = InMemoryProfileStore::new()
+            .with_group(g.clone())
+            .with_server(srv.clone());
+        let credentials = InMemoryCredentialStore::new();
+        let ext = Ext { group: g.id };
+        let manager = SessionManager::new();
+        let id = Uuid::new_v4();
+        manager.insert(id, Arc::new(dummy_session(srv.id)));
+        let session = manager.get(id).unwrap();
+
+        // Healthy rebuild: both masked, no notice.
+        rebuild_redactors_for_sessions(&manager, &store, &credentials, Some(&ext), srv.id).await;
+        assert!(!session.redaction_incomplete_notice_pending.load(SeqCst));
+        assert_eq!(
+            session.redactor.redact_text(TEXT),
+            "s=[REDACTED] g=[REDACTED]"
+        );
+
+        // Failing store: the group secret stays masked, the session is flagged.
+        store.fail_get_server.store(true, SeqCst);
+        rebuild_redactors_for_sessions(&manager, &store, &credentials, Some(&ext), srv.id).await;
+        assert_eq!(
+            session.redactor.redact_text(TEXT),
+            "s=[REDACTED] g=[REDACTED]"
+        );
+        assert!(session.redaction_incomplete_notice_pending.load(SeqCst));
+    }
+
+    /// A literal the regex size limit rejects flags the session and is not
+    /// logged; the session's byte-wise literal set still masks it.
+    #[test]
+    fn test_oversized_literal_is_flagged_masked_bytewise_and_not_logged() {
+        log_capture::start_recording();
+        let value = format!("{}-oversized-marker", "x".repeat(1_100_000));
+        let secret = SecretString::from(value.clone());
+        let (_redactor, compiled) =
+            redactor_with_secrets_checked(None, std::slice::from_ref(&secret));
+        assert!(!compiled, "the default regex limit rejects this literal");
+        let log = log_capture::recorded_text();
+        assert!(log.contains("could not be compiled"), "{log}");
+        assert!(!log.contains("oversized-marker"), "value logged");
+
+        let swappable = SwappableRedactor::new(Box::new(DefaultOutputRedactor::new()));
+        swappable.add_secret_values(&[secret]);
+        let masked = swappable.redact_text(&format!("a {value} b"));
+        assert!(!masked.contains("oversized-marker"), "not masked bytewise");
     }
 }

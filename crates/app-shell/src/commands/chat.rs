@@ -351,8 +351,7 @@ async fn send_turn_impl<R: tauri::Runtime>(
             .try_state::<AppState>()
             .and_then(|state| state.session_extension.clone());
         let notes_present = if let Some(extension) = session_extension.as_deref() {
-            let scope =
-                super::connect::extension_scope(app, profile_store, session.server_id).await;
+            let scope = super::scope::extension_scope(app, profile_store, session.server_id).await;
             let present = app_logic::session_extension::append_extension_section(
                 &mut updated_system_context_parts,
                 Some(extension),
@@ -864,8 +863,7 @@ mod send_chat_message_persistence_tests {
             chat_turn: std::sync::Mutex::new(app_logic::session::ChatTurnState::default()),
             risk_second_opinion_provider: None,
             risk_second_opinion_budget: None,
-            // Spec 0092, A1.2: standardmäßig „an", wie in der App.
-            red_risk_always_confirm: true,
+            red_risk_always_confirm: true, // Spec 0092, A1.2: default on, as in the app
             running_command_cancellations: Arc::new(ConfirmationRegistry::new()),
             outgoing_transform: None,
             chat_content: Default::default(),
@@ -878,6 +876,7 @@ mod send_chat_message_persistence_tests {
             injection_check_unavailable: std::sync::atomic::AtomicBool::new(false),
             second_opinion_setup_notice_pending: std::sync::atomic::AtomicBool::new(false),
             injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(false),
+            redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(false),
             chat_session_store: None,
             ledger_store: None,
             chat_session_id: AsyncMutex::new(None),

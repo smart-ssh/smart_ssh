@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Sjekken for injiserte instruksjoner kunne ikke kjøres (problem hos AI-leverandøren). Den neste foreslåtte handlingen krever bekreftelse.",
     "AI_INJECTION_CHECK_INACTIVE": "Sjekken for injiserte instruksjoner er slått på for denne serveren, men er ikke aktiv i denne økten (AI-andremeningen er av eller kunne ikke settes opp). Slå på andremeningen i innstillingene og koble til på nytt.",
     "AI_SECOND_OPINION_SETUP_FAILED": "AI-andremeningen er slått på, men kunne ikke settes opp for denne økten (leverandøren er fjernet eller legitimasjon ble ikke funnet). Kommandoer sjekkes ikke av den – rett opp innstillingen og koble til på nytt.",
+    "REDACTION_INCOMPLETE": "Noen hemmelige verdier for denne serveren kunne ikke lastes; de blir kanskje ikke maskert i det som sendes til KI-en.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "De gjeldende servertaggene kunne ikke leses – krever bekreftelse",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Risikoen er vurdert som rød, eller kunne ikke vurderes pålitelig (f.eks. for lang) – krever alltid bekreftelse",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Notatoppdateringer krever alltid bekreftelse",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Filskriving krever alltid bekreftelse",

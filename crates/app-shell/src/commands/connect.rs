@@ -2,6 +2,7 @@
 //! Bestätigung), persistente Chat-Sitzungen — Teil der Spec-0083-Aufteilung
 //! von `commands.rs`.
 
+use super::scope::extension_scope_lookup;
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
@@ -656,10 +657,11 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     // Passwort hinterlegt) wird zu `None`, kein harter Verbindungsfehler.
     // Issue #36: über den gemeinsamen Lesepfad, der einen Lesefehler des
     // Schlüsselbunds (anders als `NotFound`) als `warn` protokolliert.
-    let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
+    let sudo = app_logic::server_redaction::read_sudo_password_checked(
         state.credential_store.as_ref(),
         server_id,
     );
+    let sudo_password = sudo.0.clone();
 
     // Unabhängiger Review-Pass (Spec 0018): `sudo -S` liest die per Stdin
     // eingespeiste Passwortzeile nur, wenn `sudo` tatsächlich einen Prompt
@@ -674,13 +676,15 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
     // Regex-Sonderzeichen im Passwort selbst.
     // Spec 0038, section 2a: known secrets of a registered session extension
     // are masked in addition to the sudo password.
-    let extension_scope = extension_scope(app, state.profile_store.as_ref(), server_id).await;
+    let scope_lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
+    let extension_scope = scope_lookup.scope.clone();
     let extension_secrets = app_logic::session_extension::known_secrets(
         state.session_extension.as_deref(),
         extension_scope.as_ref(),
     );
-    let redactor: Box<dyn OutputRedactor> = app_logic::session_extension::redactor_with_secrets(
-        sudo_password.as_ref(),
+    let (redactor, redaction_incomplete) = app_logic::session_extension::redactor_for_connect(
+        &sudo,
+        &scope_lookup,
         &extension_secrets,
     );
 
@@ -986,6 +990,9 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
             injection_check_inactive_notice_pending: std::sync::atomic::AtomicBool::new(
                 injection_check_inactive,
             ),
+            redaction_incomplete_notice_pending: std::sync::atomic::AtomicBool::new(
+                redaction_incomplete,
+            ),
             chat_session_store: chat_session_id.map(|_| state.chat_session_store.clone()),
             // Spec 0057, §1: dieselbe Gating-Logik wie `chat_session_store`
             // direkt darüber — das Ledger braucht dieselbe `chat_sessions.id`
@@ -999,6 +1006,8 @@ pub(crate) async fn connect_session_with_progress<R: tauri::Runtime>(
         .with_is_root(is_root)
         .with_usage_reporting(Some(ai_usage_reporting)),
     );
+    // Byte-wise copy: stays masked if a later lookup fails (issue #843).
+    session.redactor.add_secret_values(&extension_secrets);
     state.sessions.insert(session_id, Arc::clone(&session));
     crate::auto_reconnect::install_hook(app, &session);
     if let Some(watch) = loss_watch {
@@ -1107,19 +1116,22 @@ pub(crate) async fn reconnect_session_inner<R: tauri::Runtime>(
         .await?;
         // The sudo password is read again, so the redactor knows the
         // current value.
-        let sudo_password = app_logic::server_redaction::read_sudo_password_for_redaction(
+        let sudo = app_logic::server_redaction::read_sudo_password_checked(
             state.credential_store.as_ref(),
             server_id,
         );
-        let scope = extension_scope(app, state.profile_store.as_ref(), server_id).await;
+        let lookup = extension_scope_lookup(app, state.profile_store.as_ref(), server_id).await;
         let extension_secrets = app_logic::session_extension::known_secrets(
             state.session_extension.as_deref(),
-            scope.as_ref(),
+            lookup.scope.as_ref(),
         );
-        let redactor = app_logic::session_extension::redactor_with_secrets(
-            sudo_password.as_ref(),
+        let redactor = app_logic::session_extension::redactor_for_reconnect(
+            &session,
+            &sudo,
+            &lookup,
             &extension_secrets,
         );
+        let sudo_password = sudo.0;
         Ok::<_, CommandError>((transport, redactor, sudo_password))
     }
     .await;
@@ -1408,19 +1420,6 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
     };
     let has_notes = parts.has_notes();
     (parts, has_notes)
-}
-
-/// Spec 0038, section 2a: the scope handed to the session extension. The
-/// local pseudo-server has no stored row, so its scope is built from the
-/// synthetic server.
-pub(crate) async fn extension_scope<R: tauri::Runtime>(
-    app: &AppHandle<R>,
-    profile_store: &dyn ProfileStore,
-    server_id: ServerId,
-) -> Option<app_logic::session_extension::ServerScope> {
-    let local_tags = app_logic::dto::is_local(server_id)
-        .then(|| crate::local_server::synthetic_server(app).tags);
-    app_logic::session_extension::scope_for_id(profile_store, server_id, local_tags).await
 }
 
 /// Ausgang des Wartens auf die Host-Key-Entscheidung (Spec 0068, Teil 5b).

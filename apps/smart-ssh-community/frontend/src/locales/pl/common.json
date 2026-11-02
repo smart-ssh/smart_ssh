@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Nie udało się wykonać kontroli wstrzykniętych instrukcji (problem z dostawcą AI). Następne proponowane działanie wymaga potwierdzenia.",
     "AI_INJECTION_CHECK_INACTIVE": "Kontrola wstrzykniętych instrukcji jest włączona dla tego serwera, ale nie jest aktywna w tej sesji (druga opinia AI jest wyłączona lub nie dało się jej skonfigurować). Włącz drugą opinię w ustawieniach i połącz się ponownie.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Druga opinia AI jest włączona, ale nie dało się jej skonfigurować dla tej sesji (dostawca usunięty lub nie znaleziono danych uwierzytelniających). Polecenia nie są przez nią sprawdzane – popraw ustawienie i połącz się ponownie.",
+    "REDACTION_INCOMPLETE": "Nie udało się wczytać niektórych tajnych wartości tego serwera; mogą nie zostać zamaskowane w tym, co trafia do AI.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Nie udało się odczytać bieżących tagów serwera – wymaga potwierdzenia",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Ryzyko ocenione jako czerwone lub nie dało się go rzetelnie ocenić (np. zbyt długie) – zawsze wymaga potwierdzenia",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Aktualizacje notatek zawsze wymagają potwierdzenia",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Zapisy plików zawsze wymagają potwierdzenia",

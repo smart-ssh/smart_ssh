@@ -619,6 +619,8 @@
     "AI_INJECTION_CHECK_UNAVAILABLE": "Kontrolu vložených pokynů se nepodařilo provést (problém poskytovatele AI). Další navržená akce vyžaduje potvrzení.",
     "AI_INJECTION_CHECK_INACTIVE": "Kontrola vložených pokynů je pro tento server zapnuta, ale v této relaci není aktivní (druhý názor AI je vypnutý nebo jej nebylo možné nastavit). Zapněte druhý názor v nastavení a připojte se znovu.",
     "AI_SECOND_OPINION_SETUP_FAILED": "Druhý názor AI je zapnutý, ale pro tuto relaci jej nebylo možné nastavit (poskytovatel odebrán nebo přihlašovací údaj nenalezen). Příkazy jím nejsou kontrolovány – opravte nastavení a připojte se znovu.",
+    "REDACTION_INCOMPLETE": "Některé tajné hodnoty tohoto serveru se nepodařilo načíst; v tom, co se posílá AI, nemusí být zamaskovány.",
+    "FILTER_SERVER_TAGS_UNAVAILABLE": "Aktuální značky serveru se nepodařilo přečíst – vyžaduje potvrzení",
     "FILTER_RED_RISK_REQUIRES_CONFIRM": "Riziko vyhodnoceno jako červené, nebo je nelze spolehlivě posoudit (např. příliš dlouhé) – vždy vyžaduje potvrzení",
     "FILTER_NOTE_UPDATE_REQUIRES_CONFIRM": "Aktualizace poznámek vždy vyžadují potvrzení",
     "FILTER_FILE_WRITE_REQUIRES_CONFIRM": "Zápisy souborů vždy vyžadují potvrzení",
