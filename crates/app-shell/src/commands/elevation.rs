@@ -912,7 +912,6 @@ mod browser_channel_tests {
     use ssh_manager_core::ssh::{CommandOutput, PtySize, SshError, SshTransport};
 
     use super::*;
-    use ssh_manager_core::filter::PolicyRules;
 
     struct NoTransport;
     #[async_trait::async_trait]
@@ -1385,8 +1384,8 @@ mod browser_channel_tests {
         async fn rules_for(
             &self,
             _scope: &ssh_manager_core::filter::EffectiveScope,
-        ) -> PolicyRules {
-            PolicyRules::complete(vec![ssh_manager_core::filter::Rule {
+        ) -> ssh_manager_core::filter::PolicyRules {
+            ssh_manager_core::filter::PolicyRules::complete(vec![ssh_manager_core::filter::Rule {
                 id: ssh_manager_core::filter::RuleId("allow-all".to_string()),
                 pattern: ssh_manager_core::filter::Pattern::Glob("*".to_string()),
                 action: ssh_manager_core::filter::RuleAction::Allow,

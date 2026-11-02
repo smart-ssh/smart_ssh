@@ -785,7 +785,7 @@ mod send_chat_message_persistence_tests {
     use ssh_manager_core::ai::{
         default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, SessionContext,
     };
-    use ssh_manager_core::filter::FilterEngine;
+    use ssh_manager_core::filter::{FilterEngine, PolicyRules};
     use ssh_manager_core::profiles::Server;
     use ssh_manager_core::shared::ServerId;
     use ssh_manager_core::ssh::{CommandOutput, InteractiveShell, PtySize, SshError, SshTransport};
@@ -797,7 +797,6 @@ mod send_chat_message_persistence_tests {
     use app_logic::test_support::InMemoryProfileStore;
 
     use super::*;
-    use ssh_manager_core::filter::PolicyRules;
 
     /// Nie tatsächlich aufgerufen — dieser Test führt kein Kommando aus,
     /// die KI schlägt keins vor (s. `NoopAiProvider`).

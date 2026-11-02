@@ -3,7 +3,6 @@
 //! mehrere Tool-Calls in einer Antwort — Spec 0083: reine Verschiebung
 //! aus `orchestration::tests`, keine Verhaltensänderung.
 
-use ssh_manager_core::filter::PolicyRules;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 
@@ -11,7 +10,9 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{AiProvider, RejectionReason, SessionContext};
-use ssh_manager_core::filter::{Decision, EffectiveScope, FilterEngine, PolicyStore, Rule};
+use ssh_manager_core::filter::{
+    Decision, EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule, RuleAction,
+};
 use ssh_manager_core::profiles::PostIngestPolicy;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::mock::MockSftpSession;
@@ -2263,28 +2264,18 @@ async fn test_blocked_edit_escalates_allowed_later_action_of_same_response() {
     #[async_trait]
     impl PolicyStore for DenyRmAllowLs2 {
         async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
-            PolicyRules::complete({
-                let rule = |id: &str, glob: &str, action| Rule {
-                    id: ssh_manager_core::filter::RuleId(id.to_string()),
-                    pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
-                    action,
-                    scope: ssh_manager_core::filter::Scope::Global,
-                    priority: 0,
-                    origin: ssh_manager_core::filter::RuleOrigin::User,
-                };
-                vec![
-                    rule(
-                        "deny-rm",
-                        "rm *",
-                        ssh_manager_core::filter::RuleAction::Deny,
-                    ),
-                    rule(
-                        "allow-ls",
-                        "ls*",
-                        ssh_manager_core::filter::RuleAction::Allow,
-                    ),
-                ]
-            })
+            let rule = |id: &str, glob: &str, action| Rule {
+                id: ssh_manager_core::filter::RuleId(id.to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
+                action,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            };
+            PolicyRules::complete(vec![
+                rule("deny-rm", "rm *", RuleAction::Deny),
+                rule("allow-ls", "ls*", RuleAction::Allow),
+            ])
         }
     }
     let mut session = test_session(
@@ -2349,28 +2340,18 @@ async fn test_blocked_action_escalates_allowed_later_action_of_same_response() {
     #[async_trait]
     impl PolicyStore for DenyRmAllowLs {
         async fn rules_for(&self, _scope: &EffectiveScope) -> PolicyRules {
-            PolicyRules::complete({
-                let rule = |id: &str, glob: &str, action| Rule {
-                    id: ssh_manager_core::filter::RuleId(id.to_string()),
-                    pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
-                    action,
-                    scope: ssh_manager_core::filter::Scope::Global,
-                    priority: 0,
-                    origin: ssh_manager_core::filter::RuleOrigin::User,
-                };
-                vec![
-                    rule(
-                        "deny-rm",
-                        "rm *",
-                        ssh_manager_core::filter::RuleAction::Deny,
-                    ),
-                    rule(
-                        "allow-ls",
-                        "ls*",
-                        ssh_manager_core::filter::RuleAction::Allow,
-                    ),
-                ]
-            })
+            let rule = |id: &str, glob: &str, action| Rule {
+                id: ssh_manager_core::filter::RuleId(id.to_string()),
+                pattern: ssh_manager_core::filter::Pattern::Glob(glob.to_string()),
+                action,
+                scope: ssh_manager_core::filter::Scope::Global,
+                priority: 0,
+                origin: ssh_manager_core::filter::RuleOrigin::User,
+            };
+            PolicyRules::complete(vec![
+                rule("deny-rm", "rm *", RuleAction::Deny),
+                rule("allow-ls", "ls*", RuleAction::Allow),
+            ])
         }
     }
     let mut session = test_session(

@@ -4,10 +4,9 @@
 //! `orchestration::tests`, keine Verhaltensänderung.
 
 use async_trait::async_trait;
-use ssh_manager_core::filter::PolicyRules;
 
 use ssh_manager_core::ai::{AiEvent, DefaultOutputRedactor, OutputRedactor};
-use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
+use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
 use ssh_manager_core::profiles::Server;
 use ssh_manager_core::shared::ServerId;
 use ssh_manager_core::ssh::mock::MockSftpSession;

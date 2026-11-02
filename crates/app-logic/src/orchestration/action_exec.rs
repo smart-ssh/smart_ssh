@@ -91,10 +91,6 @@ mod tests_live_output;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
-mod tests_rules_unavailable;
-// Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_auto_exec_rules;
 
 /// Spec 0088, A1.4: Die Entscheidung der Filter-Engine, angereichert um das

@@ -1393,7 +1393,6 @@ pub(super) async fn build_session_system_context<R: tauri::Runtime>(
         tags: tags.to_vec(),
     };
     let scope = EffectiveScope::from(&eval_ctx);
-    // No allow rules are listed when the rule set could not be loaded.
     let rules = policy_store.rules_for(&scope).await.into_trusted_rules();
     let allow_rules = app_logic::system_prompt::allow_rule_lines(&rules);
 
