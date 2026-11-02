@@ -286,8 +286,8 @@ fn is_path_shaped_pattern(pattern: &str) -> bool {
 /// Spec 0060, Abschnitt 2: Zusammenspiel mit dem lexikalischen Pfad-
 /// Normalizer.
 ///
-/// Der bestehende SFTP-Traversal-Normalizer
-/// (`app_logic::orchestration::action_exec::normalize_remote_path`)
+/// Derselbe Normalizer ([`normalize_lexical_path`]) wird von `app-logic`
+/// (`action_exec`) auf den SFTP-Pfad angewendet; er
 /// normalisiert genau EIN Feld (den SFTP-Pfad) VOR der Filter-Auswertung —
 /// für die beiden SFTP-Pseudo-Kommandos ist `cmd` an dieser Stelle also
 /// bereits `.`/`..`-frei, diese Funktion hier ist für diesen Fall ein
@@ -352,17 +352,19 @@ fn path_shaped_tokens_contain_shell_metacharacters(cmd: &str) -> bool {
         .any(|token| token.contains('/') && token.contains(SHELL_METACHARACTERS.as_slice()))
 }
 
-/// Löst `.`/`..`-Segmente rein lexikalisch auf und kollabiert wiederholte
-/// `/` — bewusst dieselbe Semantik wie
-/// `app_logic::orchestration::action_exec::normalize_remote_path`
-/// (Spec 0020, SFTP-Traversal-Entschärfung), hier unabhängig dupliziert:
-/// `core` darf laut Architektur-Regel nicht von `app-shell` abhängen
-/// (`app-shell` hängt von `core` ab, nie umgekehrt), ein Teilen des Codes
-/// ist also nur in dieser Richtung (app-shell → core) möglich, nicht
-/// andersherum — nicht Teil dieser Spec (Spec 0060, „Nicht Teil dieser
-/// Spec"), hier nur als eigenständige, für die Filter-Engine unabhängig
-/// getestete Kopie.
-fn normalize_lexical_path(path: &str) -> String {
+/// The one lexical path normalisation of the filter and execution path
+/// (Spec 0020, Spec 0060).
+///
+/// Pure and lexical: it never touches a file system and resolves no symlinks.
+/// Empty and `.` segments are dropped and repeated `/` collapse. A `..`
+/// removes the previous segment; above `/` it is dropped for an absolute
+/// path and kept for a relative one. An empty relative result is `.`; an
+/// absolute path never becomes empty (`/`).
+///
+/// Used for path-shaped tokens in glob matching and by `app-logic` for the
+/// SFTP path of `ReadRemoteFile`/`WriteRemoteFile` before the filter
+/// evaluates it, so both agree on which path a rule matched.
+pub fn normalize_lexical_path(path: &str) -> String {
     let is_absolute = path.starts_with('/');
     let mut stack: Vec<&str> = Vec::new();
     for segment in path.split('/') {
@@ -536,6 +538,29 @@ mod path_glob_tests {
     fn test_is_path_shaped_returns_false_for_no_slash_at_all() {
         assert!(!is_path_shaped_pattern("rm -rf *"));
         assert!(!is_path_shaped_pattern("*"));
+    }
+
+    /// Issue #840: expected values are the output of the former
+    /// `app_logic` `normalize_remote_path` (character-identical copy).
+    #[test]
+    fn test_normalize_lexical_path_table() {
+        let table = [
+            ("/home/deploy/../../etc/shadow", "/etc/shadow"),
+            ("/etc/nginx//secret.conf", "/etc/nginx/secret.conf"),
+            ("/etc/nginx/./secret.conf", "/etc/nginx/secret.conf"),
+            ("/var/log/..", "/var"),
+            ("/../../etc/shadow", "/etc/shadow"),
+            ("../x/../../y", "../../y"),
+            ("a/./b/", "a/b"),
+            (".", "."),
+            ("", "."),
+            ("/var/log/", "/var/log"),
+            ("/", "/"),
+            ("a/..", "."),
+        ];
+        for (input, expected) in table {
+            assert_eq!(normalize_lexical_path(input), expected, "input {input:?}");
+        }
     }
 
     #[test]

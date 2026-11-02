@@ -161,13 +161,14 @@ pub(crate) async fn handle_action_proposed(
     let persist = !matches!(origin, ActionOrigin::Mcp { .. });
 
     // Unabhängiger Review-Pass (Spec 0020): Pfad-Normalisierung passiert
-    // hier, EINMALIG, bevor irgendein Konsument unten (Filter-Auswertung,
+    // hier, EINMALIG (via `ssh_manager_core::filter::normalize_lexical_path`,
+    // dieselbe Funktion wie in der Glob-Auswertung), bevor irgendein Konsument unten (Filter-Auswertung,
     // Risikoeinschätzung, Vorschau, `execute_action`) den Pfad sieht — alle
     // greifen auf dasselbe `action` zu, das ab hier bereits normalisiert
     // ist.
     if let AiAction::ReadRemoteFile { path } | AiAction::WriteRemoteFile { path, .. } = &mut action
     {
-        *path = normalize_remote_path(path);
+        *path = ssh_manager_core::filter::normalize_lexical_path(path);
     }
 
     let evaluation = evaluate_action(session, &action, profile_store).await;
@@ -741,46 +742,6 @@ fn sftp_read_pseudo_command(path: &str) -> String {
 
 fn sftp_write_pseudo_command(path: &str) -> String {
     format!("sftp-write {path}")
-}
-
-/// Unabhängiger Review-Pass (Spec 0020): löst `.`/`..`-Segmente rein
-/// lexikalisch auf und kollabiert wiederholte `/`, OHNE das entfernte
-/// Dateisystem zu berühren. `globset`-Muster (z. B. `Allow: sftp-read
-/// /home/deploy/*`) lassen `*` `/` kreuzen — ohne Normalisierung VOR der
-/// Filter-Auswertung hätte ein KI-gelieferter Pfad wie
-/// `/home/deploy/../../etc/shadow` dieselbe Allow-Regel getroffen (und
-/// `/etc/nginx//secret.conf`/`/etc/nginx/./secret.conf` hätten eine
-/// Deny-Regel für `/etc/nginx/secret.conf` umgangen). Wird EINMAL in
-/// `handle_action_proposed` angewendet, bevor irgendein Konsument (Filter-
-/// Auswertung, Risikoeinschätzung, Vorschau, tatsächliche SFTP-Ausführung)
-/// den Pfad sieht, damit alle dieselbe (normalisierte) Zeichenkette
-/// verwenden.
-fn normalize_remote_path(path: &str) -> String {
-    let is_absolute = path.starts_with('/');
-    let mut stack: Vec<&str> = Vec::new();
-    for segment in path.split('/') {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                if matches!(stack.last(), Some(&last) if last != "..") {
-                    stack.pop();
-                } else if !is_absolute {
-                    stack.push("..");
-                }
-                // Absoluter Pfad: `..` über der Wurzel hinaus wird verworfen
-                // (kann nicht höher als `/`).
-            }
-            other => stack.push(other),
-        }
-    }
-    let joined = stack.join("/");
-    if is_absolute {
-        format!("/{joined}")
-    } else if joined.is_empty() {
-        ".".to_string()
-    } else {
-        joined
-    }
 }
 
 /// Spec 0026, Abschnitt 2, Punkt 5: synchron beim Erzeugen des
