@@ -657,6 +657,8 @@
     "KEYCHAIN_KEY_MISMATCH": "キーチェーンの鍵は、このデータベースのものではありません。何も変更されていません。保存すると、次回の起動時にデータベースを読み取れなくなります。",
     "SFTP_CONTENT_TOO_LARGE": "ファイルが 50 MB を超えているため、クリップボードにコピーできません。",
     "CLIPBOARD_FILE_FAILED": "このシステムではファイルをクリップボードに置けませんでした。",
+    "RISK_SETTINGS_PROVIDER_UNKNOWN": "選択した AI プロバイダーは設定されていません。設定済みのプロバイダーを選択してください。",
+    "RISK_SETTINGS_PROVIDER_REQUIRED": "リスクのセカンドオピニオンをオンにする前に、AI プロバイダーを選択してください。",
     "SSH_SFTP_ALREADY_EXISTS": "この名前のファイルまたはフォルダーはすでに存在します",
     "KEY_FILE_NOT_FOUND_ON_DEVICE": "このデバイスにキーファイルが見つかりません"
   },
