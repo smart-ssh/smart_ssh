@@ -191,7 +191,10 @@ der Liste), im Schlüsselbund-Modus beim Start. Jedes höchstens einmal je
 Prozess; ein Plugin, dessen Registrierung scheitert, steht im Log und hält
 weder die übrigen noch das Entsperren auf. Die Hooks in `plugins` laufen vor
 dem Entsperren — Plugins mit Befehlen, die eine entsperrte App brauchen,
-gehören in `plugins_after_unlock`.
+gehören in `plugins_after_unlock`. Die Liste nimmt jedes Tauri-Plugin
+aus, auch eines mit eigenem Konfigurationstyp; seine Konfiguration aus
+`tauri.conf.json` (`plugins.<name>`) wird wie bei einem Plugin am Builder
+angewendet (Issue #1049).
 
 ### 2a. Erweiterungseigene Datenbanktabellen
 
