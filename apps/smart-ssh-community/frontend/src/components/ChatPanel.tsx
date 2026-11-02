@@ -686,7 +686,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
         if (event.sessionId !== sessionId) return;
         setRetrying(null);
         setAiWait(null);
-        setItems((prev) => [...prev, actionItemFromProposed(event, riskSecondOpinionEnabled)]);
+        setItems((prev) => [...prev, actionItemFromProposed(event, riskSecondOpinionRef.current)]);
       }),
       onRiskAssessmentUpdated((event) => {
         if (event.sessionId !== sessionId) return;
@@ -971,7 +971,7 @@ export function ChatPanel({ sessionId, serverId, onActionSettled, readOnlyHint }
       unlisten.forEach((p) => p.then((unlistenFn) => unlistenFn()));
       pendingBudgetTimers.forEach((id) => window.clearTimeout(id));
     };
-  }, [sessionId, riskSecondOpinionEnabled]);
+  }, [sessionId]);
 
   const respond = (actionId: string, decision: ActionUserDecision) => {
     // Spec 0027: die tatsächliche Ausführung beginnt jetzt (nicht bei
