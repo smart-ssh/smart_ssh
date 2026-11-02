@@ -67,6 +67,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 pub(crate) mod action_exec;
+mod approval;
 mod attachments;
 mod chat_turn;
 mod escalation;
@@ -77,11 +78,15 @@ mod outgoing;
 /// Spec 0088, A1: das Warten auf eine Bestätigung als Wert mit `Drop`.
 mod pending_confirmation;
 mod remote_files;
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_exec_guard;
 // Testcode-Ausnahme zum `deny` — s. `orchestration.rs`, Modulkopf.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 pub(crate) mod test_support;
 
+pub use approval::{ApprovedCommand, ApprovedFileWrite};
 pub use attachments::{
     accept_extension_content, push_extension_parts, PreparedExtensionParts,
     ATTACHMENTS_REQUEST_TOO_LARGE, ATTACHMENTS_TOO_MANY, ATTACHMENTS_UNAVAILABLE,
@@ -94,8 +99,7 @@ pub use new_chat::{chat_switching_error, start_new_chat, CHAT_SWITCHING, NEW_CHA
 // `pub(crate)` (Spec 0084, A6.4).
 pub use chat_turn::{push_history, PENDING_ACTION_CONFIRM_TIMEOUT};
 pub(crate) use chat_turn::{
-    reapply_redaction_and_seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
-    SIDE_CALL_MAX_TOKENS,
+    seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget, SIDE_CALL_MAX_TOKENS,
 };
 
 // `app-shell::mcp_backend` ruft dies direkt auf.

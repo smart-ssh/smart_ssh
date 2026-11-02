@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
+use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, RedactedContext};
 use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
 
 use crate::events::TestEmitter;
@@ -22,7 +22,7 @@ struct FailingProvider;
 impl AiProvider for FailingProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::iter(vec![AiEvent::Error(
             AiError::ProviderUnavailable(format!("HTTP 500 body: {SECRET_FRAGMENT}")),
@@ -34,7 +34,7 @@ struct TextProvider(&'static str);
 impl AiProvider for TextProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::iter(vec![
             AiEvent::TextDelta(self.0.to_string()),

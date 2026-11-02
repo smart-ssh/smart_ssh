@@ -13,7 +13,8 @@ use async_trait::async_trait;
 use tokio::sync::Mutex as AsyncMutex;
 
 use ssh_manager_core::ai::{
-    default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, SessionContext,
+    default_action_schemas, AiEvent, AiProvider, DefaultOutputRedactor, RedactedContext,
+    SessionContext,
 };
 use ssh_manager_core::filter::{Decision, EffectiveScope, FilterEngine, PolicyStore, Rule};
 use ssh_manager_core::profiles::{
@@ -83,8 +84,9 @@ impl MockAiProvider {
 impl AiProvider for MockAiProvider {
     fn send(
         &self,
-        context: SessionContext,
+        context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
+        let context = context.into_parts();
         self.received_contexts.lock().unwrap().push(context);
         let events = self
             .rounds

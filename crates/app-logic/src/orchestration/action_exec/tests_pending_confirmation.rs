@@ -270,7 +270,7 @@ async fn test_aborting_during_the_second_opinion_removes_the_registry_entry() {
     impl ssh_manager_core::ai::AiProvider for HangingProvider {
         fn send(
             &self,
-            _context: ssh_manager_core::ai::SessionContext,
+            _context: ssh_manager_core::ai::RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             Box::pin(futures::stream::pending())
         }

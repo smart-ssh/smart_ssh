@@ -41,6 +41,14 @@ When you chat in a session, the active AI provider receives:
   content.
 - **The commands themselves** that the AI proposed or that you approved.
 
+Structurally, a provider only accepts a `RedactedContext`
+([`crates/core/src/ai/redacted_context.rs`](crates/core/src/ai/redacted_context.rs)):
+it has private fields and can only be built by `RedactedContext::seal` (seals
+extension content, then redacts the whole history again, as the last step
+before sending) or by one named exception, the risk second opinion, which
+sends the command or path text as is (see above). A new request path cannot
+skip redaction without failing to compile.
+
 Content that comes from the server is treated as untrusted data, never as
 instructions: it is wrapped in tagged fences with `<`, `>` and `&` escaped,
 and the system prompt tells the model not to follow instructions inside them

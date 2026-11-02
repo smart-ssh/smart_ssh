@@ -6,8 +6,8 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use ssh_manager_core::ai::{
-    AiError, AiEvent, ChatMessage, InvalidToolCallReason, MessageContent, OutputRedactor,
-    RejectionReason, Role, WebActivity, WebSource,
+    redact_web_activity, AiError, AiEvent, ChatMessage, InvalidToolCallReason, MessageContent,
+    OutputRedactor, RedactedContext, RejectionReason, Role, SessionContext, WebActivity,
 };
 use ssh_manager_core::audit::{LedgerEntryContent, LedgerSource};
 use ssh_manager_core::profiles::{AiAction, ProfileStore};
@@ -70,6 +70,10 @@ mod tests_request_deadline;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_usage;
+// Issue #833: every request is redacted by `RedactedContext::seal`.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests_redacted_send;
 
 /// Sicherheitsgrenze gegen eine KI, die in jeder Folgerunde erneut eine
 /// Aktion vorschlägt, die wieder ausgeführt/abgelehnt/blockiert wird — ohne
@@ -536,236 +540,24 @@ enum RoundOutcome {
     StoppedBeforeSend,
 }
 
-/// Spec 0040, Abschnitt 5: wird auf die (bereits kompaktierte, s.
-/// `compaction::compact_for_send`) Kopie der Historie angewendet, die
-/// tatsächlich an [`ssh_manager_core::ai::AiProvider::send`] geht —
-/// unmittelbar vor jedem `send()`-Aufruf, an allen drei Aufrufstellen in
-/// diesem Modul.
-///
-/// **Kritisch — nur additiv:** wendet denselben [`OutputRedactor`] erneut
-/// auf jede Nachricht an, der auch beim ursprünglichen Erzeugen bereits
-/// lief (Spec 0006, Abschnitt 5, für `CommandResult`; hier neu auch für
-/// freien `Text`-Inhalt über [`OutputRedactor::redact_text`]). Das ist
-/// strukturell garantiert additiv: `redact`/`redact_text` ersetzen
-/// ausschließlich neu erkannte Muster durch den `[REDACTED]`-Platzhalter,
-/// nie umgekehrt — ein bereits vorhandener Platzhalter matcht selbst keines
-/// der Muster erneut, bleibt also unverändert stehen, und kein Aufruf hier
-/// kann jemals Text sichtbar machen, der vorher (in `session.context`/der
-/// DB) redigiert war. Nur diese eine Kopie wird verändert — `session.
-/// context`/die persistierte Historie bleiben unangetastet, exakt wie bei
-/// der Kürzung nebenan.
-///
-/// `command`-Felder (bei `CommandResult`/`ActionRejected`) bleiben bewusst
-/// unangetastet — Spec 0018, Abschnitt 5: das ausgeführte Kommando selbst
-/// ist "bewusst voll transparent", nur seine Ausgabe läuft durch den
-/// Redactor (s. `execute_suggested_command`).
-///
-/// **Fencing-Sicherheit (Nachtrag, unabhängiger Review-Pass zu Spec
-/// 0040):** `MessageContent::Text` kann bereits gefencten Inhalt tragen
-/// (z. B. `execute_read_remote_file`s `<remote_file>...</remote_file>`,
-/// Spec 0039) — anders als `CommandResult` (dessen `output` erst *nach*
-/// dieser Funktion, beim eigentlichen Request-Aufbau in `ai-providers`,
-/// gefenced wird, Redaction dort also bereits strukturell vor dem
-/// Fencing läuft). Ein einfacher `redact_text(&text)` über die GESAMTE,
-/// bereits gefencte Zeichenkette würde ein gieriges Redaction-
-/// Fallback-Muster (z. B. das Private-Key-Rückfallmuster für einen
-/// abgeschnittenen Key-Block ohne `END`-Marker, s.
-/// `ssh_manager_core::ai::redactor`) erlauben, über die Fence-Grenze
-/// hinweg bis zum schließenden Tag zu matchen und diesen mit zu
-/// verschlucken — die Fencing-Garantie aus Spec 0039 (nicht
-/// vertrauenswürdiger Inhalt bleibt sicher eingerahmt) wäre damit
-/// verletzt, obwohl die Redaction-Richtung selbst sicher bleibt (nichts
-/// wird sichtbar, nur zusätzlich gelöscht).
-///
-/// Ein reines Vorziehen des Fencings vor die Redaction (der eigentlich
-/// bevorzugte Fix) ist für `RemoteFile`-Inhalt hier nicht sauber möglich:
-/// der gefencte Text IST die persistierte Repräsentation (`session.
-/// context`/die DB speichern bereits das fertig gefencte `MessageContent::
-/// Text`, s. `execute_read_remote_file`) — ein wiederaufgenommener Chat
-/// redigiert beim nächsten Versand also zwangsläufig bereits gefencten
-/// Text erneut. Stattdessen behandelt `redact_text_preserving_fence_
-/// markers` unten die bekannten, festen Fence-Marker-Strings
-/// (`ssh_manager_core::ai::fence_markers`) als Segment-Grenzen: der Text
-/// wird an jedem Marker aufgetrennt, jedes Segment *zwischen* zwei
-/// Markern unabhängig redigiert (ein gieriges Muster kann dadurch nie
-/// über einen Marker hinausmatchen — die Marker selbst durchlaufen den
-/// Redactor gar nicht erst), die Marker unverändert wieder eingefügt. Das
-/// ist sicher, weil `fence_untrusted`s Escaping (`escape_for_prompt_fence`)
-/// garantiert, dass ein literales `<`/`>` in bereits gefenctem Text NIE
-/// aus dem ursprünglichen Inhalt stammt, sondern ausschließlich von den
-/// Fence-Tags selbst — für tatsächlich gefencten Inhalt kann die
-/// Marker-Liste also nichts fälschlich "beschützen", das eigentlich
-/// redigiert werden müsste.
-///
-/// **Bekannte, bewusst nicht geschlossene Restlücke** (unabhängiger
-/// Review-Pass zu diesem Fix selbst, dokumentiert statt stillschweigend
-/// verschwiegen): `MessageContent::Text` trägt auch gewöhnlichen, nie
-/// escapten Chat-Text (Nutzer-Eingabe, KI-Antworttext über
-/// `flush_text_buffer`) — enthält so ein Text zufällig eine Marker-artige
-/// Teilzeichenkette (z. B. ein zitiertes `</stdout>` ohne jeden echten
-/// Fence-Bezug) MITTEN in einem unterminierten Fail-safe-Treffer (etwa
-/// einem von der KI ausgegebenen, abgeschnittenen Private-Key-Block ohne
-/// `END`-Marker), trennt das Segmentieren unten die Fail-safe-Reichweite
-/// an dieser Stelle künstlich ab — der Teil hinter dem Marker enthält
-/// dann keinen `BEGIN`-Header mehr, matcht kein Muster mehr und bleibt
-/// unredigiert. Das ist eine echte, aber eng begrenzte Abschwächung
-/// gegenüber dem Verhalten vor diesem Fix (der bis dahin den gesamten
-/// Text ungeteilt redigierte). Bewusst nicht mitgelöst: aus reinem
-/// String-Inhalt lässt sich nicht zuverlässig unterscheiden, ob ein
-/// Marker-Vorkommen aus einem echten Fence stammt oder zufällig in nie
-/// gefenctem Text auftaucht (das wäre nur mit einer strukturellen
-/// Kennzeichnung "dieser Text ist gefenct" lösbar, die über die
-/// Persistenz hinweg erhalten bliebe — ein größerer Umbau, nicht Teil
-/// dieses Fixes) — und die beiden Fehlerrichtungen widersprechen sich:
-/// bevorzugt man "immer volle Fail-safe-Reichweite", bricht das
-/// wiederum genau den hier eigentlich zu behebenden Fence-Bruch bei
-/// echtem gefenctem Inhalt. Die Redaction-Richtung bleibt in diesem
-/// Rand-Rand-Fall weiterhin sicher (nichts wird sichtbar gemacht, was
-/// vorher nicht sichtbar war) — nur die Reichweite ist geringer als im
-/// theoretischen Idealfall.
-pub(crate) fn reapply_redaction_for_send(
-    history: Vec<ChatMessage>,
-    redactor: &dyn OutputRedactor,
-) -> Vec<ChatMessage> {
-    history
-        .into_iter()
-        .map(|message| ChatMessage {
-            role: message.role,
-            content: match message.content {
-                MessageContent::Text(text) => {
-                    MessageContent::Text(redact_text_preserving_fence_markers(&text, redactor))
-                }
-                MessageContent::CommandResult {
-                    command,
-                    output,
-                    cancelled,
-                    waiting_for_input,
-                } => MessageContent::CommandResult {
-                    command,
-                    output: redactor.redact(&output),
-                    cancelled,
-                    waiting_for_input,
-                },
-                other @ MessageContent::ActionRejected { .. } => other,
-                // Issue #162: nur-additiv wie oben; der Webinhalt wird erst
-                // beim Request-Aufbau gefencet (`WebActivity::to_model_
-                // text`), hier also noch ungefencet redigiert.
-                MessageContent::WebActivity(activity) => {
-                    MessageContent::WebActivity(redact_web_activity(activity, redactor))
-                }
-                // Issue #504: the label goes into the fence, so it is
-                // redacted again on every send. The core never stores
-                // content here; the placeholder is built by the provider.
-                MessageContent::Extension(mut part) => {
-                    part.label = redactor.redact_text(&part.label);
-                    MessageContent::Extension(part)
-                }
-                // Issue #505: already sealed by the core.
-                sealed @ MessageContent::Sealed(_) => sealed,
-                // Issue #545: redacted again on every send (invariant 11).
-                MessageContent::Question {
-                    question_id,
-                    question,
-                    options,
-                    multi_select,
-                } => MessageContent::Question {
-                    question_id,
-                    question: redact_text_preserving_fence_markers(&question, redactor),
-                    options: options
-                        .into_iter()
-                        .map(|o| ssh_manager_core::profiles::AskUserOption {
-                            label: redact_text_preserving_fence_markers(&o.label, redactor),
-                            description: o
-                                .description
-                                .map(|d| redact_text_preserving_fence_markers(&d, redactor)),
-                        })
-                        .collect(),
-                    multi_select,
-                },
-            },
-        })
-        .collect()
-}
-
-/// [`reapply_redaction_for_send`] plus the sealing of extension parts (Issue
-/// #505, ADR 0141, decision 3). The one entry point every provider request
-/// (chat turn and compaction) goes through.
-pub(crate) fn reapply_redaction_and_seal_for_send(
-    history: Vec<ChatMessage>,
+/// The one entry point every provider request of a session goes through
+/// (chat turn, compaction, title, notes): seals extension parts (Issue #505),
+/// then re-applies redaction (Spec 0040, Abschnitt 5; invariant 11). Call it
+/// as the last step before `AiProvider::send` (issue #833).
+pub(crate) fn seal_for_send(
+    context: SessionContext,
     redactor: &dyn OutputRedactor,
     registry: &crate::chat_content_extension::ChatContentRegistry,
     session_id: SessionId,
-) -> Result<Vec<ChatMessage>, crate::chat_content_extension::SealError> {
-    crate::chat_content_extension::seal_extension_parts(
-        reapply_redaction_for_send(history, redactor),
-        registry,
-        session_id,
+) -> Result<RedactedContext, crate::chat_content_extension::SealError> {
+    RedactedContext::seal(
+        context,
         redactor,
+        &crate::chat_content_extension::RegistrySealer {
+            registry,
+            session_id,
+        },
     )
-}
-
-/// Issue #162: redigiert jedes Textfeld einer Web-Recherche — Anfrage und
-/// URLs können von der KI eingesetzte Geheimnisse tragen, Titel und
-/// Seitentext stammen aus dem offenen Web. Läuft vor dem Speichern und
-/// erneut vor jedem Versand (s. `reapply_redaction_for_send`).
-pub(crate) fn redact_web_activity(
-    activity: WebActivity,
-    redactor: &dyn OutputRedactor,
-) -> WebActivity {
-    let redact_sources = |sources: Vec<WebSource>| {
-        sources
-            .into_iter()
-            .map(|source| WebSource {
-                title: redactor.redact_text(&source.title),
-                url: redactor.redact_text(&source.url),
-            })
-            .collect()
-    };
-    WebActivity {
-        kind: activity.kind,
-        input: redactor.redact_text(&activity.input),
-        results: redact_sources(activity.results),
-        cited: redact_sources(activity.cited),
-        content: activity.content.map(|c| redactor.redact_text(&c)),
-        content_truncated: activity.content_truncated,
-        error_code: activity.error_code,
-    }
-}
-
-/// s. `reapply_redaction_for_send`-Doc-Kommentar ("Fencing-Sicherheit").
-/// Trennt `text` an jedem bekannten Fence-Marker (`ssh_manager_core::ai::
-/// fence_markers`) auf, redigiert nur die Segmente dazwischen und fügt die
-/// Marker unverändert wieder ein — ein Redaction-Muster kann dadurch nie
-/// über eine Fence-Grenze hinausmatchen, unabhängig davon, wie gierig es
-/// ist. Findet `text` keinen Marker (der Normalfall für gewöhnlichen
-/// Chat-Text), verhält sich das identisch zu einem einzelnen
-/// `redactor.redact_text(text)`-Aufruf.
-fn redact_text_preserving_fence_markers(text: &str, redactor: &dyn OutputRedactor) -> String {
-    let markers = ssh_manager_core::ai::fence_markers();
-    let mut result = String::new();
-    let mut remaining = text;
-
-    loop {
-        let earliest = markers
-            .iter()
-            .filter_map(|marker| remaining.find(marker.as_str()).map(|idx| (idx, marker)))
-            .min_by_key(|(idx, _)| *idx);
-
-        match earliest {
-            Some((idx, marker)) => {
-                let (before, after) = remaining.split_at(idx);
-                result.push_str(&redactor.redact_text(before));
-                result.push_str(marker);
-                remaining = &after[marker.len()..];
-            }
-            None => {
-                result.push_str(&redactor.redact_text(remaining));
-                break;
-            }
-        }
-    }
-
-    result
 }
 
 /// Genau eine KI-Antwortrunde, s. [`RoundOutcome`].
@@ -812,19 +604,20 @@ async fn run_one_round(
     // `send()`-Aufruf, s. `reapply_redaction_for_send`-Doc-Kommentar.
     // Issue #505: extension parts are sealed here (limits, redaction,
     // fencing); a failure sends nothing.
-    request_context.history = match reapply_redaction_and_seal_for_send(
-        request_context.history,
+    let request_context = match seal_for_send(
+        request_context,
         session.redactor.as_ref(),
         &session.chat_content,
         session.extension_content_key(session_id).await,
     ) {
-        Ok(history) => history,
+        Ok(context) => context,
         Err(err) => {
             emit_chat_error(emitter, session_id, err.message, Some(err.code));
             return RoundOutcome::Finished;
         }
     };
-    let estimated_tokens = crate::compaction::estimate_request_tokens(&request_context);
+    let estimated_tokens =
+        crate::compaction::estimate_request_tokens(request_context.as_session_context());
     if wait_before_main_send(session, session_id, emitter, estimated_tokens).await {
         emit_chat_response_cancelled(emitter, session_id);
         return RoundOutcome::StoppedBeforeSend;
@@ -856,7 +649,7 @@ async fn run_one_round(
     let mut invalid_calls = 0u32;
     let mut valid_call_seen = false;
     let available_tool_names: Vec<String> = request_context
-        .available_actions
+        .available_actions()
         .iter()
         .map(|a| a.name.clone())
         .collect();

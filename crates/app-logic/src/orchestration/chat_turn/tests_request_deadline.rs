@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
+use ssh_manager_core::ai::{AiError, AiEvent, AiProvider};
 
 use crate::events::TestEmitter;
 use crate::test_support::log_capture;
@@ -23,7 +23,7 @@ struct SlowDeltas {
 impl AiProvider for SlowDeltas {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         let every = self.every;
         Box::pin(futures::stream::unfold((), move |()| async move {
@@ -39,7 +39,7 @@ struct Silent;
 impl AiProvider for Silent {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         Box::pin(futures::stream::pending())
     }

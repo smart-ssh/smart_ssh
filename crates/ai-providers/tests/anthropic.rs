@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use ai_providers::{AnthropicProvider, ProviderBudgetGuard};
 use futures::StreamExt;
+use ssh_manager_core::ai::RedactedContext;
 use ssh_manager_core::ai::{default_action_schemas, AiError, AiEvent, AiProvider, SessionContext};
 use ssh_manager_core::profiles::AiAction;
 use wiremock::matchers::{method, path};
@@ -73,7 +74,10 @@ event: message_stop\ndata: {}\n\n";
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(events[0], AiEvent::TextDelta("Klar,".to_string()));
     assert_eq!(
@@ -106,7 +110,10 @@ event: message_stop\ndata: {}\n\n";
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(events.len(), 3);
     let AiEvent::TextDelta(text) = &events[0] else {
@@ -144,7 +151,10 @@ event: message_stop\ndata: {{}}\n\n",
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(
         events,
@@ -175,7 +185,10 @@ async fn test_authentication_failure_maps_401_to_ai_error() {
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(events, vec![AiEvent::Error(AiError::AuthenticationFailed)]);
 }
@@ -225,7 +238,10 @@ event: message_stop\ndata: {}\n\n";
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(
         events,
@@ -266,7 +282,10 @@ async fn test_persistent_429_gives_up_after_attempt_cap_with_rate_limited_error(
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(events, vec![AiEvent::Error(AiError::RateLimited)]);
 }
@@ -299,7 +318,10 @@ async fn test_retry_after_longer_than_total_budget_gives_up_without_extra_reques
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(events, vec![AiEvent::Error(AiError::RateLimited)]);
 }
@@ -338,7 +360,10 @@ event: message_stop\ndata: {}\n\n";
         None,
     );
 
-    let _events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let _events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert!(
         budget.wait_duration(0).is_some(),
@@ -374,7 +399,10 @@ async fn test_rate_limit_headers_are_recorded_from_a_429_response() {
         None,
     );
 
-    let _events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let _events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert!(
         budget.wait_duration(0).is_some(),
@@ -435,7 +463,10 @@ event: message_stop\ndata: {}\n\n";
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     // `.expect(1)` auf beiden Mocks (per Drop-Assertion von wiremock) prüft
     // bereits die Request-Anzahl — hier zusätzlich das sichtbare Ergebnis:
@@ -484,7 +515,10 @@ event: message_stop\ndata: {}\n\n";
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(events, vec![AiEvent::Error(AiError::ResponseTruncated)]);
 }
@@ -519,7 +553,7 @@ async fn test_dropping_stream_during_retry_backoff_sends_no_further_request() {
         None,
     );
 
-    let mut stream = provider.send(empty_context());
+    let mut stream = provider.send(RedactedContext::for_tests(empty_context()));
     let polled = tokio::time::timeout(std::time::Duration::from_millis(300), stream.next()).await;
     assert!(
         polled.is_err(),
@@ -553,7 +587,10 @@ event: message_stop\ndata: {}\n\n";
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(
         events,
@@ -606,7 +643,10 @@ event: message_stop\ndata: {}\n\n";
         Some(100_000),
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     // `.expect(2)` oben ist der eigentliche Beweis: BEIDE Requests trugen
     // `"max_tokens":100000` — würde der zweite Retry stattdessen 64000
@@ -641,7 +681,10 @@ async fn test_context_length_wording_at_anthropic_provider_is_a_rejected_request
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert!(matches!(
         events.as_slice(),
@@ -687,7 +730,10 @@ async fn test_web_tool_rejection_is_reported_as_web_research_rejected() {
     let server = mock_server_with_error(400, WEB_SEARCH_DISABLED_BODY).await;
     let provider = web_provider(server.uri(), true);
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert_eq!(events.len(), 1, "{events:?}");
     assert!(
@@ -706,10 +752,16 @@ async fn test_web_tool_rejection_is_reported_as_web_research_rejected() {
 async fn test_after_disable_the_request_has_no_web_tools_and_cannot_be_rejected_again() {
     let server = mock_server_with_error(400, WEB_SEARCH_DISABLED_BODY).await;
     let provider = web_provider(server.uri(), true);
-    let _: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let _: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     provider.disable_web_research();
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     let bodies = sent_bodies(&server.received_requests().await.unwrap());
     assert_eq!(bodies.len(), 2);
@@ -729,7 +781,10 @@ async fn test_rejection_body_without_web_tools_in_request_is_a_plain_error() {
     let server = mock_server_with_error(400, WEB_SEARCH_DISABLED_BODY).await;
     let provider = web_provider(server.uri(), false);
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert!(
         matches!(&events[..], [AiEvent::Error(AiError::RejectedRequest(_))]),
@@ -762,7 +817,10 @@ async fn test_other_errors_with_web_tools_keep_their_usual_mapping() {
         let server = mock_server_with_error(status, body).await;
         let provider = web_provider(server.uri(), true);
 
-        let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+        let events: Vec<AiEvent> = provider
+            .send(RedactedContext::for_tests(empty_context()))
+            .collect()
+            .await;
 
         match &events[..] {
             [AiEvent::Error(err)] => assert!(expected(err), "{status}: {err:?}"),
@@ -817,7 +875,7 @@ async fn test_issue_599_http_overload_is_retried_until_success() {
             .await;
 
         let events: Vec<AiEvent> = overload_provider(server.uri())
-            .send(empty_context())
+            .send(RedactedContext::for_tests(empty_context()))
             .collect()
             .await;
 
@@ -854,7 +912,7 @@ async fn test_issue_599_http_529_exhausts_retries_with_overloaded() {
         .await;
 
     let events: Vec<AiEvent> = overload_provider(server.uri())
-        .send(empty_context())
+        .send(RedactedContext::for_tests(empty_context()))
         .collect()
         .await;
 
@@ -894,7 +952,7 @@ async fn test_issue_599_in_stream_overload_before_content_is_retried() {
         .await;
 
     let events: Vec<AiEvent> = overload_provider(server.uri())
-        .send(empty_context())
+        .send(RedactedContext::for_tests(empty_context()))
         .collect()
         .await;
 
@@ -922,7 +980,7 @@ event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\"
     let server = mock_server_with_sse_body(body).await;
 
     let events: Vec<AiEvent> = overload_provider(server.uri())
-        .send(empty_context())
+        .send(RedactedContext::for_tests(empty_context()))
         .collect()
         .await;
 
@@ -948,7 +1006,7 @@ async fn test_issue_599_credit_balance_400_is_billing_and_not_retried() {
         .await;
 
     let events: Vec<AiEvent> = overload_provider(server.uri())
-        .send(empty_context())
+        .send(RedactedContext::for_tests(empty_context()))
         .collect()
         .await;
 
@@ -972,7 +1030,7 @@ async fn test_issue_599_prompt_too_long_400_is_context_too_large() {
         .await;
 
     let events: Vec<AiEvent> = overload_provider(server.uri())
-        .send(empty_context())
+        .send(RedactedContext::for_tests(empty_context()))
         .collect()
         .await;
 
@@ -1000,7 +1058,10 @@ async fn test_server_that_never_sends_headers_ends_with_timeout() {
         None,
     );
 
-    let events: Vec<AiEvent> = provider.send(empty_context()).collect().await;
+    let events: Vec<AiEvent> = provider
+        .send(RedactedContext::for_tests(empty_context()))
+        .collect()
+        .await;
 
     assert!(
         matches!(

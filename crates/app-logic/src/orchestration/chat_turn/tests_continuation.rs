@@ -9,7 +9,7 @@ use std::sync::Mutex as StdMutex;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use ssh_manager_core::ai::{AiProvider, RejectionReason, SessionContext};
+use ssh_manager_core::ai::{AiProvider, RejectionReason};
 use ssh_manager_core::filter::{
     Decision, EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule, RuleAction,
 };
@@ -700,7 +700,7 @@ async fn test_auto_continuation_cap_stops_after_configured_rounds_with_visible_m
     impl AiProvider for AlwaysSuggestEchoProvider {
         fn send(
             &self,
-            _context: SessionContext,
+            _context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             Box::pin(futures::stream::iter(vec![
                 AiEvent::ActionProposed(AiAction::SuggestCommand {
@@ -784,7 +784,7 @@ async fn test_auto_continuation_cap_resets_for_each_new_user_message() {
     impl AiProvider for AlwaysSuggestEchoProvider {
         fn send(
             &self,
-            _context: SessionContext,
+            _context: RedactedContext,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
             Box::pin(futures::stream::iter(vec![
                 AiEvent::ActionProposed(AiAction::SuggestCommand {
@@ -1318,7 +1318,7 @@ impl Drop for DropFlag {
 impl AiProvider for GatedAiProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         self.send_calls
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);

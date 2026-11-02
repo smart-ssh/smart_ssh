@@ -10,6 +10,13 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 1. **Jede KI-Aktion läuft durch Filter-Engine + Bestätigung.** Kein Pfad
    von einem KI-Vorschlag zur Ausführung ohne `handle_action_proposed` →
    `evaluate_action` (`crates/app-logic/src/orchestration/action_exec.rs`).
+   The command reaches the transport only as an `ApprovedCommand`
+   (`crates/app-logic/src/orchestration/approval.rs`), which only the
+   approval path can create (auto-run after `escalate`, user approval).
+   The guard test `exec_call_sites_are_allowlisted_and_not_stale`
+   (`crates/app-logic/src/orchestration/tests_exec_guard.rs`) fails on any
+   transport exec call (`.start_exec(`, `.execute_streaming(`, …) in a
+   production file that is not in its reasoned allowlist.
 2. **Eskalation nur in eine Richtung.** Regelbasiertes `Deny`/Risiko-`Red`
    wird nie durch KI-Meinung oder neuen Code aufgeweicht
    (ADR 0024, AGENTS.md). Enforced in one place: the post-engine chain is the pure
@@ -56,8 +63,15 @@ Spec/ADR lesen. Neue Invarianten aus neuen Specs hier ergänzen.
 
 ## Redaction und Geheimnisse
 
-11. **Redaction vor Versand/Log**: `reapply_redaction_for_send` vor jedem
-    `AiProvider::send()`; Kommando-Ausgaben werden beim Erzeugen redigiert.
+11. **Redaction vor Versand/Log**: `AiProvider::send()` nimmt nur einen
+    `RedactedContext` (`crates/core/src/ai/redacted_context.rs`, private
+    Felder, kein `Deserialize`/`Default`). Er entsteht nur über
+    `RedactedContext::seal` (versiegelt Extension-Teile, dann
+    `reapply_redaction_for_send` über die ganze Historie; als letzter Schritt
+    vor `send`) oder über die eine benannte Ausnahme
+    `unredacted_command_for_second_opinion` (Risiko-Zweitmeinung, nur
+    `crates/app-logic/src/second_opinion.rs`, THREAT-MODEL.md §1). `for_tests` nur hinter
+    `test-support`, nie in `[dependencies]`. Kommando-Ausgaben werden beim Erzeugen redigiert.
     Nutzertext wird verschlüsselt gespeichert (Spec 0036) und beim Versand
     redigiert. Test-Muster: Geheimnis einpflanzen (`AKIAABCDEFGHIJKLMNOP`
     wird erkannt), prüfen, dass es nie im Klartext im Request steht.

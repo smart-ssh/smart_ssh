@@ -2,12 +2,11 @@
 //! Risiko/Injection-Eskalation, Ausführung) — Spec 0083: reine Verschiebung
 //! aus `orchestration::tests`, keine Verhaltensänderung.
 
-use ssh_manager_core::filter::PolicyRules;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, SessionContext};
-use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyStore, Rule};
+use ssh_manager_core::ai::{AiError, AiEvent, AiProvider, RedactedContext};
+use ssh_manager_core::filter::{EffectiveScope, FilterEngine, PolicyRules, PolicyStore, Rule};
 
 use crate::events::TestEmitter;
 use crate::orchestration::run_chat_turn;
@@ -494,7 +493,7 @@ async fn test_execute_suggested_command_cancellation_returns_partial_output() {
         &session,
         session_id,
         action_id,
-        "journalctl -f".to_string(),
+        ApprovedCommand::new("journalctl -f".to_string()),
         &emitter,
         empty_store(),
         true,
@@ -572,7 +571,7 @@ async fn test_running_command_does_not_hold_transport_and_commands_stay_serial()
             &session,
             session_id,
             id,
-            cmd.to_string(),
+            ApprovedCommand::new(cmd.to_string()),
             &emitter,
             empty_store(),
             true,
@@ -641,7 +640,7 @@ async fn test_execute_suggested_command_without_cancellation_leaves_no_registry_
         &session,
         session_id,
         action_id,
-        "ls -la".to_string(),
+        ApprovedCommand::new("ls -la".to_string()),
         &emitter,
         empty_store(),
         true,
@@ -2104,7 +2103,7 @@ struct SlowAiProvider {
 impl AiProvider for SlowAiProvider {
     fn send(
         &self,
-        _context: SessionContext,
+        _context: RedactedContext,
     ) -> std::pin::Pin<Box<dyn futures::Stream<Item = AiEvent> + Send>> {
         let entered = self.entered.clone();
         let release = self.release.clone();

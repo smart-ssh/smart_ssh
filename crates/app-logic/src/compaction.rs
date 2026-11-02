@@ -33,9 +33,7 @@ use ssh_manager_core::ai::{
 };
 
 use crate::events::EventEmitter;
-use crate::orchestration::{
-    reapply_redaction_and_seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget,
-};
+use crate::orchestration::{seal_for_send, wait_for_ai_request_slot, wait_for_rate_limit_budget};
 use crate::second_opinion::{collect_side_call_text, SideCallEnd};
 use crate::session::Session;
 use crate::state::SessionId;
@@ -717,16 +715,7 @@ async fn generate_rolling_summary(
             }),
         });
     }
-    // Issue #505: compaction requests go through the same sealing.
-    match reapply_redaction_and_seal_for_send(
-        new_rounds.to_vec(),
-        session.redactor.as_ref(),
-        &session.chat_content,
-        session.extension_content_key(session_id).await,
-    ) {
-        Ok(sealed) => history.extend(sealed),
-        Err(_) => return None,
-    }
+    history.extend(new_rounds.iter().cloned());
     history.push(ChatMessage {
         role: Role::User,
         content: MessageContent::Text(summary_instruction(language)),
@@ -746,11 +735,22 @@ async fn generate_rolling_summary(
         // SIDE_CALL_MAX_TOKENS`-Kommentar.
         max_tokens_hint: Some(crate::orchestration::SIDE_CALL_MAX_TOKENS),
     };
+    // Issue #505/#833: compaction requests go through the same sealing entry
+    // point, as the last step; a sealing failure means no summary.
+    let summary_context = match seal_for_send(
+        summary_context,
+        session.redactor.as_ref(),
+        &session.chat_content,
+        session.extension_content_key(session_id).await,
+    ) {
+        Ok(context) => context,
+        Err(_) => return None,
+    };
 
     wait_for_ai_request_slot(session).await;
     wait_for_rate_limit_budget(
         &session.ai_provider_budget,
-        estimate_request_tokens(&summary_context),
+        estimate_request_tokens(summary_context.as_session_context()),
         emitter,
         session_id,
     )
