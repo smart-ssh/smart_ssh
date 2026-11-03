@@ -48,12 +48,13 @@ mod fixture {
     pub async fn app_state(
         dir: &std::path::Path,
         extension: Option<Arc<dyn app_logic::ext::SessionExtension>>,
-    ) -> AppState {
+    ) -> (AppState, Arc<SqliteProfileStore>) {
         let db = SqliteProfileStore::connect_plaintext(&dir.join("main.db"))
             .await
             .unwrap();
         let data_changes = db.data_changes();
-        AppState {
+        let db = Arc::new(db);
+        let state = AppState {
             sessions: app_logic::session::SessionManager::new(),
             session_extension: extension,
             root_key_fingerprint: [0; 32],
@@ -63,7 +64,7 @@ mod fixture {
             prompt_history_store: db.prompt_history_store(),
             chat_session_store: db.chat_session_store(),
             ledger_store: db.ledger_store(),
-            profile_store: Arc::new(db),
+            profile_store: db.clone(),
             credential_store: Arc::new(NoCredentials),
             key_file_reader: Arc::new(ssh_manager_core::ssh::mock::MockKeyFileReader::new()),
             keychain: credentials_keyring::KeychainAvailability::Available,
@@ -84,7 +85,8 @@ mod fixture {
             outgoing_transform: None,
             chat_content: Default::default(),
             ai_usage_observers: Default::default(),
-        }
+        };
+        (state, db)
     }
 }
 
@@ -128,7 +130,7 @@ impl AiUsageObserver for MyUsageObserver {
 async fn test_extension_uses_only_the_facade() {
     let dir = tempfile::tempdir().unwrap();
     let extension: Arc<dyn SessionExtension> = Arc::new(MySessionExtension);
-    let state: AppState = fixture::app_state(dir.path(), Some(extension)).await;
+    let (state, db): (AppState, _) = fixture::app_state(dir.path(), Some(extension)).await;
 
     // The extension traits are object-safe and usable as registered.
     let _chat: Arc<dyn ChatContentExtension> = Arc::new(MyChatContent);
@@ -150,4 +152,10 @@ async fn test_extension_uses_only_the_facade() {
         .await
         .is_none());
     assert!(ext::KNOWN_SECTIONS.len() > 1);
+
+    // Close the pool before the temp dir goes away. Dropping an open pool
+    // leaves its worker threads running against a deleted database file
+    // while the process exits (issue #1078: SIGTRAP after the test passed).
+    drop(state);
+    db.close().await;
 }
